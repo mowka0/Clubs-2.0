@@ -89,3 +89,44 @@ X = memberLimit * subscriptionPrice * 0.8
 
 ### Список клубов организатора
 Для каждого membership с `role = organizer` загружается имя клуба через `GET /api/clubs/{id}`. Навигация по клику: `/clubs/{clubId}/manage`.
+
+---
+
+## OrganizerClubManage — Страница управления клубом (`/clubs/:id/manage`)
+
+### Описание
+Страница доступна только организатору. Содержит 4 вкладки: Участники, Заявки, События, Финансы.
+
+### Вкладки
+
+#### Участники (`MembersTab`)
+- Список участников через `GET /api/clubs/:id/members`
+- Клик по участнику → `MemberProfileModal`
+
+#### MemberProfileModal
+Загружает `GET /api/clubs/:id/members/:userId/profile`. Показывает:
+- Аватар, имя, username
+- Роль и дата вступления
+- Репутация: индекс надёжности, % выполнения обещаний, подтверждения, посещения
+
+#### Заявки (`ApplicationsTab`)
+- Список pending заявок через `GET /api/clubs/:id/applications`
+- Кнопки "Принять" / "Отклонить" → `POST /api/applications/:id/approve` или `/reject`
+- Таймер до автоотклонения (48ч с момента создания)
+
+#### События (`EventsTab`)
+- Список через `GET /api/clubs/:id/events?size=50`
+- Предстоящие (статусы: `upcoming`, `stage_1`, `stage_2`) и Завершённые (`completed`)
+- Клик по событию → `EventDetailModal`
+- Кнопка "Присутствие" на завершённых → AttendanceModal (отметка явки)
+- Форма создания события: название, место, дата/время, лимит участников
+
+#### EventDetailModal
+Загружает `GET /api/events/:id`. Показывает:
+- Название, дата/время, место, статус (с русской меткой)
+- Счётчики: пойдут / лимит, может быть, не пойдут, подтверждено
+- Описание (если есть)
+- Для завершённых: флаги `attendanceMarked` и `attendanceFinalized`
+
+#### Финансы (`FinancesTab`)
+- `GET /api/clubs/:id/finances` → активные участники, выручка за месяц, доля организатора, комиссия платформы
