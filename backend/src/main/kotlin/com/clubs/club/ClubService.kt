@@ -8,11 +8,17 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.tables.records.ClubsRecord
+import com.clubs.generated.jooq.tables.references.CLUBS
+import org.jooq.DSLContext
+import org.jooq.impl.DSL
 import org.springframework.stereotype.Service
 import java.util.UUID
 
 @Service
-class ClubService(private val clubRepository: ClubRepository) {
+class ClubService(
+    private val clubRepository: ClubRepository,
+    private val dsl: DSLContext
+) {
 
     fun getClubs(filters: ClubFilterParams): PageResponse<ClubListItemDto> {
         filters.category?.let { validateCategory(it) }
@@ -51,6 +57,16 @@ class ClubService(private val clubRepository: ClubRepository) {
     fun getClub(id: UUID): ClubDetailDto {
         val club = clubRepository.findById(id) ?: throw NotFoundException("Club not found")
         return club.toDto()
+    }
+
+    fun linkTelegramGroup(clubId: UUID, telegramGroupId: Long, userId: UUID): ClubDetailDto {
+        val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
+        if (club.ownerId != userId) throw ForbiddenException("Only the club owner can link a Telegram group")
+        dsl.update(CLUBS)
+            .set(DSL.field("telegram_group_id"), telegramGroupId)
+            .where(CLUBS.ID.eq(clubId))
+            .execute()
+        return clubRepository.findById(clubId)!!.toDto()
     }
 
     fun updateClub(id: UUID, request: UpdateClubRequest, userId: UUID): ClubDetailDto {

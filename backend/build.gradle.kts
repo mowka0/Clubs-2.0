@@ -47,6 +47,20 @@ dependencies {
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
 
+    // Rate limiting
+    implementation("com.bucket4j:bucket4j-core:8.10.1")
+
+    // AOP for role authorization
+    implementation("org.springframework.boot:spring-boot-starter-aop")
+
+    // AWS S3 SDK
+    implementation("software.amazon.awssdk:s3:2.25.0")
+
+    // Telegram Bot
+    implementation("org.telegram:telegrambots-springboot-longpolling-starter:7.10.0")
+    implementation("org.telegram:telegrambots-longpolling:7.10.0")
+    implementation("org.telegram:telegrambots-client:7.10.0")
+
     // PostgreSQL
     runtimeOnly("org.postgresql:postgresql")
 

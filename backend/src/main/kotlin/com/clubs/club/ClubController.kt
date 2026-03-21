@@ -1,5 +1,6 @@
 package com.clubs.club
 
+import com.clubs.common.auth.RequiresOrganizer
 import com.clubs.common.dto.PageResponse
 import com.clubs.common.security.AuthenticatedUser
 import jakarta.validation.Valid
@@ -16,9 +17,14 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
+data class LinkGroupRequest(val telegramGroupId: Long)
+
 @RestController
 @RequestMapping("/api/clubs")
-class ClubController(private val clubService: ClubService) {
+class ClubController(
+    private val clubService: ClubService,
+    private val financesService: FinancesService
+) {
 
     @GetMapping
     fun getClubs(
@@ -55,4 +61,21 @@ class ClubController(private val clubService: ClubService) {
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<ClubDetailDto> =
         ResponseEntity.ok(clubService.updateClub(id, request, user.userId))
+
+    @RequiresOrganizer
+    @PostMapping("/{id}/link-group")
+    fun linkGroup(
+        @PathVariable id: UUID,
+        @RequestBody request: LinkGroupRequest,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<ClubDetailDto> =
+        ResponseEntity.ok(clubService.linkTelegramGroup(id, request.telegramGroupId, user.userId))
+
+    @RequiresOrganizer
+    @GetMapping("/{id}/finances")
+    fun getFinances(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<FinancesDto> =
+        ResponseEntity.ok(financesService.getFinances(id, user.userId))
 }

@@ -22,4 +22,11 @@ class MembershipController(private val membershipService: MembershipService) {
         val membership = membershipService.joinOpenClub(id, user.userId)
         return ResponseEntity.status(HttpStatus.CREATED).body(membership)
     }
+
+    @PostMapping("/{id}/cancel")
+    fun cancelMembership(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<MembershipDto> =
+        ResponseEntity.ok(membershipService.cancelMembership(id, user.userId))
 }

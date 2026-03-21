@@ -39,6 +39,50 @@ export interface ClubListItemDto {
   memberLimit: number;
   avatarUrl: string | null;
   nearestEvent: NearestEventDto | null;
+  tags: string[];
+}
+
+export interface MemberListItemDto {
+  userId: string;
+  firstName: string;
+  lastName: string | null;
+  avatarUrl: string | null;
+  role: string;
+  joinedAt: string | null;
+  reliabilityIndex: number;
+  promiseFulfillmentPct: number;
+}
+
+export interface MemberProfileDto {
+  userId: string;
+  clubId: string;
+  firstName: string;
+  username: string | null;
+  avatarUrl: string | null;
+  reliabilityIndex: number;
+  promiseFulfillmentPct: number;
+  totalConfirmations: number;
+  totalAttendances: number;
+}
+
+export interface FinancesDto {
+  activeMembers: number;
+  monthlyRevenue: number;
+  organizerShare: number;
+  platformFee: number;
+  organizerSharePct: number;
+  platformFeePct: number;
+}
+
+export interface ClubApplicationDto {
+  id: string;
+  userId: string;
+  clubId: string;
+  status: string;
+  answerText: string | null;
+  rejectedReason: string | null;
+  createdAt: string | null;
+  resolvedAt: string | null;
 }
 
 export interface ClubDetailDto {

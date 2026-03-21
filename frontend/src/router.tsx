@@ -23,6 +23,9 @@ const EventPage = lazy(() =>
 const InvitePage = lazy(() =>
   import('./pages/InvitePage').then((m) => ({ default: m.InvitePage })),
 );
+const OrganizerClubManage = lazy(() =>
+  import('./pages/OrganizerClubManage').then((m) => ({ default: m.OrganizerClubManage })),
+);
 
 export const router = createBrowserRouter([
   {
@@ -58,6 +61,10 @@ export const router = createBrowserRouter([
       {
         path: '/events/:id',
         element: <EventPage />,
+      },
+      {
+        path: '/clubs/:id/manage',
+        element: <OrganizerClubManage />,
       },
       {
         path: '/invite/:code',

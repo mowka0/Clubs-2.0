@@ -102,7 +102,24 @@ class ClubRepository(private val dsl: DSLContext) {
         val clubIds = clubs.map { it.id!! }
         val nearestEvents = fetchNearestEvents(clubIds)
 
+        val now = OffsetDateTime.now()
+        val newThreshold = now.minusDays(14)
+
+        // Top 10% threshold for "Популярный" tag
+        val topRatingThreshold = if (clubs.size >= 10) {
+            clubs.sortedByDescending { it.activityRating ?: 0 }
+                .take(maxOf(1, clubs.size / 10))
+                .last().activityRating ?: 0
+        } else null
+
         val items = clubs.map { club ->
+            val tags = mutableListOf<String>()
+            if (club.createdAt?.isAfter(newThreshold) == true) tags += "Новый"
+            if (topRatingThreshold != null && (club.activityRating ?: 0) >= topRatingThreshold) tags += "Популярный"
+            val memberCount = club.memberCount ?: 0
+            val memberLimit = club.memberLimit
+            if (memberLimit > 0 && memberCount.toDouble() / memberLimit < 0.8) tags += "Свободные места"
+
             ClubListItemDto(
                 id = club.id!!,
                 name = club.name,
@@ -110,10 +127,11 @@ class ClubRepository(private val dsl: DSLContext) {
                 accessType = club.accessType?.literal ?: "open",
                 city = club.city,
                 subscriptionPrice = club.subscriptionPrice ?: 0,
-                memberCount = club.memberCount ?: 0,
-                memberLimit = club.memberLimit,
+                memberCount = memberCount,
+                memberLimit = memberLimit,
                 avatarUrl = club.avatarUrl,
-                nearestEvent = nearestEvents[club.id]
+                nearestEvent = nearestEvents[club.id],
+                tags = tags
             )
         }
 

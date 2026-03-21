@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import type { MembershipDto } from '../types/api';
+import type { MemberListItemDto, MemberProfileDto, MembershipDto } from '../types/api';
 
 export interface ApplicationDto {
   id: string;
@@ -24,4 +24,24 @@ export function getMyApplications(): Promise<ApplicationDto[]> {
 
 export function joinByInviteCode(code: string): Promise<MembershipDto> {
   return apiClient.post<MembershipDto>(`/api/invite/${code}/join`);
+}
+
+export function getClubMembers(clubId: string): Promise<MemberListItemDto[]> {
+  return apiClient.get<MemberListItemDto[]>(`/api/clubs/${clubId}/members`);
+}
+
+export function getMemberProfile(clubId: string, userId: string): Promise<MemberProfileDto> {
+  return apiClient.get<MemberProfileDto>(`/api/clubs/${clubId}/members/${userId}`);
+}
+
+export function getClubApplications(clubId: string): Promise<import('../types/api').ClubApplicationDto[]> {
+  return apiClient.get(`/api/clubs/${clubId}/applications`);
+}
+
+export function approveApplication(applicationId: string): Promise<void> {
+  return apiClient.post(`/api/applications/${applicationId}/approve`);
+}
+
+export function rejectApplication(applicationId: string, reason?: string): Promise<void> {
+  return apiClient.post(`/api/applications/${applicationId}/reject`, { reason });
 }

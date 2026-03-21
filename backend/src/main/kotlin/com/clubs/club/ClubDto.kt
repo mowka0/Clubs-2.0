@@ -25,7 +25,8 @@ data class ClubListItemDto(
     val memberCount: Int,
     val memberLimit: Int,
     val avatarUrl: String?,
-    val nearestEvent: NearestEventDto?
+    val nearestEvent: NearestEventDto?,
+    val tags: List<String> = emptyList()
 )
 
 data class ClubDetailDto(

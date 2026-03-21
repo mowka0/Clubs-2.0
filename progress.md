@@ -1,5 +1,103 @@
 # Clubs 2.0 — Progress Log
 
+## 2026-03-21: TASK-018 + TASK-006 + TASK-021 + TASK-022 + TASK-028 + TASK-029 + TASK-031 + TASK-035 + TASK-037 + TASK-044
+
+### TASK-018: Система репутации
+- `ReputationService.kt` — @Scheduled(1h): обрабатывает финализированные события, upsert в user_club_reputation
+- Правила: going→confirmed→attended: +100, going→confirmed→absent: -50, maybe→confirmed→attended: +30, maybe→confirmed→absent: -20, declined: +10
+- `./gradlew compileKotlin` — BUILD SUCCESSFUL
+
+### TASK-006: Rate limiting
+- Добавлен `bucket4j-core:8.10.1` в build.gradle.kts
+- `RateLimitFilter.kt` — OncePerRequestFilter, 60 req/min на IP или telegram_id, исключение /actuator/health
+- Зарегистрирован в SecurityConfig перед JwtAuthenticationFilter
+
+### TASK-021: Список участников с репутацией
+- `MemberListDto.kt` — MemberListItemDto (userId, firstName, lastName, avatarUrl, role, joinedAt, reliabilityIndex, promiseFulfillmentPct)
+- `MemberController.kt` — добавлен GET /api/clubs/{clubId}/members (только для участников, сортировка reliability_index DESC)
+- JOIN MEMBERSHIPS + USERS + USER_CLUB_REPUTATION (LEFT JOIN)
+
+### TASK-022: Финансовый блок
+- `FinancesDto.kt` — FinancesDto (activeMembers, monthlyRevenue, organizerShare, platformFee, organizerSharePct, platformFeePct)
+- `FinancesService.kt` — запросы: COUNT active members, SUM(amount) за текущий месяц, 80/20 split
+- `ClubController` — добавлен GET /api/clubs/{id}/finances
+
+### TASK-035: Промо-теги в каталоге
+- Backend: добавлено поле `tags: List<String>` в ClubListItemDto
+- Логика: "Новый" (< 14 дней), "Популярный" (топ-10%), "Свободные места" (< 80% заполнено)
+- Frontend: ClubCard показывает теги как синие Badge
+
+### TASK-028: Внутренний экран клуба
+- `ClubInteriorPage.tsx` — 3 таба: События (upcoming + past), Участники (с reliability), Мой профиль (репутация)
+- Использует getClubMembers, getMemberProfile, getClubEvents
+- Маршрут /clubs/:id/interior
+
+### TASK-029: Экран события
+- `EventPage.tsx` — полностью реализован
+- Статистика набора (going/maybe/notGoing + прогресс-бар)
+- Этап 1: кнопки голосования (Пойду/Возможно/Не пойду)
+- Этап 2: подтверждение/отказ, статус (confirmed/waitlisted/declined)
+- TypeScript компилируется без ошибок
+
+### TASK-031: Дашборд организатора
+- `OrganizerClubManage.tsx` — 4 таба: Участники, Заявки (approve/reject), События (создание + отметка присутствия), Финансы
+- Маршрут /clubs/:id/manage
+- `npm run build` — BUILD SUCCESSFUL
+
+### TASK-037: Coolify auto-deploy
+- `.github/workflows/deploy.yml` — GitHub Actions на push в main
+- Вызывает Coolify webhook через secrets COOLIFY_WEBHOOK_URL + COOLIFY_TOKEN
+
+### TASK-044: Авторизация ролей
+- `common/auth/Annotations.kt` — @RequiresMembership, @RequiresOrganizer (с clubIdParam)
+- `common/auth/AuthorizationAspect.kt` — Spring AOP @Around advice, проверяет MEMBERSHIPS/CLUBS
+- Добавлен spring-boot-starter-aop
+- Применено: @RequiresOrganizer на createEvent и getFinances
+- `./gradlew compileKotlin` — BUILD SUCCESSFUL
+
+### TASK-039: Telegram Bot
+- Зависимости: telegrambots-springboot-longpolling-starter:7.10.0 + telegrambots-client:7.10.0
+- `BotConfig.kt` — @Bean OkHttpTelegramClient
+- `ClubsBot.kt` — SpringLongPollingBot + LongPollingSingleThreadUpdateConsumer
+- Команды: /start (Mini App кнопка), /кто_идет (ближайшее событие), /мой_рейтинг (репутация)
+- Обработка successful_payment делегируется PaymentService
+
+### TASK-040: Telegram уведомления
+- `NotificationService.kt` — @Async DM уведомления
+- sendEventCreated: всем участникам клуба
+- sendStage2Started: проголосовавшим going/maybe
+- sendAttendanceMarked: отмеченным absent (с кнопкой оспорить)
+- sendDirectMessage: универсальный метод для других нужд
+
+### TASK-041: Telegram Stars оплата
+- `PaymentService.kt` — createInvoice (SendInvoice с currency="XTR"), handleSuccessfulPayment
+- При успешной оплате: создаёт/продлевает membership + запись в transactions (80/20 split)
+- ClubsBot обрабатывает successful_payment → PaymentService
+
+### TASK-042: Автопродление подписок
+- `SubscriptionScheduler.kt` — cron "0 0 9 * * *" (ежедневно в 09:00)
+- За 3 дня: warning notification через NotificationService
+- При истечении: active → grace_period
+- После grace_period (3 дня): → expired, decrement member_count
+- `MembershipService.cancelMembership()` + `POST /api/clubs/{id}/cancel`
+
+### TASK-043: Привязка Telegram-группы
+- `V10__add_telegram_group_id.sql` — добавлен BIGINT столбец telegram_group_id
+- `ClubService.linkTelegramGroup()` — DSL.field("telegram_group_id") (до регенерации jOOQ)
+- `POST /api/clubs/{id}/link-group` — только для организатора (@RequiresOrganizer)
+
+### TASK-045: S3 хранилище (подтверждено агентом)
+- `S3Config.kt` — S3Client с forcePathStyle=true для MinIO/Timeweb совместимости
+- `StorageService.kt` — uploadFile, deleteFile
+- `StorageController.kt` — POST /api/upload (jpg/png, 5MB), UUID-based path
+- `docker-compose.yml` — добавлен MinIO сервис (порты 9000/9001)
+- `application.yml` — s3.bucket, s3.base-url, multipart.max-file-size=5MB
+
+## 🎉 ПРОЕКТ ЗАВЕРШЁН: 45/45 задач выполнено
+- `./gradlew compileKotlin` — BUILD SUCCESSFUL
+- `npm run build` — ✓ built in 1.04s
+- Все 45 задач в tasks.json имеют status="done"
+
 ## 2026-03-21: TASK-011 + TASK-014 + TASK-026 + TASK-030
 
 ### Specs созданы (Analyst)

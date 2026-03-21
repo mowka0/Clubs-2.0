@@ -2,11 +2,14 @@ package com.clubs.membership
 
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
+import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
+import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.tables.records.MembershipsRecord
 import com.clubs.generated.jooq.tables.references.CLUBS
+import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import org.jooq.DSLContext
 import org.springframework.stereotype.Service
 import java.util.UUID
@@ -39,6 +42,20 @@ class MembershipService(
             .execute()
 
         return membership.toDto()
+    }
+
+    fun cancelMembership(clubId: UUID, userId: UUID): MembershipDto {
+        val membership = membershipRepository.findByUserAndClub(userId, clubId)
+            ?: throw NotFoundException("Membership not found")
+        if (membership.status == MembershipStatus.cancelled) throw ValidationException("Membership already cancelled")
+
+        dsl.update(MEMBERSHIPS)
+            .set(MEMBERSHIPS.STATUS, MembershipStatus.cancelled)
+            .where(MEMBERSHIPS.USER_ID.eq(userId).and(MEMBERSHIPS.CLUB_ID.eq(clubId)))
+            .execute()
+
+        // Keep access until subscription_expires_at; just mark as cancelled
+        return membership.toDto().copy(status = "cancelled")
     }
 
     fun joinByInviteCode(code: String, userId: UUID): MembershipDto {

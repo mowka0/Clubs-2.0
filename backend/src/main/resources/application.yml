@@ -13,6 +13,10 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
 
 server:
   port: ${SERVER_PORT:8080}
@@ -33,6 +37,10 @@ jwt:
 telegram:
   bot-token: ${TELEGRAM_BOT_TOKEN:}
 
+s3:
+  bucket: ${S3_BUCKET:clubs-uploads}
+  base-url: ${S3_BASE_URL:http://localhost:9000/clubs-uploads}
+
 ---
 spring:
   config:
@@ -43,6 +51,10 @@ spring:
     baseline-on-migrate: true
     baseline-version: 9
 
+s3:
+  bucket: clubs-uploads
+  base-url: http://localhost:9000/clubs-uploads
+
 ---
 spring:
   config:
@@ -50,3 +62,7 @@ spring:
       on-profile: prod
   flyway:
     enabled: true
+
+s3:
+  bucket: ${S3_BUCKET:clubs-uploads}
+  base-url: ${S3_BASE_URL}

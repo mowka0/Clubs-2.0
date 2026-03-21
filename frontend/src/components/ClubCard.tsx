@@ -60,6 +60,11 @@ export const ClubCard: FC<ClubCardProps> = ({ club }) => {
             {ACCESS_LABELS[club.accessType] ?? club.accessType}
           </Badge>
         )}
+        {club.tags?.map((tag) => (
+          <Badge key={tag} type="number" style={{ fontSize: 11, background: 'var(--tgui--button_color)', color: '#fff' }}>
+            {tag}
+          </Badge>
+        ))}
       </span>
     </Cell>
   );
