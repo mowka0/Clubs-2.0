@@ -1,5 +1,18 @@
 # Clubs 2.0 — Progress Log
 
+## 2026-03-21: TASK-036 Docker Compose production: Dockerfiles + nginx
+
+### Выполнено
+- `backend/Dockerfile` — multi-stage (gradle:8.12-jdk21 → eclipse-temurin:21-jre-alpine), non-root user, healthcheck start_period=90s
+- `frontend/Dockerfile` — multi-stage (node:20-alpine → nginx:alpine), с `--legacy-peer-deps`
+- `frontend/nginx.conf` — проксирование /api/ → backend:8080, SPA fallback, security headers, asset caching
+- `docker-compose.prod.yml` — postgres, redis, backend, frontend; порты 5432/6379/8080 НЕ экспонированы; все env через ${VAR}
+- `docker compose -f docker-compose.prod.yml config` — синтаксис валиден
+- Статус TASK-036 обновлён на "done"
+
+### Следующие шаги
+- TASK-037: Coolify auto-deploy (зависит от TASK-036 — теперь разблокирован)
+
 ## 2026-03-21: TASK-005 Аутентификация: Telegram initData + JWT
 
 ### Выполнено
