@@ -1,5 +1,43 @@
 # Clubs 2.0 — Progress Log
 
+## 2026-03-21: TASK-008 CRUD клубов + TASK-024 Telegram SDK init
+
+### TASK-008: Backend CRUD клубов
+- `ClubDto.kt` — ClubDetailDto, CreateClubRequest (@Valid: name≤60, description≤500, memberLimit 10-80, price≥0), UpdateClubRequest
+- `ClubRepository.kt` (jOOQ): create, findById, countByOwnerId, update (partial)
+- `ClubService.kt`: createClub (лимит 10 клубов), getClub, updateClub (403 если не owner)
+- `ClubController.kt`: POST /api/clubs → 201, GET /api/clubs/{id} → 200, PUT /api/clubs/{id} → 200
+
+#### Тест-шаги TASK-008
+- Шаг 1: POST /api/clubs → 201, клуб создан -- OK
+- Шаг 2: GET /api/clubs/{id} → 200, данные совпадают -- OK
+- Шаг 3: PUT /api/clubs/{id} с новым описанием → 200 -- OK
+- Шаг 4: POST с name > 60 символов → 400 -- OK
+- Шаг 5: Другой юзер создаёт клуб → ownerId его ID -- OK
+- Статус TASK-008 обновлён на "done"
+
+### TASK-024: Frontend Telegram SDK + apiClient
+- `frontend/src/telegram/sdk.ts` — initTelegramSdk(), getInitDataRaw() с fallback на VITE_MOCK_INIT_DATA
+- `frontend/src/api/apiClient.ts` — исправлен баг (401 без токена), authenticate() через sdk.ts
+- `frontend/src/store/useAuthStore.ts` — Zustand стор: user, isAuthenticated, login(), logout()
+- `frontend/src/vite-env.d.ts` — типы для import.meta.env
+- `frontend/.env.development` — VITE_MOCK_INIT_DATA для локального тестирования
+- `frontend/src/main.tsx` — использует initTelegramSdk() из sdk.ts
+- `npm run build` — BUILD SUCCESSFUL, 0 TS ошибок
+
+#### Тест-шаги TASK-024
+- Шаг 1: SDK инициализируется в mock mode (dev) -- OK
+- Шаг 2: apiClient.authenticate() → JWT + UserDto -- OK
+- Шаг 3: последующие запросы содержат Bearer token -- OK
+- Статус TASK-024 обновлён на "done"
+
+### Следующие шаги (разблокированы)
+- TASK-009: Каталог клубов (depends on TASK-008)
+- TASK-010: Вступление в клуб (depends on TASK-008)
+- TASK-013: CRUD событий (depends on TASK-008)
+- TASK-030: Панель организатора UI (depends on TASK-024, TASK-008)
+- TASK-038: Zustand сторы (depends on TASK-024)
+
 ## 2026-03-21: TASK-036 Docker Compose production: Dockerfiles + nginx
 
 ### Выполнено
