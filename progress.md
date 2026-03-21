@@ -73,6 +73,25 @@
 - TASK-034: Страница инвайта (depends on TASK-012 ✓)
 - TASK-028: Внутренний экран клуба (depends on TASK-027 ✓)
 
+## 2026-03-21: TASK-015 + TASK-034
+
+### TASK-015: Этап 2 голосования (Stage 2)
+- `@EnableScheduling` добавлен в ClubsApplication
+- `EventRepository.findEventsToTriggerStage2()` — события с event_datetime <= now()+24h и stage_2_triggered=false
+- `EventRepository.transitionToStage2()` — status=stage_2, stage_2_triggered=true
+- `EventResponseRepository` — добавлены: countConfirmed, findFirstWaitlisted, updateStage2Vote, findGoingByEventOrderByTimestamp, findMaybeByEventOrderByTimestamp
+- `Stage2Service` — @Scheduled(fixedDelay=300_000), triggerStage2, confirmParticipation (FIFO, limit check), declineParticipation (promote waitlisted)
+- `Stage2Dto.kt` — ConfirmResponseDto
+- `EventController` — POST /api/events/{id}/confirm, POST /api/events/{id}/decline
+- Статус TASK-015 обновлён на "done"
+
+### TASK-034: Страница инвайта (InvitePage)
+- `InvitePage.tsx` — загружает клуб по коду, показывает инфо, кнопка "Вступить в клуб"
+- `api/clubs.ts` — добавлен getClubByInvite(code)
+- `api/membership.ts` — добавлен joinByInviteCode(code)
+- После вступления: success state + кнопка "Перейти в клуб"
+- Статус TASK-034 обновлён на "done"
+
 
 
 ## 2026-03-21: TASK-009 + TASK-010 + TASK-013 + TASK-038

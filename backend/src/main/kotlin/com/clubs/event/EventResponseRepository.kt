@@ -1,6 +1,8 @@
 package com.clubs.event
 
+import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
+import com.clubs.generated.jooq.enums.Stage_2Vote
 import com.clubs.generated.jooq.tables.records.EventResponsesRecord
 import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import org.jooq.DSLContext
@@ -52,4 +54,50 @@ class EventResponseRepository(private val dsl: DSLContext) {
             .fetchOne(0, Int::class.java) ?: 0
         return mapOf("going" to going, "maybe" to maybe, "notGoing" to notGoing)
     }
+
+    fun countConfirmed(eventId: UUID): Int =
+        dsl.selectCount().from(EVENT_RESPONSES)
+            .where(
+                EVENT_RESPONSES.EVENT_ID.eq(eventId)
+                    .and(EVENT_RESPONSES.STAGE_2_VOTE.eq(Stage_2Vote.confirmed))
+            )
+            .fetchOne(0, Int::class.java) ?: 0
+
+    fun findFirstWaitlisted(eventId: UUID): EventResponsesRecord? =
+        dsl.selectFrom(EVENT_RESPONSES)
+            .where(
+                EVENT_RESPONSES.EVENT_ID.eq(eventId)
+                    .and(EVENT_RESPONSES.STAGE_2_VOTE.eq(Stage_2Vote.waitlisted))
+            )
+            .orderBy(EVENT_RESPONSES.STAGE_1_TIMESTAMP.asc())
+            .limit(1)
+            .fetchOne()
+
+    fun updateStage2Vote(id: UUID, vote: Stage_2Vote, finalStatus: FinalStatus): EventResponsesRecord =
+        dsl.update(EVENT_RESPONSES)
+            .set(EVENT_RESPONSES.STAGE_2_VOTE, vote)
+            .set(EVENT_RESPONSES.STAGE_2_TIMESTAMP, OffsetDateTime.now())
+            .set(EVENT_RESPONSES.FINAL_STATUS, finalStatus)
+            .set(EVENT_RESPONSES.UPDATED_AT, OffsetDateTime.now())
+            .where(EVENT_RESPONSES.ID.eq(id))
+            .returning()
+            .fetchOne()!!
+
+    fun findGoingByEventOrderByTimestamp(eventId: UUID): List<EventResponsesRecord> =
+        dsl.selectFrom(EVENT_RESPONSES)
+            .where(
+                EVENT_RESPONSES.EVENT_ID.eq(eventId)
+                    .and(EVENT_RESPONSES.STAGE_1_VOTE.eq(Stage_1Vote.going))
+            )
+            .orderBy(EVENT_RESPONSES.STAGE_1_TIMESTAMP.asc())
+            .fetch()
+
+    fun findMaybeByEventOrderByTimestamp(eventId: UUID): List<EventResponsesRecord> =
+        dsl.selectFrom(EVENT_RESPONSES)
+            .where(
+                EVENT_RESPONSES.EVENT_ID.eq(eventId)
+                    .and(EVENT_RESPONSES.STAGE_1_VOTE.eq(Stage_1Vote.maybe))
+            )
+            .orderBy(EVENT_RESPONSES.STAGE_1_TIMESTAMP.asc())
+            .fetch()
 }

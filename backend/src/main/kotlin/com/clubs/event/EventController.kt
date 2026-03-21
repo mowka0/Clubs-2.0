@@ -18,7 +18,8 @@ import java.util.UUID
 @RestController
 class EventController(
     private val eventService: EventService,
-    private val voteService: VoteService
+    private val voteService: VoteService,
+    private val stage2Service: Stage2Service
 ) {
 
     @PostMapping("/api/clubs/{id}/events")
@@ -58,4 +59,18 @@ class EventController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<MyVoteDto> =
         ResponseEntity.ok(voteService.getMyVote(id, user.userId))
+
+    @PostMapping("/api/events/{id}/confirm")
+    fun confirmParticipation(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<ConfirmResponseDto> =
+        ResponseEntity.ok(stage2Service.confirmParticipation(id, user.userId))
+
+    @PostMapping("/api/events/{id}/decline")
+    fun declineParticipation(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<ConfirmResponseDto> =
+        ResponseEntity.ok(stage2Service.declineParticipation(id, user.userId))
 }

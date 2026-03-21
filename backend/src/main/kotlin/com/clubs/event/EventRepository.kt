@@ -8,6 +8,7 @@ import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import com.clubs.generated.jooq.tables.references.EVENTS
 import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
+import java.time.OffsetDateTime
 import java.util.UUID
 
 @Repository
@@ -80,6 +81,25 @@ class EventRepository(private val dsl: DSLContext) {
             .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.STAGE_1_VOTE.eq(Stage_1Vote.not_going)))
             .fetchOne(0, Int::class.java) ?: 0
         return mapOf("going" to going, "maybe" to maybe, "notGoing" to notGoing)
+    }
+
+    fun findEventsToTriggerStage2(): List<EventsRecord> {
+        val cutoff = OffsetDateTime.now().plusHours(24)
+        return dsl.selectFrom(EVENTS)
+            .where(
+                EVENTS.STATUS.eq(EventStatus.upcoming)
+                    .and(EVENTS.STAGE_2_TRIGGERED.eq(false))
+                    .and(EVENTS.EVENT_DATETIME.lessOrEqual(cutoff))
+            )
+            .fetch()
+    }
+
+    fun transitionToStage2(id: UUID) {
+        dsl.update(EVENTS)
+            .set(EVENTS.STATUS, EventStatus.stage_2)
+            .set(EVENTS.STAGE_2_TRIGGERED, true)
+            .where(EVENTS.ID.eq(id))
+            .execute()
     }
 
     private fun fetchGoingCounts(eventIds: List<UUID>): Map<UUID, Int> {

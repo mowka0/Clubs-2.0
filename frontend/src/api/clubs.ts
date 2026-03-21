@@ -45,3 +45,7 @@ export function createClub(body: CreateClubBody): Promise<ClubDetailDto> {
 export function getMyClubs(): Promise<MembershipDto[]> {
   return apiClient.get<MembershipDto[]>('/api/users/me/clubs');
 }
+
+export function getClubByInvite(code: string): Promise<ClubDetailDto> {
+  return apiClient.get<ClubDetailDto>(`/api/invite/${code}`);
+}

@@ -21,3 +21,7 @@ export function applyToClub(clubId: string, answerText: string): Promise<Applica
 export function getMyApplications(): Promise<ApplicationDto[]> {
   return apiClient.get<ApplicationDto[]>('/api/users/me/applications');
 }
+
+export function joinByInviteCode(code: string): Promise<MembershipDto> {
+  return apiClient.post<MembershipDto>(`/api/invite/${code}/join`);
+}
