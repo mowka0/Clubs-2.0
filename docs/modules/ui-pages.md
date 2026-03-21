@@ -85,4 +85,7 @@ X = memberLimit * subscriptionPrice * 0.8
 - `applicationQuestion`: до 200 символов
 
 ### После создания
-Редирект на `/clubs/{newClubId}`.
+Редирект на `/clubs/{newClubId}/manage` (страница управления клубом). Перед переходом вызывается `fetchMyClubs()` чтобы обновить список в стор.
+
+### Список клубов организатора
+Для каждого membership с `role = organizer` загружается имя клуба через `GET /api/clubs/{id}`. Навигация по клику: `/clubs/{clubId}/manage`.

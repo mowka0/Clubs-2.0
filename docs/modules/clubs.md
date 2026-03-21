@@ -13,6 +13,7 @@ PUT  /api/clubs/{id}       → 200 ClubDetailDto
 - `owner_id` берётся из JWT, никогда из тела запроса
 - Максимум 10 клубов на одного организатора → 409 CONFLICT
 - Только owner может обновлять клуб → 403 FORBIDDEN
+- При создании клуба автоматически создаётся membership с `role = organizer`, `status = active` для владельца — чтобы `/api/users/me/clubs` возвращал клуб в списке и фронтенд мог показывать кнопку управления
 
 ### Валидация CreateClubRequest
 | Поле | Правило | Ошибка |

@@ -208,10 +208,10 @@ interface AuthState {
 | `/my-clubs` | `MyClubsPage` | Да (таб My Clubs) | Нет | |
 | `/organizer` | `OrganizerPage` | Да (таб Organizer) | Нет | |
 | `/profile` | `ProfilePage` | Да (таб Profile) | Нет | |
-| `/clubs/:id` | `ClubPage` | Нет | Да | Детальная карточка клуба |
+| `/clubs/:id` | `ClubPage` | Да | Нет | Детальная карточка клуба |
+| `/clubs/:id/manage` | `OrganizerClubManage` | Да | Нет | Только для организаторов |
 | `/clubs/:id/interior` | `ClubInteriorPage` | Нет | Да | Только для участников |
 | `/events/:id` | `EventPage` | Нет | Да | Только для участников |
-| `/organizer/clubs/:id` | `OrganizerClubManagePage` | Нет | Да | Только для организаторов |
 | `/invite/:code` | `InvitePage` | Нет | Да | Вступление по приглашению |
 
 **Архитектура роутера:** один родительский маршрут (`path: '/'`) с компонентом `<Layout />` содержит все дочерние маршруты через `children`. Это позволяет Layout рендерить BottomTabBar только там, где нужно.
@@ -246,6 +246,7 @@ BottomTabBar рендерится в Layout, но виден ТОЛЬКО на 4
 ```
 TAB_PATHS = ['/', '/my-clubs', '/organizer', '/profile']
 isTabPage = TAB_PATHS.includes(location.pathname)
+           || /^\/clubs\/[^/]+(\/manage)?$/.test(location.pathname)
 ```
 
 Если `isTabPage === false` — компонент возвращает `null`.
@@ -451,7 +452,7 @@ export const router = createBrowserRouter([
 | 2 | Пользователь нажимает BackButton на `/invite/:code` (пришёл через deep link) | `navigate(-1)` ведёт на предыдущую страницу в истории Router. Если стартовал прямо с инвайт-страницы — истории нет, `navigate(-1)` не сработает. Решение: в `InvitePage` использовать модифицированный хук с fallback: `navigate(canGoBack ? -1 : '/')`. Определять `canGoBack` через проверку `window.history.length > 1`. |
 | 3 | Пользователь кликает на таб Discovery (`/`), находясь уже на `/` | Повторная навигация на тот же маршрут. React Router v7 не вызывает ошибку, но и не перезагружает страницу. Поведение корректно. |
 | 4 | Пользователь кликает на таб Organizer (`/organizer`) находясь на `/organizer/clubs/123` | Переход на `/organizer`, таб становится активным. BackButton скрывается (на `/organizer` нет `useBackButton`). BottomTabBar показывается. |
-| 5 | BottomTabBar на `/clubs/123` | `TAB_PATHS.includes('/clubs/123')` = `false`, BottomTabBar возвращает `null`. Контент без нижнего отступа. |
+| 5 | BottomTabBar на `/clubs/123` | `isTabBarRoute('/clubs/123')` = `true` (regex match), BottomTabBar показывается. То же для `/clubs/123/manage`. |
 | 6 | Spinner из telegram-ui не найден | Если `Spinner` не экспортируется из `@telegram-apps/telegram-ui`, использовать простой текстовый fallback: `<div style={{textAlign:'center', padding:'20px'}}>Загрузка...</div>`. Проверить наличие через импорт перед использованием. |
 | 7 | `backButton` вызывается вне Telegram (в браузере при разработке) | `backButton.show()` может бросить исключение вне Telegram WebApp. Обернуть в `try/catch` или проверить `backButton.isSupported()` перед вызовом. Поведение в браузере: graceful degrade (кнопки нет, но страница работает). |
 | 8 | Маршрут `/clubs/:id/interior` — вложенный path | `TAB_PATHS.includes('/clubs/abc/interior')` = `false`. Корректно: BottomTabBar скрыта, BackButton показывается. |

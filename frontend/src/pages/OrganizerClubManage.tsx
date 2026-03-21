@@ -564,17 +564,13 @@ export const OrganizerClubManage: FC = () => {
   return (
     <List>
       {/* Club header */}
-      {clubLoading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
-          <Spinner size="m" />
-        </div>
-      ) : club ? (
+      {!clubLoading && club && (
         <Section>
           <Cell subtitle={`${club.memberCount} / ${club.memberLimit} участников | ${club.city}`}>
             {club.name}
           </Cell>
         </Section>
-      ) : null}
+      )}
 
       {/* Tabs */}
       <div style={{ padding: '0 16px', marginBottom: 8 }}>

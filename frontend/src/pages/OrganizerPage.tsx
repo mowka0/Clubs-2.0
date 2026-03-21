@@ -13,8 +13,9 @@ import {
   Placeholder,
 } from '@telegram-apps/telegram-ui';
 import { useClubsStore } from '../store/useClubsStore';
-import { createClub } from '../api/clubs';
+import { createClub, getClub } from '../api/clubs';
 import type { CreateClubBody } from '../api/clubs';
+import type { ClubDetailDto } from '../types/api';
 
 const CATEGORIES = [
   { value: 'sport', label: 'Спорт' },
@@ -221,6 +222,7 @@ export const OrganizerPage: FC = () => {
   const navigate = useNavigate();
   const { myClubs, loading, fetchMyClubs } = useClubsStore();
   const [showModal, setShowModal] = useState(false);
+  const [clubDetails, setClubDetails] = useState<Record<string, ClubDetailDto>>({});
 
   useEffect(() => {
     fetchMyClubs();
@@ -228,9 +230,21 @@ export const OrganizerPage: FC = () => {
 
   const ownedClubs = myClubs.filter((m) => m.role === 'organizer');
 
-  const handleCreated = (id: string) => {
+  // Load club names for owned clubs
+  useEffect(() => {
+    const missing = ownedClubs.map((m) => m.clubId).filter((id) => !clubDetails[id]);
+    if (missing.length === 0) return;
+    missing.forEach((id) => {
+      getClub(id)
+        .then((club) => setClubDetails((prev) => ({ ...prev, [id]: club })))
+        .catch(() => {});
+    });
+  }, [ownedClubs]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCreated = async (id: string) => {
     setShowModal(false);
-    navigate(`/clubs/${id}`);
+    await fetchMyClubs();
+    navigate(`/clubs/${id}/manage`);
   };
 
   return (
@@ -243,10 +257,10 @@ export const OrganizerPage: FC = () => {
         {ownedClubs.map((m) => (
           <Cell
             key={m.id}
-            onClick={() => navigate(`/organizer/clubs/${m.clubId}`)}
-            subtitle={`${m.role === 'organizer' ? 'Организатор' : 'Участник'}`}
+            onClick={() => navigate(`/clubs/${m.clubId}/manage`)}
+            subtitle="Организатор"
           >
-            Клуб {m.clubId.slice(0, 8)}…
+            {clubDetails[m.clubId]?.name ?? `Клуб ${m.clubId.slice(0, 8)}…`}
           </Cell>
         ))}
       </Section>
