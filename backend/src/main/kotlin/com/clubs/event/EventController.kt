@@ -82,4 +82,20 @@ class EventController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<AttendanceResultDto> =
         ResponseEntity.ok(attendanceService.markAttendance(id, user.userId, request))
+
+    @PostMapping("/api/events/{id}/dispute")
+    fun disputeAttendance(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<AttendanceResultDto> =
+        ResponseEntity.ok(attendanceService.disputeAttendance(id, user.userId))
+
+    @PostMapping("/api/events/{id}/attendance/{userId}/resolve")
+    fun resolveDispute(
+        @PathVariable id: UUID,
+        @PathVariable userId: UUID,
+        @RequestBody request: ResolveDisputeRequest,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<AttendanceResultDto> =
+        ResponseEntity.ok(attendanceService.resolveDispute(id, user.userId, userId, request.attended))
 }

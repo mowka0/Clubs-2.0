@@ -15,3 +15,7 @@ data class AttendanceResultDto(
     val eventId: UUID,
     val markedCount: Int
 )
+
+data class ResolveDisputeRequest(
+    val attended: Boolean
+)
