@@ -1,0 +1,52 @@
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/clubs}
+    username: ${DB_USER:clubs}
+    password: ${DB_PASSWORD:clubs_secret}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+jwt:
+  secret: ${JWT_SECRET:dev-secret-key-that-is-at-least-32-chars}
+  expiration: ${JWT_EXPIRATION:86400000}
+
+telegram:
+  bot-token: ${TELEGRAM_BOT_TOKEN:}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 9
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  flyway:
+    enabled: true
