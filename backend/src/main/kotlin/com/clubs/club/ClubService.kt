@@ -30,8 +30,22 @@ class ClubService(private val clubRepository: ClubRepository) {
         val count = clubRepository.countByOwnerId(ownerId)
         if (count >= 10) throw ConflictException("Maximum 10 clubs per organizer")
 
-        val club = clubRepository.create(request, ownerId)
+        val inviteCode = if (request.accessType == "private") UUID.randomUUID().toString().replace("-", "").take(16) else null
+        val club = clubRepository.create(request, ownerId, inviteCode)
         return club.toDto()
+    }
+
+    fun getClubByInviteCode(code: String): ClubDetailDto {
+        val club = clubRepository.findByInviteCode(code) ?: throw NotFoundException("Invite link not found")
+        return club.toDto()
+    }
+
+    fun regenerateInviteLink(clubId: UUID, userId: UUID): ClubDetailDto {
+        val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
+        if (club.ownerId != userId) throw ForbiddenException("Only the club owner can regenerate invite link")
+        val newCode = UUID.randomUUID().toString().replace("-", "").take(16)
+        val updated = clubRepository.updateInviteCode(clubId, newCode) ?: throw NotFoundException("Club not found")
+        return updated.toDto()
     }
 
     fun getClub(id: UUID): ClubDetailDto {

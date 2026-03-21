@@ -18,7 +18,7 @@ import java.util.UUID
 @Repository
 class ClubRepository(private val dsl: DSLContext) {
 
-    fun create(request: CreateClubRequest, ownerId: UUID): ClubsRecord =
+    fun create(request: CreateClubRequest, ownerId: UUID, inviteCode: String? = null): ClubsRecord =
         dsl.insertInto(CLUBS)
             .set(CLUBS.ID, UUID.randomUUID())
             .set(CLUBS.OWNER_ID, ownerId)
@@ -33,11 +33,25 @@ class ClubRepository(private val dsl: DSLContext) {
             .set(CLUBS.AVATAR_URL, request.avatarUrl)
             .set(CLUBS.RULES, request.rules)
             .set(CLUBS.APPLICATION_QUESTION, request.applicationQuestion)
+            .set(CLUBS.INVITE_LINK, inviteCode)
             .set(CLUBS.MEMBER_COUNT, 0)
             .set(CLUBS.ACTIVITY_RATING, 0)
             .set(CLUBS.IS_ACTIVE, true)
             .returning()
             .fetchOne()!!
+
+    fun findByInviteCode(code: String): ClubsRecord? =
+        dsl.selectFrom(CLUBS)
+            .where(CLUBS.INVITE_LINK.eq(code))
+            .fetchOne()
+
+    fun updateInviteCode(id: UUID, code: String): ClubsRecord? {
+        dsl.update(CLUBS)
+            .set(CLUBS.INVITE_LINK, code)
+            .where(CLUBS.ID.eq(id))
+            .execute()
+        return findById(id)
+    }
 
     fun findById(id: UUID): ClubsRecord? =
         dsl.selectFrom(CLUBS)

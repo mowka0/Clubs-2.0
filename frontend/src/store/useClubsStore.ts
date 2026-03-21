@@ -26,7 +26,13 @@ export const useClubsStore = create<ClubsState>((set) => ({
     set({ loading: true, error: null });
     try {
       const res = await getClubs(filters);
-      set({ clubs: res.content, totalPages: res.totalPages, totalElements: res.totalElements, loading: false });
+      const page = Number(filters?.page ?? 0);
+      set((state) => ({
+        clubs: page === 0 ? res.content : [...state.clubs, ...res.content],
+        totalPages: res.totalPages,
+        totalElements: res.totalElements,
+        loading: false,
+      }));
     } catch (e) {
       set({ error: (e as Error).message, loading: false });
     }

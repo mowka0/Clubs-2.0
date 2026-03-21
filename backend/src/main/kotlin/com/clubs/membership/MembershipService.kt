@@ -33,10 +33,28 @@ class MembershipService(
 
         val membership = membershipRepository.create(userId, clubId)
 
-        // Update clubs.member_count
         dsl.update(CLUBS)
             .set(CLUBS.MEMBER_COUNT, (club.memberCount ?: 0) + 1)
             .where(CLUBS.ID.eq(clubId))
+            .execute()
+
+        return membership.toDto()
+    }
+
+    fun joinByInviteCode(code: String, userId: UUID): MembershipDto {
+        val club = clubRepository.findByInviteCode(code) ?: throw NotFoundException("Invite link not found")
+
+        val existing = membershipRepository.findByUserAndClub(userId, club.id!!)
+        if (existing != null) throw ConflictException("Already a member")
+
+        val activeCount = membershipRepository.countActiveByClubId(club.id!!)
+        if (activeCount >= (club.memberLimit ?: 0)) throw ValidationException("Club is full")
+
+        val membership = membershipRepository.create(userId, club.id!!)
+
+        dsl.update(CLUBS)
+            .set(CLUBS.MEMBER_COUNT, (club.memberCount ?: 0) + 1)
+            .where(CLUBS.ID.eq(club.id))
             .execute()
 
         return membership.toDto()

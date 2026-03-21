@@ -1,5 +1,80 @@
 # Clubs 2.0 — Progress Log
 
+## 2026-03-21: TASK-011 + TASK-014 + TASK-026 + TASK-030
+
+### Specs созданы (Analyst)
+- `docs/modules/membership.md` — добавлена секция TASK-011 (заявки)
+- `docs/modules/events.md` — добавлена секция TASK-014 (голосование Этап 1)
+- `docs/modules/ui-pages.md` — TASK-026 (Discovery) и TASK-030 (Organizer)
+- `docs/modules/infrastructure.md` — TASK-001, 002, 003, 004, 007, 036 (backfill)
+- `docs/modules/frontend-core.md` — добавлены TASK-023 и TASK-024 секции (backfill)
+
+### TASK-011: Заявки в закрытый клуб
+- `ApplicationDto.kt` — ApplicationDto, SubmitApplicationRequest, RejectApplicationRequest
+- `ApplicationRepository.kt` — create, findById, findByClubId, findPendingByUserAndClub, countTodayByUser, updateStatus, findByUserId
+- `ApplicationService.kt` — submitApplication (validation: accessType=closed, answerText если есть вопрос, rate limit 5/день), approveApplication (creates membership), rejectApplication, getClubApplications, getMyApplications
+- `ApplicationController.kt` — POST /api/clubs/{id}/apply, GET /api/clubs/{id}/applications, POST /api/applications/{id}/approve, POST /api/applications/{id}/reject
+- `UserController.kt` — добавлен GET /api/users/me/applications
+- `./gradlew compileKotlin` — BUILD SUCCESSFUL
+- Статус TASK-011 обновлён на "done"
+
+### TASK-014: Этап 1 голосования
+- `VoteDto.kt` — CastVoteRequest, VoteResponseDto, MyVoteDto
+- `EventResponseRepository.kt` — upsertStage1Vote (insert или update), findByEventAndUser, countByVote
+- `VoteService.kt` — castVote (проверки: member, status=upcoming, voting open by days), getMyVote; upsert логика
+- `EventController.kt` — добавлены POST /api/events/{id}/vote и GET /api/events/{id}/my-vote
+- Статус TASK-014 обновлён на "done"
+
+### TASK-026: Discovery страница
+- `ClubCard.tsx` — карточка клуба: название, категория (badge), город, цена, участники, ближайшее событие
+- `ClubFilters.tsx` — поиск (text), категория (chips с горизонтальным скроллом), город (text)
+- `DiscoveryPage.tsx` — infinite scroll через IntersectionObserver, debounce 300ms для фильтров, empty state, skeleton spinner
+- `useClubsStore.ts` — обновлён fetchClubs: append (page > 0) vs replace (page = 0) для infinite scroll
+- `npx tsc --noEmit` — 0 ошибок
+- Статус TASK-026 обновлён на "done"
+
+### TASK-030: Панель организатора
+- `OrganizerPage.tsx` — список своих клубов + кнопка создания
+- CreateClubModal — 5 шагов: основное, категория, участники+цена, описание, вопрос при вступлении
+- Калькулятор дохода: memberLimit * subscriptionPrice * 0.8
+- Валидация каждого шага перед переходом
+- После создания — редирект на /clubs/{id}
+- Статус TASK-030 обновлён на "done"
+
+### Следующие шаги (разблокированы)
+- TASK-019: Автоотклонение заявок (depends on TASK-011 ✓)
+- TASK-027: Страница клуба детальная (depends on TASK-011 ✓)
+- TASK-015: Этап 2 голосования (depends on TASK-014 ✓)
+
+## 2026-03-21: TASK-027 + TASK-012 + GET /api/users/me/clubs
+
+### TASK-027: Страница клуба (ClubPage)
+- `ClubPage.tsx` — полная информация: обложка, название, категория/тип, город, участники, описание, правила
+- Кнопка вступления: "Вступить" (open) / "Хочу вступить" (closed) / "Вы участник" (если уже в клубе)
+- Для закрытого клуба: Modal с полем ответа на вопрос организатора
+- useBackButton(true) — кнопка назад в Telegram
+- Статус TASK-027 обновлён на "done"
+
+### TASK-012: Приватный клуб по инвайт-ссылке
+- `ClubRepository.findByInviteCode()`, `updateInviteCode()`
+- При создании private клуба → генерируется 16-символьный invite code
+- `ClubService.getClubByInviteCode()`, `regenerateInviteLink()`
+- `MembershipService.joinByInviteCode()` — вступление по инвайту (без проверки access_type)
+- `InviteController.kt` — GET /api/invite/{code}, POST /api/invite/{code}/join, POST /api/clubs/{id}/regenerate-invite
+- Статус TASK-012 обновлён на "done"
+
+### GET /api/users/me/clubs (бонус)
+- `MembershipRepository.findByUserId()` — найти все активные членства пользователя
+- `UserController` — добавлен GET /api/users/me/clubs → List<MembershipDto>
+- Используется в OrganizerPage и ClubPage для проверки членства
+
+### Следующие шаги
+- TASK-015 [critical]: Этап 2 голосования (cron + подтверждения)
+- TASK-034: Страница инвайта (depends on TASK-012 ✓)
+- TASK-028: Внутренний экран клуба (depends on TASK-027 ✓)
+
+
+
 ## 2026-03-21: TASK-009 + TASK-010 + TASK-013 + TASK-038
 
 ### Specs созданы (Analyst)

@@ -47,4 +47,12 @@ class MembershipRepository(private val dsl: DSLContext) {
         dsl.selectFrom(MEMBERSHIPS)
             .where(MEMBERSHIPS.CLUB_ID.eq(clubId))
             .fetch()
+
+    fun findByUserId(userId: UUID): List<MembershipsRecord> =
+        dsl.selectFrom(MEMBERSHIPS)
+            .where(
+                MEMBERSHIPS.USER_ID.eq(userId)
+                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period))
+            )
+            .fetch()
 }

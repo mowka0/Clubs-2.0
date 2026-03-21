@@ -1,0 +1,33 @@
+# Gradle
+build/
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Kotlin
+*.class
+
+# JARs
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# jOOQ generated sources
+src/generated/
+
+# Logs
+*.log
+logs/

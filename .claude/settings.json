@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew build:*)",
+      "Bash(docker compose:*)",
+      "Bash(python3 -c \":*)",
+      "Bash(npm run:*)",
+      "Read(//private/tmp/**)",
+      "Bash(CLUB_ID=\"52fe1644-8a1b-4738-a353-81de3eeaed1f\" curl -s \"http://localhost:8080/api/clubs/$CLUB_ID\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(npx tsc:*)",
+      "Bash(./gradlew compileKotlin --no-daemon)"
+    ]
+  }
+}

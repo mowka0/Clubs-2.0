@@ -16,7 +16,10 @@ import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
 @RestController
-class EventController(private val eventService: EventService) {
+class EventController(
+    private val eventService: EventService,
+    private val voteService: VoteService
+) {
 
     @PostMapping("/api/clubs/{id}/events")
     fun createEvent(
@@ -40,4 +43,19 @@ class EventController(private val eventService: EventService) {
     @GetMapping("/api/events/{id}")
     fun getEvent(@PathVariable id: UUID): ResponseEntity<EventDetailDto> =
         ResponseEntity.ok(eventService.getEvent(id))
+
+    @PostMapping("/api/events/{id}/vote")
+    fun castVote(
+        @PathVariable id: UUID,
+        @RequestBody request: CastVoteRequest,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<VoteResponseDto> =
+        ResponseEntity.ok(voteService.castVote(id, user.userId, request))
+
+    @GetMapping("/api/events/{id}/my-vote")
+    fun getMyVote(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<MyVoteDto> =
+        ResponseEntity.ok(voteService.getMyVote(id, user.userId))
 }
