@@ -17,13 +17,14 @@ import {
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { getClubMembers, getMemberProfile, getClubApplications, approveApplication, rejectApplication } from '../api/membership';
-import { getClubEvents, createEvent, markAttendance, getFinances } from '../api/events';
+import { getClubEvents, createEvent, markAttendance, getFinances, getEvent } from '../api/events';
 import { getClub } from '../api/clubs';
 import type { CreateEventBody } from '../api/events';
 import type {
   MemberListItemDto,
   ClubApplicationDto,
   EventListItemDto,
+  EventDetailDto,
   FinancesDto,
   ClubDetailDto,
 } from '../types/api';
@@ -90,7 +91,7 @@ const MemberProfileModal: FC<{
         {/* Avatar + name */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
           <Avatar
-            size={56}
+            size={48}
             src={member.avatarUrl ?? undefined}
             acronym={`${member.firstName.charAt(0)}${member.lastName?.charAt(0) ?? ''}`}
           />
@@ -298,6 +299,77 @@ const ApplicationsTab: FC<{ clubId: string }> = ({ clubId }) => {
   );
 };
 
+// ---- Event Detail Modal ----
+
+const EVENT_STATUS_LABELS: Record<string, string> = {
+  upcoming: 'Запланировано',
+  stage_1: 'Голосование',
+  stage_2: 'Подтверждение',
+  completed: 'Завершено',
+  cancelled: 'Отменено',
+};
+
+const EventDetailModal: FC<{ eventId: string; onClose: () => void }> = ({ eventId, onClose }) => {
+  const [detail, setDetail] = useState<EventDetailDto | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getEvent(eventId)
+      .then(setDetail)
+      .finally(() => setLoading(false));
+  }, [eventId]);
+
+  return (
+    <Modal open onOpenChange={(open) => !open && onClose()}>
+      <div style={{ padding: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <Text weight="2" style={{ fontSize: 18 }}>Детали события</Text>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--tgui--text_color)' }}>✕</button>
+        </div>
+
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+            <Spinner size="m" />
+          </div>
+        ) : detail ? (
+          <>
+            <Section>
+              <Cell subtitle="Название">{detail.title}</Cell>
+              <Cell subtitle="Дата и время">{formatDatetime(detail.eventDatetime)}</Cell>
+              <Cell subtitle="Место">{detail.locationText}</Cell>
+              <Cell subtitle="Статус">{EVENT_STATUS_LABELS[detail.status] ?? detail.status}</Cell>
+            </Section>
+
+            <Section header="Участники">
+              <Cell subtitle="Пойдут / лимит">{detail.goingCount} / {detail.participantLimit}</Cell>
+              <Cell subtitle="Может быть">{detail.maybeCount}</Cell>
+              <Cell subtitle="Не пойдут">{detail.notGoingCount}</Cell>
+              <Cell subtitle="Подтверждено">{detail.confirmedCount}</Cell>
+            </Section>
+
+            {detail.description && (
+              <Section header="Описание">
+                <div style={{ padding: '12px 16px', lineHeight: 1.5, color: 'var(--tgui--text_color)' }}>
+                  {detail.description}
+                </div>
+              </Section>
+            )}
+
+            {detail.status === 'completed' && (
+              <Section header="Посещаемость">
+                <Cell subtitle="Явка отмечена">{detail.attendanceMarked ? 'Да' : 'Нет'}</Cell>
+                <Cell subtitle="Явка финализирована">{detail.attendanceFinalized ? 'Да' : 'Нет'}</Cell>
+              </Section>
+            )}
+          </>
+        ) : (
+          <Placeholder description="Не удалось загрузить событие" />
+        )}
+      </div>
+    </Modal>
+  );
+};
+
 // ---- Events Tab ----
 
 interface EventFormState {
@@ -326,6 +398,7 @@ const EventsTab: FC<{ clubId: string }> = ({ clubId }) => {
   const [attendanceEventId, setAttendanceEventId] = useState<string | null>(null);
   const [attendanceList, setAttendanceList] = useState<{ userId: string; attended: boolean }[]>([]);
   const [markingAttendance, setMarkingAttendance] = useState(false);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   const fetchEvents = useCallback(() => {
     setLoading(true);
@@ -470,6 +543,7 @@ const EventsTab: FC<{ clubId: string }> = ({ clubId }) => {
           {upcomingEvents.map((evt) => (
             <Cell
               key={evt.id}
+              onClick={() => setSelectedEventId(evt.id)}
               subtitle={`${formatDatetime(evt.eventDatetime)} | ${evt.locationText}`}
               after={
                 <Badge type="number" mode="secondary">
@@ -488,9 +562,10 @@ const EventsTab: FC<{ clubId: string }> = ({ clubId }) => {
           {completedEvents.map((evt) => (
             <Cell
               key={evt.id}
+              onClick={() => setSelectedEventId(evt.id)}
               subtitle={formatDatetime(evt.eventDatetime)}
               after={
-                <Button size="s" mode="outline" onClick={() => openAttendanceModal(evt)}>
+                <Button size="s" mode="outline" onClick={(e) => { e.stopPropagation(); openAttendanceModal(evt); }}>
                   Присутствие
                 </Button>
               }
@@ -503,6 +578,11 @@ const EventsTab: FC<{ clubId: string }> = ({ clubId }) => {
 
       {upcomingEvents.length === 0 && completedEvents.length === 0 && !showForm && (
         <Placeholder description="Событий пока нет. Создайте первое!" />
+      )}
+
+      {/* Event Detail Modal */}
+      {selectedEventId && (
+        <EventDetailModal eventId={selectedEventId} onClose={() => setSelectedEventId(null)} />
       )}
 
       {/* Attendance Modal */}
