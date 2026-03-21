@@ -305,7 +305,7 @@ Reviewer проверяет:
 - Нет `any` типа — всегда конкретный тип
 ```
 
-### 4.2 Commits
+### 4.2 Commits & Pull Requests
 
 ```
 Формат: conventional commits
@@ -315,10 +315,15 @@ Reviewer проверяет:
   chore(docker): add healthcheck to backend service
   refactor(event): extract voting logic to separate service
 
-Правила:
+Правила коммитов:
 - Один коммит = одно логическое изменение
 - Коммит-сообщение на английском
 - Не коммитить .env, secrets, node_modules, build/
+
+Правила PR и веток:
+- При создании PR через `gh pr merge` НИКОГДА не использовать флаг --delete-branch
+- Ветки после мержа НЕ удалять — они остаются для истории
+- В описании PR указывать ссылку на документацию, если она обновлялась
 ```
 
 ### 4.3 Тестирование
