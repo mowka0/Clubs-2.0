@@ -16,7 +16,7 @@ import {
   TabsList,
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
-import { getClubMembers, getClubApplications, approveApplication, rejectApplication } from '../api/membership';
+import { getClubMembers, getMemberProfile, getClubApplications, approveApplication, rejectApplication } from '../api/membership';
 import { getClubEvents, createEvent, markAttendance, getFinances } from '../api/events';
 import { getClub } from '../api/clubs';
 import type { CreateEventBody } from '../api/events';
@@ -58,11 +58,86 @@ function formatDatetime(iso: string): string {
   });
 }
 
+// ---- Member Profile Modal ----
+
+const MemberProfileModal: FC<{
+  member: MemberListItemDto;
+  clubId: string;
+  onClose: () => void;
+}> = ({ member, clubId, onClose }) => {
+  const [profile, setProfile] = useState<import('../types/api').MemberProfileDto | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getMemberProfile(clubId, member.userId)
+      .then(setProfile)
+      .finally(() => setLoading(false));
+  }, [clubId, member.userId]);
+
+  const joinedAt = member.joinedAt
+    ? new Date(member.joinedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+    : '—';
+
+  return (
+    <Modal open onOpenChange={(open) => !open && onClose()}>
+      <div style={{ padding: 16 }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <Text weight="2" style={{ fontSize: 18 }}>Профиль участника</Text>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--tgui--text_color)' }}>✕</button>
+        </div>
+
+        {/* Avatar + name */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <Avatar
+            size={56}
+            src={member.avatarUrl ?? undefined}
+            acronym={`${member.firstName.charAt(0)}${member.lastName?.charAt(0) ?? ''}`}
+          />
+          <div>
+            <Text weight="1" style={{ fontSize: 17, display: 'block' }}>
+              {member.firstName} {member.lastName ?? ''}
+            </Text>
+            {profile?.username && (
+              <Text style={{ fontSize: 13, color: 'var(--tgui--hint_color)', display: 'block' }}>
+                @{profile.username}
+              </Text>
+            )}
+          </div>
+        </div>
+
+        {/* Status in club */}
+        <Section header="Статус в клубе">
+          <Cell subtitle="Роль">
+            {member.role === 'organizer' ? 'Организатор' : 'Участник'}
+          </Cell>
+          <Cell subtitle="В клубе с">{joinedAt}</Cell>
+        </Section>
+
+        {/* Reputation */}
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}>
+            <Spinner size="s" />
+          </div>
+        ) : profile ? (
+          <Section header="Репутация">
+            <Cell subtitle="Индекс надёжности">{profile.reliabilityIndex}</Cell>
+            <Cell subtitle="Выполнение обещаний">{profile.promiseFulfillmentPct}%</Cell>
+            <Cell subtitle="Подтверждений участия">{profile.totalConfirmations}</Cell>
+            <Cell subtitle="Посещений событий">{profile.totalAttendances}</Cell>
+          </Section>
+        ) : null}
+      </div>
+    </Modal>
+  );
+};
+
 // ---- Members Tab ----
 
 const MembersTab: FC<{ clubId: string }> = ({ clubId }) => {
   const [members, setMembers] = useState<MemberListItemDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedMember, setSelectedMember] = useState<MemberListItemDto | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -84,30 +159,39 @@ const MembersTab: FC<{ clubId: string }> = ({ clubId }) => {
   }
 
   return (
-    <Section>
-      {members.map((m) => (
-        <Cell
-          key={m.userId}
-          before={
-            <Avatar
-              size={40}
-              src={m.avatarUrl ?? undefined}
-              acronym={`${m.firstName.charAt(0)}${m.lastName?.charAt(0) ?? ''}`}
-            />
-          }
-          subtitle={`Надёжность: ${m.reliabilityIndex}`}
-          after={
-            m.role === 'organizer' ? (
-              <Badge type="number" mode="primary">
-                Орг
-              </Badge>
-            ) : undefined
-          }
-        >
-          {m.firstName} {m.lastName ?? ''}
-        </Cell>
-      ))}
-    </Section>
+    <>
+      <Section>
+        {members.map((m) => (
+          <Cell
+            key={m.userId}
+            onClick={() => setSelectedMember(m)}
+            before={
+              <Avatar
+                size={40}
+                src={m.avatarUrl ?? undefined}
+                acronym={`${m.firstName.charAt(0)}${m.lastName?.charAt(0) ?? ''}`}
+              />
+            }
+            subtitle={`Надёжность: ${m.reliabilityIndex} · Обещания: ${m.promiseFulfillmentPct}%`}
+            after={
+              m.role === 'organizer' ? (
+                <Badge type="number" mode="primary">Орг</Badge>
+              ) : undefined
+            }
+          >
+            {m.firstName} {m.lastName ?? ''}
+          </Cell>
+        ))}
+      </Section>
+
+      {selectedMember && (
+        <MemberProfileModal
+          member={selectedMember}
+          clubId={clubId}
+          onClose={() => setSelectedMember(null)}
+        />
+      )}
+    </>
   );
 };
 
