@@ -1,5 +1,6 @@
 package com.clubs.club
 
+import com.clubs.common.dto.PageResponse
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
@@ -12,6 +13,15 @@ import java.util.UUID
 
 @Service
 class ClubService(private val clubRepository: ClubRepository) {
+
+    fun getClubs(filters: ClubFilterParams): PageResponse<ClubListItemDto> {
+        filters.category?.let { validateCategory(it) }
+        filters.accessType?.let { validateAccessType(it) }
+        if (filters.minPrice != null && filters.maxPrice != null && filters.minPrice > filters.maxPrice) {
+            throw ValidationException("minPrice must not be greater than maxPrice")
+        }
+        return clubRepository.findAll(filters)
+    }
 
     fun createClub(request: CreateClubRequest, ownerId: UUID): ClubDetailDto {
         validateCategory(request.category)

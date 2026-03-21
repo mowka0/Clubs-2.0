@@ -1,5 +1,6 @@
 package com.clubs.club
 
+import com.clubs.common.dto.PageResponse
 import com.clubs.common.security.AuthenticatedUser
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
@@ -11,12 +12,28 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
 @RestController
 @RequestMapping("/api/clubs")
 class ClubController(private val clubService: ClubService) {
+
+    @GetMapping
+    fun getClubs(
+        @RequestParam(required = false) category: String?,
+        @RequestParam(required = false) city: String?,
+        @RequestParam(required = false) accessType: String?,
+        @RequestParam(required = false) minPrice: Int?,
+        @RequestParam(required = false) maxPrice: Int?,
+        @RequestParam(required = false) search: String?,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int
+    ): ResponseEntity<PageResponse<ClubListItemDto>> {
+        val filters = ClubFilterParams(category, city, accessType, minPrice, maxPrice, search, page, size)
+        return ResponseEntity.ok(clubService.getClubs(filters))
+    }
 
     @PostMapping
     fun createClub(

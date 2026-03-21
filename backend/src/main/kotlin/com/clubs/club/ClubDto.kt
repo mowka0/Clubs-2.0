@@ -5,7 +5,28 @@ import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
+import java.time.OffsetDateTime
 import java.util.UUID
+
+data class NearestEventDto(
+    val id: UUID,
+    val title: String,
+    val eventDatetime: OffsetDateTime,
+    val goingCount: Int
+)
+
+data class ClubListItemDto(
+    val id: UUID,
+    val name: String,
+    val category: String,
+    val accessType: String,
+    val city: String,
+    val subscriptionPrice: Int,
+    val memberCount: Int,
+    val memberLimit: Int,
+    val avatarUrl: String?,
+    val nearestEvent: NearestEventDto?
+)
 
 data class ClubDetailDto(
     val id: UUID,
@@ -81,4 +102,15 @@ data class UpdateClubRequest(
     val avatarUrl: String? = null,
     val rules: String? = null,
     val applicationQuestion: String? = null
+)
+
+data class ClubFilterParams(
+    val category: String? = null,
+    val city: String? = null,
+    val accessType: String? = null,
+    val minPrice: Int? = null,
+    val maxPrice: Int? = null,
+    val search: String? = null,
+    val page: Int = 0,
+    val size: Int = 20
 )

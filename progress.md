@@ -1,5 +1,41 @@
 # Clubs 2.0 — Progress Log
 
+## 2026-03-21: TASK-009 + TASK-010 + TASK-013 + TASK-038
+
+### Specs созданы (Analyst)
+- `docs/modules/clubs.md` — каталог, фильтры, ClubListItemDto
+- `docs/modules/membership.md` — join, edge cases
+- `docs/modules/events.md` — CRUD событий, EventDetailDto
+- `docs/modules/frontend-stores.md` — Zustand stores, api modules
+
+### TASK-009: Каталог клубов (Discovery API)
+- `ClubListItemDto`, `NearestEventDto`, `ClubFilterParams` добавлены в ClubDto.kt
+- `ClubRepository.findAll()` — фильтры по category/city/accessType/price/search, private скрыты, сортировка activity_rating DESC
+- `ClubRepository.fetchNearestEvents()` — ближайшее событие для каждого клуба одним запросом
+- `ClubService.getClubs()` — валидация фильтров, minPrice/maxPrice check
+- `GET /api/clubs` добавлен в ClubController
+- Статус TASK-009 обновлён на "done"
+
+### TASK-010: Вступление в открытый клуб
+- `MembershipDto`, `MembershipRepository`, `MembershipService`, `MembershipController`
+- `POST /api/clubs/{id}/join` — проверки: open, not member, not full; updates member_count
+- Статус TASK-010 обновлён на "done"
+
+### TASK-013: CRUD событий
+- `EventDto.kt` — EventDetailDto, EventListItemDto, CreateEventRequest (@Future, @Positive, @Min/@Max)
+- `EventRepository` — create, findById, findByClubId (с пагинацией), getVoteCounts
+- `EventService` — createEvent (403 если не owner), getClubEvents, getEvent
+- `EventController` — POST /api/clubs/{id}/events, GET /api/clubs/{id}/events, GET /api/events/{id}
+- Статус TASK-013 обновлён на "done"
+
+### TASK-038: Frontend Zustand stores
+- `src/types/api.ts` — полный набор DTO типов
+- `src/api/clubs.ts`, `src/api/events.ts`, `src/api/membership.ts` — api модули
+- `src/store/useClubsStore.ts` — clubs, myClubs, fetchClubs, fetchMyClubs
+- `src/store/useEventsStore.ts` — eventsByClub, currentEvent, fetchClubEvents, fetchEvent
+- `npm run build` — BUILD SUCCESSFUL
+- Статус TASK-038 обновлён на "done"
+
 ## 2026-03-21: TASK-008 CRUD клубов + TASK-024 Telegram SDK init
 
 ### TASK-008: Backend CRUD клубов
