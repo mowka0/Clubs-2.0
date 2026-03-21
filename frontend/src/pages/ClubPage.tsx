@@ -1,5 +1,5 @@
 import { FC, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   List,
   Section,
@@ -14,6 +14,7 @@ import {
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useClubsStore } from '../store/useClubsStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { getClub } from '../api/clubs';
 import { joinClub, applyToClub } from '../api/membership';
 import type { ClubDetailDto } from '../types/api';
@@ -35,7 +36,9 @@ function formatPrice(price: number): string {
 export const ClubPage: FC = () => {
   useBackButton(true);
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { myClubs, fetchMyClubs } = useClubsStore();
+  const { user } = useAuthStore();
 
   const [club, setClub] = useState<ClubDetailDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,7 +59,7 @@ export const ClubPage: FC = () => {
 
   const membership = myClubs.find((m) => m.clubId === id);
   const isMember = !!membership && membership.status === 'active';
-  const isOrganizer = membership?.role === 'organizer';
+  const isOrganizer = club?.ownerId === user?.id || membership?.role === 'organizer';
 
   const handleJoin = async () => {
     if (!id || !club) return;
@@ -101,7 +104,7 @@ export const ClubPage: FC = () => {
   }
 
   const renderJoinButton = () => {
-    if (isOrganizer) return <Button size="l" mode="outline" disabled stretched>Вы организатор</Button>;
+    if (isOrganizer) return <Button size="l" stretched onClick={() => navigate(`/clubs/${id}/manage`)}>⚙️ Управление клубом</Button>;
     if (isMember) return <Button size="l" mode="outline" disabled stretched>Вы участник ✓</Button>;
     if (joinSuccess) return <Button size="l" mode="outline" disabled stretched>Заявка отправлена ✓</Button>;
 

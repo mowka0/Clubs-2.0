@@ -1,8 +1,9 @@
-import { FC, Suspense } from 'react';
+import { FC, Suspense, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { BottomTabBar, isTabBarRoute } from './BottomTabBar';
 import { useBackButton } from '../hooks/useBackButton';
+import { useAuthStore } from '../store/useAuthStore';
 
 /**
  * Fallback spinner shown while lazy-loaded pages are being fetched.
@@ -30,6 +31,12 @@ const PageFallback: FC = () => (
 export const Layout: FC = () => {
   const location = useLocation();
   const isMainTab = isTabBarRoute(location.pathname);
+  const { user, login } = useAuthStore();
+
+  // Initialize auth once on app start so user is available in all pages
+  useEffect(() => {
+    if (!user) login();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show Telegram BackButton only on nested pages
   useBackButton(!isMainTab);

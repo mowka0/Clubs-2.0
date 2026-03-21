@@ -20,9 +20,11 @@ const TAB_PATHS = new Set(TABS.map((t) => t.path));
 
 /**
  * Determines if the BottomTabBar should be displayed for the current path.
+ * Also shows on /clubs/:id and /clubs/:id/manage pages.
  */
 export function isTabBarRoute(pathname: string): boolean {
-  return TAB_PATHS.has(pathname);
+  if (TAB_PATHS.has(pathname)) return true;
+  return /^\/clubs\/[^/]+(\/manage)?$/.test(pathname);
 }
 
 /**

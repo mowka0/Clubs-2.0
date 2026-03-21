@@ -7,8 +7,11 @@ import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
+import com.clubs.generated.jooq.enums.MembershipRole
+import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.tables.records.ClubsRecord
 import com.clubs.generated.jooq.tables.references.CLUBS
+import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Service
@@ -38,6 +41,15 @@ class ClubService(
 
         val inviteCode = if (request.accessType == "private") UUID.randomUUID().toString().replace("-", "").take(16) else null
         val club = clubRepository.create(request, ownerId, inviteCode)
+
+        // Auto-create organizer membership for the owner
+        dsl.insertInto(MEMBERSHIPS)
+            .set(MEMBERSHIPS.USER_ID, ownerId)
+            .set(MEMBERSHIPS.CLUB_ID, club.id)
+            .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
+            .set(MEMBERSHIPS.ROLE, MembershipRole.organizer)
+            .execute()
+
         return club.toDto()
     }
 
