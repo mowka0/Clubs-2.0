@@ -68,6 +68,26 @@
 - `UserController` — добавлен GET /api/users/me/clubs → List<MembershipDto>
 - Используется в OrganizerPage и ClubPage для проверки членства
 
+## 2026-03-21: TASK-016 + TASK-019 + TASK-020
+
+### TASK-016: Отметка присутствия организатором
+- `AttendanceDto.kt` — AttendanceEntryRequest, MarkAttendanceRequest, AttendanceResultDto
+- `AttendanceService.kt` — markAttendance (проверка: organizerId=club.ownerId, event уже прошёл)
+- `EventController` — POST /api/events/{id}/attendance
+- Статус TASK-016 обновлён на "done"
+
+### TASK-019: Автоотклонение заявок
+- `ApplicationScheduler.kt` — @Scheduled(fixedDelay=3_600_000): pending заявки > 48h → auto_rejected
+- Каждый затронутый клуб: activity_rating -= 5 (минимум 0)
+- Логирование с количеством и ID отклонённых заявок
+- Статус TASK-019 обновлён на "done"
+
+### TASK-020: API профиля пользователя
+- Существующие эндпоинты: GET /api/users/me, /me/clubs, /me/applications — все реализованы
+- `MemberProfileDto.kt` — профиль участника с репутацией
+- `MemberController.kt` — GET /api/clubs/{clubId}/members/{userId} (нужно быть участником)
+- Статус TASK-020 обновлён на "done"
+
 ### Следующие шаги
 - TASK-015 [critical]: Этап 2 голосования (cron + подтверждения)
 - TASK-034: Страница инвайта (depends on TASK-012 ✓)
