@@ -16,6 +16,8 @@ import { useClubsStore } from '../store/useClubsStore';
 import { createClub, getClub } from '../api/clubs';
 import type { CreateClubBody } from '../api/clubs';
 import type { ClubDetailDto } from '../types/api';
+import { validateStep } from '../utils/validators';
+import type { ClubFormData } from '../utils/validators';
 
 const CATEGORIES = [
   { value: 'sport', label: 'Спорт' },
@@ -30,18 +32,7 @@ const CATEGORIES = [
 
 const STEP_TITLES = ['Основное', 'Категория', 'Участники', 'Описание', 'Заявка'];
 
-interface FormData {
-  name: string;
-  city: string;
-  district: string;
-  category: string;
-  accessType: 'open' | 'closed';
-  memberLimit: string;
-  subscriptionPrice: string;
-  description: string;
-  rules: string;
-  applicationQuestion: string;
-}
+type FormData = ClubFormData;
 
 const INITIAL_FORM: FormData = {
   name: '',
@@ -56,27 +47,7 @@ const INITIAL_FORM: FormData = {
   applicationQuestion: '',
 };
 
-function validateStep(step: number, form: FormData): string | null {
-  if (step === 0) {
-    if (form.name.trim().length < 3) return 'Название: минимум 3 символа';
-    if (form.name.trim().length > 60) return 'Название: максимум 60 символов';
-    if (!form.city.trim()) return 'Укажите город';
-  }
-  if (step === 2) {
-    const limit = Number(form.memberLimit);
-    if (!limit || limit < 1 || limit > 200) return 'Лимит участников: 1–200';
-    const price = Number(form.subscriptionPrice);
-    if (isNaN(price) || price < 0) return 'Укажите корректную цену';
-    if (price > 0 && price < 100) return 'Минимальная цена — 100 Stars (или 0 для бесплатного)';
-  }
-  if (step === 3) {
-    if (form.description.trim().length < 10) return 'Описание: минимум 10 символов';
-    if (form.description.trim().length > 500) return 'Описание: максимум 500 символов';
-  }
-  return null;
-}
-
-const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) => void }> = ({ onClose, onCreated }) => {
+export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) => void }> = ({ onClose, onCreated }) => {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [error, setError] = useState<string | null>(null);
@@ -125,7 +96,7 @@ const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) => void
     <div style={{ padding: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <span style={{ fontSize: 13, color: 'var(--tgui--hint_color)' }}>Шаг {step + 1} из {STEP_TITLES.length}: {STEP_TITLES[step]}</span>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--tgui--text_color)' }}>✕</button>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--tgui--text_color)' }}>&#x2715;</button>
       </div>
 
       {error && (
@@ -178,7 +149,7 @@ const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) => void
 
       {step === 3 && (
         <Section>
-          <Textarea header="Описание клуба *" placeholder="Расскажите о своём клубе (10–500 символов)" value={form.description} onChange={(e) => update('description', e.target.value)} />
+          <Textarea header="Описание клуба *" placeholder="Расскажите о своём клубе (10-500 символов)" value={form.description} onChange={(e) => update('description', e.target.value)} />
           <Textarea header="Правила (необязательно)" placeholder="Правила сообщества" value={form.rules} onChange={(e) => update('rules', e.target.value)} />
         </Section>
       )}
@@ -260,7 +231,7 @@ export const OrganizerPage: FC = () => {
             onClick={() => navigate(`/clubs/${m.clubId}/manage`)}
             subtitle="Организатор"
           >
-            {clubDetails[m.clubId]?.name ?? `Клуб ${m.clubId.slice(0, 8)}…`}
+            {clubDetails[m.clubId]?.name ?? `Клуб ${m.clubId.slice(0, 8)}...`}
           </Cell>
         ))}
       </Section>

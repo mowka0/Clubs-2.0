@@ -28,6 +28,7 @@ import type {
   FinancesDto,
   ClubDetailDto,
 } from '../types/api';
+import { formatDatetime } from '../utils/formatters';
 
 type TabKey = 'members' | 'applications' | 'events' | 'finances';
 
@@ -48,17 +49,6 @@ function hoursRemaining(createdAt: string | null): number | null {
   return Math.floor(diff / (60 * 60 * 1000));
 }
 
-function formatDatetime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString('ru-RU', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
 // ---- Member Profile Modal ----
 
 const MemberProfileModal: FC<{
@@ -77,7 +67,7 @@ const MemberProfileModal: FC<{
 
   const joinedAt = member.joinedAt
     ? new Date(member.joinedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
-    : '—';
+    : '\u2014';
 
   return (
     <Modal open onOpenChange={(open) => !open && onClose()}>
@@ -85,7 +75,7 @@ const MemberProfileModal: FC<{
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <Text weight="2" style={{ fontSize: 18 }}>Профиль участника</Text>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--tgui--text_color)' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--tgui--text_color)' }}>&#x2715;</button>
         </div>
 
         {/* Avatar + name */}
@@ -173,7 +163,7 @@ const MembersTab: FC<{ clubId: string }> = ({ clubId }) => {
                 acronym={`${m.firstName.charAt(0)}${m.lastName?.charAt(0) ?? ''}`}
               />
             }
-            subtitle={`Надёжность: ${m.reliabilityIndex} · Обещания: ${m.promiseFulfillmentPct}%`}
+            subtitle={`Надёжность: ${m.reliabilityIndex} \u00B7 Обещания: ${m.promiseFulfillmentPct}%`}
             after={
               m.role === 'organizer' ? (
                 <Badge type="number" mode="primary">Орг</Badge>
@@ -262,7 +252,7 @@ const ApplicationsTab: FC<{ clubId: string }> = ({ clubId }) => {
               </Text>
               {hrs !== null && (
                 <span style={{ fontSize: 12, color: hrs <= 6 ? 'var(--tgui--destructive_text_color)' : 'var(--tgui--hint_color)' }}>
-                  {hrs > 0 ? `${hrs}ч до автоотклонения` : 'Время истекло'}
+                  {hrs > 0 ? `${hrs}\u0447 \u0434\u043E \u0430\u0432\u0442\u043E\u043E\u0442\u043A\u043B\u043E\u043D\u0435\u043D\u0438\u044F` : '\u0412\u0440\u0435\u043C\u044F \u0438\u0441\u0442\u0435\u043A\u043B\u043E'}
                 </span>
               )}
             </div>
@@ -324,7 +314,7 @@ const EventDetailModal: FC<{ eventId: string; onClose: () => void }> = ({ eventI
       <div style={{ padding: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <Text weight="2" style={{ fontSize: 18 }}>Детали события</Text>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--tgui--text_color)' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--tgui--text_color)' }}>&#x2715;</button>
         </div>
 
         {loading ? (
@@ -443,8 +433,6 @@ const EventsTab: FC<{ clubId: string }> = ({ clubId }) => {
 
   const openAttendanceModal = (event: EventListItemDto) => {
     setAttendanceEventId(event.id);
-    // We don't have a confirmed participants endpoint here, so pre-populate empty
-    // The organizer will manually add userIds via the attendance API
     setAttendanceList([]);
   };
 
@@ -457,7 +445,7 @@ const EventsTab: FC<{ clubId: string }> = ({ clubId }) => {
       setAttendanceList([]);
       fetchEvents();
     } catch {
-      // Silently handle — in production, show error
+      // Silently handle
     } finally {
       setMarkingAttendance(false);
     }

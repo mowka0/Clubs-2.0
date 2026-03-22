@@ -23,7 +23,7 @@ PUT  /api/clubs/{id}       → 200 ClubDetailDto
 | category | одно из: sport, creative, food, board_games, cinema, education, travel, other | 400 |
 | accessType | одно из: open, closed, private | 400 |
 | city | not blank | 400 |
-| memberLimit | 10-80 | 400 |
+| memberLimit | 1-200 | 400 |
 | subscriptionPrice | >= 0 | 400 |
 
 ### Corner Cases

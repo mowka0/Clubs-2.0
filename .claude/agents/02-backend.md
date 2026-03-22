@@ -25,6 +25,7 @@ After finishing: self-check against acceptance criteria, run test steps, verify 
 | Валидация исчерпывающая | 0 невалидированных полей, все edge cases из acceptance criteria покрыты |
 | Build стабилен | ./gradlew build = 0 errors, 0 warnings |
 | Код типобезопасен | 0 использований raw SQL, 0 unchecked casts |
+| Тестовое покрытие | ≥80% покрытия нового кода (Controller, Service, Repository, утилиты, exception handlers) |
 
 ---
 
@@ -187,6 +188,192 @@ data class ErrorResponse(val error: String, val message: String)
 
 ---
 
+## Testing
+
+```
+Тесты ОБЯЗАТЕЛЬНЫ для каждой реализованной фичи. Пропускать нельзя.
+Тесты проверяют СПЕЦИФИКАЦИЮ из docs/modules/{module}.md, а не просто выполнение кода.
+```
+
+### Стратегия: 3 уровня (все обязательны)
+
+| Уровень | Цель | Слой |
+|---------|------|------|
+| 1. Unit | Бизнес-логика в изоляции | Service, Validators, Pure functions |
+| 2. Integration | Реальное поведение системы с БД | Repository, Service + DB, полный flow |
+| 3. Contract / API | Соответствие спецификации | Controller (MockMvc) + HTTP контракт |
+
+### Стек
+- JUnit 5 + MockK (`mockk<T>()`, `every {}`, `verify {}`)
+- Testcontainers (`PostgreSQLContainer("postgres:16")`) — обязателен для интеграционных
+- Spring Boot Test (`@SpringBootTest`, `@AutoConfigureMockMvc`)
+
+### Не покрывать
+- DTO-классы (простые data class)
+- Конфигурационные файлы (`SecurityConfig`, `JooqConfig`, etc.)
+- jOOQ-generated классы
+
+---
+
+### Уровень 1: Unit-тесты
+
+```
+✓ Покрывать все ветки: успех + все ошибки
+✓ Мокировать только внешние зависимости (репозитории, API)
+✓ Без Spring-контекста — быстрые
+```
+
+```kotlin
+class ClubServiceTest {
+    private val repository = mockk<ClubRepository>()
+    private val service = ClubService(repository)
+
+    @Test
+    fun `should create club when data is valid`() {
+        every { repository.countByOwnerId(any()) } returns 0
+        every { repository.save(any()) } returns mockk()
+
+        val result = service.createClub(validRequest, userId)
+
+        assertThat(result.name).isEqualTo("Test Club")
+    }
+
+    @Test
+    fun `should throw when organizer club limit exceeded`() {
+        every { repository.countByOwnerId(any()) } returns 10
+
+        assertThrows<ConflictException> {
+            service.createClub(validRequest, userId)
+        }
+    }
+
+    @Test
+    fun `should throw ValidationException when name is too short`() {
+        assertThrows<ValidationException> {
+            service.createClub(validRequest.copy(name = "AB"), userId)
+        }
+    }
+}
+```
+
+---
+
+### Уровень 2: Integration-тесты
+
+```
+ОБЯЗАТЕЛЬНО:
+✓ Реальная БД (Testcontainers)
+✓ Реальный Spring-контекст
+✓ Реальные репозитории
+✓ Проверка состояния БД после операции
+
+ЗАПРЕЩЕНО:
+✗ Mock-база данных
+✗ Fake-репозитории
+```
+
+```kotlin
+@SpringBootTest
+@AutoConfigureMockMvc
+@Testcontainers
+class ClubIntegrationTest {
+
+    companion object {
+        @Container
+        val postgres = PostgreSQLContainer("postgres:16")
+    }
+
+    @Autowired lateinit var mockMvc: MockMvc
+    @Autowired lateinit var clubRepository: ClubRepository
+
+    @Test
+    fun `should create club and persist in database`() {
+        mockMvc.perform(
+            post("/api/clubs")
+                .header("Authorization", "Bearer $validToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validJson)
+        )
+        .andExpect(status().isCreated)
+
+        val clubs = clubRepository.findAll()
+        assertThat(clubs).hasSize(1)
+        assertThat(clubs[0].name).isEqualTo("Test Club")
+    }
+
+    @Test
+    fun `should auto-create organizer membership on club creation`() {
+        val response = mockMvc.perform(post("/api/clubs")...).andReturn()
+        val clubId = parseId(response)
+
+        val membership = membershipRepository.findByClubAndUser(clubId, userId)
+        assertThat(membership).isNotNull
+        assertThat(membership!!.role).isEqualTo(MembershipRole.organizer)
+    }
+}
+```
+
+---
+
+### Уровень 3: Contract / API-тесты
+
+```
+✓ Проверять полную структуру ответа (все поля)
+✓ Проверять все HTTP коды: 400, 401, 403, 404, 409
+✓ Проверять формат ошибок
+✓ Каждый acceptance criterion из docs/modules/ → 1 тест
+```
+
+```kotlin
+@Test
+fun `POST clubs returns correct response structure`() {
+    mockMvc.perform(post("/api/clubs").header("Authorization", "Bearer $validToken")...)
+        .andExpect(status().isCreated)
+        .andExpect(jsonPath("$.id").exists())
+        .andExpect(jsonPath("$.name").value("Test Club"))
+        .andExpect(jsonPath("$.category").value("sport"))
+        .andExpect(jsonPath("$.memberCount").value(0))
+}
+
+@Test
+fun `GET clubs returns 401 without token`() {
+    mockMvc.perform(get("/api/clubs"))
+        .andExpect(status().isUnauthorized)
+}
+
+@Test
+fun `POST clubs returns 400 with correct error format`() {
+    mockMvc.perform(post("/api/clubs").content("""{"city":"Moscow"}""")...)
+        .andExpect(status().isBadRequest)
+        .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"))
+        .andExpect(jsonPath("$.message").exists())
+}
+```
+
+---
+
+### Связь тестов со спецификацией
+
+```
+docs/modules/{module}.md → "Критерии приёмки"
+    ↓
+1 acceptance criterion = 1 integration/contract тест
+    +
+дополнительные unit-тесты для покрытия логики
+```
+
+### Запрещённые паттерны
+
+```
+✗ Тестировать только HTTP статус без проверки тела
+✗ Интеграционные тесты без реальной БД
+✗ Тесты без бизнес-ассёртов ("happy path only")
+✗ Тесты не привязанные к спецификации
+✗ Пустые или тривиальные тесты
+```
+
+---
+
 ## Pre-Completion Checklist
 
 ```
@@ -202,6 +389,12 @@ data class ErrorResponse(val error: String, val message: String)
 □ Нет wildcard imports
 □ Нет бизнес-логики в Controller
 □ Нет raw SQL
+□ Unit-тесты: бизнес-логика покрыта (успех + все ошибки), без Spring-контекста
+□ Integration-тесты: реальная БД (Testcontainers), состояние БД проверяется после операций
+□ Contract-тесты: полная структура ответа, все HTTP коды (400/401/403/404/409), формат ошибок
+□ Каждый acceptance criterion из docs/modules/ → минимум 1 тест
+□ ./gradlew test = все тесты зелёные
+□ Покрытие нового кода ≥80% (Controller, Service, Repository, утилиты, GlobalExceptionHandler)
 □ Conventional commit message
 □ Completion Report заполнен по шаблону
 ```
@@ -219,6 +412,10 @@ data class ErrorResponse(val error: String, val message: String)
 5. Слои разделены: Controller → Service → Repository
 6. jOOQ используется для всех запросов, типобезопасно
 7. Build проходит чисто
+8. Все 3 уровня тестов реализованы: Unit → Integration → Contract
+9. Каждый acceptance criterion из docs/modules/ покрыт тестом
+10. Тесты проверяют спецификацию, а не просто выполнение кода
+11. Покрытие ≥80%, все тесты зелёные
 ```
 
 ---

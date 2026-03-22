@@ -1,0 +1,24 @@
+spring:
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.telegram.telegrambots.longpolling.starter.TelegramBotStarterConfiguration
+
+jwt:
+  secret: test-secret-key-that-is-at-least-32-characters-long-for-integration
+  expiration: 86400000
+
+telegram:
+  bot-token: test-bot-token
+
+s3:
+  bucket: test-bucket
+  base-url: http://localhost:9000/test-bucket

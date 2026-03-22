@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.io.File
 
 plugins {
     kotlin("jvm") version "2.1.0"
@@ -68,6 +69,23 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation("io.mockk:mockk:1.13.10")
+    testImplementation("org.testcontainers:testcontainers:1.20.4")
+    testImplementation("org.testcontainers:postgresql:1.20.4")
+    testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+    testImplementation("org.springframework.security:spring-security-test")
+    // Override docker-java to 3.4.x (Spring Boot BOM locks it to 3.3.x which uses API 1.41,
+    // but Docker Desktop requires minimum API 1.44)
+    testImplementation("com.github.docker-java:docker-java-api:3.4.0")
+    testImplementation("com.github.docker-java:docker-java-transport-httpclient5:3.4.0")
+}
+
+configurations.testImplementation {
+    resolutionStrategy.force(
+        "com.github.docker-java:docker-java-api:3.4.0",
+        "com.github.docker-java:docker-java-transport-httpclient5:3.4.0",
+        "com.github.docker-java:docker-java-core:3.4.0"
+    )
 }
 
 // jOOQ codegen configuration
@@ -140,4 +158,16 @@ kotlin {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    // Pass Docker env to the forked test JVM so Testcontainers can find Docker Desktop on macOS.
+    // Docker Desktop 29.x requires minimum API 1.44; Testcontainers' shaded docker-java defaults to 1.32.
+    // The raw socket supports versioned calls; the proxy socket at /var/run/docker.sock does not.
+    val home = System.getProperty("user.home") ?: ""
+    val rawSock = "$home/Library/Containers/com.docker.docker/Data/docker.raw.sock"
+    if (File(rawSock).exists()) {
+        environment("DOCKER_HOST", "unix://$rawSock")
+        environment("DOCKER_API_VERSION", "1.44")
+        systemProperty("api.version", "1.44")
+        // Ryuk needs to mount the socket as a volume, which fails for docker.raw.sock
+        environment("TESTCONTAINERS_RYUK_DISABLED", "true")
+    }
 }
