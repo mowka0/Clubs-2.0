@@ -18,6 +18,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { getClub } from '../api/clubs';
 import { joinClub, applyToClub } from '../api/membership';
 import type { ClubDetailDto } from '../types/api';
+import { formatPrice } from '../utils/formatters';
 
 const CATEGORY_LABELS: Record<string, string> = {
   sport: 'Спорт', creative: 'Творчество', food: 'Еда',
@@ -28,10 +29,6 @@ const CATEGORY_LABELS: Record<string, string> = {
 const ACCESS_LABELS: Record<string, string> = {
   open: 'Открытый', closed: 'По заявке', private: 'Приватный',
 };
-
-function formatPrice(price: number): string {
-  return price === 0 ? 'Бесплатно' : `${price} Stars / мес`;
-}
 
 export const ClubPage: FC = () => {
   useBackButton(true);
@@ -104,9 +101,9 @@ export const ClubPage: FC = () => {
   }
 
   const renderJoinButton = () => {
-    if (isOrganizer) return <Button size="l" stretched onClick={() => navigate(`/clubs/${id}/manage`)}>⚙️ Управление клубом</Button>;
-    if (isMember) return <Button size="l" mode="outline" disabled stretched>Вы участник ✓</Button>;
-    if (joinSuccess) return <Button size="l" mode="outline" disabled stretched>Заявка отправлена ✓</Button>;
+    if (isOrganizer) return <Button size="l" stretched onClick={() => navigate(`/clubs/${id}/manage`)}>&#x2699;&#xFE0F; Управление клубом</Button>;
+    if (isMember) return <Button size="l" mode="outline" disabled stretched>Вы участник &#x2713;</Button>;
+    if (joinSuccess) return <Button size="l" mode="outline" disabled stretched>Заявка отправлена &#x2713;</Button>;
 
     if (club.accessType === 'open') {
       return (
@@ -133,7 +130,7 @@ export const ClubPage: FC = () => {
           {club.avatarUrl ? (
             <img src={club.avatarUrl} alt="" style={{ width: 80, height: 80, borderRadius: 16, objectFit: 'cover', flexShrink: 0 }} />
           ) : (
-            <div style={{ width: 80, height: 80, borderRadius: 16, background: 'var(--tgui--secondary_bg_color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, flexShrink: 0 }}>🏠</div>
+            <div style={{ width: 80, height: 80, borderRadius: 16, background: 'var(--tgui--secondary_bg_color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, flexShrink: 0 }}>&#x1F3E0;</div>
           )}
           <div>
             <Text weight="1" style={{ fontSize: 20, display: 'block' }}>{club.name}</Text>

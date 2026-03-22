@@ -25,6 +25,7 @@ After finishing: verify in browser, check console for errors, run npm run build.
 | Состояния обработаны | 100% страниц имеют loading + error + empty states |
 | TypeScript строгий | npm run build = 0 errors |
 | Telegram-нативный UX | 100% стандартных элементов через @telegram-apps/telegram-ui |
+| Тестовое покрытие | ≥80% покрытия нового кода (утилиты, store actions, компоненты с логикой) |
 
 ---
 
@@ -239,6 +240,161 @@ export const router = createBrowserRouter([
 
 ---
 
+## Testing
+
+```
+Тесты ОБЯЗАТЕЛЬНЫ для каждой реализованной фичи. Пропускать нельзя.
+Тесты проверяют ПОВЕДЕНИЕ ПОЛЬЗОВАТЕЛЯ из docs/modules/{module}.md, а не просто рендер компонентов.
+```
+
+### Стратегия: 3 уровня (все обязательны)
+
+| Уровень | Цель | Что покрывает |
+|---------|------|---------------|
+| 1. Unit | Бизнес-логика в изоляции | Утилиты, валидаторы, pure functions, store actions |
+| 2. Integration | Полный user flow с API | Компонент + MSW + Zustand + side effects |
+| 3. Navigation | Поведение навигации | BottomTabBar, BackButton, переходы между страницами |
+
+### Стек
+- Vitest + React Testing Library (`render`, `screen`, `userEvent`, `waitFor`)
+- **MSW (Mock Service Worker)** — для интеграционных тестов (не `vi.mock` API напрямую)
+- `@testing-library/user-event` для симуляции взаимодействий
+- `MemoryRouter` для тестов с навигацией
+
+### Не покрывать
+- Простые presentational-компоненты без логики
+- Конфигурационные файлы
+
+### Связь со спецификацией
+
+```
+docs/modules/{module}.md → "Критерии приёмки"
+    ↓
+1 acceptance criterion = 1 integration тест
+
+Пример:
+Спецификация: "Пользователь вводит пустое имя → отображается ошибка"
+Тест: render → simulate empty input → submit → assert error shown
+```
+
+---
+
+### Уровень 1: Unit-тесты
+
+```
+✓ Утилиты и форматирование
+✓ Валидаторы форм (все ветки: успех + ошибки)
+✓ Store actions в изоляции
+✓ Pure functions с бизнес-логикой
+```
+
+```ts
+// validateStep.test.ts
+describe('validateStep', () => {
+  it('returns error when name is too short', () => {
+    expect(validateStep(0, { ...form, name: 'AB' })).toBe('Название: минимум 3 символа');
+  });
+  it('returns null when step 0 is valid', () => {
+    expect(validateStep(0, { ...form, name: 'Valid Name', city: 'Moscow' })).toBeNull();
+  });
+});
+
+// formatPrice.test.ts
+describe('formatPrice', () => {
+  it('returns "Бесплатно" for 0', () => {
+    expect(formatPrice(0)).toBe('Бесплатно');
+  });
+  it('returns price with Stars suffix', () => {
+    expect(formatPrice(100)).toBe('100 Stars / мес');
+  });
+});
+```
+
+---
+
+### Уровень 2: Integration-тесты (с MSW)
+
+```
+✓ Полный user flow: действие → loading → API → финальное состояние
+✓ API через MSW — не мокировать логику напрямую
+✓ Проверять обновление Zustand store
+✓ Проверять обработку ошибок API
+```
+
+```tsx
+// setupTests.ts
+import { setupServer } from 'msw/node';
+import { http, HttpResponse } from 'msw';
+
+export const server = setupServer(
+  http.post('/api/clubs', () => HttpResponse.json({ id: 'new-id', name: 'Test Club' }, { status: 201 })),
+  http.get('/api/clubs', () => HttpResponse.json({ content: [], totalElements: 0 })),
+);
+
+// CreateClubModal.test.tsx
+it('full flow: submit → loading → success → store updated', async () => {
+  const user = userEvent.setup();
+  const onCreated = vi.fn();
+  render(<CreateClubModal onClose={vi.fn()} onCreated={onCreated} />);
+
+  await user.type(screen.getByPlaceholderText(/Например: Книжный/), 'Test Club');
+  await user.type(screen.getByPlaceholderText('Москва'), 'Moscow');
+  await user.click(screen.getByText('Далее'));
+  // ... navigate steps
+  await user.click(screen.getByText('Создать клуб'));
+
+  expect(screen.getByRole('progressbar')).toBeInTheDocument(); // spinner
+  await waitFor(() => expect(onCreated).toHaveBeenCalledWith('new-id'));
+});
+
+it('shows error message when API returns 400', async () => {
+  server.use(http.post('/api/clubs', () => HttpResponse.json({ message: 'Validation error' }, { status: 400 })));
+
+  render(<CreateClubModal onClose={vi.fn()} onCreated={vi.fn()} />);
+  // ... fill + submit
+  expect(await screen.findByText('Validation error')).toBeInTheDocument();
+});
+```
+
+---
+
+### Уровень 3: Navigation-тесты
+
+```
+✓ BottomTabBar: переключение табов, active state
+✓ Переход на detail-страницы
+✓ BackButton: появляется на detail, скрыт на tab-страницах
+```
+
+```tsx
+it('navigates to /my-clubs on tab click', async () => {
+  const user = userEvent.setup();
+  render(<App />, { wrapper: MemoryRouter });
+
+  await user.click(screen.getByText('Мои клубы'));
+  expect(window.location.pathname).toBe('/my-clubs');
+});
+
+it('shows BackButton on /clubs/:id', () => {
+  render(<App />, { wrapper: () => <MemoryRouter initialEntries={['/clubs/123']}><App /></MemoryRouter> });
+  expect(screen.getByLabelText('back')).toBeInTheDocument();
+});
+```
+
+---
+
+### Запрещённые паттерны
+
+```
+✗ Тесты без assertions
+✗ Тесты, которые только проверяют render() без взаимодействия
+✗ Мокировать всё подряд (нет реального поведения)
+✗ Тесты без связи со спецификацией
+✗ Пустые или тривиальные тесты
+```
+
+---
+
 ## Pre-Completion Checklist
 
 ```
@@ -256,6 +412,14 @@ export const router = createBrowserRouter([
 □ JWT: в памяти (Zustand), НЕ в localStorage
 □ Нет console.log в коммите
 □ Нет any типов
+□ Unit-тесты: утилиты и валидаторы покрыты (успех + все ошибки)
+□ Integration-тесты: полный user flow через MSW (действие → loading → API → финальное состояние)
+□ Integration-тесты: обработка API ошибок проверена
+□ Integration-тесты: Zustand store обновляется корректно
+□ Navigation-тесты: BottomTabBar, BackButton, переходы
+□ Каждый acceptance criterion из docs/modules/ → минимум 1 тест
+□ npx vitest run = все тесты зелёные
+□ 100% критических user flows покрыты
 □ Conventional commit message
 □ Completion Report заполнен
 ```
@@ -273,6 +437,10 @@ export const router = createBrowserRouter([
 5. Навигация корректна (BackButton, BottomTabBar, deep links)
 6. Данные загружаются через apiClient → Zustand store
 7. Текст интерфейса на русском
+8. Все 3 уровня тестов реализованы: Unit → Integration (MSW) → Navigation
+9. Каждый acceptance criterion из docs/modules/ покрыт тестом
+10. Тесты проверяют поведение пользователя, а не просто рендер
+11. 100% критических user flows покрыты, все тесты зелёные
 ```
 
 ---
