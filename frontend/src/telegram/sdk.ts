@@ -1,4 +1,4 @@
-import { init, retrieveLaunchParams } from '@telegram-apps/sdk-react';
+import { init, retrieveLaunchParams, initData } from '@telegram-apps/sdk-react';
 
 let initialized = false;
 
@@ -6,6 +6,7 @@ export function initTelegramSdk(): void {
   if (initialized) return;
   try {
     init({ acceptCustomStyles: true });
+    initData.restore(); // Required in v3 to populate initDataRaw
     initialized = true;
   } catch (_e) {
     // Not running in Telegram environment — mock mode
@@ -14,6 +15,15 @@ export function initTelegramSdk(): void {
 }
 
 export function getInitDataRaw(): string {
+  // v3: initData.raw() is a signal, call as function to get current value
+  try {
+    const raw = initData.raw();
+    if (raw) return raw;
+  } catch (_e) {
+    // Not in Telegram environment
+  }
+
+  // Fallback: retrieveLaunchParams
   try {
     const params = retrieveLaunchParams();
     const raw = params.initDataRaw as string | undefined;

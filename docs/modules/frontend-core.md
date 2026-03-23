@@ -56,21 +56,36 @@ frontend/
 **Файл: `src/telegram/sdk.ts`**
 
 ```typescript
-import { retrieveLaunchParams } from '@telegram-apps/sdk-react';
+import { init, retrieveLaunchParams, initData } from '@telegram-apps/sdk-react';
+
+export function initTelegramSdk(): void {
+  try {
+    init({ acceptCustomStyles: true });
+    initData.restore(); // Required in v3 to populate raw signal
+  } catch (_e) { /* mock mode */ }
+}
 
 export function getInitDataRaw(): string {
+  // v3: initData.raw is a Computed signal, call as function
   try {
-    const params = retrieveLaunchParams();
-    const raw = params.initDataRaw as string | undefined;
+    const raw = initData.raw();
     if (raw) return raw;
-  } catch (_e) { /* not in Telegram */ }
+  } catch (_e) {}
+  // Fallback: retrieveLaunchParams
+  try {
+    const raw = (retrieveLaunchParams().initDataRaw as string | undefined);
+    if (raw) return raw;
+  } catch (_e) {}
+  // Fallback: native Telegram WebApp API
+  const tgRaw = (window as any)?.Telegram?.WebApp?.initData;
+  if (tgRaw) return tgRaw;
   const mock = import.meta.env.VITE_MOCK_INIT_DATA as string | undefined;
   if (mock) return mock;
-  throw new Error('No initData available. Run inside Telegram or set VITE_MOCK_INIT_DATA');
+  throw new Error('No initData available. Set VITE_MOCK_INIT_DATA in .env.development');
 }
 ```
 
-**Важно:** использовать `retrieveLaunchParams()` (НЕ `useLaunchParams()` хук вне компонентов), НЕ использовать mock fallback напрямую — только через env var.
+**Важно (v3):** `initData.restore()` обязателен при инициализации — без него `initData.raw()` возвращает `undefined`. `initData.raw` — это `Computed<string | undefined>`, вызывается как функция `initData.raw()`. Хук `useLaunchParams` удалён в v3.
 
 ### apiClient
 
