@@ -10,7 +10,8 @@
       "Bash(python3 -m json.tool)",
       "Bash(npx tsc:*)",
       "Bash(./gradlew compileKotlin --no-daemon)",
-      "Bash(./gradlew compileKotlin --no-daemon --info)"
+      "Bash(./gradlew compileKotlin --no-daemon --info)",
+      "Bash(./gradlew compileKotlin)"
     ]
   }
 }
