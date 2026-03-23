@@ -22,6 +22,11 @@ export function getInitDataRaw(): string {
     // Not in Telegram environment
   }
 
+  // Fallback to native Telegram WebApp API
+  const tgInitData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })
+    ?.Telegram?.WebApp?.initData;
+  if (tgInitData) return tgInitData;
+
   const mock = import.meta.env.VITE_MOCK_INIT_DATA as string | undefined;
   if (mock) return mock;
 
