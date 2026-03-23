@@ -107,10 +107,13 @@ services:
     restart: unless-stopped
     networks:
       - clubs_net
+      - coolify
 
 networks:
   clubs_net:
     driver: bridge
+  coolify:
+    external: true
 
 volumes:
   postgres_data:
