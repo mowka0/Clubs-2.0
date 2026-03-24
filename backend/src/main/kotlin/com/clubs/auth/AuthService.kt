@@ -4,6 +4,7 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.user.UserRepository
 import com.clubs.user.toDto
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
@@ -16,8 +17,12 @@ class AuthService(
     private val objectMapper: ObjectMapper
 ) {
 
+    private val log = LoggerFactory.getLogger(AuthService::class.java)
+
     fun authenticate(request: AuthRequest): AuthResponse {
+        log.info("Authenticating initData, length={}", request.initData.length)
         if (!validator.validate(request.initData)) {
+            log.warn("initData signature invalid, length={}", request.initData.length)
             throw ValidationException("Invalid Telegram initData signature")
         }
 
@@ -46,6 +51,7 @@ class AuthService(
             avatarUrl = photoUrl
         )
 
+        log.info("User upserted: id={} telegramId={} username={}", userRecord.id, telegramId, username)
         val token = jwtService.generateToken(userRecord.id!!, telegramId)
         return AuthResponse(token = token, user = userRecord.toDto())
     }
