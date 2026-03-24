@@ -40,7 +40,9 @@ class TelegramInitDataValidator(
         val secretKey = hmacSha256("WebAppData".toByteArray(), botToken)
         val computedHash = hmacSha256(secretKey, dataCheckString).toHexString()
 
-        return computedHash == hash
+        val valid = computedHash == hash
+        if (!valid) logger.warn("Telegram HMAC validation failed — hash mismatch")
+        return valid
     }
 
     private fun hmacSha256(key: ByteArray, data: String): ByteArray {
