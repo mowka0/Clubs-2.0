@@ -35,11 +35,14 @@ user/
 ### HMAC-SHA256 алгоритм (TelegramInitDataValidator)
 1. Разбить `initData` по `&`, получить пары `key=value`
 2. Извлечь `hash`, удалить его из набора
-3. Отсортировать остальные пары по ключу, объединить `\n`
-4. `secret_key = HMAC-SHA256("WebAppData", bot_token)`
-5. `computed = HMAC-SHA256(secret_key, data_check_string)`
-6. Сравнить hex(computed) с hash
-7. **Dev-профиль**: пропускать проверку (`spring.profiles.active=dev`)
+3. **URL-декодировать значения** (`URLDecoder.decode(value, UTF_8)`) — Telegram передаёт значения URL-encoded, а `data_check_string` должен содержать декодированные значения (так же как `new URLSearchParams()` в JS)
+4. Отсортировать остальные пары по ключу, объединить `\n`
+5. `secret_key = HMAC-SHA256("WebAppData", bot_token)`
+6. `computed = HMAC-SHA256(secret_key, data_check_string)`
+7. Сравнить hex(computed) с hash
+8. **Dev-профиль**: пропускать проверку (`spring.profiles.active=dev`)
+
+> **Важно:** без URL-декодирования HMAC всегда будет неверным, так как `user` поле содержит `%7B%22id%22...` вместо `{"id":...}`.
 
 ### JWT claims
 ```json
