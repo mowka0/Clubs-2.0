@@ -49,10 +49,13 @@ class TelegramInitDataValidator(
         val computedHash = hmacSha256(secretKey, dataCheckString).toHexString()
 
         val valid = computedHash == hash
-        if (!valid) logger.warn(
-            "HMAC validation failed — token_len={} params_keys={} computed_prefix={} received_prefix={}",
-            trimmedToken.length, params.keys, computedHash.take(8), hash.take(8)
-        )
+        if (!valid) {
+            val userFieldPrefix = params["user"]?.take(10) ?: "missing"
+            logger.warn(
+                "HMAC validation failed — token_len={} params_keys={} user_prefix='{}' computed_prefix={} received_prefix={}",
+                trimmedToken.length, params.keys, userFieldPrefix, computedHash.take(8), hash.take(8)
+            )
+        }
         return valid
     }
 
