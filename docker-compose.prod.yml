@@ -15,6 +15,11 @@ services:
       start_period: 30s
       retries: 5
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - clubs_net
 
@@ -31,6 +36,11 @@ services:
       start_period: 10s
       retries: 5
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - clubs_net
 
@@ -50,6 +60,11 @@ services:
       start_period: 10s
       retries: 5
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - clubs_net
 
@@ -74,6 +89,9 @@ services:
       S3_BUCKET: ${S3_BUCKET:-clubs-uploads}
       S3_BASE_URL: ${S3_BASE_URL}
       AWS_REGION: us-east-1
+      # Log levels — override without rebuild via Coolify env vars:
+      # LOGGING_LEVEL_COM_CLUBS=DEBUG  →  verbose app logs
+      # LOGGING_LEVEL_ROOT=WARN        →  quiet mode
     depends_on:
       postgres:
         condition: service_healthy
@@ -88,6 +106,11 @@ services:
       start_period: 90s
       retries: 3
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     networks:
       - clubs_net
 
@@ -111,6 +134,11 @@ services:
       start_period: 10s
       retries: 3
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
     networks:
       - clubs_net
       - coolify
