@@ -97,7 +97,10 @@ services:
       dockerfile: Dockerfile
     labels:
       - "traefik.docker.network=coolify"
-      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      # TRAEFIK_SERVICE_NAME must be unique per environment (prod vs staging)
+      # to avoid Traefik merging them into one load-balancer pool.
+      # Set in Coolify env vars: clubs-frontend-prod / clubs-frontend-staging
+      - "traefik.http.services.${TRAEFIK_SERVICE_NAME:-clubs-frontend-prod}.loadbalancer.server.port=80"
     depends_on:
       backend:
         condition: service_healthy

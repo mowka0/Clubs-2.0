@@ -1,0 +1,34 @@
+name: Deploy Preview Branch to Staging
+
+on:
+  push:
+    branches:
+      - 'bugfix/**'
+      - 'feature/**'
+      - 'devops/**'
+
+jobs:
+  deploy-preview:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update staging app branch
+        run: |
+          curl --fail -s -X PATCH \
+            "${{ secrets.COOLIFY_API_URL }}/api/v1/applications/${{ secrets.COOLIFY_STAGING_UUID }}" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"git_branch": "${{ github.ref_name }}"}'
+
+      - name: Trigger staging deploy
+        run: |
+          curl --fail -s -X GET \
+            "${{ secrets.COOLIFY_STAGING_WEBHOOK_URL }}" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
+            --max-time 30
+
+      - name: Post summary
+        run: |
+          echo "### Staging deploy triggered" >> $GITHUB_STEP_SUMMARY
+          echo "Branch: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "Staging URL: ${{ secrets.COOLIFY_STAGING_URL }}" >> $GITHUB_STEP_SUMMARY
