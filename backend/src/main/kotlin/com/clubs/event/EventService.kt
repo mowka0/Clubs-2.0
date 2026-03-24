@@ -6,6 +6,7 @@ import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.tables.records.EventsRecord
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
 
@@ -15,10 +16,13 @@ class EventService(
     private val clubRepository: ClubRepository
 ) {
 
+    private val log = LoggerFactory.getLogger(EventService::class.java)
+
     fun createEvent(clubId: UUID, request: CreateEventRequest, userId: UUID): EventDetailDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club organizer can create events")
         val event = eventRepository.create(request, clubId, userId)
+        log.info("Event created: id={} clubId={} title='{}' userId={}", event.id, clubId, event.title, userId)
         return event.toDetailDto(goingCount = 0, maybeCount = 0, notGoingCount = 0, confirmedCount = 0)
     }
 

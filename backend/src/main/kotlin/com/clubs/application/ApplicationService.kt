@@ -13,6 +13,7 @@ import com.clubs.membership.MembershipRepository
 import com.clubs.membership.MembershipService
 import com.clubs.membership.toDto
 import org.jooq.DSLContext
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
 
@@ -24,6 +25,8 @@ class ApplicationService(
     private val membershipService: MembershipService,
     private val dsl: DSLContext
 ) {
+
+    private val log = LoggerFactory.getLogger(ApplicationService::class.java)
 
     fun submitApplication(clubId: UUID, userId: UUID, request: SubmitApplicationRequest): ApplicationDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
@@ -46,6 +49,7 @@ class ApplicationService(
         if (todayCount >= 5) throw RateLimitException("Too many applications today")
 
         val application = applicationRepository.create(userId, clubId, request.answerText)
+        log.info("Application submitted: id={} clubId={} userId={}", application.id, clubId, userId)
         return application.toDto()
     }
 
@@ -73,6 +77,7 @@ class ApplicationService(
             .execute()
 
         val updated = applicationRepository.updateStatus(applicationId, ApplicationStatus.approved)
+        log.info("Application approved: id={} clubId={} userId={} organizerId={}", applicationId, application.clubId, application.userId, organizerId)
         return updated.toDto()
     }
 
@@ -90,6 +95,7 @@ class ApplicationService(
         }
 
         val updated = applicationRepository.updateStatus(applicationId, ApplicationStatus.rejected, reason)
+        log.info("Application rejected: id={} clubId={} userId={} organizerId={} reason={}", applicationId, application.clubId, application.userId, organizerId, reason)
         return updated.toDto()
     }
 

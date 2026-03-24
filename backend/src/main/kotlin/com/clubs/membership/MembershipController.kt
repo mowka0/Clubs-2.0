@@ -1,6 +1,7 @@
 package com.clubs.membership
 
 import com.clubs.common.security.AuthenticatedUser
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
@@ -14,11 +15,14 @@ import java.util.UUID
 @RequestMapping("/api/clubs")
 class MembershipController(private val membershipService: MembershipService) {
 
+    private val log = LoggerFactory.getLogger(MembershipController::class.java)
+
     @PostMapping("/{id}/join")
     fun joinClub(
         @PathVariable id: UUID,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<MembershipDto> {
+        log.info("Join club {}: userId={}", id, user.userId)
         val membership = membershipService.joinOpenClub(id, user.userId)
         return ResponseEntity.status(HttpStatus.CREATED).body(membership)
     }
@@ -27,6 +31,8 @@ class MembershipController(private val membershipService: MembershipService) {
     fun cancelMembership(
         @PathVariable id: UUID,
         @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<MembershipDto> =
-        ResponseEntity.ok(membershipService.cancelMembership(id, user.userId))
+    ): ResponseEntity<MembershipDto> {
+        log.info("Cancel membership in club {}: userId={}", id, user.userId)
+        return ResponseEntity.ok(membershipService.cancelMembership(id, user.userId))
+    }
 }

@@ -1,6 +1,7 @@
 package com.clubs.storage
 
 import com.clubs.common.exception.ValidationException
+import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -12,6 +13,8 @@ import java.util.UUID
 class StorageController(
     private val storageService: StorageService
 ) {
+
+    private val log = LoggerFactory.getLogger(StorageController::class.java)
 
     companion object {
         private const val MAX_FILE_SIZE = 5 * 1024 * 1024L // 5 MB
@@ -39,6 +42,7 @@ class StorageController(
             ?: throw ValidationException("Unsupported file type")
 
         val path = "uploads/${UUID.randomUUID()}.$ext"
+        log.info("Upload file: contentType={} size={} path={}", contentType, file.size, path)
         val url = storageService.uploadFile(file.bytes, path, contentType)
 
         return ResponseEntity.ok(UploadResponseDto(url))

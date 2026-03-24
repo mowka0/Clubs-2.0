@@ -14,6 +14,7 @@ import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
 
@@ -22,6 +23,8 @@ class ClubService(
     private val clubRepository: ClubRepository,
     private val dsl: DSLContext
 ) {
+
+    private val log = LoggerFactory.getLogger(ClubService::class.java)
 
     fun getClubs(filters: ClubFilterParams): PageResponse<ClubListItemDto> {
         filters.category?.let { validateCategory(it) }
@@ -41,6 +44,7 @@ class ClubService(
 
         val inviteCode = if (request.accessType == "private") UUID.randomUUID().toString().replace("-", "").take(16) else null
         val club = clubRepository.create(request, ownerId, inviteCode)
+        log.info("Club created: id={} name='{}' category={} accessType={} ownerId={}", club.id, club.name, request.category, request.accessType, ownerId)
 
         // Auto-create organizer membership for the owner
         dsl.insertInto(MEMBERSHIPS)
@@ -63,6 +67,7 @@ class ClubService(
         if (club.ownerId != userId) throw ForbiddenException("Only the club owner can regenerate invite link")
         val newCode = UUID.randomUUID().toString().replace("-", "").take(16)
         val updated = clubRepository.updateInviteCode(clubId, newCode) ?: throw NotFoundException("Club not found")
+        log.info("Invite link regenerated: clubId={} userId={}", clubId, userId)
         return updated.toDto()
     }
 
@@ -78,6 +83,7 @@ class ClubService(
             .set(DSL.field("telegram_group_id"), telegramGroupId)
             .where(CLUBS.ID.eq(clubId))
             .execute()
+        log.info("Telegram group {} linked to club {}: userId={}", telegramGroupId, clubId, userId)
         return clubRepository.findById(clubId)!!.toDto()
     }
 
@@ -85,6 +91,7 @@ class ClubService(
         val club = clubRepository.findById(id) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club owner can update it")
         val updated = clubRepository.update(id, request) ?: throw NotFoundException("Club not found after update")
+        log.info("Club updated: id={} userId={}", id, userId)
         return updated.toDto()
     }
 

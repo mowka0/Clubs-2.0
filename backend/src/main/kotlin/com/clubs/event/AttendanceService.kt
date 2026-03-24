@@ -8,6 +8,7 @@ import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import com.clubs.generated.jooq.tables.references.EVENTS
 import org.jooq.DSLContext
+import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -20,6 +21,8 @@ class AttendanceService(
     private val clubRepository: ClubRepository,
     private val dsl: DSLContext
 ) {
+
+    private val log = LoggerFactory.getLogger(AttendanceService::class.java)
 
     @Transactional
     fun markAttendance(eventId: UUID, organizerId: UUID, request: MarkAttendanceRequest): AttendanceResultDto {
@@ -50,6 +53,7 @@ class AttendanceService(
             .where(EVENTS.ID.eq(eventId))
             .execute()
 
+        log.info("Attendance marked: eventId={} markedCount={} organizerId={}", eventId, markedCount, organizerId)
         return AttendanceResultDto(eventId, markedCount)
     }
 
@@ -78,6 +82,7 @@ class AttendanceService(
             throw ValidationException("No absent attendance to dispute")
         }
 
+        log.info("Attendance disputed: eventId={} userId={}", eventId, userId)
         return AttendanceResultDto(eventId, updated)
     }
 
@@ -100,6 +105,7 @@ class AttendanceService(
             )
             .execute()
 
+        log.info("Dispute resolved: eventId={} userId={} attended={} organizerId={}", eventId, userId, attended, organizerId)
         return AttendanceResultDto(eventId, 1)
     }
 
@@ -108,7 +114,7 @@ class AttendanceService(
     fun finalizeAttendance() {
         val cutoff = OffsetDateTime.now().minusHours(48)
 
-        dsl.update(EVENTS)
+        val count = dsl.update(EVENTS)
             .set(EVENTS.ATTENDANCE_FINALIZED, true)
             .where(
                 EVENTS.ATTENDANCE_MARKED.eq(true)
@@ -116,5 +122,7 @@ class AttendanceService(
                     .and(EVENTS.EVENT_DATETIME.lessOrEqual(cutoff))
             )
             .execute()
+
+        if (count > 0) log.info("Finalized attendance for $count events")
     }
 }
