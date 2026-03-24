@@ -60,7 +60,7 @@ class EventController(
         @RequestBody request: CastVoteRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<VoteResponseDto> {
-        log.info("Vote on event {}: userId={} answer={}", id, user.userId, request.answer)
+        log.info("Vote on event {}: userId={} vote={}", id, user.userId, request.vote)
         return ResponseEntity.ok(voteService.castVote(id, user.userId, request))
     }
 
@@ -95,7 +95,7 @@ class EventController(
         @RequestBody request: MarkAttendanceRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<AttendanceResultDto> {
-        log.info("Mark attendance: eventId={} userId={} attended={}", id, user.userId, request.attended)
+        log.info("Mark attendance: eventId={} userId={} count={}", id, user.userId, request.attendance.size)
         return ResponseEntity.ok(attendanceService.markAttendance(id, user.userId, request))
     }
 
