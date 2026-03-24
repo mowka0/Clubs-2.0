@@ -29,7 +29,10 @@ class TelegramInitDataValidator(
             .filter { it.size == 2 }
             .associate { it[0] to it[1] }
 
-        val hash = params["hash"] ?: return false
+        val hash = params["hash"] ?: run {
+            logger.warn("HMAC validation: 'hash' field missing from initData, keys={}", params.keys)
+            return false
+        }
 
         val dataCheckString = params
             .filter { it.key != "hash" }
@@ -37,11 +40,19 @@ class TelegramInitDataValidator(
             .sortedBy { it.key }
             .joinToString("\n") { "${it.key}=${it.value}" }
 
-        val secretKey = hmacSha256("WebAppData".toByteArray(), botToken)
+        val trimmedToken = botToken.trim()
+        if (trimmedToken.length != botToken.length) {
+            logger.warn("HMAC validation: bot token has leading/trailing whitespace! raw_len={} trimmed_len={}", botToken.length, trimmedToken.length)
+        }
+
+        val secretKey = hmacSha256("WebAppData".toByteArray(), trimmedToken)
         val computedHash = hmacSha256(secretKey, dataCheckString).toHexString()
 
         val valid = computedHash == hash
-        if (!valid) logger.warn("Telegram HMAC validation failed — hash mismatch")
+        if (!valid) logger.warn(
+            "HMAC validation failed — token_len={} params_keys={} computed_prefix={} received_prefix={}",
+            trimmedToken.length, params.keys, computedHash.take(8), hash.take(8)
+        )
         return valid
     }
 
