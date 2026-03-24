@@ -4,6 +4,8 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.env.Environment
 import org.springframework.stereotype.Component
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
@@ -27,9 +29,12 @@ class TelegramInitDataValidator(
         val params = initData.split("&")
             .map { it.split("=", limit = 2) }
             .filter { it.size == 2 }
-            .associate { it[0] to it[1] }
+            .associate { it[0] to URLDecoder.decode(it[1], StandardCharsets.UTF_8) }
 
-        val hash = params["hash"] ?: return false
+        val hash = params["hash"] ?: run {
+            logger.warn("HMAC validation: 'hash' field missing from initData, keys={}", params.keys)
+            return false
+        }
 
         val dataCheckString = params
             .filter { it.key != "hash" }
@@ -37,10 +42,23 @@ class TelegramInitDataValidator(
             .sortedBy { it.key }
             .joinToString("\n") { "${it.key}=${it.value}" }
 
-        val secretKey = hmacSha256("WebAppData".toByteArray(), botToken)
+        val trimmedToken = botToken.trim()
+        if (trimmedToken.length != botToken.length) {
+            logger.warn("HMAC validation: bot token has leading/trailing whitespace! raw_len={} trimmed_len={}", botToken.length, trimmedToken.length)
+        }
+
+        val secretKey = hmacSha256("WebAppData".toByteArray(), trimmedToken)
         val computedHash = hmacSha256(secretKey, dataCheckString).toHexString()
 
-        return computedHash == hash
+        val valid = computedHash == hash
+        if (!valid) {
+            val userFieldPrefix = params["user"]?.take(10) ?: "missing"
+            logger.warn(
+                "HMAC validation failed — token_len={} params_keys={} user_prefix='{}' computed_prefix={} received_prefix={}",
+                trimmedToken.length, params.keys, userFieldPrefix, computedHash.take(8), hash.take(8)
+            )
+        }
+        return valid
     }
 
     private fun hmacSha256(key: ByteArray, data: String): ByteArray {

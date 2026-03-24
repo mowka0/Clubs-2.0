@@ -5,6 +5,7 @@ import com.clubs.common.auth.RequiresOrganizer
 import com.clubs.common.dto.PageResponse
 import com.clubs.common.security.AuthenticatedUser
 import jakarta.validation.Valid
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
@@ -25,6 +26,8 @@ class EventController(
     private val attendanceService: AttendanceService
 ) {
 
+    private val log = LoggerFactory.getLogger(EventController::class.java)
+
     @RequiresOrganizer
     @PostMapping("/api/clubs/{id}/events")
     fun createEvent(
@@ -32,7 +35,9 @@ class EventController(
         @RequestBody @Valid request: CreateEventRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<EventDetailDto> {
+        log.info("Create event: clubId={} title='{}' userId={}", id, request.title, user.userId)
         val event = eventService.createEvent(id, request, user.userId)
+        log.info("Event created: id={} clubId={} userId={}", event.id, id, user.userId)
         return ResponseEntity.status(HttpStatus.CREATED).body(event)
     }
 
@@ -54,8 +59,10 @@ class EventController(
         @PathVariable id: UUID,
         @RequestBody request: CastVoteRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<VoteResponseDto> =
-        ResponseEntity.ok(voteService.castVote(id, user.userId, request))
+    ): ResponseEntity<VoteResponseDto> {
+        log.info("Vote on event {}: userId={} vote={}", id, user.userId, request.vote)
+        return ResponseEntity.ok(voteService.castVote(id, user.userId, request))
+    }
 
     @GetMapping("/api/events/{id}/my-vote")
     fun getMyVote(
@@ -68,30 +75,38 @@ class EventController(
     fun confirmParticipation(
         @PathVariable id: UUID,
         @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<ConfirmResponseDto> =
-        ResponseEntity.ok(stage2Service.confirmParticipation(id, user.userId))
+    ): ResponseEntity<ConfirmResponseDto> {
+        log.info("Confirm participation: eventId={} userId={}", id, user.userId)
+        return ResponseEntity.ok(stage2Service.confirmParticipation(id, user.userId))
+    }
 
     @PostMapping("/api/events/{id}/decline")
     fun declineParticipation(
         @PathVariable id: UUID,
         @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<ConfirmResponseDto> =
-        ResponseEntity.ok(stage2Service.declineParticipation(id, user.userId))
+    ): ResponseEntity<ConfirmResponseDto> {
+        log.info("Decline participation: eventId={} userId={}", id, user.userId)
+        return ResponseEntity.ok(stage2Service.declineParticipation(id, user.userId))
+    }
 
     @PostMapping("/api/events/{id}/attendance")
     fun markAttendance(
         @PathVariable id: UUID,
         @RequestBody request: MarkAttendanceRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<AttendanceResultDto> =
-        ResponseEntity.ok(attendanceService.markAttendance(id, user.userId, request))
+    ): ResponseEntity<AttendanceResultDto> {
+        log.info("Mark attendance: eventId={} userId={} count={}", id, user.userId, request.attendance.size)
+        return ResponseEntity.ok(attendanceService.markAttendance(id, user.userId, request))
+    }
 
     @PostMapping("/api/events/{id}/dispute")
     fun disputeAttendance(
         @PathVariable id: UUID,
         @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<AttendanceResultDto> =
-        ResponseEntity.ok(attendanceService.disputeAttendance(id, user.userId))
+    ): ResponseEntity<AttendanceResultDto> {
+        log.info("Dispute attendance: eventId={} userId={}", id, user.userId)
+        return ResponseEntity.ok(attendanceService.disputeAttendance(id, user.userId))
+    }
 
     @PostMapping("/api/events/{id}/attendance/{userId}/resolve")
     fun resolveDispute(
@@ -99,6 +114,8 @@ class EventController(
         @PathVariable userId: UUID,
         @RequestBody request: ResolveDisputeRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<AttendanceResultDto> =
-        ResponseEntity.ok(attendanceService.resolveDispute(id, user.userId, userId, request.attended))
+    ): ResponseEntity<AttendanceResultDto> {
+        log.info("Resolve dispute: eventId={} targetUserId={} attended={} resolvedBy={}", id, userId, request.attended, user.userId)
+        return ResponseEntity.ok(attendanceService.resolveDispute(id, user.userId, userId, request.attended))
+    }
 }

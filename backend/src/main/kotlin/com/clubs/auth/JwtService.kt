@@ -3,6 +3,7 @@ package com.clubs.auth
 import com.clubs.common.security.AuthenticatedUser
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.Authentication
@@ -16,6 +17,8 @@ class JwtService(
     @Value("\${jwt.secret}") private val secret: String,
     @Value("\${jwt.expiration}") private val expirationMs: Long
 ) {
+
+    private val logger = LoggerFactory.getLogger(JwtService::class.java)
 
     private val key: SecretKey by lazy {
         Keys.hmacShaKeyFor(secret.toByteArray())
@@ -43,6 +46,7 @@ class JwtService(
         val principal = AuthenticatedUser(userId, telegramId)
         UsernamePasswordAuthenticationToken(principal, null, emptyList())
     } catch (e: Exception) {
+        logger.warn("JWT parse failed: {} — {}", e.javaClass.simpleName, e.message)
         null
     }
 }

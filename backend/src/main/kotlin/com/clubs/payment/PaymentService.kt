@@ -43,6 +43,7 @@ class PaymentService(
         val user = dsl.selectFrom(USERS).where(USERS.ID.eq(userId)).fetchOne()
             ?: throw NotFoundException("User not found")
 
+        log.info("Creating invoice: userId={} clubId={} price={} Stars", userId, clubId, price)
         val invoice = SendInvoice.builder()
             .chatId(user.telegramId.toString())
             .title("Подписка: ${club.name}")
@@ -53,6 +54,7 @@ class PaymentService(
             .build()
 
         telegramClient.execute(invoice)
+        log.info("Invoice sent: userId={} telegramId={} clubId={}", userId, user.telegramId, clubId)
     }
 
     /**

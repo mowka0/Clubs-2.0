@@ -11,6 +11,7 @@ import com.clubs.generated.jooq.tables.records.MembershipsRecord
 import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import org.jooq.DSLContext
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
 
@@ -20,6 +21,8 @@ class MembershipService(
     private val clubRepository: ClubRepository,
     private val dsl: DSLContext
 ) {
+
+    private val log = LoggerFactory.getLogger(MembershipService::class.java)
 
     fun joinOpenClub(clubId: UUID, userId: UUID): MembershipDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
@@ -35,6 +38,7 @@ class MembershipService(
         if (activeCount >= club.memberLimit) throw ValidationException("Club is full")
 
         val membership = membershipRepository.create(userId, clubId)
+        log.info("Joined open club: clubId={} userId={}", clubId, userId)
 
         dsl.update(CLUBS)
             .set(CLUBS.MEMBER_COUNT, (club.memberCount ?: 0) + 1)
@@ -55,6 +59,7 @@ class MembershipService(
             .execute()
 
         // Keep access until subscription_expires_at; just mark as cancelled
+        log.info("Membership cancelled: clubId={} userId={}", clubId, userId)
         return membership.toDto().copy(status = "cancelled")
     }
 
@@ -68,6 +73,7 @@ class MembershipService(
         if (activeCount >= (club.memberLimit ?: 0)) throw ValidationException("Club is full")
 
         val membership = membershipRepository.create(userId, club.id!!)
+        log.info("Joined by invite: clubId={} userId={}", club.id, userId)
 
         dsl.update(CLUBS)
             .set(CLUBS.MEMBER_COUNT, (club.memberCount ?: 0) + 1)

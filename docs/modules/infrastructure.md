@@ -43,6 +43,25 @@ dependencies {
 }
 ```
 
+### application.yml — логирование
+
+Уровни логирования управляются через env-переменные (без перезапуска не меняются, но удобны для настройки окружений):
+
+```yaml
+logging:
+  level:
+    root: ${LOGGING_LEVEL_ROOT:INFO}
+    com.clubs: ${LOGGING_LEVEL_COM_CLUBS:INFO}
+    org.springframework.web: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB:WARN}
+    org.springframework.security: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY:WARN}
+    org.hibernate: ${LOGGING_LEVEL_ORG_HIBERNATE:WARN}
+    org.flywaydb: ${LOGGING_LEVEL_ORG_FLYWAYDB:INFO}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+```
+
+Для включения DEBUG нашего кода: задать `LOGGING_LEVEL_COM_CLUBS=DEBUG` в Coolify env.
+
 ### application.yml профили
 
 ```yaml
@@ -389,13 +408,13 @@ labels:
 
 | Ветка | Окружение | Триггер |
 |-------|-----------|---------|
-| `master` | production | `deploy.yml` → Coolify webhook |
-| `bugfix/**`, `feature/**`, `devops/**` | staging | `deploy-preview.yml` → Coolify API |
+| `master` | production | Coolify Git Source integration (нативный webhook) |
+| `bugfix/**`, `feature/**`, `devops/**` | staging | `deploy-preview.yml` → Coolify API + webhook |
 
-### deploy.yml (production)
+### Production deploy
 
-Триггер: push в `master`.
-Вызывает `COOLIFY_WEBHOOK_URL` — Coolify пересобирает и деплоит.
+Coolify сам следит за веткой `master` через встроенную интеграцию с GitHub.
+Файл `deploy.yml` **удалён** — был избыточен и вызывал двойной деплой.
 
 ### deploy-preview.yml (staging)
 
@@ -404,13 +423,31 @@ labels:
 1. `PATCH /api/v1/applications/{uuid}` — меняет ветку staging-приложения на текущую
 2. `GET COOLIFY_STAGING_WEBHOOK_URL` — запускает деплой
 
+**Важно:** в Coolify staging-приложении опция "Auto Deploy" должна быть **отключена**,
+иначе будет двойной деплой (PATCH тоже триггерит деплой).
+
+### Docker логирование (docker-compose.prod.yml)
+
+Все сервисы используют ограничение логов:
+```yaml
+logging:
+  driver: json-file
+  options:
+    max-size: "50m"   # backend
+    max-file: "5"
+```
+Frontend, postgres, redis — `max-size: "10m"`.
+
+### nginx access_log
+
+Для статических ассетов логирование отключено (`access_log off`), чтобы не засорять логи.
+
 ### Необходимые GitHub Secrets
 
 | Secret | Описание |
 |--------|----------|
-| `COOLIFY_TOKEN` | API-токен Coolify (общий для prod и staging) |
-| `COOLIFY_WEBHOOK_URL` | Webhook production-приложения |
+| `COOLIFY_TOKEN` | API-токен Coolify (root права, общий для prod и staging) |
 | `COOLIFY_API_URL` | Base URL Coolify (`http://77.42.23.177:8000`) |
 | `COOLIFY_STAGING_UUID` | UUID staging-приложения в Coolify |
-| `COOLIFY_STAGING_WEBHOOK_URL` | Webhook staging-приложения (с `force=true`) |
+| `COOLIFY_STAGING_WEBHOOK_URL` | Webhook staging-приложения |
 | `COOLIFY_STAGING_URL` | Публичный URL staging для summary |

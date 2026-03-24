@@ -5,6 +5,7 @@ import io.github.bucket4j.Bucket
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
@@ -15,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap
 @Component
 class RateLimitFilter : OncePerRequestFilter() {
 
+    private val logger = LoggerFactory.getLogger(RateLimitFilter::class.java)
     private val buckets = ConcurrentHashMap<String, Bucket>()
 
     override fun doFilterInternal(
@@ -33,6 +35,7 @@ class RateLimitFilter : OncePerRequestFilter() {
         if (bucket.tryConsume(1)) {
             filterChain.doFilter(request, response)
         } else {
+            logger.warn("Rate limit exceeded: key={} uri={}", key, request.requestURI)
             response.status = HttpStatus.TOO_MANY_REQUESTS.value()
             response.contentType = "application/json"
             response.writer.write("""{"error":"Too many requests. Limit: 60 per minute."}""")

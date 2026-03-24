@@ -1,3 +1,18 @@
+logging:
+  level:
+    # Override at runtime via env vars without rebuilding:
+    #   LOGGING_LEVEL_COM_CLUBS=DEBUG
+    #   LOGGING_LEVEL_ROOT=WARN
+    #   LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY=DEBUG
+    root: ${LOGGING_LEVEL_ROOT:INFO}
+    com.clubs: ${LOGGING_LEVEL_COM_CLUBS:INFO}
+    org.springframework.web: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB:WARN}
+    org.springframework.security: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY:WARN}
+    org.hibernate: ${LOGGING_LEVEL_ORG_HIBERNATE:WARN}
+    org.flywaydb: ${LOGGING_LEVEL_ORG_FLYWAYDB:INFO}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
 spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}

@@ -1,6 +1,7 @@
 package com.clubs.application
 
 import com.clubs.common.security.AuthenticatedUser
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
@@ -15,12 +16,15 @@ import java.util.UUID
 @RestController
 class ApplicationController(private val applicationService: ApplicationService) {
 
+    private val log = LoggerFactory.getLogger(ApplicationController::class.java)
+
     @PostMapping("/api/clubs/{id}/apply")
     fun apply(
         @PathVariable id: UUID,
         @RequestBody request: SubmitApplicationRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<ApplicationDto> {
+        log.info("Apply to club {}: userId={}", id, user.userId)
         val application = applicationService.submitApplication(id, user.userId, request)
         return ResponseEntity.status(HttpStatus.CREATED).body(application)
     }
@@ -40,6 +44,7 @@ class ApplicationController(private val applicationService: ApplicationService) 
         @PathVariable id: UUID,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<ApplicationDto> {
+        log.info("Approve application {}: organizerId={}", id, user.userId)
         val application = applicationService.approveApplication(id, user.userId)
         return ResponseEntity.ok(application)
     }
@@ -50,6 +55,7 @@ class ApplicationController(private val applicationService: ApplicationService) 
         @RequestBody(required = false) request: RejectApplicationRequest?,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<ApplicationDto> {
+        log.info("Reject application {}: organizerId={}", id, user.userId)
         val application = applicationService.rejectApplication(id, user.userId, request?.reason)
         return ResponseEntity.ok(application)
     }

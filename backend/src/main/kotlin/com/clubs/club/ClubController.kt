@@ -4,6 +4,7 @@ import com.clubs.common.auth.RequiresOrganizer
 import com.clubs.common.dto.PageResponse
 import com.clubs.common.security.AuthenticatedUser
 import jakarta.validation.Valid
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
@@ -26,6 +27,8 @@ class ClubController(
     private val financesService: FinancesService
 ) {
 
+    private val log = LoggerFactory.getLogger(ClubController::class.java)
+
     @GetMapping
     fun getClubs(
         @RequestParam(required = false) category: String?,
@@ -46,7 +49,9 @@ class ClubController(
         @RequestBody @Valid request: CreateClubRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<ClubDetailDto> {
+        log.info("Create club: name='{}' userId={}", request.name, user.userId)
         val club = clubService.createClub(request, user.userId)
+        log.info("Club created: id={} name='{}' userId={}", club.id, club.name, user.userId)
         return ResponseEntity.status(HttpStatus.CREATED).body(club)
     }
 
@@ -59,8 +64,10 @@ class ClubController(
         @PathVariable id: UUID,
         @RequestBody @Valid request: UpdateClubRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<ClubDetailDto> =
-        ResponseEntity.ok(clubService.updateClub(id, request, user.userId))
+    ): ResponseEntity<ClubDetailDto> {
+        log.info("Update club: id={} userId={}", id, user.userId)
+        return ResponseEntity.ok(clubService.updateClub(id, request, user.userId))
+    }
 
     @RequiresOrganizer
     @PostMapping("/{id}/link-group")
@@ -68,8 +75,10 @@ class ClubController(
         @PathVariable id: UUID,
         @RequestBody request: LinkGroupRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<ClubDetailDto> =
-        ResponseEntity.ok(clubService.linkTelegramGroup(id, request.telegramGroupId, user.userId))
+    ): ResponseEntity<ClubDetailDto> {
+        log.info("Link Telegram group {} to club {}: userId={}", request.telegramGroupId, id, user.userId)
+        return ResponseEntity.ok(clubService.linkTelegramGroup(id, request.telegramGroupId, user.userId))
+    }
 
     @RequiresOrganizer
     @GetMapping("/{id}/finances")
