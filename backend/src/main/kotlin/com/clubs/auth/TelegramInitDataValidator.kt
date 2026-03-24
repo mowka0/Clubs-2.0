@@ -4,6 +4,8 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.env.Environment
 import org.springframework.stereotype.Component
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
@@ -27,7 +29,7 @@ class TelegramInitDataValidator(
         val params = initData.split("&")
             .map { it.split("=", limit = 2) }
             .filter { it.size == 2 }
-            .associate { it[0] to it[1] }
+            .associate { it[0] to URLDecoder.decode(it[1], StandardCharsets.UTF_8) }
 
         val hash = params["hash"] ?: run {
             logger.warn("HMAC validation: 'hash' field missing from initData, keys={}", params.keys)
