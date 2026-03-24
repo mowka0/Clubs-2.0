@@ -14,12 +14,11 @@ jobs:
     steps:
       - name: Update staging app branch
         run: |
-          curl -s -X PATCH \
+          curl --fail -s -X PATCH \
             "${{ secrets.COOLIFY_API_URL }}/api/v1/applications/${{ secrets.COOLIFY_STAGING_UUID }}" \
             -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d '{"git_branch": "${{ github.ref_name }}"}' \
-            -w "\nHTTP_STATUS:%{http_code}\n"
+            -d '{"git_branch": "${{ github.ref_name }}"}'
 
       - name: Trigger staging deploy
         run: |
