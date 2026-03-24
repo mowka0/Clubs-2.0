@@ -355,6 +355,24 @@ server {
 }
 ```
 
+### TRAEFIK_SERVICE_NAME
+
+Каждое окружение должно иметь уникальное имя Traefik-сервиса, иначе Traefik объединит
+production и staging в один load-balancer pool:
+
+```yaml
+# docker-compose.prod.yml
+labels:
+  - "traefik.http.services.${TRAEFIK_SERVICE_NAME:-clubs-frontend-prod}.loadbalancer.server.port=80"
+```
+
+| Окружение | Значение |
+|-----------|----------|
+| production | `clubs-frontend-prod` |
+| staging | `clubs-frontend-staging` |
+
+Задаётся в Environment Variables Coolify-приложения.
+
 ### Corner Cases
 
 | Ситуация | Решение |
@@ -363,3 +381,36 @@ server {
 | Порты БД не должны быть открыты наружу | Не добавлять `ports:` для postgres/redis в prod |
 | Конфликт peer deps в npm | `--legacy-peer-deps` флаг |
 | Flyway в prod | Без `baseline-on-migrate` — при первом деплое применит все миграции |
+| Prod и staging конфликтуют в Traefik | Разные `TRAEFIK_SERVICE_NAME` на каждое окружение |
+
+## CI/CD — GitHub Actions + Coolify
+
+### Карта деплоев
+
+| Ветка | Окружение | Триггер |
+|-------|-----------|---------|
+| `master` | production | `deploy.yml` → Coolify webhook |
+| `bugfix/**`, `feature/**`, `devops/**` | staging | `deploy-preview.yml` → Coolify API |
+
+### deploy.yml (production)
+
+Триггер: push в `master`.
+Вызывает `COOLIFY_WEBHOOK_URL` — Coolify пересобирает и деплоит.
+
+### deploy-preview.yml (staging)
+
+Триггер: push в `bugfix/**`, `feature/**`, `devops/**`.
+
+1. `PATCH /api/v1/applications/{uuid}` — меняет ветку staging-приложения на текущую
+2. `GET COOLIFY_STAGING_WEBHOOK_URL` — запускает деплой
+
+### Необходимые GitHub Secrets
+
+| Secret | Описание |
+|--------|----------|
+| `COOLIFY_TOKEN` | API-токен Coolify (общий для prod и staging) |
+| `COOLIFY_WEBHOOK_URL` | Webhook production-приложения |
+| `COOLIFY_API_URL` | Base URL Coolify (`http://77.42.23.177:8000`) |
+| `COOLIFY_STAGING_UUID` | UUID staging-приложения в Coolify |
+| `COOLIFY_STAGING_WEBHOOK_URL` | Webhook staging-приложения (с `force=true`) |
+| `COOLIFY_STAGING_URL` | Публичный URL staging для summary |
