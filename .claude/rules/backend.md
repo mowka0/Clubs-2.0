@@ -226,6 +226,16 @@ fun getUser(id: UUID): User {                                       // Service
 
 ---
 
+## Flyway миграции
+
+- Перед созданием миграции — посмотреть **весь** список `ls backend/src/main/resources/db/migration/` (без `| tail`, без `| head`). Номер следующей миграции = max(existing) + 1
+- Имя: `V{N}__snake_case_description.sql`. После публикации (push) номер и имя **не менять** — Flyway считает checksum
+- Idempotent DDL где уместно (`ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`)
+- После добавления новой миграции: `./gradlew generateJooq` если изменилась схема
+- Проверять что миграция работает через restart backend контейнера локально перед push
+
+---
+
 ## Telegram Bot API интеграция
 
 ### Bot Token
