@@ -39,7 +39,16 @@ Telegram Mini App для создания и управления платным
 #### Настройка staging в Coolify (одноразово)
 1. Coolify → New Application → Docker Compose → тот же репо, `docker-compose.prod.yml`
 2. Задать домен staging (например `staging.77-42-23-177.sslip.io`)
-3. Env vars: те же что у production + `TRAEFIK_SERVICE_NAME=clubs-frontend-staging`
+3. Env vars: те же что у production
+   > Не выставляй `TRAEFIK_SERVICE_NAME` — эта переменная больше нигде в `docker-compose.prod.yml`
+   > не используется. Раньше в compose был лейбл `traefik.http.services.${TRAEFIK_SERVICE_NAME:-clubs-frontend-prod}.loadbalancer.server.port=80`,
+   > но `docker inspect` на живых контейнерах показал, что Coolify **не подставляет**
+   > `${VAR:-default}`-синтаксис в ключах Traefik-лейблов — ключ оставался буквальным
+   > `${TRAEFIK_SERVICE_NAME:-clubs-frontend-prod}` и у prod, и у staging. Traefik
+   > видел один сервис с двумя бэкендами и балансировал 50/50 между окружениями.
+   > Сейчас явного service-лейбла нет — Traefik сам создаёт per-container сервис
+   > из `EXPOSE 80`, и Coolify-роутеры (уникальные на приложение) соединяются только
+   > со своим контейнером.
 4. Скопировать UUID приложения (из URL в Coolify) и Webhook URL
 5. Добавить GitHub Secrets:
    - `COOLIFY_API_URL` = `http://77.42.23.177:8000`
