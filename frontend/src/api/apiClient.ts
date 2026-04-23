@@ -50,6 +50,11 @@ class ApiClient {
     console.debug(`[api] ← ${tag} ${res.status}`);
 
     if (res.status === 401 && !isRetry) {
+      // Peek at response body so we can surface the server-provided reason.
+      // Clone is needed because we'll still need to read or discard the original body.
+      const bodyText = await res.clone().text().catch(() => '');
+      console.warn(`[api] 401 on ${tag} — server response:`, bodyText);
+
       // If another request already refreshed the token while we were in flight,
       // just retry with the current one — don't trigger another auth round.
       if (this.token && this.token !== tokenUsed) {

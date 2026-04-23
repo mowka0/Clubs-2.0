@@ -33,20 +33,42 @@ class JwtService(
             .signWith(key)
             .compact()
 
-    fun parseToken(token: String): Authentication? = try {
+    fun parseToken(token: String): Authentication? =
+        when (val result = parseTokenWithReason(token)) {
+            is JwtParseResult.Success -> result.authentication
+            is JwtParseResult.Failure -> null
+        }
+
+    fun parseTokenWithReason(token: String): JwtParseResult = try {
         val claims = Jwts.parser()
             .verifyWith(key)
             .build()
             .parseSignedClaims(token)
             .payload
 
-        val userId = UUID.fromString(claims["user_id"] as String)
-        val telegramId = (claims["telegram_id"] as? Number)?.toLong() ?: return null
+        val userIdStr = claims["user_id"] as? String
+            ?: return JwtParseResult.Failure("missing_user_id_claim", "user_id claim not present")
+        val userId = UUID.fromString(userIdStr)
+        val telegramId = (claims["telegram_id"] as? Number)?.toLong()
+            ?: return JwtParseResult.Failure("missing_telegram_id_claim", "telegram_id claim not present")
 
         val principal = AuthenticatedUser(userId, telegramId)
-        UsernamePasswordAuthenticationToken(principal, null, emptyList())
+        JwtParseResult.Success(UsernamePasswordAuthenticationToken(principal, null, emptyList()))
     } catch (e: Exception) {
-        logger.warn("JWT parse failed: {} — {}", e.javaClass.simpleName, e.message)
-        null
+        val reason = when (e.javaClass.simpleName) {
+            "ExpiredJwtException" -> "token_expired"
+            "SignatureException" -> "invalid_signature"
+            "MalformedJwtException" -> "malformed_token"
+            "UnsupportedJwtException" -> "unsupported_token"
+            "IllegalArgumentException" -> "empty_or_null_token"
+            else -> "parse_error_${e.javaClass.simpleName}"
+        }
+        logger.warn("JWT parse failed: {} — {}", reason, e.message)
+        JwtParseResult.Failure(reason, e.message ?: "no detail")
     }
+}
+
+sealed class JwtParseResult {
+    data class Success(val authentication: Authentication) : JwtParseResult()
+    data class Failure(val reason: String, val detail: String) : JwtParseResult()
 }
