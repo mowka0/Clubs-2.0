@@ -374,23 +374,109 @@ server {
 }
 ```
 
-### TRAEFIK_SERVICE_NAME
+### Traefik routing: как prod и staging разведены
 
-Каждое окружение должно иметь уникальное имя Traefik-сервиса, иначе Traefik объединит
-production и staging в один load-balancer pool:
+**TL;DR:** роутеры делает Coolify сам (уникальные на приложение), сервис Traefik
+автогенерирует per-container из `EXPOSE 80`. В compose **нет** явных
+`traefik.http.services.*` лейблов.
 
+#### Как это работает
+
+1. **Coolify автоматически** навешивает router-лейблы на каждый запущенный
+   контейнер. Имя роутера содержит UUID Coolify-приложения:
+   ```
+   traefik.http.routers.http-0-u91a5392n24ubfq17kl251z4-frontend.rule = Host(`staging.77-42-23-177.sslip.io`)
+   traefik.http.routers.http-0-qhbcadbuungspby1mxw7p7n9-frontend.rule = Host(`77.42.23.177.sslip.io`)
+   ```
+   Разные приложения в Coolify = разные UUID = разные имена роутеров.
+2. **Наш compose** не объявляет `traefik.http.services.*` — Traefik Docker provider
+   видит роутер без явного `service=`, на том же контейнере не находит никакого
+   `services.*` лейбла → создаёт default service и связывает его с этим
+   контейнером, используя порт из Dockerfile `EXPOSE 80`.
+3. Итог: `staging.*.sslip.io` ↔ router `u91a5...-frontend` ↔ auto-service ↔
+   только staging-контейнер. Prod — аналогично, со своим UUID. Никакого
+   пересечения между окружениями.
+
+#### Почему это не через `TRAEFIK_SERVICE_NAME` (исторический inцидент)
+
+Раньше в compose было:
 ```yaml
-# docker-compose.prod.yml
 labels:
   - "traefik.http.services.${TRAEFIK_SERVICE_NAME:-clubs-frontend-prod}.loadbalancer.server.port=80"
 ```
+Идея: в Coolify у prod и staging приложений выставить разные значения
+(`clubs-frontend-prod` / `clubs-frontend-staging`), Compose подставит,
+Traefik разведёт по именам сервисов.
 
-| Окружение | Значение |
-|-----------|----------|
-| production | `clubs-frontend-prod` |
-| staging | `clubs-frontend-staging` |
+**На практике Coolify deployer не подставляет `${VAR:-default}` синтаксис
+в ключах Traefik-лейблов.** `docker inspect` живых контейнеров показывал
+лейбл как литеральную строку:
+```
+"traefik.http.services.${TRAEFIK_SERVICE_NAME:-clubs-frontend-prod}.loadbalancer.server.port": "80"
+```
+На **обоих** контейнерах (prod и staging) получался **одинаковый литеральный
+ключ сервиса**. Traefik видел один service с двумя backend'ами и балансировал
+50/50 между окружениями. Результат: на `staging.*.sslip.io` случайно падаешь
+то на staging-контейнер, то на prod-контейнер — каждый со своим бандлом.
+Всё выглядело как флаки в любом тесте.
 
-Задаётся в Environment Variables Coolify-приложения.
+Выставление переменной в Coolify UI **не помогало** — дефис в `:-default`
+ломал парсинг регекспа Coolify (простое `${VAR}` без fallback, возможно,
+сработало бы, но это не проверялось).
+
+Фикс: убрали лейбл целиком, положились на auto-service Traefik.
+`TRAEFIK_SERVICE_NAME` теперь **нигде в проекте не используется** — можно
+удалить из env-переменных в Coolify, но не обязательно.
+
+#### Что делать если понадобятся multiple replicas одного окружения
+
+Тогда auto-service уже не подойдёт (Traefik создаст отдельные сервисы на
+каждый контейнер вместо одного пула). Путь — явный named service, но
+**не через compose-переменную** (Coolify не подставит). Варианты:
+- Отдельный `docker-compose.staging.yml` с хардкодом имени сервиса.
+- Сделать замену имени в CI перед `docker compose up` через `sed`.
+- Посмотреть umбельно конфиги per-application в Coolify UI (если такое есть).
+
+---
+
+### Debug playbook: «на одном домене два разных ответа»
+
+Симптомы: `curl` одной и той же страницы даёт разные бандлы / ETag / Last-Modified
+при последовательных запросах. Или браузер в инкогнито видит одно, Telegram — другое.
+Ошибки типа 404 на ассет который есть на одном контейнере, но нет на другом.
+
+1. **Подтвердить split:**
+   ```bash
+   for i in {1..6}; do curl -s https://<domain>/ | grep -oE 'assets/index-[^".]+\.js'; done | sort | uniq -c
+   ```
+   Если в выводе разные хеши — трафик размазывается между несколькими бэкендами.
+
+2. **Найти все контейнеры на домене** (SSH на VPS):
+   ```bash
+   docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}' | grep -i <service>
+   ```
+   Если более одного — смотреть Traefik-лейблы у каждого:
+   ```bash
+   docker inspect <container> --format '{{json .Config.Labels}}' | tr ',' '\n' | grep -i traefik
+   ```
+
+3. **Что смотреть в лейблах:**
+   - Host-rule у роутеров — разные ли они?
+   - Имя сервиса в `traefik.http.services.X.loadbalancer.server.port` — не совпадает ли между контейнерами?
+   - Не висит ли в ключе буквальная строка `${...}` — значит переменная не подставилась, и это общий ключ для всех контейнеров.
+
+4. **Быстрый sanity-check Coolify auto-routers:** роутер у каждого приложения
+   должен содержать UUID Coolify-приложения (`http-0-<uuid>-<service>`). Если
+   у двух контейнеров из РАЗНЫХ приложений совпадает что-то ещё кроме Host-rule
+   — это потенциальная коллизия.
+
+5. **Если нашлось совпадение имени сервиса** — выбор из трёх:
+   - Убрать явный `services.*` лейбл целиком (как мы сделали). Работает для 1
+     контейнер = 1 окружение.
+   - Захардкодить уникальное имя сервиса в compose и держать отдельные compose-файлы
+     на env (prod/staging).
+   - Перед деплоем подставить имя через CI (sed/envsubst на compose-файле
+     **вне** Coolify-deployer).
 
 ### Corner Cases
 
@@ -400,7 +486,7 @@ labels:
 | Порты БД не должны быть открыты наружу | Не добавлять `ports:` для postgres/redis в prod |
 | Конфликт peer deps в npm | `--legacy-peer-deps` флаг |
 | Flyway в prod | Без `baseline-on-migrate` — при первом деплое применит все миграции |
-| Prod и staging конфликтуют в Traefik | Разные `TRAEFIK_SERVICE_NAME` на каждое окружение |
+| Prod и staging конфликтуют в Traefik (split 50/50) | Убрать `services.*` лейбл из compose, положиться на auto-service из `EXPOSE 80`. См. «Traefik routing: как prod и staging разведены» и debug playbook ниже. |
 
 ## CI/CD — GitHub Actions + Coolify
 
