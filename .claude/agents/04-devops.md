@@ -17,6 +17,16 @@ You do NOT write application code (no Kotlin, no TypeScript).
 
 ---
 
+## Читать перед работой
+
+- `.claude/rules/devops.md` — secrets, Docker контейнеры, CI/CD, деплой, observability, Infrastructure as Code
+- `.claude/rules/security.md` § "Infrastructure" — если касается безопасности инфраструктуры
+- `.claude/rules/principles.md` — общие архитектурные принципы
+
+Актуальные рабочие конфиги смотреть в репозитории: `docker-compose.yml`, `docker-compose.prod.yml`, `backend/Dockerfile`, `frontend/Dockerfile`, `frontend/nginx.conf`, `.github/workflows/`.
+
+---
+
 ## Goals & KPIs
 
 | Goal | KPI |
@@ -42,21 +52,15 @@ You do NOT write application code (no Kotlin, no TypeScript).
 
 ---
 
-## Constraints
+## Constraints (role-specific)
 
 ```
 НИКОГДА:
-✗ Секреты в Dockerfile или docker-compose.yml (только ${ENV_VAR})
-✗ Порты БД (5432), Redis (6379), MinIO (9000/9001) в production docker-compose (только внутренняя сеть)
-✗ Root-пользователь в production контейнерах
-✗ Пропуск healthcheck — каждый сервис ОБЯЗАН иметь healthcheck
-✗ latest теги для base images — всегда конкретная версия (minio/minio:RELEASE.*, postgres:16-alpine, etc.)
 ✗ Модификация application code (src/)
-✗ Пропуск start_period для JVM-приложений (минимум 90s)
 ✗ ports: в production для frontend — только expose: (Coolify's Traefik управляет внешним доступом)
-✗ Отсутствие logging limits в production (логи без ротации забьют диск)
-✗ Отсутствие .dockerignore — node_modules/build/dist/.git/.env* ОБЯЗАНЫ быть исключены
 ```
+
+Остальные запреты (секреты в Dockerfile, порты БД наружу, root user, пропуск healthcheck, `latest` теги, отсутствие logging limits и т.д.) — см. `.claude/rules/devops.md`.
 
 ---
 
@@ -77,138 +81,15 @@ Coolify (v4) управляет деплоем через docker-compose.prod.ym
 
 ## Reference Configs
 
-### Logging config (production, все сервисы)
-```yaml
-logging:
-  driver: "json-file"
-  options:
-    max-size: "10m"
-    max-file: "3"
-```
+Актуальные рабочие файлы — единственный источник истины:
+- Dev: `docker-compose.yml`
+- Prod: `docker-compose.prod.yml`
+- Backend build: `backend/Dockerfile`
+- Frontend build: `frontend/Dockerfile`
+- Nginx: `frontend/nginx.conf`
+- CI/CD: `.github/workflows/`
 
-### .dockerignore (backend и frontend)
-```
-node_modules
-build
-dist
-.git
-.env
-.env.*
-*.log
-```
-
-### docker-compose.yml (dev)
-```yaml
-services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: clubs
-      POSTGRES_USER: clubs
-      POSTGRES_PASSWORD: clubs_secret
-    ports: ["5432:5432"]
-    volumes: [postgres_data:/var/lib/postgresql/data]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U clubs"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports: ["6379:6379"]
-    volumes: [redis_data:/data]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  postgres_data:
-  redis_data:
-```
-
-### Backend Dockerfile (актуальный)
-```dockerfile
-FROM gradle:8.12-jdk21 AS build
-WORKDIR /app
-COPY build.gradle.kts settings.gradle.kts ./
-COPY gradle ./gradle
-RUN gradle dependencies --no-daemon || true
-COPY src ./src
-RUN gradle bootJar --no-daemon -x generateJooq
-
-FROM eclipse-temurin:21-jre-alpine
-RUN apk add --no-cache curl
-WORKDIR /app
-COPY --from=build /app/build/libs/*.jar app.jar
-RUN addgroup -S app && adduser -S app -G app
-USER app
-EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-  CMD curl -f http://localhost:8080/actuator/health || exit 1
-ENTRYPOINT ["java", "-jar", "app.jar"]
-```
-
-### Frontend Dockerfile (актуальный)
-```dockerfile
-FROM node:20-alpine AS build
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --legacy-peer-deps
-COPY . .
-RUN npm run build
-
-FROM nginx:alpine
-RUN rm -f /etc/nginx/conf.d/default.conf
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-RUN touch /var/run/nginx.pid && \
-    chown -R nginx:nginx /var/run/nginx.pid && \
-    chown -R nginx:nginx /var/cache/nginx && \
-    chown -R nginx:nginx /usr/share/nginx/html
-USER nginx
-EXPOSE 80
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -q --spider http://localhost/ || exit 1
-```
-
-### nginx.conf (актуальный)
-```nginx
-server {
-    listen 80;
-    server_name _;
-    root /usr/share/nginx/html;
-    index index.html;
-
-    gzip on;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript;
-    gzip_min_length 256;
-
-    location /api/ {
-        proxy_pass http://backend:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 30s;
-        proxy_connect_timeout 10s;
-    }
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
-}
-```
+Перед началом работы — прочитать нужные файлы через Read tool.
 
 ---
 

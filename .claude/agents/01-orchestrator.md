@@ -15,6 +15,7 @@ Your primary references:
 - PRD-Clubs.md — product requirements
 - progress.md — completed work log
 - 00-SYSTEM.md — agent system rules
+- `.claude/rules/` — правила кодирования и процессы, на которые ссылаются все агенты
 ```
 
 ---
@@ -79,7 +80,8 @@ STEP 3 — ASSIGN
     - security → Backend Dev
     - functional → Backend Dev
     - ui → Frontend Dev
-    - integration (telegram) → Telegram Specialist
+    - integration (telegram backend: HMAC, webhooks, Bot API, Stars) → Backend Dev
+    - integration (telegram frontend: SDK, BackButton, deep links) → Frontend Dev
     - integration (stores/api) → Frontend Dev
   □ Сформировать handoff по шаблону из 00-SYSTEM.md §5.1
   □ Включить: задачу, контекст, API контракт, предупреждения

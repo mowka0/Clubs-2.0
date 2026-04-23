@@ -16,6 +16,21 @@ When requesting changes, you give SPECIFIC, ACTIONABLE feedback: file, line/loca
 
 ---
 
+## Читать перед работой
+
+Rules-файлы содержат чеклисты и критерии ревью:
+
+- `.claude/rules/reviewer.md` — порядок проверки, чеклисты, формат комментариев, severity-метки
+- `.claude/rules/principles.md` — архитектурные принципы
+- `.claude/rules/naming-and-smells.md` — code smells, соответствие конвенциям имён
+- `.claude/rules/error-handling.md` — корректность обработки ошибок
+- `.claude/rules/backend.md` — при ревью Kotlin кода
+- `.claude/rules/frontend.md` — при ревью React/TS кода
+
+Security-review проводит отдельный Security agent — Reviewer на security фокус не ставит (но флагает очевидное).
+
+---
+
 ## Goals & KPIs
 
 | Goal | KPI |
@@ -56,111 +71,29 @@ When requesting changes, you give SPECIFIC, ACTIONABLE feedback: file, line/loca
 
 ## Review Checklist
 
-### Correctness
-```
-□ ВСЕ acceptance_criteria из tasks.json удовлетворены?
-□ ВСЕ test_steps пройдены агентом (задокументированы)?
-□ Edge cases обработаны? (null, empty, boundary, concurrent)
-□ Error responses правильные? (404, 400, 409, 403 — не 500)
-□ HTTP status codes правильные? (201 create, 200 get/update)
-```
+Полный чеклист (Architecture / Correctness / Tests / Code Quality) — `.claude/rules/reviewer.md`.
 
-### Security
-```
-□ Нет секретов в коде? (tokens, passwords, API keys)
-□ Auth check на всех protected endpoints?
-□ Role check где нужно? (organizer vs member)
-□ Input validation присутствует и достаточна?
-□ SQL injection невозможен? (jOOQ DSL используется)
-□ XSS невозможен? (React escapes by default, нет dangerouslySetInnerHTML)
-□ JWT claims корректно валидируются?
-□ Stack traces НЕ утекают в error responses?
-□ initData HMAC валидация присутствует (если Telegram-related)?
-```
-
-### Architecture Compliance
-```
-□ Package structure соответствует ARCHITECTURE.md?
-□ API endpoints: method + path + request + response совпадают с контрактом?
-□ DTO поля совпадают с ARCHITECTURE.md?
-□ Слои разделены: Controller → Service → Repository?
-□ Бизнес-логика ТОЛЬКО в Service?
-□ Database доступ ТОЛЬКО через Repository (jOOQ)?
-□ Frontend: apiClient используется для всех API вызовов?
-□ Frontend: Zustand для state management?
-```
-
-### Code Quality
-```
-□ Нет unused imports / dead code?
-□ Нет var где можно val? (Kotlin)
-□ Нет any тип? (TypeScript)
-□ Нет console.log / println в production коде?
-□ Naming: осмысленные имена переменных/функций?
-□ Один класс на файл? (Kotlin, кроме sealed)
-□ Named exports? (TypeScript)
-□ Comments объясняют "why", не "what"?
-```
-
-### Performance
-```
-□ Нет N+1 запросов? (jOOQ query в цикле)
-□ Pagination на list endpoints?
-□ Нет unnecessary re-renders? (useEffect deps правильные)
-□ Тяжёлые страницы используют React.lazy?
-□ Нет блокирующих вызовов Telegram API в request handlers?
-```
-
-### Frontend-specific
-```
-□ Loading state: skeleton/spinner при загрузке?
-□ Error state: Placeholder с сообщением?
-□ Empty state: Placeholder с подсказкой?
-□ Telegram UI компоненты (Cell, Section, Button, Placeholder)?
-□ BackButton: на detail pages показан, на tabs скрыт?
-□ BottomTabBar: на 4 главных табах, correct active state?
-□ JWT в памяти, НЕ в localStorage?
-□ UI текст на русском?
-```
+Обязательные проверки специфичные для агента (перед APPROVE):
+- ВСЕ `acceptance_criteria` из `tasks.json` удовлетворены
+- ВСЕ `test_steps` пройдены (задокументированы в Completion Report)
+- Соответствие `ARCHITECTURE.md` (API contracts, package structure)
 
 ---
 
-## Review Report Template
+## Severity и формат комментариев
 
-```markdown
-## Review: TASK-{ID}
+Используем систему из `.claude/rules/reviewer.md`:
 
-**Вердикт:** ✅ APPROVE / ❌ REQUEST CHANGES
+| Метка | Блокирует мерж |
+|---|---|
+| **[Blocker]** | Да |
+| **[Security]** | Да (флагует Reviewer, детально разбирается Security agent) |
+| **[Suggestion]** | Нет |
+| **[Nit]** | Нет |
+| **[Question]** | Блокирует до ответа |
 
-### Проверено по чек-листу
-| Категория | Статус |
-|-----------|--------|
-| Correctness | ✅/❌ |
-| Security | ✅/❌ |
-| Architecture | ✅/❌ |
-| Code Quality | ✅/❌ |
-| Performance | ✅/❌ |
-| Frontend UI (если применимо) | ✅/❌ |
-
-### Проблемы
-
-#### 🔴 Критично (блокер, ОБЯЗАТЕЛЬНО исправить)
-N. **Файл:** `path/file.kt:42`
-   **Проблема:** {конкретное описание}
-   **Решение:** {конкретное решение}
-
-#### 🟡 Важно (СЛЕДУЕТ исправить)
-N. **Файл:** `path/file.tsx:15`
-   **Проблема:** {конкретное описание}
-   **Решение:** {конкретное решение}
-
-#### 🔵 Рекомендация (можно улучшить)
-N. **Файл:** `path/file.kt:88`
-   **Предложение:** {конкретное улучшение}
-
-### Что сделано хорошо
-- {конкретная похвала}
-```
+Формат комментария: `[Severity] проблема (file:line) / Why / Fix / Ref`.
+Подробнее в `.claude/rules/reviewer.md` § "Формат комментария".
 
 ---
 
@@ -170,16 +103,15 @@ N. **Файл:** `path/file.kt:88`
 APPROVE если:
   - ВСЕ acceptance_criteria удовлетворены
   - ВСЕ test_steps пройдены
-  - Нет 🔴 Critical issues
-  - Нет 🟡 Important issues (или они незначительны и не влияют на функциональность)
+  - Нет [Blocker] findings
+  - Нет нерешённых [Question]
 
 REQUEST CHANGES если:
   - Хотя бы один acceptance criterion не удовлетворён
-  - Хотя бы один test step не пройден
-  - Есть 🔴 Critical issue
-  - Есть несколько 🟡 Important issues
+  - Есть [Blocker]
+  - Есть нерешённые [Question]
 
-Примечание: 🔵 Recommendations НЕ блокируют APPROVE
+[Suggestion] и [Nit] НЕ блокируют APPROVE.
 ```
 
 ---

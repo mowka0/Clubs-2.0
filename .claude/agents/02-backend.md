@@ -17,6 +17,17 @@ After finishing: self-check against acceptance criteria, run test steps, verify 
 
 ---
 
+## Читать перед работой
+
+Rules-файлы содержат правила кодирования проекта. ОБЯЗАТЕЛЬНО прочитать в начале работы:
+
+- `.claude/rules/principles.md` — архитектура, SOLID, DRY/KISS/YAGNI, иммутабельность
+- `.claude/rules/backend.md` — слои (Controller→Service→Repository→Mapper), DTO vs Record vs Domain, валидация, Kotlin-специфика
+- `.claude/rules/naming-and-smells.md` — конвенции имён, code smells
+- `.claude/rules/error-handling.md` — Fail Fast, specific exceptions, логирование
+
+---
+
 ## Goals & KPIs
 
 | Goal | KPI |
@@ -46,145 +57,24 @@ After finishing: self-check against acceptance criteria, run test steps, verify 
 
 ---
 
-## Constraints (Запреты)
+## Constraints (role-specific)
 
 ```
 НИКОГДА:
 ✗ JPA / Hibernate / Spring Data JPA — только jOOQ DSL
 ✗ Raw SQL строки — только typesafe jOOQ API
-✗ Секреты в коде — только environment variables
-✗ var когда можно val
-✗ Wildcard imports (import com.clubs.*)
-✗ Stack traces в API-ответах (в production)
-✗ Бизнес-логика в Controller (только в Service)
-✗ Прямой доступ к БД из Controller (только через Repository → Service)
 ✗ Endpoints не из ARCHITECTURE.md без согласования с Orchestrator
 ✗ Модификация tasks.json кроме поля status
 ✗ Модификация frontend/ директории
 ```
 
+Остальные запреты (секреты в коде, бизнес-логика в Controller, прямой доступ к БД, var вместо val и т.д.) — см. `.claude/rules/`.
+
 ---
 
-## Code Patterns (обязательные)
+## Code Patterns
 
-### Controller
-```kotlin
-@RestController
-@RequestMapping("/api/clubs")
-class ClubController(private val clubService: ClubService) {
-
-    @PostMapping
-    fun createClub(
-        @RequestBody request: CreateClubRequest,
-        @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<ClubDetailDto> {
-        val club = clubService.createClub(request, user.userId)
-        return ResponseEntity.status(HttpStatus.CREATED).body(club)
-    }
-}
-// Controller = маршрутизация + извлечение параметров. Логики здесь НЕТ.
-```
-
-### Service
-```kotlin
-@Service
-class ClubService(
-    private val clubRepository: ClubRepository,
-    private val membershipRepository: MembershipRepository
-) {
-    fun createClub(request: CreateClubRequest, ownerId: UUID): ClubDetailDto {
-        // 1. Валидация
-        validate(request)
-        // 2. Бизнес-правила
-        if (clubRepository.countByOwnerId(ownerId) >= 10)
-            throw ConflictException("Maximum 10 clubs per organizer")
-        // 3. Действие
-        val club = clubRepository.create(request, ownerId)
-        // 4. Возврат DTO
-        return toDetailDto(club, memberCount = 0, isMember = false, isOrganizer = true)
-    }
-}
-// Service = валидация + бизнес-правила + оркестрация repositories.
-```
-
-### Repository (jOOQ)
-```kotlin
-@Repository
-class ClubRepository(private val dsl: DSLContext) {
-
-    fun create(request: CreateClubRequest, ownerId: UUID): ClubRecord =
-        dsl.insertInto(CLUBS)
-            .set(CLUBS.ID, UUID.randomUUID())
-            .set(CLUBS.OWNER_ID, ownerId)
-            .set(CLUBS.NAME, request.name)
-            .set(CLUBS.CATEGORY, ClubCategory.valueOf(request.category))
-            .returning()
-            .fetchOne()!!
-
-    fun findById(id: UUID): ClubRecord? =
-        dsl.selectFrom(CLUBS)
-            .where(CLUBS.ID.eq(id))
-            .fetchOne()
-
-    fun countByOwnerId(ownerId: UUID): Int =
-        dsl.selectCount().from(CLUBS)
-            .where(CLUBS.OWNER_ID.eq(ownerId))
-            .fetchOne(0, Int::class.java) ?: 0
-}
-// Repository = чистые jOOQ запросы. Никакой бизнес-логики.
-```
-
-### DTO
-```kotlin
-data class CreateClubRequest(
-    val name: String,
-    val description: String,
-    val category: String,
-    val accessType: String,
-    val city: String,
-    val district: String? = null,
-    val memberLimit: Int,
-    val subscriptionPrice: Int,
-    val avatarUrl: String? = null,
-    val rules: String? = null,
-    val applicationQuestion: String? = null
-)
-// data class. Неизменяемый. Nullable только где это доменно оправдано.
-```
-
-### Exceptions
-```kotlin
-class NotFoundException(message: String) : RuntimeException(message)
-class ValidationException(message: String) : RuntimeException(message)
-class ConflictException(message: String) : RuntimeException(message)
-// Throw в Service. Ловит GlobalExceptionHandler. Controller не знает об ошибках.
-```
-
-### GlobalExceptionHandler
-```kotlin
-@RestControllerAdvice
-class GlobalExceptionHandler {
-    @ExceptionHandler(NotFoundException::class)
-    fun handle(ex: NotFoundException) =
-        ResponseEntity.status(404).body(ErrorResponse("NOT_FOUND", ex.message ?: "Not found"))
-
-    @ExceptionHandler(ValidationException::class)
-    fun handle(ex: ValidationException) =
-        ResponseEntity.status(400).body(ErrorResponse("VALIDATION_ERROR", ex.message ?: "Invalid"))
-
-    @ExceptionHandler(ConflictException::class)
-    fun handle(ex: ConflictException) =
-        ResponseEntity.status(409).body(ErrorResponse("CONFLICT", ex.message ?: "Conflict"))
-
-    @ExceptionHandler(Exception::class)
-    fun handle(ex: Exception): ResponseEntity<ErrorResponse> {
-        logger.error("Unhandled", ex)
-        return ResponseEntity.status(500).body(ErrorResponse("INTERNAL_ERROR", "Internal server error"))
-        // НЕ УТЕКАЕТ stack trace
-    }
-}
-data class ErrorResponse(val error: String, val message: String)
-```
+Обязательная структура Controller → Service → Repository → Mapper + правила написания кода — см. `.claude/rules/backend.md`.
 
 ---
 

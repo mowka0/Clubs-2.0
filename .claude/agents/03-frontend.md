@@ -17,6 +17,17 @@ After finishing: verify in browser, check console for errors, run npm run build.
 
 ---
 
+## Читать перед работой
+
+Rules-файлы содержат правила кодирования. ОБЯЗАТЕЛЬНО прочитать:
+
+- `.claude/rules/principles.md` — архитектурные принципы, иммутабельность
+- `.claude/rules/frontend.md` — feature-based структура, Server vs Client state, TS strict, discriminated unions, branded types, re-renders, error handling (ErrorBoundary, 401)
+- `.claude/rules/naming-and-smells.md` — конвенции имён, code smells
+- `.claude/rules/error-handling.md` — Fail Fast, обработка ошибок
+
+---
+
 ## Goals & KPIs
 
 | Goal | KPI |
@@ -52,15 +63,11 @@ After finishing: verify in browser, check console for errors, run npm run build.
 
 ---
 
-## Constraints (Запреты)
+## Constraints (role-specific)
 
 ```
 НИКОГДА:
-✗ Class components — только functional с FC<Props>
-✗ Default exports — только named exports
 ✗ JWT в localStorage — только в памяти (Zustand store)
-✗ any тип — всегда конкретный тип или unknown
-✗ console.log в коммите — удалять перед коммитом
 ✗ Пропуск loading/error/empty state — ВСЕ три обязательны
 ✗ Custom HTML вместо Telegram UI компонентов (Cell, Section, Button)
 ✗ Mock initData fallback в production (только через env)
@@ -70,173 +77,33 @@ After finishing: verify in browser, check console for errors, run npm run build.
 ✗ Изменение API контрактов
 ```
 
+Остальные запреты (class components, default exports, `any`, `console.log` и т.д.) — см. `.claude/rules/frontend.md`.
+
 ---
 
-## Code Patterns (обязательные)
+## Code Patterns
 
-### Page Component
-```tsx
-import { FC, useEffect } from 'react';
-import { Section, Placeholder } from '@telegram-apps/telegram-ui';
-import { useClubsStore } from '../store/useClubsStore';
-import { ClubCard } from '../components/ClubCard';
-import { Skeleton } from '../components/Skeleton';
+Общие паттерны (feature-based структура, state management, typing, компоненты, хуки, re-renders) — см. `.claude/rules/frontend.md`.
 
-export const DiscoveryPage: FC = () => {
-  const { clubs, loading, error, fetchClubs } = useClubsStore();
+### Telegram-специфичные паттерны (уникальные для проекта)
 
-  useEffect(() => {
-    fetchClubs();
-  }, [fetchClubs]);
+**BackButton:**
+- Показывать на detail-страницах (`ClubPage`, `EventPage` и т.п.)
+- Скрывать на tab-страницах (Discovery, MyClubs, Organizer, Profile)
+- Использовать `backButton` из `@telegram-apps/sdk-react`, регистрировать через `useEffect` с cleanup
 
-  // ← ОБЯЗАТЕЛЬНО: три состояния
-  if (loading) return <Skeleton count={5} />;
-  if (error) return <Placeholder description={error} />;
-  if (clubs.length === 0) return <Placeholder description="Клубы не найдены" />;
+**BottomTabBar:**
+- 4 таба: Discovery (`/`), Мои клубы (`/my-clubs`), Организатор (`/organizer`), Профиль (`/profile`)
+- Видна ТОЛЬКО на этих 4 страницах
+- На detail-страницах (`clubs/:id`, `events/:id`) — скрыта (logic проверки `pathname` в Layout)
 
-  return (
-    <Section header="Клубы">
-      {clubs.map(club => <ClubCard key={club.id} club={club} />)}
-    </Section>
-  );
-};
-```
+**initData:**
+- Получать через `retrieveLaunchParams().initDataRaw`
+- НЕ использовать mock fallback в production (только через env `VITE_MOCK_INIT_DATA`)
 
-### API Client
-```tsx
-// api/apiClient.ts
-class ApiClient {
-  private token: string | null = null;
-
-  setToken(token: string) { this.token = token; }
-  clearToken() { this.token = null; }
-
-  async request<T>(method: string, path: string, body?: unknown, params?: Record<string, string>, isRetry = false): Promise<T> {
-    const url = new URL(path, window.location.origin);
-    if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
-
-    const res = await fetch(url.toString(), {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-
-    if (res.status === 401 && this.token && !isRetry) {
-      this.clearToken();
-      await this.authenticate();
-      return this.request(method, path, body, params, true); // retry once, no further retries
-    }
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: 'Unknown error' }));
-      throw new Error(err.message || `HTTP ${res.status}`);
-    }
-
-    return res.json();
-  }
-
-  get<T>(path: string, params?: Record<string, string>) { return this.request<T>('GET', path, undefined, params); }
-  post<T>(path: string, body?: unknown) { return this.request<T>('POST', path, body); }
-  put<T>(path: string, body?: unknown) { return this.request<T>('PUT', path, body); }
-
-  private async authenticate() {
-    const { retrieveLaunchParams } = await import('@telegram-apps/sdk-react');
-    const { initDataRaw } = retrieveLaunchParams();
-    const data = await this.request<{ token: string }>('POST', '/api/auth/telegram', { initData: initDataRaw });
-    this.token = data.token;
-  }
-}
-
-export const apiClient = new ApiClient();
-```
-
-### Zustand Store
-```tsx
-import { create } from 'zustand';
-
-interface ClubsState {
-  clubs: ClubListItemDto[];
-  loading: boolean;
-  error: string | null;
-  fetchClubs: (params?: Record<string, string>) => Promise<void>;
-}
-
-export const useClubsStore = create<ClubsState>((set) => ({
-  clubs: [],
-  loading: false,
-  error: null,
-
-  fetchClubs: async (params) => {
-    set({ loading: true, error: null });
-    try {
-      const res = await apiClient.get<PageResponse<ClubListItemDto>>('/api/clubs', params);
-      set({ clubs: res.content, loading: false });
-    } catch (e) {
-      set({ error: (e as Error).message, loading: false });
-    }
-  },
-}));
-// Store = данные + loading + error + async actions. Нет UI логики.
-```
-
-### Hooks
-```tsx
-// hooks/useBackButton.ts
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { backButton } from '@telegram-apps/sdk-react';
-
-export const useBackButton = () => {
-  const navigate = useNavigate();
-  useEffect(() => {
-    backButton.show();
-    const off = backButton.onClick(() => navigate(-1));
-    return () => { off(); backButton.hide(); };
-  }, [navigate]);
-};
-// Показывать на detail-страницах (ClubPage, EventPage, etc.)
-// Скрывать на tab-страницах (Discovery, MyClubs, Organizer, Profile)
-```
-
-### Routing
-```tsx
-// router.tsx — lazy loading для тяжёлых страниц
-import { lazy, Suspense } from 'react';
-import { createBrowserRouter } from 'react-router-dom';
-
-const DiscoveryPage = lazy(() =>
-  import('./pages/DiscoveryPage').then(m => ({ default: m.DiscoveryPage }))
-);
-
-export const router = createBrowserRouter([
-  {
-    path: '/',
-    element: <Layout />,
-    children: [
-      { index: true, element: <Suspense fallback={<Spinner />}><DiscoveryPage /></Suspense> },
-      { path: 'clubs/:id', element: <Suspense fallback={<Spinner />}><ClubPage /></Suspense> },
-      { path: 'clubs/:id/interior', element: <ClubInteriorPage /> },
-      { path: 'events/:id', element: <EventPage /> },
-      { path: 'my-clubs', element: <MyClubsPage /> },
-      { path: 'organizer', element: <OrganizerPage /> },
-      { path: 'organizer/clubs/:id', element: <OrganizerClubManagePage /> },
-      { path: 'profile', element: <ProfilePage /> },
-      { path: 'invite/:code', element: <InvitePage /> },
-    ],
-  },
-]);
-```
-
-### BottomTabBar
-```tsx
-// components/BottomTabBar.tsx
-// 4 таба: Discovery (/), Мои клубы (/my-clubs), Организатор (/organizer), Профиль (/profile)
-// Видна ТОЛЬКО на этих 4 страницах
-// На detail-страницах (clubs/:id, events/:id, etc.) — скрыта
-```
+**UI kit:**
+- Использовать `@telegram-apps/telegram-ui v2` компоненты (`Cell`, `Section`, `Button`, `Placeholder`) вместо custom HTML
+- Состояния страницы (loading/error/empty/data) рендерить через `Placeholder`
 
 ---
 

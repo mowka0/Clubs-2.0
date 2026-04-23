@@ -16,6 +16,15 @@ Your output is the single source of truth that both the Developer and the Tester
 
 ---
 
+## Читать перед работой
+
+Rules-файлы содержат правила написания спецификаций:
+
+- `.claude/rules/analyst.md` — структура спецификации, шаблон секции, User Stories (INVEST), Acceptance Criteria (Given/When/Then), функциональные vs нефункциональные требования, интеграции, язык
+- `.claude/rules/principles.md` — архитектурные принципы (чтобы спека не противоречила им)
+
+---
+
 ## Goals & KPIs
 
 | Goal | KPI |
@@ -103,93 +112,13 @@ STEP 6 — DEFINE ACCEPTANCE TESTS
 
 ## Module Documentation Structure
 
-Каждый файл `docs/modules/{module}.md` накапливает спецификации:
+Шаблон секции спецификации и стандартные подсекции (Описание, API Контракт, Corner Cases, Acceptance Criteria и т.д.) — см. `.claude/rules/analyst.md` § "Структура спецификации".
 
-```markdown
-# Module: {Название модуля}
-
----
-
-## TASK-{ID}: {Название задачи}
-
-**Приоритет:** critical | high | medium | low
-**Агент:** Backend Dev | Frontend Dev | Telegram Spec
-**Дата анализа:** YYYY-MM-DD
-
-### Описание
-{Что делает эта задача с точки зрения пользователя. 2-3 предложения.}
-
-### Файлы для создания/изменения
-| Файл | Действие | Описание |
-|------|----------|----------|
-| `backend/src/.../ClubController.kt` | Создать | REST endpoints для CRUD клубов |
-| `backend/src/.../ClubService.kt` | Создать | Бизнес-логика: валидация, лимиты |
-| `backend/src/.../ClubRepository.kt` | Создать | jOOQ запросы к таблице clubs |
-
-### API Контракт
-{Скопировать из ARCHITECTURE.md конкретные endpoints с примерами}
-
-```
-POST /api/clubs
-  Request: { "name": "Футбол", "category": "sport", ... }
-  Response 201: { "id": "uuid", "name": "Футбол", ... }
-  Errors:
-    400 — name пустой или > 60 символов
-    400 — memberLimit < 10 или > 80
-    409 — у организатора уже 10 клубов
-```
-
-### Бизнес-логика (пошагово)
-1. Извлечь userId из JWT
-2. Валидировать поля запроса:
-   - name: 1-60 символов, обязательно
-   - description: 1-500 символов, обязательно
-   - ...
-3. Проверить лимит: countByOwnerId(userId) < 10
-4. Если access_type = private → сгенерировать invite_link (UUID)
-5. Сохранить в БД
-6. Вернуть ClubDetailDto
-
-### Corner Cases
-
-| # | Ситуация | Вход | Ожидаемый результат |
-|---|----------|------|---------------------|
-| 1 | Пустое имя | `{ "name": "" }` | 400 `{ "error": "VALIDATION_ERROR", "message": "Name is required" }` |
-| 2 | Имя > 60 символов | `{ "name": "A".repeat(61) }` | 400 |
-| 3 | Лимит < 10 | `{ "memberLimit": 5 }` | 400 |
-| 4 | 11-й клуб | Организатор уже имеет 10 клубов | 409 `{ "error": "CONFLICT", "message": "Maximum 10 clubs per organizer" }` |
-| 5 | Не авторизован | Без Bearer token | 401 |
-| 6 | Невалидная категория | `{ "category": "xxx" }` | 400 |
-
-### Критерии приёмки для тестирования
-
-```
-TEST-1: Успешное создание
-  curl -X POST /api/clubs -H "Authorization: Bearer $TOKEN" \
-    -d '{"name":"Test","category":"sport","accessType":"open","city":"Москва","memberLimit":20,"subscriptionPrice":0,"description":"Test club"}'
-  → 201, response содержит id, name="Test", category="sport"
-
-TEST-2: Валидация имени
-  curl -X POST /api/clubs -H "Authorization: Bearer $TOKEN" \
-    -d '{"name":"","category":"sport",...}'
-  → 400, error="VALIDATION_ERROR"
-
-TEST-3: Лимит организатора
-  Создать 10 клубов от одного юзера
-  curl -X POST /api/clubs (11-й) → 409
-
-TEST-4: Без авторизации
-  curl -X POST /api/clubs (без заголовка Authorization) → 401
-
-TEST-5: Приватный клуб
-  curl -X POST /api/clubs -d '{"accessType":"private",...}'
-  → 201, response содержит inviteLink != null
-```
-
-### Связи с другими задачами
-- Зависит от: TASK-004 (jOOQ codegen) — нужны сгенерированные классы
-- Блокирует: TASK-009 (каталог), TASK-010 (вступление), TASK-013 (события)
-```
+Важное дополнение для tasks.json-задач (специфично для этого проекта):
+- Каждый файл `docs/modules/{module}.md` **накапливает** спецификации всех задач модуля
+- Для каждой задачи добавить подсекцию `## TASK-{ID}: {Название}` + стандартную структуру из `.claude/rules/analyst.md`
+- Дополнительно указать: **Файлы для создания/изменения** (таблица с путями) и **Связи с другими задачами** (зависимости из tasks.json)
+- Предыдущие задачи **НЕ удалять** — только добавлять новые
 
 ---
 

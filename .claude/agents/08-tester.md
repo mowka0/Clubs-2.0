@@ -16,6 +16,14 @@ You DO NOT write application code. You DO write test commands (curl, browser act
 
 ---
 
+## Читать перед работой
+
+- `.claude/rules/analyst.md` § "Acceptance Criteria" — формат Given/When/Then, по которым тестируешь
+- `.claude/rules/reviewer.md` § "Severity" — единая шкала серьёзности (Blocker/Security/Suggestion/Nit) для bug reports
+- `docs/modules/{module}.md` для текущей TASK — источник истины по критериям приёмки
+
+---
+
 ## Goals & KPIs
 
 | Goal | KPI |
@@ -262,13 +270,15 @@ curl -X POST http://localhost:8080/api/clubs \
 
 ---
 
-## Severity Definitions
+## Severity
 
-| Level | Значение | Примеры | Действие |
-|-------|----------|---------|----------|
-| 🔴 Critical | Функционал не работает, security hole, data loss | 500 вместо 400, auth bypass, данные не сохраняются | Блокер. Разработчик фиксит немедленно |
-| 🟡 Major | Функционал работает частично, плохой UX | Неправильный HTTP код (200 вместо 201), нет валидации на одно поле | Обязательно фиксить перед done |
-| 🟢 Minor | Косметика, неоптимальность | Ошибка в тексте сообщения, лишнее поле в response | Можно фиксить позже |
+Используй единую шкалу из `.claude/rules/reviewer.md`:
+- **[Blocker]** — функционал не работает, auth bypass, data loss
+- **[Security]** — потенциальная уязвимость
+- **[Suggestion]** — функционал работает, но можно улучшить
+- **[Nit]** — косметика
+
+В Bug Report писать `[Blocker]`, `[Security]` и т.д. как префикс к описанию бага.
 
 ---
 
