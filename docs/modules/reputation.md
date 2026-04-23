@@ -1,139 +1,112 @@
 # Module: Reputation
 
-## Refactor: add Repository and Mapper layers
+Система репутации участников в рамках клуба.
+Соответствует PRD §4.4.4. Источник истины для бизнес-правил — PRD.
 
-**Дата:** 2026-04-23
-**Тип:** Архитектурный рефакторинг
-**Агент:** Backend Developer
+## Назначение
+Считает и хранит per-club метрики поведения участника на событиях: надёжность, процент выполнения обещаний, счётчик спонтанности.
 
-### Цель
-Привести модуль `reputation/` к слоистой архитектуре из `.claude/rules/backend.md`. Сейчас `ReputationService` напрямую использует `DSLContext`, минуя Repository слой.
+## Архитектура
 
-### Scope
+```
+@Scheduled → ReputationService
+                   │
+                   ▼
+            ReputationRepository (interface)
+                   │
+                   ▼
+          JooqReputationRepository ──▶ ReputationMapper ──▶ Reputation (domain)
+```
 
-**Входит:**
-- Создать `ReputationRepository` (интерфейс) + `JooqReputationRepository` (impl)
-- Создать `ReputationMapper` для маппинга jOOQ Record → domain
-- Создать domain-класс `Reputation` (data class)
-- Переписать `ReputationService` на Repository + Mapper
-- Поведение (подсчёт репутации) **не меняется** — только структура
-
-**НЕ входит:**
-- Использование `USER_CLUB_REPUTATION` в `bot/ClubsBot.kt` — будет в рефакторинге модуля `bot`
-- Использование в `membership/MemberController.kt` — в рефакторинге `membership`
-- Изменение бизнес-правил подсчёта репутации
-
-### Файлы для создания/изменения
-| Файл | Действие |
+### Файлы
+| Файл | Роль |
 |---|---|
-| `reputation/domain/Reputation.kt` | **Создать** — domain data class |
-| `reputation/ReputationRepository.kt` | **Создать** — интерфейс |
-| `reputation/JooqReputationRepository.kt` | **Создать** — реализация с jOOQ |
-| `reputation/ReputationMapper.kt` | **Создать** — маппинг Record ↔ domain |
-| `reputation/ReputationService.kt` | **Изменить** — убрать прямой `DSLContext`, работать через Repository |
+| `Reputation.kt` | Domain data classes (Reputation, FinalizedEventRef, ResponseForReputation) |
+| `ReputationRepository.kt` | Интерфейс |
+| `JooqReputationRepository.kt` | Реализация с jOOQ |
+| `ReputationMapper.kt` | Record → domain |
+| `ReputationService.kt` | Оркестрация + бизнес-правила |
 
-### API Контракт
-Без изменений (Service не имеет REST endpoints, только `@Scheduled`).
+### Хранение
+Таблица `user_club_reputation` (см. миграцию V7, V10):
+- `reliability_index` INT (default 0, без границ, может быть отрицательным)
+- `promise_fulfillment_pct` NUMERIC(5,2) (default 0)
+- `total_confirmations`, `total_attendances`, `spontaneity_count` INT
+- UNIQUE (user_id, club_id) — одна запись на пару юзер+клуб
 
-### Repository Contract
+## Бизнес-правила (из PRD §4.4.4)
 
-```kotlin
-interface ReputationRepository {
-    fun findByUserAndClub(userId: UUID, clubId: UUID): Reputation?
-    fun save(reputation: Reputation)
-    fun findFinalizedEventsForReputation(): List<EventSummary>  // id, clubId
-    fun findResponsesByEvent(eventId: UUID): List<EventResponseSummary>
-}
+### Начисления надёжности
+
+| Сценарий | Этап 1 | Этап 2 | Приход | Δ reliability | Δ spontaneity |
+|---|---|---|---|---|---|
+| Железобетонный | going | confirmed | attended | +100 | — |
+| Пустозвон | going | confirmed | absent | −50 | — |
+| Передумавший | going | declined | — | 0 | — |
+| Спонтанный | maybe | confirmed | attended | +30 | +1 |
+| Зритель | maybe | confirmed | absent | −20 | — |
+| Вечный сомневающийся | maybe | not confirmed | — | 0 | — |
+| Молчун | not_going | — | — | 0 | — |
+
+### Формулы
+
+- **reliabilityIndex** = Σ всех начислений за всю историю. Стартует с 0. **Может быть отрицательным.** Не ограничен сверху.
+- **promiseFulfillmentPct** = totalAttendances / totalConfirmations × 100, округление HALF_UP до 2 знаков. При totalConfirmations = 0 → 0.
+- **spontaneityCount** = число случаев "maybe → confirmed → attended".
+- **totalConfirmations** = число случаев finalStatus = confirmed.
+- **totalAttendances** = число случаев confirmed + attendance = attended.
+
+### Когда пересчитывается
+`@Scheduled(fixedDelay = 1h)` в `ReputationService.processReputationForFinalizedEvents()`:
+- Находит события где `attendance_finalized = true AND attendance_marked = true`
+- Для каждого прогоняет `calculateReputation(eventId, clubId)`
+- Для каждого response: считает deltas → загружает существующую репутацию → применяет deltas → сохраняет
+
+## Acceptance Criteria
+
+**AC-1: deltas по таблице**
+```
+GIVEN новая запись (существующей репутации нет)
+WHEN event response (going, confirmed, attended)
+THEN reliability = 0 + 100 = 100, confirmations = 1, attendances = 1, fulfillmentPct = 100
 ```
 
-**Примечание:** `EventSummary` и `EventResponseSummary` — минимальные DTO только для нужд Reputation (нужны id, clubId, userId, stage1Vote, finalStatus, attendance). НЕ доставать полные сущности.
-
-### Domain model
-
-```kotlin
-data class Reputation(
-    val userId: UUID,
-    val clubId: UUID,
-    val reliabilityIndex: Int,
-    val promiseFulfillmentPct: BigDecimal,
-    val totalConfirmations: Int,
-    val totalAttendances: Int,
-    val spontaneityCount: Int,
-    val updatedAt: OffsetDateTime
-)
+**AC-2: отрицательная репутация допустима**
+```
+GIVEN reliability = 0 (новый юзер)
+WHEN event response (going, confirmed, absent) — "Пустозвон" -50
+THEN reliability = -50 (не клампится в 0)
 ```
 
-### Бизнес-логика (не меняется)
-
-Логика подсчёта — как в текущем `ReputationService.processReputationForFinalizedEvents()` / `calculateReputation()`:
-- Деltas по таблице 4.4.4 из PRD (+100/-50/+30/-20/+10)
-- `reliabilityIndex` clamp в [0, 200]
-- `promiseFulfillmentPct` = totalAttendances / totalConfirmations × 100
-
-Перенос логики из Service должен сохранить эти правила **бит в бит**.
-
-### Acceptance Criteria (Given/When/Then)
-
-**AC-1: Структура слоёв**
+**AC-3: declined → 0**
 ```
-GIVEN рефакторинг завершён
-WHEN открыт `ReputationService.kt`
-THEN нет импортов `DSLContext`, `org.jooq.impl.DSL`, jOOQ-generated классов
-AND есть инжект `ReputationRepository` (не реализация)
-AND есть инжект `ReputationMapper`
+GIVEN любая существующая репутация
+WHEN event response (finalStatus = declined)
+THEN reliability не меняется (+0)
 ```
 
-**AC-2: Repository чистый**
+**AC-4: спонтанность только для "maybe → confirmed → attended"**
 ```
-GIVEN открыт `JooqReputationRepository.kt`
-WHEN смотрим содержимое
-THEN есть только jOOQ-запросы и вызовы Mapper
-AND НЕТ бизнес-логики (никаких if со значениями delta, clamp, подсчёта процентов)
-```
-
-**AC-3: Mapper чистый**
-```
-GIVEN открыт `ReputationMapper.kt`
-WHEN смотрим содержимое
-THEN только преобразования полей Record ↔ Reputation
-AND нет бизнес-логики
+GIVEN ...
+WHEN event response (maybe, confirmed, attended)
+THEN reliability += 30 AND spontaneityCount += 1
 ```
 
-**AC-4: Service содержит только бизнес-логику**
+**AC-5: изоляция по клубу**
 ```
-GIVEN открыт `ReputationService.kt`
-WHEN смотрим содержимое
-THEN метод `processReputationForFinalizedEvents()` — оркестрация (запросы через Repository, цикл, обновление)
-AND метод `calculateReputation()` — вычисление deltas (по правилам PRD) + save через Repository
-AND приватная функция расчёта reliability clamp и fulfillmentPct — есть, остаётся pure-функция
+GIVEN у юзера есть репутация в клубе A
+WHEN event в клубе B добавляет reliability
+THEN меняется только запись user_club_reputation для клуба B, клуб A не тронут
 ```
 
-**AC-5: Поведение не изменилось**
-```
-GIVEN тестовый event с responses (going→confirmed→attended):
-  user1: stage1Vote=going, finalStatus=confirmed, attendance=attended
-  user2: stage1Vote=maybe, finalStatus=confirmed, attendance=absent
-  user3: stage1Vote=going, finalStatus=declined
-WHEN запускается `calculateReputation(eventId, clubId)`
-THEN user1.reliability_index += 100 (или стартует с 100 → 200)
-AND user2.reliability_index -= 20
-AND user3.reliability_index += 10
-AND промисы/посещения/спонтанность подсчитаны как раньше
-```
+## Интеграции
 
-**AC-6: Билд и тесты**
-```
-GIVEN рефакторинг завершён
-WHEN `./gradlew build`
-THEN BUILD SUCCESSFUL без warnings
-AND все существующие тесты проходят (если они есть для reputation)
-```
+- Таблица `EVENTS` (read): `ATTENDANCE_FINALIZED`, `ATTENDANCE_MARKED`
+- Таблица `EVENT_RESPONSES` (read): `STAGE_1_VOTE`, `FINAL_STATUS`, `ATTENDANCE`
+- Чтение репутации из других модулей (bot, membership) идёт **напрямую к таблице** — это будет вынесено в `ReputationRepository` при рефакторинге этих модулей.
 
-### Non-functional requirements
-- Производительность не деградирует — те же 2 запроса на event (fetch responses, fetch existing reputation), те же update/insert
-- `@Transactional` сохраняется на `processReputationForFinalizedEvents()`
-- Логирование остаётся (errors при фейле отдельного event)
+## Non-functional
 
-### Риски
-- **Средний:** регрессия в логике подсчёта при переносе. Митигация: построчное сравнение до/после + тест `AC-5` вручную
-- **Низкий:** Repository methods для event/response минимальны, но могут быть избыточны (over-engineering) — следить за YAGNI
+- `@Transactional` на `processReputationForFinalizedEvents`
+- Ошибки при расчёте одного event логируются, не роняют весь батч
+- Пересчёт идёт раз в час (fixed delay)
