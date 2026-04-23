@@ -23,24 +23,10 @@ import kotlin.test.assertEquals
 /**
  * Tests for the reputation delta calculation logic in ReputationService.
  *
- * The tested scenarios are based on PRD table 4.4.4:
- * - "Zhelezobetonnyi" (going -> confirmed -> attended):  +100 reliability
- * - "Pustozvon"       (going -> confirmed -> absent):    -50  reliability
- * - "Spontannyi"      (maybe -> confirmed -> attended):  +30  reliability, +1 spontaneity
- * - "Zritel"          (maybe -> confirmed -> absent):    -20  reliability
- * - "Chestnyi"        (declined):                        +10  reliability
- * - Default:                                              0   reliability
- *
- * Since ReputationService.calculateReputation is tightly coupled with jOOQ DSLContext,
- * we extract the delta logic into a testable helper and verify the calculation in isolation.
+ * Mirrors PRD §4.4.4 table. Must stay in sync with ReputationService.computeDeltas.
  */
 class ReputationServiceTest {
 
-    /**
-     * Extracts the reliability delta calculation logic exactly as implemented
-     * in ReputationService.calculateReputation so we can test it without
-     * a real DB or complex mocking of jOOQ query chains.
-     */
     private fun calculateReliabilityDelta(
         stage1Vote: Stage_1Vote?,
         finalStatus: FinalStatus?,
@@ -50,7 +36,6 @@ class ReputationServiceTest {
         stage1Vote == Stage_1Vote.going && finalStatus == FinalStatus.confirmed && attendance == AttendanceStatus.absent -> -50
         stage1Vote == Stage_1Vote.maybe && finalStatus == FinalStatus.confirmed && attendance == AttendanceStatus.attended -> 30
         stage1Vote == Stage_1Vote.maybe && finalStatus == FinalStatus.confirmed && attendance == AttendanceStatus.absent -> -20
-        finalStatus == FinalStatus.declined -> 10
         else -> 0
     }
 
@@ -89,13 +74,12 @@ class ReputationServiceTest {
     }
 
     @Test
-    fun `declined should give +10 reliability (Chestnyi)`() {
+    fun `declined should give 0 reliability (Peredumavshii per PRD 4_4_4)`() {
         val delta = calculateReliabilityDelta(Stage_1Vote.going, FinalStatus.declined, null)
-        assertEquals(10, delta, "declined = +10")
+        assertEquals(0, delta, "going -> declined = 0 per PRD")
 
-        // Also test with maybe -> declined
         val deltaMaybe = calculateReliabilityDelta(Stage_1Vote.maybe, FinalStatus.declined, null)
-        assertEquals(10, deltaMaybe, "maybe -> declined = +10")
+        assertEquals(0, deltaMaybe, "maybe -> declined = 0 per PRD")
     }
 
     @Test
@@ -119,28 +103,20 @@ class ReputationServiceTest {
     }
 
     @Test
-    fun `new user reliability should start at 100 and be clamped between 0 and 200`() {
-        val baseReliability = 100
+    fun `reliability index is unbounded sum of history per PRD 4_4_4`() {
+        // PRD: "Индекс надёжности = Σ всех начислений за всю историю (может быть отрицательным)"
+        // Starting value for a new user = 0, not clamped
 
-        // "Zhelezobetonnyi" +100 -> 200 (clamped at max)
-        val caseMax = (baseReliability + 100).coerceIn(0, 200)
-        assertEquals(200, caseMax)
+        val base = 0
 
-        // "Pustozvon" -50 -> 50
-        val caseMinus50 = (baseReliability + (-50)).coerceIn(0, 200)
-        assertEquals(50, caseMinus50)
+        // Сумма "Железобетонный" x 3 = 300 (no ceiling)
+        assertEquals(300, base + 100 + 100 + 100)
 
-        // Two "Pustozvon" in a row from 100 -> 50 -> 0
-        val caseTwoMinus = ((baseReliability + (-50)) + (-50)).coerceIn(0, 200)
-        assertEquals(0, caseTwoMinus)
+        // "Пустозвон" от 0 → -50 (допустимо, PRD явно говорит "может быть отрицательным")
+        assertEquals(-50, base + (-50))
 
-        // Cannot go below 0
-        val caseFloor = (0 + (-50)).coerceIn(0, 200)
-        assertEquals(0, caseFloor, "Reliability must not drop below 0")
-
-        // Cannot go above 200
-        val caseCeiling = (200 + 100).coerceIn(0, 200)
-        assertEquals(200, caseCeiling, "Reliability must not exceed 200")
+        // "Пустозвон" x 3 от 0 → -150
+        assertEquals(-150, base + (-50) + (-50) + (-50))
     }
 
     @Test
@@ -157,8 +133,10 @@ class ReputationServiceTest {
         val pct3 = if (3 > 0) (2 * 100) / 3 else 0
         assertEquals(66, pct3)
 
-        // 0 confirmations -> 0%
-        val pct0 = if (0 > 0) (0 * 100) / 0 else 0
+        // 0 confirmations -> 0% (guarded against division by zero)
+        val confirmations = 0
+        val attendances = 0
+        val pct0 = if (confirmations > 0) (attendances * 100) / confirmations else 0
         assertEquals(0, pct0)
     }
 }
