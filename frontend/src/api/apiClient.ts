@@ -2,6 +2,7 @@ import { getInitDataRaw } from '../telegram/sdk';
 
 class ApiClient {
   private token: string | null = null;
+  private authInFlight: Promise<{ token: string; user: unknown }> | null = null;
 
   setToken(token: string): void {
     this.token = token;
@@ -69,16 +70,26 @@ class ApiClient {
   }
 
   async authenticate(): Promise<{ token: string; user: unknown }> {
-    const initDataRaw = getInitDataRaw();
-    const data = await this.request<{ token: string; user: unknown }>(
-      'POST',
-      '/api/auth/telegram',
-      { initData: initDataRaw },
-      undefined,
-      true // mark as retry to avoid infinite loop
-    );
-    this.token = data.token;
-    return data;
+    if (this.authInFlight) return this.authInFlight;
+
+    this.authInFlight = (async () => {
+      try {
+        const initDataRaw = getInitDataRaw();
+        const data = await this.request<{ token: string; user: unknown }>(
+          'POST',
+          '/api/auth/telegram',
+          { initData: initDataRaw },
+          undefined,
+          true // mark as retry to avoid infinite loop
+        );
+        this.token = data.token;
+        return data;
+      } finally {
+        this.authInFlight = null;
+      }
+    })();
+
+    return this.authInFlight;
   }
 }
 

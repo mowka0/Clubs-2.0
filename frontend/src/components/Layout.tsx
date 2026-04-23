@@ -31,15 +31,36 @@ const PageFallback: FC = () => (
 export const Layout: FC = () => {
   const location = useLocation();
   const isMainTab = isTabBarRoute(location.pathname);
-  const { user, login } = useAuthStore();
+  const { isAuthenticated, isLoading, error, login } = useAuthStore();
 
-  // Initialize auth once on app start so user is available in all pages
+  // Initialize auth once on app start so token is available before child pages fetch data
   useEffect(() => {
-    if (!user) login();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!isAuthenticated && !isLoading && !error) login();
+  }, [isAuthenticated, isLoading, error, login]);
 
   // Show Telegram BackButton only on nested pages
   useBackButton(!isMainTab);
+
+  if (!isAuthenticated) {
+    if (error) {
+      return (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            height: '100vh',
+            padding: 16,
+            textAlign: 'center',
+            color: 'var(--tgui--destructive_text_color)',
+          }}
+        >
+          Не удалось авторизоваться. Откройте приложение через Telegram.
+        </div>
+      );
+    }
+    return <PageFallback />;
+  }
 
   return (
     <>
