@@ -120,10 +120,14 @@ services:
       dockerfile: Dockerfile
     labels:
       - "traefik.docker.network=coolify"
-      # TRAEFIK_SERVICE_NAME must be unique per environment (prod vs staging)
-      # to avoid Traefik merging them into one load-balancer pool.
-      # Set in Coolify env vars: clubs-frontend-prod / clubs-frontend-staging
-      - "traefik.http.services.${TRAEFIK_SERVICE_NAME:-clubs-frontend-prod}.loadbalancer.server.port=80"
+      # No explicit traefik.http.services.*.loadbalancer label here.
+      # Coolify's deployer does not substitute variables in Traefik label KEYS,
+      # so `${TRAEFIK_SERVICE_NAME:-...}` was landing on BOTH prod and staging
+      # containers as the same literal string, causing Traefik to merge them
+      # into one load-balancer pool and round-robin requests between them.
+      # Without this label, Traefik auto-creates a per-container service
+      # using the port from Dockerfile EXPOSE, and Coolify's auto-generated
+      # per-app routers wire to their own container only.
     depends_on:
       backend:
         condition: service_healthy
