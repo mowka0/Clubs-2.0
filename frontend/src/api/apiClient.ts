@@ -2,6 +2,7 @@ import { getInitDataRaw } from '../telegram/sdk';
 
 class ApiClient {
   private token: string | null = null;
+  private authInFlight: Promise<{ token: string; user: unknown }> | null = null;
 
   setToken(token: string): void {
     this.token = token;
@@ -27,11 +28,14 @@ class ApiClient {
       Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
     }
 
+    // Capture token at request-send time so we can detect stale-token 401s
+    // (another concurrent request may refresh the token before this one returns).
+    const tokenUsed = this.token;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
+    if (tokenUsed) {
+      headers['Authorization'] = `Bearer ${tokenUsed}`;
     }
 
     const res = await fetch(url.toString(), {
@@ -41,7 +45,14 @@ class ApiClient {
     });
 
     if (res.status === 401 && !isRetry) {
-      this.clearToken();
+      const bodyText = await res.clone().text().catch(() => '');
+      console.warn(`[api] 401 on ${method} ${path} — ${bodyText}`);
+
+      // If another concurrent request already refreshed the token while this one
+      // was in flight, retry with the new token — don't trigger another auth round.
+      if (this.token && this.token !== tokenUsed) {
+        return this.request<T>(method, path, body, params, true);
+      }
       await this.authenticate();
       return this.request<T>(method, path, body, params, true);
     }
@@ -69,16 +80,26 @@ class ApiClient {
   }
 
   async authenticate(): Promise<{ token: string; user: unknown }> {
-    const initDataRaw = getInitDataRaw();
-    const data = await this.request<{ token: string; user: unknown }>(
-      'POST',
-      '/api/auth/telegram',
-      { initData: initDataRaw },
-      undefined,
-      true // mark as retry to avoid infinite loop
-    );
-    this.token = data.token;
-    return data;
+    if (this.authInFlight) return this.authInFlight;
+
+    this.authInFlight = (async () => {
+      try {
+        const initDataRaw = getInitDataRaw();
+        const data = await this.request<{ token: string; user: unknown }>(
+          'POST',
+          '/api/auth/telegram',
+          { initData: initDataRaw },
+          undefined,
+          true // mark as retry to avoid infinite loop
+        );
+        this.token = data.token;
+        return data;
+      } finally {
+        this.authInFlight = null;
+      }
+    })();
+
+    return this.authInFlight;
   }
 }
 
