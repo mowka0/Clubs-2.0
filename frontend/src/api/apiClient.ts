@@ -28,12 +28,18 @@ class ApiClient {
       Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
     }
 
+    // Capture token at request-send time so we can detect stale-token 401s
+    // (another concurrent request may refresh the token before this one returns).
+    const tokenUsed = this.token;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
+    if (tokenUsed) {
+      headers['Authorization'] = `Bearer ${tokenUsed}`;
     }
+
+    const tag = `${method} ${path}`;
+    console.debug(`[api] → ${tag} (token=${tokenUsed ? tokenUsed.slice(0, 8) + '…' : 'none'})`);
 
     const res = await fetch(url.toString(), {
       method,
@@ -41,8 +47,16 @@ class ApiClient {
       body: body ? JSON.stringify(body) : undefined,
     });
 
+    console.debug(`[api] ← ${tag} ${res.status}`);
+
     if (res.status === 401 && !isRetry) {
-      this.clearToken();
+      // If another request already refreshed the token while we were in flight,
+      // just retry with the current one — don't trigger another auth round.
+      if (this.token && this.token !== tokenUsed) {
+        console.debug(`[api] 401 on ${tag}: token already refreshed by another request, retrying`);
+        return this.request<T>(method, path, body, params, true);
+      }
+      console.debug(`[api] 401 on ${tag}: re-authenticating`);
       await this.authenticate();
       return this.request<T>(method, path, body, params, true);
     }
@@ -70,8 +84,12 @@ class ApiClient {
   }
 
   async authenticate(): Promise<{ token: string; user: unknown }> {
-    if (this.authInFlight) return this.authInFlight;
+    if (this.authInFlight) {
+      console.debug('[api] authenticate: joining in-flight request');
+      return this.authInFlight;
+    }
 
+    console.debug('[api] authenticate: starting new auth request');
     this.authInFlight = (async () => {
       try {
         const initDataRaw = getInitDataRaw();
@@ -83,6 +101,7 @@ class ApiClient {
           true // mark as retry to avoid infinite loop
         );
         this.token = data.token;
+        console.debug(`[api] authenticate: got new token ${data.token.slice(0, 8)}…`);
         return data;
       } finally {
         this.authInFlight = null;

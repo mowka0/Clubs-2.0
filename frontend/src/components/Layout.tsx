@@ -33,9 +33,14 @@ export const Layout: FC = () => {
   const isMainTab = isTabBarRoute(location.pathname);
   const { isAuthenticated, isLoading, error, login } = useAuthStore();
 
+  console.debug(`[layout] render: isAuth=${isAuthenticated} isLoading=${isLoading} error=${error ?? 'none'}`);
+
   // Initialize auth once on app start so token is available before child pages fetch data
   useEffect(() => {
-    if (!isAuthenticated && !isLoading && !error) login();
+    if (!isAuthenticated && !isLoading && !error) {
+      console.debug('[layout] triggering login()');
+      login();
+    }
   }, [isAuthenticated, isLoading, error, login]);
 
   // Show Telegram BackButton only on nested pages
