@@ -696,7 +696,7 @@ const ACCESS_LABELS_RU: Record<string, string> = {
 interface SettingsTabProps {
   club: ClubDetailDto;
   onUpdated: (club: ClubDetailDto) => void;
-  onDeleted: () => void;
+  onDeleted: (clubName: string) => void;
 }
 
 const SettingsTab: FC<SettingsTabProps> = ({ club, onUpdated, onDeleted }) => {
@@ -784,7 +784,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onUpdated, onDeleted }) => {
     setDeleting(true);
     try {
       await deleteClub(club.id);
-      onDeleted();
+      onDeleted(club.name);
     } catch (e) {
       setError((e as Error).message);
       setDeleting(false);
@@ -938,7 +938,12 @@ export const OrganizerClubManage: FC = () => {
           <SettingsTab
             club={club}
             onUpdated={setClub}
-            onDeleted={() => navigate('/clubs')}
+            onDeleted={(name) =>
+              navigate('/my-clubs', {
+                replace: true,
+                state: { toast: `Клуб «${name}» удалён` },
+              })
+            }
           />
         );
     }

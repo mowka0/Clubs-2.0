@@ -1,10 +1,15 @@
 import { FC, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { List, Section, Cell, Spinner, Placeholder } from '@telegram-apps/telegram-ui';
 import { useClubsStore } from '../store/useClubsStore';
 import { useApplicationsStore } from '../store/useApplicationsStore';
+import { Toast } from '../components/Toast';
 import { getClub } from '../api/clubs';
 import type { ClubDetailDto } from '../types/api';
+
+interface MyClubsLocationState {
+  toast?: string;
+}
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'На рассмотрении',
@@ -26,9 +31,20 @@ function formatDate(iso: string): string {
 
 export const MyClubsPage: FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { myClubs, loading: clubsLoading, fetchMyClubs } = useClubsStore();
   const { applications, loading: appsLoading, fetchMyApplications } = useApplicationsStore();
   const [clubDetails, setClubDetails] = useState<Record<string, ClubDetailDto>>({});
+
+  // Read one-shot toast from navigation state (e.g. "Клуб X удалён" after delete).
+  // Clear it after first render so a refresh/back doesn't show the same toast twice.
+  const navState = location.state as MyClubsLocationState | null;
+  const [toastMessage, setToastMessage] = useState<string | null>(navState?.toast ?? null);
+  useEffect(() => {
+    if (navState?.toast) {
+      window.history.replaceState(null, '', location.pathname);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchMyClubs();
@@ -93,6 +109,8 @@ export const MyClubsPage: FC = () => {
           );
         })}
       </Section>
+
+      {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
     </List>
   );
 };
