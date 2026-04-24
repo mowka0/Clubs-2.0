@@ -87,7 +87,9 @@ services:
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
       S3_ENDPOINT_URL: http://minio:9000
       S3_BUCKET: ${S3_BUCKET:-clubs-uploads}
-      S3_BASE_URL: ${S3_BASE_URL}
+      # S3_BASE_URL intentionally not passed: backend returns relative URLs
+      # and frontend nginx proxies /uploads/ to MinIO on the internal network.
+      # Only set S3_BASE_URL in env if you expose MinIO publicly via its own hostname.
       AWS_REGION: us-east-1
       # Log levels — override without rebuild via Coolify env vars:
       # LOGGING_LEVEL_COM_CLUBS=DEBUG  →  verbose app logs
