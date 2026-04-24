@@ -43,7 +43,7 @@ frontend/
 
 ### Важные решения
 
-- `npm install` требует `--legacy-peer-deps` (конфликт `telegram-ui` и React 19)
+- Исторически `npm install` требовал `--legacy-peer-deps` из-за конфликта `telegram-ui` ↔ React 19. На текущих версиях (`@telegram-apps/telegram-ui@^2` + `react@^19`) конфликт разрешён — флаг локально не нужен. В `frontend/Dockerfile` флаг пока оставлен для совместимости; можно убрать после проверки чистого `npm install` на CI
 - AppRoot из `@telegram-apps/telegram-ui` — обёртка в `main.tsx`
 - SDK инициализируется до рендера: `init({ acceptCustomStyles: true })` в `main.tsx`
 
@@ -208,7 +208,7 @@ interface AuthState {
 | `src/pages/ClubPage.tsx` | Создать | Заглушка-placeholder (реализация в TASK-027) |
 | `src/pages/ClubInteriorPage.tsx` | Создать | Заглушка-placeholder (реализация в TASK-028) |
 | `src/pages/EventPage.tsx` | Создать | Заглушка-placeholder (реализация в TASK-029) |
-| `src/pages/OrganizerClubManagePage.tsx` | Создать | Заглушка-placeholder (реализация в TASK-031) |
+| `src/pages/OrganizerClubManage.tsx` | Создать | Заглушка-placeholder (реализация в TASK-031) |
 | `src/pages/InvitePage.tsx` | Создать | Заглушка-placeholder (реализация в TASK-034) |
 
 > Заглушки нужны чтобы React.lazy мог их импортировать и роутер компилировался без ошибок. Реальная реализация страниц — в последующих задачах.
@@ -223,11 +223,13 @@ interface AuthState {
 | `/my-clubs` | `MyClubsPage` | Да (таб My Clubs) | Нет | |
 | `/organizer` | `OrganizerPage` | Да (таб Organizer) | Нет | |
 | `/profile` | `ProfilePage` | Да (таб Profile) | Нет | |
-| `/clubs/:id` | `ClubPage` | Да | Нет | Детальная карточка клуба |
-| `/clubs/:id/manage` | `OrganizerClubManage` | Да | Нет | Только для организаторов |
-| `/clubs/:id/interior` | `ClubInteriorPage` | Нет | Да | Только для участников |
-| `/events/:id` | `EventPage` | Нет | Да | Только для участников |
-| `/invite/:code` | `InvitePage` | Нет | Да | Вступление по приглашению |
+| `/clubs/:id` | `ClubPage` | Да | Да | Детальная карточка клуба |
+| `/clubs/:id/manage` | `OrganizerClubManage` | Да | Да | Только для организаторов |
+| `/clubs/:id/interior` | `ClubInteriorPage` | Да | Да | Только для участников |
+| `/events/:id` | `EventPage` | Да | Да | Только для участников |
+| `/invite/:code` | `InvitePage` | Да | Да | Вступление по приглашению |
+
+> **BottomTabBar** сейчас показывается на всех 9 страницах (`isTabBarRoute` в `BottomTabBar.tsx` разрешает также `^/clubs/[^/]+(/manage)?$`). Вопрос «скрывать ли на nested» — для дизайн-итерации (см. [docs/design/stack.md §3](../design/stack.md)).
 
 **Архитектура роутера:** один родительский маршрут (`path: '/'`) с компонентом `<Layout />` содержит все дочерние маршруты через `children`. Это позволяет Layout рендерить BottomTabBar только там, где нужно.
 
@@ -256,15 +258,18 @@ export const BottomTabBar: FC = () => { ... };
 
 **Логика видимости:**
 
-BottomTabBar рендерится в Layout, но виден ТОЛЬКО на 4 главных страницах. Определять через `useLocation()`:
+BottomTabBar рендерится в Layout. Виден на 4 tab-страницах + на страницах клубов (`/clubs/:id` и `/clubs/:id/manage`). Определяется через `useLocation()`:
 
 ```
 TAB_PATHS = ['/', '/my-clubs', '/organizer', '/profile']
-isTabPage = TAB_PATHS.includes(location.pathname)
-           || /^\/clubs\/[^/]+(\/manage)?$/.test(location.pathname)
+isTabBarRoute(pathname) =
+  TAB_PATHS.includes(pathname)
+  || /^\/clubs\/[^/]+(\/manage)?$/.test(pathname)
 ```
 
-Если `isTabPage === false` — компонент возвращает `null`.
+Скрыт на `/clubs/:id/interior`, `/events/:id`, `/invite/:code`. Если `isTabBarRoute(pathname) === false` — компонент возвращает `null`.
+
+> Вопрос «скрывать ли на `/clubs/:id` и `/clubs/:id/manage` тоже» — для дизайн-итерации (nested-страницы обычно прячут bottom-bar, но тут решено оставить). См. `docs/design/stack.md §5`.
 
 **Активный таб:** таб считается активным если `location.pathname === tab.path`. Для Discovery (`/`) — активен только при точном совпадении с `/`, не для `/clubs/...`.
 
@@ -327,7 +332,7 @@ export const useBackButton = (): void => {
 - `ClubPage` — вызывает `useBackButton()`
 - `ClubInteriorPage` — вызывает `useBackButton()`
 - `EventPage` — вызывает `useBackButton()`
-- `OrganizerClubManagePage` — вызывает `useBackButton()`
+- `OrganizerClubManage` — вызывает `useBackButton()`
 - `InvitePage` — вызывает `useBackButton()`
 
 **НЕ вызывать** на tab-страницах (Discovery, MyClubs, Organizer, Profile).
@@ -389,7 +394,7 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ defaul
 const ClubPage = lazy(() => import('./pages/ClubPage').then(m => ({ default: m.ClubPage })));
 const ClubInteriorPage = lazy(() => import('./pages/ClubInteriorPage').then(m => ({ default: m.ClubInteriorPage })));
 const EventPage = lazy(() => import('./pages/EventPage').then(m => ({ default: m.EventPage })));
-const OrganizerClubManagePage = lazy(() => import('./pages/OrganizerClubManagePage').then(m => ({ default: m.OrganizerClubManagePage })));
+const OrganizerClubManage = lazy(() => import('./pages/OrganizerClubManage').then(m => ({ default: m.OrganizerClubManage })));
 const InvitePage = lazy(() => import('./pages/InvitePage').then(m => ({ default: m.InvitePage })));
 ```
 
@@ -449,7 +454,7 @@ export const router = createBrowserRouter([
       { path: 'events/:id', element: <Suspense fallback={<Spinner />}><EventPage /></Suspense> },
       { path: 'my-clubs', element: <Suspense fallback={<Spinner />}><MyClubsPage /></Suspense> },
       { path: 'organizer', element: <Suspense fallback={<Spinner />}><OrganizerPage /></Suspense> },
-      { path: 'organizer/clubs/:id', element: <Suspense fallback={<Spinner />}><OrganizerClubManagePage /></Suspense> },
+      { path: 'clubs/:id/manage', element: <Suspense fallback={<Spinner />}><OrganizerClubManage /></Suspense> },
       { path: 'profile', element: <Suspense fallback={<Spinner />}><ProfilePage /></Suspense> },
       { path: 'invite/:code', element: <Suspense fallback={<Spinner />}><InvitePage /></Suspense> },
     ],
@@ -466,7 +471,7 @@ export const router = createBrowserRouter([
 | 1 | Пользователь переходит напрямую по URL `/clubs/123` (без предыдущей истории) | BackButton показывается, при нажатии `navigate(-1)` — попадает на предыдущую запись в истории браузера. Если истории нет (прямой переход) — остаётся на той же странице или переходит на `/` (браузер обрабатывает `history.go(-1)` без эффекта). В Telegram Mini App прямые URL-переходы редки — приложение всегда стартует с `/`. |
 | 2 | Пользователь нажимает BackButton на `/invite/:code` (пришёл через deep link) | `navigate(-1)` ведёт на предыдущую страницу в истории Router. Если стартовал прямо с инвайт-страницы — истории нет, `navigate(-1)` не сработает. Решение: в `InvitePage` использовать модифицированный хук с fallback: `navigate(canGoBack ? -1 : '/')`. Определять `canGoBack` через проверку `window.history.length > 1`. |
 | 3 | Пользователь кликает на таб Discovery (`/`), находясь уже на `/` | Повторная навигация на тот же маршрут. React Router v7 не вызывает ошибку, но и не перезагружает страницу. Поведение корректно. |
-| 4 | Пользователь кликает на таб Organizer (`/organizer`) находясь на `/organizer/clubs/123` | Переход на `/organizer`, таб становится активным. BackButton скрывается (на `/organizer` нет `useBackButton`). BottomTabBar показывается. |
+| 4 | Пользователь кликает на таб Organizer (`/organizer`) находясь на `/clubs/123/manage` | Переход на `/organizer`, таб становится активным. BackButton скрывается (на `/organizer` нет `useBackButton`). BottomTabBar показывается. |
 | 5 | BottomTabBar на `/clubs/123` | `isTabBarRoute('/clubs/123')` = `true` (regex match), BottomTabBar показывается. То же для `/clubs/123/manage`. |
 | 6 | Spinner из telegram-ui не найден | Если `Spinner` не экспортируется из `@telegram-apps/telegram-ui`, использовать простой текстовый fallback: `<div style={{textAlign:'center', padding:'20px'}}>Загрузка...</div>`. Проверить наличие через импорт перед использованием. |
 | 7 | `backButton` вызывается вне Telegram (в браузере при разработке) | `backButton.show()` может бросить исключение вне Telegram WebApp. Обернуть в `try/catch` или проверить `backButton.isSupported()` перед вызовом. Поведение в браузере: graceful degrade (кнопки нет, но страница работает). |
@@ -487,7 +492,7 @@ export const router = createBrowserRouter([
 - [ ] Открыть `/clubs/123` — страница ClubPage рендерится (заглушка)
 - [ ] Открыть `/clubs/123/interior` — страница ClubInteriorPage рендерится (заглушка)
 - [ ] Открыть `/events/456` — страница EventPage рендерится (заглушка)
-- [ ] Открыть `/organizer/clubs/789` — страница OrganizerClubManagePage рендерится (заглушка)
+- [ ] Открыть `/clubs/789/manage` — страница OrganizerClubManage рендерится (заглушка)
 - [ ] Открыть `/invite/abc` — страница InvitePage рендерится (заглушка)
 
 **BottomTabBar:**
@@ -495,8 +500,11 @@ export const router = createBrowserRouter([
 - [ ] На `/my-clubs` — BottomTabBar видна, таб "Мои клубы" выделен
 - [ ] На `/organizer` — BottomTabBar видна, таб "Организатор" выделен
 - [ ] На `/profile` — BottomTabBar видна, таб "Профиль" выделен
-- [ ] На `/clubs/123` — BottomTabBar НЕ видна
+- [ ] На `/clubs/123` — BottomTabBar видна (regex match)
+- [ ] На `/clubs/123/manage` — BottomTabBar видна (regex match)
+- [ ] На `/clubs/123/interior` — BottomTabBar НЕ видна
 - [ ] На `/events/456` — BottomTabBar НЕ видна
+- [ ] На `/invite/abc` — BottomTabBar НЕ видна
 - [ ] Клик по табу "Мои клубы" с `/` → URL меняется на `/my-clubs`
 - [ ] Клик по табу "Клубы" с `/my-clubs` → URL меняется на `/`
 
