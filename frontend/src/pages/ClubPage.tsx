@@ -17,6 +17,7 @@ import { useClubsStore } from '../store/useClubsStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { getClub } from '../api/clubs';
 import { joinClub, applyToClub } from '../api/membership';
+import { isPendingPayment } from '../types/api';
 import type { ClubDetailDto } from '../types/api';
 import { formatPrice } from '../utils/formatters';
 
@@ -45,6 +46,7 @@ export const ClubPage: FC = () => {
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [answerText, setAnswerText] = useState('');
   const [joinSuccess, setJoinSuccess] = useState(false);
+  const [pendingPayment, setPendingPayment] = useState<{ priceStars: number; message: string } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -63,9 +65,13 @@ export const ClubPage: FC = () => {
     setJoining(true);
     setJoinError(null);
     try {
-      await joinClub(id);
-      await fetchMyClubs();
-      setJoinSuccess(true);
+      const result = await joinClub(id);
+      if (isPendingPayment(result)) {
+        setPendingPayment({ priceStars: result.priceStars, message: result.message });
+      } else {
+        await fetchMyClubs();
+        setJoinSuccess(true);
+      }
     } catch (e) {
       setJoinError((e as Error).message);
     } finally {
@@ -103,6 +109,18 @@ export const ClubPage: FC = () => {
   const renderJoinButton = () => {
     if (isOrganizer) return <Button size="l" stretched onClick={() => navigate(`/clubs/${id}/manage`)}>&#x2699;&#xFE0F; Управление клубом</Button>;
     if (isMember) return <Button size="l" mode="outline" disabled stretched>Вы участник &#x2713;</Button>;
+    if (pendingPayment) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Button size="l" mode="outline" disabled stretched>
+            &#x1F4B3; Ожидаем оплату &#x2013; {pendingPayment.priceStars} Stars
+          </Button>
+          <Text style={{ fontSize: 13, color: 'var(--tgui--hint_color)', textAlign: 'center' }}>
+            {pendingPayment.message}
+          </Text>
+        </div>
+      );
+    }
     if (joinSuccess) return <Button size="l" mode="outline" disabled stretched>Заявка отправлена &#x2713;</Button>;
 
     if (club.accessType === 'open') {

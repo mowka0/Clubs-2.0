@@ -259,11 +259,14 @@ AND clubs.member_count уменьшен на 1 (но не ниже 0)
 
 ### Расхождения с PRD (см. `docs/backlog/payment-prd-gaps.md`)
 
-- **GAP-5 (критический)**: flow вступления (`MembershipService.joinOpenClub`/`joinByInviteCode`) не зовёт `PaymentService.createInvoice`. Для платных клубов membership создаётся напрямую, обходя оплату. `createInvoice` и `handleSuccessfulPayment` — dead code в текущем проде. Блокирует монетизацию MVP. Отдельная bugfix-ветка.
+- **GAP-5 (критический)**: flow вступления (`MembershipService.joinOpenClub`/`joinByInviteCode`, `ApplicationService.approveApplication`) не зовёт `PaymentService.createInvoice`. Для платных клубов membership создаётся напрямую, обходя оплату. `createInvoice` и `handleSuccessfulPayment` — dead code в текущем проде. Блокирует монетизацию MVP. Отдельная bugfix-ветка.
 - **GAP-1**: нет автосписания Telegram Stars (PRD §4.7.2, §4.7.3.2). Сейчас renewal — только ручной.
 - **GAP-2**: нет flow отмены подписки (PRD §4.7.3.4). Статус `cancelled` в enum есть, но недостижим.
 - **GAP-3**: при смене `clubs.subscription_price` следующий инвойс уйдёт по новой цене (PRD §4.7.4 ACP нарушено).
 - **GAP-4**: после успешной оплаты пользователь **не** добавляется в Telegram-группу автоматически (PRD §4.2.1.4 — ключевое обещание MVP). Виден только после закрытия GAP-5.
+- **GAP-6**: UX закрытого клуба меняется на «две кнопки» (запрос + вступить, вторая разблокируется после approve организатора). Текущий PRD §4.2.2 устарел — требует переписывания. Зависит от GAP-5.
+- **GAP-7**: для бесплатных клубов нужен lifecycle по вовлечённости (автопродление активным, авто-исключение неактивным через 30 дней). PRD не описывает. Требует дизайна.
+- **GAP-8**: нет dedup'а повторных invoice-запросов per (user, club). Клики «Вступить» подряд → несколько Telegram DM. Ограничено глобальным rate-limit, но UX-неаккуратно.
 
 ### Прочее
 

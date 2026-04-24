@@ -164,6 +164,55 @@ describe('ClubPage', () => {
     expect(joinCalled).toBe(true);
   });
 
+  it('paid club: pending_payment response shows "Ожидаем оплату" and does not mark user as member', async () => {
+    let fetchMyClubsCallCount = 0;
+
+    server.use(
+      http.get('*/api/clubs/:id', () => {
+        return HttpResponse.json({
+          ...mockClubDetail,
+          accessType: 'open',
+          ownerId: 'other-owner',
+          subscriptionPrice: 500,
+        });
+      }),
+      http.get('*/api/users/me/clubs', () => {
+        fetchMyClubsCallCount += 1;
+        return HttpResponse.json([] as MembershipDto[]);
+      }),
+      http.post('*/api/clubs/:id/join', () => {
+        return HttpResponse.json(
+          {
+            status: 'pending_payment',
+            clubId: 'club-123',
+            priceStars: 500,
+            message: 'Оплатите подписку через бота. Счёт отправлен в Telegram.',
+          },
+          { status: 202 }
+        );
+      })
+    );
+
+    const { user } = renderClubPage();
+
+    const joinButton = await waitFor(() => {
+      return screen.getByRole('button', { name: /вступить/i });
+    });
+
+    const countBeforeJoin = fetchMyClubsCallCount;
+    await user.click(joinButton);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /ожидаем оплату/i })).toBeInTheDocument();
+      expect(screen.getByText(/счёт отправлен в telegram/i)).toBeInTheDocument();
+    });
+
+    // No "Вы участник" must appear (user is NOT a member yet)
+    expect(screen.queryByText(/вы участник/i)).not.toBeInTheDocument();
+    // fetchMyClubs must NOT be called after pending_payment — membership isn't active
+    expect(fetchMyClubsCallCount).toBe(countBeforeJoin);
+  });
+
   it('shows error message when join API fails', async () => {
     server.use(
       http.get('*/api/clubs/:id', () => {

@@ -11,11 +11,10 @@ import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.tables.records.ApplicationsRecord
 import com.clubs.generated.jooq.tables.records.ClubsRecord
 import com.clubs.membership.MembershipRepository
-import com.clubs.membership.MembershipService
+import com.clubs.payment.PaymentService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -29,8 +28,7 @@ class ApplicationServiceTest {
     private lateinit var applicationRepository: ApplicationRepository
     private lateinit var clubRepository: ClubRepository
     private lateinit var membershipRepository: MembershipRepository
-    private lateinit var membershipService: MembershipService
-    private lateinit var dsl: DSLContext
+    private lateinit var paymentService: PaymentService
     private lateinit var applicationService: ApplicationService
 
     @BeforeEach
@@ -38,10 +36,9 @@ class ApplicationServiceTest {
         applicationRepository = mockk(relaxed = true)
         clubRepository = mockk(relaxed = true)
         membershipRepository = mockk(relaxed = true)
-        membershipService = mockk(relaxed = true)
-        dsl = mockk(relaxed = true)
+        paymentService = mockk(relaxed = true)
         applicationService = ApplicationService(
-            applicationRepository, clubRepository, membershipRepository, membershipService, dsl
+            applicationRepository, clubRepository, membershipRepository, paymentService
         )
     }
 
@@ -50,7 +47,8 @@ class ApplicationServiceTest {
         ownerId: UUID,
         applicationQuestion: String? = null,
         memberLimit: Int = 50,
-        memberCount: Int = 5
+        memberCount: Int = 5,
+        subscriptionPrice: Int = 100
     ): ClubsRecord =
         ClubsRecord(
             id = clubId,
@@ -61,7 +59,7 @@ class ApplicationServiceTest {
             accessType = AccessType.closed,
             city = "Moscow",
             memberLimit = memberLimit,
-            subscriptionPrice = 100,
+            subscriptionPrice = subscriptionPrice,
             applicationQuestion = applicationQuestion,
             memberCount = memberCount,
             activityRating = 0,
@@ -164,7 +162,7 @@ class ApplicationServiceTest {
     }
 
     @Test
-    fun `approveApplication should create membership and update status to approved`() {
+    fun `approveApplication for paid club sends invoice and does NOT create membership`() {
         val applicationId = UUID.randomUUID()
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
@@ -178,7 +176,7 @@ class ApplicationServiceTest {
             createdAt = OffsetDateTime.now()
         )
 
-        val club = createClosedClub(clubId, organizerId)
+        val club = createClosedClub(clubId, organizerId, subscriptionPrice = 500)
 
         val approvedApplication = ApplicationsRecord(
             id = applicationId,
@@ -200,7 +198,48 @@ class ApplicationServiceTest {
         assertEquals(userId, result.userId)
         assertEquals(clubId, result.clubId)
         assertNotNull(result.resolvedAt)
+        verify(exactly = 1) { paymentService.createInvoice(userId, clubId) }
+        verify(exactly = 0) { membershipRepository.create(any(), any()) }
+        verify(exactly = 0) { clubRepository.incrementMemberCount(any()) }
+    }
+
+    @Test
+    fun `approveApplication for free club creates membership and increments member_count`() {
+        val applicationId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val organizerId = UUID.randomUUID()
+
+        val application = ApplicationsRecord(
+            id = applicationId,
+            userId = userId,
+            clubId = clubId,
+            status = ApplicationStatus.pending,
+            createdAt = OffsetDateTime.now()
+        )
+
+        val club = createClosedClub(clubId, organizerId, subscriptionPrice = 0)
+
+        val approvedApplication = ApplicationsRecord(
+            id = applicationId,
+            userId = userId,
+            clubId = clubId,
+            status = ApplicationStatus.approved,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = OffsetDateTime.now()
+        )
+
+        every { applicationRepository.findById(applicationId) } returns application
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.countActiveByClubId(clubId) } returns 5
+        every { applicationRepository.updateStatus(applicationId, ApplicationStatus.approved) } returns approvedApplication
+
+        val result = applicationService.approveApplication(applicationId, organizerId)
+
+        assertEquals("approved", result.status)
         verify(exactly = 1) { membershipRepository.create(userId, clubId) }
+        verify(exactly = 1) { clubRepository.incrementMemberCount(clubId) }
+        verify(exactly = 0) { paymentService.createInvoice(any(), any()) }
     }
 
     @Test

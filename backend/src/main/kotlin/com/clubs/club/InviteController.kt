@@ -1,8 +1,8 @@
 package com.clubs.club
 
 import com.clubs.common.security.AuthenticatedUser
-import com.clubs.membership.MembershipDto
 import com.clubs.membership.MembershipService
+import com.clubs.membership.toHttpResponse
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
@@ -29,9 +29,9 @@ class InviteController(
     fun joinByInvite(
         @PathVariable code: String,
         @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<MembershipDto> {
+    ): ResponseEntity<Any> {
         log.info("Join by invite code: userId={}", user.userId)
-        return ResponseEntity.ok(membershipService.joinByInviteCode(code, user.userId))
+        return toHttpResponse(membershipService.joinByInviteCode(code, user.userId))
     }
 
     @PostMapping("/api/clubs/{id}/regenerate-invite")

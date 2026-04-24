@@ -115,6 +115,19 @@ export interface MembershipDto {
   subscriptionExpiresAt: string | null;
 }
 
+export interface PendingPaymentDto {
+  status: 'pending_payment';
+  clubId: string;
+  priceStars: number;
+  message: string;
+}
+
+export type JoinClubResult = MembershipDto | PendingPaymentDto;
+
+export function isPendingPayment(result: JoinClubResult): result is PendingPaymentDto {
+  return result.status === 'pending_payment';
+}
+
 export interface EventDetailDto {
   id: string;
   clubId: string;
