@@ -95,6 +95,13 @@ class ClubService(
         return updated.toDto()
     }
 
+    fun deleteClub(id: UUID, userId: UUID) {
+        val club = clubRepository.findById(id) ?: throw NotFoundException("Club not found")
+        if (club.ownerId != userId) throw ForbiddenException("Only the club owner can delete it")
+        clubRepository.softDelete(id)
+        log.info("Club soft-deleted: id={} userId={}", id, userId)
+    }
+
     private fun validateCategory(category: String) {
         try {
             ClubCategory.valueOf(category)

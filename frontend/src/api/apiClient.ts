@@ -73,6 +73,9 @@ class ApiClient {
       throw new ApiError(res.status, err.message ?? `HTTP ${res.status}`);
     }
 
+    // 204 No Content has an empty body — don't call res.json() or it throws.
+    if (res.status === 204) return undefined as T;
+
     return res.json() as Promise<T>;
   }
 
@@ -86,6 +89,27 @@ class ApiClient {
 
   put<T>(path: string, body?: unknown): Promise<T> {
     return this.request<T>('PUT', path, body);
+  }
+
+  delete<T>(path: string): Promise<T> {
+    return this.request<T>('DELETE', path);
+  }
+
+  async uploadFile(path: string, file: File): Promise<{ url: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const headers: Record<string, string> = {};
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+    const res = await fetch(new URL(path, window.location.origin).toString(), {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({ message: 'Upload failed' }))) as { message?: string };
+      throw new ApiError(res.status, err.message ?? `HTTP ${res.status}`);
+    }
+    return res.json() as Promise<{ url: string }>;
   }
 
   async authenticate(): Promise<{ token: string; user: unknown }> {

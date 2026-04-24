@@ -264,4 +264,59 @@ class ClubServiceTest {
         assertEquals("Updated Club", result.name)
         verify(exactly = 1) { clubRepository.update(clubId, updateRequest) }
     }
+
+    private fun makeClubRecord(clubId: UUID, ownerId: UUID): ClubsRecord = ClubsRecord(
+        id = clubId,
+        ownerId = ownerId,
+        name = "Club",
+        description = "Desc",
+        category = ClubCategory.sport,
+        accessType = AccessType.`open`,
+        city = "Moscow",
+        memberLimit = 30,
+        subscriptionPrice = 0,
+        memberCount = 3,
+        activityRating = 0,
+        isActive = true
+    )
+
+    @Test
+    fun `deleteClub soft-deletes when user is the owner`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        every { clubRepository.findById(clubId) } returns makeClubRecord(clubId, ownerId)
+
+        clubService.deleteClub(clubId, ownerId)
+
+        verify(exactly = 1) { clubRepository.softDelete(clubId) }
+    }
+
+    @Test
+    fun `deleteClub throws ForbiddenException when user is not owner`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val otherUserId = UUID.randomUUID()
+        every { clubRepository.findById(clubId) } returns makeClubRecord(clubId, ownerId)
+
+        val exception = assertThrows<ForbiddenException> {
+            clubService.deleteClub(clubId, otherUserId)
+        }
+
+        assertEquals("Only the club owner can delete it", exception.message)
+        verify(exactly = 0) { clubRepository.softDelete(any()) }
+    }
+
+    @Test
+    fun `deleteClub throws NotFoundException when club does not exist`() {
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        every { clubRepository.findById(clubId) } returns null
+
+        val exception = assertThrows<NotFoundException> {
+            clubService.deleteClub(clubId, userId)
+        }
+
+        assertEquals("Club not found", exception.message)
+        verify(exactly = 0) { clubRepository.softDelete(any()) }
+    }
 }

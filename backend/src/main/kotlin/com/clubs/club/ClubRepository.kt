@@ -42,7 +42,7 @@ class ClubRepository(private val dsl: DSLContext) {
 
     fun findByInviteCode(code: String): ClubsRecord? =
         dsl.selectFrom(CLUBS)
-            .where(CLUBS.INVITE_LINK.eq(code))
+            .where(CLUBS.INVITE_LINK.eq(code).and(CLUBS.IS_ACTIVE.eq(true)))
             .fetchOne()
 
     fun updateInviteCode(id: UUID, code: String): ClubsRecord? {
@@ -55,16 +55,24 @@ class ClubRepository(private val dsl: DSLContext) {
 
     fun findById(id: UUID): ClubsRecord? =
         dsl.selectFrom(CLUBS)
-            .where(CLUBS.ID.eq(id))
+            .where(CLUBS.ID.eq(id).and(CLUBS.IS_ACTIVE.eq(true)))
             .fetchOne()
 
     fun countByOwnerId(ownerId: UUID): Int =
         dsl.selectCount().from(CLUBS)
-            .where(CLUBS.OWNER_ID.eq(ownerId))
+            .where(CLUBS.OWNER_ID.eq(ownerId).and(CLUBS.IS_ACTIVE.eq(true)))
             .fetchOne(0, Int::class.java) ?: 0
 
+    fun softDelete(id: UUID) {
+        dsl.update(CLUBS)
+            .set(CLUBS.IS_ACTIVE, false)
+            .set(CLUBS.UPDATED_AT, OffsetDateTime.now())
+            .where(CLUBS.ID.eq(id))
+            .execute()
+    }
+
     fun findAll(filters: ClubFilterParams): PageResponse<ClubListItemDto> {
-        var condition = CLUBS.ACCESS_TYPE.ne(AccessType.`private`)
+        var condition = CLUBS.ACCESS_TYPE.ne(AccessType.`private`).and(CLUBS.IS_ACTIVE.eq(true))
 
         filters.category?.let {
             condition = condition.and(CLUBS.CATEGORY.eq(ClubCategory.valueOf(it)))
@@ -179,15 +187,23 @@ class ClubRepository(private val dsl: DSLContext) {
 
     fun update(id: UUID, request: UpdateClubRequest): ClubsRecord? {
         val step = dsl.update(CLUBS).set(CLUBS.UPDATED_AT, OffsetDateTime.now())
+
+        // Required-in-DB fields: only touched when non-null (null = "leave as is"),
+        // empty string never makes sense for them — validation layer rejects.
         request.name?.let { step.set(CLUBS.NAME, it) }
         request.description?.let { step.set(CLUBS.DESCRIPTION, it) }
         request.city?.let { step.set(CLUBS.CITY, it) }
-        request.district?.let { step.set(CLUBS.DISTRICT, it) }
         request.memberLimit?.let { step.set(CLUBS.MEMBER_LIMIT, it) }
         request.subscriptionPrice?.let { step.set(CLUBS.SUBSCRIPTION_PRICE, it) }
-        request.avatarUrl?.let { step.set(CLUBS.AVATAR_URL, it) }
-        request.rules?.let { step.set(CLUBS.RULES, it) }
-        request.applicationQuestion?.let { step.set(CLUBS.APPLICATION_QUESTION, it) }
+
+        // Nullable-in-DB fields: null = "leave as is", blank string = "clear to NULL".
+        // This lets the frontend explicitly erase a field (delete avatar, clear rules, etc.)
+        // while the absent key in the JSON body still means "don't touch".
+        request.district?.let { step.set(CLUBS.DISTRICT, it.ifBlank { null }) }
+        request.avatarUrl?.let { step.set(CLUBS.AVATAR_URL, it.ifBlank { null }) }
+        request.rules?.let { step.set(CLUBS.RULES, it.ifBlank { null }) }
+        request.applicationQuestion?.let { step.set(CLUBS.APPLICATION_QUESTION, it.ifBlank { null }) }
+
         step.where(CLUBS.ID.eq(id)).execute()
         return findById(id)
     }

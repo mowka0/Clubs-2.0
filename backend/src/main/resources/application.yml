@@ -80,4 +80,7 @@ spring:
 
 s3:
   bucket: ${S3_BUCKET:clubs-uploads}
-  base-url: ${S3_BASE_URL}
+  # Empty by default — backend then returns relative URLs like "/uploads/<uuid>.png",
+  # which the frontend nginx proxies to internal MinIO (see frontend/nginx.conf).
+  # Override only when MinIO is exposed publicly via its own hostname.
+  base-url: ${S3_BASE_URL:}

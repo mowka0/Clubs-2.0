@@ -49,3 +49,28 @@ export function getMyClubs(): Promise<MembershipDto[]> {
 export function getClubByInvite(code: string): Promise<ClubDetailDto> {
   return apiClient.get<ClubDetailDto>(`/api/invite/${code}`);
 }
+
+export interface UpdateClubBody {
+  name?: string;
+  description?: string;
+  city?: string;
+  district?: string;
+  memberLimit?: number;
+  subscriptionPrice?: number;
+  avatarUrl?: string | null;
+  rules?: string | null;
+  applicationQuestion?: string | null;
+}
+
+export function updateClub(id: string, body: UpdateClubBody): Promise<ClubDetailDto> {
+  return apiClient.put<ClubDetailDto>(`/api/clubs/${id}`, body);
+}
+
+export function deleteClub(id: string): Promise<void> {
+  return apiClient.delete<void>(`/api/clubs/${id}`);
+}
+
+export async function uploadImage(file: File): Promise<string> {
+  const { url } = await apiClient.uploadFile('/api/upload', file);
+  return url;
+}
