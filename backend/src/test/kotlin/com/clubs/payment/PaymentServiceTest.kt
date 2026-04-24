@@ -17,6 +17,7 @@ import io.mockk.verify
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DuplicateKeyException
 import org.telegram.telegrambots.meta.api.methods.invoices.SendInvoice
 import org.telegram.telegrambots.meta.generics.TelegramClient
@@ -36,6 +37,7 @@ class PaymentServiceTest {
     private lateinit var membershipRepository: MembershipRepository
     private lateinit var transactionRepository: TransactionRepository
     private lateinit var telegramClient: TelegramClient
+    private lateinit var eventPublisher: ApplicationEventPublisher
     private lateinit var service: PaymentService
 
     private val userId = UUID.randomUUID()
@@ -51,12 +53,14 @@ class PaymentServiceTest {
         membershipRepository = mockk(relaxed = true)
         transactionRepository = mockk(relaxed = true)
         telegramClient = mockk(relaxed = true)
+        eventPublisher = mockk(relaxed = true)
         service = PaymentService(
             clubRepository,
             userRepository,
             membershipRepository,
             transactionRepository,
-            telegramClient
+            telegramClient,
+            eventPublisher
         )
     }
 
@@ -263,6 +267,48 @@ class PaymentServiceTest {
         assertThrows<DuplicateKeyException> {
             service.handleSuccessfulPayment(telegramId, chargeId, "club_subscription:$clubId:$userId", 500)
         }
+    }
+
+    @Test
+    fun `handleSuccessfulPayment publishes PaymentConfirmedEvent on success`() {
+        every { transactionRepository.existsByTelegramChargeId(chargeId) } returns false
+        every { clubRepository.findById(clubId) } returns clubRecord(price = 500, name = "Chess Club")
+        every { membershipRepository.findExpiryRefByUserAndClub(userId, clubId) } returns null
+        every { membershipRepository.activateSubscription(userId, clubId, any()) } returns membershipId
+        every { transactionRepository.save(any()) } answers { firstArg() }
+
+        val captured = slot<PaymentConfirmedEvent>()
+        every { eventPublisher.publishEvent(capture(captured)) } returns Unit
+
+        service.handleSuccessfulPayment(telegramId, chargeId, "club_subscription:$clubId:$userId", 500)
+
+        verify(exactly = 1) { eventPublisher.publishEvent(any<PaymentConfirmedEvent>()) }
+        assertEquals(telegramId, captured.captured.telegramId)
+        assertEquals("Chess Club", captured.captured.clubName)
+    }
+
+    @Test
+    fun `handleSuccessfulPayment does NOT publish event on idempotent duplicate`() {
+        every { transactionRepository.existsByTelegramChargeId(chargeId) } returns true
+
+        service.handleSuccessfulPayment(telegramId, chargeId, "club_subscription:$clubId:$userId", 500)
+
+        verify(exactly = 0) { eventPublisher.publishEvent(any<PaymentConfirmedEvent>()) }
+    }
+
+    @Test
+    fun `handleSuccessfulPayment does NOT publish event on validation failures`() {
+        // unknown payload
+        service.handleSuccessfulPayment(telegramId, chargeId, "wrong:format", 500)
+        // non-positive amount
+        service.handleSuccessfulPayment(telegramId, chargeId, "club_subscription:$clubId:$userId", 0)
+
+        // unknown club
+        every { transactionRepository.existsByTelegramChargeId(any()) } returns false
+        every { clubRepository.findById(clubId) } returns null
+        service.handleSuccessfulPayment(telegramId, chargeId, "club_subscription:$clubId:$userId", 500)
+
+        verify(exactly = 0) { eventPublisher.publishEvent(any<PaymentConfirmedEvent>()) }
     }
 
     @Test

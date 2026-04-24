@@ -95,6 +95,8 @@ Parsing payload: `"club_subscription:{clubId}:{userId}"`. Некорректны
 
 Fast-path проверка `existsByTelegramChargeId` — оптимизация, не primary защита.
 
+**Post-commit welcome DM.** После успешной обработки `handleSuccessfulPayment` публикует `PaymentConfirmedEvent(telegramId, clubName)` через `ApplicationEventPublisher`. `PaymentNotificationHandler` слушает его через `@TransactionalEventListener` (фаза `AFTER_COMMIT`) и шлёт DM «Оплата принята. Добро пожаловать в клуб «X»!». Это гарантирует, что DM никогда не уйдёт до фактического коммита (rollback → событие отбрасывается) и не держит БД-транзакцию открытой во время сетевого вызова Telegram.
+
 ### Lifecycle scheduler
 `@Scheduled(cron = "0 0 9 * * *")` — ежедневно в 09:00 сервера.
 
@@ -250,20 +252,24 @@ AND clubs.member_count уменьшен на 1 (но не ниже 0)
 - **`club` модуль** — читает `subscription_price`, обновляет `member_count` через `ClubRepository`.
 - **`user` модуль** — читает `telegram_id` для отправки инвойса.
 - **`bot` модуль** — единственный caller `PaymentService` (invoice отправляется через `TelegramClient`, оба handler-а вызываются из `ClubsBot`).
-- **Telegram Bot API**:
-  - `SendInvoice` — синхронный execute
-  - `successful_payment` — webhook, может повторяться → идемпотентность обязательна
-  - `pre_checkout_query` — обрабатывается в `ClubsBot` (10s лимит Telegram)
+- **Telegram Bot API** (через `ClubsBot` long-polling consumer):
+  - `SendInvoice` — синхронный execute из `PaymentService.createInvoice`
+  - `pre_checkout_query` — Telegram шлёт между нажатием «Pay» и списанием; **должен** быть подтверждён через `AnswerPreCheckoutQuery` в течение 10 с, иначе Telegram отменит платёж. Обрабатывается в `ClubsBot.handlePreCheckoutQuery`: валидирует формат payload (`club_subscription:{clubId}:{userId}`), отвечает `ok=true` либо `ok=false` с `error_message`. Исключения Telegram API swallow-ятся логом — fail в боте не должен ронять весь long-polling loop.
+  - `successful_payment` — приходит как `Update.message` без поля `text`, поэтому его обработчик в `ClubsBot.consume` должен быть **раньше** `hasText()` early-return. Может повторяться Telegram'ом → идемпотентность через partial UNIQUE (см. выше).
 
 ## Риски и открытые вопросы
 
 ### Расхождения с PRD (см. `docs/backlog/payment-prd-gaps.md`)
 
-- **GAP-5 (критический)**: flow вступления (`MembershipService.joinOpenClub`/`joinByInviteCode`) не зовёт `PaymentService.createInvoice`. Для платных клубов membership создаётся напрямую, обходя оплату. `createInvoice` и `handleSuccessfulPayment` — dead code в текущем проде. Блокирует монетизацию MVP. Отдельная bugfix-ветка.
+- **GAP-5 (критический)**: flow вступления (`MembershipService.joinOpenClub`/`joinByInviteCode`, `ApplicationService.approveApplication`) не зовёт `PaymentService.createInvoice`. Для платных клубов membership создаётся напрямую, обходя оплату. `createInvoice` и `handleSuccessfulPayment` — dead code в текущем проде. Блокирует монетизацию MVP. Отдельная bugfix-ветка.
 - **GAP-1**: нет автосписания Telegram Stars (PRD §4.7.2, §4.7.3.2). Сейчас renewal — только ручной.
 - **GAP-2**: нет flow отмены подписки (PRD §4.7.3.4). Статус `cancelled` в enum есть, но недостижим.
 - **GAP-3**: при смене `clubs.subscription_price` следующий инвойс уйдёт по новой цене (PRD §4.7.4 ACP нарушено).
 - **GAP-4**: после успешной оплаты пользователь **не** добавляется в Telegram-группу автоматически (PRD §4.2.1.4 — ключевое обещание MVP). Виден только после закрытия GAP-5.
+- **GAP-6**: UX закрытого клуба меняется на «две кнопки» (запрос + вступить, вторая разблокируется после approve организатора). Текущий PRD §4.2.2 устарел — требует переписывания. Зависит от GAP-5.
+- **GAP-7**: для бесплатных клубов нужен lifecycle по вовлечённости (автопродление активным, авто-исключение неактивным через 30 дней). PRD не описывает. Требует дизайна.
+- **GAP-8**: нет dedup'а повторных invoice-запросов per (user, club). Клики «Вступить» подряд → несколько Telegram DM. Ограничено глобальным rate-limit, но UX-неаккуратно.
+- **GAP-9**: welcome DM после оплаты ведёт в главную страницу Mini App, а не в конкретный клуб (deep-link handler не реализован).
 
 ### Прочее
 

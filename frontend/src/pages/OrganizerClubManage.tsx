@@ -193,24 +193,25 @@ const ApplicationsTab: FC<{ clubId: string }> = ({ clubId }) => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
 
-  const fetchApps = useCallback(() => {
+  const fetchApps = useCallback(async () => {
     setLoading(true);
-    getClubApplications(clubId)
-      .then(setApplications)
-      .finally(() => setLoading(false));
+    try {
+      const result = await getClubApplications(clubId, 'pending');
+      setApplications(result);
+    } finally {
+      setLoading(false);
+    }
   }, [clubId]);
 
   useEffect(() => {
     fetchApps();
   }, [fetchApps]);
 
-  const pending = applications.filter((a) => a.status === 'pending');
-
   const handleApprove = async (appId: string) => {
     setProcessing(appId);
     try {
       await approveApplication(appId);
-      fetchApps();
+      await fetchApps();
     } finally {
       setProcessing(null);
     }
@@ -220,7 +221,7 @@ const ApplicationsTab: FC<{ clubId: string }> = ({ clubId }) => {
     setProcessing(appId);
     try {
       await rejectApplication(appId);
-      fetchApps();
+      await fetchApps();
     } finally {
       setProcessing(null);
     }
@@ -234,13 +235,13 @@ const ApplicationsTab: FC<{ clubId: string }> = ({ clubId }) => {
     );
   }
 
-  if (pending.length === 0) {
+  if (applications.length === 0) {
     return <Placeholder description="Нет активных заявок" />;
   }
 
   return (
     <Section>
-      {pending.map((app) => {
+      {applications.map((app) => {
         const hrs = hoursRemaining(app.createdAt);
         const isProcessing = processing === app.id;
 

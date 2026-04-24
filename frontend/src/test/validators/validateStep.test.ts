@@ -96,33 +96,24 @@ describe('validateStep', () => {
       expect(validateStep(2, form)).toBe('Укажите корректную цену');
     });
 
-    it('returns error when price is between 1 and 99', () => {
-      const form = makeForm({ subscriptionPrice: '50' });
-      expect(validateStep(2, form)).toBe(
-        'Минимальная цена — 100 Stars (или 0 для бесплатного)'
-      );
-    });
-
-    it('returns error when price is 99', () => {
-      const form = makeForm({ subscriptionPrice: '99' });
-      expect(validateStep(2, form)).toBe(
-        'Минимальная цена — 100 Stars (или 0 для бесплатного)'
-      );
-    });
-
     it('returns null when price is 0 (free)', () => {
       const form = makeForm({ subscriptionPrice: '0' });
       expect(validateStep(2, form)).toBeNull();
     });
 
-    it('returns null when price is exactly 100', () => {
-      const form = makeForm({ subscriptionPrice: '100' });
+    it('returns null when price is 1 (minimum paid)', () => {
+      const form = makeForm({ subscriptionPrice: '1' });
       expect(validateStep(2, form)).toBeNull();
     });
 
-    it('returns null when price is above 100', () => {
+    it('returns null when price is above 1', () => {
       const form = makeForm({ subscriptionPrice: '500' });
       expect(validateStep(2, form)).toBeNull();
+    });
+
+    it('returns error for fractional price', () => {
+      const form = makeForm({ subscriptionPrice: '1.5' });
+      expect(validateStep(2, form)).toBe('Цена должна быть целым числом');
     });
 
     it('accepts memberLimit of 1', () => {

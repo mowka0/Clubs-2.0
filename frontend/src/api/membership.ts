@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import type { MemberListItemDto, MemberProfileDto, MembershipDto } from '../types/api';
+import type { JoinClubResult, MemberListItemDto, MemberProfileDto } from '../types/api';
 
 export interface ApplicationDto {
   id: string;
@@ -10,8 +10,8 @@ export interface ApplicationDto {
   createdAt: string | null;
 }
 
-export function joinClub(clubId: string): Promise<MembershipDto> {
-  return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/join`);
+export function joinClub(clubId: string): Promise<JoinClubResult> {
+  return apiClient.post<JoinClubResult>(`/api/clubs/${clubId}/join`);
 }
 
 export function applyToClub(clubId: string, answerText: string): Promise<ApplicationDto> {
@@ -22,8 +22,8 @@ export function getMyApplications(): Promise<ApplicationDto[]> {
   return apiClient.get<ApplicationDto[]>('/api/users/me/applications');
 }
 
-export function joinByInviteCode(code: string): Promise<MembershipDto> {
-  return apiClient.post<MembershipDto>(`/api/invite/${code}/join`);
+export function joinByInviteCode(code: string): Promise<JoinClubResult> {
+  return apiClient.post<JoinClubResult>(`/api/invite/${code}/join`);
 }
 
 export function getClubMembers(clubId: string): Promise<MemberListItemDto[]> {
@@ -34,8 +34,12 @@ export function getMemberProfile(clubId: string, userId: string): Promise<Member
   return apiClient.get<MemberProfileDto>(`/api/clubs/${clubId}/members/${userId}`);
 }
 
-export function getClubApplications(clubId: string): Promise<import('../types/api').ClubApplicationDto[]> {
-  return apiClient.get(`/api/clubs/${clubId}/applications`);
+export function getClubApplications(
+  clubId: string,
+  status?: 'pending' | 'approved' | 'rejected'
+): Promise<import('../types/api').ClubApplicationDto[]> {
+  const params = status ? { status } : undefined;
+  return apiClient.get(`/api/clubs/${clubId}/applications`, params);
 }
 
 export function approveApplication(applicationId: string): Promise<void> {

@@ -14,8 +14,10 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer
 import org.telegram.telegrambots.longpolling.starter.SpringLongPollingBot
+import org.telegram.telegrambots.meta.api.methods.AnswerPreCheckoutQuery
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.objects.Update
+import org.telegram.telegrambots.meta.api.objects.payments.PreCheckoutQuery
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow
@@ -41,23 +43,34 @@ class ClubsBot(
     override fun getUpdatesConsumer(): LongPollingSingleThreadUpdateConsumer = this
 
     override fun consume(update: Update) {
-        if (!update.hasMessage() || !update.message.hasText()) return
+        // Telegram Stars: pre_checkout_query MUST be answered within 10s or
+        // the payment is cancelled. It arrives as its own update type, not a message.
+        if (update.hasPreCheckoutQuery()) {
+            handlePreCheckoutQuery(update.preCheckoutQuery)
+            return
+        }
 
-        val text = update.message.text
-        val chatId = update.message.chatId.toString()
-        val telegramId = update.message.from?.id
+        if (!update.hasMessage()) return
 
-        // Handle successful_payment (Stars)
+        // successful_payment is delivered as a message without `text`, so it
+        // must be dispatched BEFORE the hasText() early-return below.
         if (update.message.hasSuccessfulPayment()) {
+            val telegramId = update.message.from?.id ?: return
             val payment = update.message.successfulPayment
             paymentService.handleSuccessfulPayment(
-                telegramId = telegramId ?: return,
+                telegramId = telegramId,
                 telegramChargeId = payment.telegramPaymentChargeId,
                 payload = payment.invoicePayload,
                 amount = payment.totalAmount
             )
             return
         }
+
+        if (!update.message.hasText()) return
+
+        val text = update.message.text
+        val chatId = update.message.chatId.toString()
+        val telegramId = update.message.from?.id
 
         try {
             when {
@@ -67,6 +80,32 @@ class ClubsBot(
             }
         } catch (e: Exception) {
             log.error("Error handling command '{}' from chat {}: {}", text, chatId, e.message, e)
+        }
+    }
+
+    /**
+     * Answers a Stars `pre_checkout_query` within Telegram's 10-second window.
+     * Only validates payload format (full business validation already happened
+     * at invoice creation). Any unexpected exception still answers with ok=false
+     * to avoid leaving the payment in an indeterminate "waiting" state.
+     */
+    internal fun handlePreCheckoutQuery(query: PreCheckoutQuery) {
+        val parts = query.invoicePayload.split(":")
+        val valid = parts.size == 3 && parts[0] == "club_subscription"
+
+        val answer = AnswerPreCheckoutQuery.builder()
+            .preCheckoutQueryId(query.id)
+            .ok(valid)
+            .apply {
+                if (!valid) errorMessage("Некорректный формат заказа. Попробуйте вступить снова из приложения.")
+            }
+            .build()
+
+        try {
+            telegramClient.execute(answer)
+            log.info("pre_checkout_query answered: id={} ok={} payload={}", query.id, valid, query.invoicePayload)
+        } catch (e: Exception) {
+            log.error("Failed to answer pre_checkout_query {}: {}", query.id, e.message, e)
         }
     }
 

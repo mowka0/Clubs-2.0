@@ -7,24 +7,28 @@ import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.MembershipStatus
+import com.clubs.generated.jooq.tables.records.ClubsRecord
 import com.clubs.generated.jooq.tables.records.MembershipsRecord
-import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
+import com.clubs.payment.PaymentService
 import org.jooq.DSLContext
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
 @Service
 class MembershipService(
     private val membershipRepository: MembershipRepository,
     private val clubRepository: ClubRepository,
+    private val paymentService: PaymentService,
     private val dsl: DSLContext
 ) {
 
     private val log = LoggerFactory.getLogger(MembershipService::class.java)
 
-    fun joinOpenClub(clubId: UUID, userId: UUID): MembershipDto {
+    @Transactional
+    fun joinOpenClub(clubId: UUID, userId: UUID): JoinResult {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
 
         if (club.accessType != AccessType.`open`) {
@@ -37,15 +41,7 @@ class MembershipService(
         val activeCount = membershipRepository.countActiveByClubId(clubId)
         if (activeCount >= club.memberLimit) throw ValidationException("Club is full")
 
-        val membership = membershipRepository.create(userId, clubId)
-        log.info("Joined open club: clubId={} userId={}", clubId, userId)
-
-        dsl.update(CLUBS)
-            .set(CLUBS.MEMBER_COUNT, (club.memberCount ?: 0) + 1)
-            .where(CLUBS.ID.eq(clubId))
-            .execute()
-
-        return membership.toDto()
+        return joinOrRequestPayment(club, userId, "open")
     }
 
     fun cancelMembership(clubId: UUID, userId: UUID): MembershipDto {
@@ -58,29 +54,38 @@ class MembershipService(
             .where(MEMBERSHIPS.USER_ID.eq(userId).and(MEMBERSHIPS.CLUB_ID.eq(clubId)))
             .execute()
 
-        // Keep access until subscription_expires_at; just mark as cancelled
         log.info("Membership cancelled: clubId={} userId={}", clubId, userId)
         return membership.toDto().copy(status = "cancelled")
     }
 
-    fun joinByInviteCode(code: String, userId: UUID): MembershipDto {
+    @Transactional
+    fun joinByInviteCode(code: String, userId: UUID): JoinResult {
         val club = clubRepository.findByInviteCode(code) ?: throw NotFoundException("Invite link not found")
+        val clubId = club.id!!
 
-        val existing = membershipRepository.findByUserAndClub(userId, club.id!!)
+        val existing = membershipRepository.findByUserAndClub(userId, clubId)
         if (existing != null) throw ConflictException("Already a member")
 
-        val activeCount = membershipRepository.countActiveByClubId(club.id!!)
+        val activeCount = membershipRepository.countActiveByClubId(clubId)
         if (activeCount >= (club.memberLimit ?: 0)) throw ValidationException("Club is full")
 
-        val membership = membershipRepository.create(userId, club.id!!)
-        log.info("Joined by invite: clubId={} userId={}", club.id, userId)
+        return joinOrRequestPayment(club, userId, "invite")
+    }
 
-        dsl.update(CLUBS)
-            .set(CLUBS.MEMBER_COUNT, (club.memberCount ?: 0) + 1)
-            .where(CLUBS.ID.eq(club.id))
-            .execute()
+    private fun joinOrRequestPayment(club: ClubsRecord, userId: UUID, source: String): JoinResult {
+        val clubId = club.id!!
+        val price = club.subscriptionPrice ?: 0
 
-        return membership.toDto()
+        return if (price > 0) {
+            paymentService.createInvoice(userId, clubId)
+            log.info("Invoice requested on {} join: clubId={} userId={} price={}", source, clubId, userId, price)
+            JoinResult.PendingPayment(PendingPaymentDto(clubId = clubId, priceStars = price))
+        } else {
+            val membership = membershipRepository.create(userId, clubId)
+            clubRepository.incrementMemberCount(clubId)
+            log.info("Joined free club via {}: clubId={} userId={}", source, clubId, userId)
+            JoinResult.Joined(membership.toDto())
+        }
     }
 }
 

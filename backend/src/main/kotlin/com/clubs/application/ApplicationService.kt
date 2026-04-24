@@ -8,13 +8,11 @@ import com.clubs.common.exception.RateLimitException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ApplicationStatus
-import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.membership.MembershipRepository
-import com.clubs.membership.MembershipService
-import com.clubs.membership.toDto
-import org.jooq.DSLContext
+import com.clubs.payment.PaymentService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
 @Service
@@ -22,8 +20,7 @@ class ApplicationService(
     private val applicationRepository: ApplicationRepository,
     private val clubRepository: ClubRepository,
     private val membershipRepository: MembershipRepository,
-    private val membershipService: MembershipService,
-    private val dsl: DSLContext
+    private val paymentService: PaymentService
 ) {
 
     private val log = LoggerFactory.getLogger(ApplicationService::class.java)
@@ -42,8 +39,14 @@ class ApplicationService(
         val existingMembership = membershipRepository.findByUserAndClub(userId, clubId)
         if (existingMembership != null) throw ConflictException("Already a member")
 
-        val pendingApp = applicationRepository.findPendingByUserAndClub(userId, clubId)
-        if (pendingApp != null) throw ConflictException("Application already exists")
+        val activeApp = applicationRepository.findActiveByUserAndClub(userId, clubId)
+        if (activeApp != null) {
+            val reason = if (activeApp.status == ApplicationStatus.approved)
+                "Application already approved — waiting for payment"
+            else
+                "Application already exists"
+            throw ConflictException(reason)
+        }
 
         val todayCount = applicationRepository.countTodayByUser(userId)
         if (todayCount >= 5) throw RateLimitException("Too many applications today")
@@ -53,6 +56,7 @@ class ApplicationService(
         return application.toDto()
     }
 
+    @Transactional
     fun approveApplication(applicationId: UUID, organizerId: UUID): ApplicationDto {
         val application = applicationRepository.findById(applicationId)
             ?: throw NotFoundException("Application not found")
@@ -69,12 +73,21 @@ class ApplicationService(
         val activeCount = membershipRepository.countActiveByClubId(application.clubId!!)
         if (activeCount >= (club.memberLimit ?: 0)) throw ValidationException("Club is full")
 
-        membershipRepository.create(application.userId!!, application.clubId!!)
-
-        dsl.update(CLUBS)
-            .set(CLUBS.MEMBER_COUNT, (club.memberCount ?: 0) + 1)
-            .where(CLUBS.ID.eq(application.clubId))
-            .execute()
+        val price = club.subscriptionPrice ?: 0
+        if (price > 0) {
+            paymentService.createInvoice(application.userId!!, application.clubId!!)
+            log.info(
+                "Invoice requested on application approve: applicationId={} clubId={} userId={} price={}",
+                applicationId, application.clubId, application.userId, price
+            )
+        } else {
+            membershipRepository.create(application.userId!!, application.clubId!!)
+            clubRepository.incrementMemberCount(application.clubId!!)
+            log.info(
+                "Membership created on application approve (free club): applicationId={} clubId={} userId={}",
+                applicationId, application.clubId, application.userId
+            )
+        }
 
         val updated = applicationRepository.updateStatus(applicationId, ApplicationStatus.approved)
         log.info("Application approved: id={} clubId={} userId={} organizerId={}", applicationId, application.clubId, application.userId, organizerId)
