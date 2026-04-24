@@ -252,10 +252,10 @@ AND clubs.member_count уменьшен на 1 (но не ниже 0)
 - **`club` модуль** — читает `subscription_price`, обновляет `member_count` через `ClubRepository`.
 - **`user` модуль** — читает `telegram_id` для отправки инвойса.
 - **`bot` модуль** — единственный caller `PaymentService` (invoice отправляется через `TelegramClient`, оба handler-а вызываются из `ClubsBot`).
-- **Telegram Bot API**:
-  - `SendInvoice` — синхронный execute
-  - `successful_payment` — webhook, может повторяться → идемпотентность обязательна
-  - `pre_checkout_query` — обрабатывается в `ClubsBot` (10s лимит Telegram)
+- **Telegram Bot API** (через `ClubsBot` long-polling consumer):
+  - `SendInvoice` — синхронный execute из `PaymentService.createInvoice`
+  - `pre_checkout_query` — Telegram шлёт между нажатием «Pay» и списанием; **должен** быть подтверждён через `AnswerPreCheckoutQuery` в течение 10 с, иначе Telegram отменит платёж. Обрабатывается в `ClubsBot.handlePreCheckoutQuery`: валидирует формат payload (`club_subscription:{clubId}:{userId}`), отвечает `ok=true` либо `ok=false` с `error_message`. Исключения Telegram API swallow-ятся логом — fail в боте не должен ронять весь long-polling loop.
+  - `successful_payment` — приходит как `Update.message` без поля `text`, поэтому его обработчик в `ClubsBot.consume` должен быть **раньше** `hasText()` early-return. Может повторяться Telegram'ом → идемпотентность через partial UNIQUE (см. выше).
 
 ## Риски и открытые вопросы
 
