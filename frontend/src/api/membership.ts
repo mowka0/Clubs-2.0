@@ -34,8 +34,12 @@ export function getMemberProfile(clubId: string, userId: string): Promise<Member
   return apiClient.get<MemberProfileDto>(`/api/clubs/${clubId}/members/${userId}`);
 }
 
-export function getClubApplications(clubId: string): Promise<import('../types/api').ClubApplicationDto[]> {
-  return apiClient.get(`/api/clubs/${clubId}/applications`);
+export function getClubApplications(
+  clubId: string,
+  status?: 'pending' | 'approved' | 'rejected'
+): Promise<import('../types/api').ClubApplicationDto[]> {
+  const params = status ? { status } : undefined;
+  return apiClient.get(`/api/clubs/${clubId}/applications`, params);
 }
 
 export function approveApplication(applicationId: string): Promise<void> {

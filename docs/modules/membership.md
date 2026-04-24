@@ -126,7 +126,10 @@ GET /api/users/me/applications
 - Клуб должен иметь `access_type = closed` → 400 "Club does not accept applications"
 - Если `club.application_question != null` → `answerText` обязателен → 400 "Answer is required"
 - Пользователь не должен быть уже участником (active) → 409 "Already a member"
-- Пользователь не должен иметь pending заявку в этот клуб → 409 "Application already exists"
+- Пользователь не должен иметь **активную** заявку в этот клуб → 409. Активная = `pending` ИЛИ `approved` (до оплаты):
+  - `pending` → "Application already exists"
+  - `approved` → "Application already approved — waiting for payment"
+  Это нужно чтобы юзер не мог переподавать заявку между approve организатора и оплатой (иначе в админке появляются дубли).
 - Rate limit: 5 заявок в день от одного юзера → 429
 
 ### Бизнес-правила — approveApplication

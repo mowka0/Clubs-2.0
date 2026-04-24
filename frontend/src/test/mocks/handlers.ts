@@ -63,6 +63,11 @@ export const handlers = [
     return HttpResponse.json([] as MembershipDto[]);
   }),
 
+  // GET /api/users/me/applications
+  http.get('*/api/users/me/applications', () => {
+    return HttpResponse.json([]);
+  }),
+
   // POST /api/clubs/:id/join
   http.post('*/api/clubs/:id/join', ({ params }) => {
     const membership: MembershipDto = {

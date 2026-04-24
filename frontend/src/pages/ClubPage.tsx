@@ -16,7 +16,9 @@ import { useBackButton } from '../hooks/useBackButton';
 import { useClubsStore } from '../store/useClubsStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { getClub } from '../api/clubs';
-import { joinClub, applyToClub } from '../api/membership';
+import { joinClub, applyToClub, getMyApplications } from '../api/membership';
+import type { ApplicationDto } from '../api/membership';
+import { ApiError } from '../api/apiClient';
 import { isPendingPayment } from '../types/api';
 import type { ClubDetailDto } from '../types/api';
 import { formatPrice } from '../utils/formatters';
@@ -47,18 +49,31 @@ export const ClubPage: FC = () => {
   const [answerText, setAnswerText] = useState('');
   const [joinSuccess, setJoinSuccess] = useState(false);
   const [pendingPayment, setPendingPayment] = useState<{ priceStars: number; message: string } | null>(null);
+  const [myApplication, setMyApplication] = useState<ApplicationDto | null>(null);
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    Promise.all([getClub(id), fetchMyClubs()])
-      .then(([clubData]) => { setClub(clubData); setLoading(false); })
+    Promise.all([getClub(id), fetchMyClubs(), getMyApplications()])
+      .then(([clubData, , apps]) => {
+        setClub(clubData);
+        setMyApplication(apps.find((a) => a.clubId === id) ?? null);
+        setLoading(false);
+      })
       .catch((e) => { setError((e as Error).message); setLoading(false); });
   }, [id, fetchMyClubs]);
 
   const membership = myClubs.find((m) => m.clubId === id);
   const isMember = !!membership && membership.status === 'active';
   const isOrganizer = club?.ownerId === user?.id || membership?.role === 'organizer';
+
+  // On 409 the UI state is stale (another tab approved an app, another payment completed, etc.)
+  // Refetch user-visible state and let renderJoinButton recompute — no raw error for the user.
+  const refetchUserState = async () => {
+    if (!id) return;
+    const [, apps] = await Promise.all([fetchMyClubs(), getMyApplications()]);
+    setMyApplication(apps.find((a) => a.clubId === id) ?? null);
+  };
 
   const handleJoin = async () => {
     if (!id || !club) return;
@@ -73,7 +88,11 @@ export const ClubPage: FC = () => {
         setJoinSuccess(true);
       }
     } catch (e) {
-      setJoinError((e as Error).message);
+      if (e instanceof ApiError && e.status === 409) {
+        await refetchUserState();
+      } else {
+        setJoinError((e as Error).message);
+      }
     } finally {
       setJoining(false);
     }
@@ -88,11 +107,16 @@ export const ClubPage: FC = () => {
     setJoining(true);
     setJoinError(null);
     try {
-      await applyToClub(id, answerText.trim());
+      const created = await applyToClub(id, answerText.trim());
       setShowApplyModal(false);
-      setJoinSuccess(true);
+      setMyApplication(created);
     } catch (e) {
-      setJoinError((e as Error).message);
+      if (e instanceof ApiError && e.status === 409) {
+        setShowApplyModal(false);
+        await refetchUserState();
+      } else {
+        setJoinError((e as Error).message);
+      }
     } finally {
       setJoining(false);
     }
@@ -106,6 +130,9 @@ export const ClubPage: FC = () => {
     return <Placeholder header="Ошибка" description={error ?? 'Клуб не найден'} />;
   }
 
+  // Order matters: isMember wins over myApplication — after successful payment,
+  // handleSuccessfulPayment creates the membership; the approved application row
+  // remains in DB but isn't UI-visible because isMember takes precedence here.
   const renderJoinButton = () => {
     if (isOrganizer) return <Button size="l" stretched onClick={() => navigate(`/clubs/${id}/manage`)}>&#x2699;&#xFE0F; Управление клубом</Button>;
     if (isMember) return <Button size="l" mode="outline" disabled stretched>Вы участник &#x2713;</Button>;
@@ -117,6 +144,23 @@ export const ClubPage: FC = () => {
           </Button>
           <Text style={{ fontSize: 13, color: 'var(--tgui--hint_color)', textAlign: 'center' }}>
             {pendingPayment.message}
+          </Text>
+        </div>
+      );
+    }
+    // Closed club: user already has an application in flight
+    if (myApplication?.status === 'pending') {
+      return <Button size="l" mode="outline" disabled stretched>&#x23F3; Заявка на рассмотрении</Button>;
+    }
+    if (myApplication?.status === 'approved') {
+      const price = club.subscriptionPrice ?? 0;
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Button size="l" mode="outline" disabled stretched>
+            &#x1F4B3; Ожидаем оплату{price > 0 ? ` – ${price} Stars` : ''}
+          </Button>
+          <Text style={{ fontSize: 13, color: 'var(--tgui--hint_color)', textAlign: 'center' }}>
+            Заявка одобрена. Счёт отправлен в Telegram — оплатите его, чтобы вступить.
           </Text>
         </div>
       );

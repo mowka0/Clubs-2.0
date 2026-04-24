@@ -1,5 +1,14 @@
 import { getInitDataRaw } from '../telegram/sdk';
 
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 class ApiClient {
   private token: string | null = null;
   private authInFlight: Promise<{ token: string; user: unknown }> | null = null;
@@ -61,7 +70,7 @@ class ApiClient {
       const err = (await res.json().catch(() => ({ message: 'Unknown error' }))) as {
         message?: string;
       };
-      throw new Error(err.message ?? `HTTP ${res.status}`);
+      throw new ApiError(res.status, err.message ?? `HTTP ${res.status}`);
     }
 
     return res.json() as Promise<T>;

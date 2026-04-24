@@ -44,6 +44,15 @@ class ApplicationRepository(private val dsl: DSLContext) {
             )
             .fetchOne()
 
+    fun findActiveByUserAndClub(userId: UUID, clubId: UUID): ApplicationsRecord? =
+        dsl.selectFrom(APPLICATIONS)
+            .where(
+                APPLICATIONS.USER_ID.eq(userId)
+                    .and(APPLICATIONS.CLUB_ID.eq(clubId))
+                    .and(APPLICATIONS.STATUS.`in`(ApplicationStatus.pending, ApplicationStatus.approved))
+            )
+            .fetchOne()
+
     fun countTodayByUser(userId: UUID): Int {
         val startOfDay = OffsetDateTime.now(ZoneOffset.UTC).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC)
         return dsl.selectCount().from(APPLICATIONS)

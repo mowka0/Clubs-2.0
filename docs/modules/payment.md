@@ -95,6 +95,8 @@ Parsing payload: `"club_subscription:{clubId}:{userId}"`. Некорректны
 
 Fast-path проверка `existsByTelegramChargeId` — оптимизация, не primary защита.
 
+**Post-commit welcome DM.** После успешной обработки `handleSuccessfulPayment` публикует `PaymentConfirmedEvent(telegramId, clubName)` через `ApplicationEventPublisher`. `PaymentNotificationHandler` слушает его через `@TransactionalEventListener` (фаза `AFTER_COMMIT`) и шлёт DM «Оплата принята. Добро пожаловать в клуб «X»!». Это гарантирует, что DM никогда не уйдёт до фактического коммита (rollback → событие отбрасывается) и не держит БД-транзакцию открытой во время сетевого вызова Telegram.
+
 ### Lifecycle scheduler
 `@Scheduled(cron = "0 0 9 * * *")` — ежедневно в 09:00 сервера.
 
@@ -267,6 +269,7 @@ AND clubs.member_count уменьшен на 1 (но не ниже 0)
 - **GAP-6**: UX закрытого клуба меняется на «две кнопки» (запрос + вступить, вторая разблокируется после approve организатора). Текущий PRD §4.2.2 устарел — требует переписывания. Зависит от GAP-5.
 - **GAP-7**: для бесплатных клубов нужен lifecycle по вовлечённости (автопродление активным, авто-исключение неактивным через 30 дней). PRD не описывает. Требует дизайна.
 - **GAP-8**: нет dedup'а повторных invoice-запросов per (user, club). Клики «Вступить» подряд → несколько Telegram DM. Ограничено глобальным rate-limit, но UX-неаккуратно.
+- **GAP-9**: welcome DM после оплаты ведёт в главную страницу Mini App, а не в конкретный клуб (deep-link handler не реализован).
 
 ### Прочее
 

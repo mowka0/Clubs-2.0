@@ -39,8 +39,14 @@ class ApplicationService(
         val existingMembership = membershipRepository.findByUserAndClub(userId, clubId)
         if (existingMembership != null) throw ConflictException("Already a member")
 
-        val pendingApp = applicationRepository.findPendingByUserAndClub(userId, clubId)
-        if (pendingApp != null) throw ConflictException("Application already exists")
+        val activeApp = applicationRepository.findActiveByUserAndClub(userId, clubId)
+        if (activeApp != null) {
+            val reason = if (activeApp.status == ApplicationStatus.approved)
+                "Application already approved — waiting for payment"
+            else
+                "Application already exists"
+            throw ConflictException(reason)
+        }
 
         val todayCount = applicationRepository.countTodayByUser(userId)
         if (todayCount >= 5) throw RateLimitException("Too many applications today")

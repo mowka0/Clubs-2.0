@@ -7,6 +7,7 @@ import com.clubs.generated.jooq.enums.TransactionType
 import com.clubs.membership.MembershipRepository
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -25,7 +26,8 @@ class PaymentService(
     private val userRepository: UserRepository,
     private val membershipRepository: MembershipRepository,
     private val transactionRepository: TransactionRepository,
-    private val telegramClient: TelegramClient
+    private val telegramClient: TelegramClient,
+    private val eventPublisher: ApplicationEventPublisher
 ) {
 
     private val log = LoggerFactory.getLogger(PaymentService::class.java)
@@ -152,6 +154,11 @@ class PaymentService(
         }
 
         log.info("Payment processed: userId={} clubId={} amount={} Stars type={}", userId, clubId, amount, type)
+
+        // Welcome DM is dispatched AFTER_COMMIT by PaymentNotificationHandler.
+        // Publishing inside the transaction lets the listener skip entirely
+        // if the outer @Transactional rolls back (e.g. DuplicateKeyException).
+        eventPublisher.publishEvent(PaymentConfirmedEvent(telegramId = telegramId, clubName = club.name))
     }
 
     private fun parsePayload(payload: String): Pair<UUID, UUID>? {

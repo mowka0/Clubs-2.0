@@ -87,7 +87,7 @@ class ApplicationServiceTest {
 
         every { clubRepository.findById(clubId) } returns club
         every { membershipRepository.findByUserAndClub(userId, clubId) } returns null
-        every { applicationRepository.findPendingByUserAndClub(userId, clubId) } returns null
+        every { applicationRepository.findActiveByUserAndClub(userId, clubId) } returns null
         every { applicationRepository.countTodayByUser(userId) } returns 0
         every { applicationRepository.create(userId, clubId, "I want to join") } returns application
 
@@ -159,6 +159,33 @@ class ApplicationServiceTest {
         }
 
         assertEquals("Answer is required for this club", exception.message)
+    }
+
+    @Test
+    fun `submitApplication rejects when user already has approved application awaiting payment`() {
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val organizerId = UUID.randomUUID()
+        val club = createClosedClub(clubId, organizerId)
+        val approvedApp = ApplicationsRecord(
+            id = UUID.randomUUID(),
+            userId = userId,
+            clubId = clubId,
+            status = ApplicationStatus.approved,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = OffsetDateTime.now()
+        )
+
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.findByUserAndClub(userId, clubId) } returns null
+        every { applicationRepository.findActiveByUserAndClub(userId, clubId) } returns approvedApp
+
+        val exception = assertThrows<ConflictException> {
+            applicationService.submitApplication(clubId, userId, SubmitApplicationRequest(answerText = "test"))
+        }
+
+        assertEquals("Application already approved — waiting for payment", exception.message)
+        verify(exactly = 0) { applicationRepository.create(any(), any(), any()) }
     }
 
     @Test

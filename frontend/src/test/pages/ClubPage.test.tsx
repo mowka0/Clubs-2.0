@@ -164,6 +164,72 @@ describe('ClubPage', () => {
     expect(joinCalled).toBe(true);
   });
 
+  it('closed club with pending application: button is disabled and shows "Заявка на рассмотрении"', async () => {
+    server.use(
+      http.get('*/api/clubs/:id', () => {
+        return HttpResponse.json({
+          ...mockClubDetail,
+          accessType: 'closed',
+          ownerId: 'other-owner',
+          subscriptionPrice: 500,
+        });
+      }),
+      http.get('*/api/users/me/clubs', () => HttpResponse.json([] as MembershipDto[])),
+      http.get('*/api/users/me/applications', () => {
+        return HttpResponse.json([
+          {
+            id: 'app-1',
+            userId: 'user-1',
+            clubId: 'club-123',
+            status: 'pending',
+            answerText: null,
+            createdAt: '2025-01-01T00:00:00Z',
+          },
+        ]);
+      })
+    );
+
+    renderClubPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /заявка на рассмотрении/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: /^хочу вступить$/i })).not.toBeInTheDocument();
+  });
+
+  it('closed club with approved application: shows "Ожидаем оплату" with club price', async () => {
+    server.use(
+      http.get('*/api/clubs/:id', () => {
+        return HttpResponse.json({
+          ...mockClubDetail,
+          accessType: 'closed',
+          ownerId: 'other-owner',
+          subscriptionPrice: 750,
+        });
+      }),
+      http.get('*/api/users/me/clubs', () => HttpResponse.json([] as MembershipDto[])),
+      http.get('*/api/users/me/applications', () => {
+        return HttpResponse.json([
+          {
+            id: 'app-1',
+            userId: 'user-1',
+            clubId: 'club-123',
+            status: 'approved',
+            answerText: null,
+            createdAt: '2025-01-01T00:00:00Z',
+          },
+        ]);
+      })
+    );
+
+    renderClubPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /ожидаем оплату/i })).toBeInTheDocument();
+      expect(screen.getByText(/заявка одобрена/i)).toBeInTheDocument();
+    });
+  });
+
   it('paid club: pending_payment response shows "Ожидаем оплату" and does not mark user as member', async () => {
     let fetchMyClubsCallCount = 0;
 

@@ -158,6 +158,21 @@
 
 ---
 
+## GAP-9: Deep-link в конкретный клуб из DM (поверх welcome-DM)
+
+**Реальность:** после закрытия GAP-5+DM-welcome пользователь получает DM «Добро пожаловать в клуб «X»!» с кнопкой «📱 Открыть Clubs» (existing inline button в `NotificationService.sendDm`). Кнопка открывает **главную** страницу Mini App, а не страницу конкретного клуба. Пользователю нужно самому найти клуб в «Мои клубы».
+
+**Что нужно:**
+- Формировать deep-link `https://t.me/<bot>/app?startapp=club_<clubId>` для конкретного клуба.
+- Во фронте добавить обработчик `startParam` (через `retrieveLaunchParams()`) в корневом компоненте или отдельном `DeepLinkHandler`: парсит `startParam`, редиректит на `/clubs/<id>` / `/invite/<code>` и т. д.
+- `NotificationService` получает перегрузку `sendDirectMessage(telegramId, text, startParam?)`, которая собирает URL с нужным параметром.
+
+**Связанные GAP:** GAP-4 (автоинвайт в TG-группу после оплаты) концептуально близок — оба о "что происходит post-payment". Можно проектировать и реализовывать вместе: one PR = welcome DM со ссылкой + создание invite-link в Telegram-группу + shared deep-link handler.
+
+**Scope:** отдельная ветка, frontend + backend + возможно расширение `NotificationService`.
+
+---
+
 ## Статус
 
 Все gap'и **зафиксированы в `docs/modules/payment.md`** (раздел «Риски и открытые вопросы») как known. После того как каждая фича будет реализована — запись переносится из этого файла в git history (через удаление + описание в PR).
