@@ -81,7 +81,7 @@ services:
       REDIS_PORT: 6379
       SERVER_PORT: 8080
       JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-3600000}  # 1h per security.md; frontend apiClient auto-retries 401 with fresh initData
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
