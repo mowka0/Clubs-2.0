@@ -37,26 +37,47 @@ class StorageService(
      */
     @PostConstruct
     fun initBucket() {
+        // Step 1: ensure bucket exists (idempotent).
+        var bucketReady = false
         try {
             s3Client.headBucket(HeadBucketRequest.builder().bucket(bucket).build())
-            logger.info("S3 bucket already exists: {}", bucket)
-            return
+            logger.info("S3 bucket exists: {}", bucket)
+            bucketReady = true
         } catch (_: NoSuchBucketException) {
-            // Fall through to create
+            try {
+                s3Client.createBucket(CreateBucketRequest.builder().bucket(bucket).build())
+                logger.info("S3 bucket created: {}", bucket)
+                bucketReady = true
+            } catch (e: Exception) {
+                logger.error("Failed to create S3 bucket '{}': {}", bucket, e.message, e)
+            }
         } catch (e: S3Exception) {
-            if (e.statusCode() != 404) {
+            if (e.statusCode() == 404) {
+                // Some S3-compatible servers return 404 without NoSuchBucketException — retry create.
+                try {
+                    s3Client.createBucket(CreateBucketRequest.builder().bucket(bucket).build())
+                    logger.info("S3 bucket created: {}", bucket)
+                    bucketReady = true
+                } catch (ce: Exception) {
+                    logger.error("Failed to create S3 bucket '{}': {}", bucket, ce.message, ce)
+                }
+            } else {
                 logger.error("Failed to probe S3 bucket '{}': {}", bucket, e.message, e)
-                return
             }
         }
 
+        if (!bucketReady) return
+
+        // Step 2: always (re)apply the public-read policy. Running this on every
+        // startup is safe and idempotent — MinIO overwrites the previous policy.
+        // Critical because a bucket pre-created without policy (e.g. older deploy)
+        // would otherwise block anonymous GET with 403, breaking avatar rendering.
         try {
-            s3Client.createBucket(CreateBucketRequest.builder().bucket(bucket).build())
             val policy = """{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::$bucket/*"}]}"""
             s3Client.putBucketPolicy(PutBucketPolicyRequest.builder().bucket(bucket).policy(policy).build())
-            logger.info("S3 bucket created with public-read policy: {}", bucket)
+            logger.info("S3 bucket public-read policy ensured: {}", bucket)
         } catch (e: Exception) {
-            logger.error("Failed to create S3 bucket '{}': {}", bucket, e.message, e)
+            logger.error("Failed to set S3 bucket policy '{}': {}", bucket, e.message, e)
         }
     }
 
