@@ -514,12 +514,13 @@
 - id: UUID (PK)
 - user_id: UUID (FK → users.id)
 - club_id: UUID (FK → clubs.id)
-- amount_stars: integer (not null)
-- platform_fee_stars: integer (not null)
-- organizer_revenue_stars: integer (not null)
+- membership_id: UUID (FK → memberships.id, nullable — для audit trail)
+- amount: integer (not null, в Stars) — в MVP единственная валюта Telegram Stars, колонка `currency` будет добавлена, когда появится мультивалютная оплата
+- platform_fee: integer (not null, в Stars)
+- organizer_revenue: integer (not null, в Stars)
 - type: enum (subscription, renewal)
 - status: enum (completed, failed, refunded)
-- telegram_payment_id: varchar(255)
+- telegram_payment_charge_id: varchar(255), partial UNIQUE (WHERE NOT NULL) — ключ идемпотентности webhook `successful_payment`
 - created_at: timestamp
 
 ### 5.2 Связи

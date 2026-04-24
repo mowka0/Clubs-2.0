@@ -2,46 +2,47 @@ package com.clubs.payment
 
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.NotFoundException
-import com.clubs.generated.jooq.enums.MembershipRole
-import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.enums.TransactionStatus
 import com.clubs.generated.jooq.enums.TransactionType
-import com.clubs.generated.jooq.tables.references.CLUBS
-import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
-import com.clubs.generated.jooq.tables.references.TRANSACTIONS
-import com.clubs.generated.jooq.tables.references.USERS
-import org.jooq.DSLContext
+import com.clubs.membership.MembershipRepository
+import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
+import org.springframework.dao.DuplicateKeyException
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import org.telegram.telegrambots.meta.api.methods.invoices.SendInvoice
 import org.telegram.telegrambots.meta.api.objects.payments.LabeledPrice
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.time.OffsetDateTime
 import java.util.UUID
 
+private const val PLATFORM_FEE_PERCENT = 20
+private const val SUBSCRIPTION_DAYS = 30L
+
 @Service
 class PaymentService(
-    private val dsl: DSLContext,
     private val clubRepository: ClubRepository,
+    private val userRepository: UserRepository,
+    private val membershipRepository: MembershipRepository,
+    private val transactionRepository: TransactionRepository,
     private val telegramClient: TelegramClient
 ) {
 
     private val log = LoggerFactory.getLogger(PaymentService::class.java)
 
     /**
-     * Creates a Telegram Stars invoice for club subscription.
-     * Sends it as a DM to the user's Telegram account.
+     * Sends a Telegram Stars invoice to the user. Free clubs have no invoice
+     * — membership for them is created by the membership module on join.
+     *
+     * Trust boundary: caller MUST ensure `userId` is the authenticated initiator.
+     * Currently invoked only from ClubsBot (Telegram webhook).
      */
     fun createInvoice(userId: UUID, clubId: UUID) {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         val price = club.subscriptionPrice ?: 0
-        if (price == 0) {
-            // Free club — just create membership directly
-            return
-        }
+        if (price == 0) return
 
-        val user = dsl.selectFrom(USERS).where(USERS.ID.eq(userId)).fetchOne()
-            ?: throw NotFoundException("User not found")
+        val user = userRepository.findById(userId) ?: throw NotFoundException("User not found")
 
         log.info("Creating invoice: userId={} clubId={} price={} Stars", userId, clubId, price)
         val invoice = SendInvoice.builder()
@@ -49,7 +50,7 @@ class PaymentService(
             .title("Подписка: ${club.name}")
             .description("Ежемесячная подписка на клуб «${club.name}»")
             .payload("club_subscription:${clubId}:${userId}")
-            .currency("XTR") // Telegram Stars
+            .currency("XTR")
             .price(LabeledPrice("Подписка на 30 дней", price))
             .build()
 
@@ -58,74 +59,108 @@ class PaymentService(
     }
 
     /**
-     * Handles successful Stars payment.
-     * Called from ClubsBot when a successful_payment message is received.
+     * Handles successful Stars payment from Telegram Bot API.
+     * Idempotent — Telegram may retry the webhook. Guarantees:
+     *   - transactions.telegram_payment_charge_id has a partial UNIQUE index (V12)
+     *   - memberships(user_id, club_id) is UNIQUE (V3)
+     *   - @Transactional rolls back the whole operation on any constraint violation
+     * so concurrent retries converge to a single committed state.
      */
+    @Transactional
     fun handleSuccessfulPayment(
         telegramId: Long,
         telegramChargeId: String,
         payload: String,
         amount: Int
     ) {
-        // Payload format: "club_subscription:{clubId}:{userId}"
-        val parts = payload.split(":")
-        if (parts.size != 3 || parts[0] != "club_subscription") {
-            log.warn("Unknown payment payload: $payload")
+        if (amount <= 0) {
+            log.warn("Ignoring payment with non-positive amount: telegramId={} amount={}", telegramId, amount)
             return
         }
 
-        val clubId = UUID.fromString(parts[1])
-        val userId = UUID.fromString(parts[2])
+        val parsed = parsePayload(payload)
+        if (parsed == null) {
+            log.warn("Unknown payment payload: telegramId={} payload={}", telegramId, payload)
+            return
+        }
+        val (clubId, userId) = parsed
 
-        val club = clubRepository.findById(clubId) ?: return
-
-        // Create or renew membership
-        val existing = dsl.selectFrom(MEMBERSHIPS)
-            .where(MEMBERSHIPS.USER_ID.eq(userId).and(MEMBERSHIPS.CLUB_ID.eq(clubId)))
-            .fetchOne()
-
-        val expiresAt = OffsetDateTime.now().plusDays(30)
-
-        if (existing == null) {
-            dsl.insertInto(MEMBERSHIPS)
-                .set(MEMBERSHIPS.USER_ID, userId)
-                .set(MEMBERSHIPS.CLUB_ID, clubId)
-                .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
-                .set(MEMBERSHIPS.ROLE, MembershipRole.member)
-                .set(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT, expiresAt)
-                .execute()
-
-            dsl.update(CLUBS)
-                .set(CLUBS.MEMBER_COUNT, (club.memberCount ?: 0) + 1)
-                .where(CLUBS.ID.eq(clubId))
-                .execute()
-        } else {
-            val newExpiry = if (existing.subscriptionExpiresAt?.isAfter(OffsetDateTime.now()) == true)
-                existing.subscriptionExpiresAt!!.plusDays(30)
-            else expiresAt
-
-            dsl.update(MEMBERSHIPS)
-                .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
-                .set(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT, newExpiry)
-                .where(MEMBERSHIPS.USER_ID.eq(userId).and(MEMBERSHIPS.CLUB_ID.eq(clubId)))
-                .execute()
+        if (transactionRepository.existsByTelegramChargeId(telegramChargeId)) {
+            log.info("Duplicate successful_payment ignored: chargeId={} userId={}", telegramChargeId, userId)
+            return
         }
 
-        // Record transaction
-        val platformFee = (amount * 0.2).toInt()
+        val club = clubRepository.findById(clubId)
+        if (club == null) {
+            log.warn("Payment for unknown club: clubId={} userId={}", clubId, userId)
+            return
+        }
+
+        val expectedPrice = club.subscriptionPrice ?: 0
+        if (expectedPrice > 0 && amount != expectedPrice) {
+            log.warn(
+                "Amount mismatch vs clubs.subscription_price: clubId={} userId={} amount={} expected={}",
+                clubId, userId, amount, expectedPrice
+            )
+        }
+
+        val now = OffsetDateTime.now()
+        val existing = membershipRepository.findExpiryRefByUserAndClub(userId, clubId)
+
+        val membershipId: UUID
+        val type: TransactionType
+
+        if (existing == null) {
+            membershipId = membershipRepository.activateSubscription(userId, clubId, now.plusDays(SUBSCRIPTION_DAYS))
+            clubRepository.incrementMemberCount(clubId)
+            type = TransactionType.subscription
+        } else {
+            val newExpiry = existing.subscriptionExpiresAt
+                ?.takeIf { it.isAfter(now) }
+                ?.plusDays(SUBSCRIPTION_DAYS)
+                ?: now.plusDays(SUBSCRIPTION_DAYS)
+            membershipRepository.renewSubscription(existing.id, newExpiry)
+            membershipId = existing.id
+            type = TransactionType.renewal
+        }
+
+        val platformFee = amount * PLATFORM_FEE_PERCENT / 100
         val organizerRevenue = amount - platformFee
 
-        dsl.insertInto(TRANSACTIONS)
-            .set(TRANSACTIONS.USER_ID, userId)
-            .set(TRANSACTIONS.CLUB_ID, clubId)
-            .set(TRANSACTIONS.TYPE, TransactionType.subscription)
-            .set(TRANSACTIONS.STATUS, TransactionStatus.completed)
-            .set(TRANSACTIONS.AMOUNT, amount)
-            .set(TRANSACTIONS.PLATFORM_FEE, platformFee)
-            .set(TRANSACTIONS.ORGANIZER_REVENUE, organizerRevenue)
-            .set(TRANSACTIONS.TELEGRAM_PAYMENT_CHARGE_ID, telegramChargeId)
-            .execute()
+        try {
+            transactionRepository.save(
+                Transaction(
+                    id = UUID.randomUUID(),
+                    userId = userId,
+                    clubId = clubId,
+                    membershipId = membershipId,
+                    type = type,
+                    status = TransactionStatus.completed,
+                    amount = amount,
+                    platformFee = platformFee,
+                    organizerRevenue = organizerRevenue,
+                    telegramPaymentChargeId = telegramChargeId,
+                    createdAt = now
+                )
+            )
+        } catch (e: DuplicateKeyException) {
+            // Concurrent retry: another thread already persisted this charge.
+            // @Transactional will roll back the membership work we just did;
+            // the first committer's state remains authoritative.
+            log.info("Concurrent duplicate successful_payment rolled back: chargeId={}", telegramChargeId)
+            throw e
+        }
 
-        log.info("Payment processed: userId={}, clubId={}, amount={} Stars", userId, clubId, amount)
+        log.info("Payment processed: userId={} clubId={} amount={} Stars type={}", userId, clubId, amount, type)
+    }
+
+    private fun parsePayload(payload: String): Pair<UUID, UUID>? {
+        val parts = payload.split(":")
+        if (parts.size != 3 || parts[0] != "club_subscription") return null
+        return try {
+            UUID.fromString(parts[1]) to UUID.fromString(parts[2])
+        } catch (e: IllegalArgumentException) {
+            null
+        }
     }
 }

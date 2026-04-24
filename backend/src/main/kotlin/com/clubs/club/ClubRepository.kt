@@ -191,4 +191,19 @@ class ClubRepository(private val dsl: DSLContext) {
         step.where(CLUBS.ID.eq(id)).execute()
         return findById(id)
     }
+
+    fun incrementMemberCount(clubId: UUID) {
+        dsl.update(CLUBS)
+            .set(CLUBS.MEMBER_COUNT, CLUBS.MEMBER_COUNT.plus(1))
+            .where(CLUBS.ID.eq(clubId))
+            .execute()
+    }
+
+    fun decrementMemberCountSafely(clubId: UUID, delta: Int) {
+        if (delta <= 0) return
+        dsl.update(CLUBS)
+            .set(CLUBS.MEMBER_COUNT, DSL.greatest(CLUBS.MEMBER_COUNT.minus(delta), DSL.`val`(0)))
+            .where(CLUBS.ID.eq(clubId))
+            .execute()
+    }
 }
