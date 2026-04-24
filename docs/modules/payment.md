@@ -259,10 +259,11 @@ AND clubs.member_count уменьшен на 1 (но не ниже 0)
 
 ### Расхождения с PRD (см. `docs/backlog/payment-prd-gaps.md`)
 
+- **GAP-5 (критический)**: flow вступления (`MembershipService.joinOpenClub`/`joinByInviteCode`) не зовёт `PaymentService.createInvoice`. Для платных клубов membership создаётся напрямую, обходя оплату. `createInvoice` и `handleSuccessfulPayment` — dead code в текущем проде. Блокирует монетизацию MVP. Отдельная bugfix-ветка.
 - **GAP-1**: нет автосписания Telegram Stars (PRD §4.7.2, §4.7.3.2). Сейчас renewal — только ручной.
 - **GAP-2**: нет flow отмены подписки (PRD §4.7.3.4). Статус `cancelled` в enum есть, но недостижим.
 - **GAP-3**: при смене `clubs.subscription_price` следующий инвойс уйдёт по новой цене (PRD §4.7.4 ACP нарушено).
-- **GAP-4**: после успешной оплаты пользователь **не** добавляется в Telegram-группу автоматически (PRD §4.2.1.4 — ключевое обещание MVP).
+- **GAP-4**: после успешной оплаты пользователь **не** добавляется в Telegram-группу автоматически (PRD §4.2.1.4 — ключевое обещание MVP). Виден только после закрытия GAP-5.
 
 ### Прочее
 

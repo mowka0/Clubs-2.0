@@ -57,6 +57,27 @@
 
 ---
 
+## GAP-5: Flow вступления не зовёт createInvoice (payment отключён от join)
+
+**PRD §4.2.1.3:** «Переход к оплате через Telegram Stars» — шаг flow вступления в открытый клуб.
+**PRD §4.2.1.4:** «После успешной оплаты: пользователь автоматически добавляется в Telegram-группу клуба».
+
+**Реальность:** `MembershipController.POST /api/clubs/{id}/join` → `MembershipService.joinOpenClub` создаёт membership напрямую **без проверки цены и без invoice**. `PaymentService.createInvoice` существует, но не вызывается нигде в кодовой базе (`grep -r 'createInvoice' backend/src/main/kotlin` даёт только определение). Аналогично `MembershipService.joinByInviteCode`.
+
+**Impact:** платные клубы де-факто работают как бесплатные. Invoice никогда не приходит, `handleSuccessfulPayment` — dead code в текущем состоянии прода.
+
+**Что нужно:**
+- `MembershipService.joinOpenClub` (и `joinByInviteCode`): если `club.subscription_price > 0` → **не создавать** membership, вместо этого зовём `paymentService.createInvoice(userId, clubId)` и возвращаем HTTP 202 / DTO со статусом «pending_payment». Если `== 0` (free club) — текущее поведение (создаём `active` membership сразу).
+- `handleSuccessfulPayment` уже корректно создаёт membership при активации (рефакторинг `feature/refactor-payment` это закрыл) — т.е. вторая половина flow уже работает, надо только подключить первую.
+- Frontend: на ответ «pending_payment» показывать пользователю подсказку «ждём оплату в боте».
+
+**Scope:** отдельная bugfix-ветка `bugfix/wire-payment-to-join`. Меньше фич чем GAP-1/2/3/4, но критичнее — блокирует всю монетизацию MVP.
+
+**Связанные GAP:**
+- После закрытия GAP-5 появится реальный flow оплаты → станет видно отсутствие GAP-4 (авто-invite в TG-группу после `handleSuccessfulPayment`).
+
+---
+
 ## GAP-4: Автоматическое добавление в Telegram-группу после оплаты
 
 **PRD §4.2.1.4:** «После успешной оплаты: пользователь автоматически добавляется в Telegram-группу клуба и получает доступ к календарю событий в Mini App.»
