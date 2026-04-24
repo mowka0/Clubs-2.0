@@ -1,5 +1,5 @@
 import { FC, useCallback, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   List,
   Section,
@@ -12,13 +12,16 @@ import {
   Badge,
   Modal,
   Input,
+  Textarea,
   Checkbox,
   TabsList,
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
+import { AvatarUpload } from '../components/AvatarUpload';
 import { getClubMembers, getMemberProfile, getClubApplications, approveApplication, rejectApplication } from '../api/membership';
 import { getClubEvents, createEvent, markAttendance, getFinances, getEvent } from '../api/events';
-import { getClub } from '../api/clubs';
+import { getClub, updateClub, deleteClub } from '../api/clubs';
+import type { UpdateClubBody } from '../api/clubs';
 import type { CreateEventBody } from '../api/events';
 import type {
   MemberListItemDto,
@@ -30,13 +33,14 @@ import type {
 } from '../types/api';
 import { formatDatetime } from '../utils/formatters';
 
-type TabKey = 'members' | 'applications' | 'events' | 'finances';
+type TabKey = 'members' | 'applications' | 'events' | 'finances' | 'settings';
 
 const TAB_LABELS: Record<TabKey, string> = {
   members: 'Участники',
   applications: 'Заявки',
   events: 'События',
   finances: 'Финансы',
+  settings: 'Настройки',
 };
 
 function hoursRemaining(createdAt: string | null): number | null {
@@ -678,11 +682,228 @@ const FinancesTab: FC<{ clubId: string }> = ({ clubId }) => {
   );
 };
 
+// ---- Settings Tab ----
+
+const CATEGORY_LABELS_RU: Record<string, string> = {
+  sport: 'Спорт', creative: 'Творчество', food: 'Еда',
+  board_games: 'Настолки', cinema: 'Кино', education: 'Образование',
+  travel: 'Путешествия', other: 'Другое',
+};
+const ACCESS_LABELS_RU: Record<string, string> = {
+  open: 'Открытый', closed: 'По заявке', private: 'Приватный',
+};
+
+interface SettingsTabProps {
+  club: ClubDetailDto;
+  onUpdated: (club: ClubDetailDto) => void;
+  onDeleted: () => void;
+}
+
+const SettingsTab: FC<SettingsTabProps> = ({ club, onUpdated, onDeleted }) => {
+  const [name, setName] = useState(club.name);
+  const [city, setCity] = useState(club.city);
+  const [district, setDistrict] = useState(club.district ?? '');
+  const [memberLimit, setMemberLimit] = useState(String(club.memberLimit));
+  const [subscriptionPrice, setSubscriptionPrice] = useState(String(club.subscriptionPrice));
+  const [description, setDescription] = useState(club.description);
+  const [rules, setRules] = useState(club.rules ?? '');
+  const [applicationQuestion, setApplicationQuestion] = useState(club.applicationQuestion ?? '');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(club.avatarUrl ?? null);
+
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const dirty =
+    name !== club.name ||
+    city !== club.city ||
+    district !== (club.district ?? '') ||
+    memberLimit !== String(club.memberLimit) ||
+    subscriptionPrice !== String(club.subscriptionPrice) ||
+    description !== club.description ||
+    rules !== (club.rules ?? '') ||
+    applicationQuestion !== (club.applicationQuestion ?? '') ||
+    avatarUrl !== (club.avatarUrl ?? null);
+
+  const handleSave = async () => {
+    setError(null);
+
+    // Basic validation (server does full Bean Validation)
+    if (name.trim().length < 1 || name.trim().length > 60) {
+      setError('Название: 1–60 символов');
+      return;
+    }
+    if (!city.trim()) {
+      setError('Укажите город');
+      return;
+    }
+    const limit = Number(memberLimit);
+    if (!Number.isInteger(limit) || limit < 10 || limit > 80) {
+      setError('Лимит участников: 10–80');
+      return;
+    }
+    const price = Number(subscriptionPrice);
+    if (!Number.isInteger(price) || price < 0) {
+      setError('Цена: целое число >= 0');
+      return;
+    }
+    if (description.trim().length < 1 || description.trim().length > 500) {
+      setError('Описание: 1–500 символов');
+      return;
+    }
+
+    // Backend contract: for nullable-in-DB fields (district, avatarUrl, rules, applicationQuestion)
+    // an omitted key means "leave as is", a blank string means "clear to NULL".
+    // That's why we send '' (not null/undefined) when the user clears the field.
+    const payload: UpdateClubBody = {};
+    if (name !== club.name) payload.name = name.trim();
+    if (city !== club.city) payload.city = city.trim();
+    if (district !== (club.district ?? '')) payload.district = district.trim();
+    if (limit !== club.memberLimit) payload.memberLimit = limit;
+    if (price !== club.subscriptionPrice) payload.subscriptionPrice = price;
+    if (description !== club.description) payload.description = description.trim();
+    if (rules !== (club.rules ?? '')) payload.rules = rules.trim();
+    if (applicationQuestion !== (club.applicationQuestion ?? '')) {
+      payload.applicationQuestion = applicationQuestion.trim();
+    }
+    if (avatarUrl !== (club.avatarUrl ?? null)) payload.avatarUrl = avatarUrl ?? '';
+
+    setSaving(true);
+    try {
+      const updated = await updateClub(club.id, payload);
+      onUpdated(updated);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteClub(club.id);
+      onDeleted();
+    } catch (e) {
+      setError((e as Error).message);
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <>
+      <Section header="Аватар">
+        <div style={{ padding: 16 }}>
+          <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} disabled={saving || deleting} />
+        </div>
+      </Section>
+
+      <Section header="Основное">
+        <Input header="Название" value={name} onChange={(e) => setName(e.target.value)} />
+        <Input header="Город" value={city} onChange={(e) => setCity(e.target.value)} />
+        <Input header="Район (опционально)" value={district} onChange={(e) => setDistrict(e.target.value)} />
+        <Input
+          header="Лимит участников (10–80)"
+          type="number"
+          value={memberLimit}
+          onChange={(e) => setMemberLimit(e.target.value)}
+        />
+        <Input
+          header="Цена подписки (Stars/мес, 0 = бесплатно)"
+          type="number"
+          value={subscriptionPrice}
+          onChange={(e) => setSubscriptionPrice(e.target.value)}
+        />
+      </Section>
+
+      <Section header="Описание и правила">
+        <Textarea
+          header="Описание"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+        <Textarea
+          header="Правила клуба (опционально)"
+          value={rules}
+          onChange={(e) => setRules(e.target.value)}
+        />
+        {club.accessType === 'closed' && (
+          <Input
+            header="Вопрос для заявки (опционально)"
+            value={applicationQuestion}
+            onChange={(e) => setApplicationQuestion(e.target.value)}
+          />
+        )}
+      </Section>
+
+      <Section header="Нельзя изменить">
+        <Cell subtitle="Категория">{CATEGORY_LABELS_RU[club.category] ?? club.category}</Cell>
+        <Cell subtitle="Тип доступа">{ACCESS_LABELS_RU[club.accessType] ?? club.accessType}</Cell>
+        <div style={{ padding: '0 16px 12px', fontSize: 12, color: 'var(--tgui--hint_color)' }}>
+          Смена категории или типа доступа не поддерживается.
+        </div>
+      </Section>
+
+      {error && (
+        <div style={{ padding: '0 16px 8px', color: 'var(--tgui--destructive_text_color, #d00)', fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+
+      <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <Button size="l" stretched onClick={handleSave} disabled={!dirty || saving || deleting}>
+          {saving ? <Spinner size="s" /> : 'Сохранить'}
+        </Button>
+      </div>
+
+      <Section header="Опасная зона">
+        <div style={{ padding: 16 }}>
+          <Button
+            size="l"
+            stretched
+            mode="outline"
+            onClick={() => setShowDeleteModal(true)}
+            disabled={saving || deleting}
+          >
+            &#x1F5D1; Удалить клуб
+          </Button>
+        </div>
+      </Section>
+
+      <Modal open={showDeleteModal} onOpenChange={(v) => !deleting && setShowDeleteModal(v)}>
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Text weight="2">Удалить клуб «{club.name}»?</Text>
+          <Text>
+            Клуб скроется из каталога и «Моих клубов». {club.memberCount} активных участников потеряют доступ.
+            Это действие необратимо.
+          </Text>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <Button
+              size="m"
+              stretched
+              mode="outline"
+              onClick={() => setShowDeleteModal(false)}
+              disabled={deleting}
+            >
+              Отмена
+            </Button>
+            <Button size="m" stretched onClick={handleDelete} disabled={deleting}>
+              {deleting ? <Spinner size="s" /> : 'Удалить'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
+  );
+};
+
 // ---- Main Page ----
 
 export const OrganizerClubManage: FC = () => {
   useBackButton(true);
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabKey>('members');
   const [club, setClub] = useState<ClubDetailDto | null>(null);
   const [clubLoading, setClubLoading] = useState(true);
@@ -711,6 +932,15 @@ export const OrganizerClubManage: FC = () => {
         return <EventsTab clubId={clubId} />;
       case 'finances':
         return <FinancesTab clubId={clubId} />;
+      case 'settings':
+        if (!club) return <div style={{ padding: 16 }}><Spinner size="m" /></div>;
+        return (
+          <SettingsTab
+            club={club}
+            onUpdated={setClub}
+            onDeleted={() => navigate('/clubs')}
+          />
+        );
     }
   };
 

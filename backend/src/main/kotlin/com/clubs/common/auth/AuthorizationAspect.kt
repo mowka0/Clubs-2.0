@@ -24,10 +24,14 @@ class AuthorizationAspect(private val dsl: DSLContext) {
         val userId = currentUserId()
         val clubId = extractUUID(joinPoint, requiresMembership.clubIdParam)
         val exists = dsl.fetchExists(
-            MEMBERSHIPS,
-            MEMBERSHIPS.USER_ID.eq(userId)
-                .and(MEMBERSHIPS.CLUB_ID.eq(clubId))
-                .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active))
+            dsl.selectOne().from(MEMBERSHIPS)
+                .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))
+                .where(
+                    MEMBERSHIPS.USER_ID.eq(userId)
+                        .and(MEMBERSHIPS.CLUB_ID.eq(clubId))
+                        .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active))
+                        .and(CLUBS.IS_ACTIVE.eq(true))
+                )
         )
         if (!exists) throw ForbiddenException("You must be an active member of this club")
         return joinPoint.proceed()
@@ -37,7 +41,9 @@ class AuthorizationAspect(private val dsl: DSLContext) {
     fun checkOrganizer(joinPoint: ProceedingJoinPoint, requiresOrganizer: RequiresOrganizer): Any? {
         val userId = currentUserId()
         val clubId = extractUUID(joinPoint, requiresOrganizer.clubIdParam)
-        val club = dsl.selectFrom(CLUBS).where(CLUBS.ID.eq(clubId)).fetchOne()
+        val club = dsl.selectFrom(CLUBS)
+            .where(CLUBS.ID.eq(clubId).and(CLUBS.IS_ACTIVE.eq(true)))
+            .fetchOne()
             ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club organizer can perform this action")
         return joinPoint.proceed()

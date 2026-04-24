@@ -13,6 +13,7 @@ import {
   Placeholder,
 } from '@telegram-apps/telegram-ui';
 import { useClubsStore } from '../store/useClubsStore';
+import { AvatarUpload } from '../components/AvatarUpload';
 import { createClub, getClub } from '../api/clubs';
 import type { CreateClubBody } from '../api/clubs';
 import type { ClubDetailDto } from '../types/api';
@@ -50,6 +51,7 @@ const INITIAL_FORM: FormData = {
 export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) => void }> = ({ onClose, onCreated }) => {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -79,6 +81,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
         district: form.district.trim() || undefined,
         memberLimit: Number(form.memberLimit),
         subscriptionPrice: Number(form.subscriptionPrice),
+        avatarUrl: avatarUrl ?? undefined,
         rules: form.rules.trim() || undefined,
         applicationQuestion: (form.accessType === 'closed' && form.applicationQuestion.trim())
           ? form.applicationQuestion.trim()
@@ -149,6 +152,10 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
 
       {step === 3 && (
         <Section>
+          <div style={{ padding: 16 }}>
+            <div style={{ fontSize: 13, color: 'var(--tgui--hint_color)', marginBottom: 8 }}>Аватар (необязательно)</div>
+            <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} disabled={submitting} />
+          </div>
           <Textarea header="Описание клуба *" placeholder="Расскажите о своём клубе (10-500 символов)" value={form.description} onChange={(e) => update('description', e.target.value)} />
           <Textarea header="Правила (необязательно)" placeholder="Правила сообщества" value={form.rules} onChange={(e) => update('rules', e.target.value)} />
         </Section>

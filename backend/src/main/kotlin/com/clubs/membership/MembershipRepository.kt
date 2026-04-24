@@ -63,12 +63,15 @@ class MembershipRepository(private val dsl: DSLContext) {
             .fetch()
 
     fun findByUserId(userId: UUID): List<MembershipsRecord> =
-        dsl.selectFrom(MEMBERSHIPS)
+        dsl.select(*MEMBERSHIPS.fields())
+            .from(MEMBERSHIPS)
+            .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))
             .where(
                 MEMBERSHIPS.USER_ID.eq(userId)
                     .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period))
+                    .and(CLUBS.IS_ACTIVE.eq(true))
             )
-            .fetch()
+            .fetchInto(MembershipsRecord::class.java)
 
     fun activateSubscription(userId: UUID, clubId: UUID, expiresAt: OffsetDateTime): UUID {
         val id = UUID.randomUUID()

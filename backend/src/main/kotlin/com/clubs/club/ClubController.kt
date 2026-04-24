@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -67,6 +68,16 @@ class ClubController(
     ): ResponseEntity<ClubDetailDto> {
         log.info("Update club: id={} userId={}", id, user.userId)
         return ResponseEntity.ok(clubService.updateClub(id, request, user.userId))
+    }
+
+    @DeleteMapping("/{id}")
+    fun deleteClub(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<Void> {
+        log.info("Delete club: id={} userId={}", id, user.userId)
+        clubService.deleteClub(id, user.userId)
+        return ResponseEntity.noContent().build()
     }
 
     @RequiresOrganizer
