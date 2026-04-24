@@ -16,6 +16,7 @@ import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
 @Service
@@ -35,6 +36,7 @@ class ClubService(
         return clubRepository.findAll(filters)
     }
 
+    @Transactional
     fun createClub(request: CreateClubRequest, ownerId: UUID): ClubDetailDto {
         validateCategory(request.category)
         validateAccessType(request.accessType)
@@ -46,7 +48,10 @@ class ClubService(
         val club = clubRepository.create(request, ownerId, inviteCode)
         log.info("Club created: id={} name='{}' category={} accessType={} ownerId={}", club.id, club.name, request.category, request.accessType, ownerId)
 
-        // Auto-create organizer membership for the owner
+        // Auto-create organizer membership for the owner.
+        // Wrapped in the same @Transactional scope as clubRepository.create() above —
+        // if this INSERT fails the club row rolls back, preventing orphaned clubs
+        // without an organizer membership.
         dsl.insertInto(MEMBERSHIPS)
             .set(MEMBERSHIPS.USER_ID, ownerId)
             .set(MEMBERSHIPS.CLUB_ID, club.id)
@@ -62,6 +67,7 @@ class ClubService(
         return club.toDto()
     }
 
+    @Transactional
     fun regenerateInviteLink(clubId: UUID, userId: UUID): ClubDetailDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club owner can regenerate invite link")
@@ -76,6 +82,7 @@ class ClubService(
         return club.toDto()
     }
 
+    @Transactional
     fun linkTelegramGroup(clubId: UUID, telegramGroupId: Long, userId: UUID): ClubDetailDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club owner can link a Telegram group")
@@ -87,6 +94,7 @@ class ClubService(
         return clubRepository.findById(clubId)!!.toDto()
     }
 
+    @Transactional
     fun updateClub(id: UUID, request: UpdateClubRequest, userId: UUID): ClubDetailDto {
         val club = clubRepository.findById(id) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club owner can update it")
@@ -95,6 +103,7 @@ class ClubService(
         return updated.toDto()
     }
 
+    @Transactional
     fun deleteClub(id: UUID, userId: UUID) {
         val club = clubRepository.findById(id) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club owner can delete it")

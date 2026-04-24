@@ -47,7 +47,10 @@ management:
 
 jwt:
   secret: ${JWT_SECRET:dev-secret-key-that-is-at-least-32-chars}
-  expiration: ${JWT_EXPIRATION:86400000}
+  # 1 hour TTL per security.md. Frontend apiClient has 401-retry with fresh
+  # initData (authenticate() + authInFlight dedup), so users get a seamless
+  # re-auth without being logged out. Override via JWT_EXPIRATION (ms).
+  expiration: ${JWT_EXPIRATION:3600000}
 
 telegram:
   bot-token: ${TELEGRAM_BOT_TOKEN:}
