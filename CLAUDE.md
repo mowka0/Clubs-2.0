@@ -167,7 +167,10 @@ Telegram Mini App для создания и управления платным
 3. Закоммитить все изменения (conventional commits) — включая документацию
 4. Запушить ветку (если были новые коммиты в п.1-3)
 5. Создать PR на GitHub через `gh pr create`
-6. Влить PR в master через `gh pr merge --merge` (БЕЗ флага `--delete-branch`)
+6. Влить PR в master через `gh pr merge --squash` (БЕЗ флага `--delete-branch`).
+   Squash намеренно: feature/bugfix-ветки обычно содержат итеративные коммиты
+   (ловля багов на staging, правки по ревью), и в `git log master` хочется видеть
+   одну запись на фичу. Развёрнутое описание всё равно есть в PR body.
    → GitHub Actions автоматически задеплоит master в production
 7. Переключиться на `master`, сделать `git pull`
 8. Сообщить статус: что закоммичено, ссылка на PR, что обновлено в доках
