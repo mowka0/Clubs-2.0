@@ -120,7 +120,7 @@ const onTabClick = (path: string) => {
 | `pages/OrganizerClubManage.tsx` | `handleReject(appId)` (строка 234) | `impact('medium')` | `notify('warning')` | `notify('error')` |
 | `pages/OrganizerClubManage.tsx` | `handleCreateEvent` (строка 436) | `impact('medium')` | `notify('success')` | `notify('error')` |
 | `pages/OrganizerClubManage.tsx` | `handleMarkAttendance` (строка 472) | `impact('medium')` | `notify('success')` | `notify('error')` |
-| `pages/OrganizerClubManage.tsx` | `handleSave` (строка 769) — сохранение настроек клуба | `impact('medium')` | `notify('success')` | `notify('error')` |
+| `pages/OrganizerClubManage.tsx` | `handleSave` (строка 769) — сохранение настроек клуба. **Также** на каждом early-return клиентской валидации — `notify('error')` (через локальный `fail(msg)` хелпер), иначе клик «Сохранить» с невалидным значением даёт только текст ошибки без тактильного отклика | `impact('medium')` | `notify('success')` + Toast «Изменения сохранены» (см. § Side-effect) | `notify('error')` |
 | `pages/OrganizerClubManage.tsx` | `handleDelete` (строка 826) — удаление клуба | `impact('heavy')` | `notify('success')` | `notify('error')` |
 | `pages/OrganizerClubManage.tsx` | open delete-modal (строка 912) | `impact('light')` (open) / no haptic (close через X или «Отмена», строка 932) | — | — |
 
@@ -135,16 +135,18 @@ const onTabClick = (path: string) => {
 | `components/AvatarUpload.tsx` | ошибка валидации (MIME/size) или upload | `notify('error')` | Каждая ветка ошибки |
 | `components/AvatarUpload.tsx` | «Убрать» (строка 101) | `impact('light')` | Удаление preview |
 
-### Side-effect требования к error-веткам
+### Side-effect требования к error-веткам и тихим success-веткам
 
-`notify('error')` — это **тактильный сигнал**, не пользовательская обратная связь. Глухая вибрация без текста ошибки = баг с точки зрения юзера: он не понимает, что пошло не так и что делать.
+`notify('error' | 'success')` — это **тактильный сигнал**, не пользовательская обратная связь. Глухая вибрация без визуального ответа = баг с точки зрения юзера: он не понимает, что произошло.
 
-Правило: каждый `.catch(...)`-блок, в котором есть `haptic.notify('error')` или `haptic.notify('warning')`, **обязан** показать сообщение пользователю — inline-текст в той же секции/модалке. Паттерн: локальный `useState<string | null>` + рендер `{error && <div style={{ color: 'var(--tgui--destructive_text_color)' }}>{error}</div>}`.
+**Правило 1 (error):** каждый `.catch(...)`-блок, в котором есть `haptic.notify('error')` или `haptic.notify('warning')`, **обязан** показать сообщение пользователю — inline-текст в той же секции/модалке. Паттерн: локальный `useState<string | null>` + рендер `{error && <div style={{ color: 'var(--tgui--destructive_text_color)' }}>{error}</div>}`. То же — для **client-side валидации** (early-return до API-вызова): фон `setError(msg) + haptic.notify('error')`, инкапсулированный в локальный `fail(msg)` хелпер, чтобы все ветки валидации синхронно давали и текст и тактильный сигнал.
+
+**Правило 2 (success без перехода):** если success-путь **не** меняет страницу/модалку (юзер остаётся на том же экране — типичный пример: `handleSave` настроек клуба), `notify('success')` **обязан** сопровождаться transient UI-фидбеком — `<Toast>` с текстом подтверждения. Если success-путь делает navigate / закрывает модалку — Toast не нужен, переход сам по себе сигнал.
 
 Дополнительно (рекомендуется для новых обработчиков): `console.error('handleX failed', e)` для прод-диагностики — см. [`.claude/rules/error-handling.md`](../../.claude/rules/error-handling.md) § «Логирование ошибок».
 
 Текущие реализации паттерна:
-- `pages/OrganizerClubManage.tsx` — `actionError` (строка 201, рендер 265-267) для approve/reject; `attendanceError` (строка 419, рендер 648-650) для отметки посещений. Оба — с `console.error`.
+- `pages/OrganizerClubManage.tsx` — `actionError` (строка 201, рендер 265-267) для approve/reject; `attendanceError` (строка 419, рендер 648-650) для отметки посещений. Оба — с `console.error`. `SettingsTab` (`handleSave`): `fail(msg)` хелпер для валидации + `savedToast` стейт + `<Toast message="Изменения сохранены" />` на success.
 - `pages/ClubPage.tsx` — `joinError` (строка 84, рендер 239-243 и 269-273) для handleJoin / handleApply.
 - `pages/EventPage.tsx`, `pages/InvitePage.tsx`, `pages/OrganizerPage.tsx` — собственные локальные `error`/`setError`-стейты с inline-рендером.
 

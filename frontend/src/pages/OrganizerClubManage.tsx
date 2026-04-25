@@ -19,6 +19,7 @@ import {
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { AvatarUpload } from '../components/AvatarUpload';
+import { Toast } from '../components/Toast';
 import { getClubMembers, getMemberProfile, getClubApplications, approveApplication, rejectApplication } from '../api/membership';
 import { getClubEvents, createEvent, markAttendance, getFinances, getEvent } from '../api/events';
 import { getClub, updateClub, deleteClub } from '../api/clubs';
@@ -752,6 +753,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onUpdated, onDeleted }) => {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedToast, setSavedToast] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -769,27 +771,33 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onUpdated, onDeleted }) => {
   const handleSave = async () => {
     setError(null);
 
+    // Validation failures share the same UX: inline error + error haptic.
+    const fail = (msg: string) => {
+      setError(msg);
+      haptic.notify('error');
+    };
+
     // Basic validation (server does full Bean Validation)
     if (name.trim().length < 1 || name.trim().length > 60) {
-      setError('Название: 1–60 символов');
+      fail('Название: 1–60 символов');
       return;
     }
     if (!city.trim()) {
-      setError('Укажите город');
+      fail('Укажите город');
       return;
     }
     const limit = Number(memberLimit);
     if (!Number.isInteger(limit) || limit < 10 || limit > 80) {
-      setError('Лимит участников: 10–80');
+      fail('Лимит участников: 10–80');
       return;
     }
     const price = Number(subscriptionPrice);
     if (!Number.isInteger(price) || price < 0) {
-      setError('Цена: целое число >= 0');
+      fail('Цена: целое число >= 0');
       return;
     }
     if (description.trim().length < 1 || description.trim().length > 500) {
-      setError('Описание: 1–500 символов');
+      fail('Описание: 1–500 символов');
       return;
     }
 
@@ -814,6 +822,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onUpdated, onDeleted }) => {
     try {
       const updated = await updateClub(club.id, payload);
       haptic.notify('success');
+      setSavedToast('Изменения сохранены');
       onUpdated(updated);
     } catch (e) {
       setError((e as Error).message);
@@ -902,6 +911,8 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onUpdated, onDeleted }) => {
           {saving ? <Spinner size="s" /> : 'Сохранить'}
         </Button>
       </div>
+
+      {savedToast && <Toast message={savedToast} onClose={() => setSavedToast(null)} />}
 
       <Section header="Опасная зона">
         <div style={{ padding: 16 }}>
