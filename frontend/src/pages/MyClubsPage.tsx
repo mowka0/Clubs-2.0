@@ -1,9 +1,11 @@
-import { FC, useEffect, useState } from 'react';
+import { FC, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useQueries } from '@tanstack/react-query';
 import { List, Section, Cell, Spinner, Placeholder } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
-import { useClubsStore } from '../store/useClubsStore';
-import { useApplicationsStore } from '../store/useApplicationsStore';
+import { useMyClubsQuery } from '../queries/clubs';
+import { useMyApplicationsQuery } from '../queries/applications';
+import { queryKeys } from '../queries/queryKeys';
 import { Toast } from '../components/Toast';
 import { getClub } from '../api/clubs';
 import type { ClubDetailDto } from '../types/api';
@@ -34,9 +36,12 @@ export const MyClubsPage: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const haptic = useHaptic();
-  const { myClubs, loading: clubsLoading, fetchMyClubs } = useClubsStore();
-  const { applications, loading: appsLoading, fetchMyApplications } = useApplicationsStore();
-  const [clubDetails, setClubDetails] = useState<Record<string, ClubDetailDto>>({});
+
+  const myClubsQuery = useMyClubsQuery();
+  const applicationsQuery = useMyApplicationsQuery();
+
+  const myClubs = myClubsQuery.data ?? [];
+  const applications = applicationsQuery.data ?? [];
 
   // Read one-shot toast from navigation state (e.g. "Клуб X удалён" after delete).
   // Clear it after first render so a refresh/back doesn't show the same toast twice.
@@ -48,26 +53,29 @@ export const MyClubsPage: FC = () => {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    fetchMyClubs();
-    fetchMyApplications();
-  }, [fetchMyClubs, fetchMyApplications]);
+  // Dedup club ids from both memberships and applications so each club is fetched once
+  // and shares cache with ClubPage / OrganizerPage.
+  const clubIds = useMemo(() => {
+    const ids = new Set<string>();
+    myClubs.forEach((m) => ids.add(m.clubId));
+    applications.forEach((a) => ids.add(a.clubId));
+    return Array.from(ids);
+  }, [myClubs, applications]);
 
-  // Fetch club details for memberships
-  useEffect(() => {
-    const membershipClubIds = myClubs.map((m) => m.clubId).filter((id) => !clubDetails[id]);
-    const appClubIds = applications.map((a) => a.clubId).filter((id) => !clubDetails[id]);
-    const allIds = [...new Set([...membershipClubIds, ...appClubIds])];
-    if (allIds.length === 0) return;
+  const clubDetailQueries = useQueries({
+    queries: clubIds.map((id) => ({
+      queryKey: queryKeys.clubs.detail(id),
+      queryFn: () => getClub(id),
+    })),
+  });
 
-    allIds.forEach((id) => {
-      getClub(id)
-        .then((club) => setClubDetails((prev) => ({ ...prev, [id]: club })))
-        .catch(() => {});
-    });
-  }, [myClubs, applications]); // eslint-disable-line react-hooks/exhaustive-deps
+  const clubDetails: Record<string, ClubDetailDto> = {};
+  clubIds.forEach((id, idx) => {
+    const q = clubDetailQueries[idx];
+    if (q?.data) clubDetails[id] = q.data;
+  });
 
-  const loading = clubsLoading || appsLoading;
+  const loading = myClubsQuery.isPending || applicationsQuery.isPending;
 
   return (
     <List>

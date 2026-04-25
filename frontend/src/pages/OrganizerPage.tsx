@@ -1,5 +1,6 @@
-import { FC, useEffect, useState } from 'react';
+import { FC, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueries } from '@tanstack/react-query';
 import {
   List,
   Section,
@@ -13,9 +14,10 @@ import {
   Placeholder,
 } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
-import { useClubsStore } from '../store/useClubsStore';
+import { useCreateClubMutation, useMyClubsQuery } from '../queries/clubs';
+import { queryKeys } from '../queries/queryKeys';
 import { AvatarUpload } from '../components/AvatarUpload';
-import { createClub, getClub } from '../api/clubs';
+import { getClub } from '../api/clubs';
 import type { CreateClubBody } from '../api/clubs';
 import type { ClubDetailDto } from '../types/api';
 import { validateStep } from '../utils/validators';
@@ -51,11 +53,13 @@ const INITIAL_FORM: FormData = {
 
 export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) => void }> = ({ onClose, onCreated }) => {
   const haptic = useHaptic();
+  const createClubMutation = useCreateClubMutation();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+
+  const submitting = createClubMutation.isPending;
 
   const update = (field: keyof FormData, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
@@ -69,36 +73,36 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
     setStep((s) => s + 1);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     const err = validateStep(step, form);
     if (err) { setError(err); return; }
     haptic.impact('heavy');
-    setSubmitting(true);
     setError(null);
-    try {
-      const body: CreateClubBody = {
-        name: form.name.trim(),
-        description: form.description.trim(),
-        category: form.category,
-        accessType: form.accessType,
-        city: form.city.trim(),
-        district: form.district.trim() || undefined,
-        memberLimit: Number(form.memberLimit),
-        subscriptionPrice: Number(form.subscriptionPrice),
-        avatarUrl: avatarUrl ?? undefined,
-        rules: form.rules.trim() || undefined,
-        applicationQuestion: (form.accessType === 'closed' && form.applicationQuestion.trim())
-          ? form.applicationQuestion.trim()
-          : undefined,
-      };
-      const club = await createClub(body);
-      haptic.notify('success');
-      onCreated(club.id);
-    } catch (e) {
-      setError((e as Error).message);
-      haptic.notify('error');
-      setSubmitting(false);
-    }
+    const body: CreateClubBody = {
+      name: form.name.trim(),
+      description: form.description.trim(),
+      category: form.category,
+      accessType: form.accessType,
+      city: form.city.trim(),
+      district: form.district.trim() || undefined,
+      memberLimit: Number(form.memberLimit),
+      subscriptionPrice: Number(form.subscriptionPrice),
+      avatarUrl: avatarUrl ?? undefined,
+      rules: form.rules.trim() || undefined,
+      applicationQuestion: (form.accessType === 'closed' && form.applicationQuestion.trim())
+        ? form.applicationQuestion.trim()
+        : undefined,
+    };
+    createClubMutation.mutate(body, {
+      onSuccess: (club) => {
+        haptic.notify('success');
+        onCreated(club.id);
+      },
+      onError: (e) => {
+        setError(e.message);
+        haptic.notify('error');
+      },
+    });
   };
 
   return (
@@ -205,38 +209,38 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
 export const OrganizerPage: FC = () => {
   const navigate = useNavigate();
   const haptic = useHaptic();
-  const { myClubs, loading, fetchMyClubs } = useClubsStore();
+  const myClubsQuery = useMyClubsQuery();
   const [showModal, setShowModal] = useState(false);
-  const [clubDetails, setClubDetails] = useState<Record<string, ClubDetailDto>>({});
 
-  useEffect(() => {
-    fetchMyClubs();
-  }, [fetchMyClubs]);
+  const myClubs = myClubsQuery.data ?? [];
+  const ownedClubs = useMemo(() => myClubs.filter((m) => m.role === 'organizer'), [myClubs]);
 
-  const ownedClubs = myClubs.filter((m) => m.role === 'organizer');
+  const ownedClubIds = ownedClubs.map((m) => m.clubId);
+  const clubDetailQueries = useQueries({
+    queries: ownedClubIds.map((id) => ({
+      queryKey: queryKeys.clubs.detail(id),
+      queryFn: () => getClub(id),
+    })),
+  });
 
-  // Load club names for owned clubs
-  useEffect(() => {
-    const missing = ownedClubs.map((m) => m.clubId).filter((id) => !clubDetails[id]);
-    if (missing.length === 0) return;
-    missing.forEach((id) => {
-      getClub(id)
-        .then((club) => setClubDetails((prev) => ({ ...prev, [id]: club })))
-        .catch(() => {});
-    });
-  }, [ownedClubs]); // eslint-disable-line react-hooks/exhaustive-deps
+  const clubDetails: Record<string, ClubDetailDto> = {};
+  ownedClubIds.forEach((id, idx) => {
+    const q = clubDetailQueries[idx];
+    if (q?.data) clubDetails[id] = q.data;
+  });
 
-  const handleCreated = async (id: string) => {
+  const handleCreated = (id: string) => {
     setShowModal(false);
-    await fetchMyClubs();
+    // Cache for clubs.my() is invalidated by useCreateClubMutation onSuccess —
+    // navigation triggers OrganizerClubManage which fetches the new club fresh.
     navigate(`/clubs/${id}/manage`);
   };
 
   return (
     <List>
       <Section header="Мои клубы">
-        {loading && <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Spinner size="m" /></div>}
-        {!loading && ownedClubs.length === 0 && (
+        {myClubsQuery.isPending && <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Spinner size="m" /></div>}
+        {!myClubsQuery.isPending && ownedClubs.length === 0 && (
           <Placeholder description="У вас пока нет клубов. Создайте первый!" />
         )}
         {ownedClubs.map((m) => (

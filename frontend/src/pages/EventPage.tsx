@@ -1,4 +1,4 @@
-import { FC, useCallback, useEffect, useState } from 'react';
+import { FC, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   List,
@@ -14,13 +14,12 @@ import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import {
-  getEvent,
-  castVote,
-  getMyVote,
-  confirmParticipation,
-  declineParticipation,
-} from '../api/events';
-import type { EventDetailDto } from '../types/api';
+  useCastVoteMutation,
+  useConfirmParticipationMutation,
+  useDeclineParticipationMutation,
+  useEventQuery,
+  useMyVoteQuery,
+} from '../queries/events';
 
 const VOTE_LABELS: Record<string, string> = {
   going: 'Пойду',
@@ -48,104 +47,62 @@ export const EventPage: FC = () => {
   const haptic = useHaptic();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  const [event, setEvent] = useState<EventDetailDto | null>(null);
-  const [myVote, setMyVote] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [voting, setVoting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const eventQuery = useEventQuery(isAuthenticated ? id : undefined);
+  const myVoteQuery = useMyVoteQuery(isAuthenticated ? id : undefined);
 
-  const loadData = useCallback(async () => {
-    if (!id) return;
-    try {
-      const [eventData, voteData] = await Promise.all([
-        getEvent(id),
-        getMyVote(id),
-      ]);
-      setEvent(eventData);
-      setMyVote(voteData.vote);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }, [id]);
+  const castVoteMutation = useCastVoteMutation();
+  const confirmMutation = useConfirmParticipationMutation();
+  const declineMutation = useDeclineParticipationMutation();
 
-  useEffect(() => {
-    if (!isAuthenticated) return;
+  const [actionError, setActionError] = useState<string | null>(null);
 
-    let cancelled = false;
+  const event = eventQuery.data;
+  const myVote = myVoteQuery.data?.vote ?? null;
+  const loading = eventQuery.isPending || myVoteQuery.isPending;
+  const voting =
+    castVoteMutation.isPending || confirmMutation.isPending || declineMutation.isPending;
+  const error = actionError ?? eventQuery.error?.message;
 
-    setLoading(true);
-    setError(null);
-
-    loadData().finally(() => {
-      if (!cancelled) setLoading(false);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [loadData, isAuthenticated]);
-
-  const handleVote = async (vote: 'going' | 'maybe' | 'not_going') => {
+  const handleVote = (vote: 'going' | 'maybe' | 'not_going') => {
     if (!id || voting) return;
     haptic.select();
-    setVoting(true);
-    try {
-      await castVote(id, vote);
-      const [eventData, voteData] = await Promise.all([
-        getEvent(id),
-        getMyVote(id),
-      ]);
-      setEvent(eventData);
-      setMyVote(voteData.vote);
-      haptic.notify('success');
-    } catch (e) {
-      setError((e as Error).message);
-      haptic.notify('error');
-    } finally {
-      setVoting(false);
-    }
+    setActionError(null);
+    castVoteMutation.mutate(
+      { eventId: id, vote },
+      {
+        onSuccess: () => haptic.notify('success'),
+        onError: (e) => {
+          setActionError(e.message);
+          haptic.notify('error');
+        },
+      },
+    );
   };
 
-  const handleConfirm = async () => {
+  const handleConfirm = () => {
     if (!id || voting) return;
     haptic.impact('medium');
-    setVoting(true);
-    try {
-      await confirmParticipation(id);
-      const [eventData, voteData] = await Promise.all([
-        getEvent(id),
-        getMyVote(id),
-      ]);
-      setEvent(eventData);
-      setMyVote(voteData.vote);
-      haptic.notify('success');
-    } catch (e) {
-      setError((e as Error).message);
-      haptic.notify('error');
-    } finally {
-      setVoting(false);
-    }
+    setActionError(null);
+    confirmMutation.mutate(id, {
+      onSuccess: () => haptic.notify('success'),
+      onError: (e) => {
+        setActionError(e.message);
+        haptic.notify('error');
+      },
+    });
   };
 
-  const handleDecline = async () => {
+  const handleDecline = () => {
     if (!id || voting) return;
     haptic.impact('medium');
-    setVoting(true);
-    try {
-      await declineParticipation(id);
-      const [eventData, voteData] = await Promise.all([
-        getEvent(id),
-        getMyVote(id),
-      ]);
-      setEvent(eventData);
-      setMyVote(voteData.vote);
-      haptic.notify('warning');
-    } catch (e) {
-      setError((e as Error).message);
-      haptic.notify('error');
-    } finally {
-      setVoting(false);
-    }
+    setActionError(null);
+    declineMutation.mutate(id, {
+      onSuccess: () => haptic.notify('warning'),
+      onError: (e) => {
+        setActionError(e.message);
+        haptic.notify('error');
+      },
+    });
   };
 
   if (loading) {

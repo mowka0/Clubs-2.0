@@ -1,4 +1,4 @@
-import { FC, useEffect, useState } from 'react';
+import { FC, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   List,
@@ -14,14 +14,16 @@ import {
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
-import { useClubsStore } from '../store/useClubsStore';
 import { useAuthStore } from '../store/useAuthStore';
-import { getClub } from '../api/clubs';
-import { joinClub, applyToClub, getMyApplications } from '../api/membership';
-import type { ApplicationDto } from '../api/membership';
+import {
+  useApplyToClubMutation,
+  useClubQuery,
+  useJoinClubMutation,
+  useMyClubsQuery,
+} from '../queries/clubs';
+import { useMyApplicationsQuery } from '../queries/applications';
 import { ApiError } from '../api/apiClient';
 import { isPendingPayment } from '../types/api';
-import type { ClubDetailDto } from '../types/api';
 import { formatPrice } from '../utils/formatters';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -39,95 +41,85 @@ export const ClubPage: FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const haptic = useHaptic();
-  const { myClubs, fetchMyClubs } = useClubsStore();
   const { user } = useAuthStore();
 
-  const [club, setClub] = useState<ClubDetailDto | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [joining, setJoining] = useState(false);
+  const clubQuery = useClubQuery(id);
+  const myClubsQuery = useMyClubsQuery();
+  const applicationsQuery = useMyApplicationsQuery();
+
+  const joinMutation = useJoinClubMutation();
+  const applyMutation = useApplyToClubMutation();
+
   const [joinError, setJoinError] = useState<string | null>(null);
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [answerText, setAnswerText] = useState('');
   const [joinSuccess, setJoinSuccess] = useState(false);
   const [pendingPayment, setPendingPayment] = useState<{ priceStars: number; message: string } | null>(null);
-  const [myApplication, setMyApplication] = useState<ApplicationDto | null>(null);
 
-  useEffect(() => {
-    if (!id) return;
-    setLoading(true);
-    Promise.all([getClub(id), fetchMyClubs(), getMyApplications()])
-      .then(([clubData, , apps]) => {
-        setClub(clubData);
-        setMyApplication(apps.find((a) => a.clubId === id) ?? null);
-        setLoading(false);
-      })
-      .catch((e) => { setError((e as Error).message); setLoading(false); });
-  }, [id, fetchMyClubs]);
+  const club = clubQuery.data;
+  const myClubs = myClubsQuery.data ?? [];
+  const applications = applicationsQuery.data ?? [];
 
   const membership = myClubs.find((m) => m.clubId === id);
   const isMember = !!membership && membership.status === 'active';
   const isOrganizer = club?.ownerId === user?.id || membership?.role === 'organizer';
+  const myApplication = applications.find((a) => a.clubId === id) ?? null;
 
-  // On 409 the UI state is stale (another tab approved an app, another payment completed, etc.)
-  // Refetch user-visible state and let renderJoinButton recompute — no raw error for the user.
-  const refetchUserState = async () => {
-    if (!id) return;
-    const [, apps] = await Promise.all([fetchMyClubs(), getMyApplications()]);
-    setMyApplication(apps.find((a) => a.clubId === id) ?? null);
-  };
+  const joining = joinMutation.isPending || applyMutation.isPending;
 
-  const handleJoin = async () => {
+  const loading = clubQuery.isPending;
+  const error = clubQuery.error?.message;
+
+  const handleJoin = () => {
     if (!id || !club) return;
     haptic.impact('medium');
-    setJoining(true);
     setJoinError(null);
-    try {
-      const result = await joinClub(id);
-      if (isPendingPayment(result)) {
-        setPendingPayment({ priceStars: result.priceStars, message: result.message });
-      } else {
-        await fetchMyClubs();
-        setJoinSuccess(true);
-      }
-      haptic.notify('success');
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        await refetchUserState();
-      } else {
-        setJoinError((e as Error).message);
+    joinMutation.mutate(id, {
+      onSuccess: (result) => {
+        if (isPendingPayment(result)) {
+          setPendingPayment({ priceStars: result.priceStars, message: result.message });
+        } else {
+          setJoinSuccess(true);
+        }
+        haptic.notify('success');
+      },
+      onError: (e) => {
+        // On 409 the UI state is stale (another tab approved an app, payment completed elsewhere).
+        // The mutation already invalidated club + my clubs caches; treat as silent recovery.
+        if (e instanceof ApiError && e.status === 409) {
+          return;
+        }
+        setJoinError(e.message);
         haptic.notify('error');
-      }
-    } finally {
-      setJoining(false);
-    }
+      },
+    });
   };
 
-  const handleApply = async () => {
+  const handleApply = () => {
     if (!id || !club) return;
     if (club.applicationQuestion && !answerText.trim()) {
       setJoinError('Введите ответ на вопрос');
       return;
     }
     haptic.impact('medium');
-    setJoining(true);
     setJoinError(null);
-    try {
-      const created = await applyToClub(id, answerText.trim());
-      setShowApplyModal(false);
-      setMyApplication(created);
-      haptic.notify('success');
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        setShowApplyModal(false);
-        await refetchUserState();
-      } else {
-        setJoinError((e as Error).message);
-        haptic.notify('error');
-      }
-    } finally {
-      setJoining(false);
-    }
+    applyMutation.mutate(
+      { clubId: id, answerText: answerText.trim() },
+      {
+        onSuccess: () => {
+          setShowApplyModal(false);
+          haptic.notify('success');
+        },
+        onError: (e) => {
+          if (e instanceof ApiError && e.status === 409) {
+            setShowApplyModal(false);
+            return;
+          }
+          setJoinError(e.message);
+          haptic.notify('error');
+        },
+      },
+    );
   };
 
   if (loading) {

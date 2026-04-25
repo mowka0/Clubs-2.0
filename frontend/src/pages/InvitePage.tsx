@@ -1,11 +1,9 @@
-import { FC, useEffect, useState } from 'react';
+import { FC, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { List, Section, Cell, Button, Spinner, Placeholder, Text, Badge } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
-import { getClubByInvite } from '../api/clubs';
-import { joinByInviteCode } from '../api/membership';
-import type { ClubDetailDto } from '../types/api';
+import { useClubByInviteQuery, useJoinByInviteMutation } from '../queries/clubs';
 
 const CATEGORY_LABELS: Record<string, string> = {
   sport: 'Спорт', creative: 'Творчество', food: 'Еда',
@@ -19,40 +17,38 @@ export const InvitePage: FC = () => {
   const navigate = useNavigate();
   const haptic = useHaptic();
 
-  const [club, setClub] = useState<ClubDetailDto | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [joining, setJoining] = useState(false);
+  const clubQuery = useClubByInviteQuery(code);
+  const joinMutation = useJoinByInviteMutation();
+
+  const [actionError, setActionError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
 
-  useEffect(() => {
-    if (!code) return;
-    getClubByInvite(code)
-      .then((data) => { setClub(data); setLoading(false); })
-      .catch((e) => { setError((e as Error).message); setLoading(false); });
-  }, [code]);
+  const club = clubQuery.data;
+  const loading = clubQuery.isPending;
+  const loadError = clubQuery.error?.message;
+  const joining = joinMutation.isPending;
 
-  const handleJoin = async () => {
+  const handleJoin = () => {
     if (!code) return;
     haptic.impact('medium');
-    setJoining(true);
-    setError(null);
-    try {
-      await joinByInviteCode(code);
-      setJoined(true);
-      haptic.notify('success');
-    } catch (e) {
-      setError((e as Error).message);
-      haptic.notify('error');
-      setJoining(false);
-    }
+    setActionError(null);
+    joinMutation.mutate(code, {
+      onSuccess: () => {
+        setJoined(true);
+        haptic.notify('success');
+      },
+      onError: (e) => {
+        setActionError(e.message);
+        haptic.notify('error');
+      },
+    });
   };
 
   if (loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spinner size="l" /></div>;
   }
 
-  if (error && !club) {
+  if (loadError && !club) {
     return <Placeholder header="Ссылка недействительна" description="Эта ссылка-приглашение устарела или не существует" />;
   }
 
@@ -98,8 +94,8 @@ export const InvitePage: FC = () => {
         </Section>
       )}
 
-      {error && (
-        <div style={{ padding: '8px 16px', color: 'var(--tgui--destructive_text_color)' }}>{error}</div>
+      {actionError && (
+        <div style={{ padding: '8px 16px', color: 'var(--tgui--destructive_text_color)' }}>{actionError}</div>
       )}
 
       <Section>

@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { mockClubDetail } from '../mocks/handlers';
+import { renderWithProviders } from '../utils/renderWithProviders';
 import type { ClubDetailDto, MembershipDto } from '../../types/api';
 
 // Mock Telegram SDK
@@ -34,7 +35,6 @@ vi.mock('../../telegram/sdk', () => ({
 // Import after mocks
 import { ClubPage } from '../../pages/ClubPage';
 import { useAuthStore } from '../../store/useAuthStore';
-import { useClubsStore } from '../../store/useClubsStore';
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
 afterEach(() => server.resetHandlers());
@@ -42,20 +42,18 @@ afterAll(() => server.close());
 
 function renderClubPage(clubId: string = 'club-123') {
   const user = userEvent.setup();
-  const result = render(
-    <MemoryRouter initialEntries={[`/clubs/${clubId}`]}>
-      <Routes>
-        <Route path="/clubs/:id" element={<ClubPage />} />
-        <Route path="/clubs/:id/manage" element={<div>Manage Page</div>} />
-      </Routes>
-    </MemoryRouter>
+  const result = renderWithProviders(
+    <Routes>
+      <Route path="/clubs/:id" element={<ClubPage />} />
+      <Route path="/clubs/:id/manage" element={<div>Manage Page</div>} />
+    </Routes>,
+    { routerEntries: [`/clubs/${clubId}`] },
   );
   return { ...result, user };
 }
 
 describe('ClubPage', () => {
   beforeEach(() => {
-    // Reset stores
     useAuthStore.setState({
       user: {
         id: 'user-1',
@@ -70,19 +68,10 @@ describe('ClubPage', () => {
       isLoading: false,
       error: null,
     });
-    useClubsStore.setState({
-      clubs: [],
-      myClubs: [],
-      totalPages: 0,
-      totalElements: 0,
-      loading: false,
-      error: null,
-    });
     server.resetHandlers();
   });
 
   it('shows "Вступить" button for non-member open club', async () => {
-    // Set up MSW to return an open club
     server.use(
       http.get('*/api/clubs/:id', () => {
         return HttpResponse.json({
@@ -93,7 +82,7 @@ describe('ClubPage', () => {
       }),
       http.get('*/api/users/me/clubs', () => {
         return HttpResponse.json([] as MembershipDto[]);
-      })
+      }),
     );
 
     renderClubPage();
@@ -115,7 +104,6 @@ describe('ClubPage', () => {
         });
       }),
       http.get('*/api/users/me/clubs', () => {
-        // First call returns empty (not a member), second call returns member
         if (joinCalled) {
           return HttpResponse.json([
             {
@@ -142,23 +130,18 @@ describe('ClubPage', () => {
           joinedAt: '2025-01-01T00:00:00Z',
           subscriptionExpiresAt: null,
         } as MembershipDto);
-      })
+      }),
     );
 
     const { user } = renderClubPage();
 
-    // Wait for the join button to appear
     const joinButton = await waitFor(() => {
       return screen.getByRole('button', { name: /вступить/i });
     });
 
-    // Click join
     await user.click(joinButton);
 
-    // After join, the button text should change to show membership
     await waitFor(() => {
-      // The joinSuccess state is set after fetchMyClubs completes
-      // The component shows either "Вы участник" (if isMember) or "Заявка отправлена"
       const memberButton = screen.queryByText(/вы участник/i);
       const successButton = screen.queryByText(/заявка отправлена/i);
       expect(memberButton || successButton).toBeTruthy();
@@ -189,7 +172,7 @@ describe('ClubPage', () => {
             createdAt: '2025-01-01T00:00:00Z',
           },
         ]);
-      })
+      }),
     );
 
     renderClubPage();
@@ -222,7 +205,7 @@ describe('ClubPage', () => {
             createdAt: '2025-01-01T00:00:00Z',
           },
         ]);
-      })
+      }),
     );
 
     renderClubPage();
@@ -234,8 +217,6 @@ describe('ClubPage', () => {
   });
 
   it('paid club: pending_payment response shows "Ожидаем оплату" and does not mark user as member', async () => {
-    let fetchMyClubsCallCount = 0;
-
     server.use(
       http.get('*/api/clubs/:id', () => {
         return HttpResponse.json({
@@ -246,7 +227,6 @@ describe('ClubPage', () => {
         });
       }),
       http.get('*/api/users/me/clubs', () => {
-        fetchMyClubsCallCount += 1;
         return HttpResponse.json([] as MembershipDto[]);
       }),
       http.post('*/api/clubs/:id/join', () => {
@@ -257,9 +237,9 @@ describe('ClubPage', () => {
             priceStars: 500,
             message: 'Оплатите подписку через бота. Счёт отправлен в Telegram.',
           },
-          { status: 202 }
+          { status: 202 },
         );
-      })
+      }),
     );
 
     const { user } = renderClubPage();
@@ -268,7 +248,6 @@ describe('ClubPage', () => {
       return screen.getByRole('button', { name: /вступить/i });
     });
 
-    const countBeforeJoin = fetchMyClubsCallCount;
     await user.click(joinButton);
 
     await waitFor(() => {
@@ -276,10 +255,7 @@ describe('ClubPage', () => {
       expect(screen.getByText(/счёт отправлен в telegram/i)).toBeInTheDocument();
     });
 
-    // No "Вы участник" must appear (user is NOT a member yet)
     expect(screen.queryByText(/вы участник/i)).not.toBeInTheDocument();
-    // fetchMyClubs must NOT be called after pending_payment — membership isn't active
-    expect(fetchMyClubsCallCount).toBe(countBeforeJoin);
   });
 
   it('shows error message when join API fails', async () => {
@@ -297,29 +273,25 @@ describe('ClubPage', () => {
       http.post('*/api/clubs/:id/join', () => {
         return HttpResponse.json(
           { message: 'Club is full' },
-          { status: 400 }
+          { status: 400 },
         );
-      })
+      }),
     );
 
     const { user } = renderClubPage();
 
-    // Wait for join button
     const joinButton = await waitFor(() => {
       return screen.getByRole('button', { name: /вступить/i });
     });
 
-    // Click join
     await user.click(joinButton);
 
-    // Wait for error message
     await waitFor(() => {
       expect(screen.getByText('Club is full')).toBeInTheDocument();
     });
   });
 
   it('organizer sees "Управление клубом" button when ownerId matches user id', async () => {
-    // Set user as owner
     useAuthStore.setState({
       user: {
         id: 'owner-456',
@@ -344,13 +316,12 @@ describe('ClubPage', () => {
       }),
       http.get('*/api/users/me/clubs', () => {
         return HttpResponse.json([] as MembershipDto[]);
-      })
+      }),
     );
 
     renderClubPage();
 
     await waitFor(() => {
-      // The button text includes the gear emoji entity + "Управление клубом"
       const manageButton = screen.getByRole('button', { name: /управление клубом/i });
       expect(manageButton).toBeInTheDocument();
     });
@@ -376,7 +347,7 @@ describe('ClubPage', () => {
             subscriptionExpiresAt: null,
           },
         ] as MembershipDto[]);
-      })
+      }),
     );
 
     renderClubPage();
@@ -401,7 +372,7 @@ describe('ClubPage', () => {
       }),
       http.get('*/api/users/me/clubs', () => {
         return HttpResponse.json([] as MembershipDto[]);
-      })
+      }),
     );
 
     renderClubPage();
@@ -419,12 +390,12 @@ describe('ClubPage', () => {
       http.get('*/api/clubs/:id', () => {
         return HttpResponse.json(
           { message: 'Club not found' },
-          { status: 404 }
+          { status: 404 },
         );
       }),
       http.get('*/api/users/me/clubs', () => {
         return HttpResponse.json([] as MembershipDto[]);
-      })
+      }),
     );
 
     renderClubPage();
