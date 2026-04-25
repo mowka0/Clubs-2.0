@@ -17,7 +17,10 @@ import java.util.concurrent.ConcurrentHashMap
 class RateLimitFilter : OncePerRequestFilter() {
 
     private val logger = LoggerFactory.getLogger(RateLimitFilter::class.java)
-    private val buckets = ConcurrentHashMap<String, Bucket>()
+    // Separate bucket pools for separate limits — auth endpoints brute-force protection
+    // requires tighter limits than general API (security.md: 5/min on /api/auth/*).
+    private val apiBuckets = ConcurrentHashMap<String, Bucket>()
+    private val authBuckets = ConcurrentHashMap<String, Bucket>()
 
     override fun doFilterInternal(
         request: HttpServletRequest,
@@ -29,16 +32,25 @@ class RateLimitFilter : OncePerRequestFilter() {
             return
         }
 
+        val isAuthEndpoint = request.requestURI.startsWith("/api/auth/")
         val key = resolveKey(request)
-        val bucket = buckets.computeIfAbsent(key) { createBucket() }
+        val bucket = if (isAuthEndpoint) {
+            authBuckets.computeIfAbsent(key) { createAuthBucket() }
+        } else {
+            apiBuckets.computeIfAbsent(key) { createApiBucket() }
+        }
 
         if (bucket.tryConsume(1)) {
             filterChain.doFilter(request, response)
         } else {
-            logger.warn("Rate limit exceeded: key={} uri={}", key, request.requestURI)
+            val limit = if (isAuthEndpoint) AUTH_LIMIT_PER_MIN else API_LIMIT_PER_MIN
+            logger.warn(
+                "Rate limit exceeded: key={} uri={} limit={}/min",
+                key, request.requestURI, limit
+            )
             response.status = HttpStatus.TOO_MANY_REQUESTS.value()
             response.contentType = "application/json"
-            response.writer.write("""{"error":"Too many requests. Limit: 60 per minute."}""")
+            response.writer.write("""{"error":"Too many requests. Limit: $limit per minute."}""")
         }
     }
 
@@ -57,7 +69,28 @@ class RateLimitFilter : OncePerRequestFilter() {
         else request.remoteAddr
     }
 
-    private fun createBucket(): Bucket = Bucket.builder()
-        .addLimit(Bandwidth.builder().capacity(60).refillGreedy(60, Duration.ofMinutes(1)).build())
+    private fun createApiBucket(): Bucket = Bucket.builder()
+        .addLimit(
+            Bandwidth.builder()
+                .capacity(API_LIMIT_PER_MIN)
+                .refillGreedy(API_LIMIT_PER_MIN, Duration.ofMinutes(1))
+                .build()
+        )
         .build()
+
+    private fun createAuthBucket(): Bucket = Bucket.builder()
+        .addLimit(
+            Bandwidth.builder()
+                .capacity(AUTH_LIMIT_PER_MIN)
+                .refillGreedy(AUTH_LIMIT_PER_MIN, Duration.ofMinutes(1))
+                .build()
+        )
+        .build()
+
+    companion object {
+        private const val API_LIMIT_PER_MIN = 60L
+        // Tight limit for /api/auth/* — brute-force defence against HMAC probing
+        // (security.md: "агрессивно" — 5 попыток в минуту на IP/user).
+        private const val AUTH_LIMIT_PER_MIN = 5L
+    }
 }
