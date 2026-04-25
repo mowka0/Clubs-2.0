@@ -12,7 +12,7 @@ import { useHaptic } from './useHaptic';
 /**
  * Manages the Telegram BackButton visibility and behavior.
  *
- * On main tab pages (/, /my-clubs, /organizer, /profile) the BackButton is hidden.
+ * On main tab pages (/, /my-clubs, /events, /profile) the BackButton is hidden.
  * On nested pages (club detail, event detail, invite, etc.) the BackButton is shown
  * and navigates back in the browser history when clicked.
  */

@@ -31,7 +31,7 @@ vi.mock('../../telegram/sdk', () => ({
 }));
 
 // Import after mocks are set up
-import { CreateClubModal } from '../../pages/OrganizerPage';
+import { CreateClubModal } from '../../components/CreateClubModal';
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
 afterEach(() => server.resetHandlers());

@@ -29,7 +29,7 @@ frontend/
     pages/
       DiscoveryPage.tsx   — заглушка
       MyClubsPage.tsx     — заглушка
-      OrganizerPage.tsx   — заглушка
+      OrganizerPage.tsx   — заглушка (удалён в feature/restructure-bottom-tabs, 2026-04-25 — функционал слит в MyClubsPage; см. docs/modules/my-clubs-unified.md)
       ProfilePage.tsx     — заглушка
     api/
       apiClient.ts        — ApiClient class с retry при 401
@@ -180,6 +180,8 @@ interface AuthState {
 **Агент:** Frontend Dev
 **Дата анализа:** 2026-03-21
 **Зависимости:** TASK-023 (done)
+
+> **Update 2026-04-25 (PR `feature/restructure-bottom-tabs`):** структура BottomTabBar изменилась — таб «Организатор» (`/organizer`) удалён, его функционал слит в «Мои клубы»; добавлен таб «События» (`/events`, placeholder). Текущий список табов и regex `isTabBarRoute` см. в [`docs/design/stack.md` §3 + §5](../design/stack.md) и [`docs/modules/my-clubs-unified.md`](./my-clubs-unified.md). Описание ниже сохранено для исторического контекста TASK-025 (initial routing setup), но **актуальная конфигурация табов и navigation flow** — в указанных документах.
 
 ---
 

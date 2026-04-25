@@ -1,9 +1,6 @@
-import { FC, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useQueries } from '@tanstack/react-query';
+import { FC, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
-  List,
   Section,
   Cell,
   Button,
@@ -11,16 +8,12 @@ import {
   Select,
   Textarea,
   Spinner,
-  Modal,
   Placeholder,
 } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
-import { useCreateClubMutation, useMyClubsQuery } from '../queries/clubs';
-import { queryKeys } from '../queries/queryKeys';
-import { AvatarUpload } from '../components/AvatarUpload';
-import { getClub } from '../api/clubs';
+import { useCreateClubMutation } from '../queries/clubs';
+import { AvatarUpload } from './AvatarUpload';
 import type { CreateClubBody } from '../api/clubs';
-import type { ClubDetailDto } from '../types/api';
 
 const CATEGORIES = [
   { value: 'sport', label: 'Спорт' },
@@ -316,68 +309,5 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
         )}
       </div>
     </div>
-  );
-};
-
-export const OrganizerPage: FC = () => {
-  const navigate = useNavigate();
-  const haptic = useHaptic();
-  const myClubsQuery = useMyClubsQuery();
-  const [showModal, setShowModal] = useState(false);
-
-  const myClubs = myClubsQuery.data ?? [];
-  const ownedClubs = useMemo(() => myClubs.filter((m) => m.role === 'organizer'), [myClubs]);
-
-  const ownedClubIds = ownedClubs.map((m) => m.clubId);
-  const clubDetailQueries = useQueries({
-    queries: ownedClubIds.map((id) => ({
-      queryKey: queryKeys.clubs.detail(id),
-      queryFn: () => getClub(id),
-    })),
-  });
-
-  const clubDetails: Record<string, ClubDetailDto> = {};
-  ownedClubIds.forEach((id, idx) => {
-    const q = clubDetailQueries[idx];
-    if (q?.data) clubDetails[id] = q.data;
-  });
-
-  const handleCreated = (id: string) => {
-    setShowModal(false);
-    // Cache for clubs.my() is invalidated by useCreateClubMutation onSuccess —
-    // navigation triggers OrganizerClubManage which fetches the new club fresh.
-    navigate(`/clubs/${id}/manage`);
-  };
-
-  return (
-    <List>
-      <Section header="Мои клубы">
-        {myClubsQuery.isPending && <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Spinner size="m" /></div>}
-        {!myClubsQuery.isPending && ownedClubs.length === 0 && (
-          <Placeholder description="У вас пока нет клубов. Создайте первый!" />
-        )}
-        {ownedClubs.map((m) => (
-          <Cell
-            key={m.id}
-            onClick={() => { haptic.impact('light'); navigate(`/clubs/${m.clubId}/manage`); }}
-            subtitle="Организатор"
-          >
-            {clubDetails[m.clubId]?.name ?? `Клуб ${m.clubId.slice(0, 8)}...`}
-          </Cell>
-        ))}
-      </Section>
-
-      <Section>
-        <Button size="l" stretched onClick={() => setShowModal(true)}>
-          + Создать новый клуб
-        </Button>
-      </Section>
-
-      {showModal && (
-        <Modal open onOpenChange={(open) => !open && setShowModal(false)}>
-          <CreateClubModal onClose={() => setShowModal(false)} onCreated={handleCreated} />
-        </Modal>
-      )}
-    </List>
   );
 };

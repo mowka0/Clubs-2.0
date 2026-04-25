@@ -1,12 +1,13 @@
 import { FC, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
-import { List, Section, Cell, Spinner, Placeholder } from '@telegram-apps/telegram-ui';
+import { List, Section, Cell, Button, Modal, Spinner, Placeholder } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMyClubsQuery } from '../queries/clubs';
 import { useMyApplicationsQuery } from '../queries/applications';
 import { queryKeys } from '../queries/queryKeys';
 import { Toast } from '../components/Toast';
+import { CreateClubModal } from '../components/CreateClubModal';
 import { getClub } from '../api/clubs';
 import type { ClubDetailDto } from '../types/api';
 
@@ -39,6 +40,7 @@ export const MyClubsPage: FC = () => {
 
   const myClubsQuery = useMyClubsQuery();
   const applicationsQuery = useMyApplicationsQuery();
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const myClubs = myClubsQuery.data ?? [];
   const applications = applicationsQuery.data ?? [];
@@ -54,7 +56,7 @@ export const MyClubsPage: FC = () => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Dedup club ids from both memberships and applications so each club is fetched once
-  // and shares cache with ClubPage / OrganizerPage.
+  // and shares cache with ClubPage / OrganizerClubManage.
   const clubIds = useMemo(() => {
     const ids = new Set<string>();
     myClubs.forEach((m) => ids.add(m.clubId));
@@ -77,48 +79,86 @@ export const MyClubsPage: FC = () => {
 
   const loading = myClubsQuery.isPending || applicationsQuery.isPending;
 
+  const handleCreated = (id: string) => {
+    setShowCreateModal(false);
+    // Cache for clubs.my() is invalidated by useCreateClubMutation onSuccess.
+    // Navigate to manage page which fetches the new club fresh.
+    navigate(`/clubs/${id}/manage`);
+  };
+
+  const handleClubClick = (clubId: string, role: string) => {
+    haptic.impact('light');
+    if (role === 'organizer') {
+      navigate(`/clubs/${clubId}/manage`);
+    } else {
+      navigate(`/clubs/${clubId}`);
+    }
+  };
+
   return (
     <List>
-      <Section header="Мои клубы">
-        {loading && <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Spinner size="m" /></div>}
-        {!loading && myClubs.length === 0 && (
-          <Placeholder description="Вы пока не состоите ни в одном клубе" />
-        )}
-        {myClubs.map((m) => {
-          const club = clubDetails[m.clubId];
-          return (
-            <Cell
-              key={m.id}
-              onClick={() => { haptic.impact('light'); navigate(`/clubs/${m.clubId}`); }}
-              subtitle={m.role === 'organizer' ? 'Организатор' : 'Участник'}
-            >
-              {club?.name ?? `Клуб ${m.clubId.slice(0, 8)}…`}
-            </Cell>
-          );
-        })}
+      <Section>
+        <div style={{ padding: 16 }}>
+          <Button
+            size="l"
+            stretched
+            onClick={() => { haptic.impact('light'); setShowCreateModal(true); }}
+          >
+            + Создать клуб
+          </Button>
+        </div>
       </Section>
 
-      <Section header="Мои заявки">
-        {!loading && applications.length === 0 && (
-          <Placeholder description="Нет поданных заявок" />
-        )}
-        {applications.map((app) => {
-          const club = clubDetails[app.clubId];
-          return (
-            <Cell
-              key={app.id}
-              subtitle={app.createdAt ? formatDate(app.createdAt) : ''}
-              after={
-                <span style={{ fontSize: 12, color: STATUS_COLOR[app.status] ?? 'inherit' }}>
-                  {STATUS_LABELS[app.status] ?? app.status}
-                </span>
-              }
-            >
-              {club?.name ?? `Клуб ${app.clubId.slice(0, 8)}…`}
-            </Cell>
-          );
-        })}
-      </Section>
+      {/* Single combined empty state when there's nothing to show — avoids two adjacent
+          placeholders («нет клубов» + «нет заявок») feeling like clutter for new users. */}
+      {!loading && myClubs.length === 0 && applications.length === 0 && (
+        <Placeholder description="Вы пока не состоите ни в одном клубе. Найдите интересный в Поиске или создайте свой выше." />
+      )}
+
+      {(loading || myClubs.length > 0) && (
+        <Section header="Мои клубы">
+          {loading && <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Spinner size="m" /></div>}
+          {myClubs.map((m) => {
+            const club = clubDetails[m.clubId];
+            return (
+              <Cell
+                key={m.id}
+                onClick={() => handleClubClick(m.clubId, m.role)}
+                subtitle={m.role === 'organizer' ? 'Организатор' : 'Участник'}
+              >
+                {club?.name ?? `Клуб ${m.clubId.slice(0, 8)}…`}
+              </Cell>
+            );
+          })}
+        </Section>
+      )}
+
+      {applications.length > 0 && (
+        <Section header="Мои заявки">
+          {applications.map((app) => {
+            const club = clubDetails[app.clubId];
+            return (
+              <Cell
+                key={app.id}
+                subtitle={app.createdAt ? formatDate(app.createdAt) : ''}
+                after={
+                  <span style={{ fontSize: 12, color: STATUS_COLOR[app.status] ?? 'inherit' }}>
+                    {STATUS_LABELS[app.status] ?? app.status}
+                  </span>
+                }
+              >
+                {club?.name ?? `Клуб ${app.clubId.slice(0, 8)}…`}
+              </Cell>
+            );
+          })}
+        </Section>
+      )}
+
+      {showCreateModal && (
+        <Modal open onOpenChange={(open) => !open && setShowCreateModal(false)}>
+          <CreateClubModal onClose={() => setShowCreateModal(false)} onCreated={handleCreated} />
+        </Modal>
+      )}
 
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
     </List>
