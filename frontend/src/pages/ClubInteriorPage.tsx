@@ -1,4 +1,4 @@
-import { FC, useEffect, useState } from 'react';
+import { FC, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   List,
@@ -14,15 +14,9 @@ import {
 import { useAuthStore } from '../store/useAuthStore';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
-import { getClubMembers, getMemberProfile } from '../api/membership';
-import { getClubEvents } from '../api/events';
-import { getClub } from '../api/clubs';
-import type {
-  MemberListItemDto,
-  MemberProfileDto,
-  EventListItemDto,
-  ClubDetailDto,
-} from '../types/api';
+import { useClubQuery } from '../queries/clubs';
+import { useClubMembersQuery, useMemberProfileQuery } from '../queries/members';
+import { useClubEventsQuery } from '../queries/events';
 
 type TabId = 'events' | 'members' | 'profile';
 
@@ -53,57 +47,19 @@ export const ClubInteriorPage: FC = () => {
   useBackButton(true);
 
   const [activeTab, setActiveTab] = useState<TabId>('events');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const [club, setClub] = useState<ClubDetailDto | null>(null);
-  const [events, setEvents] = useState<EventListItemDto[]>([]);
-  const [members, setMembers] = useState<MemberListItemDto[]>([]);
-  const [memberProfile, setMemberProfile] = useState<MemberProfileDto | null>(null);
+  const clubQuery = useClubQuery(clubId);
+  const eventsQuery = useClubEventsQuery(clubId, { size: '100' });
+  const membersQuery = useClubMembersQuery(clubId);
+  const memberProfileQuery = useMemberProfileQuery(clubId, user?.id);
 
-  useEffect(() => {
-    if (!clubId) return;
+  const club = clubQuery.data;
+  const events = eventsQuery.data?.content ?? [];
+  const members = membersQuery.data ?? [];
+  const memberProfile = memberProfileQuery.data;
 
-    let cancelled = false;
-
-    const loadData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [clubData, eventsData, membersData] = await Promise.all([
-          getClub(clubId),
-          getClubEvents(clubId, { size: '100' }),
-          getClubMembers(clubId),
-        ]);
-
-        if (cancelled) return;
-
-        setClub(clubData);
-        setEvents(eventsData.content);
-        setMembers(membersData);
-
-        // Load member profile if user is authenticated
-        if (user?.id) {
-          try {
-            const profile = await getMemberProfile(clubId, user.id);
-            if (!cancelled) setMemberProfile(profile);
-          } catch {
-            // Profile may not exist — not critical
-          }
-        }
-      } catch (e) {
-        if (!cancelled) setError((e as Error).message);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    loadData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clubId, user?.id]);
+  const loading = clubQuery.isPending || eventsQuery.isPending || membersQuery.isPending;
+  const error = clubQuery.error?.message ?? eventsQuery.error?.message ?? membersQuery.error?.message;
 
   if (loading) {
     return (

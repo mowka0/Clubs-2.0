@@ -5,7 +5,7 @@
 ## TASK-026 — Discovery страница (лента клубов)
 
 ### Описание
-Главная страница приложения (`/`). Список карточек клубов с фильтрацией и поиском. Использует `useClubsStore` для данных, `@telegram-apps/telegram-ui` для UI.
+Главная страница приложения (`/`). Список карточек клубов с фильтрацией и поиском. Server state — через `useClubsQuery` (`@tanstack/react-query`, `useInfiniteQuery` для пагинации, см. [`frontend-stores.md`](./frontend-stores.md)), UI — `@telegram-apps/telegram-ui`.
 
 ### Файловая структура
 

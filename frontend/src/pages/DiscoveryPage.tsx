@@ -1,6 +1,6 @@
 import { FC, useCallback, useEffect, useRef, useState } from 'react';
 import { List, Spinner, Placeholder } from '@telegram-apps/telegram-ui';
-import { useClubsStore } from '../store/useClubsStore';
+import { useClubsQuery } from '../queries/clubs';
 import { ClubCard } from '../components/ClubCard';
 import { ClubFiltersComponent } from '../components/ClubFilters';
 import type { ClubFilters } from '../api/clubs';
@@ -15,36 +15,28 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 export const DiscoveryPage: FC = () => {
-  const { clubs, totalPages, loading, error, fetchClubs } = useClubsStore();
   const [filters, setFilters] = useState<ClubFilters>({});
-  const [page, setPage] = useState(0);
   const debouncedFilters = useDebounce(filters, 300);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(0);
-  }, [debouncedFilters]);
+  const {
+    data,
+    error,
+    isPending,
+    isFetchingNextPage,
+    fetchNextPage,
+    hasNextPage,
+  } = useClubsQuery({ ...debouncedFilters, size: '20' });
 
-  // Fetch clubs
-  useEffect(() => {
-    const params: ClubFilters = {
-      ...debouncedFilters,
-      page: String(page),
-      size: '20',
-    };
-    fetchClubs(params);
-  }, [debouncedFilters, page, fetchClubs]);
+  const clubs = data?.pages.flatMap((p) => p.content) ?? [];
 
-  // Infinite scroll observer
-  const hasMore = page + 1 < totalPages;
   const handleObserver = useCallback(
     (entries: IntersectionObserverEntry[]) => {
-      if (entries[0].isIntersecting && hasMore && !loading) {
-        setPage((p) => p + 1);
+      if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+        fetchNextPage();
       }
     },
-    [hasMore, loading]
+    [hasNextPage, isFetchingNextPage, fetchNextPage],
   );
 
   useEffect(() => {
@@ -61,11 +53,11 @@ export const DiscoveryPage: FC = () => {
 
       {error && (
         <div style={{ padding: 16, color: 'var(--tgui--destructive_text_color)', textAlign: 'center' }}>
-          {error}
+          {error.message}
         </div>
       )}
 
-      {!loading && clubs.length === 0 && !error && (
+      {!isPending && clubs.length === 0 && !error && (
         <Placeholder
           header="Клубы не найдены"
           description="Попробуйте изменить фильтры"
@@ -76,7 +68,15 @@ export const DiscoveryPage: FC = () => {
         <ClubCard key={club.id} club={club} />
       ))}
 
-      {loading && (
+      {/* Initial load only — background refetches (staleTime expiry) must NOT show a spinner. */}
+      {isPending && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+          <Spinner size="m" />
+        </div>
+      )}
+
+      {/* Pagination spinner shown only while fetching the next page. */}
+      {isFetchingNextPage && (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
           <Spinner size="m" />
         </div>

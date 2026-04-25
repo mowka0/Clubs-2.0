@@ -33,8 +33,11 @@ frontend/
       ProfilePage.tsx     — заглушка
     api/
       apiClient.ts        — ApiClient class с retry при 401
+    queries/              — TanStack Query / mutation хуки (server state)
+      queryKeys.ts
+      clubs.ts events.ts applications.ts members.ts finances.ts
     store/
-      useAuthStore.ts     — Zustand auth store
+      useAuthStore.ts     — Zustand auth store (только client state — token/user/isAuthenticated)
     telegram/
       sdk.ts              — getInitDataRaw()
     types/

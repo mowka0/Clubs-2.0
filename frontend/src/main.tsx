@@ -24,6 +24,11 @@ const queryClient = new QueryClient({
   },
 });
 
+// Lazy-load devtools so they're stripped from the production bundle by Vite tree-shaking.
+const Devtools = import.meta.env.DEV
+  ? (await import('@tanstack/react-query-devtools')).ReactQueryDevtools
+  : null;
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary FallbackComponent={RootErrorFallback}>
@@ -31,6 +36,7 @@ createRoot(document.getElementById('root')!).render(
         <AppRoot platform="base">
           <App />
         </AppRoot>
+        {Devtools ? <Devtools initialIsOpen={false} buttonPosition="bottom-left" /> : null}
       </QueryClientProvider>
     </ErrorBoundary>
   </StrictMode>

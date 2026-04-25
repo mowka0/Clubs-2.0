@@ -1,25 +1,51 @@
-import { FC, useEffect } from 'react';
+import { FC, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueries } from '@tanstack/react-query';
 import { List, Section, Cell, Spinner, Placeholder, Avatar, Text } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
-import { useClubsStore } from '../store/useClubsStore';
-import { useApplicationsStore } from '../store/useApplicationsStore';
+import { useMyClubsQuery } from '../queries/clubs';
+import { useMyApplicationsQuery } from '../queries/applications';
+import { queryKeys } from '../queries/queryKeys';
+import { getClub } from '../api/clubs';
+import type { ClubDetailDto } from '../types/api';
 
 export const ProfilePage: FC = () => {
   const navigate = useNavigate();
   const haptic = useHaptic();
   const { user, login, isLoading: authLoading } = useAuthStore();
-  const { myClubs, loading: clubsLoading, fetchMyClubs } = useClubsStore();
-  const { applications, fetchMyApplications } = useApplicationsStore();
+
+  const myClubsQuery = useMyClubsQuery();
+  const applicationsQuery = useMyApplicationsQuery();
+
+  const myClubs = myClubsQuery.data ?? [];
+  const applications = applicationsQuery.data ?? [];
 
   useEffect(() => {
     if (!user) login();
-    fetchMyClubs();
-    fetchMyApplications();
-  }, [user, login, fetchMyClubs, fetchMyApplications]);
+  }, [user, login]);
 
-  if (authLoading || clubsLoading) {
+  const clubIds = useMemo(() => {
+    const ids = new Set<string>();
+    myClubs.forEach((m) => ids.add(m.clubId));
+    applications.forEach((a) => ids.add(a.clubId));
+    return Array.from(ids);
+  }, [myClubs, applications]);
+
+  const clubDetailQueries = useQueries({
+    queries: clubIds.map((id) => ({
+      queryKey: queryKeys.clubs.detail(id),
+      queryFn: () => getClub(id),
+    })),
+  });
+
+  const clubDetails: Record<string, ClubDetailDto> = {};
+  clubIds.forEach((id, idx) => {
+    const q = clubDetailQueries[idx];
+    if (q?.data) clubDetails[id] = q.data;
+  });
+
+  if (authLoading || myClubsQuery.isPending) {
     return <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spinner size="l" /></div>;
   }
 
@@ -64,15 +90,18 @@ export const ProfilePage: FC = () => {
       {/* My clubs preview */}
       {previewClubs.length > 0 && (
         <Section header="Мои клубы">
-          {previewClubs.map((m) => (
-            <Cell
-              key={m.id}
-              onClick={() => { haptic.impact('light'); navigate(`/clubs/${m.clubId}`); }}
-              subtitle={m.role === 'organizer' ? 'Организатор' : 'Участник'}
-            >
-              Клуб {m.clubId.slice(0, 8)}…
-            </Cell>
-          ))}
+          {previewClubs.map((m) => {
+            const club = clubDetails[m.clubId];
+            return (
+              <Cell
+                key={m.id}
+                onClick={() => { haptic.impact('light'); navigate(`/clubs/${m.clubId}`); }}
+                subtitle={m.role === 'organizer' ? 'Организатор' : 'Участник'}
+              >
+                {club?.name ?? `Клуб ${m.clubId.slice(0, 8)}…`}
+              </Cell>
+            );
+          })}
           {myClubs.length > 5 && (
             <Cell onClick={() => { haptic.impact('light'); navigate('/my-clubs'); }} style={{ color: 'var(--tgui--button_color)' }}>
               Показать все ({myClubs.length})
@@ -84,19 +113,22 @@ export const ProfilePage: FC = () => {
       {/* Pending applications */}
       {pendingApps.length > 0 && (
         <Section header="Активные заявки">
-          {pendingApps.map((app) => (
-            <Cell
-              key={app.id}
-              subtitle="На рассмотрении"
-              onClick={() => { haptic.impact('light'); navigate(`/clubs/${app.clubId}`); }}
-            >
-              Клуб {app.clubId.slice(0, 8)}…
-            </Cell>
-          ))}
+          {pendingApps.map((app) => {
+            const club = clubDetails[app.clubId];
+            return (
+              <Cell
+                key={app.id}
+                subtitle="На рассмотрении"
+                onClick={() => { haptic.impact('light'); navigate(`/clubs/${app.clubId}`); }}
+              >
+                {club?.name ?? `Клуб ${app.clubId.slice(0, 8)}…`}
+              </Cell>
+            );
+          })}
         </Section>
       )}
 
-      {myClubs.length === 0 && !clubsLoading && (
+      {myClubs.length === 0 && !myClubsQuery.isPending && (
         <Placeholder
           description="Вы пока не состоите ни в одном клубе"
         >

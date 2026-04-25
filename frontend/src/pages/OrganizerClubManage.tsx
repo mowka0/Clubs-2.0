@@ -1,4 +1,4 @@
-import { FC, useCallback, useEffect, useState } from 'react';
+import { FC, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   List,
@@ -20,17 +20,25 @@ import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { AvatarUpload } from '../components/AvatarUpload';
 import { Toast } from '../components/Toast';
-import { getClubMembers, getMemberProfile, getClubApplications, approveApplication, rejectApplication } from '../api/membership';
-import { getClubEvents, createEvent, markAttendance, getFinances, getEvent } from '../api/events';
-import { getClub, updateClub, deleteClub } from '../api/clubs';
+import { useClubQuery, useDeleteClubMutation, useUpdateClubMutation } from '../queries/clubs';
+import { useClubMembersQuery, useMemberProfileQuery } from '../queries/members';
+import {
+  useApproveApplicationMutation,
+  useClubApplicationsQuery,
+  useRejectApplicationMutation,
+} from '../queries/applications';
+import {
+  useClubEventsQuery,
+  useCreateEventMutation,
+  useEventQuery,
+  useMarkAttendanceMutation,
+} from '../queries/events';
+import { useClubFinancesQuery } from '../queries/finances';
 import type { UpdateClubBody } from '../api/clubs';
 import type { CreateEventBody } from '../api/events';
 import type {
   MemberListItemDto,
-  ClubApplicationDto,
   EventListItemDto,
-  EventDetailDto,
-  FinancesDto,
   ClubDetailDto,
 } from '../types/api';
 import { formatDatetime } from '../utils/formatters';
@@ -62,14 +70,9 @@ const MemberProfileModal: FC<{
   clubId: string;
   onClose: () => void;
 }> = ({ member, clubId, onClose }) => {
-  const [profile, setProfile] = useState<import('../types/api').MemberProfileDto | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    getMemberProfile(clubId, member.userId)
-      .then(setProfile)
-      .finally(() => setLoading(false));
-  }, [clubId, member.userId]);
+  const profileQuery = useMemberProfileQuery(clubId, member.userId);
+  const profile = profileQuery.data;
+  const loading = profileQuery.isPending;
 
   const joinedAt = member.joinedAt
     ? new Date(member.joinedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -132,18 +135,12 @@ const MemberProfileModal: FC<{
 // ---- Members Tab ----
 
 const MembersTab: FC<{ clubId: string }> = ({ clubId }) => {
-  const [members, setMembers] = useState<MemberListItemDto[]>([]);
-  const [loading, setLoading] = useState(true);
+  const membersQuery = useClubMembersQuery(clubId);
   const [selectedMember, setSelectedMember] = useState<MemberListItemDto | null>(null);
 
-  useEffect(() => {
-    setLoading(true);
-    getClubMembers(clubId)
-      .then(setMembers)
-      .finally(() => setLoading(false));
-  }, [clubId]);
+  const members = membersQuery.data ?? [];
 
-  if (loading) {
+  if (membersQuery.isPending) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
         <Spinner size="m" />
@@ -196,60 +193,58 @@ const MembersTab: FC<{ clubId: string }> = ({ clubId }) => {
 
 const ApplicationsTab: FC<{ clubId: string }> = ({ clubId }) => {
   const haptic = useHaptic();
-  const [applications, setApplications] = useState<ClubApplicationDto[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState<string | null>(null);
+  const applicationsQuery = useClubApplicationsQuery(clubId, 'pending');
+  const approveMutation = useApproveApplicationMutation();
+  const rejectMutation = useRejectApplicationMutation();
+
+  const [processingId, setProcessingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const fetchApps = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await getClubApplications(clubId, 'pending');
-      setApplications(result);
-    } finally {
-      setLoading(false);
-    }
-  }, [clubId]);
+  const applications = applicationsQuery.data ?? [];
 
-  useEffect(() => {
-    fetchApps();
-  }, [fetchApps]);
-
-  const handleApprove = async (appId: string) => {
+  const handleApprove = (appId: string) => {
     haptic.impact('medium');
-    setProcessing(appId);
+    setProcessingId(appId);
     setActionError(null);
-    try {
-      await approveApplication(appId);
-      haptic.notify('success');
-      await fetchApps();
-    } catch (e) {
-      console.error('Failed to approve application', e);
-      setActionError((e as Error).message);
-      haptic.notify('error');
-    } finally {
-      setProcessing(null);
-    }
+    approveMutation.mutate(
+      { applicationId: appId, clubId },
+      {
+        onSuccess: () => {
+          haptic.notify('success');
+          setProcessingId(null);
+        },
+        onError: (e) => {
+          console.error('Failed to approve application', e);
+          setActionError(e.message);
+          haptic.notify('error');
+          setProcessingId(null);
+        },
+      },
+    );
   };
 
-  const handleReject = async (appId: string) => {
+  const handleReject = (appId: string) => {
     haptic.impact('medium');
-    setProcessing(appId);
+    setProcessingId(appId);
     setActionError(null);
-    try {
-      await rejectApplication(appId);
-      haptic.notify('warning');
-      await fetchApps();
-    } catch (e) {
-      console.error('Failed to reject application', e);
-      setActionError((e as Error).message);
-      haptic.notify('error');
-    } finally {
-      setProcessing(null);
-    }
+    rejectMutation.mutate(
+      { applicationId: appId, clubId },
+      {
+        onSuccess: () => {
+          haptic.notify('warning');
+          setProcessingId(null);
+        },
+        onError: (e) => {
+          console.error('Failed to reject application', e);
+          setActionError(e.message);
+          haptic.notify('error');
+          setProcessingId(null);
+        },
+      },
+    );
   };
 
-  if (loading) {
+  if (applicationsQuery.isPending) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
         <Spinner size="m" />
@@ -270,7 +265,7 @@ const ApplicationsTab: FC<{ clubId: string }> = ({ clubId }) => {
       )}
       {applications.map((app) => {
         const hrs = hoursRemaining(app.createdAt);
-        const isProcessing = processing === app.id;
+        const isProcessing = processingId === app.id;
 
         return (
           <div key={app.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--tgui--divider)' }}>
@@ -328,14 +323,9 @@ const EVENT_STATUS_LABELS: Record<string, string> = {
 };
 
 const EventDetailModal: FC<{ eventId: string; onClose: () => void }> = ({ eventId, onClose }) => {
-  const [detail, setDetail] = useState<EventDetailDto | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    getEvent(eventId)
-      .then(setDetail)
-      .finally(() => setLoading(false));
-  }, [eventId]);
+  const eventQuery = useEventQuery(eventId);
+  const detail = eventQuery.data;
+  const loading = eventQuery.isPending;
 
   return (
     <Modal open onOpenChange={(open) => !open && onClose()}>
@@ -408,33 +398,26 @@ const UPCOMING_STATUSES = ['upcoming', 'stage_1', 'stage_2'];
 
 const EventsTab: FC<{ clubId: string }> = ({ clubId }) => {
   const haptic = useHaptic();
-  const [events, setEvents] = useState<EventListItemDto[]>([]);
-  const [loading, setLoading] = useState(true);
+  const eventsQuery = useClubEventsQuery(clubId, { size: '50' });
+  const createEventMutation = useCreateEventMutation();
+  const markAttendanceMutation = useMarkAttendanceMutation();
+
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<EventFormState>(INITIAL_EVENT_FORM);
-  const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [attendanceEventId, setAttendanceEventId] = useState<string | null>(null);
   const [attendanceList, setAttendanceList] = useState<{ userId: string; attended: boolean }[]>([]);
-  const [markingAttendance, setMarkingAttendance] = useState(false);
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
-  const fetchEvents = useCallback(() => {
-    setLoading(true);
-    getClubEvents(clubId, { size: '50' })
-      .then((res) => setEvents(res.content))
-      .finally(() => setLoading(false));
-  }, [clubId]);
-
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
+  const events = eventsQuery.data?.content ?? [];
+  const submitting = createEventMutation.isPending;
+  const markingAttendance = markAttendanceMutation.isPending;
 
   const update = (field: keyof EventFormState, value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
 
-  const handleCreateEvent = async () => {
+  const handleCreateEvent = () => {
     setFormError(null);
     if (!form.title.trim()) { setFormError('Укажите название'); return; }
     if (!form.locationText.trim()) { setFormError('Укажите место'); return; }
@@ -443,25 +426,26 @@ const EventsTab: FC<{ clubId: string }> = ({ clubId }) => {
     if (!limit || limit < 1) { setFormError('Укажите лимит участников'); return; }
 
     haptic.impact('medium');
-    setSubmitting(true);
-    try {
-      const body: CreateEventBody = {
-        title: form.title.trim(),
-        locationText: form.locationText.trim(),
-        eventDatetime: new Date(form.eventDatetime).toISOString(),
-        participantLimit: limit,
-      };
-      await createEvent(clubId, body);
-      haptic.notify('success');
-      setForm(INITIAL_EVENT_FORM);
-      setShowForm(false);
-      fetchEvents();
-    } catch (e) {
-      setFormError((e as Error).message);
-      haptic.notify('error');
-    } finally {
-      setSubmitting(false);
-    }
+    const body: CreateEventBody = {
+      title: form.title.trim(),
+      locationText: form.locationText.trim(),
+      eventDatetime: new Date(form.eventDatetime).toISOString(),
+      participantLimit: limit,
+    };
+    createEventMutation.mutate(
+      { clubId, body },
+      {
+        onSuccess: () => {
+          haptic.notify('success');
+          setForm(INITIAL_EVENT_FORM);
+          setShowForm(false);
+        },
+        onError: (e) => {
+          setFormError(e.message);
+          haptic.notify('error');
+        },
+      },
+    );
   };
 
   const openAttendanceModal = (event: EventListItemDto) => {
@@ -470,30 +454,31 @@ const EventsTab: FC<{ clubId: string }> = ({ clubId }) => {
     setAttendanceError(null);
   };
 
-  const handleMarkAttendance = async () => {
+  const handleMarkAttendance = () => {
     if (!attendanceEventId) return;
     haptic.impact('medium');
-    setMarkingAttendance(true);
     setAttendanceError(null);
-    try {
-      await markAttendance(attendanceEventId, attendanceList.filter((a) => a.attended));
-      haptic.notify('success');
-      setAttendanceEventId(null);
-      setAttendanceList([]);
-      fetchEvents();
-    } catch (e) {
-      console.error('Failed to mark attendance', e);
-      setAttendanceError((e as Error).message);
-      haptic.notify('error');
-    } finally {
-      setMarkingAttendance(false);
-    }
+    markAttendanceMutation.mutate(
+      { eventId: attendanceEventId, attendance: attendanceList.filter((a) => a.attended) },
+      {
+        onSuccess: () => {
+          haptic.notify('success');
+          setAttendanceEventId(null);
+          setAttendanceList([]);
+        },
+        onError: (e) => {
+          console.error('Failed to mark attendance', e);
+          setAttendanceError(e.message);
+          haptic.notify('error');
+        },
+      },
+    );
   };
 
   const upcomingEvents = events.filter((e) => UPCOMING_STATUSES.includes(e.status));
   const completedEvents = events.filter((e) => e.status === 'completed');
 
-  if (loading) {
+  if (eventsQuery.isPending) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
         <Spinner size="m" />
@@ -682,17 +667,10 @@ const EventsTab: FC<{ clubId: string }> = ({ clubId }) => {
 // ---- Finances Tab ----
 
 const FinancesTab: FC<{ clubId: string }> = ({ clubId }) => {
-  const [finances, setFinances] = useState<FinancesDto | null>(null);
-  const [loading, setLoading] = useState(true);
+  const financesQuery = useClubFinancesQuery(clubId);
+  const finances = financesQuery.data;
 
-  useEffect(() => {
-    setLoading(true);
-    getFinances(clubId)
-      .then(setFinances)
-      .finally(() => setLoading(false));
-  }, [clubId]);
-
-  if (loading) {
+  if (financesQuery.isPending) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
         <Spinner size="m" />
@@ -735,12 +713,14 @@ const ACCESS_LABELS_RU: Record<string, string> = {
 
 interface SettingsTabProps {
   club: ClubDetailDto;
-  onUpdated: (club: ClubDetailDto) => void;
   onDeleted: (clubName: string) => void;
 }
 
-const SettingsTab: FC<SettingsTabProps> = ({ club, onUpdated, onDeleted }) => {
+const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
   const haptic = useHaptic();
+  const updateMutation = useUpdateClubMutation();
+  const deleteMutation = useDeleteClubMutation();
+
   const [name, setName] = useState(club.name);
   const [city, setCity] = useState(club.city);
   const [district, setDistrict] = useState(club.district ?? '');
@@ -751,11 +731,12 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onUpdated, onDeleted }) => {
   const [applicationQuestion, setApplicationQuestion] = useState(club.applicationQuestion ?? '');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(club.avatarUrl ?? null);
 
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedToast, setSavedToast] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+
+  const saving = updateMutation.isPending;
+  const deleting = deleteMutation.isPending;
 
   const dirty =
     name !== club.name ||
@@ -768,7 +749,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onUpdated, onDeleted }) => {
     applicationQuestion !== (club.applicationQuestion ?? '') ||
     avatarUrl !== (club.avatarUrl ?? null);
 
-  const handleSave = async () => {
+  const handleSave = () => {
     setError(null);
 
     // Validation failures share the same UX: inline error + error haptic.
@@ -818,32 +799,33 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onUpdated, onDeleted }) => {
     if (avatarUrl !== (club.avatarUrl ?? null)) payload.avatarUrl = avatarUrl ?? '';
 
     haptic.impact('medium');
-    setSaving(true);
-    try {
-      const updated = await updateClub(club.id, payload);
-      haptic.notify('success');
-      setSavedToast('Изменения сохранены');
-      onUpdated(updated);
-    } catch (e) {
-      setError((e as Error).message);
-      haptic.notify('error');
-    } finally {
-      setSaving(false);
-    }
+    updateMutation.mutate(
+      { id: club.id, body: payload },
+      {
+        onSuccess: () => {
+          haptic.notify('success');
+          setSavedToast('Изменения сохранены');
+        },
+        onError: (e) => {
+          setError(e.message);
+          haptic.notify('error');
+        },
+      },
+    );
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     haptic.impact('heavy');
-    setDeleting(true);
-    try {
-      await deleteClub(club.id);
-      haptic.notify('success');
-      onDeleted(club.name);
-    } catch (e) {
-      setError((e as Error).message);
-      haptic.notify('error');
-      setDeleting(false);
-    }
+    deleteMutation.mutate(club.id, {
+      onSuccess: () => {
+        haptic.notify('success');
+        onDeleted(club.name);
+      },
+      onError: (e) => {
+        setError(e.message);
+        haptic.notify('error');
+      },
+    });
   };
 
   return (
@@ -963,18 +945,11 @@ export const OrganizerClubManage: FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabKey>('members');
-  const [club, setClub] = useState<ClubDetailDto | null>(null);
-  const [clubLoading, setClubLoading] = useState(true);
 
   const clubId = id ?? '';
-
-  useEffect(() => {
-    if (!clubId) return;
-    setClubLoading(true);
-    getClub(clubId)
-      .then(setClub)
-      .finally(() => setClubLoading(false));
-  }, [clubId]);
+  const clubQuery = useClubQuery(clubId || undefined);
+  const club = clubQuery.data;
+  const clubLoading = clubQuery.isPending;
 
   if (!clubId) {
     return <Placeholder description="Клуб не найден" />;
@@ -995,7 +970,6 @@ export const OrganizerClubManage: FC = () => {
         return (
           <SettingsTab
             club={club}
-            onUpdated={setClub}
             onDeleted={(name) =>
               navigate('/my-clubs', {
                 replace: true,
