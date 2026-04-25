@@ -43,9 +43,10 @@ frontend/
 
 ### Важные решения
 
-- Исторически `npm install` требовал `--legacy-peer-deps` из-за конфликта `telegram-ui` ↔ React 19. На текущих версиях (`@telegram-apps/telegram-ui@^2` + `react@^19`) конфликт разрешён — флаг локально не нужен. В `frontend/Dockerfile` флаг пока оставлен для совместимости; можно убрать после проверки чистого `npm install` на CI
-- AppRoot из `@telegram-apps/telegram-ui` — обёртка в `main.tsx`
+- `npm install` требует `--legacy-peer-deps`. Причина: `@telegram-apps/telegram-ui` объявляет peer `react@^18.2.0`, у нас `react@^19`. Lockfile, собранный с флагом, работает без проблем — но **любая новая установка** (добавление пакета, fresh clone без lockfile, CI с `npm ci`) требует флаг, иначе npm падает с `ERESOLVE`. В `frontend/Dockerfile` флаг тоже стоит. Снимется только когда tgui подымет peer-range до React 19
+- AppRoot из `@telegram-apps/telegram-ui` — обёртка в `main.tsx` с `platform="base"` (единый визуал tgui независимо от ОС-клиента)
 - SDK инициализируется до рендера: `init({ acceptCustomStyles: true })` в `main.tsx`
+- Render-стек в `main.tsx` (от внешнего к внутреннему): `<ErrorBoundary FallbackComponent={RootErrorFallback}>` → `<QueryClientProvider>` (TanStack Query, см. дальше) → `<AppRoot platform="base">` → `<App />`. Это значит любой uncaught render-error ловится root-fallback'ом (`src/components/RootErrorFallback.tsx`), а server-state доступен через TanStack Query из любой страницы
 
 ---
 

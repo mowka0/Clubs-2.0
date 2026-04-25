@@ -11,10 +11,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.100.1",
     "@telegram-apps/sdk-react": "^3.0.0",
     "@telegram-apps/telegram-ui": "^2.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-error-boundary": "^6.1.1",
+    "react-hook-form": "^7.73.1",
     "react-router-dom": "^7.0.0",
     "zustand": "^5.0.0"
   },

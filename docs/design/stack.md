@@ -62,13 +62,14 @@ frontend/
     │   ├── OrganizerClubManage.tsx
     │   └── InvitePage.tsx
     │
-    ├── components/           — 6 custom-компонентов
+    ├── components/           — 7 custom-компонентов
     │   ├── Layout.tsx
     │   ├── BottomTabBar.tsx
     │   ├── ClubCard.tsx
     │   ├── ClubFilters.tsx
     │   ├── AvatarUpload.tsx
-    │   └── Toast.tsx
+    │   ├── Toast.tsx
+    │   └── RootErrorFallback.tsx
     │
     ├── hooks/
     │   └── useBackButton.ts
@@ -100,7 +101,7 @@ frontend/
         └── mocks/            — MSW handlers + server + mocked tgui
 ```
 
-Всего: **9 страниц**, **6 компонентов**, **1 хук**, **4 стора**, **3 API-модуля**,
+Всего: **9 страниц**, **7 компонентов**, **1 хук**, **4 стора**, **3 API-модуля**,
 **1 файл типов**, **2 util-модуля**.
 
 ---
@@ -844,6 +845,13 @@ setToastMsg('Клуб создан!');
 
 Либо через `navigate(..., { state: { toast: '...' } })` и чтение из
 `location.state` на целевой странице (используется для delete-клуба → MyClubs).
+
+### `<RootErrorFallback>` `error, resetErrorBoundary` (Added in `feature/pre-design-prep` — this PR)
+Last-resort fallback для top-level `<ErrorBoundary>` (`react-error-boundary`) в `main.tsx`:
+- Centered placeholder на весь экран с `var(--tgui--bg_color)`
+- Заголовок «Что-то пошло не так» + сообщение из `error.message` (если есть) или дефолт «Попробуйте перезапустить приложение.»
+- `<Button>` «Попробовать снова» → `resetErrorBoundary()` сбрасывает boundary, рендер-дерево перерендерится
+- Виден только при uncaught render-error'е (защита от blank-screen). Per-page ошибки обрабатываются страницами сами через loading/error состояния
 
 ---
 
