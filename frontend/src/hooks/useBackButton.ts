@@ -7,6 +7,7 @@ import {
   hideBackButton,
   onBackButtonClick,
 } from '@telegram-apps/sdk-react';
+import { useHaptic } from './useHaptic';
 
 /**
  * Manages the Telegram BackButton visibility and behavior.
@@ -17,6 +18,7 @@ import {
  */
 export function useBackButton(visible: boolean): void {
   const navigate = useNavigate();
+  const haptic = useHaptic();
 
   useEffect(() => {
     // Mount the BackButton component if supported
@@ -49,10 +51,14 @@ export function useBackButton(visible: boolean): void {
     if (!onBackButtonClick.isAvailable()) return;
 
     const handleBack = () => {
+      // Telegram's native BackButton does not always emit haptic on every
+      // platform/version (observed missing on staging) — fire one ourselves
+      // so the back-tap feels consistent with in-app navigation.
+      haptic.impact('light');
       navigate(-1);
     };
 
     const off = onBackButtonClick(handleBack);
     return off;
-  }, [visible, navigate]);
+  }, [visible, navigate, haptic]);
 }
