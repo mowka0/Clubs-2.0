@@ -11,6 +11,7 @@ import {
   Modal,
   Text,
   Badge,
+  TabsList,
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
@@ -25,6 +26,9 @@ import { useMyApplicationsQuery } from '../queries/applications';
 import { ApiError } from '../api/apiClient';
 import { isPendingPayment } from '../types/api';
 import { formatPrice } from '../utils/formatters';
+import { ClubEventsTab } from '../components/club/ClubEventsTab';
+import { ClubMembersTab } from '../components/club/ClubMembersTab';
+import { ClubProfileTab } from '../components/club/ClubProfileTab';
 
 const CATEGORY_LABELS: Record<string, string> = {
   sport: 'Спорт', creative: 'Творчество', food: 'Еда',
@@ -35,6 +39,15 @@ const CATEGORY_LABELS: Record<string, string> = {
 const ACCESS_LABELS: Record<string, string> = {
   open: 'Открытый', closed: 'По заявке', private: 'Приватный',
 };
+
+type TabId = 'events' | 'members' | 'profile';
+type TabKey = TabId | 'manage';
+
+interface TabItem {
+  key: TabKey;
+  label: string;
+  selected: boolean;
+}
 
 export const ClubPage: FC = () => {
   useBackButton(true);
@@ -55,6 +68,7 @@ export const ClubPage: FC = () => {
   const [answerText, setAnswerText] = useState('');
   const [joinSuccess, setJoinSuccess] = useState(false);
   const [pendingPayment, setPendingPayment] = useState<{ priceStars: number; message: string } | null>(null);
+  const [activeTab, setActiveTab] = useState<TabId>('events');
 
   const club = clubQuery.data;
   const myClubs = myClubsQuery.data ?? [];
@@ -130,12 +144,21 @@ export const ClubPage: FC = () => {
     return <Placeholder header="Ошибка" description={error ?? 'Клуб не найден'} />;
   }
 
-  // Order matters: isMember wins over myApplication — after successful payment,
-  // handleSuccessfulPayment creates the membership; the approved application row
-  // remains in DB but isn't UI-visible because isMember takes precedence here.
+  // Tab «Управление» is a navigate-link, not a state-toggle: tap fires haptic
+  // impact (not select) and routes to /manage. activeTab never holds 'manage'.
+  const handleTabClick = (tab: TabKey) => {
+    if (tab === 'manage') {
+      haptic.impact('light');
+      navigate(`/clubs/${id}/manage`);
+      return;
+    }
+    haptic.select();
+    setActiveTab(tab);
+  };
+
+  // Visitor CTA: order matters — isMember/isOrganizer never reach here
+  // (they get role-aware tabs instead, status shown as header badge).
   const renderJoinButton = () => {
-    if (isOrganizer) return <Button size="l" stretched onClick={() => { haptic.impact('light'); navigate(`/clubs/${id}/manage`); }}>&#x2699;&#xFE0F; Управление клубом</Button>;
-    if (isMember) return <Button size="l" mode="outline" disabled stretched>Вы участник &#x2713;</Button>;
     if (pendingPayment) {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -148,7 +171,6 @@ export const ClubPage: FC = () => {
         </div>
       );
     }
-    // Closed club: user already has an application in flight
     if (myApplication?.status === 'pending') {
       return <Button size="l" mode="outline" disabled stretched>&#x23F3; Заявка на рассмотрении</Button>;
     }
@@ -184,6 +206,20 @@ export const ClubPage: FC = () => {
     return null;
   };
 
+  const showTabs = isMember || isOrganizer;
+  const roleBadgeLabel = isOrganizer ? 'Вы организатор' : isMember ? 'Вы участник' : null;
+
+  // Build TabsList children as a homogeneous array — telegram-ui v2 typings
+  // require ReactElement<TabsItemProps>[], not (Element | false)[].
+  const tabItems: TabItem[] = [
+    { key: 'events', label: 'События', selected: activeTab === 'events' },
+    { key: 'members', label: 'Участники', selected: activeTab === 'members' },
+    { key: 'profile', label: 'Мой профиль', selected: activeTab === 'profile' },
+  ];
+  if (isOrganizer) {
+    tabItems.push({ key: 'manage', label: 'Управление', selected: false });
+  }
+
   return (
     <List>
       {/* Header */}
@@ -199,26 +235,27 @@ export const ClubPage: FC = () => {
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
               <Badge type="number" style={{ fontSize: 11 }}>{CATEGORY_LABELS[club.category] ?? club.category}</Badge>
               <Badge type="number" style={{ fontSize: 11 }}>{ACCESS_LABELS[club.accessType] ?? club.accessType}</Badge>
+              {roleBadgeLabel && (
+                <Badge type="number" mode="primary" style={{ fontSize: 11 }}>{roleBadgeLabel}</Badge>
+              )}
             </div>
           </div>
         </div>
       </Section>
 
-      {/* Info */}
+      {/* About */}
       <Section>
         <Cell subtitle={club.city}>{club.district ? `${club.city}, ${club.district}` : club.city}</Cell>
         <Cell subtitle="Участники">{club.memberCount} / {club.memberLimit}</Cell>
         <Cell subtitle="Подписка">{formatPrice(club.subscriptionPrice)}</Cell>
       </Section>
 
-      {/* Description */}
       <Section header="О клубе">
         <div style={{ padding: '12px 16px', lineHeight: 1.5, color: 'var(--tgui--text_color)' }}>
           {club.description}
         </div>
       </Section>
 
-      {/* Rules */}
       {club.rules && (
         <Section header="Правила">
           <div style={{ padding: '12px 16px', lineHeight: 1.5, color: 'var(--tgui--hint_color)' }}>
@@ -227,19 +264,51 @@ export const ClubPage: FC = () => {
         </Section>
       )}
 
-      {/* Join error */}
-      {joinError && (
-        <div style={{ padding: '8px 16px', color: 'var(--tgui--destructive_text_color)' }}>
-          {joinError}
-        </div>
+      {/* Visitor: placeholder + CTA */}
+      {!showTabs && (
+        <>
+          <Section>
+            <Placeholder description="События доступны участникам клуба" />
+          </Section>
+
+          {joinError && (
+            <div style={{ padding: '8px 16px', color: 'var(--tgui--destructive_text_color)' }}>
+              {joinError}
+            </div>
+          )}
+
+          <Section>
+            {renderJoinButton()}
+          </Section>
+        </>
       )}
 
-      {/* Join button */}
-      <Section>
-        {renderJoinButton()}
-      </Section>
+      {/* Member / Organizer: role-aware tabs */}
+      {showTabs && id && (
+        <>
+          <div style={{ padding: '0 16px 8px' }}>
+            <TabsList>
+              {tabItems.map((item) => (
+                <TabsList.Item
+                  key={item.key}
+                  selected={item.selected}
+                  onClick={() => handleTabClick(item.key)}
+                >
+                  {item.label}
+                </TabsList.Item>
+              ))}
+            </TabsList>
+          </div>
 
-      {/* Apply modal */}
+          {activeTab === 'events' && <ClubEventsTab clubId={id} />}
+          {activeTab === 'members' && <ClubMembersTab clubId={id} />}
+          {activeTab === 'profile' && user?.id && (
+            <ClubProfileTab clubId={id} userId={user.id} />
+          )}
+        </>
+      )}
+
+      {/* Apply modal (visitor closed-club flow) */}
       {showApplyModal && (
         <Modal open onOpenChange={(open) => !open && setShowApplyModal(false)}>
           <div style={{ padding: 16 }}>

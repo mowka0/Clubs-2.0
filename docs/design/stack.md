@@ -17,7 +17,7 @@
 4. Auth flow & guards
 5. Conditional navigation (BottomTabBar / BackButton)
 6. Data models (TypeScript shapes)
-7. Page anatomy (все 9 страниц top→bottom)
+7. Page anatomy (все 8 страниц top→bottom)
 8. OrganizerPage wizard — 5 шагов детально
 9. Custom-компоненты
 10. tgui v2 — используемые компоненты
@@ -51,20 +51,21 @@ frontend/
     ├── router.tsx            — декларация всех 9 маршрутов
     ├── vite-env.d.ts
     │
-    ├── pages/                — 9 страниц, 4 eager + 5 lazy
+    ├── pages/                — 8 страниц, 4 eager + 4 lazy
     │   ├── DiscoveryPage.tsx
     │   ├── MyClubsPage.tsx     — unified (organizer + member), кнопка «+ Создать клуб»
     │   ├── EventsPage.tsx      — placeholder (реальная лента — отдельный PR)
     │   ├── ProfilePage.tsx
-    │   ├── ClubPage.tsx
-    │   ├── ClubInteriorPage.tsx
+    │   ├── ClubPage.tsx          — unified shell с role-aware tabs (см. club-page-unified.md)
     │   ├── EventPage.tsx
     │   ├── OrganizerClubManage.tsx
     │   └── InvitePage.tsx
     │   (OrganizerPage.tsx удалён в feature/restructure-bottom-tabs;
-    │    /organizer редиректится на /my-clubs через <Navigate>)
+    │    /organizer редиректится на /my-clubs через <Navigate>.
+    │    ClubInteriorPage.tsx удалён в feature/unified-club-page;
+    │    /clubs/:id/interior редиректится на /clubs/:id через <InteriorRedirect>)
     │
-    ├── components/           — 8 custom-компонентов
+    ├── components/           — 8 custom-компонентов + 3 club-tab-компонента
     │   ├── Layout.tsx
     │   ├── BottomTabBar.tsx
     │   ├── ClubCard.tsx
@@ -72,7 +73,11 @@ frontend/
     │   ├── AvatarUpload.tsx
     │   ├── CreateClubModal.tsx — 5-шаговый wizard на RHF, открывается из MyClubsPage
     │   ├── Toast.tsx
-    │   └── RootErrorFallback.tsx
+    │   ├── RootErrorFallback.tsx
+    │   └── club/                 — tab-content для unified ClubPage
+    │       ├── ClubEventsTab.tsx
+    │       ├── ClubMembersTab.tsx
+    │       └── ClubProfileTab.tsx
     │
     ├── hooks/
     │   └── useBackButton.ts
@@ -110,7 +115,7 @@ frontend/
         └── mocks/            — MSW handlers + server + mocked tgui
 ```
 
-Всего: **9 страниц**, **8 компонентов**, **2 хука** (`useBackButton`, `useHaptic`),
+Всего: **8 страниц**, **8 компонентов** + **3 club-tab-компонента**, **2 хука** (`useBackButton`, `useHaptic`),
 **1 стор** (`useAuthStore`), **3 API-модуля**, **5 query-модулей** (`queries/`),
 **1 файл типов**, **1 util-модуль** (`formatters.ts`).
 
@@ -181,8 +186,8 @@ frontend/
 | `/events` | EventsPage | eager | ✗ | ✓ | tab |
 | `/profile` | ProfilePage | eager | ✗ | ✓ | tab |
 | `/organizer` | `<Navigate to="/my-clubs" replace />` | — | — | — | legacy redirect |
-| `/clubs/:id` | ClubPage | lazy | ✓ | ✓ | nested |
-| `/clubs/:id/interior` | ClubInteriorPage | lazy | ✓ | ✓ | nested |
+| `/clubs/:id` | ClubPage (unified — visitor / member / organizer view) | lazy | ✓ | ✓ | nested |
+| `/clubs/:id/interior` | `<InteriorRedirect>` → `/clubs/:id` | — | — | — | legacy redirect (см. `club-page-unified.md`) |
 | `/clubs/:id/manage` | OrganizerClubManage | lazy | ✓ | ✓ | nested |
 | `/events/:id` | EventPage | lazy | ✓ | ✓ | nested |
 | `/invite/:code` | InvitePage | lazy | ✓ | ✓ | nested |
@@ -254,7 +259,7 @@ export function isTabBarRoute(pathname: string): boolean {
 }
 ```
 
-Итого: **все 9 страниц** показывают BottomTabBar (4 таба + 5 nested-страниц).
+Итого: **все 8 страниц** показывают BottomTabBar (4 таба + 4 nested-страницы — после удаления `ClubInteriorPage` в `feature/unified-club-page`).
 `/events/:id` и `/clubs/:id` (с `/manage`) сохраняют tab-bar явно через regex,
 чтобы тап в карточку не «терял» текущий таб. На `/invite/:code` tab-bar **скрыт**
 (не покрыт regex'ом) — invite — entry-flow для незарегистрированного контекста,
@@ -579,77 +584,55 @@ type UserVote = 'going' | 'maybe' | 'not_going' | 'confirmed' | 'waitlisted' | '
 
 ---
 
-### 7.5 ClubPage `/clubs/:id` ⚡ nested
+### 7.5 ClubPage (unified) `/clubs/:id` ⚡ nested
+
+> Единая страница клуба для всех ролей. Контент member/organizer вынесен в
+> tab-компоненты `components/club/`. Полная спецификация —
+> [`docs/modules/club-page-unified.md`](../modules/club-page-unified.md).
 
 **Header:** BackButton
-**Body:**
+**Body (рендерится всем):**
 1. Header клуба
-   - `<Avatar>` 80×80
+   - `<Avatar>` 80×80 (или эмодзи 🏠 fallback)
    - Название (`<Text weight="1">`)
-   - Badges: категория + тип доступа
-2. Info-cells
-   - «Город» (+ «Район» если есть)
-   - «Участники» — `X / Y`
-   - «Подписка» — `formatPrice(subscriptionPrice)`
+   - Badges: категория + тип доступа + **role-badge** (member/organizer)
+2. Info-cells: «Город», «Участники X/Y», «Подписка»
 3. `<Section header="О клубе">` — `description`
 4. `<Section header="Правила">` — если `rules !== null`
-5. Join-error (красный текст) — если есть
-6. CTA-кнопка (динамическая, см. ниже)
-7. `<Modal>` «Заявка в клуб» — для closed-клубов
 
-**CTA-логика** (приоритет сверху вниз):
-- `isOrganizer` → «⚙️ Управление клубом» (disabled, outline)
-- `isMember` → «Вы участник ✓» (disabled, outline)
-- `pendingPayment` → «💳 Ожидаем оплату — {priceStars} Stars» (disabled) +
-  hint про Telegram-счёт
-- `app.status === 'pending'` → «⏳ Заявка на рассмотрении» (disabled)
-- `app.status === 'approved'` → «💳 Ожидаем оплату…» (disabled)
-- `joinSuccess` → «Заявка отправлена ✓» (disabled)
-- `accessType === 'open'` → «Вступить» (onClick = `handleJoin`)
-- `accessType === 'closed'` → «Хочу вступить» (onClick = `setShowApplyModal`)
+**Visitor-only ветка:**
+5. `<Placeholder description="События доступны участникам клуба" />`
+6. Join-error (красный текст) — если есть
+7. CTA-кнопка (динамическая):
+   - `pendingPayment` → «💳 Ожидаем оплату — {priceStars} Stars» (disabled) + hint
+   - `app.status === 'pending'` → «⏳ Заявка на рассмотрении» (disabled)
+   - `app.status === 'approved'` → «💳 Ожидаем оплату…» (disabled)
+   - `joinSuccess` → «Заявка отправлена ✓» (disabled)
+   - `accessType === 'open'` → «Вступить» → `handleJoin`
+   - `accessType === 'closed'` → «Хочу вступить» → `setShowApplyModal(true)`
+8. `<Modal>` «Заявка в клуб» — для closed-клубов
 
-**ApplyModal:**
-- Заголовок «Заявка в клуб»
-- Если `applicationQuestion` — показать + `<Textarea>` для ответа
-- Join-error
-- Кнопки: «Отмена» / «Отправить»
+**Member / Organizer ветка:**
+5. `<TabsList>` горизонтальная:
+   - member: 3 таба «События / Участники / Мой профиль» (default «События»)
+   - organizer: + 4-й таб «Управление» (navigate-link, не state-toggle —
+     `haptic.impact('light')` + `navigate('/clubs/:id/manage')`, никогда не selected)
+6. Активный tab-контент:
+   - `events` → `<ClubEventsTab clubId={id} />` (upcoming + past через `useClubEventsQuery`)
+   - `members` → `<ClubMembersTab clubId={id} />` (через `useClubMembersQuery`)
+   - `profile` → `<ClubProfileTab clubId={id} userId={user.id} />` (через `useMemberProfileQuery`)
+
+CTA-кнопка / placeholder для visitor — НЕ рендерятся для member/organizer.
+Tabs условно (`{activeTab === X && <Tab/>}`) — only active mounts → only active query runs.
 
 **Footer:** BottomTabBar
-**API:** `getClub(id)`, `fetchMyClubs()`, `getMyApplications()`, `joinClub(id)`,
-`applyToClub(id, answer)`
+**API:** `getClub(id)`, `getMyClubs()`, `getMyApplications()`, `joinClub(id)`,
+`applyToClub(id, answer)` + (для member/organizer-ветки) `getClubEvents`,
+`getClubMembers`, `getMemberProfile`.
 
 ---
 
-### 7.6 ClubInteriorPage `/clubs/:id/interior` ⚡ nested
-
-**Header:** BackButton
-**Body:**
-1. Header клуба — название + «X / Y участников»
-2. `<TabsList>` горизонтальная (3 таба): **«События» / «Участники» / «Мой
-   профиль»**
-
-**Tab 1: События**
-- `<Section header="Ближайшие">` (статусы `upcoming` / `stage_1` / `stage_2`)
-  - `<Cell>` события (subtitle: дата+время · место, after: `X/Y`)
-  - click → `navigate('/events/:id')`
-- `<Section header="Прошедшие">` (`completed`, max 5) — аналогично
-
-**Tab 2: Участники**
-- `<Section header="Участники (N)">`
-  - `<Cell>` каждого — before: Avatar, subtitle: «Надёжность: {index}»,
-    after: badge «Организатор» (если role)
-
-**Tab 3: Мой профиль**
-- `<Placeholder>` «Профиль недоступен» — если `memberProfile === null`
-- Иначе: Avatar + имя + `<Section header="Репутация">` с метриками
-
-**Footer:** BottomTabBar
-**API:** `getClub()`, `getClubEvents()`, `getClubMembers()`,
-`getMemberProfile(clubId, userId)`
-
----
-
-### 7.7 EventPage `/events/:id` ⚡ nested
+### 7.6 EventPage `/events/:id` ⚡ nested
 
 **Header:** BackButton
 **Body:**
@@ -674,7 +657,7 @@ type UserVote = 'going' | 'maybe' | 'not_going' | 'confirmed' | 'waitlisted' | '
 
 ---
 
-### 7.8 OrganizerClubManage `/clubs/:id/manage` ⚡ nested
+### 7.7 OrganizerClubManage `/clubs/:id/manage` ⚡ nested
 
 **Header:** BackButton
 **Body:**
@@ -729,7 +712,7 @@ type UserVote = 'going' | 'maybe' | 'not_going' | 'confirmed' | 'waitlisted' | '
 
 ---
 
-### 7.9 InvitePage `/invite/:code` ⚡ nested
+### 7.8 InvitePage `/invite/:code` ⚡ nested
 
 **Header:** BackButton
 **Body:**
@@ -917,7 +900,7 @@ Last-resort fallback для top-level `<ErrorBoundary>` (`react-error-boundary`)
 - `Select` — dropdown
 - `Textarea` — многострочный ввод
 - `TabsList` — горизонтальная вкладка внутри страницы (используется в
-  ClubInteriorPage и OrganizerClubManage)
+  unified ClubPage role-aware tabs и OrganizerClubManage)
 
 ### Обратная связь и состояния
 - `Spinner` — индикатор, размеры `s` / `m` / `l`
@@ -1507,11 +1490,11 @@ ErrorBoundary, branded types, features-reorg — отдельно.
 - Иконочный набор (24px grid, currentColor fill) — замена emoji
 - Avatar-placeholder (инициалы на цветном фоне)
 
-### Макеты (9 страниц × 2 темы)
+### Макеты (8 страниц × 2 темы)
 - DiscoveryPage, MyClubsPage (unified, organizer + member), EventsPage
   (placeholder/будущая лента), ProfilePage (tab)
-- ClubPage, ClubInteriorPage, OrganizerClubManage (5 табов), EventPage,
-  InvitePage (nested)
+- ClubPage (unified — visitor / member / organizer view с role-aware tabs),
+  OrganizerClubManage (5 табов), EventPage, InvitePage (nested)
 - Каждая — empty state + loading skeleton + error state
 - Nested — с учётом места под Telegram MainButton
 

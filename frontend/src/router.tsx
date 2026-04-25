@@ -1,5 +1,5 @@
-import { lazy } from 'react';
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { lazy, FC } from 'react';
+import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
 import { Layout } from './components/Layout';
 
 // Main tab pages — eagerly imported for instant tab switching
@@ -12,11 +12,6 @@ import { ProfilePage } from './pages/ProfilePage';
 const ClubPage = lazy(() =>
   import('./pages/ClubPage').then((m) => ({ default: m.ClubPage })),
 );
-const ClubInteriorPage = lazy(() =>
-  import('./pages/ClubInteriorPage').then((m) => ({
-    default: m.ClubInteriorPage,
-  })),
-);
 const EventPage = lazy(() =>
   import('./pages/EventPage').then((m) => ({ default: m.EventPage })),
 );
@@ -26,6 +21,13 @@ const InvitePage = lazy(() =>
 const OrganizerClubManage = lazy(() =>
   import('./pages/OrganizerClubManage').then((m) => ({ default: m.OrganizerClubManage })),
 );
+
+// Legacy /clubs/:id/interior was merged into unified /clubs/:id.
+// Preserve :id in redirect so old bookmarks / deep-links don't 404.
+const InteriorRedirect: FC = () => {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`/clubs/${id}`} replace />;
+};
 
 export const router = createBrowserRouter([
   {
@@ -63,7 +65,7 @@ export const router = createBrowserRouter([
       },
       {
         path: '/clubs/:id/interior',
-        element: <ClubInteriorPage />,
+        element: <InteriorRedirect />,
       },
       {
         path: '/events/:id',

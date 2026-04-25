@@ -52,6 +52,31 @@ function renderClubPage(clubId: string = 'club-123') {
   return { ...result, user };
 }
 
+// Helpers for member/organizer scenarios — keep tab data endpoints empty by default.
+function mockEmptyTabData(clubId: string = 'club-123') {
+  server.use(
+    http.get(`*/api/clubs/${clubId}/events`, () => HttpResponse.json({
+      content: [],
+      totalElements: 0,
+      totalPages: 0,
+      page: 0,
+      size: 100,
+    })),
+    http.get(`*/api/clubs/${clubId}/members`, () => HttpResponse.json([])),
+    http.get(`*/api/clubs/${clubId}/members/:userId`, () => HttpResponse.json({
+      userId: 'user-1',
+      clubId,
+      firstName: 'Test',
+      username: 'testuser',
+      avatarUrl: null,
+      reliabilityIndex: 100,
+      promiseFulfillmentPct: 100,
+      totalConfirmations: 0,
+      totalAttendances: 0,
+    })),
+  );
+}
+
 describe('ClubPage', () => {
   beforeEach(() => {
     useAuthStore.setState({
@@ -92,7 +117,28 @@ describe('ClubPage', () => {
     });
   });
 
-  it('click "Вступить" calls joinClub API, then shows "Вы участник" text', async () => {
+  it('visitor sees placeholder "События доступны участникам клуба" and no tabs', async () => {
+    server.use(
+      http.get('*/api/clubs/:id', () => {
+        return HttpResponse.json({
+          ...mockClubDetail,
+          accessType: 'open',
+          ownerId: 'other-owner',
+        });
+      }),
+      http.get('*/api/users/me/clubs', () => HttpResponse.json([] as MembershipDto[])),
+    );
+
+    renderClubPage();
+
+    await waitFor(() => {
+      expect(screen.getByText(/события доступны участникам клуба/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: /^участники$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^мой профиль$/i })).not.toBeInTheDocument();
+  });
+
+  it('click "Вступить" calls joinClub API, then shows "Вы участник" badge', async () => {
     let joinCalled = false;
 
     server.use(
@@ -132,6 +178,7 @@ describe('ClubPage', () => {
         } as MembershipDto);
       }),
     );
+    mockEmptyTabData();
 
     const { user } = renderClubPage();
 
@@ -142,9 +189,7 @@ describe('ClubPage', () => {
     await user.click(joinButton);
 
     await waitFor(() => {
-      const memberButton = screen.queryByText(/вы участник/i);
-      const successButton = screen.queryByText(/заявка отправлена/i);
-      expect(memberButton || successButton).toBeTruthy();
+      expect(screen.getByText(/вы участник/i)).toBeInTheDocument();
     });
 
     expect(joinCalled).toBe(true);
@@ -291,7 +336,43 @@ describe('ClubPage', () => {
     });
   });
 
-  it('organizer sees "Управление клубом" button when ownerId matches user id', async () => {
+  it('member sees role-aware tabs (events / members / profile) without manage tab and without CTA', async () => {
+    server.use(
+      http.get('*/api/clubs/:id', () => {
+        return HttpResponse.json({
+          ...mockClubDetail,
+          ownerId: 'other-owner',
+        } as ClubDetailDto);
+      }),
+      http.get('*/api/users/me/clubs', () => {
+        return HttpResponse.json([
+          {
+            id: 'mem-1',
+            userId: 'user-1',
+            clubId: 'club-123',
+            status: 'active',
+            role: 'member',
+            joinedAt: '2025-01-01T00:00:00Z',
+            subscriptionExpiresAt: null,
+          },
+        ] as MembershipDto[]);
+      }),
+    );
+    mockEmptyTabData();
+
+    renderClubPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^события$/i })).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: /^участники$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^мой профиль$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^управление$/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/вы участник/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^вступить$/i })).not.toBeInTheDocument();
+  });
+
+  it('organizer sees extra "Управление" tab when ownerId matches user id', async () => {
     useAuthStore.setState({
       user: {
         id: 'owner-456',
@@ -318,16 +399,17 @@ describe('ClubPage', () => {
         return HttpResponse.json([] as MembershipDto[]);
       }),
     );
+    mockEmptyTabData();
 
     renderClubPage();
 
     await waitFor(() => {
-      const manageButton = screen.getByRole('button', { name: /управление клубом/i });
-      expect(manageButton).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^управление$/i })).toBeInTheDocument();
     });
+    expect(screen.getByText(/вы организатор/i)).toBeInTheDocument();
   });
 
-  it('organizer sees "Управление клубом" when they have organizer membership role', async () => {
+  it('organizer sees "Управление" tab when they have organizer membership role', async () => {
     server.use(
       http.get('*/api/clubs/:id', () => {
         return HttpResponse.json({
@@ -349,12 +431,52 @@ describe('ClubPage', () => {
         ] as MembershipDto[]);
       }),
     );
+    mockEmptyTabData();
 
     renderClubPage();
 
     await waitFor(() => {
-      const manageButton = screen.getByRole('button', { name: /управление клубом/i });
-      expect(manageButton).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^управление$/i })).toBeInTheDocument();
+    });
+  });
+
+  it('organizer tap on "Управление" tab navigates to /clubs/:id/manage', async () => {
+    useAuthStore.setState({
+      user: {
+        id: 'owner-456',
+        telegramId: 12345,
+        telegramUsername: 'owner',
+        firstName: 'Owner',
+        lastName: 'User',
+        avatarUrl: null,
+        city: null,
+      },
+      isAuthenticated: true,
+      isLoading: false,
+      error: null,
+    });
+
+    server.use(
+      http.get('*/api/clubs/:id', () => {
+        return HttpResponse.json({
+          ...mockClubDetail,
+          ownerId: 'owner-456',
+        } as ClubDetailDto);
+      }),
+      http.get('*/api/users/me/clubs', () => HttpResponse.json([] as MembershipDto[])),
+    );
+    mockEmptyTabData();
+
+    const { user } = renderClubPage();
+
+    const manageTab = await waitFor(() => {
+      return screen.getByRole('button', { name: /^управление$/i });
+    });
+
+    await user.click(manageTab);
+
+    await waitFor(() => {
+      expect(screen.getByText('Manage Page')).toBeInTheDocument();
     });
   });
 

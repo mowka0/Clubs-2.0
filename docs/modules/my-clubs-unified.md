@@ -28,7 +28,7 @@
 ### НЕ входит (отдельный PR)
 - Реальная логика `EventsPage`: backend endpoint `GET /api/users/me/events?status=upcoming` + frontend список с RSVP — only placeholder сейчас.
 - Любые изменения backend (`getMyClubs()` уже возвращает `MembershipDto.role` — `frontend/src/types/api.ts:113`).
-- Изменения других страниц: `ClubPage`, `EventPage`, `OrganizerClubManage`, `ClubInteriorPage`, `DiscoveryPage`, `ProfilePage`.
+- Изменения других страниц: `ClubPage`, `EventPage`, `OrganizerClubManage`, ~~`ClubInteriorPage`~~ (удалён в `feature/unified-club-page`, 2026-04-25), `DiscoveryPage`, `ProfilePage`.
 - Реструктуризация роутера за пределами этих 4 routes.
 - Discovery по событиям (запрещено, см. инвариант выше).
 

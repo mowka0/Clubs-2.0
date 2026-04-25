@@ -114,14 +114,14 @@ export const queryKeys = {
 |---|---|---|---|
 | `useClubsQuery(filters)` | `queryKeys.clubs.list(filters)` | `getClubs` | DiscoveryPage |
 | `useMyClubsQuery()` | `queryKeys.clubs.my()` | `getMyClubs` | MyClubsPage, ProfilePage, ClubPage (после `feature/restructure-bottom-tabs` — OrganizerPage удалён, его консьюмеры слиты в MyClubsPage) |
-| `useClubQuery(clubId, opts?)` | `queryKeys.clubs.detail(clubId)` | `getClub` | ClubPage, ClubInteriorPage, OrganizerClubManage, MyClubsPage (для дозагрузки названий клубов и заявок), CreateClubModal post-create |
+| `useClubQuery(clubId, opts?)` | `queryKeys.clubs.detail(clubId)` | `getClub` | ClubPage (unified), OrganizerClubManage, MyClubsPage (для дозагрузки названий клубов и заявок), CreateClubModal post-create |
 | `useClubByInviteQuery(code)` | `queryKeys.clubs.byInvite(code)` | `getClubByInvite` | InvitePage |
-| `useClubEventsQuery(clubId, params?)` | `queryKeys.events.byClub(clubId, params)` | `getClubEvents` | ClubInteriorPage, OrganizerClubManage |
+| `useClubEventsQuery(clubId, params?)` | `queryKeys.events.byClub(clubId, params)` | `getClubEvents` | components/club/ClubEventsTab, OrganizerClubManage |
 | `useEventQuery(eventId)` | `queryKeys.events.detail(eventId)` | `getEvent` | EventPage, OrganizerClubManage (attendance modal) |
 | `useMyVoteQuery(eventId, enabled?)` | `queryKeys.events.myVote(eventId)` | `getMyVote` | EventPage |
 | `useMyApplicationsQuery()` | `queryKeys.applications.mine()` | `getMyApplications` | ClubPage, MyClubsPage, ProfilePage |
-| `useClubMembersQuery(clubId)` | `queryKeys.clubs.members(clubId)` | `getClubMembers` | ClubInteriorPage, OrganizerClubManage |
-| `useMemberProfileQuery(clubId, userId)` | `queryKeys.clubs.memberProfile(clubId, userId)` | `getMemberProfile` | ClubInteriorPage, OrganizerClubManage |
+| `useClubMembersQuery(clubId)` | `queryKeys.clubs.members(clubId)` | `getClubMembers` | components/club/ClubMembersTab, OrganizerClubManage |
+| `useMemberProfileQuery(clubId, userId)` | `queryKeys.clubs.memberProfile(clubId, userId)` | `getMemberProfile` | components/club/ClubProfileTab, OrganizerClubManage |
 | `useClubApplicationsQuery(clubId, status?)` | `queryKeys.clubs.applications(clubId, status)` | `getClubApplications` | OrganizerClubManage |
 | `useClubFinancesQuery(clubId)` | `queryKeys.clubs.finances(clubId)` | `getFinances` | OrganizerClubManage |
 
@@ -332,7 +332,7 @@ export function renderWithProviders(
 - ~~`frontend/src/pages/OrganizerPage.tsx`~~ — `useClubsStore.fetchMyClubs` → `useMyClubsQuery`. `createClub` в CreateClubModal → `useCreateClubMutation`. `getClub` для дозагрузки → как в MyClubsPage. **Файл удалён** в PR `feature/restructure-bottom-tabs` (2026-04-25); его потребители query-хуков (`useMyClubsQuery`, `useCreateClubMutation`, `useClubQuery` через `useQueries`) переехали в `MyClubsPage.tsx` и `components/CreateClubModal.tsx`.
 - `frontend/src/pages/ProfilePage.tsx` — `useClubsStore` + `useApplicationsStore` → query-хуки.
 - `frontend/src/pages/ClubPage.tsx` — `useClubsStore.fetchMyClubs` + `getClub` + `getMyApplications` в `Promise.all` → `useClubQuery` + `useMyClubsQuery` + `useMyApplicationsQuery` (3 параллельных запроса, TanStack их не блокирует). `joinClub` / `applyToClub` → `useJoinClubMutation` / `useApplyToClubMutation`.
-- `frontend/src/pages/ClubInteriorPage.tsx` — `getClub` + `getClubEvents` + `getClubMembers` → `useClubQuery` + `useClubEventsQuery` + `useClubMembersQuery` (если включаем members)
+- ~~`frontend/src/pages/ClubInteriorPage.tsx`~~ — файл удалён в `feature/unified-club-page` (2026-04-25); query-консьюмеры переехали в `frontend/src/components/club/ClubEventsTab.tsx` (`useClubEventsQuery`), `ClubMembersTab.tsx` (`useClubMembersQuery`), `ClubProfileTab.tsx` (`useMemberProfileQuery`). Унифицированный `ClubPage` дёргает `useClubQuery` сам.
 - `frontend/src/pages/EventPage.tsx` — `getEvent` → `useEventQuery`. `castVote` / `confirmParticipation` / `declineParticipation` → mutations с invalidation `queryKeys.events.detail(eventId)`.
 - `frontend/src/pages/OrganizerClubManage.tsx` — массовая миграция: `getClub`, `updateClub`, `deleteClub`, `getClubMembers`, `getClubApplications`, `approveApplication`, `rejectApplication`, `getClubEvents`, `createEvent`, `markAttendance`, `getEvent`, `getFinances` → соответствующие query/mutation-хуки.
 - `frontend/src/pages/InvitePage.tsx` — `getClubByInvite` → `useClubByInviteQuery`. `joinByInviteCode` → `useJoinByInviteMutation`.
@@ -355,7 +355,7 @@ export function renderWithProviders(
 - 3 Zustand-стора (`useClubsStore`, `useApplicationsStore`, `useEventsStore`) → удаляются
 - 13 прямых API-вызовов в `useEffect`/`useState` по страницам — все мигрируются на `useQuery`/`useQueries`/`useMutation`:
   - `OrganizerClubManage.tsx` — 7 точек (members, applications, events, finances, club, memberProfile, eventDetail) разнесены по 5 табам
-  - `ClubInteriorPage.tsx` — 4 (club, events, members, memberProfile)
+  - ~~`ClubInteriorPage.tsx` — 4 (club, events, members, memberProfile)~~ — файл удалён в `feature/unified-club-page`. Те же 4 query-вызова переехали в unified `ClubPage` + `components/club/{ClubEventsTab,ClubMembersTab,ClubProfileTab}`
   - `EventPage.tsx` — 2 (event, myVote)
   - `ClubPage.tsx`, `InvitePage.tsx`, `MyClubsPage.tsx` — `getClub` для деталей (`OrganizerPage.tsx` упразднён в `feature/restructure-bottom-tabs`)
 
