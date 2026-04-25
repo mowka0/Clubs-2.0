@@ -85,9 +85,13 @@ GIVEN валидный wizard заполнен до конца
 WHEN submit
 THEN `body` запроса содержит ровно те же 10 полей (name, city, district, category, accessType, memberLimit, subscriptionPrice, description, rules, applicationQuestion) + avatarUrl что и до миграции. Имена и типы не меняются.
 
-### AC-4: haptic preserved
+### AC-4: haptic preserved + validation-fail
 GIVEN миграция завершена
-THEN haptic срабатывает в тех же точках: `impact('light')` на каждом успешном next/back, `impact('heavy')` на финальный submit, `notify('success')` на onSuccess мутации, `notify('error')` на onError. Покрытие — см. `haptic.md` § wizard mappings.
+THEN haptic срабатывает в тех же точках: `impact('light')` на каждом успешном next/back, `impact('heavy')` на финальный submit, `notify('success')` на onSuccess мутации, `notify('error')` на onError.
+AND **дополнительно** `notify('error')` срабатывает на любом RHF validation fail:
+- В `handleNext` если `await trigger(STEP_FIELDS[step])` вернул `false` (невалидный шаг)
+- В `handleSubmit(onValid, onInvalid)` через `onInvalid` callback — RHF сам зовёт его при провале валидации перед mutation
+Покрытие и Правила — см. `haptic.md` § Side-effect требования (Правило 1.2).
 
 ### AC-5: server error UI preserved
 GIVEN submit вернул ошибку (mutation `onError`)

@@ -82,6 +82,12 @@ const onTabClick = (path: string) => {
 |---|---|---|---|
 | `components/BottomTabBar.tsx` | `handleTabClick` (до `navigate`), только если `location.pathname !== path` | `select()` | Смена выбора таба — `selectionChanged()`. Не `impact` — это переключение, не подтверждение |
 
+### Навигация назад
+
+| Файл | Событие | Метод | Reason |
+|---|---|---|---|
+| `hooks/useBackButton.ts` | callback нативной Telegram BackButton (внутри `onBackButtonClick`, до `navigate(-1)`) | `impact('light')` | Telegram не генерит haptic на back-tap надёжно — добавляем явно для консистентности с in-app навигацией |
+
 ### Списки и навигация в детали
 
 | Файл | Событие | Метод | Reason |
@@ -91,6 +97,8 @@ const onTabClick = (path: string) => {
 | `pages/MyClubsPage.tsx` | tap клуба → `navigate('/clubs/:id')` (строка 84) | `impact('light')` | То же |
 | `pages/ProfilePage.tsx` | tap клуба или application → `navigate(...)` (строки 70, 77, 91, 103) | `impact('light')` | То же |
 | `pages/OrganizerPage.tsx` | tap клуба → `navigate('/clubs/:id/manage')` (строка 245) | `impact('light')` | То же |
+| `pages/ClubPage.tsx` | «⚙️ Управление клубом» Button (для организатора, строка 137) → `navigate('/clubs/:id/manage')` | `impact('light')` | Открытие nested-страницы — light, как навигация-cell |
+| `pages/OrganizerClubManage.tsx` MembersTab | tap по member-Cell → `setSelectedMember(m)` (строка 162) — открытие профильной модалки | `impact('light')` | §15: открытие модалки — light |
 
 ### Внутри-страничные переключатели
 
@@ -141,6 +149,14 @@ const onTabClick = (path: string) => {
 
 **Правило 1 (error):** каждый `.catch(...)`-блок, в котором есть `haptic.notify('error')` или `haptic.notify('warning')`, **обязан** показать сообщение пользователю — inline-текст в той же секции/модалке. Паттерн: локальный `useState<string | null>` + рендер `{error && <div style={{ color: 'var(--tgui--destructive_text_color)' }}>{error}</div>}`. То же — для **client-side валидации** (early-return до API-вызова): фон `setError(msg) + haptic.notify('error')`, инкапсулированный в локальный `fail(msg)` хелпер, чтобы все ветки валидации синхронно давали и текст и тактильный сигнал.
 
+**Правило 1.1 (красная подсветка поля):** валидация конкретного поля **обязана** также подсвечивать это поле красным контуром через `status="error"` prop у `Input`/`Textarea` из telegram-ui. Это даёт пользователю однозначно понять **какое именно** поле не прошло, без необходимости читать текст ошибки сверху. Два паттерна реализации:
+- **RHF (CreateClubModal):** `status={errors.fieldName ? 'error' : undefined}` напрямую из `formState.errors` — автоматически синхронизируется с RHF.
+- **useState (SettingsTab):** локальный `errorField` state + типизированный `fail(field, msg)` хелпер; `status={errorField === 'fieldName' ? 'error' : undefined}` на каждом Input. Используется когда форма не на RHF.
+
+**Правило 1.2 (RHF validation haptic):** для форм на react-hook-form `notify('error')` вызывается:
+- На **шаге wizard'а** (next-кнопка): после `await trigger(fields)` если возвращает false (см. `OrganizerPage.handleNext`).
+- На **финальном submit**: через `handleSubmit(onValid, onInvalid)` — RHF сам вызовет `onInvalid` callback при провале валидации перед mutation. См. `OrganizerPage.onInvalid`.
+
 **Правило 2 (success без перехода):** если success-путь **не** меняет страницу/модалку (юзер остаётся на том же экране — типичный пример: `handleSave` настроек клуба), `notify('success')` **обязан** сопровождаться transient UI-фидбеком — `<Toast>` с текстом подтверждения. Если success-путь делает navigate / закрывает модалку — Toast не нужен, переход сам по себе сигнал.
 
 Дополнительно (рекомендуется для новых обработчиков): `console.error('handleX failed', e)` для прод-диагностики — см. [`.claude/rules/error-handling.md`](../../.claude/rules/error-handling.md) § «Логирование ошибок».
@@ -162,9 +178,10 @@ DiscoveryPage сама по себе не имеет специфичных кн
 - ❌ Автозагрузка следующей страницы DiscoveryPage (infinite scroll fetch — system event)
 - ❌ `useEffect`-fetched data success (не пользовательское действие)
 - ❌ `Toast` появление (system notification)
-- ❌ BackButton клик (нативный Telegram-элемент сам генерит haptic)
-- ❌ MainButton клик (нативный — то же)
+- ❌ MainButton клик (нативный Telegram-элемент сам генерит haptic)
 - ❌ Hover-эффекты (на Desktop)
+
+> **Был раньше в этом списке:** `BackButton`. На staging обнаружили что Telegram **не** генерит haptic на нативную back-кнопку надёжно (зависит от платформы / версии клиента) — сейчас в `useBackButton` явно добавлен `haptic.impact('light')` как fallback. См. секцию «Навигация назад» ниже.
 
 ---
 
