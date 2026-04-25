@@ -134,7 +134,7 @@ export const ClubPage: FC = () => {
   // handleSuccessfulPayment creates the membership; the approved application row
   // remains in DB but isn't UI-visible because isMember takes precedence here.
   const renderJoinButton = () => {
-    if (isOrganizer) return <Button size="l" stretched onClick={() => navigate(`/clubs/${id}/manage`)}>&#x2699;&#xFE0F; Управление клубом</Button>;
+    if (isOrganizer) return <Button size="l" stretched onClick={() => { haptic.impact('light'); navigate(`/clubs/${id}/manage`); }}>&#x2699;&#xFE0F; Управление клубом</Button>;
     if (isMember) return <Button size="l" mode="outline" disabled stretched>Вы участник &#x2713;</Button>;
     if (pendingPayment) {
       return (

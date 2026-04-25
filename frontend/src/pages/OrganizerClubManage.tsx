@@ -135,6 +135,7 @@ const MemberProfileModal: FC<{
 // ---- Members Tab ----
 
 const MembersTab: FC<{ clubId: string }> = ({ clubId }) => {
+  const haptic = useHaptic();
   const membersQuery = useClubMembersQuery(clubId);
   const [selectedMember, setSelectedMember] = useState<MemberListItemDto | null>(null);
 
@@ -158,7 +159,7 @@ const MembersTab: FC<{ clubId: string }> = ({ clubId }) => {
         {members.map((m) => (
           <Cell
             key={m.userId}
-            onClick={() => setSelectedMember(m)}
+            onClick={() => { haptic.impact('light'); setSelectedMember(m); }}
             before={
               <Avatar
                 size={40}
@@ -732,6 +733,11 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(club.avatarUrl ?? null);
 
   const [error, setError] = useState<string | null>(null);
+  // Tracks which Input should render in the error state. Same pattern as RHF
+  // `formState.errors.<field>` in CreateClubModal — gives a red outline on the
+  // offending field, not just an inline message.
+  type SettingsField = 'name' | 'city' | 'memberLimit' | 'subscriptionPrice' | 'description';
+  const [errorField, setErrorField] = useState<SettingsField | null>(null);
   const [savedToast, setSavedToast] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
@@ -751,34 +757,37 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
 
   const handleSave = () => {
     setError(null);
+    setErrorField(null);
 
-    // Validation failures share the same UX: inline error + error haptic.
-    const fail = (msg: string) => {
+    // Validation failures share the same UX: red outline on the field +
+    // inline error message + error haptic.
+    const fail = (field: SettingsField, msg: string) => {
       setError(msg);
+      setErrorField(field);
       haptic.notify('error');
     };
 
     // Basic validation (server does full Bean Validation)
     if (name.trim().length < 1 || name.trim().length > 60) {
-      fail('Название: 1–60 символов');
+      fail('name', 'Название: 1–60 символов');
       return;
     }
     if (!city.trim()) {
-      fail('Укажите город');
+      fail('city', 'Укажите город');
       return;
     }
     const limit = Number(memberLimit);
     if (!Number.isInteger(limit) || limit < 10 || limit > 80) {
-      fail('Лимит участников: 10–80');
+      fail('memberLimit', 'Лимит участников: 10–80');
       return;
     }
     const price = Number(subscriptionPrice);
     if (!Number.isInteger(price) || price < 0) {
-      fail('Цена: целое число >= 0');
+      fail('subscriptionPrice', 'Цена: целое число >= 0');
       return;
     }
     if (description.trim().length < 1 || description.trim().length > 500) {
-      fail('Описание: 1–500 символов');
+      fail('description', 'Описание: 1–500 символов');
       return;
     }
 
@@ -837,20 +846,22 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
       </Section>
 
       <Section header="Основное">
-        <Input header="Название" value={name} onChange={(e) => setName(e.target.value)} />
-        <Input header="Город" value={city} onChange={(e) => setCity(e.target.value)} />
+        <Input header="Название" value={name} onChange={(e) => setName(e.target.value)} status={errorField === 'name' ? 'error' : undefined} />
+        <Input header="Город" value={city} onChange={(e) => setCity(e.target.value)} status={errorField === 'city' ? 'error' : undefined} />
         <Input header="Район (опционально)" value={district} onChange={(e) => setDistrict(e.target.value)} />
         <Input
           header="Лимит участников (10–80)"
           type="number"
           value={memberLimit}
           onChange={(e) => setMemberLimit(e.target.value)}
+          status={errorField === 'memberLimit' ? 'error' : undefined}
         />
         <Input
           header="Цена подписки (Stars/мес, 0 = бесплатно)"
           type="number"
           value={subscriptionPrice}
           onChange={(e) => setSubscriptionPrice(e.target.value)}
+          status={errorField === 'subscriptionPrice' ? 'error' : undefined}
         />
       </Section>
 
@@ -859,6 +870,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
           header="Описание"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
+          status={errorField === 'description' ? 'error' : undefined}
         />
         <Textarea
           header="Правила клуба (опционально)"

@@ -103,9 +103,18 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
   const handleNext = async () => {
     const fields = STEP_FIELDS[step];
     const valid = fields && fields.length > 0 ? await trigger(fields) : true;
-    if (!valid) return;
+    if (!valid) {
+      haptic.notify('error');
+      return;
+    }
     haptic.impact('light');
     setStep((s) => s + 1);
+  };
+
+  // RHF invokes this when handleSubmit() detects validation errors.
+  // Mirrors handleNext fail-path so users feel the same haptic on the final step.
+  const onInvalid = () => {
+    haptic.notify('error');
   };
 
   const onValid = (data: ClubFormValues) => {
@@ -301,7 +310,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
             Далее
           </Button>
         ) : (
-          <Button size="m" onClick={handleSubmit(onValid)} disabled={submitting} stretched>
+          <Button size="m" onClick={handleSubmit(onValid, onInvalid)} disabled={submitting} stretched>
             {submitting ? <Spinner size="s" /> : 'Создать клуб'}
           </Button>
         )}
