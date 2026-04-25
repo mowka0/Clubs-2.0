@@ -2,13 +2,15 @@
 
 Небольшие задачки, выявленные при ревью на ветке `feature/club-settings-tab` (2026-04-24). Не блокируют мерж, но не должны потеряться.
 
-## CL-1: docs/code drift — member_limit
+## CL-1: docs/code drift — member_limit ✅ RESOLVED (2026-04-25, feature/pre-design-rhf-wizard)
 
 **Реальность:** `OrganizerPage` / `validators.ts` использует `validateStep` со старым правилом `memberLimit: 1–200`. Backend `@Min(10) @Max(80)` в `CreateClubRequest` / `UpdateClubRequest`. Пользователь введёт 5 → фронт пропустит → backend 400.
 
 **Fix:** синхронизировать `validators.ts` с `@Min(10) @Max(80)` + текст ошибки «Лимит участников: 10–80». Обновить `docs/modules/clubs.md` TASK-008 валидации (там всё ещё `memberLimit: 1-200`).
 
 **Scope:** мелкий bugfix, одна ветка.
+
+**Resolution:** RHF-миграция CreateClubModal удалила `validators.ts` целиком. RHF rule в `OrganizerPage.tsx:217-225`: `n < 10 || n > 80` с message «Лимит участников: 10–80». `docs/modules/clubs.md` уже было `10-80` (PR `feature/club-settings-tab`). Доп. правки post-flight: `docs/modules/ui-pages.md` и `docs/design/stack.md` — `1-200` → `10-80`.
 
 ---
 

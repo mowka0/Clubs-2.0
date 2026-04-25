@@ -1,6 +1,7 @@
 import { FC, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
 import {
   List,
   Section,
@@ -20,8 +21,6 @@ import { AvatarUpload } from '../components/AvatarUpload';
 import { getClub } from '../api/clubs';
 import type { CreateClubBody } from '../api/clubs';
 import type { ClubDetailDto } from '../types/api';
-import { validateStep } from '../utils/validators';
-import type { ClubFormData } from '../utils/validators';
 
 const CATEGORIES = [
   { value: 'sport', label: 'Спорт' },
@@ -36,61 +35,95 @@ const CATEGORIES = [
 
 const STEP_TITLES = ['Основное', 'Категория', 'Участники', 'Описание', 'Заявка'];
 
-type FormData = ClubFormData;
+interface ClubFormValues {
+  name: string;
+  city: string;
+  district: string;
+  category: string;
+  accessType: 'open' | 'closed';
+  memberLimit: string;
+  subscriptionPrice: string;
+  description: string;
+  rules: string;
+  applicationQuestion: string;
+}
 
-const INITIAL_FORM: FormData = {
-  name: '',
-  city: '',
-  district: '',
-  category: 'other',
-  accessType: 'open',
-  memberLimit: '30',
-  subscriptionPrice: '0',
-  description: '',
-  rules: '',
-  applicationQuestion: '',
-};
+const STEP_FIELDS: Array<Array<keyof ClubFormValues>> = [
+  ['name', 'city'],
+  ['category', 'accessType'],
+  ['memberLimit', 'subscriptionPrice'],
+  ['description'],
+  [],
+];
+
+const FieldError: FC<{ message?: string }> = ({ message }) =>
+  message ? (
+    <div style={{ color: 'var(--tgui--destructive_text_color)', fontSize: 13, padding: '4px 16px 0' }}>
+      {message}
+    </div>
+  ) : null;
 
 export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) => void }> = ({ onClose, onCreated }) => {
   const haptic = useHaptic();
   const createClubMutation = useCreateClubMutation();
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const {
+    register,
+    handleSubmit,
+    trigger,
+    watch,
+    formState: { errors },
+  } = useForm<ClubFormValues>({
+    mode: 'onTouched',
+    defaultValues: {
+      name: '',
+      city: '',
+      district: '',
+      category: 'other',
+      accessType: 'open',
+      memberLimit: '30',
+      subscriptionPrice: '0',
+      description: '',
+      rules: '',
+      applicationQuestion: '',
+    },
+  });
+
   const submitting = createClubMutation.isPending;
 
-  const update = (field: keyof FormData, value: string) => setForm((f) => ({ ...f, [field]: value }));
+  const memberLimit = watch('memberLimit');
+  const subscriptionPrice = watch('subscriptionPrice');
+  const accessType = watch('accessType');
 
-  const monthlyIncome = Math.round(Number(form.memberLimit) * Number(form.subscriptionPrice) * 0.8);
+  const monthlyIncome = Math.round(Number(memberLimit) * Number(subscriptionPrice) * 0.8);
 
-  const handleNext = () => {
-    const err = validateStep(step, form);
-    if (err) { setError(err); return; }
+  const handleNext = async () => {
+    const fields = STEP_FIELDS[step];
+    const valid = fields && fields.length > 0 ? await trigger(fields) : true;
+    if (!valid) return;
     haptic.impact('light');
-    setError(null);
     setStep((s) => s + 1);
   };
 
-  const handleSubmit = () => {
-    const err = validateStep(step, form);
-    if (err) { setError(err); return; }
+  const onValid = (data: ClubFormValues) => {
     haptic.impact('heavy');
     setError(null);
     const body: CreateClubBody = {
-      name: form.name.trim(),
-      description: form.description.trim(),
-      category: form.category,
-      accessType: form.accessType,
-      city: form.city.trim(),
-      district: form.district.trim() || undefined,
-      memberLimit: Number(form.memberLimit),
-      subscriptionPrice: Number(form.subscriptionPrice),
+      name: data.name.trim(),
+      description: data.description.trim(),
+      category: data.category,
+      accessType: data.accessType,
+      city: data.city.trim(),
+      district: data.district.trim() || undefined,
+      memberLimit: Number(data.memberLimit),
+      subscriptionPrice: Number(data.subscriptionPrice),
       avatarUrl: avatarUrl ?? undefined,
-      rules: form.rules.trim() || undefined,
-      applicationQuestion: (form.accessType === 'closed' && form.applicationQuestion.trim())
-        ? form.applicationQuestion.trim()
+      rules: data.rules.trim() || undefined,
+      applicationQuestion: (data.accessType === 'closed' && data.applicationQuestion.trim())
+        ? data.applicationQuestion.trim()
         : undefined,
     };
     createClubMutation.mutate(body, {
@@ -120,27 +153,53 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
 
       {step === 0 && (
         <Section>
-          <Input header="Название клуба *" placeholder="Например: Книжный клуб Москвы" value={form.name} onChange={(e) => update('name', e.target.value)} />
-          <Input header="Город *" placeholder="Москва" value={form.city} onChange={(e) => update('city', e.target.value)} />
-          <Input header="Район (необязательно)" placeholder="Центральный" value={form.district} onChange={(e) => update('district', e.target.value)} />
+          <Input
+            header="Название клуба *"
+            placeholder="Например: Книжный клуб Москвы"
+            status={errors.name ? 'error' : undefined}
+            {...register('name', {
+              validate: (v) => {
+                const t = v.trim();
+                if (t.length < 3) return 'Название: минимум 3 символа';
+                if (t.length > 60) return 'Название: максимум 60 символов';
+                return true;
+              },
+            })}
+          />
+          <FieldError message={errors.name?.message} />
+          <Input
+            header="Город *"
+            placeholder="Москва"
+            status={errors.city ? 'error' : undefined}
+            {...register('city', {
+              validate: (v) => v.trim().length > 0 || 'Укажите город',
+            })}
+          />
+          <FieldError message={errors.city?.message} />
+          <Input
+            header="Район (необязательно)"
+            placeholder="Центральный"
+            {...register('district')}
+          />
         </Section>
       )}
 
       {step === 1 && (
         <Section>
-          <Select header="Категория *" value={form.category} onChange={(e) => update('category', e.target.value)}>
+          <Select header="Категория *" {...register('category', { required: 'Выберите категорию' })}>
             {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
           </Select>
+          <FieldError message={errors.category?.message} />
           <Cell
             Component="label"
-            after={<input type="radio" checked={form.accessType === 'open'} onChange={() => update('accessType', 'open')} />}
+            after={<input type="radio" value="open" {...register('accessType')} />}
             description="Любой желающий может вступить"
           >
             Открытый клуб
           </Cell>
           <Cell
             Component="label"
-            after={<input type="radio" checked={form.accessType === 'closed'} onChange={() => update('accessType', 'closed')} />}
+            after={<input type="radio" value="closed" {...register('accessType')} />}
             description="Вступление по заявке (организатор одобряет)"
           >
             Закрытый клуб
@@ -150,10 +209,39 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
 
       {step === 2 && (
         <Section>
-          <Input header="Лимит участников *" type="number" placeholder="30" value={form.memberLimit} onChange={(e) => update('memberLimit', e.target.value)} />
-          <Input header="Цена подписки (Stars/мес)" type="number" placeholder="0 — бесплатно" value={form.subscriptionPrice} onChange={(e) => update('subscriptionPrice', e.target.value)} />
-          {Number(form.subscriptionPrice) > 0 && Number(form.memberLimit) > 0 && (
-            <Cell description={`При ${form.memberLimit} участниках вы будете зарабатывать ${monthlyIncome} Stars в месяц (80% от дохода)`}>
+          <Input
+            header="Лимит участников *"
+            type="number"
+            placeholder="30"
+            status={errors.memberLimit ? 'error' : undefined}
+            {...register('memberLimit', {
+              validate: (v) => {
+                const n = Number(v);
+                // Aligned with backend Bean Validation in CreateClubRequest.kt (10-80).
+                if (!v || !Number.isFinite(n) || n < 10 || n > 80) return 'Лимит участников: 10–80';
+                if (!Number.isInteger(n)) return 'Лимит участников: 10–80';
+                return true;
+              },
+            })}
+          />
+          <FieldError message={errors.memberLimit?.message} />
+          <Input
+            header="Цена подписки (Stars/мес)"
+            type="number"
+            placeholder="0 — бесплатно"
+            status={errors.subscriptionPrice ? 'error' : undefined}
+            {...register('subscriptionPrice', {
+              validate: (v) => {
+                const n = Number(v);
+                if (v === '' || !Number.isFinite(n) || n < 0) return 'Укажите корректную цену';
+                if (!Number.isInteger(n)) return 'Цена должна быть целым числом';
+                return true;
+              },
+            })}
+          />
+          <FieldError message={errors.subscriptionPrice?.message} />
+          {Number(subscriptionPrice) > 0 && Number(memberLimit) > 0 && (
+            <Cell description={`При ${memberLimit} участниках вы будете зарабатывать ${monthlyIncome} Stars в месяц (80% от дохода)`}>
               Доход организатора
             </Cell>
           )}
@@ -166,19 +254,35 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
             <div style={{ fontSize: 13, color: 'var(--tgui--hint_color)', marginBottom: 8 }}>Аватар (необязательно)</div>
             <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} disabled={submitting} />
           </div>
-          <Textarea header="Описание клуба *" placeholder="Расскажите о своём клубе (10-500 символов)" value={form.description} onChange={(e) => update('description', e.target.value)} />
-          <Textarea header="Правила (необязательно)" placeholder="Правила сообщества" value={form.rules} onChange={(e) => update('rules', e.target.value)} />
+          <Textarea
+            header="Описание клуба *"
+            placeholder="Расскажите о своём клубе (10-500 символов)"
+            status={errors.description ? 'error' : undefined}
+            {...register('description', {
+              validate: (v) => {
+                const t = v.trim();
+                if (t.length < 10) return 'Описание: минимум 10 символов';
+                if (t.length > 500) return 'Описание: максимум 500 символов';
+                return true;
+              },
+            })}
+          />
+          <FieldError message={errors.description?.message} />
+          <Textarea
+            header="Правила (необязательно)"
+            placeholder="Правила сообщества"
+            {...register('rules')}
+          />
         </Section>
       )}
 
       {step === 4 && (
         <Section>
-          {form.accessType === 'closed' ? (
+          {accessType === 'closed' ? (
             <Input
               header="Вопрос для вступления (необязательно)"
               placeholder="Почему вы хотите вступить?"
-              value={form.applicationQuestion}
-              onChange={(e) => update('applicationQuestion', e.target.value)}
+              {...register('applicationQuestion')}
             />
           ) : (
             <Placeholder description="Для открытого клуба вопрос при вступлении не нужен" />
@@ -188,7 +292,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
 
       <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
         {step > 0 && (
-          <Button size="m" mode="outline" onClick={() => { haptic.impact('light'); setError(null); setStep((s) => s - 1); }} stretched>
+          <Button size="m" mode="outline" onClick={() => { haptic.impact('light'); setStep((s) => s - 1); }} stretched>
             Назад
           </Button>
         )}
@@ -197,7 +301,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
             Далее
           </Button>
         ) : (
-          <Button size="m" onClick={handleSubmit} disabled={submitting} stretched>
+          <Button size="m" onClick={handleSubmit(onValid)} disabled={submitting} stretched>
             {submitting ? <Spinner size="s" /> : 'Создать клуб'}
           </Button>
         )}

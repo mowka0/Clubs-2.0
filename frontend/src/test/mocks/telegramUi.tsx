@@ -2,6 +2,12 @@
  * Minimal mock implementations of @telegram-apps/telegram-ui components
  * used in tests. These render simple HTML elements so we can query
  * them with Testing Library.
+ *
+ * Form components (Input/Textarea/Select) use forwardRef and spread
+ * remaining props onto the underlying native element. This is required
+ * for compatibility with react-hook-form's `register`, which passes
+ * `{ onChange, onBlur, name, ref }` and expects them to land on the
+ * native control.
  */
 import React from 'react';
 
@@ -52,56 +58,52 @@ export const Button: React.FC<
   </button>
 );
 
-export const Input: React.FC<{
+type InputProps = React.InputHTMLAttributes<HTMLInputElement> & {
   header?: string;
-  placeholder?: string;
-  value?: string;
-  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  type?: string;
-}> = ({ header, placeholder, value, onChange, type }) => (
-  <div>
-    {header && <label>{header}</label>}
-    <input
-      placeholder={placeholder}
-      value={value}
-      onChange={onChange}
-      type={type}
-      aria-label={header}
-    />
-  </div>
-);
+  status?: 'default' | 'error' | 'focused';
+};
 
-export const Textarea: React.FC<{
+export const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ header, status: _status, ...rest }, ref) => (
+    <div>
+      {header && <label>{header}</label>}
+      <input ref={ref} aria-label={typeof header === 'string' ? header : undefined} {...rest} />
+    </div>
+  ),
+);
+Input.displayName = 'Input';
+
+type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
   header?: string;
-  placeholder?: string;
-  value?: string;
-  onChange?: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
-}> = ({ header, placeholder, value, onChange }) => (
-  <div>
-    {header && <label>{header}</label>}
-    <textarea
-      placeholder={placeholder}
-      value={value}
-      onChange={onChange}
-      aria-label={header}
-    />
-  </div>
-);
+  status?: 'default' | 'error' | 'focused';
+};
 
-export const Select: React.FC<
-  React.PropsWithChildren<{
-    header?: string;
-    value?: string;
-    onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void;
-  }>
-> = ({ children, header, value, onChange }) => (
-  <div>
-    {header && <label>{header}</label>}
-    <select value={value} onChange={onChange} aria-label={header}>
-      {children}
-    </select>
-  </div>
+export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
+  ({ header, status: _status, ...rest }, ref) => (
+    <div>
+      {header && <label>{header}</label>}
+      <textarea ref={ref} aria-label={typeof header === 'string' ? header : undefined} {...rest} />
+    </div>
+  ),
 );
+Textarea.displayName = 'Textarea';
+
+type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & {
+  header?: string;
+  status?: 'default' | 'error' | 'focused';
+};
+
+export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
+  ({ header, status: _status, children, ...rest }, ref) => (
+    <div>
+      {header && <label>{header}</label>}
+      <select ref={ref} aria-label={typeof header === 'string' ? header : undefined} {...rest}>
+        {children}
+      </select>
+    </div>
+  ),
+);
+Select.displayName = 'Select';
 
 export const Spinner: React.FC<{ size?: string }> = ({ size }) => (
   <div data-testid="tg-spinner" data-size={size} role="progressbar">
