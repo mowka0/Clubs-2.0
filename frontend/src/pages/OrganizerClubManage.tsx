@@ -995,10 +995,13 @@ export const OrganizerClubManage: FC = () => {
 
   return (
     <List>
-      {/* Club header */}
+      {/* Club header — clickable, navigates back to unified ClubPage */}
       {!clubLoading && club && (
         <Section>
-          <Cell subtitle={`${club.memberCount} / ${club.memberLimit} участников | ${club.city}`}>
+          <Cell
+            onClick={() => { haptic.impact('light'); navigate(`/clubs/${clubId}`); }}
+            subtitle={`${club.memberCount} / ${club.memberLimit} участников | ${club.city}`}
+          >
             {club.name}
           </Cell>
         </Section>

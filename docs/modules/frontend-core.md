@@ -1,5 +1,10 @@
 # Module: Frontend Core
 
+> **Status (2026-04-25):** этот документ описывает **первоначальное scaffolding** (TASK-023..025). Актуальное состояние файловой структуры, routing и компонентов — в [`docs/design/stack.md`](../design/stack.md). Расхождения относительно scaffolding-времени:
+> - `OrganizerPage` удалён в PR `feature/restructure-bottom-tabs`; `/organizer` редиректится на `/my-clubs`. Введён 4-й tab «События» (`/events` → `EventsPage` placeholder).
+> - `ClubInteriorPage` удалён в PR `feature/unified-club-page`; `/clubs/:id/interior` редиректится на `/clubs/:id` через `<InteriorRedirect>`. Контент member/organizer-tabs живёт в `frontend/src/components/club/{ClubEventsTab,ClubMembersTab,ClubProfileTab}.tsx`. Подробности — [`club-page-unified.md`](./club-page-unified.md).
+> - Lazy-loaded sтраницы: ClubPage, EventPage, OrganizerClubManage, InvitePage. Tab-страницы (Discovery / MyClubs / Events / Profile) — eager.
+
 ---
 
 ## TASK-023 — Инициализация frontend-проекта

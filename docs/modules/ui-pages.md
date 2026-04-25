@@ -102,6 +102,34 @@ X = memberLimit * subscriptionPrice * 0.8
 
 ---
 
+## ClubPage — Унифицированная страница клуба (`/clubs/:id`)
+
+> **Status (2026-04-25):** реализовано в `feature/unified-club-page`. Single entry point под три роли: visitor / member / organizer. Раздельная `ClubInteriorPage` удалена; легаси-роут `/clubs/:id/interior` редиректит на `/clubs/:id` через `<InteriorRedirect>` (`router.tsx:25-30`). Подробная спецификация — [`club-page-unified.md`](./club-page-unified.md).
+
+### Что показывается по роли
+
+| Роль | Header (с avatar/name/badges) | About-секция | TabsList | CTA |
+|---|---|---|---|---|
+| **Visitor** | ✓ (без role-badge) | ✓ | — | «Вступить» / «Хочу вступить» / disabled-варианты для pending state |
+| **Member** | ✓ + badge «Вы участник» | ✓ | События / Участники / Мой профиль | — (статус в badge) |
+| **Organizer** | ✓ + badge «Вы организатор» | ✓ | События / Участники / Мой профиль / **Управление** | — |
+
+«Управление» — **navigate-link**, не state-tab: `handleTabClick('manage')` делает `haptic.impact('light')` + `navigate('/clubs/:id/manage')`, активной не становится.
+
+### Tab-компоненты
+
+Контент member/organizer-tabs вынесен в `frontend/src/components/club/`:
+
+| Файл | Источник данных | Заметки |
+|---|---|---|
+| `ClubEventsTab.tsx` | `useClubEventsQuery(clubId, { size: '100' })` | Upcoming (статусы `upcoming`/`stage_1`/`stage_2`) + past (max 5). Tap по Cell → `/events/:id` |
+| `ClubMembersTab.tsx` | `useClubMembersQuery(clubId)` | Список с avatar/reliability, badge «Организатор» для `role === 'organizer'` |
+| `ClubProfileTab.tsx` | `useMemberProfileQuery(clubId, userId)` | Avatar + reputation-метрики (reliability / promiseFulfillmentPct / totalConfirmations) |
+
+Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — non-active tabs не монтируются и их queries не выполняются. Visitor-режим вообще не подключает эти три query.
+
+---
+
 ## OrganizerClubManage — Страница управления клубом (`/clubs/:id/manage`)
 
 ### Описание

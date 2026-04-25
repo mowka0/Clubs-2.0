@@ -21,7 +21,7 @@ Pre-design подготовка фронта: единая обёртка над
 
 ### Входит
 - Хук `frontend/src/hooks/useHaptic.ts` с silent no-op fallback
-- Вызовы хука в: `BottomTabBar`, `ClubCard`, `ClubFilters`, `AvatarUpload`, `ClubPage`, `EventPage`, `CreateClubModal`, `OrganizerClubManage`, `InvitePage`, `ClubInteriorPage`, `ProfilePage`, `MyClubsPage`, `DiscoveryPage`, `useBackButton`
+- Вызовы хука в: `BottomTabBar`, `ClubCard`, `ClubFilters`, `AvatarUpload`, `ClubPage` (включая role-aware tabs), `EventPage`, `CreateClubModal`, `OrganizerClubManage`, `InvitePage`, `components/club/ClubEventsTab`, `ProfilePage`, `MyClubsPage`, `DiscoveryPage`, `useBackButton`. **`ClubInteriorPage` удалён** в `feature/unified-club-page` — точки кода переехали в unified `ClubPage` + три tab-компонента (см. `club-page-unified.md`).
 - Unit-тест хука (mock SDK, проверка no-op при `isAvailable() === false`)
 
 ### НЕ входит
@@ -93,19 +93,19 @@ const onTabClick = (path: string) => {
 | Файл | Событие | Метод | Reason |
 |---|---|---|---|
 | `components/ClubCard.tsx` | `Cell.onClick` (до `navigate`) | `impact('light')` | Тап по карточке-Cell — light impact (§15: «по Cell, открытие модалки») |
-| `pages/ClubInteriorPage.tsx` | tap event-карточки → `navigate('/events/:id')` (строки 186, 210) | `impact('light')` | То же правило для navigation-cell |
+| `components/club/ClubEventsTab.tsx` | tap event-Cell → `navigate('/events/:id')` (строки 73, 97) | `impact('light')` | То же правило для navigation-cell. Перенесено из удалённого `ClubInteriorPage.tsx` |
 | `pages/MyClubsPage.tsx` | tap клуба (`role === 'member'`) → `navigate('/clubs/:id')` (`handleClubClick`, строки 89-95) | `impact('light')` | То же |
 | `pages/MyClubsPage.tsx` | tap клуба (`role === 'organizer'`) → `navigate('/clubs/:id/manage')` (`handleClubClick`, строки 89-95) | `impact('light')` | То же — общий `handleClubClick` маршрутизирует по роли, haptic один и тот же |
 | `pages/MyClubsPage.tsx` | tap «+ Создать клуб» (Section-кнопка, строки 102-108) → открытие `<Modal>` с `CreateClubModal` | `impact('light')` | §15: открытие модалки — light |
 | `pages/ProfilePage.tsx` | tap клуба или application → `navigate(...)` (строки 70, 77, 91, 103) | `impact('light')` | То же |
-| `pages/ClubPage.tsx` | «⚙️ Управление клубом» Button (для организатора, строка 137) → `navigate('/clubs/:id/manage')` | `impact('light')` | Открытие nested-страницы — light, как навигация-cell |
+| `pages/ClubPage.tsx` | tap по tab «Управление» (organizer-only, `handleTabClick('manage')`, строки 149-154) → `navigate('/clubs/:id/manage')` | `impact('light')` | Открытие nested-страницы — light. Tab-как-link: `setActiveTab` НЕ вызывается, отличие от `select()` тактильно сигнализирует переход (см. `club-page-unified.md` § R-2) |
 | `pages/OrganizerClubManage.tsx` MembersTab | tap по member-Cell → `setSelectedMember(m)` (строка 162) — открытие профильной модалки | `impact('light')` | §15: открытие модалки — light |
 
 ### Внутри-страничные переключатели
 
 | Файл | Событие | Метод | Reason |
 |---|---|---|---|
-| `pages/ClubInteriorPage.tsx` | `setActiveTab('events' / 'members' / 'profile')` (строки 153, 159, 165) | `select()` | Смена секции — selectionChanged |
+| `pages/ClubPage.tsx` | `handleTabClick('events' / 'members' / 'profile')` → `setActiveTab(tab)` (строки 149-157) | `select()` | Смена секции — selectionChanged. Перенесено из удалённого `ClubInteriorPage.tsx`. Только эти три tab'а; tab `'manage'` идёт по другой ветке (impact, см. таблицу выше) |
 | `pages/OrganizerClubManage.tsx` | `setActiveTab(key)` (строка 1017) | `select()` | То же |
 | `components/ClubFilters.tsx` | клик по chip-кнопке категории (`onChange` в строке 53) | `select()` | Смена выбора в picker — selectionChanged (§15: «смена chip — не подтверждение») |
 
@@ -115,9 +115,9 @@ const onTabClick = (path: string) => {
 
 | Файл | Событие | Старт | Success | Error |
 |---|---|---|---|---|
-| `pages/ClubPage.tsx` | `handleJoin` (строка 80) — вступление в открытый клуб | `impact('medium')` | `notify('success')` | `notify('error')` |
-| `pages/ClubPage.tsx` | `handleApply` (строка 106) — заявка в закрытый клуб | `impact('medium')` | `notify('success')` | `notify('error')` |
-| `pages/ClubPage.tsx` | open apply modal (строка 187) | `impact('light')` (open) / no haptic (close через X или «Отмена», строка 275) | — | — |
+| `pages/ClubPage.tsx` | `handleJoin` (строки 87-110) — вступление в открытый клуб (visitor-only, `isMember`/`isOrganizer` идут по tab-ветке) | `impact('medium')` | `notify('success')` | `notify('error')` |
+| `pages/ClubPage.tsx` | `handleApply` (строки 112-137) — заявка в закрытый клуб | `impact('medium')` | `notify('success')` | `notify('error')` |
+| `pages/ClubPage.tsx` | open apply modal через «Хочу вступить» (строка 201) | `impact('light')` (open) / no haptic (close через X или «Отмена», строка 336) | — | — |
 | `pages/InvitePage.tsx` | `handleJoin` (строка 35) — вступление по invite | `impact('medium')` | `notify('success')` | `notify('error')` |
 | `pages/EventPage.tsx` | `handleVote('going' / 'maybe' / 'not_going')` (строка 88) | `select()` (выбор RSVP-опции) | `notify('success')` | `notify('error')` |
 | `pages/EventPage.tsx` | `handleConfirm` (строка 109) — подтверждение участия | `impact('medium')` | `notify('success')` | `notify('error')` |
@@ -164,7 +164,7 @@ const onTabClick = (path: string) => {
 
 Текущие реализации паттерна:
 - `pages/OrganizerClubManage.tsx` — `actionError` (строка 201, рендер 265-267) для approve/reject; `attendanceError` (строка 419, рендер 648-650) для отметки посещений. Оба — с `console.error`. `SettingsTab` (`handleSave`): `fail(msg)` хелпер для валидации + `savedToast` стейт + `<Toast message="Изменения сохранены" />` на success.
-- `pages/ClubPage.tsx` — `joinError` (строка 84, рендер 239-243 и 269-273) для handleJoin / handleApply.
+- `pages/ClubPage.tsx` — `joinError` (строка 66, рендер inline visitor-секции 274-278 и в apply-modal 330-334) для handleJoin / handleApply.
 - `pages/EventPage.tsx`, `pages/InvitePage.tsx`, `components/CreateClubModal.tsx` — собственные локальные `error`/`setError`-стейты с inline-рендером.
 
 ### DiscoveryPage
