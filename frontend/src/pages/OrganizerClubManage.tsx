@@ -17,6 +17,7 @@ import {
   TabsList,
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
+import { useHaptic } from '../hooks/useHaptic';
 import { AvatarUpload } from '../components/AvatarUpload';
 import { getClubMembers, getMemberProfile, getClubApplications, approveApplication, rejectApplication } from '../api/membership';
 import { getClubEvents, createEvent, markAttendance, getFinances, getEvent } from '../api/events';
@@ -71,7 +72,7 @@ const MemberProfileModal: FC<{
 
   const joinedAt = member.joinedAt
     ? new Date(member.joinedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
-    : '\u2014';
+    : '—';
 
   return (
     <Modal open onOpenChange={(open) => !open && onClose()}>
@@ -167,7 +168,7 @@ const MembersTab: FC<{ clubId: string }> = ({ clubId }) => {
                 acronym={`${m.firstName.charAt(0)}${m.lastName?.charAt(0) ?? ''}`}
               />
             }
-            subtitle={`Надёжность: ${m.reliabilityIndex} \u00B7 Обещания: ${m.promiseFulfillmentPct}%`}
+            subtitle={`Надёжность: ${m.reliabilityIndex} · Обещания: ${m.promiseFulfillmentPct}%`}
             after={
               m.role === 'organizer' ? (
                 <Badge type="number" mode="primary">Орг</Badge>
@@ -193,9 +194,11 @@ const MembersTab: FC<{ clubId: string }> = ({ clubId }) => {
 // ---- Applications Tab ----
 
 const ApplicationsTab: FC<{ clubId: string }> = ({ clubId }) => {
+  const haptic = useHaptic();
   const [applications, setApplications] = useState<ClubApplicationDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const fetchApps = useCallback(async () => {
     setLoading(true);
@@ -212,20 +215,34 @@ const ApplicationsTab: FC<{ clubId: string }> = ({ clubId }) => {
   }, [fetchApps]);
 
   const handleApprove = async (appId: string) => {
+    haptic.impact('medium');
     setProcessing(appId);
+    setActionError(null);
     try {
       await approveApplication(appId);
+      haptic.notify('success');
       await fetchApps();
+    } catch (e) {
+      console.error('Failed to approve application', e);
+      setActionError((e as Error).message);
+      haptic.notify('error');
     } finally {
       setProcessing(null);
     }
   };
 
   const handleReject = async (appId: string) => {
+    haptic.impact('medium');
     setProcessing(appId);
+    setActionError(null);
     try {
       await rejectApplication(appId);
+      haptic.notify('warning');
       await fetchApps();
+    } catch (e) {
+      console.error('Failed to reject application', e);
+      setActionError((e as Error).message);
+      haptic.notify('error');
     } finally {
       setProcessing(null);
     }
@@ -245,6 +262,11 @@ const ApplicationsTab: FC<{ clubId: string }> = ({ clubId }) => {
 
   return (
     <Section>
+      {actionError && (
+        <div style={{ padding: '8px 16px', color: 'var(--tgui--destructive_text_color)', fontSize: 14 }}>
+          {actionError}
+        </div>
+      )}
       {applications.map((app) => {
         const hrs = hoursRemaining(app.createdAt);
         const isProcessing = processing === app.id;
@@ -257,7 +279,7 @@ const ApplicationsTab: FC<{ clubId: string }> = ({ clubId }) => {
               </Text>
               {hrs !== null && (
                 <span style={{ fontSize: 12, color: hrs <= 6 ? 'var(--tgui--destructive_text_color)' : 'var(--tgui--hint_color)' }}>
-                  {hrs > 0 ? `${hrs}\u0447 \u0434\u043E \u0430\u0432\u0442\u043E\u043E\u0442\u043A\u043B\u043E\u043D\u0435\u043D\u0438\u044F` : '\u0412\u0440\u0435\u043C\u044F \u0438\u0441\u0442\u0435\u043A\u043B\u043E'}
+                  {hrs > 0 ? `${hrs}ч до автоотклонения` : 'Время истекло'}
                 </span>
               )}
             </div>
@@ -384,6 +406,7 @@ const INITIAL_EVENT_FORM: EventFormState = {
 const UPCOMING_STATUSES = ['upcoming', 'stage_1', 'stage_2'];
 
 const EventsTab: FC<{ clubId: string }> = ({ clubId }) => {
+  const haptic = useHaptic();
   const [events, setEvents] = useState<EventListItemDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -393,6 +416,7 @@ const EventsTab: FC<{ clubId: string }> = ({ clubId }) => {
   const [attendanceEventId, setAttendanceEventId] = useState<string | null>(null);
   const [attendanceList, setAttendanceList] = useState<{ userId: string; attended: boolean }[]>([]);
   const [markingAttendance, setMarkingAttendance] = useState(false);
+  const [attendanceError, setAttendanceError] = useState<string | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   const fetchEvents = useCallback(() => {
@@ -417,6 +441,7 @@ const EventsTab: FC<{ clubId: string }> = ({ clubId }) => {
     const limit = Number(form.participantLimit);
     if (!limit || limit < 1) { setFormError('Укажите лимит участников'); return; }
 
+    haptic.impact('medium');
     setSubmitting(true);
     try {
       const body: CreateEventBody = {
@@ -426,11 +451,13 @@ const EventsTab: FC<{ clubId: string }> = ({ clubId }) => {
         participantLimit: limit,
       };
       await createEvent(clubId, body);
+      haptic.notify('success');
       setForm(INITIAL_EVENT_FORM);
       setShowForm(false);
       fetchEvents();
     } catch (e) {
       setFormError((e as Error).message);
+      haptic.notify('error');
     } finally {
       setSubmitting(false);
     }
@@ -439,18 +466,24 @@ const EventsTab: FC<{ clubId: string }> = ({ clubId }) => {
   const openAttendanceModal = (event: EventListItemDto) => {
     setAttendanceEventId(event.id);
     setAttendanceList([]);
+    setAttendanceError(null);
   };
 
   const handleMarkAttendance = async () => {
     if (!attendanceEventId) return;
+    haptic.impact('medium');
     setMarkingAttendance(true);
+    setAttendanceError(null);
     try {
       await markAttendance(attendanceEventId, attendanceList.filter((a) => a.attended));
+      haptic.notify('success');
       setAttendanceEventId(null);
       setAttendanceList([]);
       fetchEvents();
-    } catch {
-      // Silently handle
+    } catch (e) {
+      console.error('Failed to mark attendance', e);
+      setAttendanceError((e as Error).message);
+      haptic.notify('error');
     } finally {
       setMarkingAttendance(false);
     }
@@ -612,6 +645,12 @@ const EventsTab: FC<{ clubId: string }> = ({ clubId }) => {
               </Cell>
             ))}
 
+            {attendanceError && (
+              <div style={{ padding: '8px 0', color: 'var(--tgui--destructive_text_color)', fontSize: 14 }}>
+                {attendanceError}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
               <Button
                 size="m"
@@ -700,6 +739,7 @@ interface SettingsTabProps {
 }
 
 const SettingsTab: FC<SettingsTabProps> = ({ club, onUpdated, onDeleted }) => {
+  const haptic = useHaptic();
   const [name, setName] = useState(club.name);
   const [city, setCity] = useState(club.city);
   const [district, setDistrict] = useState(club.district ?? '');
@@ -769,24 +809,30 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onUpdated, onDeleted }) => {
     }
     if (avatarUrl !== (club.avatarUrl ?? null)) payload.avatarUrl = avatarUrl ?? '';
 
+    haptic.impact('medium');
     setSaving(true);
     try {
       const updated = await updateClub(club.id, payload);
+      haptic.notify('success');
       onUpdated(updated);
     } catch (e) {
       setError((e as Error).message);
+      haptic.notify('error');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async () => {
+    haptic.impact('heavy');
     setDeleting(true);
     try {
       await deleteClub(club.id);
+      haptic.notify('success');
       onDeleted(club.name);
     } catch (e) {
       setError((e as Error).message);
+      haptic.notify('error');
       setDeleting(false);
     }
   };
@@ -863,7 +909,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onUpdated, onDeleted }) => {
             size="l"
             stretched
             mode="outline"
-            onClick={() => setShowDeleteModal(true)}
+            onClick={() => { haptic.impact('light'); setShowDeleteModal(true); }}
             disabled={saving || deleting}
           >
             &#x1F5D1; Удалить клуб
@@ -902,6 +948,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onUpdated, onDeleted }) => {
 
 export const OrganizerClubManage: FC = () => {
   useBackButton(true);
+  const haptic = useHaptic();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabKey>('members');
@@ -967,7 +1014,7 @@ export const OrganizerClubManage: FC = () => {
             <TabsList.Item
               key={key}
               selected={activeTab === key}
-              onClick={() => setActiveTab(key)}
+              onClick={() => { haptic.select(); setActiveTab(key); }}
             >
               {TAB_LABELS[key]}
             </TabsList.Item>

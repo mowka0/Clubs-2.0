@@ -2,6 +2,7 @@ import { FC, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { List, Section, Cell, Button, Spinner, Placeholder, Text, Badge } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
+import { useHaptic } from '../hooks/useHaptic';
 import { getClubByInvite } from '../api/clubs';
 import { joinByInviteCode } from '../api/membership';
 import type { ClubDetailDto } from '../types/api';
@@ -16,6 +17,7 @@ export const InvitePage: FC = () => {
   useBackButton(true);
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
+  const haptic = useHaptic();
 
   const [club, setClub] = useState<ClubDetailDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,13 +34,16 @@ export const InvitePage: FC = () => {
 
   const handleJoin = async () => {
     if (!code) return;
+    haptic.impact('medium');
     setJoining(true);
     setError(null);
     try {
       await joinByInviteCode(code);
       setJoined(true);
+      haptic.notify('success');
     } catch (e) {
       setError((e as Error).message);
+      haptic.notify('error');
       setJoining(false);
     }
   };

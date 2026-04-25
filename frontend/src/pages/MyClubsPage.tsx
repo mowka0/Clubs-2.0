@@ -1,6 +1,7 @@
 import { FC, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { List, Section, Cell, Spinner, Placeholder } from '@telegram-apps/telegram-ui';
+import { useHaptic } from '../hooks/useHaptic';
 import { useClubsStore } from '../store/useClubsStore';
 import { useApplicationsStore } from '../store/useApplicationsStore';
 import { Toast } from '../components/Toast';
@@ -32,6 +33,7 @@ function formatDate(iso: string): string {
 export const MyClubsPage: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const haptic = useHaptic();
   const { myClubs, loading: clubsLoading, fetchMyClubs } = useClubsStore();
   const { applications, loading: appsLoading, fetchMyApplications } = useApplicationsStore();
   const [clubDetails, setClubDetails] = useState<Record<string, ClubDetailDto>>({});
@@ -79,7 +81,7 @@ export const MyClubsPage: FC = () => {
           return (
             <Cell
               key={m.id}
-              onClick={() => navigate(`/clubs/${m.clubId}`)}
+              onClick={() => { haptic.impact('light'); navigate(`/clubs/${m.clubId}`); }}
               subtitle={m.role === 'organizer' ? 'Организатор' : 'Участник'}
             >
               {club?.name ?? `Клуб ${m.clubId.slice(0, 8)}…`}

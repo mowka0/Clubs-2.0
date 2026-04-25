@@ -12,6 +12,7 @@ import {
   Modal,
   Placeholder,
 } from '@telegram-apps/telegram-ui';
+import { useHaptic } from '../hooks/useHaptic';
 import { useClubsStore } from '../store/useClubsStore';
 import { AvatarUpload } from '../components/AvatarUpload';
 import { createClub, getClub } from '../api/clubs';
@@ -49,6 +50,7 @@ const INITIAL_FORM: FormData = {
 };
 
 export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) => void }> = ({ onClose, onCreated }) => {
+  const haptic = useHaptic();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -62,6 +64,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
   const handleNext = () => {
     const err = validateStep(step, form);
     if (err) { setError(err); return; }
+    haptic.impact('light');
     setError(null);
     setStep((s) => s + 1);
   };
@@ -69,6 +72,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
   const handleSubmit = async () => {
     const err = validateStep(step, form);
     if (err) { setError(err); return; }
+    haptic.impact('heavy');
     setSubmitting(true);
     setError(null);
     try {
@@ -88,9 +92,11 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
           : undefined,
       };
       const club = await createClub(body);
+      haptic.notify('success');
       onCreated(club.id);
     } catch (e) {
       setError((e as Error).message);
+      haptic.notify('error');
       setSubmitting(false);
     }
   };
@@ -178,7 +184,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
 
       <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
         {step > 0 && (
-          <Button size="m" mode="outline" onClick={() => { setError(null); setStep((s) => s - 1); }} stretched>
+          <Button size="m" mode="outline" onClick={() => { haptic.impact('light'); setError(null); setStep((s) => s - 1); }} stretched>
             Назад
           </Button>
         )}
@@ -198,6 +204,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
 
 export const OrganizerPage: FC = () => {
   const navigate = useNavigate();
+  const haptic = useHaptic();
   const { myClubs, loading, fetchMyClubs } = useClubsStore();
   const [showModal, setShowModal] = useState(false);
   const [clubDetails, setClubDetails] = useState<Record<string, ClubDetailDto>>({});
@@ -235,7 +242,7 @@ export const OrganizerPage: FC = () => {
         {ownedClubs.map((m) => (
           <Cell
             key={m.id}
-            onClick={() => navigate(`/clubs/${m.clubId}/manage`)}
+            onClick={() => { haptic.impact('light'); navigate(`/clubs/${m.clubId}/manage`); }}
             subtitle="Организатор"
           >
             {clubDetails[m.clubId]?.name ?? `Клуб ${m.clubId.slice(0, 8)}...`}

@@ -1,12 +1,14 @@
 import { FC, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { List, Section, Cell, Spinner, Placeholder, Avatar, Text } from '@telegram-apps/telegram-ui';
+import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useClubsStore } from '../store/useClubsStore';
 import { useApplicationsStore } from '../store/useApplicationsStore';
 
 export const ProfilePage: FC = () => {
   const navigate = useNavigate();
+  const haptic = useHaptic();
   const { user, login, isLoading: authLoading } = useAuthStore();
   const { myClubs, loading: clubsLoading, fetchMyClubs } = useClubsStore();
   const { applications, fetchMyApplications } = useApplicationsStore();
@@ -65,14 +67,14 @@ export const ProfilePage: FC = () => {
           {previewClubs.map((m) => (
             <Cell
               key={m.id}
-              onClick={() => navigate(`/clubs/${m.clubId}`)}
+              onClick={() => { haptic.impact('light'); navigate(`/clubs/${m.clubId}`); }}
               subtitle={m.role === 'organizer' ? 'Организатор' : 'Участник'}
             >
               Клуб {m.clubId.slice(0, 8)}…
             </Cell>
           ))}
           {myClubs.length > 5 && (
-            <Cell onClick={() => navigate('/my-clubs')} style={{ color: 'var(--tgui--button_color)' }}>
+            <Cell onClick={() => { haptic.impact('light'); navigate('/my-clubs'); }} style={{ color: 'var(--tgui--button_color)' }}>
               Показать все ({myClubs.length})
             </Cell>
           )}
@@ -86,7 +88,7 @@ export const ProfilePage: FC = () => {
             <Cell
               key={app.id}
               subtitle="На рассмотрении"
-              onClick={() => navigate(`/clubs/${app.clubId}`)}
+              onClick={() => { haptic.impact('light'); navigate(`/clubs/${app.clubId}`); }}
             >
               Клуб {app.clubId.slice(0, 8)}…
             </Cell>
@@ -98,7 +100,7 @@ export const ProfilePage: FC = () => {
         <Placeholder
           description="Вы пока не состоите ни в одном клубе"
         >
-          <Cell onClick={() => navigate('/')} style={{ color: 'var(--tgui--button_color)' }}>
+          <Cell onClick={() => { haptic.impact('light'); navigate('/'); }} style={{ color: 'var(--tgui--button_color)' }}>
             Найти клуб
           </Cell>
         </Placeholder>

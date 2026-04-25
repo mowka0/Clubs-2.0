@@ -1,6 +1,7 @@
 import { FC } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Cell, Text, Badge } from '@telegram-apps/telegram-ui';
+import { useHaptic } from '../hooks/useHaptic';
 import type { ClubListItemDto } from '../types/api';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -35,10 +36,14 @@ interface ClubCardProps {
 
 export const ClubCard: FC<ClubCardProps> = ({ club }) => {
   const navigate = useNavigate();
+  const haptic = useHaptic();
 
   return (
     <Cell
-      onClick={() => navigate(`/clubs/${club.id}`)}
+      onClick={() => {
+        haptic.impact('light');
+        navigate(`/clubs/${club.id}`);
+      }}
       subtitle={
         <span>
           {club.city} · {club.memberCount}/{club.memberLimit} участников

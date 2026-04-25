@@ -13,6 +13,7 @@ import {
 } from '@telegram-apps/telegram-ui';
 import { useAuthStore } from '../store/useAuthStore';
 import { useBackButton } from '../hooks/useBackButton';
+import { useHaptic } from '../hooks/useHaptic';
 import { getClubMembers, getMemberProfile } from '../api/membership';
 import { getClubEvents } from '../api/events';
 import { getClub } from '../api/clubs';
@@ -46,6 +47,7 @@ function getInitials(firstName: string, lastName: string | null): string {
 export const ClubInteriorPage: FC = () => {
   const { id: clubId } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const haptic = useHaptic();
   const user = useAuthStore((s) => s.user);
 
   useBackButton(true);
@@ -148,19 +150,19 @@ export const ClubInteriorPage: FC = () => {
         <TabsList>
           <TabsList.Item
             selected={activeTab === 'events'}
-            onClick={() => setActiveTab('events')}
+            onClick={() => { haptic.select(); setActiveTab('events'); }}
           >
             События
           </TabsList.Item>
           <TabsList.Item
             selected={activeTab === 'members'}
-            onClick={() => setActiveTab('members')}
+            onClick={() => { haptic.select(); setActiveTab('members'); }}
           >
             Участники
           </TabsList.Item>
           <TabsList.Item
             selected={activeTab === 'profile'}
-            onClick={() => setActiveTab('profile')}
+            onClick={() => { haptic.select(); setActiveTab('profile'); }}
           >
             Мой профиль
           </TabsList.Item>
@@ -175,13 +177,13 @@ export const ClubInteriorPage: FC = () => {
               {upcomingEvents.map((event) => (
                 <Cell
                   key={event.id}
-                  subtitle={`${formatEventDate(event.eventDatetime)} \u00B7 ${event.locationText}`}
+                  subtitle={`${formatEventDate(event.eventDatetime)} · ${event.locationText}`}
                   after={
                     <span style={{ color: 'var(--tgui--hint_color)', fontSize: 13, whiteSpace: 'nowrap' }}>
                       {event.goingCount}/{event.participantLimit}
                     </span>
                   }
-                  onClick={() => navigate(`/events/${event.id}`)}
+                  onClick={() => { haptic.impact('light'); navigate(`/events/${event.id}`); }}
                   multiline
                 >
                   {event.title}
@@ -205,7 +207,7 @@ export const ClubInteriorPage: FC = () => {
                       {event.goingCount}/{event.participantLimit}
                     </span>
                   }
-                  onClick={() => navigate(`/events/${event.id}`)}
+                  onClick={() => { haptic.impact('light'); navigate(`/events/${event.id}`); }}
                   multiline
                 >
                   {event.title}

@@ -1,5 +1,6 @@
 import { FC } from 'react';
 import { Input, Section } from '@telegram-apps/telegram-ui';
+import { useHaptic } from '../hooks/useHaptic';
 import type { ClubFilters } from '../api/clubs';
 
 const CATEGORIES = [
@@ -20,6 +21,8 @@ interface ClubFiltersProps {
 }
 
 export const ClubFiltersComponent: FC<ClubFiltersProps> = ({ filters, onChange }) => {
+  const haptic = useHaptic();
+
   const chipStyle = (active: boolean): React.CSSProperties => ({
     padding: '6px 12px',
     borderRadius: 20,
@@ -46,7 +49,10 @@ export const ClubFiltersComponent: FC<ClubFiltersProps> = ({ filters, onChange }
           <button
             key={cat.value}
             style={chipStyle(filters.category === cat.value || (!filters.category && cat.value === ''))}
-            onClick={() => onChange({ ...filters, category: cat.value || undefined })}
+            onClick={() => {
+              haptic.select();
+              onChange({ ...filters, category: cat.value || undefined });
+            }}
           >
             {cat.label}
           </button>

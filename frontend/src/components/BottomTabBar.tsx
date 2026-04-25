@@ -1,6 +1,7 @@
 import { FC, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Tabbar } from '@telegram-apps/telegram-ui';
+import { useHaptic } from '../hooks/useHaptic';
 
 interface TabConfig {
   readonly path: string;
@@ -35,14 +36,16 @@ export function isTabBarRoute(pathname: string): boolean {
 export const BottomTabBar: FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const haptic = useHaptic();
 
   const handleTabClick = useCallback(
     (path: string) => {
       if (location.pathname !== path) {
+        haptic.select();
         navigate(path);
       }
     },
-    [location.pathname, navigate],
+    [location.pathname, navigate, haptic],
   );
 
   if (!isTabBarRoute(location.pathname)) {

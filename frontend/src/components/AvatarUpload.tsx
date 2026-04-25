@@ -1,5 +1,6 @@
 import { FC, useRef, useState } from 'react';
 import { Button, Spinner, Text } from '@telegram-apps/telegram-ui';
+import { useHaptic } from '../hooks/useHaptic';
 import { uploadImage } from '../api/clubs';
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -13,10 +14,14 @@ interface Props {
 
 export const AvatarUpload: FC<Props> = ({ value, onChange, disabled }) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const haptic = useHaptic();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const pick = () => inputRef.current?.click();
+  const pick = () => {
+    haptic.impact('light');
+    inputRef.current?.click();
+  };
 
   const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -26,10 +31,12 @@ export const AvatarUpload: FC<Props> = ({ value, onChange, disabled }) => {
     setError(null);
     if (!ALLOWED_MIMES.has(file.type)) {
       setError('Только JPEG и PNG');
+      haptic.notify('error');
       return;
     }
     if (file.size > MAX_BYTES) {
       setError('Файл больше 5 МБ');
+      haptic.notify('error');
       return;
     }
 
@@ -37,8 +44,10 @@ export const AvatarUpload: FC<Props> = ({ value, onChange, disabled }) => {
     try {
       const url = await uploadImage(file);
       onChange(url);
+      haptic.notify('success');
     } catch (err) {
       setError((err as Error).message || 'Не удалось загрузить файл');
+      haptic.notify('error');
     } finally {
       setUploading(false);
     }
@@ -99,6 +108,7 @@ export const AvatarUpload: FC<Props> = ({ value, onChange, disabled }) => {
             size="s"
             mode="plain"
             onClick={() => {
+              haptic.impact('light');
               setError(null);
               onChange(null);
             }}
