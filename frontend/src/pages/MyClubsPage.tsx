@@ -86,13 +86,13 @@ export const MyClubsPage: FC = () => {
     navigate(`/clubs/${id}/manage`);
   };
 
-  const handleClubClick = (clubId: string, role: string) => {
+  // Always land on the unified ClubPage regardless of role. Organizers drill
+  // into management via the "Управление" tab inside the unified page — same
+  // entry-point as Discovery, consistent UX. The `role` parameter is no longer
+  // read here (kept on the call sites for badge display).
+  const handleClubClick = (clubId: string) => {
     haptic.impact('light');
-    if (role === 'organizer') {
-      navigate(`/clubs/${clubId}/manage`);
-    } else {
-      navigate(`/clubs/${clubId}`);
-    }
+    navigate(`/clubs/${clubId}`);
   };
 
   return (
@@ -123,7 +123,7 @@ export const MyClubsPage: FC = () => {
             return (
               <Cell
                 key={m.id}
-                onClick={() => handleClubClick(m.clubId, m.role)}
+                onClick={() => handleClubClick(m.clubId)}
                 subtitle={m.role === 'organizer' ? 'Организатор' : 'Участник'}
               >
                 {club?.name ?? `Клуб ${m.clubId.slice(0, 8)}…`}

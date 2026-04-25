@@ -245,7 +245,7 @@ export const ClubPage: FC = () => {
 
       {/* About */}
       <Section>
-        <Cell subtitle={club.city}>{club.district ? `${club.city}, ${club.district}` : club.city}</Cell>
+        <Cell subtitle="Город">{club.district ? `${club.city}, ${club.district}` : club.city}</Cell>
         <Cell subtitle="Участники">{club.memberCount} / {club.memberLimit}</Cell>
         <Cell subtitle="Подписка">{formatPrice(club.subscriptionPrice)}</Cell>
       </Section>
