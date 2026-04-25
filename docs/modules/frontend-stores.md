@@ -113,8 +113,8 @@ export const queryKeys = {
 | Хук | Query key | Источник данных | Используется в |
 |---|---|---|---|
 | `useClubsQuery(filters)` | `queryKeys.clubs.list(filters)` | `getClubs` | DiscoveryPage |
-| `useMyClubsQuery()` | `queryKeys.clubs.my()` | `getMyClubs` | MyClubsPage, OrganizerPage, ProfilePage, ClubPage |
-| `useClubQuery(clubId, opts?)` | `queryKeys.clubs.detail(clubId)` | `getClub` | ClubPage, ClubInteriorPage, OrganizerClubManage, MyClubsPage (для дозагрузки названий), OrganizerPage (то же), CreateClubModal post-create |
+| `useMyClubsQuery()` | `queryKeys.clubs.my()` | `getMyClubs` | MyClubsPage, ProfilePage, ClubPage (после `feature/restructure-bottom-tabs` — OrganizerPage удалён, его консьюмеры слиты в MyClubsPage) |
+| `useClubQuery(clubId, opts?)` | `queryKeys.clubs.detail(clubId)` | `getClub` | ClubPage, ClubInteriorPage, OrganizerClubManage, MyClubsPage (для дозагрузки названий клубов и заявок), CreateClubModal post-create |
 | `useClubByInviteQuery(code)` | `queryKeys.clubs.byInvite(code)` | `getClubByInvite` | InvitePage |
 | `useClubEventsQuery(clubId, params?)` | `queryKeys.events.byClub(clubId, params)` | `getClubEvents` | ClubInteriorPage, OrganizerClubManage |
 | `useEventQuery(eventId)` | `queryKeys.events.detail(eventId)` | `getEvent` | EventPage, OrganizerClubManage (attendance modal) |
@@ -329,7 +329,7 @@ export function renderWithProviders(
 **Меняются файлы (consumer'ы):**
 - `frontend/src/pages/DiscoveryPage.tsx` — `useClubsStore` → `useClubsQuery` (infinite)
 - `frontend/src/pages/MyClubsPage.tsx` — `useClubsStore.fetchMyClubs` + `useApplicationsStore.fetchMyApplications` → `useMyClubsQuery` + `useMyApplicationsQuery`. `getClub` в `useEffect` для дозагрузки названий → `useQueries({ queries: clubIds.map(id => ({ queryKey: queryKeys.clubs.detail(id), queryFn: () => getClub(id) })) })` — даёт shared cache с детальной страницей ClubPage
-- `frontend/src/pages/OrganizerPage.tsx` — `useClubsStore.fetchMyClubs` → `useMyClubsQuery`. `createClub` в CreateClubModal → `useCreateClubMutation`. `getClub` для дозагрузки → как в MyClubsPage.
+- ~~`frontend/src/pages/OrganizerPage.tsx`~~ — `useClubsStore.fetchMyClubs` → `useMyClubsQuery`. `createClub` в CreateClubModal → `useCreateClubMutation`. `getClub` для дозагрузки → как в MyClubsPage. **Файл удалён** в PR `feature/restructure-bottom-tabs` (2026-04-25); его потребители query-хуков (`useMyClubsQuery`, `useCreateClubMutation`, `useClubQuery` через `useQueries`) переехали в `MyClubsPage.tsx` и `components/CreateClubModal.tsx`.
 - `frontend/src/pages/ProfilePage.tsx` — `useClubsStore` + `useApplicationsStore` → query-хуки.
 - `frontend/src/pages/ClubPage.tsx` — `useClubsStore.fetchMyClubs` + `getClub` + `getMyApplications` в `Promise.all` → `useClubQuery` + `useMyClubsQuery` + `useMyApplicationsQuery` (3 параллельных запроса, TanStack их не блокирует). `joinClub` / `applyToClub` → `useJoinClubMutation` / `useApplyToClubMutation`.
 - `frontend/src/pages/ClubInteriorPage.tsx` — `getClub` + `getClubEvents` + `getClubMembers` → `useClubQuery` + `useClubEventsQuery` + `useClubMembersQuery` (если включаем members)
@@ -357,13 +357,13 @@ export function renderWithProviders(
   - `OrganizerClubManage.tsx` — 7 точек (members, applications, events, finances, club, memberProfile, eventDetail) разнесены по 5 табам
   - `ClubInteriorPage.tsx` — 4 (club, events, members, memberProfile)
   - `EventPage.tsx` — 2 (event, myVote)
-  - `ClubPage.tsx`, `InvitePage.tsx`, `MyClubsPage.tsx`, `OrganizerPage.tsx` — `getClub` для деталей
+  - `ClubPage.tsx`, `InvitePage.tsx`, `MyClubsPage.tsx` — `getClub` для деталей (`OrganizerPage.tsx` упразднён в `feature/restructure-bottom-tabs`)
 
 Обоснование: цель PR — «ликвидировать анти-паттерн server-state-вне-Query». Половинчатая миграция оставит видимую рассинхронизацию (например, approve заявки в OrganizerClubManage не обновит соседний таб без ручного refetch).
 
 #### S2. `useQueries` для динамических списков
 
-MyClubsPage / OrganizerPage / ProfilePage берут массив `clubIds` из memberships/applications и для каждого нужен `getClub(id)`. Реализация — `useQueries({ queries: clubIds.map(id => ({ queryKey: queryKeys.clubs.detail(id), queryFn: () => getClub(id) })) })`. Каждый club становится отдельным cached query → открытие любого клуба = cache hit на ClubPage без повторного fetch.
+MyClubsPage / ProfilePage берут массив `clubIds` из memberships/applications и для каждого нужен `getClub(id)`. Реализация — `useQueries({ queries: clubIds.map(id => ({ queryKey: queryKeys.clubs.detail(id), queryFn: () => getClub(id) })) })`. Каждый club становится отдельным cached query → открытие любого клуба = cache hit на ClubPage без повторного fetch. (Прежний consumer OrganizerPage слит в MyClubsPage в `feature/restructure-bottom-tabs`.)
 
 #### S3. `react-query-devtools` в dev-режиме
 

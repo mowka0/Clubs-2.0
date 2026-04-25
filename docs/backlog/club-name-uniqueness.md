@@ -44,6 +44,6 @@
 
 ## Связанное
 
-- `frontend/src/pages/OrganizerPage.tsx:111-138` — `onValid` payload построение для CreateClub
+- `frontend/src/components/CreateClubModal.tsx:113-141` — `onValid` payload построение для CreateClub (после переезда из удалённого `OrganizerPage.tsx` в PR `feature/restructure-bottom-tabs`)
 - `backend/.../ClubService.kt` — `createClub()` insert
 - `backend/.../ClubDto.kt:73-74` — другие Bean Validation rules для inspiration

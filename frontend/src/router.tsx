@@ -1,11 +1,11 @@
 import { lazy } from 'react';
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 
 // Main tab pages — eagerly imported for instant tab switching
 import { DiscoveryPage } from './pages/DiscoveryPage';
 import { MyClubsPage } from './pages/MyClubsPage';
-import { OrganizerPage } from './pages/OrganizerPage';
+import { EventsPage } from './pages/EventsPage';
 import { ProfilePage } from './pages/ProfilePage';
 
 // Nested pages — lazy loaded for code splitting
@@ -41,12 +41,19 @@ export const router = createBrowserRouter([
         element: <MyClubsPage />,
       },
       {
-        path: '/organizer',
-        element: <OrganizerPage />,
+        path: '/events',
+        element: <EventsPage />,
       },
       {
         path: '/profile',
         element: <ProfilePage />,
+      },
+
+      // Legacy redirect: /organizer was merged into /my-clubs.
+      // Kept so old bookmarks / deep-links don't 404.
+      {
+        path: '/organizer',
+        element: <Navigate to="/my-clubs" replace />,
       },
 
       // Nested routes (lazy loaded, show BackButton)

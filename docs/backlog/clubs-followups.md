@@ -10,7 +10,7 @@
 
 **Scope:** мелкий bugfix, одна ветка.
 
-**Resolution:** RHF-миграция CreateClubModal удалила `validators.ts` целиком. RHF rule в `OrganizerPage.tsx:217-225`: `n < 10 || n > 80` с message «Лимит участников: 10–80». `docs/modules/clubs.md` уже было `10-80` (PR `feature/club-settings-tab`). Доп. правки post-flight: `docs/modules/ui-pages.md` и `docs/design/stack.md` — `1-200` → `10-80`.
+**Resolution:** RHF-миграция CreateClubModal удалила `validators.ts` целиком. RHF rule в `components/CreateClubModal.tsx:219-227` (после переезда в `feature/restructure-bottom-tabs`; в исходной RHF-итерации жил в `OrganizerPage.tsx:217-225`): `n < 10 || n > 80` с message «Лимит участников: 10–80». `docs/modules/clubs.md` уже было `10-80` (PR `feature/club-settings-tab`). Доп. правки post-flight: `docs/modules/ui-pages.md` и `docs/design/stack.md` — `1-200` → `10-80`.
 
 ---
 

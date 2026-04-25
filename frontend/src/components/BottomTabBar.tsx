@@ -10,9 +10,9 @@ interface TabConfig {
 }
 
 const TABS: readonly TabConfig[] = [
-  { path: '/', label: 'Discovery', icon: '🔍' },
+  { path: '/', label: 'Поиск', icon: '🔍' },
   { path: '/my-clubs', label: 'Мои клубы', icon: '👥' },
-  { path: '/organizer', label: 'Организатор', icon: '⚙️' },
+  { path: '/events', label: 'События', icon: '📅' },
   { path: '/profile', label: 'Профиль', icon: '👤' },
 ] as const;
 
@@ -21,15 +21,16 @@ const TAB_PATHS = new Set(TABS.map((t) => t.path));
 
 /**
  * Determines if the BottomTabBar should be displayed for the current path.
- * Also shows on /clubs/:id and /clubs/:id/manage pages.
+ * Also shows on /clubs/:id, /clubs/:id/manage, and /events/:id detail pages
+ * so users can switch tabs without losing context.
  */
 export function isTabBarRoute(pathname: string): boolean {
   if (TAB_PATHS.has(pathname)) return true;
-  return /^\/clubs\/[^/]+(\/manage)?$/.test(pathname);
+  return /^\/(clubs|events)\/[^/]+(\/manage)?$/.test(pathname);
 }
 
 /**
- * Bottom navigation tab bar with 4 tabs: Discovery, My Clubs, Organizer, Profile.
+ * Bottom navigation tab bar with 4 tabs: Поиск, Мои клубы, События, Профиль.
  * Uses Tabbar and Tabbar.Item from @telegram-apps/telegram-ui.
  * Active tab is determined by the current route path.
  */

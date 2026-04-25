@@ -60,9 +60,11 @@ Frontend рендерит теги как badges на `ClubCard`.
 
 ---
 
-## TASK-030 — Панель организатора (создание клуба)
+## TASK-030 — Панель организатора (создание клуба) — **DEPRECATED**
 
-### Описание
+> **Status:** функционал консолидирован в **TASK-018 (унифицированная `MyClubsPage`)** в PR `feature/restructure-bottom-tabs` (2026-04-25). Отдельная страница `/organizer` удалена; `/organizer` URL редиректится на `/my-clubs` через `<Navigate>` в `router.tsx`. Wizard-форма создания клуба вынесена в `frontend/src/components/CreateClubModal.tsx` и открывается из Section-кнопки «+ Создать клуб» в шапке `MyClubsPage`. История описания TASK-030 ниже сохранена для аудита; для актуального поведения см. [`my-clubs-unified.md`](./my-clubs-unified.md).
+
+### Описание (исторически)
 Страница `/organizer`. Две секции:
 1. Список своих клубов
 2. Кнопка создания нового клуба → пошаговая форма (modal или отдельная страница)

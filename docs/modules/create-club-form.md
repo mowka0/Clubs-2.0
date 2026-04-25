@@ -2,7 +2,7 @@
 
 ## Цель
 
-`CreateClubModal` (5-шаговый wizard в `OrganizerPage`) держит 10 полей формы в одном `useState<FormData>`-объекте и валидирует через ручной `validateStep(step, form)` из `utils/validators.ts`. Это анти-паттерн (см. `frontend.md` § «Формы»):
+`CreateClubModal` (5-шаговый wizard) на момент написания этой спеки жил inline в `OrganizerPage` и держал 10 полей формы в одном `useState<FormData>`-объекте, валидируя через ручной `validateStep(step, form)` из `utils/validators.ts`. После RHF-миграции (PR #26) и переезда в `frontend/src/components/CreateClubModal.tsx` (PR `feature/restructure-bottom-tabs`, 2026-04-25) — открывается из `MyClubsPage` через `<Modal>`. Анти-паттерн, который решала эта спека (см. `frontend.md` § «Формы»):
 
 - ререндер всего модала на каждое нажатие клавиши
 - валидация императивная, дублирует то что RHF делает декларативно
@@ -13,7 +13,7 @@
 ## Scope
 
 ### Входит
-- `frontend/src/pages/OrganizerPage.tsx` — `CreateClubModal` (строки ~54-207): `useState<FormData>` → `useForm`, `validateStep` → RHF rules + `trigger()` для шаговой валидации, локальный `error` для validation → `formState.errors`.
+- `frontend/src/components/CreateClubModal.tsx` — компонент `CreateClubModal` (выделен из удалённого `OrganizerPage.tsx` в PR `feature/restructure-bottom-tabs`): `useState<FormData>` → `useForm`, `validateStep` → RHF rules + `trigger()` для шаговой валидации, локальный `error` для validation → `formState.errors`. На момент RHF-миграции (PR #26) код ещё жил в `pages/OrganizerPage.tsx`; путь обновлён post-flight.
 - `frontend/src/utils/validators.ts` — удалить (больше нигде не используется, см. pre-flight ниже).
 - `frontend/src/test/validators/validateStep.test.ts` — удалить вместе с `validators.ts` (тестирует удаляемый код).
 - `frontend/src/test/pages/CreateClubModal.test.tsx` — адаптировать assertion'ы про error states под RHF (`errors.fieldName.message` вместо локального `error`-state). Сценарии не меняются.
@@ -62,7 +62,7 @@ Pattern: перед `setStep(s + 1)` вызвать `await trigger([...fields_of
 ## Pre-flight
 
 `grep -rn 'validateStep\|ClubFormData\|utils/validators' frontend/src` показал:
-- `frontend/src/pages/OrganizerPage.tsx` — единственный потребитель.
+- `frontend/src/pages/OrganizerPage.tsx` — единственный потребитель (на момент RHF-миграции). После PR `feature/restructure-bottom-tabs` потребитель — `frontend/src/pages/MyClubsPage.tsx`, импортирует `CreateClubModal` из `components/CreateClubModal.tsx`.
 - `frontend/src/utils/validators.ts` — сам файл.
 - `frontend/src/test/validators/validateStep.test.ts` — unit-тест на удаляемую логику.
 

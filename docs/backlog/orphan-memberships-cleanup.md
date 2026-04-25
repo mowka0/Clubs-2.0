@@ -4,7 +4,7 @@
 
 ## Что не так
 
-В DevTools Console на MyClubsPage / ProfilePage / OrganizerPage появляется 404:
+В DevTools Console на MyClubsPage / ProfilePage появляется 404 (прежде также на OrganizerPage до его удаления в `feature/restructure-bottom-tabs`):
 ```
 GET /api/clubs/3a3606ec-e747-49a4-896f-dde7be3247ce 404
 ```
@@ -59,7 +59,7 @@ Hard-delete клуба + cascade FK на memberships/applications. Самый ч
 
 ## Frontend defensive fix (можно добавить независимо)
 
-В `MyClubsPage` / `ProfilePage` / `OrganizerPage`: для membership с `useQueries` query, у которого `error?.status === 404`, скрыть или отобразить как «(удалён)». Не блокирует backend fix, но улучшает UX немедленно.
+В `MyClubsPage` / `ProfilePage` (после `feature/restructure-bottom-tabs` — двух страницах вместо трёх): для membership с `useQueries` query, у которого `error?.status === 404`, скрыть или отобразить как «(удалён)». Не блокирует backend fix, но улучшает UX немедленно.
 
 ```ts
 const clubQueries = useQueries({ queries: clubIds.map(...) });
