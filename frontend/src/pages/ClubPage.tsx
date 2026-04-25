@@ -13,6 +13,7 @@ import {
   Badge,
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
+import { useHaptic } from '../hooks/useHaptic';
 import { useClubsStore } from '../store/useClubsStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { getClub } from '../api/clubs';
@@ -37,6 +38,7 @@ export const ClubPage: FC = () => {
   useBackButton(true);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const haptic = useHaptic();
   const { myClubs, fetchMyClubs } = useClubsStore();
   const { user } = useAuthStore();
 
@@ -77,6 +79,7 @@ export const ClubPage: FC = () => {
 
   const handleJoin = async () => {
     if (!id || !club) return;
+    haptic.impact('medium');
     setJoining(true);
     setJoinError(null);
     try {
@@ -87,11 +90,13 @@ export const ClubPage: FC = () => {
         await fetchMyClubs();
         setJoinSuccess(true);
       }
+      haptic.notify('success');
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         await refetchUserState();
       } else {
         setJoinError((e as Error).message);
+        haptic.notify('error');
       }
     } finally {
       setJoining(false);
@@ -104,18 +109,21 @@ export const ClubPage: FC = () => {
       setJoinError('Введите ответ на вопрос');
       return;
     }
+    haptic.impact('medium');
     setJoining(true);
     setJoinError(null);
     try {
       const created = await applyToClub(id, answerText.trim());
       setShowApplyModal(false);
       setMyApplication(created);
+      haptic.notify('success');
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         setShowApplyModal(false);
         await refetchUserState();
       } else {
         setJoinError((e as Error).message);
+        haptic.notify('error');
       }
     } finally {
       setJoining(false);
@@ -176,7 +184,7 @@ export const ClubPage: FC = () => {
     }
     if (club.accessType === 'closed') {
       return (
-        <Button size="l" onClick={() => setShowApplyModal(true)} stretched>
+        <Button size="l" onClick={() => { haptic.impact('light'); setShowApplyModal(true); }} stretched>
           Хочу вступить
         </Button>
       );

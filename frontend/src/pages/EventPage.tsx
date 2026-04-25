@@ -11,6 +11,7 @@ import {
   Badge,
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
+import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import {
   getEvent,
@@ -44,6 +45,7 @@ export const EventPage: FC = () => {
   useBackButton(true);
 
   const { id } = useParams<{ id: string }>();
+  const haptic = useHaptic();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const [event, setEvent] = useState<EventDetailDto | null>(null);
@@ -85,6 +87,7 @@ export const EventPage: FC = () => {
 
   const handleVote = async (vote: 'going' | 'maybe' | 'not_going') => {
     if (!id || voting) return;
+    haptic.select();
     setVoting(true);
     try {
       await castVote(id, vote);
@@ -94,8 +97,10 @@ export const EventPage: FC = () => {
       ]);
       setEvent(eventData);
       setMyVote(voteData.vote);
+      haptic.notify('success');
     } catch (e) {
       setError((e as Error).message);
+      haptic.notify('error');
     } finally {
       setVoting(false);
     }
@@ -103,6 +108,7 @@ export const EventPage: FC = () => {
 
   const handleConfirm = async () => {
     if (!id || voting) return;
+    haptic.impact('medium');
     setVoting(true);
     try {
       await confirmParticipation(id);
@@ -112,8 +118,10 @@ export const EventPage: FC = () => {
       ]);
       setEvent(eventData);
       setMyVote(voteData.vote);
+      haptic.notify('success');
     } catch (e) {
       setError((e as Error).message);
+      haptic.notify('error');
     } finally {
       setVoting(false);
     }
@@ -121,6 +129,7 @@ export const EventPage: FC = () => {
 
   const handleDecline = async () => {
     if (!id || voting) return;
+    haptic.impact('medium');
     setVoting(true);
     try {
       await declineParticipation(id);
@@ -130,8 +139,10 @@ export const EventPage: FC = () => {
       ]);
       setEvent(eventData);
       setMyVote(voteData.vote);
+      haptic.notify('warning');
     } catch (e) {
       setError((e as Error).message);
+      haptic.notify('error');
     } finally {
       setVoting(false);
     }

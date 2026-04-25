@@ -17,6 +17,9 @@ vi.mock('@telegram-apps/sdk-react', () => ({
   showBackButton: Object.assign(vi.fn(), { isAvailable: () => false }),
   hideBackButton: Object.assign(vi.fn(), { isAvailable: () => false }),
   onBackButtonClick: Object.assign(vi.fn(() => vi.fn()), { isAvailable: () => false }),
+  hapticFeedbackImpactOccurred: Object.assign(vi.fn(), { isAvailable: () => false }),
+  hapticFeedbackNotificationOccurred: Object.assign(vi.fn(), { isAvailable: () => false }),
+  hapticFeedbackSelectionChanged: Object.assign(vi.fn(), { isAvailable: () => false }),
 }));
 
 // Mock Telegram UI
