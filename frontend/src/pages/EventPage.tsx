@@ -61,7 +61,10 @@ export const EventPage: FC = () => {
   const loading = eventQuery.isPending || myVoteQuery.isPending;
   const voting =
     castVoteMutation.isPending || confirmMutation.isPending || declineMutation.isPending;
-  const error = actionError ?? eventQuery.error?.message;
+  // Page-level error — only when we can't load the event itself.
+  // Mutation errors (`actionError`) live in `actionError` state and render INLINE
+  // near the voting buttons; they MUST NOT replace the whole page.
+  const loadError = eventQuery.error?.message;
 
   const handleVote = (vote: 'going' | 'maybe' | 'not_going') => {
     if (!id || voting) return;
@@ -113,11 +116,11 @@ export const EventPage: FC = () => {
     );
   }
 
-  if (error || !event) {
+  if (loadError || !event) {
     return (
       <Placeholder
         header="Ошибка"
-        description={error ?? 'Событие не найдено'}
+        description={loadError ?? 'Событие не найдено'}
       />
     );
   }
@@ -126,7 +129,9 @@ export const EventPage: FC = () => {
     ? Math.min((event.goingCount / event.participantLimit) * 100, 100)
     : 0;
 
-  const showVoting = event.status === 'upcoming' || event.status === 'stage_1';
+  // Backend (`VoteService.castVote` line 40) принимает голос ТОЛЬКО при status='upcoming'.
+  // stage_1 в этой же строке раньше показывал кнопки которые firing'ались в 4xx-ошибку.
+  const showVoting = event.status === 'upcoming';
   const showStage2 = event.status === 'stage_2';
   const showConfirmed =
     event.confirmedCount > 0 &&
@@ -232,6 +237,11 @@ export const EventPage: FC = () => {
               </Badge>
             </div>
           )}
+          {actionError && (
+            <div style={{ padding: '8px 20px', color: 'var(--tgui--destructive_text_color)', fontSize: 14 }}>
+              {actionError}
+            </div>
+          )}
           <div
             style={{
               display: 'flex',
@@ -308,6 +318,12 @@ export const EventPage: FC = () => {
               </Text>
             )}
           </div>
+
+          {actionError && (
+            <div style={{ padding: '8px 20px', color: 'var(--tgui--destructive_text_color)', fontSize: 14 }}>
+              {actionError}
+            </div>
+          )}
 
           {/* Action buttons for users who voted going/maybe but haven't confirmed yet */}
           {(myVote === 'going' || myVote === 'maybe') && (

@@ -60,7 +60,7 @@ fun EventsRecord.toDetailDto(
     locationText = locationText,
     eventDatetime = eventDatetime,
     participantLimit = participantLimit,
-    votingOpensDaysBefore = votingOpensDaysBefore ?: 5,
+    votingOpensDaysBefore = votingOpensDaysBefore ?: 14,
     status = status?.literal ?: "upcoming",
     goingCount = goingCount,
     maybeCount = maybeCount,

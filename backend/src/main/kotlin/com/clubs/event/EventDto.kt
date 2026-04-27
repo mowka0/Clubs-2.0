@@ -60,5 +60,5 @@ data class CreateEventRequest(
 
     @field:Min(value = 1, message = "Voting opens days before must be at least 1")
     @field:Max(value = 14, message = "Voting opens days before must be at most 14")
-    val votingOpensDaysBefore: Int = 5
+    val votingOpensDaysBefore: Int = 14
 )
