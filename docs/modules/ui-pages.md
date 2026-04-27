@@ -130,6 +130,37 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 
 ---
 
+## EventsPage — Лента событий (`/events`)
+
+> **Status (2026-04-25):** placeholder в коде (`<Placeholder>` с эмодзи 📅 + текстом «Скоро будет лента»). Полная спека дизайна и реализации — [`events-feed.md`](./events-feed.md), написана 2026-04-27 для подачи в дизайн-итерацию.
+
+### Цель (TL;DR)
+
+Аггрегированная лента upcoming events из ВСЕХ клубов где user — active member. Цель — сократить дистанцию пользователь↔событие до **одного клика**: сейчас 3-4 клика (Мои клубы → клуб → События → событие), будет 1 (открыл таб → видишь карточки).
+
+### Action-first сортировка
+
+Карточки группируются в этом порядке:
+1. **🔥 Требует действия** — voting открыт без vote, ИЛИ stage_2 без confirm
+2. **📅 Эта неделя** — events ≤ 7 дней
+3. **📆 Позже** — events > 7 дней
+
+### Privacy invariant
+
+События **только** из клубов где `MembershipStatus.active`. Не показывает events из:
+- Клубов где user только подал application (pending)
+- Soft-deleted клубов
+- Публичные events (этого слоя в продукте нет — см. `project_clubs_over_events_rationale.md`)
+
+### Зависимости
+
+- Backend endpoint `GET /api/users/me/events` — НЕ существует, нужно реализовать
+- `docs/backlog/club-events-membership-check.md` — security-фикс должен быть закрыт ДО этой фичи (иначе агрегатный endpoint унаследует утечку)
+
+Полная спека (user-stories, AC, API контракт, анатомия event-card, frontend/backend план) — в `events-feed.md`.
+
+---
+
 ## OrganizerClubManage — Страница управления клубом (`/clubs/:id/manage`)
 
 ### Описание

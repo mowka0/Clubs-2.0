@@ -539,13 +539,18 @@ type UserVote = 'going' | 'maybe' | 'not_going' | 'confirmed' | 'waitlisted' | '
 
 ---
 
-### 7.3 EventsPage `/events` ⚡ tab — **placeholder**
+### 7.3 EventsPage `/events` ⚡ tab — **placeholder, спека готова**
 
 > Новый таб (PR `feature/restructure-bottom-tabs`, 2026-04-25). Заменил
-> прежний таб «Организатор» в нижней навигации. Сейчас — заглушка-`<Placeholder>`;
-> реальная лента upcoming-событий из всех клубов user'а — отдельный PR
-> (требует backend endpoint `GET /api/users/me/events?status=upcoming`).
-> Product-инвариант: события **только из моих клубов**, не публичная лента.
+> прежний таб «Организатор» в нижней навигации. Сейчас — заглушка-`<Placeholder>`.
+>
+> **Полная спека дизайна и реализации:** [`docs/modules/events-feed.md`](../modules/events-feed.md)
+> (написана 2026-04-27 для дизайн-итерации). Включает: action-first
+> сортировку, group'ировку по «Требует действия / Эта неделя / Позже»,
+> анатомию event-card, AC и user-stories, backend API контракт.
+>
+> Product-инвариант: события **только из моих клубов** (active membership),
+> не публичная лента — см. `project_clubs_over_events_rationale.md`.
 
 **Header:** —
 **Body:**
