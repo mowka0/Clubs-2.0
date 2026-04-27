@@ -42,7 +42,7 @@ class VoteService(
         }
 
         val daysUntilEvent = ChronoUnit.DAYS.between(OffsetDateTime.now(), event.eventDatetime)
-        val votingOpensDaysBefore = event.votingOpensDaysBefore ?: 5
+        val votingOpensDaysBefore = event.votingOpensDaysBefore ?: 14
         if (daysUntilEvent > votingOpensDaysBefore) {
             throw ValidationException("Voting has not started yet")
         }
