@@ -1,4 +1,18 @@
-# Backend: добавить membership check на GET /api/clubs/:id/events
+# ✅ RESOLVED — Backend: добавить membership check на GET /api/clubs/:id/events
+
+**Resolved:** 2026-04-27 в `bugfix/club-events-membership-check`. На `EventController.getClubEvents` добавлена аннотация `@RequiresMembership` (использует существующий AOP `AuthorizationAspect`). Теперь endpoint возвращает 403 для:
+- authenticated user, не имеющего active membership в клубе
+- несуществующего клуба (privacy: не раскрываем существование клуба non-member'ам)
+
+Ранее: 200 для любого authenticated user (data leak), 404 для несуществующего клуба (existence leak).
+
+Integration test: `EventControllerSecurityTest.kt` — 5 кейсов (non-member 403, member 200, organizer 200, no token 401, unknown club 403).
+
+Doc updates: `docs/modules/events.md` (corner cases), `ARCHITECTURE.md` (errors line), `docs/modules/events-feed.md` (reference как закрытый gap).
+
+---
+
+## История (для контекста)
 
 Обнаружено 2026-04-25 Security-агентом при ревью `feature/unified-club-page`.
 
