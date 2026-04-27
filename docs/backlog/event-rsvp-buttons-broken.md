@@ -2,6 +2,12 @@
 
 Обнаружено пользователем 2026-04-25 при тесте `feature/unified-club-page` на staging (сценарий #8 — тап на событие из ClubEventsTab открывает /events/:id, на котором кнопки участия не реагируют).
 
+> **✅ RESOLVED** в `bugfix/event-rsvp-broken` 2026-04-27. Root cause состоял из 2 проблем:
+> 1. **UI catastrophe (главное):** `EventPage.tsx` объявлял `const error = actionError ?? eventQuery.error?.message`, и при ЛЮБОМ срабатывании `actionError` (mutation onError) ВСЯ страница заменялась на `<Placeholder header="Ошибка">`. Из-за этого пользователь нажимал «Иду» → backend rejection → весь экран флипался на error-плейсхолдер → ощущение «ничего не меняет / приложение сломалось». Фикс: разделили `loadError` (от eventQuery — основание для page-level placeholder) и `actionError` (от мутаций — рендерится inline в нужной секции, страница не перерисовывается)
+> 2. **Status mismatch:** Frontend `showVoting = status === 'upcoming' || status === 'stage_1'`, backend `VoteService.castVote:40` принимает голос ТОЛЬКО при `status === 'upcoming'`. Для events в `stage_1` кнопки показывались, но backend возвращал 4xx → катастрофа из п.1. Фикс: убрал `stage_1` из showVoting (frontend строго совпадает с backend rules)
+>
+> Smoke-test: голосование на upcoming-event теперь проходит, mutation update'ит статистику и myVote badge. Если backend rejected (например voting period не открыт >5 дней до события) — inline error в воuting секции, страница продолжает работать.
+
 ## Что не так
 
 `pages/EventPage.tsx` отрисовывает кнопки RSVP («Иду» / «Может быть» / «Не иду») и confirm/decline участия. На staging нажатие на эти кнопки **не меняет состояние UI** — нет visual feedback что vote/confirm зарегистрировался.
