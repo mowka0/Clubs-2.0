@@ -12,6 +12,7 @@ POST /api/clubs/{id}/events
 GET /api/clubs/{id}/events
   Query: status? (upcoming|completed), page=0, size=20
   Response 200: PageResponse<EventListItemDto>
+  Errors: 403 (not active member of this club; also returned when club doesn't exist — privacy)
 
 GET /api/events/{id}
   Response 200: EventDetailDto
@@ -73,7 +74,8 @@ GET /api/events/{id}
 ### Corner Cases
 - POST от не-организатора → 403 FORBIDDEN
 - POST с датой в прошлом → 400 VALIDATION_ERROR "Event datetime must be in the future"
-- GET /api/clubs/{unknownId}/events → 404 NOT_FOUND
+- GET /api/clubs/{id}/events от не-участника клуба → 403 FORBIDDEN "You must be an active member of this club"
+- GET /api/clubs/{unknownId}/events → 403 FORBIDDEN (privacy: existence клуба не раскрывается non-member'ам)
 - GET /api/events/{unknownId} → 404 NOT_FOUND
 
 ---

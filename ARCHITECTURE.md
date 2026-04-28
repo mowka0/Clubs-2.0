@@ -126,6 +126,7 @@ POST /api/clubs/{id}/events
 GET /api/clubs/{id}/events
   Query: ?status=upcoming|completed&page=0&size=20
   Response 200: { content: EventListItemDto[], totalPages, totalElements }
+  Errors: 403 (not active member; also returned for non-existent clubs — privacy)
 
 GET /api/events/{id}
   Response 200: EventDetailDto

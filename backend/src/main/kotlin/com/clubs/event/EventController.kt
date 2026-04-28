@@ -41,6 +41,7 @@ class EventController(
         return ResponseEntity.status(HttpStatus.CREATED).body(event)
     }
 
+    @RequiresMembership
     @GetMapping("/api/clubs/{id}/events")
     fun getClubEvents(
         @PathVariable id: UUID,

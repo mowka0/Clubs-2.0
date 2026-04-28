@@ -25,7 +25,7 @@
 - Публичные события (этого слоя в продукте нет, см. `project_clubs_over_events_rationale.md` — мы намеренно clubs-first, не event-discovery)
 - События закрытых клубов где пользователь не состоит
 
-Это защищает приватность closed-club meetups (organizer контролирует кто видит расписание) и согласуется с `EventService.getClubEvents` membership check (см. `docs/backlog/club-events-membership-check.md` — backend gap, который должен быть закрыт **до** этой фичи).
+Это защищает приватность closed-club meetups (organizer контролирует кто видит расписание) и согласуется с `EventController.getClubEvents` membership check (закрыт через `@RequiresMembership` aspect — см. `docs/backlog/club-events-membership-check.md` ✅ RESOLVED). Реализация `/api/users/me/events` должна аналогично фильтровать по active memberships на бэкенде, не доверяя клиенту.
 
 ### Action-first сортировка
 
