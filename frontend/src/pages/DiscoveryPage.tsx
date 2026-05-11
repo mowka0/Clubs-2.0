@@ -1,9 +1,21 @@
 import { FC, useCallback, useEffect, useRef, useState } from 'react';
-import { List, Spinner, Placeholder } from '@telegram-apps/telegram-ui';
+import { Spinner } from '@telegram-apps/telegram-ui';
 import { useClubsQuery } from '../queries/clubs';
 import { ClubCard } from '../components/ClubCard';
-import { ClubFiltersComponent } from '../components/ClubFilters';
+import { DiscoveryBackdrop } from '../components/DiscoveryBackdrop';
+import { useHaptic } from '../hooks/useHaptic';
 import type { ClubFilters } from '../api/clubs';
+
+const CATEGORY_CHIPS = [
+  { value: '',            label: 'Все' },
+  { value: 'sport',       label: 'Спорт' },
+  { value: 'creative',    label: 'Творчество' },
+  { value: 'education',   label: 'Книги' },
+  { value: 'food',        label: 'Кулинария' },
+  { value: 'cinema',      label: 'Кино' },
+  { value: 'board_games', label: 'Настолки' },
+  { value: 'travel',      label: 'Путешествия' },
+] as const;
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -14,10 +26,18 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced;
 }
 
+const SEARCH_ICON = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="11" cy="11" r="7" />
+    <path d="m20 20-3.5-3.5" />
+  </svg>
+);
+
 export const DiscoveryPage: FC = () => {
   const [filters, setFilters] = useState<ClubFilters>({});
   const debouncedFilters = useDebounce(filters, 300);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const haptic = useHaptic();
 
   const {
     data,
@@ -47,42 +67,107 @@ export const DiscoveryPage: FC = () => {
     return () => observer.disconnect();
   }, [handleObserver]);
 
+  const handleCategoryClick = useCallback(
+    (value: string) => {
+      haptic.select();
+      setFilters((prev) => ({ ...prev, category: value || undefined }));
+    },
+    [haptic],
+  );
+
+  const activeCategory = filters.category ?? '';
+
   return (
-    <List>
-      <ClubFiltersComponent filters={filters} onChange={setFilters} />
+    <div className="discovery-page">
+      <DiscoveryBackdrop />
 
-      {error && (
-        <div style={{ padding: 16, color: 'var(--tgui--destructive_text_color)', textAlign: 'center' }}>
-          {error.message}
+      <header className="discovery-topbar">
+        <div className="discovery-brand">
+          <img src="/brand/logo.png" alt="Clubs" />
+          <div>
+            <div className="name">Clubs</div>
+            <div className="tag">Сообщества</div>
+          </div>
         </div>
-      )}
+        <span className="discovery-city-pill">Москва</span>
+      </header>
 
-      {!isPending && clubs.length === 0 && !error && (
-        <Placeholder
-          header="Клубы не найдены"
-          description="Попробуйте изменить фильтры"
-        />
-      )}
+      <section className="discovery-hero">
+        <h1>
+          Найди свой{' '}
+          <span className="accent">клуб</span>
+        </h1>
+      </section>
 
-      {clubs.map((club) => (
-        <ClubCard key={club.id} club={club} />
-      ))}
+      <div className="discovery-search-wrap">
+        <label className="discovery-search">
+          {SEARCH_ICON}
+          <input
+            type="search"
+            placeholder="Беговой клуб, книжный, дегустации"
+            value={filters.search ?? ''}
+            onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value || undefined }))}
+            aria-label="Поиск клубов"
+          />
+        </label>
+      </div>
 
-      {/* Initial load only — background refetches (staleTime expiry) must NOT show a spinner. */}
-      {isPending && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
-          <Spinner size="m" />
-        </div>
-      )}
+      <div className="discovery-chips" role="tablist" aria-label="Категории">
+        {CATEGORY_CHIPS.map((chip) => {
+          const isActive = activeCategory === chip.value;
+          return (
+            <button
+              key={chip.value || 'all'}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              className={isActive ? 'discovery-chip active' : 'discovery-chip'}
+              onClick={() => handleCategoryClick(chip.value)}
+            >
+              {chip.label}
+            </button>
+          );
+        })}
+      </div>
 
-      {/* Pagination spinner shown only while fetching the next page. */}
-      {isFetchingNextPage && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
-          <Spinner size="m" />
-        </div>
-      )}
+      <div className="discovery-meta-row">
+        <span className="count">{clubs.length} {pluralizeClubs(clubs.length)}</span>
+        <span className="sort">По релевантности</span>
+      </div>
 
-      <div ref={sentinelRef} style={{ height: 1 }} />
-    </List>
+      <div className="discovery-list">
+        {error && (
+          <div className="discovery-error" role="alert">{error.message}</div>
+        )}
+
+        {isPending && (
+          <div className="discovery-spinner-row"><Spinner size="m" /></div>
+        )}
+
+        {!isPending && clubs.length === 0 && !error && (
+          <div className="discovery-empty">
+            Клубы не найдены. Попробуйте изменить фильтры.
+          </div>
+        )}
+
+        {clubs.map((club) => (
+          <ClubCard key={club.id} club={club} />
+        ))}
+
+        {isFetchingNextPage && (
+          <div className="discovery-spinner-row"><Spinner size="m" /></div>
+        )}
+
+        <div ref={sentinelRef} style={{ height: 1 }} />
+      </div>
+    </div>
   );
 };
+
+function pluralizeClubs(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'клуб';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'клуба';
+  return 'клубов';
+}

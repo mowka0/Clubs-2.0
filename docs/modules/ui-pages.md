@@ -12,11 +12,18 @@
 ```
 src/
   pages/
-    DiscoveryPage.tsx          — основная страница
+    DiscoveryPage.tsx          — основная страница (brand layout: topbar + hero + search + chips + list)
   components/
-    ClubCard.tsx               — карточка клуба
-    ClubFilters.tsx            — фильтры (категория, город, тип доступа, цена)
+    ClubCard.tsx               — карточка клуба (gradient avatar + capacity bar + featured state)
+    DiscoveryBackdrop.tsx      — SVG абстракция (navy blobs + brass glows + contour lines)
+  styles/
+    brand-theme.css            — палитра navy + brass + component-CSS
+  public/brand/                — production-ready brand assets (logo + 4 tab иконки)
 ```
+
+> **2026-05-11 `feature/discovery-redesign`:** ClubFilters.tsx удалён — фильтры
+> (search + category chips) inline в `DiscoveryPage` как часть единого визуального
+> редизайна. Detail в [`discovery-redesign.md`](./discovery-redesign.md).
 
 ### ClubCard
 
