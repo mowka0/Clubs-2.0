@@ -1,0 +1,824 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Discovery — Dark v3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --font: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+
+    --navy-bg:     #0E1428;
+    --navy-card:   #1A2138;
+    --navy-card-2: #232B45;
+    --navy-soft:   #2E3858;
+    --brass:       #C9A063;
+    --brass-2:     #B58A4D;
+    --brass-soft:  rgba(201, 160, 99, 0.14);
+    --brass-deep:  #DDB87A;
+    --brass-glow:  rgba(201, 160, 99, 0.32);
+
+    --ink:         #F0EEE7;
+    --ink-2:       #C2C8D9;
+    --ink-3:       #8A92AC;
+    --ink-4:       #5C6584;
+    --hairline:    rgba(240, 238, 231, 0.07);
+    --hairline-2:  rgba(240, 238, 231, 0.12);
+
+    --live:        #4FA078;
+    --live-soft:   rgba(79, 160, 120, 0.18);
+
+    --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-pill: 999px;
+  }
+
+  html, body {
+    font-family: var(--font);
+    background: var(--navy-bg);
+    color: var(--ink);
+    font-size: 15px; line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+    font-feature-settings: "cv11", "ss01";
+  }
+  html, body { width: 390px; }
+  body {
+    min-height: 1180px; margin: 0; position: relative; overflow-x: hidden;
+    background:
+      radial-gradient(circle at 92% 6%, rgba(201, 160, 99, 0.22), transparent 42%),
+      radial-gradient(circle at 8% 0%,  rgba(58, 70, 110, 0.75), transparent 45%),
+      var(--navy-bg);
+  }
+
+  /* abstract background pattern layer — visible at top, faint baseline at bottom */
+  .bg-pattern {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1750px;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom,
+      rgba(0,0,0,1.00) 0%,
+      rgba(0,0,0,1.00) 27%,
+      rgba(0,0,0,0.70) 42%,
+      rgba(0,0,0,0.45) 60%,
+      rgba(0,0,0,0.30) 80%,
+      rgba(0,0,0,0.18) 100%);
+            mask-image: linear-gradient(to bottom,
+      rgba(0,0,0,1.00) 0%,
+      rgba(0,0,0,1.00) 27%,
+      rgba(0,0,0,0.70) 42%,
+      rgba(0,0,0,0.45) 60%,
+      rgba(0,0,0,0.30) 80%,
+      rgba(0,0,0,0.18) 100%);
+  }
+  .bg-pattern svg {
+    width: 100%; height: 100%;
+    display: block;
+  }
+
+  /* lift content above pattern */
+  .statusbar, .page-head, .hero, .search-wrap, .chips,
+  .section-head, .rail, .meta-row, .list, .tabbar { position: relative; z-index: 1; }
+
+  /* status bar */
+  .statusbar {
+    height: 47px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 0 20px 8px;
+    font-size: 16px; font-weight: 600;
+    color: var(--ink);
+    z-index: 5;
+  }
+  .statusbar .right { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .battery { display: inline-block; width: 24px; height: 12px; border: 1.5px solid var(--ink); border-radius: 3px; position: relative; margin-left: 2px; }
+  .battery::before { content: ''; position: absolute; right: -3px; top: 3px; width: 2px; height: 4px; background: var(--ink); border-radius: 0 1px 1px 0; }
+  .battery::after { content: ''; position: absolute; inset: 1.5px; width: 17px; background: var(--ink); border-radius: 1px; }
+
+  /* page header */
+  .page-head {
+    padding: 8px 20px 18px;
+    display: flex; align-items: center; justify-content: space-between;
+    z-index: 2;
+  }
+  .brand { display: inline-flex; align-items: center; gap: 12px; }
+  .brand img {
+    width: 72px; height: 72px;
+    object-fit: contain;
+    display: block;
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.35));
+  }
+  .brand .word { display: flex; flex-direction: column; line-height: 1; }
+  .brand .word .name { font-size: 22px; font-weight: 700; letter-spacing: -0.012em; color: var(--ink); }
+  .brand .word .tag { font-size: 10.5px; font-weight: 600; letter-spacing: 0.20em; text-transform: uppercase; color: var(--brass); margin-top: 5px; }
+  .head-actions { display: inline-flex; align-items: center; gap: 8px; }
+  .city-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    height: 32px; padding: 0 12px 0 10px;
+    background: var(--navy-card);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-pill);
+    font-size: 13px; font-weight: 500; color: var(--ink-2);
+  }
+  .city-pill svg { width: 13px; height: 13px; color: var(--brass); }
+  .icon-btn {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--navy-card);
+    border: 1px solid var(--hairline);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--ink-2);
+  }
+  .icon-btn svg { width: 16px; height: 16px; }
+
+  /* hero — minimal: heading only */
+  .hero {
+    padding: 18px 20px 28px;
+  }
+  .hero h1 {
+    font-size: 34px; font-weight: 700;
+    letter-spacing: -0.024em;
+    color: var(--ink);
+    line-height: 1.08;
+  }
+  .hero h1 .accent {
+    color: var(--brass);
+    position: relative;
+    display: inline-block;
+  }
+  /* subtle brass underglow on the accent word */
+  .hero h1 .accent::after {
+    content: '';
+    position: absolute;
+    left: -2px; right: -2px;
+    bottom: 6px;
+    height: 10px;
+    background: var(--brass);
+    opacity: 0.16;
+    border-radius: 2px;
+    z-index: -1;
+    filter: blur(6px);
+  }
+
+  /* search */
+  .search-wrap { padding: 0 20px 14px; }
+  .search {
+    display: flex; align-items: center; gap: 10px;
+    height: 46px; padding: 0 14px;
+    background: rgba(26, 33, 56, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-md);
+  }
+  .search svg { color: var(--ink-3); flex-shrink: 0; }
+  .search input {
+    flex: 1; border: 0; outline: none; background: transparent;
+    font-family: inherit; font-size: 14.5px; color: var(--ink);
+  }
+  .search input::placeholder { color: var(--ink-4); }
+
+  /* chips */
+  .chips {
+    padding: 0 20px;
+    display: flex; align-items: center; gap: 8px;
+    overflow-x: auto; scrollbar-width: none;
+    margin-bottom: 18px;
+  }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex-shrink: 0;
+    height: 34px; padding: 0 14px;
+    font-size: 13px; font-weight: 500;
+    color: var(--ink-2);
+    background: rgba(26, 33, 56, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-pill);
+    display: inline-flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+  .chip.active {
+    background: var(--brass);
+    color: var(--navy-bg);
+    border-color: var(--brass);
+    font-weight: 600;
+  }
+  .chip.facet svg { width: 12px; height: 12px; color: var(--ink-3); }
+  .chip-sep { flex-shrink: 0; width: 1px; height: 18px; background: var(--hairline); }
+
+  /* section header */
+  .section-head {
+    padding: 4px 20px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .section-title {
+    font-size: 16px; font-weight: 700; letter-spacing: -0.005em;
+    color: var(--ink);
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .section-title .live-tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 8px;
+    background: var(--live-soft);
+    color: var(--live);
+    font-size: 11px; font-weight: 600;
+    border-radius: var(--r-pill);
+  }
+  .section-title .live-tag::before {
+    content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--live);
+    box-shadow: 0 0 0 3px rgba(79, 160, 120, 0.20);
+  }
+  .section-link { font-size: 13px; font-weight: 500; color: var(--ink-3); }
+
+  /* today rail */
+  .rail {
+    display: flex; gap: 10px;
+    overflow-x: auto; scrollbar-width: none;
+    padding: 0 20px 4px;
+  }
+  .rail::-webkit-scrollbar { display: none; }
+  .rail-card {
+    flex-shrink: 0;
+    width: 232px;
+    background: rgba(26, 33, 56, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-md);
+    padding: 14px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .rail-card .when { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--live); }
+  .rail-card .when.dim { color: var(--ink-3); font-weight: 500; }
+  .rail-card .when .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--live); }
+  .rail-card .ev { font-size: 15px; font-weight: 600; color: var(--ink); line-height: 1.3; letter-spacing: -0.005em; }
+  .rail-card .place { font-size: 12.5px; color: var(--ink-3); }
+  .rail-card .club {
+    margin-top: 6px; padding-top: 10px;
+    border-top: 1px solid var(--hairline);
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12.5px; color: var(--ink-2);
+  }
+  .rail-card .avt-xs {
+    width: 22px; height: 22px; border-radius: 6px;
+    font-size: 10px; font-weight: 700;
+    background: var(--navy-soft); color: var(--ink-2);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .rail-card .avt-xs[data-cat="sport"]      { background: #4A3622; color: #E0B888; }
+  .rail-card .avt-xs[data-cat="creative"]   { background: #2E2C50; color: #B5B0E2; }
+  .rail-card .avt-xs[data-cat="literature"] { background: var(--brass-soft); color: var(--brass); }
+
+  /* meta row */
+  .meta-row {
+    padding: 22px 20px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .count { font-size: 14px; font-weight: 700; color: var(--ink); }
+  .sort {
+    font-size: 13px; color: var(--ink-2);
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .sort svg { width: 13px; height: 13px; color: var(--ink-3); }
+
+  /* main list */
+  .list { padding: 0 20px 130px; display: flex; flex-direction: column; gap: 10px; }
+
+  .card {
+    background: rgba(26, 33, 56, 0.88);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--hairline-2);
+    border-radius: var(--r-md);
+    padding: 14px;
+    display: flex; gap: 14px;
+    position: relative;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.025) inset,
+                0 2px 4px rgba(0, 0, 0, 0.25);
+  }
+  .card.featured {
+    background:
+      linear-gradient(180deg, rgba(201, 160, 99, 0.06) 0%, transparent 60%),
+      rgba(26, 33, 56, 0.92);
+    border-color: rgba(201, 160, 99, 0.30);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset,
+                0 6px 20px rgba(201, 160, 99, 0.10),
+                0 0 0 1px rgba(201, 160, 99, 0.05);
+  }
+
+  .card .avt {
+    width: 52px; height: 52px;
+    border-radius: 10px;
+    font-size: 15px; font-weight: 700;
+    letter-spacing: 0.03em;
+    color: var(--ink-2);
+    background: var(--navy-soft);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+  .card .avt[data-cat="sport"]      { background: linear-gradient(160deg, #4F3825, #2E1F12); color: #E5C18C; }
+  .card .avt[data-cat="creative"]   { background: linear-gradient(160deg, #312F58, #1A1934); color: #BAB4EA; }
+  .card .avt[data-cat="food"]       { background: linear-gradient(160deg, #4F381A, #2C1F0E); color: #EBC57B; }
+  .card .avt[data-cat="board"]      { background: linear-gradient(160deg, #1F4032, #0E2419); color: #6FBA92; }
+  .card .avt[data-cat="cinema"]     { background: linear-gradient(160deg, #1F3850, #0F1E2C); color: #93BED7; }
+  .card .avt[data-cat="travel"]     { background: linear-gradient(160deg, #1E3D3B, #0E2120); color: #82B7AD; }
+  .card .avt[data-cat="literature"] { background: linear-gradient(160deg, #3A2E18, #1F1808); color: var(--brass-deep); }
+  .card.featured .avt {
+    box-shadow: inset 0 0 0 1px rgba(201, 160, 99, 0.35),
+                0 0 12px rgba(201, 160, 99, 0.12);
+  }
+
+  .card .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+
+  .card .top {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  }
+  .card .name {
+    font-size: 16px; font-weight: 600;
+    line-height: 1.25; letter-spacing: -0.008em;
+    color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    flex: 1; min-width: 0;
+  }
+  .card .price {
+    flex-shrink: 0; text-align: right;
+    font-size: 15px; font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
+  .card .price .per { display: inline; font-size: 12px; font-weight: 500; color: var(--ink-4); margin-left: 2px; }
+  .card .price.free { color: var(--ink-2); font-weight: 600; font-size: 14px; }
+
+  .card .meta {
+    font-size: 12.5px;
+    color: var(--ink-3);
+    display: flex; align-items: center; gap: 10px;
+    margin-top: -2px;
+  }
+  .card .meta .cat { color: var(--ink-2); font-weight: 500; }
+  .card .meta .signal { color: var(--live); font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+  .card .meta .signal::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 3px rgba(79, 160, 120, 0.18); }
+  .card .meta .closed { color: var(--brass-deep); font-weight: 500; display: inline-flex; align-items: center; gap: 5px; }
+  .card .meta .closed svg { width: 11px; height: 11px; }
+
+  .card .capacity { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+  .capacity-bar { flex: 1; height: 3px; background: var(--navy-soft); border-radius: 2px; overflow: hidden; position: relative; }
+  .capacity-bar .fill { position: absolute; top: 0; bottom: 0; left: 0; background: linear-gradient(90deg, var(--brass-2), var(--brass-deep)); border-radius: 2px; }
+  .capacity-bar .fill.live { background: linear-gradient(90deg, var(--live), #6FBA92); }
+  .capacity-num { font-size: 11.5px; font-weight: 600; color: var(--ink-3); letter-spacing: 0.01em; min-width: 50px; text-align: right; }
+  .capacity-num .almost-full { color: var(--brass-deep); }
+
+  /* tab bar */
+  .tabbar {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 84px;
+    background: rgba(14, 20, 40, 0.78);
+    backdrop-filter: saturate(160%) blur(28px);
+    -webkit-backdrop-filter: saturate(160%) blur(28px);
+    border-top: 1px solid var(--hairline);
+    display: flex; align-items: flex-start; justify-content: space-around;
+    padding: 10px 12px 18px;
+    z-index: 3;
+  }
+  .tab {
+    flex: 1; position: relative;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    color: var(--ink-3);
+    font-size: 11px; font-weight: 600; letter-spacing: 0.01em;
+    background: transparent; border: 0;
+  }
+  .tab.active { color: var(--ink); }
+  .tab .ico { width: 38px; height: 38px; background-repeat: no-repeat; background-size: contain; background-position: center; }
+  .tab[data-tab="search"] .ico { background-image: url("assets/nav-search.png"); }
+  .tab[data-tab="clubs"]  .ico { background-image: url("assets/nav-clubs.png"); }
+  .tab[data-tab="events"] .ico { background-image: url("assets/nav-events.png"); }
+  .tab[data-tab="me"]     .ico { background-image: url("assets/nav-me.png"); }
+  .tab:not(.active) .ico { filter: saturate(0.35) brightness(0.85) contrast(0.9); opacity: 0.62; }
+  .tab.active .indicator {
+    position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
+    width: 18px; height: 2px; border-radius: 2px;
+    background: var(--brass);
+    box-shadow: 0 0 8px rgba(201, 160, 99, 0.55);
+  }
+</style>
+</head>
+<body>
+
+  <!-- Abstract background pattern — subtle flowing curves + orbs in navy/brass -->
+  <div class="bg-pattern" aria-hidden="true">
+    <svg viewBox="0 0 390 1750" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- Soft blob gradient — clearly lighter navy now -->
+        <radialGradient id="blob-navy" cx="50%" cy="50%" r="50%">
+          <stop offset="0%"  stop-color="#4A5680" stop-opacity="0.75"/>
+          <stop offset="55%" stop-color="#384270" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="#1A2138" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="blob-brass" cx="50%" cy="50%" r="50%">
+          <stop offset="0%"  stop-color="#DDB87A" stop-opacity="0.50"/>
+          <stop offset="55%" stop-color="#B58A4D" stop-opacity="0.22"/>
+          <stop offset="100%" stop-color="#B58A4D" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="orb-brass-solid" cx="35%" cy="35%" r="65%">
+          <stop offset="0%"  stop-color="#F2D098" stop-opacity="0.95"/>
+          <stop offset="55%" stop-color="#C9A063" stop-opacity="0.65"/>
+          <stop offset="100%" stop-color="#8A6730" stop-opacity="0.15"/>
+        </radialGradient>
+      </defs>
+
+      <!-- Large soft blobs — visibly lighter than bg -->
+      <ellipse cx="60"  cy="120" rx="220" ry="200" fill="url(#blob-navy)"/>
+      <ellipse cx="340" cy="380" rx="200" ry="220" fill="url(#blob-navy)" opacity="0.85"/>
+      <ellipse cx="40"  cy="640" rx="230" ry="200" fill="url(#blob-navy)" opacity="0.75"/>
+      <ellipse cx="360" cy="940" rx="210" ry="230" fill="url(#blob-navy)" opacity="0.7"/>
+
+      <!-- Brass-glow blobs -->
+      <ellipse cx="320" cy="160" rx="180" ry="150" fill="url(#blob-brass)"/>
+      <ellipse cx="80"  cy="420" rx="120" ry="110" fill="url(#blob-brass)" opacity="0.55"/>
+
+      <!-- Topographic contour lines — brass, more visible -->
+      <g fill="none" stroke="#C9A063" stroke-width="1.1" stroke-linecap="round">
+        <path d="M-20 280 Q 100 240, 220 290 T 420 270" opacity="0.28"/>
+        <path d="M-20 310 Q 110 270, 230 320 T 430 300" opacity="0.22"/>
+        <path d="M-20 340 Q 120 300, 240 350 T 440 330" opacity="0.16"/>
+        <path d="M-20 370 Q 110 340, 230 380 T 430 365" opacity="0.10"/>
+
+        <path d="M-20 580 Q 100 540, 220 590 T 420 570" opacity="0.20"/>
+        <path d="M-20 610 Q 110 580, 230 620 T 430 600" opacity="0.15"/>
+
+        <path d="M-20 760 Q 90 720, 200 770 T 410 750" opacity="0.16"/>
+        <path d="M-20 790 Q 100 760, 210 800 T 420 780" opacity="0.12"/>
+      </g>
+
+      <!-- Light parallel ghost-lines in upper-right (like reference image) -->
+      <g fill="none" stroke="#F0EEE7" stroke-width="1" stroke-linecap="round">
+        <path d="M260 60  Q 340 100, 410 80"  opacity="0.16"/>
+        <path d="M250 80  Q 330 120, 410 100" opacity="0.14"/>
+        <path d="M240 100 Q 320 140, 410 120" opacity="0.12"/>
+        <path d="M230 120 Q 310 160, 410 140" opacity="0.10"/>
+        <path d="M220 140 Q 300 180, 410 160" opacity="0.08"/>
+      </g>
+
+      <!-- White-ish flowing curves on the left (mirror) -->
+      <g fill="none" stroke="#F0EEE7" stroke-width="1" stroke-linecap="round">
+        <path d="M-20 480 Q 60 460, 140 490" opacity="0.10"/>
+        <path d="M-20 500 Q 60 480, 140 510" opacity="0.08"/>
+        <path d="M-20 520 Q 60 500, 140 530" opacity="0.06"/>
+      </g>
+
+      <!-- Small brass dots / orbs — more visible -->
+      <!-- (removed orb near logo to avoid overlap with brand mark) -->
+      <circle cx="354" cy="490" r="6"   fill="url(#orb-brass-solid)" opacity="0.9"/>
+      <circle cx="32"  cy="560" r="5"   fill="url(#orb-brass-solid)" opacity="0.85"/>
+      <circle cx="370" cy="780" r="8"   fill="url(#orb-brass-solid)" opacity="0.75"/>
+      <circle cx="20"  cy="900" r="6"   fill="url(#orb-brass-solid)" opacity="0.6"/>
+      <circle cx="280" cy="340" r="4"   fill="url(#orb-brass-solid)" opacity="0.85"/>
+      <circle cx="140" cy="240" r="3.5" fill="url(#orb-brass-solid)" opacity="0.8"/>
+
+      <!-- Tiny dot patterns — clearly visible clusters -->
+      <g fill="#C9A063" opacity="0.55">
+        <circle cx="180" cy="40"  r="1.5"/>
+        <circle cx="200" cy="50"  r="1.5"/>
+        <circle cx="220" cy="60"  r="1.5"/>
+        <circle cx="240" cy="40"  r="1.5"/>
+        <circle cx="200" cy="68"  r="1.5"/>
+        <circle cx="222" cy="80"  r="1.5"/>
+
+        <circle cx="40"  cy="450" r="1.5"/>
+        <circle cx="60"  cy="460" r="1.5"/>
+        <circle cx="80"  cy="450" r="1.5"/>
+        <circle cx="100" cy="468" r="1.5"/>
+        <circle cx="50"  cy="470" r="1.5"/>
+
+        <circle cx="320" cy="690" r="1.5"/>
+        <circle cx="340" cy="700" r="1.5"/>
+        <circle cx="360" cy="690" r="1.5"/>
+        <circle cx="338" cy="712" r="1.5"/>
+      </g>
+
+      <!-- ============================================== -->
+      <!-- Lower half — same vocabulary, mask handles fade -->
+      <!-- ============================================== -->
+
+      <!-- Additional navy blobs in lower area -->
+      <ellipse cx="320" cy="1200" rx="220" ry="200" fill="url(#blob-navy)" opacity="0.75"/>
+      <ellipse cx="60"  cy="1380" rx="200" ry="190" fill="url(#blob-navy)" opacity="0.70"/>
+      <ellipse cx="350" cy="1580" rx="210" ry="200" fill="url(#blob-navy)" opacity="0.70"/>
+      <ellipse cx="80"  cy="1700" rx="190" ry="180" fill="url(#blob-navy)" opacity="0.65"/>
+
+      <!-- Brass-glow blob mid-lower -->
+      <ellipse cx="340" cy="1320" rx="150" ry="130" fill="url(#blob-brass)" opacity="0.85"/>
+      <ellipse cx="40"  cy="1620" rx="130" ry="120" fill="url(#blob-brass)" opacity="0.70"/>
+
+      <!-- Topographic contour lines — lower area -->
+      <g fill="none" stroke="#C9A063" stroke-width="1.1" stroke-linecap="round">
+        <path d="M-20 1100 Q 100 1060, 220 1110 T 420 1090" opacity="0.24"/>
+        <path d="M-20 1130 Q 110 1090, 230 1140 T 430 1120" opacity="0.18"/>
+        <path d="M-20 1160 Q 120 1120, 240 1170 T 440 1150" opacity="0.12"/>
+
+        <path d="M-20 1430 Q 100 1390, 220 1440 T 420 1420" opacity="0.20"/>
+        <path d="M-20 1460 Q 110 1430, 230 1470 T 430 1450" opacity="0.15"/>
+
+        <path d="M-20 1620 Q 90 1580, 200 1630 T 410 1610" opacity="0.16"/>
+        <path d="M-20 1650 Q 100 1620, 210 1660 T 420 1640" opacity="0.12"/>
+      </g>
+
+      <!-- White-ish accent curves — lower area -->
+      <g fill="none" stroke="#F0EEE7" stroke-width="1" stroke-linecap="round">
+        <path d="M260 1240 Q 340 1280, 410 1260" opacity="0.12"/>
+        <path d="M250 1260 Q 330 1300, 410 1280" opacity="0.10"/>
+        <path d="M240 1280 Q 320 1320, 410 1300" opacity="0.08"/>
+
+        <path d="M-20 1500 Q 60 1480, 140 1510" opacity="0.10"/>
+        <path d="M-20 1520 Q 60 1500, 140 1530" opacity="0.08"/>
+      </g>
+
+      <!-- Brass orbs in lower area -->
+      <circle cx="50"  cy="1150" r="6"   fill="url(#orb-brass-solid)" opacity="0.9"/>
+      <circle cx="360" cy="1280" r="5"   fill="url(#orb-brass-solid)" opacity="0.8"/>
+      <circle cx="30"  cy="1430" r="4.5" fill="url(#orb-brass-solid)" opacity="0.85"/>
+      <circle cx="350" cy="1500" r="7"   fill="url(#orb-brass-solid)" opacity="0.75"/>
+      <circle cx="60"  cy="1700" r="5"   fill="url(#orb-brass-solid)" opacity="0.7"/>
+      <circle cx="370" cy="1700" r="4"   fill="url(#orb-brass-solid)" opacity="0.65"/>
+
+      <!-- Dot pattern clusters in lower area -->
+      <g fill="#C9A063" opacity="0.55">
+        <circle cx="180" cy="1180" r="1.5"/>
+        <circle cx="200" cy="1190" r="1.5"/>
+        <circle cx="220" cy="1180" r="1.5"/>
+        <circle cx="238" cy="1196" r="1.5"/>
+
+        <circle cx="80"  cy="1380" r="1.5"/>
+        <circle cx="100" cy="1390" r="1.5"/>
+        <circle cx="120" cy="1380" r="1.5"/>
+
+        <circle cx="300" cy="1560" r="1.5"/>
+        <circle cx="320" cy="1572" r="1.5"/>
+        <circle cx="340" cy="1560" r="1.5"/>
+
+        <circle cx="180" cy="1680" r="1.5"/>
+        <circle cx="200" cy="1690" r="1.5"/>
+        <circle cx="220" cy="1680" r="1.5"/>
+      </g>
+    </svg>
+  </div>
+
+  <div class="statusbar">
+    <span>9:41</span>
+    <span class="right">
+      <span style="font-weight:700">5G</span>
+      <span class="battery"></span>
+    </span>
+  </div>
+
+  <div class="page-head">
+    <div class="brand">
+      <img src="assets/brand-logo.png" alt="Clubs">
+      <div class="word">
+        <span class="name">Clubs</span>
+        <span class="tag">Сообщества</span>
+      </div>
+    </div>
+    <div class="head-actions">
+      <span class="city-pill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        Москва
+      </span>
+      <button class="icon-btn" aria-label="Тема">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <section class="hero">
+    <h1>Найди свой <span class="accent">клуб</span></h1>
+  </section>
+
+  <div class="search-wrap">
+    <div class="search">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input placeholder="Беговой клуб, книжный, дегустации">
+    </div>
+  </div>
+
+  <div class="chips">
+    <button class="chip facet">
+      До 1 000 ₽
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <span class="chip-sep"></span>
+    <button class="chip active">Все</button>
+    <button class="chip">Спорт</button>
+    <button class="chip">Творчество</button>
+    <button class="chip">Книги</button>
+    <button class="chip">Кулинария</button>
+    <button class="chip">Кино</button>
+  </div>
+
+  <div class="section-head">
+    <div class="section-title">
+      Сегодня
+      <span class="live-tag">3 события</span>
+    </div>
+    <a class="section-link">все ›</a>
+  </div>
+
+  <div class="rail">
+    <div class="rail-card">
+      <span class="when"><span class="dot"></span>Сегодня · 19:30</span>
+      <div class="ev">Открытая тренировка</div>
+      <div class="place">Парк Горького · набережная</div>
+      <div class="club">
+        <span class="avt-xs" data-cat="sport">БК</span>
+        Беговой клуб «Ветер»
+      </div>
+    </div>
+    <div class="rail-card">
+      <span class="when dim">Завтра · 08:00</span>
+      <div class="ev">Утренняя йога</div>
+      <div class="place">Студия «Лёгкость» · Чистые пруды</div>
+      <div class="club">
+        <span class="avt-xs" data-cat="creative">ЙП</span>
+        Йога-практика
+      </div>
+    </div>
+    <div class="rail-card">
+      <span class="when dim">Чт · 19:00</span>
+      <div class="ev">Обсуждение Дидион</div>
+      <div class="place">Москва · Покровка</div>
+      <div class="club">
+        <span class="avt-xs" data-cat="literature">КЛ</span>
+        Книжный клуб «Лунная Соната»
+      </div>
+    </div>
+  </div>
+
+  <div class="meta-row">
+    <span class="count">47 клубов</span>
+    <span class="sort">
+      По релевантности
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </span>
+  </div>
+
+  <div class="list">
+
+    <div class="card featured">
+      <div class="avt" data-cat="sport">БК</div>
+      <div class="body">
+        <div class="top">
+          <div class="name">Беговой клуб «Ветер»</div>
+          <div class="price">1 200&nbsp;₽<span class="per">/мес</span></div>
+        </div>
+        <div class="meta">
+          <span class="cat">Спорт</span>
+          <span class="signal">встреча сегодня · 19:30</span>
+        </div>
+        <div class="capacity">
+          <div class="capacity-bar"><div class="fill live" style="width: 60%"></div></div>
+          <span class="capacity-num">24 / 40</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="avt" data-cat="food">КП</div>
+      <div class="body">
+        <div class="top">
+          <div class="name">Кулинарные посиделки</div>
+          <div class="price free">Бесплатно</div>
+        </div>
+        <div class="meta"><span class="cat">Кулинария</span></div>
+        <div class="capacity">
+          <div class="capacity-bar"><div class="fill" style="width: 60%"></div></div>
+          <span class="capacity-num">12 / 20</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="avt" data-cat="literature">КЛ</div>
+      <div class="body">
+        <div class="top">
+          <div class="name">Книжный клуб «Лунная Соната»</div>
+          <div class="price">600&nbsp;₽<span class="per">/мес</span></div>
+        </div>
+        <div class="meta">
+          <span class="cat">Литература</span>
+          <span class="closed">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            по заявке
+          </span>
+        </div>
+        <div class="capacity">
+          <div class="capacity-bar"><div class="fill" style="width: 53%"></div></div>
+          <span class="capacity-num">8 / 15</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="avt" data-cat="board">НС</div>
+      <div class="body">
+        <div class="top">
+          <div class="name">Настолки Sunday</div>
+          <div class="price free">Бесплатно</div>
+        </div>
+        <div class="meta"><span class="cat">Настольные игры</span></div>
+        <div class="capacity">
+          <div class="capacity-bar"><div class="fill" style="width: 60%"></div></div>
+          <span class="capacity-num">18 / 30</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="avt" data-cat="travel">ПВ</div>
+      <div class="body">
+        <div class="top">
+          <div class="name">Походы выходного дня</div>
+          <div class="price">2 400&nbsp;₽<span class="per">/мес</span></div>
+        </div>
+        <div class="meta"><span class="cat">Путешествия</span></div>
+        <div class="capacity">
+          <div class="capacity-bar"><div class="fill" style="width: 70%"></div></div>
+          <span class="capacity-num">35 / 50</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="avt" data-cat="cinema">КК</div>
+      <div class="body">
+        <div class="top">
+          <div class="name">Кинопросмотры с дискуссией</div>
+          <div class="price">800&nbsp;₽<span class="per">/мес</span></div>
+        </div>
+        <div class="meta">
+          <span class="cat">Кино</span>
+          <span class="closed">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            по заявке
+          </span>
+        </div>
+        <div class="capacity">
+          <div class="capacity-bar"><div class="fill" style="width: 73%"></div></div>
+          <span class="capacity-num"><span class="almost-full">22 / 30</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="avt" data-cat="food">ВД</div>
+      <div class="body">
+        <div class="top">
+          <div class="name">Винные дегустации</div>
+          <div class="price">1 800&nbsp;₽<span class="per">/мес</span></div>
+        </div>
+        <div class="meta">
+          <span class="cat">Гастрономия</span>
+          <span class="closed">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            по заявке
+          </span>
+        </div>
+        <div class="capacity">
+          <div class="capacity-bar"><div class="fill" style="width: 70%"></div></div>
+          <span class="capacity-num">14 / 20</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <nav class="tabbar">
+    <button class="tab active" data-tab="search">
+      <span class="indicator"></span>
+      <span class="ico"></span>
+      Поиск
+    </button>
+    <button class="tab" data-tab="clubs">
+      <span class="ico"></span>
+      Клубы
+    </button>
+    <button class="tab" data-tab="events">
+      <span class="ico"></span>
+      События
+    </button>
+    <button class="tab" data-tab="me">
+      <span class="ico"></span>
+      Профиль
+    </button>
+  </nav>
+
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Onboarding — Intro + City</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+  <div class="statusbar">
+    <span>9:41</span>
+    <span class="right">
+      <span style="font-size:13px;font-weight:700">5G</span>
+      <span class="battery"></span>
+    </span>
+  </div>
+
+  <section class="intro-hero">
+    <div class="mini-orbs">
+      <div class="orb" style="background: var(--cat-sport);">🏃</div>
+      <div class="orb" style="background: var(--cat-food);">🍳</div>
+      <div class="orb" style="background: var(--cat-creative);">🎨</div>
+    </div>
+    <div class="brand-tag"><span class="glyph"></span>Clubs</div>
+    <h1>Найди свой <span class="grad">клуб</span></h1>
+    <p>Сообщества по интересам — встречайтесь офлайн в&nbsp;твоём городе</p>
+  </section>
+
+  <div class="onb-content" style="padding-top: 12px;">
+    <div class="onb-progress" style="margin-bottom: 14px;">
+      <div class="dot active"></div>
+      <div class="dot"></div>
+    </div>
+    <div class="onb-eyebrow">Шаг 1 из 2</div>
+    <h2 class="onb-title">Где ты <span class="grad">живёшь?</span></h2>
+    <p class="onb-sub">Ответь на 2 вопроса — подберём подходящие клубы рядом с&nbsp;тобой</p>
+
+    <button class="country-select">
+      <span class="flag">🇷🇺</span>
+      <span class="label-stack">
+        <small>Страна</small>
+        <span>Россия</span>
+      </span>
+      <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+
+    <div class="city-search">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input placeholder="Введи название города">
+    </div>
+
+    <div class="suggest-label">Часто ищут</div>
+    <div class="city-suggest">
+      <div class="city-pill-lg selected">
+        <span>📍</span>
+        <span>Москва</span>
+      </div>
+      <div class="city-pill-lg">
+        <span class="dot"></span>
+        <span>Санкт-Петербург</span>
+      </div>
+      <div class="city-pill-lg">
+        <span class="dot"></span>
+        <span>Казань</span>
+      </div>
+      <div class="city-pill-lg">
+        <span class="dot"></span>
+        <span>Екатеринбург</span>
+      </div>
+      <div class="city-pill-lg">
+        <span class="dot"></span>
+        <span>Новосибирск</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="onb-cta">
+    <button>Дальше</button>
+    <div class="onb-helper">Ответы можно поменять в профиле</div>
+  </div>
+</body>
+</html>

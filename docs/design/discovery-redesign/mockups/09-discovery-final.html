@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Discovery — Final</title>
+<link rel="stylesheet" href="_shared.css">
+</head>
+<body>
+  <div class="statusbar">
+    <span>9:41</span>
+    <span class="right">
+      <span style="font-size:13px;font-weight:700">5G</span>
+      <span class="battery"></span>
+    </span>
+  </div>
+
+  <button class="theme-toggle">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  </button>
+
+  <section class="hero">
+    <h1 class="hero-title">Найди свой<br><span class="grad">клуб</span></h1>
+    <p class="hero-sub">Сообщества по интересам — встречайтесь офлайн</p>
+  </section>
+
+  <div class="search-wrap">
+    <div class="search">
+      <span class="icon"></span>
+      <input placeholder="Беговой клуб, книжный…">
+      <span class="city-pill"><span class="pin"></span>Москва</span>
+    </div>
+  </div>
+
+  <div class="chips">
+    <div class="chip facet">
+      💳 До 100⭐ / мес
+      <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <span class="sep-vert"></span>
+    <div class="chip active">Все</div>
+    <div class="chip"><span class="e">🏃</span>Спорт</div>
+    <div class="chip"><span class="e">🎲</span>Настолки</div>
+    <div class="chip"><span class="e">🎨</span>Творчество</div>
+    <div class="chip"><span class="e">🍳</span>Еда</div>
+  </div>
+
+  <section class="marquee-section">
+    <div class="marquee-head">
+      <span class="title"><span class="emoji">🔥</span><span class="grad">Активные сейчас</span></span>
+      <span class="more">все ›</span>
+    </div>
+
+    <div class="marquee-viewport">
+      <div class="marquee-track">
+        <div class="micro-card">
+          <div class="avt-wrap"><div class="avt" style="background: var(--cat-sport);">БК</div></div>
+          <div class="info">
+            <div class="name">Беговой клуб «Ветер»</div>
+            <div class="signal"><span class="live-dot"></span>встреча сегодня</div>
+          </div>
+        </div>
+        <div class="micro-card">
+          <div class="avt-wrap"><div class="avt" style="background: var(--cat-board_games);">НС</div></div>
+          <div class="info">
+            <div class="name">Настолки Sunday</div>
+            <div class="signal">🔥 23 за неделю</div>
+          </div>
+        </div>
+        <div class="micro-card">
+          <div class="avt-wrap"><div class="avt" style="background: var(--cat-creative);">ЙП</div></div>
+          <div class="info">
+            <div class="name">Йога-практика</div>
+            <div class="signal">💬 42 сегодня</div>
+          </div>
+        </div>
+        <div class="micro-card">
+          <div class="avt-wrap"><div class="avt" style="background: var(--cat-food);">КП</div></div>
+          <div class="info">
+            <div class="name">Кулинарные посиделки</div>
+            <div class="signal">⚡ +14 за неделю</div>
+          </div>
+        </div>
+        <div class="micro-card">
+          <div class="avt-wrap"><div class="avt" style="background: var(--cat-travel);">ПВ</div></div>
+          <div class="info">
+            <div class="name">Походы выходного дня</div>
+            <div class="signal"><span class="live-dot"></span>встреча в субботу</div>
+          </div>
+        </div>
+        <!-- duplicated for seamless loop in production -->
+        <div class="micro-card">
+          <div class="avt-wrap"><div class="avt" style="background: var(--cat-sport);">БК</div></div>
+          <div class="info">
+            <div class="name">Беговой клуб «Ветер»</div>
+            <div class="signal"><span class="live-dot"></span>встреча сегодня</div>
+          </div>
+        </div>
+        <div class="micro-card">
+          <div class="avt-wrap"><div class="avt" style="background: var(--cat-board_games);">НС</div></div>
+          <div class="info">
+            <div class="name">Настолки Sunday</div>
+            <div class="signal">🔥 23 за неделю</div>
+          </div>
+        </div>
+        <div class="micro-card">
+          <div class="avt-wrap"><div class="avt" style="background: var(--cat-creative);">ЙП</div></div>
+          <div class="info">
+            <div class="name">Йога-практика</div>
+            <div class="signal">💬 42 сегодня</div>
+          </div>
+        </div>
+        <div class="micro-card">
+          <div class="avt-wrap"><div class="avt" style="background: var(--cat-food);">КП</div></div>
+          <div class="info">
+            <div class="name">Кулинарные посиделки</div>
+            <div class="signal">⚡ +14 за неделю</div>
+          </div>
+        </div>
+        <div class="micro-card">
+          <div class="avt-wrap"><div class="avt" style="background: var(--cat-travel);">ПВ</div></div>
+          <div class="info">
+            <div class="name">Походы выходного дня</div>
+            <div class="signal"><span class="live-dot"></span>встреча в субботу</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="list-head">
+    <span class="count">47 клубов · Москва</span>
+    <span class="sort">По популярности <span class="arrow"></span></span>
+  </div>
+
+  <div class="cards" style="margin-top: 4px;">
+    <article class="card-rich" style="background: linear-gradient(135deg, rgba(99,102,241,0.05), rgba(236,72,153,0.04)), var(--surface); border-color: rgba(139,92,246,0.18);">
+      <div class="top">
+        <div class="avatar sport" style="background: var(--cat-sport);">БК</div>
+        <div class="name-row">
+          <span class="name">Беговой клуб «Ветер»</span>
+          <span class="cat-dot sport"></span>
+        </div>
+        <div class="meta-row">
+          <span>24 / 40</span>
+          <span>·</span>
+          <span class="spots-warn"><span class="pulse"></span>3 места</span>
+        </div>
+        <div class="price-stack">
+          <span class="price">100 ⭐</span>
+        </div>
+      </div>
+      <div class="event-row">
+        <span class="when-tag">СЕГОДНЯ 19:00</span>
+        <span class="where">Парк Горького · набережная</span>
+      </div>
+    </article>
+
+    <article class="card-rich">
+      <div class="top">
+        <div class="avatar creative" style="background: var(--cat-creative);">ЙП</div>
+        <div class="name-row">
+          <span class="name">Йога-практика</span>
+          <span class="cat-dot creative"></span>
+          <span class="restriction-pill gender women">👩</span>
+        </div>
+        <div class="meta-row">
+          <span>14 / 18</span>
+          <span>·</span>
+          <span>3 раза в нед</span>
+        </div>
+        <div class="price-stack">
+          <span class="price">200 ⭐</span>
+        </div>
+      </div>
+      <div class="event-row">
+        <span class="when-tag" style="background: var(--surface); color: var(--text-muted); border: 1px solid var(--hairline);">ЗАВТРА 8:00</span>
+        <span class="where">Студия «Aero» · Чистые пруды</span>
+      </div>
+    </article>
+
+    <article class="card-rich">
+      <div class="top">
+        <div class="avatar education" style="background: var(--cat-education);">КЛ
+          <span class="lock" style="position:absolute;right:-4px;bottom:-4px;width:22px;height:22px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.16);border:1px solid var(--hairline);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;color:var(--text-muted);"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </span>
+        </div>
+        <div class="name-row">
+          <span class="name">Книжный клуб «Луна»</span>
+          <span class="cat-dot education"></span>
+          <span class="restriction-pill age">18+</span>
+        </div>
+        <div class="meta-row">
+          <span>8 / 15</span>
+          <span>·</span>
+          <span>по заявке</span>
+        </div>
+        <div class="price-stack">
+          <span class="price">50 ⭐</span>
+        </div>
+      </div>
+      <div class="event-row">
+        <span class="when-tag" style="background: var(--surface); color: var(--text-muted); border: 1px solid var(--hairline);">ЧТ 19:30</span>
+        <span class="where">«Подписные издания»</span>
+      </div>
+    </article>
+
+    <article class="card-rich">
+      <div class="top">
+        <div class="avatar board_games" style="background: var(--cat-board_games);">НС</div>
+        <div class="name-row">
+          <span class="name">Настолки Sunday</span>
+          <span class="cat-dot board_games"></span>
+        </div>
+        <div class="meta-row">
+          <span>18 / 30</span>
+          <span>·</span>
+          <span>каждое вс</span>
+        </div>
+        <div class="price-stack">
+          <span class="price free">Free</span>
+        </div>
+      </div>
+      <div class="event-row">
+        <span class="when-tag" style="background: var(--surface); color: var(--text-muted); border: 1px solid var(--hairline);">ВС 14:00</span>
+        <span class="where">Антикафе «Циферблат»</span>
+      </div>
+    </article>
+  </div>
+
+  <nav class="tabbar">
+    <div class="tab active"><span class="icon">🔎</span><span>Поиск</span></div>
+    <div class="tab"><span class="icon">⭐</span><span>Клубы</span></div>
+    <div class="tab"><span class="icon">🗓</span><span>События</span></div>
+    <div class="tab"><span class="icon">👤</span><span>Я</span></div>
+  </nav>
+</body>
+</html>
