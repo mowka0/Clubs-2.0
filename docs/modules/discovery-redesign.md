@@ -25,7 +25,11 @@ premium «private clubs» позиционирование продукта.
   с privacy-guard аналогично PR #32. Branch `feature/discovery-today-events`
   будет отведена от текущей ветки
 - Light theme — brand зашит как dark, light нужен только когда product
-  пользователи попросят (низкий приоритет)
+  пользователи попросят (низкий приоритет). Theme-toggle в топбаре намеренно
+  не добавлен — добавим вместе с light-палитрой
+- Геолокация-автоопределение города — текущий picker строит выбор из
+  hardcoded списка (RU/BY/KZ/AM/GE/AE/TR); навешать `navigator.geolocation`
+  поверх можно отдельным шагом, когда появится backend `GET /cities/nearby`
 - Redesign других страниц (MyClubs, Events placeholder, Profile) — отдельные PR
 
 ## API контракты
@@ -56,7 +60,21 @@ premium «private clubs» позиционирование продукта.
 ### AC-1: топбар
 **GIVEN** пользователь открывает `/`
 **THEN** видит slot 72×72 px brand mark (shield logo) + wordmark «Clubs / СООБЩЕСТВА»
-**AND** видит pill «Москва» справа
+**AND** видит интерактивную city-pill с текущим городом + chevron-down иконкой справа
+
+**GIVEN** пользователь тапает по city-pill
+**THEN** срабатывает `haptic.select()`
+**AND** открывается bottom-sheet «Город» с табами стран (Россия, Беларусь, Казахстан, Армения, Грузия, ОАЭ, Турция) и списком городов выбранной страны
+**AND** текущий выбор подсвечен brass + check-иконка
+
+**GIVEN** пользователь выбирает город в sheet
+**THEN** срабатывает `haptic.select()`
+**AND** sheet закрывается
+**AND** выбор сохраняется в `localStorage` под ключом `clubs.cityChoice`
+**AND** список клубов фильтруется по `city` (query-param к `GET /api/clubs`)
+
+**GIVEN** пользователь нажимает Escape / overlay / «Закрыть»
+**THEN** sheet закрывается без изменения выбора
 
 ### AC-2: hero
 **GIVEN** страница загружена
@@ -144,8 +162,9 @@ navy soft-blobs, brass контурные линии, ghost-curves, brass orb-т
 ## Файловая карта
 
 **Новые файлы:**
-- `frontend/src/styles/brand-theme.css` — palette tokens + component styles
+- `frontend/src/styles/brand-theme.css` — palette tokens + component styles + body/html reset (убирает 8px дефолтный body-margin, чтобы navy canvas был на всю ширину viewport)
 - `frontend/src/components/DiscoveryBackdrop.tsx` — SVG паттерн с fade-mask
+- `frontend/src/components/CityPicker.tsx` — bottom-sheet picker страна+город с persist в `localStorage` (хук `useCityChoice`)
 - `frontend/public/brand/{logo,nav-search,nav-clubs,nav-events,nav-me}.png` — production ассеты
 
 **Изменённые:**

@@ -65,11 +65,12 @@ frontend/
     │    ClubInteriorPage.tsx удалён в feature/unified-club-page;
     │    /clubs/:id/interior редиректится на /clubs/:id через <InteriorRedirect>)
     │
-    ├── components/           — 8 custom-компонентов + 3 club-tab-компонента
+    ├── components/           — 9 custom-компонентов + 3 club-tab-компонента
     │   ├── Layout.tsx
     │   ├── BottomTabBar.tsx       — brand brass-иконки + active brass-indicator (feature/discovery-redesign)
     │   ├── ClubCard.tsx           — gradient avatar + capacity bar + featured-state
     │   ├── DiscoveryBackdrop.tsx  — SVG абстракция (navy blobs + brass glows) для DiscoveryPage
+    │   ├── CityPicker.tsx         — bottom-sheet country+city picker, persist в `localStorage` (хук `useCityChoice`)
     │   ├── AvatarUpload.tsx
     │   ├── CreateClubModal.tsx — 5-шаговый wizard на RHF, открывается из MyClubsPage
     │   ├── Toast.tsx
@@ -487,7 +488,7 @@ type UserVote = 'going' | 'maybe' | 'not_going' | 'confirmed' | 'waitlisted' | '
 **Header:** — (BackButton скрыт)
 **Body top→bottom (после `feature/discovery-redesign`):**
 1. `<DiscoveryBackdrop>` — фоновый абстрактный SVG-паттерн (z-index 0, mask-fade сверху→вниз)
-2. Brand topbar: 72px shield logo + wordmark «Clubs / СООБЩЕСТВА» + city pill «Москва»
+2. Brand topbar: 72px shield logo + wordmark «Clubs / СООБЩЕСТВА» + interactive city pill (chevron-down → `<CityPicker>` bottom-sheet, persist в `localStorage`)
 3. Hero `<h1>Найди свой клуб</h1>` (brass-акцент + blur-glow на «клуб»)
 4. Search input (inline, был в `ClubFilters`)
 5. Category chips row (inline, был в `ClubFilters`)

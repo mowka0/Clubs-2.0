@@ -2,6 +2,11 @@
    Intentionally NOT bound to --tg-theme-* vars: brand identity must stay
    consistent across user's Telegram themes. See SESSION-NOTES.md. */
 
+/* Body reset — browser default 8px margin would otherwise show the
+   Telegram client's grey through on the sides of our navy canvas. */
+html, body, #root { margin: 0; padding: 0; }
+html, body { background: #0E1428; min-height: 100vh; }
+
 :root {
   --brand-navy-bg:     #0E1428;
   --brand-navy-card:   #1A2138;
@@ -80,13 +85,15 @@
   align-items: center;
   gap: 7px;
   height: 32px;
-  padding: 0 12px 0 10px;
+  padding: 0 10px 0 10px;
   background: var(--brand-navy-card);
   border: 1px solid var(--brand-hairline);
   border-radius: 999px;
   font-size: 13px;
   font-weight: 500;
   color: var(--brand-ink-2);
+  font-family: inherit;
+  cursor: pointer;
 }
 .discovery-city-pill::before {
   content: '';
@@ -94,6 +101,131 @@
   border-radius: 50%;
   background: var(--brand-brass);
   flex-shrink: 0;
+}
+.discovery-city-pill .chev {
+  width: 12px; height: 12px;
+  margin-left: 2px;
+  color: var(--brand-ink-3);
+  flex-shrink: 0;
+}
+
+/* ====================================================== */
+/* City picker — bottom sheet (country tabs + city list)  */
+/* ====================================================== */
+.city-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 12, 24, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 200;
+  animation: city-picker-fade 0.18s ease-out;
+}
+.city-picker-sheet {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  background: var(--brand-navy-bg);
+  border-top: 1px solid var(--brand-hairline-2);
+  border-radius: 16px 16px 0 0;
+  z-index: 201;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  animation: city-picker-slide 0.22s cubic-bezier(.2,.7,.3,1);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.45);
+}
+.city-picker-grabber {
+  width: 36px; height: 4px;
+  background: var(--brand-hairline-2);
+  border-radius: 2px;
+  margin: 8px auto 0;
+  flex-shrink: 0;
+}
+.city-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px 6px;
+  flex-shrink: 0;
+}
+.city-picker-header h2 {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--brand-ink);
+  letter-spacing: -0.012em;
+}
+.city-picker-close {
+  background: transparent;
+  border: 0;
+  color: var(--brand-ink-3);
+  font-size: 14px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.city-picker-countries {
+  display: flex;
+  gap: 8px;
+  padding: 10px 20px 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+.city-picker-countries::-webkit-scrollbar { display: none; }
+.city-picker-country {
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--brand-ink-2);
+  background: var(--brand-navy-card);
+  border: 1px solid var(--brand-hairline);
+  border-radius: 999px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.city-picker-country.active {
+  background: var(--brand-brass);
+  color: var(--brand-navy-bg);
+  border-color: var(--brand-brass);
+  font-weight: 600;
+}
+.city-picker-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px 24px;
+  -webkit-overflow-scrolling: touch;
+}
+.city-picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  color: var(--brand-ink);
+  font-size: 15px;
+  font-weight: 500;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.city-picker-item:hover { background: var(--brand-navy-card); }
+.city-picker-item.selected { color: var(--brand-brass); }
+.city-picker-item .check { color: var(--brand-brass); }
+
+@keyframes city-picker-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes city-picker-slide {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
 }
 
 /* Hero */
@@ -239,6 +371,8 @@
     0 1px 0 rgba(255, 255, 255, 0.025) inset,
     0 2px 4px rgba(0, 0, 0, 0.25);
   cursor: pointer;
+  text-align: left;
+  font-family: inherit;
 }
 .club-card.featured {
   background:

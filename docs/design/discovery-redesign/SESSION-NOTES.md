@@ -51,7 +51,8 @@
 ### Топбар
 - **72px shield logo** (раньше был 38px — увеличили) + wordmark «Clubs / СООБЩЕСТВА» справа
 - `drop-shadow(0 4px 12px rgba(0,0,0,0.35))` на лого для глубины на тёмном фоне
-- City pill + theme toggle справа
+- Интерактивный city pill справа (тап → `<CityPicker>` bottom-sheet с country tabs + city list, persist в `localStorage` через `useCityChoice`)
+- Theme toggle намеренно отложен до появления light-палитры (UI добавим вместе с самой темой)
 
 ### Bottom tabs
 - 4 brass-иконки (поиск / клубы / события / профиль) из `frontend/resources/images/`

@@ -1,8 +1,9 @@
-import { FC, useCallback, useEffect, useRef, useState } from 'react';
+import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useClubsQuery } from '../queries/clubs';
 import { ClubCard } from '../components/ClubCard';
 import { DiscoveryBackdrop } from '../components/DiscoveryBackdrop';
+import { CityPicker, useCityChoice } from '../components/CityPicker';
 import { useHaptic } from '../hooks/useHaptic';
 import type { ClubFilters } from '../api/clubs';
 
@@ -33,11 +34,24 @@ const SEARCH_ICON = (
   </svg>
 );
 
+const CHEVRON_DOWN = (
+  <svg className="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
+
 export const DiscoveryPage: FC = () => {
   const [filters, setFilters] = useState<ClubFilters>({});
+  const [cityChoice, setCityChoice] = useCityChoice();
+  const [pickerOpen, setPickerOpen] = useState(false);
   const debouncedFilters = useDebounce(filters, 300);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const haptic = useHaptic();
+
+  const queryFilters = useMemo<ClubFilters>(
+    () => ({ ...debouncedFilters, city: cityChoice.city, size: '20' }),
+    [debouncedFilters, cityChoice.city],
+  );
 
   const {
     data,
@@ -46,7 +60,7 @@ export const DiscoveryPage: FC = () => {
     isFetchingNextPage,
     fetchNextPage,
     hasNextPage,
-  } = useClubsQuery({ ...debouncedFilters, size: '20' });
+  } = useClubsQuery(queryFilters);
 
   const clubs = data?.pages.flatMap((p) => p.content) ?? [];
 
@@ -89,7 +103,18 @@ export const DiscoveryPage: FC = () => {
             <div className="tag">Сообщества</div>
           </div>
         </div>
-        <span className="discovery-city-pill">Москва</span>
+        <button
+          type="button"
+          className="discovery-city-pill"
+          onClick={() => {
+            haptic.select();
+            setPickerOpen(true);
+          }}
+          aria-label="Выбрать город"
+        >
+          {cityChoice.city}
+          {CHEVRON_DOWN}
+        </button>
       </header>
 
       <section className="discovery-hero">
@@ -160,6 +185,14 @@ export const DiscoveryPage: FC = () => {
 
         <div ref={sentinelRef} style={{ height: 1 }} />
       </div>
+
+      {pickerOpen && (
+        <CityPicker
+          value={cityChoice}
+          onChange={setCityChoice}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </div>
   );
 };
