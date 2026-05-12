@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Discovery — Clean</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --font: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+
+    --bg: #F5F6F8;
+    --surface: #FFFFFF;
+    --ink: #0F1419;
+    --ink-2: #3D434F;
+    --ink-3: #6B7280;
+    --ink-4: #9CA3AF;
+    --hairline: rgba(15, 20, 25, 0.08);
+    --hairline-strong: rgba(15, 20, 25, 0.14);
+
+    --accent: #2F6F4E;       /* muted forest green */
+    --accent-soft: #E6F0EB;
+    --live: #2F6F4E;
+    --closed: #6B7280;
+
+    --r-xs: 6px;
+    --r-sm: 8px;
+    --r-md: 12px;
+    --r-lg: 16px;
+    --r-pill: 999px;
+
+    --shadow-card: 0 1px 2px rgba(15, 20, 25, 0.04), 0 1px 1px rgba(15, 20, 25, 0.02);
+  }
+
+  html, body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+    font-feature-settings: "cv11", "ss01";
+  }
+  html, body { width: 390px; }
+  body { min-height: 1180px; margin: 0; position: relative; overflow-x: hidden; }
+
+  /* status bar */
+  .statusbar {
+    height: 47px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 20px 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+    position: relative;
+    z-index: 5;
+  }
+  .statusbar .right { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .battery {
+    display: inline-block; width: 24px; height: 12px;
+    border: 1.5px solid var(--ink); border-radius: 3px;
+    position: relative; margin-left: 2px;
+  }
+  .battery::before {
+    content: ''; position: absolute; right: -3px; top: 3px; width: 2px; height: 4px;
+    background: var(--ink); border-radius: 0 1px 1px 0;
+  }
+  .battery::after {
+    content: ''; position: absolute; inset: 1.5px; width: 17px; background: var(--ink); border-radius: 1px;
+  }
+
+  /* page header */
+  .page-head {
+    padding: 12px 20px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .title {
+    font-size: 26px; font-weight: 700; letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .head-actions { display: inline-flex; align-items: center; gap: 8px; }
+  .city-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    height: 32px; padding: 0 12px 0 10px;
+    background: var(--surface);
+    border-radius: var(--r-pill);
+    font-size: 13px; font-weight: 500; color: var(--ink-2);
+    box-shadow: var(--shadow-card);
+  }
+  .city-pill svg { width: 13px; height: 13px; color: var(--ink-3); }
+  .icon-btn {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--surface);
+    box-shadow: var(--shadow-card);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--ink-2);
+    border: 0;
+  }
+  .icon-btn svg { width: 16px; height: 16px; }
+
+  /* search */
+  .search-wrap { padding: 0 20px 14px; }
+  .search {
+    display: flex; align-items: center; gap: 10px;
+    height: 44px; padding: 0 14px;
+    background: var(--surface);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-card);
+  }
+  .search svg { color: var(--ink-3); flex-shrink: 0; }
+  .search input {
+    flex: 1; border: 0; outline: none; background: transparent;
+    font-family: inherit; font-size: 14.5px; color: var(--ink);
+  }
+  .search input::placeholder { color: var(--ink-4); }
+
+  /* chips */
+  .chips {
+    padding: 0 20px;
+    display: flex; align-items: center; gap: 8px;
+    overflow-x: auto; scrollbar-width: none;
+    margin-bottom: 14px;
+  }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex-shrink: 0;
+    height: 34px; padding: 0 14px;
+    font-size: 13px; font-weight: 500;
+    color: var(--ink-2);
+    background: var(--surface);
+    border-radius: var(--r-pill);
+    box-shadow: var(--shadow-card);
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 0;
+    white-space: nowrap;
+  }
+  .chip.active {
+    background: var(--ink);
+    color: #FFFFFF;
+  }
+  .chip.facet {
+    background: var(--surface);
+    color: var(--ink-2);
+  }
+  .chip.facet svg { width: 12px; height: 12px; color: var(--ink-3); }
+  .chip-sep {
+    flex-shrink: 0;
+    width: 1px; height: 18px; background: var(--hairline);
+  }
+
+  /* section header */
+  .section-head {
+    padding: 18px 20px 10px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .section-title {
+    font-size: 16px; font-weight: 600; letter-spacing: -0.005em;
+    color: var(--ink);
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .section-title .live-tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 8px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 11px; font-weight: 600;
+    border-radius: var(--r-pill);
+    letter-spacing: 0.01em;
+  }
+  .section-title .live-tag::before {
+    content: ''; width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent);
+  }
+  .section-link {
+    font-size: 13px; font-weight: 500; color: var(--ink-3);
+    display: inline-flex; align-items: center; gap: 2px;
+  }
+
+  /* today rail */
+  .rail {
+    display: flex; gap: 10px;
+    overflow-x: auto; scrollbar-width: none;
+    padding: 0 20px 4px;
+  }
+  .rail::-webkit-scrollbar { display: none; }
+  .rail-card {
+    flex-shrink: 0;
+    width: 230px;
+    background: var(--surface);
+    border-radius: var(--r-md);
+    padding: 14px;
+    box-shadow: var(--shadow-card);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .rail-card .when {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600;
+    color: var(--accent);
+  }
+  .rail-card .when.dim { color: var(--ink-3); font-weight: 500; }
+  .rail-card .when .dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent);
+  }
+  .rail-card .ev {
+    font-size: 15px; font-weight: 600;
+    color: var(--ink);
+    line-height: 1.3;
+    letter-spacing: -0.005em;
+  }
+  .rail-card .place {
+    font-size: 12.5px; color: var(--ink-3);
+  }
+  .rail-card .club {
+    margin-top: 6px; padding-top: 10px;
+    border-top: 1px solid var(--hairline);
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12.5px; color: var(--ink-2);
+  }
+  .rail-card .avt-xs {
+    width: 22px; height: 22px; border-radius: 6px;
+    font-size: 10px; font-weight: 700;
+    color: var(--ink-2);
+    background: var(--bg);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .rail-card .avt-xs[data-cat="sport"]    { background: #EFE5DA; color: #6E4A2A; }
+  .rail-card .avt-xs[data-cat="creative"] { background: #E5E5F0; color: #3D3D6E; }
+  .rail-card .avt-xs[data-cat="food"]     { background: #F0E5D2; color: #6B481E; }
+  .rail-card .avt-xs[data-cat="board"]    { background: var(--accent-soft); color: var(--accent); }
+  .rail-card .avt-xs[data-cat="cinema"]   { background: #DCE5EA; color: #2F4856; }
+  .rail-card .avt-xs[data-cat="travel"]   { background: #D9E6E1; color: #275054; }
+
+  /* meta row */
+  .meta-row {
+    padding: 18px 20px 10px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .count {
+    font-size: 13px; font-weight: 600;
+    color: var(--ink);
+  }
+  .count .grey { color: var(--ink-3); font-weight: 500; }
+  .sort {
+    font-size: 13px; color: var(--ink-2);
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .sort svg { width: 13px; height: 13px; color: var(--ink-3); }
+
+  /* main list */
+  .list { padding: 0 20px 120px; display: flex; flex-direction: column; gap: 10px; }
+  .card {
+    background: var(--surface);
+    border-radius: var(--r-md);
+    padding: 14px;
+    box-shadow: var(--shadow-card);
+    display: flex; gap: 12px;
+  }
+  .card .avt {
+    width: 44px; height: 44px;
+    border-radius: var(--r-sm);
+    font-size: 14px; font-weight: 700;
+    letter-spacing: 0.03em;
+    color: var(--ink-2);
+    background: var(--bg);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .card .avt[data-cat="sport"]      { background: #EFE5DA; color: #6E4A2A; }
+  .card .avt[data-cat="creative"]   { background: #E5E5F0; color: #3D3D6E; }
+  .card .avt[data-cat="food"]       { background: #F0E5D2; color: #6B481E; }
+  .card .avt[data-cat="board"]      { background: var(--accent-soft); color: var(--accent); }
+  .card .avt[data-cat="cinema"]     { background: #DCE5EA; color: #2F4856; }
+  .card .avt[data-cat="travel"]     { background: #D9E6E1; color: #275054; }
+  .card .avt[data-cat="literature"] { background: #ECE3DA; color: #5F4528; }
+
+  .card .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .card .top {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  }
+  .card .name {
+    font-size: 15px; font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.005em;
+    color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    flex: 1; min-width: 0;
+  }
+  .card .price {
+    flex-shrink: 0;
+    text-align: right;
+    font-size: 14px; font-weight: 600;
+    color: var(--ink);
+    letter-spacing: -0.005em;
+  }
+  .card .price .per {
+    display: block;
+    font-size: 11px; font-weight: 500;
+    color: var(--ink-4);
+    margin-top: 1px;
+  }
+  .card .price.free { color: var(--ink-2); }
+  .card .meta {
+    font-size: 13px;
+    color: var(--ink-3);
+  }
+  .card .meta .cat { color: var(--ink-2); font-weight: 500; }
+  .card .meta .sep {
+    display: inline-block; width: 3px; height: 3px; border-radius: 50%;
+    background: var(--ink-4);
+    margin: 0 8px; vertical-align: middle;
+  }
+  .card .signals {
+    display: flex; align-items: center; gap: 6px;
+    margin-top: 8px;
+  }
+  .badge {
+    font-size: 11.5px; font-weight: 600;
+    letter-spacing: 0.01em;
+    padding: 3px 8px;
+    border-radius: var(--r-pill);
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .badge.live {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .badge.live::before {
+    content: ''; width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent);
+  }
+  .badge.closed {
+    background: var(--bg);
+    color: var(--ink-3);
+  }
+  .badge.closed svg { width: 11px; height: 11px; }
+
+  /* tab bar */
+  .tabbar {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 78px;
+    background: rgba(245, 246, 248, 0.92);
+    backdrop-filter: saturate(140%) blur(20px);
+    -webkit-backdrop-filter: saturate(140%) blur(20px);
+    border-top: 1px solid var(--hairline);
+    display: flex; align-items: flex-start; justify-content: space-around;
+    padding: 12px 14px 16px;
+  }
+  .tab {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    color: var(--ink-4);
+    font-size: 11px; font-weight: 500;
+    border: 0; background: transparent;
+  }
+  .tab svg { width: 22px; height: 22px; stroke-width: 1.8; }
+  .tab.active { color: var(--ink); }
+  .tab.active svg { stroke-width: 2.2; }
+</style>
+</head>
+<body>
+
+  <div class="statusbar">
+    <span>9:41</span>
+    <span class="right">
+      <span style="font-weight:700">5G</span>
+      <span class="battery"></span>
+    </span>
+  </div>
+
+  <div class="page-head">
+    <div class="title">Поиск</div>
+    <div class="head-actions">
+      <span class="city-pill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        Москва
+      </span>
+      <button class="icon-btn" aria-label="Тема">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="search-wrap">
+    <div class="search">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input placeholder="Беговой клуб, книжный, дегустации">
+    </div>
+  </div>
+
+  <div class="chips">
+    <button class="chip facet">
+      До 1 000 ₽
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <span class="chip-sep"></span>
+    <button class="chip active">Все</button>
+    <button class="chip">Спорт</button>
+    <button class="chip">Творчество</button>
+    <button class="chip">Книги</button>
+    <button class="chip">Кулинария</button>
+    <button class="chip">Кино</button>
+  </div>
+
+  <div class="section-head">
+    <div class="section-title">
+      Сегодня
+      <span class="live-tag">3 события</span>
+    </div>
+    <a class="section-link">все ›</a>
+  </div>
+
+  <div class="rail">
+    <div class="rail-card">
+      <span class="when"><span class="dot"></span>Сегодня · 19:30</span>
+      <div class="ev">Открытая тренировка</div>
+      <div class="place">Парк Горького · набережная</div>
+      <div class="club">
+        <span class="avt-xs" data-cat="sport">БК</span>
+        Беговой клуб «Ветер»
+      </div>
+    </div>
+    <div class="rail-card">
+      <span class="when dim">Завтра · 08:00</span>
+      <div class="ev">Утренняя йога</div>
+      <div class="place">Студия «Лёгкость» · Чистые пруды</div>
+      <div class="club">
+        <span class="avt-xs" data-cat="creative">ЙП</span>
+        Йога-практика
+      </div>
+    </div>
+    <div class="rail-card">
+      <span class="when dim">Чт · 19:00</span>
+      <div class="ev">Обсуждение Дидион</div>
+      <div class="place">Москва · Покровка</div>
+      <div class="club">
+        <span class="avt-xs" data-cat="literature">КЛ</span>
+        Книжный клуб «Лунная Соната»
+      </div>
+    </div>
+  </div>
+
+  <div class="meta-row">
+    <span class="count">47 клубов <span class="grey">· Москва</span></span>
+    <span class="sort">
+      По релевантности
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </span>
+  </div>
+
+  <div class="list">
+
+    <div class="card">
+      <div class="avt" data-cat="sport">БК</div>
+      <div class="body">
+        <div class="top">
+          <div class="name">Беговой клуб «Ветер»</div>
+          <div class="price">1 200 ₽<span class="per">/ мес</span></div>
+        </div>
+        <div class="meta">
+          <span class="cat">Спорт</span>
+          <span class="sep"></span>24 из 40
+          <span class="sep"></span>вт чт сб
+        </div>
+        <div class="signals">
+          <span class="badge live">встреча сегодня</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="avt" data-cat="food">КП</div>
+      <div class="body">
+        <div class="top">
+          <div class="name">Кулинарные посиделки</div>
+          <div class="price free">Бесплатно</div>
+        </div>
+        <div class="meta">
+          <span class="cat">Кулинария</span>
+          <span class="sep"></span>12 из 20
+          <span class="sep"></span>сб 19:00
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="avt" data-cat="literature">КЛ</div>
+      <div class="body">
+        <div class="top">
+          <div class="name">Книжный клуб «Лунная Соната»</div>
+          <div class="price">600 ₽<span class="per">/ мес</span></div>
+        </div>
+        <div class="meta">
+          <span class="cat">Литература</span>
+          <span class="sep"></span>8 из 15
+        </div>
+        <div class="signals">
+          <span class="badge closed">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            по заявке
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="avt" data-cat="board">НС</div>
+      <div class="body">
+        <div class="top">
+          <div class="name">Настолки Sunday</div>
+          <div class="price free">Бесплатно</div>
+        </div>
+        <div class="meta">
+          <span class="cat">Настольные игры</span>
+          <span class="sep"></span>18 из 30
+          <span class="sep"></span>каждое вс
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="avt" data-cat="travel">ПВ</div>
+      <div class="body">
+        <div class="top">
+          <div class="name">Походы выходного дня</div>
+          <div class="price">2 400 ₽<span class="per">/ мес</span></div>
+        </div>
+        <div class="meta">
+          <span class="cat">Путешествия</span>
+          <span class="sep"></span>35 из 50
+          <span class="sep"></span>сб
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="avt" data-cat="cinema">КК</div>
+      <div class="body">
+        <div class="top">
+          <div class="name">Кинопросмотры с дискуссией</div>
+          <div class="price">800 ₽<span class="per">/ мес</span></div>
+        </div>
+        <div class="meta">
+          <span class="cat">Кино</span>
+          <span class="sep"></span>22 из 30
+          <span class="sep"></span>пт 20:00
+        </div>
+        <div class="signals">
+          <span class="badge closed">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            по заявке
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="avt" data-cat="food">ВД</div>
+      <div class="body">
+        <div class="top">
+          <div class="name">Винные дегустации</div>
+          <div class="price">1 800 ₽<span class="per">/ мес</span></div>
+        </div>
+        <div class="meta">
+          <span class="cat">Гастрономия</span>
+          <span class="sep"></span>14 из 20
+        </div>
+        <div class="signals">
+          <span class="badge closed">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            по заявке
+          </span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <nav class="tabbar">
+    <button class="tab active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      Поиск
+    </button>
+    <button class="tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M21 21v-2a4 4 0 0 0-3-3.87"/></svg>
+      Клубы
+    </button>
+    <button class="tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      События
+    </button>
+    <button class="tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Я
+    </button>
+  </nav>
+
+</body>
+</html>

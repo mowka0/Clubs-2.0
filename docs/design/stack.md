@@ -65,11 +65,13 @@ frontend/
     │    ClubInteriorPage.tsx удалён в feature/unified-club-page;
     │    /clubs/:id/interior редиректится на /clubs/:id через <InteriorRedirect>)
     │
-    ├── components/           — 8 custom-компонентов + 3 club-tab-компонента
+    ├── components/           — 10 custom-компонентов + 3 club-tab-компонента
     │   ├── Layout.tsx
-    │   ├── BottomTabBar.tsx
-    │   ├── ClubCard.tsx
-    │   ├── ClubFilters.tsx
+    │   ├── BottomTabBar.tsx       — brand brass-иконки + active brass-indicator (feature/discovery-redesign)
+    │   ├── ClubCard.tsx           — gradient avatar + capacity bar + featured-state
+    │   ├── DiscoveryBackdrop.tsx  — SVG абстракция (navy blobs + brass glows) для DiscoveryPage
+    │   ├── CityPicker.tsx         — bottom-sheet country+city picker, persist в `localStorage` (хук `useCityChoice`)
+    │   ├── PriceFilter.tsx        — bottom-sheet preset-picker по стоимости подписки (min/max → query-params)
     │   ├── AvatarUpload.tsx
     │   ├── CreateClubModal.tsx — 5-шаговый wizard на RHF, открывается из MyClubsPage
     │   ├── Toast.tsx
@@ -485,10 +487,18 @@ type UserVote = 'going' | 'maybe' | 'not_going' | 'confirmed' | 'waitlisted' | '
 ### 7.1 DiscoveryPage `/` ⚡ tab
 
 **Header:** — (BackButton скрыт)
-**Body top→bottom:**
-1. `<ClubFilters>` — sticky сверху: search input, category chips, city input
-2. Inline error (красный текст) — если API упал
-3. `<Placeholder>` «Клубы не найдены. Попробуйте изменить фильтры» — если пусто
+**Body top→bottom (после `feature/discovery-redesign`):**
+1. `<DiscoveryBackdrop>` — фоновый абстрактный SVG-паттерн (z-index 0, mask-fade сверху→вниз)
+2. Brand topbar: 72px shield logo + wordmark «Clubs / СООБЩЕСТВА» + interactive city pill (chevron-down → `<CityPicker>` bottom-sheet, persist в `localStorage`)
+3. Hero `<h1>Найди свой клуб</h1>` (brass-акцент + blur-glow на «клуб»)
+4. Search input (inline, был в `ClubFilters`)
+5. Category chips row (inline, был в `ClubFilters`)
+6. Meta row «N клубов · По релевантности»
+7. Inline error — если API упал
+8. Empty-state — если результат пустой
+9. Список `<ClubCard>` через TanStack `useInfiniteQuery`
+10. Sentinel для infinite-scroll
+11. Bottom-padding для clearance под `<BottomTabBar>` (фиксированный 84px)
 4. Список `<ClubCard>` → click `navigate('/clubs/:id')`
 5. Центральный `<Spinner>` — при loading
 6. Sentinel `<div>` для IntersectionObserver (infinite scroll)
@@ -848,11 +858,11 @@ Root-обёртка:
 
 **Гэп:** нет skeleton-состояния, нет hover/press эффекта.
 
-### `<ClubFilters>` `value: FilterState, onChange`
-Блок фильтров:
-- `<Input>` поиск по названию
-- `<Section>` с `category`-chips (emoji-иконки)
-- `<Input>` город
+### `<ClubFilters>` — УДАЛЁН (`feature/discovery-redesign`)
+Фильтры (search + category chips) теперь inline в `DiscoveryPage` как часть единого визуального редизайна (brand layout с brass-палитрой). City-filter более не отображается в UI (city в city-pill в топбаре). Detail — [`docs/modules/discovery-redesign.md`](../modules/discovery-redesign.md).
+
+### `<DiscoveryBackdrop>` — статичный SVG-паттерн
+Фоновая абстракция для DiscoveryPage: navy soft-blobs + brass radial glows + topographic contour lines + brass orb-точки + ghost-curves. Маскируется vertical gradient (top→bottom fade). Inline SVG ~3 KB gzipped, no props, no state.
 
 ### `<AvatarUpload>` `value, onChange, onError`
 Загрузка аватара клуба:

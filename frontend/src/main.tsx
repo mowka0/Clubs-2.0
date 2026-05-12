@@ -4,6 +4,7 @@ import { AppRoot } from '@telegram-apps/telegram-ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from 'react-error-boundary';
 import '@telegram-apps/telegram-ui/dist/styles.css';
+import './styles/brand-theme.css';
 import { initTelegramSdk } from './telegram/sdk';
 import { App } from './App';
 import { RootErrorFallback } from './components/RootErrorFallback';

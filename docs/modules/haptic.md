@@ -21,7 +21,7 @@ Pre-design подготовка фронта: единая обёртка над
 
 ### Входит
 - Хук `frontend/src/hooks/useHaptic.ts` с silent no-op fallback
-- Вызовы хука в: `BottomTabBar`, `ClubCard`, `ClubFilters`, `AvatarUpload`, `ClubPage` (включая role-aware tabs), `EventPage`, `CreateClubModal`, `OrganizerClubManage`, `InvitePage`, `components/club/ClubEventsTab`, `ProfilePage`, `MyClubsPage`, `DiscoveryPage`, `useBackButton`. **`ClubInteriorPage` удалён** в `feature/unified-club-page` — точки кода переехали в unified `ClubPage` + три tab-компонента (см. `club-page-unified.md`).
+- Вызовы хука в: `BottomTabBar`, `ClubCard`, `AvatarUpload`, `ClubPage` (включая role-aware tabs), `EventPage`, `CreateClubModal`, `OrganizerClubManage`, `InvitePage`, `components/club/ClubEventsTab`, `ProfilePage`, `MyClubsPage`, `DiscoveryPage` (chip-выбор категории — встроенно после удаления `ClubFilters` в `feature/discovery-redesign`), `useBackButton`. **`ClubInteriorPage` удалён** в `feature/unified-club-page` — точки кода переехали в unified `ClubPage` + три tab-компонента (см. `club-page-unified.md`).
 - Unit-тест хука (mock SDK, проверка no-op при `isAvailable() === false`)
 
 ### НЕ входит
@@ -107,7 +107,7 @@ const onTabClick = (path: string) => {
 |---|---|---|---|
 | `pages/ClubPage.tsx` | `handleTabClick('events' / 'members' / 'profile')` → `setActiveTab(tab)` (строки 149-157) | `select()` | Смена секции — selectionChanged. Перенесено из удалённого `ClubInteriorPage.tsx`. Только эти три tab'а; tab `'manage'` идёт по другой ветке (impact, см. таблицу выше) |
 | `pages/OrganizerClubManage.tsx` | `setActiveTab(key)` (строка 1017) | `select()` | То же |
-| `components/ClubFilters.tsx` | клик по chip-кнопке категории (`onChange` в строке 53) | `select()` | Смена выбора в picker — selectionChanged (§15: «смена chip — не подтверждение») |
+| `pages/DiscoveryPage.tsx` | `handleCategoryClick(value)` — клик по chip-кнопке категории | `select()` | Смена выбора в picker — selectionChanged (§15: «смена chip — не подтверждение»). Раньше было в `ClubFilters.tsx`, удалён в `feature/discovery-redesign` |
 
 ### Submit / mutating actions (success / error)
 
@@ -169,7 +169,7 @@ const onTabClick = (path: string) => {
 
 ### DiscoveryPage
 
-DiscoveryPage сама по себе не имеет специфичных кнопок — взаимодействия идут через `ClubCard` и `ClubFilters` (уже покрыты выше). Прямых вызовов `useHaptic()` не требуется.
+После `feature/discovery-redesign` (`ClubFilters.tsx` удалён) DiscoveryPage сама вызывает `haptic.select()` на клик по category-chip (`handleCategoryClick`). Остальные взаимодействия идут через `ClubCard` (`impact('light')` при tap, уже покрыто выше). Поиск-input — без haptic (печать = не пользовательское «событие», а continuous input).
 
 ### Запрещённые точки (явно не добавляем)
 
@@ -217,7 +217,7 @@ GIVEN iOS или Android Telegram-клиент с Bot API ≥ 6.1
 WHEN пользователь:
 - (a) переключает таб в `BottomTabBar`
 - (b) тапает по `ClubCard` в DiscoveryPage
-- (c) меняет chip в `ClubFilters`
+- (c) меняет chip категории в DiscoveryPage (inline, был в `ClubFilters` до `feature/discovery-redesign`)
 - (d) нажимает «Вступить» на `ClubPage` для открытого клуба и операция успешна
 - (e) submit'ит финальный шаг wizard'а в `CreateClubModal` (открытый из `MyClubsPage`) с ошибкой сервера
 THEN ощущается haptic:

@@ -30,7 +30,7 @@ const PageFallback: FC = () => (
  */
 export const Layout: FC = () => {
   const location = useLocation();
-  const isMainTab = isTabBarRoute(location.pathname);
+  const showTabBar = isTabBarRoute(location.pathname);
   const { isAuthenticated, isLoading, error, login } = useAuthStore();
 
   // Initialize auth once on app start so token is available before child pages fetch data
@@ -38,8 +38,8 @@ export const Layout: FC = () => {
     if (!isAuthenticated && !isLoading && !error) login();
   }, [isAuthenticated, isLoading, error, login]);
 
-  // Show Telegram BackButton only on nested pages
-  useBackButton(!isMainTab);
+  // Show Telegram BackButton only on nested pages (where the tab bar is hidden)
+  useBackButton(!showTabBar);
 
   if (!isAuthenticated) {
     if (error) {
@@ -65,7 +65,13 @@ export const Layout: FC = () => {
   return (
     <>
       <Suspense fallback={<PageFallback />}>
-        <div style={{ paddingBottom: isMainTab ? 80 : 0 }}>
+        <div
+          style={{
+            paddingBottom: showTabBar
+              ? 'calc(84px + env(safe-area-inset-bottom, 0px) + 8px)'
+              : 0,
+          }}
+        >
           <Outlet />
         </div>
       </Suspense>

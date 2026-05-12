@@ -1,22 +1,20 @@
 import { FC, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Tabbar } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
 
 interface TabConfig {
   readonly path: string;
   readonly label: string;
-  readonly icon: string;
+  readonly icon: string; // path under /brand/ (served from public/)
 }
 
 const TABS: readonly TabConfig[] = [
-  { path: '/', label: 'Поиск', icon: '🔍' },
-  { path: '/my-clubs', label: 'Мои клубы', icon: '👥' },
-  { path: '/events', label: 'События', icon: '📅' },
-  { path: '/profile', label: 'Профиль', icon: '👤' },
+  { path: '/',          label: 'Поиск',     icon: '/brand/nav-search.png' },
+  { path: '/my-clubs',  label: 'Мои клубы', icon: '/brand/nav-clubs.png' },
+  { path: '/events',    label: 'События',   icon: '/brand/nav-events.png' },
+  { path: '/profile',   label: 'Профиль',   icon: '/brand/nav-me.png' },
 ] as const;
 
-/** Main tab paths where the BottomTabBar should be visible */
 const TAB_PATHS = new Set(TABS.map((t) => t.path));
 
 /**
@@ -30,9 +28,9 @@ export function isTabBarRoute(pathname: string): boolean {
 }
 
 /**
- * Bottom navigation tab bar with 4 tabs: Поиск, Мои клубы, События, Профиль.
- * Uses Tabbar and Tabbar.Item from @telegram-apps/telegram-ui.
- * Active tab is determined by the current route path.
+ * Bottom navigation tab bar — brand brass icons + dark backdrop.
+ * Active tab gets a brass underline marker and full saturation;
+ * inactive tabs are desaturated/dimmed (styling lives in brand-theme.css).
  */
 export const BottomTabBar: FC = () => {
   const location = useLocation();
@@ -54,34 +52,23 @@ export const BottomTabBar: FC = () => {
   }
 
   return (
-    <Tabbar>
-      {TABS.map((tab) => (
-        <Tabbar.Item
-          key={tab.path}
-          text={tab.label}
-          selected={location.pathname === tab.path}
-          onClick={() => handleTabClick(tab.path)}
-        >
-          <TabIcon icon={tab.icon} />
-        </Tabbar.Item>
-      ))}
-    </Tabbar>
+    <nav className="brand-tabbar" aria-label="Главная навигация">
+      {TABS.map((tab) => {
+        const isActive = location.pathname === tab.path;
+        return (
+          <button
+            key={tab.path}
+            type="button"
+            className={isActive ? 'tab active' : 'tab'}
+            onClick={() => handleTabClick(tab.path)}
+            aria-current={isActive ? 'page' : undefined}
+          >
+            {isActive && <span className="indicator" aria-hidden="true" />}
+            <span className="ico" style={{ backgroundImage: `url(${tab.icon})` }} aria-hidden="true" />
+            {tab.label}
+          </button>
+        );
+      })}
+    </nav>
   );
 };
-
-/** Simple icon wrapper sized 28x28 as expected by TabbarItem */
-const TabIcon: FC<{ icon: string }> = ({ icon }) => (
-  <span
-    style={{
-      fontSize: 24,
-      width: 28,
-      height: 28,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-    }}
-    role="img"
-  >
-    {icon}
-  </span>
-);
