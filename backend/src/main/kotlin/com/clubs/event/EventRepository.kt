@@ -94,6 +94,21 @@ class EventRepository(private val dsl: DSLContext) {
             .fetch()
     }
 
+    /**
+     * Returns the nearest upcoming event across all clubs.
+     * Used by ClubsBot.handleWhoIsGoing (/кто_идет command).
+     * Status must be upcoming, stage_1, or stage_2 and event_datetime > now.
+     */
+    fun findNextUpcomingEvent(now: OffsetDateTime): EventsRecord? =
+        dsl.selectFrom(EVENTS)
+            .where(
+                EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_1, EventStatus.stage_2)
+                    .and(EVENTS.EVENT_DATETIME.gt(now))
+            )
+            .orderBy(EVENTS.EVENT_DATETIME.asc())
+            .limit(1)
+            .fetchOne()
+
     fun transitionToStage2(id: UUID) {
         dsl.update(EVENTS)
             .set(EVENTS.STATUS, EventStatus.stage_2)

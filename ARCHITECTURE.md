@@ -424,6 +424,8 @@ CREATE INDEX idx_transactions_club_id_created ON transactions(club_id, created_a
 
 ## 4. Backend Package Structure
 
+> **Это исходный план Phase 1, не описание текущего состояния.** Реальная структура отдельных модулей расходится с планом — особенно `notification/` и `bot/`. Фактическое поведение и состав файлов смотри в `docs/modules/<module>.md` (например, `docs/modules/telegram-bot.md` для bot-модуля).
+
 ```
 backend/src/main/kotlin/com/clubs/
 ├── ClubsApplication.kt                    # @SpringBootApplication

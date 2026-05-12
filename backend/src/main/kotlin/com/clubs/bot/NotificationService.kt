@@ -1,11 +1,9 @@
 package com.clubs.bot
 
-import com.clubs.generated.jooq.enums.FinalStatus
+import com.clubs.event.EventResponseRepository
+import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.generated.jooq.tables.records.EventsRecord
-import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
-import com.clubs.generated.jooq.tables.references.USERS
 import com.clubs.membership.MembershipRepository
-import org.jooq.DSLContext
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
@@ -20,8 +18,8 @@ import java.util.UUID
 
 @Service
 class NotificationService(
-    private val dsl: DSLContext,
     private val membershipRepository: MembershipRepository,
+    private val eventResponseRepository: EventResponseRepository,
     private val telegramClient: TelegramClient
 ) {
 
@@ -48,7 +46,7 @@ class NotificationService(
      */
     @Async
     fun sendStage2Started(event: EventsRecord) {
-        val voterTelegramIds = getGoingVoterTelegramIds(event.id!!)
+        val voterTelegramIds = eventResponseRepository.findResponderTelegramIdsByEventId(event.id!!)
         val text = "⏰ Этап 2 начался!\n\n📌 ${event.title} — ${event.eventDatetime?.format(fmt)}\n\nПодтвердите или откажитесь от участия в приложении:"
 
         voterTelegramIds.forEach { telegramId ->
@@ -61,7 +59,7 @@ class NotificationService(
      */
     @Async
     fun sendAttendanceMarked(eventId: UUID) {
-        val absentTelegramIds = getAbsentMemberTelegramIds(eventId)
+        val absentTelegramIds = eventResponseRepository.findTelegramIdsByEventAndAttendance(eventId, AttendanceStatus.absent)
         val text = "📋 Организатор отметил присутствие на событии.\n\nВас отметили как отсутствующего. Если это ошибка — оспорьте в приложении:"
 
         absentTelegramIds.forEach { telegramId ->
@@ -90,23 +88,4 @@ class NotificationService(
             log.warn("Failed to send DM to chat {}: {}", chatId, e.message)
         }
     }
-
-    private fun getGoingVoterTelegramIds(eventId: UUID): List<Long> =
-        dsl.select(USERS.TELEGRAM_ID)
-            .from(EVENT_RESPONSES)
-            .join(USERS).on(USERS.ID.eq(EVENT_RESPONSES.USER_ID))
-            .where(EVENT_RESPONSES.EVENT_ID.eq(eventId))
-            .fetch(USERS.TELEGRAM_ID)
-            .filterNotNull()
-
-    private fun getAbsentMemberTelegramIds(eventId: UUID): List<Long> =
-        dsl.select(USERS.TELEGRAM_ID)
-            .from(EVENT_RESPONSES)
-            .join(USERS).on(USERS.ID.eq(EVENT_RESPONSES.USER_ID))
-            .where(
-                EVENT_RESPONSES.EVENT_ID.eq(eventId)
-                    .and(EVENT_RESPONSES.FINAL_STATUS.eq(FinalStatus.declined))
-            )
-            .fetch(USERS.TELEGRAM_ID)
-            .filterNotNull()
 }
