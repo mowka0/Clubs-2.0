@@ -1,7 +1,19 @@
 # Bot не доставляет DM участникам при создании события
 
-**Статус:** open · **Создано:** 2026-05-12 · **Origin:** ручной staging-тест после `feature/refactor-membership`
+**Статус:** root cause identified · **Создано:** 2026-05-12 · **Обновлено:** 2026-05-12 (post-flight `feature/refactor-bot`) · **Origin:** ручной staging-тест после `feature/refactor-membership`
 **Severity:** Medium (engagement-критично для core-loop клубов)
+
+## Root cause (выявлено 2026-05-12)
+
+После post-flight аналитики `feature/refactor-bot` корень бага установлен:
+
+**`NotificationService.sendEventCreated` — orphan-метод.** `EventService.createEvent` не импортирует `NotificationService` и не зовёт `sendEventCreated`. Метод существует и работает (SQL валиден, текст корректен, inline-кнопка есть), но его никто не вызывает. DM не приходят, потому что они **не отправляются**, а не потому что Telegram их теряет.
+
+`grep -r "sendEventCreated" backend/src/main/kotlin` → только определение в `NotificationService.kt:34`.
+
+**Решение:** см. `docs/backlog/telegram-bot-prd-gaps.md` § GAP-003 + § GAP-010 (фильтр по `membership.status` — обязательное условие, иначе DM пойдут отписавшимся).
+
+Гипотезы про webhook config / staging bot config ниже **сохранены для истории**, но не являются причиной. После закрытия GAP-003+GAP-010 они могут стать актуальными отдельно (например, для prod webhook), но не для текущего бага.
 
 ## Симптом
 
@@ -11,7 +23,9 @@ Organizer создаёт событие через `POST /api/clubs/{id}/events`
 
 **Рефакторинг membership-модуля 2026-05-12.** Reviewer провёл line-by-line сверку `NotificationService.getMemberTelegramIds` старого vs нового (`findMemberTelegramIds`) — SQL-запрос и список telegram_id'шников идентичны master. Если баг есть — он pre-existing.
 
-## Подозреваемые причины (порядок investigation)
+**Рефакторинг bot-модуля 2026-05-12 (`feature/refactor-bot`).** Метод `sendEventCreated` функционально не изменился (SQL ушёл в `MembershipRepository`, текст и кнопка остались идентичны). До рефакторинга метод тоже был orphan.
+
+## Подозреваемые причины (исторический список — НЕ актуальны после идентификации root cause)
 
 1. **Staging bot config** — `TELEGRAM_BOT_TOKEN` на staging Coolify может быть пустым или указывать на prod-бота. Если staging и prod используют одного бота, webhook прописан на prod-URL, и staging-инстанс молча не получает callback'и.
 2. **Webhook URL** — Telegram Bot API в production-режиме требует webhook (long polling запрещён, см. `.claude/rules/backend.md` § Telegram Bot API). Если webhook у бота прописан только на prod URL — staging бот вообще не активен.
