@@ -62,8 +62,12 @@ POST /api/clubs/{id}/link-group
 
 ```
 POST /api/clubs/{id}/join
-  Response 201: MembershipDto
-  Errors: 400 (not open / limit reached), 409 (already member)
+  Response 201: MembershipDto                — free or zero-price open club, membership created immediately
+  Response 202: PendingPaymentDto            — paid open club; Telegram Stars invoice sent to user's DM, membership NOT created until handleSuccessfulPayment
+  Errors:
+    400 — club is not open / member_limit reached
+    404 — club not found
+    409 — caller already has active or grace_period membership in this club
 
 POST /api/clubs/{id}/apply
   Body: { answerText: string }
@@ -83,9 +87,13 @@ POST /api/applications/{id}/reject
   Response 200: ApplicationDto
   Errors: 403, 404, 409
 
-POST /api/memberships/{id}/cancel
-  Response 200: MembershipDto
-  Notes: Status → cancelled, access until subscription_expires_at
+POST /api/clubs/{id}/cancel
+  Path: id = clubId (UUID) — clubId of the club whose membership the caller wants to cancel
+  Response 200: MembershipDto                — status → cancelled, access remains until subscription_expires_at
+  Errors:
+    404 — caller has no active or grace_period membership in this club
+    400 — membership is already cancelled
+  Notes: caller (JWT principal) is implicit owner of the membership being cancelled — no separate userId in the path
 ```
 
 ### 1.5 Invites (Private clubs)
@@ -96,23 +104,21 @@ GET /api/invite/{code}
   Errors: 404 (invalid code)
 
 POST /api/invite/{code}/join
-  Response 201: MembershipDto
-  Errors: 400 (limit), 409 (already member)
+  Response 201: MembershipDto                — free club, membership created immediately
+  Response 202: PendingPaymentDto            — paid club; invoice sent to caller's DM
+  Errors: 400 (member_limit reached), 404 (invite code unknown), 409 (already member)
 ```
 
 ### 1.6 Members
 
 ```
 GET /api/clubs/{id}/members
-  Response 200: ClubMemberDto[]
+  Response 200: MemberListItemDto[]
   Errors: 403 (not member)
 
 GET /api/clubs/{id}/members/{userId}
-  Response 200: MemberProfileDto (with reputation + attendance history)
-  Errors: 403 (not member)
-
-GET /api/clubs/{id}/members/{userId}/reputation
-  Response 200: ReputationDto
+  Response 200: MemberProfileDto (firstName, username, avatarUrl + per-club reputation metrics)
+  Errors: 403 (not member), 404 (user not found)
 ```
 
 ### 1.7 Events

@@ -6,34 +6,31 @@ import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
-import com.clubs.generated.jooq.enums.MembershipRole
-import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.tables.records.ClubsRecord
+import com.clubs.membership.MembershipRepository
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.jooq.DSLContext
-import org.jooq.InsertSetMoreStep
-import org.jooq.InsertSetStep
-import org.jooq.InsertResultStep
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.util.UUID
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 
 class ClubServiceTest {
 
     private lateinit var clubRepository: ClubRepository
+    private lateinit var membershipRepository: MembershipRepository
     private lateinit var dsl: DSLContext
     private lateinit var clubService: ClubService
 
     @BeforeEach
     fun setUp() {
         clubRepository = mockk(relaxed = true)
+        membershipRepository = mockk(relaxed = true)
         dsl = mockk(relaxed = true)
-        clubService = ClubService(clubRepository, dsl)
+        clubService = ClubService(clubRepository, membershipRepository, dsl)
     }
 
     @Test
@@ -78,6 +75,7 @@ class ClubServiceTest {
         assertEquals(50, result.memberLimit)
         assertEquals(100, result.subscriptionPrice)
         verify(exactly = 1) { clubRepository.create(request, ownerId, any()) }
+        verify(exactly = 1) { membershipRepository.createOrganizer(ownerId, clubId) }
     }
 
     @Test

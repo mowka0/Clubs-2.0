@@ -86,7 +86,7 @@ class ApplicationServiceTest {
         val application = createPendingApplication(userId, clubId, "I want to join")
 
         every { clubRepository.findById(clubId) } returns club
-        every { membershipRepository.findByUserAndClub(userId, clubId) } returns null
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
         every { applicationRepository.findActiveByUserAndClub(userId, clubId) } returns null
         every { applicationRepository.countTodayByUser(userId) } returns 0
         every { applicationRepository.create(userId, clubId, "I want to join") } returns application
@@ -177,7 +177,7 @@ class ApplicationServiceTest {
         )
 
         every { clubRepository.findById(clubId) } returns club
-        every { membershipRepository.findByUserAndClub(userId, clubId) } returns null
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
         every { applicationRepository.findActiveByUserAndClub(userId, clubId) } returns approvedApp
 
         val exception = assertThrows<ConflictException> {

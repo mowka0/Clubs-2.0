@@ -1,39 +1,32 @@
 package com.clubs.common.auth
 
+import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.security.AuthenticatedUser
-import com.clubs.generated.jooq.enums.MembershipStatus
-import com.clubs.generated.jooq.tables.references.CLUBS
-import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
+import com.clubs.membership.MembershipRepository
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.annotation.Around
 import org.aspectj.lang.annotation.Aspect
 import org.aspectj.lang.reflect.MethodSignature
-import org.jooq.DSLContext
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
 import java.util.UUID
 
 @Aspect
 @Component
-class AuthorizationAspect(private val dsl: DSLContext) {
+class AuthorizationAspect(
+    private val membershipRepository: MembershipRepository,
+    private val clubRepository: ClubRepository
+) {
 
     @Around("@annotation(requiresMembership)")
     fun checkMembership(joinPoint: ProceedingJoinPoint, requiresMembership: RequiresMembership): Any? {
         val userId = currentUserId()
         val clubId = extractUUID(joinPoint, requiresMembership.clubIdParam)
-        val exists = dsl.fetchExists(
-            dsl.selectOne().from(MEMBERSHIPS)
-                .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))
-                .where(
-                    MEMBERSHIPS.USER_ID.eq(userId)
-                        .and(MEMBERSHIPS.CLUB_ID.eq(clubId))
-                        .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active))
-                        .and(CLUBS.IS_ACTIVE.eq(true))
-                )
-        )
-        if (!exists) throw ForbiddenException("You must be an active member of this club")
+        if (!membershipRepository.isActiveMemberInActiveClub(userId, clubId)) {
+            throw ForbiddenException("You must be an active member of this club")
+        }
         return joinPoint.proceed()
     }
 
@@ -41,10 +34,7 @@ class AuthorizationAspect(private val dsl: DSLContext) {
     fun checkOrganizer(joinPoint: ProceedingJoinPoint, requiresOrganizer: RequiresOrganizer): Any? {
         val userId = currentUserId()
         val clubId = extractUUID(joinPoint, requiresOrganizer.clubIdParam)
-        val club = dsl.selectFrom(CLUBS)
-            .where(CLUBS.ID.eq(clubId).and(CLUBS.IS_ACTIVE.eq(true)))
-            .fetchOne()
-            ?: throw NotFoundException("Club not found")
+        val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club organizer can perform this action")
         return joinPoint.proceed()
     }

@@ -7,11 +7,9 @@ import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
-import com.clubs.generated.jooq.enums.MembershipRole
-import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.tables.records.ClubsRecord
 import com.clubs.generated.jooq.tables.references.CLUBS
-import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
+import com.clubs.membership.MembershipRepository
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.slf4j.LoggerFactory
@@ -22,6 +20,7 @@ import java.util.UUID
 @Service
 class ClubService(
     private val clubRepository: ClubRepository,
+    private val membershipRepository: MembershipRepository,
     private val dsl: DSLContext
 ) {
 
@@ -52,12 +51,7 @@ class ClubService(
         // Wrapped in the same @Transactional scope as clubRepository.create() above —
         // if this INSERT fails the club row rolls back, preventing orphaned clubs
         // without an organizer membership.
-        dsl.insertInto(MEMBERSHIPS)
-            .set(MEMBERSHIPS.USER_ID, ownerId)
-            .set(MEMBERSHIPS.CLUB_ID, club.id)
-            .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
-            .set(MEMBERSHIPS.ROLE, MembershipRole.organizer)
-            .execute()
+        membershipRepository.createOrganizer(ownerId, club.id!!)
 
         return club.toDto()
     }

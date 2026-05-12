@@ -4,10 +4,8 @@ import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.EventStatus
-import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
-import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
-import org.jooq.DSLContext
+import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.OffsetDateTime
@@ -18,7 +16,7 @@ import java.util.UUID
 class VoteService(
     private val eventRepository: EventRepository,
     private val eventResponseRepository: EventResponseRepository,
-    private val dsl: DSLContext
+    private val membershipRepository: MembershipRepository
 ) {
 
     private val log = LoggerFactory.getLogger(VoteService::class.java)
@@ -26,16 +24,9 @@ class VoteService(
     fun castVote(eventId: UUID, userId: UUID, request: CastVoteRequest): VoteResponseDto {
         val event = eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
 
-        // Check membership in this club
-        val isMember = dsl.selectCount().from(MEMBERSHIPS)
-            .where(
-                MEMBERSHIPS.CLUB_ID.eq(event.clubId)
-                    .and(MEMBERSHIPS.USER_ID.eq(userId))
-                    .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active))
-            )
-            .fetchOne(0, Int::class.java)!! > 0
-
-        if (!isMember) throw ForbiddenException("Not a member of this club")
+        if (!membershipRepository.isMember(userId, event.clubId)) {
+            throw ForbiddenException("Not a member of this club")
+        }
 
         if (event.status != EventStatus.upcoming) {
             throw ValidationException("Voting is not available for this event")

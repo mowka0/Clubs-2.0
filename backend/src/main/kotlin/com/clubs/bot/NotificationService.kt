@@ -3,8 +3,8 @@ package com.clubs.bot
 import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.tables.records.EventsRecord
 import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
-import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import com.clubs.generated.jooq.tables.references.USERS
+import com.clubs.membership.MembershipRepository
 import org.jooq.DSLContext
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
@@ -21,6 +21,7 @@ import java.util.UUID
 @Service
 class NotificationService(
     private val dsl: DSLContext,
+    private val membershipRepository: MembershipRepository,
     private val telegramClient: TelegramClient
 ) {
 
@@ -33,7 +34,7 @@ class NotificationService(
      */
     @Async
     fun sendEventCreated(event: EventsRecord) {
-        val memberTelegramIds = getMemberTelegramIds(event.clubId!!)
+        val memberTelegramIds = membershipRepository.findMemberTelegramIds(event.clubId!!)
         val dateStr = event.eventDatetime?.format(fmt) ?: "TBD"
         val text = "🆕 Новое событие в клубе!\n\n📌 ${event.title}\n📍 ${event.locationText}\n🗓 $dateStr\n👥 Лимит: ${event.participantLimit}\n\nГолосуйте в приложении:"
 
@@ -89,14 +90,6 @@ class NotificationService(
             log.warn("Failed to send DM to chat {}: {}", chatId, e.message)
         }
     }
-
-    private fun getMemberTelegramIds(clubId: UUID): List<Long> =
-        dsl.select(USERS.TELEGRAM_ID)
-            .from(MEMBERSHIPS)
-            .join(USERS).on(USERS.ID.eq(MEMBERSHIPS.USER_ID))
-            .where(MEMBERSHIPS.CLUB_ID.eq(clubId))
-            .fetch(USERS.TELEGRAM_ID)
-            .filterNotNull()
 
     private fun getGoingVoterTelegramIds(eventId: UUID): List<Long> =
         dsl.select(USERS.TELEGRAM_ID)

@@ -36,7 +36,7 @@ class ApplicationService(
             throw ValidationException("Answer is required for this club")
         }
 
-        val existingMembership = membershipRepository.findByUserAndClub(userId, clubId)
+        val existingMembership = membershipRepository.findActiveByUserAndClub(userId, clubId)
         if (existingMembership != null) throw ConflictException("Already a member")
 
         val activeApp = applicationRepository.findActiveByUserAndClub(userId, clubId)
