@@ -9,12 +9,10 @@ import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.tables.records.ClubsRecord
-import com.clubs.generated.jooq.tables.records.MembershipsRecord
 import com.clubs.payment.PaymentService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -29,7 +27,7 @@ class MembershipServiceTest {
     private lateinit var membershipRepository: MembershipRepository
     private lateinit var clubRepository: ClubRepository
     private lateinit var paymentService: PaymentService
-    private lateinit var dsl: DSLContext
+    private lateinit var mapper: MembershipMapper
     private lateinit var membershipService: MembershipService
 
     @BeforeEach
@@ -37,8 +35,8 @@ class MembershipServiceTest {
         membershipRepository = mockk(relaxed = true)
         clubRepository = mockk(relaxed = true)
         paymentService = mockk(relaxed = true)
-        dsl = mockk(relaxed = true)
-        membershipService = MembershipService(membershipRepository, clubRepository, paymentService, dsl)
+        mapper = MembershipMapper()
+        membershipService = MembershipService(membershipRepository, clubRepository, paymentService, mapper)
     }
 
     private fun freeClubRecord(clubId: UUID, ownerId: UUID = UUID.randomUUID(), memberLimit: Int = 50, memberCount: Int = 5): ClubsRecord =
@@ -73,16 +71,18 @@ class MembershipServiceTest {
             isActive = true
         )
 
-    private fun membershipRecord(userId: UUID, clubId: UUID): MembershipsRecord {
+    private fun membership(userId: UUID, clubId: UUID, status: MembershipStatus = MembershipStatus.active): Membership {
         val now = OffsetDateTime.now()
-        return MembershipsRecord(
+        return Membership(
             id = UUID.randomUUID(),
             userId = userId,
             clubId = clubId,
-            status = MembershipStatus.active,
+            status = status,
             role = MembershipRole.member,
             joinedAt = now,
-            subscriptionExpiresAt = now.plusDays(30)
+            subscriptionExpiresAt = now.plusDays(30),
+            createdAt = now,
+            updatedAt = now
         )
     }
 
@@ -91,12 +91,12 @@ class MembershipServiceTest {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val club = freeClubRecord(clubId)
-        val membership = membershipRecord(userId, clubId)
+        val createdMembership = membership(userId, clubId)
 
         every { clubRepository.findById(clubId) } returns club
-        every { membershipRepository.findByUserAndClub(userId, clubId) } returns null
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
         every { membershipRepository.countActiveByClubId(clubId) } returns 5
-        every { membershipRepository.create(userId, clubId) } returns membership
+        every { membershipRepository.create(userId, clubId) } returns createdMembership
 
         val result = membershipService.joinOpenClub(clubId, userId)
 
@@ -118,7 +118,7 @@ class MembershipServiceTest {
         val club = paidClubRecord(clubId, price = 500)
 
         every { clubRepository.findById(clubId) } returns club
-        every { membershipRepository.findByUserAndClub(userId, clubId) } returns null
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
         every { membershipRepository.countActiveByClubId(clubId) } returns 5
 
         val result = membershipService.joinOpenClub(clubId, userId)
@@ -179,10 +179,10 @@ class MembershipServiceTest {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val club = freeClubRecord(clubId)
-        val existingMembership = membershipRecord(userId, clubId)
+        val existingMembership = membership(userId, clubId)
 
         every { clubRepository.findById(clubId) } returns club
-        every { membershipRepository.findByUserAndClub(userId, clubId) } returns existingMembership
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns existingMembership
 
         val exception = assertThrows<ConflictException> {
             membershipService.joinOpenClub(clubId, userId)
@@ -200,7 +200,7 @@ class MembershipServiceTest {
         val club = freeClubRecord(clubId, memberLimit = 20, memberCount = 20)
 
         every { clubRepository.findById(clubId) } returns club
-        every { membershipRepository.findByUserAndClub(userId, clubId) } returns null
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
         every { membershipRepository.countActiveByClubId(clubId) } returns 20
 
         val exception = assertThrows<ValidationException> {
@@ -219,7 +219,7 @@ class MembershipServiceTest {
         val club = paidClubRecord(clubId, price = 500)
 
         every { clubRepository.findById(clubId) } returns club
-        every { membershipRepository.findByUserAndClub(userId, clubId) } returns null
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
         every { membershipRepository.countActiveByClubId(clubId) } returns 5
 
         val first = membershipService.joinOpenClub(clubId, userId)
@@ -239,7 +239,7 @@ class MembershipServiceTest {
         val club = paidClubRecord(clubId, price = 300)
 
         every { clubRepository.findByInviteCode(code) } returns club
-        every { membershipRepository.findByUserAndClub(userId, clubId) } returns null
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
         every { membershipRepository.countActiveByClubId(clubId) } returns 0
 
         val result = membershipService.joinByInviteCode(code, userId)
@@ -256,12 +256,12 @@ class MembershipServiceTest {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val club = freeClubRecord(clubId)
-        val membership = membershipRecord(userId, clubId)
+        val createdMembership = membership(userId, clubId)
 
         every { clubRepository.findByInviteCode(code) } returns club
-        every { membershipRepository.findByUserAndClub(userId, clubId) } returns null
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
         every { membershipRepository.countActiveByClubId(clubId) } returns 0
-        every { membershipRepository.create(userId, clubId) } returns membership
+        every { membershipRepository.create(userId, clubId) } returns createdMembership
 
         val result = membershipService.joinByInviteCode(code, userId)
 
@@ -285,15 +285,16 @@ class MembershipServiceTest {
     fun `cancelMembership marks membership as cancelled`() {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
-        val membership = membershipRecord(userId, clubId)
+        val activeMembership = membership(userId, clubId)
 
-        every { membershipRepository.findByUserAndClub(userId, clubId) } returns membership
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns activeMembership
 
         val result = membershipService.cancelMembership(clubId, userId)
 
         assertEquals("cancelled", result.status)
         assertEquals(userId, result.userId)
         assertEquals(clubId, result.clubId)
+        verify(exactly = 1) { membershipRepository.cancel(activeMembership.id) }
     }
 
     @Test
@@ -301,7 +302,7 @@ class MembershipServiceTest {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
 
-        every { membershipRepository.findByUserAndClub(userId, clubId) } returns null
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
 
         val exception = assertThrows<NotFoundException> {
             membershipService.cancelMembership(clubId, userId)
@@ -314,23 +315,15 @@ class MembershipServiceTest {
     fun `cancelMembership throws ValidationException when already cancelled`() {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
-        val now = OffsetDateTime.now()
-        val cancelledMembership = MembershipsRecord(
-            id = UUID.randomUUID(),
-            userId = userId,
-            clubId = clubId,
-            status = MembershipStatus.cancelled,
-            role = MembershipRole.member,
-            joinedAt = now,
-            subscriptionExpiresAt = now.plusDays(30)
-        )
+        val cancelledMembership = membership(userId, clubId, status = MembershipStatus.cancelled)
 
-        every { membershipRepository.findByUserAndClub(userId, clubId) } returns cancelledMembership
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns cancelledMembership
 
         val exception = assertThrows<ValidationException> {
             membershipService.cancelMembership(clubId, userId)
         }
 
         assertEquals("Membership already cancelled", exception.message)
+        verify(exactly = 0) { membershipRepository.cancel(any()) }
     }
 }

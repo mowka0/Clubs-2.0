@@ -24,19 +24,20 @@
 
 ---
 
-## GAP-2: Отмена подписки пользователем (`cancelled`)
+## GAP-2: Отмена подписки пользователем (`cancelled`) — частично реализована
 
 **PRD §4.7.3.4:** «Отмена: Пользователь может отменить подписку вручную. Доступ сохраняется до конца оплаченного периода. Статус: `cancelled`.»
 
-**Реальность:** enum `membership_status.cancelled` существует в V3, но нет endpoint / сервиса, который переводит подписку в этот статус. В текущей логике renewal (`PaymentService.handleSuccessfulPayment`) оплата membership со статусом `cancelled` вернёт его в `active` без подтверждения — т.е. сейчас cancelled де-факто недостижим и потенциально «хрупок».
+**Реальность (после рефакторинга membership):**
+- Endpoint `POST /api/clubs/{id}/cancel` реализован — переводит membership в `cancelled` (см. `docs/modules/membership.md` § «Отмена подписки»).
+- `subscription_expires_at` не трогается — доступ сохраняется до этой даты.
 
-**Что нужно:**
-- HTTP endpoint для пользовательской отмены (`POST /api/memberships/{id}/cancel`) + UI в Mini App.
-- Логика: после `cancelled` membership остаётся активным до `subscription_expires_at`, потом → `expired` без прохождения `grace_period`.
-- Scheduler: перевод `cancelled → expired` по истечении `expires_at`.
-- Pre-check в `handleSuccessfulPayment`: оплата `cancelled`-membership должна требовать явного согласия (или запрещаться в рамках текущего инвойса).
+**Что ещё нужно (остаточный gap):**
+- UI в Mini App для отмены (кнопка «Отменить подписку») — фронт пока не вызывает endpoint.
+- Логика scheduler: перевод `cancelled → expired` по истечении `subscription_expires_at`. Текущие scheduler-джобы переводят только `active → grace_period → expired`; `cancelled` остаётся в статусе `cancelled` навсегда.
+- Pre-check в `handleSuccessfulPayment`: оплата `cancelled`-membership сейчас вернёт его в `active` без подтверждения — это может быть нежелательно, нужно решение.
 
-**Scope:** отдельная фича.
+**Scope:** оставшиеся пункты — отдельная фича.
 
 ---
 

@@ -4,8 +4,7 @@ import com.clubs.application.ApplicationDto
 import com.clubs.application.ApplicationService
 import com.clubs.common.security.AuthenticatedUser
 import com.clubs.membership.MembershipDto
-import com.clubs.membership.MembershipRepository
-import com.clubs.membership.toDto
+import com.clubs.membership.MembershipService
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
@@ -17,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController
 class UserController(
     private val userService: UserService,
     private val applicationService: ApplicationService,
-    private val membershipRepository: MembershipRepository
+    private val membershipService: MembershipService
 ) {
 
     @GetMapping("/me")
@@ -29,10 +28,8 @@ class UserController(
     @GetMapping("/me/clubs")
     fun getMyClubs(
         @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<List<MembershipDto>> {
-        val memberships = membershipRepository.findByUserId(user.userId).map { it.toDto() }
-        return ResponseEntity.ok(memberships)
-    }
+    ): ResponseEntity<List<MembershipDto>> =
+        ResponseEntity.ok(membershipService.getUserMemberships(user.userId))
 
     @GetMapping("/me/applications")
     fun getMyApplications(

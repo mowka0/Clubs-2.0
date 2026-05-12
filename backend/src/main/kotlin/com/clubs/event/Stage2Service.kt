@@ -5,11 +5,9 @@ import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
-import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
-import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
-import org.jooq.DSLContext
+import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
@@ -20,7 +18,7 @@ import java.util.UUID
 class Stage2Service(
     private val eventRepository: EventRepository,
     private val eventResponseRepository: EventResponseRepository,
-    private val dsl: DSLContext
+    private val membershipRepository: MembershipRepository
 ) {
     private val log = LoggerFactory.getLogger(Stage2Service::class.java)
 
@@ -62,15 +60,9 @@ class Stage2Service(
             throw ValidationException("Event is not in confirmation stage")
         }
 
-        val isMember = dsl.selectCount().from(MEMBERSHIPS)
-            .where(
-                MEMBERSHIPS.CLUB_ID.eq(event.clubId)
-                    .and(MEMBERSHIPS.USER_ID.eq(userId))
-                    .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active))
-            )
-            .fetchOne(0, Int::class.java)!! > 0
-
-        if (!isMember) throw ForbiddenException("Not a member of this club")
+        if (!membershipRepository.isMember(userId, event.clubId)) {
+            throw ForbiddenException("Not a member of this club")
+        }
 
         val response = eventResponseRepository.findByEventAndUser(eventId, userId)
             ?: throw ValidationException("You didn't vote in this event")

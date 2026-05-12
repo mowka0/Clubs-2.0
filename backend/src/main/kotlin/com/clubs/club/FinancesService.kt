@@ -2,11 +2,10 @@ package com.clubs.club
 
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
-import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.enums.TransactionStatus
 import com.clubs.generated.jooq.enums.TransactionType
-import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import com.clubs.generated.jooq.tables.references.TRANSACTIONS
+import com.clubs.membership.MembershipRepository
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Service
@@ -17,6 +16,7 @@ import java.util.UUID
 @Service
 class FinancesService(
     private val clubRepository: ClubRepository,
+    private val membershipRepository: MembershipRepository,
     private val dsl: DSLContext
 ) {
 
@@ -27,10 +27,7 @@ class FinancesService(
         val now = OffsetDateTime.now()
         val startOfMonth = now.withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0)
 
-        val activeMembers = dsl.fetchCount(
-            MEMBERSHIPS,
-            MEMBERSHIPS.CLUB_ID.eq(clubId).and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active))
-        )
+        val activeMembers = membershipRepository.countActiveByClubId(clubId)
 
         val monthlyRevenue = dsl
             .select(DSL.coalesce(DSL.sum(TRANSACTIONS.AMOUNT), DSL.`val`(0)))
