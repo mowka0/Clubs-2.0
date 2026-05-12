@@ -101,7 +101,21 @@ navy soft-blobs, brass контурные линии, ghost-curves, brass orb-т
 
 ### AC-5: meta-row + список
 **GIVEN** загружены `N` клубов
-**THEN** видит «`N` клуб(а/ов)» (Russian pluralization) + «По релевантности»
+**THEN** видит «`N` клуб(а/ов)» (Russian pluralization) слева, price-pill «Цена» в центре, «По релевантности» справа
+
+**GIVEN** пользователь тапает price-pill
+**THEN** срабатывает `haptic.select()`
+**AND** открывается bottom-sheet «Стоимость подписки» с presets:
+  «Любая», «Бесплатно», «До 1 000 ₽», «1 000 – 3 000 ₽», «От 3 000 ₽»
+**AND** текущий выбор подсвечен brass + check-иконка
+
+**GIVEN** выбран любой preset кроме «Любая»
+**THEN** pill окрашена в brass-soft с brass-deep текстом (active state)
+**AND** label отражает выбор: «Цена · до 1 000 ₽» и т.д.
+**AND** запрос отправляется с `minPrice` / `maxPrice` query-params
+
+**GIVEN** выбрана «Любая»
+**THEN** `minPrice` и `maxPrice` не передаются (фильтр снят)
 
 **GIVEN** список пуст и filters активны
 **THEN** видит «Клубы не найдены. Попробуйте изменить фильтры.»
@@ -158,6 +172,7 @@ navy soft-blobs, brass контурные линии, ghost-curves, brass orb-т
 - **Безопасность**: внешний CDN `fonts.googleapis.com` — для шрифта Inter. CSP в проекте пока не enforced
 - **Совместимость**: `backdrop-filter` поддерживается Safari/Chrome/Firefox 2020+. Telegram iOS/Android WebView — OK
 - **Дегра­дация**: на старых браузерах без `backdrop-filter` карточки покажутся с базовым `background: rgba(26, 33, 56, 0.88)` без blur — читабельно
+- **Z-index hierarchy**: `.brand-tabbar` → `z-index: 2` (выше контента, но НИЖЕ tgui Modal overlay = `--tgui--z-index--overlay: 3`). Это гарантирует, что CreateClubModal-wizard рендерится поверх tab bar — иначе нижние поля формы скрываются под баром
 
 ## Файловая карта
 
@@ -165,13 +180,15 @@ navy soft-blobs, brass контурные линии, ghost-curves, brass orb-т
 - `frontend/src/styles/brand-theme.css` — palette tokens + component styles + body/html reset (убирает 8px дефолтный body-margin, чтобы navy canvas был на всю ширину viewport)
 - `frontend/src/components/DiscoveryBackdrop.tsx` — SVG паттерн с fade-mask
 - `frontend/src/components/CityPicker.tsx` — bottom-sheet picker страна+город с persist в `localStorage` (хук `useCityChoice`)
+- `frontend/src/components/PriceFilter.tsx` — bottom-sheet preset-picker по стоимости подписки, утилиты `presetIdFromRange` / `pillLabelFromRange`
 - `frontend/public/brand/{logo,nav-search,nav-clubs,nav-events,nav-me}.png` — production ассеты
 
 **Изменённые:**
 - `frontend/index.html` — добавлен link на Inter Google Fonts
 - `frontend/src/main.tsx` — импорт `./styles/brand-theme.css`
 - `frontend/src/components/BottomTabBar.tsx` — `<img>` brass-иконки + active brass-indicator (вместо tgui `Tabbar`)
-- `frontend/src/pages/DiscoveryPage.tsx` — целиком новый layout, inline filters (search + chips)
+- `frontend/src/components/Layout.tsx` — padding-bottom = `calc(84px + env(safe-area-inset-bottom) + 8px)` на всех tabbar-routes (включая `/clubs/:id`), чтобы tab bar не перекрывал контент
+- `frontend/src/pages/DiscoveryPage.tsx` — целиком новый layout, inline filters (search + chips), price-pill в meta-row
 - `frontend/src/components/ClubCard.tsx` — целиком новый дизайн с capacity bar + featured state
 
 **Удалённые:**

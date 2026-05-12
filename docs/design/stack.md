@@ -65,12 +65,13 @@ frontend/
     │    ClubInteriorPage.tsx удалён в feature/unified-club-page;
     │    /clubs/:id/interior редиректится на /clubs/:id через <InteriorRedirect>)
     │
-    ├── components/           — 9 custom-компонентов + 3 club-tab-компонента
+    ├── components/           — 10 custom-компонентов + 3 club-tab-компонента
     │   ├── Layout.tsx
     │   ├── BottomTabBar.tsx       — brand brass-иконки + active brass-indicator (feature/discovery-redesign)
     │   ├── ClubCard.tsx           — gradient avatar + capacity bar + featured-state
     │   ├── DiscoveryBackdrop.tsx  — SVG абстракция (navy blobs + brass glows) для DiscoveryPage
     │   ├── CityPicker.tsx         — bottom-sheet country+city picker, persist в `localStorage` (хук `useCityChoice`)
+    │   ├── PriceFilter.tsx        — bottom-sheet preset-picker по стоимости подписки (min/max → query-params)
     │   ├── AvatarUpload.tsx
     │   ├── CreateClubModal.tsx — 5-шаговый wizard на RHF, открывается из MyClubsPage
     │   ├── Toast.tsx

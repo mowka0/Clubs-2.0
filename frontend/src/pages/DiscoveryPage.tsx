@@ -4,6 +4,12 @@ import { useClubsQuery } from '../queries/clubs';
 import { ClubCard } from '../components/ClubCard';
 import { DiscoveryBackdrop } from '../components/DiscoveryBackdrop';
 import { CityPicker, useCityChoice } from '../components/CityPicker';
+import {
+  PriceFilter,
+  pillLabelFromRange,
+  presetIdFromRange,
+  type PriceRange,
+} from '../components/PriceFilter';
 import { useHaptic } from '../hooks/useHaptic';
 import type { ClubFilters } from '../api/clubs';
 
@@ -43,14 +49,22 @@ const CHEVRON_DOWN = (
 export const DiscoveryPage: FC = () => {
   const [filters, setFilters] = useState<ClubFilters>({});
   const [cityChoice, setCityChoice] = useCityChoice();
+  const [priceRange, setPriceRange] = useState<PriceRange>({});
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [priceOpen, setPriceOpen] = useState(false);
   const debouncedFilters = useDebounce(filters, 300);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const haptic = useHaptic();
 
   const queryFilters = useMemo<ClubFilters>(
-    () => ({ ...debouncedFilters, city: cityChoice.city, size: '20' }),
-    [debouncedFilters, cityChoice.city],
+    () => ({
+      ...debouncedFilters,
+      city: cityChoice.city,
+      minPrice: priceRange.min !== undefined ? String(priceRange.min) : undefined,
+      maxPrice: priceRange.max !== undefined ? String(priceRange.max) : undefined,
+      size: '20',
+    }),
+    [debouncedFilters, cityChoice.city, priceRange.min, priceRange.max],
   );
 
   const {
@@ -157,6 +171,22 @@ export const DiscoveryPage: FC = () => {
 
       <div className="discovery-meta-row">
         <span className="count">{clubs.length} {pluralizeClubs(clubs.length)}</span>
+        <button
+          type="button"
+          className={
+            presetIdFromRange(priceRange) === 'any'
+              ? 'discovery-filter-pill'
+              : 'discovery-filter-pill active'
+          }
+          onClick={() => {
+            haptic.select();
+            setPriceOpen(true);
+          }}
+          aria-label="Фильтр по стоимости подписки"
+        >
+          {pillLabelFromRange(priceRange)}
+          {CHEVRON_DOWN}
+        </button>
         <span className="sort">По релевантности</span>
       </div>
 
@@ -191,6 +221,14 @@ export const DiscoveryPage: FC = () => {
           value={cityChoice}
           onChange={setCityChoice}
           onClose={() => setPickerOpen(false)}
+        />
+      )}
+
+      {priceOpen && (
+        <PriceFilter
+          value={priceRange}
+          onChange={setPriceRange}
+          onClose={() => setPriceOpen(false)}
         />
       )}
     </div>
