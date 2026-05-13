@@ -66,7 +66,7 @@ MembershipRepository (bulk updates, expiring notifications)
 
 ### Стоимость и комиссия
 - Цена месячной подписки задаётся организатором в Stars (`clubs.subscription_price`).
-- `platform_fee = floor(amount * 0.20)`
+- `platform_fee = amount * PLATFORM_FEE_PERCENT / 100` (integer division; `PLATFORM_FEE_PERCENT = 20`)
 - `organizer_revenue = amount − platform_fee`
 - Цена **всегда с сервера** (из `clubs.subscription_price`) — клиентскому значению amount не доверяем при построении инвойса.
 
@@ -280,4 +280,4 @@ AND clubs.member_count уменьшен на 1 (но не ниже 0)
 - **member_count drift**: использование `GREATEST(x-delta, 0)` маскирует рассинхрон. Долгосрочно — завести sanity-check job, считающий `member_count` из фактических active membership'ов.
 - **Scheduler и timezone**: cron в UTC контейнера. Если нужен 09:00 МСК — настраивать через `spring.task.scheduling.pool.timezone` или переносить в cron-выражение.
 - **Миграция V12 и объём**: partial UNIQUE index создаётся без `CONCURRENTLY` (Flyway в транзакции). На текущем объёме OK; при росте таблицы `transactions` вынести в отдельный скрипт с `spring.flyway.mixed=true`.
-- **Неполный membership-domain**: `MembershipRepository.activateSubscription` и `findExpiryRefByUserAndClub` уже возвращают не jOOQ Record, но остальные методы (`create`, `findByUserAndClub`, ...) всё ещё отдают `MembershipsRecord`. Полноценная доменизация — в отдельной итерации рефакторинга membership-модуля.
+- **FinancesService — aggregation на стороне Repository**: расчёт `monthlyRevenue` теперь живёт в `TransactionRepository.sumCompletedSubscriptionRevenueSince(clubId, since)` (см. `club/FinancesService.kt`). Service больше не держит `DSLContext`; SQL — параметризован.

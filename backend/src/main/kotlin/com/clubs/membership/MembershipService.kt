@@ -1,12 +1,12 @@
 package com.clubs.membership
 
+import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.MembershipStatus
-import com.clubs.generated.jooq.tables.records.ClubsRecord
 import com.clubs.payment.PaymentService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -55,13 +55,13 @@ class MembershipService(
     @Transactional
     fun joinByInviteCode(code: String, userId: UUID): JoinResult {
         val club = clubRepository.findByInviteCode(code) ?: throw NotFoundException("Invite link not found")
-        val clubId = club.id!!
+        val clubId = club.id
 
         val existing = membershipRepository.findActiveByUserAndClub(userId, clubId)
         if (existing != null) throw ConflictException("Already a member")
 
         val activeCount = membershipRepository.countActiveByClubId(clubId)
-        if (activeCount >= (club.memberLimit ?: 0)) throw ValidationException("Club is full")
+        if (activeCount >= club.memberLimit) throw ValidationException("Club is full")
 
         return joinOrRequestPayment(club, userId, "invite")
     }
@@ -69,9 +69,9 @@ class MembershipService(
     fun getUserMemberships(userId: UUID): List<MembershipDto> =
         membershipRepository.findByUserId(userId).map(mapper::toDto)
 
-    private fun joinOrRequestPayment(club: ClubsRecord, userId: UUID, source: String): JoinResult {
-        val clubId = club.id!!
-        val price = club.subscriptionPrice ?: 0
+    private fun joinOrRequestPayment(club: Club, userId: UUID, source: String): JoinResult {
+        val clubId = club.id
+        val price = club.subscriptionPrice
 
         return if (price > 0) {
             paymentService.createInvoice(userId, clubId)

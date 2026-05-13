@@ -1,11 +1,11 @@
 package com.clubs.payment
 
+import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.enums.TransactionStatus
 import com.clubs.generated.jooq.enums.TransactionType
-import com.clubs.generated.jooq.tables.records.ClubsRecord
 import com.clubs.generated.jooq.tables.records.UsersRecord
 import com.clubs.membership.MembershipExpiryRef
 import com.clubs.membership.MembershipRepository
@@ -64,8 +64,9 @@ class PaymentServiceTest {
         )
     }
 
-    private fun clubRecord(price: Int?, name: String = "Test Club"): ClubsRecord =
-        ClubsRecord(
+    private fun clubRecord(price: Int, name: String = "Test Club"): Club {
+        val now = OffsetDateTime.now()
+        return Club(
             id = clubId,
             ownerId = UUID.randomUUID(),
             name = name,
@@ -73,12 +74,21 @@ class PaymentServiceTest {
             category = ClubCategory.sport,
             accessType = AccessType.`open`,
             city = "Moscow",
+            district = null,
             memberLimit = 50,
             subscriptionPrice = price,
+            avatarUrl = null,
+            rules = null,
+            applicationQuestion = null,
+            inviteLink = null,
             memberCount = 0,
             activityRating = 0,
-            isActive = true
+            isActive = true,
+            telegramGroupId = null,
+            createdAt = now,
+            updatedAt = now
         )
+    }
 
     private fun userRecord(): UsersRecord =
         UsersRecord(
@@ -118,8 +128,11 @@ class PaymentServiceTest {
     }
 
     @Test
-    fun `createInvoice is a no-op for club with null price`() {
-        every { clubRepository.findById(clubId) } returns clubRecord(price = null)
+    fun `createInvoice is a no-op when DB price is NULL (mapper coerces to 0)`() {
+        // ClubMapper coerces NULL subscription_price → 0 at the persistence
+        // boundary, so a club row with NULL price is indistinguishable from a
+        // 0-price (free) club at the service layer. Both paths must skip invoice.
+        every { clubRepository.findById(clubId) } returns clubRecord(price = 0)
 
         service.createInvoice(userId, clubId)
 
