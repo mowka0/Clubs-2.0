@@ -8,7 +8,6 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ApplicationStatus
 import com.clubs.generated.jooq.enums.ClubCategory
-import com.clubs.generated.jooq.tables.records.ApplicationsRecord
 import com.clubs.generated.jooq.tables.records.ClubsRecord
 import com.clubs.membership.MembershipRepository
 import com.clubs.payment.PaymentService
@@ -29,6 +28,7 @@ class ApplicationServiceTest {
     private lateinit var clubRepository: ClubRepository
     private lateinit var membershipRepository: MembershipRepository
     private lateinit var paymentService: PaymentService
+    private lateinit var mapper: ApplicationMapper
     private lateinit var applicationService: ApplicationService
 
     @BeforeEach
@@ -37,8 +37,9 @@ class ApplicationServiceTest {
         clubRepository = mockk(relaxed = true)
         membershipRepository = mockk(relaxed = true)
         paymentService = mockk(relaxed = true)
+        mapper = ApplicationMapper()
         applicationService = ApplicationService(
-            applicationRepository, clubRepository, membershipRepository, paymentService
+            applicationRepository, clubRepository, membershipRepository, paymentService, mapper
         )
     }
 
@@ -66,14 +67,16 @@ class ApplicationServiceTest {
             isActive = true
         )
 
-    private fun createPendingApplication(userId: UUID, clubId: UUID, answerText: String? = null): ApplicationsRecord =
-        ApplicationsRecord(
+    private fun createPendingApplication(userId: UUID, clubId: UUID, answerText: String? = null): Application =
+        Application(
             id = UUID.randomUUID(),
             userId = userId,
             clubId = clubId,
             answerText = answerText,
             status = ApplicationStatus.pending,
-            createdAt = OffsetDateTime.now()
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = null
         )
 
     @Test
@@ -167,11 +170,13 @@ class ApplicationServiceTest {
         val userId = UUID.randomUUID()
         val organizerId = UUID.randomUUID()
         val club = createClosedClub(clubId, organizerId)
-        val approvedApp = ApplicationsRecord(
+        val approvedApp = Application(
             id = UUID.randomUUID(),
             userId = userId,
             clubId = clubId,
+            answerText = null,
             status = ApplicationStatus.approved,
+            rejectedReason = null,
             createdAt = OffsetDateTime.now(),
             resolvedAt = OffsetDateTime.now()
         )
@@ -195,21 +200,26 @@ class ApplicationServiceTest {
         val userId = UUID.randomUUID()
         val organizerId = UUID.randomUUID()
 
-        val application = ApplicationsRecord(
+        val application = Application(
             id = applicationId,
             userId = userId,
             clubId = clubId,
+            answerText = null,
             status = ApplicationStatus.pending,
-            createdAt = OffsetDateTime.now()
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = null
         )
 
         val club = createClosedClub(clubId, organizerId, subscriptionPrice = 500)
 
-        val approvedApplication = ApplicationsRecord(
+        val approvedApplication = Application(
             id = applicationId,
             userId = userId,
             clubId = clubId,
+            answerText = null,
             status = ApplicationStatus.approved,
+            rejectedReason = null,
             createdAt = OffsetDateTime.now(),
             resolvedAt = OffsetDateTime.now()
         )
@@ -237,21 +247,26 @@ class ApplicationServiceTest {
         val userId = UUID.randomUUID()
         val organizerId = UUID.randomUUID()
 
-        val application = ApplicationsRecord(
+        val application = Application(
             id = applicationId,
             userId = userId,
             clubId = clubId,
+            answerText = null,
             status = ApplicationStatus.pending,
-            createdAt = OffsetDateTime.now()
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = null
         )
 
         val club = createClosedClub(clubId, organizerId, subscriptionPrice = 0)
 
-        val approvedApplication = ApplicationsRecord(
+        val approvedApplication = Application(
             id = applicationId,
             userId = userId,
             clubId = clubId,
+            answerText = null,
             status = ApplicationStatus.approved,
+            rejectedReason = null,
             createdAt = OffsetDateTime.now(),
             resolvedAt = OffsetDateTime.now()
         )
@@ -277,12 +292,15 @@ class ApplicationServiceTest {
         val organizerId = UUID.randomUUID()
         val otherUserId = UUID.randomUUID()
 
-        val application = ApplicationsRecord(
+        val application = Application(
             id = applicationId,
             userId = userId,
             clubId = clubId,
+            answerText = null,
             status = ApplicationStatus.pending,
-            createdAt = OffsetDateTime.now()
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = null
         )
 
         val club = createClosedClub(clubId, organizerId)
@@ -305,20 +323,24 @@ class ApplicationServiceTest {
         val userId = UUID.randomUUID()
         val organizerId = UUID.randomUUID()
 
-        val application = ApplicationsRecord(
+        val application = Application(
             id = applicationId,
             userId = userId,
             clubId = clubId,
+            answerText = null,
             status = ApplicationStatus.pending,
-            createdAt = OffsetDateTime.now()
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = null
         )
 
         val club = createClosedClub(clubId, organizerId)
 
-        val rejectedApplication = ApplicationsRecord(
+        val rejectedApplication = Application(
             id = applicationId,
             userId = userId,
             clubId = clubId,
+            answerText = null,
             status = ApplicationStatus.rejected,
             rejectedReason = "Not a good fit",
             createdAt = OffsetDateTime.now(),
@@ -344,12 +366,15 @@ class ApplicationServiceTest {
         val organizerId = UUID.randomUUID()
         val randomUserId = UUID.randomUUID()
 
-        val application = ApplicationsRecord(
+        val application = Application(
             id = applicationId,
             userId = userId,
             clubId = clubId,
+            answerText = null,
             status = ApplicationStatus.pending,
-            createdAt = OffsetDateTime.now()
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = null
         )
 
         val club = createClosedClub(clubId, organizerId)
@@ -371,12 +396,15 @@ class ApplicationServiceTest {
         val userId = UUID.randomUUID()
         val organizerId = UUID.randomUUID()
 
-        val application = ApplicationsRecord(
+        val application = Application(
             id = applicationId,
             userId = userId,
             clubId = clubId,
+            answerText = null,
             status = ApplicationStatus.approved,
-            createdAt = OffsetDateTime.now()
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = null
         )
 
         val club = createClosedClub(clubId, organizerId)

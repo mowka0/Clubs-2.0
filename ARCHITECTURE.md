@@ -75,17 +75,18 @@ POST /api/clubs/{id}/apply
   Errors: 400 (not closed club / missing answer), 409 (already applied), 429 (5/day limit)
 
 GET /api/clubs/{id}/applications
-  Response 200: ApplicationDto[]
-  Errors: 403 (not organizer)
+  Query: ?status=pending|approved|rejected|auto_rejected
+  Response 200: ApplicationDto[] (отсортирован по created_at DESC)
+  Errors: 400 (invalid status), 403 (not organizer), 404 (club not found)
 
 POST /api/applications/{id}/approve
-  Response 200: { application: ApplicationDto, membership: MembershipDto }
-  Errors: 403 (not organizer), 404, 409 (already resolved)
+  Response 200: ApplicationDto
+  Errors: 400 (not pending / club is full), 403 (not organizer), 404
 
 POST /api/applications/{id}/reject
-  Body: { reason?: string }
+  Body: { reason?: string }   — reason ≤ 500 символов
   Response 200: ApplicationDto
-  Errors: 403, 404, 409
+  Errors: 400 (not pending), 403, 404
 
 POST /api/clubs/{id}/cancel
   Path: id = clubId (UUID) — clubId of the club whose membership the caller wants to cancel
