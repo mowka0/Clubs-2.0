@@ -15,16 +15,20 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
+private const val MAX_APPLICATIONS_PER_DAY = 5
+
 @Service
 class ApplicationService(
     private val applicationRepository: ApplicationRepository,
     private val clubRepository: ClubRepository,
     private val membershipRepository: MembershipRepository,
-    private val paymentService: PaymentService
+    private val paymentService: PaymentService,
+    private val mapper: ApplicationMapper
 ) {
 
     private val log = LoggerFactory.getLogger(ApplicationService::class.java)
 
+    @Transactional
     fun submitApplication(clubId: UUID, userId: UUID, request: SubmitApplicationRequest): ApplicationDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
 
@@ -49,11 +53,11 @@ class ApplicationService(
         }
 
         val todayCount = applicationRepository.countTodayByUser(userId)
-        if (todayCount >= 5) throw RateLimitException("Too many applications today")
+        if (todayCount >= MAX_APPLICATIONS_PER_DAY) throw RateLimitException("Too many applications today")
 
         val application = applicationRepository.create(userId, clubId, request.answerText)
         log.info("Application submitted: id={} clubId={} userId={}", application.id, clubId, userId)
-        return application.toDto()
+        return mapper.toDto(application)
     }
 
     @Transactional
@@ -61,7 +65,7 @@ class ApplicationService(
         val application = applicationRepository.findById(applicationId)
             ?: throw NotFoundException("Application not found")
 
-        val club = clubRepository.findById(application.clubId!!)
+        val club = clubRepository.findById(application.clubId)
             ?: throw NotFoundException("Club not found")
 
         if (club.ownerId != organizerId) throw ForbiddenException("Forbidden")
@@ -70,19 +74,19 @@ class ApplicationService(
             throw ValidationException("Application is not pending")
         }
 
-        val activeCount = membershipRepository.countActiveByClubId(application.clubId!!)
+        val activeCount = membershipRepository.countActiveByClubId(application.clubId)
         if (activeCount >= (club.memberLimit ?: 0)) throw ValidationException("Club is full")
 
         val price = club.subscriptionPrice ?: 0
         if (price > 0) {
-            paymentService.createInvoice(application.userId!!, application.clubId!!)
+            paymentService.createInvoice(application.userId, application.clubId)
             log.info(
                 "Invoice requested on application approve: applicationId={} clubId={} userId={} price={}",
                 applicationId, application.clubId, application.userId, price
             )
         } else {
-            membershipRepository.create(application.userId!!, application.clubId!!)
-            clubRepository.incrementMemberCount(application.clubId!!)
+            membershipRepository.create(application.userId, application.clubId)
+            clubRepository.incrementMemberCount(application.clubId)
             log.info(
                 "Membership created on application approve (free club): applicationId={} clubId={} userId={}",
                 applicationId, application.clubId, application.userId
@@ -91,14 +95,15 @@ class ApplicationService(
 
         val updated = applicationRepository.updateStatus(applicationId, ApplicationStatus.approved)
         log.info("Application approved: id={} clubId={} userId={} organizerId={}", applicationId, application.clubId, application.userId, organizerId)
-        return updated.toDto()
+        return mapper.toDto(updated)
     }
 
+    @Transactional
     fun rejectApplication(applicationId: UUID, organizerId: UUID, reason: String?): ApplicationDto {
         val application = applicationRepository.findById(applicationId)
             ?: throw NotFoundException("Application not found")
 
-        val club = clubRepository.findById(application.clubId!!)
+        val club = clubRepository.findById(application.clubId)
             ?: throw NotFoundException("Club not found")
 
         if (club.ownerId != organizerId) throw ForbiddenException("Forbidden")
@@ -109,13 +114,11 @@ class ApplicationService(
 
         val updated = applicationRepository.updateStatus(applicationId, ApplicationStatus.rejected, reason)
         log.info("Application rejected: id={} clubId={} userId={} organizerId={} reason={}", applicationId, application.clubId, application.userId, organizerId, reason)
-        return updated.toDto()
+        return mapper.toDto(updated)
     }
 
     fun getClubApplications(clubId: UUID, organizerId: UUID, status: String?): List<ApplicationDto> {
-        clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-
-        val club = clubRepository.findById(clubId)!!
+        val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != organizerId) throw ForbiddenException("Forbidden")
 
         val statusEnum = status?.let {
@@ -123,9 +126,9 @@ class ApplicationService(
                 ?: throw ValidationException("Invalid status: $it")
         }
 
-        return applicationRepository.findByClubId(clubId, statusEnum).map { it.toDto() }
+        return applicationRepository.findByClubId(clubId, statusEnum).map(mapper::toDto)
     }
 
     fun getMyApplications(userId: UUID): List<ApplicationDto> =
-        applicationRepository.findByUserId(userId).map { it.toDto() }
+        applicationRepository.findByUserId(userId).map(mapper::toDto)
 }

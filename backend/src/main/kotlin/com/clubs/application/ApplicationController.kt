@@ -1,6 +1,7 @@
 package com.clubs.application
 
 import com.clubs.common.security.AuthenticatedUser
+import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -21,7 +22,7 @@ class ApplicationController(private val applicationService: ApplicationService) 
     @PostMapping("/api/clubs/{id}/apply")
     fun apply(
         @PathVariable id: UUID,
-        @RequestBody request: SubmitApplicationRequest,
+        @Valid @RequestBody request: SubmitApplicationRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<ApplicationDto> {
         log.info("Apply to club {}: userId={}", id, user.userId)
@@ -52,7 +53,7 @@ class ApplicationController(private val applicationService: ApplicationService) 
     @PostMapping("/api/applications/{id}/reject")
     fun reject(
         @PathVariable id: UUID,
-        @RequestBody(required = false) request: RejectApplicationRequest?,
+        @Valid @RequestBody(required = false) request: RejectApplicationRequest?,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<ApplicationDto> {
         log.info("Reject application {}: organizerId={}", id, user.userId)

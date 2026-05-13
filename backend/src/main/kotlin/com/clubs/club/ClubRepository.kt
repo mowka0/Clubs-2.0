@@ -222,4 +222,12 @@ class ClubRepository(private val dsl: DSLContext) {
             .where(CLUBS.ID.eq(clubId))
             .execute()
     }
+
+    fun decreaseActivityRatingSafely(clubId: UUID, delta: Int) {
+        if (delta <= 0) return
+        dsl.update(CLUBS)
+            .set(CLUBS.ACTIVITY_RATING, DSL.greatest(CLUBS.ACTIVITY_RATING.minus(delta), DSL.`val`(0)))
+            .where(CLUBS.ID.eq(clubId))
+            .execute()
+    }
 }

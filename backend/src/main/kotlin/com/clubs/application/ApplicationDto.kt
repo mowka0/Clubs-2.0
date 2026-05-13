@@ -1,5 +1,6 @@
 package com.clubs.application
 
+import jakarta.validation.constraints.Size
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -19,5 +20,6 @@ data class SubmitApplicationRequest(
 )
 
 data class RejectApplicationRequest(
+    @field:Size(max = 500)
     val reason: String? = null
 )
