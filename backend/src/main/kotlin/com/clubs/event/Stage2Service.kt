@@ -22,13 +22,13 @@ class Stage2Service(
 ) {
     private val log = LoggerFactory.getLogger(Stage2Service::class.java)
 
-    @Scheduled(fixedDelay = 300_000) // every 5 minutes
+    @Scheduled(fixedDelay = STAGE_2_SCHEDULER_PERIOD_MS)
     @Transactional
     fun triggerStage2ForReadyEvents() {
         val events = eventRepository.findEventsToTriggerStage2()
         events.forEach { event ->
             try {
-                triggerStage2(event.id!!, event.participantLimit ?: Int.MAX_VALUE)
+                triggerStage2(event.id, event.participantLimit)
                 log.info("Stage 2 triggered for event ${event.id}")
             } catch (e: Exception) {
                 log.error("Failed to trigger Stage 2 for event ${event.id}", e)
@@ -39,15 +39,12 @@ class Stage2Service(
     private fun triggerStage2(eventId: UUID, participantLimit: Int) {
         eventRepository.transitionToStage2(eventId)
 
-        // Assign waitlisted status to going voters beyond the limit
+        // First N going voters (by stage_1_timestamp) keep stage_2_vote = null — they confirm explicitly.
+        // Extras start as waitlisted.
         val goingVoters = eventResponseRepository.findGoingByEventOrderByTimestamp(eventId)
         goingVoters.forEachIndexed { index, response ->
-            if (index < participantLimit) {
-                // First N going voters: they're in the priority queue (still need to confirm)
-                // Leave stage_2_vote as null — they need to explicitly confirm
-            } else {
-                // Extra going voters start as waitlisted
-                eventResponseRepository.updateStage2Vote(response.id!!, Stage_2Vote.waitlisted, FinalStatus.waitlisted)
+            if (index >= participantLimit) {
+                eventResponseRepository.updateStage2Vote(response.id, Stage_2Vote.waitlisted, FinalStatus.waitlisted)
             }
         }
     }
@@ -67,25 +64,24 @@ class Stage2Service(
         val response = eventResponseRepository.findByEventAndUser(eventId, userId)
             ?: throw ValidationException("You didn't vote in this event")
 
-        if (response.stage_1Vote != Stage_1Vote.going && response.stage_1Vote != Stage_1Vote.maybe) {
+        if (response.stage1Vote != Stage_1Vote.going && response.stage1Vote != Stage_1Vote.maybe) {
             throw ValidationException("You voted not_going for this event")
         }
 
-        if (response.stage_2Vote == Stage_2Vote.confirmed) {
+        if (response.stage2Vote == Stage_2Vote.confirmed) {
             val count = eventResponseRepository.countConfirmed(eventId)
-            return ConfirmResponseDto(eventId, "confirmed", count, event.participantLimit ?: 0)
+            return ConfirmResponseDto(eventId, "confirmed", count, event.participantLimit)
         }
 
-        if (response.stage_2Vote == Stage_2Vote.declined) {
+        if (response.stage2Vote == Stage_2Vote.declined) {
             throw ValidationException("You already declined participation")
         }
 
         val confirmedCount = eventResponseRepository.countConfirmed(eventId)
-        val participantLimit = event.participantLimit ?: Int.MAX_VALUE
 
         val newStatus: Stage_2Vote
         val finalStatus: FinalStatus
-        if (confirmedCount < participantLimit) {
+        if (confirmedCount < event.participantLimit) {
             newStatus = Stage_2Vote.confirmed
             finalStatus = FinalStatus.confirmed
         } else {
@@ -93,10 +89,10 @@ class Stage2Service(
             finalStatus = FinalStatus.waitlisted
         }
 
-        eventResponseRepository.updateStage2Vote(response.id!!, newStatus, finalStatus)
+        eventResponseRepository.updateStage2Vote(response.id, newStatus, finalStatus)
 
         val newCount = eventResponseRepository.countConfirmed(eventId)
-        return ConfirmResponseDto(eventId, newStatus.literal, newCount, event.participantLimit ?: 0)
+        return ConfirmResponseDto(eventId, newStatus.literal, newCount, event.participantLimit)
     }
 
     @Transactional
@@ -110,23 +106,26 @@ class Stage2Service(
         val response = eventResponseRepository.findByEventAndUser(eventId, userId)
             ?: throw ValidationException("You didn't vote in this event")
 
-        if (response.stage_2Vote == Stage_2Vote.declined) {
+        if (response.stage2Vote == Stage_2Vote.declined) {
             val count = eventResponseRepository.countConfirmed(eventId)
-            return ConfirmResponseDto(eventId, "declined", count, event.participantLimit ?: 0)
+            return ConfirmResponseDto(eventId, "declined", count, event.participantLimit)
         }
 
-        val wasConfirmed = response.stage_2Vote == Stage_2Vote.confirmed
-        eventResponseRepository.updateStage2Vote(response.id!!, Stage_2Vote.declined, FinalStatus.declined)
+        val wasConfirmed = response.stage2Vote == Stage_2Vote.confirmed
+        eventResponseRepository.updateStage2Vote(response.id, Stage_2Vote.declined, FinalStatus.declined)
 
-        // Promote first waitlisted to confirmed
         if (wasConfirmed) {
             val firstWaitlisted = eventResponseRepository.findFirstWaitlisted(eventId)
             firstWaitlisted?.let {
-                eventResponseRepository.updateStage2Vote(it.id!!, Stage_2Vote.confirmed, FinalStatus.confirmed)
+                eventResponseRepository.updateStage2Vote(it.id, Stage_2Vote.confirmed, FinalStatus.confirmed)
             }
         }
 
         val count = eventResponseRepository.countConfirmed(eventId)
-        return ConfirmResponseDto(eventId, "declined", count, event.participantLimit ?: 0)
+        return ConfirmResponseDto(eventId, "declined", count, event.participantLimit)
+    }
+
+    companion object {
+        private const val STAGE_2_SCHEDULER_PERIOD_MS = 300_000L
     }
 }

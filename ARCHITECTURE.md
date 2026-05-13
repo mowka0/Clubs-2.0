@@ -488,21 +488,24 @@ backend/src/main/kotlin/com/clubs/
 ├── invite/
 │   ├── InviteController.kt               # GET /api/invite/{code}, POST /join
 │   └── InviteService.kt
-├── event/
-│   ├── EventController.kt                # CRUD + /vote, /confirm, /decline
+├── event/                                # 13 файлов после рефакторинга (PR #38)
+│   ├── Event.kt                          # Domain
+│   ├── EventResponse.kt                  # Domain
+│   ├── EventMapper.kt                    # @Component, record↔Event, Event→DTO, DEFAULT_VOTING_OPENS_DAYS_BEFORE=14
+│   ├── EventResponseMapper.kt            # @Component, record↔EventResponse
+│   ├── EventRepository.kt                # interface
+│   ├── JooqEventRepository.kt            # impl (DSLContext + EVENTS table only here)
+│   ├── EventResponseRepository.kt        # interface
+│   ├── JooqEventResponseRepository.kt    # impl (DSLContext + EVENT_RESPONSES table only here)
+│   ├── EventController.kt                # CRUD + /vote, /confirm, /decline, /attendance, /dispute, /resolve
 │   ├── EventService.kt
-│   ├── EventRepository.kt
-│   ├── EventResponseRepository.kt
-│   └── dto/
-│       ├── EventDetailDto.kt
-│       ├── EventListItemDto.kt
-│       ├── CreateEventRequest.kt
-│       └── VoteRequest.kt
-├── attendance/
-│   ├── AttendanceController.kt           # /attendance, /dispute, /resolve
-│   ├── AttendanceService.kt
-│   └── dto/
-│       └── AttendanceRequest.kt
+│   ├── VoteService.kt                    # Stage 1 voting (uses MembershipRepository.isMember)
+│   ├── Stage2Service.kt                  # Stage 2 confirm/decline + @Scheduled 5min trigger
+│   ├── AttendanceService.kt              # mark/dispute/resolve + @Scheduled 1h finalize (no DSLContext)
+│   ├── EventDto.kt
+│   ├── VoteDto.kt
+│   ├── Stage2Dto.kt
+│   └── AttendanceDto.kt
 ├── reputation/
 │   ├── ReputationService.kt              # calculateReputation after finalization
 │   ├── ReputationRepository.kt

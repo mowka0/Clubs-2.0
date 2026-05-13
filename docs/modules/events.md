@@ -23,7 +23,7 @@ GET /api/events/{id}
 - Создавать события может только **организатор клуба** (clubs.owner_id = user.id) → 403
 - `eventDatetime` должен быть в будущем → 400
 - `participantLimit > 0` → 400
-- `votingOpensDaysBefore` 1-14, default = 5 → 400
+- `votingOpensDaysBefore` 1-14, default = 14 → 400
 - При создании: `status = upcoming`, `stage_2_triggered = false`
 - `created_by = user.id` из JWT
 
@@ -34,7 +34,7 @@ GET /api/events/{id}
 | locationText | 1-500 символов, not blank |
 | eventDatetime | ISO datetime, must be > now() |
 | participantLimit | > 0 |
-| votingOpensDaysBefore | 1-14, default 5 |
+| votingOpensDaysBefore | 1-14, default 14 |
 
 ### EventDetailDto (TASK-013 scope — без vote counts из EventResponses)
 ```json
@@ -46,7 +46,7 @@ GET /api/events/{id}
   "locationText": "string",
   "eventDatetime": "ISO datetime",
   "participantLimit": 15,
-  "votingOpensDaysBefore": 5,
+  "votingOpensDaysBefore": 14,
   "status": "upcoming",
   "goingCount": 0,
   "maybeCount": 0,
@@ -192,3 +192,47 @@ POST /api/events/{id}/decline
 | Пользователь не голосовал в Stage 1 | 400 "You didn't vote going" |
 | Мест нет (confirmedCount >= limit) | Получает waitlisted |
 | Decline → нет waitlisted | Просто decline, место "теряется" |
+
+---
+
+## Архитектура
+
+```
+EventController ──┬─► EventService ────► EventRepository ──► JooqEventRepository ──► EVENTS
+                  │       │                                                        │
+                  │       └──► EventMapper (record↔Event, Event→DTO)               │
+                  ├─► VoteService ─────► EventResponseRepository ──► JooqEventResponseRepository ──► EVENT_RESPONSES
+                  │       │                                                        │
+                  │       └──► MembershipRepository.isMember                       │
+                  ├─► Stage2Service ───► EventRepository + EventResponseRepository (+ EventResponseMapper)
+                  │       │                                                        │
+                  │       └──► @Scheduled triggerStage2ForReadyEvents (5 min)      │
+                  └─► AttendanceService ─► EventRepository + EventResponseRepository + ClubRepository
+                          │                                                        │
+                          └──► @Scheduled finalizeAttendance (1 h)                 │
+```
+
+### Файлы
+
+| Файл | Роль |
+|------|------|
+| `Event.kt` | Domain (data class, все поля non-null соответствуют DB NOT NULL) |
+| `EventResponse.kt` | Domain |
+| `EventMapper.kt` | `@Component`: `toDomain(EventsRecord) → Event`, `toDetailDto(Event, counts)`, `toListItemDto`. Содержит `DEFAULT_VOTING_OPENS_DAYS_BEFORE = 14` |
+| `EventResponseMapper.kt` | `@Component`: `toDomain(EventResponsesRecord) → EventResponse` |
+| `EventRepository.kt` | Interface |
+| `JooqEventRepository.kt` | Реализация. Все DDL/DML через jOOQ. Новые методы: `markAttendanceMarked`, `finalizeAttendanceBefore` |
+| `EventResponseRepository.kt` | Interface |
+| `JooqEventResponseRepository.kt` | Реализация. Новые методы: `setAttendance`, `disputeAbsentAttendance`, `resolveDisputedAttendance` |
+| `EventController.kt` | HTTP. Делегирует в 4 сервиса |
+| `EventService.kt` | CRUD событий, без extension `toDetailDto` (вынесено в Mapper) |
+| `VoteService.kt` | Stage 1 голосование. Использует `MembershipRepository.isMember` |
+| `Stage2Service.kt` | Stage 2 переход + confirm/decline. `@Scheduled` каждые 5 мин |
+| `AttendanceService.kt` | mark / dispute / resolve / finalize. `DSLContext` убран — все update через Repository. `@Scheduled` каждый час |
+| `EventDto.kt`, `VoteDto.kt`, `Stage2Dto.kt`, `AttendanceDto.kt` | Request/Response DTO |
+
+### Boundary правила
+- `EventsRecord` / `EventResponsesRecord` → **только** в `JooqEvent*Repository.kt` и `Event*Mapper.kt`.
+- `DSLContext` → **только** в `JooqEvent*Repository.kt`.
+- Сервисы получают domain `Event` / `EventResponse` от Repository, передают DTO в Controller.
+- `NotificationService.sendEventCreated/sendStage2Started(event: Event)` и `ClubsBot.handleWhoIsGoing` принимают domain, не Record.

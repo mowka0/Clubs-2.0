@@ -4,104 +4,25 @@ import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
-import com.clubs.generated.jooq.tables.records.EventResponsesRecord
-import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
-import com.clubs.generated.jooq.tables.references.USERS
-import org.jooq.DSLContext
-import org.springframework.stereotype.Repository
-import java.time.OffsetDateTime
 import java.util.UUID
 
-@Repository
-class EventResponseRepository(private val dsl: DSLContext) {
+interface EventResponseRepository {
 
-    fun upsertStage1Vote(eventId: UUID, userId: UUID, vote: Stage_1Vote): EventResponsesRecord {
-        val existing = findByEventAndUser(eventId, userId)
-        return if (existing != null) {
-            dsl.update(EVENT_RESPONSES)
-                .set(EVENT_RESPONSES.STAGE_1_VOTE, vote)
-                .set(EVENT_RESPONSES.STAGE_1_TIMESTAMP, OffsetDateTime.now())
-                .set(EVENT_RESPONSES.UPDATED_AT, OffsetDateTime.now())
-                .where(EVENT_RESPONSES.ID.eq(existing.id))
-                .returning()
-                .fetchOne()!!
-        } else {
-            dsl.insertInto(EVENT_RESPONSES)
-                .set(EVENT_RESPONSES.EVENT_ID, eventId)
-                .set(EVENT_RESPONSES.USER_ID, userId)
-                .set(EVENT_RESPONSES.STAGE_1_VOTE, vote)
-                .set(EVENT_RESPONSES.STAGE_1_TIMESTAMP, OffsetDateTime.now())
-                .returning()
-                .fetchOne()!!
-        }
-    }
+    fun upsertStage1Vote(eventId: UUID, userId: UUID, vote: Stage_1Vote): EventResponse
 
-    fun findByEventAndUser(eventId: UUID, userId: UUID): EventResponsesRecord? =
-        dsl.selectFrom(EVENT_RESPONSES)
-            .where(
-                EVENT_RESPONSES.EVENT_ID.eq(eventId)
-                    .and(EVENT_RESPONSES.USER_ID.eq(userId))
-            )
-            .fetchOne()
+    fun findByEventAndUser(eventId: UUID, userId: UUID): EventResponse?
 
-    fun countByVote(eventId: UUID): Map<String, Int> {
-        val going = dsl.selectCount().from(EVENT_RESPONSES)
-            .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.STAGE_1_VOTE.eq(Stage_1Vote.going)))
-            .fetchOne(0, Int::class.java) ?: 0
-        val maybe = dsl.selectCount().from(EVENT_RESPONSES)
-            .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.STAGE_1_VOTE.eq(Stage_1Vote.maybe)))
-            .fetchOne(0, Int::class.java) ?: 0
-        val notGoing = dsl.selectCount().from(EVENT_RESPONSES)
-            .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.STAGE_1_VOTE.eq(Stage_1Vote.not_going)))
-            .fetchOne(0, Int::class.java) ?: 0
-        return mapOf("going" to going, "maybe" to maybe, "notGoing" to notGoing)
-    }
+    fun countByVote(eventId: UUID): Map<String, Int>
 
-    fun countConfirmed(eventId: UUID): Int =
-        dsl.selectCount().from(EVENT_RESPONSES)
-            .where(
-                EVENT_RESPONSES.EVENT_ID.eq(eventId)
-                    .and(EVENT_RESPONSES.STAGE_2_VOTE.eq(Stage_2Vote.confirmed))
-            )
-            .fetchOne(0, Int::class.java) ?: 0
+    fun countConfirmed(eventId: UUID): Int
 
-    fun findFirstWaitlisted(eventId: UUID): EventResponsesRecord? =
-        dsl.selectFrom(EVENT_RESPONSES)
-            .where(
-                EVENT_RESPONSES.EVENT_ID.eq(eventId)
-                    .and(EVENT_RESPONSES.STAGE_2_VOTE.eq(Stage_2Vote.waitlisted))
-            )
-            .orderBy(EVENT_RESPONSES.STAGE_1_TIMESTAMP.asc())
-            .limit(1)
-            .fetchOne()
+    fun findFirstWaitlisted(eventId: UUID): EventResponse?
 
-    fun updateStage2Vote(id: UUID, vote: Stage_2Vote, finalStatus: FinalStatus): EventResponsesRecord =
-        dsl.update(EVENT_RESPONSES)
-            .set(EVENT_RESPONSES.STAGE_2_VOTE, vote)
-            .set(EVENT_RESPONSES.STAGE_2_TIMESTAMP, OffsetDateTime.now())
-            .set(EVENT_RESPONSES.FINAL_STATUS, finalStatus)
-            .set(EVENT_RESPONSES.UPDATED_AT, OffsetDateTime.now())
-            .where(EVENT_RESPONSES.ID.eq(id))
-            .returning()
-            .fetchOne()!!
+    fun updateStage2Vote(id: UUID, vote: Stage_2Vote, finalStatus: FinalStatus): EventResponse
 
-    fun findGoingByEventOrderByTimestamp(eventId: UUID): List<EventResponsesRecord> =
-        dsl.selectFrom(EVENT_RESPONSES)
-            .where(
-                EVENT_RESPONSES.EVENT_ID.eq(eventId)
-                    .and(EVENT_RESPONSES.STAGE_1_VOTE.eq(Stage_1Vote.going))
-            )
-            .orderBy(EVENT_RESPONSES.STAGE_1_TIMESTAMP.asc())
-            .fetch()
+    fun findGoingByEventOrderByTimestamp(eventId: UUID): List<EventResponse>
 
-    fun findMaybeByEventOrderByTimestamp(eventId: UUID): List<EventResponsesRecord> =
-        dsl.selectFrom(EVENT_RESPONSES)
-            .where(
-                EVENT_RESPONSES.EVENT_ID.eq(eventId)
-                    .and(EVENT_RESPONSES.STAGE_1_VOTE.eq(Stage_1Vote.maybe))
-            )
-            .orderBy(EVENT_RESPONSES.STAGE_1_TIMESTAMP.asc())
-            .fetch()
+    fun findMaybeByEventOrderByTimestamp(eventId: UUID): List<EventResponse>
 
     /**
      * Returns telegram IDs of users who have ANY stage_1_vote response for the event
@@ -110,28 +31,27 @@ class EventResponseRepository(private val dsl: DSLContext) {
      * PRD says reminder should target going+maybe — tracked as GAP in
      * docs/backlog/telegram-bot-prd-gaps.md.
      */
-    fun findResponderTelegramIdsByEventId(eventId: UUID): List<Long> =
-        dsl.select(USERS.TELEGRAM_ID)
-            .from(EVENT_RESPONSES)
-            .join(USERS).on(USERS.ID.eq(EVENT_RESPONSES.USER_ID))
-            .where(EVENT_RESPONSES.EVENT_ID.eq(eventId))
-            .fetch(USERS.TELEGRAM_ID)
-            .filterNotNull()
+    fun findResponderTelegramIdsByEventId(eventId: UUID): List<Long>
 
     /**
      * Returns telegram IDs of users whose ATTENDANCE matches the given value
      * for the event. Used by NotificationService.sendAttendanceMarked.
-     * Replaces a previous query that filtered by final_status=declined — that
-     * was a bug (method name implied attendance), fixed during bot refactor.
      */
-    fun findTelegramIdsByEventAndAttendance(eventId: UUID, attendance: AttendanceStatus): List<Long> =
-        dsl.select(USERS.TELEGRAM_ID)
-            .from(EVENT_RESPONSES)
-            .join(USERS).on(USERS.ID.eq(EVENT_RESPONSES.USER_ID))
-            .where(
-                EVENT_RESPONSES.EVENT_ID.eq(eventId)
-                    .and(EVENT_RESPONSES.ATTENDANCE.eq(attendance))
-            )
-            .fetch(USERS.TELEGRAM_ID)
-            .filterNotNull()
+    fun findTelegramIdsByEventAndAttendance(eventId: UUID, attendance: AttendanceStatus): List<Long>
+
+    /**
+     * Bulk-sets ATTENDANCE for the given (eventId, userId) pair to attended/absent.
+     * Returns number of rows updated (0 if user has no response row).
+     */
+    fun setAttendance(eventId: UUID, userId: UUID, attended: Boolean): Int
+
+    /**
+     * Marks an absent attendance as disputed. Returns rows updated (0 if user is not absent).
+     */
+    fun disputeAbsentAttendance(eventId: UUID, userId: UUID): Int
+
+    /**
+     * Resolves a disputed attendance into attended/absent. Returns rows updated (0 if not disputed).
+     */
+    fun resolveDisputedAttendance(eventId: UUID, userId: UUID, attended: Boolean): Int
 }
