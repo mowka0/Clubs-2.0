@@ -462,14 +462,16 @@ backend/src/main/kotlin/com/clubs/
 │   └── dto/
 │       └── UserDto.kt
 ├── club/
-│   ├── ClubController.kt                  # CRUD + /join, /apply
+│   ├── ClubController.kt                  # CRUD + link-group + finances endpoints
+│   ├── InviteController.kt                # /api/invite/* + regenerate-invite
 │   ├── ClubService.kt
-│   ├── ClubRepository.kt
-│   └── dto/
-│       ├── ClubListItemDto.kt
-│       ├── ClubDetailDto.kt
-│       ├── CreateClubRequest.kt
-│       └── UpdateClubRequest.kt
+│   ├── FinancesService.kt
+│   ├── Club.kt                            # domain
+│   ├── ClubMapper.kt                      # ClubsRecord → Club, Club → ClubDetailDto
+│   ├── ClubRepository.kt                  # interface
+│   ├── JooqClubRepository.kt              # jOOQ implementation
+│   ├── ClubDto.kt                         # Request/Response/Filter DTOs
+│   └── FinancesDto.kt
 ├── membership/
 │   ├── MembershipController.kt            # /cancel
 │   ├── MembershipService.kt              # joinOpenClub, createFromApproval

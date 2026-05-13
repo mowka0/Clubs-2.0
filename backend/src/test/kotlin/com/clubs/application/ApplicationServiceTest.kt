@@ -1,5 +1,6 @@
 package com.clubs.application
 
+import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
@@ -8,7 +9,6 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ApplicationStatus
 import com.clubs.generated.jooq.enums.ClubCategory
-import com.clubs.generated.jooq.tables.records.ClubsRecord
 import com.clubs.membership.MembershipRepository
 import com.clubs.payment.PaymentService
 import io.mockk.every
@@ -50,8 +50,9 @@ class ApplicationServiceTest {
         memberLimit: Int = 50,
         memberCount: Int = 5,
         subscriptionPrice: Int = 100
-    ): ClubsRecord =
-        ClubsRecord(
+    ): Club {
+        val now = OffsetDateTime.now()
+        return Club(
             id = clubId,
             ownerId = ownerId,
             name = "Closed Club",
@@ -59,13 +60,21 @@ class ApplicationServiceTest {
             category = ClubCategory.sport,
             accessType = AccessType.closed,
             city = "Moscow",
+            district = null,
             memberLimit = memberLimit,
             subscriptionPrice = subscriptionPrice,
+            avatarUrl = null,
+            rules = null,
             applicationQuestion = applicationQuestion,
+            inviteLink = null,
             memberCount = memberCount,
             activityRating = 0,
-            isActive = true
+            isActive = true,
+            telegramGroupId = null,
+            createdAt = now,
+            updatedAt = now
         )
+    }
 
     private fun createPendingApplication(userId: UUID, clubId: UUID, answerText: String? = null): Application =
         Application(
@@ -108,7 +117,8 @@ class ApplicationServiceTest {
         val userId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
 
-        val openClub = ClubsRecord(
+        val now = OffsetDateTime.now()
+        val openClub = Club(
             id = clubId,
             ownerId = ownerId,
             name = "Open Club",
@@ -116,11 +126,19 @@ class ApplicationServiceTest {
             category = ClubCategory.sport,
             accessType = AccessType.`open`,
             city = "Moscow",
+            district = null,
             memberLimit = 50,
             subscriptionPrice = 0,
+            avatarUrl = null,
+            rules = null,
+            applicationQuestion = null,
+            inviteLink = null,
             memberCount = 0,
             activityRating = 0,
-            isActive = true
+            isActive = true,
+            telegramGroupId = null,
+            createdAt = now,
+            updatedAt = now
         )
 
         every { clubRepository.findById(clubId) } returns openClub

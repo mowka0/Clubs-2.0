@@ -7,21 +7,20 @@ import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
-import com.clubs.generated.jooq.tables.records.ClubsRecord
-import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.membership.MembershipRepository
-import org.jooq.DSLContext
-import org.jooq.impl.DSL
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
+private const val MAX_CLUBS_PER_ORGANIZER = 10
+private const val INVITE_CODE_LENGTH = 16
+
 @Service
 class ClubService(
     private val clubRepository: ClubRepository,
     private val membershipRepository: MembershipRepository,
-    private val dsl: DSLContext
+    private val mapper: ClubMapper
 ) {
 
     private val log = LoggerFactory.getLogger(ClubService::class.java)
@@ -41,9 +40,9 @@ class ClubService(
         validateAccessType(request.accessType)
 
         val count = clubRepository.countByOwnerId(ownerId)
-        if (count >= 10) throw ConflictException("Maximum 10 clubs per organizer")
+        if (count >= MAX_CLUBS_PER_ORGANIZER) throw ConflictException("Maximum $MAX_CLUBS_PER_ORGANIZER clubs per organizer")
 
-        val inviteCode = if (request.accessType == "private") UUID.randomUUID().toString().replace("-", "").take(16) else null
+        val inviteCode = if (request.accessType == "private") generateInviteCode() else null
         val club = clubRepository.create(request, ownerId, inviteCode)
         log.info("Club created: id={} name='{}' category={} accessType={} ownerId={}", club.id, club.name, request.category, request.accessType, ownerId)
 
@@ -51,41 +50,39 @@ class ClubService(
         // Wrapped in the same @Transactional scope as clubRepository.create() above —
         // if this INSERT fails the club row rolls back, preventing orphaned clubs
         // without an organizer membership.
-        membershipRepository.createOrganizer(ownerId, club.id!!)
+        membershipRepository.createOrganizer(ownerId, club.id)
 
-        return club.toDto()
+        return mapper.toDetailDto(club)
     }
 
     fun getClubByInviteCode(code: String): ClubDetailDto {
         val club = clubRepository.findByInviteCode(code) ?: throw NotFoundException("Invite link not found")
-        return club.toDto()
+        return mapper.toDetailDto(club)
     }
 
     @Transactional
     fun regenerateInviteLink(clubId: UUID, userId: UUID): ClubDetailDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club owner can regenerate invite link")
-        val newCode = UUID.randomUUID().toString().replace("-", "").take(16)
+        val newCode = generateInviteCode()
         val updated = clubRepository.updateInviteCode(clubId, newCode) ?: throw NotFoundException("Club not found")
         log.info("Invite link regenerated: clubId={} userId={}", clubId, userId)
-        return updated.toDto()
+        return mapper.toDetailDto(updated)
     }
 
     fun getClub(id: UUID): ClubDetailDto {
         val club = clubRepository.findById(id) ?: throw NotFoundException("Club not found")
-        return club.toDto()
+        return mapper.toDetailDto(club)
     }
 
     @Transactional
     fun linkTelegramGroup(clubId: UUID, telegramGroupId: Long, userId: UUID): ClubDetailDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club owner can link a Telegram group")
-        dsl.update(CLUBS)
-            .set(DSL.field("telegram_group_id"), telegramGroupId)
-            .where(CLUBS.ID.eq(clubId))
-            .execute()
+        clubRepository.linkTelegramGroup(clubId, telegramGroupId)
         log.info("Telegram group {} linked to club {}: userId={}", telegramGroupId, clubId, userId)
-        return clubRepository.findById(clubId)!!.toDto()
+        val updated = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found after update")
+        return mapper.toDetailDto(updated)
     }
 
     @Transactional
@@ -94,7 +91,7 @@ class ClubService(
         if (club.ownerId != userId) throw ForbiddenException("Only the club owner can update it")
         val updated = clubRepository.update(id, request) ?: throw NotFoundException("Club not found after update")
         log.info("Club updated: id={} userId={}", id, userId)
-        return updated.toDto()
+        return mapper.toDetailDto(updated)
     }
 
     @Transactional
@@ -104,6 +101,9 @@ class ClubService(
         clubRepository.softDelete(id)
         log.info("Club soft-deleted: id={} userId={}", id, userId)
     }
+
+    private fun generateInviteCode(): String =
+        UUID.randomUUID().toString().replace("-", "").take(INVITE_CODE_LENGTH)
 
     private fun validateCategory(category: String) {
         try {
@@ -121,23 +121,3 @@ class ClubService(
         }
     }
 }
-
-fun ClubsRecord.toDto() = ClubDetailDto(
-    id = id!!,
-    ownerId = ownerId,
-    name = name,
-    description = description,
-    category = category.literal,
-    accessType = accessType?.literal ?: "open",
-    city = city,
-    district = district,
-    memberLimit = memberLimit,
-    subscriptionPrice = subscriptionPrice ?: 0,
-    avatarUrl = avatarUrl,
-    rules = rules,
-    applicationQuestion = applicationQuestion,
-    inviteLink = inviteLink,
-    memberCount = memberCount ?: 0,
-    activityRating = activityRating ?: 0,
-    isActive = isActive ?: true
-)

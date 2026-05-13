@@ -1,5 +1,45 @@
 # Module: Clubs
 
+## Архитектура
+
+```
+ClubController, InviteController
+    │
+    ▼
+ClubService ───────────────▶ ClubRepository (interface) ──▶ JooqClubRepository ──▶ jOOQ DSL
+    │   ▲                                  │
+    │   │ ClubMapper                       │ ClubMapper
+    │   │ (record → domain / domain → DTO) │
+    │   └───────────────────────────────────┘
+    │
+    └──▶ MembershipRepository (организатор-membership при createClub)
+
+FinancesService ──▶ ClubRepository (ownership), MembershipRepository (active count),
+                    TransactionRepository.sumCompletedSubscriptionRevenueSince
+                                            │
+                                            └──▶ возвращает Int, никакого DSL в Service
+```
+
+Слоистость по `.claude/rules/backend.md`: Service не имеет `DSLContext`, `ClubsRecord` не покидает `JooqClubRepository`/`ClubMapper`. Все мутации клуба проходят через интерфейс `ClubRepository`.
+
+### Файлы (целевая структура)
+| Файл | Роль |
+|---|---|
+| `club/ClubController.kt` | REST endpoints `/api/clubs/*` |
+| `club/InviteController.kt` | REST endpoints `/api/invite/*` + `/api/clubs/{id}/regenerate-invite` |
+| `club/ClubService.kt` | Бизнес-логика клуба (CRUD, регенерация инвайт-кода, link-group) |
+| `club/FinancesService.kt` | Расчёт `FinancesDto` для организатора (active members, monthly revenue, доля 80/20) |
+| `club/Club.kt` | Domain data class (внутренний тип Service-слоя) |
+| `club/ClubMapper.kt` | `ClubsRecord → Club` + `Club → ClubDetailDto` |
+| `club/ClubRepository.kt` | **Интерфейс** репозитория |
+| `club/JooqClubRepository.kt` | Реализация на jOOQ |
+| `club/ClubDto.kt` | Request/Response/Filter DTOs |
+| `club/FinancesDto.kt` | Финансовый response |
+
+`ClubsRecord` импортируется **только** в `JooqClubRepository.kt` и `ClubMapper.kt`. Любое другое место — нарушение слоистости.
+
+---
+
 ## TASK-008 — CRUD клубов
 
 ### Endpoints

@@ -6,15 +6,14 @@ import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
-import com.clubs.generated.jooq.tables.records.ClubsRecord
 import com.clubs.membership.MembershipRepository
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
 
@@ -22,15 +21,53 @@ class ClubServiceTest {
 
     private lateinit var clubRepository: ClubRepository
     private lateinit var membershipRepository: MembershipRepository
-    private lateinit var dsl: DSLContext
+    private lateinit var mapper: ClubMapper
     private lateinit var clubService: ClubService
 
     @BeforeEach
     fun setUp() {
         clubRepository = mockk(relaxed = true)
         membershipRepository = mockk(relaxed = true)
-        dsl = mockk(relaxed = true)
-        clubService = ClubService(clubRepository, membershipRepository, dsl)
+        mapper = ClubMapper()
+        clubService = ClubService(clubRepository, membershipRepository, mapper)
+    }
+
+    private fun makeClub(
+        clubId: UUID = UUID.randomUUID(),
+        ownerId: UUID = UUID.randomUUID(),
+        name: String = "Club",
+        description: String = "Desc",
+        category: ClubCategory = ClubCategory.sport,
+        accessType: AccessType = AccessType.`open`,
+        city: String = "Moscow",
+        memberLimit: Int = 30,
+        subscriptionPrice: Int = 0,
+        memberCount: Int = 3,
+        activityRating: Int = 0
+    ): Club {
+        val now = OffsetDateTime.now()
+        return Club(
+            id = clubId,
+            ownerId = ownerId,
+            name = name,
+            description = description,
+            category = category,
+            accessType = accessType,
+            city = city,
+            district = null,
+            memberLimit = memberLimit,
+            subscriptionPrice = subscriptionPrice,
+            avatarUrl = null,
+            rules = null,
+            applicationQuestion = null,
+            inviteLink = null,
+            memberCount = memberCount,
+            activityRating = activityRating,
+            isActive = true,
+            telegramGroupId = null,
+            createdAt = now,
+            updatedAt = now
+        )
     }
 
     @Test
@@ -47,8 +84,8 @@ class ClubServiceTest {
             subscriptionPrice = 100
         )
 
-        val record = ClubsRecord(
-            id = clubId,
+        val club = makeClub(
+            clubId = clubId,
             ownerId = ownerId,
             name = request.name,
             description = request.description,
@@ -57,13 +94,11 @@ class ClubServiceTest {
             city = request.city,
             memberLimit = request.memberLimit,
             subscriptionPrice = request.subscriptionPrice,
-            memberCount = 0,
-            activityRating = 0,
-            isActive = true
+            memberCount = 0
         )
 
         every { clubRepository.countByOwnerId(ownerId) } returns 0
-        every { clubRepository.create(request, ownerId, any()) } returns record
+        every { clubRepository.create(request, ownerId, any()) } returns club
 
         val result = clubService.createClub(request, ownerId)
 
@@ -160,8 +195,8 @@ class ClubServiceTest {
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
 
-        val record = ClubsRecord(
-            id = clubId,
+        val club = makeClub(
+            clubId = clubId,
             ownerId = ownerId,
             name = "Existing Club",
             description = "Exists",
@@ -171,11 +206,10 @@ class ClubServiceTest {
             memberLimit = 20,
             subscriptionPrice = 200,
             memberCount = 5,
-            activityRating = 10,
-            isActive = true
+            activityRating = 10
         )
 
-        every { clubRepository.findById(clubId) } returns record
+        every { clubRepository.findById(clubId) } returns club
 
         val result = clubService.getClub(clubId)
 
@@ -191,22 +225,9 @@ class ClubServiceTest {
         val ownerId = UUID.randomUUID()
         val differentUserId = UUID.randomUUID()
 
-        val record = ClubsRecord(
-            id = clubId,
-            ownerId = ownerId,
-            name = "My Club",
-            description = "Desc",
-            category = ClubCategory.sport,
-            accessType = AccessType.`open`,
-            city = "Moscow",
-            memberLimit = 30,
-            subscriptionPrice = 0,
-            memberCount = 3,
-            activityRating = 0,
-            isActive = true
-        )
+        val club = makeClub(clubId = clubId, ownerId = ownerId, name = "My Club")
 
-        every { clubRepository.findById(clubId) } returns record
+        every { clubRepository.findById(clubId) } returns club
 
         val updateRequest = UpdateClubRequest(name = "New Name")
 
@@ -223,38 +244,11 @@ class ClubServiceTest {
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
 
-        val record = ClubsRecord(
-            id = clubId,
-            ownerId = ownerId,
-            name = "My Club",
-            description = "Desc",
-            category = ClubCategory.sport,
-            accessType = AccessType.`open`,
-            city = "Moscow",
-            memberLimit = 30,
-            subscriptionPrice = 0,
-            memberCount = 3,
-            activityRating = 0,
-            isActive = true
-        )
+        val club = makeClub(clubId = clubId, ownerId = ownerId, name = "My Club")
+        val updatedClub = club.copy(name = "Updated Club")
 
-        val updatedRecord = ClubsRecord(
-            id = clubId,
-            ownerId = ownerId,
-            name = "Updated Club",
-            description = "Desc",
-            category = ClubCategory.sport,
-            accessType = AccessType.`open`,
-            city = "Moscow",
-            memberLimit = 30,
-            subscriptionPrice = 0,
-            memberCount = 3,
-            activityRating = 0,
-            isActive = true
-        )
-
-        every { clubRepository.findById(clubId) } returns record
-        every { clubRepository.update(clubId, any()) } returns updatedRecord
+        every { clubRepository.findById(clubId) } returns club
+        every { clubRepository.update(clubId, any()) } returns updatedClub
 
         val updateRequest = UpdateClubRequest(name = "Updated Club")
         val result = clubService.updateClub(clubId, updateRequest, ownerId)
@@ -263,26 +257,11 @@ class ClubServiceTest {
         verify(exactly = 1) { clubRepository.update(clubId, updateRequest) }
     }
 
-    private fun makeClubRecord(clubId: UUID, ownerId: UUID): ClubsRecord = ClubsRecord(
-        id = clubId,
-        ownerId = ownerId,
-        name = "Club",
-        description = "Desc",
-        category = ClubCategory.sport,
-        accessType = AccessType.`open`,
-        city = "Moscow",
-        memberLimit = 30,
-        subscriptionPrice = 0,
-        memberCount = 3,
-        activityRating = 0,
-        isActive = true
-    )
-
     @Test
     fun `deleteClub soft-deletes when user is the owner`() {
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
-        every { clubRepository.findById(clubId) } returns makeClubRecord(clubId, ownerId)
+        every { clubRepository.findById(clubId) } returns makeClub(clubId = clubId, ownerId = ownerId)
 
         clubService.deleteClub(clubId, ownerId)
 
@@ -294,7 +273,7 @@ class ClubServiceTest {
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
         val otherUserId = UUID.randomUUID()
-        every { clubRepository.findById(clubId) } returns makeClubRecord(clubId, ownerId)
+        every { clubRepository.findById(clubId) } returns makeClub(clubId = clubId, ownerId = ownerId)
 
         val exception = assertThrows<ForbiddenException> {
             clubService.deleteClub(clubId, otherUserId)

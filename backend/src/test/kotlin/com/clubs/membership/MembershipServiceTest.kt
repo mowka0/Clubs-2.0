@@ -1,5 +1,6 @@
 package com.clubs.membership
 
+import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
@@ -8,7 +9,6 @@ import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
-import com.clubs.generated.jooq.tables.records.ClubsRecord
 import com.clubs.payment.PaymentService
 import io.mockk.every
 import io.mockk.mockk
@@ -39,37 +39,46 @@ class MembershipServiceTest {
         membershipService = MembershipService(membershipRepository, clubRepository, paymentService, mapper)
     }
 
-    private fun freeClubRecord(clubId: UUID, ownerId: UUID = UUID.randomUUID(), memberLimit: Int = 50, memberCount: Int = 5): ClubsRecord =
-        ClubsRecord(
+    private fun makeClub(
+        clubId: UUID,
+        ownerId: UUID = UUID.randomUUID(),
+        name: String = "Club",
+        description: String = "Desc",
+        accessType: AccessType = AccessType.`open`,
+        memberLimit: Int = 50,
+        memberCount: Int = 5,
+        subscriptionPrice: Int = 0
+    ): Club {
+        val now = OffsetDateTime.now()
+        return Club(
             id = clubId,
             ownerId = ownerId,
-            name = "Open Club",
-            description = "An open club",
+            name = name,
+            description = description,
             category = ClubCategory.sport,
-            accessType = AccessType.`open`,
+            accessType = accessType,
             city = "Moscow",
+            district = null,
             memberLimit = memberLimit,
-            subscriptionPrice = 0,
+            subscriptionPrice = subscriptionPrice,
+            avatarUrl = null,
+            rules = null,
+            applicationQuestion = null,
+            inviteLink = null,
             memberCount = memberCount,
             activityRating = 0,
-            isActive = true
+            isActive = true,
+            telegramGroupId = null,
+            createdAt = now,
+            updatedAt = now
         )
+    }
 
-    private fun paidClubRecord(clubId: UUID, price: Int = 500, memberLimit: Int = 50, memberCount: Int = 5): ClubsRecord =
-        ClubsRecord(
-            id = clubId,
-            ownerId = UUID.randomUUID(),
-            name = "Paid Club",
-            description = "Stars-paid",
-            category = ClubCategory.sport,
-            accessType = AccessType.`open`,
-            city = "Moscow",
-            memberLimit = memberLimit,
-            subscriptionPrice = price,
-            memberCount = memberCount,
-            activityRating = 0,
-            isActive = true
-        )
+    private fun freeClubRecord(clubId: UUID, ownerId: UUID = UUID.randomUUID(), memberLimit: Int = 50, memberCount: Int = 5): Club =
+        makeClub(clubId, ownerId, name = "Open Club", description = "An open club", memberLimit = memberLimit, memberCount = memberCount, subscriptionPrice = 0)
+
+    private fun paidClubRecord(clubId: UUID, price: Int = 500, memberLimit: Int = 50, memberCount: Int = 5): Club =
+        makeClub(clubId, name = "Paid Club", description = "Stars-paid", memberLimit = memberLimit, memberCount = memberCount, subscriptionPrice = price)
 
     private fun membership(userId: UUID, clubId: UUID, status: MembershipStatus = MembershipStatus.active): Membership {
         val now = OffsetDateTime.now()
@@ -150,20 +159,7 @@ class MembershipServiceTest {
     fun `joinOpenClub throws ValidationException when club is not open`() {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
-        val closedClub = ClubsRecord(
-            id = clubId,
-            ownerId = UUID.randomUUID(),
-            name = "Closed Club",
-            description = "Closed",
-            category = ClubCategory.sport,
-            accessType = AccessType.closed,
-            city = "Moscow",
-            memberLimit = 50,
-            subscriptionPrice = 0,
-            memberCount = 0,
-            activityRating = 0,
-            isActive = true
-        )
+        val closedClub = makeClub(clubId, name = "Closed Club", description = "Closed", accessType = AccessType.closed, memberCount = 0)
 
         every { clubRepository.findById(clubId) } returns closedClub
 

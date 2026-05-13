@@ -1,8 +1,13 @@
 package com.clubs.payment
 
+import com.clubs.generated.jooq.enums.TransactionStatus
+import com.clubs.generated.jooq.enums.TransactionType
 import com.clubs.generated.jooq.tables.references.TRANSACTIONS
 import org.jooq.DSLContext
+import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
+import java.time.OffsetDateTime
+import java.util.UUID
 
 @Repository
 class JooqTransactionRepository(
@@ -33,4 +38,15 @@ class JooqTransactionRepository(
             .fetchOne()!!
         return mapper.toDomain(record)
     }
+
+    override fun sumCompletedSubscriptionRevenueSince(clubId: UUID, since: OffsetDateTime): Int =
+        dsl.select(DSL.coalesce(DSL.sum(TRANSACTIONS.AMOUNT), DSL.`val`(0)))
+            .from(TRANSACTIONS)
+            .where(
+                TRANSACTIONS.CLUB_ID.eq(clubId)
+                    .and(TRANSACTIONS.TYPE.eq(TransactionType.subscription))
+                    .and(TRANSACTIONS.STATUS.eq(TransactionStatus.completed))
+                    .and(TRANSACTIONS.CREATED_AT.greaterOrEqual(since))
+            )
+            .fetchOne(0, Int::class.java) ?: 0
 }
