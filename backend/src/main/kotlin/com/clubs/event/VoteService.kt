@@ -33,8 +33,7 @@ class VoteService(
         }
 
         val daysUntilEvent = ChronoUnit.DAYS.between(OffsetDateTime.now(), event.eventDatetime)
-        val votingOpensDaysBefore = event.votingOpensDaysBefore ?: 14
-        if (daysUntilEvent > votingOpensDaysBefore) {
+        if (daysUntilEvent > event.votingOpensDaysBefore) {
             throw ValidationException("Voting has not started yet")
         }
 
@@ -57,6 +56,6 @@ class VoteService(
     fun getMyVote(eventId: UUID, userId: UUID): MyVoteDto {
         eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
         val response = eventResponseRepository.findByEventAndUser(eventId, userId)
-        return MyVoteDto(vote = response?.stage_1Vote?.literal)
+        return MyVoteDto(vote = response?.stage1Vote?.literal)
     }
 }

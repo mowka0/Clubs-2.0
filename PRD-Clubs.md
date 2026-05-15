@@ -204,7 +204,7 @@
 
 #### 4.4.1 Этап 1: Предварительное голосование (за 3–5 дней до события)
 
-**Триггер:** Организатор создаёт событие с указанием даты, лимита участников и параметра «за сколько дней открыть голосование» (по умолчанию — 5 дней).
+**Триггер:** Организатор создаёт событие с указанием даты, лимита участников и параметра «за сколько дней открыть голосование» (по умолчанию — 14 дней).
 
 **Действия:**
 1. Бот отправляет уведомление в группу: «Новая активность: [Название]. Нужно [N] человек. Отметь свой статус».
@@ -486,7 +486,7 @@
 - location_text: varchar(500, not null)
 - event_datetime: timestamp (not null)
 - participant_limit: integer (not null)
-- voting_opens_days_before: integer (default 5)
+- voting_opens_days_before: integer (default 14, 1≤x≤14) — поднят с 5 миграцией V13
 - stage_2_triggered: boolean (default false)
 - attendance_marked: boolean (default false)
 - attendance_finalized: boolean (default false)

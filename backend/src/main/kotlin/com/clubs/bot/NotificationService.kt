@@ -1,8 +1,8 @@
 package com.clubs.bot
 
+import com.clubs.event.Event
 import com.clubs.event.EventResponseRepository
 import com.clubs.generated.jooq.enums.AttendanceStatus
-import com.clubs.generated.jooq.tables.records.EventsRecord
 import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
@@ -31,9 +31,9 @@ class NotificationService(
      * Sends a message to each active member's DM with a link to the Mini App.
      */
     @Async
-    fun sendEventCreated(event: EventsRecord) {
-        val memberTelegramIds = membershipRepository.findMemberTelegramIds(event.clubId!!)
-        val dateStr = event.eventDatetime?.format(fmt) ?: "TBD"
+    fun sendEventCreated(event: Event) {
+        val memberTelegramIds = membershipRepository.findMemberTelegramIds(event.clubId)
+        val dateStr = event.eventDatetime.format(fmt)
         val text = "🆕 Новое событие в клубе!\n\n📌 ${event.title}\n📍 ${event.locationText}\n🗓 $dateStr\n👥 Лимит: ${event.participantLimit}\n\nГолосуйте в приложении:"
 
         memberTelegramIds.forEach { telegramId ->
@@ -45,9 +45,9 @@ class NotificationService(
      * Notify going/maybe voters when Stage 2 starts, asking them to confirm.
      */
     @Async
-    fun sendStage2Started(event: EventsRecord) {
-        val voterTelegramIds = eventResponseRepository.findResponderTelegramIdsByEventId(event.id!!)
-        val text = "⏰ Этап 2 начался!\n\n📌 ${event.title} — ${event.eventDatetime?.format(fmt)}\n\nПодтвердите или откажитесь от участия в приложении:"
+    fun sendStage2Started(event: Event) {
+        val voterTelegramIds = eventResponseRepository.findResponderTelegramIdsByEventId(event.id)
+        val text = "⏰ Этап 2 начался!\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\nПодтвердите или откажитесь от участия в приложении:"
 
         voterTelegramIds.forEach { telegramId ->
             sendDm(telegramId.toString(), text)

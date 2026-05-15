@@ -141,25 +141,19 @@ class ClubsBot(
             return
         }
 
-        val eventId = event.id!!
-        val title = event.title
-        val locationText = event.locationText
-        val eventDatetime = event.eventDatetime
-        val participantLimit = event.participantLimit
-
-        val counts = eventResponseRepository.countByVote(eventId)
+        val counts = eventResponseRepository.countByVote(event.id)
         val goingCount = counts["going"] ?: 0
         val maybeCount = counts["maybe"] ?: 0
 
-        val formattedDate = eventDatetime?.format(dateFormatter) ?: "не указана"
+        val formattedDate = event.eventDatetime.format(dateFormatter)
 
         val text = buildString {
-            appendLine("\uD83D\uDCC5 Ближайшее событие: $title")
-            appendLine("\uD83D\uDCCD $locationText")
+            appendLine("\uD83D\uDCC5 Ближайшее событие: ${event.title}")
+            appendLine("\uD83D\uDCCD ${event.locationText}")
             appendLine("\uD83D\uDDD3 $formattedDate")
             appendLine("\u2705 Пойдут: $goingCount")
             appendLine("\uD83E\uDD14 Возможно: $maybeCount")
-            append("\uD83D\uDC65 Лимит: $participantLimit")
+            append("\uD83D\uDC65 Лимит: ${event.participantLimit}")
         }
 
         val msg = SendMessage
