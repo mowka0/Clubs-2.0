@@ -1227,18 +1227,54 @@ html, body { background: #0E1428; min-height: 100vh; }
 /* MyClubsPage (mc-*)                                     */
 /* ====================================================== */
 
-.mc-header-row {
+/* Hero — greeting + h1 with brass accent + summary sub-line.
+   Mass-balances against Discovery hero (logo + h1 + search + chips). */
+.mc-hero {
+  padding: 16px 20px 24px;
+}
+.mc-hero .greeting {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--brand-ink-2);
+  letter-spacing: -0.004em;
+  margin-bottom: 6px;
+}
+.mc-hero-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 20px 8px;
   gap: 12px;
 }
-.mc-eyebrow {
-  font-size: 22px;
+.mc-hero-row h1 {
+  font-size: 32px;
   font-weight: 700;
-  letter-spacing: -0.018em;
+  letter-spacing: -0.022em;
+  line-height: 1.08;
   color: var(--brand-ink);
+  margin: 0;
+}
+.mc-hero-row h1 .accent {
+  color: var(--brand-brass);
+  position: relative;
+  display: inline-block;
+}
+.mc-hero-row h1 .accent::after {
+  content: '';
+  position: absolute;
+  left: -2px; right: -2px;
+  bottom: 4px;
+  height: 9px;
+  background: var(--brand-brass);
+  opacity: 0.16;
+  border-radius: 2px;
+  z-index: -1;
+  filter: blur(5px);
+}
+.mc-hero .sub {
+  font-size: 14px;
+  color: var(--brand-ink-3);
+  margin-top: 10px;
+  letter-spacing: -0.003em;
 }
 .mc-create-btn {
   flex-shrink: 0;

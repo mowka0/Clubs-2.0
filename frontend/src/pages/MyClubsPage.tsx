@@ -39,6 +39,22 @@ function formatApplicationDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 }
 
+/** Russian plural form picker: forms = [one, few, many] */
+function pluralRu(n: number, forms: [string, string, string]): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return forms[0];
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return forms[1];
+  return forms[2];
+}
+
+function summaryLine(clubs: number, apps: number): string {
+  const parts: string[] = [];
+  if (clubs > 0) parts.push(`${clubs} ${pluralRu(clubs, ['клуб', 'клуба', 'клубов'])}`);
+  if (apps > 0) parts.push(`${apps} ${pluralRu(apps, ['заявка', 'заявки', 'заявок'])}`);
+  return parts.join(' · ');
+}
+
 const PEOPLE_ICON = (
   <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -194,14 +210,24 @@ export const MyClubsPage: FC = () => {
     <div className="brand-page">
       <BrandBackdrop />
 
-      {/* Hero row */}
-      <div className="mc-header-row">
-        <h1 className="mc-eyebrow" style={{ margin: 0 }}>Мои клубы</h1>
-        <button type="button" className="mc-create-btn" onClick={openCreate}>
-          <span className="plus">+</span>
-          Создать
-        </button>
-      </div>
+      {/* Hero */}
+      <header className="mc-hero">
+        {user?.firstName && (
+          <div className="greeting">Привет, {user.firstName} <span aria-hidden="true">👋</span></div>
+        )}
+        <div className="mc-hero-row">
+          <h1>
+            Твои <span className="accent">клубы</span>
+          </h1>
+          <button type="button" className="mc-create-btn" onClick={openCreate}>
+            <span className="plus">+</span>
+            Создать
+          </button>
+        </div>
+        {(myClubs.length > 0 || applications.length > 0) && (
+          <div className="sub">{summaryLine(myClubs.length, applications.length)}</div>
+        )}
+      </header>
 
       {/* Loading spinner */}
       {loading && (
