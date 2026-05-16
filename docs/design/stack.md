@@ -69,7 +69,7 @@ frontend/
     │   ├── Layout.tsx
     │   ├── BottomTabBar.tsx       — brand brass-иконки + active brass-indicator (feature/discovery-redesign)
     │   ├── ClubCard.tsx           — gradient avatar + capacity bar + featured-state
-    │   ├── DiscoveryBackdrop.tsx  — SVG абстракция (navy blobs + brass glows) для DiscoveryPage
+    │   ├── BrandBackdrop.tsx      — SVG абстракция (navy blobs + brass glows + contour lines). Используется на Discovery, ClubPage, MyClubsPage
     │   ├── CityPicker.tsx         — bottom-sheet country+city picker, persist в `localStorage` (хук `useCityChoice`)
     │   ├── PriceFilter.tsx        — bottom-sheet preset-picker по стоимости подписки (min/max → query-params)
     │   ├── AvatarUpload.tsx
@@ -488,7 +488,7 @@ type UserVote = 'going' | 'maybe' | 'not_going' | 'confirmed' | 'waitlisted' | '
 
 **Header:** — (BackButton скрыт)
 **Body top→bottom (после `feature/discovery-redesign`):**
-1. `<DiscoveryBackdrop>` — фоновый абстрактный SVG-паттерн (z-index 0, mask-fade сверху→вниз)
+1. `<BrandBackdrop>` — фоновый абстрактный SVG-паттерн (z-index 0, mask-fade сверху→вниз). Общий компонент, используется также на ClubPage и MyClubsPage
 2. Brand topbar: 72px shield logo + wordmark «Clubs / СООБЩЕСТВА» + interactive city pill (chevron-down → `<CityPicker>` bottom-sheet, persist в `localStorage`)
 3. Hero `<h1>Найди свой клуб</h1>` (brass-акцент + blur-glow на «клуб»)
 4. Search input (inline, был в `ClubFilters`)
@@ -517,28 +517,35 @@ type UserVote = 'going' | 'maybe' | 'not_going' | 'confirmed' | 'waitlisted' | '
 > destination'ами по тапу (см. ниже). Кнопка «+ Создать клуб» переехала
 > сюда же. Спецификация: [`my-clubs-unified.md`](../modules/my-clubs-unified.md).
 
+**[ОБНОВЛЕНО brand-редизайн 2026-05-16, PR #41]** Layout переписан под brand-язык (.brand-page canvas + BrandBackdrop). Поведение сохранено.
+
 **Header:** —
 **Body (top → bottom):**
-1. `<Section>` с **«+ Создать клуб»** Button (`size="l"`, stretched) →
-   открывает `<Modal>` с `CreateClubModal` (5-шаговый wizard, см. §8).
-   Видна сразу при открытии страницы, до списка клубов.
-2. **Combined empty state:** один `<Placeholder>` «Вы пока не состоите ни
-   в одном клубе. Найдите интересный в Поиске или создайте свой выше.» —
-   рендерится только если `!loading && myClubs.length === 0 &&
-   applications.length === 0`. Не дублируется per-section.
-3. `<Section header="Мои клубы">` — рендерится при loading или
-   `myClubs.length > 0`:
-   - Spinner при loading
-   - `<Cell>` каждого membership'а → `handleClubClick(clubId, role)`:
-     - `role === 'organizer'` → `navigate('/clubs/{id}/manage')` + `haptic.impact('light')`
-     - `role === 'member'`    → `navigate('/clubs/{id}')` + `haptic.impact('light')`
-   - subtitle: «Организатор» или «Участник» (различение по роли)
-4. `<Section header="Мои заявки">` — только если `applications.length > 0`:
-   - `<Cell>` заявки
-     - subtitle: дата подачи (`formatDate`)
-     - after: badge-статус («На рассмотрении» / «Одобрено» / «Отклонено» /
-       «Отклонено автоматически»)
-5. `<Toast>` — если в `location.state.toast` есть сообщение (после
+1. `<BrandBackdrop />` — общий SVG-фон (тот же что на Discovery).
+2. `<header className="mc-hero">` — Hero с greeting «Привет, {firstName} 👋»,
+   h1 «Твои [brass]клубы[/brass]» 32px с brass-accent blur, sub-line
+   «N клубов · M заявок» (Russian pluralize), brand brass pill «+ Создать»
+   справа от h1. Открывает `<Modal>` с `CreateClubModal`.
+3. **Empty state** — `mc-empty` brand-карточка с brass-icon + headline
+   «Пока пусто» + sub + dual CTA («Открыть поиск» ghost + «+ Создать клуб»
+   brass). Рендерится только если `!loading && myClubs.length === 0 &&
+   applications.length === 0`. Заменяет старый tgui Placeholder.
+4. `<div className="mc-section-label">` Активные · N (brass uppercase) +
+   `<div className="mc-list">`:
+   - Member club-card (reuse Discovery `.club-card`): 52px category-gradient
+     avatar (img if avatarUrl, else initials) + name + meta «Категория» +
+     capacity-bar `{count}/{limit}`. Без цены (member внутри).
+   - Organizer club-card: то же + brass-ring на avatar + 👑 crown в верхнем-
+     правом углу `.body` (`<span className="role-crown">`).
+   - Tap → `navigate('/clubs/{clubId}')` + `haptic.impact('light')` (unified
+     ClubPage handles routing — organizer drills в /manage через таб
+     «Управление»).
+5. `<div className="mc-section-label">` Заявки · N + `<div className="mc-list">`:
+   - `mc-app` карточки: muted navy-card + avatar 44px initials + name
+     (line-clamp 2) + дата подачи + status pill справа (brass `pending`,
+     sage `approved`, red `rejected`/`auto_rejected`).
+   - Tap → `navigate('/clubs/{clubId}')` (visitor view с pending state).
+6. `<Toast>` — если в `location.state.toast` есть сообщение (например после
    удаления клуба из OrganizerClubManage). Очищается через
    `window.history.replaceState` после первого рендера.
 
@@ -861,8 +868,8 @@ Root-обёртка:
 ### `<ClubFilters>` — УДАЛЁН (`feature/discovery-redesign`)
 Фильтры (search + category chips) теперь inline в `DiscoveryPage` как часть единого визуального редизайна (brand layout с brass-палитрой). City-filter более не отображается в UI (city в city-pill в топбаре). Detail — [`docs/modules/discovery-redesign.md`](../modules/discovery-redesign.md).
 
-### `<DiscoveryBackdrop>` — статичный SVG-паттерн
-Фоновая абстракция для DiscoveryPage: navy soft-blobs + brass radial glows + topographic contour lines + brass orb-точки + ghost-curves. Маскируется vertical gradient (top→bottom fade). Inline SVG ~3 KB gzipped, no props, no state.
+### `<BrandBackdrop>` — статичный SVG-паттерн
+Фоновая абстракция для всех brand-страниц (Discovery, ClubPage, MyClubsPage): navy soft-blobs + brass radial glows + topographic contour lines + brass orb-точки + ghost-curves. Маскируется vertical gradient (top→bottom fade). Inline SVG ~3 KB gzipped, no props, no state. Раньше назывался `DiscoveryBackdrop`, переименован в `feature/myclubs-redesign` (2026-05-16) для повторного использования на других brand-страницах.
 
 ### `<AvatarUpload>` `value, onChange, onError`
 Загрузка аватара клуба:

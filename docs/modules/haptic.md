@@ -95,8 +95,8 @@ const onTabClick = (path: string) => {
 | `components/ClubCard.tsx` | `Cell.onClick` (до `navigate`) | `impact('light')` | Тап по карточке-Cell — light impact (§15: «по Cell, открытие модалки») |
 | `components/club/ClubEventsTab.tsx` | tap event-Cell → `navigate('/events/:id')` (строки 73, 97) | `impact('light')` | То же правило для navigation-cell. Перенесено из удалённого `ClubInteriorPage.tsx` |
 | `pages/MyClubsPage.tsx` | tap клуба (`role === 'member'`) → `navigate('/clubs/:id')` (`handleClubClick`, строки 89-95) | `impact('light')` | То же |
-| `pages/MyClubsPage.tsx` | tap клуба (`role === 'organizer'`) → `navigate('/clubs/:id/manage')` (`handleClubClick`, строки 89-95) | `impact('light')` | То же — общий `handleClubClick` маршрутизирует по роли, haptic один и тот же |
-| `pages/MyClubsPage.tsx` | tap «+ Создать клуб» (Section-кнопка, строки 102-108) → открытие `<Modal>` с `CreateClubModal` | `impact('light')` | §15: открытие модалки — light |
+| `pages/MyClubsPage.tsx` | tap клуба (organizer-role) → `navigate('/clubs/:id')` (`handleClubClick`) | `impact('light')` | После PR #28 и tap organizer-клуба идёт на unified ClubPage; в /manage юзер дрилит через таб «Управление» |
+| `pages/MyClubsPage.tsx` | tap «+ Создать» (brand pill `.mc-create-btn` в `.mc-hero`, после brand-редизайна PR #41) → открытие `<Modal>` с `CreateClubModal` | `impact('light')` | §15: открытие модалки — light |
 | `pages/ProfilePage.tsx` | tap клуба или application → `navigate(...)` (строки 70, 77, 91, 103) | `impact('light')` | То же |
 | `pages/ClubPage.tsx` | tap по tab «Управление» (organizer-only, `handleTabClick('manage')`, строки 149-154) → `navigate('/clubs/:id/manage')` | `impact('light')` | Открытие nested-страницы — light. Tab-как-link: `setActiveTab` НЕ вызывается, отличие от `select()` тактильно сигнализирует переход (см. `club-page-unified.md` § R-2) |
 | `pages/OrganizerClubManage.tsx` MembersTab | tap по member-Cell → `setSelectedMember(m)` (строка 162) — открытие профильной модалки | `impact('light')` | §15: открытие модалки — light |
