@@ -65,7 +65,7 @@ paths:
   permissions:
     contents: read
   ```
-- Secret scanning включён в репо
+- Secret scanning включён в репо (`.github/workflows/secret-scan.yml` — gitleaks-action; локальный pre-commit hook в `.githooks/pre-commit`)
 - `pull_request_target` с untrusted кодом — запрещён
 
 ### Pipeline структура — fail fast

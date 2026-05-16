@@ -147,6 +147,16 @@
 - Ротация при утечке или периодически
 - `JWT_SECRET`, API keys, passwords, tokens, webhooks — всё секреты
 
+### `.env.example` и committed-конфиги
+- `.env.example` содержит **только placeholder'ы** (`<set-strong-password>`, `<generate: openssl rand -hex 32>`, `<your-bot-token>`).
+- В любом committed JSON/YAML конфиге (`.mcp.json`, `docker-compose*.yml`, и т.д.) реальные значения подставляются через `${VAR_NAME}` env-indirection — runtime читает из окружения, файл в репо хранит только имя переменной.
+- Если placeholder выглядит как реальный секрет (длинная hex-строка) — это **bug**, заглушка должна быть очевидно ненастоящей.
+- Один раз утёкший секрет в публичный репо = compromised навсегда. Чистка git history не лечит (форки, GitHub-кэш, индексация). Ротировать в Coolify и считать значение dead.
+
+### Автоматическая защита
+- Pre-commit hook: `.githooks/pre-commit` (gitleaks). Активируется через `git config core.hooksPath .githooks`. Если gitleaks не установлен — hook warning'ом пропускает коммит, ловит CI.
+- CI: `.github/workflows/secret-scan.yml` (gitleaks-action на `pull_request` и `push`). Скан только новых коммитов, исторические утечки в scope не входят.
+
 ### Маскирование в логах
 ```kotlin
 // ❌ плохо
