@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Club Page — Organizer view</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="_shared.css">
+<style>
+  html, body { width: 390px; }
+  body { min-height: 1180px; position: relative; overflow-x: hidden; }
+</style>
+</head>
+<body>
+<div class="club-page">
+
+  <div class="cp-topbar">
+    <span>Клуб</span>
+    <span class="dot"></span>
+    <span style="color: var(--brand-ink-3); letter-spacing: 0.08em; font-weight: 500; text-transform: none;">Из «Мои клубы»</span>
+  </div>
+
+  <!-- Header / Cover -->
+  <div class="cp-cover">
+    <div class="cp-avt featured" data-cat="education">КП</div>
+    <div class="body">
+      <h1 class="name">Книжный клуб «Полночь»</h1>
+      <div class="cp-chips">
+        <span class="cp-chip">Образование</span>
+        <span class="cp-chip closed">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 1 1 8 0v3"/></svg>
+          По заявке
+        </span>
+        <span class="cp-chip role">Вы организатор</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats row -->
+  <div class="cp-stats">
+    <div class="cp-stat">
+      <span class="label">Участники</span>
+      <span class="value">18 <span class="per">/ 24</span></span>
+      <div class="capbar"><div class="fill" style="width: 75%;"></div></div>
+    </div>
+    <div class="cp-stat">
+      <span class="label">Подписка</span>
+      <span class="value">1 200 <span class="per">₽/мес</span></span>
+      <span class="sub" style="visibility:hidden;">·</span>
+    </div>
+    <div class="cp-stat">
+      <span class="label">Где</span>
+      <span class="value" style="font-size: 15px;">Москва</span>
+      <span class="sub">Чистые пруды</span>
+    </div>
+  </div>
+
+  <!-- About -->
+  <div class="cp-card">
+    <span class="label">О клубе</span>
+    <div class="body-text">Раз в месяц встречаемся в кафе на Чистых прудах и обсуждаем русскую литературу XX&nbsp;века. Без снобизма, с вином и долгими разговорами до полуночи.</div>
+  </div>
+
+  <!-- Rules -->
+  <div class="cp-card rules">
+    <span class="label">Правила</span>
+    <div class="body-text">Один пропуск без предупреждения — без проблем. Два подряд — напишем тебе. Опоздание больше 20 минут считается пропуском.</div>
+  </div>
+
+  <!-- Tabs (organizer has extra "Управление" pill rendered differently) -->
+  <div class="cp-tab-row">
+    <button class="cp-tab active">События</button>
+    <button class="cp-tab">Участники</button>
+    <button class="cp-tab">Мой профиль</button>
+    <button class="cp-tab manage">Управление</button>
+  </div>
+
+  <!-- Events tab content -->
+  <div class="cp-section-label">Ближайшие</div>
+  <div class="cp-events">
+
+    <div class="cp-event featured">
+      <div class="date">
+        <span class="day">18</span>
+        <span class="mon">Май</span>
+      </div>
+      <div class="body">
+        <span class="title">Набоков. «Лолита»</span>
+        <div class="meta">
+          <span class="time">19:00</span>
+          <span class="sep">·</span>
+          <span>Кафе «Жан-Жак»</span>
+        </div>
+        <span class="going almost-full">12 / 15 идут</span>
+      </div>
+    </div>
+
+    <div class="cp-event">
+      <div class="date">
+        <span class="day">01</span>
+        <span class="mon">Июн</span>
+      </div>
+      <div class="body">
+        <span class="title">Бунин. «Тёмные аллеи»</span>
+        <div class="meta">
+          <span class="time">20:00</span>
+          <span class="sep">·</span>
+          <span>Место уточняется</span>
+        </div>
+        <span class="going">6 / 15 идут</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="cp-section-label" style="padding-top: 22px;">Прошедшие</div>
+  <div class="cp-events">
+
+    <div class="cp-event past">
+      <div class="date">
+        <span class="day">15</span>
+        <span class="mon">Апр</span>
+      </div>
+      <div class="body">
+        <span class="title">Толстой. «Воскресение»</span>
+        <div class="meta">
+          <span>14 пришло</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="cp-event past">
+      <div class="date">
+        <span class="day">18</span>
+        <span class="mon">Мар</span>
+      </div>
+      <div class="body">
+        <span class="title">Достоевский. «Идиот»</span>
+        <div class="meta">
+          <span>11 пришло</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom tab bar -->
+  <div class="brand-tabbar">
+    <button class="tab">
+      <span class="ico" style="background-image: url('assets/nav-search.png');"></span>
+      <span>Поиск</span>
+    </button>
+    <button class="tab active">
+      <span class="indicator"></span>
+      <span class="ico" style="background-image: url('assets/nav-clubs.png');"></span>
+      <span>Мои клубы</span>
+    </button>
+    <button class="tab">
+      <span class="ico" style="background-image: url('assets/nav-events.png');"></span>
+      <span>События</span>
+    </button>
+    <button class="tab">
+      <span class="ico" style="background-image: url('assets/nav-me.png');"></span>
+      <span>Профиль</span>
+    </button>
+  </div>
+
+</div>
+</body>
+</html>

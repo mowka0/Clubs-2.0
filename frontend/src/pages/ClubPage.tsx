@@ -1,17 +1,13 @@
 import { FC, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  List,
-  Section,
-  Cell,
   Button,
   Spinner,
   Placeholder,
   Input,
   Modal,
+  Section,
   Text,
-  Badge,
-  TabsList,
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
@@ -49,6 +45,29 @@ interface TabItem {
   selected: boolean;
 }
 
+function getClubInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w.charAt(0).toUpperCase())
+    .join('');
+}
+
+const LockIcon: FC = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="4" y="11" width="16" height="11" rx="2.5" />
+    <path d="M8 11V7a4 4 0 1 1 8 0v4" />
+  </svg>
+);
+
+const ClosedChipIcon: FC = () => (
+  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true">
+    <rect x="5" y="11" width="14" height="10" rx="2" />
+    <path d="M8 11V8a4 4 0 1 1 8 0v3" />
+  </svg>
+);
+
 export const ClubPage: FC = () => {
   useBackButton(true);
   const { id } = useParams<{ id: string }>();
@@ -81,11 +100,24 @@ export const ClubPage: FC = () => {
 
   const joining = joinMutation.isPending || applyMutation.isPending;
 
-  const loading = clubQuery.isPending;
-  const error = clubQuery.error?.message;
+  if (clubQuery.isPending) {
+    return (
+      <div className="club-page" style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
+        <Spinner size="l" />
+      </div>
+    );
+  }
+
+  if (clubQuery.error || !club) {
+    return (
+      <div className="club-page">
+        <Placeholder header="Ошибка" description={clubQuery.error?.message ?? 'Клуб не найден'} />
+      </div>
+    );
+  }
 
   const handleJoin = () => {
-    if (!id || !club) return;
+    if (!id) return;
     haptic.impact('medium');
     setJoinError(null);
     joinMutation.mutate(id, {
@@ -98,11 +130,8 @@ export const ClubPage: FC = () => {
         haptic.notify('success');
       },
       onError: (e) => {
-        // On 409 the UI state is stale (another tab approved an app, payment completed elsewhere).
-        // The mutation already invalidated club + my clubs caches; treat as silent recovery.
-        if (e instanceof ApiError && e.status === 409) {
-          return;
-        }
+        // 409 — silent recovery: cache already invalidated, UI was stale.
+        if (e instanceof ApiError && e.status === 409) return;
         setJoinError(e.message);
         haptic.notify('error');
       },
@@ -110,7 +139,7 @@ export const ClubPage: FC = () => {
   };
 
   const handleApply = () => {
-    if (!id || !club) return;
+    if (!id) return;
     if (club.applicationQuestion && !answerText.trim()) {
       setJoinError('Введите ответ на вопрос');
       return;
@@ -136,14 +165,6 @@ export const ClubPage: FC = () => {
     );
   };
 
-  if (loading) {
-    return <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spinner size="l" /></div>;
-  }
-
-  if (error || !club) {
-    return <Placeholder header="Ошибка" description={error ?? 'Клуб не найден'} />;
-  }
-
   // Tab «Управление» is a navigate-link, not a state-toggle: tap fires haptic
   // impact (not select) and routes to /manage. activeTab never holds 'manage'.
   const handleTabClick = (tab: TabKey) => {
@@ -156,51 +177,65 @@ export const ClubPage: FC = () => {
     setActiveTab(tab);
   };
 
-  // Visitor CTA: order matters — isMember/isOrganizer never reach here
-  // (they get role-aware tabs instead, status shown as header badge).
-  const renderJoinButton = () => {
+  const renderCta = () => {
     if (pendingPayment) {
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <Button size="l" mode="outline" disabled stretched>
-            &#x1F4B3; Ожидаем оплату &#x2013; {pendingPayment.priceStars} Stars
-          </Button>
-          <Text style={{ fontSize: 13, color: 'var(--tgui--hint_color)', textAlign: 'center' }}>
-            {pendingPayment.message}
-          </Text>
-        </div>
+        <>
+          <button type="button" className="cp-cta outline" disabled>
+            Ожидаем оплату — {pendingPayment.priceStars} Stars
+          </button>
+          <div className="cp-cta-hint">{pendingPayment.message}</div>
+        </>
       );
     }
     if (myApplication?.status === 'pending') {
-      return <Button size="l" mode="outline" disabled stretched>&#x23F3; Заявка на рассмотрении</Button>;
+      return (
+        <button type="button" className="cp-cta outline" disabled>
+          Заявка на рассмотрении
+        </button>
+      );
     }
     if (myApplication?.status === 'approved') {
       const price = club.subscriptionPrice ?? 0;
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <Button size="l" mode="outline" disabled stretched>
-            &#x1F4B3; Ожидаем оплату{price > 0 ? ` – ${price} Stars` : ''}
-          </Button>
-          <Text style={{ fontSize: 13, color: 'var(--tgui--hint_color)', textAlign: 'center' }}>
+        <>
+          <button type="button" className="cp-cta outline" disabled>
+            Ожидаем оплату{price > 0 ? ` — ${price} Stars` : ''}
+          </button>
+          <div className="cp-cta-hint">
             Заявка одобрена. Счёт отправлен в Telegram — оплатите его, чтобы вступить.
-          </Text>
-        </div>
+          </div>
+        </>
       );
     }
-    if (joinSuccess) return <Button size="l" mode="outline" disabled stretched>Заявка отправлена &#x2713;</Button>;
-
+    if (joinSuccess) {
+      return (
+        <button type="button" className="cp-cta outline" disabled>
+          Заявка отправлена
+        </button>
+      );
+    }
     if (club.accessType === 'open') {
       return (
-        <Button size="l" onClick={handleJoin} disabled={joining} stretched>
+        <button type="button" className="cp-cta" onClick={handleJoin} disabled={joining}>
           {joining ? <Spinner size="s" /> : 'Вступить'}
-        </Button>
+        </button>
       );
     }
     if (club.accessType === 'closed') {
       return (
-        <Button size="l" onClick={() => { haptic.impact('light'); setShowApplyModal(true); }} stretched>
-          Хочу вступить
-        </Button>
+        <>
+          <button
+            type="button"
+            className="cp-cta"
+            onClick={() => { haptic.impact('light'); setShowApplyModal(true); }}
+          >
+            Хочу вступить
+          </button>
+          <div className="cp-cta-hint">
+            Организатор задаст один вопрос. Ответ увидит только он.
+          </div>
+        </>
       );
     }
     return null;
@@ -209,8 +244,6 @@ export const ClubPage: FC = () => {
   const showTabs = isMember || isOrganizer;
   const roleBadgeLabel = isOrganizer ? 'Вы организатор' : isMember ? 'Вы участник' : null;
 
-  // Build TabsList children as a homogeneous array — telegram-ui v2 typings
-  // require ReactElement<TabsItemProps>[], not (Element | false)[].
   const tabItems: TabItem[] = [
     { key: 'events', label: 'События', selected: activeTab === 'events' },
     { key: 'members', label: 'Участники', selected: activeTab === 'members' },
@@ -220,84 +253,109 @@ export const ClubPage: FC = () => {
     tabItems.push({ key: 'manage', label: 'Управление', selected: false });
   }
 
+  const capacityPct = club.memberLimit > 0
+    ? Math.min(100, Math.round((club.memberCount / club.memberLimit) * 100))
+    : 0;
+  const locationLine = club.district ?? null;
+  const isPaid = club.subscriptionPrice > 0;
+
   return (
-    <List>
-      {/* Header */}
-      <Section>
-        <div style={{ padding: 16, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-          {club.avatarUrl ? (
-            <img src={club.avatarUrl} alt="" style={{ width: 80, height: 80, borderRadius: 16, objectFit: 'cover', flexShrink: 0 }} />
-          ) : (
-            <div style={{ width: 80, height: 80, borderRadius: 16, background: 'var(--tgui--secondary_bg_color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, flexShrink: 0 }}>&#x1F3E0;</div>
-          )}
-          <div>
-            <Text weight="1" style={{ fontSize: 20, display: 'block' }}>{club.name}</Text>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
-              <Badge type="number" style={{ fontSize: 11 }}>{CATEGORY_LABELS[club.category] ?? club.category}</Badge>
-              <Badge type="number" style={{ fontSize: 11 }}>{ACCESS_LABELS[club.accessType] ?? club.accessType}</Badge>
-              {roleBadgeLabel && (
-                <Badge type="number" mode="primary" style={{ fontSize: 11 }}>{roleBadgeLabel}</Badge>
-              )}
-            </div>
+    <div className="club-page">
+
+      {/* Header / Cover */}
+      <div className="cp-cover">
+        <div
+          className={`cp-avt${showTabs ? ' featured' : ''}`}
+          data-cat={club.category}
+        >
+          {club.avatarUrl
+            ? <img src={club.avatarUrl} alt="" />
+            : getClubInitials(club.name)}
+        </div>
+        <div className="body">
+          <h1 className="name">{club.name}</h1>
+          <div className="cp-chips">
+            <span className="cp-chip">{CATEGORY_LABELS[club.category] ?? club.category}</span>
+            <span className={`cp-chip${club.accessType === 'closed' ? ' closed' : ''}`}>
+              {club.accessType === 'closed' && <ClosedChipIcon />}
+              {ACCESS_LABELS[club.accessType] ?? club.accessType}
+            </span>
+            {roleBadgeLabel && <span className="cp-chip role">{roleBadgeLabel}</span>}
           </div>
         </div>
-      </Section>
+      </div>
+
+      {/* Stats row */}
+      <div className="cp-stats">
+        <div className="cp-stat">
+          <span className="label">Участники</span>
+          <span className="value">{club.memberCount} / {club.memberLimit}</span>
+          <div className="capbar"><div className="fill" style={{ width: `${capacityPct}%` }} /></div>
+        </div>
+        <div className="cp-stat">
+          <span className="label">Подписка</span>
+          <span className="value" style={isPaid ? { fontSize: 14.5, letterSpacing: '-0.008em' } : undefined}>
+            {formatPrice(club.subscriptionPrice)}
+          </span>
+        </div>
+        <div className="cp-stat">
+          <span className="label">Где</span>
+          <span className="value" style={{ fontSize: 15 }}>{club.city}</span>
+          {locationLine && <span className="sub">{locationLine}</span>}
+        </div>
+      </div>
 
       {/* About */}
-      <Section>
-        <Cell subtitle="Город">{club.district ? `${club.city}, ${club.district}` : club.city}</Cell>
-        <Cell subtitle="Участники">{club.memberCount} / {club.memberLimit}</Cell>
-        <Cell subtitle="Подписка">{formatPrice(club.subscriptionPrice)}</Cell>
-      </Section>
+      <div className="cp-card">
+        <span className="label">О клубе</span>
+        <div className="body-text">{club.description}</div>
+      </div>
 
-      <Section header="О клубе">
-        <div style={{ padding: '12px 16px', lineHeight: 1.5, color: 'var(--tgui--text_color)' }}>
-          {club.description}
-        </div>
-      </Section>
-
+      {/* Rules (optional) */}
       {club.rules && (
-        <Section header="Правила">
-          <div style={{ padding: '12px 16px', lineHeight: 1.5, color: 'var(--tgui--hint_color)' }}>
-            {club.rules}
-          </div>
-        </Section>
+        <div className="cp-card rules">
+          <span className="label">Правила</span>
+          <div className="body-text">{club.rules}</div>
+        </div>
       )}
 
-      {/* Visitor: placeholder + CTA */}
+      {/* Visitor: lock placeholder + CTA */}
       {!showTabs && (
         <>
-          <Section>
-            <Placeholder description="События доступны участникам клуба" />
-          </Section>
+          <div className="cp-locked">
+            <div className="ico"><LockIcon /></div>
+            <div className="text">
+              <strong>События доступны участникам клуба</strong>
+              Содержимое клуба открывается после вступления.
+            </div>
+          </div>
 
           {joinError && (
-            <div style={{ padding: '8px 16px', color: 'var(--tgui--destructive_text_color)' }}>
+            <div style={{ padding: '0 20px 8px', color: '#FF8B8B', fontSize: 13, textAlign: 'center' }}>
               {joinError}
             </div>
           )}
 
-          <Section>
-            {renderJoinButton()}
-          </Section>
+          <div className="cp-cta-wrap">
+            {renderCta()}
+          </div>
         </>
       )}
 
       {/* Member / Organizer: role-aware tabs */}
       {showTabs && id && (
         <>
-          <div style={{ padding: '0 16px 8px' }}>
-            <TabsList>
-              {tabItems.map((item) => (
-                <TabsList.Item
-                  key={item.key}
-                  selected={item.selected}
-                  onClick={() => handleTabClick(item.key)}
-                >
-                  {item.label}
-                </TabsList.Item>
-              ))}
-            </TabsList>
+          <div className="cp-tab-row" role="tablist">
+            {tabItems.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={`cp-tab${item.selected ? ' active' : ''}${item.key === 'manage' ? ' manage' : ''}`}
+                onClick={() => handleTabClick(item.key)}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
 
           {activeTab === 'events' && <ClubEventsTab clubId={id} />}
@@ -341,6 +399,6 @@ export const ClubPage: FC = () => {
           </div>
         </Modal>
       )}
-    </List>
+    </div>
   );
 };
