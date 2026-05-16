@@ -58,6 +58,18 @@
 
 ## UX-детали unified MyClubsPage
 
+> **[ОБНОВЛЕНО brand-редизайн 2026-05-16, ветка `feature/myclubs-redesign`]** Структура страницы переписана под brand-язык (navy + brass) из PR #33 / #40. Поведение (queries, mutations, navigation) полностью сохранено. Текущая реализация:
+>
+> 1. **Hero** (`<header className="mc-hero">`) — greeting «Привет, {firstName} 👋» + h1 «Твои [brass]клубы[/brass]» с brass-blur подсветкой на слове «клубы» + sub-line «N клубов · M заявок» с русской pluralization. «+ Создать» — brand brass pill (`mc-create-btn`) справа от h1.
+> 2. **Активные клубы** — section label «АКТИВНЫЕ · N» + `mc-list` из brand club-card. Member-карточка — стандартная (avatar 52px category-gradient + name + категория + capacity-bar, без цены). Organizer-карточка — то же + brass-ring на аватаре + 👑 crown в верхнем-правом углу body.
+> 3. **Заявки** — section label «ЗАЯВКИ · N» + `mc-list` из `mc-app` карточек (muted navy с avatar 44px, name line-clamp 2, дата подачи, brass/sage/red status pill).
+> 4. **Empty state** — `mc-empty` карточка с brass-иконкой + headline + sub + dual CTA («Открыть поиск» ghost + «+ Создать клуб» brass). Заменяет старый tgui `Placeholder`.
+> 5. **Backdrop** — `<BrandBackdrop />` первым ребёнком `.brand-page`.
+>
+> Класс корня — `.brand-page` (общий канвас для Discovery/ClubPage/MyClubsPage). Inter font вынесен на `html, body` для единого шрифта во всём app.
+>
+> Старая структура (Section + Cell + tgui Button) сохранена ниже для истории.
+
 > Это решения, требующие подтверждения пользователя ДО разработки. Помечены **[DECIDE]** где есть варианты.
 
 ### Структура списка

@@ -3,9 +3,20 @@
    consistent across user's Telegram themes. See SESSION-NOTES.md. */
 
 /* Body reset — browser default 8px margin would otherwise show the
-   Telegram client's grey through on the sides of our navy canvas. */
+   Telegram client's grey through on the sides of our navy canvas.
+   Inter font is the brand-wide default — applied here so ALL pages
+   (Discovery, ClubPage, MyClubsPage, future) inherit it consistently.
+   Children use `font-family: inherit` to pick this up. */
 html, body, #root { margin: 0; padding: 0; }
-html, body { background: #0E1428; min-height: 100vh; }
+html, body {
+  background: #0E1428;
+  min-height: 100vh;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+  color: var(--brand-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
 :root {
   --brand-navy-bg:     #0E1428;
@@ -31,23 +42,23 @@ html, body { background: #0E1428; min-height: 100vh; }
   --brand-live-soft: rgba(79, 160, 120, 0.18);
 }
 
-/* Discovery page root — brand canvas with ambient mesh */
+/* Discovery page root — brand canvas with ambient mesh.
+   Font / color / antialiasing live on html,body now (universal brand defaults). */
 .discovery-page {
   position: relative;
   min-height: 100vh;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
-  font-feature-settings: 'cv11', 'ss01';
-  color: var(--brand-ink);
   background:
     radial-gradient(circle at 92% 6%, rgba(201, 160, 99, 0.22), transparent 42%),
     radial-gradient(circle at 8% 0%,  rgba(58, 70, 110, 0.75), transparent 45%),
     var(--brand-navy-bg);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 /* All discovery children sit above the SVG backdrop */
-.discovery-page > *:not(.discovery-backdrop) { position: relative; z-index: 1; }
+/* Brand SVG backdrop positioning lives inline in <BrandBackdrop> component;
+   classname is a marker for the z-index rule below (and for any consumer that
+   wants to override). */
+.discovery-page > *:not(.brand-backdrop) { position: relative; z-index: 1; }
+.brand-page > *:not(.brand-backdrop) { position: relative; z-index: 1; }
 
 /* Topbar — brand mark + city pill.
    Logo image (256×238 PNG) has ~6% transparent margin around the shield.
@@ -617,11 +628,13 @@ html, body { background: #0E1428; min-height: 100vh; }
 
 
 /* ====================================================== */
-/* Club page (cp-*) — see docs/design/club-page-redesign/  */
+/* Brand page canvas (.brand-page) — shared by ClubPage,    */
+/* MyClubsPage, ProfilePage, EventPage, etc. SVG decor in   */
+/* <BrandBackdrop>. Discovery uses its own .discovery-page  */
+/* canvas with hero-specific gradients.                     */
 /* ====================================================== */
 
-/* Ambient mesh background — softer than discovery (no SVG decor under club content) */
-.club-page {
+.brand-page {
   position: relative;
   min-height: 100vh;
   width: 100%;
@@ -631,8 +644,8 @@ html, body { background: #0E1428; min-height: 100vh; }
      viewport and shows a dark strip on the right edge. */
   overflow-x: hidden;
   background:
-    radial-gradient(circle at 96% 4%, rgba(201, 160, 99, 0.18), transparent 38%),
-    radial-gradient(circle at 4% 8%, rgba(58, 70, 110, 0.65), transparent 42%),
+    radial-gradient(circle at 92% 6%, rgba(201, 160, 99, 0.22), transparent 42%),
+    radial-gradient(circle at 8% 0%,  rgba(58, 70, 110, 0.75), transparent 45%),
     var(--brand-navy-bg);
   padding-bottom: 100px;
 }
@@ -1211,3 +1224,262 @@ html, body { background: #0E1428; min-height: 100vh; }
   overflow-wrap: anywhere;
 }
 
+
+
+/* ====================================================== */
+/* MyClubsPage (mc-*) — see docs/design/myclubs-redesign/  */
+/* ====================================================== */
+
+/* ====================================================== */
+/* MyClubsPage (mc-*)                                     */
+/* ====================================================== */
+
+/* Hero — greeting + h1 with brass accent + summary sub-line.
+   Mass-balances against Discovery hero (logo + h1 + search + chips). */
+.mc-hero {
+  padding: 16px 20px 24px;
+}
+.mc-hero .greeting {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--brand-ink-2);
+  letter-spacing: -0.004em;
+  margin-bottom: 6px;
+}
+.mc-hero-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.mc-hero-row h1 {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.08;
+  color: var(--brand-ink);
+  margin: 0;
+}
+.mc-hero-row h1 .accent {
+  color: var(--brand-brass);
+  position: relative;
+  display: inline-block;
+}
+.mc-hero-row h1 .accent::after {
+  content: '';
+  position: absolute;
+  left: -2px; right: -2px;
+  bottom: 4px;
+  height: 9px;
+  background: var(--brand-brass);
+  opacity: 0.16;
+  border-radius: 2px;
+  z-index: -1;
+  filter: blur(5px);
+}
+.mc-hero .sub {
+  font-size: 14px;
+  color: var(--brand-ink-3);
+  margin-top: 10px;
+  letter-spacing: -0.003em;
+}
+.mc-create-btn {
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 14px 0 12px;
+  border: 1px solid rgba(201, 160, 99, 0.40);
+  border-radius: 999px;
+  background: var(--brand-brass-soft);
+  color: var(--brand-brass-deep);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.mc-create-btn .plus {
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
+  position: relative;
+  top: -1px;
+}
+
+/* Section label with count */
+.mc-section-label {
+  padding: 18px 20px 10px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--brand-brass-2);
+}
+.mc-section-label .count {
+  color: var(--brand-ink-4);
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+/* Container for cards on MyClubsPage */
+.mc-list {
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Organizer indicators:
+   - brass ring on avatar (subtle glow)
+   - crown badge in top-right corner of card body (over capacity numbers)
+   Equal 14px padding from card edges thanks to .club-card padding + .top
+   being the first row of .body. */
+.club-card .avt.organizer-ring {
+  box-shadow:
+    inset 0 0 0 1.5px rgba(201, 160, 99, 0.55),
+    0 0 14px rgba(201, 160, 99, 0.18);
+}
+.club-card .role-crown {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  background: var(--brand-navy-bg);
+  border: 1.5px solid var(--brand-brass);
+  border-radius: 50%;
+  font-size: 15px;
+  line-height: 1;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45), 0 0 12px rgba(201, 160, 99, 0.30);
+}
+
+/* Application card — muted variant, status-driven right pill */
+.mc-app {
+  background: rgba(26, 33, 56, 0.55);
+  border: 1px solid var(--brand-hairline);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  font-family: inherit;
+  text-align: left;
+  color: inherit;
+  width: 100%;
+  cursor: pointer;
+}
+.mc-app .avt {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  background: var(--brand-navy-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-ink-3);
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+.mc-app .body {
+  flex: 1; min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.mc-app .name {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--brand-ink-2);
+  letter-spacing: -0.005em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  line-height: 1.3;
+}
+.mc-app .meta {
+  font-size: 12px;
+  color: var(--brand-ink-4);
+}
+.mc-app .status {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+.mc-app .status.pending {
+  background: var(--brand-brass-soft);
+  color: var(--brand-brass-deep);
+  border: 1px solid rgba(201, 160, 99, 0.30);
+}
+.mc-app .status.approved {
+  background: var(--brand-live-soft);
+  color: var(--brand-live);
+  border: 1px solid rgba(79, 160, 120, 0.32);
+}
+.mc-app .status.rejected,
+.mc-app .status.auto_rejected {
+  background: rgba(255, 139, 139, 0.08);
+  color: #FF8B8B;
+  border: 1px solid rgba(255, 139, 139, 0.22);
+}
+
+/* Empty state card (when user has no clubs nor applications) */
+.mc-empty {
+  margin: 24px 20px;
+  padding: 36px 24px;
+  background:
+    linear-gradient(180deg, rgba(201, 160, 99, 0.05), transparent 70%),
+    rgba(26, 33, 56, 0.72);
+  border: 1px solid var(--brand-hairline-2);
+  border-radius: 14px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.mc-empty .ico {
+  width: 56px; height: 56px;
+  display: grid;
+  place-items: center;
+  background: var(--brand-brass-soft);
+  border-radius: 50%;
+  color: var(--brand-brass-deep);
+}
+.mc-empty .title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--brand-ink);
+  letter-spacing: -0.012em;
+}
+.mc-empty .sub {
+  font-size: 13.5px;
+  color: var(--brand-ink-3);
+  line-height: 1.5;
+  max-width: 280px;
+}
+.mc-empty .actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 10px;
+}
+.mc-empty .ghost-btn {
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--brand-hairline-2);
+  background: transparent;
+  color: var(--brand-ink-2);
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}

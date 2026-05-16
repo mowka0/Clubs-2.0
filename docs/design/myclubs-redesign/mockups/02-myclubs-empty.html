@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>My Clubs — empty state</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="_shared.css">
+<style>
+  html, body { width: 390px; }
+  body { position: relative; overflow-x: hidden; }
+</style>
+</head>
+<body>
+<div class="club-page">
+
+  <!-- Brand SVG backdrop -->
+  <div class="brand-backdrop">
+    <img src="assets/brand-backdrop.svg" alt="" aria-hidden="true">
+  </div>
+
+  <!-- Hero -->
+  <header class="mc-hero">
+    <div class="greeting">Привет, Иван <span aria-hidden="true">👋</span></div>
+    <div class="mc-hero-row">
+      <h1>Твои <span class="accent">клубы</span></h1>
+      <button class="mc-create-btn">
+        <span class="plus">+</span>
+        Создать
+      </button>
+    </div>
+  </header>
+
+  <!-- Empty state card -->
+  <div class="mc-empty">
+    <div class="ico">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+        <circle cx="12" cy="7" r="4"/>
+      </svg>
+    </div>
+    <div class="title">Пока пусто</div>
+    <div class="sub">Найдите подходящий клуб в&nbsp;«Поиске» или создайте свой — будете звать единомышленников сами.</div>
+    <div class="actions">
+      <button class="ghost-btn">Открыть поиск</button>
+      <button class="mc-create-btn">
+        <span class="plus">+</span>
+        Создать клуб
+      </button>
+    </div>
+  </div>
+
+  <!-- Bottom tab bar -->
+  <div class="brand-tabbar">
+    <button class="tab">
+      <span class="ico" style="background-image: url('assets/nav-search.png');"></span>
+      <span>Поиск</span>
+    </button>
+    <button class="tab active">
+      <span class="indicator"></span>
+      <span class="ico" style="background-image: url('assets/nav-clubs.png');"></span>
+      <span>Мои клубы</span>
+    </button>
+    <button class="tab">
+      <span class="ico" style="background-image: url('assets/nav-events.png');"></span>
+      <span>События</span>
+    </button>
+    <button class="tab">
+      <span class="ico" style="background-image: url('assets/nav-me.png');"></span>
+      <span>Профиль</span>
+    </button>
+  </div>
+
+</div>
+</body>
+</html>

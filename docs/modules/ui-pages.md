@@ -15,7 +15,7 @@ src/
     DiscoveryPage.tsx          — основная страница (brand layout: topbar + hero + search + chips + list)
   components/
     ClubCard.tsx               — карточка клуба (gradient avatar + capacity bar + featured state)
-    DiscoveryBackdrop.tsx      — SVG абстракция (navy blobs + brass glows + contour lines)
+    BrandBackdrop.tsx          — SVG абстракция (navy blobs + brass glows + contour lines). Используется на Discovery, ClubPage, MyClubsPage. Раньше назывался DiscoveryBackdrop, переименован в `feature/myclubs-redesign` (2026-05-16)
   styles/
     brand-theme.css            — палитра navy + brass + component-CSS
   public/brand/                — production-ready brand assets (logo + 4 tab иконки)
