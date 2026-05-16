@@ -513,6 +513,14 @@ Coolify сам следит за веткой `master` через встроен
 **Важно:** в Coolify staging-приложении опция "Auto Deploy" должна быть **отключена**,
 иначе будет двойной деплой (PATCH тоже триггерит деплой).
 
+### secret-scan.yml
+
+Триггер: `pull_request` в `master` + `push` в `master` / `bugfix/**` / `feature/**` / `devops/**`.
+
+Использует `gitleaks/gitleaks-action` (pinned к SHA `ff98106e...`, v2.3.9) для скана новых коммитов на утёкшие секреты. Скан охватывает **только commits диапазона push/PR**, не всю историю репо — старые leaked-значения (см. `docs/backlog/leaked-secrets-in-git.md`) считаются dead и не блокируют CI.
+
+Permissions: `contents: read` (least-privilege). `GITHUB_TOKEN` подставляется автоматически.
+
 ### Docker логирование (docker-compose.prod.yml)
 
 Все сервисы используют ограничение логов:

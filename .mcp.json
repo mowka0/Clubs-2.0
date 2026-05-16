@@ -5,7 +5,7 @@
       "command": "npx",
       "args": ["-y", "@anthropic-ai/mcp-server-brave-search"],
       "env": {
-        "BRAVE_API_KEY": "BSAbzlwrEmTLdXSTTF4Xpzr_QSoEBSV"
+        "BRAVE_API_KEY": "${BRAVE_API_KEY}"
       }
     }
   }

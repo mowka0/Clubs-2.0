@@ -57,6 +57,10 @@ Telegram Mini App для создания и управления платным
    - `COOLIFY_STAGING_URL` = `https://staging.77-42-23-177.sslip.io`
    - `COOLIFY_TOKEN` уже есть (используется общий)
 
+#### Локальная разработка (одноразово на свежем clone)
+1. Активировать git-hooks: `git config core.hooksPath .githooks`
+2. Установить gitleaks (опционально, для секрет-скана перед коммитом): `brew install gitleaks`. Без него hook пропускает, скан всё равно ловит на CI (`.github/workflows/secret-scan.yml`).
+
 ### Telegram
 - Bot: @clubs_admin_bot
 - Bot Token: хранится в env var TELEGRAM_BOT_TOKEN

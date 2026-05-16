@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Pre-commit hook: detect secrets in staged changes before they hit git history.
+#
+# Activate once per clone:
+#   git config core.hooksPath .githooks
+#
+# Requires `gitleaks` on PATH. Install on macOS: brew install gitleaks
+# If gitleaks is missing the hook warns and lets the commit through —
+# CI (.github/workflows/secret-scan.yml) is the source of truth.
+
+set -e
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "⚠️  gitleaks not installed — skipping local secret scan."
+  echo "   Install: brew install gitleaks  (CI will still scan)"
+  exit 0
+fi
+
+gitleaks protect --staged --no-banner --redact --verbose
