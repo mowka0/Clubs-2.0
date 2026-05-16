@@ -1131,41 +1131,41 @@ html, body { background: #0E1428; min-height: 100vh; }
 
 /* =========== Profile tab =========== */
 .cp-profile-head {
-  margin: 4px 20px 14px;
-  padding: 18px;
+  margin: 4px 20px 12px;
+  padding: 12px 14px;
   background: rgba(26, 33, 56, 0.78);
   border: 1px solid var(--brand-hairline-2);
   border-radius: 14px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 .cp-profile-head .avt {
-  width: 60px; height: 60px;
+  width: 44px; height: 44px;
   border-radius: 50%;
   background: linear-gradient(160deg, #3A2E18, #1F1808);
   color: var(--brand-brass-deep);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 19px;
+  font-size: 15px;
   font-weight: 700;
   flex-shrink: 0;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 .cp-profile-head .name {
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -0.012em;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.008em;
   color: var(--brand-ink);
   line-height: 1.2;
 }
 .cp-profile-head .handle {
-  font-size: 13.5px;
+  font-size: 12.5px;
   color: var(--brand-ink-3);
-  margin-top: 3px;
+  margin-top: 2px;
 }
 
 .cp-profile-stats {
