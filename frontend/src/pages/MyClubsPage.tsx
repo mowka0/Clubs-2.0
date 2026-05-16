@@ -1,15 +1,18 @@
 import { FC, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
-import { List, Section, Cell, Button, Modal, Spinner, Placeholder } from '@telegram-apps/telegram-ui';
+import { Modal, Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
+import { useAuthStore } from '../store/useAuthStore';
 import { useMyClubsQuery } from '../queries/clubs';
 import { useMyApplicationsQuery } from '../queries/applications';
 import { queryKeys } from '../queries/queryKeys';
 import { Toast } from '../components/Toast';
 import { CreateClubModal } from '../components/CreateClubModal';
+import { BrandBackdrop } from '../components/BrandBackdrop';
 import { getClub } from '../api/clubs';
-import type { ClubDetailDto } from '../types/api';
+import type { ClubDetailDto, MembershipDto } from '../types/api';
+import type { ApplicationDto } from '../api/membership';
 
 interface MyClubsLocationState {
   toast?: string;
@@ -19,24 +22,111 @@ const STATUS_LABELS: Record<string, string> = {
   pending: 'На рассмотрении',
   approved: 'Одобрено',
   rejected: 'Отклонено',
-  auto_rejected: 'Отклонено автоматически',
+  auto_rejected: 'Отклонено',
 };
 
-const STATUS_COLOR: Record<string, string> = {
-  pending: 'var(--tgui--hint_color)',
-  approved: '#34c759',
-  rejected: 'var(--tgui--destructive_text_color)',
-  auto_rejected: 'var(--tgui--destructive_text_color)',
-};
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
+function getInitials(name: string): string {
+  return name
+    .replace(/[«»"']/g, '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w.charAt(0).toUpperCase())
+    .join('');
 }
+
+function formatApplicationDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+}
+
+const PEOPLE_ICON = (
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
+interface MyClubCardProps {
+  membership: MembershipDto;
+  club: ClubDetailDto | undefined;
+  isOrganizer: boolean;
+  onClick: () => void;
+}
+
+const MyClubCard: FC<MyClubCardProps> = ({ membership, club, isOrganizer, onClick }) => {
+  const name = club?.name ?? `Клуб ${membership.clubId.slice(0, 8)}…`;
+  const category = club?.category ?? 'other';
+  const initials = club ? getInitials(club.name) : '·';
+  const capacityPct = club && club.memberLimit > 0
+    ? Math.min(100, Math.round((club.memberCount / club.memberLimit) * 100))
+    : 0;
+  const almostFull = capacityPct >= 80;
+
+  const avtClass = `avt${isOrganizer ? ' organizer-ring' : ''}`;
+
+  return (
+    <button type="button" className="club-card" onClick={onClick}>
+      <span className={avtClass} data-cat={category}>
+        {initials}
+        {isOrganizer && <span className="role-badge" aria-label="Вы организатор">👑</span>}
+      </span>
+      <div className="body">
+        <div className="top">
+          <span className="name">{name}</span>
+        </div>
+        <div className="meta">
+          {club && <span className="cat">{CATEGORY_LABELS[category] ?? category}</span>}
+        </div>
+        {club && (
+          <div className="capacity">
+            <div className="capacity-bar"><div className="fill" style={{ width: `${capacityPct}%` }} /></div>
+            <span className={`capacity-num${almostFull ? ' almost-full' : ''}`}>
+              {club.memberCount} / {club.memberLimit}
+            </span>
+          </div>
+        )}
+      </div>
+    </button>
+  );
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  sport: 'Спорт', creative: 'Творчество', food: 'Еда',
+  board_games: 'Настолки', cinema: 'Кино', education: 'Образование',
+  travel: 'Путешествия', other: 'Другое',
+};
+
+interface AppCardProps {
+  application: ApplicationDto;
+  club: ClubDetailDto | undefined;
+  onClick: () => void;
+}
+
+const AppCard: FC<AppCardProps> = ({ application, club, onClick }) => {
+  const name = club?.name ?? `Клуб ${application.clubId.slice(0, 8)}…`;
+  const initials = club ? getInitials(club.name) : '·';
+  const status = application.status;
+  const statusLabel = STATUS_LABELS[status] ?? status;
+
+  return (
+    <button type="button" className="mc-app" onClick={onClick}>
+      <span className="avt">{initials}</span>
+      <div className="body">
+        <span className="name">{name}</span>
+        {application.createdAt && (
+          <span className="meta">Подана {formatApplicationDate(application.createdAt)}</span>
+        )}
+      </div>
+      <span className={`status ${status}`}>{statusLabel}</span>
+    </button>
+  );
+};
 
 export const MyClubsPage: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const haptic = useHaptic();
+  const { user } = useAuthStore();
 
   const myClubsQuery = useMyClubsQuery();
   const applicationsQuery = useMyApplicationsQuery();
@@ -45,8 +135,6 @@ export const MyClubsPage: FC = () => {
   const myClubs = myClubsQuery.data ?? [];
   const applications = applicationsQuery.data ?? [];
 
-  // Read one-shot toast from navigation state (e.g. "Клуб X удалён" after delete).
-  // Clear it after first render so a refresh/back doesn't show the same toast twice.
   const navState = location.state as MyClubsLocationState | null;
   const [toastMessage, setToastMessage] = useState<string | null>(navState?.toast ?? null);
   useEffect(() => {
@@ -55,8 +143,6 @@ export const MyClubsPage: FC = () => {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Dedup club ids from both memberships and applications so each club is fetched once
-  // and shares cache with ClubPage / OrganizerClubManage.
   const clubIds = useMemo(() => {
     const ids = new Set<string>();
     myClubs.forEach((m) => ids.add(m.clubId));
@@ -78,80 +164,107 @@ export const MyClubsPage: FC = () => {
   });
 
   const loading = myClubsQuery.isPending || applicationsQuery.isPending;
+  const empty = !loading && myClubs.length === 0 && applications.length === 0;
 
   const handleCreated = (id: string) => {
     setShowCreateModal(false);
-    // Cache for clubs.my() is invalidated by useCreateClubMutation onSuccess.
-    // Navigate to manage page which fetches the new club fresh.
     navigate(`/clubs/${id}/manage`);
   };
 
-  // Always land on the unified ClubPage regardless of role. Organizers drill
-  // into management via the "Управление" tab inside the unified page — same
-  // entry-point as Discovery, consistent UX. The `role` parameter is no longer
-  // read here (kept on the call sites for badge display).
+  const openCreate = () => {
+    haptic.impact('light');
+    setShowCreateModal(true);
+  };
+
   const handleClubClick = (clubId: string) => {
     haptic.impact('light');
     navigate(`/clubs/${clubId}`);
   };
 
+  const handleSearchClick = () => {
+    haptic.impact('light');
+    navigate('/');
+  };
+
   return (
-    <List>
-      <Section>
-        <div style={{ padding: 16 }}>
-          <Button
-            size="l"
-            stretched
-            onClick={() => { haptic.impact('light'); setShowCreateModal(true); }}
-          >
-            + Создать клуб
-          </Button>
+    <div className="brand-page">
+      <BrandBackdrop />
+
+      {/* Hero row */}
+      <div className="mc-header-row">
+        <h1 className="mc-eyebrow" style={{ margin: 0 }}>Мои клубы</h1>
+        <button type="button" className="mc-create-btn" onClick={openCreate}>
+          <span className="plus">+</span>
+          Создать
+        </button>
+      </div>
+
+      {/* Loading spinner */}
+      {loading && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+          <Spinner size="m" />
         </div>
-      </Section>
-
-      {/* Single combined empty state when there's nothing to show — avoids two adjacent
-          placeholders («нет клубов» + «нет заявок») feeling like clutter for new users. */}
-      {!loading && myClubs.length === 0 && applications.length === 0 && (
-        <Placeholder description="Вы пока не состоите ни в одном клубе. Найдите интересный в Поиске или создайте свой выше." />
       )}
 
-      {(loading || myClubs.length > 0) && (
-        <Section header="Мои клубы">
-          {loading && <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Spinner size="m" /></div>}
-          {myClubs.map((m) => {
-            const club = clubDetails[m.clubId];
-            return (
-              <Cell
-                key={m.id}
-                onClick={() => handleClubClick(m.clubId)}
-                subtitle={m.role === 'organizer' ? 'Организатор' : 'Участник'}
-              >
-                {club?.name ?? `Клуб ${m.clubId.slice(0, 8)}…`}
-              </Cell>
-            );
-          })}
-        </Section>
+      {/* Empty state */}
+      {empty && (
+        <div className="mc-empty">
+          <div className="ico">{PEOPLE_ICON}</div>
+          <div className="title">Пока пусто</div>
+          <div className="sub">
+            Найдите подходящий клуб в&nbsp;«Поиске» или создайте свой — будете звать единомышленников сами.
+          </div>
+          <div className="actions">
+            <button type="button" className="ghost-btn" onClick={handleSearchClick}>Открыть поиск</button>
+            <button type="button" className="mc-create-btn" onClick={openCreate}>
+              <span className="plus">+</span>
+              Создать клуб
+            </button>
+          </div>
+        </div>
       )}
 
-      {applications.length > 0 && (
-        <Section header="Мои заявки">
-          {applications.map((app) => {
-            const club = clubDetails[app.clubId];
-            return (
-              <Cell
+      {/* Active clubs */}
+      {!loading && myClubs.length > 0 && (
+        <>
+          <div className="mc-section-label">
+            Активные <span className="count">· {myClubs.length}</span>
+          </div>
+          <div className="mc-list">
+            {myClubs.map((m) => {
+              const club = clubDetails[m.clubId];
+              const isOrganizer = m.role === 'organizer' || club?.ownerId === user?.id;
+              return (
+                <MyClubCard
+                  key={m.id}
+                  membership={m}
+                  club={club}
+                  isOrganizer={isOrganizer}
+                  onClick={() => handleClubClick(m.clubId)}
+                />
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* Applications */}
+      {!loading && applications.length > 0 && (
+        <>
+          <div className="mc-section-label">
+            Заявки <span className="count">· {applications.length}</span>
+          </div>
+          <div className="mc-list">
+            {applications.map((app) => (
+              <AppCard
                 key={app.id}
-                subtitle={app.createdAt ? formatDate(app.createdAt) : ''}
-                after={
-                  <span style={{ fontSize: 12, color: STATUS_COLOR[app.status] ?? 'inherit' }}>
-                    {STATUS_LABELS[app.status] ?? app.status}
-                  </span>
-                }
-              >
-                {club?.name ?? `Клуб ${app.clubId.slice(0, 8)}…`}
-              </Cell>
-            );
-          })}
-        </Section>
+                application={app}
+                club={clubDetails[app.clubId]}
+                onClick={() => handleClubClick(app.clubId)}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {showCreateModal && (
@@ -161,6 +274,6 @@ export const MyClubsPage: FC = () => {
       )}
 
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
-    </List>
+    </div>
   );
 };

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>My Clubs — populated</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="_shared.css">
+<style>
+  html, body { width: 390px; }
+  body { position: relative; overflow-x: hidden; }
+</style>
+</head>
+<body>
+<div class="club-page">
+
+  <!-- Brand SVG backdrop (navy blobs + brass glows + contour lines + orbs + dotted clusters) -->
+  <div class="brand-backdrop">
+    <img src="assets/brand-backdrop.svg" alt="" aria-hidden="true">
+  </div>
+
+  <!-- Top hero row -->
+  <div class="mc-header-row">
+    <h1 class="mc-eyebrow" style="margin: 0;">Мои клубы</h1>
+    <button class="mc-create-btn">
+      <span class="plus">+</span>
+      Создать
+    </button>
+  </div>
+
+  <!-- Active clubs section -->
+  <div class="mc-section-label">Активные <span class="count">· 3</span></div>
+  <div class="mc-list">
+
+    <!-- Organizer club (brass ring + crown emoji badge on avatar) -->
+    <button class="club-card">
+      <span class="avt organizer-ring" data-cat="education">
+        КП
+        <span class="role-badge">👑</span>
+      </span>
+      <div class="body">
+        <div class="top">
+          <span class="name">Книжный клуб «Полночь»</span>
+        </div>
+        <div class="meta">
+          <span class="cat">Образование</span>
+        </div>
+        <div class="capacity">
+          <div class="capacity-bar"><div class="fill" style="width: 75%;"></div></div>
+          <span class="capacity-num">18 / 24</span>
+        </div>
+      </div>
+    </button>
+
+    <!-- Member club (almost full) -->
+    <button class="club-card">
+      <span class="avt" data-cat="board_games">ШЭ</span>
+      <div class="body">
+        <div class="top">
+          <span class="name">Шахматный клуб «Эндшпиль»</span>
+        </div>
+        <div class="meta">
+          <span class="cat">Настолки</span>
+        </div>
+        <div class="capacity">
+          <div class="capacity-bar"><div class="fill" style="width: 73%;"></div></div>
+          <span class="capacity-num almost-full">22 / 30</span>
+        </div>
+      </div>
+    </button>
+
+    <!-- Member club -->
+    <button class="club-card">
+      <span class="avt" data-cat="food">КС</span>
+      <div class="body">
+        <div class="top">
+          <span class="name">Кулинарный клуб «Сковорода»</span>
+        </div>
+        <div class="meta">
+          <span class="cat">Еда</span>
+        </div>
+        <div class="capacity">
+          <div class="capacity-bar"><div class="fill" style="width: 67%;"></div></div>
+          <span class="capacity-num">8 / 12</span>
+        </div>
+      </div>
+    </button>
+
+  </div>
+
+  <!-- Applications section -->
+  <div class="mc-section-label">Заявки <span class="count">· 1</span></div>
+  <div class="mc-list">
+
+    <button class="mc-app">
+      <span class="avt">СА</span>
+      <div class="body">
+        <span class="name">Спорт-клуб «Активити»</span>
+        <span class="meta">Подана 23 апреля</span>
+      </div>
+      <span class="status pending">На рассмотрении</span>
+    </button>
+
+  </div>
+
+  <!-- Bottom tab bar -->
+  <div class="brand-tabbar">
+    <button class="tab">
+      <span class="ico" style="background-image: url('assets/nav-search.png');"></span>
+      <span>Поиск</span>
+    </button>
+    <button class="tab active">
+      <span class="indicator"></span>
+      <span class="ico" style="background-image: url('assets/nav-clubs.png');"></span>
+      <span>Мои клубы</span>
+    </button>
+    <button class="tab">
+      <span class="ico" style="background-image: url('assets/nav-events.png');"></span>
+      <span>События</span>
+    </button>
+    <button class="tab">
+      <span class="ico" style="background-image: url('assets/nav-me.png');"></span>
+      <span>Профиль</span>
+    </button>
+  </div>
+
+</div>
+</body>
+</html>

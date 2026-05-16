@@ -25,6 +25,7 @@ import { formatPrice } from '../utils/formatters';
 import { ClubEventsTab } from '../components/club/ClubEventsTab';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubProfileTab } from '../components/club/ClubProfileTab';
+import { BrandBackdrop } from '../components/BrandBackdrop';
 
 const CATEGORY_LABELS: Record<string, string> = {
   sport: 'Спорт', creative: 'Творчество', food: 'Еда',
@@ -102,7 +103,7 @@ export const ClubPage: FC = () => {
 
   if (clubQuery.isPending) {
     return (
-      <div className="club-page" style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
+      <div className="brand-page" style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
         <Spinner size="l" />
       </div>
     );
@@ -110,7 +111,7 @@ export const ClubPage: FC = () => {
 
   if (clubQuery.error || !club) {
     return (
-      <div className="club-page">
+      <div className="brand-page">
         <Placeholder header="Ошибка" description={clubQuery.error?.message ?? 'Клуб не найден'} />
       </div>
     );
@@ -260,7 +261,8 @@ export const ClubPage: FC = () => {
   const isPaid = club.subscriptionPrice > 0;
 
   return (
-    <div className="club-page">
+    <div className="brand-page">
+      <BrandBackdrop />
 
       {/* Header / Cover */}
       <div className="cp-cover">

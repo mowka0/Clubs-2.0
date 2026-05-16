@@ -2,7 +2,7 @@ import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useClubsQuery } from '../queries/clubs';
 import { ClubCard } from '../components/ClubCard';
-import { DiscoveryBackdrop } from '../components/DiscoveryBackdrop';
+import { BrandBackdrop } from '../components/BrandBackdrop';
 import { CityPicker, useCityChoice } from '../components/CityPicker';
 import {
   PriceFilter,
@@ -107,7 +107,7 @@ export const DiscoveryPage: FC = () => {
 
   return (
     <div className="discovery-page">
-      <DiscoveryBackdrop />
+      <BrandBackdrop />
 
       <header className="discovery-topbar">
         <div className="discovery-brand">
