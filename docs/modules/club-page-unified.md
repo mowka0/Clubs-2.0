@@ -167,7 +167,9 @@ const handleTabClick = (tab: TabId | 'manage') => {
 
 ## Tabs реализация
 
-Используется `TabsList` / `TabsList.Item` из `@telegram-apps/telegram-ui`, как уже сделано в `OrganizerClubManage.tsx:1009-1020` и в текущем `ClubInteriorPage.tsx:106-126`. Никаких новых UI-зависимостей.
+**[ОБНОВЛЕНО brand-редизайн 2026-05-16]** Tabs выполнены как `<button className="cp-tab">` в `<div className="cp-tab-row">` — brand-стилизованные pill'ы (active = brass-fill, inactive = navy-card outline, manage = outline brass с стрелкой `→`). Стили живут в `frontend/src/styles/brand-theme.css` § cp-* (Club page). Tabs `OrganizerClubManage` остались на `TabsList` от `@telegram-apps/telegram-ui` — это отдельный экран вне redesign-scope.
+
+Аналогично header, about, rules, locked, CTA, events, members, profile — вынесены из telegram-ui-компонентов (`List/Section/Cell/Badge/Placeholder/Button`) в brand-классы `.cp-*` для единства с DiscoveryPage (PR #33). `Modal/Input/Spinner` для apply-modal — остались.
 
 ### Haptic mapping (preserved from ClubInteriorPage)
 

@@ -115,7 +115,7 @@ X = memberLimit * subscriptionPrice * 0.8
 
 ### Что показывается по роли
 
-| Роль | Header (с avatar/name/badges) | About-секция | TabsList | CTA |
+| Роль | Header (с avatar/name/badges) | About-секция | Tabs (brand `cp-tab-row`) | CTA |
 |---|---|---|---|---|
 | **Visitor** | ✓ (без role-badge) | ✓ | — | «Вступить» / «Хочу вступить» / disabled-варианты для pending state |
 | **Member** | ✓ + badge «Вы участник» | ✓ | События / Участники / Мой профиль | — (статус в badge) |

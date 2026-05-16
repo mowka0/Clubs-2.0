@@ -1,5 +1,5 @@
 import { FC, useState } from 'react';
-import { Section, Cell, Spinner, Placeholder, Avatar, Badge } from '@telegram-apps/telegram-ui';
+import { Spinner, Placeholder } from '@telegram-apps/telegram-ui';
 import { useClubMembersQuery } from '../../queries/members';
 import { useHaptic } from '../../hooks/useHaptic';
 import { MemberProfileModal } from './MemberProfileModal';
@@ -13,6 +13,12 @@ function getInitials(firstName: string, lastName: string | null): string {
   const first = firstName.charAt(0).toUpperCase();
   const last = lastName ? lastName.charAt(0).toUpperCase() : '';
   return first + last;
+}
+
+function reliabilityTier(score: number): 'high' | 'mid' | 'low' {
+  if (score >= 85) return 'high';
+  if (score >= 70) return 'mid';
+  return 'low';
 }
 
 export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId }) => {
@@ -30,12 +36,9 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId }) => {
 
   if (membersQuery.error) {
     return (
-      <Section>
-        <Placeholder
-          header="Ошибка"
-          description={membersQuery.error.message}
-        />
-      </Section>
+      <div style={{ padding: '0 20px' }}>
+        <Placeholder header="Ошибка" description={membersQuery.error.message} />
+      </div>
     );
   }
 
@@ -43,38 +46,47 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId }) => {
 
   return (
     <>
-      <Section header={`Участники (${members.length})`}>
-        {members.length === 0 && (
+      <div className="cp-section-label">Участники ({members.length})</div>
+
+      {members.length === 0 ? (
+        <div style={{ padding: '0 20px' }}>
           <Placeholder description="Список участников пуст" />
-        )}
-        {members.map((member) => (
-          <Cell
-            key={member.userId}
-            onClick={() => { haptic.impact('light'); setSelectedMember(member); }}
-            before={
-              member.avatarUrl ? (
-                <Avatar src={member.avatarUrl} size={40} />
-              ) : (
-                <Avatar
-                  size={40}
-                  acronym={getInitials(member.firstName, member.lastName)}
-                />
-              )
-            }
-            subtitle={`Надёжность: ${member.reliabilityIndex}`}
-            after={
-              member.role === 'organizer' ? (
-                <Badge type="number" mode="primary">
-                  Организатор
-                </Badge>
-              ) : undefined
-            }
-            multiline
-          >
-            {member.firstName}{member.lastName ? ` ${member.lastName}` : ''}
-          </Cell>
-        ))}
-      </Section>
+        </div>
+      ) : (
+        <div className="cp-members">
+          {members.map((member) => {
+            const fullName = `${member.firstName}${member.lastName ? ` ${member.lastName}` : ''}`;
+            const tier = reliabilityTier(member.reliabilityIndex);
+            return (
+              <button
+                key={member.userId}
+                type="button"
+                className="cp-member"
+                onClick={() => { haptic.impact('light'); setSelectedMember(member); }}
+              >
+                <div className="avt">
+                  {member.avatarUrl
+                    ? <img src={member.avatarUrl} alt="" />
+                    : getInitials(member.firstName, member.lastName)}
+                </div>
+                <div className="body">
+                  <div className="name">
+                    <span>{fullName}</span>
+                    {member.role === 'organizer' && (
+                      <span className="org-badge">Организатор</span>
+                    )}
+                  </div>
+                  <div className="reliability">
+                    <span className={`dot ${tier}`} />
+                    <span>Надёжность <span className="num">{member.reliabilityIndex}</span></span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {selectedMember && (
         <MemberProfileModal
           member={selectedMember}
