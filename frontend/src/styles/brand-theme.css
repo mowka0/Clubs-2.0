@@ -3,9 +3,20 @@
    consistent across user's Telegram themes. See SESSION-NOTES.md. */
 
 /* Body reset — browser default 8px margin would otherwise show the
-   Telegram client's grey through on the sides of our navy canvas. */
+   Telegram client's grey through on the sides of our navy canvas.
+   Inter font is the brand-wide default — applied here so ALL pages
+   (Discovery, ClubPage, MyClubsPage, future) inherit it consistently.
+   Children use `font-family: inherit` to pick this up. */
 html, body, #root { margin: 0; padding: 0; }
-html, body { background: #0E1428; min-height: 100vh; }
+html, body {
+  background: #0E1428;
+  min-height: 100vh;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+  color: var(--brand-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
 :root {
   --brand-navy-bg:     #0E1428;
@@ -31,19 +42,15 @@ html, body { background: #0E1428; min-height: 100vh; }
   --brand-live-soft: rgba(79, 160, 120, 0.18);
 }
 
-/* Discovery page root — brand canvas with ambient mesh */
+/* Discovery page root — brand canvas with ambient mesh.
+   Font / color / antialiasing live on html,body now (universal brand defaults). */
 .discovery-page {
   position: relative;
   min-height: 100vh;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
-  font-feature-settings: 'cv11', 'ss01';
-  color: var(--brand-ink);
   background:
     radial-gradient(circle at 92% 6%, rgba(201, 160, 99, 0.22), transparent 42%),
     radial-gradient(circle at 8% 0%,  rgba(58, 70, 110, 0.75), transparent 45%),
     var(--brand-navy-bg);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 /* All discovery children sit above the SVG backdrop */
