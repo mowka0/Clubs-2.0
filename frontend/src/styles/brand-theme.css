@@ -1176,22 +1176,25 @@ html, body { background: #0E1428; min-height: 100vh; }
 
 .cp-profile-stats {
   margin: 0 20px;
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 10px;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
 }
 .cp-profile-stat {
+  flex: 1 1 0;
+  max-width: 108px;
+  min-width: 0;
   background: rgba(26, 33, 56, 0.7);
   border: 1px solid var(--brand-hairline);
   border-radius: 12px;
-  padding: 14px 8px;
+  padding: 10px 6px;
   text-align: center;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 .cp-profile-stat .num {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.020em;
   color: var(--brand-brass-deep);
@@ -1199,11 +1202,12 @@ html, body { background: #0E1428; min-height: 100vh; }
   font-feature-settings: 'tnum';
 }
 .cp-profile-stat .label {
-  font-size: 10.5px;
+  font-size: 9.5px;
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--brand-ink-3);
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
