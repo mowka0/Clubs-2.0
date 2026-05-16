@@ -616,21 +616,21 @@ type UserVote = 'going' | 'maybe' | 'not_going' | 'confirmed' | 'waitlisted' | '
 4. `<Section header="Правила">` — если `rules !== null`
 
 **Visitor-only ветка:**
-5. `<Placeholder description="События доступны участникам клуба" />`
+5. `<div className="cp-locked">` — brand lock-карточка (заголовок «События доступны участникам клуба» + sub-описание)
 6. Join-error (красный текст) — если есть
-7. CTA-кнопка (динамическая):
-   - `pendingPayment` → «💳 Ожидаем оплату — {priceStars} Stars» (disabled) + hint
-   - `app.status === 'pending'` → «⏳ Заявка на рассмотрении» (disabled)
-   - `app.status === 'approved'` → «💳 Ожидаем оплату…» (disabled)
-   - `joinSuccess` → «Заявка отправлена ✓» (disabled)
+7. CTA — `<button className="cp-cta">` (brand brass-fill кнопка, не tgui Button):
+   - `pendingPayment` → «Ожидаем оплату — {priceStars} Stars» (outline disabled) + hint
+   - `app.status === 'pending'` → «Заявка на рассмотрении» (outline disabled)
+   - `app.status === 'approved'` → «Ожидаем оплату…» (outline disabled) + hint
+   - `joinSuccess` → «Заявка отправлена» (outline disabled)
    - `accessType === 'open'` → «Вступить» → `handleJoin`
-   - `accessType === 'closed'` → «Хочу вступить» → `setShowApplyModal(true)`
-8. `<Modal>` «Заявка в клуб» — для closed-клубов
+   - `accessType === 'closed'` → «Хочу вступить» → `setShowApplyModal(true)` + hint
+8. `<Modal>` «Заявка в клуб» — для closed-клубов (telegram-ui Modal preserved)
 
 **Member / Organizer ветка:**
-5. `<TabsList>` горизонтальная:
+5. `<div className="cp-tab-row">` — brand pill-таб row (brass active, navy-card inactive):
    - member: 3 таба «События / Участники / Мой профиль» (default «События»)
-   - organizer: + 4-й таб «Управление» (navigate-link, не state-toggle —
+   - organizer: + 4-й таб «Управление» (outline-style со стрелкой `→`, navigate-link, не state-toggle —
      `haptic.impact('light')` + `navigate('/clubs/:id/manage')`, никогда не selected)
 6. Активный tab-контент:
    - `events` → `<ClubEventsTab clubId={id} />` (upcoming + past через `useClubEventsQuery`)
@@ -915,7 +915,8 @@ Last-resort fallback для top-level `<ErrorBoundary>` (`react-error-boundary`)
 - `Select` — dropdown
 - `Textarea` — многострочный ввод
 - `TabsList` — горизонтальная вкладка внутри страницы (используется в
-  unified ClubPage role-aware tabs и OrganizerClubManage)
+  OrganizerClubManage). ClubPage с brand-редизайна 2026-05-16 использует
+  свой `<div className="cp-tab-row">` с brand-pill кнопками (см. § 7.5)
 
 ### Обратная связь и состояния
 - `Spinner` — индикатор, размеры `s` / `m` / `l`
