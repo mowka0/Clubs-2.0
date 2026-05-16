@@ -1287,27 +1287,25 @@ html, body { background: #0E1428; min-height: 100vh; }
   gap: 10px;
 }
 
-/* Organizer indicators on avatar:
-   - brass ring (subtle glow on avatar border)
-   - emoji badge (crown) bottom-right corner — explicit "this is yours" signal */
+/* Organizer indicators:
+   - brass ring on avatar (subtle glow)
+   - crown badge in top-right corner of card body (over capacity numbers)
+   Equal 14px padding from card edges thanks to .club-card padding + .top
+   being the first row of .body. */
 .club-card .avt.organizer-ring {
-  position: relative;
   box-shadow:
     inset 0 0 0 1.5px rgba(201, 160, 99, 0.55),
     0 0 14px rgba(201, 160, 99, 0.18);
-  overflow: visible;
 }
-.club-card .avt .role-badge {
-  position: absolute;
-  bottom: -6px;
-  right: -6px;
+.club-card .role-crown {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
   width: 26px;
   height: 26px;
   background: var(--brand-navy-bg);
   border: 1.5px solid var(--brand-brass);
   border-radius: 50%;
-  display: grid;
-  place-items: center;
   font-size: 15px;
   line-height: 1;
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45), 0 0 12px rgba(201, 160, 99, 0.30);

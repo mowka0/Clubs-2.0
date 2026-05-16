@@ -67,12 +67,16 @@ const MyClubCard: FC<MyClubCardProps> = ({ membership, club, isOrganizer, onClic
   return (
     <button type="button" className="club-card" onClick={onClick}>
       <span className={avtClass} data-cat={category}>
-        {initials}
-        {isOrganizer && <span className="role-badge" aria-label="Вы организатор">👑</span>}
+        {club?.avatarUrl ? <img src={club.avatarUrl} alt="" /> : initials}
       </span>
       <div className="body">
         <div className="top">
           <span className="name">{name}</span>
+          {isOrganizer && (
+            <span className="role-crown" aria-label="Вы организатор" title="Вы организатор">
+              👑
+            </span>
+          )}
         </div>
         <div className="meta">
           {club && <span className="cat">{CATEGORY_LABELS[category] ?? category}</span>}
