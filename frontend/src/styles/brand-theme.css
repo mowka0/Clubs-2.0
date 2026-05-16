@@ -624,6 +624,12 @@ html, body { background: #0E1428; min-height: 100vh; }
 .club-page {
   position: relative;
   min-height: 100vh;
+  width: 100%;
+  max-width: 100vw;
+  /* contain horizontal overflow from internally-scrolling rows (cp-tab-row).
+     without this, the page body grows wider than the Telegram WebApp
+     viewport and shows a dark strip on the right edge. */
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 96% 4%, rgba(201, 160, 99, 0.18), transparent 38%),
     radial-gradient(circle at 4% 8%, rgba(58, 70, 110, 0.65), transparent 42%),
