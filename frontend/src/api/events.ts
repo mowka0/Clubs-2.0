@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import type { EventDetailDto, EventListItemDto, PageResponse } from '../types/api';
+import type { EventDetailDto, EventListItemDto, MyEventListItemDto, PageResponse } from '../types/api';
 
 export interface CreateEventBody {
   title: string;
@@ -19,6 +19,15 @@ export function getClubEvents(
     Object.entries(params).forEach(([k, v]) => { if (v !== undefined) queryParams[k] = v; });
   }
   return apiClient.get<PageResponse<EventListItemDto>>(`/api/clubs/${clubId}/events`, queryParams);
+}
+
+export function getMyEvents(
+  params?: { page?: number; size?: number }
+): Promise<PageResponse<MyEventListItemDto>> {
+  const queryParams: Record<string, string> = {};
+  if (params?.page !== undefined) queryParams.page = String(params.page);
+  if (params?.size !== undefined) queryParams.size = String(params.size);
+  return apiClient.get<PageResponse<MyEventListItemDto>>(`/api/users/me/events`, queryParams);
 }
 
 export function getEvent(id: string): Promise<EventDetailDto> {

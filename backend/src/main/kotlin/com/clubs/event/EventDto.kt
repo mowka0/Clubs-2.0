@@ -39,6 +39,23 @@ data class EventListItemDto(
     val status: String
 )
 
+data class MyEventListItemDto(
+    val id: UUID,
+    val title: String,
+    val eventDatetime: OffsetDateTime,
+    val locationText: String,
+    val status: String,
+    val clubId: UUID,
+    val clubName: String,
+    val clubAvatarUrl: String?,
+    val myVote: String?,
+    val myParticipationStatus: String?,
+    val goingCount: Int,
+    val confirmedCount: Int,
+    val participantLimit: Int,
+    val actionRequired: Boolean
+)
+
 data class CreateEventRequest(
     @field:NotBlank(message = "Title is required")
     @field:Size(max = 255, message = "Title must be at most 255 characters")

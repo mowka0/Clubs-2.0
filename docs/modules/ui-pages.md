@@ -137,9 +137,9 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 
 ---
 
-## EventsPage — Лента событий (`/events`)
+## EventsPage — Лента активностей (`/events`, таб «Активности»)
 
-> **Status (2026-04-25):** placeholder в коде (`<Placeholder>` с эмодзи 📅 + текстом «Скоро будет лента»). Полная спека дизайна и реализации — [`events-feed.md`](./events-feed.md), написана 2026-04-27 для подачи в дизайн-итерацию.
+> **Status (2026-05-18):** ✅ реализовано в PR `feature/events-feed-page`. Полная спека реализации — [`events-feed.md`](./events-feed.md). Таб переименован «События» → «Активности», URL `/events` сохранён (переименование URL отложено до появления складчины — см. `events-feed.md` Decision 1).
 
 ### Цель (TL;DR)
 
@@ -159,12 +159,13 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 - Soft-deleted клубов
 - Публичные events (этого слоя в продукте нет — см. `project_clubs_over_events_rationale.md`)
 
-### Зависимости
+### Реализация
 
-- Backend endpoint `GET /api/users/me/events` — НЕ существует, нужно реализовать
-- `docs/backlog/club-events-membership-check.md` — security-фикс должен быть закрыт ДО этой фичи (иначе агрегатный endpoint унаследует утечку)
+- Backend endpoint `GET /api/users/me/events` — реализован в `UserController` (page-based pagination, page+size, max size = 50)
+- Privacy: фильтр по `MEMBERSHIPS.STATUS = active` + `CLUBS.IS_ACTIVE = true` + `event_datetime > now` + `status IN (upcoming, stage_2)`
+- Зависимость по security (`club-events-membership-check`) закрыта в PR #32
 
-Полная спека (user-stories, AC, API контракт, анатомия event-card, frontend/backend план) — в `events-feed.md`.
+Полная спека (user-stories, AC, API контракт, анатомия event-card, frontend/backend план, post-flight decisions) — в `events-feed.md`.
 
 ---
 

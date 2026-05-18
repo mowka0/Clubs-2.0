@@ -54,7 +54,7 @@ frontend/
     ├── pages/                — 8 страниц, 4 eager + 4 lazy
     │   ├── DiscoveryPage.tsx
     │   ├── MyClubsPage.tsx     — unified (organizer + member), кнопка «+ Создать клуб»
-    │   ├── EventsPage.tsx      — placeholder (реальная лента — отдельный PR)
+    │   ├── EventsPage.tsx      — таб «Активности», агрегированная лента my events
     │   ├── ProfilePage.tsx
     │   ├── ClubPage.tsx          — unified shell с role-aware tabs (см. club-page-unified.md)
     │   ├── EventPage.tsx
@@ -556,27 +556,33 @@ type UserVote = 'going' | 'maybe' | 'not_going' | 'confirmed' | 'waitlisted' | '
 
 ---
 
-### 7.3 EventsPage `/events` ⚡ tab — **placeholder, спека готова**
+### 7.3 EventsPage `/events` ⚡ tab — ✅ **реализовано (PR `feature/events-feed-page`, 2026-05-18)**
 
-> Новый таб (PR `feature/restructure-bottom-tabs`, 2026-04-25). Заменил
-> прежний таб «Организатор» в нижней навигации. Сейчас — заглушка-`<Placeholder>`.
+> Таб переименован «События» → «Активности» в нижней навигации
+> (URL `/events` сохранён до появления складчины). Placeholder заменён
+> на агрегированную ленту событий из ВСЕХ клубов где user — active member.
 >
-> **Полная спека дизайна и реализации:** [`docs/modules/events-feed.md`](../modules/events-feed.md)
-> (написана 2026-04-27 для дизайн-итерации). Включает: action-first
-> сортировку, group'ировку по «Требует действия / Эта неделя / Позже»,
-> анатомию event-card, AC и user-stories, backend API контракт.
+> **Полная спека:** [`docs/modules/events-feed.md`](../modules/events-feed.md).
+> Action-first сортировка (Требует действия / Эта неделя / Позже),
+> анатомия event-card (дата+время block, club avatar+name, status-badge,
+> stats-counter числом), 7 AC проверяемых, brand-стиль navy+brass +
+> BrandBackdrop.
 >
 > Product-инвариант: события **только из моих клубов** (active membership),
 > не публичная лента — см. `project_clubs_over_events_rationale.md`.
 
-**Header:** —
+**Header:** «Твои **активности**» + кнопка «Обновить» (заменила pull-to-refresh).
 **Body:**
-1. `<List>` с `<Placeholder>`:
-   - `header="События"`
-   - `description="Здесь скоро появится лента ваших ближайших событий из всех клубов, где вы состоите."`
-   - `children`: emoji 📅 (font-size 64, role="img" aria-label="calendar")
+1. `<FeedSection>` × до 3-х (action_required / this_week / later); пустые секции не рендерятся
+2. В каждой секции `<EventCard>` карточки; тап → `/events/:id`
+3. Infinite scroll через IntersectionObserver (`useInfiniteQuery`, page-based)
+4. Skeleton (3 placeholder) при initial load; `<FeedEmpty>` при error / 0 events
 
 **Footer:** BottomTabBar
+
+**Generic feed namespace:** `components/feed/` (FeedSection, FeedSkeleton,
+FeedEmpty) специально не-event-specific — переиспользуется для складчины,
+когда придёт время (`docs/backlog/skladchina.md`).
 **API:** нет (статичный рендер).
 **Haptic:** только `select()` от `BottomTabBar` на смену таба; на самой
 странице вызовов нет.

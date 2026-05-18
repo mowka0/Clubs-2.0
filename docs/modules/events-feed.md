@@ -1,10 +1,54 @@
-# Module: EventsFeed (вкладка «События»)
+# Module: EventsFeed (вкладка «Активности»)
 
-> **Status:** Spec для дизайн-итерации и последующей реализации.
-> Текущее состояние: `frontend/src/pages/EventsPage.tsx` рендерит placeholder
-> «Здесь скоро появится лента ваших ближайших событий из всех клубов где вы
-> состоите» (PR #27 `feature/restructure-bottom-tabs`). Backend endpoint
-> ещё не существует.
+> **Status:** ✅ Реализовано (PR `feature/events-feed-page`, merge 2026-05-18).
+> Endpoint `GET /api/users/me/events` живой, `EventsPage` переписан с
+> placeholder'а, таб в нижней навигации переименован «События» → «Активности»
+> (URL остаётся `/events`). Все Decisions из § ниже отражены в коде.
+> Post-flight расхождения уже подтянуты в спеку (см. Decision 4 о замене
+> pull-to-refresh на кнопку «Обновить»).
+
+## Decisions from pre-flight (2026-05-18)
+
+Зафиксированные продуктовые и архитектурные решения после обсуждения с владельцем
+продукта. Обновляют первоначальный draft спеки в местах противоречия.
+
+1. **Таб переименовывается «События» → «Активности».** URL остаётся `/events`
+   (переименование URL = breaking change без cause: складчина ещё не существует).
+   Когда появится складчина — добавим segmented control «События / Сборы» внутри
+   страницы, тогда же решим про URL.
+2. **Карточка содержит stats-счётчик числом** (`12/30 идёт` для `upcoming`,
+   `12/30 подтверждено` для `stage_2`). Без progress bar.
+3. **Без inline quick-actions в карточке.** Тап → `/events/:id`, действия там.
+4. **Pull-to-refresh — НЕ реализован в v1.** В ходе реализации оценили
+   стоимость: TG WebView не имеет нативного pull-to-refresh, нужен custom
+   touch-event handler ~50 строк отдельным хуком ради одной фичи. Заменено
+   на **кнопку «Обновить»** в header — функционально эквивалентно, реализация
+   тривиальна, hapticfeedback тот же. Если в проде попросят жест-обновление —
+   отдельная задача `feature/pull-to-refresh-hook`.
+5. **Empty state v1 = stub без recommendations.** Рекомендации клубов «по
+   интересам с ближайшими событиями» отложены в
+   `docs/backlog/onboarding-interests-and-recommendations.md` (зависит от модели
+   интересов пользователя, которой ещё нет).
+6. **Расширяемость для складчины** реализуется через generic naming:
+   `frontend/src/components/feed/` (не `events/`). Generic-компоненты
+   (FeedSection, FeedSkeleton, FeedEmpty, grouping-утилиты) переиспользуются.
+   `EventCard.tsx` остаётся event-specific; когда появится `SkladchinaCard.tsx`
+   — будет рядом. Endpoint остаётся `/api/users/me/events` (не generic
+   `/me/feed`) — для складчины будет параллельный `/me/skladchinas`.
+7. **Endpoint location:** `getMyEvents` добавляется в существующий
+   `UserController` (рядом с `/me/clubs`, `/me/applications`), не отдельный
+   `UserEventsController`. Сервис — `UserEventsService` в пакете `com.clubs.event`.
+8. **Pagination — page-based** (консистентно с `findByClubId`), не cursor-based
+   как в первоначальном draft. Cursor может быть введён позже, если page-based
+   станет узким местом.
+9. **Invalidation после mutations** — точечно: расширяем `useCastVoteMutation`,
+   `useConfirmParticipationMutation`, `useDeclineParticipationMutation` на
+   invalidate `events.myFeed` + `events.byClubAll(clubId)`, не `events.all`.
+   Это эффективнее на больших нагрузках.
+10. **EventStatus enum имеет 5 values** (`upcoming`, `stage_1`, `stage_2`,
+    `completed`, `cancelled`). В реальном flow `stage_1` не транзитится
+    (голосование происходит при `status=upcoming`). MVP feed показывает:
+    `upcoming` + `stage_2`. `completed`/`cancelled` отфильтровываются на бэке.
 
 ---
 
@@ -52,8 +96,8 @@
   - Empty state когда событий нет
   - Loading / error states
   - Тап по карточке → `/events/:id` (существующий EventPage с полным flow)
+  - Кнопка «Обновить» в header (заменяет pull-to-refresh, см. Decision 4)
 - Новый query hook `useMyEventsQuery()` в `frontend/src/queries/events.ts`
-- Pull-to-refresh (если технически просто — Telegram WebApp expand эта возможность)
 
 ### НЕ входит (v2 / отдельные PR)
 
@@ -123,19 +167,25 @@
 ### `GET /api/users/me/events`
 
 Аггрегированный список upcoming events из всех клубов где user — active member.
+Добавляется в существующий `UserController` (рядом с `/me/clubs`,
+`/me/applications`).
 
 **Query parameters:**
 | Параметр | Тип | Дефолт | Описание |
 |---|---|---|---|
-| `status` | string | `upcoming` | `upcoming` (все upcoming + stage_2), `past` (для будущей вкладки «Архив»). MVP — только `upcoming` |
-| `limit` | int | 20 | pagination — сколько вернуть. Max 50 |
-| `cursor` | string? | null | для pagination — eventDatetime + id последнего из предыдущей страницы. NULL = с начала |
+| `page` | int | 0 | 0-based номер страницы |
+| `size` | int | 20 | размер страницы. Max 50 |
 
-**Response 200:**
+(`status` параметр НЕ добавляется в v1 — feed всегда показывает upcoming + stage_2. Past events — отдельный сценарий, будут отдельным endpoint или query-param когда понадобятся, см. R-2.)
+
+**Response 200:** стандартный `PageResponse<MyEventListItemDto>` как у других list-endpoints:
 ```ts
 {
-  items: MyEventListItemDto[],
-  nextCursor: string | null  // null = дальше ничего нет
+  content: MyEventListItemDto[],
+  totalElements: number,
+  totalPages: number,
+  page: number,
+  size: number
 }
 ```
 
@@ -146,7 +196,7 @@
   title: string,
   eventDatetime: string,        // ISO 8601
   locationText: string,
-  status: 'upcoming' | 'stage_2' | 'completed' | 'cancelled',
+  status: string,               // literal из EventStatus enum: upcoming | stage_2 (других в feed v1 не отдаём)
 
   clubId: string,
   clubName: string,
@@ -159,8 +209,7 @@
   confirmedCount: number,
   participantLimit: number,
 
-  // Computed на бэке для удобства фронта (frontend не должен пересчитывать)
-  actionRequired: boolean       // см. § «Action-required logic»
+  actionRequired: boolean       // computed на бэке, см. § «Action-required logic»
 }
 ```
 
@@ -171,6 +220,9 @@
 **Notes:**
 - Сортировка: `actionRequired DESC, eventDatetime ASC` — events требующие действия сверху, остальные хронологически
 - Данные включают events из клубов где user `MembershipStatus.active` (member ИЛИ organizer). Не включают: applications/pending, soft-deleted клубы
+- Фильтр на стороне БД: `status IN ('upcoming', 'stage_2') AND event_datetime > now() AND clubs.deleted_at IS NULL`
+- `myParticipationStatus` мэппится из `EventResponse.finalStatus` (FinalStatus enum: confirmed/waitlisted/declined). Если запись `event_responses` отсутствует — null
+- `myVote` мэппится из `EventResponse.stage1Vote` (Stage_1Vote enum). null если не голосовал
 
 ### Action-required logic (backend computes)
 
@@ -182,26 +234,29 @@
 
 ---
 
-## Анатомия event-card (для дизайнера — структура info, не визуал)
+## Анатомия event-card (минимум информации, детали по тапу)
 
-Каждая карточка события содержит:
+Карточка лаконичная: достаточно для решения «открывать или нет», полная инфа +
+действия — на `/events/:id` (PR #28+ EventPage с voting/confirm flow).
 
-### Top-section
-- **Дата + время** события — крупно, например «Сб 4 мая, 18:00»
-- **Title события** — основной текст
+### Содержимое (сверху вниз)
+- **Дата + время** события — «Сб 4 мая, 18:00» (форматирование локализовано в `shared/lib/formatDate`)
+- **Title** события
 - **Place** — место проведения
+- **Avatar клуба + название клуба** — subtle/secondary
+- **Status-badge** — если применимо (см. ниже)
+- **Stats-counter** — `12/30 идёт` (`upcoming`) или `12/30 подтверждено` (`stage_2`). Числом, без progress bar
 
-### Club-section (subtle)
-- **Avatar** клуба + **название** клуба — small/secondary, как footer-info («📚 Книжный клуб Москвы»)
-
-### Status-badge
-- Если `actionRequired` — выделенный badge: «Голосуй до X» / «Подтверди участие до Y» (где X, Y — даты)
-- Иначе если `myVote` или `myParticipationStatus` — нейтральный badge: «Иду» / «Подтверждён» / «Лист ожидания» / etc
+### Status-badge логика
+- Если `actionRequired` — выделенный (brass-acceпт) badge: «Голосуй» / «Подтверди участие»
+- Иначе если `myParticipationStatus != null` — нейтральный badge: «Подтверждён» / «Лист ожидания» / «Отказался»
+- Иначе если `myVote != null` (но не actionRequired) — нейтральный badge: «Иду» / «Возможно» / «Не иду»
 - Иначе — без badge
 
-### Stats-section (для events с активным набором)
-- `goingCount / participantLimit` (для stage_1 — голосование) ИЛИ `confirmedCount / participantLimit` (для stage_2 — подтверждение)
-- Опционально: progress bar отображающий заполненность
+### Без inline RSVP
+В v1 на карточке **нет** кнопок «Иду / Возможно / Не иду». Это решение для
+снижения визуальной плотности и одного очевидного primary action (тап → детали).
+Quick-actions могут быть добавлены позже на основе использования (см. R-1).
 
 ### Tap behavior
 - Light haptic + navigate `/events/:id`
@@ -221,15 +276,25 @@
 
 ---
 
-## Empty states (важные для UX)
+## Empty states
+
+v1 — stub-варианты без recommendations. Рекомендации клубов по интересам
+отложены в `docs/backlog/onboarding-interests-and-recommendations.md` (нет
+модели интересов user'а в БД).
 
 | Состояние | Текст | CTA |
 |---|---|---|
 | Нет membership ни в одном клубе | «Вы пока не состоите в клубах. Найдите интересный в Поиске.» | «Перейти в Поиск» → tab `/` |
-| Membership есть, но нет upcoming events | «В ваших клубах пока нет предстоящих событий. Загляните позже или подпишитесь на новые клубы.» | «Найти ещё клубы» → `/` |
-| Loading (initial) | Skeleton-карточки (3-5 placeholder) | — |
+| Membership есть, но нет upcoming events | «В ваших клубах пока нет предстоящих событий. Загляните позже.» | — |
+| Loading (initial) | Skeleton-карточки (3 placeholder) | — |
 | Loading next page (pagination) | Spinner внизу | — |
-| Network error | «Не удалось загрузить события. Проверьте соединение.» | «Повторить» → refetch |
+| Network error | «Не удалось загрузить события. Проверьте соединение и попробуйте снова.» | «Повторить» → refetch |
+
+**Имплементация (post-flight):** один компонент `<FeedEmpty>` рендерится во всех
+non-data состояниях (no clubs / no events / error), различается title/description/CTA.
+Различие "no clubs" vs "no events" не делается на UI — backend возвращает пустой
+PageResponse в обоих случаях, отдельный запрос `useMyClubsQuery` ради разной
+формулировки расценено как overkill для v1. Текст empty state универсален.
 
 ---
 
@@ -291,7 +356,7 @@
 **THEN** haptic срабатывает по правилам `haptic.md`:
 - Тап по event-карточке → `impact('light')` (как другие nav-cells)
 - Тап по «Перейти в Поиск» из empty state → `impact('light')`
-- Pull-to-refresh release → `impact('soft')` (если pull-to-refresh реализован)
+- Тап по кнопке «Обновить» → `impact('light')` (заменяет pull-to-refresh)
 
 ---
 
@@ -324,13 +389,16 @@
 ## Frontend implementation план
 
 ### Новый query hook (queries/events.ts)
+Используем `useInfiniteQuery` с page-based pagination (консистентно с
+существующим `findByClubId`):
+
 ```ts
-export function useMyEventsQuery(status: 'upcoming' | 'past' = 'upcoming') {
+export function useMyEventsQuery() {
   return useInfiniteQuery({
-    queryKey: queryKeys.events.myFeed(status),
-    queryFn: ({ pageParam }) => getMyEvents({ status, cursor: pageParam, limit: 20 }),
-    initialPageParam: null as string | null,
-    getNextPageParam: (last) => last.nextCursor,
+    queryKey: queryKeys.events.myFeed,
+    queryFn: ({ pageParam }) => getMyEvents({ page: pageParam, size: 20 }),
+    initialPageParam: 0,
+    getNextPageParam: (last) => last.page + 1 < last.totalPages ? last.page + 1 : undefined,
   });
 }
 ```
@@ -340,21 +408,35 @@ export function useMyEventsQuery(status: 'upcoming' | 'past' = 'upcoming') {
 ```ts
 events: {
   ...,
-  myFeed: (status: string) => ['events', 'my-feed', status] as const,
+  myFeed: ['events', 'my-feed'] as const,
 }
 ```
+Один ключ без параметров (status фильтра пока нет, см. § «API контракты»).
 
 ### Invalidation
-В существующих мутациях (`useCastVoteMutation`, `useConfirmParticipationMutation`, `useDeclineParticipationMutation`) — добавить `qc.invalidateQueries({ queryKey: queryKeys.events.all })` чтобы лента обновлялась после действия. Сейчас они invalidate'ят `events.detail(id)` и `events.myVote(id)` — расширить.
+В существующих мутациях (`useCastVoteMutation`, `useConfirmParticipationMutation`, `useDeclineParticipationMutation`) — расширить onSuccess: добавить invalidate `events.myFeed` + `events.byClubAll(clubId)`. Точечно, **не** `events.all` (см. Decision 9).
+
+```ts
+// Пример для useCastVoteMutation.onSuccess
+qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
+qc.invalidateQueries({ queryKey: queryKeys.events.myVote(eventId) });
+qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });    // лента
+// byClubAll нужен только если знаем clubId — для confirm/decline он есть в response,
+// для castVote проще вообще не invalidate'ить byClubAll (текущая страница event-detail
+// сама подтянет fresh data на mount)
+```
 
 ### Компоненты
 ```
-frontend/src/components/events/
-  EventsFeedList.tsx        — оркестрирует группировку и pagination
-  EventsFeedSection.tsx     — одна секция (header + список карточек)
-  EventCard.tsx             — карточка одного события
-  EventsFeedEmpty.tsx       — empty states
+frontend/src/components/feed/        ← generic namespace (расширение для skladchina)
+  FeedSection.tsx           — одна секция (header + children)
+  FeedSkeleton.tsx          — placeholder загрузки
+  FeedEmpty.tsx             — empty state (принимает title/description/cta)
+  EventCard.tsx             — карточка одного события (event-specific)
+  (позже: SkladchinaCard.tsx)
 ```
+
+Группировка / sorting / actionRequired-логика — generic helpers в `frontend/src/utils/feedGrouping.ts` (если простые) или inline в `EventsPage.tsx` (если ≤ 30 строк).
 
 ### Страница
 `frontend/src/pages/EventsPage.tsx` — становится thin container:
@@ -368,29 +450,45 @@ frontend/src/components/events/
 ## Backend implementation план
 
 ### Endpoint
-`GET /api/users/me/events` в новом или существующем `EventController` (или отдельный `UserEventsController` для консистентности с `/api/users/me/clubs` и `/api/users/me/applications`)
+`GET /api/users/me/events` добавляется в **существующий** `UserController` (рядом
+с `/me/clubs`, `/me/applications`). DI: `UserEventsService` (новый сервис).
 
 ### Service
-`UserEventsService.getMyEvents(userId, status, cursor, limit): MyEventsPageDto`
+`UserEventsService.getMyEvents(userId: UUID, page: Int, size: Int): PageResponse<MyEventListItemDto>`
+
+Пакет: `com.clubs.event` (логика event-related, рядом с EventService).
 
 Логика:
-1. SELECT user's active memberships → list of clubIds
-2. SELECT events WHERE clubId IN (...) AND status IN (relevant statuses based on `status` param) AND clubs.deleted_at IS NULL
-3. LEFT JOIN event_responses для текущего user → получить myVote, myParticipationStatus
-4. JOIN clubs для clubName, avatarUrl
-5. Compute actionRequired для каждой записи
-6. ORDER BY actionRequired DESC, eventDatetime ASC
-7. LIMIT + cursor logic
+1. Получить список clubIds где user — active member (`MembershipRepository`)
+2. Если список пуст → вернуть пустой `PageResponse` (не 4xx)
+3. Запрос в новом методе `EventRepository.findMyFeed(userId, clubIds, page, size)`:
+   - SELECT events
+     WHERE club_id IN (...)
+       AND status IN ('upcoming', 'stage_2')
+       AND event_datetime > now()
+       AND clubs.deleted_at IS NULL  -- JOIN с clubs
+   - LEFT JOIN event_responses ON event_id = events.id AND user_id = :userId → myVote, myParticipationStatus
+   - JOIN clubs → clubName, avatarUrl
+   - LEFT JOIN с aggregated counts (готовый `fetchGoingCounts` уже есть, нужен аналог для confirmedCount)
+   - ORDER BY (actionRequired_expr) DESC, event_datetime ASC
+   - LIMIT/OFFSET
+4. Mapper в `MyEventListItemDto` (новый метод в EventMapper) — на каждой записи computes `actionRequired` через тот же helper, который SQL не может посчитать чисто (deadlines vs now)
 
 ### DB queries / индексы
-- Существующий index на `events.club_id` (V9) — должно работать
-- Возможно понадобится составной индекс `(club_id, event_datetime, status)` если query slow на больших объёмах (≥10k events) — измерить, не упреждать
+- Существующий index на `events(club_id)` (V9) — должно работать
+- Возможно понадобится составной индекс `(club_id, event_datetime, status)` если query slow на больших объёмах (≥10k events) — **не упреждаем**, измерим если будет медленно
+- Миграция в этом PR — **не нужна** (все поля уже есть)
 
 ### Тестирование (backend)
-- Integration test: user с 3 клубами получает agg-список только из этих клубов
-- Negative: user не member ни одного клуба → empty list (не 4xx)
-- Negative: club soft-deleted → events этого клуба отсутствуют
-- Pagination: cursor работает корректно
+Integration test `UserControllerMeEventsTest` (или дополнение существующего `UserControllerTest`):
+- **AC-1**: user с 3 клубами получает agg-список только из этих клубов
+- **AC-2**: actionRequired=true сортируется выше
+- **Negative**: user не member ни одного клуба → пустой PageResponse (не 4xx)
+- **Negative**: club soft-deleted → events этого клуба отсутствуют
+- **Negative**: events со status=completed/cancelled отфильтрованы
+- **Negative**: events с event_datetime < now() отфильтрованы
+- **Privacy**: user A не видит events клуба B где он не member
+- **Pagination**: page=1 возвращает корректный slice
 
 ---
 

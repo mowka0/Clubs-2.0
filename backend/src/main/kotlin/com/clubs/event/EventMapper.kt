@@ -1,8 +1,10 @@
 package com.clubs.event
 
 import com.clubs.generated.jooq.enums.EventStatus
+import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.tables.records.EventsRecord
 import org.springframework.stereotype.Component
+import java.time.OffsetDateTime
 
 @Component
 class EventMapper {
@@ -49,6 +51,40 @@ class EventMapper {
         attendanceFinalized = event.attendanceFinalized,
         createdAt = event.createdAt
     )
+
+    fun toMyFeedItemDto(item: MyFeedItem, now: OffsetDateTime = OffsetDateTime.now()): MyEventListItemDto {
+        val event = item.event
+        return MyEventListItemDto(
+            id = event.id,
+            title = event.title,
+            eventDatetime = event.eventDatetime,
+            locationText = event.locationText,
+            status = event.status.literal,
+            clubId = event.clubId,
+            clubName = item.clubName,
+            clubAvatarUrl = item.clubAvatarUrl,
+            myVote = item.myVote?.literal,
+            myParticipationStatus = item.myFinalStatus?.literal,
+            goingCount = item.goingCount,
+            confirmedCount = item.confirmedCount,
+            participantLimit = event.participantLimit,
+            actionRequired = computeActionRequired(item, now)
+        )
+    }
+
+    private fun computeActionRequired(item: MyFeedItem, now: OffsetDateTime): Boolean {
+        val event = item.event
+        return when (event.status) {
+            EventStatus.upcoming -> {
+                val votingOpensAt = event.eventDatetime.minusDays(event.votingOpensDaysBefore.toLong())
+                !now.isBefore(votingOpensAt) && item.myVote == null
+            }
+            EventStatus.stage_2 -> {
+                item.myVote in setOf(Stage_1Vote.going, Stage_1Vote.maybe) && item.myFinalStatus == null
+            }
+            else -> false
+        }
+    }
 
     fun toListItemDto(event: Event, goingCount: Int) = EventListItemDto(
         id = event.id,

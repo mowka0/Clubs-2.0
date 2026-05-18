@@ -156,3 +156,20 @@ export interface EventListItemDto {
   goingCount: number;
   status: string;
 }
+
+export interface MyEventListItemDto {
+  id: string;
+  title: string;
+  eventDatetime: string;
+  locationText: string;
+  status: string;
+  clubId: string;
+  clubName: string;
+  clubAvatarUrl: string | null;
+  myVote: 'going' | 'maybe' | 'not_going' | null;
+  myParticipationStatus: 'confirmed' | 'waitlisted' | 'declined' | null;
+  goingCount: number;
+  confirmedCount: number;
+  participantLimit: number;
+  actionRequired: boolean;
+}
