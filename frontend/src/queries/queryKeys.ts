@@ -23,6 +23,7 @@ export const queryKeys = {
     byClubAll: (clubId: string) => ['events', 'by-club', clubId] as const,
     detail: (id: string) => ['events', 'detail', id] as const,
     myVote: (id: string) => ['events', 'detail', id, 'my-vote'] as const,
+    myFeed: ['events', 'my-feed'] as const,
   },
   applications: {
     mine: () => ['applications', 'mine'] as const,

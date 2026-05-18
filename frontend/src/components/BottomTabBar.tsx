@@ -11,7 +11,7 @@ interface TabConfig {
 const TABS: readonly TabConfig[] = [
   { path: '/',          label: 'Поиск',     icon: '/brand/nav-search.png' },
   { path: '/my-clubs',  label: 'Мои клубы', icon: '/brand/nav-clubs.png' },
-  { path: '/events',    label: 'События',   icon: '/brand/nav-events.png' },
+  { path: '/events',    label: 'Активности', icon: '/brand/nav-events.png' },
   { path: '/profile',   label: 'Профиль',   icon: '/brand/nav-me.png' },
 ] as const;
 

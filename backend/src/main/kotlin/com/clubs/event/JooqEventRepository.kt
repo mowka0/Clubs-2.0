@@ -2,9 +2,14 @@ package com.clubs.event
 
 import com.clubs.common.dto.PageResponse
 import com.clubs.generated.jooq.enums.EventStatus
+import com.clubs.generated.jooq.enums.FinalStatus
+import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
+import com.clubs.generated.jooq.enums.Stage_2Vote
+import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import com.clubs.generated.jooq.tables.references.EVENTS
+import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
@@ -62,6 +67,119 @@ class JooqEventRepository(
         val goingCounts = fetchGoingCounts(eventIds)
 
         val items = events.map { event -> mapper.toListItemDto(event, goingCounts[event.id] ?: 0) }
+
+        val totalPages = if (size == 0) 0 else ((total + size - 1) / size).toInt()
+        return PageResponse(content = items, totalElements = total, totalPages = totalPages, page = page, size = size)
+    }
+
+    override fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MyFeedItem> {
+        val now = OffsetDateTime.now()
+
+        val baseCondition = EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_2)
+            .and(EVENTS.EVENT_DATETIME.gt(now))
+            .and(CLUBS.IS_ACTIVE.eq(true))
+            .and(MEMBERSHIPS.USER_ID.eq(userId))
+            .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active))
+
+        val total = dsl.select(DSL.countDistinct(EVENTS.ID))
+            .from(EVENTS)
+            .join(MEMBERSHIPS).on(MEMBERSHIPS.CLUB_ID.eq(EVENTS.CLUB_ID))
+            .join(CLUBS).on(CLUBS.ID.eq(EVENTS.CLUB_ID))
+            .where(baseCondition)
+            .fetchOne(0, Long::class.java) ?: 0L
+
+        // ORDER BY: action-required events first (computed inline via CASE),
+        // then chronological. Voting window opens at
+        // event_datetime - voting_opens_days_before * 1 day.
+        val actionRequiredOrder = DSL.case_()
+            .`when`(
+                EVENTS.STATUS.eq(EventStatus.upcoming)
+                    .and(EVENT_RESPONSES.STAGE_1_VOTE.isNull)
+                    .and(
+                        DSL.condition(
+                            "{0} - ({1} * INTERVAL '1 day') <= {2}",
+                            EVENTS.EVENT_DATETIME,
+                            EVENTS.VOTING_OPENS_DAYS_BEFORE,
+                            DSL.value(now)
+                        )
+                    ),
+                1
+            )
+            .`when`(
+                EVENTS.STATUS.eq(EventStatus.stage_2)
+                    .and(EVENT_RESPONSES.STAGE_1_VOTE.`in`(Stage_1Vote.going, Stage_1Vote.maybe))
+                    .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull),
+                1
+            )
+            .otherwise(0)
+
+        val rows = dsl.select(
+            EVENTS.ID,
+            EVENTS.CLUB_ID,
+            EVENTS.CREATED_BY,
+            EVENTS.TITLE,
+            EVENTS.DESCRIPTION,
+            EVENTS.LOCATION_TEXT,
+            EVENTS.EVENT_DATETIME,
+            EVENTS.PARTICIPANT_LIMIT,
+            EVENTS.VOTING_OPENS_DAYS_BEFORE,
+            EVENTS.STATUS,
+            EVENTS.STAGE_2_TRIGGERED,
+            EVENTS.ATTENDANCE_MARKED,
+            EVENTS.ATTENDANCE_FINALIZED,
+            EVENTS.CREATED_AT,
+            EVENTS.UPDATED_AT,
+            CLUBS.NAME.`as`("club_name"),
+            CLUBS.AVATAR_URL.`as`("club_avatar_url"),
+            EVENT_RESPONSES.STAGE_1_VOTE.`as`("my_vote"),
+            EVENT_RESPONSES.FINAL_STATUS.`as`("my_final_status"),
+        )
+            .from(EVENTS)
+            .join(MEMBERSHIPS).on(MEMBERSHIPS.CLUB_ID.eq(EVENTS.CLUB_ID))
+            .join(CLUBS).on(CLUBS.ID.eq(EVENTS.CLUB_ID))
+            .leftJoin(EVENT_RESPONSES).on(
+                EVENT_RESPONSES.EVENT_ID.eq(EVENTS.ID)
+                    .and(EVENT_RESPONSES.USER_ID.eq(userId))
+            )
+            .where(baseCondition)
+            .orderBy(actionRequiredOrder.desc(), EVENTS.EVENT_DATETIME.asc())
+            .limit(size)
+            .offset(page * size)
+            .fetch()
+
+        val eventIds = rows.map { it.get(EVENTS.ID)!! }
+        val goingCounts = fetchGoingCounts(eventIds)
+        val confirmedCounts = fetchConfirmedCounts(eventIds)
+
+        val items = rows.map { r ->
+            val eventId = r.get(EVENTS.ID)!!
+            val event = Event(
+                id = eventId,
+                clubId = r.get(EVENTS.CLUB_ID)!!,
+                createdBy = r.get(EVENTS.CREATED_BY)!!,
+                title = r.get(EVENTS.TITLE)!!,
+                description = r.get(EVENTS.DESCRIPTION),
+                locationText = r.get(EVENTS.LOCATION_TEXT)!!,
+                eventDatetime = r.get(EVENTS.EVENT_DATETIME)!!,
+                participantLimit = r.get(EVENTS.PARTICIPANT_LIMIT)!!,
+                votingOpensDaysBefore = r.get(EVENTS.VOTING_OPENS_DAYS_BEFORE) ?: EventMapper.DEFAULT_VOTING_OPENS_DAYS_BEFORE,
+                status = r.get(EVENTS.STATUS) ?: EventStatus.upcoming,
+                stage2Triggered = r.get(EVENTS.STAGE_2_TRIGGERED) ?: false,
+                attendanceMarked = r.get(EVENTS.ATTENDANCE_MARKED) ?: false,
+                attendanceFinalized = r.get(EVENTS.ATTENDANCE_FINALIZED) ?: false,
+                createdAt = r.get(EVENTS.CREATED_AT),
+                updatedAt = r.get(EVENTS.UPDATED_AT)
+            )
+            MyFeedItem(
+                event = event,
+                clubName = r.get("club_name", String::class.java),
+                clubAvatarUrl = r.get("club_avatar_url", String::class.java),
+                myVote = r.get("my_vote", Stage_1Vote::class.java),
+                myFinalStatus = r.get("my_final_status", FinalStatus::class.java),
+                goingCount = goingCounts[eventId] ?: 0,
+                confirmedCount = confirmedCounts[eventId] ?: 0
+            )
+        }
 
         val totalPages = if (size == 0) 0 else ((total + size - 1) / size).toInt()
         return PageResponse(content = items, totalElements = total, totalPages = totalPages, page = page, size = size)
@@ -139,6 +257,19 @@ class JooqEventRepository(
             .where(
                 EVENT_RESPONSES.EVENT_ID.`in`(eventIds)
                     .and(EVENT_RESPONSES.STAGE_1_VOTE.eq(Stage_1Vote.going))
+            )
+            .groupBy(EVENT_RESPONSES.EVENT_ID)
+            .fetch()
+            .associate { it.value1()!! to it.value2() }
+    }
+
+    private fun fetchConfirmedCounts(eventIds: List<UUID>): Map<UUID, Int> {
+        if (eventIds.isEmpty()) return emptyMap()
+        return dsl.select(EVENT_RESPONSES.EVENT_ID, DSL.count())
+            .from(EVENT_RESPONSES)
+            .where(
+                EVENT_RESPONSES.EVENT_ID.`in`(eventIds)
+                    .and(EVENT_RESPONSES.STAGE_2_VOTE.eq(Stage_2Vote.confirmed))
             )
             .groupBy(EVENT_RESPONSES.EVENT_ID)
             .fetch()

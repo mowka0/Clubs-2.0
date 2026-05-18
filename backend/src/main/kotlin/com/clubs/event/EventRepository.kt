@@ -13,6 +13,8 @@ interface EventRepository {
 
     fun findByClubId(clubId: UUID, status: EventStatus?, page: Int, size: Int): PageResponse<EventListItemDto>
 
+    fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MyFeedItem>
+
     fun getVoteCounts(eventId: UUID): Map<String, Int>
 
     fun findEventsToTriggerStage2(): List<Event>

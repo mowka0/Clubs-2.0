@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   castVote,
   confirmParticipation,
@@ -6,6 +6,7 @@ import {
   declineParticipation,
   getClubEvents,
   getEvent,
+  getMyEvents,
   getMyVote,
   markAttendance,
 } from '../api/events';
@@ -36,6 +37,17 @@ export function useMyVoteQuery(eventId: string | undefined, enabled = true) {
   });
 }
 
+const MY_EVENTS_PAGE_SIZE = 20;
+
+export function useMyEventsQuery() {
+  return useInfiniteQuery({
+    queryKey: queryKeys.events.myFeed,
+    queryFn: ({ pageParam }) => getMyEvents({ page: pageParam, size: MY_EVENTS_PAGE_SIZE }),
+    initialPageParam: 0,
+    getNextPageParam: (last) => (last.page + 1 < last.totalPages ? last.page + 1 : undefined),
+  });
+}
+
 interface CastVoteArgs {
   eventId: string;
   vote: 'going' | 'maybe' | 'not_going';
@@ -47,10 +59,8 @@ export function useCastVoteMutation() {
     mutationFn: ({ eventId, vote }: CastVoteArgs) => castVote(eventId, vote),
     onSuccess: (_data, { eventId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
-      // Explicit invalidation — myVote key is a prefix-extension of detail,
-      // technically covered by the first invalidate, but keeping for clarity
-      // in case key shape changes.
       qc.invalidateQueries({ queryKey: queryKeys.events.myVote(eventId) });
+      qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });
     },
   });
 }
@@ -61,10 +71,8 @@ export function useConfirmParticipationMutation() {
     mutationFn: (eventId: string) => confirmParticipation(eventId),
     onSuccess: (_data, eventId) => {
       qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
-      // Explicit invalidation — myVote key is a prefix-extension of detail,
-      // technically covered by the first invalidate, but keeping for clarity
-      // in case key shape changes.
       qc.invalidateQueries({ queryKey: queryKeys.events.myVote(eventId) });
+      qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });
     },
   });
 }
@@ -75,10 +83,8 @@ export function useDeclineParticipationMutation() {
     mutationFn: (eventId: string) => declineParticipation(eventId),
     onSuccess: (_data, eventId) => {
       qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
-      // Explicit invalidation — myVote key is a prefix-extension of detail,
-      // technically covered by the first invalidate, but keeping for clarity
-      // in case key shape changes.
       qc.invalidateQueries({ queryKey: queryKeys.events.myVote(eventId) });
+      qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });
     },
   });
 }
