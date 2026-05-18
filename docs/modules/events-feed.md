@@ -1,10 +1,11 @@
 # Module: EventsFeed (вкладка «Активности»)
 
-> **Status:** Спека в реализации (`feature/events-feed-page`, начато 2026-05-18).
-> Pre-flight Analyst закончен — pre-design решения зафиксированы в § «Decisions
-> from pre-flight» ниже. Текущее состояние до этого PR:
-> `frontend/src/pages/EventsPage.tsx` рендерит placeholder, backend endpoint
-> ещё не существует.
+> **Status:** ✅ Реализовано (PR `feature/events-feed-page`, merge 2026-05-18).
+> Endpoint `GET /api/users/me/events` живой, `EventsPage` переписан с
+> placeholder'а, таб в нижней навигации переименован «События» → «Активности»
+> (URL остаётся `/events`). Все Decisions из § ниже отражены в коде.
+> Post-flight расхождения уже подтянуты в спеку (см. Decision 4 о замене
+> pull-to-refresh на кнопку «Обновить»).
 
 ## Decisions from pre-flight (2026-05-18)
 
