@@ -72,6 +72,9 @@ class NotificationService(
     }
 
     private fun sendDm(chatId: String, text: String) {
+        log.info("Sending DM to chatId={}", chatId)
+        // Try with inline WebApp button first. If WebAppInfo URL config is broken
+        // on this bot (rare staging-env case), fall back to plain text DM.
         try {
             val button = InlineKeyboardButton.builder()
                 .text("📱 Открыть Clubs")
@@ -84,8 +87,23 @@ class NotificationService(
                 .replyMarkup(markup)
                 .build()
             telegramClient.execute(msg)
+            log.info("DM sent with inline button: chatId={}", chatId)
+            return
         } catch (e: Exception) {
-            log.warn("Failed to send DM to chat {}: {}", chatId, e.message)
+            log.error("Failed to send DM with inline button to chat {}: {} ({})", chatId, e.message, e.javaClass.simpleName, e)
+        }
+        // Fallback — без inline button. Если bot не настроен для WebApp на этом
+        // env, plain DM всё равно должен дойти. Логируем отдельным сообщением
+        // чтобы в логах было видно что это fallback.
+        try {
+            val msg = SendMessage.builder()
+                .chatId(chatId)
+                .text(text)
+                .build()
+            telegramClient.execute(msg)
+            log.info("DM sent without inline button (fallback): chatId={}", chatId)
+        } catch (e: Exception) {
+            log.error("Failed to send fallback DM to chat {}: {} ({})", chatId, e.message, e.javaClass.simpleName, e)
         }
     }
 }

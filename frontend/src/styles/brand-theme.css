@@ -2221,7 +2221,9 @@ html, body {
   border-radius: 10px;
   color: var(--brand-ink);
   font-family: inherit;
-  font-size: 14px;
+  /* 16px обязательно — iOS Safari/TG WebView зуммит viewport при focus на поля
+     с font-size меньше 16px. Не уменьшать без замены на TG-UI Input. */
+  font-size: 16px;
 }
 .sklad-create-modal .field .hint {
   font-size: 11.5px;
@@ -2307,13 +2309,14 @@ html, body {
   color: var(--brand-ink);
 }
 .sklad-create-modal .individual-amount {
-  width: 90px;
+  width: 96px;
   padding: 7px 10px;
   background: var(--brand-navy-card-2);
   border: 1px solid var(--brand-hairline-2);
   border-radius: 8px;
   color: var(--brand-ink);
-  font-size: 13px;
+  /* 16px обязательно — iOS zoom при focus на input < 16px */
+  font-size: 16px;
 }
 .sklad-create-modal .submit-error {
   margin: 10px 0;

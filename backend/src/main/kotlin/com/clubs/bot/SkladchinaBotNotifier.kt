@@ -26,7 +26,7 @@ class SkladchinaBotNotifier(
     private val log = LoggerFactory.getLogger(SkladchinaBotNotifier::class.java)
     private val fmt = DateTimeFormatter.ofPattern("dd.MM HH:mm")
 
-    @TransactionalEventListener
+    @TransactionalEventListener(fallbackExecution = true)
     fun onSkladchinaCreated(event: SkladchinaCreatedEvent) {
         val telegramIds = userRepository.findTelegramIds(event.participantUserIds)
         log.info("Skladchina-created DM: id={} participants={} resolved telegramIds={}",
@@ -61,7 +61,7 @@ class SkladchinaBotNotifier(
         }
     }
 
-    @TransactionalEventListener
+    @TransactionalEventListener(fallbackExecution = true)
     fun onSkladchinaClosed(event: SkladchinaClosedEvent) {
         val creatorTelegramId = userRepository.findById(event.creatorId)?.telegramId
         if (creatorTelegramId == null) {
