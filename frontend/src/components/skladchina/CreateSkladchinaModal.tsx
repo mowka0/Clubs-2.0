@@ -1,31 +1,31 @@
 import { FC, useMemo, useState } from 'react';
-import { Modal, Spinner } from '@telegram-apps/telegram-ui';
+import {
+  Modal,
+  Spinner,
+  Input,
+  Textarea,
+  Select,
+  Checkbox,
+} from '@telegram-apps/telegram-ui';
 import { useClubMembersQuery } from '../../queries/members';
 import { useCreateSkladchinaMutation } from '../../queries/skladchina';
 import { useHaptic } from '../../hooks/useHaptic';
-import { Toast } from '../Toast';
 import type { CreateSkladchinaRequest, SkladchinaMode } from '../../types/api';
 
 interface CreateSkladchinaModalProps {
   clubId: string;
-  // organizerUserId сохранён в типе для будущих расширений (например, организатор-default),
+  // organizerUserId сохранён в типе для будущих расширений (например, organizer-default),
   // но сейчас не используется — organizer может быть участником сбора как любой member.
   organizerUserId: string;
   onClose: () => void;
   onCreated: (skladchinaId: string) => void;
 }
 
-const MODE_LABELS: Record<SkladchinaMode, string> = {
-  fixed_equal: 'Поровну между всеми',
-  fixed_individual: 'Индивидуальная сумма каждому',
-  voluntary: 'По желанию (без фикс. суммы)',
-};
-
-const MODE_DESCRIPTIONS: Record<SkladchinaMode, string> = {
-  fixed_equal: 'Общая сумма делится поровну. Каждый видит свою долю.',
-  fixed_individual: 'Вы задаёте сумму для каждого участника отдельно.',
-  voluntary: 'Без фиксированной суммы. Участник вводит свою сумму при оплате.',
-};
+const MODE_OPTIONS: Array<{ value: SkladchinaMode; label: string; desc: string }> = [
+  { value: 'fixed_equal',      label: 'Поровну между всеми',           desc: 'Общая сумма делится поровну. Каждый видит свою долю.' },
+  { value: 'fixed_individual', label: 'Индивидуальная сумма каждому',  desc: 'Вы задаёте сумму для каждого участника отдельно.' },
+  { value: 'voluntary',        label: 'По желанию (без фикс. суммы)',  desc: 'Участник вводит свою сумму при оплате.' },
+];
 
 function rubToKopecks(rub: string): number | null {
   const v = Number(rub.replace(',', '.').trim());
@@ -68,9 +68,7 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
   const [affectsReputation, setAffectsReputation] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [individualAmounts, setIndividualAmounts] = useState<Record<string, string>>({});
-
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const toggleParticipant = (userId: string) => {
     haptic.select();
@@ -78,6 +76,11 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
     if (next.has(userId)) next.delete(userId);
     else next.add(userId);
     setSelectedIds(next);
+  };
+
+  const fail = (msg: string) => {
+    haptic.notify('error');
+    setSubmitError(msg);
   };
 
   const handleSubmit = async () => {
@@ -132,112 +135,106 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
     }
   };
 
-  const fail = (msg: string) => {
-    haptic.notify('error');
-    setSubmitError(msg);
-  };
-
   return (
     <Modal open onOpenChange={(open) => !open && onClose()}>
       <div className="sklad-create-modal">
         <h2>Новый сбор</h2>
 
-        <label className="field">
-          <span className="label">Название *</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={255} />
-        </label>
+        <Input
+          header="Название *"
+          placeholder="Бронь корта"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={255}
+        />
 
-        <label className="field">
-          <span className="label">Описание</span>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
-        </label>
+        <Textarea
+          header="Описание"
+          placeholder="Зачем сбор и что собираем"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={3}
+        />
 
-        <label className="field">
-          <span className="label">Правила (опц.)</span>
-          <textarea value={rules} onChange={(e) => setRules(e.target.value)} rows={2} />
-        </label>
+        <Textarea
+          header="Правила (опц.)"
+          placeholder="Например: возврат при отмене"
+          value={rules}
+          onChange={(e) => setRules(e.target.value)}
+          rows={2}
+        />
 
-        <label className="field">
-          <span className="label">Ссылка на фото (опц.)</span>
-          <input value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)} placeholder="https://…" />
-        </label>
+        <Input
+          header="Ссылка на фото (опц.)"
+          placeholder="https://…"
+          value={photoUrl}
+          onChange={(e) => setPhotoUrl(e.target.value)}
+        />
 
-        <div className="field">
-          <span className="label">Порядок сбора *</span>
-          <div className="mode-options">
-            {(Object.keys(MODE_LABELS) as SkladchinaMode[]).map((m) => (
-              <label key={m} className={mode === m ? 'mode-option active' : 'mode-option'}>
-                <input
-                  type="radio"
-                  name="mode"
-                  checked={mode === m}
-                  onChange={() => setMode(m)}
-                />
-                <div className="mode-text">
-                  <div className="mode-title">{MODE_LABELS[m]}</div>
-                  <div className="mode-desc">{MODE_DESCRIPTIONS[m]}</div>
-                </div>
-              </label>
-            ))}
-          </div>
+        <Select
+          header="Порядок сбора *"
+          value={mode}
+          onChange={(e) => setMode(e.target.value as SkladchinaMode)}
+        >
+          {MODE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </Select>
+        <div className="mode-hint">
+          {MODE_OPTIONS.find((o) => o.value === mode)?.desc}
         </div>
 
         {mode === 'fixed_equal' && (
-          <label className="field">
-            <span className="label">Общая сумма (₽) *</span>
-            <input
-              type="number"
-              inputMode="decimal"
-              min="1"
-              value={totalRub}
-              onChange={(e) => setTotalRub(e.target.value)}
-              placeholder="Например, 5000"
-            />
-          </label>
+          <Input
+            header="Общая сумма (₽) *"
+            type="number"
+            inputMode="decimal"
+            placeholder="5000"
+            value={totalRub}
+            onChange={(e) => setTotalRub(e.target.value)}
+          />
         )}
 
-        <label className="field">
-          <span className="label">Платёжная ссылка *</span>
-          <input
-            value={paymentLink}
-            onChange={(e) => setPaymentLink(e.target.value)}
-            placeholder="https://www.tinkoff.ru/cf/…"
-          />
-          <span className="hint">⚠️ Ссылка будет видна всем участникам сбора</span>
-        </label>
+        <Input
+          header="Платёжная ссылка *"
+          placeholder="https://www.tinkoff.ru/cf/…"
+          value={paymentLink}
+          onChange={(e) => setPaymentLink(e.target.value)}
+        />
+        <div className="modal-hint">⚠️ Ссылка будет видна всем участникам сбора</div>
 
-        <label className="field">
-          <span className="label">Банк / способ (опц.)</span>
-          <input
-            value={paymentMethodNote}
-            onChange={(e) => setPaymentMethodNote(e.target.value)}
-            placeholder="Тинькофф, СБП, ВТБ…"
-          />
-        </label>
+        <Input
+          header="Банк / способ (опц.)"
+          placeholder="Тинькофф, СБП…"
+          value={paymentMethodNote}
+          onChange={(e) => setPaymentMethodNote(e.target.value)}
+        />
 
-        <label className="field">
-          <span className="label">Срок до *</span>
-          <input
-            type="datetime-local"
-            value={deadline}
-            onChange={(e) => setDeadline(e.target.value)}
-          />
-        </label>
+        <Input
+          header="Срок до *"
+          type="datetime-local"
+          value={deadline}
+          onChange={(e) => setDeadline(e.target.value)}
+        />
 
-        <label className="field checkbox">
-          <input
-            type="checkbox"
+        <div className="reputation-toggle">
+          <Checkbox
             checked={affectsReputation}
             onChange={(e) => setAffectsReputation(e.target.checked)}
           />
-          <span>Влияет на репутацию участников (за неответ −25)</span>
-        </label>
+          <div className="reputation-toggle-text">
+            <div className="title">Влияет на репутацию</div>
+            <div className="sub">−5 за отказ, −25 за молчание</div>
+          </div>
+        </div>
 
-        <div className="field">
-          <span className="label">Участники * <span className="count">· выбрано {selectedIds.size}</span></span>
+        <div className="participants-block">
+          <div className="participants-label">
+            Участники * <span className="count">· выбрано {selectedIds.size}</span>
+          </div>
           {membersQuery.isPending && <Spinner size="s" />}
           {!membersQuery.isPending && eligibleMembers.length === 0 && (
-            <div className="hint">В клубе пока нет других активных участников.</div>
+            <div className="modal-hint">В клубе пока нет активных участников.</div>
           )}
           {eligibleMembers.length > 0 && (
             <div className="participants-list">
@@ -256,12 +253,10 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
                       </span>
                     </button>
                     {mode === 'fixed_individual' && isSelected && (
-                      <input
+                      <Input
                         type="number"
                         inputMode="decimal"
-                        min="1"
                         placeholder="₽"
-                        className="individual-amount"
                         value={individualAmounts[m.userId] ?? ''}
                         onChange={(e) =>
                           setIndividualAmounts((prev) => ({ ...prev, [m.userId]: e.target.value }))
@@ -288,8 +283,6 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
             {createMut.isPending ? 'Создаём…' : 'Создать сбор'}
           </button>
         </div>
-
-        {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
       </div>
     </Modal>
   );

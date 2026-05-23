@@ -9,6 +9,7 @@ import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
 import com.clubs.generated.jooq.enums.SkladchinaStatus
 import com.clubs.reputation.ReputationService
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
@@ -21,7 +22,7 @@ class SkladchinaService(
     private val clubRepository: ClubRepository,
     private val mapper: SkladchinaMapper,
     private val reputationService: ReputationService,
-    private val notifier: SkladchinaNotifier
+    private val eventPublisher: ApplicationEventPublisher
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaService::class.java)
 
@@ -84,7 +85,22 @@ class SkladchinaService(
         log.info("Skladchina created: id={} clubId={} creatorId={} mode={} participants={}",
             created.id, clubId, creatorId, mode, participants.size)
 
-        notifier.sendCreated(created, club.name, userIds)
+        // DM-рассылка идёт через @TransactionalEventListener в SkladchinaBotNotifier —
+        // гарантия отправки ПОСЛЕ commit'а транзакции (тот же паттерн что PaymentNotificationHandler).
+        eventPublisher.publishEvent(
+            SkladchinaCreatedEvent(
+                skladchinaId = created.id,
+                clubId = clubId,
+                clubName = club.name,
+                title = created.title,
+                description = created.description,
+                paymentLink = created.paymentLink,
+                paymentMode = created.paymentMode.literal,
+                totalGoalKopecks = created.totalGoalKopecks,
+                deadline = created.deadline,
+                participantUserIds = userIds
+            )
+        )
 
         return getDetail(created.id, creatorId)
     }
@@ -252,7 +268,20 @@ class SkladchinaService(
             applyReputationDeltas(skladchinaId, skladchina.clubId)
         }
 
-        notifier.sendClosed(skladchina, club.name, finalStatus, collected, paidCount, totalParticipants)
+        eventPublisher.publishEvent(
+            SkladchinaClosedEvent(
+                skladchinaId = skladchinaId,
+                creatorId = skladchina.creatorId,
+                clubName = club.name,
+                title = skladchina.title,
+                finalStatus = finalStatus,
+                collectedKopecks = collected,
+                totalGoalKopecks = skladchina.totalGoalKopecks,
+                paidCount = paidCount,
+                participantCount = totalParticipants,
+                affectsReputation = skladchina.affectsReputation
+            )
+        )
     }
 
     private fun computeFinalStatus(

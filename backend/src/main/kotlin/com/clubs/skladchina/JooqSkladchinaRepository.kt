@@ -101,23 +101,32 @@ class JooqSkladchinaRepository(
         val statusBucket = DSL.case_()
             .`when`(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active), 0)
             .otherwise(1)
+        // Conditional sort key — для active = deadline, для closed = NULL.
+        // SELECT DISTINCT требует чтобы все ORDER BY-выражения были в select list,
+        // поэтому выносим как alias `active_sort`.
+        val activeSort = DSL.field(
+            "CASE WHEN {0} = 'active' THEN {1} END",
+            java.time.OffsetDateTime::class.java,
+            SKLADCHINAS.STATUS, SKLADCHINAS.DEADLINE
+        )
 
         val skladchinaIds = dsl.selectDistinct(
             SKLADCHINAS.ID,
             SKLADCHINAS.DEADLINE,
             SKLADCHINAS.CLOSED_AT,
             statusBucket.`as`("sb"),
-            actionRequiredOrder.`as`("ar")
+            actionRequiredOrder.`as`("ar"),
+            activeSort.`as`("active_sort")
         )
             .from(SKLADCHINAS)
             .join(CLUBS).on(CLUBS.ID.eq(SKLADCHINAS.CLUB_ID))
             .leftJoin(SKLADCHINA_PARTICIPANTS).on(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(SKLADCHINAS.ID))
             .where(baseCondition)
             .orderBy(
-                DSL.field("sb").asc(),                  // active первыми
-                DSL.field("ar").desc(),                 // внутри active — actionRequired сверху
-                SKLADCHINAS.DEADLINE.asc(),             // active: ближайший deadline сверху
-                SKLADCHINAS.CLOSED_AT.desc()            // closed: самые свежие сверху
+                DSL.field("sb").asc(),                                       // active группа первой
+                DSL.field("ar").desc(),                                      // внутри active — actionRequired сверху
+                DSL.field("active_sort").asc().nullsLast(),                  // active: ближайший deadline; closed → NULL → в конец, но они уже разделены через sb
+                SKLADCHINAS.CLOSED_AT.desc().nullsLast()                     // closed: свежее закрытие сверху
             )
             .limit(size)
             .offset(page * size)
