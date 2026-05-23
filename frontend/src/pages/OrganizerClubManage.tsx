@@ -1,5 +1,5 @@
-import { FC, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { FC, useEffect, useState } from 'react';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   List,
   Section,
@@ -13,7 +13,6 @@ import {
   Modal,
   Input,
   Textarea,
-  Checkbox,
   TabsList,
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
@@ -28,33 +27,34 @@ import {
   useClubApplicationsQuery,
   useRejectApplicationMutation,
 } from '../queries/applications';
-import {
-  useClubEventsQuery,
-  useCreateEventMutation,
-  useEventQuery,
-  useMarkAttendanceMutation,
-} from '../queries/events';
-import { useClubActiveSkladchinasQuery } from '../queries/skladchina';
 import { useClubFinancesQuery } from '../queries/finances';
+import { ActivitiesManageTab } from '../components/manage/ActivitiesManageTab';
 import type { UpdateClubBody } from '../api/clubs';
-import type { CreateEventBody } from '../api/events';
 import type {
   MemberListItemDto,
-  EventListItemDto,
   ClubDetailDto,
 } from '../types/api';
-import { formatDatetime } from '../utils/formatters';
 
-type TabKey = 'members' | 'applications' | 'events' | 'skladchina' | 'finances' | 'settings';
+type TabKey = 'members' | 'applications' | 'activities' | 'finances' | 'settings';
 
 const TAB_LABELS: Record<TabKey, string> = {
   members: 'Участники',
   applications: 'Заявки',
-  events: 'События',
-  skladchina: 'Сборы',
+  activities: 'Активности',
   finances: 'Финансы',
   settings: 'Настройки',
 };
+
+const LEGACY_TAB_REDIRECTS: Record<string, TabKey> = {
+  events: 'activities',
+  skladchina: 'activities',
+};
+
+function resolveInitialTab(raw: string | null): TabKey {
+  if (!raw) return 'members';
+  if (raw in TAB_LABELS) return raw as TabKey;
+  return LEGACY_TAB_REDIRECTS[raw] ?? 'members';
+}
 
 function hoursRemaining(createdAt: string | null): number | null {
   if (!createdAt) return null;
@@ -68,66 +68,6 @@ function hoursRemaining(createdAt: string | null): number | null {
 
 // MemberProfileModal extracted to components/club/MemberProfileModal.tsx
 // (shared with ClubMembersTab inside unified ClubPage).
-
-// ---- Skladchina Tab ----
-
-interface SkladchinaManageTabProps {
-  clubId: string;
-}
-
-const SkladchinaManageTab: FC<SkladchinaManageTabProps> = ({ clubId }) => {
-  const navigate = useNavigate();
-  const haptic = useHaptic();
-  const activeQuery = useClubActiveSkladchinasQuery(clubId);
-
-  const items = activeQuery.data ?? [];
-
-  return (
-    <Section header="Активные сборы">
-      <div style={{ padding: '0 16px 12px' }}>
-        <Button
-          mode="filled"
-          size="m"
-          onClick={() => {
-            haptic.impact('light');
-            navigate(`/clubs/${clubId}/skladchina/new`);
-          }}
-          stretched
-        >
-          + Создать сбор
-        </Button>
-      </div>
-
-      {activeQuery.isPending && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}>
-          <Spinner size="s" />
-        </div>
-      )}
-
-      {!activeQuery.isPending && items.length === 0 && (
-        <Placeholder description="Сейчас в клубе нет активных сборов." />
-      )}
-
-      {items.map((s) => {
-        const hasGoal = s.totalGoalKopecks != null && s.totalGoalKopecks > 0;
-        const collectedRub = Math.floor(s.collectedKopecks / 100);
-        const goalRub = s.totalGoalKopecks != null ? Math.floor(s.totalGoalKopecks / 100) : null;
-        const sub = hasGoal
-          ? `${collectedRub} ₽ из ${goalRub} ₽ · ${s.paidCount}/${s.participantCount} оплатили`
-          : `${collectedRub} ₽ собрано · ${s.paidCount}/${s.participantCount}`;
-        return (
-          <Cell
-            key={s.id}
-            subtitle={sub}
-            onClick={() => { haptic.impact('light'); navigate(`/skladchina/${s.id}`); }}
-          >
-            {s.title}
-          </Cell>
-        );
-      })}
-    </Section>
-  );
-};
 
 // ---- Members Tab ----
 
@@ -307,358 +247,6 @@ const ApplicationsTab: FC<{ clubId: string }> = ({ clubId }) => {
         );
       })}
     </Section>
-  );
-};
-
-// ---- Event Detail Modal ----
-
-const EVENT_STATUS_LABELS: Record<string, string> = {
-  upcoming: 'Запланировано',
-  stage_1: 'Голосование',
-  stage_2: 'Подтверждение',
-  completed: 'Завершено',
-  cancelled: 'Отменено',
-};
-
-const EventDetailModal: FC<{ eventId: string; onClose: () => void }> = ({ eventId, onClose }) => {
-  const eventQuery = useEventQuery(eventId);
-  const detail = eventQuery.data;
-  const loading = eventQuery.isPending;
-
-  return (
-    <Modal open onOpenChange={(open) => !open && onClose()}>
-      <div style={{ padding: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <Text weight="2" style={{ fontSize: 18 }}>Детали события</Text>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--tgui--text_color)' }}>&#x2715;</button>
-        </div>
-
-        {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
-            <Spinner size="m" />
-          </div>
-        ) : detail ? (
-          <>
-            <Section>
-              <Cell subtitle="Название">{detail.title}</Cell>
-              <Cell subtitle="Дата и время">{formatDatetime(detail.eventDatetime)}</Cell>
-              <Cell subtitle="Место">{detail.locationText}</Cell>
-              <Cell subtitle="Статус">{EVENT_STATUS_LABELS[detail.status] ?? detail.status}</Cell>
-            </Section>
-
-            <Section header="Участники">
-              <Cell subtitle="Пойдут / лимит">{detail.goingCount} / {detail.participantLimit}</Cell>
-              <Cell subtitle="Может быть">{detail.maybeCount}</Cell>
-              <Cell subtitle="Не пойдут">{detail.notGoingCount}</Cell>
-              <Cell subtitle="Подтверждено">{detail.confirmedCount}</Cell>
-            </Section>
-
-            {detail.description && (
-              <Section header="Описание">
-                <div style={{ padding: '12px 16px', lineHeight: 1.5, color: 'var(--tgui--text_color)' }}>
-                  {detail.description}
-                </div>
-              </Section>
-            )}
-
-            {detail.status === 'completed' && (
-              <Section header="Посещаемость">
-                <Cell subtitle="Явка отмечена">{detail.attendanceMarked ? 'Да' : 'Нет'}</Cell>
-                <Cell subtitle="Явка финализирована">{detail.attendanceFinalized ? 'Да' : 'Нет'}</Cell>
-              </Section>
-            )}
-          </>
-        ) : (
-          <Placeholder description="Не удалось загрузить событие" />
-        )}
-      </div>
-    </Modal>
-  );
-};
-
-// ---- Events Tab ----
-
-interface EventFormState {
-  title: string;
-  locationText: string;
-  eventDatetime: string;
-  participantLimit: string;
-}
-
-const INITIAL_EVENT_FORM: EventFormState = {
-  title: '',
-  locationText: '',
-  eventDatetime: '',
-  participantLimit: '20',
-};
-
-const UPCOMING_STATUSES = ['upcoming', 'stage_1', 'stage_2'];
-
-const EventsTab: FC<{ clubId: string }> = ({ clubId }) => {
-  const haptic = useHaptic();
-  const eventsQuery = useClubEventsQuery(clubId, { size: '50' });
-  const createEventMutation = useCreateEventMutation();
-  const markAttendanceMutation = useMarkAttendanceMutation();
-
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<EventFormState>(INITIAL_EVENT_FORM);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [attendanceEventId, setAttendanceEventId] = useState<string | null>(null);
-  const [attendanceList, setAttendanceList] = useState<{ userId: string; attended: boolean }[]>([]);
-  const [attendanceError, setAttendanceError] = useState<string | null>(null);
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-
-  const events = eventsQuery.data?.content ?? [];
-  const submitting = createEventMutation.isPending;
-  const markingAttendance = markAttendanceMutation.isPending;
-
-  const update = (field: keyof EventFormState, value: string) =>
-    setForm((f) => ({ ...f, [field]: value }));
-
-  const handleCreateEvent = () => {
-    setFormError(null);
-    if (!form.title.trim()) { setFormError('Укажите название'); return; }
-    if (!form.locationText.trim()) { setFormError('Укажите место'); return; }
-    if (!form.eventDatetime) { setFormError('Укажите дату и время'); return; }
-    const limit = Number(form.participantLimit);
-    if (!limit || limit < 1) { setFormError('Укажите лимит участников'); return; }
-
-    haptic.impact('medium');
-    const body: CreateEventBody = {
-      title: form.title.trim(),
-      locationText: form.locationText.trim(),
-      eventDatetime: new Date(form.eventDatetime).toISOString(),
-      participantLimit: limit,
-    };
-    createEventMutation.mutate(
-      { clubId, body },
-      {
-        onSuccess: () => {
-          haptic.notify('success');
-          setForm(INITIAL_EVENT_FORM);
-          setShowForm(false);
-        },
-        onError: (e) => {
-          setFormError(e.message);
-          haptic.notify('error');
-        },
-      },
-    );
-  };
-
-  const openAttendanceModal = (event: EventListItemDto) => {
-    setAttendanceEventId(event.id);
-    setAttendanceList([]);
-    setAttendanceError(null);
-  };
-
-  const handleMarkAttendance = () => {
-    if (!attendanceEventId) return;
-    haptic.impact('medium');
-    setAttendanceError(null);
-    markAttendanceMutation.mutate(
-      { eventId: attendanceEventId, attendance: attendanceList.filter((a) => a.attended) },
-      {
-        onSuccess: () => {
-          haptic.notify('success');
-          setAttendanceEventId(null);
-          setAttendanceList([]);
-        },
-        onError: (e) => {
-          console.error('Failed to mark attendance', e);
-          setAttendanceError(e.message);
-          haptic.notify('error');
-        },
-      },
-    );
-  };
-
-  const upcomingEvents = events.filter((e) => UPCOMING_STATUSES.includes(e.status));
-  const completedEvents = events.filter((e) => e.status === 'completed');
-
-  if (eventsQuery.isPending) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
-        <Spinner size="m" />
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <Section>
-        <Button size="l" stretched onClick={() => setShowForm((s) => !s)}>
-          {showForm ? 'Отменить' : '+ Создать событие'}
-        </Button>
-      </Section>
-
-      {showForm && (
-        <Section header="Новое событие">
-          <Input
-            header="Название *"
-            placeholder="Например: Йога в парке"
-            value={form.title}
-            onChange={(e) => update('title', e.target.value)}
-          />
-          <Input
-            header="Место *"
-            placeholder="Адрес или описание"
-            value={form.locationText}
-            onChange={(e) => update('locationText', e.target.value)}
-          />
-          <div style={{ padding: '0 16px' }}>
-            <div style={{ fontSize: 14, color: 'var(--tgui--hint_color)', marginBottom: 4, marginTop: 12 }}>
-              Дата и время *
-            </div>
-            <input
-              type="datetime-local"
-              value={form.eventDatetime}
-              onChange={(e) => update('eventDatetime', e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                fontSize: 16,
-                border: '1px solid var(--tgui--divider)',
-                borderRadius: 10,
-                background: 'var(--tgui--secondary_bg_color)',
-                color: 'var(--tgui--text_color)',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
-          <Input
-            header="Лимит участников *"
-            type="number"
-            placeholder="20"
-            value={form.participantLimit}
-            onChange={(e) => update('participantLimit', e.target.value)}
-          />
-
-          {formError && (
-            <div style={{ padding: '8px 16px', color: 'var(--tgui--destructive_text_color)', fontSize: 14 }}>
-              {formError}
-            </div>
-          )}
-
-          <div style={{ padding: '8px 16px 16px' }}>
-            <Button size="m" onClick={handleCreateEvent} disabled={submitting} stretched>
-              {submitting ? <Spinner size="s" /> : 'Создать'}
-            </Button>
-          </div>
-        </Section>
-      )}
-
-      {upcomingEvents.length > 0 && (
-        <Section header="Предстоящие">
-          {upcomingEvents.map((evt) => (
-            <Cell
-              key={evt.id}
-              onClick={() => setSelectedEventId(evt.id)}
-              subtitle={`${formatDatetime(evt.eventDatetime)} | ${evt.locationText}`}
-              after={
-                <Badge type="number" mode="secondary">
-                  {evt.goingCount}/{evt.participantLimit}
-                </Badge>
-              }
-            >
-              {evt.title}
-            </Cell>
-          ))}
-        </Section>
-      )}
-
-      {completedEvents.length > 0 && (
-        <Section header="Завершённые">
-          {completedEvents.map((evt) => (
-            <Cell
-              key={evt.id}
-              onClick={() => setSelectedEventId(evt.id)}
-              subtitle={formatDatetime(evt.eventDatetime)}
-              after={
-                <Button size="s" mode="outline" onClick={(e) => { e.stopPropagation(); openAttendanceModal(evt); }}>
-                  Присутствие
-                </Button>
-              }
-            >
-              {evt.title}
-            </Cell>
-          ))}
-        </Section>
-      )}
-
-      {upcomingEvents.length === 0 && completedEvents.length === 0 && !showForm && (
-        <Placeholder description="Событий пока нет. Создайте первое!" />
-      )}
-
-      {/* Event Detail Modal */}
-      {selectedEventId && (
-        <EventDetailModal eventId={selectedEventId} onClose={() => setSelectedEventId(null)} />
-      )}
-
-      {/* Attendance Modal */}
-      {attendanceEventId !== null && (
-        <Modal open onOpenChange={(open) => { if (!open) setAttendanceEventId(null); }}>
-          <div style={{ padding: 16 }}>
-            <Text weight="2" style={{ fontSize: 18, display: 'block', marginBottom: 12 }}>
-              Отметить присутствие
-            </Text>
-
-            {attendanceList.length === 0 && (
-              <div style={{ padding: '12px 0', color: 'var(--tgui--hint_color)', fontSize: 14, lineHeight: 1.5 }}>
-                Список подтверждённых участников загружается из данных события.
-                Добавьте участников вручную или отметьте присутствие через API.
-              </div>
-            )}
-
-            {attendanceList.map((item, idx) => (
-              <Cell
-                key={item.userId}
-                Component="label"
-                before={
-                  <Checkbox
-                    checked={item.attended}
-                    onChange={(e) => {
-                      const next = [...attendanceList];
-                      next[idx] = { ...next[idx], attended: (e.target as HTMLInputElement).checked };
-                      setAttendanceList(next);
-                    }}
-                  />
-                }
-              >
-                {item.userId.slice(0, 8)}...
-              </Cell>
-            ))}
-
-            {attendanceError && (
-              <div style={{ padding: '8px 0', color: 'var(--tgui--destructive_text_color)', fontSize: 14 }}>
-                {attendanceError}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              <Button
-                size="m"
-                mode="outline"
-                onClick={() => setAttendanceEventId(null)}
-                stretched
-              >
-                Закрыть
-              </Button>
-              {attendanceList.length > 0 && (
-                <Button
-                  size="m"
-                  onClick={handleMarkAttendance}
-                  disabled={markingAttendance}
-                  stretched
-                >
-                  {markingAttendance ? <Spinner size="s" /> : 'Сохранить'}
-                </Button>
-              )}
-            </div>
-          </div>
-        </Modal>
-      )}
-    </>
   );
 };
 
@@ -953,7 +541,41 @@ export const OrganizerClubManage: FC = () => {
   const haptic = useHaptic();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabKey>('members');
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const initialTab = resolveInitialTab(searchParams.get('tab'));
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
+
+  // Read flash toast from navigation state (e.g. set by CreateEventPage on success).
+  const flashToast =
+    typeof location.state === 'object' &&
+    location.state !== null &&
+    'toast' in location.state &&
+    typeof (location.state as { toast?: unknown }).toast === 'string'
+      ? (location.state as { toast: string }).toast
+      : null;
+  const [toast, setToast] = useState<string | null>(flashToast);
+
+  // Clear navigation state once consumed so back-nav doesn't re-trigger the toast.
+  useEffect(() => {
+    if (flashToast) {
+      window.history.replaceState({}, document.title);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Normalize legacy `?tab=events` / `?tab=skladchina` deep-links to `?tab=activities`
+  // so refresh / share doesn't keep the dead value around.
+  useEffect(() => {
+    const raw = searchParams.get('tab');
+    if (raw && raw in LEGACY_TAB_REDIRECTS) {
+      const next = new URLSearchParams(searchParams);
+      next.set('tab', LEGACY_TAB_REDIRECTS[raw]!);
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const clubId = id ?? '';
   const clubQuery = useClubQuery(clubId || undefined);
@@ -970,10 +592,8 @@ export const OrganizerClubManage: FC = () => {
         return <MembersTab clubId={clubId} />;
       case 'applications':
         return <ApplicationsTab clubId={clubId} />;
-      case 'events':
-        return <EventsTab clubId={clubId} />;
-      case 'skladchina':
-        return <SkladchinaManageTab clubId={clubId} />;
+      case 'activities':
+        return <ActivitiesManageTab clubId={clubId} />;
       case 'finances':
         return <FinancesTab clubId={clubId} />;
       case 'settings':
@@ -1023,6 +643,8 @@ export const OrganizerClubManage: FC = () => {
 
       {/* Tab content */}
       {renderTab()}
+
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </List>
   );
 };

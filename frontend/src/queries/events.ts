@@ -101,6 +101,9 @@ export function useCreateEventMutation() {
     onSuccess: (_data, { clubId }) => {
       // Invalidate every params variant of this club's event list (filters/pagination).
       qc.invalidateQueries({ queryKey: queryKeys.events.byClubAll(clubId) });
+      // Unified activity feed must refresh too — newly created event must
+      // appear at the top across all filter variants of the manage tab.
+      qc.invalidateQueries({ queryKey: queryKeys.activities.byClubAll(clubId) });
     },
   });
 }

@@ -55,6 +55,13 @@ function renderClubPage(clubId: string = 'club-123') {
 // Helpers for member/organizer scenarios — keep tab data endpoints empty by default.
 function mockEmptyTabData(clubId: string = 'club-123') {
   server.use(
+    http.get(`*/api/clubs/${clubId}/activities`, () => HttpResponse.json({
+      content: [],
+      totalElements: 0,
+      totalPages: 0,
+      page: 0,
+      size: 20,
+    })),
     http.get(`*/api/clubs/${clubId}/events`, () => HttpResponse.json({
       content: [],
       totalElements: 0,
@@ -117,7 +124,7 @@ describe('ClubPage', () => {
     });
   });
 
-  it('visitor sees placeholder "События доступны участникам клуба" and no tabs', async () => {
+  it('visitor sees placeholder "Активности клуба доступны участникам" and no tabs', async () => {
     server.use(
       http.get('*/api/clubs/:id', () => {
         return HttpResponse.json({
@@ -132,7 +139,7 @@ describe('ClubPage', () => {
     renderClubPage();
 
     await waitFor(() => {
-      expect(screen.getByText(/события доступны участникам клуба/i)).toBeInTheDocument();
+      expect(screen.getByText(/активности клуба доступны участникам/i)).toBeInTheDocument();
     });
     expect(screen.queryByRole('button', { name: /^участники$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^мой профиль$/i })).not.toBeInTheDocument();
@@ -336,7 +343,7 @@ describe('ClubPage', () => {
     });
   });
 
-  it('member sees role-aware tabs (events / members / profile) without manage tab and without CTA', async () => {
+  it('member sees role-aware tabs (activities / members / profile) without manage tab and without CTA', async () => {
     server.use(
       http.get('*/api/clubs/:id', () => {
         return HttpResponse.json({
@@ -363,7 +370,7 @@ describe('ClubPage', () => {
     renderClubPage();
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /^события$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^активности$/i })).toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: /^участники$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^мой профиль$/i })).toBeInTheDocument();

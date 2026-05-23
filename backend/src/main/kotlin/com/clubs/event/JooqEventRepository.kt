@@ -72,6 +72,19 @@ class JooqEventRepository(
         return PageResponse(content = items, totalElements = total, totalPages = totalPages, page = page, size = size)
     }
 
+    override fun findAllByClubWithGoingCount(clubId: UUID): List<EventWithGoingCount> {
+        val events = dsl.selectFrom(EVENTS)
+            .where(EVENTS.CLUB_ID.eq(clubId))
+            .orderBy(EVENTS.CREATED_AT.desc(), EVENTS.ID.asc())
+            .fetch()
+            .map(mapper::toDomain)
+
+        if (events.isEmpty()) return emptyList()
+
+        val goingCounts = fetchGoingCounts(events.map { it.id })
+        return events.map { EventWithGoingCount(event = it, goingCount = goingCounts[it.id] ?: 0) }
+    }
+
     override fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MyFeedItem> {
         val now = OffsetDateTime.now()
 

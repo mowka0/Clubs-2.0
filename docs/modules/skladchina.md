@@ -5,6 +5,17 @@
 > от 2026-05-17). Post-flight отклонения от исходной спеки + post-staging фиксы
 > зафиксированы в § ниже.
 
+> **Update (post `feature/unified-activity-creation`, 2026-05-24):**
+> вкладки `События` и `Сборы` в `OrganizerClubManage` объединены в одну
+> вкладку `Активности` с unified-feed и Modal-picker'ом «+ Создать».
+> Компоненты `SkladchinaManageTab` и `EventsTab` удалены — их функции
+> делит `ActivitiesManageTab` + `ActivityCard` (внутри switch по `type`).
+> Создание сбора по-прежнему ведёт на `/clubs/:id/skladchina/new`
+> (`CreateSkladchinaPage`), endpoint `POST /api/clubs/:id/skladchinas` не
+> изменился. Все упоминания «новый 4-й таб `SkladchinaManageTab`» / «segmented
+> control События | Сборы» ниже остаются как **исторический контекст** этой
+> спеки. Актуальная UX-картина — [`unified-activity-creation.md`](./unified-activity-creation.md).
+
 ## Post-staging hotfixes round 2 (2026-05-23 вечер)
 
 После первого захода на staging пришёл второй пакет фидбека — все закрыты:

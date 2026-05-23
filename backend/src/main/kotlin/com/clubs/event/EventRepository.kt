@@ -13,6 +13,13 @@ interface EventRepository {
 
     fun findByClubId(clubId: UUID, status: EventStatus?, page: Int, size: Int): PageResponse<EventListItemDto>
 
+    /**
+     * Returns ALL events of the given club (any status, any datetime) paired with the
+     * cached going-vote count. Used by the unified activity feed where pagination /
+     * sorting is decided at a higher level (in-memory merge with skladchinas).
+     */
+    fun findAllByClubWithGoingCount(clubId: UUID): List<EventWithGoingCount>
+
     fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MyFeedItem>
 
     fun getVoteCounts(eventId: UUID): Map<String, Int>
@@ -27,3 +34,8 @@ interface EventRepository {
 
     fun finalizeAttendanceBefore(eventDatetimeCutoff: OffsetDateTime): Int
 }
+
+data class EventWithGoingCount(
+    val event: Event,
+    val goingCount: Int
+)

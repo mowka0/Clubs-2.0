@@ -22,7 +22,7 @@ import { useMyApplicationsQuery } from '../queries/applications';
 import { ApiError } from '../api/apiClient';
 import { isPendingPayment } from '../types/api';
 import { formatPrice } from '../utils/formatters';
-import { ClubEventsTab } from '../components/club/ClubEventsTab';
+import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubProfileTab } from '../components/club/ClubProfileTab';
 import { BrandBackdrop } from '../components/BrandBackdrop';
@@ -37,7 +37,7 @@ const ACCESS_LABELS: Record<string, string> = {
   open: 'Открытый', closed: 'По заявке', private: 'Приватный',
 };
 
-type TabId = 'events' | 'members' | 'profile';
+type TabId = 'activities' | 'members' | 'profile';
 type TabKey = TabId | 'manage';
 
 interface TabItem {
@@ -88,7 +88,7 @@ export const ClubPage: FC = () => {
   const [answerText, setAnswerText] = useState('');
   const [joinSuccess, setJoinSuccess] = useState(false);
   const [pendingPayment, setPendingPayment] = useState<{ priceStars: number; message: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<TabId>('events');
+  const [activeTab, setActiveTab] = useState<TabId>('activities');
 
   const club = clubQuery.data;
   const myClubs = myClubsQuery.data ?? [];
@@ -246,7 +246,7 @@ export const ClubPage: FC = () => {
   const roleBadgeLabel = isOrganizer ? 'Вы организатор' : isMember ? 'Вы участник' : null;
 
   const tabItems: TabItem[] = [
-    { key: 'events', label: 'События', selected: activeTab === 'events' },
+    { key: 'activities', label: 'Активности', selected: activeTab === 'activities' },
     { key: 'members', label: 'Участники', selected: activeTab === 'members' },
     { key: 'profile', label: 'Мой профиль', selected: activeTab === 'profile' },
   ];
@@ -327,7 +327,7 @@ export const ClubPage: FC = () => {
           <div className="cp-locked">
             <div className="ico"><LockIcon /></div>
             <div className="text">
-              <strong>События доступны участникам клуба</strong>
+              <strong>Активности клуба доступны участникам</strong>
               Содержимое клуба открывается после вступления.
             </div>
           </div>
@@ -360,7 +360,7 @@ export const ClubPage: FC = () => {
             ))}
           </div>
 
-          {activeTab === 'events' && <ClubEventsTab clubId={id} />}
+          {activeTab === 'activities' && <ClubActivitiesTab clubId={id} />}
           {activeTab === 'members' && <ClubMembersTab clubId={id} />}
           {activeTab === 'profile' && user?.id && (
             <ClubProfileTab clubId={id} userId={user.id} />

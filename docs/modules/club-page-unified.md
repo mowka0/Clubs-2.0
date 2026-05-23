@@ -1,5 +1,13 @@
 # Club Page Unified — единая страница клуба для всех ролей
 
+> **Update (post `feature/unified-activity-creation`, 2026-05-24):** таб
+> `События` переименован в `Активности` и теперь содержит unified-ленту
+> events + skladchinas (read-only для member, без `+ Создать`). Компонент
+> `ClubEventsTab.tsx` удалён, его место занял `ClubActivitiesTab.tsx`. Все
+> прежние упоминания «events tab», `<TabId='events'>`, `ClubEventsTab` ниже
+> остаются как **исторический контекст** этой спеки. Актуальный TabId —
+> `'activities'`. Полная спека — [`unified-activity-creation.md`](./unified-activity-creation.md).
+
 ## Цель
 
 Сейчас один и тот же клуб имеет **три разные frontend-страницы** в зависимости от роли user'а:

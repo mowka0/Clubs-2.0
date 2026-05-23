@@ -118,8 +118,8 @@ X = memberLimit * subscriptionPrice * 0.8
 | Роль | Header (с avatar/name/badges) | About-секция | Tabs (brand `cp-tab-row`) | CTA |
 |---|---|---|---|---|
 | **Visitor** | ✓ (без role-badge) | ✓ | — | «Вступить» / «Хочу вступить» / disabled-варианты для pending state |
-| **Member** | ✓ + badge «Вы участник» | ✓ | События / Участники / Мой профиль | — (статус в badge) |
-| **Organizer** | ✓ + badge «Вы организатор» | ✓ | События / Участники / Мой профиль / **Управление** | — |
+| **Member** | ✓ + badge «Вы участник» | ✓ | Активности / Участники / Мой профиль | — (статус в badge) |
+| **Organizer** | ✓ + badge «Вы организатор» | ✓ | Активности / Участники / Мой профиль / **Управление** | — |
 
 «Управление» — **navigate-link**, не state-tab: `handleTabClick('manage')` делает `haptic.impact('light')` + `navigate('/clubs/:id/manage')`, активной не становится.
 
@@ -129,7 +129,7 @@ X = memberLimit * subscriptionPrice * 0.8
 
 | Файл | Источник данных | Заметки |
 |---|---|---|
-| `ClubEventsTab.tsx` | `useClubEventsQuery(clubId, { size: '100' })` | Upcoming (статусы `upcoming`/`stage_1`/`stage_2`) + past (max 5). Tap по Cell → `/events/:id` |
+| `ClubActivitiesTab.tsx` | `useClubActivitiesQuery(clubId, filters)` (`useInfiniteQuery`) | Read-only unified-feed events + skladchinas клуба, sort by `createdAt DESC`, group-by-day. Tap по карточке → `/events/:id` или `/skladchina/:id`. Заменил `ClubEventsTab.tsx` (удалён) в `feature/unified-activity-creation`. |
 | `ClubMembersTab.tsx` | `useClubMembersQuery(clubId)` | Список с avatar/reliability, badge «Организатор» для `role === 'organizer'` |
 | `ClubProfileTab.tsx` | `useMemberProfileQuery(clubId, userId)` | Avatar + reputation-метрики (reliability / promiseFulfillmentPct / totalConfirmations) |
 
@@ -172,7 +172,13 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 ## OrganizerClubManage — Страница управления клубом (`/clubs/:id/manage`)
 
 ### Описание
-Страница доступна только организатору. Содержит **5 вкладок**: Участники, Заявки, События, Финансы, Настройки.
+Страница доступна только организатору. Содержит **5 вкладок**: Участники, Заявки, Активности, Финансы, Настройки.
+
+> **Note (post `feature/unified-activity-creation`):** ранее было 6 вкладок
+> (`События` + `Сборы` отдельными табами). В рамках unified-activity-creation
+> они объединены в одну вкладку `Активности` с единой лентой
+> events+skladchinas и Modal-picker'ом «+ Создать». Полная спека —
+> [`unified-activity-creation.md`](./unified-activity-creation.md).
 
 ### Вкладки
 
@@ -191,19 +197,24 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 - Кнопки "Принять" / "Отклонить" → `POST /api/applications/:id/approve` или `/reject`
 - Таймер до автоотклонения (48ч с момента создания)
 
-#### События (`EventsTab`)
-- Список через `GET /api/clubs/:id/events?size=50`
-- Предстоящие (статусы: `upcoming`, `stage_1`, `stage_2`) и Завершённые (`completed`)
-- Клик по событию → `EventDetailModal`
-- Кнопка "Присутствие" на завершённых → AttendanceModal (отметка явки)
-- Форма создания события: название, место, дата/время, лимит участников
+#### Активности (`ActivitiesManageTab`)
 
-#### EventDetailModal
-Загружает `GET /api/events/:id`. Показывает:
-- Название, дата/время, место, статус (с русской меткой)
-- Счётчики: пойдут / лимит, может быть, не пойдут, подтверждено
-- Описание (если есть)
-- Для завершённых: флаги `attendanceMarked` и `attendanceFinalized`
+Единая лента событий + сборов клуба, отсортированная по `createdAt DESC`,
+сгруппированная по дню (`Сегодня` / `Вчера` / `<день месяц>`).
+
+- Источник: `GET /api/clubs/:id/activities` (unified-endpoint), `useClubActivitiesQuery`
+  → `useInfiniteQuery`
+- Sticky-top `+ Создать` → `CreateActivityPicker` (`Modal` с двумя опциями:
+  🗓 Событие / 💰 Сбор) → navigate на `CreateEventPage` (`/clubs/:id/events/new`)
+  или `CreateSkladchinaPage` (`/clubs/:id/skladchina/new`)
+- Chips-фильтр: `Все` · `События` · `Сборы`
+- Tap по карточке → детальная страница (`/events/:id` или `/skladchina/:id`)
+- `EventDetailModal` **удалён** (модал-внутри-модала был anti-pattern;
+  переход на полноценные detail-страницы)
+- Inline-форма создания события из бывшего `EventsTab` **удалена** —
+  заменена на полноэкранную `CreateEventPage`
+
+Полная спека — [`unified-activity-creation.md`](./unified-activity-creation.md).
 
 #### Финансы (`FinancesTab`)
 - `GET /api/clubs/:id/finances` → активные участники, выручка за месяц, доля организатора, комиссия платформы

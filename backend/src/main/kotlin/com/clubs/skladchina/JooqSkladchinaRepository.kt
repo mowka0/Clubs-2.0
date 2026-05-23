@@ -70,6 +70,65 @@ class JooqSkladchinaRepository(
             .fetch()
             .map(mapper::toDomain)
 
+    override fun findAllByClubWithAggregates(
+        clubId: UUID,
+        includeCompleted: Boolean
+    ): List<SkladchinaWithAggregates> {
+        var condition = SKLADCHINAS.CLUB_ID.eq(clubId)
+        if (!includeCompleted) {
+            condition = condition.and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active))
+        }
+
+        val skladchinas = dsl.selectFrom(SKLADCHINAS)
+            .where(condition)
+            .orderBy(SKLADCHINAS.CREATED_AT.desc(), SKLADCHINAS.ID.asc())
+            .fetch()
+            .map(mapper::toDomain)
+
+        if (skladchinas.isEmpty()) return emptyList()
+
+        val ids = skladchinas.map { it.id }
+
+        val participantCounts = dsl.select(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID, DSL.count())
+            .from(SKLADCHINA_PARTICIPANTS)
+            .where(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.`in`(ids))
+            .groupBy(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID)
+            .fetch()
+            .associate { it.value1()!! to it.value2() }
+
+        val paidCounts = dsl.select(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID, DSL.count())
+            .from(SKLADCHINA_PARTICIPANTS)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.`in`(ids)
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid))
+            )
+            .groupBy(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID)
+            .fetch()
+            .associate { it.value1()!! to it.value2() }
+
+        val collectedSums = dsl.select(
+            SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID,
+            DSL.sum(SKLADCHINA_PARTICIPANTS.DECLARED_AMOUNT_KOPECKS)
+        )
+            .from(SKLADCHINA_PARTICIPANTS)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.`in`(ids)
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid))
+            )
+            .groupBy(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID)
+            .fetch()
+            .associate { it.value1()!! to (it.value2()?.toLong() ?: 0L) }
+
+        return skladchinas.map { s ->
+            SkladchinaWithAggregates(
+                skladchina = s,
+                collectedKopecks = collectedSums[s.id] ?: 0L,
+                participantCount = participantCounts[s.id] ?: 0,
+                paidCount = paidCounts[s.id] ?: 0
+            )
+        }
+    }
+
     override fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MySkladchinaFeedItem> {
         // Скоуп — сборы, где user либо participant, либо creator. Active клубы only.
         // Включаем И активные, И закрытые — закрытые остаются в истории.
