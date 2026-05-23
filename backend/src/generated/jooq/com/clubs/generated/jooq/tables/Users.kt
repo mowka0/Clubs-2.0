@@ -10,6 +10,9 @@ import com.clubs.generated.jooq.keys.CLUBS__CLUBS_OWNER_ID_FKEY
 import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CREATED_BY_FKEY
 import com.clubs.generated.jooq.keys.EVENT_RESPONSES__EVENT_RESPONSES_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY
+import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CLOSED_BY_FKEY
+import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CREATOR_ID_FKEY
+import com.clubs.generated.jooq.keys.SKLADCHINA_PARTICIPANTS__SKLADCHINA_PARTICIPANTS_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.TRANSACTIONS__TRANSACTIONS_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.USERS_PKEY
 import com.clubs.generated.jooq.keys.USERS_TELEGRAM_ID_KEY
@@ -19,6 +22,8 @@ import com.clubs.generated.jooq.tables.Clubs.ClubsPath
 import com.clubs.generated.jooq.tables.EventResponses.EventResponsesPath
 import com.clubs.generated.jooq.tables.Events.EventsPath
 import com.clubs.generated.jooq.tables.Memberships.MembershipsPath
+import com.clubs.generated.jooq.tables.SkladchinaParticipants.SkladchinaParticipantsPath
+import com.clubs.generated.jooq.tables.Skladchinas.SkladchinasPath
 import com.clubs.generated.jooq.tables.Transactions.TransactionsPath
 import com.clubs.generated.jooq.tables.UserClubReputation.UserClubReputationPath
 import com.clubs.generated.jooq.tables.records.UsersRecord
@@ -248,6 +253,54 @@ open class Users(
     val memberships: MembershipsPath
         get(): MembershipsPath = memberships()
 
+    private lateinit var _skladchinaParticipants: SkladchinaParticipantsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.skladchina_participants</code> table
+     */
+    fun skladchinaParticipants(): SkladchinaParticipantsPath {
+        if (!this::_skladchinaParticipants.isInitialized)
+            _skladchinaParticipants = SkladchinaParticipantsPath(this, null, SKLADCHINA_PARTICIPANTS__SKLADCHINA_PARTICIPANTS_USER_ID_FKEY.inverseKey)
+
+        return _skladchinaParticipants;
+    }
+
+    val skladchinaParticipants: SkladchinaParticipantsPath
+        get(): SkladchinaParticipantsPath = skladchinaParticipants()
+
+    private lateinit var _skladchinasClosedByFkey: SkladchinasPath
+
+    /**
+     * Get the implicit to-many join path to the <code>public.skladchinas</code>
+     * table, via the <code>skladchinas_closed_by_fkey</code> key
+     */
+    fun skladchinasClosedByFkey(): SkladchinasPath {
+        if (!this::_skladchinasClosedByFkey.isInitialized)
+            _skladchinasClosedByFkey = SkladchinasPath(this, null, SKLADCHINAS__SKLADCHINAS_CLOSED_BY_FKEY.inverseKey)
+
+        return _skladchinasClosedByFkey;
+    }
+
+    val skladchinasClosedByFkey: SkladchinasPath
+        get(): SkladchinasPath = skladchinasClosedByFkey()
+
+    private lateinit var _skladchinasCreatorIdFkey: SkladchinasPath
+
+    /**
+     * Get the implicit to-many join path to the <code>public.skladchinas</code>
+     * table, via the <code>skladchinas_creator_id_fkey</code> key
+     */
+    fun skladchinasCreatorIdFkey(): SkladchinasPath {
+        if (!this::_skladchinasCreatorIdFkey.isInitialized)
+            _skladchinasCreatorIdFkey = SkladchinasPath(this, null, SKLADCHINAS__SKLADCHINAS_CREATOR_ID_FKEY.inverseKey)
+
+        return _skladchinasCreatorIdFkey;
+    }
+
+    val skladchinasCreatorIdFkey: SkladchinasPath
+        get(): SkladchinasPath = skladchinasCreatorIdFkey()
+
     private lateinit var _transactions: TransactionsPath
 
     /**
@@ -286,6 +339,13 @@ open class Users(
      */
     val membershipsClubIdFkey: ClubsPath
         get(): ClubsPath = memberships().clubs()
+
+    /**
+     * Get the implicit many-to-many join path to the
+     * <code>public.skladchinas</code> table
+     */
+    val skladchinas: SkladchinasPath
+        get(): SkladchinasPath = skladchinaParticipants().skladchinas()
 
     /**
      * Get the implicit many-to-many join path to the <code>public.clubs</code>

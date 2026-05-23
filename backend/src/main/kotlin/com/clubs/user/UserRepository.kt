@@ -20,6 +20,16 @@ class UserRepository(private val dsl: DSLContext) {
             .where(USERS.ID.eq(id))
             .fetchOne()
 
+    /** Returns Telegram chat IDs for given user IDs, in arbitrary order. Used by NotificationService for batch DMs. */
+    fun findTelegramIds(userIds: Collection<UUID>): List<Long> {
+        if (userIds.isEmpty()) return emptyList()
+        return dsl.select(USERS.TELEGRAM_ID)
+            .from(USERS)
+            .where(USERS.ID.`in`(userIds))
+            .fetch(USERS.TELEGRAM_ID)
+            .filterNotNull()
+    }
+
     fun upsert(
         telegramId: Long,
         telegramUsername: String?,

@@ -130,4 +130,30 @@ class ReputationService(
         val confirmedAndAttended: Boolean,
         val confirmed: Boolean
     )
+
+    /**
+     * Adjust user's reliability index in a specific club by a fixed delta.
+     * Public API for non-event reputation sources (e.g. skladchina close).
+     * Does NOT touch event-specific counters (totalConfirmations, totalAttendances,
+     * spontaneityCount) — those stay event-bound. Creates a new row if reputation
+     * doesn't yet exist for this user+club pair.
+     */
+    @Transactional
+    fun addReliabilityDelta(userId: UUID, clubId: UUID, delta: Int, reason: String) {
+        val existing = repository.findByUserAndClub(userId, clubId)
+        val baseReliability = existing?.reliabilityIndex ?: 0
+        val newReliability = baseReliability + delta
+        val updated = Reputation(
+            userId = userId,
+            clubId = clubId,
+            reliabilityIndex = newReliability,
+            promiseFulfillmentPct = existing?.promiseFulfillmentPct ?: BigDecimal.ZERO,
+            totalConfirmations = existing?.totalConfirmations ?: 0,
+            totalAttendances = existing?.totalAttendances ?: 0,
+            spontaneityCount = existing?.spontaneityCount ?: 0
+        )
+        repository.save(updated)
+        log.info("Reliability delta applied: userId={} clubId={} delta={} reason={} newIndex={}",
+            userId, clubId, delta, reason, newReliability)
+    }
 }

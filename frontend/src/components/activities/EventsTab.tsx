@@ -1,14 +1,13 @@
 import { FC, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
-import { useHaptic } from '../hooks/useHaptic';
-import { useMyEventsQuery } from '../queries/events';
-import { BrandBackdrop } from '../components/BrandBackdrop';
-import { FeedSection } from '../components/feed/FeedSection';
-import { FeedSkeleton } from '../components/feed/FeedSkeleton';
-import { FeedEmpty } from '../components/feed/FeedEmpty';
-import { EventCard } from '../components/feed/EventCard';
-import { groupMyEvents } from '../utils/feedGrouping';
+import { useHaptic } from '../../hooks/useHaptic';
+import { useMyEventsQuery } from '../../queries/events';
+import { FeedSection } from '../feed/FeedSection';
+import { FeedSkeleton } from '../feed/FeedSkeleton';
+import { FeedEmpty } from '../feed/FeedEmpty';
+import { EventCard } from '../feed/EventCard';
+import { groupMyEvents } from '../../utils/feedGrouping';
 
 const CALENDAR_ICON = (
   <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -19,7 +18,7 @@ const CALENDAR_ICON = (
   </svg>
 );
 
-export const EventsPage: FC = () => {
+export const EventsTab: FC = () => {
   const navigate = useNavigate();
   const haptic = useHaptic();
   const myEventsQuery = useMyEventsQuery();
@@ -56,36 +55,12 @@ export const EventsPage: FC = () => {
     navigate('/');
   };
 
-  const handleRefresh = () => {
-    haptic.impact('light');
-    myEventsQuery.refetch();
-  };
-
   const isLoadingInitial = myEventsQuery.isPending;
   const isError = myEventsQuery.isError && !myEventsQuery.isPending;
   const isEmpty = !isLoadingInitial && !isError && events.length === 0;
 
   return (
-    <div className="brand-page">
-      <BrandBackdrop />
-
-      <header className="mc-hero">
-        <div className="mc-hero-row">
-          <h1>
-            Твои <span className="accent">активности</span>
-          </h1>
-          <button
-            type="button"
-            className="mc-create-btn"
-            onClick={handleRefresh}
-            disabled={myEventsQuery.isFetching}
-            aria-label="Обновить ленту"
-          >
-            Обновить
-          </button>
-        </div>
-      </header>
-
+    <>
       {isLoadingInitial && <FeedSkeleton count={3} />}
 
       {isError && (
@@ -94,7 +69,7 @@ export const EventsPage: FC = () => {
           title="Не удалось загрузить события"
           description="Проверьте соединение и попробуйте снова."
           ctaLabel="Повторить"
-          onCta={handleRefresh}
+          onCta={() => myEventsQuery.refetch()}
         />
       )}
 
@@ -130,6 +105,6 @@ export const EventsPage: FC = () => {
           {myEventsQuery.isFetchingNextPage && <Spinner size="s" />}
         </div>
       )}
-    </div>
+    </>
   );
 };

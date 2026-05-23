@@ -128,7 +128,7 @@ open class Events(
     /**
      * The column <code>public.events.voting_opens_days_before</code>.
      */
-    val VOTING_OPENS_DAYS_BEFORE: TableField<EventsRecord, Int?> = createField(DSL.name("voting_opens_days_before"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("5"), SQLDataType.INTEGER)), this, "")
+    val VOTING_OPENS_DAYS_BEFORE: TableField<EventsRecord, Int?> = createField(DSL.name("voting_opens_days_before"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("14"), SQLDataType.INTEGER)), this, "")
 
     /**
      * The column <code>public.events.status</code>.

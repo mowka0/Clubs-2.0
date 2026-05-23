@@ -5,6 +5,7 @@ import com.clubs.event.EventResponseRepository
 import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
@@ -20,7 +21,9 @@ import java.util.UUID
 class NotificationService(
     private val membershipRepository: MembershipRepository,
     private val eventResponseRepository: EventResponseRepository,
-    private val telegramClient: TelegramClient
+    private val telegramClient: TelegramClient,
+    @Value("\${telegram.bot-username}") private val botUsername: String,
+    @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String
 ) {
 
     private val log = LoggerFactory.getLogger(NotificationService::class.java)
@@ -68,24 +71,71 @@ class NotificationService(
     }
 
     fun sendDirectMessage(telegramId: Long, text: String) {
-        sendDm(telegramId.toString(), text)
+        sendDm(telegramId.toString(), text, webAppPath = null, buttonText = DEFAULT_BUTTON_TEXT)
     }
 
-    private fun sendDm(chatId: String, text: String) {
+    /**
+     * DM with a deep-link inline button that opens the Mini App on a specific
+     * route. [webAppPath] is path-prefixed-with-slash, e.g. "/skladchina/<id>"
+     * or "/events/<id>". Frontend's React Router renders the matching page
+     * directly — no DeepLinkHandler hop needed.
+     *
+     * Implementation note: button uses WebAppInfo (not t.me URL) because
+     * Telegram blocks self-bot t.me links inside DMs with that same bot
+     * (cyclic interaction). WebAppInfo opens the Mini App reliably.
+     */
+    fun sendDirectMessageWithDeepLink(
+        telegramId: Long,
+        text: String,
+        webAppPath: String,
+        buttonText: String = DEFAULT_BUTTON_TEXT
+    ) {
+        sendDm(telegramId.toString(), text, webAppPath, buttonText)
+    }
+
+    private fun sendDm(
+        chatId: String,
+        text: String,
+        webAppPath: String? = null,
+        buttonText: String = DEFAULT_BUTTON_TEXT
+    ) {
+        log.info("Sending DM to chatId={} webAppPath={}", chatId, webAppPath)
         try {
-            val button = InlineKeyboardButton.builder()
-                .text("📱 Открыть Clubs")
-                .webApp(WebAppInfo("https://t.me/clubs_v2_bot/app"))
-                .build()
-            val markup = InlineKeyboardMarkup(listOf(InlineKeyboardRow(button)))
+            val markup = buildKeyboard(buttonText, webAppPath = webAppPath)
             val msg = SendMessage.builder()
                 .chatId(chatId)
                 .text(text)
                 .replyMarkup(markup)
                 .build()
             telegramClient.execute(msg)
+            log.info("DM sent with inline button: chatId={}", chatId)
+            return
         } catch (e: Exception) {
-            log.warn("Failed to send DM to chat {}: {}", chatId, e.message)
+            log.error("Failed to send DM with inline button to chat {}: {} ({})", chatId, e.message, e.javaClass.simpleName, e)
         }
+        // Fallback — plain text без inline button.
+        try {
+            val msg = SendMessage.builder().chatId(chatId).text(text).build()
+            telegramClient.execute(msg)
+            log.info("DM sent without inline button (fallback): chatId={}", chatId)
+        } catch (e: Exception) {
+            log.error("Failed to send fallback DM to chat {}: {} ({})", chatId, e.message, e.javaClass.simpleName, e)
+        }
+    }
+
+    private fun buildKeyboard(buttonText: String, webAppPath: String?): InlineKeyboardMarkup {
+        // WebApp button with frontend URL — открывает Mini App напрямую на нужном
+        // route (через React Router). t.me/<bot>/... URL button НЕ используется,
+        // потому что Telegram блокирует self-bot ссылки внутри DM с этим же ботом.
+        val url = if (webAppPath != null) "$webAppBaseUrl$webAppPath" else webAppBaseUrl
+        val button = InlineKeyboardButton.builder()
+            .text(buttonText)
+            .webApp(WebAppInfo(url))
+            .build()
+        return InlineKeyboardMarkup(listOf(InlineKeyboardRow(button)))
+    }
+
+    companion object {
+        private const val DEFAULT_BUTTON_TEXT = "📱 Открыть Clubs"
     }
 }

@@ -18,11 +18,13 @@ import com.clubs.generated.jooq.keys.CLUBS_PKEY
 import com.clubs.generated.jooq.keys.CLUBS__CLUBS_OWNER_ID_FKEY
 import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_CLUB_ID_FKEY
+import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.TRANSACTIONS__TRANSACTIONS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.USER_CLUB_REPUTATION__USER_CLUB_REPUTATION_CLUB_ID_FKEY
 import com.clubs.generated.jooq.tables.Applications.ApplicationsPath
 import com.clubs.generated.jooq.tables.Events.EventsPath
 import com.clubs.generated.jooq.tables.Memberships.MembershipsPath
+import com.clubs.generated.jooq.tables.Skladchinas.SkladchinasPath
 import com.clubs.generated.jooq.tables.Transactions.TransactionsPath
 import com.clubs.generated.jooq.tables.UserClubReputation.UserClubReputationPath
 import com.clubs.generated.jooq.tables.Users.UsersPath
@@ -295,6 +297,22 @@ open class Clubs(
 
     val memberships: MembershipsPath
         get(): MembershipsPath = memberships()
+
+    private lateinit var _skladchinas: SkladchinasPath
+
+    /**
+     * Get the implicit to-many join path to the <code>public.skladchinas</code>
+     * table
+     */
+    fun skladchinas(): SkladchinasPath {
+        if (!this::_skladchinas.isInitialized)
+            _skladchinas = SkladchinasPath(this, null, SKLADCHINAS__SKLADCHINAS_CLUB_ID_FKEY.inverseKey)
+
+        return _skladchinas;
+    }
+
+    val skladchinas: SkladchinasPath
+        get(): SkladchinasPath = skladchinas()
 
     private lateinit var _transactions: TransactionsPath
 

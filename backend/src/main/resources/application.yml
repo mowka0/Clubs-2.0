@@ -54,6 +54,17 @@ jwt:
 
 telegram:
   bot-token: ${TELEGRAM_BOT_TOKEN:}
+  # Bot username (без @) — используется в Mini App deep-link URL вида
+  # https://t.me/<bot-username>/app?startapp=... В DM inline-кнопках.
+  # Prod: clubs_v2_bot, Staging: clubs_v2_test_bot.
+  bot-username: ${TELEGRAM_BOT_USERNAME:clubs_v2_bot}
+  # Base URL фронта Mini App — используется в WebApp inline-кнопках
+  # для прямой навигации на deep route (например /skladchina/<id>).
+  # Telegram не позволяет ботам шлать t.me/<self-bot>/... ссылки в DM
+  # с тем же ботом (циклическая ссылка), поэтому используем именно
+  # frontend URL через WebAppInfo.
+  # Prod: https://77-42-23-177.sslip.io, Staging: https://staging.77-42-23-177.sslip.io
+  webapp-base-url: ${TELEGRAM_WEBAPP_BASE_URL:https://77-42-23-177.sslip.io}
 
 s3:
   bucket: ${S3_BUCKET:clubs-uploads}

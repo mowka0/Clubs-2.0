@@ -1,0 +1,61 @@
+package com.clubs.skladchina
+
+import com.clubs.common.dto.PageResponse
+import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
+import com.clubs.generated.jooq.enums.SkladchinaStatus
+import java.time.OffsetDateTime
+import java.util.UUID
+
+interface SkladchinaRepository {
+
+    fun create(
+        skladchina: Skladchina,
+        participants: List<Pair<UUID, Long?>>          // (userId, expectedAmountKopecks)
+    ): Skladchina
+
+    fun findById(id: UUID): Skladchina?
+
+    fun findActiveByClub(clubId: UUID): List<Skladchina>
+
+    fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MySkladchinaFeedItem>
+
+    fun findExpiredActive(now: OffsetDateTime): List<Skladchina>
+
+    fun updateStatus(id: UUID, status: SkladchinaStatus, closedBy: UUID?, closedAt: OffsetDateTime)
+
+    /** Returns participants joined with user info — for organizer view + reputation hook. */
+    fun findParticipantsWithInfo(skladchinaId: UUID): List<SkladchinaParticipantInfo>
+
+    /** Plain participant records — for state-machine logic (mark paid, reputation hook). */
+    fun findParticipants(skladchinaId: UUID): List<SkladchinaParticipant>
+
+    fun findParticipant(skladchinaId: UUID, userId: UUID): SkladchinaParticipant?
+
+    fun setParticipantPaid(
+        skladchinaId: UUID,
+        userId: UUID,
+        declaredAmountKopecks: Long,
+        paidAt: OffsetDateTime
+    ): Int
+
+    fun setParticipantDeclined(
+        skladchinaId: UUID,
+        userId: UUID,
+        declinedAt: OffsetDateTime
+    ): Int
+
+    /** Move all `pending` participants to `expired_no_response` for given skladchina. */
+    fun expirePendingParticipants(skladchinaId: UUID): Int
+
+    fun markReputationApplied(skladchinaId: UUID, userId: UUID)
+
+    /** Sum of declared_amount for participants with status='paid'. */
+    fun sumCollectedKopecks(skladchinaId: UUID): Long
+
+    fun countParticipants(skladchinaId: UUID): Int
+
+    fun countParticipantsByStatus(skladchinaId: UUID, status: SkladchinaParticipantStatus): Int
+
+    /** Returns subset of given userIds that are NOT active members of given club. */
+    fun findNonActiveMembers(clubId: UUID, userIds: Collection<UUID>): Set<UUID>
+}

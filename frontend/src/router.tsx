@@ -5,7 +5,7 @@ import { Layout } from './components/Layout';
 // Main tab pages — eagerly imported for instant tab switching
 import { DiscoveryPage } from './pages/DiscoveryPage';
 import { MyClubsPage } from './pages/MyClubsPage';
-import { EventsPage } from './pages/EventsPage';
+import { ActivitiesPage } from './pages/ActivitiesPage';
 import { ProfilePage } from './pages/ProfilePage';
 
 // Nested pages — lazy loaded for code splitting
@@ -14,6 +14,12 @@ const ClubPage = lazy(() =>
 );
 const EventPage = lazy(() =>
   import('./pages/EventPage').then((m) => ({ default: m.EventPage })),
+);
+const SkladchinaPage = lazy(() =>
+  import('./pages/SkladchinaPage').then((m) => ({ default: m.SkladchinaPage })),
+);
+const CreateSkladchinaPage = lazy(() =>
+  import('./pages/CreateSkladchinaPage').then((m) => ({ default: m.CreateSkladchinaPage })),
 );
 const InvitePage = lazy(() =>
   import('./pages/InvitePage').then((m) => ({ default: m.InvitePage })),
@@ -43,8 +49,16 @@ export const router = createBrowserRouter([
         element: <MyClubsPage />,
       },
       {
+        path: '/activities',
+        element: <ActivitiesPage />,
+      },
+      {
         path: '/events',
-        element: <EventsPage />,
+        element: <ActivitiesPage />,
+      },
+      {
+        path: '/skladchina',
+        element: <ActivitiesPage />,
       },
       {
         path: '/profile',
@@ -72,8 +86,16 @@ export const router = createBrowserRouter([
         element: <EventPage />,
       },
       {
+        path: '/skladchina/:id',
+        element: <SkladchinaPage />,
+      },
+      {
         path: '/clubs/:id/manage',
         element: <OrganizerClubManage />,
+      },
+      {
+        path: '/clubs/:id/skladchina/new',
+        element: <CreateSkladchinaPage />,
       },
       {
         path: '/invite/:code',

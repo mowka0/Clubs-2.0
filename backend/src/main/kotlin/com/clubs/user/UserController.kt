@@ -8,6 +8,8 @@ import com.clubs.event.MyEventListItemDto
 import com.clubs.event.UserEventsService
 import com.clubs.membership.MembershipDto
 import com.clubs.membership.MembershipService
+import com.clubs.skladchina.MySkladchinaListItemDto
+import com.clubs.skladchina.UserSkladchinasService
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
@@ -21,7 +23,8 @@ class UserController(
     private val userService: UserService,
     private val applicationService: ApplicationService,
     private val membershipService: MembershipService,
-    private val userEventsService: UserEventsService
+    private val userEventsService: UserEventsService,
+    private val userSkladchinasService: UserSkladchinasService
 ) {
 
     @GetMapping("/me")
@@ -51,6 +54,17 @@ class UserController(
         val safePage = page.coerceAtLeast(0)
         val safeSize = size.coerceIn(1, MAX_PAGE_SIZE)
         return ResponseEntity.ok(userEventsService.getMyEvents(user.userId, safePage, safeSize))
+    }
+
+    @GetMapping("/me/skladchinas")
+    fun getMySkladchinas(
+        @AuthenticationPrincipal user: AuthenticatedUser,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int
+    ): ResponseEntity<PageResponse<MySkladchinaListItemDto>> {
+        val safePage = page.coerceAtLeast(0)
+        val safeSize = size.coerceIn(1, MAX_PAGE_SIZE)
+        return ResponseEntity.ok(userSkladchinasService.getMySkladchinas(user.userId, safePage, safeSize))
     }
 
     companion object {
