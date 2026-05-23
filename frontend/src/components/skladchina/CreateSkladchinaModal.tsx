@@ -148,7 +148,12 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
   };
 
   return (
-    <Modal open onOpenChange={(open) => !open && onClose()}>
+    <Modal
+      open
+      onOpenChange={(open) => !open && onClose()}
+      snapPoints={[1]}
+      dismissible
+    >
       <div className="sklad-create-modal">
         <h2>Новый сбор</h2>
 
