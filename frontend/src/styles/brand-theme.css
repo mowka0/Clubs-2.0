@@ -2456,3 +2456,28 @@ select {
 .skladchina-card.closed .skladchina-card-body .title {
   color: var(--brand-ink-2);
 }
+
+/* ============================================================
+   Skladchina create-modal — фикс «модалка плавает» при выборе режима
+   (фидбек 2026-05-23)
+   ============================================================ */
+.sklad-create-modal {
+  /* prevent rubber-band scroll наружу модалки */
+  overscroll-behavior: contain;
+  /* Y-only scroll внутри modal: ловим только vertical pan, чтобы TG-UI
+     не путал тап по radio с горизонтальным swipe-to-close */
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+.sklad-create-modal .mode-option {
+  /* radio-карточки не должны попадать под scroll/swipe модалки */
+  touch-action: manipulation;
+}
+
+/* TG-UI Modal portal заворачивает в [role="dialog"]; на iOS его контейнер
+   может scroll'ить вместе со страницей — закрепляем намертво. */
+[role="dialog"] {
+  position: fixed !important;
+  z-index: 1000 !important;
+  inset: 0 !important;
+}

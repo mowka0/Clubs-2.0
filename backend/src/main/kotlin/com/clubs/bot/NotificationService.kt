@@ -68,19 +68,33 @@ class NotificationService(
     }
 
     fun sendDirectMessage(telegramId: Long, text: String) {
-        sendDm(telegramId.toString(), text)
+        sendDm(telegramId.toString(), text, startApp = null, buttonText = DEFAULT_BUTTON_TEXT)
     }
 
-    private fun sendDm(chatId: String, text: String) {
-        log.info("Sending DM to chatId={}", chatId)
-        // Try with inline WebApp button first. If WebAppInfo URL config is broken
-        // on this bot (rare staging-env case), fall back to plain text DM.
+    /**
+     * DM with a deep-link inline button into the Mini App.
+     * [startApp] becomes the `?startapp=<value>` parameter on the t.me URL,
+     * which DeepLinkHandler reads from `initData.start_param` and routes to
+     * e.g. /skladchina/{id} or /events/{id}.
+     */
+    fun sendDirectMessageWithDeepLink(
+        telegramId: Long,
+        text: String,
+        startApp: String,
+        buttonText: String = DEFAULT_BUTTON_TEXT
+    ) {
+        sendDm(telegramId.toString(), text, startApp, buttonText)
+    }
+
+    private fun sendDm(
+        chatId: String,
+        text: String,
+        startApp: String? = null,
+        buttonText: String = DEFAULT_BUTTON_TEXT
+    ) {
+        log.info("Sending DM to chatId={} startApp={}", chatId, startApp)
         try {
-            val button = InlineKeyboardButton.builder()
-                .text("📱 Открыть Clubs")
-                .webApp(WebAppInfo("https://t.me/clubs_v2_bot/app"))
-                .build()
-            val markup = InlineKeyboardMarkup(listOf(InlineKeyboardRow(button)))
+            val markup = buildKeyboard(buttonText, startApp)
             val msg = SendMessage.builder()
                 .chatId(chatId)
                 .text(text)
@@ -92,18 +106,36 @@ class NotificationService(
         } catch (e: Exception) {
             log.error("Failed to send DM with inline button to chat {}: {} ({})", chatId, e.message, e.javaClass.simpleName, e)
         }
-        // Fallback — без inline button. Если bot не настроен для WebApp на этом
-        // env, plain DM всё равно должен дойти. Логируем отдельным сообщением
-        // чтобы в логах было видно что это fallback.
+        // Fallback — plain text без inline button.
         try {
-            val msg = SendMessage.builder()
-                .chatId(chatId)
-                .text(text)
-                .build()
+            val msg = SendMessage.builder().chatId(chatId).text(text).build()
             telegramClient.execute(msg)
             log.info("DM sent without inline button (fallback): chatId={}", chatId)
         } catch (e: Exception) {
             log.error("Failed to send fallback DM to chat {}: {} ({})", chatId, e.message, e.javaClass.simpleName, e)
         }
+    }
+
+    private fun buildKeyboard(buttonText: String, startApp: String?): InlineKeyboardMarkup {
+        // С startApp — t.me deep-link (Telegram пробрасывает startapp в initData.start_param).
+        // Без — обычная WebApp кнопка (открывает Mini App на главный route).
+        val button = if (startApp != null) {
+            InlineKeyboardButton.builder()
+                .text(buttonText)
+                .url("https://t.me/$BOT_USERNAME/$WEBAPP_SLUG?startapp=$startApp")
+                .build()
+        } else {
+            InlineKeyboardButton.builder()
+                .text(buttonText)
+                .webApp(WebAppInfo("https://t.me/$BOT_USERNAME/$WEBAPP_SLUG"))
+                .build()
+        }
+        return InlineKeyboardMarkup(listOf(InlineKeyboardRow(button)))
+    }
+
+    companion object {
+        private const val BOT_USERNAME = "clubs_v2_bot"
+        private const val WEBAPP_SLUG = "app"
+        private const val DEFAULT_BUTTON_TEXT = "📱 Открыть Clubs"
     }
 }

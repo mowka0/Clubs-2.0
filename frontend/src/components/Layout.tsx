@@ -2,6 +2,7 @@ import { FC, Suspense, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { BottomTabBar, isTabBarRoute } from './BottomTabBar';
+import { DeepLinkHandler } from './DeepLinkHandler';
 import { useBackButton } from '../hooks/useBackButton';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -64,6 +65,7 @@ export const Layout: FC = () => {
 
   return (
     <>
+      <DeepLinkHandler />
       <Suspense fallback={<PageFallback />}>
         <div
           style={{
