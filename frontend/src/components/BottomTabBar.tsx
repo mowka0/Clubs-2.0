@@ -29,13 +29,14 @@ const ACTIVITIES_SECONDARY_PATHS = new Set<string>(['/events', '/skladchina']);
 export function isTabBarRoute(pathname: string): boolean {
   if (TAB_PATHS.has(pathname)) return true;
   if (ACTIVITIES_SECONDARY_PATHS.has(pathname)) return true;
-  return /^\/(clubs|events|skladchina)\/[^/]+(\/manage)?$/.test(pathname);
+  return /^\/(clubs|events|skladchina)\/[^/]+(\/manage|\/skladchina\/new)?$/.test(pathname);
 }
 
 /** Активный таб для текущего pathname (учитывает sub-segments активностей и детальные страницы). */
 function resolveActivePath(pathname: string): string {
   if (ACTIVITIES_SECONDARY_PATHS.has(pathname)) return '/activities';
   if (/^\/(events|skladchina)\/[^/]+$/.test(pathname)) return '/activities';
+  if (/^\/clubs\/[^/]+\/skladchina\/new$/.test(pathname)) return '/my-clubs';
   return pathname;
 }
 

@@ -2184,13 +2184,13 @@ html, body {
    CreateSkladchinaModal — form
    ============================================================ */
 .sklad-create-modal {
-  /* TG-UI Modal открыт с snapPoints={[1]} — занимает весь viewport.
-     Sheet-контейнер сам отдаёт высоту, внутри прокручиваемся через body scroll.
-     padding-bottom большой чтобы последние поля не обрезались под home indicator. */
-  padding: 20px 20px calc(120px + env(safe-area-inset-bottom, 0px));
-  /* Высота — auto, наследует от vaul Drawer.Content. Modal sheet сам fits viewport. */
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  padding: 0 20px 24px;
+}
+/* Variant used by CreateSkladchinaPage — full route page, не bottom sheet.
+   Modal-based wrapper удалён (фидбек 2026-05-23 — vaul sheet не справлялся
+   с длинной формой). */
+.sklad-create-as-page {
+  padding: 0 20px calc(40px + env(safe-area-inset-bottom, 0px));
 }
 .sklad-create-modal h2 {
   margin: 0 0 16px;

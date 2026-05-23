@@ -35,7 +35,6 @@ import {
   useMarkAttendanceMutation,
 } from '../queries/events';
 import { useClubActiveSkladchinasQuery } from '../queries/skladchina';
-import { CreateSkladchinaModal } from '../components/skladchina/CreateSkladchinaModal';
 import { useClubFinancesQuery } from '../queries/finances';
 import type { UpdateClubBody } from '../api/clubs';
 import type { CreateEventBody } from '../api/events';
@@ -74,19 +73,12 @@ function hoursRemaining(createdAt: string | null): number | null {
 
 interface SkladchinaManageTabProps {
   clubId: string;
-  organizerUserId: string;
 }
 
-const SkladchinaManageTab: FC<SkladchinaManageTabProps> = ({ clubId, organizerUserId }) => {
+const SkladchinaManageTab: FC<SkladchinaManageTabProps> = ({ clubId }) => {
   const navigate = useNavigate();
   const haptic = useHaptic();
   const activeQuery = useClubActiveSkladchinasQuery(clubId);
-  const [showCreate, setShowCreate] = useState(false);
-
-  const handleCreated = (id: string) => {
-    setShowCreate(false);
-    navigate(`/skladchina/${id}`);
-  };
 
   const items = activeQuery.data ?? [];
 
@@ -96,7 +88,10 @@ const SkladchinaManageTab: FC<SkladchinaManageTabProps> = ({ clubId, organizerUs
         <Button
           mode="filled"
           size="m"
-          onClick={() => { haptic.impact('light'); setShowCreate(true); }}
+          onClick={() => {
+            haptic.impact('light');
+            navigate(`/clubs/${clubId}/skladchina/new`);
+          }}
           stretched
         >
           + Создать сбор
@@ -130,15 +125,6 @@ const SkladchinaManageTab: FC<SkladchinaManageTabProps> = ({ clubId, organizerUs
           </Cell>
         );
       })}
-
-      {showCreate && (
-        <CreateSkladchinaModal
-          clubId={clubId}
-          organizerUserId={organizerUserId}
-          onClose={() => setShowCreate(false)}
-          onCreated={handleCreated}
-        />
-      )}
     </Section>
   );
 };
@@ -987,7 +973,7 @@ export const OrganizerClubManage: FC = () => {
       case 'events':
         return <EventsTab clubId={clubId} />;
       case 'skladchina':
-        return <SkladchinaManageTab clubId={clubId} organizerUserId={club?.ownerId ?? ''} />;
+        return <SkladchinaManageTab clubId={clubId} />;
       case 'finances':
         return <FinancesTab clubId={clubId} />;
       case 'settings':

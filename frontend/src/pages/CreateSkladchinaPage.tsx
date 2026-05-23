@@ -1,19 +1,13 @@
-import { FC, useEffect, useMemo, useState } from 'react';
-import { Modal, Spinner } from '@telegram-apps/telegram-ui';
-import { useClubMembersQuery } from '../../queries/members';
-import { useCreateSkladchinaMutation } from '../../queries/skladchina';
-import { useHaptic } from '../../hooks/useHaptic';
-import { AvatarUpload } from '../AvatarUpload';
-import type { CreateSkladchinaRequest, SkladchinaMode } from '../../types/api';
-
-interface CreateSkladchinaModalProps {
-  clubId: string;
-  // organizerUserId сохранён в типе для будущих расширений (organizer-default и т.п.),
-  // но сейчас не используется — organizer может быть участником сбора как любой member.
-  organizerUserId: string;
-  onClose: () => void;
-  onCreated: (skladchinaId: string) => void;
-}
+import { FC, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Spinner } from '@telegram-apps/telegram-ui';
+import { useBackButton } from '../hooks/useBackButton';
+import { useHaptic } from '../hooks/useHaptic';
+import { BrandBackdrop } from '../components/BrandBackdrop';
+import { AvatarUpload } from '../components/AvatarUpload';
+import { useClubMembersQuery } from '../queries/members';
+import { useCreateSkladchinaMutation } from '../queries/skladchina';
+import type { CreateSkladchinaRequest, SkladchinaMode } from '../types/api';
 
 const MODE_LABELS: Record<SkladchinaMode, string> = {
   fixed_equal: 'Поровну между всеми',
@@ -40,17 +34,14 @@ function defaultDeadlineLocal(): string {
   return d.toISOString().slice(0, 16);
 }
 
-export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
-  clubId,
-  organizerUserId: _organizerUserId,
-  onClose,
-  onCreated,
-}) => {
+export const CreateSkladchinaPage: FC = () => {
+  useBackButton(true);
+  const { id: clubId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const haptic = useHaptic();
   const membersQuery = useClubMembersQuery(clubId);
   const createMut = useCreateSkladchinaMutation();
 
-  // Все active members клуба, включая organizer'а — он тоже может скинуться.
   const eligibleMembers = useMemo(
     () => membersQuery.data ?? [],
     [membersQuery.data],
@@ -70,17 +61,16 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
   const [individualAmounts, setIndividualAmounts] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Lock background scroll пока модалка открыта — фикс «модалка плавает»
-  // при выборе режима / тапе на radio в Telegram WebView. Только overflow,
-  // без position:fixed — иначе на iOS TG ломает scroll внутри модалки и
-  // последние поля обрезаются.
-  useEffect(() => {
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prevOverflow;
-    };
-  }, []);
+  if (!clubId) {
+    return (
+      <div className="brand-page">
+        <BrandBackdrop />
+        <div style={{ padding: 40, textAlign: 'center', color: 'var(--brand-ink-3)' }}>
+          Клуб не найден
+        </div>
+      </div>
+    );
+  }
 
   const toggleParticipant = (userId: string) => {
     haptic.select();
@@ -125,7 +115,7 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
       title: title.trim(),
       description: description.trim() || null,
       rules: rules.trim() || null,
-      photoUrl: photoUrl,
+      photoUrl,
       paymentMode: mode,
       totalGoalKopecks: mode === 'fixed_equal' ? totalKopecks : null,
       paymentLink: paymentLink.trim(),
@@ -139,7 +129,7 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
       haptic.impact('medium');
       const created = await createMut.mutateAsync({ clubId, body });
       haptic.notify('success');
-      onCreated(created.id);
+      navigate(`/skladchina/${created.id}`, { replace: true });
     } catch (e) {
       console.error('createSkladchina failed', e);
       haptic.notify('error');
@@ -147,16 +137,22 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
     }
   };
 
-  return (
-    <Modal
-      open
-      onOpenChange={(open) => !open && onClose()}
-      snapPoints={[1]}
-      dismissible
-    >
-      <div className="sklad-create-modal">
-        <h2>Новый сбор</h2>
+  const handleCancel = () => {
+    haptic.impact('light');
+    navigate(-1);
+  };
 
+  return (
+    <div className="brand-page">
+      <BrandBackdrop />
+
+      <header className="mc-hero">
+        <div className="mc-hero-row">
+          <h1>Новый <span className="accent">сбор</span></h1>
+        </div>
+      </header>
+
+      <div className="sklad-create-modal sklad-create-as-page">
         <label className="field">
           <span className="label">Название *</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={255} />
@@ -249,7 +245,9 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
         </label>
 
         <div className="field">
-          <span className="label">Участники * <span className="count">· выбрано {selectedIds.size}</span></span>
+          <span className="label">
+            Участники * <span className="count">· выбрано {selectedIds.size}</span>
+          </span>
           {membersQuery.isPending && <Spinner size="s" />}
           {!membersQuery.isPending && eligibleMembers.length === 0 && (
             <div className="hint">В клубе пока нет активных участников.</div>
@@ -293,7 +291,7 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
         {submitError && <div className="submit-error">{submitError}</div>}
 
         <div className="modal-actions">
-          <button type="button" className="ghost-btn" onClick={onClose}>Отмена</button>
+          <button type="button" className="ghost-btn" onClick={handleCancel}>Отмена</button>
           <button
             type="button"
             className="primary-btn"
@@ -304,6 +302,6 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
           </button>
         </div>
       </div>
-    </Modal>
+    </div>
   );
 };

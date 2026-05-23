@@ -18,6 +18,9 @@ const EventPage = lazy(() =>
 const SkladchinaPage = lazy(() =>
   import('./pages/SkladchinaPage').then((m) => ({ default: m.SkladchinaPage })),
 );
+const CreateSkladchinaPage = lazy(() =>
+  import('./pages/CreateSkladchinaPage').then((m) => ({ default: m.CreateSkladchinaPage })),
+);
 const InvitePage = lazy(() =>
   import('./pages/InvitePage').then((m) => ({ default: m.InvitePage })),
 );
@@ -89,6 +92,10 @@ export const router = createBrowserRouter([
       {
         path: '/clubs/:id/manage',
         element: <OrganizerClubManage />,
+      },
+      {
+        path: '/clubs/:id/skladchina/new',
+        element: <CreateSkladchinaPage />,
       },
       {
         path: '/invite/:code',
