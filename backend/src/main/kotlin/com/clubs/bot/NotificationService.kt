@@ -22,7 +22,8 @@ class NotificationService(
     private val membershipRepository: MembershipRepository,
     private val eventResponseRepository: EventResponseRepository,
     private val telegramClient: TelegramClient,
-    @Value("\${telegram.bot-username}") private val botUsername: String
+    @Value("\${telegram.bot-username}") private val botUsername: String,
+    @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String
 ) {
 
     private val log = LoggerFactory.getLogger(NotificationService::class.java)
@@ -70,33 +71,37 @@ class NotificationService(
     }
 
     fun sendDirectMessage(telegramId: Long, text: String) {
-        sendDm(telegramId.toString(), text, startApp = null, buttonText = DEFAULT_BUTTON_TEXT)
+        sendDm(telegramId.toString(), text, webAppPath = null, buttonText = DEFAULT_BUTTON_TEXT)
     }
 
     /**
-     * DM with a deep-link inline button into the Mini App.
-     * [startApp] becomes the `?startapp=<value>` parameter on the t.me URL,
-     * which DeepLinkHandler reads from `initData.start_param` and routes to
-     * e.g. /skladchina/{id} or /events/{id}.
+     * DM with a deep-link inline button that opens the Mini App on a specific
+     * route. [webAppPath] is path-prefixed-with-slash, e.g. "/skladchina/<id>"
+     * or "/events/<id>". Frontend's React Router renders the matching page
+     * directly — no DeepLinkHandler hop needed.
+     *
+     * Implementation note: button uses WebAppInfo (not t.me URL) because
+     * Telegram blocks self-bot t.me links inside DMs with that same bot
+     * (cyclic interaction). WebAppInfo opens the Mini App reliably.
      */
     fun sendDirectMessageWithDeepLink(
         telegramId: Long,
         text: String,
-        startApp: String,
+        webAppPath: String,
         buttonText: String = DEFAULT_BUTTON_TEXT
     ) {
-        sendDm(telegramId.toString(), text, startApp, buttonText)
+        sendDm(telegramId.toString(), text, webAppPath, buttonText)
     }
 
     private fun sendDm(
         chatId: String,
         text: String,
-        startApp: String? = null,
+        webAppPath: String? = null,
         buttonText: String = DEFAULT_BUTTON_TEXT
     ) {
-        log.info("Sending DM to chatId={} startApp={}", chatId, startApp)
+        log.info("Sending DM to chatId={} webAppPath={}", chatId, webAppPath)
         try {
-            val markup = buildKeyboard(buttonText, startApp)
+            val markup = buildKeyboard(buttonText, webAppPath = webAppPath)
             val msg = SendMessage.builder()
                 .chatId(chatId)
                 .text(text)
@@ -118,27 +123,19 @@ class NotificationService(
         }
     }
 
-    private fun buildKeyboard(buttonText: String, startApp: String?): InlineKeyboardMarkup {
-        // С startApp — t.me deep-link (Telegram пробрасывает startapp в initData.start_param).
-        // Без — обычная WebApp кнопка (открывает Mini App на главный route).
-        // botUsername — env var TELEGRAM_BOT_USERNAME, разный на staging (clubs_v2_test_bot)
-        // и prod (clubs_v2_bot).
-        val button = if (startApp != null) {
-            InlineKeyboardButton.builder()
-                .text(buttonText)
-                .url("https://t.me/$botUsername/$WEBAPP_SLUG?startapp=$startApp")
-                .build()
-        } else {
-            InlineKeyboardButton.builder()
-                .text(buttonText)
-                .webApp(WebAppInfo("https://t.me/$botUsername/$WEBAPP_SLUG"))
-                .build()
-        }
+    private fun buildKeyboard(buttonText: String, webAppPath: String?): InlineKeyboardMarkup {
+        // WebApp button with frontend URL — открывает Mini App напрямую на нужном
+        // route (через React Router). t.me/<bot>/... URL button НЕ используется,
+        // потому что Telegram блокирует self-bot ссылки внутри DM с этим же ботом.
+        val url = if (webAppPath != null) "$webAppBaseUrl$webAppPath" else webAppBaseUrl
+        val button = InlineKeyboardButton.builder()
+            .text(buttonText)
+            .webApp(WebAppInfo(url))
+            .build()
         return InlineKeyboardMarkup(listOf(InlineKeyboardRow(button)))
     }
 
     companion object {
-        private const val WEBAPP_SLUG = "app"
         private const val DEFAULT_BUTTON_TEXT = "📱 Открыть Clubs"
     }
 }

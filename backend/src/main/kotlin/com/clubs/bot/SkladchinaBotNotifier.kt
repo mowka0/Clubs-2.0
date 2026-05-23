@@ -57,14 +57,14 @@ class SkladchinaBotNotifier(
             append("\n\nПосле оплаты — отметьте в приложении, чтобы организатор увидел.")
         }
 
-        // Deep-link inline button — открывает /skladchina/<id> в Mini App
-        // через ?startapp=skladchina_<uuid> (см. DeepLinkHandler).
-        val startApp = "skladchina_${event.skladchinaId}"
+        // WebApp inline button c прямым frontend URL — открывает Mini App
+        // на /skladchina/<id>, React Router рендерит SkladchinaPage напрямую.
+        val webAppPath = "/skladchina/${event.skladchinaId}"
         telegramIds.forEach { telegramId ->
             notificationService.sendDirectMessageWithDeepLink(
                 telegramId = telegramId,
                 text = text,
-                startApp = startApp,
+                webAppPath = webAppPath,
                 buttonText = "💰 Открыть сбор"
             )
         }

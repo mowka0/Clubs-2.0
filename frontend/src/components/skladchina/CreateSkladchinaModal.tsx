@@ -71,22 +71,14 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Lock background scroll пока модалка открыта — фикс «модалка плавает»
-  // при выборе режима / тапе на radio в Telegram WebView.
+  // при выборе режима / тапе на radio в Telegram WebView. Только overflow,
+  // без position:fixed — иначе на iOS TG ломает scroll внутри модалки и
+  // последние поля обрезаются.
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
-    const prevPosition = document.body.style.position;
-    const prevWidth = document.body.style.width;
-    const scrollY = window.scrollY;
     document.body.style.overflow = 'hidden';
-    document.body.style.position = 'fixed';
-    document.body.style.width = '100%';
-    document.body.style.top = `-${scrollY}px`;
     return () => {
       document.body.style.overflow = prevOverflow;
-      document.body.style.position = prevPosition;
-      document.body.style.width = prevWidth;
-      document.body.style.top = '';
-      window.scrollTo(0, scrollY);
     };
   }, []);
 

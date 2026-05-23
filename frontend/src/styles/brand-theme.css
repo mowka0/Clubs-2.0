@@ -1912,15 +1912,17 @@ html, body {
 }
 
 .sklad-photo {
-  margin: 0 20px 12px;
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--brand-navy-card);
-  border: 1px solid var(--brand-hairline);
+  margin: 0 20px 14px;
+  display: flex;
+  justify-content: flex-start;
 }
 .sklad-photo img {
-  width: 100%;
-  height: auto;
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 12px;
+  background: var(--brand-navy-card);
+  border: 1px solid var(--brand-hairline);
   display: block;
 }
 
@@ -2182,8 +2184,12 @@ html, body {
    CreateSkladchinaModal — form
    ============================================================ */
 .sklad-create-modal {
-  padding: 20px;
-  max-height: 88vh;
+  /* padding-bottom большой чтобы последние поля не обрезались под Telegram
+     bottom bar и iOS home indicator. */
+  padding: 20px 20px calc(96px + env(safe-area-inset-bottom, 0px));
+  /* max-height чуть меньше viewport — оставляем место для TG-UI Modal header
+     и нижнего drag-handle. */
+  max-height: 82vh;
   overflow-y: auto;
 }
 .sklad-create-modal h2 {
