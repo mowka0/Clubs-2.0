@@ -34,6 +34,8 @@ import {
   useEventQuery,
   useMarkAttendanceMutation,
 } from '../queries/events';
+import { useClubActiveSkladchinasQuery } from '../queries/skladchina';
+import { CreateSkladchinaModal } from '../components/skladchina/CreateSkladchinaModal';
 import { useClubFinancesQuery } from '../queries/finances';
 import type { UpdateClubBody } from '../api/clubs';
 import type { CreateEventBody } from '../api/events';
@@ -44,12 +46,13 @@ import type {
 } from '../types/api';
 import { formatDatetime } from '../utils/formatters';
 
-type TabKey = 'members' | 'applications' | 'events' | 'finances' | 'settings';
+type TabKey = 'members' | 'applications' | 'events' | 'skladchina' | 'finances' | 'settings';
 
 const TAB_LABELS: Record<TabKey, string> = {
   members: 'Участники',
   applications: 'Заявки',
   events: 'События',
+  skladchina: 'Сборы',
   finances: 'Финансы',
   settings: 'Настройки',
 };
@@ -66,6 +69,79 @@ function hoursRemaining(createdAt: string | null): number | null {
 
 // MemberProfileModal extracted to components/club/MemberProfileModal.tsx
 // (shared with ClubMembersTab inside unified ClubPage).
+
+// ---- Skladchina Tab ----
+
+interface SkladchinaManageTabProps {
+  clubId: string;
+  organizerUserId: string;
+}
+
+const SkladchinaManageTab: FC<SkladchinaManageTabProps> = ({ clubId, organizerUserId }) => {
+  const navigate = useNavigate();
+  const haptic = useHaptic();
+  const activeQuery = useClubActiveSkladchinasQuery(clubId);
+  const [showCreate, setShowCreate] = useState(false);
+
+  const handleCreated = (id: string) => {
+    setShowCreate(false);
+    navigate(`/skladchina/${id}`);
+  };
+
+  const items = activeQuery.data ?? [];
+
+  return (
+    <Section header="Активные сборы">
+      <div style={{ padding: '0 16px 12px' }}>
+        <Button
+          mode="filled"
+          size="m"
+          onClick={() => { haptic.impact('light'); setShowCreate(true); }}
+          stretched
+        >
+          + Создать сбор
+        </Button>
+      </div>
+
+      {activeQuery.isPending && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}>
+          <Spinner size="s" />
+        </div>
+      )}
+
+      {!activeQuery.isPending && items.length === 0 && (
+        <Placeholder description="Сейчас в клубе нет активных сборов." />
+      )}
+
+      {items.map((s) => {
+        const hasGoal = s.totalGoalKopecks != null && s.totalGoalKopecks > 0;
+        const collectedRub = Math.floor(s.collectedKopecks / 100);
+        const goalRub = s.totalGoalKopecks != null ? Math.floor(s.totalGoalKopecks / 100) : null;
+        const sub = hasGoal
+          ? `${collectedRub} ₽ из ${goalRub} ₽ · ${s.paidCount}/${s.participantCount} оплатили`
+          : `${collectedRub} ₽ собрано · ${s.paidCount}/${s.participantCount}`;
+        return (
+          <Cell
+            key={s.id}
+            subtitle={sub}
+            onClick={() => { haptic.impact('light'); navigate(`/skladchina/${s.id}`); }}
+          >
+            {s.title}
+          </Cell>
+        );
+      })}
+
+      {showCreate && (
+        <CreateSkladchinaModal
+          clubId={clubId}
+          organizerUserId={organizerUserId}
+          onClose={() => setShowCreate(false)}
+          onCreated={handleCreated}
+        />
+      )}
+    </Section>
+  );
+};
 
 // ---- Members Tab ----
 
@@ -910,6 +986,8 @@ export const OrganizerClubManage: FC = () => {
         return <ApplicationsTab clubId={clubId} />;
       case 'events':
         return <EventsTab clubId={clubId} />;
+      case 'skladchina':
+        return <SkladchinaManageTab clubId={clubId} organizerUserId={club?.ownerId ?? ''} />;
       case 'finances':
         return <FinancesTab clubId={clubId} />;
       case 'settings':

@@ -9,6 +9,8 @@ import com.clubs.generated.jooq.tables.Clubs
 import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.Events
 import com.clubs.generated.jooq.tables.Memberships
+import com.clubs.generated.jooq.tables.SkladchinaParticipants
+import com.clubs.generated.jooq.tables.Skladchinas
 import com.clubs.generated.jooq.tables.Transactions
 
 import org.jooq.Index
@@ -35,5 +37,9 @@ val IDX_EVENTS_STATUS: Index = Internal.createIndex(DSL.name("idx_events_status"
 val IDX_MEMBERSHIPS_CLUB_ID: Index = Internal.createIndex(DSL.name("idx_memberships_club_id"), Memberships.MEMBERSHIPS, arrayOf(Memberships.MEMBERSHIPS.CLUB_ID), false)
 val IDX_MEMBERSHIPS_STATUS: Index = Internal.createIndex(DSL.name("idx_memberships_status"), Memberships.MEMBERSHIPS, arrayOf(Memberships.MEMBERSHIPS.STATUS), false)
 val IDX_MEMBERSHIPS_USER_ID: Index = Internal.createIndex(DSL.name("idx_memberships_user_id"), Memberships.MEMBERSHIPS, arrayOf(Memberships.MEMBERSHIPS.USER_ID), false)
+val IDX_SKLADCHINA_PARTICIPANTS_USER_ID: Index = Internal.createIndex(DSL.name("idx_skladchina_participants_user_id"), SkladchinaParticipants.SKLADCHINA_PARTICIPANTS, arrayOf(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.USER_ID), false)
+val IDX_SKLADCHINAS_CLUB_ID: Index = Internal.createIndex(DSL.name("idx_skladchinas_club_id"), Skladchinas.SKLADCHINAS, arrayOf(Skladchinas.SKLADCHINAS.CLUB_ID), false)
+val IDX_SKLADCHINAS_STATUS_DEADLINE: Index = Internal.createIndex(DSL.name("idx_skladchinas_status_deadline"), Skladchinas.SKLADCHINAS, arrayOf(Skladchinas.SKLADCHINAS.STATUS, Skladchinas.SKLADCHINAS.DEADLINE), false)
 val IDX_TRANSACTIONS_CLUB_ID_CREATED: Index = Internal.createIndex(DSL.name("idx_transactions_club_id_created"), Transactions.TRANSACTIONS, arrayOf(Transactions.TRANSACTIONS.CLUB_ID, Transactions.TRANSACTIONS.CREATED_AT), false)
 val IDX_TRANSACTIONS_USER_ID: Index = Internal.createIndex(DSL.name("idx_transactions_user_id"), Transactions.TRANSACTIONS, arrayOf(Transactions.TRANSACTIONS.USER_ID), false)
+val UQ_TRANSACTIONS_TELEGRAM_CHARGE_ID: Index = Internal.createIndex(DSL.name("uq_transactions_telegram_charge_id"), Transactions.TRANSACTIONS, arrayOf(Transactions.TRANSACTIONS.TELEGRAM_PAYMENT_CHARGE_ID), true)

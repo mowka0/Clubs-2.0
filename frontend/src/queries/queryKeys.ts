@@ -28,4 +28,10 @@ export const queryKeys = {
   applications: {
     mine: () => ['applications', 'mine'] as const,
   },
+  skladchinas: {
+    all: ['skladchinas'] as const,
+    myFeed: ['skladchinas', 'my-feed'] as const,
+    detail: (id: string) => ['skladchinas', 'detail', id] as const,
+    byClubActive: (clubId: string) => ['skladchinas', 'by-club-active', clubId] as const,
+  },
 } as const;

@@ -157,6 +157,86 @@ export interface EventListItemDto {
   status: string;
 }
 
+export type SkladchinaMode = 'fixed_equal' | 'fixed_individual' | 'voluntary';
+export type SkladchinaStatus = 'active' | 'closed_success' | 'closed_failed' | 'cancelled';
+export type SkladchinaParticipantStatus = 'pending' | 'paid' | 'declined' | 'expired_no_response';
+
+export interface SkladchinaParticipantDto {
+  userId: string;
+  firstName: string;
+  lastName: string | null;
+  avatarUrl: string | null;
+  expectedAmountKopecks: number | null;
+  declaredAmountKopecks: number | null;
+  status: SkladchinaParticipantStatus;
+  paidAt: string | null;
+}
+
+export interface SkladchinaDetailDto {
+  id: string;
+  clubId: string;
+  clubName: string;
+  clubAvatarUrl: string | null;
+  creatorId: string;
+  title: string;
+  description: string | null;
+  rules: string | null;
+  photoUrl: string | null;
+  paymentMode: SkladchinaMode;
+  totalGoalKopecks: number | null;
+  collectedKopecks: number;
+  paymentLink: string;
+  paymentMethodNote: string | null;
+  deadline: string;
+  affectsReputation: boolean;
+  status: SkladchinaStatus;
+  closedAt: string | null;
+  isOrganizerView: boolean;
+  myStatus: SkladchinaParticipantStatus | null;
+  myExpectedAmountKopecks: number | null;
+  myDeclaredAmountKopecks: number | null;
+  participants: SkladchinaParticipantDto[] | null;
+  participantCount: number;
+  paidCount: number;
+}
+
+export interface MySkladchinaListItemDto {
+  id: string;
+  title: string;
+  clubId: string;
+  clubName: string;
+  clubAvatarUrl: string | null;
+  paymentMode: SkladchinaMode;
+  totalGoalKopecks: number | null;
+  collectedKopecks: number;
+  participantCount: number;
+  paidCount: number;
+  deadline: string;
+  status: SkladchinaStatus;
+  isOrganizerView: boolean;
+  myStatus: SkladchinaParticipantStatus | null;
+  actionRequired: boolean;
+}
+
+export interface CreateSkladchinaParticipantInput {
+  userId: string;
+  expectedAmountKopecks?: number | null;
+}
+
+export interface CreateSkladchinaRequest {
+  title: string;
+  description?: string | null;
+  rules?: string | null;
+  photoUrl?: string | null;
+  paymentMode: SkladchinaMode;
+  totalGoalKopecks?: number | null;
+  paymentLink: string;
+  paymentMethodNote?: string | null;
+  deadline: string;
+  affectsReputation: boolean;
+  participants: CreateSkladchinaParticipantInput[];
+}
+
 export interface MyEventListItemDto {
   id: string;
   title: string;

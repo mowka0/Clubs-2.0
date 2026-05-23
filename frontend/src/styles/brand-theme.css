@@ -1704,3 +1704,628 @@ html, body {
 .feed-empty .actions {
   margin-top: 8px;
 }
+
+/* ============================================================
+   Activities — segmented control on ActivitiesPage
+   ============================================================ */
+.activities-segments {
+  display: flex;
+  gap: 4px;
+  padding: 0 20px 12px;
+  margin-top: -8px;
+}
+.activities-segments .segment {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1px solid var(--brand-hairline-2);
+  background: var(--brand-navy-card-2);
+  color: var(--brand-ink-2);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.activities-segments .segment.active {
+  background: var(--brand-brass-soft);
+  color: var(--brand-brass-deep);
+  border-color: rgba(201, 160, 99, 0.45);
+}
+
+/* ============================================================
+   Skladchina card — in feed
+   ============================================================ */
+.skladchina-card {
+  display: flex;
+  width: 100%;
+  padding: 14px;
+  background: var(--brand-navy-card);
+  border: 1px solid var(--brand-hairline);
+  border-radius: 14px;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.08s ease, border-color 0.15s ease;
+}
+.skladchina-card:active {
+  transform: scale(0.985);
+  border-color: var(--brand-hairline-2);
+}
+.skladchina-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.skladchina-card-body .title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--brand-ink);
+  line-height: 1.3;
+}
+.skladchina-card-body .club {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.skladchina-card-body .club-avt {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--brand-navy-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--brand-ink-3);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.skladchina-card-body .club-avt img { width: 100%; height: 100%; object-fit: cover; }
+.skladchina-card-body .club-name {
+  font-size: 12px;
+  color: var(--brand-ink-2);
+}
+.skladchina-card-body .amounts {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.skladchina-card-body .amounts .collected {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--brand-brass-deep);
+  font-variant-numeric: tabular-nums;
+}
+.skladchina-card-body .amounts .sep { color: var(--brand-ink-4); }
+.skladchina-card-body .amounts .goal {
+  font-size: 14px;
+  color: var(--brand-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.skladchina-card-body .amounts .percent {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--brand-ink-3);
+}
+.skladchina-card-body .amounts .voluntary-note {
+  font-size: 12px;
+  color: var(--brand-ink-3);
+}
+.skladchina-card-body .progress-bar,
+.sklad-progress-block .progress-bar {
+  height: 6px;
+  background: var(--brand-navy-soft);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.skladchina-card-body .progress-bar .fill,
+.sklad-progress-block .progress-bar .fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--brand-brass-2), var(--brand-brass-deep));
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.skladchina-card-body .footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+}
+.skladchina-card-body .stats {
+  font-size: 11.5px;
+  color: var(--brand-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.skladchina-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--brand-navy-soft);
+  color: var(--brand-ink-2);
+  white-space: nowrap;
+}
+.skladchina-badge.accent {
+  background: var(--brand-brass-soft);
+  color: var(--brand-brass-deep);
+  border: 1px solid rgba(201, 160, 99, 0.30);
+}
+
+/* ============================================================
+   SkladchinaPage — detail view
+   ============================================================ */
+.sklad-hero {
+  padding: 16px 20px 10px;
+}
+.sklad-club-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--brand-brass-2);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+.sklad-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--brand-ink);
+  margin: 0 0 8px;
+  line-height: 1.25;
+}
+.sklad-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sklad-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--brand-navy-soft);
+  color: var(--brand-ink-2);
+}
+.sklad-status-active {
+  background: var(--brand-brass-soft);
+  color: var(--brand-brass-deep);
+}
+.sklad-status-closed_success { background: rgba(79, 160, 120, 0.18); color: #4FA078; }
+.sklad-status-closed_failed,
+.sklad-status-cancelled { background: rgba(160, 79, 79, 0.18); color: #C97070; }
+.sklad-mode {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--brand-navy-card-2);
+  color: var(--brand-ink-3);
+}
+
+.sklad-photo {
+  margin: 0 20px 12px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--brand-navy-card);
+  border: 1px solid var(--brand-hairline);
+}
+.sklad-photo img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.sklad-description {
+  padding: 0 20px 12px;
+  color: var(--brand-ink-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.sklad-rules {
+  margin: 0 20px 14px;
+  padding: 12px 14px;
+  background: var(--brand-navy-card);
+  border: 1px solid var(--brand-hairline);
+  border-radius: 12px;
+}
+.sklad-rules p {
+  margin: 4px 0 0;
+  color: var(--brand-ink-2);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.sklad-block-title {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--brand-brass-2);
+  margin-bottom: 6px;
+}
+.sklad-block-title .count {
+  color: var(--brand-ink-4);
+  margin-left: 4px;
+}
+
+.sklad-progress-block {
+  margin: 0 20px 14px;
+  padding: 14px;
+  background: var(--brand-navy-card);
+  border: 1px solid var(--brand-hairline);
+  border-radius: 12px;
+}
+.sklad-amounts {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.sklad-amounts .collected {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--brand-brass-deep);
+}
+.sklad-amounts .sep { color: var(--brand-ink-4); }
+.sklad-amounts .goal {
+  font-size: 16px;
+  color: var(--brand-ink-2);
+}
+.sklad-amounts .percent {
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--brand-ink-3);
+}
+.sklad-amounts .voluntary-note {
+  font-size: 13px;
+  color: var(--brand-ink-3);
+}
+.sklad-stats {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--brand-ink-3);
+}
+
+.sklad-payment-block {
+  margin: 0 20px 14px;
+  padding: 14px;
+  background: var(--brand-navy-card);
+  border: 1px solid var(--brand-hairline);
+  border-radius: 12px;
+}
+.sklad-payment-block .payment-note {
+  font-size: 12.5px;
+  color: var(--brand-ink-3);
+  margin-bottom: 8px;
+}
+.payment-link-btn {
+  width: 100%;
+  padding: 11px 14px;
+  background: var(--brand-brass-soft);
+  border: 1px solid rgba(201, 160, 99, 0.45);
+  color: var(--brand-brass-deep);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.payment-link-text {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--brand-navy-card-2);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--brand-ink-3);
+  word-break: break-all;
+  font-family: monospace;
+}
+
+.sklad-action-block {
+  margin: 0 20px 14px;
+  padding: 14px;
+  background: var(--brand-navy-card);
+  border: 1px solid var(--brand-hairline);
+  border-radius: 12px;
+}
+.sklad-action-block .expected-note {
+  font-size: 13px;
+  color: var(--brand-ink-3);
+  margin-bottom: 8px;
+}
+.sklad-action-block .amount-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.sklad-action-block .amount-input {
+  flex: 1;
+  padding: 11px 12px;
+  background: var(--brand-navy-card-2);
+  border: 1px solid var(--brand-hairline-2);
+  border-radius: 10px;
+  color: var(--brand-ink);
+  font-family: inherit;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.sklad-action-block .amount-input[readonly] {
+  color: var(--brand-ink-2);
+  background: var(--brand-navy-soft);
+}
+.sklad-action-block .suffix {
+  color: var(--brand-ink-3);
+  font-size: 14px;
+}
+.sklad-action-block .action-row {
+  display: flex;
+  gap: 8px;
+}
+.sklad-action-block .action-error {
+  font-size: 12.5px;
+  color: #C97070;
+  margin-bottom: 8px;
+}
+
+.primary-btn {
+  flex: 1;
+  padding: 12px 14px;
+  background: var(--brand-brass);
+  border: none;
+  color: #0E1428;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.primary-btn:disabled {
+  background: var(--brand-navy-soft);
+  color: var(--brand-ink-4);
+  cursor: default;
+}
+
+.sklad-my-status {
+  margin: 0 20px 14px;
+  padding: 14px;
+  background: var(--brand-navy-card);
+  border: 1px solid var(--brand-hairline);
+  border-radius: 12px;
+  text-align: center;
+}
+.sklad-my-status .title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--brand-ink);
+}
+.sklad-my-status .sub {
+  font-size: 13px;
+  color: var(--brand-ink-3);
+  margin-top: 4px;
+}
+
+.sklad-participants {
+  margin: 0 20px 14px;
+  padding: 14px;
+  background: var(--brand-navy-card);
+  border: 1px solid var(--brand-hairline);
+  border-radius: 12px;
+}
+.sklad-participant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sklad-participant-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--brand-navy-card-2);
+  border-radius: 10px;
+}
+.sklad-participant-row .avt {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--brand-navy-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand-ink-3);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.sklad-participant-row .avt img { width: 100%; height: 100%; object-fit: cover; }
+.sklad-participant-row .body { flex: 1; min-width: 0; }
+.sklad-participant-row .name {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--brand-ink);
+}
+.sklad-participant-row .amounts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--brand-ink-3);
+  margin-top: 2px;
+}
+.sklad-participant-row .declared.mismatch {
+  color: #DDB87A;
+}
+.sklad-participant-row .status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.status-paid { background: rgba(79, 160, 120, 0.18); color: #4FA078; }
+.status-pending { background: var(--brand-navy-soft); color: var(--brand-ink-2); }
+.status-declined { background: rgba(160, 79, 79, 0.18); color: #C97070; }
+.status-expired { background: rgba(140, 100, 50, 0.20); color: #C9A063; }
+
+/* ============================================================
+   CreateSkladchinaModal — form
+   ============================================================ */
+.sklad-create-modal {
+  padding: 20px;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.sklad-create-modal h2 {
+  margin: 0 0 16px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--brand-ink);
+}
+.sklad-create-modal .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.sklad-create-modal .field.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.sklad-create-modal .field .label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--brand-brass-2);
+  letter-spacing: 0.04em;
+}
+.sklad-create-modal .field .label .count {
+  color: var(--brand-ink-4);
+  font-weight: 400;
+}
+.sklad-create-modal .field input,
+.sklad-create-modal .field textarea {
+  padding: 10px 12px;
+  background: var(--brand-navy-card-2);
+  border: 1px solid var(--brand-hairline-2);
+  border-radius: 10px;
+  color: var(--brand-ink);
+  font-family: inherit;
+  font-size: 14px;
+}
+.sklad-create-modal .field .hint {
+  font-size: 11.5px;
+  color: var(--brand-ink-4);
+}
+.sklad-create-modal .mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sklad-create-modal .mode-option {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--brand-navy-card-2);
+  border: 1px solid var(--brand-hairline-2);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.sklad-create-modal .mode-option.active {
+  border-color: rgba(201, 160, 99, 0.45);
+  background: var(--brand-brass-soft);
+}
+.sklad-create-modal .mode-option input {
+  margin-top: 3px;
+}
+.sklad-create-modal .mode-option .mode-text {
+  flex: 1;
+}
+.sklad-create-modal .mode-option .mode-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--brand-ink);
+}
+.sklad-create-modal .mode-option .mode-desc {
+  font-size: 11.5px;
+  color: var(--brand-ink-3);
+  margin-top: 2px;
+}
+.sklad-create-modal .participants-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.sklad-create-modal .p-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sklad-create-modal .p-toggle {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 12px;
+  background: var(--brand-navy-card-2);
+  border: 1px solid var(--brand-hairline-2);
+  border-radius: 10px;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sklad-create-modal .p-row.selected .p-toggle {
+  border-color: rgba(201, 160, 99, 0.45);
+  background: var(--brand-brass-soft);
+}
+.sklad-create-modal .p-toggle .check {
+  width: 18px; height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--brand-navy-soft);
+  color: var(--brand-brass-deep);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+}
+.sklad-create-modal .p-toggle .name {
+  font-size: 13.5px;
+  color: var(--brand-ink);
+}
+.sklad-create-modal .individual-amount {
+  width: 90px;
+  padding: 7px 10px;
+  background: var(--brand-navy-card-2);
+  border: 1px solid var(--brand-hairline-2);
+  border-radius: 8px;
+  color: var(--brand-ink);
+  font-size: 13px;
+}
+.sklad-create-modal .submit-error {
+  margin: 10px 0;
+  padding: 10px 12px;
+  background: rgba(201, 112, 112, 0.10);
+  border: 1px solid rgba(201, 112, 112, 0.30);
+  border-radius: 8px;
+  color: #C97070;
+  font-size: 12.5px;
+}
+.sklad-create-modal .modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}

@@ -98,7 +98,7 @@ open class UserClubReputation(
     /**
      * The column <code>public.user_club_reputation.reliability_index</code>.
      */
-    val RELIABILITY_INDEX: TableField<UserClubReputationRecord, Int?> = createField(DSL.name("reliability_index"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("100"), SQLDataType.INTEGER)), this, "")
+    val RELIABILITY_INDEX: TableField<UserClubReputationRecord, Int?> = createField(DSL.name("reliability_index"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("0"), SQLDataType.INTEGER)), this, "")
 
     /**
      * The column

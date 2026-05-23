@@ -9,6 +9,7 @@ import com.clubs.generated.jooq.enums.TransactionStatus
 import com.clubs.generated.jooq.enums.TransactionType
 import com.clubs.generated.jooq.indexes.IDX_TRANSACTIONS_CLUB_ID_CREATED
 import com.clubs.generated.jooq.indexes.IDX_TRANSACTIONS_USER_ID
+import com.clubs.generated.jooq.indexes.UQ_TRANSACTIONS_TELEGRAM_CHARGE_ID
 import com.clubs.generated.jooq.keys.TRANSACTIONS_PKEY
 import com.clubs.generated.jooq.keys.TRANSACTIONS__TRANSACTIONS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.TRANSACTIONS__TRANSACTIONS_MEMBERSHIP_ID_FKEY
@@ -173,7 +174,7 @@ open class Transactions(
         override fun `as`(alias: Table<*>): TransactionsPath = TransactionsPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(IDX_TRANSACTIONS_CLUB_ID_CREATED, IDX_TRANSACTIONS_USER_ID)
+    override fun getIndexes(): List<Index> = listOf(IDX_TRANSACTIONS_CLUB_ID_CREATED, IDX_TRANSACTIONS_USER_ID, UQ_TRANSACTIONS_TELEGRAM_CHARGE_ID)
     override fun getPrimaryKey(): UniqueKey<TransactionsRecord> = TRANSACTIONS_PKEY
     override fun getReferences(): List<ForeignKey<TransactionsRecord, *>> = listOf(TRANSACTIONS__TRANSACTIONS_CLUB_ID_FKEY, TRANSACTIONS__TRANSACTIONS_MEMBERSHIP_ID_FKEY, TRANSACTIONS__TRANSACTIONS_USER_ID_FKEY)
 
