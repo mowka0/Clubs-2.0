@@ -3,6 +3,7 @@ import { Modal, Spinner } from '@telegram-apps/telegram-ui';
 import { useClubMembersQuery } from '../../queries/members';
 import { useCreateSkladchinaMutation } from '../../queries/skladchina';
 import { useHaptic } from '../../hooks/useHaptic';
+import { AvatarUpload } from '../AvatarUpload';
 import type { CreateSkladchinaRequest, SkladchinaMode } from '../../types/api';
 
 interface CreateSkladchinaModalProps {
@@ -58,7 +59,7 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [rules, setRules] = useState('');
-  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [mode, setMode] = useState<SkladchinaMode>('fixed_equal');
   const [totalRub, setTotalRub] = useState('');
   const [paymentLink, setPaymentLink] = useState('');
@@ -132,7 +133,7 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
       title: title.trim(),
       description: description.trim() || null,
       rules: rules.trim() || null,
-      photoUrl: photoUrl.trim() || null,
+      photoUrl: photoUrl,
       paymentMode: mode,
       totalGoalKopecks: mode === 'fixed_equal' ? totalKopecks : null,
       paymentLink: paymentLink.trim(),
@@ -174,10 +175,10 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
           <textarea value={rules} onChange={(e) => setRules(e.target.value)} rows={2} />
         </label>
 
-        <label className="field">
-          <span className="label">Ссылка на фото (опц.)</span>
-          <input value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)} placeholder="https://…" />
-        </label>
+        <div className="field">
+          <span className="label">Фото (опц.)</span>
+          <AvatarUpload value={photoUrl} onChange={setPhotoUrl} />
+        </div>
 
         <div className="field">
           <span className="label">Порядок сбора *</span>

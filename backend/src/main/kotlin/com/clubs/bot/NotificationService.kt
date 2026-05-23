@@ -5,6 +5,7 @@ import com.clubs.event.EventResponseRepository
 import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
@@ -20,7 +21,8 @@ import java.util.UUID
 class NotificationService(
     private val membershipRepository: MembershipRepository,
     private val eventResponseRepository: EventResponseRepository,
-    private val telegramClient: TelegramClient
+    private val telegramClient: TelegramClient,
+    @Value("\${telegram.bot-username}") private val botUsername: String
 ) {
 
     private val log = LoggerFactory.getLogger(NotificationService::class.java)
@@ -119,22 +121,23 @@ class NotificationService(
     private fun buildKeyboard(buttonText: String, startApp: String?): InlineKeyboardMarkup {
         // С startApp — t.me deep-link (Telegram пробрасывает startapp в initData.start_param).
         // Без — обычная WebApp кнопка (открывает Mini App на главный route).
+        // botUsername — env var TELEGRAM_BOT_USERNAME, разный на staging (clubs_v2_test_bot)
+        // и prod (clubs_v2_bot).
         val button = if (startApp != null) {
             InlineKeyboardButton.builder()
                 .text(buttonText)
-                .url("https://t.me/$BOT_USERNAME/$WEBAPP_SLUG?startapp=$startApp")
+                .url("https://t.me/$botUsername/$WEBAPP_SLUG?startapp=$startApp")
                 .build()
         } else {
             InlineKeyboardButton.builder()
                 .text(buttonText)
-                .webApp(WebAppInfo("https://t.me/$BOT_USERNAME/$WEBAPP_SLUG"))
+                .webApp(WebAppInfo("https://t.me/$botUsername/$WEBAPP_SLUG"))
                 .build()
         }
         return InlineKeyboardMarkup(listOf(InlineKeyboardRow(button)))
     }
 
     companion object {
-        private const val BOT_USERNAME = "clubs_v2_bot"
         private const val WEBAPP_SLUG = "app"
         private const val DEFAULT_BUTTON_TEXT = "📱 Открыть Clubs"
     }

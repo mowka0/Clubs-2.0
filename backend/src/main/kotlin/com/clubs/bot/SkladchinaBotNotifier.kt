@@ -43,18 +43,19 @@ class SkladchinaBotNotifier(
                 "💵 Сумма сбора: $rubles ₽"
             }
         }
-        val descSnippet = event.description?.take(200)?.let { "\n\n$it" } ?: ""
-        val text = """
-            💰 Новый сбор в клубе «${event.clubName}»: ${event.title}$descSnippet
-
-            $expectedNote
-            ⏰ До: ${event.deadline.format(fmt)}
-
-            💳 Платёжная ссылка:
-            ${event.paymentLink}
-
-            После оплаты — отметьте в приложении, чтобы организатор увидел.
-        """.trimIndent()
+        // buildString вместо """trimIndent""" — interpolated description с собственными
+        // переводами строк ломал trimIndent calculation (минимальный indent становился 0,
+        // остальные строки оставались с 12 пробелами отступа в финальной DM).
+        val text = buildString {
+            append("💰 Новый сбор в клубе «${event.clubName}»: ${event.title}")
+            event.description?.takeIf { it.isNotBlank() }?.let {
+                append("\n\n").append(it.take(200))
+            }
+            append("\n\n").append(expectedNote)
+            append("\n⏰ До: ").append(event.deadline.format(fmt))
+            append("\n\n💳 Платёжная ссылка:\n").append(event.paymentLink)
+            append("\n\nПосле оплаты — отметьте в приложении, чтобы организатор увидел.")
+        }
 
         // Deep-link inline button — открывает /skladchina/<id> в Mini App
         // через ?startapp=skladchina_<uuid> (см. DeepLinkHandler).
@@ -84,13 +85,14 @@ class SkladchinaBotNotifier(
             SkladchinaStatus.cancelled -> "🚫"
             else -> "❓"
         }
-        val reputationLine = if (event.affectsReputation) "\n⚠️ Репутация участников пересчитана." else ""
-        val text = """
-            $statusEmoji Сбор закрыт: «${event.title}»
-
-            Собрано: $collectedRub ₽$goalLine
-            Оплатили: ${event.paidCount} из ${event.participantCount}$reputationLine
-        """.trimIndent()
+        val text = buildString {
+            append("$statusEmoji Сбор закрыт: «${event.title}»")
+            append("\n\nСобрано: $collectedRub ₽$goalLine")
+            append("\nОплатили: ${event.paidCount} из ${event.participantCount}")
+            if (event.affectsReputation) {
+                append("\n⚠️ Репутация участников пересчитана.")
+            }
+        }
 
         notificationService.sendDirectMessage(creatorTelegramId, text)
         log.info("Skladchina-closed DM sent: id={} status={} creator={}",

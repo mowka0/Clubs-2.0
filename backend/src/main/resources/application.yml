@@ -54,6 +54,10 @@ jwt:
 
 telegram:
   bot-token: ${TELEGRAM_BOT_TOKEN:}
+  # Bot username (без @) — используется в Mini App deep-link URL вида
+  # https://t.me/<bot-username>/app?startapp=... В DM inline-кнопках.
+  # Prod: clubs_v2_bot, Staging: clubs_v2_test_bot.
+  bot-username: ${TELEGRAM_BOT_USERNAME:clubs_v2_bot}
 
 s3:
   bucket: ${S3_BUCKET:clubs-uploads}
