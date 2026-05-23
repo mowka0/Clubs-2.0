@@ -109,7 +109,8 @@ data class MySkladchinaListItemDto(
     val status: String,
     val isOrganizerView: Boolean,
     val myStatus: String?,
-    val actionRequired: Boolean
+    val actionRequired: Boolean,
+    val affectsReputation: Boolean
 )
 
 data class SkladchinaUploadResponse(

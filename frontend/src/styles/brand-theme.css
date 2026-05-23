@@ -2329,3 +2329,127 @@ html, body {
   gap: 8px;
   margin-top: 8px;
 }
+
+/* ============================================================
+   Skladchina post-staging fixes (2026-05-23)
+   ============================================================ */
+
+/* #1 iOS zoom — Safari/Telegram WebView zooms viewport when input
+   font-size < 16px. Enforce 16px on all relevant inputs across the app. */
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="tel"],
+input[type="url"],
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="search"],
+input[type="password"],
+textarea,
+select {
+  font-size: 16px;
+}
+
+/* #7 Modal z-index — telegram-ui's modal occasionally rendered below
+   bottom tab bar or behind main window on desktop Telegram. Force-top
+   via explicit z-index. */
+[role="dialog"],
+.tgui-modal,
+.tgui-overlay {
+  z-index: 1000 !important;
+}
+
+/* #8 SkladchinaPage — clickable club card on top (replaces text-link sklad-club-link). */
+.sklad-club-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: calc(100% - 40px);
+  margin: 14px 20px 14px;
+  padding: 12px 14px;
+  background: var(--brand-navy-card);
+  border: 1px solid var(--brand-hairline);
+  border-radius: 12px;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.08s ease, border-color 0.15s ease;
+}
+.sklad-club-card:active {
+  transform: scale(0.985);
+  border-color: var(--brand-hairline-2);
+}
+.sklad-club-card .club-avt {
+  width: 42px; height: 42px;
+  border-radius: 10px;
+  background: var(--brand-navy-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--brand-ink-2);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.sklad-club-card .club-avt img { width: 100%; height: 100%; object-fit: cover; }
+.sklad-club-card .club-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sklad-club-card .club-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--brand-ink-3);
+  font-weight: 500;
+}
+.sklad-club-card .club-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--brand-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sklad-club-card .chevron {
+  color: var(--brand-ink-4);
+  flex-shrink: 0;
+}
+
+/* Sklad hero — без верхнего padding, чтобы клуб-карточка визуально лидировала */
+.sklad-hero {
+  padding: 4px 20px 10px;
+}
+
+/* #5 Reputation tag — both inline (sklad-meta) and on cards */
+.sklad-reputation-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(201, 112, 112, 0.16);
+  color: #DDB87A;
+  border: 1px solid rgba(201, 112, 112, 0.25);
+  white-space: nowrap;
+}
+
+.skladchina-badge.reputation {
+  background: rgba(201, 112, 112, 0.14);
+  color: #DDB87A;
+  border: 1px solid rgba(201, 112, 112, 0.20);
+}
+
+/* #3 SkladchinasTab — closed sklаdchinas in history section get muted style */
+.skladchina-card.closed {
+  opacity: 0.72;
+}
+.skladchina-card.closed .skladchina-card-body .collected,
+.skladchina-card.closed .skladchina-card-body .title {
+  color: var(--brand-ink-2);
+}

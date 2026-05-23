@@ -1,6 +1,7 @@
 import { FC, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
+import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import {
   useCloseSkladchinaMutation,
@@ -44,6 +45,7 @@ function paymentModeLabel(mode: string): string {
 }
 
 export const SkladchinaPage: FC = () => {
+  useBackButton(true);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const haptic = useHaptic();
@@ -159,14 +161,38 @@ export const SkladchinaPage: FC = () => {
     <div className="brand-page">
       <BrandBackdrop />
 
+      <button
+        type="button"
+        className="sklad-club-card"
+        onClick={handleBackToClub}
+        aria-label={`Открыть клуб ${s.clubName}`}
+      >
+        <span className="club-avt">
+          {s.clubAvatarUrl
+            ? <img src={s.clubAvatarUrl} alt="" />
+            : s.clubName.split(/\s+/).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join('')}
+        </span>
+        <div className="club-body">
+          <span className="club-label">Сбор в клубе</span>
+          <span className="club-name">{s.clubName}</span>
+        </div>
+        <span className="chevron" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </span>
+      </button>
+
       <header className="sklad-hero">
-        <button type="button" className="sklad-club-link" onClick={handleBackToClub}>
-          {s.clubName}
-        </button>
         <h1 className="sklad-title">{s.title}</h1>
         <div className="sklad-meta">
           <span className={`sklad-status sklad-status-${s.status}`}>{statusLabel(s.status)}</span>
           <span className="sklad-mode">{paymentModeLabel(s.paymentMode)}</span>
+          {s.affectsReputation && (
+            <span className="sklad-reputation-tag" title="Этот сбор влияет на репутацию">
+              ⚠️ С репутацией
+            </span>
+          )}
         </div>
       </header>
 

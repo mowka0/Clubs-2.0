@@ -18,21 +18,24 @@ const COIN_ICON = (
 );
 
 interface Group {
-  key: 'action_required' | 'others';
+  key: 'action_required' | 'active' | 'history';
   title: string;
   items: MySkladchinaListItemDto[];
 }
 
 function groupSkladchinas(list: readonly MySkladchinaListItemDto[]): Group[] {
   const action: MySkladchinaListItemDto[] = [];
-  const others: MySkladchinaListItemDto[] = [];
+  const active: MySkladchinaListItemDto[] = [];
+  const history: MySkladchinaListItemDto[] = [];
   for (const s of list) {
-    if (s.actionRequired) action.push(s);
-    else others.push(s);
+    if (s.status !== 'active') history.push(s);
+    else if (s.actionRequired) action.push(s);
+    else active.push(s);
   }
   const result: Group[] = [];
   if (action.length > 0) result.push({ key: 'action_required', title: 'Требует оплаты', items: action });
-  if (others.length > 0) result.push({ key: 'others', title: 'Активные сборы', items: others });
+  if (active.length > 0) result.push({ key: 'active', title: 'Активные сборы', items: active });
+  if (history.length > 0) result.push({ key: 'history', title: 'История', items: history });
   return result;
 }
 

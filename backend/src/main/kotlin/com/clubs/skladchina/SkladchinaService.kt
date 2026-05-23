@@ -155,13 +155,7 @@ class SkladchinaService(
         skladchinaRepository.setParticipantPaid(skladchinaId, callerId, declaredAmountKopecks, OffsetDateTime.now())
         log.info("Skladchina mark-paid: id={} userId={} amount={}", skladchinaId, callerId, declaredAmountKopecks)
 
-        // Auto-close if goal reached (fixed modes only)
-        if (skladchina.totalGoalKopecks != null) {
-            val collected = skladchinaRepository.sumCollectedKopecks(skladchinaId)
-            if (collected >= skladchina.totalGoalKopecks) {
-                closeInternal(skladchinaId, closedBy = null, manualClose = false)
-            }
-        }
+        maybeAutoCloseAfterStateChange(skladchinaId)
 
         return getDetail(skladchinaId, callerId)
     }
@@ -183,7 +177,34 @@ class SkladchinaService(
         }
         skladchinaRepository.setParticipantDeclined(skladchinaId, callerId, OffsetDateTime.now())
         log.info("Skladchina declined: id={} userId={}", skladchinaId, callerId)
+        maybeAutoCloseAfterStateChange(skladchinaId)
         return getDetail(skladchinaId, callerId)
+    }
+
+    /**
+     * Auto-close trigger that fires after mark-paid or decline. Closes if:
+     *  - goal is reached (fixed-modes), OR
+     *  - all participants are in a terminal status (paid / declined) — no more pending.
+     * Quiet no-op otherwise. Errors don't propagate up — they're logged in closeInternal.
+     */
+    private fun maybeAutoCloseAfterStateChange(skladchinaId: UUID) {
+        val skladchina = skladchinaRepository.findById(skladchinaId) ?: return
+        if (skladchina.status != SkladchinaStatus.active) return
+
+        if (skladchina.totalGoalKopecks != null) {
+            val collected = skladchinaRepository.sumCollectedKopecks(skladchinaId)
+            if (collected >= skladchina.totalGoalKopecks) {
+                closeInternal(skladchinaId, closedBy = null, manualClose = false)
+                return
+            }
+        }
+
+        val pendingCount = skladchinaRepository.countParticipantsByStatus(
+            skladchinaId, SkladchinaParticipantStatus.pending
+        )
+        if (pendingCount == 0) {
+            closeInternal(skladchinaId, closedBy = null, manualClose = false)
+        }
     }
 
     @Transactional
@@ -255,7 +276,7 @@ class SkladchinaService(
             if (p.reputationApplied) return@forEach
             val delta = when (p.status) {
                 SkladchinaParticipantStatus.paid -> REP_DELTA_PAID
-                SkladchinaParticipantStatus.declined -> 0
+                SkladchinaParticipantStatus.declined -> REP_DELTA_DECLINED
                 SkladchinaParticipantStatus.expired_no_response -> REP_DELTA_NO_RESPONSE
                 SkladchinaParticipantStatus.pending -> 0  // should be expired by now, fallback
             }
@@ -324,6 +345,9 @@ class SkladchinaService(
         private const val MAX_DEADLINE_DAYS = 90L
         private const val SUCCESS_THRESHOLD = 0.80     // fixed-mode: ≥80% → success at deadline
         private const val REP_DELTA_PAID = 10
+        // Явный отказ слабее чем «не ответил» — мы наказываем безответственность,
+        // не несогласие. См. фидбек #6 по skladchina-mvp staging.
+        private const val REP_DELTA_DECLINED = -5
         private const val REP_DELTA_NO_RESPONSE = -25
     }
 }

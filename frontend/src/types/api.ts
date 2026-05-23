@@ -216,6 +216,7 @@ export interface MySkladchinaListItemDto {
   isOrganizerView: boolean;
   myStatus: SkladchinaParticipantStatus | null;
   actionRequired: boolean;
+  affectsReputation: boolean;
 }
 
 export interface CreateSkladchinaParticipantInput {

@@ -72,10 +72,11 @@ class JooqSkladchinaRepository(
 
     override fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MySkladchinaFeedItem> {
         // Скоуп — сборы, где user либо participant, либо creator. Active клубы only.
+        // Включаем И активные, И закрытые — закрытые остаются в истории.
+        // Сортировка: active первыми (actionRequired → deadline), closed по closed_at DESC.
         val involvementCondition = SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId)
             .or(SKLADCHINAS.CREATOR_ID.eq(userId))
-        val baseCondition = SKLADCHINAS.STATUS.eq(SkladchinaStatus.active)
-            .and(CLUBS.IS_ACTIVE.eq(true))
+        val baseCondition = CLUBS.IS_ACTIVE.eq(true)
             .and(involvementCondition)
 
         // Total distinct skladchina_id satisfying involvement
@@ -96,13 +97,28 @@ class JooqSkladchinaRepository(
         val actionRequiredOrder = DSL.case_()
             .`when`(callerStatus.eq(SkladchinaParticipantStatus.pending), 1)
             .otherwise(0)
+        // 0 = active (top), 1 = closed (bottom — история)
+        val statusBucket = DSL.case_()
+            .`when`(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active), 0)
+            .otherwise(1)
 
-        val skladchinaIds = dsl.selectDistinct(SKLADCHINAS.ID, SKLADCHINAS.DEADLINE, actionRequiredOrder.`as`("ar"))
+        val skladchinaIds = dsl.selectDistinct(
+            SKLADCHINAS.ID,
+            SKLADCHINAS.DEADLINE,
+            SKLADCHINAS.CLOSED_AT,
+            statusBucket.`as`("sb"),
+            actionRequiredOrder.`as`("ar")
+        )
             .from(SKLADCHINAS)
             .join(CLUBS).on(CLUBS.ID.eq(SKLADCHINAS.CLUB_ID))
             .leftJoin(SKLADCHINA_PARTICIPANTS).on(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(SKLADCHINAS.ID))
             .where(baseCondition)
-            .orderBy(DSL.field("ar").desc(), SKLADCHINAS.DEADLINE.asc())
+            .orderBy(
+                DSL.field("sb").asc(),                  // active первыми
+                DSL.field("ar").desc(),                 // внутри active — actionRequired сверху
+                SKLADCHINAS.DEADLINE.asc(),             // active: ближайший deadline сверху
+                SKLADCHINAS.CLOSED_AT.desc()            // closed: самые свежие сверху
+            )
             .limit(size)
             .offset(page * size)
             .fetch()

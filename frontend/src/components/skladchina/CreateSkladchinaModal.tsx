@@ -8,6 +8,8 @@ import type { CreateSkladchinaRequest, SkladchinaMode } from '../../types/api';
 
 interface CreateSkladchinaModalProps {
   clubId: string;
+  // organizerUserId сохранён в типе для будущих расширений (например, организатор-default),
+  // но сейчас не используется — organizer может быть участником сбора как любой member.
   organizerUserId: string;
   onClose: () => void;
   onCreated: (skladchinaId: string) => void;
@@ -40,7 +42,7 @@ function defaultDeadlineLocal(): string {
 
 export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
   clubId,
-  organizerUserId,
+  organizerUserId: _organizerUserId,
   onClose,
   onCreated,
 }) => {
@@ -48,10 +50,10 @@ export const CreateSkladchinaModal: FC<CreateSkladchinaModalProps> = ({
   const membersQuery = useClubMembersQuery(clubId);
   const createMut = useCreateSkladchinaMutation();
 
-  // Members minus the organizer (organizer doesn't participate in own collection by default)
+  // Все active members клуба, включая organizer'а — он тоже может скинуться.
   const eligibleMembers = useMemo(
-    () => (membersQuery.data ?? []).filter((m) => m.userId !== organizerUserId),
-    [membersQuery.data, organizerUserId],
+    () => membersQuery.data ?? [],
+    [membersQuery.data],
   );
 
   const [title, setTitle] = useState('');

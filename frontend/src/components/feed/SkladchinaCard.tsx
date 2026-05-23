@@ -34,6 +34,14 @@ function formatRubles(kopecks: number): string {
 }
 
 function pickBadge(s: MySkladchinaListItemDto): Badge | null {
+  // For closed skladchinas surface the final status, not personal myStatus
+  if (s.status !== 'active') {
+    switch (s.status) {
+      case 'closed_success': return { text: 'Завершён', accent: false };
+      case 'closed_failed':  return { text: 'Не собран', accent: false };
+      case 'cancelled':      return { text: 'Отменён',  accent: false };
+    }
+  }
   if (s.actionRequired) return { text: 'Требует оплаты', accent: true };
   switch (s.myStatus) {
     case 'paid':                 return { text: 'Оплачено', accent: false };
@@ -55,8 +63,11 @@ export const SkladchinaCard: FC<SkladchinaCardProps> = ({ skladchina, onClick })
     ? Math.min(100, Math.round((skladchina.collectedKopecks / skladchina.totalGoalKopecks!) * 100))
     : null;
 
+  const isClosed = skladchina.status !== 'active';
+  const cardClass = isClosed ? 'skladchina-card closed' : 'skladchina-card';
+
   return (
-    <button type="button" className="skladchina-card" onClick={onClick}>
+    <button type="button" className={cardClass} onClick={onClick}>
       <div className="skladchina-card-body">
         <div className="title">{skladchina.title}</div>
         <div className="club">
@@ -91,6 +102,11 @@ export const SkladchinaCard: FC<SkladchinaCardProps> = ({ skladchina, onClick })
           {badge && (
             <span className={badge.accent ? 'skladchina-badge accent' : 'skladchina-badge'}>
               {badge.text}
+            </span>
+          )}
+          {skladchina.affectsReputation && (
+            <span className="skladchina-badge reputation" title="Влияет на репутацию">
+              ⚠️ Репутация
             </span>
           )}
           <span className="stats">

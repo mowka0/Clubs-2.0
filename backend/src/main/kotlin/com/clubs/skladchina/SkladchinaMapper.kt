@@ -102,7 +102,8 @@ class SkladchinaMapper {
             status = item.skladchina.status.literal,
             isOrganizerView = isOrganizerView,
             myStatus = item.myStatus?.literal,
-            actionRequired = actionRequired
+            actionRequired = actionRequired,
+            affectsReputation = item.skladchina.affectsReputation
         )
     }
 
