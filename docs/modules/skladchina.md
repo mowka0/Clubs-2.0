@@ -1,8 +1,63 @@
 # Module: Skladchina (сборы — совместные сбор денег внутри клуба)
 
-> **Status:** ✅ Реализовано в `feature/skladchina-mvp` (2026-05-23).
-> Заменяет `docs/backlog/skladchina.md` (старый brainstorm от 2026-05-17).
-> Post-flight отклонения зафиксированы в § «Post-flight deltas» ниже.
+> **Status:** ✅ Реализовано и прошло staging — `feature/skladchina-mvp` мержится
+> в master 2026-05-23. Заменяет `docs/backlog/skladchina.md` (старый brainstorm
+> от 2026-05-17). Post-flight отклонения от исходной спеки + post-staging фиксы
+> зафиксированы в § ниже.
+
+## Post-staging hotfixes round 2 (2026-05-23 вечер)
+
+После первого захода на staging пришёл второй пакет фидбека — все закрыты:
+
+1. **WebApp кнопка в DM** теперь использует прямой frontend URL
+   `https://<base>/skladchina/<id>` через `WebAppInfo`, не t.me/<bot>/...?startapp=.
+   Причина: Telegram блокирует self-bot ссылки внутри DM с тем же ботом
+   (циклическая ссылка). Параметр в `NotificationService.sendDm` называется
+   `webAppPath` (готовый path с `/`), env var `TELEGRAM_WEBAPP_BASE_URL`
+   контролирует base.
+2. **`TELEGRAM_BOT_USERNAME` env var** — bot username вынесен из hardcode
+   `clubs_v2_bot`. На staging → `clubs_v2_test_bot`, на prod default.
+3. **Reputation: declined → −5** (было 0). По фидбеку «обязан был оплатить и
+   отказался — снижаем». Применяется только при `affects_reputation = true`.
+4. **Auto-close при всех ответивших участниках** — `maybeAutoCloseAfterStateChange`
+   срабатывает не только при goal-reached, но и когда 0 pending participants
+   (все paid или declined). Закрывает voluntary-кейс «все обязанные ответили».
+5. **Closed sklаdchinas в истории** — `findMyFeed` возвращает все involvement-
+   сборы (не только active). Sort: active первыми (actionRequired → deadline),
+   closed следом по `closed_at DESC`.
+6. **Photo upload** — переиспользует существующий `POST /api/upload`
+   endpoint (тот же что для аватарок клубов) через `AvatarUpload` компонент.
+   Отдельный SkladchinaUploadController **не делается** (YAGNI).
+7. **DM forматирование** — отступы перед строками исчезли. `buildString`
+   вместо `"""trimIndent"""` (последний ломался на interpolated `$description`
+   с собственными переводами строк).
+8. **Создание сбора — отдельная route-страница**, не bottom-sheet Modal.
+   `pages/CreateSkladchinaPage.tsx`, route `/clubs/:id/skladchina/new`.
+   vaul Modal не справлялся с длинной формой на iOS Telegram WebView
+   (partial snap, обрезание последних полей). Page даёт полный viewport
+   и нативную back-кнопку.
+9. **`@EnableAsync` + `@TransactionalEventListener`** — `SkladchinaService`
+   публикует `SkladchinaCreatedEvent`/`SkladchinaClosedEvent`, бот-listener
+   ловит и шлёт DM после commit'а транзакции (тот же паттерн что
+   `PaymentNotificationHandler`).
+10. **UI fixes**: фото на странице сбора 120×120 слева (не full-width),
+    клуб-карточка сверху SkladchinaPage кликабельная, бейдж «⚠️ Репутация»
+    на карточке/странице, organizer может быть в списке участников сбора,
+    iOS zoom фикс через font-size: 16px на input/textarea внутри страницы
+    создания.
+
+## Deploy notes (важно для staging)
+
+В Coolify staging env vars нужны:
+```
+TELEGRAM_BOT_USERNAME=clubs_v2_test_bot
+TELEGRAM_WEBAPP_BASE_URL=https://staging.77-42-23-177.sslip.io
+```
+Для prod env vars можно не задавать — default из `application.yml`:
+```
+telegram.bot-username = clubs_v2_bot
+telegram.webapp-base-url = https://77-42-23-177.sslip.io
+```
 
 ---
 
