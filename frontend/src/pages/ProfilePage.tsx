@@ -1,15 +1,25 @@
-import { FC, useEffect, useMemo } from 'react';
+import { FC, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
 import { Spinner, Placeholder } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useMyReputationQuery } from '../queries/members';
+import { useMyInterestsQuery } from '../queries/profile';
 import { useMyApplicationsQuery } from '../queries/applications';
 import { queryKeys } from '../queries/queryKeys';
 import { getClub } from '../api/clubs';
 import { BrandBackdrop } from '../components/BrandBackdrop';
+import { countryNameByCode } from '../components/CityPicker';
+import { ProfileEditModal } from '../components/profile/ProfileEditModal';
 import type { ClubDetailDto } from '../types/api';
+
+const GearIcon: FC = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </svg>
+);
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'На рассмотрении',
@@ -56,10 +66,14 @@ export const ProfilePage: FC = () => {
 
   const reputationQuery = useMyReputationQuery();
   const applicationsQuery = useMyApplicationsQuery();
+  const interestsQuery = useMyInterestsQuery();
 
   const reputation = useMemo(() => reputationQuery.data ?? [], [reputationQuery.data]);
   const applications = applicationsQuery.data ?? [];
   const pendingApps = applications.filter((a) => a.status === 'pending');
+  const interests = useMemo(() => interestsQuery.data ?? [], [interestsQuery.data]);
+
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
     if (!user) login();
@@ -101,7 +115,14 @@ export const ProfilePage: FC = () => {
   }
 
   const fullName = `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`;
-  const empty = reputation.length === 0 && pendingApps.length === 0;
+  const locationLabel = user.city
+    ? [user.city, countryNameByCode(user.country)].filter(Boolean).join(', ')
+    : null;
+  const empty =
+    reputation.length === 0 &&
+    pendingApps.length === 0 &&
+    interests.length === 0 &&
+    !user.bio;
 
   return (
     <div className="brand-page">
@@ -112,6 +133,15 @@ export const ProfilePage: FC = () => {
           <h1>
             Твой <span className="accent">профиль</span>
           </h1>
+          <button
+            type="button"
+            className="pf-gear"
+            onClick={() => { haptic.impact('light'); setEditOpen(true); }}
+            disabled={interestsQuery.isPending}
+            aria-label="Редактировать профиль"
+          >
+            <GearIcon />
+          </button>
         </div>
       </header>
 
@@ -123,8 +153,26 @@ export const ProfilePage: FC = () => {
         <div className="meta">
           <div className="name">{fullName}</div>
           {user.telegramUsername && <div className="handle">@{user.telegramUsername}</div>}
+          {locationLabel && <div className="location">{locationLabel}</div>}
         </div>
       </div>
+
+      {/* Bio */}
+      {user.bio && (
+        <div className="pf-bio">{user.bio}</div>
+      )}
+
+      {/* Interests */}
+      {interests.length > 0 && (
+        <>
+          <div className="mc-section-label">Интересы</div>
+          <div className="pf-tags">
+            {interests.map((interest) => (
+              <span key={interest} className="pf-tag">{interest}</span>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Reputation per club */}
       {reputation.length > 0 && (
@@ -202,7 +250,7 @@ export const ProfilePage: FC = () => {
         <div className="mc-empty">
           <div className="title">Профиль пока пуст</div>
           <div className="sub">
-            Вступите в клуб — здесь появится ваша репутация по&nbsp;каждому из них.
+            Расскажите о себе через ⚙️ или вступите в клуб — здесь появится ваша репутация.
           </div>
           <div className="actions">
             <button type="button" className="ghost-btn" onClick={() => { haptic.impact('light'); navigate('/'); }}>
@@ -210,6 +258,10 @@ export const ProfilePage: FC = () => {
             </button>
           </div>
         </div>
+      )}
+
+      {editOpen && (
+        <ProfileEditModal initialInterests={interests} onClose={() => setEditOpen(false)} />
       )}
     </div>
   );

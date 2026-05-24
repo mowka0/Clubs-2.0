@@ -1345,6 +1345,172 @@ html, body {
   margin-top: 4px;
 }
 
+/* Gear (edit profile) in the hero — round icon button, mirrors mc-create-btn spot */
+.pf-gear {
+  flex-shrink: 0;
+  width: 40px; height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 12px;
+  border: 1px solid var(--brand-hairline-2);
+  background: var(--brand-navy-card-2);
+  color: var(--brand-ink-2);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.pf-gear:active { background: var(--brand-brass-soft); color: var(--brand-brass-deep); }
+.pf-gear:disabled { opacity: 0.5; cursor: default; }
+
+.pf-identity .location { font-size: 12.5px; color: var(--brand-ink-3); margin-top: 4px; }
+
+/* Bio + interest tags (read view) */
+.pf-bio {
+  margin: 0 20px 12px;
+  padding: 12px 14px;
+  background: var(--brand-navy-card);
+  border: 1px solid var(--brand-hairline);
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--brand-ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.pf-tags {
+  padding: 0 20px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.pf-tag {
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--brand-brass-soft);
+  color: var(--brand-brass-deep);
+  border: 1px solid rgba(201, 160, 99, 0.30);
+}
+
+/* ---- Profile edit sheet (own portal, below CityPicker at z-200) ---- */
+.pf-edit-overlay {
+  position: fixed; inset: 0;
+  background: rgba(8, 12, 24, 0.62);
+  backdrop-filter: blur(2px);
+  z-index: 150;
+}
+.pf-edit-sheet {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 151;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--brand-navy-card);
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  border-top: 1px solid var(--brand-hairline-2);
+  padding: 8px 0 max(16px, env(safe-area-inset-bottom));
+}
+.pf-edit-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 20px 12px;
+}
+.pf-edit-header h2 { font-size: 18px; font-weight: 700; color: var(--brand-ink); margin: 0; }
+.pf-edit-body { overflow-y: auto; padding: 0 20px; flex: 1; }
+.pf-edit-label {
+  display: block;
+  font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  color: var(--brand-ink-3);
+  margin: 14px 0 7px;
+}
+.pf-edit-field {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--brand-hairline-2);
+  background: var(--brand-navy-card-2);
+  color: var(--brand-ink);
+  font-family: inherit; font-size: 14.5px;
+  cursor: pointer;
+}
+.pf-edit-field .placeholder { color: var(--brand-ink-4); }
+.pf-edit-field .chevron { color: var(--brand-ink-3); font-size: 20px; line-height: 1; }
+.pf-edit-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--brand-hairline-2);
+  background: var(--brand-navy-card-2);
+  color: var(--brand-ink);
+  font-family: inherit; font-size: 14.5px; line-height: 1.4;
+  resize: none;
+}
+.pf-edit-textarea::placeholder { color: var(--brand-ink-4); }
+.pf-edit-counter { text-align: right; font-size: 11px; color: var(--brand-ink-4); margin-top: 4px; }
+.pf-edit-error { color: #FF8B8B; font-size: 13px; margin-top: 12px; }
+.pf-edit-actions {
+  display: flex; gap: 10px;
+  padding: 14px 20px 4px;
+}
+.pf-edit-actions .ghost-btn,
+.pf-edit-actions .mc-create-btn { flex: 1; justify-content: center; }
+
+/* ---- Interest chip input (edit) ---- */
+.pf-interests { position: relative; }
+.pf-chips {
+  display: flex; flex-wrap: wrap; gap: 7px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--brand-hairline-2);
+  background: var(--brand-navy-card-2);
+  min-height: 44px;
+}
+.pf-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12.5px; font-weight: 500;
+  padding: 4px 6px 4px 10px;
+  border-radius: 999px;
+  background: var(--brand-brass-soft);
+  color: var(--brand-brass-deep);
+  border: 1px solid rgba(201, 160, 99, 0.30);
+}
+.pf-chip .x {
+  border: 0; background: transparent;
+  color: var(--brand-brass-deep);
+  font-size: 16px; line-height: 1;
+  cursor: pointer; padding: 0 2px;
+}
+.pf-chip-input {
+  flex: 1; min-width: 90px;
+  border: 0; background: transparent; outline: none;
+  color: var(--brand-ink); font-family: inherit; font-size: 14px;
+  padding: 4px 2px;
+}
+.pf-chip-input::placeholder { color: var(--brand-ink-4); }
+.pf-suggest {
+  margin-top: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--brand-hairline-2);
+  background: var(--brand-navy-card-2);
+  overflow: hidden;
+}
+.pf-suggest-item {
+  display: block; width: 100%; text-align: left;
+  padding: 10px 14px;
+  border: 0; background: transparent;
+  color: var(--brand-ink); font-family: inherit; font-size: 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--brand-hairline);
+}
+.pf-suggest-item:last-child { border-bottom: 0; }
+.pf-suggest-item:active { background: var(--brand-brass-soft); color: var(--brand-brass-deep); }
+.pf-interests-hint { font-size: 11px; color: var(--brand-ink-4); margin-top: 6px; }
+
 
 /* ====================================================== */
 /* MyClubsPage (mc-*) — see docs/design/myclubs-redesign/  */

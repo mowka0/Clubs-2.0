@@ -9,6 +9,8 @@ export interface UserDto {
   lastName: string | null;
   avatarUrl: string | null;
   city: string | null;
+  country: string | null;
+  bio: string | null;
 }
 
 interface AuthState {
@@ -18,6 +20,7 @@ interface AuthState {
   error: string | null;
   login: () => Promise<void>;
   logout: () => void;
+  setUser: (user: UserDto) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -44,4 +47,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     apiClient.clearToken();
     set({ user: null, isAuthenticated: false });
   },
+
+  setUser: (user) => set({ user }),
 }));

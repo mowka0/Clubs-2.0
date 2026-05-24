@@ -20,6 +20,17 @@ class UserRepository(private val dsl: DSLContext) {
             .where(USERS.ID.eq(id))
             .fetchOne()
 
+    /** Updates only the user-editable profile scalars; TG-synced fields untouched. */
+    fun updateProfileFields(userId: UUID, country: String?, city: String?, bio: String?) {
+        dsl.update(USERS)
+            .set(USERS.COUNTRY, country)
+            .set(USERS.CITY, city)
+            .set(USERS.BIO, bio)
+            .set(USERS.UPDATED_AT, OffsetDateTime.now())
+            .where(USERS.ID.eq(userId))
+            .execute()
+    }
+
     /** Returns Telegram chat IDs for given user IDs, in arbitrary order. Used by NotificationService for batch DMs. */
     fun findTelegramIds(userIds: Collection<UUID>): List<Long> {
         if (userIds.isEmpty()) return emptyList()

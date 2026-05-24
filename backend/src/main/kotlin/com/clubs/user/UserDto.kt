@@ -9,5 +9,7 @@ data class UserDto(
     val firstName: String,
     val lastName: String?,
     val avatarUrl: String?,
-    val city: String?
+    val city: String?,
+    val country: String?,
+    val bio: String?
 )

@@ -8,11 +8,13 @@ import com.clubs.generated.jooq.tables.Applications
 import com.clubs.generated.jooq.tables.Clubs
 import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.Events
+import com.clubs.generated.jooq.tables.Interests
 import com.clubs.generated.jooq.tables.Memberships
 import com.clubs.generated.jooq.tables.SkladchinaParticipants
 import com.clubs.generated.jooq.tables.Skladchinas
 import com.clubs.generated.jooq.tables.Transactions
 import com.clubs.generated.jooq.tables.UserClubReputation
+import com.clubs.generated.jooq.tables.UserInterests
 import com.clubs.generated.jooq.tables.Users
 
 import kotlin.collections.List
@@ -56,6 +58,11 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val EVENTS: Events get() = Events.EVENTS
 
     /**
+     * The table <code>public.interests</code>.
+     */
+    val INTERESTS: Interests get() = Interests.INTERESTS
+
+    /**
      * The table <code>public.memberships</code>.
      */
     val MEMBERSHIPS: Memberships get() = Memberships.MEMBERSHIPS
@@ -81,6 +88,11 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val USER_CLUB_REPUTATION: UserClubReputation get() = UserClubReputation.USER_CLUB_REPUTATION
 
     /**
+     * The table <code>public.user_interests</code>.
+     */
+    val USER_INTERESTS: UserInterests get() = UserInterests.USER_INTERESTS
+
+    /**
      * The table <code>public.users</code>.
      */
     val USERS: Users get() = Users.USERS
@@ -92,11 +104,13 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         Clubs.CLUBS,
         EventResponses.EVENT_RESPONSES,
         Events.EVENTS,
+        Interests.INTERESTS,
         Memberships.MEMBERSHIPS,
         SkladchinaParticipants.SKLADCHINA_PARTICIPANTS,
         Skladchinas.SKLADCHINAS,
         Transactions.TRANSACTIONS,
         UserClubReputation.USER_CLUB_REPUTATION,
+        UserInterests.USER_INTERESTS,
         Users.USERS
     )
 }

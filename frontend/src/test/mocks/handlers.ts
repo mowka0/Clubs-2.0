@@ -89,6 +89,8 @@ export const handlers = [
         lastName: 'User',
         avatarUrl: null,
         city: null,
+        country: null,
+        bio: null,
       },
     });
   }),

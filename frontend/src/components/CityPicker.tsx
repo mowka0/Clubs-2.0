@@ -59,6 +59,12 @@ const COUNTRIES: readonly Country[] = [
 const STORAGE_KEY = 'clubs.cityChoice';
 const DEFAULT_CHOICE: CityChoice = { country: 'RU', city: 'Москва' };
 
+/** Human-readable country name for a stored country code (e.g. 'RU' → 'Россия'). */
+export function countryNameByCode(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return COUNTRIES.find((c) => c.code === code)?.name ?? null;
+}
+
 function loadStored(): CityChoice {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);

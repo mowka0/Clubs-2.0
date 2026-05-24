@@ -18,6 +18,7 @@ export const queryKeys = {
     memberProfile: (clubId: string, userId: string) =>
       ['clubs', 'detail', clubId, 'members', userId] as const,
     myReputation: () => ['clubs', 'my', 'reputation'] as const,
+    myInterests: () => ['users', 'me', 'interests'] as const,
     applications: (clubId: string, status?: string) =>
       ['clubs', 'detail', clubId, 'applications', status ?? 'all'] as const,
     finances: (clubId: string) => ['clubs', 'detail', clubId, 'finances'] as const,

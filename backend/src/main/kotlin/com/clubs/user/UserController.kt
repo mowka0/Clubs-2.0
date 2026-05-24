@@ -12,9 +12,12 @@ import com.clubs.membership.UserClubReputationDto
 import com.clubs.skladchina.ActionRequiredCountDto
 import com.clubs.skladchina.MySkladchinaListItemDto
 import com.clubs.skladchina.UserSkladchinasService
+import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
@@ -34,6 +37,19 @@ class UserController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<UserDto> =
         ResponseEntity.ok(userService.getUserById(user.userId))
+
+    @PatchMapping("/me")
+    fun updateProfile(
+        @AuthenticationPrincipal user: AuthenticatedUser,
+        @Valid @RequestBody request: UpdateMeRequest
+    ): ResponseEntity<UserDto> =
+        ResponseEntity.ok(userService.updateProfile(user.userId, request))
+
+    @GetMapping("/me/interests")
+    fun getMyInterests(
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<List<String>> =
+        ResponseEntity.ok(userService.getMyInterests(user.userId))
 
     @GetMapping("/me/clubs")
     fun getMyClubs(

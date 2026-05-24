@@ -92,6 +92,8 @@ describe('ClubPage', () => {
         lastName: 'User',
         avatarUrl: null,
         city: null,
+        country: null,
+        bio: null,
       },
       isAuthenticated: true,
       isLoading: false,
@@ -340,7 +342,7 @@ describe('ClubPage', () => {
     });
   });
 
-  it('member sees role-aware tabs (activities / members / profile) without manage tab and without CTA', async () => {
+  it('member sees role-aware tabs (activities / members) without manage tab and without CTA', async () => {
     server.use(
       http.get('*/api/clubs/:id', () => {
         return HttpResponse.json({
@@ -370,7 +372,8 @@ describe('ClubPage', () => {
       expect(screen.getByRole('button', { name: /^активности$/i })).toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: /^участники$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^мой профиль$/i })).toBeInTheDocument();
+    // "Мой профиль" tab removed — per-club reputation now lives in the global Profile.
+    expect(screen.queryByRole('button', { name: /^мой профиль$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^управление$/i })).not.toBeInTheDocument();
     expect(screen.getByText(/вы участник/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^вступить$/i })).not.toBeInTheDocument();
@@ -386,6 +389,8 @@ describe('ClubPage', () => {
         lastName: 'User',
         avatarUrl: null,
         city: null,
+        country: null,
+        bio: null,
       },
       isAuthenticated: true,
       isLoading: false,
@@ -454,6 +459,8 @@ describe('ClubPage', () => {
         lastName: 'User',
         avatarUrl: null,
         city: null,
+        country: null,
+        bio: null,
       },
       isAuthenticated: true,
       isLoading: false,

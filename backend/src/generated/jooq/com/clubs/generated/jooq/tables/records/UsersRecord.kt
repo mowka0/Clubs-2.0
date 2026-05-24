@@ -55,6 +55,14 @@ open class UsersRecord private constructor() : UpdatableRecordImpl<UsersRecord>(
         set(value): Unit = set(8, value)
         get(): OffsetDateTime? = get(8) as OffsetDateTime?
 
+    open var country: String?
+        set(value): Unit = set(9, value)
+        get(): String? = get(9) as String?
+
+    open var bio: String?
+        set(value): Unit = set(10, value)
+        get(): String? = get(10) as String?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -64,7 +72,7 @@ open class UsersRecord private constructor() : UpdatableRecordImpl<UsersRecord>(
     /**
      * Create a detached, initialised UsersRecord
      */
-    constructor(id: UUID? = null, telegramId: Long, telegramUsername: String? = null, firstName: String, lastName: String? = null, avatarUrl: String? = null, city: String? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, telegramId: Long, telegramUsername: String? = null, firstName: String, lastName: String? = null, avatarUrl: String? = null, city: String? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, country: String? = null, bio: String? = null): this() {
         this.id = id
         this.telegramId = telegramId
         this.telegramUsername = telegramUsername
@@ -74,6 +82,8 @@ open class UsersRecord private constructor() : UpdatableRecordImpl<UsersRecord>(
         this.city = city
         this.createdAt = createdAt
         this.updatedAt = updatedAt
+        this.country = country
+        this.bio = bio
         resetChangedOnNotNull()
     }
 
@@ -91,6 +101,8 @@ open class UsersRecord private constructor() : UpdatableRecordImpl<UsersRecord>(
             this.city = value.city
             this.createdAt = value.createdAt
             this.updatedAt = value.updatedAt
+            this.country = value.country
+            this.bio = value.bio
             resetChangedOnNotNull()
         }
     }

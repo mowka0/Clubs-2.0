@@ -19,6 +19,15 @@ export interface UserDto {
   lastName: string | null;
   avatarUrl: string | null;
   city: string | null;
+  country: string | null;
+  bio: string | null;
+}
+
+export interface UpdateProfileBody {
+  country: string | null;
+  city: string | null;
+  bio: string | null;
+  interests: string[];
 }
 
 export interface NearestEventDto {

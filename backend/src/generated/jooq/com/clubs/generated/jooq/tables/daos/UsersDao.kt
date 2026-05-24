@@ -137,4 +137,26 @@ open class UsersDao(configuration: Configuration?) : DAOImpl<UsersRecord, com.cl
      * Fetch records that have <code>updated_at IN (values)</code>
      */
     fun fetchByUpdatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Users> = fetch(Users.USERS.UPDATED_AT, *values)
+
+    /**
+     * Fetch records that have <code>country BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfCountry(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.Users> = fetchRange(Users.USERS.COUNTRY, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>country IN (values)</code>
+     */
+    fun fetchByCountry(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Users> = fetch(Users.USERS.COUNTRY, *values)
+
+    /**
+     * Fetch records that have <code>bio BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfBio(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.Users> = fetchRange(Users.USERS.BIO, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>bio IN (values)</code>
+     */
+    fun fetchByBio(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Users> = fetch(Users.USERS.BIO, *values)
 }
