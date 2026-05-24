@@ -52,8 +52,11 @@ export const ActivityFeedList: FC<ActivityFeedListProps> = ({
             <span className="label">Прошедшие</span>
             <span className="count">({feed.past.length})</span>
           </button>
-          {pastExpanded && (
-            <div className="activity-list compact">
+          {/* The list stays mounted; the grid wrapper animates row height so the
+              accordion slides open/closed instead of popping (no reload feel).
+              Hidden rows stay out of the a11y tree + tab order via `hidden`. */}
+          <div className={pastExpanded ? 'activity-past-body open' : 'activity-past-body'}>
+            <div className="activity-list compact" hidden={!pastExpanded}>
               {feed.past.map((item) => (
                 <ActivityCompactRow
                   key={item.id}
@@ -62,7 +65,7 @@ export const ActivityFeedList: FC<ActivityFeedListProps> = ({
                 />
               ))}
             </div>
-          )}
+          </div>
         </section>
       )}
     </>

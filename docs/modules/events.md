@@ -35,6 +35,25 @@ GET /api/events/{id}
 | eventDatetime | ISO datetime, must be > now() |
 | participantLimit | > 0 |
 | votingOpensDaysBefore | 1-14, default 14 |
+| photoUrl | опционально, max 1024 символа (`@Size(max=1024)`), nullable |
+
+### Photo события (`photo_url`, миграция V15, 2026-05-24)
+Событие может иметь обложку — поле `events.photo_url TEXT` (nullable, миграция
+`V15__add_event_photo_url.sql`, `ALTER TABLE events ADD COLUMN IF NOT EXISTS
+photo_url`). Зеркалит `skladchinas.photo_url`: у существующих событий фото нет
+(NULL). Surface'ится в:
+- `Event` (domain) — `photoUrl: String?`
+- `EventMapper` — read из `EVENTS.PHOTO_URL`, write `request.photoUrl`
+- `JooqEventRepository` — `.set(EVENTS.PHOTO_URL, request.photoUrl)` на create, select на read
+- `CreateEventRequest.photoUrl` (`@Size(max=1024)`, default `null`)
+- `EventDetailDto.photoUrl`, `EventListItemDto.photoUrl`
+- Unified-feed `ActivityItemDto.EventActivity.photoUrl` (см.
+  [`unified-activity-creation.md`](./unified-activity-creation.md) § ActivityThumb).
+  Складчина переиспользует уже существовавшее `skladchinas.photo_url`.
+
+Фронт: `CreateEventPage` получил поле загрузки фото через компонент
+`AvatarUpload` → `CreateEventBody.photoUrl`. В карточке активности фото —
+левый thumbnail (`ActivityThumb`), placeholder при отсутствии.
 
 ### EventDetailDto (TASK-013 scope — без vote counts из EventResponses)
 ```json
@@ -54,7 +73,8 @@ GET /api/events/{id}
   "confirmedCount": 0,
   "attendanceMarked": false,
   "attendanceFinalized": false,
-  "createdAt": "ISO datetime"
+  "createdAt": "ISO datetime",
+  "photoUrl": "string|null"
 }
 ```
 
@@ -67,7 +87,8 @@ GET /api/events/{id}
   "locationText": "string",
   "participantLimit": 15,
   "goingCount": 0,
-  "status": "upcoming"
+  "status": "upcoming",
+  "photoUrl": "string|null"
 }
 ```
 

@@ -1,7 +1,20 @@
 # Module: Unified Activity Creation (единая вкладка «Активности»)
 
 > **Status:** ✅ Реализовано в `feature/unified-activity-creation` (post-flight
-> docs alignment 2026-05-24). Спецификация ниже описывает фактическую реализацию.
+> docs alignment round 4 — 2026-05-24). Спецификация ниже описывает фактическую реализацию.
+>
+> ⚠️ **ВАЖНО (итерация 4 — entry point создания переехал):** создание активностей
+> **больше НЕ в `OrganizerClubManage`**. Picker «+ Создать» (раньше — sticky-CTA
+> внутри manage-таба «Активности») теперь живёт **на глобальной странице
+> `/events` (`ActivitiesPage`)** как hero-кнопка «+ Создать», видимая только
+> организаторам (≥1 клуб в роли organizer). Flow: тип (Событие/Сбор) → клуб
+> (авто-выбор если 1 organizer-клуб, иначе `ClubPickerModal`) → существующие
+> create-routes. **Таб «Активности» из `OrganizerClubManage` УДАЛЁН** — manage-панель
+> теперь 4 таба (Участники/Заявки/Финансы/Настройки), `ActivitiesManageTab.tsx`
+> удалён. Унифицированная лента активностей сохранилась только в **member-view**
+> на `ClubPage` (`ClubActivitiesTab`, read-only). Детали — § «Итерация 4» ниже и
+> Changelog 2026-05-24 (round 4). Секции 1-3 описывают предыдущие итерации, где
+> picker был в manage — читать с учётом этого override.
 >
 > Связанные специи (не дублируем — ссылаемся):
 > - `docs/modules/events.md` — backend events модуль (источник правды по event-flow)
@@ -57,11 +70,17 @@
 
 **Frontend:**
 - Новая страница `CreateEventPage` (`/clubs/:id/events/new`) — миррор
-  `CreateSkladchinaPage`, полноэкранная, с back-кнопкой и sticky bottom submit
+  `CreateSkladchinaPage`, полноэкранная, с back-кнопкой и sticky bottom submit.
+  Итерация 4: получила поле загрузки фото (`AvatarUpload` → `photoUrl`)
 - Новый picker-компонент `CreateActivityPicker` на базе `Modal` из
-  `@telegram-apps/telegram-ui` (2 опции: 🗓 Событие, 💰 Сбор; см. § Picker — Modal vs ActionSheet)
-- Новая вкладка `ActivitiesManageTab` в `OrganizerClubManage` (заменяет
-  `EventsTab` + `SkladchinaManageTab`)
+  `@telegram-apps/telegram-ui` (2 опции: 🗓 Событие, 💰 Сбор; см. § Picker — Modal vs ActionSheet).
+  Итерация 4: рефакторен на единый `onPick(type)` (вместо двух
+  `onSelectEvent`/`onSelectSkladchina`)
+- ~~Новая вкладка `ActivitiesManageTab` в `OrganizerClubManage`~~ **УДАЛЕНА в
+  итерации 4** (создание переехало на глобальную `ActivitiesPage`). Вместо неё
+  итерация 4 ввела: `CreateActivityFlow` (контроллер flow тип→клуб→форма),
+  `ClubPickerModal` (выбор клуба при ≥2 organizer-клубах), `useOrganizerClubs`
+  (`queries/organizerClubs.ts`)
 - Новый компонент `ActivityCard` — рендерит и event-карточку, и skladchina-карточку
   (внутри switch по `type`) — полная карточка для `upcoming`; прошедшие
   рендерятся компактным `ActivityCompactRow`
@@ -163,6 +182,9 @@
 | `backend/src/main/kotlin/com/clubs/event/EventRepository.kt` | MODIFY (опционально) | Если нужен метод `findAllByClub(clubId, page, size)` без `status`-фильтра. Текущий `findByClubId` принимает nullable `EventStatus?` — можно переиспользовать с `null` |
 | `backend/src/main/kotlin/com/clubs/event/EventCompletionService.kt` | NEW (итерация 2) | `@Scheduled` (hourly) автозавершение прошедших событий `upcoming/stage_1/stage_2 → completed` (grace 6ч). Закрывает баг «прошедшие события не приглушаются в ленте». Полная спека — [`events.md`](./events.md) |
 | `backend/src/main/kotlin/com/clubs/event/EventRepository.kt` + `JooqEventRepository.kt` | MODIFY (итерация 2) | Новый метод `markPastEventsCompleted(cutoff): Int` — `UPDATE events SET status=completed WHERE event_datetime < cutoff AND status IN (upcoming, stage_1, stage_2)` |
+| `backend/src/main/resources/db/migration/V15__add_event_photo_url.sql` | NEW (итерация 4) | `ALTER TABLE events ADD COLUMN IF NOT EXISTS photo_url TEXT` (nullable). Зеркалит `skladchinas.photo_url`. Полная спека — [`events.md`](./events.md) § «Photo события» |
+| `backend/.../event/{Event,EventDto,EventMapper,JooqEventRepository}.kt` | MODIFY (итерация 4) | `photoUrl: String?` в domain/`CreateEventRequest` (`@Size(max=1024)`)/`EventDetailDto`/`EventListItemDto`; маппер read/write `EVENTS.PHOTO_URL` |
+| `backend/.../activity/dto/ActivityItemDto.kt` + `mapper/ActivityMapper.kt` | MODIFY (итерация 4) | `photoUrl: String?` в `EventActivity` (из `event.photoUrl`) и `SkladchinaActivity` (из `s.photoUrl` — складчина уже имела фото) |
 
 > **Замечание про слияние:** `ActivityService` тянет события и сборы из
 > существующих репозиториев, мержит in-memory. **Альтернатива** — единый SQL
@@ -176,11 +198,16 @@
 
 | Path | Action | Purpose |
 |---|---|---|
-| `frontend/src/pages/CreateEventPage.tsx` | NEW | Полноэкранная форма создания события — миррор `CreateSkladchinaPage` |
-| `frontend/src/components/manage/CreateActivityPicker.tsx` | NEW | `Modal`-picker с двумя опциями (Событие / Сбор). См. § «Picker — Modal vs ActionSheet» — `ActionSheet` в `@telegram-apps/telegram-ui` v2 не экспортируется, поэтому используется `Modal` со списком кнопок. |
-| `frontend/src/components/manage/ActivitiesManageTab.tsx` | NEW | Organizer-таб — заменяет `EventsTab` + `SkladchinaManageTab` |
-| `frontend/src/components/club/ClubActivitiesTab.tsx` | NEW | Read-only таб для member view (`ClubPage`) — заменяет `ClubEventsTab` |
-| `frontend/src/components/manage/ActivityCard.tsx` | NEW | Унифицированная полная карточка (внутри switch по `type`) — рендерит только `upcoming` |
+| `frontend/src/pages/CreateEventPage.tsx` | NEW | Полноэкранная форма создания события — миррор `CreateSkladchinaPage`. Итерация 4: поле фото (`AvatarUpload` → `photoUrl`); на success navigate на `/events` (глобальная `ActivitiesPage`), не на `manage?tab=activities` |
+| `frontend/src/components/manage/CreateActivityPicker.tsx` | NEW | `Modal`-picker с двумя опциями (Событие / Сбор). См. § «Picker — Modal vs ActionSheet». Итерация 4: единый колбэк `onPick(type: ActivityType)` вместо `onSelectEvent`/`onSelectSkladchina` (выбор клуба+навигацию делает `CreateActivityFlow`) |
+| `frontend/src/components/manage/ActivitiesManageTab.tsx` | **REMOVED (итерация 4)** | Был organizer-таб создания внутри `OrganizerClubManage`. Удалён — создание переехало на глобальную `ActivitiesPage`. Файл удалён |
+| `frontend/src/components/manage/CreateActivityFlow.tsx` | NEW (итерация 4) | Контроллер flow «тип → клуб → форма». Step 1: `CreateActivityPicker` (тип). Step 2: если 1 organizer-клуб — авто-навигация; если ≥2 — `ClubPickerModal`. Затем navigate на `/clubs/:id/events/new` или `/clubs/:id/skladchina/new` |
+| `frontend/src/components/manage/ClubPickerModal.tsx` | NEW (итерация 4) | `Modal`-список organizer-клубов (avatar/initials + name) для выбора клуба, когда у пользователя их ≥2. Экспортирует тип `ClubPickerOption` |
+| `frontend/src/components/manage/ActivityThumb.tsx` | NEW (итерация 4) | Квадратный thumbnail слева в `ActivityCard`: фото (cover) при `photoUrl`, иначе brass-плейсхолдер с type-emoji |
+| `frontend/src/queries/organizerClubs.ts` | NEW (итерация 4) | Хук `useOrganizerClubs()` — клубы пользователя в роли organizer (`useMyClubsQuery` filter `role==='organizer'` + per-club `getClub` для name/avatar), возвращает `{ clubs: ClubPickerOption[], isLoading }` |
+| `frontend/src/pages/ActivitiesPage.tsx` | MODIFY (итерация 4) | Глобальная страница `/events` `/skladchina`: hero-кнопка «+ Создать» (видна только если `useOrganizerClubs().clubs.length > 0`) → `CreateActivityFlow`. Сами сегменты (`EventsTab`/`SkladchinasTab` из `components/activities/`) — из events-feed модуля, не из unified-feed |
+| `frontend/src/components/club/ClubActivitiesTab.tsx` | NEW | Read-only таб для member view (`ClubPage`) — заменяет `ClubEventsTab`. **Единственный** consumer unified-feed (`ActivityFeedList`/`ActivityCard`) после итерации 4 |
+| `frontend/src/components/manage/ActivityCard.tsx` | NEW (фото — итерация 4) | Унифицированная полная карточка (внутри switch по `type`) — рендерит только `upcoming`. Итерация 4: фото-thumbnail слева (`ActivityThumb`), type-иконка (🗓/💰) — badge в правом верхнем углу; `photoUrl` берётся из DTO |
 | `frontend/src/components/manage/ActivityCompactRow.tsx` | NEW (итерация 3) | Компактная приглушённая строка (иконка · title · дата) — рендерит элементы `past` под аккордеоном |
 | `frontend/src/components/manage/ActivityFilterChips.tsx` | NEW | Chips `Все · События · Сборы` |
 | `frontend/src/components/manage/ActivityFeedList.tsx` | NEW (переписан в итерации 3) | Секция `Предстоящие` (полные `ActivityCard`) + сворачиваемый блок `Прошедшие (N)` (компактные `ActivityCompactRow`). Принимает `ClubActivityFeed { upcoming, past }`. Группировки по дню и infinite-scroll sentinel больше нет |
@@ -189,7 +216,7 @@
 | `frontend/src/queries/activities.ts` | NEW | `useClubActivitiesQuery` — обычный `useQuery` (не InfiniteQuery; лента не пагинируется) |
 | `frontend/src/queries/queryKeys.ts` | MODIFY | Добавить `activities.byClub(clubId, filters)` |
 | `frontend/src/types/api.ts` | MODIFY | Добавить TS-типы `ActivityItemDto`, `ActivityType`, `EventActivityDto`, `SkladchinaActivityDto` |
-| `frontend/src/pages/OrganizerClubManage.tsx` | MODIFY | Удалить `EventsTab` (~lines 380-663) + `SkladchinaManageTab` (~lines 72-130) + `EventDetailModal` (~lines 313-377) полностью — подтверждено user'ом, dead code; `TabKey` сократить до `members \| applications \| activities \| finances \| settings`; `TAB_LABELS` обновить; добавить `ActivitiesManageTab` |
+| `frontend/src/pages/OrganizerClubManage.tsx` | MODIFY | Удалить `EventsTab` + `SkladchinaManageTab` + `EventDetailModal` (dead code). **Итерация 4:** `TabKey` = `members \| applications \| finances \| settings` (БЕЗ `activities` — таб создания убран); legacy deep-links `?tab=activities\|events\|skladchina` (`LEGACY_TAB_KEYS`) → fallback `members`. `ActivitiesManageTab` НЕ подключается (удалён) |
 | `frontend/src/pages/ClubPage.tsx` | MODIFY | `TabId` сменить `events` → `activities`; обновить лейбл «События» → «Активности»; импортировать `ClubActivitiesTab` вместо `ClubEventsTab` |
 | `frontend/src/components/club/ClubEventsTab.tsx` | REMOVE | После миграции — удалить файл |
 | `frontend/src/router.tsx` | MODIFY | Добавить route `/clubs/:id/events/new` → lazy `CreateEventPage` |
@@ -207,8 +234,9 @@
 
 | Path | Page | Auth |
 |---|---|---|
+| `/events` / `/skladchina` | `ActivitiesPage` (hero «+ Создать» → `CreateActivityFlow`, видна organizer'ам) | любой авторизованный |
 | `/clubs/:id` → tab `activities` | `ClubPage` → `ClubActivitiesTab` (read-only) | member или organizer |
-| `/clubs/:id/manage` → tab `activities` | `OrganizerClubManage` → `ActivitiesManageTab` | organizer |
+| `/clubs/:id/manage` | `OrganizerClubManage` (4 таба, БЕЗ создания активностей с итерации 4) | organizer |
 | `/clubs/:id/events/new` | `CreateEventPage` | organizer |
 | `/clubs/:id/skladchina/new` | `CreateSkladchinaPage` (существует) | organizer |
 
@@ -336,7 +364,8 @@ sealed class ActivityItemDto {
         val participantLimit: Int,
         val goingCount: Int,
         val status: String,                  // EventStatus enum value
-        val descriptionPreview: String?      // first 40 chars of description, trimmed; null if no description
+        val descriptionPreview: String?,     // first 40 chars of description, trimmed; null if no description
+        val photoUrl: String?                // event cover (V15), null if none — итерация 4
     ) : ActivityItemDto() {
         override val type: String = "event"
     }
@@ -354,7 +383,8 @@ sealed class ActivityItemDto {
         val participantCount: Int,
         val paidCount: Int,
         val status: String,                  // SkladchinaStatus enum
-        val affectsReputation: Boolean
+        val affectsReputation: Boolean,
+        val photoUrl: String?                // skladchina cover (existing), null if none — итерация 4
     ) : ActivityItemDto() {
         override val type: String = "skladchina"
     }
@@ -383,6 +413,7 @@ interface EventActivityDto extends ActivityBase {
   goingCount: number;
   status: 'upcoming' | 'stage_1' | 'stage_2' | 'completed' | 'cancelled';
   descriptionPreview: string | null;  // first 40 chars of event description
+  photoUrl: string | null;            // event cover (V15) — итерация 4
 }
 
 interface SkladchinaActivityDto extends ActivityBase {
@@ -395,6 +426,7 @@ interface SkladchinaActivityDto extends ActivityBase {
   paidCount: number;
   status: 'active' | 'closed_success' | 'closed_failed' | 'cancelled';
   affectsReputation: boolean;
+  photoUrl: string | null;            // skladchina cover (existing) — итерация 4
 }
 
 type ActivityItemDto = EventActivityDto | SkladchinaActivityDto;
@@ -489,10 +521,12 @@ interface CreateActivityPickerProps {
 **Submit:**
 1. Frontend-валидация (те же rules что в inline-form)
 2. `haptic.impact('medium')`
-3. `useCreateEventMutation.mutateAsync({ clubId, body })`
+3. `useCreateEventMutation.mutateAsync({ clubId, body })` (`body.photoUrl` опц.)
 4. Success:
    - `haptic.notify('success')`
-   - `navigate('/clubs/' + clubId + '/manage?tab=activities', { replace: true, state: { toast: 'Событие создано' } })`
+   - **(итерация 4)** `navigate('/events', { replace: true, state: { toast: 'Событие создано' } })`
+     — на глобальную `ActivitiesPage` (раньше — на `manage?tab=activities`,
+     которого больше нет)
 5. Error:
    - `haptic.notify('error')`
    - Inline-сообщение под форм-блоком (как в `CreateSkladchinaPage`)
@@ -598,7 +632,12 @@ interface ActivityCompactRowProps {
 - `aria-label` включает «Завершено»
 - Тап → тот же `onActivityClick` → detail-страница
 
-### `ActivitiesManageTab` (organizer)
+### ~~`ActivitiesManageTab` (organizer)~~ — УДАЛЁН в итерации 4
+
+> ⚠️ **Компонент удалён** (`ActivitiesManageTab.tsx` больше нет). Создание
+> переехало в `CreateActivityFlow` на глобальной `ActivitiesPage`; лента осталась
+> только в member-view `ClubActivitiesTab`. Описание ниже — исторический контекст
+> итераций 1-3.
 
 ```ts
 interface ActivitiesManageTabProps {
@@ -606,7 +645,7 @@ interface ActivitiesManageTabProps {
 }
 ```
 
-**Composition:**
+**Composition (исторически):**
 1. Sticky-top `Button + Создать` → открывает `CreateActivityPicker`
 2. `ActivityFilterChips`
 3. `ActivityFeedList`
@@ -644,23 +683,31 @@ interface ClubActivitiesTabProps {
 
 ### `OrganizerClubManage` — изменения
 
-**TabKey изменение:**
+> ⚠️ **Итерация 4 override:** таб `activities` из manage **удалён**. Актуальный
+> `TabKey = 'members' | 'applications' | 'finances' | 'settings'` (БЕЗ
+> `activities`); `renderTab` не имеет `case 'activities'`; toast-handling и
+> `?tab=` query-param обработка переехали на `ActivitiesPage` (создание теперь
+> там). Снимки ниже — исторический план итерации 1.
+
+**TabKey изменение (исторически, итерация 1):**
 ```ts
-// было
+// было (6 табов)
 type TabKey = 'members' | 'applications' | 'events' | 'skladchina' | 'finances' | 'settings';
-// становится
+// итерация 1 (5 табов)
 type TabKey = 'members' | 'applications' | 'activities' | 'finances' | 'settings';
+// итерация 4 (актуально, 4 таба — activities убран):
+// type TabKey = 'members' | 'applications' | 'finances' | 'settings';
 
 const TAB_LABELS: Record<TabKey, string> = {
   members: 'Участники',
   applications: 'Заявки',
-  activities: 'Активности',
+  activities: 'Активности', // удалён в итерации 4
   finances: 'Финансы',
   settings: 'Настройки',
 };
 ```
 
-`renderTab()`:
+`renderTab()` (итерация 1, удалён в итерации 4):
 ```tsx
 case 'activities':
   return <ActivitiesManageTab clubId={clubId} />;
@@ -688,13 +735,12 @@ useEffect(() => {
 }, []);
 ```
 
-**Active tab from query param:**
-Поддержать `?tab=activities` (для редиректа из CreateEventPage):
-```tsx
-const [searchParams] = useSearchParams();
-const initialTab = (searchParams.get('tab') as TabKey) || 'members';
-const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
-```
+**Active tab from query param (итерация 1, заменено в итерации 4):**
+Исторически поддерживался `?tab=activities` для редиректа из CreateEventPage.
+**Итерация 4:** create-редирект ведёт на `/events` (`ActivitiesPage`), а
+`OrganizerClubManage` теперь резолвит legacy-ключи `activities|events|skladchina`
+в `members` (`LEGACY_TAB_KEYS`, см. `resolveInitialTab`). Toast/`?tab=`-логика
+создания переехала на `ActivitiesPage`.
 
 ### `ClubPage` — изменения
 
@@ -835,25 +881,32 @@ data class SkladchinaWithAggregates(
 
 ## Frontend бизнес-логика
 
-### Picker flow (organizer)
+### Picker flow (organizer) — итерация 4: на глобальной `ActivitiesPage`
 
-1. Tap `+ Создать` → `setPickerOpen(true)` + `haptic.impact('light')`
-2. ActionSheet рендерится поверх ленты
-3. Tap «🗓 Событие» → `haptic.impact('medium')` → `setPickerOpen(false)` → `navigate('/clubs/${clubId}/events/new')`
-4. Tap «💰 Сбор» → `haptic.impact('medium')` → `setPickerOpen(false)` → `navigate('/clubs/${clubId}/skladchina/new')`
-5. Tap backdrop / system back → `haptic.impact('light')` → `setPickerOpen(false)`
+> ⚠️ Заменяет прежний manage-флоу (picker был sticky-CTA внутри
+> `ActivitiesManageTab`). Теперь — `CreateActivityFlow` на `ActivitiesPage`.
 
-### Create flow (CreateEventPage)
+1. Tap hero `+ Создать` (виден если `useOrganizerClubs().clubs.length > 0`) →
+   `setCreateOpen(true)` + `haptic.impact('light')`
+2. `CreateActivityPicker` (`Modal`) рендерится поверх страницы
+3. Tap «🗓 Событие» → `haptic.impact('medium')` → picker закрывается →
+   `onPick('event')`:
+   - 1 organizer-клуб → `navigate('/clubs/${theOnlyClub}/events/new')`
+   - ≥2 → открыть `ClubPickerModal`; tap клуба → `navigate('/clubs/${clubId}/events/new')`
+4. Tap «💰 Сбор» → аналогично → `navigate('/clubs/${clubId}/skladchina/new')`
+5. Tap backdrop / system back на любом шаге → `haptic.impact('light')` → flow reset
+
+### Create flow (CreateEventPage) — итерация 4
 
 1. Mount → `useBackButton(true)` показывает back-button
-2. User заполняет форму
+2. User заполняет форму (включая опц. фото через `AvatarUpload`)
 3. Tap «Создать»:
    - Frontend-валидация (см. AC-12)
-   - Mutation вызов
-   - На success → `navigate('/clubs/' + clubId + '/manage?tab=activities', { replace: true, state: { toast: 'Событие создано' } })`
-4. `OrganizerClubManage` mount → читает `?tab=activities` → активирует таб
-5. `OrganizerClubManage` mount → читает `location.state.toast` → показывает toast «Событие создано»
-6. `useCreateEventMutation` invalidate'ит `queryKeys.activities.byClub(clubId)` → лента обновляется автоматически
+   - Mutation вызов (`body.photoUrl` опц.)
+   - На success → `navigate('/events', { replace: true, state: { toast: 'Событие создано' } })`
+4. `ActivitiesPage` mount → читает `location.state.toast` → показывает toast «Событие создано»
+5. `useCreateEventMutation` invalidate'ит `queryKeys.activities.byClub(clubId)` →
+   лента клуба (`ClubActivitiesTab`) обновляется при следующем открытии
 
 ### Filter behavior
 
@@ -960,42 +1013,48 @@ const activitiesQuery = useClubActivitiesQuery(clubId, params);
 
 ## Acceptance Criteria
 
-### AC-1: Navigation — 5 табов вместо 6
+### AC-1: Navigation — 4 таба в manage (итерация 4: «Активности» убран)
 **GIVEN** organizer открывает `/clubs/{id}/manage` (валидный clubId, есть organizer-роль)
 **WHEN** видит TabsList
-**THEN** в нём ровно 5 элементов: `Участники · Заявки · Активности · Финансы · Настройки`
-**AND** табов `События` и `Сборы` в списке нет
+**THEN** в нём ровно 4 элемента: `Участники · Заявки · Финансы · Настройки`
+**AND** табов `События`, `Сборы` **и `Активности`** в списке нет
+> До итерации 4 здесь был 5-й таб «Активности» с лентой+созданием. Создание
+> переехало на глобальную `ActivitiesPage`, лента активностей осталась только в
+> member-view `ClubPage`.
 
-### AC-2: Picker — открытие и опции
-**GIVEN** organizer на табе «Активности» в `OrganizerClubManage`
-**WHEN** тапает «+ Создать»
-**THEN** появляется ActionSheet с двумя опциями: «🗓 Событие», «💰 Сбор»
-**AND** light haptic при открытии
+### AC-2: Picker — открытие и опции (итерация 4: на глобальной `ActivitiesPage`)
+**GIVEN** organizer (≥1 клуб) на странице `/events` (`ActivitiesPage`)
+**WHEN** тапает hero-кнопку «+ Создать»
+**THEN** появляется `Modal`-picker с двумя опциями: «🗓 Событие», «💰 Сбор»
+**AND** light haptic
+> Не-organizer (0 клубов в роли organizer) кнопки «+ Создать» **не видит**. при открытии
 
-### AC-3: Picker → CreateEventPage
-**GIVEN** ActionSheet открыт
+### AC-3: Picker → выбор типа «Событие» (итерация 4: тип → клуб → форма)
+**GIVEN** picker открыт на `ActivitiesPage`
 **WHEN** organizer тапает «🗓 Событие»
-**THEN** ActionSheet закрывается
-**AND** medium haptic
-**AND** происходит navigate на `/clubs/{id}/events/new`
-**AND** видна полноэкранная форма с полями `Название`, `Место`, `Дата и время`, `Лимит участников`
+**THEN** picker закрывается, medium haptic
+**AND** если у organizer **ровно один** клуб → navigate на `/clubs/{theOnlyClub}/events/new`
+**AND** если **≥2** клуба → открывается `ClubPickerModal`; после выбора клуба →
+navigate на `/clubs/{chosen}/events/new`
+**AND** видна полноэкранная форма с полями `Название`, `Место`, `Дата и время`,
+`Лимит участников`, `Фото` (опц.)
 **AND** кнопка «Назад» в Telegram navbar активна
 
-### AC-4: Picker → CreateSkladchinaPage
-**GIVEN** ActionSheet открыт
+### AC-4: Picker → выбор типа «Сбор» (итерация 4)
+**GIVEN** picker открыт на `ActivitiesPage`
 **WHEN** organizer тапает «💰 Сбор»
-**THEN** ActionSheet закрывается
-**AND** medium haptic
-**AND** navigate на `/clubs/{id}/skladchina/new` (существующая страница, не ломается)
+**THEN** picker закрывается, medium haptic
+**AND** тот же club-resolve (авто / `ClubPickerModal`) →
+navigate на `/clubs/{id}/skladchina/new` (существующая страница, не ломается)
 
-### AC-5: CreateEventPage submit success
+### AC-5: CreateEventPage submit success (итерация 4: navigate на `/events`)
 **GIVEN** organizer на `/clubs/{id}/events/new` с валидно заполненной формой
 **WHEN** тапает «Создать»
-**THEN** POST `/api/clubs/{id}/events` отправляется
-**AND** при success — navigate на `/clubs/{id}/manage?tab=activities`
-**AND** активный таб = «Активности»
+**THEN** POST `/api/clubs/{id}/events` отправляется (с `photoUrl`, если фото задано)
+**AND** при success — navigate на `/events` (глобальная `ActivitiesPage`)
 **AND** показывается toast «Событие создано»
-**AND** созданное событие появляется в ленте (newest at top)
+**AND** созданное событие появляется в ленте клуба (member-view `ClubActivitiesTab`)
+после invalidation
 
 ### AC-6: Предстоящие — sort by relevantDate ASC, типы interleaved
 **GIVEN** в клубе предстоящие: событие (eventDatetime +3d) и сбор (deadline +1d)
@@ -1088,12 +1147,14 @@ completion больше нет)
 **THEN** `upcoming` содержит 3 events + 1 skladchina (все `isCompleted=false`)
 **AND** `past` содержит 2 events + 1 skladchina (все `isCompleted=true`)
 
-### AC-20: Empty state — organizer
-**GIVEN** organizer открывает таб «Активности» в свежесозданном клубе без активностей
+### AC-20: Empty state — organizer (итерация 4: лента в member-view, создание глобально)
+**GIVEN** organizer открывает таб «Активности» в `ClubPage` (`/clubs/:id`) свежесозданного клуба
 **WHEN** видит content
-**THEN** видит «+ Создать» кнопку sticky сверху
-**AND** видит chips
-**AND** видит placeholder «В клубе пока нет активностей. Создайте первую через '+ Создать'.»
+**THEN** видит chips
+**AND** видит placeholder «В клубе пока нет активностей.»
+> Кнопка «+ Создать» теперь не в табе клуба, а hero на глобальной
+> `ActivitiesPage`. Member-view `ClubActivitiesTab` read-only для всех (включая
+> organizer'а, открывшего `/clubs/:id`).
 
 ### AC-21: Empty state — member
 **GIVEN** member открывает таб «Активности» в клубе без активностей
@@ -1102,11 +1163,14 @@ completion больше нет)
 **AND** видит placeholder «В клубе пока нет активностей.»
 **AND** **НЕ** видит кнопку «+ Создать»
 
-### AC-22: Deep-link compatibility — `?tab=events` редирект
+### AC-22: Deep-link compatibility — legacy `?tab=` fallback (итерация 4)
 **GIVEN** пользователь открывает legacy bookmark `/clubs/{id}/manage?tab=events`
+(или `?tab=activities` / `?tab=skladchina`)
 **WHEN** OrganizerClubManage mount
-**THEN** активный таб = `activities` (не `events` — старый ключ не существует)
+**THEN** активный таб = `members` (`LEGACY_TAB_KEYS` fallback — этих табов больше нет)
 **AND** показ работает без ошибок
+> До итерации 4 fallback вёл на `activities`. После удаления таба «Активности»
+> все три legacy-ключа резолвятся в дефолтный `members`.
 
 ### AC-23: Без пагинации — вся лента в одной выдаче
 **GIVEN** клуб с 35 активностями
@@ -1115,10 +1179,12 @@ completion больше нет)
 `{ upcoming, past }`
 **AND** скролл не вызывает дополнительных запросов (пагинации нет)
 
-### AC-24: Invalidation при создании события
-**GIVEN** organizer на `/clubs/{id}/manage?tab=activities` со списком активностей
-**WHEN** создаёт новое событие через CreateEventPage и возвращается
-**THEN** созданное событие появляется в ленте без manual refresh
+### AC-24: Invalidation при создании события (итерация 4)
+**GIVEN** organizer создал событие через `CreateEventPage`
+**WHEN** `useCreateEventMutation.onSuccess` отрабатывает и organizer открывает
+ленту клуба (`/clubs/{id}` таб «Активности»)
+**THEN** созданное событие присутствует в ленте без manual refresh
+(invalidation `queryKeys.activities.byClub(clubId)`)
 
 ---
 
@@ -1359,6 +1425,86 @@ curl -s -H "Authorization: Bearer $JWT_MEMBER" \
 > теперь редактируемый numeric input (ввод цифр с клавиатуры, clamp к `[min, max]`
 > на blur), а не только +/− кнопки. Haptic `selection` по-прежнему только на
 > +/− тапах, не на каждое нажатие клавиши. См. файловую таблицу `BrandStepper.tsx`.
+
+### Post-flight alignment — итерация 4 (2026-05-24, round 4)
+
+> **Q-16 → RESOLVED (entry point создания переехал из manage на глобальную
+> `ActivitiesPage`):** picker «+ Создать» больше **не** sticky-CTA внутри
+> manage-таба «Активности». Теперь — hero-кнопка «+ Создать» на странице `/events`
+> (`ActivitiesPage`), видимая только организаторам (`useOrganizerClubs().clubs.length > 0`).
+> Flow: тип (`CreateActivityPicker.onPick(type)`) → клуб (авто-выбор если 1
+> organizer-клуб, иначе `ClubPickerModal`) → существующие create-routes
+> (`/clubs/:id/events/new` · `/clubs/:id/skladchina/new`). Контроллер flow —
+> `CreateActivityFlow`. Новые: `CreateActivityFlow`, `ClubPickerModal`,
+> `useOrganizerClubs` (`queries/organizerClubs.ts`). `CreateActivityPicker`
+> рефакторен с двух колбэков на единый `onPick`. `CreateEventPage` на success
+> навигирует на `/events` (не на `manage?tab=activities`).
+>
+> ⚠️ **Supersedes** memory-note `project_unified_creation_in_manage` («создание
+> событий + сборов = одна вкладка управления через picker»): создание вынесено
+> ИЗ управления НА глобальный таб. См. отчёт «→ User».
+
+> **Q-17 → RESOLVED (таб «Активности» удалён из `OrganizerClubManage`):**
+> `ActivitiesManageTab.tsx` **удалён**. Manage-панель теперь 4 таба:
+> Участники / Заявки / Финансы / Настройки (`TabKey` без `activities`). Legacy
+> deep-links `?tab=activities|events|skladchina` (`LEGACY_TAB_KEYS`) → fallback
+> `members`. Unified-лента активностей (`ActivityFeedList`/`ActivityCard`)
+> сохранилась только в member-view `ClubActivitiesTab` (`ClubPage`).
+
+> **Q-18 → RESOLVED (карточка активности — фото-редизайн + event photo):**
+> миграция `V15__add_event_photo_url.sql` (`events.photo_url TEXT` nullable)
+> добавила событиям обложку (параллель `skladchinas.photo_url`). `photoUrl`
+> протянут в `CreateEventRequest` (`@Size(max=1024)`), `EventDetailDto`,
+> `EventListItemDto`, `ActivityItemDto.EventActivity`/`SkladchinaActivity`
+> (маппер: event — `event.photoUrl`, skladchina — `s.photoUrl`). Карточка
+> `ActivityCard` редизайнена: фото/placeholder thumbnail **слева** (`ActivityThumb`),
+> type-иконка (🗓/💰) — badge **в правом верхнем углу** (раньше — иконка в углу
+> без фото). `CreateEventPage` получил поле загрузки фото (`AvatarUpload` →
+> `CreateEventBody.photoUrl`). Backend photo-спека — [`events.md`](./events.md).
+
+> **Q-19 → RESOLVED (аккордеон «Прошедшие» теперь анимируется):** раскрытие/
+> сворачивание блока `Прошедшие (N)` в `ActivityFeedList` использует
+> grid-rows-transition (вместо резкого pop); учитывает `prefers-reduced-motion`.
+
+---
+
+## Итерация 4 — глобальный entry point создания (2026-05-24)
+
+Создание активностей переехало из `OrganizerClubManage` на глобальную
+`ActivitiesPage` (`/events` / `/skladchina`).
+
+### Flow «тип → клуб → форма»
+
+1. На `ActivitiesPage` хук `useOrganizerClubs()` (`queries/organizerClubs.ts`)
+   собирает клубы пользователя в роли organizer (`useMyClubsQuery` filter
+   `role === 'organizer'` + per-club `getClub` для name/avatar/category).
+2. Кнопка hero «+ Создать» рендерится **только если** `clubs.length > 0`.
+3. Tap → `haptic.impact('light')` → открывается `CreateActivityFlow`.
+4. **Step 1** — `CreateActivityPicker` (`Modal`, опции 🗓 Событие / 💰 Сбор).
+   `onPick(type)`:
+   - если organizer-клуб **ровно один** → авто-навигация на
+     `/clubs/{theOnlyClub}/{events|skladchina}/new`;
+   - если **≥2** → переход к Step 2.
+5. **Step 2** — `ClubPickerModal` (`Modal`-список клубов: avatar/initials + name).
+   `onPick(clubId)` → navigate на `/clubs/{clubId}/{events|skladchina}/new`.
+6. Create-страницы (`CreateEventPage` / `CreateSkladchinaPage`) читают `:id` из
+   URL — без изменений в их сигнатуре. На success — navigate на `/events`
+   (глобальная `ActivitiesPage`), toast «Событие создано» через router state.
+
+### Карточка `ActivityCard` (фото-редизайн)
+
+- **Слева** — `ActivityThumb`: квадрат с фото (`photoUrl`, cover) либо
+  brass-плейсхолдер с type-emoji (🗓/💰), если фото нет.
+- **Справа сверху** — `type-badge` с иконкой типа.
+- Контент (title / дата+место или прогресс / badge счётчика) — без изменений по
+  данным, перекомпонован вокруг thumbnail.
+
+### Где живёт unified-лента после итерации 4
+
+`ActivityFeedList` + `ActivityCard` + `ActivityCompactRow` используются только в
+**member-view** `ClubActivitiesTab` (`ClubPage`, read-only). Organizer-таб
+`ActivitiesManageTab` удалён. Глобальная `ActivitiesPage` рендерит свои
+сегменты (`EventsTab`/`SkladchinasTab` из events-feed модуля), а не unified-feed.
 
 ---
 

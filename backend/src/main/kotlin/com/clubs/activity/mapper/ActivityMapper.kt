@@ -29,7 +29,8 @@ class ActivityMapper {
             participantLimit = event.participantLimit,
             goingCount = goingCount,
             status = event.status.literal,
-            descriptionPreview = buildDescriptionPreview(event.description)
+            descriptionPreview = buildDescriptionPreview(event.description),
+            photoUrl = event.photoUrl
         )
     }
 
@@ -48,7 +49,8 @@ class ActivityMapper {
             participantCount = item.participantCount,
             paidCount = item.paidCount,
             status = s.status.literal,
-            affectsReputation = s.affectsReputation
+            affectsReputation = s.affectsReputation,
+            photoUrl = s.photoUrl
         )
     }
 

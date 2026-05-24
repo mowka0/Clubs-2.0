@@ -6,6 +6,13 @@
 > (URL остаётся `/events`). Все Decisions из § ниже отражены в коде.
 > Post-flight расхождения уже подтянуты в спеку (см. Decision 4 о замене
 > pull-to-refresh на кнопку «Обновить»).
+>
+> **Update (итерация 4 `feature/unified-activity-creation`, 2026-05-24):** в шапку
+> `ActivitiesPage` добавлена hero-кнопка «+ Создать» (видна только организаторам,
+> `useOrganizerClubs().clubs.length > 0`) → flow создания события/сбора
+> (`CreateActivityFlow`). Это chrome поверх ленты, на сам feed-контракт
+> (`GET /api/users/me/events`) не влияет. Полная спека создания —
+> [`unified-activity-creation.md`](./unified-activity-creation.md) § «Итерация 4».
 
 ## Decisions from pre-flight (2026-05-18)
 

@@ -1,22 +1,26 @@
 package com.clubs.event
 
 import com.clubs.auth.JwtService
+import org.hamcrest.Matchers.nullValue
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
+import java.time.OffsetDateTime
 import java.util.UUID
 
 @SpringBootTest(
@@ -142,5 +146,59 @@ class EventControllerSecurityTest {
                 .header("Authorization", "Bearer $memberToken")
         )
             .andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `POST event with photoUrl persists and returns it in detail and list`() {
+        val eventDatetime = OffsetDateTime.now().plusDays(10)
+        val photoUrl = "https://cdn.example.com/event-cover.jpg"
+        val body = """
+            {
+              "title": "Photo Event",
+              "locationText": "Park",
+              "eventDatetime": "$eventDatetime",
+              "participantLimit": 20,
+              "photoUrl": "$photoUrl"
+            }
+        """.trimIndent()
+
+        mockMvc.perform(
+            post("/api/clubs/$clubId/events")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+        )
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.photoUrl").value(photoUrl))
+
+        // List endpoint also carries it
+        mockMvc.perform(
+            get("/api/clubs/$clubId/events")
+                .header("Authorization", "Bearer $memberToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content[0].photoUrl").value(photoUrl))
+    }
+
+    @Test
+    fun `POST event without photoUrl returns null photoUrl`() {
+        val eventDatetime = OffsetDateTime.now().plusDays(10)
+        val body = """
+            {
+              "title": "No Photo Event",
+              "locationText": "Park",
+              "eventDatetime": "$eventDatetime",
+              "participantLimit": 20
+            }
+        """.trimIndent()
+
+        mockMvc.perform(
+            post("/api/clubs/$clubId/events")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+        )
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.photoUrl").value(nullValue()))
     }
 }

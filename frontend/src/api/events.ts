@@ -8,6 +8,7 @@ export interface CreateEventBody {
   eventDatetime: string;
   participantLimit: number;
   votingOpensDaysBefore?: number;
+  photoUrl?: string;
 }
 
 export function getClubEvents(

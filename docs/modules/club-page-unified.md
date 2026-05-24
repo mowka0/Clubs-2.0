@@ -9,6 +9,13 @@
 > прежние упоминания «events tab», `<TabId='events'>`, `ClubEventsTab` ниже
 > остаются как **исторический контекст** этой спеки. Актуальный TabId —
 > `'activities'`. Полная спека — [`unified-activity-creation.md`](./unified-activity-creation.md).
+>
+> **Update round 4 (2026-05-24):** карточки активностей (`ActivityCard`) теперь
+> с фото-thumbnail слева (`ActivityThumb`, placeholder при отсутствии) и type-иконкой
+> в правом верхнем углу; событиям добавлено фото (миграция V15). Аккордеон
+> `Прошедшие` теперь анимируется (grid-rows transition). `ClubActivitiesTab`
+> остаётся read-only без `+ Создать` — создание активностей переехало на
+> глобальную `ActivitiesPage` (`/events`), доступно организаторам.
 
 ## Цель
 

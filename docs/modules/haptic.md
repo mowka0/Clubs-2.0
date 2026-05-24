@@ -21,7 +21,7 @@ Pre-design подготовка фронта: единая обёртка над
 
 ### Входит
 - Хук `frontend/src/hooks/useHaptic.ts` с silent no-op fallback
-- Вызовы хука в: `BottomTabBar`, `ClubCard`, `AvatarUpload`, `ClubPage` (включая role-aware tabs), `EventPage`, `CreateClubModal`, `OrganizerClubManage`, `InvitePage`, `components/club/ClubActivitiesTab` (после `feature/unified-activity-creation` 2026-05-24, заменил `ClubEventsTab`), `components/manage/{ActivityCard,ActivityFilterChips,CreateActivityPicker,ActivitiesManageTab}`, `ProfilePage`, `MyClubsPage`, `DiscoveryPage` (chip-выбор категории — встроенно после удаления `ClubFilters` в `feature/discovery-redesign`), `useBackButton`. **`ClubInteriorPage` удалён** в `feature/unified-club-page` — точки кода переехали в unified `ClubPage` + три tab-компонента (см. `club-page-unified.md`).
+- Вызовы хука в: `BottomTabBar`, `ClubCard`, `AvatarUpload`, `ClubPage` (включая role-aware tabs), `EventPage`, `CreateClubModal`, `OrganizerClubManage`, `InvitePage`, `components/club/ClubActivitiesTab` (после `feature/unified-activity-creation` 2026-05-24, заменил `ClubEventsTab`), `components/manage/{ActivityCard,ActivityFilterChips,CreateActivityPicker,ClubPickerModal}` (после итерации 4 `feature/unified-activity-creation`: `ActivitiesManageTab` удалён, добавлен `ClubPickerModal`; `CreateActivityFlow` haptic не вызывает напрямую — делегирует picker'ам), `ActivitiesPage` (hero «+ Создать» → impact light), `ProfilePage`, `MyClubsPage`, `DiscoveryPage` (chip-выбор категории — встроенно после удаления `ClubFilters` в `feature/discovery-redesign`), `useBackButton`. **`ClubInteriorPage` удалён** в `feature/unified-club-page` — точки кода переехали в unified `ClubPage` + три tab-компонента (см. `club-page-unified.md`).
 - Unit-тест хука (mock SDK, проверка no-op при `isAvailable() === false`)
 
 ### НЕ входит
@@ -93,7 +93,8 @@ const onTabClick = (path: string) => {
 | Файл | Событие | Метод | Reason |
 |---|---|---|---|
 | `components/ClubCard.tsx` | `Cell.onClick` (до `navigate`) | `impact('light')` | Тап по карточке-Cell — light impact (§15: «по Cell, открытие модалки») |
-| `components/club/ClubActivitiesTab.tsx` + `components/manage/ActivitiesManageTab.tsx` (через `ActivityCard`) | tap activity-карточки → `navigate('/events/:id'\|'/skladchina/:id')` | `impact('light')` | То же правило для navigation-cell. Заменил `ClubEventsTab.tsx` (удалён в `feature/unified-activity-creation`); теперь общая логика — в `components/manage/ActivityCard.tsx`. |
+| `components/club/ClubActivitiesTab.tsx` (через `ActivityCard`) | tap activity-карточки → `navigate('/events/:id'\|'/skladchina/:id')` | `impact('light')` | То же правило для navigation-cell. Заменил `ClubEventsTab.tsx` (удалён в `feature/unified-activity-creation`); общая логика — в `components/manage/ActivityCard.tsx`. `ActivitiesManageTab` удалён в итерации 4 — карточки остались только в member-view `ClubActivitiesTab`. |
+| `components/manage/ClubPickerModal.tsx` (итерация 4) | tap клуба в picker'е | `impact('medium')` (выбор) / `impact('light')` (закрытие) | Step 2 flow создания на `ActivitiesPage`. |
 | `pages/MyClubsPage.tsx` | tap клуба (`role === 'member'`) → `navigate('/clubs/:id')` (`handleClubClick`, строки 89-95) | `impact('light')` | То же |
 | `pages/MyClubsPage.tsx` | tap клуба (organizer-role) → `navigate('/clubs/:id')` (`handleClubClick`) | `impact('light')` | После PR #28 и tap organizer-клуба идёт на unified ClubPage; в /manage юзер дрилит через таб «Управление» |
 | `pages/MyClubsPage.tsx` | tap «+ Создать» (brand pill `.mc-create-btn` в `.mc-hero`, после brand-редизайна PR #41) → открытие `<Modal>` с `CreateClubModal` | `impact('light')` | §15: открытие модалки — light |

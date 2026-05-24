@@ -28,6 +28,7 @@ function buildEvent(overrides: Partial<EventActivityDto> = {}): EventActivityDto
     goingCount: 5,
     status: 'upcoming',
     descriptionPreview: null,
+    photoUrl: null,
     ...overrides,
   };
 }
@@ -43,7 +44,7 @@ describe('ActivityFeedList', () => {
     expect(screen.getByText('Upcoming yoga')).toBeInTheDocument();
   });
 
-  it('collapses past activities behind a "Прошедшие (N)" accordion, expanding on click', async () => {
+  it('animates the "Прошедшие (N)" accordion open via the grid wrapper (open class + hidden toggle)', async () => {
     const user = userEvent.setup();
     const feed: ClubActivityFeed = {
       upcoming: [],
@@ -56,14 +57,20 @@ describe('ActivityFeedList', () => {
       <ActivityFeedList feed={feed} onActivityClick={vi.fn()} />,
     );
 
-    // Collapsed by default: toggle shows count, rows are hidden.
+    // Collapsed by default: rows stay mounted (for the smooth transition) but the
+    // wrapper has no `open` class and the list is hidden from the a11y tree.
     expect(screen.getByText('Прошедшие')).toBeInTheDocument();
     expect(screen.getByText('(2)')).toBeInTheDocument();
-    expect(container.querySelector('.activity-compact-row')).toBeNull();
+    const body = container.querySelector('.activity-past-body');
+    expect(body).not.toBeNull();
+    expect(body?.classList.contains('open')).toBe(false);
+    expect(container.querySelector('.activity-list.compact')?.hasAttribute('hidden')).toBe(true);
 
     await user.click(screen.getByRole('button', { name: /прошедшие/i }));
 
-    // Expanded: compact rows now rendered.
+    // Expanded: wrapper gets `open`, rows become visible, and stay in the DOM.
+    expect(container.querySelector('.activity-past-body')?.classList.contains('open')).toBe(true);
+    expect(container.querySelector('.activity-list.compact')?.hasAttribute('hidden')).toBe(false);
     expect(container.querySelectorAll('.activity-compact-row')).toHaveLength(2);
     expect(screen.getByText('Old yoga')).toBeInTheDocument();
   });

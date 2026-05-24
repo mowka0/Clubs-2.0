@@ -40,7 +40,8 @@ sealed class ActivityItemDto {
         val participantLimit: Int,
         val goingCount: Int,
         val status: String,
-        val descriptionPreview: String?
+        val descriptionPreview: String?,
+        val photoUrl: String?
     ) : ActivityItemDto() {
         override val type: String = "event"
     }
@@ -58,7 +59,8 @@ sealed class ActivityItemDto {
         val participantCount: Int,
         val paidCount: Int,
         val status: String,
-        val affectsReputation: Boolean
+        val affectsReputation: Boolean,
+        val photoUrl: String?
     ) : ActivityItemDto() {
         override val type: String = "skladchina"
     }

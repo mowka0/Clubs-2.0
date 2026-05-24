@@ -4,6 +4,7 @@ import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { BrandBackdrop } from '../components/BrandBackdrop';
 import { BrandStepper } from '../components/BrandStepper';
+import { AvatarUpload } from '../components/AvatarUpload';
 import { useCreateEventMutation } from '../queries/events';
 import type { CreateEventBody } from '../api/events';
 
@@ -28,6 +29,7 @@ export const CreateEventPage: FC = () => {
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [locationText, setLocationText] = useState('');
   const [eventDatetime, setEventDatetime] = useState('');
   const [participantLimit, setParticipantLimit] = useState(20);
@@ -73,13 +75,14 @@ export const CreateEventPage: FC = () => {
       locationText: locationText.trim(),
       eventDatetime: eventDate.toISOString(),
       participantLimit,
+      photoUrl: photoUrl ?? undefined,
     };
 
     try {
       haptic.impact('medium');
       await createMut.mutateAsync({ clubId, body });
       haptic.notify('success');
-      navigate(`/clubs/${clubId}/manage?tab=activities`, {
+      navigate('/events', {
         replace: true,
         state: { toast: 'Событие создано' },
       });
@@ -116,6 +119,11 @@ export const CreateEventPage: FC = () => {
             placeholder="Например: Йога в парке"
           />
         </label>
+
+        <div className="field">
+          <span className="label">Фото (опц.)</span>
+          <AvatarUpload value={photoUrl} onChange={setPhotoUrl} />
+        </div>
 
         <label className="field">
           <span className="label">Описание</span>

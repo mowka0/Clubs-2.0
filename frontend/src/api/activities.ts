@@ -27,6 +27,7 @@ export interface EventActivityDto extends ActivityBase {
   goingCount: number;
   status: EventActivityStatus;
   descriptionPreview: string | null;
+  photoUrl: string | null;
 }
 
 export type SkladchinaActivityStatus =
@@ -50,6 +51,7 @@ export interface SkladchinaActivityDto extends ActivityBase {
   paidCount: number;
   status: SkladchinaActivityStatus;
   affectsReputation: boolean;
+  photoUrl: string | null;
 }
 
 export type ActivityItemDto = EventActivityDto | SkladchinaActivityDto;

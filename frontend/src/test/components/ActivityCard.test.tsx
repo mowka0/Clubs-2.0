@@ -39,6 +39,7 @@ function buildEvent(overrides: Partial<EventActivityDto> = {}): EventActivityDto
     goingCount: 5,
     status: 'upcoming',
     descriptionPreview: null,
+    photoUrl: null,
     ...overrides,
   };
 }
@@ -61,6 +62,7 @@ function buildSkladchina(
     paidCount: 1,
     status: 'active',
     affectsReputation: false,
+    photoUrl: null,
     ...overrides,
   };
 }
@@ -72,16 +74,48 @@ describe('ActivityCard (full)', () => {
     expect(screen.getByText('5/20')).toBeInTheDocument();
   });
 
-  it('renders the icon inside the title head row (aligned, not floating)', () => {
+  it('puts the type icon in the top-right badge (not inline with the title)', () => {
     const { container } = render(
       <ActivityCard activity={buildEvent()} onClick={vi.fn()} />,
     );
-    const head = container.querySelector('.activity-card .head');
-    expect(head).not.toBeNull();
-    // Icon and title are siblings in the same baseline-aligned head row,
-    // which is what keeps the glyph aligned with the title's first line.
-    expect(head?.querySelector('.ico')?.textContent).toBe('🗓');
-    expect(head?.querySelector('.title')?.textContent).toBe('Yoga in the park');
+    const badge = container.querySelector('.activity-card .type-badge');
+    expect(badge?.textContent).toBe('🗓');
+    // Title lives in the middle content column and carries no leading emoji.
+    const title = container.querySelector('.activity-card .content .title');
+    expect(title?.textContent).toBe('Yoga in the park');
+  });
+
+  it('renders a placeholder thumb (with type emoji) when photoUrl is absent', () => {
+    const { container } = render(
+      <ActivityCard activity={buildEvent({ photoUrl: null })} onClick={vi.fn()} />,
+    );
+    const thumb = container.querySelector('.activity-card .activity-thumb');
+    expect(thumb).not.toBeNull();
+    expect(thumb?.classList.contains('placeholder')).toBe(true);
+    expect(thumb?.querySelector('img')).toBeNull();
+    expect(thumb?.querySelector('.placeholder-emoji')?.textContent).toBe('🗓');
+  });
+
+  it('renders the photo (cover img) on the left when photoUrl is present', () => {
+    const { container } = render(
+      <ActivityCard
+        activity={buildEvent({ photoUrl: 'https://cdn.example/e.jpg' })}
+        onClick={vi.fn()}
+      />,
+    );
+    const thumb = container.querySelector('.activity-card .activity-thumb');
+    expect(thumb?.classList.contains('placeholder')).toBe(false);
+    const img = thumb?.querySelector('img');
+    expect(img?.getAttribute('src')).toBe('https://cdn.example/e.jpg');
+  });
+
+  it('uses the 💰 emoji placeholder for a photoless skladchina', () => {
+    const { container } = render(
+      <ActivityCard activity={buildSkladchina({ photoUrl: null })} onClick={vi.fn()} />,
+    );
+    const thumb = container.querySelector('.activity-card .activity-thumb.placeholder');
+    expect(thumb?.querySelector('.placeholder-emoji')?.textContent).toBe('💰');
+    expect(container.querySelector('.activity-card .type-badge')?.textContent).toBe('💰');
   });
 
   it('shows event date/time and location, not the creation date', () => {

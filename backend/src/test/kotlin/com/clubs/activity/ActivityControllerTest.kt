@@ -1,6 +1,7 @@
 package com.clubs.activity
 
 import com.clubs.auth.JwtService
+import org.hamcrest.Matchers.nullValue
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -140,17 +141,19 @@ class ActivityControllerTest {
         dsl.execute(
             """
             INSERT INTO events (id, club_id, created_by, title, description, location_text,
-                                event_datetime, participant_limit, status, created_at, updated_at)
+                                event_datetime, participant_limit, status, photo_url, created_at, updated_at)
             VALUES ('$eventId', '$clubId', '$organizerId', 'Event +3d', 'Some description text',
-                    'Park', '$eventDatetime', 20, 'upcoming', '$createdAt', '$createdAt')
+                    'Park', '$eventDatetime', 20, 'upcoming', 'https://cdn.example.com/event.jpg',
+                    '$createdAt', '$createdAt')
             """.trimIndent()
         )
         dsl.execute(
             """
             INSERT INTO skladchinas (id, club_id, creator_id, title, payment_mode, payment_link,
-                                     deadline, status, created_at, updated_at, affects_reputation)
+                                     deadline, status, photo_url, created_at, updated_at, affects_reputation)
             VALUES ('$skladchinaId', '$clubId', '$organizerId', 'Sklad +1d', 'voluntary',
-                    'https://pay.me', '$skladDeadline', 'active', '$createdAt', '$createdAt', false)
+                    'https://pay.me', '$skladDeadline', 'active', 'https://cdn.example.com/sklad.jpg',
+                    '$createdAt', '$createdAt', false)
             """.trimIndent()
         )
 
@@ -164,9 +167,36 @@ class ActivityControllerTest {
             .andExpect(jsonPath("$.upcoming[0].type").value("skladchina"))
             .andExpect(jsonPath("$.upcoming[0].title").value("Sklad +1d"))
             .andExpect(jsonPath("$.upcoming[0].isCompleted").value(false))
+            .andExpect(jsonPath("$.upcoming[0].photoUrl").value("https://cdn.example.com/sklad.jpg"))
             .andExpect(jsonPath("$.upcoming[1].type").value("event"))
             .andExpect(jsonPath("$.upcoming[1].title").value("Event +3d"))
             .andExpect(jsonPath("$.upcoming[1].descriptionPreview").value("Some description text"))
+            .andExpect(jsonPath("$.upcoming[1].photoUrl").value("https://cdn.example.com/event.jpg"))
+    }
+
+    @Test
+    fun `GET activities returns null photoUrl when event has none`() {
+        val eventId = UUID.randomUUID()
+        val createdAt = OffsetDateTime.now().minusHours(1)
+        val eventDatetime = OffsetDateTime.now().plusDays(3)
+
+        dsl.execute(
+            """
+            INSERT INTO events (id, club_id, created_by, title, location_text,
+                                event_datetime, participant_limit, status, created_at, updated_at)
+            VALUES ('$eventId', '$clubId', '$organizerId', 'No photo', 'Park',
+                    '$eventDatetime', 20, 'upcoming', '$createdAt', '$createdAt')
+            """.trimIndent()
+        )
+
+        mockMvc.perform(
+            get("/api/clubs/$clubId/activities")
+                .header("Authorization", "Bearer $memberToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.upcoming.length()").value(1))
+            .andExpect(jsonPath("$.upcoming[0].type").value("event"))
+            .andExpect(jsonPath("$.upcoming[0].photoUrl").value(nullValue()))
     }
 
     @Test

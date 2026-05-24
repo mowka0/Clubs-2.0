@@ -1,11 +1,18 @@
-import { FC, useCallback } from 'react';
+import { FC, useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useHaptic } from '../hooks/useHaptic';
 import { BrandBackdrop } from '../components/BrandBackdrop';
+import { Toast } from '../components/Toast';
 import { EventsTab } from '../components/activities/EventsTab';
 import { SkladchinasTab } from '../components/activities/SkladchinasTab';
+import { CreateActivityFlow } from '../components/manage/CreateActivityFlow';
+import { useOrganizerClubs } from '../queries/organizerClubs';
 
 type SegmentKey = 'events' | 'skladchina';
+
+interface ActivitiesLocationState {
+  toast?: string;
+}
 
 function routeToSegment(pathname: string): SegmentKey {
   if (pathname.startsWith('/skladchina')) return 'skladchina';
@@ -23,6 +30,18 @@ export const ActivitiesPage: FC = () => {
 
   const segment = routeToSegment(location.pathname);
 
+  const { clubs: organizerClubs } = useOrganizerClubs();
+  const canCreate = organizerClubs.length > 0;
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const navState = location.state as ActivitiesLocationState | null;
+  const [toastMessage, setToastMessage] = useState<string | null>(navState?.toast ?? null);
+  useEffect(() => {
+    if (navState?.toast) {
+      window.history.replaceState(null, '', location.pathname);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSelect = useCallback(
     (next: SegmentKey) => {
       if (next === segment) return;
@@ -31,6 +50,11 @@ export const ActivitiesPage: FC = () => {
     },
     [segment, navigate, haptic],
   );
+
+  const openCreate = () => {
+    haptic.impact('light');
+    setCreateOpen(true);
+  };
 
   return (
     <div className="brand-page">
@@ -41,6 +65,12 @@ export const ActivitiesPage: FC = () => {
           <h1>
             Твои <span className="accent">активности</span>
           </h1>
+          {canCreate && (
+            <button type="button" className="mc-create-btn" onClick={openCreate}>
+              <span className="plus">+</span>
+              Создать
+            </button>
+          )}
         </div>
       </header>
 
@@ -66,6 +96,16 @@ export const ActivitiesPage: FC = () => {
       </div>
 
       {segment === 'events' ? <EventsTab /> : <SkladchinasTab />}
+
+      {canCreate && (
+        <CreateActivityFlow
+          open={createOpen}
+          organizerClubs={organizerClubs}
+          onClose={() => setCreateOpen(false)}
+        />
+      )}
+
+      {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
     </div>
   );
 };

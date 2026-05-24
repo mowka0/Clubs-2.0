@@ -199,4 +199,15 @@ open class EventsDao(configuration: Configuration?) : DAOImpl<EventsRecord, com.
      * Fetch records that have <code>updated_at IN (values)</code>
      */
     fun fetchByUpdatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.UPDATED_AT, *values)
+
+    /**
+     * Fetch records that have <code>photo_url BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfPhotoUrl(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.PHOTO_URL, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>photo_url IN (values)</code>
+     */
+    fun fetchByPhotoUrl(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.PHOTO_URL, *values)
 }

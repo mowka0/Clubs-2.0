@@ -23,6 +23,7 @@ class EventMapper {
         stage2Triggered = record.stage_2Triggered ?: false,
         attendanceMarked = record.attendanceMarked ?: false,
         attendanceFinalized = record.attendanceFinalized ?: false,
+        photoUrl = record.photoUrl,
         createdAt = record.createdAt,
         updatedAt = record.updatedAt
     )
@@ -49,6 +50,7 @@ class EventMapper {
         confirmedCount = confirmedCount,
         attendanceMarked = event.attendanceMarked,
         attendanceFinalized = event.attendanceFinalized,
+        photoUrl = event.photoUrl,
         createdAt = event.createdAt
     )
 
@@ -93,7 +95,8 @@ class EventMapper {
         locationText = event.locationText,
         participantLimit = event.participantLimit,
         goingCount = goingCount,
-        status = event.status.literal
+        status = event.status.literal,
+        photoUrl = event.photoUrl
     )
 
     companion object {

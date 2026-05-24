@@ -1,16 +1,17 @@
 import { FC } from 'react';
 import { Modal } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../../hooks/useHaptic';
+import type { ActivityType } from '../../api/activities';
 
 interface CreateActivityPickerProps {
   open: boolean;
   onClose: () => void;
-  onSelectEvent: () => void;
-  onSelectSkladchina: () => void;
+  /** Called with the chosen activity type. The picker closes first. */
+  onPick: (type: ActivityType) => void;
 }
 
 interface PickerOption {
-  key: 'event' | 'skladchina';
+  key: ActivityType;
   emoji: string;
   title: string;
   subtitle: string;
@@ -80,16 +81,14 @@ const subtitleStyle: React.CSSProperties = {
 export const CreateActivityPicker: FC<CreateActivityPickerProps> = ({
   open,
   onClose,
-  onSelectEvent,
-  onSelectSkladchina,
+  onPick,
 }) => {
   const haptic = useHaptic();
 
-  const handleSelect = (key: PickerOption['key']) => {
+  const handleSelect = (key: ActivityType) => {
     haptic.impact('medium');
     onClose();
-    if (key === 'event') onSelectEvent();
-    else onSelectSkladchina();
+    onPick(key);
   };
 
   const handleOpenChange = (next: boolean) => {

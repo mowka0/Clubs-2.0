@@ -29,34 +29,31 @@ import {
   useRejectApplicationMutation,
 } from '../queries/applications';
 import { useClubFinancesQuery } from '../queries/finances';
-import { ActivitiesManageTab } from '../components/manage/ActivitiesManageTab';
 import type { UpdateClubBody } from '../api/clubs';
 import type {
   MemberListItemDto,
   ClubDetailDto,
 } from '../types/api';
 
-type TabKey = 'members' | 'applications' | 'activities' | 'finances' | 'settings';
+type TabKey = 'members' | 'applications' | 'finances' | 'settings';
 
 const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
   { key: 'members', label: 'Участники' },
   { key: 'applications', label: 'Заявки' },
-  { key: 'activities', label: 'Активности' },
   { key: 'finances', label: 'Финансы' },
   { key: 'settings', label: 'Настройки' },
 ];
 
 const VALID_TABS = new Set<string>(TABS.map((t) => t.key));
 
-const LEGACY_TAB_REDIRECTS: Record<string, TabKey> = {
-  events: 'activities',
-  skladchina: 'activities',
-};
+// Activity creation/browsing moved out of Manage (now on the global "Активности"
+// tab). Legacy deep-links that pointed at the removed activities/events/skladchina
+// tabs fall back to "Участники" so old shares/refreshes don't 404.
+const LEGACY_TAB_KEYS = new Set<string>(['activities', 'events', 'skladchina']);
 
 function resolveInitialTab(raw: string | null): TabKey {
-  if (!raw) return 'members';
-  if (VALID_TABS.has(raw)) return raw as TabKey;
-  return LEGACY_TAB_REDIRECTS[raw] ?? 'members';
+  if (raw && VALID_TABS.has(raw)) return raw as TabKey;
+  return 'members';
 }
 
 function hoursRemaining(createdAt: string | null): number | null {
@@ -568,13 +565,13 @@ export const OrganizerClubManage: FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Normalize legacy `?tab=events` / `?tab=skladchina` deep-links to `?tab=activities`
-  // so refresh / share doesn't keep the dead value around.
+  // Drop legacy `?tab=activities|events|skladchina` deep-links to the default
+  // tab so refresh / share doesn't keep a dead value in the URL.
   useEffect(() => {
     const raw = searchParams.get('tab');
-    if (raw && raw in LEGACY_TAB_REDIRECTS) {
+    if (raw && LEGACY_TAB_KEYS.has(raw)) {
       const next = new URLSearchParams(searchParams);
-      next.set('tab', LEGACY_TAB_REDIRECTS[raw]!);
+      next.delete('tab');
       setSearchParams(next, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -600,8 +597,6 @@ export const OrganizerClubManage: FC = () => {
         return <MembersTab clubId={clubId} />;
       case 'applications':
         return <ApplicationsTab clubId={clubId} />;
-      case 'activities':
-        return <ActivitiesManageTab clubId={clubId} />;
       case 'finances':
         return <FinancesTab clubId={clubId} />;
       case 'settings':

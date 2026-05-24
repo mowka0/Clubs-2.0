@@ -37,6 +37,7 @@ class JooqEventRepository(
             .set(EVENTS.STAGE_2_TRIGGERED, false)
             .set(EVENTS.ATTENDANCE_MARKED, false)
             .set(EVENTS.ATTENDANCE_FINALIZED, false)
+            .set(EVENTS.PHOTO_URL, request.photoUrl)
             .returning()
             .fetchOne()!!
         return mapper.toDomain(record)
@@ -140,6 +141,7 @@ class JooqEventRepository(
             EVENTS.STAGE_2_TRIGGERED,
             EVENTS.ATTENDANCE_MARKED,
             EVENTS.ATTENDANCE_FINALIZED,
+            EVENTS.PHOTO_URL,
             EVENTS.CREATED_AT,
             EVENTS.UPDATED_AT,
             CLUBS.NAME.`as`("club_name"),
@@ -180,6 +182,7 @@ class JooqEventRepository(
                 stage2Triggered = r.get(EVENTS.STAGE_2_TRIGGERED) ?: false,
                 attendanceMarked = r.get(EVENTS.ATTENDANCE_MARKED) ?: false,
                 attendanceFinalized = r.get(EVENTS.ATTENDANCE_FINALIZED) ?: false,
+                photoUrl = r.get(EVENTS.PHOTO_URL),
                 createdAt = r.get(EVENTS.CREATED_AT),
                 updatedAt = r.get(EVENTS.UPDATED_AT)
             )

@@ -26,6 +26,7 @@ data class EventDetailDto(
     val confirmedCount: Int,
     val attendanceMarked: Boolean,
     val attendanceFinalized: Boolean,
+    val photoUrl: String?,
     val createdAt: OffsetDateTime?
 )
 
@@ -36,7 +37,8 @@ data class EventListItemDto(
     val locationText: String,
     val participantLimit: Int,
     val goingCount: Int,
-    val status: String
+    val status: String,
+    val photoUrl: String?
 )
 
 data class MyEventListItemDto(
@@ -77,5 +79,8 @@ data class CreateEventRequest(
 
     @field:Min(value = 1, message = "Voting opens days before must be at least 1")
     @field:Max(value = 14, message = "Voting opens days before must be at most 14")
-    val votingOpensDaysBefore: Int = 14
+    val votingOpensDaysBefore: Int = 14,
+
+    @field:Size(max = 1024, message = "Photo URL must be at most 1024 characters")
+    val photoUrl: String? = null
 )

@@ -251,6 +251,48 @@ class ActivityServiceTest {
         assertEquals("a".repeat(40) + "…", item.descriptionPreview)
     }
 
+    @Test
+    fun `event photoUrl propagates from domain to activity dto`() {
+        val event = makeEvent(eventDatetime = now.plusDays(1), photoUrl = "https://cdn.example.com/event.jpg")
+        every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
+            EventWithGoingCount(event, 0)
+        )
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
+
+        val result = service.getClubActivities(clubId, null)
+        val item = result.upcoming.single() as ActivityItemDto.EventActivity
+
+        assertEquals("https://cdn.example.com/event.jpg", item.photoUrl)
+    }
+
+    @Test
+    fun `event photoUrl is null when domain has none`() {
+        val event = makeEvent(eventDatetime = now.plusDays(1), photoUrl = null)
+        every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
+            EventWithGoingCount(event, 0)
+        )
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
+
+        val result = service.getClubActivities(clubId, null)
+        val item = result.upcoming.single() as ActivityItemDto.EventActivity
+
+        assertNull(item.photoUrl)
+    }
+
+    @Test
+    fun `skladchina photoUrl propagates from domain to activity dto`() {
+        val sklad = makeSkladchina(deadline = now.plusDays(1), photoUrl = "https://cdn.example.com/sklad.jpg")
+        every { eventRepository.findAllByClubWithGoingCount(clubId) } returns emptyList()
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns listOf(
+            SkladchinaWithAggregates(sklad, 0, 0, 0)
+        )
+
+        val result = service.getClubActivities(clubId, null)
+        val item = result.upcoming.single() as ActivityItemDto.SkladchinaActivity
+
+        assertEquals("https://cdn.example.com/sklad.jpg", item.photoUrl)
+    }
+
     // ---- helpers ----
 
     private fun makeEvent(
@@ -259,7 +301,8 @@ class ActivityServiceTest {
         eventDatetime: OffsetDateTime = now.plusDays(7),
         status: EventStatus = EventStatus.upcoming,
         title: String = "Event",
-        description: String? = null
+        description: String? = null,
+        photoUrl: String? = null
     ): Event = Event(
         id = id,
         clubId = clubId,
@@ -274,6 +317,7 @@ class ActivityServiceTest {
         stage2Triggered = false,
         attendanceMarked = false,
         attendanceFinalized = false,
+        photoUrl = photoUrl,
         createdAt = createdAt,
         updatedAt = createdAt
     )
@@ -283,7 +327,8 @@ class ActivityServiceTest {
         createdAt: OffsetDateTime = now,
         deadline: OffsetDateTime = now.plusDays(7),
         status: SkladchinaStatus = SkladchinaStatus.active,
-        title: String = "Sklad"
+        title: String = "Sklad",
+        photoUrl: String? = null
     ): Skladchina = Skladchina(
         id = id,
         clubId = clubId,
@@ -291,7 +336,7 @@ class ActivityServiceTest {
         title = title,
         description = null,
         rules = null,
-        photoUrl = null,
+        photoUrl = photoUrl,
         paymentMode = SkladchinaMode.fixed_equal,
         totalGoalKopecks = 100000L,
         paymentLink = "https://pay.me",

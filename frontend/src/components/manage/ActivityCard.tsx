@@ -4,11 +4,14 @@ import type {
   EventActivityDto,
   SkladchinaActivityDto,
 } from '../../api/activities';
+import { ActivityThumb } from './ActivityThumb';
 
 interface ActivityCardProps {
   activity: ActivityItemDto;
   onClick: () => void;
 }
+
+const TYPE_EMOJI = { event: '🗓', skladchina: '💰' } as const;
 
 const DATETIME_FMT = new Intl.DateTimeFormat('ru-RU', {
   day: 'numeric',
@@ -32,12 +35,7 @@ function progressPercent(collected: number, goal: number): number {
 
 const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => (
   <>
-    <div className="head">
-      <span className="ico" aria-hidden="true">
-        🗓
-      </span>
-      <span className="title">{event.title}</span>
-    </div>
+    <span className="title">{event.title}</span>
     <span className="sub">
       {formatDatetime(event.eventDatetime)} · {event.locationText}
     </span>
@@ -63,12 +61,7 @@ const SkladchinaCardBody: FC<{ skladchina: SkladchinaActivityDto }> = ({
 
   return (
     <>
-      <div className="head">
-        <span className="ico" aria-hidden="true">
-          💰
-        </span>
-        <span className="title">{skladchina.title}</span>
-      </div>
+      <span className="title">{skladchina.title}</span>
       <span className="sub">
         {hasGoal ? (
           <>
@@ -113,12 +106,18 @@ export const ActivityCard: FC<ActivityCardProps> = ({ activity, onClick }) => {
       aria-label={ariaLabel}
       className={className}
     >
-      {activity.isCompleted && <span className="done-badge">Завершено</span>}
-      {activity.type === 'event' ? (
-        <EventCardBody event={activity} />
-      ) : (
-        <SkladchinaCardBody skladchina={activity} />
-      )}
+      <span className="type-badge" aria-hidden="true">
+        {TYPE_EMOJI[activity.type]}
+      </span>
+      <ActivityThumb type={activity.type} photoUrl={activity.photoUrl} />
+      <div className="content">
+        {activity.isCompleted && <span className="done-badge">Завершено</span>}
+        {activity.type === 'event' ? (
+          <EventCardBody event={activity} />
+        ) : (
+          <SkladchinaCardBody skladchina={activity} />
+        )}
+      </div>
     </button>
   );
 };

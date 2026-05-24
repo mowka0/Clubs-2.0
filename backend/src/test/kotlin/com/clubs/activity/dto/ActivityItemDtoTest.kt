@@ -35,7 +35,8 @@ class ActivityItemDtoTest {
             participantLimit = 20,
             goingCount = 5,
             status = "PUBLISHED",
-            descriptionPreview = "Bring your laptop"
+            descriptionPreview = "Bring your laptop",
+            photoUrl = "https://cdn.example.com/event.jpg"
         )
 
         val json = mapper.writeValueAsString(dto)
@@ -47,6 +48,32 @@ class ActivityItemDtoTest {
         assertTrue(json.contains("\"goingCount\":5"))
         assertTrue(json.contains("\"status\":\"PUBLISHED\""))
         assertTrue(json.contains("\"descriptionPreview\":\"Bring your laptop\""))
+        assertTrue(
+            json.contains("\"photoUrl\":\"https://cdn.example.com/event.jpg\""),
+            "expected photoUrl present; got: $json"
+        )
+    }
+
+    @Test
+    fun `EventActivity serializes null photoUrl as null`() {
+        val dto = ActivityItemDto.EventActivity(
+            id = UUID.fromString("11111111-1111-1111-1111-111111111111"),
+            clubId = UUID.fromString("22222222-2222-2222-2222-222222222222"),
+            title = "No photo",
+            createdAt = OffsetDateTime.parse("2026-05-01T10:00:00Z"),
+            isCompleted = false,
+            eventDatetime = OffsetDateTime.parse("2026-06-01T18:00:00Z"),
+            locationText = "Main square",
+            participantLimit = 20,
+            goingCount = 0,
+            status = "PUBLISHED",
+            descriptionPreview = null,
+            photoUrl = null
+        )
+
+        val json = mapper.writeValueAsString(dto)
+
+        assertTrue(json.contains("\"photoUrl\":null"), "expected photoUrl:null; got: $json")
     }
 
     @Test
@@ -64,7 +91,8 @@ class ActivityItemDtoTest {
             participantCount = 10,
             paidCount = 3,
             status = "ACTIVE",
-            affectsReputation = true
+            affectsReputation = true,
+            photoUrl = "https://cdn.example.com/sklad.jpg"
         )
 
         val json = mapper.writeValueAsString(dto)
@@ -78,6 +106,10 @@ class ActivityItemDtoTest {
         assertTrue(json.contains("\"paidCount\":3"))
         assertTrue(json.contains("\"status\":\"ACTIVE\""))
         assertTrue(json.contains("\"affectsReputation\":true"))
+        assertTrue(
+            json.contains("\"photoUrl\":\"https://cdn.example.com/sklad.jpg\""),
+            "expected photoUrl present; got: $json"
+        )
     }
 
     private fun countOccurrences(haystack: String, needle: String): Int {
