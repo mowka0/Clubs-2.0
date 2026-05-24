@@ -18,6 +18,21 @@ const STATUS_LABELS: Record<string, string> = {
   auto_rejected: 'Отклонено',
 };
 
+const CATEGORY_LABELS: Record<string, string> = {
+  sport: 'Спорт', creative: 'Творчество', food: 'Еда',
+  board_games: 'Настолки', cinema: 'Кино', education: 'Образование',
+  travel: 'Путешествия', other: 'Другое',
+};
+
+/** Russian plural form picker: forms = [one, few, many] */
+function pluralRu(n: number, forms: [string, string, string]): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return forms[0];
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return forms[1];
+  return forms[2];
+}
+
 function getInitials(name: string): string {
   return name
     .replace(/[«»"']/g, '')
@@ -120,6 +135,9 @@ export const ProfilePage: FC = () => {
           <div className="pf-rep-list">
             {reputation.map((r) => {
               const tier = reliabilityTier(r.reliabilityIndex);
+              const roleLabel = r.role === 'organizer' ? 'Организатор' : 'Участник';
+              const categoryLabel = CATEGORY_LABELS[r.category] ?? r.category;
+              const hasActivity = r.totalAttendances > 0 || r.promiseFulfillmentPct > 0;
               return (
                 <button
                   key={r.clubId}
@@ -132,7 +150,13 @@ export const ProfilePage: FC = () => {
                   </span>
                   <div className="body">
                     <div className="name">{r.clubName}</div>
-                    <div className="role">{r.role === 'organizer' ? 'Организатор' : 'Участник'}</div>
+                    <div className="role">{categoryLabel} · {roleLabel}</div>
+                    {hasActivity && (
+                      <div className="metrics">
+                        обещания {Math.round(r.promiseFulfillmentPct)}% · {r.totalAttendances}{' '}
+                        {pluralRu(r.totalAttendances, ['посещение', 'посещения', 'посещений'])}
+                      </div>
+                    )}
                   </div>
                   <div className="score">
                     <span className={`val ${tier}`}>{r.reliabilityIndex}</span>

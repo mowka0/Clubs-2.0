@@ -72,6 +72,8 @@ export interface UserClubReputationDto {
   category: string;
   role: string;
   reliabilityIndex: number;
+  promiseFulfillmentPct: number;
+  totalAttendances: number;
 }
 
 export interface ActionRequiredCountDto {

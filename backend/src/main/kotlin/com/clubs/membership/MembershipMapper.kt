@@ -45,6 +45,8 @@ class MembershipMapper {
         clubAvatarUrl = info.clubAvatarUrl,
         category = info.category.literal,
         role = info.role.literal,
-        reliabilityIndex = info.reliabilityIndex
+        reliabilityIndex = info.reliabilityIndex,
+        promiseFulfillmentPct = info.promiseFulfillmentPct,
+        totalAttendances = info.totalAttendances
     )
 }

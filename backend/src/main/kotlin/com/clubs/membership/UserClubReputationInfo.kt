@@ -2,6 +2,7 @@ package com.clubs.membership
 
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.enums.MembershipRole
+import java.math.BigDecimal
 import java.util.UUID
 
 /**
@@ -15,5 +16,7 @@ data class UserClubReputationInfo(
     val clubAvatarUrl: String?,
     val category: ClubCategory,
     val role: MembershipRole,
-    val reliabilityIndex: Int
+    val reliabilityIndex: Int,
+    val promiseFulfillmentPct: BigDecimal,
+    val totalAttendances: Int
 )
