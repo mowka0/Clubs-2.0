@@ -18,6 +18,7 @@ data class Event(
     val stage2Triggered: Boolean,
     val attendanceMarked: Boolean,
     val attendanceFinalized: Boolean,
+    val photoUrl: String?,
     val createdAt: OffsetDateTime?,
     val updatedAt: OffsetDateTime?
 )

@@ -118,8 +118,8 @@ X = memberLimit * subscriptionPrice * 0.8
 | Роль | Header (с avatar/name/badges) | About-секция | Tabs (brand `cp-tab-row`) | CTA |
 |---|---|---|---|---|
 | **Visitor** | ✓ (без role-badge) | ✓ | — | «Вступить» / «Хочу вступить» / disabled-варианты для pending state |
-| **Member** | ✓ + badge «Вы участник» | ✓ | События / Участники / Мой профиль | — (статус в badge) |
-| **Organizer** | ✓ + badge «Вы организатор» | ✓ | События / Участники / Мой профиль / **Управление** | — |
+| **Member** | ✓ + badge «Вы участник» | ✓ | Активности / Участники / Мой профиль | — (статус в badge) |
+| **Organizer** | ✓ + badge «Вы организатор» | ✓ | Активности / Участники / Мой профиль / **Управление** | — |
 
 «Управление» — **navigate-link**, не state-tab: `handleTabClick('manage')` делает `haptic.impact('light')` + `navigate('/clubs/:id/manage')`, активной не становится.
 
@@ -129,7 +129,7 @@ X = memberLimit * subscriptionPrice * 0.8
 
 | Файл | Источник данных | Заметки |
 |---|---|---|
-| `ClubEventsTab.tsx` | `useClubEventsQuery(clubId, { size: '100' })` | Upcoming (статусы `upcoming`/`stage_1`/`stage_2`) + past (max 5). Tap по Cell → `/events/:id` |
+| `ClubActivitiesTab.tsx` | `useClubActivitiesQuery(clubId, { type? })` (`useQuery`, без пагинации) | Read-only unified-feed events + skladchinas клуба: секция `Предстоящие` (полные карточки, `relevantDate ASC`) + сворачиваемый аккордеон `Прошедшие (N)` (компактные строки, DESC). Tap по карточке → `/events/:id` или `/skladchina/:id`. Заменил `ClubEventsTab.tsx` (удалён) в `feature/unified-activity-creation`. |
 | `ClubMembersTab.tsx` | `useClubMembersQuery(clubId)` | Список с avatar/reliability, badge «Организатор» для `role === 'organizer'` |
 | `ClubProfileTab.tsx` | `useMemberProfileQuery(clubId, userId)` | Avatar + reputation-метрики (reliability / promiseFulfillmentPct / totalConfirmations) |
 
@@ -167,12 +167,40 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 
 Полная спека (user-stories, AC, API контракт, анатомия event-card, frontend/backend план, post-flight decisions) — в `events-feed.md`.
 
+### Hero «+ Создать» (итерация 4, `feature/unified-activity-creation`)
+
+В шапку `ActivitiesPage` (`mc-hero`) добавлена кнопка «+ Создать» — параллель
+кнопке «+ Создать клуб» на `MyClubsPage` (см. `my-clubs-unified.md`). Видна
+**только** организаторам (`useOrganizerClubs().clubs.length > 0`). Tap → flow
+`CreateActivityFlow` (тип → клуб → форма создания события/сбора). Это
+единственный entry point создания активностей после удаления manage-таба
+«Активности». Полная спека — [`unified-activity-creation.md`](./unified-activity-creation.md)
+§ «Итерация 4».
+
 ---
 
 ## OrganizerClubManage — Страница управления клубом (`/clubs/:id/manage`)
 
 ### Описание
-Страница доступна только организатору. Содержит **5 вкладок**: Участники, Заявки, События, Финансы, Настройки.
+Страница доступна только организатору. Содержит **4 вкладки**: Участники, Заявки, Финансы, Настройки.
+
+> **Note (post `feature/unified-activity-creation`, итерация 4 — 2026-05-24):**
+> история табов: изначально было 6 (`События` + `Сборы` отдельно) → итерация 1
+> объединила их в один таб `Активности` (лента + Modal-picker «+ Создать») →
+> **итерация 4 убрала таб `Активности` целиком**. Создание активностей переехало
+> на глобальную страницу `/events` (`ActivitiesPage`, hero «+ Создать» для
+> организаторов), а лента активностей осталась только в member-view `ClubPage`
+> (`ClubActivitiesTab`). Manage-панель снова без активностей.
+> Legacy deep-links `?tab=activities|events|skladchina` → fallback `Участники`.
+> Полная спека — [`unified-activity-creation.md`](./unified-activity-creation.md).
+
+### Brand-редизайн (итерация 2, 2026-05-24)
+Страница больше **не** плоский telegram-ui `List`. Структура:
+- Обёртка `brand-page` + `<BrandBackdrop />` (navy blobs + brass glows), как на Discovery / ClubPage / MyClubsPage
+- Шапка — brand-hero карточка `ManageHeader` (`components/manage/ManageHeader.tsx`) вместо плоского `Cell`-header
+- Вкладки — brass pill-tabs `ManageTabs` (`components/manage/ManageTabs.tsx`) вместо telegram-ui `TabsList`; фиксит обрезание длинных лейблов («Учас…»)
+- Внутренности вкладок (Участники / Заявки / Финансы / Настройки) — **без изменений**
+- CSS — в `frontend/src/styles/brand-theme.css`
 
 ### Вкладки
 
@@ -191,19 +219,14 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 - Кнопки "Принять" / "Отклонить" → `POST /api/applications/:id/approve` или `/reject`
 - Таймер до автоотклонения (48ч с момента создания)
 
-#### События (`EventsTab`)
-- Список через `GET /api/clubs/:id/events?size=50`
-- Предстоящие (статусы: `upcoming`, `stage_1`, `stage_2`) и Завершённые (`completed`)
-- Клик по событию → `EventDetailModal`
-- Кнопка "Присутствие" на завершённых → AttendanceModal (отметка явки)
-- Форма создания события: название, место, дата/время, лимит участников
-
-#### EventDetailModal
-Загружает `GET /api/events/:id`. Показывает:
-- Название, дата/время, место, статус (с русской меткой)
-- Счётчики: пойдут / лимит, может быть, не пойдут, подтверждено
-- Описание (если есть)
-- Для завершённых: флаги `attendanceMarked` и `attendanceFinalized`
+> **Активности — больше НЕ в manage (итерация 4).** Таб «Активности»
+> (`ActivitiesManageTab`) удалён. Единая лента событий + сборов клуба
+> (`Предстоящие` ASC + аккордеон `Прошедшие (N)` DESC, источник
+> `GET /api/clubs/:id/activities`) теперь только в **member-view** `ClubPage`
+> (`ClubActivitiesTab`, read-only). Создание активностей — на глобальной странице
+> `/events` (`ActivitiesPage`, hero «+ Создать» → `CreateActivityFlow`:
+> тип → клуб → `CreateEventPage`/`CreateSkladchinaPage`). Полная спека —
+> [`unified-activity-creation.md`](./unified-activity-creation.md).
 
 #### Финансы (`FinancesTab`)
 - `GET /api/clubs/:id/finances` → активные участники, выручка за месяц, доля организатора, комиссия платформы

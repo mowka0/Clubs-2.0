@@ -1,5 +1,22 @@
 # Club Page Unified — единая страница клуба для всех ролей
 
+> **Update (post `feature/unified-activity-creation`, 2026-05-24):** таб
+> `События` переименован в `Активности` и теперь содержит unified-ленту
+> events + skladchinas (read-only для member, без `+ Создать`). Лента разрезана
+> на секцию `Предстоящие` (полные карточки) + сворачиваемый аккордеон
+> `Прошедшие (N)` (компактные строки); без пагинации. Компонент
+> `ClubEventsTab.tsx` удалён, его место занял `ClubActivitiesTab.tsx`. Все
+> прежние упоминания «events tab», `<TabId='events'>`, `ClubEventsTab` ниже
+> остаются как **исторический контекст** этой спеки. Актуальный TabId —
+> `'activities'`. Полная спека — [`unified-activity-creation.md`](./unified-activity-creation.md).
+>
+> **Update round 4 (2026-05-24):** карточки активностей (`ActivityCard`) теперь
+> с фото-thumbnail слева (`ActivityThumb`, placeholder при отсутствии) и type-иконкой
+> в правом верхнем углу; событиям добавлено фото (миграция V15). Аккордеон
+> `Прошедшие` теперь анимируется (grid-rows transition). `ClubActivitiesTab`
+> остаётся read-only без `+ Создать` — создание активностей переехало на
+> глобальную `ActivitiesPage` (`/events`), доступно организаторам.
+
 ## Цель
 
 Сейчас один и тот же клуб имеет **три разные frontend-страницы** в зависимости от роли user'а:
@@ -167,7 +184,7 @@ const handleTabClick = (tab: TabId | 'manage') => {
 
 ## Tabs реализация
 
-**[ОБНОВЛЕНО brand-редизайн 2026-05-16]** Tabs выполнены как `<button className="cp-tab">` в `<div className="cp-tab-row">` — brand-стилизованные pill'ы (active = brass-fill, inactive = navy-card outline, manage = outline brass с стрелкой `→`). Стили живут в `frontend/src/styles/brand-theme.css` § cp-* (Club page). Tabs `OrganizerClubManage` остались на `TabsList` от `@telegram-apps/telegram-ui` — это отдельный экран вне redesign-scope.
+**[ОБНОВЛЕНО brand-редизайн 2026-05-16]** Tabs выполнены как `<button className="cp-tab">` в `<div className="cp-tab-row">` — brand-стилизованные pill'ы (active = brass-fill, inactive = navy-card outline, manage = outline brass с стрелкой `→`). Стили живут в `frontend/src/styles/brand-theme.css` § cp-* (Club page). Tabs `OrganizerClubManage` **тоже** переведены на brand pill-tabs (компонент `ManageTabs`) в `feature/unified-activity-creation` итерация 2 (2026-05-24) — `TabsList` от `@telegram-apps/telegram-ui` там больше не используется. См. [`ui-pages.md`](./ui-pages.md) § OrganizerClubManage и [`unified-activity-creation.md`](./unified-activity-creation.md) Q-10.
 
 Аналогично header, about, rules, locked, CTA, events, members, profile — вынесены из telegram-ui-компонентов (`List/Section/Cell/Badge/Placeholder/Button`) в brand-классы `.cp-*` для единства с DiscoveryPage (PR #33). `Modal/Input/Spinner` для apply-modal — остались.
 

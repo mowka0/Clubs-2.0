@@ -55,17 +55,22 @@ function pickBadge(event: MyEventListItemDto): Badge | null {
   return null;
 }
 
-function buildStatsLabel(event: MyEventListItemDto): string {
-  if (event.status === 'stage_2') {
-    return `${event.confirmedCount}/${event.participantLimit} подтверждено`;
-  }
-  return `${event.goingCount}/${event.participantLimit} идёт`;
+/** Current participant count: confirmed once voting closed (stage_2), else "going". */
+function currentCount(event: MyEventListItemDto): number {
+  return event.status === 'stage_2' ? event.confirmedCount : event.goingCount;
+}
+
+/** Fill ratio clamped to [0, 1]; empty when there is no limit (avoids divide-by-zero). */
+function fillRatio(event: MyEventListItemDto): number {
+  if (event.participantLimit <= 0) return 0;
+  return Math.min(1, Math.max(0, currentCount(event) / event.participantLimit));
 }
 
 export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
   const { date, time } = formatDate(event.eventDatetime);
   const badge = pickBadge(event);
-  const stats = buildStatsLabel(event);
+  const stats = `${currentCount(event)}/${event.participantLimit}`;
+  const ratio = fillRatio(event);
   const clubInitials = getInitials(event.clubName);
 
   const badgeClass = badge?.accent
@@ -92,6 +97,9 @@ export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
         <div className="footer-row">
           {badge && <span className={badgeClass}>{badge.text}</span>}
           <span className="stats">{stats}</span>
+        </div>
+        <div className="feed-card-progress" aria-hidden="true">
+          <span className="bar" style={{ width: `${ratio * 100}%` }} />
         </div>
       </div>
     </button>

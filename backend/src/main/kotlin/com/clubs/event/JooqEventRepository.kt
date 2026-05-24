@@ -37,6 +37,7 @@ class JooqEventRepository(
             .set(EVENTS.STAGE_2_TRIGGERED, false)
             .set(EVENTS.ATTENDANCE_MARKED, false)
             .set(EVENTS.ATTENDANCE_FINALIZED, false)
+            .set(EVENTS.PHOTO_URL, request.photoUrl)
             .returning()
             .fetchOne()!!
         return mapper.toDomain(record)
@@ -70,6 +71,19 @@ class JooqEventRepository(
 
         val totalPages = if (size == 0) 0 else ((total + size - 1) / size).toInt()
         return PageResponse(content = items, totalElements = total, totalPages = totalPages, page = page, size = size)
+    }
+
+    override fun findAllByClubWithGoingCount(clubId: UUID): List<EventWithGoingCount> {
+        val events = dsl.selectFrom(EVENTS)
+            .where(EVENTS.CLUB_ID.eq(clubId))
+            .orderBy(EVENTS.CREATED_AT.desc(), EVENTS.ID.asc())
+            .fetch()
+            .map(mapper::toDomain)
+
+        if (events.isEmpty()) return emptyList()
+
+        val goingCounts = fetchGoingCounts(events.map { it.id })
+        return events.map { EventWithGoingCount(event = it, goingCount = goingCounts[it.id] ?: 0) }
     }
 
     override fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MyFeedItem> {
@@ -127,6 +141,7 @@ class JooqEventRepository(
             EVENTS.STAGE_2_TRIGGERED,
             EVENTS.ATTENDANCE_MARKED,
             EVENTS.ATTENDANCE_FINALIZED,
+            EVENTS.PHOTO_URL,
             EVENTS.CREATED_AT,
             EVENTS.UPDATED_AT,
             CLUBS.NAME.`as`("club_name"),
@@ -167,6 +182,7 @@ class JooqEventRepository(
                 stage2Triggered = r.get(EVENTS.STAGE_2_TRIGGERED) ?: false,
                 attendanceMarked = r.get(EVENTS.ATTENDANCE_MARKED) ?: false,
                 attendanceFinalized = r.get(EVENTS.ATTENDANCE_FINALIZED) ?: false,
+                photoUrl = r.get(EVENTS.PHOTO_URL),
                 createdAt = r.get(EVENTS.CREATED_AT),
                 updatedAt = r.get(EVENTS.UPDATED_AT)
             )
@@ -242,6 +258,15 @@ class JooqEventRepository(
                 EVENTS.ATTENDANCE_MARKED.eq(true)
                     .and(EVENTS.ATTENDANCE_FINALIZED.eq(false))
                     .and(EVENTS.EVENT_DATETIME.lessOrEqual(eventDatetimeCutoff))
+            )
+            .execute()
+
+    override fun markPastEventsCompleted(cutoff: OffsetDateTime): Int =
+        dsl.update(EVENTS)
+            .set(EVENTS.STATUS, EventStatus.completed)
+            .where(
+                EVENTS.EVENT_DATETIME.lessThan(cutoff)
+                    .and(EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_1, EventStatus.stage_2))
             )
             .execute()
 

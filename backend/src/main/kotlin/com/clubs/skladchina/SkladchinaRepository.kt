@@ -17,6 +17,16 @@ interface SkladchinaRepository {
 
     fun findActiveByClub(clubId: UUID): List<Skladchina>
 
+    /**
+     * Returns ALL skladchinas of the given club (any status when [includeCompleted] = true,
+     * active-only otherwise) with batch-loaded aggregates (collected sum, participant
+     * counts). Sorted by `created_at DESC, id ASC` for stable merge with the events feed.
+     *
+     * Used by the unified activity feed. Does NOT load any caller-specific fields —
+     * caller resolves `myStatus` etc. on the detail screen, not in the feed.
+     */
+    fun findAllByClubWithAggregates(clubId: UUID, includeCompleted: Boolean): List<SkladchinaWithAggregates>
+
     fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MySkladchinaFeedItem>
 
     fun findExpiredActive(now: OffsetDateTime): List<Skladchina>
@@ -59,3 +69,15 @@ interface SkladchinaRepository {
     /** Returns subset of given userIds that are NOT active members of given club. */
     fun findNonActiveMembers(clubId: UUID, userIds: Collection<UUID>): Set<UUID>
 }
+
+/**
+ * Caller-agnostic feed row: a skladchina plus the aggregates used by the unified
+ * activity-feed card. No `myStatus` / `clubName` — those belong to per-user views
+ * (`MySkladchinaFeedItem`).
+ */
+data class SkladchinaWithAggregates(
+    val skladchina: Skladchina,
+    val collectedKopecks: Long,
+    val participantCount: Int,
+    val paidCount: Int
+)

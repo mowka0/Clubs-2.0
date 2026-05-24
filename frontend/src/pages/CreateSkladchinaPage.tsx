@@ -21,6 +21,13 @@ const MODE_DESCRIPTIONS: Record<SkladchinaMode, string> = {
   voluntary: 'Без фиксированной суммы. Участник вводит свою сумму при оплате.',
 };
 
+const CalendarIcon: FC = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <path d="M16 2v4M8 2v4M3 10h18" />
+  </svg>
+);
+
 function rubToKopecks(rub: string): number | null {
   const v = Number(rub.replace(',', '.').trim());
   if (!Number.isFinite(v) || v <= 0) return null;
@@ -228,11 +235,14 @@ export const CreateSkladchinaPage: FC = () => {
 
         <label className="field">
           <span className="label">Срок до *</span>
-          <input
-            type="datetime-local"
-            value={deadline}
-            onChange={(e) => setDeadline(e.target.value)}
-          />
+          <div className="brand-datetime">
+            <input
+              type="datetime-local"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+            />
+            <span className="brand-datetime-ico" aria-hidden="true"><CalendarIcon /></span>
+          </div>
         </label>
 
         <label className="field checkbox">

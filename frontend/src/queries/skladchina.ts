@@ -50,6 +50,9 @@ export function useCreateSkladchinaMutation() {
     onSuccess: (_data, { clubId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.byClubActive(clubId) });
+      // Unified activity feed must refresh too — newly created skladchina
+      // must appear at the top across all filter variants of the manage tab.
+      qc.invalidateQueries({ queryKey: queryKeys.activities.byClubAll(clubId) });
     },
   });
 }

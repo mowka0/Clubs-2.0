@@ -80,6 +80,10 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
         set(value): Unit = set(14, value)
         get(): OffsetDateTime? = get(14) as OffsetDateTime?
 
+    open var photoUrl: String?
+        set(value): Unit = set(15, value)
+        get(): String? = get(15) as String?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -89,7 +93,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
     /**
      * Create a detached, initialised EventsRecord
      */
-    constructor(id: UUID? = null, clubId: UUID, createdBy: UUID, title: String, description: String? = null, locationText: String, eventDatetime: OffsetDateTime, participantLimit: Int, votingOpensDaysBefore: Int? = null, status: EventStatus? = null, stage_2Triggered: Boolean? = null, attendanceMarked: Boolean? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, clubId: UUID, createdBy: UUID, title: String, description: String? = null, locationText: String, eventDatetime: OffsetDateTime, participantLimit: Int, votingOpensDaysBefore: Int? = null, status: EventStatus? = null, stage_2Triggered: Boolean? = null, attendanceMarked: Boolean? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, photoUrl: String? = null): this() {
         this.id = id
         this.clubId = clubId
         this.createdBy = createdBy
@@ -105,6 +109,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
         this.attendanceFinalized = attendanceFinalized
         this.createdAt = createdAt
         this.updatedAt = updatedAt
+        this.photoUrl = photoUrl
         resetChangedOnNotNull()
     }
 
@@ -128,6 +133,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
             this.attendanceFinalized = value.attendanceFinalized
             this.createdAt = value.createdAt
             this.updatedAt = value.updatedAt
+            this.photoUrl = value.photoUrl
             resetChangedOnNotNull()
         }
     }

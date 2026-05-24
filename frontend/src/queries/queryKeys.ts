@@ -1,6 +1,11 @@
 import type { ClubFilters } from '../api/clubs';
+import type { ActivityType } from '../api/activities';
 
 export type EventListParams = { status?: string; page?: string; size?: string };
+
+export interface ClubActivitiesFilters {
+  type?: ActivityType;
+}
 
 export const queryKeys = {
   clubs: {
@@ -33,5 +38,11 @@ export const queryKeys = {
     myFeed: ['skladchinas', 'my-feed'] as const,
     detail: (id: string) => ['skladchinas', 'detail', id] as const,
     byClubActive: (clubId: string) => ['skladchinas', 'by-club-active', clubId] as const,
+  },
+  activities: {
+    // Prefix used for invalidation across all filter variants of a club.
+    byClubAll: (clubId: string) => ['activities', 'by-club', clubId] as const,
+    byClub: (clubId: string, filters?: ClubActivitiesFilters) =>
+      ['activities', 'by-club', clubId, filters ?? {}] as const,
   },
 } as const;

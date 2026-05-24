@@ -35,6 +35,25 @@ GET /api/events/{id}
 | eventDatetime | ISO datetime, must be > now() |
 | participantLimit | > 0 |
 | votingOpensDaysBefore | 1-14, default 14 |
+| photoUrl | опционально, max 1024 символа (`@Size(max=1024)`), nullable |
+
+### Photo события (`photo_url`, миграция V15, 2026-05-24)
+Событие может иметь обложку — поле `events.photo_url TEXT` (nullable, миграция
+`V15__add_event_photo_url.sql`, `ALTER TABLE events ADD COLUMN IF NOT EXISTS
+photo_url`). Зеркалит `skladchinas.photo_url`: у существующих событий фото нет
+(NULL). Surface'ится в:
+- `Event` (domain) — `photoUrl: String?`
+- `EventMapper` — read из `EVENTS.PHOTO_URL`, write `request.photoUrl`
+- `JooqEventRepository` — `.set(EVENTS.PHOTO_URL, request.photoUrl)` на create, select на read
+- `CreateEventRequest.photoUrl` (`@Size(max=1024)`, default `null`)
+- `EventDetailDto.photoUrl`, `EventListItemDto.photoUrl`
+- Unified-feed `ActivityItemDto.EventActivity.photoUrl` (см.
+  [`unified-activity-creation.md`](./unified-activity-creation.md) § ActivityThumb).
+  Складчина переиспользует уже существовавшее `skladchinas.photo_url`.
+
+Фронт: `CreateEventPage` получил поле загрузки фото через компонент
+`AvatarUpload` → `CreateEventBody.photoUrl`. В карточке активности фото —
+левый thumbnail (`ActivityThumb`), placeholder при отсутствии.
 
 ### EventDetailDto (TASK-013 scope — без vote counts из EventResponses)
 ```json
@@ -54,7 +73,8 @@ GET /api/events/{id}
   "confirmedCount": 0,
   "attendanceMarked": false,
   "attendanceFinalized": false,
-  "createdAt": "ISO datetime"
+  "createdAt": "ISO datetime",
+  "photoUrl": "string|null"
 }
 ```
 
@@ -67,7 +87,8 @@ GET /api/events/{id}
   "locationText": "string",
   "participantLimit": 15,
   "goingCount": 0,
-  "status": "upcoming"
+  "status": "upcoming",
+  "photoUrl": "string|null"
 }
 ```
 
@@ -195,6 +216,44 @@ POST /api/events/{id}/decline
 
 ---
 
+## Автозавершение прошедших событий (`upcoming/stage_1/stage_2 → completed`)
+
+> **Реализовано** в `feature/unified-activity-creation` (2026-05-24). До этого статус
+> `completed` (из enum `event_status`, см. PRD §5.1) **никогда не выставлялся** — Stage2Service
+> двигал только `upcoming → stage_2`, и прошедшие события навсегда оставались
+> `upcoming`/`stage_2`. Складчины уже автозакрывались через `SkladchinaScheduler`; у событий
+> аналога не было. Из-за этого в унифицированной ленте активностей прошедшие события не
+> приглушались (dimming = `isCompleted = status IN (completed, cancelled)`).
+
+### Cron-задача (Spring Scheduler)
+- `EventCompletionService` (`backend/src/main/kotlin/com/clubs/event/EventCompletionService.kt`)
+- `@Scheduled(fixedDelay = 3_600_000)` — раз в час (тот же период что у `AttendanceService`)
+- `@Transactional`
+- `cutoff = now() − COMPLETION_GRACE_HOURS` (6 часов)
+- Вызывает `eventRepository.markPastEventsCompleted(cutoff)`; логирует INFO число обновлённых строк (если > 0)
+
+### Логика перехода
+- `UPDATE events SET status = completed WHERE event_datetime < cutoff AND status IN (upcoming, stage_1, stage_2)`
+- **НЕ трогает** события со статусом `completed` или `cancelled` (идемпотентно, повторный прогон ничего не меняет)
+- Grace-период 6ч защищает идущее событие от приглушения в середине (буфер на timezone / длительность встречи)
+
+### Независимость от attendance flow
+Перевод статуса в `completed` **не влияет** на flow отметки присутствия. `AttendanceService`
+(mark / dispute / resolve / finalize) гейтит **только** на булевых флагах `attendance_marked` /
+`attendance_finalized` и на `event_datetime` — **никогда на `status`** (подтверждено code review,
+Case A). 6-часовой grace ≪ 48-часового окна спора (PRD §4.4.3), поэтому автозавершение не пересекается
+с финализацией репутации.
+
+### Corner Cases
+| Ситуация | Поведение |
+|----------|-----------|
+| Событие уже `completed`/`cancelled` | Не трогается (`status IN` фильтр) |
+| Событие в пределах grace-периода (`event_datetime` в прошлом < 6ч назад) | Остаётся в текущем статусе до следующего прогона |
+| Событие `cancelled` с прошедшей датой | Остаётся `cancelled` (организаторская отмена не перезатирается) |
+| attendance ещё не финализирован | Статус → `completed` независимо; attendance-scheduler работает по своим флагам |
+
+---
+
 ## Архитектура
 
 ```
@@ -207,9 +266,12 @@ EventController ──┬─► EventService ────► EventRepository ─
                   ├─► Stage2Service ───► EventRepository + EventResponseRepository (+ EventResponseMapper)
                   │       │                                                        │
                   │       └──► @Scheduled triggerStage2ForReadyEvents (5 min)      │
-                  └─► AttendanceService ─► EventRepository + EventResponseRepository + ClubRepository
+                  ├─► AttendanceService ─► EventRepository + EventResponseRepository + ClubRepository
+                  │       │                                                        │
+                  │       └──► @Scheduled finalizeAttendance (1 h)                 │
+                  └─► EventCompletionService ─► EventRepository                    │
                           │                                                        │
-                          └──► @Scheduled finalizeAttendance (1 h)                 │
+                          └──► @Scheduled completePastEvents (1 h)                 │
 ```
 
 ### Файлы
@@ -220,8 +282,8 @@ EventController ──┬─► EventService ────► EventRepository ─
 | `EventResponse.kt` | Domain |
 | `EventMapper.kt` | `@Component`: `toDomain(EventsRecord) → Event`, `toDetailDto(Event, counts)`, `toListItemDto`. Содержит `DEFAULT_VOTING_OPENS_DAYS_BEFORE = 14` |
 | `EventResponseMapper.kt` | `@Component`: `toDomain(EventResponsesRecord) → EventResponse` |
-| `EventRepository.kt` | Interface |
-| `JooqEventRepository.kt` | Реализация. Все DDL/DML через jOOQ. Новые методы: `markAttendanceMarked`, `finalizeAttendanceBefore` |
+| `EventRepository.kt` | Interface. Методы автозавершения: `markPastEventsCompleted(cutoff): Int` |
+| `JooqEventRepository.kt` | Реализация. Все DDL/DML через jOOQ. Методы: `markAttendanceMarked`, `finalizeAttendanceBefore`, `markPastEventsCompleted` |
 | `EventResponseRepository.kt` | Interface |
 | `JooqEventResponseRepository.kt` | Реализация. Новые методы: `setAttendance`, `disputeAbsentAttendance`, `resolveDisputedAttendance` |
 | `EventController.kt` | HTTP. Делегирует в 4 сервиса |
@@ -229,6 +291,7 @@ EventController ──┬─► EventService ────► EventRepository ─
 | `VoteService.kt` | Stage 1 голосование. Использует `MembershipRepository.isMember` |
 | `Stage2Service.kt` | Stage 2 переход + confirm/decline. `@Scheduled` каждые 5 мин |
 | `AttendanceService.kt` | mark / dispute / resolve / finalize. `DSLContext` убран — все update через Repository. `@Scheduled` каждый час |
+| `EventCompletionService.kt` | Автозавершение прошедших событий `upcoming/stage_1/stage_2 → completed`. `@Scheduled` каждый час, grace 6ч. Делегирует в `EventRepository.markPastEventsCompleted` |
 | `EventDto.kt`, `VoteDto.kt`, `Stage2Dto.kt`, `AttendanceDto.kt` | Request/Response DTO |
 
 ### Boundary правила

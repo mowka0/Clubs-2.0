@@ -160,6 +160,11 @@ open class Events(
      */
     val UPDATED_AT: TableField<EventsRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "")
 
+    /**
+     * The column <code>public.events.photo_url</code>.
+     */
+    val PHOTO_URL: TableField<EventsRecord, String?> = createField(DSL.name("photo_url"), SQLDataType.CLOB, this, "")
+
     private constructor(alias: Name, aliased: Table<EventsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<EventsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<EventsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
