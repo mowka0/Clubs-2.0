@@ -5,7 +5,6 @@ export type EventListParams = { status?: string; page?: string; size?: string };
 
 export interface ClubActivitiesFilters {
   type?: ActivityType;
-  includeCompleted?: boolean;
 }
 
 export const queryKeys = {

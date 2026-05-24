@@ -116,41 +116,41 @@ class ActivityControllerTest {
     }
 
     @Test
-    fun `GET activities for empty club returns 200 with empty content`() {
+    fun `GET activities for empty club returns 200 with empty upcoming and past`() {
         mockMvc.perform(
             get("/api/clubs/$clubId/activities")
                 .header("Authorization", "Bearer $memberToken")
         )
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.content").isArray)
-            .andExpect(jsonPath("$.content.length()").value(0))
-            .andExpect(jsonPath("$.totalElements").value(0))
-            .andExpect(jsonPath("$.page").value(0))
-            .andExpect(jsonPath("$.size").value(20))
+            .andExpect(jsonPath("$.upcoming").isArray)
+            .andExpect(jsonPath("$.upcoming.length()").value(0))
+            .andExpect(jsonPath("$.past").isArray)
+            .andExpect(jsonPath("$.past.length()").value(0))
     }
 
     @Test
-    fun `GET activities returns merged event and skladchina sorted by createdAt desc`() {
+    fun `GET activities partitions upcoming by relevant date and interleaves types`() {
+        // upcoming: skladchina deadline +1d sorts before event datetime +3d
         val eventId = UUID.randomUUID()
         val skladchinaId = UUID.randomUUID()
-        val olderTs = OffsetDateTime.now().minusHours(5)
-        val newerTs = OffsetDateTime.now().minusHours(1)
-        val futureDeadline = OffsetDateTime.now().plusDays(7)
+        val createdAt = OffsetDateTime.now().minusHours(1)
+        val eventDatetime = OffsetDateTime.now().plusDays(3)
+        val skladDeadline = OffsetDateTime.now().plusDays(1)
 
         dsl.execute(
             """
             INSERT INTO events (id, club_id, created_by, title, description, location_text,
                                 event_datetime, participant_limit, status, created_at, updated_at)
-            VALUES ('$eventId', '$clubId', '$organizerId', 'Older Event', 'Some description text',
-                    'Park', '$futureDeadline', 20, 'upcoming', '$olderTs', '$olderTs')
+            VALUES ('$eventId', '$clubId', '$organizerId', 'Event +3d', 'Some description text',
+                    'Park', '$eventDatetime', 20, 'upcoming', '$createdAt', '$createdAt')
             """.trimIndent()
         )
         dsl.execute(
             """
             INSERT INTO skladchinas (id, club_id, creator_id, title, payment_mode, payment_link,
                                      deadline, status, created_at, updated_at, affects_reputation)
-            VALUES ('$skladchinaId', '$clubId', '$organizerId', 'Newer Skladchina', 'voluntary',
-                    'https://pay.me', '$futureDeadline', 'active', '$newerTs', '$newerTs', false)
+            VALUES ('$skladchinaId', '$clubId', '$organizerId', 'Sklad +1d', 'voluntary',
+                    'https://pay.me', '$skladDeadline', 'active', '$createdAt', '$createdAt', false)
             """.trimIndent()
         )
 
@@ -159,14 +159,55 @@ class ActivityControllerTest {
                 .header("Authorization", "Bearer $memberToken")
         )
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.content.length()").value(2))
-            .andExpect(jsonPath("$.totalElements").value(2))
-            .andExpect(jsonPath("$.content[0].type").value("skladchina"))
-            .andExpect(jsonPath("$.content[0].title").value("Newer Skladchina"))
-            .andExpect(jsonPath("$.content[0].isCompleted").value(false))
-            .andExpect(jsonPath("$.content[1].type").value("event"))
-            .andExpect(jsonPath("$.content[1].title").value("Older Event"))
-            .andExpect(jsonPath("$.content[1].descriptionPreview").value("Some description text"))
+            .andExpect(jsonPath("$.upcoming.length()").value(2))
+            .andExpect(jsonPath("$.past.length()").value(0))
+            .andExpect(jsonPath("$.upcoming[0].type").value("skladchina"))
+            .andExpect(jsonPath("$.upcoming[0].title").value("Sklad +1d"))
+            .andExpect(jsonPath("$.upcoming[0].isCompleted").value(false))
+            .andExpect(jsonPath("$.upcoming[1].type").value("event"))
+            .andExpect(jsonPath("$.upcoming[1].title").value("Event +3d"))
+            .andExpect(jsonPath("$.upcoming[1].descriptionPreview").value("Some description text"))
+    }
+
+    @Test
+    fun `GET activities puts completed items into past sorted most-recent-first`() {
+        // past: completed event datetime -2d sorts before closed skladchina deadline -5d
+        val eventId = UUID.randomUUID()
+        val skladchinaId = UUID.randomUUID()
+        val createdAt = OffsetDateTime.now().minusDays(10)
+        val eventDatetime = OffsetDateTime.now().minusDays(2)
+        val skladDeadline = OffsetDateTime.now().minusDays(5)
+
+        dsl.execute(
+            """
+            INSERT INTO events (id, club_id, created_by, title, location_text,
+                                event_datetime, participant_limit, status, created_at, updated_at)
+            VALUES ('$eventId', '$clubId', '$organizerId', 'Completed Event -2d', 'Park',
+                    '$eventDatetime', 20, 'completed', '$createdAt', '$createdAt')
+            """.trimIndent()
+        )
+        dsl.execute(
+            """
+            INSERT INTO skladchinas (id, club_id, creator_id, title, payment_mode, payment_link,
+                                     deadline, status, created_at, updated_at, affects_reputation)
+            VALUES ('$skladchinaId', '$clubId', '$organizerId', 'Closed Sklad -5d', 'voluntary',
+                    'https://pay.me', '$skladDeadline', 'closed_failed', '$createdAt', '$createdAt', false)
+            """.trimIndent()
+        )
+
+        mockMvc.perform(
+            get("/api/clubs/$clubId/activities")
+                .header("Authorization", "Bearer $memberToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.upcoming.length()").value(0))
+            .andExpect(jsonPath("$.past.length()").value(2))
+            .andExpect(jsonPath("$.past[0].type").value("event"))
+            .andExpect(jsonPath("$.past[0].title").value("Completed Event -2d"))
+            .andExpect(jsonPath("$.past[0].isCompleted").value(true))
+            .andExpect(jsonPath("$.past[1].type").value("skladchina"))
+            .andExpect(jsonPath("$.past[1].title").value("Closed Sklad -5d"))
+            .andExpect(jsonPath("$.past[1].isCompleted").value(true))
     }
 
     @Test
@@ -180,28 +221,18 @@ class ActivityControllerTest {
     }
 
     @Test
-    fun `GET activities with size over 50 returns 400`() {
-        mockMvc.perform(
-            get("/api/clubs/$clubId/activities?size=51")
-                .header("Authorization", "Bearer $memberToken")
-        )
-            .andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"))
-    }
-
-    @Test
-    fun `GET activities filters by type=event`() {
+    fun `GET activities filters by type=event in both groups`() {
         val eventId = UUID.randomUUID()
         val skladchinaId = UUID.randomUUID()
-        val ts = OffsetDateTime.now().minusHours(1)
-        val futureDeadline = OffsetDateTime.now().plusDays(7)
+        val createdAt = OffsetDateTime.now().minusHours(1)
+        val futureDate = OffsetDateTime.now().plusDays(7)
 
         dsl.execute(
             """
             INSERT INTO events (id, club_id, created_by, title, location_text,
                                 event_datetime, participant_limit, status, created_at, updated_at)
             VALUES ('$eventId', '$clubId', '$organizerId', 'E', 'Park',
-                    '$futureDeadline', 20, 'upcoming', '$ts', '$ts')
+                    '$futureDate', 20, 'upcoming', '$createdAt', '$createdAt')
             """.trimIndent()
         )
         dsl.execute(
@@ -209,7 +240,7 @@ class ActivityControllerTest {
             INSERT INTO skladchinas (id, club_id, creator_id, title, payment_mode, payment_link,
                                      deadline, status, created_at, updated_at, affects_reputation)
             VALUES ('$skladchinaId', '$clubId', '$organizerId', 'S', 'voluntary',
-                    'https://pay.me', '$futureDeadline', 'active', '$ts', '$ts', false)
+                    'https://pay.me', '$futureDate', 'active', '$createdAt', '$createdAt', false)
             """.trimIndent()
         )
 
@@ -218,41 +249,8 @@ class ActivityControllerTest {
                 .header("Authorization", "Bearer $memberToken")
         )
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.content.length()").value(1))
-            .andExpect(jsonPath("$.content[0].type").value("event"))
-    }
-
-    @Test
-    fun `GET activities with includeCompleted false excludes completed events`() {
-        val activeEventId = UUID.randomUUID()
-        val completedEventId = UUID.randomUUID()
-        val ts = OffsetDateTime.now().minusHours(1)
-        val futureDeadline = OffsetDateTime.now().plusDays(7)
-
-        dsl.execute(
-            """
-            INSERT INTO events (id, club_id, created_by, title, location_text,
-                                event_datetime, participant_limit, status, created_at, updated_at)
-            VALUES ('$activeEventId', '$clubId', '$organizerId', 'Active', 'Park',
-                    '$futureDeadline', 20, 'upcoming', '$ts', '$ts')
-            """.trimIndent()
-        )
-        dsl.execute(
-            """
-            INSERT INTO events (id, club_id, created_by, title, location_text,
-                                event_datetime, participant_limit, status, created_at, updated_at)
-            VALUES ('$completedEventId', '$clubId', '$organizerId', 'Done', 'Park',
-                    '${OffsetDateTime.now().minusDays(1)}', 20, 'completed', '$ts', '$ts')
-            """.trimIndent()
-        )
-
-        mockMvc.perform(
-            get("/api/clubs/$clubId/activities?includeCompleted=false")
-                .header("Authorization", "Bearer $memberToken")
-        )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.content.length()").value(1))
-            .andExpect(jsonPath("$.content[0].title").value("Active"))
-            .andExpect(jsonPath("$.content[0].isCompleted").value(false))
+            .andExpect(jsonPath("$.upcoming.length()").value(1))
+            .andExpect(jsonPath("$.past.length()").value(0))
+            .andExpect(jsonPath("$.upcoming[0].type").value("event"))
     }
 }

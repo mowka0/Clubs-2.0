@@ -129,7 +129,7 @@ X = memberLimit * subscriptionPrice * 0.8
 
 | Файл | Источник данных | Заметки |
 |---|---|---|
-| `ClubActivitiesTab.tsx` | `useClubActivitiesQuery(clubId, filters)` (`useInfiniteQuery`) | Read-only unified-feed events + skladchinas клуба, sort by `createdAt DESC`, group-by-day. Tap по карточке → `/events/:id` или `/skladchina/:id`. Заменил `ClubEventsTab.tsx` (удалён) в `feature/unified-activity-creation`. |
+| `ClubActivitiesTab.tsx` | `useClubActivitiesQuery(clubId, { type? })` (`useQuery`, без пагинации) | Read-only unified-feed events + skladchinas клуба: секция `Предстоящие` (полные карточки, `relevantDate ASC`) + сворачиваемый аккордеон `Прошедшие (N)` (компактные строки, DESC). Tap по карточке → `/events/:id` или `/skladchina/:id`. Заменил `ClubEventsTab.tsx` (удалён) в `feature/unified-activity-creation`. |
 | `ClubMembersTab.tsx` | `useClubMembersQuery(clubId)` | Список с avatar/reliability, badge «Организатор» для `role === 'organizer'` |
 | `ClubProfileTab.tsx` | `useMemberProfileQuery(clubId, userId)` | Avatar + reputation-метрики (reliability / promiseFulfillmentPct / totalConfirmations) |
 
@@ -207,11 +207,13 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 
 #### Активности (`ActivitiesManageTab`)
 
-Единая лента событий + сборов клуба, отсортированная по `createdAt DESC`,
-сгруппированная по дню (`Сегодня` / `Вчера` / `<день месяц>`).
+Единая лента событий + сборов клуба: секция `Предстоящие` (полные карточки,
+сортировка по `relevantDate ASC` — event=`eventDatetime`, skladchina=`deadline`)
++ сворачиваемый аккордеон `Прошедшие (N)` (компактные приглушённые строки,
+`relevantDate DESC`). Без пагинации, без группировки по дню.
 
-- Источник: `GET /api/clubs/:id/activities` (unified-endpoint), `useClubActivitiesQuery`
-  → `useInfiniteQuery`
+- Источник: `GET /api/clubs/:id/activities` → `ClubActivityFeedDto { upcoming, past }`,
+  `useClubActivitiesQuery` → `useQuery`
 - Sticky-top `+ Создать` → `CreateActivityPicker` (`Modal` с двумя опциями:
   🗓 Событие / 💰 Сбор) → navigate на `CreateEventPage` (`/clubs/:id/events/new`)
   или `CreateSkladchinaPage` (`/clubs/:id/skladchina/new`)

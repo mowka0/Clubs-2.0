@@ -56,11 +56,8 @@ function renderClubPage(clubId: string = 'club-123') {
 function mockEmptyTabData(clubId: string = 'club-123') {
   server.use(
     http.get(`*/api/clubs/${clubId}/activities`, () => HttpResponse.json({
-      content: [],
-      totalElements: 0,
-      totalPages: 0,
-      page: 0,
-      size: 20,
+      upcoming: [],
+      past: [],
     })),
     http.get(`*/api/clubs/${clubId}/events`, () => HttpResponse.json({
       content: [],

@@ -43,11 +43,12 @@ class ActivityServiceTest {
     }
 
     @Test
-    fun `merges and sorts events with skladchinas by createdAt desc`() {
-        val event1 = makeEvent(createdAt = now.minusHours(1), title = "Event newer")
-        val event2 = makeEvent(createdAt = now.minusHours(5), title = "Event older")
-        val sklad1 = makeSkladchina(createdAt = now.minusHours(2), title = "Sklad mid")
-        val sklad2 = makeSkladchina(createdAt = now.minusHours(6), title = "Sklad oldest")
+    fun `upcoming sorted soonest-first by relevant date, interleaving events and skladchinas`() {
+        // relevantDate: event -> eventDatetime, skladchina -> deadline
+        val event1 = makeEvent(eventDatetime = now.plusDays(3), title = "Event +3d")
+        val event2 = makeEvent(eventDatetime = now.plusDays(7), title = "Event +7d")
+        val sklad1 = makeSkladchina(deadline = now.plusDays(1), title = "Sklad +1d")
+        val sklad2 = makeSkladchina(deadline = now.plusDays(5), title = "Sklad +5d")
 
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
             EventWithGoingCount(event1, goingCount = 3),
@@ -58,24 +59,80 @@ class ActivityServiceTest {
             SkladchinaWithAggregates(sklad2, 50, 2, 1)
         )
 
-        val result = service.getClubActivities(clubId, null, includeCompleted = true, page = 0, size = 20)
+        val result = service.getClubActivities(clubId, null)
 
-        assertEquals(4, result.totalElements)
-        val titles = result.content.map { it.title }
-        assertEquals(listOf("Event newer", "Sklad mid", "Event older", "Sklad oldest"), titles)
+        assertTrue(result.past.isEmpty())
+        val titles = result.upcoming.map { it.title }
+        assertEquals(listOf("Sklad +1d", "Event +3d", "Sklad +5d", "Event +7d"), titles)
     }
 
     @Test
-    fun `tie on createdAt is broken by id ascending`() {
-        // UUID.compareTo is signed-long comparison on (msb, lsb). Two UUIDs with
-        // msb=0 fall back to lsb ordering, which matches lexicographic intuition.
-        val sharedTime = now.minusMinutes(10)
+    fun `past sorted most-recent-first by relevant date, interleaving events and skladchinas`() {
+        val event1 = makeEvent(
+            status = EventStatus.completed, eventDatetime = now.minusDays(2), title = "Event -2d"
+        )
+        val event2 = makeEvent(
+            status = EventStatus.cancelled, eventDatetime = now.minusDays(8), title = "Event -8d"
+        )
+        val sklad1 = makeSkladchina(
+            status = SkladchinaStatus.closed_success, deadline = now.minusDays(1), title = "Sklad -1d"
+        )
+        val sklad2 = makeSkladchina(
+            status = SkladchinaStatus.closed_failed, deadline = now.minusDays(5), title = "Sklad -5d"
+        )
+
+        every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
+            EventWithGoingCount(event1, 0),
+            EventWithGoingCount(event2, 0)
+        )
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns listOf(
+            SkladchinaWithAggregates(sklad1, 0, 0, 0),
+            SkladchinaWithAggregates(sklad2, 0, 0, 0)
+        )
+
+        val result = service.getClubActivities(clubId, null)
+
+        assertTrue(result.upcoming.isEmpty())
+        val titles = result.past.map { it.title }
+        assertEquals(listOf("Sklad -1d", "Event -2d", "Sklad -5d", "Event -8d"), titles)
+    }
+
+    @Test
+    fun `completed items go to past, others to upcoming`() {
+        val upcomingEvent = makeEvent(status = EventStatus.upcoming, eventDatetime = now.plusDays(2))
+        val completedEvent = makeEvent(status = EventStatus.completed, eventDatetime = now.minusDays(2))
+        val cancelledEvent = makeEvent(status = EventStatus.cancelled, eventDatetime = now.minusDays(3))
+        val activeSklad = makeSkladchina(status = SkladchinaStatus.active, deadline = now.plusDays(1))
+        val closedSklad = makeSkladchina(status = SkladchinaStatus.closed_success, deadline = now.minusDays(1))
+
+        every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
+            EventWithGoingCount(upcomingEvent, 0),
+            EventWithGoingCount(completedEvent, 0),
+            EventWithGoingCount(cancelledEvent, 0)
+        )
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns listOf(
+            SkladchinaWithAggregates(activeSklad, 0, 0, 0),
+            SkladchinaWithAggregates(closedSklad, 0, 0, 0)
+        )
+
+        val result = service.getClubActivities(clubId, null)
+
+        assertEquals(2, result.upcoming.size)
+        assertEquals(3, result.past.size)
+        assertTrue(result.upcoming.none { it.isCompleted })
+        assertTrue(result.past.all { it.isCompleted })
+    }
+
+    @Test
+    fun `upcoming tie on relevant date is broken by id ascending`() {
+        // Same eventDatetime/deadline → secondary sort by id ASC.
+        val sharedDate = now.plusDays(4)
         val firstId = UUID(0L, 1L)
         val secondId = UUID(0L, 2L)
         require(firstId < secondId) { "Test setup wrong: $firstId should be < $secondId" }
 
-        val firstActivity = makeEvent(id = firstId, createdAt = sharedTime, title = "First")
-        val secondActivity = makeSkladchina(id = secondId, createdAt = sharedTime, title = "Second")
+        val firstActivity = makeEvent(id = firstId, eventDatetime = sharedDate, title = "First")
+        val secondActivity = makeSkladchina(id = secondId, deadline = sharedDate, title = "Second")
 
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
             EventWithGoingCount(firstActivity, 0)
@@ -84,137 +141,96 @@ class ActivityServiceTest {
             SkladchinaWithAggregates(secondActivity, 0, 0, 0)
         )
 
-        val result = service.getClubActivities(clubId, null, includeCompleted = true, page = 0, size = 20)
+        val result = service.getClubActivities(clubId, null)
 
-        // createdAt is equal → secondary sort by id ascending → firstId (event) before secondId (sklad)
-        assertEquals(listOf("First", "Second"), result.content.map { it.title })
+        assertEquals(listOf("First", "Second"), result.upcoming.map { it.title })
     }
 
     @Test
-    fun `type filter event excludes skladchinas without hitting skladchina repository`() {
-        val event = makeEvent(createdAt = now.minusHours(1))
+    fun `type filter event returns only events in both groups without hitting skladchina repository`() {
+        val upcomingEvent = makeEvent(eventDatetime = now.plusDays(2), title = "Upcoming")
+        val pastEvent = makeEvent(status = EventStatus.completed, eventDatetime = now.minusDays(2), title = "Past")
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
-            EventWithGoingCount(event, 1)
+            EventWithGoingCount(upcomingEvent, 1),
+            EventWithGoingCount(pastEvent, 1)
         )
 
-        val result = service.getClubActivities(clubId, ActivityType.EVENT, includeCompleted = true, page = 0, size = 20)
+        val result = service.getClubActivities(clubId, ActivityType.EVENT)
 
-        assertEquals(1, result.totalElements)
-        assertTrue(result.content.all { it is ActivityItemDto.EventActivity })
+        assertTrue(result.upcoming.all { it is ActivityItemDto.EventActivity })
+        assertTrue(result.past.all { it is ActivityItemDto.EventActivity })
+        assertEquals(listOf("Upcoming"), result.upcoming.map { it.title })
+        assertEquals(listOf("Past"), result.past.map { it.title })
     }
 
     @Test
-    fun `type filter skladchina excludes events without hitting event repository`() {
-        val sklad = makeSkladchina(createdAt = now.minusHours(2))
+    fun `type filter skladchina returns only skladchinas without hitting event repository`() {
+        val activeSklad = makeSkladchina(deadline = now.plusDays(2), title = "Active")
+        val closedSklad = makeSkladchina(
+            status = SkladchinaStatus.closed_failed, deadline = now.minusDays(2), title = "Closed"
+        )
         every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns listOf(
-            SkladchinaWithAggregates(sklad, 0, 2, 0)
+            SkladchinaWithAggregates(activeSklad, 0, 2, 0),
+            SkladchinaWithAggregates(closedSklad, 0, 2, 0)
         )
 
-        val result = service.getClubActivities(
-            clubId, ActivityType.SKLADCHINA, includeCompleted = true, page = 0, size = 20
-        )
+        val result = service.getClubActivities(clubId, ActivityType.SKLADCHINA)
 
-        assertEquals(1, result.totalElements)
-        assertTrue(result.content.all { it is ActivityItemDto.SkladchinaActivity })
+        assertTrue(result.upcoming.all { it is ActivityItemDto.SkladchinaActivity })
+        assertTrue(result.past.all { it is ActivityItemDto.SkladchinaActivity })
+        assertEquals(listOf("Active"), result.upcoming.map { it.title })
+        assertEquals(listOf("Closed"), result.past.map { it.title })
     }
 
     @Test
-    fun `includeCompleted false excludes completed events and closed skladchinas`() {
-        val activeEvent = makeEvent(status = EventStatus.upcoming, createdAt = now.minusHours(1))
-        val completedEvent = makeEvent(status = EventStatus.completed, createdAt = now.minusHours(3))
-        val cancelledEvent = makeEvent(status = EventStatus.cancelled, createdAt = now.minusHours(4))
-        val activeSklad = makeSkladchina(status = SkladchinaStatus.active, createdAt = now.minusHours(2))
-
-        every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
-            EventWithGoingCount(activeEvent, 0),
-            EventWithGoingCount(completedEvent, 0),
-            EventWithGoingCount(cancelledEvent, 0)
-        )
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, false) } returns listOf(
-            SkladchinaWithAggregates(activeSklad, 0, 0, 0)
-        )
-
-        val result = service.getClubActivities(clubId, null, includeCompleted = false, page = 0, size = 20)
-
-        assertEquals(2, result.totalElements)
-        assertTrue(result.content.none { it.isCompleted })
-    }
-
-    @Test
-    fun `pagination slices in-memory merged result correctly`() {
-        val all = (0 until 5).map { i ->
-            makeEvent(createdAt = now.minusMinutes(i.toLong()), title = "Event $i")
-        }
-        every { eventRepository.findAllByClubWithGoingCount(clubId) } returns
-            all.map { EventWithGoingCount(it, 0) }
-        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
-
-        val page0 = service.getClubActivities(clubId, null, includeCompleted = true, page = 0, size = 2)
-        assertEquals(5L, page0.totalElements)
-        assertEquals(3, page0.totalPages)
-        assertEquals(listOf("Event 0", "Event 1"), page0.content.map { it.title })
-
-        val page1 = service.getClubActivities(clubId, null, includeCompleted = true, page = 1, size = 2)
-        assertEquals(listOf("Event 2", "Event 3"), page1.content.map { it.title })
-
-        val page2 = service.getClubActivities(clubId, null, includeCompleted = true, page = 2, size = 2)
-        assertEquals(listOf("Event 4"), page2.content.map { it.title })
-
-        val pageOutOfRange = service.getClubActivities(clubId, null, includeCompleted = true, page = 5, size = 2)
-        assertTrue(pageOutOfRange.content.isEmpty())
-        assertEquals(5L, pageOutOfRange.totalElements)
-    }
-
-    @Test
-    fun `empty club returns empty content`() {
+    fun `empty club returns both arrays empty`() {
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns emptyList()
         every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
 
-        val result = service.getClubActivities(clubId, null, includeCompleted = true, page = 0, size = 20)
+        val result = service.getClubActivities(clubId, null)
 
-        assertEquals(0L, result.totalElements)
-        assertEquals(0, result.totalPages)
-        assertTrue(result.content.isEmpty())
+        assertTrue(result.upcoming.isEmpty())
+        assertTrue(result.past.isEmpty())
     }
 
     @Test
     fun `descriptionPreview is null when description is null`() {
-        val event = makeEvent(description = null, createdAt = now.minusHours(1))
+        val event = makeEvent(description = null, eventDatetime = now.plusDays(1))
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
             EventWithGoingCount(event, 0)
         )
         every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
 
-        val result = service.getClubActivities(clubId, null, includeCompleted = true, page = 0, size = 20)
-        val item = result.content.single() as ActivityItemDto.EventActivity
+        val result = service.getClubActivities(clubId, null)
+        val item = result.upcoming.single() as ActivityItemDto.EventActivity
 
         assertNull(item.descriptionPreview)
     }
 
     @Test
     fun `descriptionPreview is null when description is blank`() {
-        val event = makeEvent(description = "   \n  ", createdAt = now.minusHours(1))
+        val event = makeEvent(description = "   \n  ", eventDatetime = now.plusDays(1))
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
             EventWithGoingCount(event, 0)
         )
         every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
 
-        val result = service.getClubActivities(clubId, null, includeCompleted = true, page = 0, size = 20)
-        val item = result.content.single() as ActivityItemDto.EventActivity
+        val result = service.getClubActivities(clubId, null)
+        val item = result.upcoming.single() as ActivityItemDto.EventActivity
 
         assertNull(item.descriptionPreview)
     }
 
     @Test
     fun `descriptionPreview returns trimmed full text when within limit`() {
-        val event = makeEvent(description = "  short text  ", createdAt = now.minusHours(1))
+        val event = makeEvent(description = "  short text  ", eventDatetime = now.plusDays(1))
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
             EventWithGoingCount(event, 0)
         )
         every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
 
-        val result = service.getClubActivities(clubId, null, includeCompleted = true, page = 0, size = 20)
-        val item = result.content.single() as ActivityItemDto.EventActivity
+        val result = service.getClubActivities(clubId, null)
+        val item = result.upcoming.single() as ActivityItemDto.EventActivity
 
         assertEquals("short text", item.descriptionPreview)
     }
@@ -222,14 +238,14 @@ class ActivityServiceTest {
     @Test
     fun `descriptionPreview truncates to 40 chars with ellipsis when longer`() {
         val longText = "a".repeat(60)
-        val event = makeEvent(description = longText, createdAt = now.minusHours(1))
+        val event = makeEvent(description = longText, eventDatetime = now.plusDays(1))
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
             EventWithGoingCount(event, 0)
         )
         every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
 
-        val result = service.getClubActivities(clubId, null, includeCompleted = true, page = 0, size = 20)
-        val item = result.content.single() as ActivityItemDto.EventActivity
+        val result = service.getClubActivities(clubId, null)
+        val item = result.upcoming.single() as ActivityItemDto.EventActivity
 
         assertNotNull(item.descriptionPreview)
         assertEquals("a".repeat(40) + "…", item.descriptionPreview)
@@ -240,6 +256,7 @@ class ActivityServiceTest {
     private fun makeEvent(
         id: UUID = UUID.randomUUID(),
         createdAt: OffsetDateTime = now,
+        eventDatetime: OffsetDateTime = now.plusDays(7),
         status: EventStatus = EventStatus.upcoming,
         title: String = "Event",
         description: String? = null
@@ -250,7 +267,7 @@ class ActivityServiceTest {
         title = title,
         description = description,
         locationText = "Place",
-        eventDatetime = createdAt.plusDays(7),
+        eventDatetime = eventDatetime,
         participantLimit = 20,
         votingOpensDaysBefore = 14,
         status = status,
@@ -264,6 +281,7 @@ class ActivityServiceTest {
     private fun makeSkladchina(
         id: UUID = UUID.randomUUID(),
         createdAt: OffsetDateTime = now,
+        deadline: OffsetDateTime = now.plusDays(7),
         status: SkladchinaStatus = SkladchinaStatus.active,
         title: String = "Sklad"
     ): Skladchina = Skladchina(
@@ -278,7 +296,7 @@ class ActivityServiceTest {
         totalGoalKopecks = 100000L,
         paymentLink = "https://pay.me",
         paymentMethodNote = null,
-        deadline = createdAt.plusDays(7),
+        deadline = deadline,
         affectsReputation = false,
         status = status,
         closedAt = null,

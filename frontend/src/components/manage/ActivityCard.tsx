@@ -26,145 +26,50 @@ function formatRub(kopecks: number): string {
   return `${rub.toLocaleString('ru-RU')} ₽`;
 }
 
-const cardWrapperStyle = (isCompleted: boolean): React.CSSProperties => ({
-  position: 'relative',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 6,
-  width: '100%',
-  padding: '14px 16px',
-  borderRadius: 14,
-  background: 'var(--tgui--secondary_bg_color, rgba(255,255,255,0.04))',
-  border: '1px solid var(--tgui--divider, rgba(255,255,255,0.08))',
-  textAlign: 'left',
-  cursor: 'pointer',
-  color: 'var(--tgui--text_color, #fff)',
-  opacity: isCompleted ? 0.55 : 1,
-});
+function progressPercent(collected: number, goal: number): number {
+  return Math.min(100, Math.max(0, Math.round((collected / goal) * 100)));
+}
 
-const iconBadgeStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: 10,
-  left: 12,
-  fontSize: 14,
-  lineHeight: 1,
-};
-
-const completedBadgeStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: 10,
-  right: 12,
-  fontSize: 11,
-  padding: '2px 8px',
-  borderRadius: 999,
-  background: 'var(--tgui--hint_color, rgba(255,255,255,0.12))',
-  color: 'var(--tgui--bg_color, #fff)',
-  fontWeight: 600,
-  letterSpacing: 0.3,
-};
-
-const titleStyle: React.CSSProperties = {
-  fontSize: 15,
-  fontWeight: 600,
-  lineHeight: 1.3,
-  marginTop: 2,
-  paddingLeft: 24,
-  paddingRight: 64,
-  whiteSpace: 'nowrap',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-};
-
-const subtitleStyle: React.CSSProperties = {
-  fontSize: 13,
-  color: 'var(--tgui--hint_color, rgba(255,255,255,0.6))',
-  lineHeight: 1.35,
-  paddingLeft: 24,
-};
-
-const dimSubtitleStyle: React.CSSProperties = {
-  ...subtitleStyle,
-  color: 'var(--tgui--hint_color, rgba(255,255,255,0.5))',
-};
-
-const rightBadgeStyle: React.CSSProperties = {
-  position: 'absolute',
-  bottom: 12,
-  right: 14,
-  fontSize: 12,
-  fontWeight: 600,
-  padding: '3px 8px',
-  borderRadius: 999,
-  background: 'var(--tgui--divider, rgba(255,255,255,0.10))',
-};
-
-const progressTrackStyle: React.CSSProperties = {
-  position: 'relative',
-  height: 4,
-  borderRadius: 4,
-  background: 'var(--tgui--divider, rgba(255,255,255,0.10))',
-  marginLeft: 24,
-  marginTop: 4,
-  overflow: 'hidden',
-};
-
-const progressFillStyle = (pct: number): React.CSSProperties => ({
-  position: 'absolute',
-  top: 0,
-  left: 0,
-  height: '100%',
-  width: `${pct}%`,
-  background: 'var(--brand-brass, #C9A063)',
-  borderRadius: 4,
-});
-
-const reputationBadgeStyle: React.CSSProperties = {
-  display: 'inline-block',
-  fontSize: 11,
-  padding: '2px 7px',
-  marginLeft: 8,
-  borderRadius: 999,
-  background: 'rgba(255,170,80,0.15)',
-  color: '#FFA850',
-};
-
-const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => {
-  const subtitle = `${formatDatetime(event.eventDatetime)} · ${event.locationText}`;
-  return (
-    <>
-      <span style={iconBadgeStyle} aria-hidden="true">🗓</span>
-      <span style={titleStyle}>{event.title}</span>
-      <span style={subtitleStyle}>{subtitle}</span>
-      {event.descriptionPreview !== null && (
-        <span style={dimSubtitleStyle}>{event.descriptionPreview}</span>
-      )}
-      <span style={rightBadgeStyle}>
+const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => (
+  <>
+    <div className="head">
+      <span className="ico" aria-hidden="true">
+        🗓
+      </span>
+      <span className="title">{event.title}</span>
+    </div>
+    <span className="sub">
+      {formatDatetime(event.eventDatetime)} · {event.locationText}
+    </span>
+    {event.descriptionPreview !== null && (
+      <span className="sub dim">{event.descriptionPreview}</span>
+    )}
+    <div className="footer-row">
+      <span className="badge">
         {event.goingCount}/{event.participantLimit}
       </span>
-    </>
-  );
-};
+    </div>
+  </>
+);
 
-const SkladchinaCardBody: FC<{ skladchina: SkladchinaActivityDto }> = ({ skladchina }) => {
+const SkladchinaCardBody: FC<{ skladchina: SkladchinaActivityDto }> = ({
+  skladchina,
+}) => {
   const hasGoal =
     skladchina.totalGoalKopecks !== null && skladchina.totalGoalKopecks > 0;
   const pct = hasGoal
-    ? Math.min(
-        100,
-        Math.max(
-          0,
-          Math.round(
-            (skladchina.collectedKopecks / skladchina.totalGoalKopecks!) * 100,
-          ),
-        ),
-      )
+    ? progressPercent(skladchina.collectedKopecks, skladchina.totalGoalKopecks!)
     : 0;
 
   return (
     <>
-      <span style={iconBadgeStyle} aria-hidden="true">💰</span>
-      <span style={titleStyle}>{skladchina.title}</span>
-      <span style={subtitleStyle}>
+      <div className="head">
+        <span className="ico" aria-hidden="true">
+          💰
+        </span>
+        <span className="title">{skladchina.title}</span>
+      </div>
+      <span className="sub">
         {hasGoal ? (
           <>
             {formatRub(skladchina.collectedKopecks)} /{' '}
@@ -174,24 +79,29 @@ const SkladchinaCardBody: FC<{ skladchina: SkladchinaActivityDto }> = ({ skladch
           <>{formatRub(skladchina.collectedKopecks)} собрано</>
         )}
         {skladchina.affectsReputation && (
-          <span style={reputationBadgeStyle} title="Влияет на репутацию">
+          <span className="reputation" title="Влияет на репутацию">
             ⚠️ Репутация
           </span>
         )}
       </span>
       {hasGoal && (
-        <div style={progressTrackStyle} aria-hidden="true">
-          <div style={progressFillStyle(pct)} />
+        <div className="progress-bar" aria-hidden="true">
+          <div className="fill" style={{ width: `${pct}%` }} />
         </div>
       )}
-      <span style={rightBadgeStyle}>
-        {skladchina.paidCount}/{skladchina.participantCount}
-      </span>
+      <div className="footer-row">
+        <span className="badge">
+          {skladchina.paidCount}/{skladchina.participantCount}
+        </span>
+      </div>
     </>
   );
 };
 
 export const ActivityCard: FC<ActivityCardProps> = ({ activity, onClick }) => {
+  const className = activity.isCompleted
+    ? 'activity-card completed'
+    : 'activity-card';
   const ariaLabel = activity.isCompleted
     ? `${activity.title}. Завершено`
     : activity.title;
@@ -201,19 +111,14 @@ export const ActivityCard: FC<ActivityCardProps> = ({ activity, onClick }) => {
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      style={cardWrapperStyle(activity.isCompleted)}
+      className={className}
     >
-      {activity.isCompleted && <span style={completedBadgeStyle}>Завершено</span>}
-      {renderActivityBody(activity)}
+      {activity.isCompleted && <span className="done-badge">Завершено</span>}
+      {activity.type === 'event' ? (
+        <EventCardBody event={activity} />
+      ) : (
+        <SkladchinaCardBody skladchina={activity} />
+      )}
     </button>
   );
 };
-
-function renderActivityBody(activity: ActivityItemDto) {
-  switch (activity.type) {
-    case 'event':
-      return <EventCardBody event={activity} />;
-    case 'skladchina':
-      return <SkladchinaCardBody skladchina={activity} />;
-  }
-}

@@ -1,8 +1,8 @@
 package com.clubs.activity
 
 import com.clubs.activity.dto.ActivityItemDto
+import com.clubs.activity.dto.ClubActivityFeedDto
 import com.clubs.activity.mapper.ActivityMapper
-import com.clubs.common.dto.PageResponse
 import com.clubs.event.EventRepository
 import com.clubs.event.EventWithGoingCount
 import com.clubs.skladchina.SkladchinaRepository
@@ -10,6 +10,7 @@ import com.clubs.skladchina.SkladchinaWithAggregates
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.OffsetDateTime
 import java.util.UUID
 
 @Service
@@ -22,81 +23,82 @@ class ActivityService(
     private val log = LoggerFactory.getLogger(ActivityService::class.java)
 
     /**
-     * Returns merged event + skladchina feed for a club. Authorization is enforced
+     * Returns the merged event + skladchina feed for a club, split into two
+     * pre-sorted groups by each activity's own date. Authorization is enforced
      * at the controller level by `@RequiresMembership`.
      *
      * Strategy (MVP per spec D-1): pull both collections from their repositories,
-     * merge in-memory, sort by `(createdAt DESC, id ASC)`, then page-slice.
-     * Acceptable for clubs < ~1000 activities. Migrate to SQL UNION when that
-     * stops holding.
+     * merge in-memory, then partition by `isCompleted` and sort each group by
+     * `relevantDate`. No pagination — club activity volume is bounded. Migrate to
+     * SQL UNION when that stops holding.
+     *
+     * - `upcoming` = `!isCompleted`, sorted by relevantDate ASC (soonest first)
+     * - `past` = `isCompleted`, sorted by relevantDate DESC (most recent first)
+     * - ties on relevantDate are broken by `id ASC` in both groups
      */
     @Transactional(readOnly = true)
     fun getClubActivities(
         clubId: UUID,
-        typeFilter: ActivityType?,
-        includeCompleted: Boolean,
-        page: Int,
-        size: Int
-    ): PageResponse<ActivityItemDto> {
-        log.info(
-            "Fetch activities: clubId={} type={} includeCompleted={} page={} size={}",
-            clubId, typeFilter, includeCompleted, page, size
-        )
+        typeFilter: ActivityType?
+    ): ClubActivityFeedDto {
+        log.info("Fetch activities: clubId={} type={}", clubId, typeFilter)
 
         val events: List<ActivityItemDto.EventActivity> = if (typeFilter == ActivityType.SKLADCHINA) {
             emptyList()
         } else {
-            loadEvents(clubId, includeCompleted)
+            loadEvents(clubId)
         }
 
         val skladchinas: List<ActivityItemDto.SkladchinaActivity> = if (typeFilter == ActivityType.EVENT) {
             emptyList()
         } else {
-            loadSkladchinas(clubId, includeCompleted)
+            loadSkladchinas(clubId)
         }
 
-        val merged: List<ActivityItemDto> = (events + skladchinas)
-            .sortedWith(ACTIVITY_ORDER)
+        val all: List<ActivityItemDto> = events + skladchinas
+        val (past, upcoming) = all.partition { it.isCompleted }
 
-        val total = merged.size.toLong()
-        val totalPages = if (size == 0) 0 else ((total + size - 1) / size).toInt()
-        val fromIndex = (page * size).coerceAtMost(merged.size)
-        val toIndex = (fromIndex + size).coerceAtMost(merged.size)
-        val pageContent = if (fromIndex >= toIndex) emptyList() else merged.subList(fromIndex, toIndex)
+        val sortedUpcoming = upcoming.sortedWith(UPCOMING_ORDER)
+        val sortedPast = past.sortedWith(PAST_ORDER)
 
         log.info(
-            "Activities fetched: clubId={} total={} returned={} page={}",
-            clubId, total, pageContent.size, page
+            "Activities fetched: clubId={} upcoming={} past={}",
+            clubId, sortedUpcoming.size, sortedPast.size
         )
 
-        return PageResponse(
-            content = pageContent,
-            totalElements = total,
-            totalPages = totalPages,
-            page = page,
-            size = size
-        )
+        return ClubActivityFeedDto(upcoming = sortedUpcoming, past = sortedPast)
     }
 
-    private fun loadEvents(clubId: UUID, includeCompleted: Boolean): List<ActivityItemDto.EventActivity> {
+    private fun loadEvents(clubId: UUID): List<ActivityItemDto.EventActivity> {
         val raw: List<EventWithGoingCount> = eventRepository.findAllByClubWithGoingCount(clubId)
-        val mapped = raw.map { activityMapper.toEventActivity(it.event, it.goingCount) }
-        return if (includeCompleted) mapped else mapped.filterNot { it.isCompleted }
+        return raw.map { activityMapper.toEventActivity(it.event, it.goingCount) }
     }
 
-    private fun loadSkladchinas(clubId: UUID, includeCompleted: Boolean): List<ActivityItemDto.SkladchinaActivity> {
+    private fun loadSkladchinas(clubId: UUID): List<ActivityItemDto.SkladchinaActivity> {
         val raw: List<SkladchinaWithAggregates> =
-            skladchinaRepository.findAllByClubWithAggregates(clubId, includeCompleted)
+            skladchinaRepository.findAllByClubWithAggregates(clubId, includeCompleted = true)
         return raw.map(activityMapper::toSkladchinaActivity)
     }
 
     companion object {
         /**
-         * `createdAt DESC` primary; `id ASC` secondary for stable tie-breaking
-         * (see CC-12 in the spec — UUID comparison is deterministic).
+         * Per-item sort key: an event's own datetime, a skladchina's deadline.
+         * Exhaustive `when` over the sealed subtype — compiler enforces a branch
+         * for every future activity type.
          */
-        private val ACTIVITY_ORDER: Comparator<ActivityItemDto> =
-            compareByDescending<ActivityItemDto> { it.createdAt }
+        private fun relevantDate(item: ActivityItemDto): OffsetDateTime = when (item) {
+            is ActivityItemDto.EventActivity -> item.eventDatetime
+            is ActivityItemDto.SkladchinaActivity -> item.deadline
+        }
+
+        /** Soonest first; ties broken by `id ASC` for deterministic order. */
+        private val UPCOMING_ORDER: Comparator<ActivityItemDto> =
+            compareBy<ActivityItemDto> { relevantDate(it) }
+                .thenBy { it.id }
+
+        /** Most recent first; ties broken by `id ASC` for deterministic order. */
+        private val PAST_ORDER: Comparator<ActivityItemDto> =
+            compareByDescending<ActivityItemDto> { relevantDate(it) }
                 .thenBy { it.id }
     }
 }

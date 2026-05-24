@@ -1,5 +1,4 @@
 import { apiClient } from './apiClient';
-import type { PageResponse } from '../types/api';
 
 export type ActivityType = 'event' | 'skladchina';
 export type ActivityFilter = 'all' | ActivityType;
@@ -55,25 +54,27 @@ export interface SkladchinaActivityDto extends ActivityBase {
 
 export type ActivityItemDto = EventActivityDto | SkladchinaActivityDto;
 
+/**
+ * Feed split by completion status. Backend already sorts each array:
+ * `upcoming` soonest-first (by event date / deadline), `past` most-recent-first.
+ * The frontend renders both in received order — no client re-sorting.
+ */
+export interface ClubActivityFeed {
+  upcoming: ActivityItemDto[];
+  past: ActivityItemDto[];
+}
+
 export interface ClubActivitiesParams {
   type?: ActivityType;
-  includeCompleted?: boolean;
-  page?: number;
-  size?: number;
 }
 
 export function getClubActivities(
   clubId: string,
   params?: ClubActivitiesParams,
-): Promise<PageResponse<ActivityItemDto>> {
+): Promise<ClubActivityFeed> {
   const queryParams: Record<string, string> = {};
   if (params?.type !== undefined) queryParams.type = params.type;
-  if (params?.includeCompleted !== undefined) {
-    queryParams.includeCompleted = String(params.includeCompleted);
-  }
-  if (params?.page !== undefined) queryParams.page = String(params.page);
-  if (params?.size !== undefined) queryParams.size = String(params.size);
-  return apiClient.get<PageResponse<ActivityItemDto>>(
+  return apiClient.get<ClubActivityFeed>(
     `/api/clubs/${clubId}/activities`,
     queryParams,
   );

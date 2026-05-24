@@ -9,10 +9,21 @@ vi.mock('@telegram-apps/sdk-react', () => ({
 }));
 
 import { ActivityCard } from '../../components/manage/ActivityCard';
+import { ActivityCompactRow } from '../../components/manage/ActivityCompactRow';
 import type {
   EventActivityDto,
   SkladchinaActivityDto,
 } from '../../api/activities';
+
+// Mirror the component's short-date formatter so date assertions are
+// timezone-independent (no hardcoded day that shifts across UTC offsets).
+const SHORT_DATE_FMT = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'short',
+});
+function shortDate(iso: string): string {
+  return SHORT_DATE_FMT.format(new Date(iso));
+}
 
 function buildEvent(overrides: Partial<EventActivityDto> = {}): EventActivityDto {
   return {
@@ -45,7 +56,7 @@ function buildSkladchina(
     paymentMode: 'fixed_equal',
     totalGoalKopecks: 500000,
     collectedKopecks: 100000,
-    deadline: '2026-05-30T23:59:00Z',
+    deadline: '2026-05-28T12:00:00Z',
     participantCount: 5,
     paidCount: 1,
     status: 'active',
@@ -54,22 +65,44 @@ function buildSkladchina(
   };
 }
 
-describe('ActivityCard', () => {
+describe('ActivityCard (full)', () => {
   it('renders event title and going/limit badge', () => {
-    const onClick = vi.fn();
-    render(<ActivityCard activity={buildEvent()} onClick={onClick} />);
+    render(<ActivityCard activity={buildEvent()} onClick={vi.fn()} />);
     expect(screen.getByText('Yoga in the park')).toBeInTheDocument();
     expect(screen.getByText('5/20')).toBeInTheDocument();
   });
 
-  it('renders descriptionPreview as a second subtitle row when present', () => {
-    const onClick = vi.fn();
+  it('renders the icon inside the title head row (aligned, not floating)', () => {
+    const { container } = render(
+      <ActivityCard activity={buildEvent()} onClick={vi.fn()} />,
+    );
+    const head = container.querySelector('.activity-card .head');
+    expect(head).not.toBeNull();
+    // Icon and title are siblings in the same baseline-aligned head row,
+    // which is what keeps the glyph aligned with the title's first line.
+    expect(head?.querySelector('.ico')?.textContent).toBe('🗓');
+    expect(head?.querySelector('.title')?.textContent).toBe('Yoga in the park');
+  });
+
+  it('shows event date/time and location, not the creation date', () => {
+    const { container } = render(
+      <ActivityCard activity={buildEvent()} onClick={vi.fn()} />,
+    );
+    const text = container.textContent ?? '';
+    expect(text).toContain('Gorky park');
+    // event date present
+    expect(text).toContain(shortDate('2026-05-30T11:00:00Z'));
+    // creation date (23 May) NOT present
+    expect(text).not.toContain(shortDate('2026-05-23T10:00:00Z'));
+  });
+
+  it('renders descriptionPreview as a dim subtitle row when present', () => {
     render(
       <ActivityCard
         activity={buildEvent({
           descriptionPreview: 'Возьмите коврик и хорошее настроение…',
         })}
-        onClick={onClick}
+        onClick={vi.fn()}
       />,
     );
     expect(
@@ -78,23 +111,20 @@ describe('ActivityCard', () => {
   });
 
   it('does NOT render description row when descriptionPreview is null', () => {
-    const onClick = vi.fn();
     const { container } = render(
-      <ActivityCard activity={buildEvent({ descriptionPreview: null })} onClick={onClick} />,
+      <ActivityCard activity={buildEvent({ descriptionPreview: null })} onClick={vi.fn()} />,
     );
-    // Exactly one subtitle (datetime · location). The dim second row is absent.
-    const text = container.textContent ?? '';
-    expect(text.includes('Gorky park')).toBe(true);
+    expect(container.querySelector('.sub.dim')).toBeNull();
   });
 
-  it('renders Завершено badge and ARIA label when isCompleted', () => {
-    const onClick = vi.fn();
-    render(
+  it('applies completed style + ARIA label and shows Завершено badge', () => {
+    const { container } = render(
       <ActivityCard
         activity={buildEvent({ isCompleted: true, status: 'completed' })}
-        onClick={onClick}
+        onClick={vi.fn()}
       />,
     );
+    expect(container.querySelector('.activity-card.completed')).not.toBeNull();
     expect(screen.getByText('Завершено')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /yoga in the park\. завершено/i }),
@@ -102,20 +132,14 @@ describe('ActivityCard', () => {
   });
 
   it('renders skladchina with goal as "collected / goal" and paid/participant badge', () => {
-    const onClick = vi.fn();
-    render(
-      <ActivityCard activity={buildSkladchina()} onClick={onClick} />,
-    );
+    render(<ActivityCard activity={buildSkladchina()} onClick={vi.fn()} />);
     expect(screen.getByText('Sauna booking')).toBeInTheDocument();
     expect(screen.getByText('1/5')).toBeInTheDocument();
-    // Format is "1 000 ₽ / 5 000 ₽" (Russian thousands separator). Check
-    // robustness on rub amounts present in the document.
     expect(screen.getByText(/1\s?000\s?₽/)).toBeInTheDocument();
     expect(screen.getByText(/5\s?000\s?₽/)).toBeInTheDocument();
   });
 
   it('renders voluntary skladchina as "<amount> собрано" without goal', () => {
-    const onClick = vi.fn();
     render(
       <ActivityCard
         activity={buildSkladchina({
@@ -123,16 +147,70 @@ describe('ActivityCard', () => {
           totalGoalKopecks: null,
           collectedKopecks: 200000,
         })}
-        onClick={onClick}
+        onClick={vi.fn()}
       />,
     );
     expect(screen.getByText(/собрано/)).toBeInTheDocument();
+  });
+
+  it('renders ⚠️ Репутация when affectsReputation', () => {
+    render(
+      <ActivityCard
+        activity={buildSkladchina({ affectsReputation: true })}
+        onClick={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/Репутация/)).toBeInTheDocument();
   });
 
   it('calls onClick when the card is tapped', async () => {
     const user = userEvent.setup();
     const onClick = vi.fn();
     render(<ActivityCard activity={buildEvent()} onClick={onClick} />);
+    await user.click(screen.getByRole('button'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ActivityCompactRow (past)', () => {
+  it('renders a single-line dim row with icon, title and event short date', () => {
+    const { container } = render(
+      <ActivityCompactRow
+        activity={buildEvent({ isCompleted: true })}
+        onClick={vi.fn()}
+      />,
+    );
+    const row = container.querySelector('.activity-compact-row');
+    expect(row).not.toBeNull();
+    expect(row?.querySelector('.ico')?.textContent).toBe('🗓');
+    expect(row?.querySelector('.title')?.textContent).toBe('Yoga in the park');
+    expect(row?.querySelector('.date')?.textContent).toBe(
+      shortDate('2026-05-30T11:00:00Z'),
+    );
+  });
+
+  it('uses the skladchina deadline as the short date', () => {
+    const { container } = render(
+      <ActivityCompactRow
+        activity={buildSkladchina({ isCompleted: true })}
+        onClick={vi.fn()}
+      />,
+    );
+    expect(container.querySelector('.activity-compact-row .ico')?.textContent).toBe('💰');
+    expect(container.querySelector('.activity-compact-row .date')?.textContent).toBe(
+      shortDate('2026-05-28T12:00:00Z'),
+    );
+  });
+
+  it('calls onClick when tapped', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(
+      <ActivityCompactRow
+        activity={buildEvent({ isCompleted: true })}
+        onClick={onClick}
+      />,
+    );
     await user.click(screen.getByRole('button'));
     expect(onClick).toHaveBeenCalledTimes(1);
   });

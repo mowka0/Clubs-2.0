@@ -2,7 +2,9 @@
 
 > **Update (post `feature/unified-activity-creation`, 2026-05-24):** таб
 > `События` переименован в `Активности` и теперь содержит unified-ленту
-> events + skladchinas (read-only для member, без `+ Создать`). Компонент
+> events + skladchinas (read-only для member, без `+ Создать`). Лента разрезана
+> на секцию `Предстоящие` (полные карточки) + сворачиваемый аккордеон
+> `Прошедшие (N)` (компактные строки); без пагинации. Компонент
 > `ClubEventsTab.tsx` удалён, его место занял `ClubActivitiesTab.tsx`. Все
 > прежние упоминания «events tab», `<TabId='events'>`, `ClubEventsTab` ниже
 > остаются как **исторический контекст** этой спеки. Актуальный TabId —

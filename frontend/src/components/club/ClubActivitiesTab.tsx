@@ -1,4 +1,4 @@
-import { FC, useMemo, useState } from 'react';
+import { FC, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Placeholder, Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -21,20 +21,21 @@ export const ClubActivitiesTab: FC<ClubActivitiesTabProps> = ({ clubId }) => {
     type: filter === 'all' ? undefined : filter,
   });
 
-  const activities = useMemo<ActivityItemDto[]>(
-    () => activitiesQuery.data?.pages.flatMap((p) => p.content) ?? [],
-    [activitiesQuery.data],
-  );
-
   const handleActivityClick = (activity: ActivityItemDto) => {
     haptic.impact('light');
     if (activity.type === 'event') navigate(`/events/${activity.id}`);
     else navigate(`/skladchina/${activity.id}`);
   };
 
+  const feed = activitiesQuery.data;
   const isInitialLoading = activitiesQuery.isPending;
   const isError = activitiesQuery.isError && !isInitialLoading;
-  const isEmpty = !isInitialLoading && !isError && activities.length === 0;
+  const isEmpty =
+    !isInitialLoading &&
+    !isError &&
+    feed !== undefined &&
+    feed.upcoming.length === 0 &&
+    feed.past.length === 0;
 
   return (
     <>
@@ -61,14 +62,8 @@ export const ClubActivitiesTab: FC<ClubActivitiesTabProps> = ({ clubId }) => {
         </div>
       )}
 
-      {!isInitialLoading && !isError && activities.length > 0 && (
-        <ActivityFeedList
-          activities={activities}
-          onActivityClick={handleActivityClick}
-          loadMore={() => activitiesQuery.fetchNextPage()}
-          hasMore={activitiesQuery.hasNextPage}
-          isLoadingMore={activitiesQuery.isFetchingNextPage}
-        />
+      {!isInitialLoading && !isError && feed !== undefined && !isEmpty && (
+        <ActivityFeedList feed={feed} onActivityClick={handleActivityClick} />
       )}
     </>
   );

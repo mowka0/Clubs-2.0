@@ -1859,6 +1859,211 @@ html, body {
 }
 
 /* ============================================================
+   Activities feed — Manage tab + member ClubActivitiesTab
+   Two sections: "Предстоящие" (full ActivityCard) and a
+   collapsible "Прошедшие (N)" accordion (compact dim rows).
+   ============================================================ */
+.activity-section-label {
+  padding: 16px 16px 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--brand-brass-2);
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px;
+}
+.activity-list.compact {
+  gap: 2px;
+  padding-top: 4px;
+}
+
+/* --- Full card (Предстоящие) --- */
+.activity-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--brand-navy-card);
+  border: 1px solid var(--brand-hairline);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--brand-ink);
+  transition: transform 0.08s ease, border-color 0.15s ease;
+}
+.activity-card:active {
+  transform: scale(0.985);
+  border-color: var(--brand-hairline-2);
+}
+.activity-card.completed {
+  opacity: 0.55;
+}
+
+/* Icon + title share one baseline-aligned row so the glyph never drops
+   below the title (the previous absolute-positioned icon sat too low). */
+.activity-card .head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 72px; /* leave room for the "Завершено" badge */
+}
+.activity-card .head .ico {
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1.3;
+}
+.activity-card .head .title {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--brand-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.activity-card .sub {
+  padding-left: 22px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--brand-ink-3);
+}
+.activity-card .sub.dim {
+  color: var(--brand-ink-4);
+}
+.activity-card .sub .reputation {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: rgba(255, 170, 80, 0.15);
+  color: #FFA850;
+}
+.activity-card .progress-bar {
+  height: 4px;
+  margin-left: 22px;
+  background: var(--brand-navy-soft);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.activity-card .progress-bar .fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--brand-brass-2), var(--brand-brass-deep));
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.activity-card .footer-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+  padding-left: 22px;
+}
+.activity-card .badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--brand-navy-soft);
+  color: var(--brand-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.activity-card .done-badge {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--brand-navy-soft);
+  color: var(--brand-ink-2);
+}
+
+/* --- Collapsible "Прошедшие (N)" accordion --- */
+.activity-past-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 16px 16px 8px;
+  background: none;
+  border: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.activity-past-toggle .chevron {
+  font-size: 11px;
+  color: var(--brand-ink-3);
+}
+.activity-past-toggle .label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--brand-ink-3);
+}
+.activity-past-toggle .count {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--brand-ink-4);
+}
+
+/* --- Compact dim past row --- */
+.activity-compact-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 16px;
+  background: none;
+  border: none;
+  border-radius: 10px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: background 0.12s ease, opacity 0.12s ease;
+}
+.activity-compact-row:active {
+  background: var(--brand-navy-card-2);
+  opacity: 0.85;
+}
+.activity-compact-row .ico {
+  flex-shrink: 0;
+  font-size: 13px;
+}
+.activity-compact-row .title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--brand-ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.activity-compact-row .date {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--brand-ink-4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
    SkladchinaPage — detail view
    ============================================================ */
 .sklad-hero {
@@ -2643,14 +2848,29 @@ select {
   cursor: default;
   opacity: 0.55;
 }
-.brand-stepper-value {
-  min-width: 56px;
+/* Editable numeric input. Higher specificity (`.brand-stepper input`) is
+   intentional: the global `input[type="text"] { font-size: 16px }` rule above
+   has specificity 0,1,1 and would otherwise override the brand 17px size. The
+   input is reset to look like the previous static <span> (no border/box). */
+.brand-stepper input.brand-stepper-value {
+  width: 56px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
   text-align: center;
+  font-family: inherit;
   font-size: 17px;
   font-weight: 700;
   color: var(--brand-ink);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.brand-stepper input.brand-stepper-value:focus {
+  color: var(--brand-brass-deep);
 }
 
 /* ============================================================
@@ -2671,7 +2891,6 @@ select {
   border: 1px solid var(--brand-hairline-2);
   border-radius: 10px;
   color: var(--brand-ink);
-  font-family: inherit;
   /* 16px — iOS Safari/TG WebView zooms on focus below 16px. */
   font-size: 16px;
   min-height: 44px;
