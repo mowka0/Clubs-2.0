@@ -258,6 +258,15 @@ class JooqEventRepository(
             )
             .execute()
 
+    override fun markPastEventsCompleted(cutoff: OffsetDateTime): Int =
+        dsl.update(EVENTS)
+            .set(EVENTS.STATUS, EventStatus.completed)
+            .where(
+                EVENTS.EVENT_DATETIME.lessThan(cutoff)
+                    .and(EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_1, EventStatus.stage_2))
+            )
+            .execute()
+
     private fun countVotes(eventId: UUID, vote: Stage_1Vote): Int =
         dsl.selectCount().from(EVENT_RESPONSES)
             .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.STAGE_1_VOTE.eq(vote)))

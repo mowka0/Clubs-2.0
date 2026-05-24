@@ -2487,3 +2487,234 @@ select {
   z-index: 1000 !important;
   inset: 0 !important;
 }
+
+/* ============================================================
+   OrganizerClubManage — brand shell (hero + pill-tabs)
+   ============================================================ */
+
+/* Clickable brand hero — routes back to public ClubPage.
+   Mirrors mc-hero spacing while carrying a small club avatar. */
+.manage-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: calc(100% - 40px);
+  margin: 12px 20px 4px;
+  padding: 14px 16px;
+  background: rgba(26, 33, 56, 0.78);
+  border: 1px solid var(--brand-hairline-2);
+  border-radius: 16px;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: transform 0.08s ease, border-color 0.15s ease;
+}
+.manage-hero:active {
+  transform: scale(0.99);
+  border-color: rgba(201, 160, 99, 0.30);
+}
+.manage-hero-avt {
+  width: 52px; height: 52px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--brand-ink-2);
+  background: var(--brand-navy-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+.manage-hero-avt img { width: 100%; height: 100%; object-fit: cover; }
+.manage-hero-avt[data-cat="sport"]       { background: linear-gradient(160deg, #4F3825, #2E1F12); color: #E5C18C; }
+.manage-hero-avt[data-cat="creative"]    { background: linear-gradient(160deg, #312F58, #1A1934); color: #BAB4EA; }
+.manage-hero-avt[data-cat="food"]        { background: linear-gradient(160deg, #4F381A, #2C1F0E); color: #EBC57B; }
+.manage-hero-avt[data-cat="board_games"] { background: linear-gradient(160deg, #1F4032, #0E2419); color: #6FBA92; }
+.manage-hero-avt[data-cat="cinema"]      { background: linear-gradient(160deg, #1F3850, #0F1E2C); color: #93BED7; }
+.manage-hero-avt[data-cat="travel"]      { background: linear-gradient(160deg, #1E3D3B, #0E2120); color: #82B7AD; }
+.manage-hero-avt[data-cat="education"]   { background: linear-gradient(160deg, #3A2E18, #1F1808); color: var(--brand-brass-deep); }
+.manage-hero-avt[data-cat="other"]       { background: linear-gradient(160deg, #2E3858, #16192E); color: var(--brand-ink-2); }
+.manage-hero-body { flex: 1; min-width: 0; }
+.manage-hero-title {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.014em;
+  line-height: 1.2;
+  color: var(--brand-ink);
+  margin: 0 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.manage-hero-sub {
+  font-size: 13px;
+  color: var(--brand-ink-3);
+  letter-spacing: -0.003em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.manage-hero-chevron {
+  flex-shrink: 0;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--brand-ink-4);
+}
+
+/* Pill-tabs — scroll horizontally so the 5 Russian labels never truncate.
+   Active pill gets the brass fill (same language as cp-tab / filter chips). */
+.manage-tab-row {
+  padding: 12px 20px 14px;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.manage-tab-row::-webkit-scrollbar { display: none; }
+.manage-tab {
+  flex: 0 0 auto;
+  height: 36px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--brand-ink-2);
+  background: rgba(26, 33, 56, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--brand-hairline);
+  border-radius: 999px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.manage-tab.active {
+  background: var(--brand-brass);
+  color: var(--brand-navy-bg);
+  border-color: var(--brand-brass);
+  font-weight: 600;
+}
+
+/* Tab content wrapper — telegram-ui Section/Cell rows render here on the brand
+   navy canvas (they already adapt to the TG dark theme). */
+.manage-tab-content {
+  padding-bottom: 8px;
+}
+
+/* ============================================================
+   BrandStepper — [−] value [+] numeric control
+   Replaces native <input type="number"> spinner.
+   ============================================================ */
+.brand-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  background: var(--brand-navy-card-2);
+  border: 1px solid var(--brand-hairline-2);
+  border-radius: 10px;
+  padding: 4px;
+}
+.brand-stepper-btn {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: var(--brand-navy-soft);
+  color: var(--brand-brass-deep);
+  font-family: inherit;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.08s ease, background 0.15s ease;
+}
+.brand-stepper-btn:active:not(:disabled) { transform: scale(0.92); }
+.brand-stepper-btn:disabled {
+  color: var(--brand-ink-4);
+  cursor: default;
+  opacity: 0.55;
+}
+.brand-stepper-value {
+  min-width: 56px;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--brand-ink);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ============================================================
+   Brand datetime field — native <input type="datetime-local">
+   wrapped so it matches the other .field inputs (height, padding,
+   border, font) and carries a calendar affordance. Native picker
+   still opens on tap (most reliable inside the Telegram WebView).
+   ============================================================ */
+.brand-datetime {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.sklad-create-modal .field .brand-datetime input[type="datetime-local"] {
+  width: 100%;
+  padding: 10px 40px 10px 12px;
+  background: var(--brand-navy-card-2);
+  border: 1px solid var(--brand-hairline-2);
+  border-radius: 10px;
+  color: var(--brand-ink);
+  font-family: inherit;
+  /* 16px — iOS Safari/TG WebView zooms on focus below 16px. */
+  font-size: 16px;
+  min-height: 44px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.sklad-create-modal .field .brand-datetime input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  /* hide the dim native glyph — our own brass icon sits on top, and the
+     whole control still opens the native picker on tap */
+  opacity: 0;
+  position: absolute;
+  right: 0;
+  width: 40px;
+  height: 100%;
+  cursor: pointer;
+}
+.sklad-create-modal .field .brand-datetime input[type="datetime-local"]::-webkit-datetime-edit {
+  color: var(--brand-ink);
+}
+.brand-datetime-ico {
+  position: absolute;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--brand-brass-2);
+  pointer-events: none;
+}
+
+/* Cancel button in create-screen action rows. Previously only
+   `.mc-empty .ghost-btn` existed, so the create pages rendered the
+   browser-default button next to the brass primary-btn. */
+.sklad-create-modal .modal-actions .ghost-btn {
+  flex: 1;
+  padding: 12px 14px;
+  background: transparent;
+  border: 1px solid var(--brand-hairline-2);
+  border-radius: 10px;
+  color: var(--brand-ink-2);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sklad-create-modal .modal-actions .ghost-btn:active {
+  border-color: rgba(201, 160, 99, 0.30);
+}

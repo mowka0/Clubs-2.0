@@ -180,6 +180,14 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 > events+skladchinas и Modal-picker'ом «+ Создать». Полная спека —
 > [`unified-activity-creation.md`](./unified-activity-creation.md).
 
+### Brand-редизайн (итерация 2, 2026-05-24)
+Страница больше **не** плоский telegram-ui `List`. Структура:
+- Обёртка `brand-page` + `<BrandBackdrop />` (navy blobs + brass glows), как на Discovery / ClubPage / MyClubsPage
+- Шапка — brand-hero карточка `ManageHeader` (`components/manage/ManageHeader.tsx`) вместо плоского `Cell`-header
+- Вкладки — brass pill-tabs `ManageTabs` (`components/manage/ManageTabs.tsx`) вместо telegram-ui `TabsList`; фиксит обрезание длинных лейблов («Учас…»)
+- Внутренности вкладок (Участники / Заявки / Активности / Финансы / Настройки) — **без изменений**
+- CSS — в `frontend/src/styles/brand-theme.css`
+
 ### Вкладки
 
 #### Участники (`MembersTab`)

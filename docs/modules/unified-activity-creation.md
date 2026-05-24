@@ -151,6 +151,8 @@
 | `backend/src/main/kotlin/com/clubs/skladchina/SkladchinaRepository.kt` | MODIFY | Добавить метод `findAllByClubWithAggregates(clubId, includeCompleted): List<SkladchinaWithAggregates>` + объявить новый data class `SkladchinaWithAggregates` (нейтральный к caller'у, без `myStatus`-поля из `MySkladchinaFeedItem`). Пагинация делается на уровне `ActivityService` после in-memory merge — репозиторий отдаёт полный список. |
 | `backend/src/main/kotlin/com/clubs/skladchina/JooqSkladchinaRepository.kt` | MODIFY | Реализация нового метода с batch-aggregates (collected/participants/paid) по тому же паттерну что `findMyFeed`, но без `userId`-логики. |
 | `backend/src/main/kotlin/com/clubs/event/EventRepository.kt` | MODIFY (опционально) | Если нужен метод `findAllByClub(clubId, page, size)` без `status`-фильтра. Текущий `findByClubId` принимает nullable `EventStatus?` — можно переиспользовать с `null` |
+| `backend/src/main/kotlin/com/clubs/event/EventCompletionService.kt` | NEW (итерация 2) | `@Scheduled` (hourly) автозавершение прошедших событий `upcoming/stage_1/stage_2 → completed` (grace 6ч). Закрывает баг «прошедшие события не приглушаются в ленте». Полная спека — [`events.md`](./events.md) |
+| `backend/src/main/kotlin/com/clubs/event/EventRepository.kt` + `JooqEventRepository.kt` | MODIFY (итерация 2) | Новый метод `markPastEventsCompleted(cutoff): Int` — `UPDATE events SET status=completed WHERE event_datetime < cutoff AND status IN (upcoming, stage_1, stage_2)` |
 
 > **Замечание про слияние:** `ActivityService` тянет события и сборы из
 > существующих репозиториев, мержит in-memory. **Альтернатива** — единый SQL
@@ -181,6 +183,12 @@
 | `frontend/src/router.tsx` | MODIFY | Добавить route `/clubs/:id/events/new` → lazy `CreateEventPage` |
 | `frontend/src/queries/events.ts` | MODIFY | Расширить invalidation в `useCreateEventMutation.onSuccess`: invalidate `activities.byClub(clubId)` |
 | `frontend/src/queries/skladchina.ts` | MODIFY | Аналогично — invalidate `activities.byClub(clubId)` в `useCreateSkladchinaMutation.onSuccess` |
+| `frontend/src/components/BrandStepper.tsx` | NEW (итерация 2) | Brand-степпер `[− N +]` для числового ввода. Используется в `CreateEventPage` для `participantLimit` вместо `<input type="number">` |
+| `frontend/src/components/manage/ManageHeader.tsx` | NEW (итерация 2) | Brand-hero карточка шапки `OrganizerClubManage` — заменяет плоский `Cell`-header |
+| `frontend/src/components/manage/ManageTabs.tsx` | NEW (итерация 2) | Brass pill-tabs для `OrganizerClubManage` — заменяет telegram-ui `TabsList` (фиксит обрезание лейблов «Учас…») |
+| `frontend/src/pages/CreateEventPage.tsx` | MODIFY (итерация 2) | `participantLimit` → `BrandStepper`; `datetime-local` обёрнут в `.brand-datetime` (стилизация + brass calendar icon) |
+| `frontend/src/pages/CreateSkladchinaPage.tsx` | MODIFY (итерация 2) | `datetime-local` (`deadline`) обёрнут в `.brand-datetime` (стилизация + brass calendar icon). Степпер не применяется — у складчины нет поля participant-limit |
+| `frontend/src/styles/brand-theme.css` | MODIFY (итерация 2) | Добавлены стили `.brand-stepper`, `.brand-datetime` + классы `ManageHeader` / `ManageTabs` |
 
 ### Routing reference
 
@@ -364,6 +372,14 @@ type ActivityItemDto = EventActivityDto | SkladchinaActivityDto;
 
 Поле вычисляется маппером — UI не должен дублировать enum-логику.
 
+> **Dimming для событий теперь реально работает (2026-05-24).** До итерации 2 события
+> никогда не переходили в `completed` (Stage2Service двигал только `upcoming → stage_2`),
+> поэтому прошедшие события в ленте никогда не приглушались — `isCompleted` всегда был
+> `false`. Это исправлено: `EventCompletionService` (hourly `@Scheduled`, grace 6ч) теперь
+> переводит прошедшие `upcoming/stage_1/stage_2` в `completed`. Складчины приглушались и
+> раньше — у них был `SkladchinaScheduler`. Полная спека автозавершения — в
+> [`events.md`](./events.md) § «Автозавершение прошедших событий».
+
 ### Errors
 
 | HTTP | Code | When |
@@ -428,8 +444,8 @@ interface CreateActivityPickerProps {
 - `title` (string, required, max 255) — `Input`
 - `description` (string, optional) — `Textarea`
 - `locationText` (string, required, max 500) — `Input`
-- `eventDatetime` (datetime-local, required, future) — `<input type="datetime-local">`
-- `participantLimit` (int, required, > 0) — `<input type="number">`
+- `eventDatetime` (datetime-local, required, future) — `<input type="datetime-local">` обёрнут в `.brand-datetime` (стилизованный wrapper + brass calendar icon; нативный picker сохранён)
+- `participantLimit` (int, required, > 0) — `BrandStepper` (`[− N +]`), не `<input type="number">` (итерация 2)
 - `votingOpensDaysBefore` — **НЕ показывается в UI вообще**. Backend всегда применяет default 14 (определён в `CreateEventRequest`). Решение: упрощение формы для organizer'а; кастомизация — за отдельной фичей, если когда-нибудь будет реальный запрос.
 
 **Submit:**
@@ -877,6 +893,11 @@ const activities = useMemo(
 **TanStack Query invalidation работает в одном tab'е**, в другой вкладке — обновление по `staleTime` (30s) или при refocus
 **Acceptable:** не оптимизируем под multi-tab сценарий
 
+### CC-16: Event с прошедшей датой, но в пределах grace-периода (< 6ч назад)
+**Backend:** `EventCompletionService` ещё не перевёл его в `completed` (grace 6ч / hourly cron) → возвращается с прежним статусом `upcoming/stage_1/stage_2`, `isCompleted=false`
+**Frontend:** рендерится не-dimmed. После следующего прогона scheduler'а (за пределами grace) refetch покажет dimmed
+**Acceptable:** симметрично CC-14 (skladchina lag) — небольшая задержка приглушения допустима. Полная логика — [`events.md`](./events.md) § «Автозавершение прошедших событий»
+
 ---
 
 ## Acceptance Criteria
@@ -1216,6 +1237,33 @@ curl -s -H "Authorization: Bearer $JWT_MEMBER" \
 > что они впервые потребовались в organizer-flow внутри `OrganizerClubManage`;
 > при росте использования в других фичах можно вынести в `components/activity/`
 > без изменения wire-API.
+
+### Post-flight alignment — итерация 2 (2026-05-24)
+
+> **Q-9 → RESOLVED (staging-feedback fix):** прошедшие события не приглушались в
+> ленте активностей — баг был в том, что события **никогда не переходили в
+> `completed`** (статус выставлять было нечем; Stage2Service двигал только
+> `upcoming → stage_2`). Исправлено `EventCompletionService` (hourly `@Scheduled`,
+> grace 6ч). `isCompleted = status IN (completed, cancelled)` теперь реально
+> срабатывает для прошедших событий → dimming работает. Складчины приглушались и
+> до этого (`SkladchinaScheduler`). Полная спека автозавершения —
+> [`events.md`](./events.md) § «Автозавершение прошедших событий». См. CC-16.
+
+> **Q-10 → RESOLVED (Manage brand-редизайн):** `OrganizerClubManage` обёрнут в
+> `brand-page` + `BrandBackdrop`; плоский `Cell`-header заменён на brand-карточку
+> `ManageHeader`; telegram-ui `TabsList` заменён на brass pill-tabs `ManageTabs`
+> (фиксит обрезание лейблов вида «Учас…»). Внутренности табов (Участники / Заявки /
+> Финансы / Настройки) и `ActivitiesManageTab` — без изменений. Новые компоненты:
+> `ManageHeader`, `ManageTabs` (оба в `components/manage/`). См. также
+> [`ui-pages.md`](./ui-pages.md) § OrganizerClubManage и
+> [`club-page-unified.md`](./club-page-unified.md) (заметка про `TabsList`).
+
+> **Q-11 → RESOLVED (create-form polish):** в `CreateEventPage` лимит участников →
+> `BrandStepper` (`[− N +]`); `datetime-local` в обеих формах (`CreateEventPage`,
+> `CreateSkladchinaPage`) обёрнут в стилизованный `.brand-datetime` с brass
+> calendar-иконкой (нативный picker сохранён). `BrandStepper` — в
+> `components/BrandStepper.tsx`. В `CreateSkladchinaPage` степпер **не** применяется
+> (нет поля participant-limit; суммы вводятся в рублях).
 
 ---
 

@@ -687,11 +687,19 @@ Tabs условно (`{activeTab === X && <Tab/>}`) — only active mounts → o
 
 ### 7.7 OrganizerClubManage `/clubs/:id/manage` ⚡ nested
 
-**Header:** BackButton
+> **[ОБНОВЛЕНО 2026-05-24, `feature/unified-activity-creation`]** Экран brand-редизайнут:
+> `brand-page` + `<BrandBackdrop>`, header → brand-карточка `ManageHeader`, табы →
+> brass pill-tabs `ManageTabs` (не telegram-ui `<TabsList>`). Вкладка «События»
+> объединена со «Сборами» в одну вкладку **«Активности»**. Актуальная спека —
+> [`ui-pages.md`](../modules/ui-pages.md) § OrganizerClubManage и
+> [`unified-activity-creation.md`](../modules/unified-activity-creation.md). Описание
+> ниже сохранено для аудита раскладки контента вкладок.
+
+**Header:** BackButton + `ManageHeader` (brand-hero)
 **Body:**
 1. Header — название + «X / Y участников | город»
-2. `<TabsList>` (5 табов): **«Участники» / «Заявки» / «События» / «Финансы» /
-   «Настройки»**
+2. `ManageTabs` (5 brass pill-табов): **«Участники» / «Заявки» / «Активности» /
+   «Финансы» / «Настройки»**
 
 **Tab 1: Участники**
 - `<Cell>` каждого — before: Avatar, subtitle: «Надёжность: {i} · Обещания:

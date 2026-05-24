@@ -3,11 +3,21 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { BrandBackdrop } from '../components/BrandBackdrop';
+import { BrandStepper } from '../components/BrandStepper';
 import { useCreateEventMutation } from '../queries/events';
 import type { CreateEventBody } from '../api/events';
 
 const TITLE_MAX = 255;
 const LOCATION_MAX = 500;
+const PARTICIPANT_MIN = 1;
+const PARTICIPANT_MAX = 1000;
+
+const CalendarIcon: FC = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <path d="M16 2v4M8 2v4M3 10h18" />
+  </svg>
+);
 
 export const CreateEventPage: FC = () => {
   useBackButton(true);
@@ -20,7 +30,7 @@ export const CreateEventPage: FC = () => {
   const [description, setDescription] = useState('');
   const [locationText, setLocationText] = useState('');
   const [eventDatetime, setEventDatetime] = useState('');
-  const [participantLimit, setParticipantLimit] = useState('20');
+  const [participantLimit, setParticipantLimit] = useState(20);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   if (!clubId) {
@@ -53,8 +63,7 @@ export const CreateEventPage: FC = () => {
     if (eventDate.getTime() <= Date.now()) {
       return fail('Дата события должна быть в будущем');
     }
-    const limit = Number(participantLimit);
-    if (!Number.isInteger(limit) || limit < 1) {
+    if (!Number.isInteger(participantLimit) || participantLimit < PARTICIPANT_MIN) {
       return fail('Лимит участников: целое число больше нуля');
     }
 
@@ -63,7 +72,7 @@ export const CreateEventPage: FC = () => {
       description: description.trim() || undefined,
       locationText: locationText.trim(),
       eventDatetime: eventDate.toISOString(),
-      participantLimit: limit,
+      participantLimit,
     };
 
     try {
@@ -130,24 +139,26 @@ export const CreateEventPage: FC = () => {
 
         <label className="field">
           <span className="label">Дата и время *</span>
-          <input
-            type="datetime-local"
-            value={eventDatetime}
-            onChange={(e) => setEventDatetime(e.target.value)}
-          />
+          <div className="brand-datetime">
+            <input
+              type="datetime-local"
+              value={eventDatetime}
+              onChange={(e) => setEventDatetime(e.target.value)}
+            />
+            <span className="brand-datetime-ico" aria-hidden="true"><CalendarIcon /></span>
+          </div>
         </label>
 
-        <label className="field">
+        <div className="field">
           <span className="label">Лимит участников *</span>
-          <input
-            type="number"
-            inputMode="numeric"
-            min="1"
+          <BrandStepper
             value={participantLimit}
-            onChange={(e) => setParticipantLimit(e.target.value)}
-            placeholder="20"
+            onChange={setParticipantLimit}
+            min={PARTICIPANT_MIN}
+            max={PARTICIPANT_MAX}
+            ariaLabel="Лимит участников"
           />
-        </label>
+        </div>
 
         {submitError && <div className="submit-error">{submitError}</div>}
 

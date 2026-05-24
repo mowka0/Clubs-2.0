@@ -1,7 +1,6 @@
 import { FC, useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  List,
   Section,
   Cell,
   Spinner,
@@ -13,12 +12,14 @@ import {
   Modal,
   Input,
   Textarea,
-  TabsList,
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { AvatarUpload } from '../components/AvatarUpload';
 import { Toast } from '../components/Toast';
+import { BrandBackdrop } from '../components/BrandBackdrop';
+import { ManageHeader } from '../components/manage/ManageHeader';
+import { ManageTabs } from '../components/manage/ManageTabs';
 import { useClubQuery, useDeleteClubMutation, useUpdateClubMutation } from '../queries/clubs';
 import { useClubMembersQuery } from '../queries/members';
 import { MemberProfileModal } from '../components/club/MemberProfileModal';
@@ -37,13 +38,15 @@ import type {
 
 type TabKey = 'members' | 'applications' | 'activities' | 'finances' | 'settings';
 
-const TAB_LABELS: Record<TabKey, string> = {
-  members: 'Участники',
-  applications: 'Заявки',
-  activities: 'Активности',
-  finances: 'Финансы',
-  settings: 'Настройки',
-};
+const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
+  { key: 'members', label: 'Участники' },
+  { key: 'applications', label: 'Заявки' },
+  { key: 'activities', label: 'Активности' },
+  { key: 'finances', label: 'Финансы' },
+  { key: 'settings', label: 'Настройки' },
+];
+
+const VALID_TABS = new Set<string>(TABS.map((t) => t.key));
 
 const LEGACY_TAB_REDIRECTS: Record<string, TabKey> = {
   events: 'activities',
@@ -52,7 +55,7 @@ const LEGACY_TAB_REDIRECTS: Record<string, TabKey> = {
 
 function resolveInitialTab(raw: string | null): TabKey {
   if (!raw) return 'members';
-  if (raw in TAB_LABELS) return raw as TabKey;
+  if (VALID_TABS.has(raw)) return raw as TabKey;
   return LEGACY_TAB_REDIRECTS[raw] ?? 'members';
 }
 
@@ -583,7 +586,12 @@ export const OrganizerClubManage: FC = () => {
   const clubLoading = clubQuery.isPending;
 
   if (!clubId) {
-    return <Placeholder description="Клуб не найден" />;
+    return (
+      <div className="brand-page">
+        <BrandBackdrop />
+        <Placeholder description="Клуб не найден" />
+      </div>
+    );
   }
 
   const renderTab = () => {
@@ -613,38 +621,24 @@ export const OrganizerClubManage: FC = () => {
   };
 
   return (
-    <List>
-      {/* Club header — clickable, navigates back to unified ClubPage */}
+    <div className="brand-page">
+      <BrandBackdrop />
+
+      {/* Brand hero — clickable, navigates back to public ClubPage */}
       {!clubLoading && club && (
-        <Section>
-          <Cell
-            onClick={() => { haptic.impact('light'); navigate(`/clubs/${clubId}`); }}
-            subtitle={`${club.memberCount} / ${club.memberLimit} участников | ${club.city}`}
-          >
-            {club.name}
-          </Cell>
-        </Section>
+        <ManageHeader
+          club={club}
+          onOpenClub={() => { haptic.impact('light'); navigate(`/clubs/${clubId}`); }}
+        />
       )}
 
-      {/* Tabs */}
-      <div style={{ padding: '0 16px', marginBottom: 8 }}>
-        <TabsList>
-          {(Object.keys(TAB_LABELS) as TabKey[]).map((key) => (
-            <TabsList.Item
-              key={key}
-              selected={activeTab === key}
-              onClick={() => { haptic.select(); setActiveTab(key); }}
-            >
-              {TAB_LABELS[key]}
-            </TabsList.Item>
-          ))}
-        </TabsList>
-      </div>
+      {/* Pill-tabs (scrollable, full labels) */}
+      <ManageTabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
 
       {/* Tab content */}
-      {renderTab()}
+      <div className="manage-tab-content">{renderTab()}</div>
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
-    </List>
+    </div>
   );
 };

@@ -175,7 +175,7 @@ const handleTabClick = (tab: TabId | 'manage') => {
 
 ## Tabs реализация
 
-**[ОБНОВЛЕНО brand-редизайн 2026-05-16]** Tabs выполнены как `<button className="cp-tab">` в `<div className="cp-tab-row">` — brand-стилизованные pill'ы (active = brass-fill, inactive = navy-card outline, manage = outline brass с стрелкой `→`). Стили живут в `frontend/src/styles/brand-theme.css` § cp-* (Club page). Tabs `OrganizerClubManage` остались на `TabsList` от `@telegram-apps/telegram-ui` — это отдельный экран вне redesign-scope.
+**[ОБНОВЛЕНО brand-редизайн 2026-05-16]** Tabs выполнены как `<button className="cp-tab">` в `<div className="cp-tab-row">` — brand-стилизованные pill'ы (active = brass-fill, inactive = navy-card outline, manage = outline brass с стрелкой `→`). Стили живут в `frontend/src/styles/brand-theme.css` § cp-* (Club page). Tabs `OrganizerClubManage` **тоже** переведены на brand pill-tabs (компонент `ManageTabs`) в `feature/unified-activity-creation` итерация 2 (2026-05-24) — `TabsList` от `@telegram-apps/telegram-ui` там больше не используется. См. [`ui-pages.md`](./ui-pages.md) § OrganizerClubManage и [`unified-activity-creation.md`](./unified-activity-creation.md) Q-10.
 
 Аналогично header, about, rules, locked, CTA, events, members, profile — вынесены из telegram-ui-компонентов (`List/Section/Cell/Badge/Placeholder/Button`) в brand-классы `.cp-*` для единства с DiscoveryPage (PR #33). `Modal/Input/Spinner` для apply-modal — остались.
 

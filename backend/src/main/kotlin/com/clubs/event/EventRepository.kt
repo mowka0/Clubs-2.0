@@ -33,6 +33,13 @@ interface EventRepository {
     fun markAttendanceMarked(id: UUID)
 
     fun finalizeAttendanceBefore(eventDatetimeCutoff: OffsetDateTime): Int
+
+    /**
+     * Moves active events (upcoming / stage_1 / stage_2) whose datetime is before [cutoff]
+     * to [EventStatus.completed]. Does not touch already-completed or cancelled events.
+     * Returns the number of rows updated.
+     */
+    fun markPastEventsCompleted(cutoff: OffsetDateTime): Int
 }
 
 data class EventWithGoingCount(
