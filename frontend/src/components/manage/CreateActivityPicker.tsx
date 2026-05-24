@@ -1,12 +1,8 @@
 import { FC } from 'react';
-import { Modal } from '@telegram-apps/telegram-ui';
-import { useHaptic } from '../../hooks/useHaptic';
 import type { ActivityType } from '../../api/activities';
 
-interface CreateActivityPickerProps {
-  open: boolean;
-  onClose: () => void;
-  /** Called with the chosen activity type. The picker closes first. */
+interface ActivityTypeOptionsProps {
+  /** Called with the chosen activity type. No side effects here — the parent flow owns step/haptics. */
   onPick: (type: ActivityType) => void;
 }
 
@@ -78,45 +74,28 @@ const subtitleStyle: React.CSSProperties = {
   color: 'var(--tgui--hint_color, rgba(255,255,255,0.6))',
 };
 
-export const CreateActivityPicker: FC<CreateActivityPickerProps> = ({
-  open,
-  onClose,
-  onPick,
-}) => {
-  const haptic = useHaptic();
-
-  const handleSelect = (key: ActivityType) => {
-    haptic.impact('medium');
-    onClose();
-    onPick(key);
-  };
-
-  const handleOpenChange = (next: boolean) => {
-    if (!next) {
-      haptic.impact('light');
-      onClose();
-    }
-  };
-
-  return (
-    <Modal open={open} onOpenChange={handleOpenChange}>
-      <div style={{ paddingBottom: 8 }}>
-        <div style={headerStyle}>Создать активность</div>
-        {OPTIONS.map((opt) => (
-          <button
-            key={opt.key}
-            type="button"
-            style={optionStyle}
-            onClick={() => handleSelect(opt.key)}
-          >
-            <span style={emojiStyle} aria-hidden="true">{opt.emoji}</span>
-            <span style={textStyle}>
-              <span style={titleStyle}>{opt.title}</span>
-              <span style={subtitleStyle}>{opt.subtitle}</span>
-            </span>
-          </button>
-        ))}
-      </div>
-    </Modal>
-  );
-};
+/**
+ * Content-only activity-type list (no Modal wrapper). Rendered inside the
+ * single Modal owned by CreateActivityFlow, which controls step transitions
+ * and haptics. Keeping this presentational avoids each step owning its own
+ * Modal — that caused the overlay teardown / collapse bug.
+ */
+export const ActivityTypeOptions: FC<ActivityTypeOptionsProps> = ({ onPick }) => (
+  <div style={{ paddingBottom: 8 }}>
+    <div style={headerStyle}>Создать активность</div>
+    {OPTIONS.map((opt) => (
+      <button
+        key={opt.key}
+        type="button"
+        style={optionStyle}
+        onClick={() => onPick(opt.key)}
+      >
+        <span style={emojiStyle} aria-hidden="true">{opt.emoji}</span>
+        <span style={textStyle}>
+          <span style={titleStyle}>{opt.title}</span>
+          <span style={subtitleStyle}>{opt.subtitle}</span>
+        </span>
+      </button>
+    ))}
+  </div>
+);

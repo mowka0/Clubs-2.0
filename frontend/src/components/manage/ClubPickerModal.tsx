@@ -1,6 +1,4 @@
 import { FC } from 'react';
-import { Modal } from '@telegram-apps/telegram-ui';
-import { useHaptic } from '../../hooks/useHaptic';
 
 export interface ClubPickerOption {
   id: string;
@@ -9,10 +7,9 @@ export interface ClubPickerOption {
   category: string;
 }
 
-interface ClubPickerModalProps {
-  open: boolean;
+interface ClubPickerListProps {
   clubs: ClubPickerOption[];
-  onClose: () => void;
+  /** Called with the chosen club id. No side effects here — the parent flow owns step/haptics. */
   onPick: (clubId: string) => void;
 }
 
@@ -26,46 +23,26 @@ function getInitials(name: string): string {
     .join('');
 }
 
-export const ClubPickerModal: FC<ClubPickerModalProps> = ({
-  open,
-  clubs,
-  onClose,
-  onPick,
-}) => {
-  const haptic = useHaptic();
-
-  const handleSelect = (clubId: string) => {
-    haptic.impact('medium');
-    onClose();
-    onPick(clubId);
-  };
-
-  const handleOpenChange = (next: boolean) => {
-    if (!next) {
-      haptic.impact('light');
-      onClose();
-    }
-  };
-
-  return (
-    <Modal open={open} onOpenChange={handleOpenChange}>
-      <div className="club-picker">
-        <div className="picker-header">Выберите клуб</div>
-        {clubs.map((club) => (
-          <button
-            key={club.id}
-            type="button"
-            className="picker-row"
-            onClick={() => handleSelect(club.id)}
-          >
-            <span className="avt" data-cat={club.category}>
-              {club.avatarUrl ? <img src={club.avatarUrl} alt="" /> : getInitials(club.name)}
-            </span>
-            <span className="name">{club.name}</span>
-            <span className="chevron" aria-hidden="true">›</span>
-          </button>
-        ))}
-      </div>
-    </Modal>
-  );
-};
+/**
+ * Content-only club list (no Modal wrapper). Rendered inside the single Modal
+ * owned by CreateActivityFlow, which controls step transitions and haptics.
+ */
+export const ClubPickerList: FC<ClubPickerListProps> = ({ clubs, onPick }) => (
+  <div className="club-picker">
+    <div className="picker-header">Выберите клуб</div>
+    {clubs.map((club) => (
+      <button
+        key={club.id}
+        type="button"
+        className="picker-row"
+        onClick={() => onPick(club.id)}
+      >
+        <span className="avt" data-cat={club.category}>
+          {club.avatarUrl ? <img src={club.avatarUrl} alt="" /> : getInitials(club.name)}
+        </span>
+        <span className="name">{club.name}</span>
+        <span className="chevron" aria-hidden="true">›</span>
+      </button>
+    ))}
+  </div>
+);

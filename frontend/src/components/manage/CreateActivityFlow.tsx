@@ -1,17 +1,21 @@
 import { FC, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CreateActivityPicker } from './CreateActivityPicker';
-import { ClubPickerModal, type ClubPickerOption } from './ClubPickerModal';
+import { Modal } from '@telegram-apps/telegram-ui';
+import { useHaptic } from '../../hooks/useHaptic';
+import { ActivityTypeOptions } from './CreateActivityPicker';
+import { ClubPickerList, type ClubPickerOption } from './ClubPickerModal';
 import type { ActivityType } from '../../api/activities';
 
 interface CreateActivityFlowProps {
-  /** Whether the flow's first step (type picker) is open. */
+  /** Whether the creation flow is open. */
   open: boolean;
   /** Clubs the user organizes — the flow only navigates within these. */
   organizerClubs: ClubPickerOption[];
   /** Closes the whole flow (resets internal step state). */
   onClose: () => void;
 }
+
+type Step = 'type' | 'club';
 
 function createRoute(clubId: string, type: ActivityType): string {
   return type === 'event'
@@ -21,9 +25,15 @@ function createRoute(clubId: string, type: ActivityType): string {
 
 /**
  * Controller for the global "тип → клуб → форма" creation flow.
- * Step 1: pick activity type. Step 2: resolve club — auto-select when the user
- * organizes exactly one club, otherwise show a club picker. Then navigate to
- * the per-club create route (CreateEventPage / CreateSkladchinaPage read :id).
+ *
+ * Renders a SINGLE Modal whose body swaps by `step`. Step 'type' picks the
+ * activity type; step 'club' picks the target club when the user organizes
+ * multiple. A single Modal is required: rendering a separate Modal per step
+ * made the closing one tear down the shared portal/scroll-lock overlay the
+ * opening one had just mounted, collapsing the second instantly.
+ *
+ * After resolving type + club, navigate to the per-club create route
+ * (CreateEventPage / CreateSkladchinaPage read :id).
  */
 export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   open,
@@ -31,42 +41,54 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   onClose,
 }) => {
   const navigate = useNavigate();
+  const haptic = useHaptic();
+  const [step, setStep] = useState<Step>('type');
   const [pendingType, setPendingType] = useState<ActivityType | null>(null);
 
-  const reset = () => {
+  const dismiss = () => {
+    setStep('type');
     setPendingType(null);
     onClose();
   };
 
+  const goToCreate = (clubId: string, type: ActivityType) => {
+    setStep('type');
+    setPendingType(null);
+    onClose();
+    navigate(createRoute(clubId, type));
+  };
+
   const handlePickType = (type: ActivityType) => {
+    haptic.impact('medium');
     if (organizerClubs.length === 1) {
-      reset();
-      navigate(createRoute(organizerClubs[0]!.id, type));
+      goToCreate(organizerClubs[0]!.id, type);
       return;
     }
+    // Multiple clubs: stay in the SAME Modal, just swap content to the club step.
     setPendingType(type);
+    setStep('club');
   };
 
   const handlePickClub = (clubId: string) => {
     if (!pendingType) return;
-    const type = pendingType;
-    reset();
-    navigate(createRoute(clubId, type));
+    haptic.impact('medium');
+    goToCreate(clubId, pendingType);
+  };
+
+  const handleOpenChange = (next: boolean) => {
+    if (!next) {
+      haptic.impact('light');
+      dismiss();
+    }
   };
 
   return (
-    <>
-      <CreateActivityPicker
-        open={open && pendingType === null}
-        onClose={reset}
-        onPick={handlePickType}
-      />
-      <ClubPickerModal
-        open={pendingType !== null}
-        clubs={organizerClubs}
-        onClose={reset}
-        onPick={handlePickClub}
-      />
-    </>
+    <Modal open={open} onOpenChange={handleOpenChange}>
+      {step === 'type' ? (
+        <ActivityTypeOptions onPick={handlePickType} />
+      ) : (
+        <ClubPickerList clubs={organizerClubs} onPick={handlePickClub} />
+      )}
+    </Modal>
   );
 };
