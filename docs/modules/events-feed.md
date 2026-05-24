@@ -23,8 +23,10 @@
    (переименование URL = breaking change без cause: складчина ещё не существует).
    Когда появится складчина — добавим segmented control «События / Сборы» внутри
    страницы, тогда же решим про URL.
-2. **Карточка содержит stats-счётчик числом** (`12/30 идёт` для `upcoming`,
-   `12/30 подтверждено` для `stage_2`). Без progress bar.
+2. **Карточка содержит stats-счётчик числом** (`12/30` — confirmedCount для
+   `stage_2`, иначе goingCount, над participantLimit; без слова «идёт»/«подтверждено»,
+   чтобы не выходить за рамки карточки) **+ progress bar** под счётчиком
+   (доля участников, brass-заливка). _(round 5, 2026-05-24: убрали слово, добавили bar.)_
 3. **Без inline quick-actions в карточке.** Тап → `/events/:id`, действия там.
 4. **Pull-to-refresh — НЕ реализован в v1.** В ходе реализации оценили
    стоимость: TG WebView не имеет нативного pull-to-refresh, нужен custom
@@ -252,7 +254,7 @@
 - **Place** — место проведения
 - **Avatar клуба + название клуба** — subtle/secondary
 - **Status-badge** — если применимо (см. ниже)
-- **Stats-counter** — `12/30 идёт` (`upcoming`) или `12/30 подтверждено` (`stage_2`). Числом, без progress bar
+- **Stats-counter** — `12/30` числом (confirmedCount в `stage_2`, иначе goingCount / participantLimit), без слова. Под ним **progress bar** (доля участников, brass-заливка) — round 5
 
 ### Status-badge логика
 - Если `actionRequired` — выделенный (brass-acceпт) badge: «Голосуй» / «Подтверди участие»
