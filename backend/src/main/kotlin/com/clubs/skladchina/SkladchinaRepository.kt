@@ -29,6 +29,14 @@ interface SkladchinaRepository {
 
     fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MySkladchinaFeedItem>
 
+    /**
+     * Count of active skladchinas where the user is a participant still awaiting
+     * payment (status='pending'). Mirrors the `actionRequired` flag the feed
+     * computes per item — used to badge the "Сборы" tab so unpaid obligations
+     * are not lost from sight.
+     */
+    fun countActionRequired(userId: UUID): Int
+
     fun findExpiredActive(now: OffsetDateTime): List<Skladchina>
 
     fun updateStatus(id: UUID, status: SkladchinaStatus, closedBy: UUID?, closedAt: OffsetDateTime)

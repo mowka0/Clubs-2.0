@@ -6,6 +6,7 @@ import {
   getClubActiveSkladchinas,
   getMySkladchinas,
   getSkladchina,
+  getSkladchinaActionRequiredCount,
   markPaidSkladchina,
 } from '../api/skladchina';
 import type { CreateSkladchinaRequest } from '../types/api';
@@ -19,6 +20,20 @@ export function useMySkladchinasQuery() {
     queryFn: ({ pageParam }) => getMySkladchinas({ page: pageParam, size: PAGE_SIZE }),
     initialPageParam: 0,
     getNextPageParam: (last) => (last.page + 1 < last.totalPages ? last.page + 1 : undefined),
+  });
+}
+
+/**
+ * Count of active skladchinas the user must still pay. Powers the "Сборы" tab
+ * badge + the bottom-nav "Активности" dot so unpaid obligations stay visible
+ * from anywhere. Kept lightweight (one COUNT) and runs wherever the nav lives.
+ */
+export function useSkladchinaActionRequiredCountQuery() {
+  return useQuery({
+    queryKey: queryKeys.skladchinas.actionRequiredCount,
+    queryFn: getSkladchinaActionRequiredCount,
+    select: (data) => data.count,
+    staleTime: 60_000,
   });
 }
 
@@ -50,6 +65,7 @@ export function useCreateSkladchinaMutation() {
     onSuccess: (_data, { clubId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.byClubActive(clubId) });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
       // Unified activity feed must refresh too — newly created skladchina
       // must appear at the top across all filter variants of the manage tab.
       qc.invalidateQueries({ queryKey: queryKeys.activities.byClubAll(clubId) });
@@ -70,6 +86,7 @@ export function useMarkPaidMutation() {
     onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
     },
   });
 }
@@ -81,6 +98,7 @@ export function useDeclineSkladchinaMutation() {
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
     },
   });
 }

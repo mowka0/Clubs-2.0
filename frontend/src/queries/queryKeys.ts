@@ -17,6 +17,7 @@ export const queryKeys = {
     members: (clubId: string) => ['clubs', 'detail', clubId, 'members'] as const,
     memberProfile: (clubId: string, userId: string) =>
       ['clubs', 'detail', clubId, 'members', userId] as const,
+    myReputation: () => ['clubs', 'my', 'reputation'] as const,
     applications: (clubId: string, status?: string) =>
       ['clubs', 'detail', clubId, 'applications', status ?? 'all'] as const,
     finances: (clubId: string) => ['clubs', 'detail', clubId, 'finances'] as const,
@@ -36,6 +37,7 @@ export const queryKeys = {
   skladchinas: {
     all: ['skladchinas'] as const,
     myFeed: ['skladchinas', 'my-feed'] as const,
+    actionRequiredCount: ['skladchinas', 'action-required-count'] as const,
     detail: (id: string) => ['skladchinas', 'detail', id] as const,
     byClubActive: (clubId: string) => ['skladchinas', 'by-club-active', clubId] as const,
   },

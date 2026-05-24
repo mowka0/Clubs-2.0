@@ -7,6 +7,7 @@ import { EventsTab } from '../components/activities/EventsTab';
 import { SkladchinasTab } from '../components/activities/SkladchinasTab';
 import { CreateActivityFlow } from '../components/manage/CreateActivityFlow';
 import { useOrganizerClubs } from '../queries/organizerClubs';
+import { useSkladchinaActionRequiredCountQuery } from '../queries/skladchina';
 
 type SegmentKey = 'events' | 'skladchina';
 
@@ -33,6 +34,8 @@ export const ActivitiesPage: FC = () => {
   const { clubs: organizerClubs } = useOrganizerClubs();
   const canCreate = organizerClubs.length > 0;
   const [createOpen, setCreateOpen] = useState(false);
+
+  const { data: unpaidCount = 0 } = useSkladchinaActionRequiredCountQuery();
 
   const navState = location.state as ActivitiesLocationState | null;
   const [toastMessage, setToastMessage] = useState<string | null>(navState?.toast ?? null);
@@ -92,6 +95,11 @@ export const ActivitiesPage: FC = () => {
           onClick={() => handleSelect('skladchina')}
         >
           Сборы
+          {unpaidCount > 0 && (
+            <span className="seg-badge" aria-label={`Требует оплаты: ${unpaidCount}`}>
+              {unpaidCount}
+            </span>
+          )}
         </button>
       </div>
 

@@ -65,6 +65,19 @@ export interface MemberProfileDto {
   totalAttendances: number;
 }
 
+export interface UserClubReputationDto {
+  clubId: string;
+  clubName: string;
+  clubAvatarUrl: string | null;
+  category: string;
+  role: string;
+  reliabilityIndex: number;
+}
+
+export interface ActionRequiredCountDto {
+  count: number;
+}
+
 export interface FinancesDto {
   activeMembers: number;
   monthlyRevenue: number;

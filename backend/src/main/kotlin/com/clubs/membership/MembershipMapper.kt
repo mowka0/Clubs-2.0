@@ -38,4 +38,13 @@ class MembershipMapper {
         reliabilityIndex = info.reliabilityIndex,
         promiseFulfillmentPct = info.promiseFulfillmentPct
     )
+
+    fun toUserClubReputationDto(info: UserClubReputationInfo): UserClubReputationDto = UserClubReputationDto(
+        clubId = info.clubId,
+        clubName = info.clubName,
+        clubAvatarUrl = info.clubAvatarUrl,
+        category = info.category.literal,
+        role = info.role.literal,
+        reliabilityIndex = info.reliabilityIndex
+    )
 }

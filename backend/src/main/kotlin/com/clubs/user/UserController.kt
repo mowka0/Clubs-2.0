@@ -8,6 +8,8 @@ import com.clubs.event.MyEventListItemDto
 import com.clubs.event.UserEventsService
 import com.clubs.membership.MembershipDto
 import com.clubs.membership.MembershipService
+import com.clubs.membership.UserClubReputationDto
+import com.clubs.skladchina.ActionRequiredCountDto
 import com.clubs.skladchina.MySkladchinaListItemDto
 import com.clubs.skladchina.UserSkladchinasService
 import org.springframework.http.ResponseEntity
@@ -39,6 +41,12 @@ class UserController(
     ): ResponseEntity<List<MembershipDto>> =
         ResponseEntity.ok(membershipService.getUserMemberships(user.userId))
 
+    @GetMapping("/me/reputation")
+    fun getMyReputation(
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<List<UserClubReputationDto>> =
+        ResponseEntity.ok(membershipService.getUserClubsWithReputation(user.userId))
+
     @GetMapping("/me/applications")
     fun getMyApplications(
         @AuthenticationPrincipal user: AuthenticatedUser
@@ -66,6 +74,12 @@ class UserController(
         val safeSize = size.coerceIn(1, MAX_PAGE_SIZE)
         return ResponseEntity.ok(userSkladchinasService.getMySkladchinas(user.userId, safePage, safeSize))
     }
+
+    @GetMapping("/me/skladchinas/action-required-count")
+    fun getMySkladchinaActionRequiredCount(
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<ActionRequiredCountDto> =
+        ResponseEntity.ok(userSkladchinasService.countActionRequired(user.userId))
 
     companion object {
         private const val MAX_PAGE_SIZE = 50

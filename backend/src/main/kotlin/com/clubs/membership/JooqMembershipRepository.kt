@@ -80,6 +80,38 @@ class JooqMembershipRepository(
                 )
             }
 
+    override fun findUserClubsWithReputation(userId: UUID): List<UserClubReputationInfo> =
+        dsl.select(
+            CLUBS.ID,
+            CLUBS.NAME,
+            CLUBS.AVATAR_URL,
+            CLUBS.CATEGORY,
+            MEMBERSHIPS.ROLE,
+            DSL.coalesce(USER_CLUB_REPUTATION.RELIABILITY_INDEX, DSL.`val`(100)).`as`("reliability_index")
+        )
+            .from(MEMBERSHIPS)
+            .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))
+            .leftJoin(USER_CLUB_REPUTATION).on(
+                USER_CLUB_REPUTATION.USER_ID.eq(MEMBERSHIPS.USER_ID)
+                    .and(USER_CLUB_REPUTATION.CLUB_ID.eq(CLUBS.ID))
+            )
+            .where(
+                MEMBERSHIPS.USER_ID.eq(userId)
+                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period))
+                    .and(CLUBS.IS_ACTIVE.eq(true))
+            )
+            .orderBy(MEMBERSHIPS.JOINED_AT.desc().nullsLast())
+            .fetch { r ->
+                UserClubReputationInfo(
+                    clubId = r.get(CLUBS.ID)!!,
+                    clubName = r.get(CLUBS.NAME)!!,
+                    clubAvatarUrl = r.get(CLUBS.AVATAR_URL),
+                    category = r.get(CLUBS.CATEGORY)!!,
+                    role = r.get(MEMBERSHIPS.ROLE) ?: MembershipRole.member,
+                    reliabilityIndex = r.get("reliability_index", Int::class.java) ?: 100
+                )
+            }
+
     override fun findExpiryRefByUserAndClub(userId: UUID, clubId: UUID): MembershipExpiryRef? =
         dsl.select(MEMBERSHIPS.ID, MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT)
             .from(MEMBERSHIPS)

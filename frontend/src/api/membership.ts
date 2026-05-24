@@ -1,5 +1,10 @@
 import { apiClient } from './apiClient';
-import type { JoinClubResult, MemberListItemDto, MemberProfileDto } from '../types/api';
+import type {
+  JoinClubResult,
+  MemberListItemDto,
+  MemberProfileDto,
+  UserClubReputationDto,
+} from '../types/api';
 
 export interface ApplicationDto {
   id: string;
@@ -32,6 +37,10 @@ export function getClubMembers(clubId: string): Promise<MemberListItemDto[]> {
 
 export function getMemberProfile(clubId: string, userId: string): Promise<MemberProfileDto> {
   return apiClient.get<MemberProfileDto>(`/api/clubs/${clubId}/members/${userId}`);
+}
+
+export function getMyReputation(): Promise<UserClubReputationDto[]> {
+  return apiClient.get<UserClubReputationDto[]>('/api/users/me/reputation');
 }
 
 export function getClubApplications(

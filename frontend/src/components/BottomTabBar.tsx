@@ -1,6 +1,7 @@
 import { FC, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useHaptic } from '../hooks/useHaptic';
+import { useSkladchinaActionRequiredCountQuery } from '../queries/skladchina';
 
 interface TabConfig {
   readonly path: string;
@@ -50,6 +51,8 @@ export const BottomTabBar: FC = () => {
   const navigate = useNavigate();
   const haptic = useHaptic();
 
+  const { data: unpaidCount = 0 } = useSkladchinaActionRequiredCountQuery();
+
   const handleTabClick = useCallback(
     (path: string) => {
       if (location.pathname !== path) {
@@ -70,6 +73,7 @@ export const BottomTabBar: FC = () => {
     <nav className="brand-tabbar" aria-label="Главная навигация">
       {TABS.map((tab) => {
         const isActive = activePath === tab.path;
+        const showUnpaidDot = tab.path === '/activities' && unpaidCount > 0;
         return (
           <button
             key={tab.path}
@@ -79,6 +83,7 @@ export const BottomTabBar: FC = () => {
             aria-current={isActive ? 'page' : undefined}
           >
             {isActive && <span className="indicator" aria-hidden="true" />}
+            {showUnpaidDot && <span className="tab-dot" aria-label="Есть неоплаченный сбор" />}
             <span className="ico" style={{ backgroundImage: `url(${tab.icon})` }} aria-hidden="true" />
             {tab.label}
           </button>
