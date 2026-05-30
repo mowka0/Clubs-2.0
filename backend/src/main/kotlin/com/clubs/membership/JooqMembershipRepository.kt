@@ -87,8 +87,10 @@ class JooqMembershipRepository(
             CLUBS.AVATAR_URL,
             CLUBS.CATEGORY,
             MEMBERSHIPS.ROLE,
+            MEMBERSHIPS.JOINED_AT,
             DSL.coalesce(USER_CLUB_REPUTATION.RELIABILITY_INDEX, DSL.`val`(100)).`as`("reliability_index"),
             DSL.coalesce(USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT, DSL.`val`(BigDecimal.ZERO)).`as`("promise_fulfillment_pct"),
+            DSL.coalesce(USER_CLUB_REPUTATION.TOTAL_CONFIRMATIONS, DSL.`val`(0)).`as`("total_confirmations"),
             DSL.coalesce(USER_CLUB_REPUTATION.TOTAL_ATTENDANCES, DSL.`val`(0)).`as`("total_attendances")
         )
             .from(MEMBERSHIPS)
@@ -110,8 +112,10 @@ class JooqMembershipRepository(
                     clubAvatarUrl = r.get(CLUBS.AVATAR_URL),
                     category = r.get(CLUBS.CATEGORY)!!,
                     role = r.get(MEMBERSHIPS.ROLE) ?: MembershipRole.member,
+                    joinedAt = r.get(MEMBERSHIPS.JOINED_AT),
                     reliabilityIndex = r.get("reliability_index", Int::class.java) ?: 100,
                     promiseFulfillmentPct = r.get("promise_fulfillment_pct", BigDecimal::class.java) ?: BigDecimal.ZERO,
+                    totalConfirmations = r.get("total_confirmations", Int::class.java) ?: 0,
                     totalAttendances = r.get("total_attendances", Int::class.java) ?: 0
                 )
             }

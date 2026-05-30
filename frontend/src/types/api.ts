@@ -80,8 +80,10 @@ export interface UserClubReputationDto {
   clubAvatarUrl: string | null;
   category: string;
   role: string;
+  joinedAt: string | null;
   reliabilityIndex: number;
   promiseFulfillmentPct: number;
+  totalConfirmations: number;
   totalAttendances: number;
 }
 

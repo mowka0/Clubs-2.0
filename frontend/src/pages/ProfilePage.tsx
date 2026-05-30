@@ -59,6 +59,19 @@ function reliabilityTier(score: number): 'high' | 'mid' | 'low' {
   return 'low';
 }
 
+/** Compact tenure for the meta row: "недавно" / "5 мес." / "2 года". */
+function formatTenure(joinedAt: string | null): string | null {
+  if (!joinedAt) return null;
+  const ms = Date.now() - new Date(joinedAt).getTime();
+  if (Number.isNaN(ms) || ms < 0) return null;
+  const days = Math.floor(ms / 86400000);
+  if (days < 30) return 'недавно';
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} мес.`;
+  const years = Math.floor(months / 12);
+  return `${years} ${pluralRu(years, ['год', 'года', 'лет'])}`;
+}
+
 export const ProfilePage: FC = () => {
   const navigate = useNavigate();
   const haptic = useHaptic();
@@ -118,11 +131,6 @@ export const ProfilePage: FC = () => {
   const locationLabel = user.city
     ? [user.city, countryNameByCode(user.country)].filter(Boolean).join(', ')
     : null;
-  const empty =
-    reputation.length === 0 &&
-    pendingApps.length === 0 &&
-    interests.length === 0 &&
-    !user.bio;
 
   return (
     <div className="brand-page">
@@ -174,18 +182,36 @@ export const ProfilePage: FC = () => {
         </>
       )}
 
-      {/* Reputation per club */}
-      {reputation.length > 0 && (
-        <>
-          <div className="mc-section-label">
-            Моя репутация <span className="count">· {reputation.length}</span>
+      {/* Reputation per club — always shown; plate explains the section when empty */}
+      <div className="mc-section-label">
+        Моя репутация
+        {reputation.length > 0 && <span className="count"> · {reputation.length}</span>}
+      </div>
+      {reputation.length === 0 ? (
+        <div className="mc-empty">
+          <div className="title">Тут появится репутация</div>
+          <div className="sub">
+            Вступи в клуб — будем считать твою надёжность по&nbsp;каждому из них.
           </div>
-          <div className="pf-rep-list">
+          <div className="actions">
+            <button type="button" className="ghost-btn" onClick={() => { haptic.impact('light'); navigate('/'); }}>
+              Найти клуб
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="pf-rep-list">
             {reputation.map((r) => {
               const tier = reliabilityTier(r.reliabilityIndex);
               const roleLabel = r.role === 'organizer' ? 'Организатор' : 'Участник';
               const categoryLabel = CATEGORY_LABELS[r.category] ?? r.category;
-              const hasActivity = r.totalAttendances > 0 || r.promiseFulfillmentPct > 0;
+              const tenure = formatTenure(r.joinedAt);
+              const metaParts = [categoryLabel, roleLabel];
+              if (tenure) metaParts.push(tenure);
+              const hasActivity =
+                r.totalAttendances > 0 ||
+                r.totalConfirmations > 0 ||
+                r.promiseFulfillmentPct > 0;
               return (
                 <button
                   key={r.clubId}
@@ -198,11 +224,10 @@ export const ProfilePage: FC = () => {
                   </span>
                   <div className="body">
                     <div className="name">{r.clubName}</div>
-                    <div className="role">{categoryLabel} · {roleLabel}</div>
+                    <div className="role">{metaParts.join(' · ')}</div>
                     {hasActivity && (
                       <div className="metrics">
-                        обещания {Math.round(r.promiseFulfillmentPct)}% · {r.totalAttendances}{' '}
-                        {pluralRu(r.totalAttendances, ['посещение', 'посещения', 'посещений'])}
+                        обещания {Math.round(r.promiseFulfillmentPct)}% · {r.totalConfirmations} подтв. · {r.totalAttendances} посещ.
                       </div>
                     )}
                   </div>
@@ -213,8 +238,7 @@ export const ProfilePage: FC = () => {
                 </button>
               );
             })}
-          </div>
-        </>
+        </div>
       )}
 
       {/* Pending applications */}
@@ -244,20 +268,6 @@ export const ProfilePage: FC = () => {
             })}
           </div>
         </>
-      )}
-
-      {empty && (
-        <div className="mc-empty">
-          <div className="title">Профиль пока пуст</div>
-          <div className="sub">
-            Расскажите о себе через ⚙️ или вступите в клуб — здесь появится ваша репутация.
-          </div>
-          <div className="actions">
-            <button type="button" className="ghost-btn" onClick={() => { haptic.impact('light'); navigate('/'); }}>
-              Найти клуб
-            </button>
-          </div>
-        </div>
       )}
 
       {editOpen && (
