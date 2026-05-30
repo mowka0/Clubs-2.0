@@ -111,6 +111,40 @@ export interface ClubApplicationDto {
   resolvedAt: string | null;
 }
 
+export interface ApplicantInfoDto {
+  userId: string;
+  firstName: string;
+  lastName: string | null;
+  telegramUsername: string | null;
+  avatarUrl: string | null;
+}
+
+export interface PeerStatsDto {
+  memberClubCount: number;
+  totalConfirmations: number;
+  totalAttendances: number;
+}
+
+export interface ClubBriefDto {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
+export interface PendingApplicationDto {
+  applicationId: string;
+  answerText: string | null;
+  createdAt: string;
+  hoursUntilAutoReject: number;
+  applicant: ApplicantInfoDto;
+  peerStats: PeerStatsDto;
+  club: ClubBriefDto;
+}
+
+export interface PendingApplicationsCountDto {
+  count: number;
+}
+
 export interface ClubDetailDto {
   id: string;
   ownerId: string;

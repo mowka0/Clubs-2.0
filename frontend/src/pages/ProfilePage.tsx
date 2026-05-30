@@ -55,7 +55,15 @@ export const ProfilePage: FC = () => {
 
   const reputation = useMemo(() => reputationQuery.data ?? [], [reputationQuery.data]);
   const applications = applicationsQuery.data ?? [];
-  const pendingApps = applications.filter((a) => a.status === 'pending');
+  // Includes pending + (auto)rejected so the rejected-reason feedback has a
+  // place to render. See docs/modules/applications-inbox.md § "ProfilePage —
+  // pending-apps секция".
+  const pendingApps = applications.filter(
+    (a) =>
+      a.status === 'pending' ||
+      a.status === 'rejected' ||
+      a.status === 'auto_rejected',
+  );
   const interests = useMemo(() => interestsQuery.data ?? [], [interestsQuery.data]);
 
   const [editOpen, setEditOpen] = useState(false);
@@ -217,6 +225,9 @@ export const ProfilePage: FC = () => {
             {pendingApps.map((app) => {
               const club = appClubs[app.clubId];
               const name = club?.name ?? `Клуб ${app.clubId.slice(0, 8)}…`;
+              const showReason =
+                (app.status === 'rejected' || app.status === 'auto_rejected') &&
+                Boolean(app.rejectedReason && app.rejectedReason.trim());
               return (
                 <button
                   key={app.id}
@@ -228,6 +239,7 @@ export const ProfilePage: FC = () => {
                   <div className="body">
                     <div className="name">{name}</div>
                     <div className="role">{STATUS_LABELS[app.status] ?? app.status}</div>
+                    {showReason && <div className="reason">{app.rejectedReason}</div>}
                   </div>
                 </button>
               );

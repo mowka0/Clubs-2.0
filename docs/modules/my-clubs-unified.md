@@ -62,9 +62,10 @@
 >
 > 1. **Hero** (`<header className="mc-hero">`) — greeting «Привет, {firstName} 👋» + h1 «Твои [brass]клубы[/brass]» с brass-blur подсветкой на слове «клубы» + sub-line «N клубов · M заявок» с русской pluralization. «+ Создать» — brand brass pill (`mc-create-btn`) справа от h1.
 > 2. **Активные клубы** — section label «АКТИВНЫЕ · N» + `mc-list` из brand club-card. Member-карточка — стандартная (avatar 52px category-gradient + name + категория + capacity-bar, без цены). Organizer-карточка — то же + brass-ring на аватаре + 👑 crown в верхнем-правом углу body.
-> 3. **Заявки** — section label «ЗАЯВКИ · N» + `mc-list` из `mc-app` карточек (muted navy с avatar 44px, name line-clamp 2, дата подачи, brass/sage/red status pill).
-> 4. **Empty state** — `mc-empty` карточка с brass-иконкой + headline + sub + dual CTA («Открыть поиск» ghost + «+ Создать клуб» brass). Заменяет старый tgui `Placeholder`.
-> 5. **Backdrop** — `<BrandBackdrop />` первым ребёнком `.brand-page`.
+> 3. **Заявки на рассмотрении** (organizer-side, NEW в `feature/applications-inbox`, 2026-05-30) — section label «Заявки на рассмотрении · N» + `mc-list` из `pending-app-card`. Карточки с круглым avatar заявителя, peer-signal-строкой, club-chip и hours-hint (`{N}ч до автоотклонения`, красный при `≤6` часов). Тап → `ApplicationReviewModal`. Видна **только** если у caller'а есть pending-заявки по клубам, где он owner. Полная спека — [`applications-inbox.md`](./applications-inbox.md).
+> 4. **Заявки** (applicant-side) — section label «ЗАЯВКИ · N» + `mc-list` из `mc-app` карточек (muted navy с avatar 44px, name line-clamp 2, дата подачи, brass/sage/red status pill). Для статусов `rejected` / `auto_rejected` с непустым `rejectedReason` под датой добавлена третья строка «Причина: {rejectedReason}» (red ink, 2-line truncate) — см. `applications-inbox.md`.
+> 5. **Empty state** — `mc-empty` карточка с brass-иконкой + headline + sub + dual CTA («Открыть поиск» ghost + «+ Создать клуб» brass). Заменяет старый tgui `Placeholder`. Видна когда нет ни клубов, ни applicant-заявок, ни organizer-inbox.
+> 6. **Backdrop** — `<BrandBackdrop />` первым ребёнком `.brand-page`.
 >
 > Класс корня — `.brand-page` (общий канвас для Discovery/ClubPage/MyClubsPage). Inter font вынесен на `html, body` для единого шрифта во всём app.
 >
@@ -118,6 +119,8 @@
 ### Сортировка
 
 `getMyClubs()` отдаёт уже отсортированные данные (по joinedAt DESC у бэкенда — verify в Developer-этапе). На фронте **без доп. сортировки**, рендерим в исходном порядке. Organizer-clubs обычно созданы позже member-clubs (юзер сначала вступает куда-то, потом сам создаёт), так что они часто и так окажутся вверху.
+
+Блок «Заявки на рассмотрении» (organizer-side, NEW `feature/applications-inbox`) сортируется на бэкенде `createdAt ASC` — старые заявки сверху, чтобы organizer первым увидел те, у которых меньше всего часов до автоотклонения. См. `applications-inbox.md` § «AC-1».
 
 ### Тап-поведение
 
@@ -195,6 +198,17 @@ GIVEN новый user без membership и заявок
 WHEN открывает `/my-clubs`
 THEN видит **один** `<Placeholder>` с текстом «Вы пока не состоите ни в одном клубе. Найдите интересный в Поиске или создайте свой выше.» (combined — отдельных placeholder'ов на пустые «Мои клубы» и «Мои заявки» рядом не появляется)
 AND Section-кнопка «+ Создать клуб» видна сверху.
+AND блок «Заявки на рассмотрении» отсутствует (у user нет owned-клубов → pending-inbox пуст).
+
+### AC-9: deep-link `?focus=inbox` скроллит к organizer-inbox (NEW, `feature/applications-inbox`)
+GIVEN organizer тапает inline-кнопку «Открыть заявки» из DM-уведомления о новой заявке
+WHEN открывается `/my-clubs?focus=inbox`
+THEN после загрузки `useMyPendingApplicationsQuery` если `pendingInbox.length > 0` — `inboxSectionRef.scrollIntoView({ behavior: 'smooth', block: 'start' })`
+AND query-параметр `focus` стирается через `setSearchParams({...}, { replace: true })` (повторный refresh не триггерит scroll)
+AND scroll отрабатывает ровно один раз (idempotent через `useRef` flag — защита от Vite HMR re-run effect)
+AND если pending-inbox пуст (нет owned-клубов / уже разобрал) — scroll не происходит, query-параметр всё равно стирается
+
+Полная спека — [`applications-inbox.md`](./applications-inbox.md) § «AC-11, AC-12».
 
 ## Non-functional
 

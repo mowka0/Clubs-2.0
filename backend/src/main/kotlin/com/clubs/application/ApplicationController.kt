@@ -53,11 +53,25 @@ class ApplicationController(private val applicationService: ApplicationService) 
     @PostMapping("/api/applications/{id}/reject")
     fun reject(
         @PathVariable id: UUID,
-        @Valid @RequestBody(required = false) request: RejectApplicationRequest?,
+        @Valid @RequestBody request: RejectApplicationRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<ApplicationDto> {
+        // Intentionally NOT logging request.reason — see docs/modules/applications-inbox.md
+        // § Non-functional / Logging: PII-class field.
         log.info("Reject application {}: organizerId={}", id, user.userId)
-        val application = applicationService.rejectApplication(id, user.userId, request?.reason)
+        val application = applicationService.rejectApplication(id, user.userId, request.reason)
         return ResponseEntity.ok(application)
     }
+
+    @GetMapping("/api/users/me/applications-pending")
+    fun getMyPendingApplications(
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<List<PendingApplicationDto>> =
+        ResponseEntity.ok(applicationService.getMyPendingApplications(user.userId))
+
+    @GetMapping("/api/users/me/applications-pending-count")
+    fun getMyPendingApplicationsCount(
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<PendingApplicationsCountDto> =
+        ResponseEntity.ok(applicationService.getMyPendingApplicationsCount(user.userId))
 }

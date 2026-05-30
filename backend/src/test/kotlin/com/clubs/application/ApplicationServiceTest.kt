@@ -1,5 +1,6 @@
 package com.clubs.application
 
+import com.clubs.bot.NotificationService
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
@@ -11,6 +12,8 @@ import com.clubs.generated.jooq.enums.ApplicationStatus
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.membership.MembershipRepository
 import com.clubs.payment.PaymentService
+import com.clubs.reputation.ReputationRepository
+import com.clubs.user.UserRepository
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -29,6 +32,9 @@ class ApplicationServiceTest {
     private lateinit var membershipRepository: MembershipRepository
     private lateinit var paymentService: PaymentService
     private lateinit var mapper: ApplicationMapper
+    private lateinit var notificationService: NotificationService
+    private lateinit var userRepository: UserRepository
+    private lateinit var reputationRepository: ReputationRepository
     private lateinit var applicationService: ApplicationService
 
     @BeforeEach
@@ -38,8 +44,18 @@ class ApplicationServiceTest {
         membershipRepository = mockk(relaxed = true)
         paymentService = mockk(relaxed = true)
         mapper = ApplicationMapper()
+        notificationService = mockk(relaxed = true)
+        userRepository = mockk(relaxed = true)
+        reputationRepository = mockk(relaxed = true)
         applicationService = ApplicationService(
-            applicationRepository, clubRepository, membershipRepository, paymentService, mapper
+            applicationRepository,
+            clubRepository,
+            membershipRepository,
+            paymentService,
+            mapper,
+            notificationService,
+            userRepository,
+            reputationRepository
         )
     }
 

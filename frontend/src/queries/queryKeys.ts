@@ -34,6 +34,8 @@ export const queryKeys = {
   },
   applications: {
     mine: () => ['applications', 'mine'] as const,
+    myPending: ['applications', 'my-pending'] as const,
+    myPendingCount: ['applications', 'my-pending-count'] as const,
   },
   skladchinas: {
     all: ['skladchinas'] as const,

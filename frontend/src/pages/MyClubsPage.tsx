@@ -1,17 +1,26 @@
-import { FC, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { FC, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
 import { Modal, Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useMyClubsQuery } from '../queries/clubs';
-import { useMyApplicationsQuery } from '../queries/applications';
+import {
+  useMyApplicationsQuery,
+  useMyPendingApplicationsQuery,
+} from '../queries/applications';
 import { queryKeys } from '../queries/queryKeys';
 import { Toast } from '../components/Toast';
 import { CreateClubModal } from '../components/CreateClubModal';
 import { BrandBackdrop } from '../components/BrandBackdrop';
+import { ApplicationReviewModal } from '../components/applications/ApplicationReviewModal';
+import { formatPeerSignal } from '../features/applications-inbox/lib/peer-signal-format';
 import { getClub } from '../api/clubs';
-import type { ClubDetailDto, MembershipDto } from '../types/api';
+import type {
+  ClubDetailDto,
+  MembershipDto,
+  PendingApplicationDto,
+} from '../types/api';
 import type { ApplicationDto } from '../api/membership';
 
 interface MyClubsLocationState {
@@ -127,6 +136,9 @@ const AppCard: FC<AppCardProps> = ({ application, club, onClick }) => {
   const initials = club ? getInitials(club.name) : '·';
   const status = application.status;
   const statusLabel = STATUS_LABELS[status] ?? status;
+  const showReason =
+    (status === 'rejected' || status === 'auto_rejected') &&
+    Boolean(application.rejectedReason && application.rejectedReason.trim());
 
   return (
     <button type="button" className="mc-app" onClick={onClick}>
@@ -136,8 +148,46 @@ const AppCard: FC<AppCardProps> = ({ application, club, onClick }) => {
         {application.createdAt && (
           <span className="meta">Подана {formatApplicationDate(application.createdAt)}</span>
         )}
+        {showReason && (
+          <span className="reason">Причина: {application.rejectedReason}</span>
+        )}
       </div>
       <span className={`status ${status}`}>{statusLabel}</span>
+    </button>
+  );
+};
+
+interface PendingAppCardProps {
+  pending: PendingApplicationDto;
+  onClick: () => void;
+}
+
+const PendingAppCard: FC<PendingAppCardProps> = ({ pending, onClick }) => {
+  const { applicant, peerStats, club, hoursUntilAutoReject } = pending;
+  const fullName = `${applicant.firstName}${applicant.lastName ? ` ${applicant.lastName}` : ''}`;
+  const initials = getInitials(fullName) || '·';
+  const urgent = hoursUntilAutoReject <= 6;
+  const hoursLabel =
+    hoursUntilAutoReject > 0
+      ? `${hoursUntilAutoReject}ч до автоотклонения`
+      : 'Время истекло';
+
+  return (
+    <button type="button" className="mc-app pending-app-card" onClick={onClick}>
+      <span className="avt">
+        {applicant.avatarUrl ? <img src={applicant.avatarUrl} alt="" /> : initials}
+      </span>
+      <div className="body">
+        <span className="name">
+          {fullName}
+          {applicant.telegramUsername && (
+            <span className="handle"> · @{applicant.telegramUsername}</span>
+          )}
+        </span>
+        <span className="meta peer">{formatPeerSignal(peerStats)}</span>
+        <span className="club-chip">{club.name}</span>
+        <span className={`hours-hint${urgent ? ' urgent' : ''}`}>{hoursLabel}</span>
+      </div>
     </button>
   );
 };
@@ -145,15 +195,24 @@ const AppCard: FC<AppCardProps> = ({ application, club, onClick }) => {
 export const MyClubsPage: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const haptic = useHaptic();
   const { user } = useAuthStore();
 
   const myClubsQuery = useMyClubsQuery();
   const applicationsQuery = useMyApplicationsQuery();
+  const pendingInboxQuery = useMyPendingApplicationsQuery();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [reviewing, setReviewing] = useState<PendingApplicationDto | null>(null);
 
   const myClubs = myClubsQuery.data ?? [];
   const applications = applicationsQuery.data ?? [];
+  const pendingInbox = pendingInboxQuery.data ?? [];
+
+  const inboxSectionRef = useRef<HTMLDivElement | null>(null);
+  // Idempotent scroll: focus=inbox deep-link must scroll exactly once per
+  // mount, even with Vite HMR re-running the effect.
+  const focusInboxHandledRef = useRef(false);
 
   const navState = location.state as MyClubsLocationState | null;
   const [toastMessage, setToastMessage] = useState<string | null>(navState?.toast ?? null);
@@ -162,6 +221,26 @@ export const MyClubsPage: FC = () => {
       window.history.replaceState(null, '', location.pathname);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Deep-link from DM: /my-clubs?focus=inbox. Scroll to the inbox section once
+  // its data is loaded and the section is in the DOM; then strip the query so
+  // a refresh doesn't re-trigger. If the user has no pending applications,
+  // there is no section and we just clear the query.
+  useEffect(() => {
+    if (focusInboxHandledRef.current) return;
+    if (searchParams.get('focus') !== 'inbox') return;
+    if (pendingInboxQuery.isPending) return;
+
+    focusInboxHandledRef.current = true;
+
+    if (pendingInbox.length > 0 && inboxSectionRef.current) {
+      inboxSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    const next = new URLSearchParams(searchParams);
+    next.delete('focus');
+    setSearchParams(next, { replace: true });
+  }, [pendingInboxQuery.isPending, pendingInbox.length, searchParams, setSearchParams]);
 
   const clubIds = useMemo(() => {
     const ids = new Set<string>();
@@ -184,7 +263,11 @@ export const MyClubsPage: FC = () => {
   });
 
   const loading = myClubsQuery.isPending || applicationsQuery.isPending;
-  const empty = !loading && myClubs.length === 0 && applications.length === 0;
+  const empty =
+    !loading &&
+    myClubs.length === 0 &&
+    applications.length === 0 &&
+    pendingInbox.length === 0;
 
   const handleCreated = (id: string) => {
     setShowCreateModal(false);
@@ -278,6 +361,27 @@ export const MyClubsPage: FC = () => {
         </>
       )}
 
+      {/* Organizer cross-club inbox — pending applications across all owned clubs */}
+      {!loading && pendingInbox.length > 0 && (
+        <div ref={inboxSectionRef}>
+          <div className="mc-section-label">
+            Заявки на рассмотрении <span className="count">· {pendingInbox.length}</span>
+          </div>
+          <div className="mc-list">
+            {pendingInbox.map((p) => (
+              <PendingAppCard
+                key={p.applicationId}
+                pending={p}
+                onClick={() => {
+                  haptic.impact('light');
+                  setReviewing(p);
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Applications */}
       {!loading && applications.length > 0 && (
         <>
@@ -301,6 +405,14 @@ export const MyClubsPage: FC = () => {
         <Modal open onOpenChange={(open) => !open && setShowCreateModal(false)}>
           <CreateClubModal onClose={() => setShowCreateModal(false)} onCreated={handleCreated} />
         </Modal>
+      )}
+
+      {reviewing && (
+        <ApplicationReviewModal
+          application={reviewing}
+          open
+          onClose={() => setReviewing(null)}
+        />
       )}
 
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}

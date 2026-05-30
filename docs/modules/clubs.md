@@ -111,7 +111,9 @@ Backend явно не принимает category/accessType в `UpdateClubReque
 Покрывает PRD §8 Milestone 2 *«CRUD клубов (создание, редактирование, удаление)»* — edit/delete на стороне UI. Соответствует PRD §4.5.1 (поля) и §4.5.2 (Дашборд организатора).
 
 ### UI
-В `OrganizerClubManage` — новая вкладка **«⚙️ Настройки»** (пятая после Members / Applications / Events / Finances).
+В `OrganizerClubManage` — вкладка **«⚙️ Настройки»**.
+
+> **Update (`feature/applications-inbox`, 2026-05-30):** таб **«Заявки»** (`ApplicationsTab`) удалён из `OrganizerClubManage`. `TabKey` теперь = `'members' | 'finances' | 'settings'`. Approve/reject заявок выполняется только через кросс-клубовый organizer-inbox на `MyClubsPage` («Заявки на рассмотрении» секция) — см. [`applications-inbox.md`](./applications-inbox.md). Legacy deep-link `?tab=applications` добавлен в `LEGACY_TAB_KEYS` → fallback на `members`.
 
 ### Поля формы (из PRD §4.5.1, без category и accessType)
 1. **Аватар** — image upload через `POST /api/upload` (MinIO/S3). Формат jpeg/png, до 5 MB. Preview локально пока идёт загрузка.

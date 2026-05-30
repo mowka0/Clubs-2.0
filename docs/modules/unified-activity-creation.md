@@ -10,8 +10,11 @@
 > организаторам (≥1 клуб в роли organizer). Flow: тип (Событие/Сбор) → клуб
 > (авто-выбор если 1 organizer-клуб, иначе `ClubPickerModal`) → существующие
 > create-routes. **Таб «Активности» из `OrganizerClubManage` УДАЛЁН** — manage-панель
-> теперь 4 таба (Участники/Заявки/Финансы/Настройки), `ActivitiesManageTab.tsx`
-> удалён. Унифицированная лента активностей сохранилась только в **member-view**
+> теперь **3 таба (Участники/Финансы/Настройки)** после `feature/applications-inbox`
+> (2026-05-30, таб «Заявки» удалён в пользу кросс-клубового inbox на
+> `MyClubsPage`, см. [`applications-inbox.md`](./applications-inbox.md)).
+> `ActivitiesManageTab.tsx` удалён ещё в `feature/unified-activity-creation`.
+> Унифицированная лента активностей сохранилась только в **member-view**
 > на `ClubPage` (`ClubActivitiesTab`, read-only). Детали — § «Итерация 4» ниже и
 > Changelog 2026-05-24 (round 4). Секции 1-3 описывают предыдущие итерации, где
 > picker был в manage — читать с учётом этого override.

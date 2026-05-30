@@ -184,7 +184,9 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 ## OrganizerClubManage — Страница управления клубом (`/clubs/:id/manage`)
 
 ### Описание
-Страница доступна только организатору. Содержит **4 вкладки**: Участники, Заявки, Финансы, Настройки.
+Страница доступна только организатору. Содержит **3 вкладки**: Участники, Финансы, Настройки.
+
+> **Update (post `feature/applications-inbox`, 2026-05-30):** таб **«Заявки»** (`ApplicationsTab`) удалён. Approve / reject заявок выполняется через кросс-клубовый organizer-inbox на `MyClubsPage` — секция «Заявки на рассмотрении». Legacy deep-link `?tab=applications` редиректит на `members` (через `LEGACY_TAB_KEYS`). Полная спека инбокса — [`applications-inbox.md`](./applications-inbox.md).
 
 > **Note (post `feature/unified-activity-creation`, итерация 4 — 2026-05-24):**
 > история табов: изначально было 6 (`События` + `Сборы` отдельно) → итерация 1
@@ -201,7 +203,7 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 - Обёртка `brand-page` + `<BrandBackdrop />` (navy blobs + brass glows), как на Discovery / ClubPage / MyClubsPage
 - Шапка — brand-hero карточка `ManageHeader` (`components/manage/ManageHeader.tsx`) вместо плоского `Cell`-header
 - Вкладки — brass pill-tabs `ManageTabs` (`components/manage/ManageTabs.tsx`) вместо telegram-ui `TabsList`; фиксит обрезание длинных лейблов («Учас…»)
-- Внутренности вкладок (Участники / Заявки / Финансы / Настройки) — **без изменений**
+- Внутренности вкладок (Участники / Финансы / Настройки) — **без изменений** относительно итерации 4. Таб «Заявки» удалён в `feature/applications-inbox` (см. update-блок выше).
 - CSS — в `frontend/src/styles/brand-theme.css`
 
 ### Вкладки
@@ -216,10 +218,11 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 - Роль и дата вступления
 - Репутация: индекс надёжности, % выполнения обещаний, подтверждения, посещения
 
-#### Заявки (`ApplicationsTab`)
-- Список pending заявок через `GET /api/clubs/:id/applications`
-- Кнопки "Принять" / "Отклонить" → `POST /api/applications/:id/approve` или `/reject`
-- Таймер до автоотклонения (48ч с момента создания)
+#### ~~Заявки~~ (`ApplicationsTab`, удалён в `feature/applications-inbox`, 2026-05-30)
+- Кросс-клубовый organizer-inbox теперь живёт на `MyClubsPage` — секция «Заявки на рассмотрении».
+- `GET /api/clubs/:id/applications` остаётся public endpoint'ом (используется для архива, не задействован UI).
+- Approve/reject — через `ApplicationReviewModal` на `MyClubsPage`. Reason при reject — обязателен (≥5 символов после trim).
+- Полная спека — [`applications-inbox.md`](./applications-inbox.md).
 
 > **Активности — больше НЕ в manage (итерация 4).** Таб «Активности»
 > (`ActivitiesManageTab`) удалён. Единая лента событий + сборов клуба
@@ -257,7 +260,7 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 | `.pf-bio` (свободный текст «о себе») | если `user.bio` задан | `useAuthStore.user.bio` |
 | Секция «Интересы» (чипы `.pf-tag`) | если `interests.length > 0` | `useMyInterestsQuery()` |
 | Секция «Моя репутация» — карточки клубов ИЛИ плашка | **всегда** (плашка `.mc-empty` при пустоте) | `useMyReputationQuery()` |
-| Секция «Активные заявки» | если есть pending applications | `useMyApplicationsQuery()` + `useQueries(getClub)` для названий |
+| Секция «Активные заявки» | если есть pending / rejected / auto_rejected applications | `useMyApplicationsQuery()` + `useQueries(getClub)` для названий. Для отклонённых заявок с `rejectedReason` рендерится третья строка `.reason` с причиной отказа — см. [`profile.md`](./profile.md) § «AC-12». |
 
 Карточка `.pf-rep-card`: avatar + название клуба + (опц.) `обещания N% · M подтв. · K посещ.` + индекс надёжности справа (цвет по тиру: high ≥85 / mid ≥70 / low). Тап → `/clubs/{clubId}`.
 

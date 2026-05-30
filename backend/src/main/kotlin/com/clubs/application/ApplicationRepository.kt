@@ -16,6 +16,15 @@ interface ApplicationRepository {
     fun findActiveByUserAndClub(userId: UUID, clubId: UUID): Application?
     fun findByUserId(userId: UUID): List<Application>
 
+    /**
+     * Pending applications across multiple clubs, oldest-first.
+     * Used by the cross-club organizer inbox. Empty input → empty output (no SQL hit).
+     */
+    fun findPendingByClubIds(clubIds: Collection<UUID>): List<Application>
+
+    /** Count of pending applications across multiple clubs. Empty input → 0 (no SQL hit). */
+    fun countPendingByClubIds(clubIds: Collection<UUID>): Int
+
     // Counts / rate limit
     fun countTodayByUser(userId: UUID): Int
 

@@ -69,6 +69,28 @@ class JooqApplicationRepository(
             .fetch()
             .map(mapper::toDomain)
 
+    override fun findPendingByClubIds(clubIds: Collection<UUID>): List<Application> {
+        if (clubIds.isEmpty()) return emptyList()
+        return dsl.selectFrom(APPLICATIONS)
+            .where(
+                APPLICATIONS.CLUB_ID.`in`(clubIds)
+                    .and(APPLICATIONS.STATUS.eq(ApplicationStatus.pending))
+            )
+            .orderBy(APPLICATIONS.CREATED_AT.asc())
+            .fetch()
+            .map(mapper::toDomain)
+    }
+
+    override fun countPendingByClubIds(clubIds: Collection<UUID>): Int {
+        if (clubIds.isEmpty()) return 0
+        return dsl.selectCount().from(APPLICATIONS)
+            .where(
+                APPLICATIONS.CLUB_ID.`in`(clubIds)
+                    .and(APPLICATIONS.STATUS.eq(ApplicationStatus.pending))
+            )
+            .fetchOne(0, Int::class.java) ?: 0
+    }
+
     override fun countTodayByUser(userId: UUID): Int {
         val startOfDay = OffsetDateTime.now(ZoneOffset.UTC).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC)
         return dsl.selectCount().from(APPLICATIONS)

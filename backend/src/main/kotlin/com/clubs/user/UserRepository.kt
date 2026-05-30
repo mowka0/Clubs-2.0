@@ -31,6 +31,14 @@ class UserRepository(private val dsl: DSLContext) {
             .execute()
     }
 
+    /** Batch lookup of users by IDs (active or not — caller decides). Empty input → empty output (no SQL hit). */
+    fun findByIds(ids: Collection<UUID>): List<UsersRecord> {
+        if (ids.isEmpty()) return emptyList()
+        return dsl.selectFrom(USERS)
+            .where(USERS.ID.`in`(ids))
+            .fetch()
+    }
+
     /** Returns Telegram chat IDs for given user IDs, in arbitrary order. Used by NotificationService for batch DMs. */
     fun findTelegramIds(userIds: Collection<UUID>): List<Long> {
         if (userIds.isEmpty()) return emptyList()

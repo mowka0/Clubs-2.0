@@ -75,6 +75,27 @@ class NotificationService(
     }
 
     /**
+     * Notify a club organizer that a new application has been submitted.
+     * Fire-and-forget: any Telegram error is logged in [sendDm] but does NOT
+     * propagate to the caller (so the originating DB transaction is never
+     * rolled back). Spring proxies @Async, so the call returns immediately.
+     */
+    @Async
+    fun sendApplicationCreatedDM(
+        organizerTelegramId: Long,
+        applicantDisplayName: String,
+        clubName: String
+    ) {
+        val text = "📥 Новая заявка от $applicantDisplayName в клуб «$clubName»"
+        sendDm(
+            chatId = organizerTelegramId.toString(),
+            text = text,
+            webAppPath = "/my-clubs?focus=inbox",
+            buttonText = "Открыть заявки"
+        )
+    }
+
+    /**
      * DM with a deep-link inline button that opens the Mini App on a specific
      * route. [webAppPath] is path-prefixed-with-slash, e.g. "/skladchina/<id>"
      * or "/events/<id>". Frontend's React Router renders the matching page

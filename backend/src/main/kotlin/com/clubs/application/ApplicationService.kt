@@ -1,5 +1,7 @@
 package com.clubs.application
 
+import com.clubs.bot.NotificationService
+import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
@@ -10,9 +12,13 @@ import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ApplicationStatus
 import com.clubs.membership.MembershipRepository
 import com.clubs.payment.PaymentService
+import com.clubs.reputation.PeerStatsAggregate
+import com.clubs.reputation.ReputationRepository
+import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.OffsetDateTime
 import java.util.UUID
 
 private const val MAX_APPLICATIONS_PER_DAY = 5
@@ -23,7 +29,10 @@ class ApplicationService(
     private val clubRepository: ClubRepository,
     private val membershipRepository: MembershipRepository,
     private val paymentService: PaymentService,
-    private val mapper: ApplicationMapper
+    private val mapper: ApplicationMapper,
+    private val notificationService: NotificationService,
+    private val userRepository: UserRepository,
+    private val reputationRepository: ReputationRepository
 ) {
 
     private val log = LoggerFactory.getLogger(ApplicationService::class.java)
@@ -57,8 +66,48 @@ class ApplicationService(
 
         val application = applicationRepository.create(userId, clubId, request.answerText)
         log.info("Application submitted: id={} clubId={} userId={}", application.id, clubId, userId)
+
+        dispatchApplicationCreatedDm(club, userId)
+
         return mapper.toDto(application)
     }
+
+    /**
+     * Best-effort organizer notification on new application. Failures here must
+     * NOT abort the submitApplication transaction — sendApplicationCreatedDM is
+     * @Async (fire-and-forget) and the per-message try/catch lives in
+     * NotificationService.sendDm. We additionally guard the lookups so a DB
+     * miss / NPE never poisons the happy path.
+     */
+    private fun dispatchApplicationCreatedDm(club: Club, applicantId: UUID) {
+        try {
+            val organizer = userRepository.findById(club.ownerId)
+            if (organizer == null) {
+                log.warn("Skipping application-created DM: organizer not found ownerId={} clubId={}", club.ownerId, club.id)
+                return
+            }
+            val applicant = userRepository.findById(applicantId)
+            val applicantName = applicant?.let { buildDisplayName(it.firstName, it.lastName) } ?: "Новый пользователь"
+
+            notificationService.sendApplicationCreatedDM(
+                organizerTelegramId = organizer.telegramId,
+                applicantDisplayName = applicantName,
+                clubName = club.name
+            )
+            log.info(
+                "DM dispatched for application-created: clubId={} organizerTelegramId={}",
+                club.id, organizer.telegramId
+            )
+        } catch (e: Exception) {
+            log.warn(
+                "Failed to dispatch application-created DM (non-fatal): clubId={} applicantId={} error={}",
+                club.id, applicantId, e.message
+            )
+        }
+    }
+
+    private fun buildDisplayName(firstName: String, lastName: String?): String =
+        if (lastName.isNullOrBlank()) firstName else "$firstName $lastName"
 
     @Transactional
     fun approveApplication(applicationId: UUID, organizerId: UUID): ApplicationDto {
@@ -112,8 +161,20 @@ class ApplicationService(
             throw ValidationException("Application is not pending")
         }
 
-        val updated = applicationRepository.updateStatus(applicationId, ApplicationStatus.rejected, reason)
-        log.info("Application rejected: id={} clubId={} userId={} organizerId={} reason={}", applicationId, application.clubId, application.userId, organizerId, reason)
+        // DTO @NotBlank/@Size catches empty/short reasons before we get here for
+        // human-driven rejects. The nullable parameter keeps the door open for
+        // future system-driven rejects (e.g. scheduler) without contract changes.
+        // Defense in depth: re-check length AFTER trim. "  ab " passes @Size(min=5)
+        // but trims to 2 chars; we treat it as invalid for human-driven rejects.
+        val storedReason = reason?.trim()?.ifEmpty { null }
+        if (reason != null && (storedReason == null || storedReason.length < 5)) {
+            throw ValidationException("Reason must be at least 5 characters after trim")
+        }
+        val updated = applicationRepository.updateStatus(applicationId, ApplicationStatus.rejected, storedReason)
+        log.info(
+            "Application rejected: id={} clubId={} userId={} organizerId={}",
+            applicationId, application.clubId, application.userId, organizerId
+        )
         return mapper.toDto(updated)
     }
 
@@ -131,4 +192,47 @@ class ApplicationService(
 
     fun getMyApplications(userId: UUID): List<ApplicationDto> =
         applicationRepository.findByUserId(userId).map(mapper::toDto)
+
+    /**
+     * Cross-club organizer inbox: all pending applications across the caller's
+     * owned clubs, enriched with applicant + peer-stats + club brief.
+     *
+     * Performance contract (docs/modules/applications-inbox.md § Non-functional):
+     * ≤5 SQL queries regardless of N applications.
+     */
+    @Transactional(readOnly = true)
+    fun getMyPendingApplications(organizerId: UUID): List<PendingApplicationDto> {
+        val clubIds = clubRepository.findIdsByOwnerId(organizerId)
+        if (clubIds.isEmpty()) return emptyList()
+
+        val applications = applicationRepository.findPendingByClubIds(clubIds)
+        if (applications.isEmpty()) return emptyList()
+
+        val applicantIds = applications.map { it.userId }.toSet()
+        val applicantClubIds = applications.map { it.clubId }.toSet()
+
+        val applicantsById = userRepository.findByIds(applicantIds).associateBy { it.id!! }
+        val peerStatsByUser = reputationRepository.aggregateByUserIds(applicantIds)
+        val clubsById = clubRepository.findByIds(applicantClubIds).associateBy { it.id }
+
+        val now = OffsetDateTime.now()
+        return applications.mapNotNull { application ->
+            val applicantRecord = applicantsById[application.userId] ?: return@mapNotNull null
+            val club = clubsById[application.clubId] ?: return@mapNotNull null
+            mapper.toPendingDto(
+                application = application,
+                applicant = mapper.toApplicantInfo(applicantRecord),
+                peerStats = mapper.toPeerStats(peerStatsByUser[application.userId] ?: PeerStatsAggregate.EMPTY),
+                club = mapper.toClubBrief(club),
+                now = now
+            )
+        }
+    }
+
+    @Transactional(readOnly = true)
+    fun getMyPendingApplicationsCount(organizerId: UUID): PendingApplicationsCountDto {
+        val clubIds = clubRepository.findIdsByOwnerId(organizerId)
+        val count = applicationRepository.countPendingByClubIds(clubIds)
+        return PendingApplicationsCountDto(count)
+    }
 }

@@ -97,9 +97,13 @@ export const queryKeys = {
   },
   applications: {
     mine: () => ['applications', 'mine'] as const,
+    myPending: ['applications', 'my-pending'] as const,
+    myPendingCount: ['applications', 'my-pending-count'] as const,
   },
 } as const;
 ```
+
+> `applications.myPending` / `myPendingCount` — кросс-клубовый organizer-inbox, добавлены в `feature/applications-inbox` (2026-05-30). См. [`applications-inbox.md`](./applications-inbox.md).
 
 **Правила:**
 - Префикс — домен (`clubs` / `events` / `applications`)
@@ -127,7 +131,9 @@ export const queryKeys = {
 | `useMyInterestsQuery()` | `queryKeys.clubs.myInterests()` | `getMyInterests` | `ProfilePage` (read-view чипов) + `ProfileEditModal` (seed initial state) |
 | `useInterestSuggestQuery(query)` | `['interests', 'suggest', query.toLowerCase()]` | `suggestInterests` | `InterestsInput` — `enabled = trimmed.length >= 2`, `staleTime: 60_000`. Caller передаёт уже-debounced значение (250ms в инпуте). |
 | `useSkladchinaActionRequiredCountQuery()` | `queryKeys.skladchinas.actionRequiredCount` | `getSkladchinaActionRequiredCount` | `ActivitiesPage` (бейдж на сегменте «Сборы») + `BottomTabBar` (точка на табе «Активности»). `staleTime: 60_000`, `select: data → data.count`. |
-| `useClubApplicationsQuery(clubId, status?)` | `queryKeys.clubs.applications(clubId, status)` | `getClubApplications` | OrganizerClubManage |
+| `useClubApplicationsQuery(clubId, status?)` | `queryKeys.clubs.applications(clubId, status)` | `getClubApplications` | ⚠️ После `feature/applications-inbox` (2026-05-30) **нет активных consumer'ов** в UI: `ApplicationsTab` в `OrganizerClubManage.tsx` удалён, organizer-inbox переехал на `MyClubsPage` и использует `useMyPendingApplicationsQuery`. Hook оставлен как dead-export для возможного будущего архива/аналитики. |
+| `useMyPendingApplicationsQuery()` | `queryKeys.applications.myPending` | `getMyPendingApplications` | `MyClubsPage` — секция «Заявки на рассмотрении» (cross-club organizer-inbox). `staleTime: 60_000`. Полная спека — [`applications-inbox.md`](./applications-inbox.md). |
+| `useMyPendingApplicationsCountQuery()` | `queryKeys.applications.myPendingCount` | `getMyPendingApplicationsCount` | `BottomTabBar` — точка-индикатор на табе «Мои клубы» при `count > 0`. `staleTime: 60_000`, `select: data → data.count`. |
 | `useClubFinancesQuery(clubId)` | `queryKeys.clubs.finances(clubId)` | `getFinances` | OrganizerClubManage |
 
 **Сигнатура (каноническая):**
@@ -179,8 +185,8 @@ const clubs = data?.pages.flatMap(p => p.content) ?? [];
 | `useCreateClubMutation()` | `createClub(body)` | `queryKeys.clubs.all`, `queryKeys.clubs.my()` |
 | `useUpdateClubMutation()` | `updateClub(id, body)` | `queryKeys.clubs.detail(id)`, `queryKeys.clubs.all` (список устарел) |
 | `useDeleteClubMutation()` | `deleteClub(id)` | `queryKeys.clubs.all`, `queryKeys.clubs.my()` |
-| `useApproveApplicationMutation()` | `approveApplication(appId)` | `queryKeys.clubs.applications(clubId, 'all')` + `queryKeys.clubs.applications(clubId, 'pending')` (явная инвалидация конкретной табы organizer'а) + `queryKeys.applications.mine()` + `queryKeys.clubs.members(clubId)` (approve добавляет участника → members list устаревает). `clubId` передаётся mutate-аргументом, см. `ApproveApplicationArgs`. |
-| `useRejectApplicationMutation()` | `rejectApplication(appId, reason?)` | `queryKeys.clubs.applications(clubId, 'all')` + `queryKeys.clubs.applications(clubId, 'pending')` + `queryKeys.applications.mine()` (members не трогается — заявка отклонена, новых участников нет) |
+| `useApproveApplicationMutation()` | `approveApplication(appId)` | `queryKeys.clubs.applications(clubId, 'all')` + `queryKeys.clubs.applications(clubId, 'pending')` (явная инвалидация конкретной табы organizer'а) + `queryKeys.applications.mine()` + `queryKeys.applications.myPending` + `queryKeys.applications.myPendingCount` (organizer-inbox + tab-dot) + `queryKeys.clubs.members(clubId)` (approve добавляет участника → members list устаревает). `clubId` передаётся mutate-аргументом, см. `ApproveApplicationArgs`. |
+| `useRejectApplicationMutation()` | `rejectApplication(appId, reason)` — `reason: string` теперь **обязателен** (`@NotBlank @Size(min=5, max=500)` на бэкенде, см. [`applications-inbox.md`](./applications-inbox.md) § «POST /api/applications/{id}/reject»). | `queryKeys.clubs.applications(clubId, 'all')` + `queryKeys.clubs.applications(clubId, 'pending')` + `queryKeys.applications.mine()` + `queryKeys.applications.myPending` + `queryKeys.applications.myPendingCount` (members не трогается — заявка отклонена, новых участников нет) |
 | `useCastVoteMutation()` | `castVote(eventId, vote)` | `queryKeys.events.detail(eventId)` + `queryKeys.events.myVote(eventId)` (явно — myVote ключ это prefix-extension от detail и формально покрыт первым invalidate, но оставлен явным на случай изменения формы ключа) |
 | `useConfirmParticipationMutation()` | `confirmParticipation(eventId)` | то же что cast: `events.detail(eventId)` + `events.myVote(eventId)` |
 | `useDeclineParticipationMutation()` | `declineParticipation(eventId)` | то же что cast: `events.detail(eventId)` + `events.myVote(eventId)` |

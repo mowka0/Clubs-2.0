@@ -3,6 +3,8 @@ import type {
   JoinClubResult,
   MemberListItemDto,
   MemberProfileDto,
+  PendingApplicationDto,
+  PendingApplicationsCountDto,
   UserClubReputationDto,
 } from '../types/api';
 
@@ -12,6 +14,7 @@ export interface ApplicationDto {
   clubId: string;
   status: string;
   answerText: string | null;
+  rejectedReason: string | null;
   createdAt: string | null;
 }
 
@@ -55,6 +58,20 @@ export function approveApplication(applicationId: string): Promise<void> {
   return apiClient.post(`/api/applications/${applicationId}/approve`);
 }
 
-export function rejectApplication(applicationId: string, reason?: string): Promise<void> {
+/**
+ * Reject a pending application. Backend now requires a non-empty `reason`
+ * (5–500 chars after trim) — see docs/modules/applications-inbox.md.
+ */
+export function rejectApplication(applicationId: string, reason: string): Promise<void> {
   return apiClient.post(`/api/applications/${applicationId}/reject`, { reason });
+}
+
+export function getMyPendingApplications(): Promise<PendingApplicationDto[]> {
+  return apiClient.get<PendingApplicationDto[]>('/api/users/me/applications-pending');
+}
+
+export function getMyPendingApplicationsCount(): Promise<PendingApplicationsCountDto> {
+  return apiClient.get<PendingApplicationsCountDto>(
+    '/api/users/me/applications-pending-count',
+  );
 }
