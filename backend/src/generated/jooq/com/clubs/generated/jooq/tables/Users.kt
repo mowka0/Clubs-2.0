@@ -17,15 +17,18 @@ import com.clubs.generated.jooq.keys.TRANSACTIONS__TRANSACTIONS_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.USERS_PKEY
 import com.clubs.generated.jooq.keys.USERS_TELEGRAM_ID_KEY
 import com.clubs.generated.jooq.keys.USER_CLUB_REPUTATION__USER_CLUB_REPUTATION_USER_ID_FKEY
+import com.clubs.generated.jooq.keys.USER_INTERESTS__USER_INTERESTS_USER_ID_FKEY
 import com.clubs.generated.jooq.tables.Applications.ApplicationsPath
 import com.clubs.generated.jooq.tables.Clubs.ClubsPath
 import com.clubs.generated.jooq.tables.EventResponses.EventResponsesPath
 import com.clubs.generated.jooq.tables.Events.EventsPath
+import com.clubs.generated.jooq.tables.Interests.InterestsPath
 import com.clubs.generated.jooq.tables.Memberships.MembershipsPath
 import com.clubs.generated.jooq.tables.SkladchinaParticipants.SkladchinaParticipantsPath
 import com.clubs.generated.jooq.tables.Skladchinas.SkladchinasPath
 import com.clubs.generated.jooq.tables.Transactions.TransactionsPath
 import com.clubs.generated.jooq.tables.UserClubReputation.UserClubReputationPath
+import com.clubs.generated.jooq.tables.UserInterests.UserInterestsPath
 import com.clubs.generated.jooq.tables.records.UsersRecord
 
 import java.time.OffsetDateTime
@@ -138,6 +141,16 @@ open class Users(
      * The column <code>public.users.updated_at</code>.
      */
     val UPDATED_AT: TableField<UsersRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "")
+
+    /**
+     * The column <code>public.users.country</code>.
+     */
+    val COUNTRY: TableField<UsersRecord, String?> = createField(DSL.name("country"), SQLDataType.VARCHAR(8), this, "")
+
+    /**
+     * The column <code>public.users.bio</code>.
+     */
+    val BIO: TableField<UsersRecord, String?> = createField(DSL.name("bio"), SQLDataType.VARCHAR(280), this, "")
 
     private constructor(alias: Name, aliased: Table<UsersRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<UsersRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
@@ -333,6 +346,22 @@ open class Users(
     val userClubReputation: UserClubReputationPath
         get(): UserClubReputationPath = userClubReputation()
 
+    private lateinit var _userInterests: UserInterestsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.user_interests</code> table
+     */
+    fun userInterests(): UserInterestsPath {
+        if (!this::_userInterests.isInitialized)
+            _userInterests = UserInterestsPath(this, null, USER_INTERESTS__USER_INTERESTS_USER_ID_FKEY.inverseKey)
+
+        return _userInterests;
+    }
+
+    val userInterests: UserInterestsPath
+        get(): UserInterestsPath = userInterests()
+
     /**
      * Get the implicit many-to-many join path to the <code>public.clubs</code>
      * table, via the <code>memberships_club_id_fkey</code> key
@@ -353,6 +382,13 @@ open class Users(
      */
     val userClubReputationClubIdFkey: ClubsPath
         get(): ClubsPath = userClubReputation().clubs()
+
+    /**
+     * Get the implicit many-to-many join path to the
+     * <code>public.interests</code> table
+     */
+    val interests: InterestsPath
+        get(): InterestsPath = userInterests().interests()
     override fun `as`(alias: String): Users = Users(DSL.name(alias), this)
     override fun `as`(alias: Name): Users = Users(alias, this)
     override fun `as`(alias: Table<*>): Users = Users(alias.qualifiedName, this)

@@ -8,10 +8,12 @@ import com.clubs.generated.jooq.tables.Applications
 import com.clubs.generated.jooq.tables.Clubs
 import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.Events
+import com.clubs.generated.jooq.tables.Interests
 import com.clubs.generated.jooq.tables.Memberships
 import com.clubs.generated.jooq.tables.SkladchinaParticipants
 import com.clubs.generated.jooq.tables.Skladchinas
 import com.clubs.generated.jooq.tables.Transactions
+import com.clubs.generated.jooq.tables.UserInterests
 
 import org.jooq.Index
 import org.jooq.impl.DSL
@@ -34,6 +36,7 @@ val IDX_EVENT_RESPONSES_EVENT_ID: Index = Internal.createIndex(DSL.name("idx_eve
 val IDX_EVENT_RESPONSES_USER_ID: Index = Internal.createIndex(DSL.name("idx_event_responses_user_id"), EventResponses.EVENT_RESPONSES, arrayOf(EventResponses.EVENT_RESPONSES.USER_ID), false)
 val IDX_EVENTS_CLUB_ID_DATETIME: Index = Internal.createIndex(DSL.name("idx_events_club_id_datetime"), Events.EVENTS, arrayOf(Events.EVENTS.CLUB_ID, Events.EVENTS.EVENT_DATETIME.desc()), false)
 val IDX_EVENTS_STATUS: Index = Internal.createIndex(DSL.name("idx_events_status"), Events.EVENTS, arrayOf(Events.EVENTS.STATUS), false)
+val IDX_INTERESTS_NAME_PREFIX: Index = Internal.createIndex(DSL.name("idx_interests_name_prefix"), Interests.INTERESTS, arrayOf(Interests.INTERESTS.NAME), false)
 val IDX_MEMBERSHIPS_CLUB_ID: Index = Internal.createIndex(DSL.name("idx_memberships_club_id"), Memberships.MEMBERSHIPS, arrayOf(Memberships.MEMBERSHIPS.CLUB_ID), false)
 val IDX_MEMBERSHIPS_STATUS: Index = Internal.createIndex(DSL.name("idx_memberships_status"), Memberships.MEMBERSHIPS, arrayOf(Memberships.MEMBERSHIPS.STATUS), false)
 val IDX_MEMBERSHIPS_USER_ID: Index = Internal.createIndex(DSL.name("idx_memberships_user_id"), Memberships.MEMBERSHIPS, arrayOf(Memberships.MEMBERSHIPS.USER_ID), false)
@@ -42,4 +45,5 @@ val IDX_SKLADCHINAS_CLUB_ID: Index = Internal.createIndex(DSL.name("idx_skladchi
 val IDX_SKLADCHINAS_STATUS_DEADLINE: Index = Internal.createIndex(DSL.name("idx_skladchinas_status_deadline"), Skladchinas.SKLADCHINAS, arrayOf(Skladchinas.SKLADCHINAS.STATUS, Skladchinas.SKLADCHINAS.DEADLINE), false)
 val IDX_TRANSACTIONS_CLUB_ID_CREATED: Index = Internal.createIndex(DSL.name("idx_transactions_club_id_created"), Transactions.TRANSACTIONS, arrayOf(Transactions.TRANSACTIONS.CLUB_ID, Transactions.TRANSACTIONS.CREATED_AT), false)
 val IDX_TRANSACTIONS_USER_ID: Index = Internal.createIndex(DSL.name("idx_transactions_user_id"), Transactions.TRANSACTIONS, arrayOf(Transactions.TRANSACTIONS.USER_ID), false)
+val IDX_USER_INTERESTS_USER: Index = Internal.createIndex(DSL.name("idx_user_interests_user"), UserInterests.USER_INTERESTS, arrayOf(UserInterests.USER_INTERESTS.USER_ID), false)
 val UQ_TRANSACTIONS_TELEGRAM_CHARGE_ID: Index = Internal.createIndex(DSL.name("uq_transactions_telegram_charge_id"), Transactions.TRANSACTIONS, arrayOf(Transactions.TRANSACTIONS.TELEGRAM_PAYMENT_CHARGE_ID), true)

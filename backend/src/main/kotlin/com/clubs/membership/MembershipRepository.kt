@@ -10,6 +10,7 @@ interface MembershipRepository {
     fun findById(id: UUID): Membership?
     fun findByUserId(userId: UUID): List<Membership>
     fun findClubMembersWithUserInfo(clubId: UUID): List<ClubMemberInfo>
+    fun findUserClubsWithReputation(userId: UUID): List<UserClubReputationInfo>
     fun findExpiryRefByUserAndClub(userId: UUID, clubId: UUID): MembershipExpiryRef?
 
     // Predicates / counts

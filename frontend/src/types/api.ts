@@ -19,6 +19,15 @@ export interface UserDto {
   lastName: string | null;
   avatarUrl: string | null;
   city: string | null;
+  country: string | null;
+  bio: string | null;
+}
+
+export interface UpdateProfileBody {
+  country: string | null;
+  city: string | null;
+  bio: string | null;
+  interests: string[];
 }
 
 export interface NearestEventDto {
@@ -63,6 +72,23 @@ export interface MemberProfileDto {
   promiseFulfillmentPct: number;
   totalConfirmations: number;
   totalAttendances: number;
+}
+
+export interface UserClubReputationDto {
+  clubId: string;
+  clubName: string;
+  clubAvatarUrl: string | null;
+  category: string;
+  role: string;
+  joinedAt: string | null;
+  reliabilityIndex: number;
+  promiseFulfillmentPct: number;
+  totalConfirmations: number;
+  totalAttendances: number;
+}
+
+export interface ActionRequiredCountDto {
+  count: number;
 }
 
 export interface FinancesDto {

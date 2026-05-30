@@ -22,7 +22,9 @@ data class Users(
     var avatarUrl: String? = null,
     var city: String? = null,
     var createdAt: OffsetDateTime? = null,
-    var updatedAt: OffsetDateTime? = null
+    var updatedAt: OffsetDateTime? = null,
+    var country: String? = null,
+    var bio: String? = null
 ): Serializable {
 
 
@@ -80,6 +82,18 @@ data class Users(
         }
         else if (this.updatedAt != o.updatedAt)
             return false
+        if (this.country == null) {
+            if (o.country != null)
+                return false
+        }
+        else if (this.country != o.country)
+            return false
+        if (this.bio == null) {
+            if (o.bio != null)
+                return false
+        }
+        else if (this.bio != o.bio)
+            return false
         return true
     }
 
@@ -95,6 +109,8 @@ data class Users(
         result = prime * result + (if (this.city == null) 0 else this.city.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
+        result = prime * result + (if (this.country == null) 0 else this.country.hashCode())
+        result = prime * result + (if (this.bio == null) 0 else this.bio.hashCode())
         return result
     }
 
@@ -110,6 +126,8 @@ data class Users(
         sb.append(", ").append(city)
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)
+        sb.append(", ").append(country)
+        sb.append(", ").append(bio)
 
         sb.append(")")
         return sb.toString()

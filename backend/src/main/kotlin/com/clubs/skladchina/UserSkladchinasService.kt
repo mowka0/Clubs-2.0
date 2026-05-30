@@ -26,4 +26,8 @@ class UserSkladchinasService(
             size = pageResult.size
         )
     }
+
+    @Transactional(readOnly = true)
+    fun countActionRequired(userId: UUID): ActionRequiredCountDto =
+        ActionRequiredCountDto(skladchinaRepository.countActionRequired(userId))
 }

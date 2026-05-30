@@ -122,7 +122,11 @@ export const queryKeys = {
 | `useMyVoteQuery(eventId, enabled?)` | `queryKeys.events.myVote(eventId)` | `getMyVote` | EventPage |
 | `useMyApplicationsQuery()` | `queryKeys.applications.mine()` | `getMyApplications` | ClubPage, MyClubsPage, ProfilePage |
 | `useClubMembersQuery(clubId)` | `queryKeys.clubs.members(clubId)` | `getClubMembers` | components/club/ClubMembersTab, OrganizerClubManage |
-| `useMemberProfileQuery(clubId, userId)` | `queryKeys.clubs.memberProfile(clubId, userId)` | `getMemberProfile` | components/club/ClubProfileTab, OrganizerClubManage |
+| `useMemberProfileQuery(clubId, userId)` | `queryKeys.clubs.memberProfile(clubId, userId)` | `getMemberProfile` | `MemberProfileModal` (peer-view, открывается из `ClubMembersTab` — включая тап по самому себе после удаления `ClubProfileTab` в 2026-05-30), `OrganizerClubManage` |
+| `useMyReputationQuery()` | `queryKeys.clubs.myReputation()` | `getMyReputation` | `ProfilePage` — секция «Моя репутация». Подробности — [`profile.md`](./profile.md) и [`reputation.md`](./reputation.md). |
+| `useMyInterestsQuery()` | `queryKeys.clubs.myInterests()` | `getMyInterests` | `ProfilePage` (read-view чипов) + `ProfileEditModal` (seed initial state) |
+| `useInterestSuggestQuery(query)` | `['interests', 'suggest', query.toLowerCase()]` | `suggestInterests` | `InterestsInput` — `enabled = trimmed.length >= 2`, `staleTime: 60_000`. Caller передаёт уже-debounced значение (250ms в инпуте). |
+| `useSkladchinaActionRequiredCountQuery()` | `queryKeys.skladchinas.actionRequiredCount` | `getSkladchinaActionRequiredCount` | `ActivitiesPage` (бейдж на сегменте «Сборы») + `BottomTabBar` (точка на табе «Активности»). `staleTime: 60_000`, `select: data → data.count`. |
 | `useClubApplicationsQuery(clubId, status?)` | `queryKeys.clubs.applications(clubId, status)` | `getClubApplications` | OrganizerClubManage |
 | `useClubFinancesQuery(clubId)` | `queryKeys.clubs.finances(clubId)` | `getFinances` | OrganizerClubManage |
 
@@ -180,8 +184,9 @@ const clubs = data?.pages.flatMap(p => p.content) ?? [];
 | `useCastVoteMutation()` | `castVote(eventId, vote)` | `queryKeys.events.detail(eventId)` + `queryKeys.events.myVote(eventId)` (явно — myVote ключ это prefix-extension от detail и формально покрыт первым invalidate, но оставлен явным на случай изменения формы ключа) |
 | `useConfirmParticipationMutation()` | `confirmParticipation(eventId)` | то же что cast: `events.detail(eventId)` + `events.myVote(eventId)` |
 | `useDeclineParticipationMutation()` | `declineParticipation(eventId)` | то же что cast: `events.detail(eventId)` + `events.myVote(eventId)` |
-| `useCreateEventMutation()` | `createEvent(clubId, body)` | `queryKeys.events.byClubAll(clubId)` — prefix без params, сбрасывает все варианты фильтров и пагинации (`byClub(clubId, anyParams)` все совпадают по prefix-match) |
+| `useCreateEventMutation()` | `createEvent(clubId, body)` | `queryKeys.events.byClubAll(clubId)` (prefix-match по всем фильтрам/пагинации клубных списков) + `queryKeys.activities.byClubAll(clubId)` (unified-feed клуба) + **`queryKeys.events.myFeed`** (глобальная лента `Активности → События`). Последний добавлен в `feature/profile-reputation-and-skladchina-badge` (2026-05-30) — без него после `CreateEventPage` `navigate('/events')` лента оставалась stale и нового события не было видно (зеркалит `useCreateSkladchinaMutation` который уже корректно инвалидировал `skladchinas.myFeed`). |
 | `useMarkAttendanceMutation()` | `markAttendance(eventId, list)` | `queryKeys.events.detail(eventId)` |
+| `useUpdateProfileMutation()` | `updateMyProfile(body)` | callback: `setUser(updatedUser)` в `useAuthStore` + invalidate `queryKeys.clubs.myInterests()`. Контракт PATCH `/api/users/me` см. [`profile.md`](./profile.md). |
 
 **Сигнатура (каноническая):**
 ```ts
@@ -245,8 +250,28 @@ interface AuthState {
   error: string | null;             // login() error
   login: () => Promise<void>;       // вызывает apiClient.authenticate()
   logout: () => void;               // clearToken + reset state
+  setUser: (user: UserDto) => void; // 2026-05-30 (`feature/profile-...`): нужно
+                                    // после PATCH /api/users/me чтобы обновить
+                                    // identity-card без перезахода в Mini App
 }
 ```
+
+`UserDto` (frontend-side, mirror канонического backend-DTO):
+```ts
+interface UserDto {
+  id: string;
+  telegramId: number;
+  telegramUsername: string | null;
+  firstName: string;
+  lastName: string | null;
+  avatarUrl: string | null;
+  city: string | null;
+  country: string | null;   // добавлено 2026-05-30 (код страны, e.g. 'RU')
+  bio: string | null;       // добавлено 2026-05-30 (≤280 символов)
+}
+```
+
+Поля `country` и `bio` приходят из `/api/auth/telegram` (auth-response через `userRecord.toDto()`) и из `GET /api/users/me`. Имя / `lastName` / `avatarUrl` / `telegramUsername` синхронизируются из Telegram при каждом auth через `UserRepository.upsert` и **переписывают** локальные значения — поэтому в `ProfileEditModal` они не редактируются. `city`/`country`/`bio` НЕ участвуют в `upsert` и переживают синхронизацию. Полная спека редактирования — [`profile.md`](./profile.md).
 
 > **Спорный момент** (для будущего, не в этом PR): `user` сам по себе — server state (приходит от backend'а на /api/auth/telegram). Можно вынести в `useMeQuery()`. Не делаем сейчас, потому что:
 > 1. У нас нет endpoint'а `GET /api/users/me` (только POST на /auth)

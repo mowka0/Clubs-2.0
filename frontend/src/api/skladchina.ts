@@ -1,5 +1,6 @@
 import { apiClient } from './apiClient';
 import type {
+  ActionRequiredCountDto,
   CreateSkladchinaRequest,
   MySkladchinaListItemDto,
   PageResponse,
@@ -21,6 +22,10 @@ export function getMySkladchinas(
 
 export function getClubActiveSkladchinas(clubId: string): Promise<MySkladchinaListItemDto[]> {
   return apiClient.get<MySkladchinaListItemDto[]>(`/api/clubs/${clubId}/skladchinas/active`);
+}
+
+export function getSkladchinaActionRequiredCount(): Promise<ActionRequiredCountDto> {
+  return apiClient.get<ActionRequiredCountDto>('/api/users/me/skladchinas/action-required-count');
 }
 
 export function createSkladchina(

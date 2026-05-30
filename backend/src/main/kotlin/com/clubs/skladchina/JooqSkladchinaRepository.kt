@@ -261,6 +261,19 @@ class JooqSkladchinaRepository(
         return PageResponse(items, total, computeTotalPages(total, size), page, size)
     }
 
+    override fun countActionRequired(userId: UUID): Int =
+        dsl.selectCount()
+            .from(SKLADCHINA_PARTICIPANTS)
+            .join(SKLADCHINAS).on(SKLADCHINAS.ID.eq(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID))
+            .join(CLUBS).on(CLUBS.ID.eq(SKLADCHINAS.CLUB_ID))
+            .where(
+                SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId)
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
+                    .and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active))
+                    .and(CLUBS.IS_ACTIVE.eq(true))
+            )
+            .fetchOne(0, Int::class.java) ?: 0
+
     override fun findExpiredActive(now: OffsetDateTime): List<Skladchina> =
         dsl.selectFrom(SKLADCHINAS)
             .where(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active).and(SKLADCHINAS.DEADLINE.lessOrEqual(now)))

@@ -572,6 +572,30 @@ A/B наблюдения за реальной активностью.
 
 Сортировка: `actionRequired DESC, deadline ASC`.
 
+### `GET /api/users/me/skladchinas/action-required-count` — счётчик неоплаченных (NEW, 2026-05-30)
+
+Числовой сигнал для бейджа на табе «Сборы» и точки на нижнем табе «Активности». Один лёгкий `COUNT`-запрос, та же логика что у `actionRequired` в ленте:
+
+```sql
+SELECT COUNT(*) FROM skladchina_participants sp
+  JOIN skladchinas s ON s.id = sp.skladchina_id
+  JOIN clubs       c ON c.id = s.club_id
+ WHERE sp.user_id = :userId
+   AND sp.status  = 'pending'
+   AND s.status   = 'active'
+   AND c.is_active = true
+```
+
+**Response 200:** `ActionRequiredCountDto`
+```ts
+{ count: number }
+```
+
+**Frontend (см. `feature/profile-reputation-and-skladchina-badge`):**
+- хук `useSkladchinaActionRequiredCountQuery()` — `useQuery`, `staleTime: 60_000`, `select: (data) => data.count`. Инвалидируется в `useMarkPaidMutation` / `useDeclineSkladchinaMutation` / `useCreateSkladchinaMutation`; `useCloseSkladchinaMutation` цепляет его через prefix-match по `queryKeys.skladchinas.all`.
+- **Бейдж на сегменте «Сборы»** в `ActivitiesPage` — латунная пилюля с числом (`.activities-segments .segment .seg-badge`), видна когда `unpaidCount > 0`.
+- **Точка на нижнем табе «Активности»** в `BottomTabBar` — латунный кружок с свечением (`.brand-tabbar .tab .tab-dot`). Sibling от `.ico`, не child — иначе при `desaturate + opacity 0.62` на неактивном табе точка тускнеет вместе с иконкой.
+
 ### `POST /api/skladchinas/{id}/mark-paid` — отметить «оплатил»
 
 Только participant сбора (active member клуба).

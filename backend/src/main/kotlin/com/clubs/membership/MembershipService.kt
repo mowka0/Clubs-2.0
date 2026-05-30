@@ -69,6 +69,10 @@ class MembershipService(
     fun getUserMemberships(userId: UUID): List<MembershipDto> =
         membershipRepository.findByUserId(userId).map(mapper::toDto)
 
+    @Transactional(readOnly = true)
+    fun getUserClubsWithReputation(userId: UUID): List<UserClubReputationDto> =
+        membershipRepository.findUserClubsWithReputation(userId).map(mapper::toUserClubReputationDto)
+
     private fun joinOrRequestPayment(club: Club, userId: UUID, source: String): JoinResult {
         val clubId = club.id
         val price = club.subscriptionPrice

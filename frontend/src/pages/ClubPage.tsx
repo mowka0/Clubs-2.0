@@ -24,7 +24,6 @@ import { isPendingPayment } from '../types/api';
 import { formatPrice } from '../utils/formatters';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
-import { ClubProfileTab } from '../components/club/ClubProfileTab';
 import { BrandBackdrop } from '../components/BrandBackdrop';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -37,7 +36,7 @@ const ACCESS_LABELS: Record<string, string> = {
   open: 'Открытый', closed: 'По заявке', private: 'Приватный',
 };
 
-type TabId = 'activities' | 'members' | 'profile';
+type TabId = 'activities' | 'members';
 type TabKey = TabId | 'manage';
 
 interface TabItem {
@@ -248,7 +247,6 @@ export const ClubPage: FC = () => {
   const tabItems: TabItem[] = [
     { key: 'activities', label: 'Активности', selected: activeTab === 'activities' },
     { key: 'members', label: 'Участники', selected: activeTab === 'members' },
-    { key: 'profile', label: 'Мой профиль', selected: activeTab === 'profile' },
   ];
   if (isOrganizer) {
     tabItems.push({ key: 'manage', label: 'Управление', selected: false });
@@ -362,9 +360,6 @@ export const ClubPage: FC = () => {
 
           {activeTab === 'activities' && <ClubActivitiesTab clubId={id} />}
           {activeTab === 'members' && <ClubMembersTab clubId={id} />}
-          {activeTab === 'profile' && user?.id && (
-            <ClubProfileTab clubId={id} userId={user.id} />
-          )}
         </>
       )}
 

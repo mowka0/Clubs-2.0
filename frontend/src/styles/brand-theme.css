@@ -613,6 +613,19 @@ html, body {
   background-size: contain;
   background-position: center;
 }
+/* Unpaid-skladchina dot on the "Активности" tab — visible from any screen so
+   the obligation is not forgotten. Sits OUTSIDE .ico on purpose: the inactive
+   .ico is desaturated + dimmed via filter/opacity, which would also fade a
+   nested child. As a sibling of .ico it keeps full brass saturation. */
+.brand-tabbar .tab .tab-dot {
+  position: absolute;
+  top: 0; left: calc(50% + 10px);
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--brand-brass);
+  border: 2px solid rgba(14, 20, 40, 0.95);
+  box-shadow: 0 0 6px rgba(201, 160, 99, 0.6);
+}
 .brand-tabbar .tab:not(.active) .ico {
   filter: saturate(0.35) brightness(0.85) contrast(0.9);
   opacity: 0.62;
@@ -1225,6 +1238,278 @@ html, body {
 }
 
 
+/* ====================================================== */
+/* ProfilePage (pf-*) — bottom-tab "Профиль". Identity     */
+/* card + per-club reputation list (reliability index      */
+/* moved here from the club-card "Мой профиль" tab).        */
+/* ====================================================== */
+.pf-identity {
+  margin: 4px 20px 12px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(26, 33, 56, 0.78);
+  border: 1px solid var(--brand-hairline-2);
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.pf-identity .avt {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: linear-gradient(160deg, #3A2E18, #1F1808);
+  color: var(--brand-brass-deep);
+  font-size: 19px; font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+.pf-identity .avt img { width: 100%; height: 100%; object-fit: cover; }
+.pf-identity .name {
+  font-size: 18px; font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--brand-ink);
+  line-height: 1.2;
+}
+.pf-identity .handle { font-size: 13px; color: var(--brand-ink-3); margin-top: 3px; }
+
+.pf-rep-list {
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.pf-rep-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--brand-navy-card);
+  border: 1px solid var(--brand-hairline);
+  border-radius: 14px;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.08s ease, border-color 0.15s ease;
+}
+.pf-rep-card:active { transform: scale(0.99); }
+.pf-rep-card .avt {
+  width: 42px; height: 42px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: linear-gradient(160deg, #2E3858, #16192E);
+  color: var(--brand-ink-2);
+  font-size: 14px; font-weight: 700;
+}
+.pf-rep-card .avt img { width: 100%; height: 100%; object-fit: cover; }
+.pf-rep-card .body { flex: 1; min-width: 0; }
+.pf-rep-card .body .name {
+  font-size: 14.5px; font-weight: 600;
+  color: var(--brand-ink);
+  line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pf-rep-card .body .metrics {
+  font-size: 11.5px;
+  color: var(--brand-ink-4);
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pf-rep-card .score {
+  flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center;
+  min-width: 48px;
+}
+.pf-rep-card .score .val {
+  font-size: 20px; font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.pf-rep-card .score .val.high { color: var(--brand-live); }
+.pf-rep-card .score .val.mid  { color: var(--brand-brass-deep); }
+.pf-rep-card .score .val.low  { color: var(--brand-ink-3); }
+.pf-rep-card .score .cap {
+  font-size: 8.5px; font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brand-ink-4);
+  margin-top: 4px;
+}
+
+/* Gear (edit profile) in the hero — round icon button, mirrors mc-create-btn spot */
+.pf-gear {
+  flex-shrink: 0;
+  width: 40px; height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 12px;
+  border: 1px solid var(--brand-hairline-2);
+  background: var(--brand-navy-card-2);
+  color: var(--brand-ink-2);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.pf-gear:active { background: var(--brand-brass-soft); color: var(--brand-brass-deep); }
+.pf-gear:disabled { opacity: 0.5; cursor: default; }
+
+.pf-identity .location { font-size: 12.5px; color: var(--brand-ink-3); margin-top: 4px; }
+
+/* Bio + interest tags (read view) */
+.pf-bio {
+  margin: 0 20px 12px;
+  padding: 12px 14px;
+  background: var(--brand-navy-card);
+  border: 1px solid var(--brand-hairline);
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--brand-ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.pf-tags {
+  padding: 0 20px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.pf-tag {
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--brand-brass-soft);
+  color: var(--brand-brass-deep);
+  border: 1px solid rgba(201, 160, 99, 0.30);
+}
+
+/* ---- Profile edit sheet (own portal, below CityPicker at z-200) ---- */
+.pf-edit-overlay {
+  position: fixed; inset: 0;
+  background: rgba(8, 12, 24, 0.62);
+  backdrop-filter: blur(2px);
+  z-index: 150;
+}
+.pf-edit-sheet {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 151;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--brand-navy-card);
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  border-top: 1px solid var(--brand-hairline-2);
+  padding: 8px 0 max(16px, env(safe-area-inset-bottom));
+}
+.pf-edit-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 20px 12px;
+}
+.pf-edit-header h2 { font-size: 18px; font-weight: 700; color: var(--brand-ink); margin: 0; }
+.pf-edit-body { overflow-y: auto; padding: 0 20px; flex: 1; }
+.pf-edit-label {
+  display: block;
+  font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  color: var(--brand-ink-3);
+  margin: 14px 0 7px;
+}
+.pf-edit-field {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--brand-hairline-2);
+  background: var(--brand-navy-card-2);
+  color: var(--brand-ink);
+  font-family: inherit; font-size: 14.5px;
+  cursor: pointer;
+}
+.pf-edit-field .placeholder { color: var(--brand-ink-4); }
+.pf-edit-field .chevron { color: var(--brand-ink-3); font-size: 20px; line-height: 1; }
+.pf-edit-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--brand-hairline-2);
+  background: var(--brand-navy-card-2);
+  color: var(--brand-ink);
+  font-family: inherit; font-size: 14.5px; line-height: 1.4;
+  resize: none;
+}
+.pf-edit-textarea::placeholder { color: var(--brand-ink-4); }
+.pf-edit-counter { text-align: right; font-size: 11px; color: var(--brand-ink-4); margin-top: 4px; }
+.pf-edit-error { color: #FF8B8B; font-size: 13px; margin-top: 12px; }
+.pf-edit-actions {
+  display: flex; gap: 10px;
+  padding: 14px 20px 4px;
+}
+.pf-edit-actions .ghost-btn,
+.pf-edit-actions .mc-create-btn { flex: 1; justify-content: center; }
+
+/* ---- Interest chip input (edit) ---- */
+.pf-interests { position: relative; }
+.pf-chips {
+  display: flex; flex-wrap: wrap; gap: 7px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--brand-hairline-2);
+  background: var(--brand-navy-card-2);
+  min-height: 44px;
+}
+.pf-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12.5px; font-weight: 500;
+  padding: 4px 6px 4px 10px;
+  border-radius: 999px;
+  background: var(--brand-brass-soft);
+  color: var(--brand-brass-deep);
+  border: 1px solid rgba(201, 160, 99, 0.30);
+}
+.pf-chip .x {
+  border: 0; background: transparent;
+  color: var(--brand-brass-deep);
+  font-size: 16px; line-height: 1;
+  cursor: pointer; padding: 0 2px;
+}
+.pf-chip-input {
+  flex: 1; min-width: 90px;
+  border: 0; background: transparent; outline: none;
+  color: var(--brand-ink); font-family: inherit; font-size: 14px;
+  padding: 4px 2px;
+}
+.pf-chip-input::placeholder { color: var(--brand-ink-4); }
+.pf-suggest {
+  margin-top: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--brand-hairline-2);
+  background: var(--brand-navy-card-2);
+  overflow: hidden;
+}
+.pf-suggest-item {
+  display: block; width: 100%; text-align: left;
+  padding: 10px 14px;
+  border: 0; background: transparent;
+  color: var(--brand-ink); font-family: inherit; font-size: 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--brand-hairline);
+}
+.pf-suggest-item:last-child { border-bottom: 0; }
+.pf-suggest-item:active { background: var(--brand-brass-soft); color: var(--brand-brass-deep); }
+.pf-interests-hint { font-size: 11px; color: var(--brand-ink-4); margin-top: 6px; }
+
 
 /* ====================================================== */
 /* MyClubsPage (mc-*) — see docs/design/myclubs-redesign/  */
@@ -1730,6 +2015,10 @@ html, body {
 }
 .activities-segments .segment {
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 9px 12px;
   border: 1px solid var(--brand-hairline-2);
   background: var(--brand-navy-card-2);
@@ -1745,6 +2034,23 @@ html, body {
   background: var(--brand-brass-soft);
   color: var(--brand-brass-deep);
   border-color: rgba(201, 160, 99, 0.45);
+}
+/* Unpaid-skladchina count on the "Сборы" segment — same brass language as
+   the .skladchina-badge.accent "Требует оплаты" chip. */
+.activities-segments .segment .seg-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--brand-brass);
+  color: #1A1206;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ============================================================
