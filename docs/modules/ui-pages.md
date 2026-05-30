@@ -118,10 +118,12 @@ X = memberLimit * subscriptionPrice * 0.8
 | Роль | Header (с avatar/name/badges) | About-секция | Tabs (brand `cp-tab-row`) | CTA |
 |---|---|---|---|---|
 | **Visitor** | ✓ (без role-badge) | ✓ | — | «Вступить» / «Хочу вступить» / disabled-варианты для pending state |
-| **Member** | ✓ + badge «Вы участник» | ✓ | Активности / Участники / Мой профиль | — (статус в badge) |
-| **Organizer** | ✓ + badge «Вы организатор» | ✓ | Активности / Участники / Мой профиль / **Управление** | — |
+| **Member** | ✓ + badge «Вы участник» | ✓ | Активности / Участники | — (статус в badge) |
+| **Organizer** | ✓ + badge «Вы организатор» | ✓ | Активности / Участники / **Управление** | — |
 
 «Управление» — **navigate-link**, не state-tab: `handleTabClick('manage')` делает `haptic.impact('light')` + `navigate('/clubs/:id/manage')`, активной не становится.
+
+> **Update (2026-05-30, `feature/profile-reputation-and-skladchina-badge`):** таб «Мой профиль» из member/organizer-видов удалён. Per-club self-view репутации перенесён в глобальную секцию «Моя репутация» на `/profile` (см. ниже § «ProfilePage»). Полные метрики (обещания % / подтверждения / посещения) остаются доступны через таб «Участники» → тап по самому себе → `MemberProfileModal`. Подробности — [`profile.md`](./profile.md).
 
 ### Tab-компоненты
 
@@ -130,10 +132,10 @@ X = memberLimit * subscriptionPrice * 0.8
 | Файл | Источник данных | Заметки |
 |---|---|---|
 | `ClubActivitiesTab.tsx` | `useClubActivitiesQuery(clubId, { type? })` (`useQuery`, без пагинации) | Read-only unified-feed events + skladchinas клуба: секция `Предстоящие` (полные карточки, `relevantDate ASC`) + сворачиваемый аккордеон `Прошедшие (N)` (компактные строки, DESC). Tap по карточке → `/events/:id` или `/skladchina/:id`. Заменил `ClubEventsTab.tsx` (удалён) в `feature/unified-activity-creation`. |
-| `ClubMembersTab.tsx` | `useClubMembersQuery(clubId)` | Список с avatar/reliability, badge «Организатор» для `role === 'organizer'` |
-| `ClubProfileTab.tsx` | `useMemberProfileQuery(clubId, userId)` | Avatar + reputation-метрики (reliability / promiseFulfillmentPct / totalConfirmations) |
+| `ClubMembersTab.tsx` | `useClubMembersQuery(clubId)` | Список с avatar/reliability, badge «Организатор» для `role === 'organizer'`. Тап по члену (включая себя) → `MemberProfileModal` с полными метриками. |
+| ~~`ClubProfileTab.tsx`~~ | — | **Удалён** в `feature/profile-reputation-and-skladchina-badge` (2026-05-30). Функция переехала в `ProfilePage` (см. ниже). |
 
-Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — non-active tabs не монтируются и их queries не выполняются. Visitor-режим вообще не подключает эти три query.
+Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — non-active tabs не монтируются и их queries не выполняются. Visitor-режим вообще не подключает эти query.
 
 ---
 
@@ -238,3 +240,31 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 - **Нельзя изменить:** read-only блок с категорией и типом доступа
 - Кнопка «Сохранить» — disabled если не dirty; при submit `PUT /api/clubs/:id`
 - **Опасная зона:** кнопка «🗑 Удалить клуб» → модалка подтверждения → `DELETE /api/clubs/:id` → редирект на `/my-clubs` с Toast «Клуб «X» удалён»
+
+
+---
+
+## ProfilePage — Профиль (`/profile`, нижний таб «Профиль»)
+
+> **Status (2026-05-30):** ✅ реализовано в `feature/profile-reputation-and-skladchina-badge`. Полная спека — [`profile.md`](./profile.md). Файл `frontend/src/pages/ProfilePage.tsx`. Раньше — TGUI `List/Section/Cell`, теперь `.brand-page` + `BrandBackdrop` (единый бренд-стиль).
+
+### Структура
+
+| Блок | Когда виден | Источник |
+|---|---|---|
+| Hero `Твой профиль` + ⚙️ | всегда | static (шестерёнка disabled пока `useMyInterestsQuery.isPending`) |
+| `.pf-identity` (avatar + имя + @username + город/страна) | всегда | `useAuthStore.user` |
+| `.pf-bio` (свободный текст «о себе») | если `user.bio` задан | `useAuthStore.user.bio` |
+| Секция «Интересы» (чипы `.pf-tag`) | если `interests.length > 0` | `useMyInterestsQuery()` |
+| Секция «Моя репутация» — карточки клубов ИЛИ плашка | **всегда** (плашка `.mc-empty` при пустоте) | `useMyReputationQuery()` |
+| Секция «Активные заявки» | если есть pending applications | `useMyApplicationsQuery()` + `useQueries(getClub)` для названий |
+
+Карточка `.pf-rep-card`: avatar + название клуба + (опц.) `обещания N% · M подтв. · K посещ.` + индекс надёжности справа (цвет по тиру: high ≥85 / mid ≥70 / low). Тап → `/clubs/{clubId}`.
+
+### Редактирование (⚙️ → `ProfileEditModal`)
+
+Свой `createPortal`-sheet (`pf-edit-overlay`/`pf-edit-sheet` z-index 150/151) — **не** TGUI `<Modal>`, потому что CityPicker (z 200) должен открываться поверх. Поля: Город (через `CityPicker`, страна+город из общего списка) / О себе (`textarea`, max 280) / Интересы (`InterestsInput` с дебаунс-автокомплитом, разделитель — только запятая). Submit → `PATCH /api/users/me` → `setUser(updated)` + invalidate `myInterests`.
+
+Имя / аватар / @username **не редактируются** (синхронизируются из Telegram при каждом auth через `UserRepository.upsert`).
+
+Полная спека эндпоинтов, нормализации интересов, миграции V16 и AC — в [`profile.md`](./profile.md).

@@ -105,6 +105,44 @@ THEN меняется только запись user_club_reputation для кл
 - Таблица `EVENT_RESPONSES` (read): `STAGE_1_VOTE`, `FINAL_STATUS`, `ATTENDANCE`
 - Чтение репутации из других модулей (bot, membership) идёт **напрямую к таблице** — это будет вынесено в `ReputationRepository` при рефакторинге этих модулей.
 
+---
+
+## Per-user reputation overview (NEW, 2026-05-30)
+
+> Контекст: `feature/profile-reputation-and-skladchina-badge`. Полная UI-спека — [`profile.md`](./profile.md).
+
+Раньше per-club метрики были видны юзеру только внутри карточки клуба (таб «Мой профиль», теперь удалён). Сейчас они выведены агрегатом в глобальный «Профиль» (`/profile` → секция «Моя репутация»), плюс остаются доступны через `MemberProfileModal` в табе «Участники» (peer-view = self-view, одна модалка для всех).
+
+### `GET /api/users/me/reputation`
+
+JWT-protected (под `/api/**`). Возвращает `List<UserClubReputationDto>` — по одной записи на клуб, где юзер `status IN active|grace_period` и `club.is_active = true`. Order: `MEMBERSHIPS.JOINED_AT DESC NULLS LAST`.
+
+```kotlin
+data class UserClubReputationDto(
+    val clubId: UUID,
+    val clubName: String,
+    val clubAvatarUrl: String?,
+    val category: String,
+    val role: String,
+    val joinedAt: OffsetDateTime?,
+    val reliabilityIndex: Int,        // coalesce 100 для новичка без записи в user_club_reputation
+    val promiseFulfillmentPct: BigDecimal,
+    val totalConfirmations: Int,
+    val totalAttendances: Int
+)
+```
+
+Под капотом — один SELECT с `MEMBERSHIPS ⨝ CLUBS LEFT JOIN USER_CLUB_REPUTATION` + coalesce для дефолтов (`reliability_index → 100`, остальные счётчики → 0). Совпадает с правилами defaults в `MemberService.getMemberProfile` и `findClubMembersWithUserInfo` — единая семантика «у новичка надёжность 100 (benefit of the doubt)».
+
+### Где отображается
+
+| Локация | Что показывает | Источник данных |
+|---|---|---|
+| `/profile` → секция «Моя репутация» (карточки `.pf-rep-card`) | Список всех клубов + индекс надёжности; для клубов с активностью ещё строка «обещания N% · M подтв. · K посещ.» | `GET /api/users/me/reputation` |
+| `/clubs/:id` → таб «Участники» → тап → `MemberProfileModal` | Полные метрики (надёжность / обещания % / подтверждения / посещения / роль / joined_at) для любого участника, включая себя | `GET /api/clubs/:id/members/:userId` (`useMemberProfileQuery`) |
+
+В карточке клуба отдельного таба «Мой профиль» больше нет (был `ClubProfileTab.tsx`, удалён). См. [`club-page-unified.md`](./club-page-unified.md) update-блок наверху.
+
 ## Non-functional
 
 - `@Transactional` на `processReputationForFinalizedEvents`
