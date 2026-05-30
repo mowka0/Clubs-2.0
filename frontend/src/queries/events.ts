@@ -104,6 +104,9 @@ export function useCreateEventMutation() {
       // Unified activity feed must refresh too — newly created event must
       // appear at the top across all filter variants of the manage tab.
       qc.invalidateQueries({ queryKey: queryKeys.activities.byClubAll(clubId) });
+      // Global /me/events feed (Активности → События) must show the new event
+      // after create — CreateEventPage navigates here, mirror useCreateSkladchina.
+      qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });
     },
   });
 }

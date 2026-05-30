@@ -28,21 +28,6 @@ const STATUS_LABELS: Record<string, string> = {
   auto_rejected: 'Отклонено',
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  sport: 'Спорт', creative: 'Творчество', food: 'Еда',
-  board_games: 'Настолки', cinema: 'Кино', education: 'Образование',
-  travel: 'Путешествия', other: 'Другое',
-};
-
-/** Russian plural form picker: forms = [one, few, many] */
-function pluralRu(n: number, forms: [string, string, string]): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return forms[0];
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return forms[1];
-  return forms[2];
-}
-
 function getInitials(name: string): string {
   return name
     .replace(/[«»"']/g, '')
@@ -57,19 +42,6 @@ function reliabilityTier(score: number): 'high' | 'mid' | 'low' {
   if (score >= 85) return 'high';
   if (score >= 70) return 'mid';
   return 'low';
-}
-
-/** Compact tenure for the meta row: "недавно" / "5 мес." / "2 года". */
-function formatTenure(joinedAt: string | null): string | null {
-  if (!joinedAt) return null;
-  const ms = Date.now() - new Date(joinedAt).getTime();
-  if (Number.isNaN(ms) || ms < 0) return null;
-  const days = Math.floor(ms / 86400000);
-  if (days < 30) return 'недавно';
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months} мес.`;
-  const years = Math.floor(months / 12);
-  return `${years} ${pluralRu(years, ['год', 'года', 'лет'])}`;
 }
 
 export const ProfilePage: FC = () => {
@@ -203,11 +175,6 @@ export const ProfilePage: FC = () => {
         <div className="pf-rep-list">
             {reputation.map((r) => {
               const tier = reliabilityTier(r.reliabilityIndex);
-              const roleLabel = r.role === 'organizer' ? 'Организатор' : 'Участник';
-              const categoryLabel = CATEGORY_LABELS[r.category] ?? r.category;
-              const tenure = formatTenure(r.joinedAt);
-              const metaParts = [categoryLabel, roleLabel];
-              if (tenure) metaParts.push(tenure);
               const hasActivity =
                 r.totalAttendances > 0 ||
                 r.totalConfirmations > 0 ||
@@ -224,7 +191,6 @@ export const ProfilePage: FC = () => {
                   </span>
                   <div className="body">
                     <div className="name">{r.clubName}</div>
-                    <div className="role">{metaParts.join(' · ')}</div>
                     {hasActivity && (
                       <div className="metrics">
                         обещания {Math.round(r.promiseFulfillmentPct)}% · {r.totalConfirmations} подтв. · {r.totalAttendances} посещ.
