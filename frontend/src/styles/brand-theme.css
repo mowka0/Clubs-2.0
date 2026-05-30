@@ -1665,8 +1665,10 @@ html, body {
   font-weight: 700;
   color: var(--brand-ink-3);
   flex-shrink: 0;
+  overflow: hidden;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
+.mc-app .avt img { width: 100%; height: 100%; object-fit: cover; }
 .mc-app .body {
   flex: 1; min-width: 0;
   display: flex;

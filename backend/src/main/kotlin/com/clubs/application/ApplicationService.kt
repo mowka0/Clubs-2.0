@@ -310,6 +310,14 @@ class ApplicationService(
         if (membership != null) {
             throw ValidationException("No payment pending")
         }
+        // Defensive: free clubs never need an invoice. If we hit this, awaiting-
+        // payment surfacing leaked a stale 0-price application; reject loudly so
+        // the UI shows the correct «уже member / нечего платить» state.
+        val club = clubRepository.findById(application.clubId)
+            ?: throw NotFoundException("Club not found")
+        if ((club.subscriptionPrice ?: 0) <= 0) {
+            throw ValidationException("No payment required for this club")
+        }
 
         val now = OffsetDateTime.now()
         val previous = resendCooldown[applicationId]

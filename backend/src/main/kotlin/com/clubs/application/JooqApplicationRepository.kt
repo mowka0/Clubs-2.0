@@ -3,6 +3,7 @@ package com.clubs.application
 import com.clubs.generated.jooq.enums.ApplicationStatus
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.tables.references.APPLICATIONS
+import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
@@ -95,9 +96,11 @@ class JooqApplicationRepository(
     }
 
     override fun findApprovedWithoutMembershipByUserId(userId: UUID): List<Application> {
-        // NOT EXISTS subquery filters out applications whose user already has an
-        // active/grace-period membership in the same club (i.e. invoice paid).
-        // Single round-trip, no N+1.
+        // Awaiting-payment surface = approved apps for PAID clubs that haven't
+        // yielded an active/grace_period membership yet (Stars invoice unpaid).
+        // Free clubs (subscription_price = 0 / null) auto-create membership on
+        // approve, so they must NEVER appear here even if data is inconsistent.
+        // Single round-trip via JOIN + NOT EXISTS, no N+1.
         val membershipExists = DSL.exists(
             DSL.selectOne()
                 .from(MEMBERSHIPS)
@@ -107,14 +110,16 @@ class JooqApplicationRepository(
                         .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period))
                 )
         )
-        return dsl.selectFrom(APPLICATIONS)
+        return dsl.select(APPLICATIONS.asterisk()).from(APPLICATIONS)
+            .join(CLUBS).on(CLUBS.ID.eq(APPLICATIONS.CLUB_ID))
             .where(
                 APPLICATIONS.USER_ID.eq(userId)
                     .and(APPLICATIONS.STATUS.eq(ApplicationStatus.approved))
+                    .and(CLUBS.SUBSCRIPTION_PRICE.greaterThan(0))
                     .and(DSL.not(membershipExists))
             )
             .orderBy(APPLICATIONS.RESOLVED_AT.desc().nullsLast())
-            .fetch()
+            .fetchInto(APPLICATIONS)
             .map(mapper::toDomain)
     }
 
