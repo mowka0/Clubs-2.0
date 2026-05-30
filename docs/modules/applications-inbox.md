@@ -212,6 +212,42 @@ Errors:
 Логирование: INFO `"Invoice resent: applicationId=... userId=... clubId=..."`.
 Сумма инвойса и детали платежа **не логируются**.
 
+### `GET /api/clubs/{clubId}/awaiting-payment-applicants` (NEW)
+
+Organizer-only mirror of `/api/users/me/applications-awaiting-payment`:
+applicants for [clubId] whose application is approved but the Stars invoice
+hasn't been paid (no active/grace_period membership). Surfaces on
+`ClubMembersTab` (organizer view) so the full applicant → member lifecycle
+is visible in one place.
+
+Auth: JWT, caller must be `clubs.owner_id` of [clubId].
+
+Response 200:
+```json
+[
+  {
+    "applicationId": "uuid",
+    "userId": "uuid",
+    "firstName": "string",
+    "lastName": "string|null",
+    "telegramUsername": "string|null",
+    "avatarUrl": "string|null",
+    "approvedAt": "ISO-8601"
+  }
+]
+```
+
+Сортировка: `resolvedAt DESC` (свежие сверху).
+
+Errors:
+- `401` — нет JWT.
+- `403 FORBIDDEN` — caller не owner клуба.
+- `404 NOT_FOUND` — клуб не существует.
+
+Свободные клубы (`subscription_price = 0`) **никогда** не попадают в выдачу —
+membership создаётся синхронно при approve, состояние «approved-without-membership»
+для них не возникает.
+
 ### `POST /api/applications/{id}/reject` (CHANGED)
 
 Изменения к контракту из `application.md` §API:
@@ -298,6 +334,22 @@ data class AwaitingPaymentApplicationDto(
     val approvedAt: OffsetDateTime,
     val club: ClubBriefDto,
     val subscriptionPrice: Int    // в Stars (XTR)
+)
+```
+
+### `AwaitingPaymentApplicantDto`
+
+Organizer-side mirror — описывает applicant'а, а не club'а:
+
+```kotlin
+data class AwaitingPaymentApplicantDto(
+    val applicationId: UUID,
+    val userId: UUID,
+    val firstName: String,
+    val lastName: String?,
+    val telegramUsername: String?,
+    val avatarUrl: String?,
+    val approvedAt: OffsetDateTime
 )
 ```
 
@@ -580,10 +632,13 @@ Frontend: `MyClubsPage` читает `useSearchParams().get('focus')`. Если
 | `application/ApplicationDto.kt` | `RejectApplicationRequest.reason` → `@NotBlank @Size(min=5, max=500)`, тип `String` (не nullable) |
 | `application/ApplicationController.kt` | Контроллер reject — `request` параметр становится `@Valid @RequestBody request: RejectApplicationRequest` (не nullable). Service вызов: `applicationService.rejectApplication(id, user.userId, request.reason)`. |
 | `application/ApplicationService.kt` | Inject `notificationService: NotificationService`, `userRepository: UserRepository`. После `log.info("Application submitted...")` — async DM-вызов. Новые методы `getMyPendingApplications(organizerId)` и `getMyPendingApplicationsCount(organizerId)`. |
-| `application/ApplicationRepository.kt` | Добавить `findPendingByClubIds(clubIds: List<UUID>): List<Application>` и `countPendingByClubIds(clubIds: List<UUID>): Int`. |
-| `application/JooqApplicationRepository.kt` | Реализация двух методов выше (`WHERE club_id IN (...) AND status = 'pending'`). |
+| `application/ApplicationRepository.kt` | Добавить `findPendingByClubIds(clubIds: List<UUID>): List<Application>`, `countPendingByClubIds(clubIds: List<UUID>): Int`, и `findApprovedWithoutMembershipByClubId(clubId: UUID): List<Application>` (per-club mirror для organizer-view `ClubMembersTab`). |
+| `application/JooqApplicationRepository.kt` | Реализация трёх методов выше. `findApprovedWithoutMembershipByClubId` зеркалирует `findApprovedWithoutMembershipByUserId` — фильтр по `clubId` + JOIN CLUBS на `SUBSCRIPTION_PRICE > 0` + `NOT EXISTS` membership(active/grace). |
 | `application/JooqApplicationRepository.kt` | (опционально) batch helper для applicant + peer-stats, либо использовать `UserRepository` + новый метод `ReputationRepository.aggregateByUserIds(...)`. |
-| `application/ApplicationController.kt` | Перенести `GET /api/users/me/applications-pending` и `/applications-pending-count` сюда (рядом с `/me/applications` который в `UserController` — но новые endpoints логичнее в `ApplicationController`; решение Developer'а). |
+| `application/ApplicationController.kt` | Перенести `GET /api/users/me/applications-pending` и `/applications-pending-count` сюда (рядом с `/me/applications` который в `UserController` — но новые endpoints логичнее в `ApplicationController`; решение Developer'а). Добавить organizer-only endpoint `GET /api/clubs/{clubId}/awaiting-payment-applicants`. |
+| `application/ApplicationService.kt` | Добавить `getAwaitingPaymentApplicantsByClub(clubId, callerUserId)`: 404 если club нет, 403 если caller ≠ owner, batch-load applicants через `userRepository.findByIds`, map через новый `ApplicationMapper.toAwaitingPaymentApplicant`. |
+| `application/ApplicationMapper.kt` | Добавить `toAwaitingPaymentApplicant(application, applicantRecord): AwaitingPaymentApplicantDto`. |
+| `application/PendingApplicationDto.kt` | Добавить `AwaitingPaymentApplicantDto` (organizer-side mirror). |
 | `bot/NotificationService.kt` | Новый `@Async fun sendApplicationCreatedDM(organizerTelegramId: Long, applicantDisplayName: String, clubName: String)`. Внутри использует существующий `sendDirectMessageWithDeepLink(telegramId, text, webAppPath = "/my-clubs?focus=inbox", buttonText = "Открыть заявки")`. |
 | `reputation/ReputationRepository.kt` | Новый метод `aggregateByUserIds(userIds: List<UUID>): Map<UUID, PeerStatsDto>` (или domain-эквивалент). Возвращает `userId → (memberClubCount, totalConfirmations, totalAttendances)`. |
 | `club/ClubRepository.kt` | Если ещё нет — `findIdsByOwnerId(ownerId: UUID): List<UUID>`. |
@@ -604,6 +659,13 @@ Frontend: `MyClubsPage` читает `useSearchParams().get('focus')`. Если
 | `frontend/src/components/BottomTabBar.tsx` | Импорт `useMyPendingApplicationsCountQuery`. Точка на табе `/my-clubs` если count > 0. |
 | `frontend/src/components/DeepLinkHandler.tsx` | **Без изменений** (см. «Deep-link из DM»). |
 | `frontend/src/styles/brand-theme.css` | (опционально) — стили для `.pending-app-card`, секции, reason-блока в AppCard. CSS правило `.brand-tabbar .tab .tab-dot` уже существует — переиспользовать. |
+| `frontend/src/types/api.ts` | Добавить `AwaitingPaymentApplicantDto` (organizer-view rows на `ClubMembersTab`). |
+| `frontend/src/api/membership.ts` | `getClubAwaitingPaymentApplicants(clubId)` → GET `/api/clubs/{clubId}/awaiting-payment-applicants`. |
+| `frontend/src/queries/queryKeys.ts` | Добавить `clubs.awaitingPaymentApplicants(clubId)`. |
+| `frontend/src/queries/members.ts` | Хук `useClubAwaitingPaymentApplicantsQuery(clubId, { enabled })`. `staleTime: 60_000`. |
+| `frontend/src/components/club/ClubMembersTab.tsx` | Принимает `isOrganizer?: boolean`. Если `isOrganizer && data.length > 0` — рендерит секцию «Ожидают оплаты · N» ПЕРЕД списком участников. Не-organizer не делает запрос (backend всё равно вернёт 403). |
+| `frontend/src/pages/ClubPage.tsx` | Передаёт `isOrganizer` пропом в `<ClubMembersTab>`. |
+| `frontend/src/styles/brand-theme.css` | `.mc-app .status.awaiting-payment` расширен селектором `.mc-app-status.awaiting-payment` (standalone chip-вариант для использования вне `.mc-app`-карточки). Добавлены `.cp-member-awaiting-payment` (non-interactive вариант `.cp-member` + `.username` метa). |
 
 ## Acceptance Criteria
 
@@ -912,6 +974,35 @@ AND PaymentService.createInvoice вызван
 GIVEN заявка pending (или rejected / auto_rejected)
 WHEN POST /api/applications/{id}/resend-invoice от applicant
 THEN 400 VALIDATION_ERROR "No payment pending"
+```
+
+### AC-26a: organizer видит awaiting-payment applicants своего клуба
+```
+GIVEN caller — owner клуба X (subscription_price = 250 stars)
+AND в X 2 approved заявки без active/grace membership (инвойсы не оплачены)
+AND в X 5 active members и 1 rejected заявка
+WHEN GET /api/clubs/X/awaiting-payment-applicants
+THEN 200 OK
+AND вернулось 2 элемента (только approved-без-membership)
+AND каждый элемент содержит applicationId, userId, firstName, lastName, telegramUsername, avatarUrl, approvedAt
+AND сортировка по approvedAt DESC
+```
+
+### AC-26b: не-organizer получает 403
+```
+GIVEN caller — НЕ owner клуба X (visitor / member / owner другого клуба)
+WHEN GET /api/clubs/X/awaiting-payment-applicants
+THEN 403 FORBIDDEN
+AND тело ответа НЕ содержит ни одного applicant
+```
+
+### AC-26c: бесплатный клуб всегда возвращает пустой массив
+```
+GIVEN caller — owner клуба X с subscription_price = 0
+AND теоретически у X есть approved заявка (membership создаётся синхронно при approve, состояние не должно возникать)
+WHEN GET /api/clubs/X/awaiting-payment-applicants
+THEN 200 OK с пустым массивом []
+   (даже если в данных аномалия — фильтр CLUBS.SUBSCRIPTION_PRICE > 0 не пускает)
 ```
 
 ### AC-25: telegramUsername без @ префикса

@@ -359,7 +359,7 @@ export const ClubPage: FC = () => {
           </div>
 
           {activeTab === 'activities' && <ClubActivitiesTab clubId={id} />}
-          {activeTab === 'members' && <ClubMembersTab clubId={id} />}
+          {activeTab === 'members' && <ClubMembersTab clubId={id} isOrganizer={isOrganizer} />}
         </>
       )}
 

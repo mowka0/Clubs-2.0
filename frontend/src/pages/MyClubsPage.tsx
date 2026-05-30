@@ -38,6 +38,8 @@ const STATUS_LABELS: Record<string, string> = {
   auto_rejected: 'Отклонено',
 };
 
+const AWAITING_PAYMENT_LABEL = 'Ожидает оплаты';
+
 function getInitials(name: string): string {
   return name
     .replace(/[«»"']/g, '')
@@ -147,14 +149,18 @@ const CATEGORY_LABELS: Record<string, string> = {
 interface AppCardProps {
   application: ApplicationDto;
   club: ClubDetailDto | undefined;
+  awaitingPayment: boolean;
   onClick: () => void;
 }
 
-const AppCard: FC<AppCardProps> = ({ application, club, onClick }) => {
+const AppCard: FC<AppCardProps> = ({ application, club, awaitingPayment, onClick }) => {
   const name = club?.name ?? `Клуб ${application.clubId.slice(0, 8)}…`;
   const initials = club ? getInitials(club.name) : '·';
   const status = application.status;
-  const statusLabel = STATUS_LABELS[status] ?? status;
+  // approved + still in awaiting-payment list = invoice unpaid. Surface the
+  // lifecycle state ("Ожидает оплаты") rather than the misleading "Одобрено".
+  const statusLabel = awaitingPayment ? AWAITING_PAYMENT_LABEL : (STATUS_LABELS[status] ?? status);
+  const statusClass = awaitingPayment ? 'awaiting-payment' : status;
   const showReason =
     (status === 'rejected' || status === 'auto_rejected') &&
     Boolean(application.rejectedReason && application.rejectedReason.trim());
@@ -171,7 +177,7 @@ const AppCard: FC<AppCardProps> = ({ application, club, onClick }) => {
           <span className="reason">Причина: {application.rejectedReason}</span>
         )}
       </div>
-      <span className={`status ${status}`}>{statusLabel}</span>
+      <span className={`status ${statusClass}`}>{statusLabel}</span>
     </button>
   );
 };
@@ -253,28 +259,30 @@ const AwaitingPaymentCard: FC<AwaitingPaymentCardProps> = ({ item }) => {
   };
 
   return (
-    <div className="mc-app awaiting-payment-card">
-      <span className="avt">
-        {item.club.avatarUrl ? <img src={item.club.avatarUrl} alt="" /> : initials}
-      </span>
-      <div className="body">
-        <span className="name">{item.club.name}</span>
-        <span className="meta">{formatRelativeApprovedAt(item.approvedAt)}</span>
-        <span className="price">Цена: {item.subscriptionPrice}⭐</span>
-        {feedback && (
-          <span className={`awaiting-pay-toast${feedback.kind === 'error' ? ' error' : ''}`}>
-            {feedback.text}
-          </span>
-        )}
+    <div className="awaiting-payment-card-wrap">
+      <div className="mc-app awaiting-payment-card">
+        <span className="avt">
+          {item.club.avatarUrl ? <img src={item.club.avatarUrl} alt="" /> : initials}
+        </span>
+        <div className="body">
+          <span className="name">{item.club.name}</span>
+          <span className="meta">{formatRelativeApprovedAt(item.approvedAt)}</span>
+          <span className="price">Цена: {item.subscriptionPrice}⭐</span>
+        </div>
+        <button
+          type="button"
+          className="awaiting-pay-btn"
+          onClick={handleResend}
+          disabled={resendMutation.isPending}
+        >
+          {resendMutation.isPending ? 'Отправляем…' : `Оплатить ${item.subscriptionPrice}⭐`}
+        </button>
       </div>
-      <button
-        type="button"
-        className="awaiting-pay-btn"
-        onClick={handleResend}
-        disabled={resendMutation.isPending}
-      >
-        {resendMutation.isPending ? 'Отправляем…' : `Оплатить ${item.subscriptionPrice}⭐`}
-      </button>
+      {feedback && (
+        <span className={`awaiting-pay-toast${feedback.kind === 'error' ? ' error' : ''}`}>
+          {feedback.text}
+        </span>
+      )}
     </div>
   );
 };
@@ -297,6 +305,10 @@ export const MyClubsPage: FC = () => {
   const applications = applicationsQuery.data ?? [];
   const pendingInbox = pendingInboxQuery.data ?? [];
   const awaitingPayment = awaitingPaymentQuery.data ?? [];
+  const awaitingPaymentIds = useMemo(
+    () => new Set(awaitingPayment.map((item) => item.applicationId)),
+    [awaitingPayment],
+  );
 
   const inboxSectionRef = useRef<HTMLDivElement | null>(null);
   // Idempotent scroll: focus=inbox deep-link must scroll exactly once per
@@ -506,6 +518,7 @@ export const MyClubsPage: FC = () => {
                 key={app.id}
                 application={app}
                 club={clubDetails[app.clubId]}
+                awaitingPayment={awaitingPaymentIds.has(app.id)}
                 onClick={() => handleClubClick(app.clubId)}
               />
             ))}

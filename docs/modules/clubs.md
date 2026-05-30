@@ -1,5 +1,14 @@
 # Module: Clubs
 
+> **Members tab (organizer-view, 2026-05-30):** `ClubMembersTab` теперь
+> показывает дополнительную секцию «Ожидают оплаты · N» **перед** списком
+> участников, если caller — owner клуба и есть applicants с approved-заявкой
+> без active membership (Stars-инвойс не оплачен). Источник данных —
+> `GET /api/clubs/{clubId}/awaiting-payment-applicants` (organizer-only,
+> backend возвращает 403 для не-owner). Полная спека таба и API контракт
+> живут в `docs/modules/club-page-unified.md` и `docs/modules/applications-inbox.md`
+> соответственно.
+
 ## Архитектура
 
 ```

@@ -15,6 +15,8 @@ export const queryKeys = {
     detail: (id: string) => ['clubs', 'detail', id] as const,
     byInvite: (code: string) => ['clubs', 'invite', code] as const,
     members: (clubId: string) => ['clubs', 'detail', clubId, 'members'] as const,
+    awaitingPaymentApplicants: (clubId: string) =>
+      ['clubs', 'detail', clubId, 'awaiting-payment-applicants'] as const,
     memberProfile: (clubId: string, userId: string) =>
       ['clubs', 'detail', clubId, 'members', userId] as const,
     myReputation: () => ['clubs', 'my', 'reputation'] as const,

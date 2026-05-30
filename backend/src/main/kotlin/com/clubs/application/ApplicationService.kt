@@ -291,6 +291,33 @@ class ApplicationService(
     }
 
     /**
+     * Organizer view: applicants whose application is approved for [clubId] but
+     * whose Stars invoice hasn't been paid yet (no active/grace_period membership).
+     * Sorted by `resolvedAt DESC`. Used by `ClubMembersTab` (organizer-only).
+     *
+     * Auth: caller must be the club owner. 404 if club missing, 403 if not owner.
+     */
+    @Transactional(readOnly = true)
+    fun getAwaitingPaymentApplicantsByClub(
+        clubId: UUID,
+        callerUserId: UUID
+    ): List<AwaitingPaymentApplicantDto> {
+        val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
+        if (club.ownerId != callerUserId) throw ForbiddenException("Forbidden")
+
+        val applications = applicationRepository.findApprovedWithoutMembershipByClubId(clubId)
+        if (applications.isEmpty()) return emptyList()
+
+        val applicantsById = userRepository.findByIds(applications.map { it.userId }.toSet())
+            .associateBy { it.id!! }
+
+        return applications.mapNotNull { application ->
+            val applicant = applicantsById[application.userId] ?: return@mapNotNull null
+            mapper.toAwaitingPaymentApplicant(application, applicant)
+        }
+    }
+
+    /**
      * Re-sends the Stars invoice for an approved-but-unpaid application.
      * Ownership: caller must be the applicant. Rate limit: 1 call per 60s per
      * application (in-memory cooldown — see [resendCooldown] doc).

@@ -169,6 +169,23 @@ export interface AwaitingPaymentApplicationDto {
   subscriptionPrice: number;
 }
 
+/**
+ * Mirror of {@link AwaitingPaymentApplicationDto} from the organizer's side:
+ * an applicant whose application is approved for the organizer's club but
+ * whose Stars invoice hasn't been paid yet (no active membership). Surfaces
+ * in `ClubMembersTab` (organizer view) so the full applicant → member
+ * lifecycle is visible in one place.
+ */
+export interface AwaitingPaymentApplicantDto {
+  applicationId: string;
+  userId: string;
+  firstName: string;
+  lastName: string | null;
+  telegramUsername: string | null;
+  avatarUrl: string | null;
+  approvedAt: string;
+}
+
 export interface ClubDetailDto {
   id: string;
   ownerId: string;

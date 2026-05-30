@@ -1,5 +1,6 @@
 import { apiClient } from './apiClient';
 import type {
+  AwaitingPaymentApplicantDto,
   AwaitingPaymentApplicationDto,
   JoinClubResult,
   MemberListItemDto,
@@ -37,6 +38,20 @@ export function joinByInviteCode(code: string): Promise<JoinClubResult> {
 
 export function getClubMembers(clubId: string): Promise<MemberListItemDto[]> {
   return apiClient.get<MemberListItemDto[]>(`/api/clubs/${clubId}/members`);
+}
+
+/**
+ * Organizer-only view: applicants for [clubId] whose application is approved
+ * but the Stars invoice hasn't been paid yet. Backend returns 403 if caller
+ * is not the club owner — frontend additionally gates the call behind the
+ * `isOrganizer` flag, but the backend authz is the source of truth.
+ */
+export function getClubAwaitingPaymentApplicants(
+  clubId: string,
+): Promise<AwaitingPaymentApplicantDto[]> {
+  return apiClient.get<AwaitingPaymentApplicantDto[]>(
+    `/api/clubs/${clubId}/awaiting-payment-applicants`,
+  );
 }
 
 export function getMemberProfile(clubId: string, userId: string): Promise<MemberProfileDto> {

@@ -1717,6 +1717,41 @@ html, body {
   color: #FF8B8B;
   border: 1px solid rgba(255, 139, 139, 0.22);
 }
+/* «Ожидает оплаты» — approved-but-unpaid lifecycle state. Same brass family
+   as `.pending` (waiting for action) but distinct from `.approved` (green,
+   final completion). `.mc-app-status` is the standalone variant for reuse
+   outside the `.mc-app` card (e.g. organizer-view rows on `ClubMembersTab`);
+   it inherits the same chip layout as `.mc-app .status`. */
+.mc-app .status.awaiting-payment,
+.mc-app-status.awaiting-payment {
+  background: var(--brand-brass-soft);
+  color: var(--brand-brass-deep);
+  border: 1px solid rgba(201, 160, 99, 0.30);
+}
+.mc-app-status {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+/* Awaiting-payment applicant row inside ClubMembersTab (organizer view):
+   non-interactive variant of `.cp-member` with @username + trailing chip. */
+.cp-member-awaiting-payment {
+  cursor: default;
+}
+.cp-member-awaiting-payment .name {
+  flex-wrap: wrap;
+}
+.cp-member-awaiting-payment .name .username {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--brand-ink-3);
+}
 
 /* Empty state card (when user has no clubs nor applications) */
 .mc-empty {
@@ -3555,7 +3590,13 @@ select {
 }
 
 /* «Ожидают оплаты» — applicant-side awaiting-payment cards on MyClubsPage.
-   Layout mirrors .mc-app (club avatar + body + trailing action button). */
+   Card row keeps the standard .mc-app layout; feedback toast renders BELOW
+   as a sibling so the row alignment stays stable when feedback appears. */
+.awaiting-payment-card-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .mc-app.awaiting-payment-card {
   align-items: center;
 }

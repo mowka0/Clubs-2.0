@@ -80,3 +80,23 @@ data class AwaitingPaymentApplicationDto(
     val club: ClubBriefDto,
     val subscriptionPrice: Int
 )
+
+/**
+ * Mirror of [AwaitingPaymentApplicationDto] but from the organizer's perspective:
+ * an applicant whose application is approved for the organizer's club, but who
+ * has not paid the Stars invoice yet (no active/grace_period membership).
+ *
+ * Surfaces on `ClubMembersTab` (organizer view) so the full lifecycle —
+ * applicant → member — is visible in one place.
+ *
+ * See docs/modules/applications-inbox.md § "GET /api/clubs/{clubId}/awaiting-payment-applicants".
+ */
+data class AwaitingPaymentApplicantDto(
+    val applicationId: UUID,
+    val userId: UUID,
+    val firstName: String,
+    val lastName: String?,
+    val telegramUsername: String?,
+    val avatarUrl: String?,
+    val approvedAt: OffsetDateTime
+)

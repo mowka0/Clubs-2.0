@@ -73,6 +73,21 @@ class ApplicationMapper {
         subscriptionPrice = subscriptionPrice
     )
 
+    fun toAwaitingPaymentApplicant(
+        application: Application,
+        applicant: UsersRecord
+    ): AwaitingPaymentApplicantDto = AwaitingPaymentApplicantDto(
+        applicationId = application.id,
+        userId = applicant.id!!,
+        firstName = applicant.firstName,
+        lastName = applicant.lastName,
+        telegramUsername = applicant.telegramUsername,
+        avatarUrl = applicant.avatarUrl,
+        // Same invariant as toAwaitingPaymentDto: status=approved guarantees
+        // resolvedAt is set. Defensive fallback to createdAt for safety.
+        approvedAt = application.resolvedAt ?: application.createdAt
+    )
+
     fun toPendingDto(
         application: Application,
         applicant: ApplicantInfoDto,

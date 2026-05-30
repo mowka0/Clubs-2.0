@@ -32,6 +32,15 @@ interface ApplicationRepository {
      */
     fun findApprovedWithoutMembershipByUserId(userId: UUID): List<Application>
 
+    /**
+     * Mirror of [findApprovedWithoutMembershipByUserId] but scoped to a single club:
+     * approved-but-unpaid applications for the given [clubId]. The paid-club filter
+     * (`subscription_price > 0`) is enforced inside — free clubs never produce this
+     * state because membership is created synchronously on approve.
+     * Ordered by `resolved_at` DESC. Used by `ClubMembersTab` organizer view.
+     */
+    fun findApprovedWithoutMembershipByClubId(clubId: UUID): List<Application>
+
     // Counts / rate limit
     fun countTodayByUser(userId: UUID): Int
 

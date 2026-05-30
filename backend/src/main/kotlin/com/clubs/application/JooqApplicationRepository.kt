@@ -123,6 +123,32 @@ class JooqApplicationRepository(
             .map(mapper::toDomain)
     }
 
+    override fun findApprovedWithoutMembershipByClubId(clubId: UUID): List<Application> {
+        // Mirrors findApprovedWithoutMembershipByUserId but filters by clubId.
+        // CLUBS.SUBSCRIPTION_PRICE > 0 guard kept — free clubs auto-create
+        // membership on approve and must never appear here even on bad data.
+        val membershipExists = DSL.exists(
+            DSL.selectOne()
+                .from(MEMBERSHIPS)
+                .where(
+                    MEMBERSHIPS.USER_ID.eq(APPLICATIONS.USER_ID)
+                        .and(MEMBERSHIPS.CLUB_ID.eq(APPLICATIONS.CLUB_ID))
+                        .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period))
+                )
+        )
+        return dsl.select(APPLICATIONS.asterisk()).from(APPLICATIONS)
+            .join(CLUBS).on(CLUBS.ID.eq(APPLICATIONS.CLUB_ID))
+            .where(
+                APPLICATIONS.CLUB_ID.eq(clubId)
+                    .and(APPLICATIONS.STATUS.eq(ApplicationStatus.approved))
+                    .and(CLUBS.SUBSCRIPTION_PRICE.greaterThan(0))
+                    .and(DSL.not(membershipExists))
+            )
+            .orderBy(APPLICATIONS.RESOLVED_AT.desc().nullsLast())
+            .fetchInto(APPLICATIONS)
+            .map(mapper::toDomain)
+    }
+
     override fun countTodayByUser(userId: UUID): Int {
         val startOfDay = OffsetDateTime.now(ZoneOffset.UTC).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC)
         return dsl.selectCount().from(APPLICATIONS)

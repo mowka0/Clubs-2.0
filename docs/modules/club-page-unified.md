@@ -169,7 +169,7 @@ frontend/src/
 </TabsList>
 
 {activeTab === 'events'  && <ClubEventsTab clubId={id} />}
-{activeTab === 'members' && <ClubMembersTab clubId={id} />}
+{activeTab === 'members' && <ClubMembersTab clubId={id} isOrganizer={isOrganizer} />}
 {activeTab === 'profile' && <ClubProfileTab clubId={id} userId={user.id} />}
 ```
 
@@ -266,6 +266,7 @@ WHEN тапает «Участники»
 THEN haptic `select()`
 AND active tab — «Участники»
 AND рендерится `ClubMembersTab` со списком members (avatar, name, reliability, badge «Организатор» для role='organizer').
+AND если caller — organizer и есть applicants с approved-but-unpaid статусом, **перед** списком участников отображается секция «Ожидают оплаты · N» (см. `applications-inbox.md` § `GET /api/clubs/{clubId}/awaiting-payment-applicants`). Член клуба этой секции не видит — backend возвращает 403, фронт не делает запрос.
 
 ### AC-6: organizer видит дополнительный tab «Управление»
 GIVEN user — owner клуба (`club.ownerId === user.id`) ИЛИ membership.role === 'organizer'
