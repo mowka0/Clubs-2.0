@@ -7,7 +7,9 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useMyClubsQuery } from '../queries/clubs';
 import {
   useMyApplicationsQuery,
+  useMyAwaitingPaymentQuery,
   useMyPendingApplicationsQuery,
+  useResendInvoiceMutation,
 } from '../queries/applications';
 import { queryKeys } from '../queries/queryKeys';
 import { Toast } from '../components/Toast';
@@ -16,7 +18,9 @@ import { BrandBackdrop } from '../components/BrandBackdrop';
 import { ApplicationReviewModal } from '../components/applications/ApplicationReviewModal';
 import { formatPeerSignal } from '../features/applications-inbox/lib/peer-signal-format';
 import { getClub } from '../api/clubs';
+import { ApiError } from '../api/apiClient';
 import type {
+  AwaitingPaymentApplicationDto,
   ClubDetailDto,
   MembershipDto,
   PendingApplicationDto,
@@ -46,6 +50,21 @@ function getInitials(name: string): string {
 
 function formatApplicationDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+}
+
+/**
+ * Russian relative date — "сегодня" / "вчера" / "N дней назад" / absolute date.
+ * Used on the «Ожидают оплаты» card to soft-cue urgency without a hard deadline.
+ */
+function formatRelativeApprovedAt(iso: string): string {
+  const approvedAt = new Date(iso);
+  const now = new Date();
+  const ms = now.getTime() - approvedAt.getTime();
+  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+  if (days <= 0) return 'одобрено сегодня';
+  if (days === 1) return 'одобрено вчера';
+  if (days < 7) return `одобрено ${days} ${pluralRu(days, ['день', 'дня', 'дней'])} назад`;
+  return `одобрено ${formatApplicationDate(iso)}`;
 }
 
 /** Russian plural form picker: forms = [one, few, many] */
@@ -192,6 +211,74 @@ const PendingAppCard: FC<PendingAppCardProps> = ({ pending, onClick }) => {
   );
 };
 
+interface AwaitingPaymentCardProps {
+  item: AwaitingPaymentApplicationDto;
+}
+
+/**
+ * Applicant-side card for an approved application without an active membership.
+ * Tapping «Открыть счёт в Telegram» re-triggers the Stars invoice via DM.
+ * Backend rate-limits 1 call per 60s per application → 429 maps to a specific
+ * "wait a minute" message; other errors surface a generic Russian fallback.
+ */
+const AwaitingPaymentCard: FC<AwaitingPaymentCardProps> = ({ item }) => {
+  const resendMutation = useResendInvoiceMutation();
+  const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(
+    null,
+  );
+
+  const initials = getInitials(item.club.name) || '·';
+
+  const handleResend = () => {
+    setFeedback(null);
+    resendMutation.mutate(item.applicationId, {
+      onSuccess: () => {
+        setFeedback({
+          kind: 'success',
+          text: 'Счёт отправлен. Откройте чат с ботом @clubs_admin_bot',
+        });
+      },
+      onError: (e) => {
+        if (e instanceof ApiError && e.status === 429) {
+          setFeedback({
+            kind: 'error',
+            text: 'Счёт уже отправлен. Подождите минуту.',
+          });
+          return;
+        }
+        const message = e instanceof Error && e.message ? e.message : 'Не удалось отправить счёт. Попробуйте позже.';
+        setFeedback({ kind: 'error', text: message });
+      },
+    });
+  };
+
+  return (
+    <div className="mc-app awaiting-payment-card">
+      <span className="avt">
+        {item.club.avatarUrl ? <img src={item.club.avatarUrl} alt="" /> : initials}
+      </span>
+      <div className="body">
+        <span className="name">{item.club.name}</span>
+        <span className="meta">{formatRelativeApprovedAt(item.approvedAt)}</span>
+        <span className="price">Цена: {item.subscriptionPrice}⭐</span>
+        {feedback && (
+          <span className={`awaiting-pay-toast${feedback.kind === 'error' ? ' error' : ''}`}>
+            {feedback.text}
+          </span>
+        )}
+      </div>
+      <button
+        type="button"
+        className="awaiting-pay-btn"
+        onClick={handleResend}
+        disabled={resendMutation.isPending}
+      >
+        {resendMutation.isPending ? 'Отправляем…' : `Оплатить ${item.subscriptionPrice}⭐`}
+      </button>
+    </div>
+  );
+};
+
 export const MyClubsPage: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -202,12 +289,14 @@ export const MyClubsPage: FC = () => {
   const myClubsQuery = useMyClubsQuery();
   const applicationsQuery = useMyApplicationsQuery();
   const pendingInboxQuery = useMyPendingApplicationsQuery();
+  const awaitingPaymentQuery = useMyAwaitingPaymentQuery();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [reviewing, setReviewing] = useState<PendingApplicationDto | null>(null);
 
   const myClubs = myClubsQuery.data ?? [];
   const applications = applicationsQuery.data ?? [];
   const pendingInbox = pendingInboxQuery.data ?? [];
+  const awaitingPayment = awaitingPaymentQuery.data ?? [];
 
   const inboxSectionRef = useRef<HTMLDivElement | null>(null);
   // Idempotent scroll: focus=inbox deep-link must scroll exactly once per
@@ -267,7 +356,8 @@ export const MyClubsPage: FC = () => {
     !loading &&
     myClubs.length === 0 &&
     applications.length === 0 &&
-    pendingInbox.length === 0;
+    pendingInbox.length === 0 &&
+    awaitingPayment.length === 0;
 
   const handleCreated = (id: string) => {
     setShowCreateModal(false);
@@ -337,26 +427,24 @@ export const MyClubsPage: FC = () => {
         </div>
       )}
 
-      {/* Active clubs */}
-      {!loading && myClubs.length > 0 && (
+      {/*
+        Section order (top → bottom): see docs/modules/my-clubs-unified.md.
+        1. «Ожидают оплаты» — applicant-side urgent CTA (re-send Stars invoice).
+        2. «Заявки на рассмотрении» — organizer-side cross-club inbox.
+        3. «Активные клубы» — current memberships.
+        4. «Заявки» — applicant-side pending/rejected applications.
+      */}
+
+      {/* Awaiting payment — applicant must (re)open the Stars invoice */}
+      {!loading && awaitingPayment.length > 0 && (
         <>
           <div className="mc-section-label">
-            Активные <span className="count">· {myClubs.length}</span>
+            Ожидают оплаты <span className="count">· {awaitingPayment.length}</span>
           </div>
           <div className="mc-list">
-            {myClubs.map((m) => {
-              const club = clubDetails[m.clubId];
-              const isOrganizer = m.role === 'organizer' || club?.ownerId === user?.id;
-              return (
-                <MyClubCard
-                  key={m.id}
-                  membership={m}
-                  club={club}
-                  isOrganizer={isOrganizer}
-                  onClick={() => handleClubClick(m.clubId)}
-                />
-              );
-            })}
+            {awaitingPayment.map((item) => (
+              <AwaitingPaymentCard key={item.applicationId} item={item} />
+            ))}
           </div>
         </>
       )}
@@ -382,7 +470,31 @@ export const MyClubsPage: FC = () => {
         </div>
       )}
 
-      {/* Applications */}
+      {/* Active clubs */}
+      {!loading && myClubs.length > 0 && (
+        <>
+          <div className="mc-section-label">
+            Активные <span className="count">· {myClubs.length}</span>
+          </div>
+          <div className="mc-list">
+            {myClubs.map((m) => {
+              const club = clubDetails[m.clubId];
+              const isOrganizer = m.role === 'organizer' || club?.ownerId === user?.id;
+              return (
+                <MyClubCard
+                  key={m.id}
+                  membership={m}
+                  club={club}
+                  isOrganizer={isOrganizer}
+                  onClick={() => handleClubClick(m.clubId)}
+                />
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* Applications — applicant-side pending/rejected */}
       {!loading && applications.length > 0 && (
         <>
           <div className="mc-section-label">

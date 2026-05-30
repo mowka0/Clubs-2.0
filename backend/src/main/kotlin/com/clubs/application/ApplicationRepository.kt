@@ -25,6 +25,13 @@ interface ApplicationRepository {
     /** Count of pending applications across multiple clubs. Empty input → 0 (no SQL hit). */
     fun countPendingByClubIds(clubIds: Collection<UUID>): Int
 
+    /**
+     * Applications by user that are approved but have no active/grace-period membership
+     * in the same club (i.e. Stars invoice sent but payment not completed).
+     * Ordered by `resolved_at` DESC. Used by «Ожидают оплаты» on MyClubsPage.
+     */
+    fun findApprovedWithoutMembershipByUserId(userId: UUID): List<Application>
+
     // Counts / rate limit
     fun countTodayByUser(userId: UUID): Int
 

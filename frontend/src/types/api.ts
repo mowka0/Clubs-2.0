@@ -117,6 +117,10 @@ export interface ApplicantInfoDto {
   lastName: string | null;
   telegramUsername: string | null;
   avatarUrl: string | null;
+  country: string | null;
+  city: string | null;
+  bio: string | null;
+  interests: string[];
 }
 
 export interface PeerStatsDto {
@@ -141,8 +145,28 @@ export interface PendingApplicationDto {
   club: ClubBriefDto;
 }
 
+/**
+ * Combined counter feeding the «Мои клубы» tab-dot. Both numbers signal
+ * "the user has something to act on" on this tab:
+ *  - inboxCount           — organizer-side pending applications.
+ *  - awaitingPaymentCount — applicant-side approved-but-unpaid applications.
+ * Single endpoint, single cache slot. See docs/modules/applications-inbox.md.
+ */
 export interface PendingApplicationsCountDto {
-  count: number;
+  inboxCount: number;
+  awaitingPaymentCount: number;
+}
+
+/**
+ * Caller's own approved application without active membership — Stars invoice
+ * was sent but payment hasn't arrived yet. Surfaced in the MyClubsPage so the
+ * user can re-trigger invoice delivery from the Mini App.
+ */
+export interface AwaitingPaymentApplicationDto {
+  applicationId: string;
+  approvedAt: string;
+  club: ClubBriefDto;
+  subscriptionPrice: number;
 }
 
 export interface ClubDetailDto {

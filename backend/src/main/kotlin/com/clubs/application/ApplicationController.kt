@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.ResponseStatus
 import java.util.UUID
 
 @RestController
@@ -70,8 +71,25 @@ class ApplicationController(private val applicationService: ApplicationService) 
         ResponseEntity.ok(applicationService.getMyPendingApplications(user.userId))
 
     @GetMapping("/api/users/me/applications-pending-count")
-    fun getMyPendingApplicationsCount(
+    fun getMyClubsActionCounts(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<PendingApplicationsCountDto> =
-        ResponseEntity.ok(applicationService.getMyPendingApplicationsCount(user.userId))
+        ResponseEntity.ok(applicationService.getMyClubsActionCounts(user.userId))
+
+    @GetMapping("/api/users/me/applications-awaiting-payment")
+    fun getMyAwaitingPaymentApplications(
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<List<AwaitingPaymentApplicationDto>> =
+        ResponseEntity.ok(applicationService.getMyAwaitingPaymentApplications(user.userId))
+
+    @PostMapping("/api/applications/{id}/resend-invoice")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun resendInvoice(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ) {
+        // Intentionally NOT logging applicationId at INFO before delegating — Service
+        // emits the structured log on success; failures go through GlobalExceptionHandler.
+        applicationService.resendInvoice(id, user.userId)
+    }
 }

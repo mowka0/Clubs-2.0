@@ -1,5 +1,6 @@
 import { apiClient } from './apiClient';
 import type {
+  AwaitingPaymentApplicationDto,
   JoinClubResult,
   MemberListItemDto,
   MemberProfileDto,
@@ -70,8 +71,32 @@ export function getMyPendingApplications(): Promise<PendingApplicationDto[]> {
   return apiClient.get<PendingApplicationDto[]>('/api/users/me/applications-pending');
 }
 
-export function getMyPendingApplicationsCount(): Promise<PendingApplicationsCountDto> {
+/**
+ * Combined counter that drives the «Мои клубы» tab-dot. Returns both inbox
+ * (organizer) and awaiting-payment (applicant) counts in one shape.
+ */
+export function getMyClubsActionCounts(): Promise<PendingApplicationsCountDto> {
   return apiClient.get<PendingApplicationsCountDto>(
     '/api/users/me/applications-pending-count',
   );
+}
+
+/**
+ * Caller's own approved-but-unpaid applications — surfaced on MyClubsPage
+ * so the applicant can re-trigger the Stars invoice when the original DM
+ * was missed.
+ */
+export function getMyAwaitingPaymentApplications(): Promise<AwaitingPaymentApplicationDto[]> {
+  return apiClient.get<AwaitingPaymentApplicationDto[]>(
+    '/api/users/me/applications-awaiting-payment',
+  );
+}
+
+/**
+ * Re-send the Stars invoice for an approved-but-unpaid application. Backend
+ * rate-limits at 1 call per 60s per application (HTTP 429 «Please wait
+ * before resending the invoice»). 204 No Content on success.
+ */
+export function resendApplicationInvoice(applicationId: string): Promise<void> {
+  return apiClient.post<void>(`/api/applications/${applicationId}/resend-invoice`);
 }

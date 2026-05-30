@@ -35,7 +35,9 @@ export const queryKeys = {
   applications: {
     mine: () => ['applications', 'mine'] as const,
     myPending: ['applications', 'my-pending'] as const,
-    myPendingCount: ['applications', 'my-pending-count'] as const,
+    myAwaitingPayment: ['applications', 'my-awaiting-payment'] as const,
+    /** Combined inbox + awaiting-payment counts (single endpoint). */
+    myPendingActionCounts: ['applications', 'my-pending-action-counts'] as const,
   },
   skladchinas: {
     all: ['skladchinas'] as const,

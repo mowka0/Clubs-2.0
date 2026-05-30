@@ -3524,3 +3524,72 @@ select {
   margin: 12px 0 0;
 }
 .app-review-hint.urgent { color: #FF8B8B; font-weight: 600; }
+
+/* Extended applicant profile in ApplicationReviewModal: location, bio, interests.
+   Sit between hero and peer-signal so the organizer scans identity → background
+   → reputation in a natural top-to-bottom order. */
+.app-review-location {
+  font-size: 13.5px;
+  color: var(--brand-ink-3);
+  margin: 0 0 10px;
+}
+.app-review-bio {
+  font-size: 14px;
+  color: var(--brand-ink-2);
+  line-height: 1.45;
+  padding: 10px 12px;
+  background: var(--brand-navy-card-2);
+  border-radius: 10px;
+  border: 1px solid var(--brand-hairline);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-bottom: 4px;
+}
+.app-review-interests {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+/* «Ожидают оплаты» — applicant-side awaiting-payment cards on MyClubsPage.
+   Layout mirrors .mc-app (club avatar + body + trailing action button). */
+.mc-app.awaiting-payment-card {
+  align-items: center;
+}
+.mc-app.awaiting-payment-card .body .price {
+  font-size: 12.5px;
+  color: var(--brand-brass-deep);
+  font-weight: 600;
+}
+.awaiting-pay-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(201, 160, 99, 0.30);
+  background: var(--brand-brass-soft);
+  color: var(--brand-brass-deep);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.awaiting-pay-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.awaiting-pay-toast {
+  font-size: 12px;
+  color: var(--brand-ink-3);
+  margin: 4px 4px 0;
+  padding: 6px 10px;
+  background: var(--brand-navy-soft);
+  border: 1px solid var(--brand-hairline);
+  border-radius: 8px;
+}
+.awaiting-pay-toast.error { color: #FF8B8B; }

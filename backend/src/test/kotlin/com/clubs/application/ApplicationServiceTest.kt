@@ -10,6 +10,7 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ApplicationStatus
 import com.clubs.generated.jooq.enums.ClubCategory
+import com.clubs.interest.InterestRepository
 import com.clubs.membership.MembershipRepository
 import com.clubs.payment.PaymentService
 import com.clubs.reputation.ReputationRepository
@@ -35,6 +36,7 @@ class ApplicationServiceTest {
     private lateinit var notificationService: NotificationService
     private lateinit var userRepository: UserRepository
     private lateinit var reputationRepository: ReputationRepository
+    private lateinit var interestRepository: InterestRepository
     private lateinit var applicationService: ApplicationService
 
     @BeforeEach
@@ -47,6 +49,7 @@ class ApplicationServiceTest {
         notificationService = mockk(relaxed = true)
         userRepository = mockk(relaxed = true)
         reputationRepository = mockk(relaxed = true)
+        interestRepository = mockk(relaxed = true)
         applicationService = ApplicationService(
             applicationRepository,
             clubRepository,
@@ -55,7 +58,8 @@ class ApplicationServiceTest {
             mapper,
             notificationService,
             userRepository,
-            reputationRepository
+            reputationRepository,
+            interestRepository
         )
     }
 
@@ -421,6 +425,135 @@ class ApplicationServiceTest {
         }
 
         assertEquals("Forbidden", exception.message)
+    }
+
+    @Test
+    fun `resendInvoice succeeds when application is approved and no active membership exists`() {
+        val applicationId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val approved = Application(
+            id = applicationId,
+            userId = userId,
+            clubId = clubId,
+            answerText = null,
+            status = ApplicationStatus.approved,
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = OffsetDateTime.now()
+        )
+
+        every { applicationRepository.findById(applicationId) } returns approved
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
+
+        applicationService.resendInvoice(applicationId, userId)
+
+        verify(exactly = 1) { paymentService.createInvoice(userId, clubId) }
+    }
+
+    @Test
+    fun `resendInvoice throws ForbiddenException when caller is not the applicant`() {
+        val applicationId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val otherUserId = UUID.randomUUID()
+        val approved = Application(
+            id = applicationId,
+            userId = userId,
+            clubId = clubId,
+            answerText = null,
+            status = ApplicationStatus.approved,
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = OffsetDateTime.now()
+        )
+
+        every { applicationRepository.findById(applicationId) } returns approved
+
+        assertThrows<ForbiddenException> {
+            applicationService.resendInvoice(applicationId, otherUserId)
+        }
+        verify(exactly = 0) { paymentService.createInvoice(any(), any()) }
+    }
+
+    @Test
+    fun `resendInvoice throws ValidationException when application is not approved`() {
+        val applicationId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val pending = createPendingApplication(userId, clubId).copy(id = applicationId)
+
+        every { applicationRepository.findById(applicationId) } returns pending
+
+        val ex = assertThrows<ValidationException> {
+            applicationService.resendInvoice(applicationId, userId)
+        }
+        assertEquals("No payment pending", ex.message)
+        verify(exactly = 0) { paymentService.createInvoice(any(), any()) }
+    }
+
+    @Test
+    fun `resendInvoice throws ValidationException when active membership already exists`() {
+        val applicationId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val approved = Application(
+            id = applicationId,
+            userId = userId,
+            clubId = clubId,
+            answerText = null,
+            status = ApplicationStatus.approved,
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = OffsetDateTime.now()
+        )
+        val now = OffsetDateTime.now()
+        val membership = com.clubs.membership.Membership(
+            id = UUID.randomUUID(),
+            userId = userId,
+            clubId = clubId,
+            status = com.clubs.generated.jooq.enums.MembershipStatus.active,
+            role = com.clubs.generated.jooq.enums.MembershipRole.member,
+            joinedAt = now,
+            subscriptionExpiresAt = now.plusDays(30),
+            createdAt = now,
+            updatedAt = now
+        )
+
+        every { applicationRepository.findById(applicationId) } returns approved
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns membership
+
+        val ex = assertThrows<ValidationException> {
+            applicationService.resendInvoice(applicationId, userId)
+        }
+        assertEquals("No payment pending", ex.message)
+        verify(exactly = 0) { paymentService.createInvoice(any(), any()) }
+    }
+
+    @Test
+    fun `getMyClubsActionCounts returns combined inbox and awaiting payment counts`() {
+        val userId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val ownedClubIds = listOf(UUID.randomUUID(), UUID.randomUUID())
+        val approved = Application(
+            id = UUID.randomUUID(),
+            userId = userId,
+            clubId = clubId,
+            answerText = null,
+            status = ApplicationStatus.approved,
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = OffsetDateTime.now()
+        )
+
+        every { clubRepository.findIdsByOwnerId(userId) } returns ownedClubIds
+        every { applicationRepository.countPendingByClubIds(ownedClubIds) } returns 3
+        every { applicationRepository.findApprovedWithoutMembershipByUserId(userId) } returns listOf(approved)
+
+        val result = applicationService.getMyClubsActionCounts(userId)
+
+        assertEquals(3, result.inboxCount)
+        assertEquals(1, result.awaitingPaymentCount)
     }
 
     @Test

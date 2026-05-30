@@ -7,6 +7,7 @@ import {
   useRejectApplicationMutation,
 } from '../../queries/applications';
 import { formatPeerSignal } from '../../features/applications-inbox/lib/peer-signal-format';
+import { countryNameByCode } from '../CityPicker';
 import type { PendingApplicationDto } from '../../types/api';
 
 const REASON_MIN = 5;
@@ -88,6 +89,14 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
   const { applicant, peerStats, club, hoursUntilAutoReject, answerText } = application;
   const fullName = `${applicant.firstName}${applicant.lastName ? ` ${applicant.lastName}` : ''}`;
   const hoursHint = formatHoursHint(hoursUntilAutoReject);
+
+  // City + country: mirror ProfilePage's `pf-identity .location` formatting.
+  // Render only when city is set; country alone (without city) is too vague.
+  const locationLabel = applicant.city
+    ? [applicant.city, countryNameByCode(applicant.country)].filter(Boolean).join(', ')
+    : null;
+  const bio = applicant.bio?.trim();
+  const hasInterests = applicant.interests.length > 0;
 
   const handleApprove = () => {
     haptic.impact('medium');
@@ -184,7 +193,32 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
             </div>
           </div>
 
-          {/* Peer-signal — big line under hero */}
+          {/* Location — only when city is present */}
+          {locationLabel && (
+            <div className="app-review-location">{locationLabel}</div>
+          )}
+
+          {/* About — full bio, wrapped */}
+          {bio && (
+            <>
+              <label className="pf-edit-label">О себе</label>
+              <div className="app-review-bio">{bio}</div>
+            </>
+          )}
+
+          {/* Interests — pill chips */}
+          {hasInterests && (
+            <>
+              <label className="pf-edit-label">Интересы</label>
+              <div className="app-review-interests">
+                {applicant.interests.map((interest) => (
+                  <span key={interest} className="pf-tag">{interest}</span>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Peer-signal — big line under hero/profile */}
           <div className="app-review-peer">{formatPeerSignal(peerStats)}</div>
 
           {/* Club row */}

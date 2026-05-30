@@ -25,7 +25,11 @@ data class ApplicantInfoDto(
     val firstName: String,
     val lastName: String?,
     val telegramUsername: String?,
-    val avatarUrl: String?
+    val avatarUrl: String?,
+    val country: String?,
+    val city: String?,
+    val bio: String?,
+    val interests: List<String>
 )
 
 /**
@@ -49,5 +53,30 @@ data class ClubBriefDto(
     val avatarUrl: String?
 )
 
-/** Lightweight counter for the BottomTabBar dot indicator. */
-data class PendingApplicationsCountDto(val count: Int)
+/**
+ * Combined counter feeding the `/my-clubs` tab-dot indicator. Both numbers
+ * mean "the applicant has work to do on this tab":
+ *  - [inboxCount]           — pending applications across the caller's owned clubs (organizer action).
+ *  - [awaitingPaymentCount] — caller's own approved applications without active membership (applicant action).
+ *
+ * Single endpoint = single source of truth, one cache slot. See
+ * docs/modules/applications-inbox.md § "GET /api/users/me/applications-pending-count".
+ */
+data class PendingApplicationsCountDto(
+    val inboxCount: Int,
+    val awaitingPaymentCount: Int
+)
+
+/**
+ * Caller's own application that was approved but the Stars invoice hasn't been
+ * paid yet (no active membership exists). Surfaces in MyClubsPage so the user
+ * can re-trigger invoice delivery from the Mini App.
+ *
+ * See docs/modules/applications-inbox.md § "GET /api/users/me/applications-awaiting-payment".
+ */
+data class AwaitingPaymentApplicationDto(
+    val applicationId: UUID,
+    val approvedAt: OffsetDateTime,
+    val club: ClubBriefDto,
+    val subscriptionPrice: Int
+)

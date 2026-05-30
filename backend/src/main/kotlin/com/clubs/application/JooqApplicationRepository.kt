@@ -1,8 +1,11 @@
 package com.clubs.application
 
 import com.clubs.generated.jooq.enums.ApplicationStatus
+import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.tables.references.APPLICATIONS
+import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import org.jooq.DSLContext
+import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
@@ -89,6 +92,30 @@ class JooqApplicationRepository(
                     .and(APPLICATIONS.STATUS.eq(ApplicationStatus.pending))
             )
             .fetchOne(0, Int::class.java) ?: 0
+    }
+
+    override fun findApprovedWithoutMembershipByUserId(userId: UUID): List<Application> {
+        // NOT EXISTS subquery filters out applications whose user already has an
+        // active/grace-period membership in the same club (i.e. invoice paid).
+        // Single round-trip, no N+1.
+        val membershipExists = DSL.exists(
+            DSL.selectOne()
+                .from(MEMBERSHIPS)
+                .where(
+                    MEMBERSHIPS.USER_ID.eq(APPLICATIONS.USER_ID)
+                        .and(MEMBERSHIPS.CLUB_ID.eq(APPLICATIONS.CLUB_ID))
+                        .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period))
+                )
+        )
+        return dsl.selectFrom(APPLICATIONS)
+            .where(
+                APPLICATIONS.USER_ID.eq(userId)
+                    .and(APPLICATIONS.STATUS.eq(ApplicationStatus.approved))
+                    .and(DSL.not(membershipExists))
+            )
+            .orderBy(APPLICATIONS.RESOLVED_AT.desc().nullsLast())
+            .fetch()
+            .map(mapper::toDomain)
     }
 
     override fun countTodayByUser(userId: UUID): Int {

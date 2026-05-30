@@ -35,12 +35,16 @@ class ApplicationMapper {
         resolvedAt = application.resolvedAt
     )
 
-    fun toApplicantInfo(record: UsersRecord): ApplicantInfoDto = ApplicantInfoDto(
+    fun toApplicantInfo(record: UsersRecord, interests: List<String>): ApplicantInfoDto = ApplicantInfoDto(
         userId = record.id!!,
         firstName = record.firstName,
         lastName = record.lastName,
         telegramUsername = record.telegramUsername,
-        avatarUrl = record.avatarUrl
+        avatarUrl = record.avatarUrl,
+        country = record.country,
+        city = record.city,
+        bio = record.bio,
+        interests = interests
     )
 
     fun toPeerStats(aggregate: PeerStatsAggregate): PeerStatsDto = PeerStatsDto(
@@ -53,6 +57,20 @@ class ApplicationMapper {
         id = club.id,
         name = club.name,
         avatarUrl = club.avatarUrl
+    )
+
+    fun toAwaitingPaymentDto(
+        application: Application,
+        club: ClubBriefDto,
+        subscriptionPrice: Int
+    ): AwaitingPaymentApplicationDto = AwaitingPaymentApplicationDto(
+        applicationId = application.id,
+        // Caller invariant: only call this for status=approved applications,
+        // which have resolved_at set by updateStatus. Defensive fallback to
+        // createdAt to keep the DTO non-null without throwing.
+        approvedAt = application.resolvedAt ?: application.createdAt,
+        club = club,
+        subscriptionPrice = subscriptionPrice
     )
 
     fun toPendingDto(

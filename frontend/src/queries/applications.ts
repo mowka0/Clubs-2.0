@@ -3,10 +3,13 @@ import {
   approveApplication,
   getClubApplications,
   getMyApplications,
+  getMyAwaitingPaymentApplications,
+  getMyClubsActionCounts,
   getMyPendingApplications,
-  getMyPendingApplicationsCount,
   rejectApplication,
+  resendApplicationInvoice,
 } from '../api/membership';
+import { useHaptic } from '../hooks/useHaptic';
 import { queryKeys } from './queryKeys';
 
 type ApplicationStatus = 'pending' | 'approved' | 'rejected';
@@ -43,15 +46,30 @@ export function useMyPendingApplicationsQuery() {
 }
 
 /**
- * Count of pending applications for the caller — powers the bottom-nav
- * tab-dot on «Мои клубы». Kept light (one COUNT on the backend) and
- * cached for 60s, mirroring useSkladchinaActionRequiredCountQuery.
+ * Caller's own approved-but-unpaid applications — drives the «Ожидают оплаты»
+ * section on MyClubsPage. Mirrors the staleTime/cache pattern of
+ * useMyPendingApplicationsQuery so both sections refresh together.
  */
-export function useMyPendingApplicationsCountQuery() {
+export function useMyAwaitingPaymentQuery() {
   return useQuery({
-    queryKey: queryKeys.applications.myPendingCount,
-    queryFn: getMyPendingApplicationsCount,
-    select: (data) => data.count,
+    queryKey: queryKeys.applications.myAwaitingPayment,
+    queryFn: getMyAwaitingPaymentApplications,
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Combined counter feeding the «Мои клубы» tab-dot. Returns the full
+ * `{ inboxCount, awaitingPaymentCount }` shape so call-sites can show
+ * either count independently; consumers that only need the union can
+ * compute `inboxCount + awaitingPaymentCount` themselves.
+ *
+ * One backend call, one cache slot, mirrors useSkladchinaActionRequiredCountQuery.
+ */
+export function useMyClubsActionCountsQuery() {
+  return useQuery({
+    queryKey: queryKeys.applications.myPendingActionCounts,
+    queryFn: getMyClubsActionCounts,
     staleTime: 60_000,
   });
 }
@@ -72,7 +90,7 @@ export function useApproveApplicationMutation() {
       });
       qc.invalidateQueries({ queryKey: queryKeys.applications.mine() });
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPending });
-      qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingCount });
+      qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingActionCounts });
       qc.invalidateQueries({ queryKey: queryKeys.clubs.members(clubId) });
     },
   });
@@ -96,7 +114,26 @@ export function useRejectApplicationMutation() {
       });
       qc.invalidateQueries({ queryKey: queryKeys.applications.mine() });
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPending });
-      qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingCount });
+      qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingActionCounts });
+    },
+  });
+}
+
+/**
+ * Re-send the Stars invoice for an approved-but-unpaid application. Success
+ * triggers a positive haptic and refreshes the awaiting-payment list + tab-dot
+ * counts (the application may have become "paid" between the user pressing
+ * the button and the backend processing the invoice).
+ */
+export function useResendInvoiceMutation() {
+  const qc = useQueryClient();
+  const haptic = useHaptic();
+  return useMutation({
+    mutationFn: (applicationId: string) => resendApplicationInvoice(applicationId),
+    onSuccess: () => {
+      haptic.notify('success');
+      qc.invalidateQueries({ queryKey: queryKeys.applications.myAwaitingPayment });
+      qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingActionCounts });
     },
   });
 }
