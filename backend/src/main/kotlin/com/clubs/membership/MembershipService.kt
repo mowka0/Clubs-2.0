@@ -18,7 +18,8 @@ class MembershipService(
     private val membershipRepository: MembershipRepository,
     private val clubRepository: ClubRepository,
     private val paymentService: PaymentService,
-    private val mapper: MembershipMapper
+    private val mapper: MembershipMapper,
+    private val freeMembershipActivator: FreeMembershipActivator
 ) {
 
     private val log = LoggerFactory.getLogger(MembershipService::class.java)
@@ -82,8 +83,7 @@ class MembershipService(
             log.info("Invoice requested on {} join: clubId={} userId={} price={}", source, clubId, userId, price)
             JoinResult.PendingPayment(PendingPaymentDto(clubId = clubId, priceStars = price))
         } else {
-            val membership = membershipRepository.create(userId, clubId)
-            clubRepository.incrementMemberCount(clubId)
+            val membership = freeMembershipActivator.activate(userId, clubId)
             log.info("Joined free club via {}: clubId={} userId={}", source, clubId, userId)
             JoinResult.Joined(mapper.toDto(membership))
         }

@@ -61,10 +61,16 @@
 > **[ОБНОВЛЕНО brand-редизайн 2026-05-16, ветка `feature/myclubs-redesign`]** Структура страницы переписана под brand-язык (navy + brass) из PR #33 / #40. Поведение (queries, mutations, navigation) полностью сохранено. Текущая реализация:
 >
 > 1. **Hero** (`<header className="mc-hero">`) — greeting «Привет, {firstName} 👋» + h1 «Твои [brass]клубы[/brass]» с brass-blur подсветкой на слове «клубы» + sub-line «N клубов · M заявок» с русской pluralization. «+ Создать» — brand brass pill (`mc-create-btn`) справа от h1.
-> 2. **Активные клубы** — section label «АКТИВНЫЕ · N» + `mc-list` из brand club-card. Member-карточка — стандартная (avatar 52px category-gradient + name + категория + capacity-bar, без цены). Organizer-карточка — то же + brass-ring на аватаре + 👑 crown в верхнем-правом углу body.
-> 3. **Заявки** — section label «ЗАЯВКИ · N» + `mc-list` из `mc-app` карточек (muted navy с avatar 44px, name line-clamp 2, дата подачи, brass/sage/red status pill).
-> 4. **Empty state** — `mc-empty` карточка с brass-иконкой + headline + sub + dual CTA («Открыть поиск» ghost + «+ Создать клуб» brass). Заменяет старый tgui `Placeholder`.
-> 5. **Backdrop** — `<BrandBackdrop />` первым ребёнком `.brand-page`.
+> 2. **Ожидают оплаты** (applicant-side, NEW в `feature/applications-inbox`, 2026-05-30; редизайн 2026-05-31) — section label «Ожидают оплаты · N» + `mc-list` из `awaiting-payment-card`. Карточка построена на `.club-card` (тот же `<button>` shape, padding 14px, navy 0.88, avatar 52px) с тремя рядами body: name → meta («одобрено сегодня / вчера / N дней назад») → capacity-slot с inline-CTA «Цена: N⭐ · Нажмите чтобы оплатить» (brass). **Вся карточка** — tappable target; нажатие перезапрашивает Stars-инвойс через `POST /api/applications/{id}/resend-invoice` (раньше был отдельный `.awaiting-pay-btn` row в body — удалён, делал карточку выше соседних). Видна **только** если у caller'а есть approved-но-неоплаченные заявки. См. [`applications-inbox.md`](./applications-inbox.md) § «GET /api/users/me/applications-awaiting-payment» + «POST /api/applications/{id}/resend-invoice».
+> 2b. **Self-heal stuck free-club заявок** (NEW в `feature/applications-inbox`, 2026-05-31) — на mount MyClubsPage, после загрузки `myClubs` + `myApplications` + деталей клубов, silent-вызов `POST /api/applications/{id}/complete-free-membership` для каждой заявки с `status==='approved'` И `subscriptionPrice===0` И `clubId ∉ activeMemberships`. Без haptic, без toast. `useRef` флаг — один запуск на mount. После success — invalidate `clubs.my()` → КПСС появляется в «Активные клубы». Платные клубы не self-heal'ятся (у них корректный путь — оплата Stars-инвойса). Раньше пользователь не видел КПСС и не знал про скрытый CTA на `ClubPage`. CTA «Завершить вступление» на ClubPage сохранён как fallback для race condition / network failure. См. [`applications-inbox.md`](./applications-inbox.md) § «POST /api/applications/{id}/complete-free-membership» → «Frontend self-heal».
+> 3. **Заявки на рассмотрении** (organizer-side, NEW в `feature/applications-inbox`, 2026-05-30) — section label «Заявки на рассмотрении · N» + `mc-list` из `pending-app-card`. Карточки с круглым avatar заявителя, peer-signal-строкой, club-chip и hours-hint (`{N}ч до автоотклонения`, красный при `≤6` часов). Тап → `ApplicationReviewModal`. Видна **только** если у caller'а есть pending-заявки по клубам, где он owner. Полная спека — [`applications-inbox.md`](./applications-inbox.md).
+> 4. **Ожидают оплаты от заявителей** (organizer-side cross-club, NEW в `feature/applications-inbox`, 2026-05-31) — section label «Ожидают оплаты от заявителей · N» + `mc-list` из non-interactive строк (тот же `.mc-app.awaiting-payment-card` стиль): avatar заявителя, full name + `@username`, meta «{club.name} · одобрено {relative}», status pill «Ожидает оплаты». Видна **только** если у каких-то approved заявок caller'а как owner ещё нет active membership. Источник — `GET /api/users/me/organizer/awaiting-payment-applicants`. Тап на строку — без действия (открытие модалки/чата с заявителем — out of scope этой итерации).
+> 5. **Активные клубы** — section label «АКТИВНЫЕ · N» + `mc-list` из brand club-card. Member-карточка — стандартная (avatar 52px category-gradient + name + категория + capacity-bar, без цены). Organizer-карточка — то же + brass-ring на аватаре + 👑 crown в верхнем-правом углу body.
+> 6. **Заявки** (applicant-side) — section label «ЗАЯВКИ · N» + `mc-list` из `mc-app` карточек (muted navy с avatar 44px, name line-clamp 2, дата подачи, brass/sage/red status pill). Для статусов `rejected` / `auto_rejected` с непустым `rejectedReason` под датой добавлена третья строка «Причина: {rejectedReason}» (red ink, 2-line truncate) — см. `applications-inbox.md`.
+> 7. **Empty state** — `mc-empty` карточка с brass-иконкой + headline + sub + dual CTA («Открыть поиск» ghost + «+ Создать клуб» brass). Заменяет старый tgui `Placeholder`. Видна когда нет ни клубов, ни applicant-заявок, ни organizer-inbox, ни awaiting-payment (applicant и organizer side).
+> 8. **Backdrop** — `<BrandBackdrop />` первым ребёнком `.brand-page`.
+>
+> **Порядок секций** (top → bottom): Ожидают оплаты → Заявки на рассмотрении → Ожидают оплаты от заявителей → Активные клубы → Заявки. Логика — самые urgent действия пользователя сверху: applicant-side "оплати или потеряешь approved-заявку" → organizer-side "разбери заявки до автоотклонения" → organizer-visibility "кто из одобренных ещё не заплатил" → ежедневный контекст "мои клубы" → historical "мои поданные заявки".
 >
 > Класс корня — `.brand-page` (общий канвас для Discovery/ClubPage/MyClubsPage). Inter font вынесен на `html, body` для единого шрифта во всём app.
 >
@@ -118,6 +124,8 @@
 ### Сортировка
 
 `getMyClubs()` отдаёт уже отсортированные данные (по joinedAt DESC у бэкенда — verify в Developer-этапе). На фронте **без доп. сортировки**, рендерим в исходном порядке. Organizer-clubs обычно созданы позже member-clubs (юзер сначала вступает куда-то, потом сам создаёт), так что они часто и так окажутся вверху.
+
+Блок «Заявки на рассмотрении» (organizer-side, NEW `feature/applications-inbox`) сортируется на бэкенде `createdAt ASC` — старые заявки сверху, чтобы organizer первым увидел те, у которых меньше всего часов до автоотклонения. См. `applications-inbox.md` § «AC-1».
 
 ### Тап-поведение
 
@@ -195,6 +203,17 @@ GIVEN новый user без membership и заявок
 WHEN открывает `/my-clubs`
 THEN видит **один** `<Placeholder>` с текстом «Вы пока не состоите ни в одном клубе. Найдите интересный в Поиске или создайте свой выше.» (combined — отдельных placeholder'ов на пустые «Мои клубы» и «Мои заявки» рядом не появляется)
 AND Section-кнопка «+ Создать клуб» видна сверху.
+AND блок «Заявки на рассмотрении» отсутствует (у user нет owned-клубов → pending-inbox пуст).
+
+### AC-9: deep-link `?focus=inbox` скроллит к organizer-inbox (NEW, `feature/applications-inbox`)
+GIVEN organizer тапает inline-кнопку «Открыть заявки» из DM-уведомления о новой заявке
+WHEN открывается `/my-clubs?focus=inbox`
+THEN после загрузки `useMyPendingApplicationsQuery` если `pendingInbox.length > 0` — `inboxSectionRef.scrollIntoView({ behavior: 'smooth', block: 'start' })`
+AND query-параметр `focus` стирается через `setSearchParams({...}, { replace: true })` (повторный refresh не триггерит scroll)
+AND scroll отрабатывает ровно один раз (idempotent через `useRef` flag — защита от Vite HMR re-run effect)
+AND если pending-inbox пуст (нет owned-клубов / уже разобрал) — scroll не происходит, query-параметр всё равно стирается
+
+Полная спека — [`applications-inbox.md`](./applications-inbox.md) § «AC-11, AC-12».
 
 ## Non-functional
 

@@ -140,8 +140,14 @@ data class UserClubReputationDto(
 |---|---|---|
 | `/profile` → секция «Моя репутация» (карточки `.pf-rep-card`) | Список всех клубов + индекс надёжности; для клубов с активностью ещё строка «обещания N% · M подтв. · K посещ.» | `GET /api/users/me/reputation` |
 | `/clubs/:id` → таб «Участники» → тап → `MemberProfileModal` | Полные метрики (надёжность / обещания % / подтверждения / посещения / роль / joined_at) для любого участника, включая себя | `GET /api/clubs/:id/members/:userId` (`useMemberProfileQuery`) |
+| `/my-clubs` → секция «Заявки на рассмотрении» (organizer-inbox) + `ApplicationReviewModal` | **Peer-signal** агрегата заявителя: «В N клубах · посетил X из Y событий» (или «Новый пользователь» / «В N клубах · ещё не было событий» для edge cases). Бэкенд отдаёт сырые числа, фраза собирается на фронте (`features/applications-inbox/lib/peer-signal-format.ts`). | `GET /api/users/me/applications-pending` → `peerStats` (`memberClubCount`, `totalConfirmations`, `totalAttendances`), под капотом — `ReputationRepository.aggregateByUserIds(userIds)` = batch SQL `SELECT user_id, COUNT(*), COALESCE(SUM(total_confirmations), 0), COALESCE(SUM(total_attendances), 0) FROM user_club_reputation WHERE user_id IN (...) GROUP BY user_id`. Подробно — [`applications-inbox.md`](./applications-inbox.md) § «Peer-signal — формула и edge cases». |
 
 В карточке клуба отдельного таба «Мой профиль» больше нет (был `ClubProfileTab.tsx`, удалён). См. [`club-page-unified.md`](./club-page-unified.md) update-блок наверху.
+
+### Применение метрик за пределами «Моей репутации»
+
+- **Peer-signal в Applications Inbox** (organizer-side): агрегатные `total_confirmations` / `total_attendances` + COUNT clubs из `user_club_reputation` подаются как «социальный сигнал» о заявителе — organizer оценивает надёжность ещё до открытия профиля. Не модифицирует данные репутации, только читает. Edge cases: новичок без записей → `EMPTY` aggregate → фронт показывает «Новый пользователь».
+- Этот use-case **не вводит** новых формул — переиспользует уже существующие raw-метрики per-club, агрегируя batch SQL'ом для N applicants за один запрос (anti N+1).
 
 ## Non-functional
 

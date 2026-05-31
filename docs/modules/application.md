@@ -17,7 +17,7 @@
 ### НЕ входит (из этой итерации)
 - Resubmit после `rejected` (отдельная фича)
 - Bulk approve/reject
-- DM-уведомления заявителю об одобрении/отклонении — см. GAP-007 в `docs/backlog/telegram-bot-prd-gaps.md`
+- DM-уведомления **заявителю** об approve/reject **не реализованы** (GAP-007 в `docs/backlog/telegram-bot-prd-gaps.md` — частично закрыт). DM **организатору** при создании заявки реализован в `feature/applications-inbox` (2026-05-30, см. `docs/modules/applications-inbox.md`).
 - Двухкнопочный UX «запрос + вступить» (см. GAP-6 в `docs/backlog/payment-prd-gaps.md`) — текущий approve платного клуба автоматически вызывает `paymentService.createInvoice`
 - Resubmit после `auto_rejected` — статус есть в БД, но flow повторной подачи не описан
 
@@ -29,9 +29,13 @@ ApplicationController
     ▼
 ApplicationService ─── ClubRepository,
     │                  MembershipRepository,
-    │                  PaymentService
+    │                  PaymentService,
+    │                  NotificationService,        ◀── async DM organizer'у на submit
+    │                  UserRepository,             ◀── batch applicants для inbox, organizer telegram_id для DM
+    │                  ReputationRepository        ◀── aggregateByUserIds для peer-signal
     │
     └── @Transactional submitApplication / approveApplication / rejectApplication
+    └── @Transactional(readOnly=true) getMyPendingApplications / getMyPendingApplicationsCount
 
 @Scheduled(fixedDelay = 3_600_000) ApplicationScheduler
     │
@@ -40,6 +44,8 @@ ApplicationRepository (markAutoRejected)
     │
     └──▶ ClubRepository.decreaseActivityRatingSafely
 ```
+
+> Endpoints `GET /api/users/me/applications-pending` и `/applications-pending-count` живут в `ApplicationController`, питают кросс-клубовый organizer-inbox на `MyClubsPage`. Полная спека — [`applications-inbox.md`](./applications-inbox.md).
 
 ### Файлы (целевая структура)
 | Файл | Роль |
@@ -137,14 +143,16 @@ Errors:
 
 Request:
 ```json
-{ "reason": "string?" }
+{ "reason": "string" }
 ```
-`reason` — необязателен, **до 500 символов** (`@Size(max=500)`).
+`reason` — **обязателен**, `@NotBlank` + `@Size(min=5, max=500)`. После `trim()` сервис дополнительно проверяет ≥5 символов (defense-in-depth: `"  ab "` проходит `@Size(min=5)` по сырой длине, но обрезается до 2 символов — Service бракует `400 VALIDATION_ERROR`).
+
+> Nullable-сигнатура параметра `reason: String?` в `ApplicationService.rejectApplication` намеренно сохранена для возможных будущих system-driven reject (например, scheduler). Контракт UI / `RejectApplicationRequest` — non-null с ≥5 символов после trim.
 
 Response 200: `ApplicationDto` (status = `rejected`, `rejectedReason`, `resolvedAt` заполнены)
 
 Errors:
-- `400 VALIDATION_ERROR` — `reason` длиннее 500 символов; либо заявка не в статусе `pending`
+- `400 VALIDATION_ERROR` — `reason` отсутствует / пустой / `<5` символов после trim / `>500` символов; либо заявка не в статусе `pending`
 - `403 FORBIDDEN` — caller не организатор клуба
 - `404 NOT_FOUND` — заявка или клуб не найдены
 
@@ -177,9 +185,9 @@ Response 200: `ApplicationDto[]`
 
 ### RejectApplicationRequest
 ```json
-{ "reason": "string|null" }
+{ "reason": "string" }
 ```
-**Валидация:** `@Size(max=500)` на `reason`. Bean Validation возвращает `400 VALIDATION_ERROR` при превышении.
+**Валидация:** `@NotBlank` + `@Size(min=5, max=500)` на `reason`. Bean Validation возвращает `400 VALIDATION_ERROR` при отсутствии / пустом / `<5` / `>500`. Дополнительно `ApplicationService.rejectApplication` проверяет `reason.trim().length >= 5` (defense in depth — см. `applications-inbox.md` § «rejectApplication — изменения»).
 
 ## Бизнес-правила
 
@@ -195,6 +203,7 @@ Response 200: `ApplicationDto[]`
 6. Anti-spam: не более **5 заявок в сутки** на пользователя (`countTodayByUser`, окно — календарные сутки UTC) → иначе `429 Too many applications today`
 7. Создаётся запись со `status = pending`, `created_at = now()`, `answer_text = trim(request.answerText)` если непустой иначе null
 8. Логируется INFO с id заявки, clubId, userId
+9. **Async DM организатору** через `NotificationService.sendApplicationCreatedDM` (`@Async`, fail-isolated — ошибка Telegram API не откатывает транзакцию). Текст: `📥 Новая заявка от {applicantDisplayName} в клуб «{clubName}»`, inline web_app button «Открыть заявки» → `${webAppBaseUrl}/my-clubs?focus=inbox`. Лукапы (organizer / applicant / clubName) обёрнуты try-catch — при любом NPE / БД-промахе DM пропускается с WARN-логом, INSERT заявки уже произошёл. См. `docs/modules/applications-inbox.md` § «submitApplication — изменения».
 
 ### approveApplication
 1. Заявка существует → `404 Application not found`
@@ -216,8 +225,9 @@ Response 200: `ApplicationDto[]`
 2. Клуб заявки существует → `404 Club not found`
 3. `club.owner_id = caller` → иначе `403 Forbidden`
 4. `application.status = pending` → иначе `400 Application is not pending`
-5. `applications.status = rejected`, `rejected_reason = reason`, `resolved_at = now()`
-6. Логируется INFO (с reason)
+5. **`reason` обязателен ≥5 символов после `trim()`.** DTO-валидация (`@NotBlank @Size(min=5, max=500)`) отсекает большинство случаев до Service; Service делает повторную проверку post-trim (`"  ab "` проходит `@Size(min=5)`, но trim даёт 2 символа → `400 VALIDATION_ERROR "Reason must be at least 5 characters after trim"`). Параметр `reason: String?` остаётся nullable в сигнатуре Service для возможных future system-driven reject — если `null`, проверка trim пропускается (в `rejected_reason` пишется `null`). Из UI всегда приходит non-null строка ≥5 символов.
+6. `applications.status = rejected`, `rejected_reason = reason?.trim()?.ifEmpty { null }`, `resolved_at = now()`
+7. Логируется INFO **без значения `reason`** (PII-класс — см. § «Non-functional / Логирование»)
 
 ### getClubApplications
 1. Клуб существует → `404 Club not found`
@@ -335,14 +345,23 @@ WHEN organizer POST /api/applications/{id}/reject { reason: "не подходи
 THEN 200 OK, status=rejected, rejected_reason="не подходит", resolved_at заполнен
 ```
 
-**AC-13: reject без reason**
+**AC-13: reject без reason / с пустым / коротким reason**
 ```
-WHEN organizer POST /api/applications/{id}/reject (body отсутствует или null)
-THEN 200 OK, status=rejected, rejected_reason=null
+GIVEN заявка pending
+WHEN organizer POST /api/applications/{id}/reject (body отсутствует / { } / { reason: "" } / { reason: "    " } / { reason: "abcd" })
+THEN 400 VALIDATION_ERROR (@NotBlank / @Size(min=5))
+AND application.status НЕ меняется
+
+WHEN organizer POST /api/applications/{id}/reject { reason: "  ab " }  // 5 raw chars, 2 после trim
+THEN 400 VALIDATION_ERROR "Reason must be at least 5 characters after trim" (Service-level guard)
+AND application.status НЕ меняется
 ```
 
-**AC-14: reject reason длиннее 500 символов**
+**AC-14: reject reason — граница 500 символов**
 ```
+WHEN organizer POST /api/applications/{id}/reject { reason: "x" * 500 }
+THEN 200 OK, status=rejected, rejected_reason="x" * 500
+
 WHEN organizer POST /api/applications/{id}/reject { reason: "x" * 501 }
 THEN 400 VALIDATION_ERROR (Bean Validation @Size(max=500))
 AND application.status НЕ меняется
@@ -408,7 +427,8 @@ THEN ни UPDATE, ни decreaseActivityRatingSafely не вызваны
 | Approve платного: заявитель без валидного telegram_id (не может получить invoice) | 200 | application.status = approved, invoice не отправлен (WARN-лог внутри `PaymentService`). Заявитель не получит DM — эскалация после первого инцидента. |
 | Reject не организатором | 403 | "Forbidden" |
 | Reject не-pending заявки | 400 | "Application is not pending" |
-| Reject с reason > 500 символов | 400 | VALIDATION_ERROR (Bean Validation) |
+| Reject без reason / `<5` после trim | 400 | VALIDATION_ERROR (`@NotBlank` / `@Size(min=5)` / Service post-trim guard) |
+| Reject с reason > 500 символов | 400 | VALIDATION_ERROR (Bean Validation `@Size(max=500)`) |
 | GET /applications не организатором | 403 | "Forbidden" |
 | GET /applications?status=invalid | 400 | "Invalid status: <value>" |
 | Запрос без JWT | 401 | стандартный Spring Security |
@@ -418,10 +438,10 @@ THEN ни UPDATE, ни decreaseActivityRatingSafely не вызваны
 - **Транзакции**: `submitApplication`, `approveApplication`, `rejectApplication`, `ApplicationScheduler.autoRejectExpiredApplications` — все обёрнуты `@Transactional`. На submit это критично для атомарности rate-limit check + insert (две параллельные заявки одного пользователя на 5-й и 6-й позиции корректно сериализуются под REPEATABLE READ/SERIALIZABLE; на READ COMMITTED обе могут пройти, но в МVP допустимо).
 - **Идемпотентность**: на уровне БД отсутствует уникальный constraint `(user_id, club_id, status)`. Защита от дублей `pending` — `findActiveByUserAndClub` в Service. Race window существует: два одновременных submit от одного пользователя теоретически могут создать две `pending`-записи. Acceptable для MVP, fix — partial UNIQUE индекс по `(user_id, club_id) WHERE status IN ('pending', 'approved')`.
 - **Логирование**:
-  - INFO: submit, approve, reject (с id + clubId + userId), invoice request, membership-create на approve бесплатного клуба, scheduler — количество auto-rejected и факт штрафа
-  - PII (answerText, reason) **в логи не пишутся**
+  - INFO: submit (+ строка «DM dispatched for application-created: clubId=…, organizerTelegramId=…» при успешной диспетчеризации, либо WARN при пропуске), approve, reject (с id + clubId + userId), invoice request, membership-create на approve бесплатного клуба, scheduler — количество auto-rejected и факт штрафа
+  - PII (answerText, reason) **в логи не пишутся** — контроллер `reject` явно не логирует `request.reason`, Service-лог reject содержит только ids
 - **Безопасность**:
-  - `@Valid` на DTO: `@Size(max=500)` на `RejectApplicationRequest.reason`
+  - `@Valid` на DTO: `@NotBlank @Size(min=5, max=500)` на `RejectApplicationRequest.reason`
   - Все endpoint'ы JWT-защищены (`AuthenticatedUser` через Spring Security)
   - Owner-check у approve/reject/list — через `club.owner_id == caller.userId` в Service
   - Rate limit 5/day per user — защита от спама заявок
@@ -437,7 +457,7 @@ THEN ни UPDATE, ни decreaseActivityRatingSafely не вызваны
 - **`club` модуль** — `ClubRepository.findById` (для access_type / owner_id / member_limit / subscription_price), `incrementMemberCount` (free approve), `decreaseActivityRatingSafely` (scheduler штраф)
 - **`membership` модуль** — `findActiveByUserAndClub` (проверка дубля), `countActiveByClubId` (проверка лимита), `create` (free approve)
 - **`payment` модуль** — `PaymentService.createInvoice` при approve платного клуба. Membership создаётся в `PaymentService.handleSuccessfulPayment`, не в `ApplicationService`.
-- **`telegram-bot` модуль (планируемо)** — DM-нотификации заявителю об approve/reject **не реализованы** (GAP-007 в `docs/backlog/telegram-bot-prd-gaps.md`). DM организатору о новой заявке тоже не реализован (там же).
+- **`telegram-bot` модуль** — DM **организатору** на submit реализован (`NotificationService.sendApplicationCreatedDM`, см. `docs/modules/telegram-bot.md` § «sendApplicationCreatedDM» и `docs/modules/applications-inbox.md`). DM **заявителю** об approve/reject **остаётся не реализованным** (GAP-007 в `docs/backlog/telegram-bot-prd-gaps.md` — частично закрыт).
 - **БД** — таблицы `applications`, `memberships`, `clubs`. Enum `application_status` (`pending` / `approved` / `rejected` / `auto_rejected`).
 
 ## Известные ограничения

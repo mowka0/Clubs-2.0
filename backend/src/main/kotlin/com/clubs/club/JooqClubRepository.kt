@@ -69,6 +69,21 @@ class JooqClubRepository(
             .where(CLUBS.OWNER_ID.eq(ownerId).and(CLUBS.IS_ACTIVE.eq(true)))
             .fetchOne(0, Int::class.java) ?: 0
 
+    override fun findIdsByOwnerId(ownerId: UUID): List<UUID> =
+        dsl.select(CLUBS.ID)
+            .from(CLUBS)
+            .where(CLUBS.OWNER_ID.eq(ownerId).and(CLUBS.IS_ACTIVE.eq(true)))
+            .fetch(CLUBS.ID)
+            .filterNotNull()
+
+    override fun findByIds(ids: Collection<UUID>): List<Club> {
+        if (ids.isEmpty()) return emptyList()
+        return dsl.selectFrom(CLUBS)
+            .where(CLUBS.ID.`in`(ids).and(CLUBS.IS_ACTIVE.eq(true)))
+            .fetch()
+            .map(mapper::toDomain)
+    }
+
     override fun softDelete(id: UUID) {
         dsl.update(CLUBS)
             .set(CLUBS.IS_ACTIVE, false)

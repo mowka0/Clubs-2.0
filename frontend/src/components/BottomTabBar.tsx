@@ -1,6 +1,7 @@
 import { FC, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useHaptic } from '../hooks/useHaptic';
+import { useMyClubsActionCountsQuery } from '../queries/applications';
 import { useSkladchinaActionRequiredCountQuery } from '../queries/skladchina';
 
 interface TabConfig {
@@ -52,6 +53,14 @@ export const BottomTabBar: FC = () => {
   const haptic = useHaptic();
 
   const { data: unpaidCount = 0 } = useSkladchinaActionRequiredCountQuery();
+  // Combined counter: organizer-side pending applications + applicant-side
+  // approved-but-unpaid + organizer-side approved applicants who haven't paid.
+  // Any > 0 lights up the «Мои клубы» dot.
+  const { data: myClubsActionCounts } = useMyClubsActionCountsQuery();
+  const myClubsActionTotal =
+    (myClubsActionCounts?.inboxCount ?? 0) +
+    (myClubsActionCounts?.awaitingPaymentCount ?? 0) +
+    (myClubsActionCounts?.organizerAwaitingPaymentCount ?? 0);
 
   const handleTabClick = useCallback(
     (path: string) => {
@@ -74,6 +83,7 @@ export const BottomTabBar: FC = () => {
       {TABS.map((tab) => {
         const isActive = activePath === tab.path;
         const showUnpaidDot = tab.path === '/activities' && unpaidCount > 0;
+        const showInboxDot = tab.path === '/my-clubs' && myClubsActionTotal > 0;
         return (
           <button
             key={tab.path}
@@ -84,6 +94,12 @@ export const BottomTabBar: FC = () => {
           >
             {isActive && <span className="indicator" aria-hidden="true" />}
             {showUnpaidDot && <span className="tab-dot" aria-label="Есть неоплаченный сбор" />}
+            {showInboxDot && (
+              <span
+                className="tab-dot"
+                aria-label="Есть необработанные заявки или ожидают оплаты"
+              />
+            )}
             <span className="ico" style={{ backgroundImage: `url(${tab.icon})` }} aria-hidden="true" />
             {tab.label}
           </button>

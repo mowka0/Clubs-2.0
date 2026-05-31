@@ -111,6 +111,101 @@ export interface ClubApplicationDto {
   resolvedAt: string | null;
 }
 
+export interface ApplicantInfoDto {
+  userId: string;
+  firstName: string;
+  lastName: string | null;
+  telegramUsername: string | null;
+  avatarUrl: string | null;
+  country: string | null;
+  city: string | null;
+  bio: string | null;
+  interests: string[];
+}
+
+export interface PeerStatsDto {
+  memberClubCount: number;
+  totalConfirmations: number;
+  totalAttendances: number;
+}
+
+export interface ClubBriefDto {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
+export interface PendingApplicationDto {
+  applicationId: string;
+  answerText: string | null;
+  createdAt: string;
+  hoursUntilAutoReject: number;
+  applicant: ApplicantInfoDto;
+  peerStats: PeerStatsDto;
+  club: ClubBriefDto;
+}
+
+/**
+ * Combined counter feeding the «Мои клубы» tab-dot. All three numbers signal
+ * "the user has something to act on" on this tab:
+ *  - inboxCount                    — organizer-side pending applications.
+ *  - awaitingPaymentCount          — applicant-side approved-but-unpaid applications.
+ *  - organizerAwaitingPaymentCount — organizer-side approved applicants who haven't paid yet.
+ * Single endpoint, single cache slot. See docs/modules/applications-inbox.md.
+ */
+export interface PendingApplicationsCountDto {
+  inboxCount: number;
+  awaitingPaymentCount: number;
+  organizerAwaitingPaymentCount: number;
+}
+
+/**
+ * Caller's own approved application without active membership — Stars invoice
+ * was sent but payment hasn't arrived yet. Surfaced in the MyClubsPage so the
+ * user can re-trigger invoice delivery from the Mini App.
+ */
+export interface AwaitingPaymentApplicationDto {
+  applicationId: string;
+  approvedAt: string;
+  club: ClubBriefDto;
+  subscriptionPrice: number;
+}
+
+/**
+ * Mirror of {@link AwaitingPaymentApplicationDto} from the organizer's side:
+ * an applicant whose application is approved for the organizer's club but
+ * whose Stars invoice hasn't been paid yet (no active membership). Surfaces
+ * in `ClubMembersTab` (organizer view) so the full applicant → member
+ * lifecycle is visible in one place.
+ */
+export interface AwaitingPaymentApplicantDto {
+  applicationId: string;
+  userId: string;
+  firstName: string;
+  lastName: string | null;
+  telegramUsername: string | null;
+  avatarUrl: string | null;
+  approvedAt: string;
+}
+
+/**
+ * Cross-club organizer view of approved-but-unpaid applicants — surfaces on
+ * MyClubsPage so an organizer with multiple clubs sees pending payments in
+ * one place without entering each club. Lean shape (row-only rendering, no
+ * modal opens from here): applicant identity + club brief + price.
+ */
+export interface OrganizerAwaitingPaymentApplicantDto {
+  applicationId: string;
+  approvedAt: string;
+  userId: string;
+  firstName: string;
+  lastName: string | null;
+  telegramUsername: string | null;
+  avatarUrl: string | null;
+  club: ClubBriefDto;
+  subscriptionPrice: number;
+}
+
 export interface ClubDetailDto {
   id: string;
   ownerId: string;

@@ -1,5 +1,7 @@
 package com.clubs.application
 
+import com.clubs.bot.NotificationService
+import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
@@ -8,14 +10,25 @@ import com.clubs.common.exception.RateLimitException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ApplicationStatus
+import com.clubs.interest.InterestRepository
+import com.clubs.membership.FreeMembershipActivator
+import com.clubs.membership.MembershipDto
+import com.clubs.membership.MembershipMapper
 import com.clubs.membership.MembershipRepository
 import com.clubs.payment.PaymentService
+import com.clubs.reputation.PeerStatsAggregate
+import com.clubs.reputation.ReputationRepository
+import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Duration
+import java.time.OffsetDateTime
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 private const val MAX_APPLICATIONS_PER_DAY = 5
+private val RESEND_INVOICE_COOLDOWN: Duration = Duration.ofSeconds(60)
 
 @Service
 class ApplicationService(
@@ -23,8 +36,24 @@ class ApplicationService(
     private val clubRepository: ClubRepository,
     private val membershipRepository: MembershipRepository,
     private val paymentService: PaymentService,
-    private val mapper: ApplicationMapper
+    private val mapper: ApplicationMapper,
+    private val notificationService: NotificationService,
+    private val userRepository: UserRepository,
+    private val reputationRepository: ReputationRepository,
+    private val interestRepository: InterestRepository,
+    private val membershipMapper: MembershipMapper,
+    private val freeMembershipActivator: FreeMembershipActivator
 ) {
+
+    /**
+     * In-memory cooldown for `POST /api/applications/{id}/resend-invoice`.
+     * Bucket4j RateLimitFilter is keyed by user/IP and applies to ALL endpoints
+     * uniformly; we need a per-application cooldown to prevent invoice-spam to
+     * Telegram regardless of who's clicking. Single-instance only — acceptable
+     * for current deploy (one backend container in Coolify). If we scale out,
+     * migrate to Redis.
+     */
+    private val resendCooldown = ConcurrentHashMap<UUID, OffsetDateTime>()
 
     private val log = LoggerFactory.getLogger(ApplicationService::class.java)
 
@@ -57,8 +86,48 @@ class ApplicationService(
 
         val application = applicationRepository.create(userId, clubId, request.answerText)
         log.info("Application submitted: id={} clubId={} userId={}", application.id, clubId, userId)
+
+        dispatchApplicationCreatedDm(club, userId)
+
         return mapper.toDto(application)
     }
+
+    /**
+     * Best-effort organizer notification on new application. Failures here must
+     * NOT abort the submitApplication transaction — sendApplicationCreatedDM is
+     * @Async (fire-and-forget) and the per-message try/catch lives in
+     * NotificationService.sendDm. We additionally guard the lookups so a DB
+     * miss / NPE never poisons the happy path.
+     */
+    private fun dispatchApplicationCreatedDm(club: Club, applicantId: UUID) {
+        try {
+            val organizer = userRepository.findById(club.ownerId)
+            if (organizer == null) {
+                log.warn("Skipping application-created DM: organizer not found ownerId={} clubId={}", club.ownerId, club.id)
+                return
+            }
+            val applicant = userRepository.findById(applicantId)
+            val applicantName = applicant?.let { buildDisplayName(it.firstName, it.lastName) } ?: "Новый пользователь"
+
+            notificationService.sendApplicationCreatedDM(
+                organizerTelegramId = organizer.telegramId,
+                applicantDisplayName = applicantName,
+                clubName = club.name
+            )
+            log.info(
+                "DM dispatched for application-created: clubId={} organizerTelegramId={}",
+                club.id, organizer.telegramId
+            )
+        } catch (e: Exception) {
+            log.warn(
+                "Failed to dispatch application-created DM (non-fatal): clubId={} applicantId={} error={}",
+                club.id, applicantId, e.message
+            )
+        }
+    }
+
+    private fun buildDisplayName(firstName: String, lastName: String?): String =
+        if (lastName.isNullOrBlank()) firstName else "$firstName $lastName"
 
     @Transactional
     fun approveApplication(applicationId: UUID, organizerId: UUID): ApplicationDto {
@@ -85,8 +154,7 @@ class ApplicationService(
                 applicationId, application.clubId, application.userId, price
             )
         } else {
-            membershipRepository.create(application.userId, application.clubId)
-            clubRepository.incrementMemberCount(application.clubId)
+            freeMembershipActivator.activate(application.userId, application.clubId)
             log.info(
                 "Membership created on application approve (free club): applicationId={} clubId={} userId={}",
                 applicationId, application.clubId, application.userId
@@ -112,8 +180,20 @@ class ApplicationService(
             throw ValidationException("Application is not pending")
         }
 
-        val updated = applicationRepository.updateStatus(applicationId, ApplicationStatus.rejected, reason)
-        log.info("Application rejected: id={} clubId={} userId={} organizerId={} reason={}", applicationId, application.clubId, application.userId, organizerId, reason)
+        // DTO @NotBlank/@Size catches empty/short reasons before we get here for
+        // human-driven rejects. The nullable parameter keeps the door open for
+        // future system-driven rejects (e.g. scheduler) without contract changes.
+        // Defense in depth: re-check length AFTER trim. "  ab " passes @Size(min=5)
+        // but trims to 2 chars; we treat it as invalid for human-driven rejects.
+        val storedReason = reason?.trim()?.ifEmpty { null }
+        if (reason != null && (storedReason == null || storedReason.length < 5)) {
+            throw ValidationException("Reason must be at least 5 characters after trim")
+        }
+        val updated = applicationRepository.updateStatus(applicationId, ApplicationStatus.rejected, storedReason)
+        log.info(
+            "Application rejected: id={} clubId={} userId={} organizerId={}",
+            applicationId, application.clubId, application.userId, organizerId
+        )
         return mapper.toDto(updated)
     }
 
@@ -131,4 +211,241 @@ class ApplicationService(
 
     fun getMyApplications(userId: UUID): List<ApplicationDto> =
         applicationRepository.findByUserId(userId).map(mapper::toDto)
+
+    /**
+     * Cross-club organizer inbox: all pending applications across the caller's
+     * owned clubs, enriched with applicant + peer-stats + club brief.
+     *
+     * Performance contract (docs/modules/applications-inbox.md § Non-functional):
+     * ≤5 SQL queries regardless of N applications.
+     */
+    @Transactional(readOnly = true)
+    fun getMyPendingApplications(organizerId: UUID): List<PendingApplicationDto> {
+        val clubIds = clubRepository.findIdsByOwnerId(organizerId)
+        if (clubIds.isEmpty()) return emptyList()
+
+        val applications = applicationRepository.findPendingByClubIds(clubIds)
+        if (applications.isEmpty()) return emptyList()
+
+        val applicantIds = applications.map { it.userId }.toSet()
+        val applicantClubIds = applications.map { it.clubId }.toSet()
+
+        val applicantsById = userRepository.findByIds(applicantIds).associateBy { it.id!! }
+        val peerStatsByUser = reputationRepository.aggregateByUserIds(applicantIds)
+        val interestsByUser = interestRepository.findUserInterestNamesByUserIds(applicantIds)
+        val clubsById = clubRepository.findByIds(applicantClubIds).associateBy { it.id }
+
+        val now = OffsetDateTime.now()
+        return applications.mapNotNull { application ->
+            val applicantRecord = applicantsById[application.userId] ?: return@mapNotNull null
+            val club = clubsById[application.clubId] ?: return@mapNotNull null
+            val interests = interestsByUser[application.userId].orEmpty()
+            mapper.toPendingDto(
+                application = application,
+                applicant = mapper.toApplicantInfo(applicantRecord, interests),
+                peerStats = mapper.toPeerStats(peerStatsByUser[application.userId] ?: PeerStatsAggregate.EMPTY),
+                club = mapper.toClubBrief(club),
+                now = now
+            )
+        }
+    }
+
+    /**
+     * Cross-club action counts for the «Мои клубы» tab-dot:
+     *  - inboxCount                    — pending applications for the caller's owned clubs (organizer action).
+     *  - awaitingPaymentCount          — caller's own approved applications with no active membership (applicant action).
+     *  - organizerAwaitingPaymentCount — approved-but-unpaid applicants of the caller's owned clubs (organizer visibility).
+     *
+     * Single combined response = single cache slot on the frontend. All fields
+     * are scoped to the caller; no IDOR risk.
+     */
+    @Transactional(readOnly = true)
+    fun getMyClubsActionCounts(userId: UUID): PendingApplicationsCountDto {
+        val ownedClubIds = clubRepository.findIdsByOwnerId(userId)
+        val inboxCount = applicationRepository.countPendingByClubIds(ownedClubIds)
+        val awaitingPaymentCount = applicationRepository
+            .findApprovedWithoutMembershipByUserId(userId)
+            .size
+        val organizerAwaitingPaymentCount = applicationRepository
+            .findApprovedWithoutMembershipByClubIds(ownedClubIds)
+            .size
+        return PendingApplicationsCountDto(
+            inboxCount = inboxCount,
+            awaitingPaymentCount = awaitingPaymentCount,
+            organizerAwaitingPaymentCount = organizerAwaitingPaymentCount
+        )
+    }
+
+    /**
+     * Caller's own approved applications whose Stars invoice hasn't been paid
+     * yet (no active membership exists). Used by «Ожидают оплаты» section on
+     * MyClubsPage. Returns clubs sorted by approvedAt DESC.
+     */
+    @Transactional(readOnly = true)
+    fun getMyAwaitingPaymentApplications(userId: UUID): List<AwaitingPaymentApplicationDto> {
+        val applications = applicationRepository.findApprovedWithoutMembershipByUserId(userId)
+        if (applications.isEmpty()) return emptyList()
+
+        val clubsById = clubRepository.findByIds(applications.map { it.clubId }.toSet())
+            .associateBy { it.id }
+
+        return applications.mapNotNull { application ->
+            val club = clubsById[application.clubId] ?: return@mapNotNull null
+            mapper.toAwaitingPaymentDto(
+                application = application,
+                club = mapper.toClubBrief(club),
+                subscriptionPrice = club.subscriptionPrice
+            )
+        }
+    }
+
+    /**
+     * Cross-club organizer view: approved-but-unpaid applicants across all
+     * clubs the caller owns. Surfaces on MyClubsPage so an organizer doesn't
+     * have to enter each club manage page to see who hasn't paid yet.
+     * Sorted by `resolvedAt DESC` (most recent approvals first).
+     *
+     * Auth: scoped by `findIdsByOwnerId(organizerId)` — non-organizers get
+     * empty list, no 403 needed.
+     *
+     * Performance: ≤4 SQL queries regardless of N applications (club IDs,
+     * applications, batch users, batch clubs).
+     */
+    @Transactional(readOnly = true)
+    fun getOrganizerAwaitingPaymentApplicants(
+        organizerId: UUID
+    ): List<OrganizerAwaitingPaymentApplicantDto> {
+        val clubIds = clubRepository.findIdsByOwnerId(organizerId)
+        if (clubIds.isEmpty()) return emptyList()
+
+        val applications = applicationRepository.findApprovedWithoutMembershipByClubIds(clubIds)
+        if (applications.isEmpty()) return emptyList()
+
+        val applicantsById = userRepository.findByIds(applications.map { it.userId }.toSet())
+            .associateBy { it.id!! }
+        val clubsById = clubRepository.findByIds(applications.map { it.clubId }.toSet())
+            .associateBy { it.id }
+
+        return applications.mapNotNull { application ->
+            val applicant = applicantsById[application.userId] ?: return@mapNotNull null
+            val club = clubsById[application.clubId] ?: return@mapNotNull null
+            mapper.toOrganizerAwaitingPayment(
+                application = application,
+                applicant = applicant,
+                club = mapper.toClubBrief(club),
+                subscriptionPrice = club.subscriptionPrice
+            )
+        }
+    }
+
+    /**
+     * Organizer view: applicants whose application is approved for [clubId] but
+     * whose Stars invoice hasn't been paid yet (no active/grace_period membership).
+     * Sorted by `resolvedAt DESC`. Used by `ClubMembersTab` (organizer-only).
+     *
+     * Auth: caller must be the club owner. 404 if club missing, 403 if not owner.
+     */
+    @Transactional(readOnly = true)
+    fun getAwaitingPaymentApplicantsByClub(
+        clubId: UUID,
+        callerUserId: UUID
+    ): List<AwaitingPaymentApplicantDto> {
+        val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
+        if (club.ownerId != callerUserId) throw ForbiddenException("Forbidden")
+
+        val applications = applicationRepository.findApprovedWithoutMembershipByClubId(clubId)
+        if (applications.isEmpty()) return emptyList()
+
+        val applicantsById = userRepository.findByIds(applications.map { it.userId }.toSet())
+            .associateBy { it.id!! }
+
+        return applications.mapNotNull { application ->
+            val applicant = applicantsById[application.userId] ?: return@mapNotNull null
+            mapper.toAwaitingPaymentApplicant(application, applicant)
+        }
+    }
+
+    /**
+     * Re-sends the Stars invoice for an approved-but-unpaid application.
+     * Ownership: caller must be the applicant. Rate limit: 1 call per 60s per
+     * application (in-memory cooldown — see [resendCooldown] doc).
+     * PaymentService.createInvoice may throw on Telegram errors; we let it
+     * propagate (GlobalExceptionHandler maps to 5xx) — no swallowing.
+     */
+    fun resendInvoice(applicationId: UUID, callerUserId: UUID) {
+        val application = applicationRepository.findById(applicationId)
+            ?: throw NotFoundException("Application not found")
+        if (application.userId != callerUserId) {
+            throw ForbiddenException("Forbidden")
+        }
+        if (application.status != ApplicationStatus.approved) {
+            throw ValidationException("No payment pending")
+        }
+        val membership = membershipRepository.findActiveByUserAndClub(callerUserId, application.clubId)
+        if (membership != null) {
+            throw ValidationException("No payment pending")
+        }
+        // Defensive: free clubs never need an invoice. If we hit this, awaiting-
+        // payment surfacing leaked a stale 0-price application; reject loudly so
+        // the UI shows the correct «уже member / нечего платить» state.
+        val club = clubRepository.findById(application.clubId)
+            ?: throw NotFoundException("Club not found")
+        if ((club.subscriptionPrice ?: 0) <= 0) {
+            throw ValidationException("No payment required for this club")
+        }
+
+        val now = OffsetDateTime.now()
+        val previous = resendCooldown[applicationId]
+        if (previous != null && Duration.between(previous, now) < RESEND_INVOICE_COOLDOWN) {
+            throw RateLimitException("Please wait before resending the invoice")
+        }
+        resendCooldown[applicationId] = now
+
+        paymentService.createInvoice(application.userId, application.clubId)
+        log.info(
+            "Invoice resent: applicationId={} userId={} clubId={}",
+            applicationId, application.userId, application.clubId
+        )
+    }
+
+    /**
+     * Finalises a free-club membership for an approved application that was left
+     * in a stuck "approved-without-membership" state (legacy data / earlier bug
+     * where the auto-create branch of [approveApplication] didn't run for a free
+     * club). Only the applicant can call it; only valid for free clubs
+     * (`subscription_price <= 0`) — paid clubs use the Stars-invoice path.
+     *
+     * Delegates to [FreeMembershipActivator] which handles both fresh INSERT
+     * (no row at all) and reactivation (cancelled / expired row from a prior
+     * lifecycle — UNIQUE(user_id, club_id) prevents a second INSERT). Idempotent
+     * at the application-level — second call after success returns 400
+     * ("Already a member").
+     */
+    @Transactional
+    fun completeFreeMembership(applicationId: UUID, callerUserId: UUID): MembershipDto {
+        val application = applicationRepository.findById(applicationId)
+            ?: throw NotFoundException("Application not found")
+        if (application.userId != callerUserId) {
+            throw ForbiddenException("Forbidden")
+        }
+        if (application.status != ApplicationStatus.approved) {
+            throw ValidationException("Application is not approved")
+        }
+        val club = clubRepository.findById(application.clubId)
+            ?: throw NotFoundException("Club not found")
+        if ((club.subscriptionPrice ?: 0) > 0) {
+            throw ValidationException("Club is not free — pay the invoice instead")
+        }
+        val existingMembership = membershipRepository.findActiveByUserAndClub(callerUserId, application.clubId)
+        if (existingMembership != null) {
+            throw ValidationException("Already a member")
+        }
+
+        val membership = freeMembershipActivator.activate(callerUserId, application.clubId)
+        log.info(
+            "Free membership completed for stuck application: applicationId={} userId={} clubId={}",
+            applicationId, callerUserId, application.clubId
+        )
+        return membershipMapper.toDto(membership)
+    }
 }

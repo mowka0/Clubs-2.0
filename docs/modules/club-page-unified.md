@@ -157,7 +157,9 @@ frontend/src/
 </Section>
 ```
 
-`renderJoinButton()` сохраняется в полном объёме (open → «Вступить»; closed → «Хочу вступить»; pending application → disabled; approved → «Ожидаем оплату»; pending payment — disabled). Логика не меняется; убирается только ветка `if (isMember)` и `if (isOrganizer)` — для них CTA не рендерится вовсе (статус в header).
+`renderJoinButton()` сохраняется в полном объёме (open → «Вступить»; closed → «Хочу вступить»; pending application → disabled; approved + платный клуб → «Ожидаем оплату» disabled; approved + бесплатный клуб (legacy stuck) → активная кнопка «Завершить вступление» — см. ниже; pending payment — disabled). Логика не меняется; убирается только ветка `if (isMember)` и `if (isOrganizer)` — для них CTA не рендерится вовсе (статус в header).
+
+**Approved + free club «Завершить вступление» (post-flight 2026-05-31):** если у visitor'а есть approved-заявка и `club.subscriptionPrice <= 0` — рендерится активная кнопка «Завершить вступление» вместо disabled «Ожидаем оплату». Это recovery-state для легаси-данных, где `ApplicationService.approveApplication` для бесплатного клуба не создал membership (старая версия, ручное вмешательство в БД). Клик зовёт `POST /api/applications/{id}/complete-free-membership` — backend идемпотентно создаёт membership и инкрементит `member_count`. На успех страница перерисуется как `member` (через инвалидацию `clubs.my()` и `clubs.detail(clubId)`). См. `docs/modules/applications-inbox.md` §`POST /api/applications/{id}/complete-free-membership`.
 
 ### Member tabs
 
@@ -169,7 +171,7 @@ frontend/src/
 </TabsList>
 
 {activeTab === 'events'  && <ClubEventsTab clubId={id} />}
-{activeTab === 'members' && <ClubMembersTab clubId={id} />}
+{activeTab === 'members' && <ClubMembersTab clubId={id} isOrganizer={isOrganizer} />}
 {activeTab === 'profile' && <ClubProfileTab clubId={id} userId={user.id} />}
 ```
 
@@ -266,6 +268,7 @@ WHEN тапает «Участники»
 THEN haptic `select()`
 AND active tab — «Участники»
 AND рендерится `ClubMembersTab` со списком members (avatar, name, reliability, badge «Организатор» для role='organizer').
+AND если caller — organizer и есть applicants с approved-but-unpaid статусом, **перед** списком участников отображается секция «Ожидают оплаты · N» (см. `applications-inbox.md` § `GET /api/clubs/{clubId}/awaiting-payment-applicants`). Член клуба этой секции не видит — backend возвращает 403, фронт не делает запрос.
 
 ### AC-6: organizer видит дополнительный tab «Управление»
 GIVEN user — owner клуба (`club.ownerId === user.id`) ИЛИ membership.role === 'organizer'

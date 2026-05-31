@@ -15,6 +15,8 @@ export const queryKeys = {
     detail: (id: string) => ['clubs', 'detail', id] as const,
     byInvite: (code: string) => ['clubs', 'invite', code] as const,
     members: (clubId: string) => ['clubs', 'detail', clubId, 'members'] as const,
+    awaitingPaymentApplicants: (clubId: string) =>
+      ['clubs', 'detail', clubId, 'awaiting-payment-applicants'] as const,
     memberProfile: (clubId: string, userId: string) =>
       ['clubs', 'detail', clubId, 'members', userId] as const,
     myReputation: () => ['clubs', 'my', 'reputation'] as const,
@@ -34,6 +36,12 @@ export const queryKeys = {
   },
   applications: {
     mine: () => ['applications', 'mine'] as const,
+    myPending: ['applications', 'my-pending'] as const,
+    myAwaitingPayment: ['applications', 'my-awaiting-payment'] as const,
+    /** Cross-club organizer view: approved-but-unpaid applicants of caller's owned clubs. */
+    organizerAwaitingPayment: ['applications', 'organizer-awaiting-payment'] as const,
+    /** Combined inbox + awaiting-payment counts (single endpoint). */
+    myPendingActionCounts: ['applications', 'my-pending-action-counts'] as const,
   },
   skladchinas: {
     all: ['skladchinas'] as const,

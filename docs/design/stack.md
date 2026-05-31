@@ -540,19 +540,40 @@ type UserVote = 'going' | 'maybe' | 'not_going' | 'confirmed' | 'waitlisted' | '
    - Tap → `navigate('/clubs/{clubId}')` + `haptic.impact('light')` (unified
      ClubPage handles routing — organizer drills в /manage через таб
      «Управление»).
-5. `<div className="mc-section-label">` Заявки · N + `<div className="mc-list">`:
+5. `<div className="mc-section-label">` **Заявки на рассмотрении · N**
+   (organizer-side, NEW в `feature/applications-inbox`, 2026-05-30) +
+   `<div className="mc-list">`:
+   - `pending-app-card` карточки: круглый avatar заявителя 40px +
+     name + `@telegramUsername` + peer-signal-строка («В N клубах · посетил
+     X из Y событий» / fallback варианты) + club-chip (название клуба) +
+     hours-hint («{N}ч до автоотклонения», красный при `≤6` часов).
+   - Tap → `ApplicationReviewModal` (полный профиль заявителя + approve /
+     reject с обязательной текстовой причиной ≥5 символов).
+   - Видна **только** если у caller'а есть pending-заявки по клубам, где
+     он owner. Скролл на эту секцию срабатывает автоматически при
+     открытии `/my-clubs?focus=inbox` (deep-link из DM-уведомления).
+   - Полная спека: [`applications-inbox.md`](../modules/applications-inbox.md).
+6. `<div className="mc-section-label">` Заявки · N (applicant-side) +
+   `<div className="mc-list">`:
    - `mc-app` карточки: muted navy-card + avatar 44px initials + name
      (line-clamp 2) + дата подачи + status pill справа (brass `pending`,
      sage `approved`, red `rejected`/`auto_rejected`).
+   - Для статусов `rejected` / `auto_rejected` с непустым `rejectedReason`
+     под датой третья строка `.reason` («Причина: {rejectedReason}»,
+     2-line truncate, red ink). NEW в `feature/applications-inbox`.
    - Tap → `navigate('/clubs/{clubId}')` (visitor view с pending state).
-6. `<Toast>` — если в `location.state.toast` есть сообщение (например после
+7. `<Toast>` — если в `location.state.toast` есть сообщение (например после
    удаления клуба из OrganizerClubManage). Очищается через
    `window.history.replaceState` после первого рендера.
 
 **Footer:** BottomTabBar
 **API (через TanStack Query):** `useMyClubsQuery`, `useMyApplicationsQuery`,
-`useQueries` массивом `useClubQuery(id)` для подгрузки названий клубов
-(shared cache с ClubPage / OrganizerClubManage).
+`useMyPendingApplicationsQuery` (organizer-inbox, `applications.myPending`,
+`staleTime: 60_000`), `useQueries` массивом `useClubQuery(id)` для подгрузки
+названий клубов (shared cache с ClubPage / OrganizerClubManage). `BottomTabBar`
+дополнительно дёргает `useMyPendingApplicationsCountQuery` для tab-dot на
+табе «Мои клубы». Полная спека inbox-фичи —
+[`applications-inbox.md`](../modules/applications-inbox.md).
 
 ---
 
@@ -687,19 +708,22 @@ Tabs условно (`{activeTab === X && <Tab/>}`) — only active mounts → o
 
 ### 7.7 OrganizerClubManage `/clubs/:id/manage` ⚡ nested
 
-> **[ОБНОВЛЕНО 2026-05-24, `feature/unified-activity-creation`]** Экран brand-редизайнут:
-> `brand-page` + `<BrandBackdrop>`, header → brand-карточка `ManageHeader`, табы →
-> brass pill-tabs `ManageTabs` (не telegram-ui `<TabsList>`). Вкладка «События»
-> объединена со «Сборами» в одну вкладку **«Активности»**. Актуальная спека —
-> [`ui-pages.md`](../modules/ui-pages.md) § OrganizerClubManage и
-> [`unified-activity-creation.md`](../modules/unified-activity-creation.md). Описание
-> ниже сохранено для аудита раскладки контента вкладок.
+> **[ОБНОВЛЕНО 2026-05-30, `feature/applications-inbox`]** Дополнительно к предыдущему
+> brand-редизайну (2026-05-24): таб **«Заявки»** (`ApplicationsTab`) удалён из
+> `OrganizerClubManage`. Approve / reject заявок переехали в кросс-клубовый
+> organizer-inbox на `MyClubsPage` (секция «Заявки на рассмотрении»). Текущее
+> состояние табов — **3 brass pill-таба**: Участники / Финансы / Настройки.
+> Раздел ниже сохранён как историческая раскладка до 2026-05-30 — для аудита
+> только. Актуальная спека — [`ui-pages.md`](../modules/ui-pages.md) §
+> OrganizerClubManage, [`applications-inbox.md`](../modules/applications-inbox.md),
+> [`unified-activity-creation.md`](../modules/unified-activity-creation.md).
 
 **Header:** BackButton + `ManageHeader` (brand-hero)
-**Body:**
+**Body (HISTORICAL — текущее количество табов = 3):**
 1. Header — название + «X / Y участников | город»
-2. `ManageTabs` (5 brass pill-табов): **«Участники» / «Заявки» / «Активности» /
-   «Финансы» / «Настройки»**
+2. `ManageTabs` (исторически 5 brass pill-табов): **«Участники» / ~~«Заявки»~~ /
+   «Активности» / «Финансы» / «Настройки»**. На 2026-05-30 — `Участники` /
+   `Финансы` / `Настройки` (по 3 шт.); «Заявки» удалены вместе со страницей.
 
 **Tab 1: Участники**
 - `<Cell>` каждого — before: Avatar, subtitle: «Надёжность: {i} · Обещания:
@@ -707,12 +731,16 @@ Tabs условно (`{activeTab === X && <Tab/>}`) — only active mounts → o
 - Click → `<MemberProfileModal>` (Avatar + @username + «Статус в клубе» +
   «Репутация»)
 
-**Tab 2: Заявки**
+**~~Tab 2: Заявки~~ (удалён, 2026-05-30 — см. `applications-inbox.md`)**
+- Описание ниже — историческое, до `feature/applications-inbox`.
 - Список заявок со `status === 'pending'`
   - Заголовок: «Пользователь {userId[:8]}…»
   - Текст: сколько времени до автоотклонения (красное если ≤ 6 часов)
   - «Ответ на вопрос» (если есть)
   - Кнопки: «Принять» / «Отклонить»
+- **Сейчас:** approve/reject из кросс-клубового inbox на `MyClubsPage`.
+  Reject теперь требует `reason ≥5 символов` (обязательная textarea
+  в `ApplicationReviewModal`).
 
 **Tab 3: События**
 - `<Button>` «+ Создать событие» → разворачивает inline-форму:

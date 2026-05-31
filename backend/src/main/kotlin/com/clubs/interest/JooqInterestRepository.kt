@@ -53,6 +53,20 @@ class JooqInterestRepository(private val dsl: DSLContext) : InterestRepository {
             .fetch(INTERESTS.NAME)
             .filterNotNull()
 
+    override fun findUserInterestNamesByUserIds(userIds: Collection<UUID>): Map<UUID, List<String>> {
+        if (userIds.isEmpty()) return emptyMap()
+        return dsl.select(USER_INTERESTS.USER_ID, INTERESTS.NAME)
+            .from(USER_INTERESTS)
+            .join(INTERESTS).on(INTERESTS.ID.eq(USER_INTERESTS.INTEREST_ID))
+            .where(USER_INTERESTS.USER_ID.`in`(userIds))
+            .orderBy(USER_INTERESTS.USER_ID.asc(), INTERESTS.NAME.asc())
+            .fetch()
+            .groupBy(
+                { it.get(USER_INTERESTS.USER_ID)!! },
+                { it.get(INTERESTS.NAME)!! }
+            )
+    }
+
     override fun linkUserInterests(userId: UUID, interestIds: Collection<UUID>) {
         if (interestIds.isEmpty()) return
         interestIds.forEach { interestId ->

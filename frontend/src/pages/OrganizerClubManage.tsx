@@ -23,11 +23,6 @@ import { ManageTabs } from '../components/manage/ManageTabs';
 import { useClubQuery, useDeleteClubMutation, useUpdateClubMutation } from '../queries/clubs';
 import { useClubMembersQuery } from '../queries/members';
 import { MemberProfileModal } from '../components/club/MemberProfileModal';
-import {
-  useApproveApplicationMutation,
-  useClubApplicationsQuery,
-  useRejectApplicationMutation,
-} from '../queries/applications';
 import { useClubFinancesQuery } from '../queries/finances';
 import type { UpdateClubBody } from '../api/clubs';
 import type {
@@ -35,11 +30,10 @@ import type {
   ClubDetailDto,
 } from '../types/api';
 
-type TabKey = 'members' | 'applications' | 'finances' | 'settings';
+type TabKey = 'members' | 'finances' | 'settings';
 
 const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
   { key: 'members', label: 'Участники' },
-  { key: 'applications', label: 'Заявки' },
   { key: 'finances', label: 'Финансы' },
   { key: 'settings', label: 'Настройки' },
 ];
@@ -47,23 +41,14 @@ const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
 const VALID_TABS = new Set<string>(TABS.map((t) => t.key));
 
 // Activity creation/browsing moved out of Manage (now on the global "Активности"
-// tab). Legacy deep-links that pointed at the removed activities/events/skladchina
-// tabs fall back to "Участники" so old shares/refreshes don't 404.
-const LEGACY_TAB_KEYS = new Set<string>(['activities', 'events', 'skladchina']);
+// tab). Applications moved to the cross-club inbox on MyClubsPage — see
+// docs/modules/applications-inbox.md. Legacy deep-links to removed tabs fall
+// back to "Участники" so old shares/refreshes don't 404.
+const LEGACY_TAB_KEYS = new Set<string>(['activities', 'applications', 'events', 'skladchina']);
 
 function resolveInitialTab(raw: string | null): TabKey {
   if (raw && VALID_TABS.has(raw)) return raw as TabKey;
   return 'members';
-}
-
-function hoursRemaining(createdAt: string | null): number | null {
-  if (!createdAt) return null;
-  const created = new Date(createdAt).getTime();
-  const deadline = created + 48 * 60 * 60 * 1000;
-  const now = Date.now();
-  const diff = deadline - now;
-  if (diff <= 0) return 0;
-  return Math.floor(diff / (60 * 60 * 1000));
 }
 
 // MemberProfileModal extracted to components/club/MemberProfileModal.tsx
@@ -124,129 +109,6 @@ const MembersTab: FC<{ clubId: string }> = ({ clubId }) => {
         />
       )}
     </>
-  );
-};
-
-// ---- Applications Tab ----
-
-const ApplicationsTab: FC<{ clubId: string }> = ({ clubId }) => {
-  const haptic = useHaptic();
-  const applicationsQuery = useClubApplicationsQuery(clubId, 'pending');
-  const approveMutation = useApproveApplicationMutation();
-  const rejectMutation = useRejectApplicationMutation();
-
-  const [processingId, setProcessingId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-
-  const applications = applicationsQuery.data ?? [];
-
-  const handleApprove = (appId: string) => {
-    haptic.impact('medium');
-    setProcessingId(appId);
-    setActionError(null);
-    approveMutation.mutate(
-      { applicationId: appId, clubId },
-      {
-        onSuccess: () => {
-          haptic.notify('success');
-          setProcessingId(null);
-        },
-        onError: (e) => {
-          console.error('Failed to approve application', e);
-          setActionError(e.message);
-          haptic.notify('error');
-          setProcessingId(null);
-        },
-      },
-    );
-  };
-
-  const handleReject = (appId: string) => {
-    haptic.impact('medium');
-    setProcessingId(appId);
-    setActionError(null);
-    rejectMutation.mutate(
-      { applicationId: appId, clubId },
-      {
-        onSuccess: () => {
-          haptic.notify('warning');
-          setProcessingId(null);
-        },
-        onError: (e) => {
-          console.error('Failed to reject application', e);
-          setActionError(e.message);
-          haptic.notify('error');
-          setProcessingId(null);
-        },
-      },
-    );
-  };
-
-  if (applicationsQuery.isPending) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
-        <Spinner size="m" />
-      </div>
-    );
-  }
-
-  if (applications.length === 0) {
-    return <Placeholder description="Нет активных заявок" />;
-  }
-
-  return (
-    <Section>
-      {actionError && (
-        <div style={{ padding: '8px 16px', color: 'var(--tgui--destructive_text_color)', fontSize: 14 }}>
-          {actionError}
-        </div>
-      )}
-      {applications.map((app) => {
-        const hrs = hoursRemaining(app.createdAt);
-        const isProcessing = processingId === app.id;
-
-        return (
-          <div key={app.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--tgui--divider)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text weight="2" style={{ display: 'block' }}>
-                Пользователь {app.userId.slice(0, 8)}...
-              </Text>
-              {hrs !== null && (
-                <span style={{ fontSize: 12, color: hrs <= 6 ? 'var(--tgui--destructive_text_color)' : 'var(--tgui--hint_color)' }}>
-                  {hrs > 0 ? `${hrs}ч до автоотклонения` : 'Время истекло'}
-                </span>
-              )}
-            </div>
-
-            {app.answerText && (
-              <div style={{ marginTop: 6, fontSize: 14, color: 'var(--tgui--hint_color)', lineHeight: 1.4 }}>
-                {app.answerText}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <Button
-                size="s"
-                onClick={() => handleApprove(app.id)}
-                disabled={isProcessing}
-                stretched
-              >
-                {isProcessing ? <Spinner size="s" /> : 'Принять'}
-              </Button>
-              <Button
-                size="s"
-                mode="outline"
-                onClick={() => handleReject(app.id)}
-                disabled={isProcessing}
-                stretched
-              >
-                Отклонить
-              </Button>
-            </div>
-          </div>
-        );
-      })}
-    </Section>
   );
 };
 
@@ -595,8 +457,6 @@ export const OrganizerClubManage: FC = () => {
     switch (activeTab) {
       case 'members':
         return <MembersTab clubId={clubId} />;
-      case 'applications':
-        return <ApplicationsTab clubId={clubId} />;
       case 'finances':
         return <FinancesTab clubId={clubId} />;
       case 'settings':

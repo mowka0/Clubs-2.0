@@ -22,10 +22,12 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
   - `successful_payment` — делегирование в `PaymentService.handleSuccessfulPayment`
 - **DM-уведомления (через `NotificationService`)**:
   - `sendDirectMessage(telegramId, text)` — generic DM (используется `PaymentNotificationHandler`, `SubscriptionScheduler`)
+  - `sendDirectMessageWithDeepLink(telegramId, text, webAppPath, buttonText)` — DM с inline web_app button на конкретный путь Mini App (используется Skladchina, Applications Inbox)
+  - `sendApplicationCreatedDM(organizerTelegramId, applicantDisplayName, clubName)` — organizer-DM при подаче новой заявки в закрытый клуб `[подключено к ApplicationService.submitApplication]`
   - `sendEventCreated(event)` — анонс нового события участникам клуба `[не подключено, GAP-003]`
   - `sendStage2Started(event)` — напоминание о подтверждении Stage 2 `[не подключено, GAP-004]`
   - `sendAttendanceMarked(eventId)` — DM пользователям с `attendance=absent` `[не подключено, GAP-005]`
-- Все DM имеют inline-кнопку «📱 Открыть Clubs» с `WebAppInfo("https://t.me/clubs_v2_bot/app")`.
+- Generic DM имеют inline-кнопку «📱 Открыть Clubs» с `WebAppInfo("https://t.me/clubs_v2_bot/app")`. Deep-link DM (skladchina / application-created) — кнопку с кастомным `webAppPath` (например `/my-clubs?focus=inbox`).
 
 ### НЕ входит (в текущем состоянии кода)
 
@@ -34,7 +36,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 - Напоминание о голосовании Stage 1 за N дней до события (PRD §4.6.1) — не реализовано.
 - Приветственное сообщение при добавлении нового участника в **групповой** чат (PRD §4.6.1) — не реализовано; welcome-DM есть только в payment-flow (`PaymentNotificationHandler.onPaymentConfirmed`).
 - Уведомления waitlist / освобождения места (PRD §4.6.3 буллет 3) `[GAP-006]`.
-- Уведомления approve/reject заявок в закрытые клубы (PRD §4.6.3 буллет 5) `[GAP-007]`.
+- Уведомления **заявителю** об approve/reject заявок в закрытые клубы (PRD §4.6.3 буллет 5) `[GAP-007]` — заявитель не получает DM. **Частично закрыт:** DM **организатору** при создании заявки реализован (`sendApplicationCreatedDM`, см. § Нотификации ниже).
 - Webhook-режим (PRD не уточняет, но `.claude/rules/backend.md` § Telegram Bot API требует в production). Сейчас — long-polling, см. `docs/backlog/bot-event-dm-not-delivering.md`.
 - Deep-link на конкретный клуб из DM — кнопка ведёт в корень Mini App.
 
@@ -167,6 +169,19 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 - `SubscriptionScheduler.checkSubscriptions` — два варианта: «истекает через 3 дня» и «вошла в grace_period».
 **Текст:** формируется caller'ом.
 **Inline-кнопка:** «📱 Открыть Clubs» → корень Mini App.
+
+### `sendApplicationCreatedDM(organizerTelegramId: Long, applicantDisplayName: String, clubName: String)`
+
+**Назначение:** уведомить организатора **закрытого** клуба о новой заявке на вступление. Реализовано в `feature/applications-inbox` (2026-05-30). Полная спека — [`applications-inbox.md`](./applications-inbox.md).
+**Триггер:** вызов из `ApplicationService.submitApplication` после INSERT заявки (см. `application.md` § «submitApplication», шаг 9). Fail-isolated: метод `@Async`, исключения внутри `sendDm` ловятся `WARN`-логом, поэтому Telegram API errors **не откатывают** транзакцию заявки.
+**Получатель:** один `organizerTelegramId` (Long из `users.telegram_id` владельца клуба).
+**Текст** (`NotificationService.kt:88`):
+```
+📥 Новая заявка от {applicantDisplayName} в клуб «{clubName}»
+```
+**Inline-кнопка:** «Открыть заявки» — `WebAppInfo(url = "${webAppBaseUrl}/my-clubs?focus=inbox")`. Frontend на `MyClubsPage` читает `?focus=inbox` query, делает `smooth scroll` к organizer-inbox секции, затем стирает query через `setSearchParams({ replace: true })`. См. `applications-inbox.md` § «Deep-link из DM».
+**Privacy:** в DM попадают только `applicantDisplayName` (имя из Telegram — публичное) и `clubName` (публичное). `answerText`, `telegramUsername`, `avatarUrl` заявителя — **не отправляются**; organizer видит их после открытия Mini App.
+**Edge case:** если у организатора `telegramId` не найден (теоретически не бывает — NOT NULL в БД) — DM пропускается с `WARN`-логом «Skipping application-created DM: organizer not found ownerId=… clubId=…».
 
 ### `sendEventCreated(event: EventsRecord)` — **orphan** `[GAP-003]`
 
@@ -344,7 +359,7 @@ AND участники клуба НЕ получают DM
 - `[GAP-004]` `sendStage2Started` не подключён к Stage 2 переходу.
 - `[GAP-005]` `sendAttendanceMarked` не подключён к `AttendanceService` после Q1-фикса (баг с фильтром закрыт, метод теперь корректен).
 - `[GAP-006]` Уведомления waitlist / освобождения места (PRD §4.6.3 буллет 3) не реализованы.
-- `[GAP-007]` Уведомления approve/reject заявок в закрытые клубы (PRD §4.6.3 буллет 5) не реализованы.
+- `[GAP-007]` Уведомления **заявителю** об approve/reject заявок в закрытые клубы (PRD §4.6.3 буллет 5) не реализованы. **Частично закрыт** в `feature/applications-inbox` (2026-05-30): DM **организатору** на submit теперь реализован через `sendApplicationCreatedDM`. Уведомления заявителю об approve/reject — по-прежнему gap.
 - `[GAP-008]` Ответы команд `/кто_идет` и `/мой_рейтинг` не содержат inline-кнопку «Открыть Clubs» — нарушает PRD §4.6 AC.
 - `[GAP-009]` `sendStage2Started` (orphan) шлёт всем воутерам, включая `not_going`. PRD §4.6.3 требует только going+maybe.
 - `[GAP-010]` `findMemberTelegramIds` (membership module) возвращает все membership rows клуба без фильтра по `status` — `sendEventCreated` при подключении будет слать DM и `cancelled`/`expired`. Pre-existing, дублирует комментарий в `JooqMembershipRepository.kt:248` и упомянуто в `docs/backlog/bot-event-dm-not-delivering.md`.

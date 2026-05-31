@@ -4,6 +4,7 @@ import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import com.clubs.generated.jooq.tables.references.EVENTS
 import com.clubs.generated.jooq.tables.references.USER_CLUB_REPUTATION
 import org.jooq.DSLContext
+import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -100,4 +101,26 @@ class JooqReputationRepository(
             .limit(1)
             .fetchOne()
             ?.let(mapper::toDomain)
+
+    override fun aggregateByUserIds(userIds: Collection<UUID>): Map<UUID, PeerStatsAggregate> {
+        if (userIds.isEmpty()) return emptyMap()
+
+        val clubCount = DSL.count(USER_CLUB_REPUTATION.CLUB_ID)
+        val confirmSum = DSL.coalesce(DSL.sum(USER_CLUB_REPUTATION.TOTAL_CONFIRMATIONS), DSL.`val`(0))
+        val attendSum = DSL.coalesce(DSL.sum(USER_CLUB_REPUTATION.TOTAL_ATTENDANCES), DSL.`val`(0))
+
+        return dsl.select(USER_CLUB_REPUTATION.USER_ID, clubCount, confirmSum, attendSum)
+            .from(USER_CLUB_REPUTATION)
+            .where(USER_CLUB_REPUTATION.USER_ID.`in`(userIds))
+            .groupBy(USER_CLUB_REPUTATION.USER_ID)
+            .fetch()
+            .associate { record ->
+                val userId = record.get(USER_CLUB_REPUTATION.USER_ID)!!
+                userId to PeerStatsAggregate(
+                    memberClubCount = record.get(clubCount) ?: 0,
+                    totalConfirmations = record.get(confirmSum).toInt(),
+                    totalAttendances = record.get(attendSum).toInt()
+                )
+            }
+    }
 }

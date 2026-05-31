@@ -29,3 +29,18 @@ data class ResponseForReputation(
     val finalStatus: FinalStatus?,
     val attendance: AttendanceStatus?
 )
+
+/**
+ * Cross-club aggregate of one user's reputation rows.
+ * memberClubCount = number of clubs the user has a reputation row in.
+ * totalConfirmations / totalAttendances = SUM over those rows.
+ */
+data class PeerStatsAggregate(
+    val memberClubCount: Int,
+    val totalConfirmations: Int,
+    val totalAttendances: Int
+) {
+    companion object {
+        val EMPTY = PeerStatsAggregate(0, 0, 0)
+    }
+}

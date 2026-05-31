@@ -1,17 +1,33 @@
-import { FC, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { FC, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
 import { Modal, Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useMyClubsQuery } from '../queries/clubs';
-import { useMyApplicationsQuery } from '../queries/applications';
+import {
+  useCompleteFreeMembershipMutation,
+  useMyApplicationsQuery,
+  useMyAwaitingPaymentQuery,
+  useMyPendingApplicationsQuery,
+  useOrganizerAwaitingPaymentQuery,
+  useResendInvoiceMutation,
+} from '../queries/applications';
 import { queryKeys } from '../queries/queryKeys';
 import { Toast } from '../components/Toast';
 import { CreateClubModal } from '../components/CreateClubModal';
 import { BrandBackdrop } from '../components/BrandBackdrop';
+import { ApplicationReviewModal } from '../components/applications/ApplicationReviewModal';
+import { formatPeerSignal } from '../features/applications-inbox/lib/peer-signal-format';
 import { getClub } from '../api/clubs';
-import type { ClubDetailDto, MembershipDto } from '../types/api';
+import { ApiError } from '../api/apiClient';
+import type {
+  AwaitingPaymentApplicationDto,
+  ClubDetailDto,
+  MembershipDto,
+  OrganizerAwaitingPaymentApplicantDto,
+  PendingApplicationDto,
+} from '../types/api';
 import type { ApplicationDto } from '../api/membership';
 
 interface MyClubsLocationState {
@@ -25,6 +41,8 @@ const STATUS_LABELS: Record<string, string> = {
   auto_rejected: 'Отклонено',
 };
 
+const AWAITING_PAYMENT_LABEL = 'Ожидает оплаты';
+
 function getInitials(name: string): string {
   return name
     .replace(/[«»"']/g, '')
@@ -37,6 +55,21 @@ function getInitials(name: string): string {
 
 function formatApplicationDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+}
+
+/**
+ * Russian relative date — "сегодня" / "вчера" / "N дней назад" / absolute date.
+ * Used on the «Ожидают оплаты» card to soft-cue urgency without a hard deadline.
+ */
+function formatRelativeApprovedAt(iso: string): string {
+  const approvedAt = new Date(iso);
+  const now = new Date();
+  const ms = now.getTime() - approvedAt.getTime();
+  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+  if (days <= 0) return 'одобрено сегодня';
+  if (days === 1) return 'одобрено вчера';
+  if (days < 7) return `одобрено ${days} ${pluralRu(days, ['день', 'дня', 'дней'])} назад`;
+  return `одобрено ${formatApplicationDate(iso)}`;
 }
 
 /** Russian plural form picker: forms = [one, few, many] */
@@ -119,14 +152,21 @@ const CATEGORY_LABELS: Record<string, string> = {
 interface AppCardProps {
   application: ApplicationDto;
   club: ClubDetailDto | undefined;
+  awaitingPayment: boolean;
   onClick: () => void;
 }
 
-const AppCard: FC<AppCardProps> = ({ application, club, onClick }) => {
+const AppCard: FC<AppCardProps> = ({ application, club, awaitingPayment, onClick }) => {
   const name = club?.name ?? `Клуб ${application.clubId.slice(0, 8)}…`;
   const initials = club ? getInitials(club.name) : '·';
   const status = application.status;
-  const statusLabel = STATUS_LABELS[status] ?? status;
+  // approved + still in awaiting-payment list = invoice unpaid. Surface the
+  // lifecycle state ("Ожидает оплаты") rather than the misleading "Одобрено".
+  const statusLabel = awaitingPayment ? AWAITING_PAYMENT_LABEL : (STATUS_LABELS[status] ?? status);
+  const statusClass = awaitingPayment ? 'awaiting-payment' : status;
+  const showReason =
+    (status === 'rejected' || status === 'auto_rejected') &&
+    Boolean(application.rejectedReason && application.rejectedReason.trim());
 
   return (
     <button type="button" className="mc-app" onClick={onClick}>
@@ -136,24 +176,195 @@ const AppCard: FC<AppCardProps> = ({ application, club, onClick }) => {
         {application.createdAt && (
           <span className="meta">Подана {formatApplicationDate(application.createdAt)}</span>
         )}
+        {showReason && (
+          <span className="reason">Причина: {application.rejectedReason}</span>
+        )}
       </div>
-      <span className={`status ${status}`}>{statusLabel}</span>
+      <span className={`status ${statusClass}`}>{statusLabel}</span>
     </button>
+  );
+};
+
+interface PendingAppCardProps {
+  pending: PendingApplicationDto;
+  onClick: () => void;
+}
+
+const PendingAppCard: FC<PendingAppCardProps> = ({ pending, onClick }) => {
+  const { applicant, peerStats, club, hoursUntilAutoReject } = pending;
+  const fullName = `${applicant.firstName}${applicant.lastName ? ` ${applicant.lastName}` : ''}`;
+  const initials = getInitials(fullName) || '·';
+  const urgent = hoursUntilAutoReject <= 6;
+  const hoursLabel =
+    hoursUntilAutoReject > 0
+      ? `${hoursUntilAutoReject}ч до автоотклонения`
+      : 'Время истекло';
+
+  return (
+    <button type="button" className="mc-app pending-app-card" onClick={onClick}>
+      <span className="avt">
+        {applicant.avatarUrl ? <img src={applicant.avatarUrl} alt="" /> : initials}
+      </span>
+      <div className="body">
+        <span className="name">
+          {fullName}
+          {applicant.telegramUsername && (
+            <span className="handle"> · @{applicant.telegramUsername}</span>
+          )}
+        </span>
+        <span className="meta peer">{formatPeerSignal(peerStats)}</span>
+        <span className="club-chip">{club.name}</span>
+        <span className={`hours-hint${urgent ? ' urgent' : ''}`}>{hoursLabel}</span>
+      </div>
+    </button>
+  );
+};
+
+interface AwaitingPaymentCardProps {
+  item: AwaitingPaymentApplicationDto;
+}
+
+/**
+ * Applicant-side card for an approved application without an active membership.
+ * The WHOLE card is tappable — same visual shape as `.club-card` so it sits
+ * at the same height as active-club cards stacked below in «Активные». Tap
+ * re-triggers the Stars invoice via DM. Backend rate-limits 1 call per 60s
+ * per application → 429 maps to a specific "wait a minute" message; other
+ * errors surface a generic Russian fallback.
+ */
+const AwaitingPaymentCard: FC<AwaitingPaymentCardProps> = ({ item }) => {
+  const resendMutation = useResendInvoiceMutation();
+  const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(
+    null,
+  );
+
+  const initials = getInitials(item.club.name) || '·';
+
+  const handleResend = () => {
+    if (resendMutation.isPending) return;
+    setFeedback(null);
+    resendMutation.mutate(item.applicationId, {
+      onSuccess: () => {
+        setFeedback({
+          kind: 'success',
+          text: 'Счёт отправлен. Откройте чат с ботом @clubs_admin_bot',
+        });
+      },
+      onError: (e) => {
+        if (e instanceof ApiError && e.status === 429) {
+          setFeedback({
+            kind: 'error',
+            text: 'Счёт уже отправлен. Подождите минуту.',
+          });
+          return;
+        }
+        const message = e instanceof Error && e.message ? e.message : 'Не удалось отправить счёт. Попробуйте позже.';
+        setFeedback({ kind: 'error', text: message });
+      },
+    });
+  };
+
+  const inlineLabel = resendMutation.isPending
+    ? 'Отправляем счёт…'
+    : `Цена: ${item.subscriptionPrice}⭐ · Нажмите чтобы оплатить`;
+
+  return (
+    <div className="awaiting-payment-card-wrap">
+      <button
+        type="button"
+        className="club-card awaiting-payment-card"
+        onClick={handleResend}
+        disabled={resendMutation.isPending}
+      >
+        <span className="avt">
+          {item.club.avatarUrl ? <img src={item.club.avatarUrl} alt="" /> : initials}
+        </span>
+        <div className="body">
+          <div className="top">
+            <span className="name">{item.club.name}</span>
+          </div>
+          <div className="meta">
+            <span className="cat">{formatRelativeApprovedAt(item.approvedAt)}</span>
+          </div>
+          <div className="capacity">
+            <span className="awaiting-pay-inline">{inlineLabel}</span>
+          </div>
+        </div>
+      </button>
+      {feedback && (
+        <span className={`awaiting-pay-toast ${feedback.kind}`}>{feedback.text}</span>
+      )}
+    </div>
+  );
+};
+
+interface OrganizerAwaitingPaymentRowProps {
+  item: OrganizerAwaitingPaymentApplicantDto;
+}
+
+/**
+ * Cross-club organizer-side row: shows an applicant who's been approved for
+ * one of the caller's clubs but hasn't paid the Stars invoice yet. Non-
+ * interactive (no modal opens from here) — purely informational so the
+ * organizer doesn't have to enter each club to see who's pending payment.
+ *
+ * Kept lightweight (44px avatar, 12px padding) — sits in its own section
+ * without club-card neighbours, so applicant-card visual weight would be
+ * out of place here.
+ */
+const OrganizerAwaitingPaymentRow: FC<OrganizerAwaitingPaymentRowProps> = ({ item }) => {
+  const fullName = `${item.firstName}${item.lastName ? ` ${item.lastName}` : ''}`;
+  const initials = getInitials(fullName) || '·';
+  const relative = formatRelativeApprovedAt(item.approvedAt);
+
+  return (
+    <div className="mc-app organizer-pending-row">
+      <span className="avt">
+        {item.avatarUrl ? <img src={item.avatarUrl} alt="" /> : initials}
+      </span>
+      <div className="body">
+        <span className="name">
+          {fullName}
+          {item.telegramUsername && (
+            <span className="handle"> · @{item.telegramUsername}</span>
+          )}
+        </span>
+        <span className="meta">{item.club.name} · {relative}</span>
+      </div>
+      <span className="status awaiting-payment">{AWAITING_PAYMENT_LABEL}</span>
+    </div>
   );
 };
 
 export const MyClubsPage: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const haptic = useHaptic();
   const { user } = useAuthStore();
 
   const myClubsQuery = useMyClubsQuery();
   const applicationsQuery = useMyApplicationsQuery();
+  const pendingInboxQuery = useMyPendingApplicationsQuery();
+  const awaitingPaymentQuery = useMyAwaitingPaymentQuery();
+  const organizerAwaitingPaymentQuery = useOrganizerAwaitingPaymentQuery();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [reviewing, setReviewing] = useState<PendingApplicationDto | null>(null);
 
   const myClubs = myClubsQuery.data ?? [];
   const applications = applicationsQuery.data ?? [];
+  const pendingInbox = pendingInboxQuery.data ?? [];
+  const awaitingPayment = awaitingPaymentQuery.data ?? [];
+  const organizerAwaitingPayment = organizerAwaitingPaymentQuery.data ?? [];
+  const awaitingPaymentIds = useMemo(
+    () => new Set(awaitingPayment.map((item) => item.applicationId)),
+    [awaitingPayment],
+  );
+
+  const inboxSectionRef = useRef<HTMLDivElement | null>(null);
+  // Idempotent scroll: focus=inbox deep-link must scroll exactly once per
+  // mount, even with Vite HMR re-running the effect.
+  const focusInboxHandledRef = useRef(false);
 
   const navState = location.state as MyClubsLocationState | null;
   const [toastMessage, setToastMessage] = useState<string | null>(navState?.toast ?? null);
@@ -162,6 +373,26 @@ export const MyClubsPage: FC = () => {
       window.history.replaceState(null, '', location.pathname);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Deep-link from DM: /my-clubs?focus=inbox. Scroll to the inbox section once
+  // its data is loaded and the section is in the DOM; then strip the query so
+  // a refresh doesn't re-trigger. If the user has no pending applications,
+  // there is no section and we just clear the query.
+  useEffect(() => {
+    if (focusInboxHandledRef.current) return;
+    if (searchParams.get('focus') !== 'inbox') return;
+    if (pendingInboxQuery.isPending) return;
+
+    focusInboxHandledRef.current = true;
+
+    if (pendingInbox.length > 0 && inboxSectionRef.current) {
+      inboxSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    const next = new URLSearchParams(searchParams);
+    next.delete('focus');
+    setSearchParams(next, { replace: true });
+  }, [pendingInboxQuery.isPending, pendingInbox.length, searchParams, setSearchParams]);
 
   const clubIds = useMemo(() => {
     const ids = new Set<string>();
@@ -183,8 +414,69 @@ export const MyClubsPage: FC = () => {
     if (q?.data) clubDetails[id] = q.data;
   });
 
+  /*
+   * Silent self-heal for stuck free-club applications.
+   *
+   * Background: when a free-club application is approved, the backend creates
+   * the membership inline (see ApplicationService.approveApplication free branch).
+   * If that branch ever failed for legacy reasons — or the approval came from
+   * a pre-fix codepath — the user has status=approved but no membership row,
+   * so the club doesn't show in «Активные клубы». They wouldn't know to tap
+   * «Завершить вступление» on ClubPage.
+   *
+   * Fix: on page mount, after both queries settle, find such stuck applications
+   * (approved + free club + caller not in active membership) and call
+   * completeFreeMembership(applicationId) once each. The mutation is idempotent
+   * server-side (400 «Already a member» if race lands a real membership first),
+   * silent (no toast, no haptic), and refetches myClubs so the КПСС appears.
+   *
+   * Paid clubs are explicitly excluded — they correctly remain in «Ожидают
+   * оплаты» until the Stars invoice is paid.
+   */
+  const completeFreeMutation = useCompleteFreeMembershipMutation();
+  const autoHealedRef = useRef(false);
+  const activeMembershipClubIds = useMemo(
+    () => new Set(myClubs.map((m) => m.clubId)),
+    [myClubs],
+  );
+  useEffect(() => {
+    if (autoHealedRef.current) return;
+    if (myClubsQuery.isPending || applicationsQuery.isPending) return;
+    // Need club detail to know whether subscriptionPrice === 0.
+    const haveAllClubDetails = clubIds.every((id) => Boolean(clubDetails[id]));
+    if (clubIds.length > 0 && !haveAllClubDetails) return;
+
+    const stuck = applications.filter((app) => {
+      if (app.status !== 'approved') return false;
+      if (activeMembershipClubIds.has(app.clubId)) return false;
+      const club = clubDetails[app.clubId];
+      if (!club) return false;
+      return club.subscriptionPrice === 0;
+    });
+    if (stuck.length === 0) return;
+
+    autoHealedRef.current = true;
+    stuck.forEach((app) => {
+      completeFreeMutation.mutate({ applicationId: app.id, clubId: app.clubId });
+    });
+  }, [
+    myClubsQuery.isPending,
+    applicationsQuery.isPending,
+    applications,
+    activeMembershipClubIds,
+    clubIds,
+    clubDetails,
+    completeFreeMutation,
+  ]);
+
   const loading = myClubsQuery.isPending || applicationsQuery.isPending;
-  const empty = !loading && myClubs.length === 0 && applications.length === 0;
+  const empty =
+    !loading &&
+    myClubs.length === 0 &&
+    applications.length === 0 &&
+    pendingInbox.length === 0 &&
+    awaitingPayment.length === 0 &&
+    organizerAwaitingPayment.length === 0;
 
   const handleCreated = (id: string) => {
     setShowCreateModal(false);
@@ -254,6 +546,64 @@ export const MyClubsPage: FC = () => {
         </div>
       )}
 
+      {/*
+        Section order (top → bottom): see docs/modules/my-clubs-unified.md.
+        1. «Ожидают оплаты» — applicant-side urgent CTA (re-send Stars invoice).
+        2. «Заявки на рассмотрении» — organizer-side cross-club inbox.
+        3. «Ожидают оплаты от заявителей» — organizer-side cross-club pending payments.
+        4. «Активные клубы» — current memberships.
+        5. «Заявки» — applicant-side pending/rejected applications.
+      */}
+
+      {/* Awaiting payment — applicant must (re)open the Stars invoice */}
+      {!loading && awaitingPayment.length > 0 && (
+        <>
+          <div className="mc-section-label">
+            Ожидают оплаты <span className="count">· {awaitingPayment.length}</span>
+          </div>
+          <div className="mc-list">
+            {awaitingPayment.map((item) => (
+              <AwaitingPaymentCard key={item.applicationId} item={item} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Organizer cross-club inbox — pending applications across all owned clubs */}
+      {!loading && pendingInbox.length > 0 && (
+        <div ref={inboxSectionRef}>
+          <div className="mc-section-label">
+            Заявки на рассмотрении <span className="count">· {pendingInbox.length}</span>
+          </div>
+          <div className="mc-list">
+            {pendingInbox.map((p) => (
+              <PendingAppCard
+                key={p.applicationId}
+                pending={p}
+                onClick={() => {
+                  haptic.impact('light');
+                  setReviewing(p);
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Organizer cross-club awaiting-payment — applicants approved but unpaid */}
+      {!loading && organizerAwaitingPayment.length > 0 && (
+        <>
+          <div className="mc-section-label">
+            Ожидают оплаты от заявителей <span className="count">· {organizerAwaitingPayment.length}</span>
+          </div>
+          <div className="mc-list">
+            {organizerAwaitingPayment.map((item) => (
+              <OrganizerAwaitingPaymentRow key={item.applicationId} item={item} />
+            ))}
+          </div>
+        </>
+      )}
+
       {/* Active clubs */}
       {!loading && myClubs.length > 0 && (
         <>
@@ -278,7 +628,7 @@ export const MyClubsPage: FC = () => {
         </>
       )}
 
-      {/* Applications */}
+      {/* Applications — applicant-side pending/rejected */}
       {!loading && applications.length > 0 && (
         <>
           <div className="mc-section-label">
@@ -290,6 +640,7 @@ export const MyClubsPage: FC = () => {
                 key={app.id}
                 application={app}
                 club={clubDetails[app.clubId]}
+                awaitingPayment={awaitingPaymentIds.has(app.id)}
                 onClick={() => handleClubClick(app.clubId)}
               />
             ))}
@@ -301,6 +652,14 @@ export const MyClubsPage: FC = () => {
         <Modal open onOpenChange={(open) => !open && setShowCreateModal(false)}>
           <CreateClubModal onClose={() => setShowCreateModal(false)} onCreated={handleCreated} />
         </Modal>
+      )}
+
+      {reviewing && (
+        <ApplicationReviewModal
+          application={reviewing}
+          open
+          onClose={() => setReviewing(null)}
+        />
       )}
 
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}

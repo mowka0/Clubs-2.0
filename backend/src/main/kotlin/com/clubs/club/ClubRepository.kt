@@ -17,6 +17,12 @@ interface ClubRepository {
 
     fun countByOwnerId(ownerId: UUID): Int
 
+    /** Active-club IDs owned by [ownerId]. Empty list when the user owns no clubs. */
+    fun findIdsByOwnerId(ownerId: UUID): List<UUID>
+
+    /** Batch lookup of active clubs by IDs. Empty input → empty output (no SQL hit). */
+    fun findByIds(ids: Collection<UUID>): List<Club>
+
     fun softDelete(id: UUID)
 
     fun findAll(filters: ClubFilterParams): PageResponse<ClubListItemDto>

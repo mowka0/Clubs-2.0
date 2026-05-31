@@ -13,6 +13,14 @@ interface InterestRepository {
     fun findUserInterestIds(userId: UUID): Set<UUID>
     fun findUserInterestNames(userId: UUID): List<String>
 
+    /**
+     * Batch lookup of interest names per user (single SQL hit). Used by the
+     * applications inbox to enrich applicant profiles without N+1.
+     * Empty input → emptyMap (no SQL hit). Users with no interests are absent
+     * from the map; callers default to emptyList.
+     */
+    fun findUserInterestNamesByUserIds(userIds: Collection<UUID>): Map<UUID, List<String>>
+
     fun linkUserInterests(userId: UUID, interestIds: Collection<UUID>)
     fun unlinkUserInterests(userId: UUID, interestIds: Collection<UUID>)
 

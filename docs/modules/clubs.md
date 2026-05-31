@@ -1,5 +1,14 @@
 # Module: Clubs
 
+> **Members tab (organizer-view, 2026-05-30):** `ClubMembersTab` теперь
+> показывает дополнительную секцию «Ожидают оплаты · N» **перед** списком
+> участников, если caller — owner клуба и есть applicants с approved-заявкой
+> без active membership (Stars-инвойс не оплачен). Источник данных —
+> `GET /api/clubs/{clubId}/awaiting-payment-applicants` (organizer-only,
+> backend возвращает 403 для не-owner). Полная спека таба и API контракт
+> живут в `docs/modules/club-page-unified.md` и `docs/modules/applications-inbox.md`
+> соответственно.
+
 ## Архитектура
 
 ```
@@ -111,7 +120,9 @@ Backend явно не принимает category/accessType в `UpdateClubReque
 Покрывает PRD §8 Milestone 2 *«CRUD клубов (создание, редактирование, удаление)»* — edit/delete на стороне UI. Соответствует PRD §4.5.1 (поля) и §4.5.2 (Дашборд организатора).
 
 ### UI
-В `OrganizerClubManage` — новая вкладка **«⚙️ Настройки»** (пятая после Members / Applications / Events / Finances).
+В `OrganizerClubManage` — вкладка **«⚙️ Настройки»**.
+
+> **Update (`feature/applications-inbox`, 2026-05-30):** таб **«Заявки»** (`ApplicationsTab`) удалён из `OrganizerClubManage`. `TabKey` теперь = `'members' | 'finances' | 'settings'`. Approve/reject заявок выполняется только через кросс-клубовый organizer-inbox на `MyClubsPage` («Заявки на рассмотрении» секция) — см. [`applications-inbox.md`](./applications-inbox.md). Legacy deep-link `?tab=applications` добавлен в `LEGACY_TAB_KEYS` → fallback на `members`.
 
 ### Поля формы (из PRD §4.5.1, без category и accessType)
 1. **Аватар** — image upload через `POST /api/upload` (MinIO/S3). Формат jpeg/png, до 5 MB. Preview локально пока идёт загрузка.
