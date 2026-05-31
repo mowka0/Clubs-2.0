@@ -6,6 +6,7 @@ import {
   getMyAwaitingPaymentApplications,
   getMyClubsActionCounts,
   getMyPendingApplications,
+  getOrganizerAwaitingPaymentApplicants,
   rejectApplication,
   resendApplicationInvoice,
 } from '../api/membership';
@@ -59,6 +60,20 @@ export function useMyAwaitingPaymentQuery() {
 }
 
 /**
+ * Cross-club organizer view: approved-but-unpaid applicants across all clubs
+ * the caller owns. Drives the «Ожидают оплаты от заявителей» section on
+ * MyClubsPage. Backend filters by ownership; non-organizers receive an empty
+ * list (no 403). Same `staleTime: 60_000` as sibling sections.
+ */
+export function useOrganizerAwaitingPaymentQuery() {
+  return useQuery({
+    queryKey: queryKeys.applications.organizerAwaitingPayment,
+    queryFn: getOrganizerAwaitingPaymentApplicants,
+    staleTime: 60_000,
+  });
+}
+
+/**
  * Combined counter feeding the «Мои клубы» tab-dot. Returns the full
  * `{ inboxCount, awaitingPaymentCount }` shape so call-sites can show
  * either count independently; consumers that only need the union can
@@ -92,6 +107,10 @@ export function useApproveApplicationMutation() {
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPending });
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingActionCounts });
       qc.invalidateQueries({ queryKey: queryKeys.clubs.members(clubId) });
+      // Approving a paid-club application creates a new awaiting-payment entry
+      // for the organizer cross-club view and bumps the per-club section too.
+      qc.invalidateQueries({ queryKey: queryKeys.applications.organizerAwaitingPayment });
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.awaitingPaymentApplicants(clubId) });
     },
   });
 }
@@ -115,6 +134,9 @@ export function useRejectApplicationMutation() {
       qc.invalidateQueries({ queryKey: queryKeys.applications.mine() });
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPending });
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingActionCounts });
+      // Reject doesn't add an awaiting-payment entry, but keep the cross-club
+      // organizer view in lockstep with the per-club one for consistency.
+      qc.invalidateQueries({ queryKey: queryKeys.applications.organizerAwaitingPayment });
     },
   });
 }
@@ -134,6 +156,9 @@ export function useResendInvoiceMutation() {
       haptic.notify('success');
       qc.invalidateQueries({ queryKey: queryKeys.applications.myAwaitingPayment });
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingActionCounts });
+      // Resend by applicant doesn't move the entry but webhook-driven payment
+      // can land between request and refetch; refresh the organizer view too.
+      qc.invalidateQueries({ queryKey: queryKeys.applications.organizerAwaitingPayment });
     },
   });
 }

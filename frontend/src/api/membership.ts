@@ -5,6 +5,7 @@ import type {
   JoinClubResult,
   MemberListItemDto,
   MemberProfileDto,
+  OrganizerAwaitingPaymentApplicantDto,
   PendingApplicationDto,
   PendingApplicationsCountDto,
   UserClubReputationDto,
@@ -104,6 +105,20 @@ export function getMyClubsActionCounts(): Promise<PendingApplicationsCountDto> {
 export function getMyAwaitingPaymentApplications(): Promise<AwaitingPaymentApplicationDto[]> {
   return apiClient.get<AwaitingPaymentApplicationDto[]>(
     '/api/users/me/applications-awaiting-payment',
+  );
+}
+
+/**
+ * Cross-club organizer view: approved-but-unpaid applicants across all clubs
+ * the caller owns. Surfaces on MyClubsPage so the organizer doesn't have to
+ * enter each club to see who hasn't paid yet. Non-organizers get empty list
+ * (server-side filter via `clubs.owner_id`), no 403.
+ */
+export function getOrganizerAwaitingPaymentApplicants(): Promise<
+  OrganizerAwaitingPaymentApplicantDto[]
+> {
+  return apiClient.get<OrganizerAwaitingPaymentApplicantDto[]>(
+    '/api/users/me/organizer/awaiting-payment-applicants',
   );
 }
 

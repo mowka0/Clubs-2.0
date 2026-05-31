@@ -82,6 +82,12 @@ class ApplicationController(private val applicationService: ApplicationService) 
     ): ResponseEntity<List<AwaitingPaymentApplicationDto>> =
         ResponseEntity.ok(applicationService.getMyAwaitingPaymentApplications(user.userId))
 
+    @GetMapping("/api/users/me/organizer/awaiting-payment-applicants")
+    fun getOrganizerAwaitingPaymentApplicants(
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<List<OrganizerAwaitingPaymentApplicantDto>> =
+        ResponseEntity.ok(applicationService.getOrganizerAwaitingPaymentApplicants(user.userId))
+
     @GetMapping("/api/clubs/{clubId}/awaiting-payment-applicants")
     fun getClubAwaitingPaymentApplicants(
         @PathVariable clubId: UUID,

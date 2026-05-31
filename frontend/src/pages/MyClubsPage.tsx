@@ -9,6 +9,7 @@ import {
   useMyApplicationsQuery,
   useMyAwaitingPaymentQuery,
   useMyPendingApplicationsQuery,
+  useOrganizerAwaitingPaymentQuery,
   useResendInvoiceMutation,
 } from '../queries/applications';
 import { queryKeys } from '../queries/queryKeys';
@@ -23,6 +24,7 @@ import type {
   AwaitingPaymentApplicationDto,
   ClubDetailDto,
   MembershipDto,
+  OrganizerAwaitingPaymentApplicantDto,
   PendingApplicationDto,
 } from '../types/api';
 import type { ApplicationDto } from '../api/membership';
@@ -287,6 +289,40 @@ const AwaitingPaymentCard: FC<AwaitingPaymentCardProps> = ({ item }) => {
   );
 };
 
+interface OrganizerAwaitingPaymentRowProps {
+  item: OrganizerAwaitingPaymentApplicantDto;
+}
+
+/**
+ * Cross-club organizer-side row: shows an applicant who's been approved for
+ * one of the caller's clubs but hasn't paid the Stars invoice yet. Non-
+ * interactive (no modal opens from here) — purely informational so the
+ * organizer doesn't have to enter each club to see who's pending payment.
+ */
+const OrganizerAwaitingPaymentRow: FC<OrganizerAwaitingPaymentRowProps> = ({ item }) => {
+  const fullName = `${item.firstName}${item.lastName ? ` ${item.lastName}` : ''}`;
+  const initials = getInitials(fullName) || '·';
+  const relative = formatRelativeApprovedAt(item.approvedAt);
+
+  return (
+    <div className="mc-app awaiting-payment-card">
+      <span className="avt">
+        {item.avatarUrl ? <img src={item.avatarUrl} alt="" /> : initials}
+      </span>
+      <div className="body">
+        <span className="name">
+          {fullName}
+          {item.telegramUsername && (
+            <span className="handle"> · @{item.telegramUsername}</span>
+          )}
+        </span>
+        <span className="meta">{item.club.name} · {relative}</span>
+      </div>
+      <span className="status awaiting-payment">{AWAITING_PAYMENT_LABEL}</span>
+    </div>
+  );
+};
+
 export const MyClubsPage: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -298,6 +334,7 @@ export const MyClubsPage: FC = () => {
   const applicationsQuery = useMyApplicationsQuery();
   const pendingInboxQuery = useMyPendingApplicationsQuery();
   const awaitingPaymentQuery = useMyAwaitingPaymentQuery();
+  const organizerAwaitingPaymentQuery = useOrganizerAwaitingPaymentQuery();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [reviewing, setReviewing] = useState<PendingApplicationDto | null>(null);
 
@@ -305,6 +342,7 @@ export const MyClubsPage: FC = () => {
   const applications = applicationsQuery.data ?? [];
   const pendingInbox = pendingInboxQuery.data ?? [];
   const awaitingPayment = awaitingPaymentQuery.data ?? [];
+  const organizerAwaitingPayment = organizerAwaitingPaymentQuery.data ?? [];
   const awaitingPaymentIds = useMemo(
     () => new Set(awaitingPayment.map((item) => item.applicationId)),
     [awaitingPayment],
@@ -369,7 +407,8 @@ export const MyClubsPage: FC = () => {
     myClubs.length === 0 &&
     applications.length === 0 &&
     pendingInbox.length === 0 &&
-    awaitingPayment.length === 0;
+    awaitingPayment.length === 0 &&
+    organizerAwaitingPayment.length === 0;
 
   const handleCreated = (id: string) => {
     setShowCreateModal(false);
@@ -443,8 +482,9 @@ export const MyClubsPage: FC = () => {
         Section order (top → bottom): see docs/modules/my-clubs-unified.md.
         1. «Ожидают оплаты» — applicant-side urgent CTA (re-send Stars invoice).
         2. «Заявки на рассмотрении» — organizer-side cross-club inbox.
-        3. «Активные клубы» — current memberships.
-        4. «Заявки» — applicant-side pending/rejected applications.
+        3. «Ожидают оплаты от заявителей» — organizer-side cross-club pending payments.
+        4. «Активные клубы» — current memberships.
+        5. «Заявки» — applicant-side pending/rejected applications.
       */}
 
       {/* Awaiting payment — applicant must (re)open the Stars invoice */}
@@ -480,6 +520,20 @@ export const MyClubsPage: FC = () => {
             ))}
           </div>
         </div>
+      )}
+
+      {/* Organizer cross-club awaiting-payment — applicants approved but unpaid */}
+      {!loading && organizerAwaitingPayment.length > 0 && (
+        <>
+          <div className="mc-section-label">
+            Ожидают оплаты от заявителей <span className="count">· {organizerAwaitingPayment.length}</span>
+          </div>
+          <div className="mc-list">
+            {organizerAwaitingPayment.map((item) => (
+              <OrganizerAwaitingPaymentRow key={item.applicationId} item={item} />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Active clubs */}

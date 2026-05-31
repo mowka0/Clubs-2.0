@@ -54,17 +54,19 @@ data class ClubBriefDto(
 )
 
 /**
- * Combined counter feeding the `/my-clubs` tab-dot indicator. Both numbers
- * mean "the applicant has work to do on this tab":
- *  - [inboxCount]           — pending applications across the caller's owned clubs (organizer action).
- *  - [awaitingPaymentCount] — caller's own approved applications without active membership (applicant action).
+ * Combined counter feeding the `/my-clubs` tab-dot indicator. All three numbers
+ * mean "the user has work to do on this tab":
+ *  - [inboxCount]                    — pending applications across the caller's owned clubs (organizer action).
+ *  - [awaitingPaymentCount]          — caller's own approved applications without active membership (applicant action).
+ *  - [organizerAwaitingPaymentCount] — approved applicants of the caller's owned clubs who haven't paid yet (organizer visibility).
  *
  * Single endpoint = single source of truth, one cache slot. See
  * docs/modules/applications-inbox.md § "GET /api/users/me/applications-pending-count".
  */
 data class PendingApplicationsCountDto(
     val inboxCount: Int,
-    val awaitingPaymentCount: Int
+    val awaitingPaymentCount: Int,
+    val organizerAwaitingPaymentCount: Int
 )
 
 /**
@@ -99,4 +101,25 @@ data class AwaitingPaymentApplicantDto(
     val telegramUsername: String?,
     val avatarUrl: String?,
     val approvedAt: OffsetDateTime
+)
+
+/**
+ * Cross-club organizer view of approved-but-unpaid applicants — surfaces on
+ * MyClubsPage so an organizer with multiple clubs sees pending payments in one
+ * place without entering each club. Fields are intentionally minimal (row-only
+ * rendering, no modal opens from here): applicant identity for the row text,
+ * club brief for the meta line, subscription price for context.
+ *
+ * See docs/modules/applications-inbox.md § "GET /api/users/me/organizer/awaiting-payment-applicants".
+ */
+data class OrganizerAwaitingPaymentApplicantDto(
+    val applicationId: UUID,
+    val approvedAt: OffsetDateTime,
+    val userId: UUID,
+    val firstName: String,
+    val lastName: String?,
+    val telegramUsername: String?,
+    val avatarUrl: String?,
+    val club: ClubBriefDto,
+    val subscriptionPrice: Int
 )

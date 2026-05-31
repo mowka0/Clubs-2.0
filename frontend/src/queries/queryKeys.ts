@@ -38,6 +38,8 @@ export const queryKeys = {
     mine: () => ['applications', 'mine'] as const,
     myPending: ['applications', 'my-pending'] as const,
     myAwaitingPayment: ['applications', 'my-awaiting-payment'] as const,
+    /** Cross-club organizer view: approved-but-unpaid applicants of caller's owned clubs. */
+    organizerAwaitingPayment: ['applications', 'organizer-awaiting-payment'] as const,
     /** Combined inbox + awaiting-payment counts (single endpoint). */
     myPendingActionCounts: ['applications', 'my-pending-action-counts'] as const,
   },

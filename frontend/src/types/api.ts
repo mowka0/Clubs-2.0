@@ -146,15 +146,17 @@ export interface PendingApplicationDto {
 }
 
 /**
- * Combined counter feeding the «Мои клубы» tab-dot. Both numbers signal
+ * Combined counter feeding the «Мои клубы» tab-dot. All three numbers signal
  * "the user has something to act on" on this tab:
- *  - inboxCount           — organizer-side pending applications.
- *  - awaitingPaymentCount — applicant-side approved-but-unpaid applications.
+ *  - inboxCount                    — organizer-side pending applications.
+ *  - awaitingPaymentCount          — applicant-side approved-but-unpaid applications.
+ *  - organizerAwaitingPaymentCount — organizer-side approved applicants who haven't paid yet.
  * Single endpoint, single cache slot. See docs/modules/applications-inbox.md.
  */
 export interface PendingApplicationsCountDto {
   inboxCount: number;
   awaitingPaymentCount: number;
+  organizerAwaitingPaymentCount: number;
 }
 
 /**
@@ -184,6 +186,24 @@ export interface AwaitingPaymentApplicantDto {
   telegramUsername: string | null;
   avatarUrl: string | null;
   approvedAt: string;
+}
+
+/**
+ * Cross-club organizer view of approved-but-unpaid applicants — surfaces on
+ * MyClubsPage so an organizer with multiple clubs sees pending payments in
+ * one place without entering each club. Lean shape (row-only rendering, no
+ * modal opens from here): applicant identity + club brief + price.
+ */
+export interface OrganizerAwaitingPaymentApplicantDto {
+  applicationId: string;
+  approvedAt: string;
+  userId: string;
+  firstName: string;
+  lastName: string | null;
+  telegramUsername: string | null;
+  avatarUrl: string | null;
+  club: ClubBriefDto;
+  subscriptionPrice: number;
 }
 
 export interface ClubDetailDto {

@@ -248,10 +248,11 @@ class ApplicationService(
 
     /**
      * Cross-club action counts for the «Мои клубы» tab-dot:
-     *  - inboxCount           — pending applications for the caller's owned clubs (organizer action).
-     *  - awaitingPaymentCount — caller's own approved applications with no active membership (applicant action).
+     *  - inboxCount                    — pending applications for the caller's owned clubs (organizer action).
+     *  - awaitingPaymentCount          — caller's own approved applications with no active membership (applicant action).
+     *  - organizerAwaitingPaymentCount — approved-but-unpaid applicants of the caller's owned clubs (organizer visibility).
      *
-     * Single combined response = single cache slot on the frontend. Both fields
+     * Single combined response = single cache slot on the frontend. All fields
      * are scoped to the caller; no IDOR risk.
      */
     @Transactional(readOnly = true)
@@ -261,9 +262,13 @@ class ApplicationService(
         val awaitingPaymentCount = applicationRepository
             .findApprovedWithoutMembershipByUserId(userId)
             .size
+        val organizerAwaitingPaymentCount = applicationRepository
+            .findApprovedWithoutMembershipByClubIds(ownedClubIds)
+            .size
         return PendingApplicationsCountDto(
             inboxCount = inboxCount,
-            awaitingPaymentCount = awaitingPaymentCount
+            awaitingPaymentCount = awaitingPaymentCount,
+            organizerAwaitingPaymentCount = organizerAwaitingPaymentCount
         )
     }
 
@@ -284,6 +289,45 @@ class ApplicationService(
             val club = clubsById[application.clubId] ?: return@mapNotNull null
             mapper.toAwaitingPaymentDto(
                 application = application,
+                club = mapper.toClubBrief(club),
+                subscriptionPrice = club.subscriptionPrice
+            )
+        }
+    }
+
+    /**
+     * Cross-club organizer view: approved-but-unpaid applicants across all
+     * clubs the caller owns. Surfaces on MyClubsPage so an organizer doesn't
+     * have to enter each club manage page to see who hasn't paid yet.
+     * Sorted by `resolvedAt DESC` (most recent approvals first).
+     *
+     * Auth: scoped by `findIdsByOwnerId(organizerId)` — non-organizers get
+     * empty list, no 403 needed.
+     *
+     * Performance: ≤4 SQL queries regardless of N applications (club IDs,
+     * applications, batch users, batch clubs).
+     */
+    @Transactional(readOnly = true)
+    fun getOrganizerAwaitingPaymentApplicants(
+        organizerId: UUID
+    ): List<OrganizerAwaitingPaymentApplicantDto> {
+        val clubIds = clubRepository.findIdsByOwnerId(organizerId)
+        if (clubIds.isEmpty()) return emptyList()
+
+        val applications = applicationRepository.findApprovedWithoutMembershipByClubIds(clubIds)
+        if (applications.isEmpty()) return emptyList()
+
+        val applicantsById = userRepository.findByIds(applications.map { it.userId }.toSet())
+            .associateBy { it.id!! }
+        val clubsById = clubRepository.findByIds(applications.map { it.clubId }.toSet())
+            .associateBy { it.id }
+
+        return applications.mapNotNull { application ->
+            val applicant = applicantsById[application.userId] ?: return@mapNotNull null
+            val club = clubsById[application.clubId] ?: return@mapNotNull null
+            mapper.toOrganizerAwaitingPayment(
+                application = application,
+                applicant = applicant,
                 club = mapper.toClubBrief(club),
                 subscriptionPrice = club.subscriptionPrice
             )

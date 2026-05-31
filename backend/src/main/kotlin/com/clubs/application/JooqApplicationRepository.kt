@@ -149,6 +149,34 @@ class JooqApplicationRepository(
             .map(mapper::toDomain)
     }
 
+    override fun findApprovedWithoutMembershipByClubIds(clubIds: Collection<UUID>): List<Application> {
+        // Cross-club variant of findApprovedWithoutMembershipByClubId: same
+        // paid-club + NOT EXISTS membership filters, scoped to multiple clubs
+        // at once. Empty input short-circuits so we never issue an IN ()
+        // predicate to the DB.
+        if (clubIds.isEmpty()) return emptyList()
+        val membershipExists = DSL.exists(
+            DSL.selectOne()
+                .from(MEMBERSHIPS)
+                .where(
+                    MEMBERSHIPS.USER_ID.eq(APPLICATIONS.USER_ID)
+                        .and(MEMBERSHIPS.CLUB_ID.eq(APPLICATIONS.CLUB_ID))
+                        .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period))
+                )
+        )
+        return dsl.select(APPLICATIONS.asterisk()).from(APPLICATIONS)
+            .join(CLUBS).on(CLUBS.ID.eq(APPLICATIONS.CLUB_ID))
+            .where(
+                APPLICATIONS.CLUB_ID.`in`(clubIds)
+                    .and(APPLICATIONS.STATUS.eq(ApplicationStatus.approved))
+                    .and(CLUBS.SUBSCRIPTION_PRICE.greaterThan(0))
+                    .and(DSL.not(membershipExists))
+            )
+            .orderBy(APPLICATIONS.RESOLVED_AT.desc().nullsLast())
+            .fetchInto(APPLICATIONS)
+            .map(mapper::toDomain)
+    }
+
     override fun countTodayByUser(userId: UUID): Int {
         val startOfDay = OffsetDateTime.now(ZoneOffset.UTC).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC)
         return dsl.selectCount().from(APPLICATIONS)

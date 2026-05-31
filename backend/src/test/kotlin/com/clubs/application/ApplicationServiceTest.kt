@@ -445,6 +445,7 @@ class ApplicationServiceTest {
 
         every { applicationRepository.findById(applicationId) } returns approved
         every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
+        every { clubRepository.findById(clubId) } returns createClosedClub(clubId, UUID.randomUUID())
 
         applicationService.resendInvoice(applicationId, userId)
 
@@ -531,7 +532,7 @@ class ApplicationServiceTest {
     }
 
     @Test
-    fun `getMyClubsActionCounts returns combined inbox and awaiting payment counts`() {
+    fun `getMyClubsActionCounts returns combined inbox awaiting payment and organizer awaiting payment counts`() {
         val userId = UUID.randomUUID()
         val clubId = UUID.randomUUID()
         val ownedClubIds = listOf(UUID.randomUUID(), UUID.randomUUID())
@@ -545,15 +546,123 @@ class ApplicationServiceTest {
             createdAt = OffsetDateTime.now(),
             resolvedAt = OffsetDateTime.now()
         )
+        val organizerAwaitingApp1 = Application(
+            id = UUID.randomUUID(),
+            userId = UUID.randomUUID(),
+            clubId = ownedClubIds[0],
+            answerText = null,
+            status = ApplicationStatus.approved,
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = OffsetDateTime.now()
+        )
+        val organizerAwaitingApp2 = organizerAwaitingApp1.copy(
+            id = UUID.randomUUID(),
+            userId = UUID.randomUUID()
+        )
 
         every { clubRepository.findIdsByOwnerId(userId) } returns ownedClubIds
         every { applicationRepository.countPendingByClubIds(ownedClubIds) } returns 3
         every { applicationRepository.findApprovedWithoutMembershipByUserId(userId) } returns listOf(approved)
+        every { applicationRepository.findApprovedWithoutMembershipByClubIds(ownedClubIds) } returns
+            listOf(organizerAwaitingApp1, organizerAwaitingApp2)
 
         val result = applicationService.getMyClubsActionCounts(userId)
 
         assertEquals(3, result.inboxCount)
         assertEquals(1, result.awaitingPaymentCount)
+        assertEquals(2, result.organizerAwaitingPaymentCount)
+    }
+
+    @Test
+    fun `getOrganizerAwaitingPaymentApplicants returns applicants from all owned clubs`() {
+        val organizerId = UUID.randomUUID()
+        val clubAId = UUID.randomUUID()
+        val clubBId = UUID.randomUUID()
+        val ownedClubIds = listOf(clubAId, clubBId)
+        val applicantA = UUID.randomUUID()
+        val applicantB = UUID.randomUUID()
+        val appA = Application(
+            id = UUID.randomUUID(),
+            userId = applicantA,
+            clubId = clubAId,
+            answerText = null,
+            status = ApplicationStatus.approved,
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now().minusHours(2),
+            resolvedAt = OffsetDateTime.now().minusHours(1)
+        )
+        val appB = Application(
+            id = UUID.randomUUID(),
+            userId = applicantB,
+            clubId = clubBId,
+            answerText = null,
+            status = ApplicationStatus.approved,
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now().minusHours(3),
+            resolvedAt = OffsetDateTime.now().minusHours(2)
+        )
+        val clubA = createClosedClub(clubAId, organizerId, subscriptionPrice = 250)
+        val clubB = createClosedClub(clubBId, organizerId, subscriptionPrice = 400)
+        val applicantARecord = mockk<com.clubs.generated.jooq.tables.records.UsersRecord>(relaxed = true).also {
+            every { it.id } returns applicantA
+            every { it.firstName } returns "Alice"
+            every { it.lastName } returns null
+            every { it.telegramUsername } returns "alice_a"
+            every { it.avatarUrl } returns null
+        }
+        val applicantBRecord = mockk<com.clubs.generated.jooq.tables.records.UsersRecord>(relaxed = true).also {
+            every { it.id } returns applicantB
+            every { it.firstName } returns "Bob"
+            every { it.lastName } returns "Brown"
+            every { it.telegramUsername } returns null
+            every { it.avatarUrl } returns null
+        }
+
+        every { clubRepository.findIdsByOwnerId(organizerId) } returns ownedClubIds
+        every { applicationRepository.findApprovedWithoutMembershipByClubIds(ownedClubIds) } returns listOf(appA, appB)
+        every { userRepository.findByIds(setOf(applicantA, applicantB)) } returns listOf(applicantARecord, applicantBRecord)
+        every { clubRepository.findByIds(setOf(clubAId, clubBId)) } returns listOf(clubA, clubB)
+
+        val result = applicationService.getOrganizerAwaitingPaymentApplicants(organizerId)
+
+        assertEquals(2, result.size)
+        val clubIds = result.map { it.club.id }.toSet()
+        assertEquals(setOf(clubAId, clubBId), clubIds)
+        val byApplication = result.associateBy { it.applicationId }
+        assertEquals("Alice", byApplication[appA.id]?.firstName)
+        assertEquals(250, byApplication[appA.id]?.subscriptionPrice)
+        assertEquals("Bob", byApplication[appB.id]?.firstName)
+        assertEquals(400, byApplication[appB.id]?.subscriptionPrice)
+    }
+
+    @Test
+    fun `getOrganizerAwaitingPaymentApplicants returns empty list for non-organizer`() {
+        val callerId = UUID.randomUUID()
+        every { clubRepository.findIdsByOwnerId(callerId) } returns emptyList()
+
+        val result = applicationService.getOrganizerAwaitingPaymentApplicants(callerId)
+
+        assertEquals(0, result.size)
+        verify(exactly = 0) { applicationRepository.findApprovedWithoutMembershipByClubIds(any()) }
+        verify(exactly = 0) { userRepository.findByIds(any()) }
+    }
+
+    @Test
+    fun `getOrganizerAwaitingPaymentApplicants returns empty list when only free clubs are owned`() {
+        // Repository guarantees free clubs (subscription_price = 0) never appear
+        // in findApprovedWithoutMembershipByClubIds — verify Service trusts that
+        // contract and surfaces an empty list when the repo returns nothing.
+        val organizerId = UUID.randomUUID()
+        val freeClubId = UUID.randomUUID()
+        every { clubRepository.findIdsByOwnerId(organizerId) } returns listOf(freeClubId)
+        every { applicationRepository.findApprovedWithoutMembershipByClubIds(listOf(freeClubId)) } returns emptyList()
+
+        val result = applicationService.getOrganizerAwaitingPaymentApplicants(organizerId)
+
+        assertEquals(0, result.size)
+        verify(exactly = 0) { userRepository.findByIds(any()) }
+        verify(exactly = 0) { clubRepository.findByIds(any()) }
     }
 
     @Test

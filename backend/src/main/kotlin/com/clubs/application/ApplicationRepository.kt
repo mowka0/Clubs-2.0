@@ -41,6 +41,14 @@ interface ApplicationRepository {
      */
     fun findApprovedWithoutMembershipByClubId(clubId: UUID): List<Application>
 
+    /**
+     * Cross-club mirror of [findApprovedWithoutMembershipByClubId] for the
+     * cross-club organizer view on MyClubsPage. Same filters (paid clubs only,
+     * NOT EXISTS active/grace_period membership), ordered by `resolved_at` DESC.
+     * Empty input → empty output (no SQL hit).
+     */
+    fun findApprovedWithoutMembershipByClubIds(clubIds: Collection<UUID>): List<Application>
+
     // Counts / rate limit
     fun countTodayByUser(userId: UUID): Int
 

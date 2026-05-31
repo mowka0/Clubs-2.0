@@ -54,11 +54,13 @@ export const BottomTabBar: FC = () => {
 
   const { data: unpaidCount = 0 } = useSkladchinaActionRequiredCountQuery();
   // Combined counter: organizer-side pending applications + applicant-side
-  // approved-but-unpaid applications. Either > 0 lights up the «Мои клубы» dot.
+  // approved-but-unpaid + organizer-side approved applicants who haven't paid.
+  // Any > 0 lights up the «Мои клубы» dot.
   const { data: myClubsActionCounts } = useMyClubsActionCountsQuery();
   const myClubsActionTotal =
     (myClubsActionCounts?.inboxCount ?? 0) +
-    (myClubsActionCounts?.awaitingPaymentCount ?? 0);
+    (myClubsActionCounts?.awaitingPaymentCount ?? 0) +
+    (myClubsActionCounts?.organizerAwaitingPaymentCount ?? 0);
 
   const handleTabClick = useCallback(
     (path: string) => {

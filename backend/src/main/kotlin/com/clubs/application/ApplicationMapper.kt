@@ -88,6 +88,26 @@ class ApplicationMapper {
         approvedAt = application.resolvedAt ?: application.createdAt
     )
 
+    fun toOrganizerAwaitingPayment(
+        application: Application,
+        applicant: UsersRecord,
+        club: ClubBriefDto,
+        subscriptionPrice: Int
+    ): OrganizerAwaitingPaymentApplicantDto = OrganizerAwaitingPaymentApplicantDto(
+        applicationId = application.id,
+        // Same invariant as toAwaitingPaymentDto: status=approved guarantees
+        // resolvedAt is set; defensive fallback to createdAt keeps the DTO
+        // non-null without throwing.
+        approvedAt = application.resolvedAt ?: application.createdAt,
+        userId = applicant.id!!,
+        firstName = applicant.firstName,
+        lastName = applicant.lastName,
+        telegramUsername = applicant.telegramUsername,
+        avatarUrl = applicant.avatarUrl,
+        club = club,
+        subscriptionPrice = subscriptionPrice
+    )
+
     fun toPendingDto(
         application: Application,
         applicant: ApplicantInfoDto,
