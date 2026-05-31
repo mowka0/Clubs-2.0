@@ -64,10 +64,10 @@ class FreeMembershipActivatorTest {
     }
 
     @Test
-    fun `activate reactivates cancelled membership without bumping member_count`() {
-        // Critical: member_count was already incremented when the original membership
-        // was created. Cancel doesn't decrement (docs/modules/membership.md), so a
-        // second increment on reactivation would over-count capacity.
+    fun `activate reactivates cancelled membership and re-bumps member_count`() {
+        // After PR-1 (club-leave) the free-leave flow decrements member_count.
+        // Rejoin therefore must increment again to keep member_count in lock-step
+        // with the count of active rows.
         val userId = UUID.randomUUID()
         val clubId = UUID.randomUUID()
         val membershipId = UUID.randomUUID()
@@ -82,11 +82,11 @@ class FreeMembershipActivatorTest {
         assertEquals(reactivated, result)
         verify(exactly = 1) { membershipRepository.reactivateFree(membershipId) }
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
-        verify(exactly = 0) { clubRepository.incrementMemberCount(any()) }
+        verify(exactly = 1) { clubRepository.incrementMemberCount(clubId) }
     }
 
     @Test
-    fun `activate reactivates expired membership without bumping member_count`() {
+    fun `activate reactivates expired membership and re-bumps member_count`() {
         val userId = UUID.randomUUID()
         val clubId = UUID.randomUUID()
         val membershipId = UUID.randomUUID()
@@ -101,7 +101,7 @@ class FreeMembershipActivatorTest {
         assertEquals(reactivated, result)
         verify(exactly = 1) { membershipRepository.reactivateFree(membershipId) }
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
-        verify(exactly = 0) { clubRepository.incrementMemberCount(any()) }
+        verify(exactly = 1) { clubRepository.incrementMemberCount(clubId) }
     }
 
     @Test

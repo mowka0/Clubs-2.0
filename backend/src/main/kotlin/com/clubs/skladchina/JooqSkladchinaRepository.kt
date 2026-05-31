@@ -424,4 +424,19 @@ class JooqSkladchinaRepository(
             .toSet()
         return userIds.toSet() - activeMembers
     }
+
+    override fun deleteParticipantFromActiveSkladchinasInClub(userId: UUID, clubId: UUID): Int {
+        val activeSkladchinaIds = dsl.select(SKLADCHINAS.ID)
+            .from(SKLADCHINAS)
+            .where(
+                SKLADCHINAS.CLUB_ID.eq(clubId)
+                    .and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active))
+            )
+        return dsl.deleteFrom(SKLADCHINA_PARTICIPANTS)
+            .where(
+                SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId)
+                    .and(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.`in`(activeSkladchinaIds))
+            )
+            .execute()
+    }
 }

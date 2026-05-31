@@ -7,6 +7,10 @@ export interface ClubActivitiesFilters {
   type?: ActivityType;
 }
 
+export interface ClubMembersFilters {
+  includeCancelled?: boolean;
+}
+
 export const queryKeys = {
   clubs: {
     all: ['clubs'] as const,
@@ -14,7 +18,13 @@ export const queryKeys = {
     my: () => ['clubs', 'my'] as const,
     detail: (id: string) => ['clubs', 'detail', id] as const,
     byInvite: (code: string) => ['clubs', 'invite', code] as const,
+    // Prefix shared by every members-list variant. TanStack invalidates by
+    // prefix, so leave / join / member-profile mutations can keep using this
+    // and still hit the `includeCancelled` variant cached under
+    // `membersWith(clubId, filters)`.
     members: (clubId: string) => ['clubs', 'detail', clubId, 'members'] as const,
+    membersWith: (clubId: string, filters: ClubMembersFilters) =>
+      ['clubs', 'detail', clubId, 'members', filters] as const,
     awaitingPaymentApplicants: (clubId: string) =>
       ['clubs', 'detail', clubId, 'awaiting-payment-applicants'] as const,
     memberProfile: (clubId: string, userId: string) =>

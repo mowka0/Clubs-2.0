@@ -76,6 +76,13 @@ interface SkladchinaRepository {
 
     /** Returns subset of given userIds that are NOT active members of given club. */
     fun findNonActiveMembers(clubId: UUID, userIds: Collection<UUID>): Set<UUID>
+
+    /**
+     * Cascade-delete on club leave: removes [userId] from every active skladchina
+     * of [clubId]. Closed/cancelled skladchinas are preserved as historical
+     * obligations. Returns number of rows deleted.
+     */
+    fun deleteParticipantFromActiveSkladchinasInClub(userId: UUID, clubId: UUID): Int
 }
 
 /**

@@ -14,7 +14,7 @@ import {
   updateClub,
 } from '../api/clubs';
 import type { ClubFilters, CreateClubBody, UpdateClubBody } from '../api/clubs';
-import { applyToClub, joinByInviteCode, joinClub } from '../api/membership';
+import { applyToClub, joinByInviteCode, joinClub, leaveClub } from '../api/membership';
 import { queryKeys } from './queryKeys';
 
 const PAGE_SIZE = '20';
@@ -103,6 +103,24 @@ export function useJoinClubMutation() {
     onSuccess: (_data, clubId) => {
       qc.invalidateQueries({ queryKey: queryKeys.clubs.detail(clubId) });
       qc.invalidateQueries({ queryKey: queryKeys.clubs.my() });
+    },
+  });
+}
+
+/**
+ * Leave the club. Invalidates the club detail (member_count / membership-
+ * dependent UI), the caller's club list (`my-clubs` drives MyClubsPage tabs
+ * + ClubPage membership lookup) and the members list (active count changes
+ * for free clubs).
+ */
+export function useLeaveClubMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (clubId: string) => leaveClub(clubId),
+    onSuccess: (_data, clubId) => {
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.my() });
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.detail(clubId) });
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.members(clubId) });
     },
   });
 }

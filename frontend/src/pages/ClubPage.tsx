@@ -16,6 +16,7 @@ import {
   useApplyToClubMutation,
   useClubQuery,
   useJoinClubMutation,
+  useLeaveClubMutation,
   useMyClubsQuery,
 } from '../queries/clubs';
 import {
@@ -27,6 +28,7 @@ import { isPendingPayment } from '../types/api';
 import { formatPrice } from '../utils/formatters';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
+import { LeaveClubModal } from '../components/club/LeaveClubModal';
 import { BrandBackdrop } from '../components/BrandBackdrop';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -57,6 +59,14 @@ function getClubInitials(name: string): string {
     .join('');
 }
 
+function formatExpiryDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
 const LockIcon: FC = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <rect x="4" y="11" width="16" height="11" rx="2.5" />
@@ -85,6 +95,7 @@ export const ClubPage: FC = () => {
   const joinMutation = useJoinClubMutation();
   const applyMutation = useApplyToClubMutation();
   const completeFreeMutation = useCompleteFreeMembershipMutation();
+  const leaveMutation = useLeaveClubMutation();
 
   const [joinError, setJoinError] = useState<string | null>(null);
   const [showApplyModal, setShowApplyModal] = useState(false);
@@ -92,14 +103,26 @@ export const ClubPage: FC = () => {
   const [joinSuccess, setJoinSuccess] = useState(false);
   const [pendingPayment, setPendingPayment] = useState<{ priceStars: number; message: string } | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('activities');
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
 
   const club = clubQuery.data;
   const myClubs = myClubsQuery.data ?? [];
   const applications = applicationsQuery.data ?? [];
 
   const membership = myClubs.find((m) => m.clubId === id);
-  const isMember = !!membership && membership.status === 'active';
-  const isOrganizer = club?.ownerId === user?.id || membership?.role === 'organizer';
+  const isOwner = !!club && club.ownerId === user?.id;
+  const isOrganizer = isOwner || membership?.role === 'organizer';
+  // Active membership = full member; cancelled paid membership inside its
+  // paid period = "still inside the club" — tabs stay visible, but instead
+  // of «Выйти из клуба» the footer shows a read-only «Подписка отменена» note.
+  const isActiveMember = !!membership && membership.status === 'active';
+  const isCancelledInPeriod =
+    !!membership
+    && membership.status === 'cancelled'
+    && !!membership.subscriptionExpiresAt
+    && new Date(membership.subscriptionExpiresAt).getTime() > Date.now();
+  const isMember = isActiveMember || isCancelledInPeriod;
   const myApplication = applications.find((a) => a.clubId === id) ?? null;
 
   const joining = joinMutation.isPending || applyMutation.isPending || completeFreeMutation.isPending;
@@ -189,6 +212,32 @@ export const ClubPage: FC = () => {
         },
       },
     );
+  };
+
+  const handleOpenLeaveModal = () => {
+    haptic.impact('light');
+    setLeaveError(null);
+    setShowLeaveModal(true);
+  };
+
+  const handleConfirmLeave = () => {
+    if (!id) return;
+    setLeaveError(null);
+    haptic.impact('medium');
+    leaveMutation.mutate(id, {
+      onSuccess: () => {
+        haptic.notify('success');
+        setShowLeaveModal(false);
+        navigate('/my-clubs', {
+          replace: true,
+          state: { toast: `Вы вышли из клуба «${club.name}»` },
+        });
+      },
+      onError: (e) => {
+        haptic.notify('error');
+        setLeaveError(e.message);
+      },
+    });
   };
 
   // Tab «Управление» is a navigate-link, not a state-toggle: tap fires haptic
@@ -285,6 +334,57 @@ export const ClubPage: FC = () => {
     }
     return null;
   };
+
+  // Footer for users who are already inside the club. Owner has no exit CTA
+  // (transfer/delete arrive in later PRs); cancelled-paid sees a read-only
+  // note; everyone else sees the leave button. Hidden when the page is in
+  // the visitor flow (no `showTabs`).
+  const renderMemberFooter = () => {
+    if (isOwner) return null;
+    if (isCancelledInPeriod && membership?.subscriptionExpiresAt) {
+      return (
+        <div className="cp-cta-wrap">
+          <div
+            className="cp-cta outline"
+            role="status"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'default',
+              fontWeight: 500,
+              fontSize: 13.5,
+              lineHeight: 1.35,
+              textAlign: 'center',
+              padding: '0 16px',
+            }}
+          >
+            Подписка отменена. Доступ до {formatExpiryDate(membership.subscriptionExpiresAt)}
+          </div>
+        </div>
+      );
+    }
+    if (isActiveMember) {
+      return (
+        <div className="cp-cta-wrap">
+          <button
+            type="button"
+            className="cp-cta outline"
+            onClick={handleOpenLeaveModal}
+            style={{ color: 'var(--tgui--destructive_text_color, #E53935)' }}
+          >
+            Выйти из клуба
+          </button>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const leaveVariant: 'free' | 'paid' = club.subscriptionPrice > 0 ? 'paid' : 'free';
+  const leavePaidUntilLabel = membership?.subscriptionExpiresAt
+    ? formatExpiryDate(membership.subscriptionExpiresAt)
+    : null;
 
   const showTabs = isMember || isOrganizer;
   const roleBadgeLabel = isOrganizer ? 'Вы организатор' : isMember ? 'Вы участник' : null;
@@ -405,6 +505,8 @@ export const ClubPage: FC = () => {
 
           {activeTab === 'activities' && <ClubActivitiesTab clubId={id} />}
           {activeTab === 'members' && <ClubMembersTab clubId={id} isOrganizer={isOrganizer} />}
+
+          {renderMemberFooter()}
         </>
       )}
 
@@ -441,6 +543,21 @@ export const ClubPage: FC = () => {
           </div>
         </Modal>
       )}
+
+      <LeaveClubModal
+        open={showLeaveModal}
+        clubName={club.name}
+        variant={leaveVariant}
+        paidUntilLabel={leavePaidUntilLabel}
+        submitting={leaveMutation.isPending}
+        errorMessage={leaveError}
+        onConfirm={handleConfirmLeave}
+        onClose={() => {
+          if (leaveMutation.isPending) return;
+          setShowLeaveModal(false);
+          setLeaveError(null);
+        }}
+      />
     </div>
   );
 };

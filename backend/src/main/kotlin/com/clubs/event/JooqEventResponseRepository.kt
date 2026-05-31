@@ -1,9 +1,11 @@
 package com.clubs.event
 
 import com.clubs.generated.jooq.enums.AttendanceStatus
+import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
+import com.clubs.generated.jooq.tables.references.EVENTS
 import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import com.clubs.generated.jooq.tables.references.USERS
 import org.jooq.DSLContext
@@ -159,6 +161,21 @@ class JooqEventResponseRepository(
                     .and(EVENT_RESPONSES.ATTENDANCE.eq(AttendanceStatus.disputed))
             )
             .execute()
+
+    override fun deleteByUserAndClubAndActiveEvents(userId: UUID, clubId: UUID): Int {
+        val activeEventIds = dsl.select(EVENTS.ID)
+            .from(EVENTS)
+            .where(
+                EVENTS.CLUB_ID.eq(clubId)
+                    .and(EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_1, EventStatus.stage_2))
+            )
+        return dsl.deleteFrom(EVENT_RESPONSES)
+            .where(
+                EVENT_RESPONSES.USER_ID.eq(userId)
+                    .and(EVENT_RESPONSES.EVENT_ID.`in`(activeEventIds))
+            )
+            .execute()
+    }
 
     private fun countByStage1Vote(eventId: UUID, vote: Stage_1Vote): Int =
         dsl.selectCount().from(EVENT_RESPONSES)

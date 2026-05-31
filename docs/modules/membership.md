@@ -111,8 +111,17 @@ POST /api/invite/{code}/join
 | Состояние строки в `memberships` | Действие | `clubs.member_count` |
 |---|---|---|
 | Нет строки | INSERT (`status=active`, `joined_at=now`, `subscription_expires_at=now+30d`*) | `+= 1` |
-| `status ∈ {cancelled, expired}` | UPDATE: `status=active`, `joined_at=now`, `subscription_expires_at=null`, `updated_at=now` | НЕ инкрементить (был учтён при первичном вступлении) |
+| `status ∈ {cancelled, expired}` | UPDATE: `status=active`, `joined_at=now`, `subscription_expires_at=null`, `updated_at=now` | `+= 1` (см. note ниже) |
 | `status ∈ {active, grace_period}` | `IllegalStateException` | — |
+
+> **Note (изменено в [club-leave](club-leave.md))**: До PR-1 «Club Leave» reactivate
+> НЕ инкрементил `member_count` — счётчик считался учтённым при первичном INSERT.
+> С введением `MembershipService.leaveClub` (free leave декрементит счётчик)
+> reactivate теперь обязан инкрементить — иначе при leave/rejoin цикле счётчик
+> уплывёт в минус. `decrementMemberCountSafely` гарантирует floor=0, поэтому
+> legacy `/cancel` → `/join` цикл (cancel НЕ декрементил) безопасен, но
+> `member_count` фактически сместится на +1 относительно state до PR. Это
+> сознательная цена за корректность нового /leave-цикла.
 
 (*) `subscription_expires_at = now+30d` — текущее поведение `repository.create`,
 актуально только для свежего INSERT. Реактивация ставит `null` (бесплатный

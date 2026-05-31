@@ -60,6 +60,15 @@ export interface MemberListItemDto {
   joinedAt: string | null;
   reliabilityIndex: number;
   promiseFulfillmentPct: number;
+  /**
+   * True iff the member is a paid-club subscriber who has already cancelled
+   * autorenew but is still inside the paid period (`subscription_expires_at >
+   * now`). Backend only returns such rows when the caller passed
+   * `includeCancelled=true`; otherwise this is always false. Skladchina-create
+   * UI uses it to disable the participant row and tag it «Отменил подписку».
+   * See docs/modules/club-leave.md § Frontend → CreateSkladchinaPage.
+   */
+  subscriptionCancelled?: boolean;
 }
 
 export interface MemberProfileDto {

@@ -3009,6 +3009,19 @@ html, body {
   /* 16px обязательно — iOS zoom при focus на input < 16px */
   font-size: 16px;
 }
+.sklad-create-modal .p-row.disabled .p-toggle {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: var(--brand-navy-card-2);
+  border-color: var(--brand-hairline-2);
+}
+.sklad-create-modal .p-toggle .cancelled-note {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--brand-ink-3);
+  letter-spacing: 0;
+  font-weight: 500;
+}
 .sklad-create-modal .submit-error {
   margin: 10px 0;
   padding: 10px 12px;

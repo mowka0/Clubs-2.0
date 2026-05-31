@@ -12,5 +12,6 @@ data class MemberListItemDto(
     val role: String,
     val joinedAt: OffsetDateTime?,
     val reliabilityIndex: Int,
-    val promiseFulfillmentPct: BigDecimal
+    val promiseFulfillmentPct: BigDecimal,
+    val subscriptionCancelled: Boolean = false
 )

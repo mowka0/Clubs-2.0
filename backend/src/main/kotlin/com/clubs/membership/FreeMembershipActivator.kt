@@ -25,9 +25,10 @@ import java.util.UUID
  *  - row exists with status active / grace_period → caller's bug; throw IllegalState
  *    (caller must check this BEFORE invoking — different call sites surface
  *    different HTTP errors here, e.g. 409 vs 400).
- *  - row exists with status cancelled / expired → reactivate; **don't**
- *    increment `member_count` (it was incremented on the original join and
- *    is left alone on cancel; double-bumping skews capacity).
+ *  - row exists with status cancelled / expired → reactivate + increment
+ *    `clubs.member_count`. Increment mirrors the decrement performed by
+ *    `MembershipService.leaveClub` for free clubs — keeping `member_count`
+ *    in lock-step with the count of active rows for the club.
  */
 @Component
 class FreeMembershipActivator(
@@ -57,6 +58,7 @@ class FreeMembershipActivator(
             }
             else -> {
                 val reactivated = membershipRepository.reactivateFree(existing.id)
+                clubRepository.incrementMemberCount(clubId)
                 log.info(
                     "Free membership reactivated: id={} userId={} clubId={} previousStatus={}",
                     existing.id, userId, clubId, existing.status.literal

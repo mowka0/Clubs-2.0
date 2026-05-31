@@ -5,12 +5,26 @@ import {
   getMemberProfile,
   getMyReputation,
 } from '../api/membership';
+import type { GetClubMembersOptions } from '../api/membership';
 import { queryKeys } from './queryKeys';
 
-export function useClubMembersQuery(clubId: string | undefined) {
+/**
+ * Members of [clubId]. When `options.includeCancelled` is true, the server
+ * also returns paid members who cancelled autorenew but are still inside the
+ * paid period (`subscriptionCancelled=true` on the DTO). The two variants
+ * cache under different keys so the legacy active-only callers don't pick
+ * up disabled rows. See docs/modules/club-leave.md.
+ */
+export function useClubMembersQuery(
+  clubId: string | undefined,
+  options: GetClubMembersOptions = {},
+) {
+  const includeCancelled = Boolean(options.includeCancelled);
   return useQuery({
-    queryKey: queryKeys.clubs.members(clubId ?? ''),
-    queryFn: () => getClubMembers(clubId!),
+    queryKey: includeCancelled
+      ? queryKeys.clubs.membersWith(clubId ?? '', { includeCancelled: true })
+      : queryKeys.clubs.members(clubId ?? ''),
+    queryFn: () => getClubMembers(clubId!, { includeCancelled }),
     enabled: Boolean(clubId),
   });
 }

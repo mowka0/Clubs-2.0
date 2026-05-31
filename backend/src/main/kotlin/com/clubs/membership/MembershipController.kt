@@ -34,6 +34,15 @@ class MembershipController(private val membershipService: MembershipService) {
         log.info("Cancel membership in club {}: userId={}", id, user.userId)
         return ResponseEntity.ok(membershipService.cancelMembership(id, user.userId))
     }
+
+    @PostMapping("/{id}/leave")
+    fun leaveClub(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<MembershipDto> {
+        log.info("Leave club {}: userId={}", id, user.userId)
+        return ResponseEntity.ok(membershipService.leaveClub(id, user.userId))
+    }
 }
 
 internal fun toHttpResponse(result: JoinResult): ResponseEntity<Any> = when (result) {
