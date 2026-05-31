@@ -260,25 +260,33 @@ const AwaitingPaymentCard: FC<AwaitingPaymentCardProps> = ({ item }) => {
     });
   };
 
+  // Mirrors `.club-card` layout (52px avatar, 14px padding, body column with
+  // name → meta → action). The pay-button lives INSIDE `.body` as a full-width
+  // row so the card has the same flex shape as neighbouring active-club cards
+  // — no third column, no off-axis spacing.
   return (
     <div className="awaiting-payment-card-wrap">
-      <div className="mc-app awaiting-payment-card">
+      <div className="club-card awaiting-payment-card">
         <span className="avt">
           {item.club.avatarUrl ? <img src={item.club.avatarUrl} alt="" /> : initials}
         </span>
         <div className="body">
-          <span className="name">{item.club.name}</span>
-          <span className="meta">{formatRelativeApprovedAt(item.approvedAt)}</span>
-          <span className="price">Цена: {item.subscriptionPrice}⭐</span>
+          <div className="top">
+            <span className="name">{item.club.name}</span>
+          </div>
+          <div className="meta">
+            <span>{formatRelativeApprovedAt(item.approvedAt)}</span>
+            <span className="price">Цена: {item.subscriptionPrice}⭐</span>
+          </div>
+          <button
+            type="button"
+            className="awaiting-pay-btn"
+            onClick={handleResend}
+            disabled={resendMutation.isPending}
+          >
+            {resendMutation.isPending ? 'Отправляем…' : `Оплатить ${item.subscriptionPrice}⭐`}
+          </button>
         </div>
-        <button
-          type="button"
-          className="awaiting-pay-btn"
-          onClick={handleResend}
-          disabled={resendMutation.isPending}
-        >
-          {resendMutation.isPending ? 'Отправляем…' : `Оплатить ${item.subscriptionPrice}⭐`}
-        </button>
       </div>
       {feedback && (
         <span className={`awaiting-pay-toast${feedback.kind === 'error' ? ' error' : ''}`}>
@@ -298,6 +306,10 @@ interface OrganizerAwaitingPaymentRowProps {
  * one of the caller's clubs but hasn't paid the Stars invoice yet. Non-
  * interactive (no modal opens from here) — purely informational so the
  * organizer doesn't have to enter each club to see who's pending payment.
+ *
+ * Kept lightweight (44px avatar, 12px padding) — sits in its own section
+ * without club-card neighbours, so applicant-card visual weight would be
+ * out of place here.
  */
 const OrganizerAwaitingPaymentRow: FC<OrganizerAwaitingPaymentRowProps> = ({ item }) => {
   const fullName = `${item.firstName}${item.lastName ? ` ${item.lastName}` : ''}`;
@@ -305,7 +317,7 @@ const OrganizerAwaitingPaymentRow: FC<OrganizerAwaitingPaymentRowProps> = ({ ite
   const relative = formatRelativeApprovedAt(item.approvedAt);
 
   return (
-    <div className="mc-app awaiting-payment-card">
+    <div className="mc-app organizer-pending-row">
       <span className="avt">
         {item.avatarUrl ? <img src={item.avatarUrl} alt="" /> : initials}
       </span>

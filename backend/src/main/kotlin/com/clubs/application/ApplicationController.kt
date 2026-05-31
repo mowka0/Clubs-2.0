@@ -1,6 +1,7 @@
 package com.clubs.application
 
 import com.clubs.common.security.AuthenticatedUser
+import com.clubs.membership.MembershipDto
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -104,5 +105,15 @@ class ApplicationController(private val applicationService: ApplicationService) 
         // Intentionally NOT logging applicationId at INFO before delegating — Service
         // emits the structured log on success; failures go through GlobalExceptionHandler.
         applicationService.resendInvoice(id, user.userId)
+    }
+
+    @PostMapping("/api/applications/{id}/complete-free-membership")
+    fun completeFreeMembership(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<MembershipDto> {
+        log.info("Complete free membership: applicationId={} userId={}", id, user.userId)
+        val membership = applicationService.completeFreeMembership(id, user.userId)
+        return ResponseEntity.ok(membership)
     }
 }

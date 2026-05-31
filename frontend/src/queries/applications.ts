@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   approveApplication,
+  completeFreeMembership,
   getClubApplications,
   getMyApplications,
   getMyAwaitingPaymentApplications,
@@ -159,6 +160,32 @@ export function useResendInvoiceMutation() {
       // Resend by applicant doesn't move the entry but webhook-driven payment
       // can land between request and refetch; refresh the organizer view too.
       qc.invalidateQueries({ queryKey: queryKeys.applications.organizerAwaitingPayment });
+    },
+  });
+}
+
+interface CompleteFreeMembershipArgs {
+  applicationId: string;
+  clubId: string;
+}
+
+/**
+ * Finalises a stuck free-club approved application by creating the missing
+ * membership. After success: refetch caller's clubs (the new membership
+ * appears), the club detail (memberCount bumped), and every applications
+ * cache so the stuck CTA disappears.
+ */
+export function useCompleteFreeMembershipMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ applicationId }: CompleteFreeMembershipArgs) =>
+      completeFreeMembership(applicationId),
+    onSuccess: (_data, { clubId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.applications.mine() });
+      qc.invalidateQueries({ queryKey: queryKeys.applications.myAwaitingPayment });
+      qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingActionCounts });
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.my() });
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.detail(clubId) });
     },
   });
 }

@@ -11,6 +11,8 @@ import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ApplicationStatus
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.interest.InterestRepository
+import com.clubs.membership.Membership
+import com.clubs.membership.MembershipMapper
 import com.clubs.membership.MembershipRepository
 import com.clubs.payment.PaymentService
 import com.clubs.reputation.ReputationRepository
@@ -37,6 +39,7 @@ class ApplicationServiceTest {
     private lateinit var userRepository: UserRepository
     private lateinit var reputationRepository: ReputationRepository
     private lateinit var interestRepository: InterestRepository
+    private lateinit var membershipMapper: MembershipMapper
     private lateinit var applicationService: ApplicationService
 
     @BeforeEach
@@ -50,6 +53,7 @@ class ApplicationServiceTest {
         userRepository = mockk(relaxed = true)
         reputationRepository = mockk(relaxed = true)
         interestRepository = mockk(relaxed = true)
+        membershipMapper = MembershipMapper()
         applicationService = ApplicationService(
             applicationRepository,
             clubRepository,
@@ -59,7 +63,8 @@ class ApplicationServiceTest {
             notificationService,
             userRepository,
             reputationRepository,
-            interestRepository
+            interestRepository,
+            membershipMapper
         )
     }
 
@@ -663,6 +668,147 @@ class ApplicationServiceTest {
         assertEquals(0, result.size)
         verify(exactly = 0) { userRepository.findByIds(any()) }
         verify(exactly = 0) { clubRepository.findByIds(any()) }
+    }
+
+    @Test
+    fun `completeFreeMembership creates membership and increments member_count for free club`() {
+        val applicationId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val organizerId = UUID.randomUUID()
+
+        val approved = Application(
+            id = applicationId,
+            userId = userId,
+            clubId = clubId,
+            answerText = null,
+            status = ApplicationStatus.approved,
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = OffsetDateTime.now()
+        )
+        val club = createClosedClub(clubId, organizerId, subscriptionPrice = 0)
+        val now = OffsetDateTime.now()
+        val createdMembership = Membership(
+            id = UUID.randomUUID(),
+            userId = userId,
+            clubId = clubId,
+            status = com.clubs.generated.jooq.enums.MembershipStatus.active,
+            role = com.clubs.generated.jooq.enums.MembershipRole.member,
+            joinedAt = now,
+            subscriptionExpiresAt = now.plusDays(30),
+            createdAt = now,
+            updatedAt = now
+        )
+
+        every { applicationRepository.findById(applicationId) } returns approved
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
+        every { membershipRepository.create(userId, clubId) } returns createdMembership
+
+        val result = applicationService.completeFreeMembership(applicationId, userId)
+
+        assertEquals(userId, result.userId)
+        assertEquals(clubId, result.clubId)
+        assertEquals("active", result.status)
+        verify(exactly = 1) { membershipRepository.create(userId, clubId) }
+        verify(exactly = 1) { clubRepository.incrementMemberCount(clubId) }
+    }
+
+    @Test
+    fun `completeFreeMembership throws ForbiddenException when caller is not the applicant`() {
+        val applicationId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val otherUserId = UUID.randomUUID()
+        val approved = Application(
+            id = applicationId,
+            userId = userId,
+            clubId = clubId,
+            answerText = null,
+            status = ApplicationStatus.approved,
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = OffsetDateTime.now()
+        )
+
+        every { applicationRepository.findById(applicationId) } returns approved
+
+        assertThrows<ForbiddenException> {
+            applicationService.completeFreeMembership(applicationId, otherUserId)
+        }
+        verify(exactly = 0) { membershipRepository.create(any(), any()) }
+        verify(exactly = 0) { clubRepository.incrementMemberCount(any()) }
+    }
+
+    @Test
+    fun `completeFreeMembership throws ValidationException when club is paid`() {
+        val applicationId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val organizerId = UUID.randomUUID()
+        val approved = Application(
+            id = applicationId,
+            userId = userId,
+            clubId = clubId,
+            answerText = null,
+            status = ApplicationStatus.approved,
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = OffsetDateTime.now()
+        )
+        val club = createClosedClub(clubId, organizerId, subscriptionPrice = 250)
+
+        every { applicationRepository.findById(applicationId) } returns approved
+        every { clubRepository.findById(clubId) } returns club
+
+        val ex = assertThrows<ValidationException> {
+            applicationService.completeFreeMembership(applicationId, userId)
+        }
+        assertEquals("Club is not free — pay the invoice instead", ex.message)
+        verify(exactly = 0) { membershipRepository.create(any(), any()) }
+    }
+
+    @Test
+    fun `completeFreeMembership throws ValidationException when membership already exists`() {
+        val applicationId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val organizerId = UUID.randomUUID()
+        val approved = Application(
+            id = applicationId,
+            userId = userId,
+            clubId = clubId,
+            answerText = null,
+            status = ApplicationStatus.approved,
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = OffsetDateTime.now()
+        )
+        val club = createClosedClub(clubId, organizerId, subscriptionPrice = 0)
+        val now = OffsetDateTime.now()
+        val existing = Membership(
+            id = UUID.randomUUID(),
+            userId = userId,
+            clubId = clubId,
+            status = com.clubs.generated.jooq.enums.MembershipStatus.active,
+            role = com.clubs.generated.jooq.enums.MembershipRole.member,
+            joinedAt = now,
+            subscriptionExpiresAt = now.plusDays(30),
+            createdAt = now,
+            updatedAt = now
+        )
+
+        every { applicationRepository.findById(applicationId) } returns approved
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns existing
+
+        val ex = assertThrows<ValidationException> {
+            applicationService.completeFreeMembership(applicationId, userId)
+        }
+        assertEquals("Already a member", ex.message)
+        verify(exactly = 0) { membershipRepository.create(any(), any()) }
+        verify(exactly = 0) { clubRepository.incrementMemberCount(any()) }
     }
 
     @Test

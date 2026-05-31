@@ -11,6 +11,8 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ApplicationStatus
 import com.clubs.interest.InterestRepository
+import com.clubs.membership.MembershipDto
+import com.clubs.membership.MembershipMapper
 import com.clubs.membership.MembershipRepository
 import com.clubs.payment.PaymentService
 import com.clubs.reputation.PeerStatsAggregate
@@ -37,7 +39,8 @@ class ApplicationService(
     private val notificationService: NotificationService,
     private val userRepository: UserRepository,
     private val reputationRepository: ReputationRepository,
-    private val interestRepository: InterestRepository
+    private val interestRepository: InterestRepository,
+    private val membershipMapper: MembershipMapper
 ) {
 
     /**
@@ -402,5 +405,45 @@ class ApplicationService(
             "Invoice resent: applicationId={} userId={} clubId={}",
             applicationId, application.userId, application.clubId
         )
+    }
+
+    /**
+     * Finalises a free-club membership for an approved application that was left
+     * in a stuck "approved-without-membership" state (legacy data / earlier bug
+     * where the auto-create branch of [approveApplication] didn't run for a free
+     * club). Only the applicant can call it; only valid for free clubs
+     * (`subscription_price <= 0`) — paid clubs use the Stars-invoice path.
+     *
+     * Mirrors the free-club branch of [approveApplication]: creates membership
+     * and bumps `club.member_count` in a single transaction. Idempotent at the
+     * application-level — second call after success returns 400 ("Already a member").
+     */
+    @Transactional
+    fun completeFreeMembership(applicationId: UUID, callerUserId: UUID): MembershipDto {
+        val application = applicationRepository.findById(applicationId)
+            ?: throw NotFoundException("Application not found")
+        if (application.userId != callerUserId) {
+            throw ForbiddenException("Forbidden")
+        }
+        if (application.status != ApplicationStatus.approved) {
+            throw ValidationException("Application is not approved")
+        }
+        val club = clubRepository.findById(application.clubId)
+            ?: throw NotFoundException("Club not found")
+        if ((club.subscriptionPrice ?: 0) > 0) {
+            throw ValidationException("Club is not free — pay the invoice instead")
+        }
+        val existingMembership = membershipRepository.findActiveByUserAndClub(callerUserId, application.clubId)
+        if (existingMembership != null) {
+            throw ValidationException("Already a member")
+        }
+
+        val membership = membershipRepository.create(callerUserId, application.clubId)
+        clubRepository.incrementMemberCount(application.clubId)
+        log.info(
+            "Free membership completed for stuck application: applicationId={} userId={} clubId={}",
+            applicationId, callerUserId, application.clubId
+        )
+        return membershipMapper.toDto(membership)
     }
 }

@@ -18,7 +18,10 @@ import {
   useJoinClubMutation,
   useMyClubsQuery,
 } from '../queries/clubs';
-import { useMyApplicationsQuery } from '../queries/applications';
+import {
+  useCompleteFreeMembershipMutation,
+  useMyApplicationsQuery,
+} from '../queries/applications';
 import { ApiError } from '../api/apiClient';
 import { isPendingPayment } from '../types/api';
 import { formatPrice } from '../utils/formatters';
@@ -81,6 +84,7 @@ export const ClubPage: FC = () => {
 
   const joinMutation = useJoinClubMutation();
   const applyMutation = useApplyToClubMutation();
+  const completeFreeMutation = useCompleteFreeMembershipMutation();
 
   const [joinError, setJoinError] = useState<string | null>(null);
   const [showApplyModal, setShowApplyModal] = useState(false);
@@ -98,7 +102,7 @@ export const ClubPage: FC = () => {
   const isOrganizer = club?.ownerId === user?.id || membership?.role === 'organizer';
   const myApplication = applications.find((a) => a.clubId === id) ?? null;
 
-  const joining = joinMutation.isPending || applyMutation.isPending;
+  const joining = joinMutation.isPending || applyMutation.isPending || completeFreeMutation.isPending;
 
   if (clubQuery.isPending) {
     return (
@@ -165,6 +169,28 @@ export const ClubPage: FC = () => {
     );
   };
 
+  // Recovery handler for the legacy stuck state: a free-club application was
+  // approved but the auto-create membership branch never ran (earlier bug /
+  // pre-existing data). Backend `complete-free-membership` re-creates the
+  // membership idempotently; on success the page re-renders with member tabs.
+  const handleCompleteFreeMembership = () => {
+    if (!id || !myApplication) return;
+    haptic.impact('medium');
+    setJoinError(null);
+    completeFreeMutation.mutate(
+      { applicationId: myApplication.id, clubId: id },
+      {
+        onSuccess: () => {
+          haptic.notify('success');
+        },
+        onError: (e) => {
+          setJoinError(e.message);
+          haptic.notify('error');
+        },
+      },
+    );
+  };
+
   // Tab «Управление» is a navigate-link, not a state-toggle: tap fires haptic
   // impact (not select) and routes to /manage. activeTab never holds 'manage'.
   const handleTabClick = (tab: TabKey) => {
@@ -197,10 +223,29 @@ export const ClubPage: FC = () => {
     }
     if (myApplication?.status === 'approved') {
       const price = club.subscriptionPrice ?? 0;
+      if (price <= 0) {
+        // Legacy stuck state: free club, approved, but membership row missing.
+        // Surface a recovery CTA instead of the misleading «Ожидаем оплату».
+        return (
+          <>
+            <button
+              type="button"
+              className="cp-cta"
+              onClick={handleCompleteFreeMembership}
+              disabled={joining}
+            >
+              {joining ? <Spinner size="s" /> : 'Завершить вступление'}
+            </button>
+            <div className="cp-cta-hint">
+              Заявка одобрена. Нажмите чтобы вступить.
+            </div>
+          </>
+        );
+      }
       return (
         <>
           <button type="button" className="cp-cta outline" disabled>
-            Ожидаем оплату{price > 0 ? ` — ${price} Stars` : ''}
+            Ожидаем оплату — {price} Stars
           </button>
           <div className="cp-cta-hint">
             Заявка одобрена. Счёт отправлен в Telegram — оплатите его, чтобы вступить.

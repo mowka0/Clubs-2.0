@@ -285,6 +285,35 @@ Errors:
 membership создаётся синхронно при approve, состояние «approved-without-membership»
 для них не возникает.
 
+### `POST /api/applications/{id}/complete-free-membership` (NEW)
+
+Завершает вступление в **бесплатный** клуб (`subscription_price <= 0`) для
+approved-заявки, которая по легаси / прошлому багу осталась без membership-записи.
+Кнопка живёт на `ClubPage` в visitor-CTA-блоке, если caller увидел
+`approved` статус заявки и клуб бесплатный.
+
+Mirrors free-club-branch of `POST /api/applications/{id}/approve` (создаёт
+membership(active) + `clubs.member_count += 1` в одной транзакции).
+
+Request: пустой body.
+
+Auth: JWT, caller обязан быть applicant'ом (`application.user_id == caller.userId`).
+
+Response: `200 OK` с `MembershipDto` (см. `docs/modules/membership.md`).
+
+Errors:
+- `401` — нет JWT.
+- `403 FORBIDDEN` — caller не applicant.
+- `404 NOT_FOUND` — application не существует / клуб не существует.
+- `400 VALIDATION_ERROR` `"Application is not approved"` — статус заявки не `approved`.
+- `400 VALIDATION_ERROR` `"Club is not free — pay the invoice instead"` —
+  у клуба `subscription_price > 0` (paid-клубы используют Stars-инвойс).
+- `400 VALIDATION_ERROR` `"Already a member"` — у пользователя уже есть
+  active / grace_period membership в этом клубе.
+
+Логирование: INFO `"Free membership completed for stuck application:
+applicationId=... userId=... clubId=..."`.
+
 ### `POST /api/applications/{id}/reject` (CHANGED)
 
 Изменения к контракту из `application.md` §API:
@@ -1031,6 +1060,44 @@ AND PaymentService.createInvoice вызван
 GIVEN заявка pending (или rejected / auto_rejected)
 WHEN POST /api/applications/{id}/resend-invoice от applicant
 THEN 400 VALIDATION_ERROR "No payment pending"
+```
+
+### AC-25g: complete-free-membership — успешный сценарий
+```
+GIVEN заявка approved в клубе с subscription_price = 0
+AND у applicant НЕТ active / grace_period membership в клубе
+WHEN POST /api/applications/{id}/complete-free-membership от applicant
+THEN 200 OK с MembershipDto (status="active", role="member")
+AND membershipRepository.create(userId, clubId) вызван 1 раз
+AND clubRepository.incrementMemberCount(clubId) вызван 1 раз
+AND INFO-лог "Free membership completed for stuck application: applicationId=... userId=... clubId=..."
+```
+
+### AC-25h: complete-free-membership — не applicant
+```
+GIVEN заявка approved принадлежит user U
+WHEN POST /api/applications/{id}/complete-free-membership от другого user'а V
+THEN 403 FORBIDDEN
+AND membershipRepository.create НЕ вызван
+AND clubRepository.incrementMemberCount НЕ вызван
+```
+
+### AC-25i: complete-free-membership — клуб платный
+```
+GIVEN заявка approved в клубе с subscription_price > 0
+WHEN POST /api/applications/{id}/complete-free-membership от applicant
+THEN 400 VALIDATION_ERROR "Club is not free — pay the invoice instead"
+AND membershipRepository.create НЕ вызван
+```
+
+### AC-25j: complete-free-membership — уже member
+```
+GIVEN заявка approved в бесплатном клубе
+AND у applicant уже есть active / grace_period membership в клубе
+WHEN POST /api/applications/{id}/complete-free-membership
+THEN 400 VALIDATION_ERROR "Already a member"
+AND membershipRepository.create НЕ вызван
+AND clubRepository.incrementMemberCount НЕ вызван
 ```
 
 ### AC-26a: organizer видит awaiting-payment applicants своего клуба

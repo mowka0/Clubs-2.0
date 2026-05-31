@@ -3590,36 +3590,32 @@ select {
 }
 
 /* «Ожидают оплаты» — applicant-side awaiting-payment cards on MyClubsPage.
-   Card row keeps the standard .mc-app layout; feedback toast renders BELOW
-   as a sibling so the row alignment stays stable when feedback appears. */
+   Built on `.club-card` (NOT `.mc-app`) for exact visual parity with active
+   club cards stacked below in the «Активные» section — same padding, avatar,
+   background, body shape. Feedback toast renders BELOW as a sibling of the
+   card so the row layout stays stable when feedback appears. */
 .awaiting-payment-card-wrap {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-/* Awaiting-payment card overrides bring visual weight up to `.club-card`
-   parity (padding 14px, denser navy background, 52px avatar) so the row
-   doesn't look "lightweight" next to active club cards stacked below it.
-   Other `.mc-app` variants (`.pending-app-card`, plain applicant-side
-   AppCard) keep the default 12px/44px sizing — they live in different
-   sections without club-card neighbours. */
-.mc-app.awaiting-payment-card {
-  align-items: center;
-  padding: 14px;
-  background: rgba(26, 33, 56, 0.88);
+/* Awaiting-payment-specific tweaks on top of `.club-card`:
+   - non-interactive (no cursor, no hover) — card itself isn't a button
+   - price chip in the meta row uses brass colour to mirror status semantics
+   - pay-button is a full-width row INSIDE `.body` (same vertical slot as
+     `.capacity` in active club cards) — no third column outside body. */
+.club-card.awaiting-payment-card {
+  cursor: default;
 }
-.mc-app.awaiting-payment-card .avt {
-  width: 52px;
-  height: 52px;
-  font-size: 15px;
-}
-.mc-app.awaiting-payment-card .body .price {
-  font-size: 12.5px;
+.club-card.awaiting-payment-card .meta .price {
   color: var(--brand-brass-deep);
   font-weight: 600;
 }
+.club-card.awaiting-payment-card .awaiting-pay-btn {
+  width: 100%;
+  margin-top: 4px;
+}
 .awaiting-pay-btn {
-  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;

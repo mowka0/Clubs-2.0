@@ -4,6 +4,7 @@ import type {
   AwaitingPaymentApplicationDto,
   JoinClubResult,
   MemberListItemDto,
+  MembershipDto,
   MemberProfileDto,
   OrganizerAwaitingPaymentApplicantDto,
   PendingApplicationDto,
@@ -129,4 +130,17 @@ export function getOrganizerAwaitingPaymentApplicants(): Promise<
  */
 export function resendApplicationInvoice(applicationId: string): Promise<void> {
   return apiClient.post<void>(`/api/applications/${applicationId}/resend-invoice`);
+}
+
+/**
+ * Finalises a free-club membership for an approved application stuck in
+ * "approved-without-membership" state (legacy data / earlier free-club approve
+ * bug). Backend validates the application is approved AND the club's
+ * subscription_price <= 0 AND no active/grace membership exists. Returns the
+ * newly-created MembershipDto on success.
+ */
+export function completeFreeMembership(applicationId: string): Promise<MembershipDto> {
+  return apiClient.post<MembershipDto>(
+    `/api/applications/${applicationId}/complete-free-membership`,
+  );
 }
