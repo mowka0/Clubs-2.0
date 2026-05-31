@@ -28,6 +28,7 @@ class MembershipServiceTest {
     private lateinit var clubRepository: ClubRepository
     private lateinit var paymentService: PaymentService
     private lateinit var mapper: MembershipMapper
+    private lateinit var freeMembershipActivator: FreeMembershipActivator
     private lateinit var membershipService: MembershipService
 
     @BeforeEach
@@ -36,7 +37,14 @@ class MembershipServiceTest {
         clubRepository = mockk(relaxed = true)
         paymentService = mockk(relaxed = true)
         mapper = MembershipMapper()
-        membershipService = MembershipService(membershipRepository, clubRepository, paymentService, mapper)
+        freeMembershipActivator = mockk(relaxed = true)
+        membershipService = MembershipService(
+            membershipRepository,
+            clubRepository,
+            paymentService,
+            mapper,
+            freeMembershipActivator
+        )
     }
 
     private fun makeClub(
@@ -96,7 +104,7 @@ class MembershipServiceTest {
     }
 
     @Test
-    fun `joinOpenClub free creates membership and increments member_count`() {
+    fun `joinOpenClub free delegates to FreeMembershipActivator`() {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val club = freeClubRecord(clubId)
@@ -105,7 +113,7 @@ class MembershipServiceTest {
         every { clubRepository.findById(clubId) } returns club
         every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
         every { membershipRepository.countActiveByClubId(clubId) } returns 5
-        every { membershipRepository.create(userId, clubId) } returns createdMembership
+        every { freeMembershipActivator.activate(userId, clubId) } returns createdMembership
 
         val result = membershipService.joinOpenClub(clubId, userId)
 
@@ -115,8 +123,8 @@ class MembershipServiceTest {
         assertEquals("active", joined.membership.status)
         assertEquals("member", joined.membership.role)
         assertNotNull(joined.membership.joinedAt)
-        verify(exactly = 1) { membershipRepository.create(userId, clubId) }
-        verify(exactly = 1) { clubRepository.incrementMemberCount(clubId) }
+        verify(exactly = 1) { freeMembershipActivator.activate(userId, clubId) }
+        verify(exactly = 0) { membershipRepository.create(any(), any()) }
         verify(exactly = 0) { paymentService.createInvoice(any(), any()) }
     }
 
@@ -247,7 +255,7 @@ class MembershipServiceTest {
     }
 
     @Test
-    fun `joinByInviteCode free creates membership`() {
+    fun `joinByInviteCode free delegates to FreeMembershipActivator`() {
         val code = "INV-FREE"
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
@@ -257,12 +265,13 @@ class MembershipServiceTest {
         every { clubRepository.findByInviteCode(code) } returns club
         every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
         every { membershipRepository.countActiveByClubId(clubId) } returns 0
-        every { membershipRepository.create(userId, clubId) } returns createdMembership
+        every { freeMembershipActivator.activate(userId, clubId) } returns createdMembership
 
         val result = membershipService.joinByInviteCode(code, userId)
 
         assertIs<JoinResult.Joined>(result)
-        verify(exactly = 1) { clubRepository.incrementMemberCount(clubId) }
+        verify(exactly = 1) { freeMembershipActivator.activate(userId, clubId) }
+        verify(exactly = 0) { membershipRepository.create(any(), any()) }
         verify(exactly = 0) { paymentService.createInvoice(any(), any()) }
     }
 

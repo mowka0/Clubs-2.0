@@ -1,18 +1,13 @@
 import { FC, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQueries } from '@tanstack/react-query';
 import { Spinner, Placeholder } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useMyReputationQuery } from '../queries/members';
 import { useMyInterestsQuery } from '../queries/profile';
-import { useMyApplicationsQuery } from '../queries/applications';
-import { queryKeys } from '../queries/queryKeys';
-import { getClub } from '../api/clubs';
 import { BrandBackdrop } from '../components/BrandBackdrop';
 import { countryNameByCode } from '../components/CityPicker';
 import { ProfileEditModal } from '../components/profile/ProfileEditModal';
-import type { ClubDetailDto } from '../types/api';
 
 const GearIcon: FC = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -20,13 +15,6 @@ const GearIcon: FC = () => (
     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
   </svg>
 );
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'На рассмотрении',
-  approved: 'Одобрено',
-  rejected: 'Отклонено',
-  auto_rejected: 'Отклонено',
-};
 
 function getInitials(name: string): string {
   return name
@@ -50,20 +38,9 @@ export const ProfilePage: FC = () => {
   const { user, login, isLoading: authLoading } = useAuthStore();
 
   const reputationQuery = useMyReputationQuery();
-  const applicationsQuery = useMyApplicationsQuery();
   const interestsQuery = useMyInterestsQuery();
 
   const reputation = useMemo(() => reputationQuery.data ?? [], [reputationQuery.data]);
-  const applications = applicationsQuery.data ?? [];
-  // Includes pending + (auto)rejected so the rejected-reason feedback has a
-  // place to render. See docs/modules/applications-inbox.md § "ProfilePage —
-  // pending-apps секция".
-  const pendingApps = applications.filter(
-    (a) =>
-      a.status === 'pending' ||
-      a.status === 'rejected' ||
-      a.status === 'auto_rejected',
-  );
   const interests = useMemo(() => interestsQuery.data ?? [], [interestsQuery.data]);
 
   const [editOpen, setEditOpen] = useState(false);
@@ -71,23 +48,6 @@ export const ProfilePage: FC = () => {
   useEffect(() => {
     if (!user) login();
   }, [user, login]);
-
-  // Applications carry no club name — resolve it for the pending-apps list only.
-  const appClubIds = useMemo(
-    () => Array.from(new Set(pendingApps.map((a) => a.clubId))),
-    [pendingApps],
-  );
-  const appClubQueries = useQueries({
-    queries: appClubIds.map((id) => ({
-      queryKey: queryKeys.clubs.detail(id),
-      queryFn: () => getClub(id),
-    })),
-  });
-  const appClubs: Record<string, ClubDetailDto> = {};
-  appClubIds.forEach((id, idx) => {
-    const data = appClubQueries[idx]?.data;
-    if (data) appClubs[id] = data;
-  });
 
   if (authLoading || reputationQuery.isPending) {
     return (
@@ -213,39 +173,6 @@ export const ProfilePage: FC = () => {
               );
             })}
         </div>
-      )}
-
-      {/* Pending applications */}
-      {pendingApps.length > 0 && (
-        <>
-          <div className="mc-section-label">
-            Активные заявки <span className="count">· {pendingApps.length}</span>
-          </div>
-          <div className="pf-rep-list">
-            {pendingApps.map((app) => {
-              const club = appClubs[app.clubId];
-              const name = club?.name ?? `Клуб ${app.clubId.slice(0, 8)}…`;
-              const showReason =
-                (app.status === 'rejected' || app.status === 'auto_rejected') &&
-                Boolean(app.rejectedReason && app.rejectedReason.trim());
-              return (
-                <button
-                  key={app.id}
-                  type="button"
-                  className="pf-rep-card"
-                  onClick={() => { haptic.impact('light'); navigate(`/clubs/${app.clubId}`); }}
-                >
-                  <span className="avt">{getInitials(name)}</span>
-                  <div className="body">
-                    <div className="name">{name}</div>
-                    <div className="role">{STATUS_LABELS[app.status] ?? app.status}</div>
-                    {showReason && <div className="reason">{app.rejectedReason}</div>}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </>
       )}
 
       {editOpen && (

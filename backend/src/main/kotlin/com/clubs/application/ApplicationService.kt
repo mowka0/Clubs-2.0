@@ -11,6 +11,7 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ApplicationStatus
 import com.clubs.interest.InterestRepository
+import com.clubs.membership.FreeMembershipActivator
 import com.clubs.membership.MembershipDto
 import com.clubs.membership.MembershipMapper
 import com.clubs.membership.MembershipRepository
@@ -40,7 +41,8 @@ class ApplicationService(
     private val userRepository: UserRepository,
     private val reputationRepository: ReputationRepository,
     private val interestRepository: InterestRepository,
-    private val membershipMapper: MembershipMapper
+    private val membershipMapper: MembershipMapper,
+    private val freeMembershipActivator: FreeMembershipActivator
 ) {
 
     /**
@@ -152,8 +154,7 @@ class ApplicationService(
                 applicationId, application.clubId, application.userId, price
             )
         } else {
-            membershipRepository.create(application.userId, application.clubId)
-            clubRepository.incrementMemberCount(application.clubId)
+            freeMembershipActivator.activate(application.userId, application.clubId)
             log.info(
                 "Membership created on application approve (free club): applicationId={} clubId={} userId={}",
                 applicationId, application.clubId, application.userId
@@ -414,9 +415,11 @@ class ApplicationService(
      * club). Only the applicant can call it; only valid for free clubs
      * (`subscription_price <= 0`) — paid clubs use the Stars-invoice path.
      *
-     * Mirrors the free-club branch of [approveApplication]: creates membership
-     * and bumps `club.member_count` in a single transaction. Idempotent at the
-     * application-level — second call after success returns 400 ("Already a member").
+     * Delegates to [FreeMembershipActivator] which handles both fresh INSERT
+     * (no row at all) and reactivation (cancelled / expired row from a prior
+     * lifecycle — UNIQUE(user_id, club_id) prevents a second INSERT). Idempotent
+     * at the application-level — second call after success returns 400
+     * ("Already a member").
      */
     @Transactional
     fun completeFreeMembership(applicationId: UUID, callerUserId: UUID): MembershipDto {
@@ -438,8 +441,7 @@ class ApplicationService(
             throw ValidationException("Already a member")
         }
 
-        val membership = membershipRepository.create(callerUserId, application.clubId)
-        clubRepository.incrementMemberCount(application.clubId)
+        val membership = freeMembershipActivator.activate(callerUserId, application.clubId)
         log.info(
             "Free membership completed for stuck application: applicationId={} userId={} clubId={}",
             applicationId, callerUserId, application.clubId

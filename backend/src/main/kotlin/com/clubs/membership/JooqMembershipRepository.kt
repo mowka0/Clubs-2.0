@@ -30,6 +30,15 @@ class JooqMembershipRepository(
             .fetchOne()
             ?.let(mapper::toDomain)
 
+    override fun findByUserAndClub(userId: UUID, clubId: UUID): Membership? =
+        dsl.selectFrom(MEMBERSHIPS)
+            .where(
+                MEMBERSHIPS.USER_ID.eq(userId)
+                    .and(MEMBERSHIPS.CLUB_ID.eq(clubId))
+            )
+            .fetchOne()
+            ?.let(mapper::toDomain)
+
     override fun findById(id: UUID): Membership? =
         dsl.selectFrom(MEMBERSHIPS)
             .where(MEMBERSHIPS.ID.eq(id))
@@ -185,6 +194,28 @@ class JooqMembershipRepository(
             .set(MEMBERSHIPS.CLUB_ID, clubId)
             .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
             .set(MEMBERSHIPS.ROLE, MembershipRole.organizer)
+            .returning()
+            .fetchOne()!!
+        return mapper.toDomain(record)
+    }
+
+    /**
+     * Revives a previously dead (cancelled / expired) membership row for a
+     * **free** club. UNIQUE(user_id, club_id) means we cannot INSERT a fresh
+     * row when one already exists — reactivation is the only path. Resets
+     * lifecycle fields so the join is indistinguishable from a brand-new one:
+     * status=active, joined_at=now, subscription_expires_at=null (free club —
+     * no Stars billing), updated_at=now. `member_count` bookkeeping stays
+     * with the caller; see ApplicationService / MembershipService.
+     */
+    override fun reactivateFree(membershipId: UUID): Membership {
+        val now = OffsetDateTime.now()
+        val record = dsl.update(MEMBERSHIPS)
+            .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
+            .set(MEMBERSHIPS.JOINED_AT, now)
+            .setNull(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT)
+            .set(MEMBERSHIPS.UPDATED_AT, now)
+            .where(MEMBERSHIPS.ID.eq(membershipId))
             .returning()
             .fetchOne()!!
         return mapper.toDomain(record)

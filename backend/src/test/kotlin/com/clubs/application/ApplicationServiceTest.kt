@@ -11,6 +11,7 @@ import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ApplicationStatus
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.interest.InterestRepository
+import com.clubs.membership.FreeMembershipActivator
 import com.clubs.membership.Membership
 import com.clubs.membership.MembershipMapper
 import com.clubs.membership.MembershipRepository
@@ -40,6 +41,7 @@ class ApplicationServiceTest {
     private lateinit var reputationRepository: ReputationRepository
     private lateinit var interestRepository: InterestRepository
     private lateinit var membershipMapper: MembershipMapper
+    private lateinit var freeMembershipActivator: FreeMembershipActivator
     private lateinit var applicationService: ApplicationService
 
     @BeforeEach
@@ -54,6 +56,7 @@ class ApplicationServiceTest {
         reputationRepository = mockk(relaxed = true)
         interestRepository = mockk(relaxed = true)
         membershipMapper = MembershipMapper()
+        freeMembershipActivator = mockk(relaxed = true)
         applicationService = ApplicationService(
             applicationRepository,
             clubRepository,
@@ -64,7 +67,8 @@ class ApplicationServiceTest {
             userRepository,
             reputationRepository,
             interestRepository,
-            membershipMapper
+            membershipMapper,
+            freeMembershipActivator
         )
     }
 
@@ -279,12 +283,13 @@ class ApplicationServiceTest {
         assertEquals(clubId, result.clubId)
         assertNotNull(result.resolvedAt)
         verify(exactly = 1) { paymentService.createInvoice(userId, clubId) }
+        verify(exactly = 0) { freeMembershipActivator.activate(any(), any()) }
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
         verify(exactly = 0) { clubRepository.incrementMemberCount(any()) }
     }
 
     @Test
-    fun `approveApplication for free club creates membership and increments member_count`() {
+    fun `approveApplication for free club delegates to FreeMembershipActivator`() {
         val applicationId = UUID.randomUUID()
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
@@ -322,8 +327,8 @@ class ApplicationServiceTest {
         val result = applicationService.approveApplication(applicationId, organizerId)
 
         assertEquals("approved", result.status)
-        verify(exactly = 1) { membershipRepository.create(userId, clubId) }
-        verify(exactly = 1) { clubRepository.incrementMemberCount(clubId) }
+        verify(exactly = 1) { freeMembershipActivator.activate(userId, clubId) }
+        verify(exactly = 0) { membershipRepository.create(any(), any()) }
         verify(exactly = 0) { paymentService.createInvoice(any(), any()) }
     }
 
@@ -356,6 +361,7 @@ class ApplicationServiceTest {
         }
 
         assertEquals("Forbidden", exception.message)
+        verify(exactly = 0) { freeMembershipActivator.activate(any(), any()) }
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
     }
 
@@ -671,7 +677,7 @@ class ApplicationServiceTest {
     }
 
     @Test
-    fun `completeFreeMembership creates membership and increments member_count for free club`() {
+    fun `completeFreeMembership delegates to FreeMembershipActivator for fresh insert`() {
         val applicationId = UUID.randomUUID()
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
@@ -696,7 +702,7 @@ class ApplicationServiceTest {
             status = com.clubs.generated.jooq.enums.MembershipStatus.active,
             role = com.clubs.generated.jooq.enums.MembershipRole.member,
             joinedAt = now,
-            subscriptionExpiresAt = now.plusDays(30),
+            subscriptionExpiresAt = null,
             createdAt = now,
             updatedAt = now
         )
@@ -704,15 +710,61 @@ class ApplicationServiceTest {
         every { applicationRepository.findById(applicationId) } returns approved
         every { clubRepository.findById(clubId) } returns club
         every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
-        every { membershipRepository.create(userId, clubId) } returns createdMembership
+        every { freeMembershipActivator.activate(userId, clubId) } returns createdMembership
 
         val result = applicationService.completeFreeMembership(applicationId, userId)
 
         assertEquals(userId, result.userId)
         assertEquals(clubId, result.clubId)
         assertEquals("active", result.status)
-        verify(exactly = 1) { membershipRepository.create(userId, clubId) }
-        verify(exactly = 1) { clubRepository.incrementMemberCount(clubId) }
+        verify(exactly = 1) { freeMembershipActivator.activate(userId, clubId) }
+    }
+
+    @Test
+    fun `completeFreeMembership reactivates cancelled membership via activator`() {
+        // Repro for staging DuplicateKeyException: a cancelled membership exists
+        // (status NOT in active/grace_period). `findActiveByUserAndClub` returns
+        // null, so we don't 400. The activator must reactivate the dead row
+        // instead of INSERTing (which would explode the UNIQUE constraint).
+        val applicationId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val organizerId = UUID.randomUUID()
+
+        val approved = Application(
+            id = applicationId,
+            userId = userId,
+            clubId = clubId,
+            answerText = null,
+            status = ApplicationStatus.approved,
+            rejectedReason = null,
+            createdAt = OffsetDateTime.now(),
+            resolvedAt = OffsetDateTime.now()
+        )
+        val club = createClosedClub(clubId, organizerId, subscriptionPrice = 0)
+        val now = OffsetDateTime.now()
+        val reactivated = Membership(
+            id = UUID.randomUUID(),
+            userId = userId,
+            clubId = clubId,
+            status = com.clubs.generated.jooq.enums.MembershipStatus.active,
+            role = com.clubs.generated.jooq.enums.MembershipRole.member,
+            joinedAt = now,
+            subscriptionExpiresAt = null,
+            createdAt = now.minusDays(60),
+            updatedAt = now
+        )
+
+        every { applicationRepository.findById(applicationId) } returns approved
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
+        every { freeMembershipActivator.activate(userId, clubId) } returns reactivated
+
+        val result = applicationService.completeFreeMembership(applicationId, userId)
+
+        assertEquals("active", result.status)
+        assertEquals(userId, result.userId)
+        verify(exactly = 1) { freeMembershipActivator.activate(userId, clubId) }
     }
 
     @Test
@@ -737,6 +789,7 @@ class ApplicationServiceTest {
         assertThrows<ForbiddenException> {
             applicationService.completeFreeMembership(applicationId, otherUserId)
         }
+        verify(exactly = 0) { freeMembershipActivator.activate(any(), any()) }
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
         verify(exactly = 0) { clubRepository.incrementMemberCount(any()) }
     }
@@ -766,6 +819,7 @@ class ApplicationServiceTest {
             applicationService.completeFreeMembership(applicationId, userId)
         }
         assertEquals("Club is not free — pay the invoice instead", ex.message)
+        verify(exactly = 0) { freeMembershipActivator.activate(any(), any()) }
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
     }
 
@@ -807,6 +861,7 @@ class ApplicationServiceTest {
             applicationService.completeFreeMembership(applicationId, userId)
         }
         assertEquals("Already a member", ex.message)
+        verify(exactly = 0) { freeMembershipActivator.activate(any(), any()) }
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
         verify(exactly = 0) { clubRepository.incrementMemberCount(any()) }
     }

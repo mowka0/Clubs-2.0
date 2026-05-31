@@ -3592,48 +3592,29 @@ select {
 /* «Ожидают оплаты» — applicant-side awaiting-payment cards on MyClubsPage.
    Built on `.club-card` (NOT `.mc-app`) for exact visual parity with active
    club cards stacked below in the «Активные» section — same padding, avatar,
-   background, body shape. Feedback toast renders BELOW as a sibling of the
-   card so the row layout stays stable when feedback appears. */
+   background, body shape, body row structure (top → meta → capacity).
+   The WHOLE card is the button (taps re-trigger the Stars invoice), so the
+   inline pay CTA lives in the `.capacity` slot — same vertical height as
+   the capacity bar on active cards. Feedback toast renders BELOW as a sibling
+   so the row layout stays stable when feedback appears. */
 .awaiting-payment-card-wrap {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-/* Awaiting-payment-specific tweaks on top of `.club-card`:
-   - non-interactive (no cursor, no hover) — card itself isn't a button
-   - price chip in the meta row uses brass colour to mirror status semantics
-   - pay-button is a full-width row INSIDE `.body` (same vertical slot as
-     `.capacity` in active club cards) — no third column outside body. */
 .club-card.awaiting-payment-card {
-  cursor: default;
-}
-.club-card.awaiting-payment-card .meta .price {
-  color: var(--brand-brass-deep);
-  font-weight: 600;
-}
-.club-card.awaiting-payment-card .awaiting-pay-btn {
-  width: 100%;
-  margin-top: 4px;
-}
-.awaiting-pay-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(201, 160, 99, 0.30);
-  background: var(--brand-brass-soft);
-  color: var(--brand-brass-deep);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
   cursor: pointer;
-  white-space: nowrap;
+  width: 100%;
 }
-.awaiting-pay-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+.club-card.awaiting-payment-card:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.awaiting-pay-inline {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--brand-brass-deep);
+  letter-spacing: 0.01em;
 }
 .awaiting-pay-toast {
   font-size: 12px;
@@ -3645,3 +3626,4 @@ select {
   border-radius: 8px;
 }
 .awaiting-pay-toast.error { color: #FF8B8B; }
+.awaiting-pay-toast.success { color: var(--brand-ink-2); }

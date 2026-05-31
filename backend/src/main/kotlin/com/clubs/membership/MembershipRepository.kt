@@ -7,6 +7,7 @@ interface MembershipRepository {
 
     // Lookups
     fun findActiveByUserAndClub(userId: UUID, clubId: UUID): Membership?
+    fun findByUserAndClub(userId: UUID, clubId: UUID): Membership?
     fun findById(id: UUID): Membership?
     fun findByUserId(userId: UUID): List<Membership>
     fun findClubMembersWithUserInfo(clubId: UUID): List<ClubMemberInfo>
@@ -21,6 +22,7 @@ interface MembershipRepository {
     // Mutations
     fun create(userId: UUID, clubId: UUID): Membership
     fun createOrganizer(userId: UUID, clubId: UUID): Membership
+    fun reactivateFree(membershipId: UUID): Membership
     fun cancel(membershipId: UUID)
     fun activateSubscription(userId: UUID, clubId: UUID, expiresAt: OffsetDateTime): UUID
     fun renewSubscription(membershipId: UUID, newExpiresAt: OffsetDateTime)

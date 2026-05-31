@@ -6,6 +6,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useMyClubsQuery } from '../queries/clubs';
 import {
+  useCompleteFreeMembershipMutation,
   useMyApplicationsQuery,
   useMyAwaitingPaymentQuery,
   useMyPendingApplicationsQuery,
@@ -225,9 +226,11 @@ interface AwaitingPaymentCardProps {
 
 /**
  * Applicant-side card for an approved application without an active membership.
- * Tapping «Открыть счёт в Telegram» re-triggers the Stars invoice via DM.
- * Backend rate-limits 1 call per 60s per application → 429 maps to a specific
- * "wait a minute" message; other errors surface a generic Russian fallback.
+ * The WHOLE card is tappable — same visual shape as `.club-card` so it sits
+ * at the same height as active-club cards stacked below in «Активные». Tap
+ * re-triggers the Stars invoice via DM. Backend rate-limits 1 call per 60s
+ * per application → 429 maps to a specific "wait a minute" message; other
+ * errors surface a generic Russian fallback.
  */
 const AwaitingPaymentCard: FC<AwaitingPaymentCardProps> = ({ item }) => {
   const resendMutation = useResendInvoiceMutation();
@@ -238,6 +241,7 @@ const AwaitingPaymentCard: FC<AwaitingPaymentCardProps> = ({ item }) => {
   const initials = getInitials(item.club.name) || '·';
 
   const handleResend = () => {
+    if (resendMutation.isPending) return;
     setFeedback(null);
     resendMutation.mutate(item.applicationId, {
       onSuccess: () => {
@@ -260,13 +264,18 @@ const AwaitingPaymentCard: FC<AwaitingPaymentCardProps> = ({ item }) => {
     });
   };
 
-  // Mirrors `.club-card` layout (52px avatar, 14px padding, body column with
-  // name → meta → action). The pay-button lives INSIDE `.body` as a full-width
-  // row so the card has the same flex shape as neighbouring active-club cards
-  // — no third column, no off-axis spacing.
+  const inlineLabel = resendMutation.isPending
+    ? 'Отправляем счёт…'
+    : `Цена: ${item.subscriptionPrice}⭐ · Нажмите чтобы оплатить`;
+
   return (
     <div className="awaiting-payment-card-wrap">
-      <div className="club-card awaiting-payment-card">
+      <button
+        type="button"
+        className="club-card awaiting-payment-card"
+        onClick={handleResend}
+        disabled={resendMutation.isPending}
+      >
         <span className="avt">
           {item.club.avatarUrl ? <img src={item.club.avatarUrl} alt="" /> : initials}
         </span>
@@ -275,23 +284,15 @@ const AwaitingPaymentCard: FC<AwaitingPaymentCardProps> = ({ item }) => {
             <span className="name">{item.club.name}</span>
           </div>
           <div className="meta">
-            <span>{formatRelativeApprovedAt(item.approvedAt)}</span>
-            <span className="price">Цена: {item.subscriptionPrice}⭐</span>
+            <span className="cat">{formatRelativeApprovedAt(item.approvedAt)}</span>
           </div>
-          <button
-            type="button"
-            className="awaiting-pay-btn"
-            onClick={handleResend}
-            disabled={resendMutation.isPending}
-          >
-            {resendMutation.isPending ? 'Отправляем…' : `Оплатить ${item.subscriptionPrice}⭐`}
-          </button>
+          <div className="capacity">
+            <span className="awaiting-pay-inline">{inlineLabel}</span>
+          </div>
         </div>
-      </div>
+      </button>
       {feedback && (
-        <span className={`awaiting-pay-toast${feedback.kind === 'error' ? ' error' : ''}`}>
-          {feedback.text}
-        </span>
+        <span className={`awaiting-pay-toast ${feedback.kind}`}>{feedback.text}</span>
       )}
     </div>
   );
@@ -412,6 +413,61 @@ export const MyClubsPage: FC = () => {
     const q = clubDetailQueries[idx];
     if (q?.data) clubDetails[id] = q.data;
   });
+
+  /*
+   * Silent self-heal for stuck free-club applications.
+   *
+   * Background: when a free-club application is approved, the backend creates
+   * the membership inline (see ApplicationService.approveApplication free branch).
+   * If that branch ever failed for legacy reasons — or the approval came from
+   * a pre-fix codepath — the user has status=approved but no membership row,
+   * so the club doesn't show in «Активные клубы». They wouldn't know to tap
+   * «Завершить вступление» on ClubPage.
+   *
+   * Fix: on page mount, after both queries settle, find such stuck applications
+   * (approved + free club + caller not in active membership) and call
+   * completeFreeMembership(applicationId) once each. The mutation is idempotent
+   * server-side (400 «Already a member» if race lands a real membership first),
+   * silent (no toast, no haptic), and refetches myClubs so the КПСС appears.
+   *
+   * Paid clubs are explicitly excluded — they correctly remain in «Ожидают
+   * оплаты» until the Stars invoice is paid.
+   */
+  const completeFreeMutation = useCompleteFreeMembershipMutation();
+  const autoHealedRef = useRef(false);
+  const activeMembershipClubIds = useMemo(
+    () => new Set(myClubs.map((m) => m.clubId)),
+    [myClubs],
+  );
+  useEffect(() => {
+    if (autoHealedRef.current) return;
+    if (myClubsQuery.isPending || applicationsQuery.isPending) return;
+    // Need club detail to know whether subscriptionPrice === 0.
+    const haveAllClubDetails = clubIds.every((id) => Boolean(clubDetails[id]));
+    if (clubIds.length > 0 && !haveAllClubDetails) return;
+
+    const stuck = applications.filter((app) => {
+      if (app.status !== 'approved') return false;
+      if (activeMembershipClubIds.has(app.clubId)) return false;
+      const club = clubDetails[app.clubId];
+      if (!club) return false;
+      return club.subscriptionPrice === 0;
+    });
+    if (stuck.length === 0) return;
+
+    autoHealedRef.current = true;
+    stuck.forEach((app) => {
+      completeFreeMutation.mutate({ applicationId: app.id, clubId: app.clubId });
+    });
+  }, [
+    myClubsQuery.isPending,
+    applicationsQuery.isPending,
+    applications,
+    activeMembershipClubIds,
+    clubIds,
+    clubDetails,
+    completeFreeMutation,
+  ]);
 
   const loading = myClubsQuery.isPending || applicationsQuery.isPending;
   const empty =

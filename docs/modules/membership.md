@@ -22,8 +22,9 @@ POST /api/clubs/{id}/join
   - **НЕ создавать** membership — он будет создан в `handleSuccessfulPayment` после оплаты
   - Вернуть `202 Accepted` + `PendingPaymentDto`
 - **Если `club.subscription_price == 0 || null` (бесплатный):**
-  - Создать membership: `status = active`, `role = member`, `joined_at = now()`, `subscription_expires_at = now() + 30d`
-  - `clubs.member_count += 1`
+  - Делегировать в `FreeMembershipActivator.activate(userId, clubId)` (см. §
+    «Free-club reactivate-or-create» ниже): fresh INSERT для новых
+    пользователей либо реактивация cancelled/expired-строки для возвращающихся.
   - Вернуть `201 Created` + `MembershipDto`
 
 ### MembershipDto
@@ -56,7 +57,8 @@ POST /api/clubs/{id}/join
 - Повторное вступление (уже active/grace_period) → 409 CONFLICT "Already a member"
 - Повторное нажатие «Вступить» в платный клуб, пока оплата не прошла → идемпотентно: `createInvoice` вызывается снова (Telegram сам управляет дубликатами invoice), ответ 202
 - Вступление без токена → 401
-- Expired/cancelled membership существует → 409 "Already a member" (повторное вступление для expired/cancelled не поддерживается в MVP; см. GAP-7 в backlog для будущего flow)
+- Expired/cancelled membership существует для **бесплатного** клуба → автоматическая реактивация через `FreeMembershipActivator` (status=active, joined_at=now, subscription_expires_at=null, updated_at=now; `member_count` НЕ инкрементится). Ответ 201 с MembershipDto, как для нового вступления. См. § «Free-club reactivate-or-create».
+- Expired/cancelled membership существует для **платного** клуба → ветка payment-инвойса; повторное вступление через оплату Stars инициирует новый webhook-cycle. (Поведение для платных клубов в reactivate-flow остаётся как было — см. GAP-7.)
 
 ## TASK-010b — Вступление по invite-коду (приватный клуб)
 
@@ -83,6 +85,55 @@ POST /api/invite/{code}/join
 ## Заявки в закрытые клубы
 
 См. отдельную спеку: [docs/modules/application.md](application.md)
+
+---
+
+## Free-club reactivate-or-create
+
+`FreeMembershipActivator` (`membership/FreeMembershipActivator.kt`) — Spring
+`@Component`, инкапсулирует единый lifecycle для membership в **бесплатных**
+клубах. Используется в трёх местах:
+
+1. `MembershipService.joinOpenClub` / `joinByInviteCode` — free-ветка.
+2. `ApplicationService.approveApplication` — free-ветка.
+3. `ApplicationService.completeFreeMembership` — recovery stuck-заявок.
+
+### Зачем
+
+Таблица `memberships` имеет `UNIQUE (user_id, club_id)`. Если для пары
+`(user, club)` уже есть строка со статусом `cancelled` / `expired`, прямой
+`INSERT` ловит `DuplicateKeyException` (HTTP 500). До этого все три call-site
+использовали паттерн «findActiveByUserAndClub → INSERT», который покрывал
+только `active`/`grace_period` строки; мёртвые строки приводили к 500.
+
+### Контракт `activate(userId, clubId)`
+
+| Состояние строки в `memberships` | Действие | `clubs.member_count` |
+|---|---|---|
+| Нет строки | INSERT (`status=active`, `joined_at=now`, `subscription_expires_at=now+30d`*) | `+= 1` |
+| `status ∈ {cancelled, expired}` | UPDATE: `status=active`, `joined_at=now`, `subscription_expires_at=null`, `updated_at=now` | НЕ инкрементить (был учтён при первичном вступлении) |
+| `status ∈ {active, grace_period}` | `IllegalStateException` | — |
+
+(*) `subscription_expires_at = now+30d` — текущее поведение `repository.create`,
+актуально только для свежего INSERT. Реактивация ставит `null` (бесплатный
+клуб не имеет Stars-биллинга).
+
+> **`IllegalStateException` для активного membership** — defensive: caller
+> ОБЯЗАН проверить `findActiveByUserAndClub` до вызова и сурфейснуть
+> бизнес-ошибку (409 ConflictException в `joinOpenClub`, 400 ValidationException
+> «Already a member» в `completeFreeMembership`). Активатор бросает технический
+> exception как страховку от пропущенной проверки в новых call-site'ах.
+
+### Транзакционность
+
+Активатор НЕ имеет `@Transactional` — он вызывается из уже-`@Transactional`-методов
+Service-слоя. INSERT + `incrementMemberCount` (или UPDATE) выполняются в одной
+внешней транзакции; rollback при падении любой операции.
+
+### Логи
+
+- INFO `"Free membership created: userId=... clubId=..."` (fresh insert)
+- INFO `"Free membership reactivated: id=... userId=... clubId=... previousStatus=cancelled|expired"`
 
 ---
 
