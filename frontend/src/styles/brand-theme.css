@@ -684,7 +684,7 @@ html, body {
 
 /* =========== Header / Cover =========== */
 .cp-cover {
-  padding: 8px 20px 18px;
+  padding: 14px 20px 22px;
   display: flex;
   gap: 16px;
   align-items: flex-start;
@@ -692,14 +692,17 @@ html, body {
 }
 
 /* Compact leave-club affordance in the top-right of the hero. Active members
-   only (owner / cancelled-in-period / visitor never see it). Anchored to the
-   cover so long club names don't push it off the row. */
+   only (owner / cancelled-in-period / visitor never see it). Top-aligned with
+   the avatar (same 14px top inset as `.cp-cover` padding) so it sits on the
+   same baseline as the avatar's top edge. `.cp-cover .body` reserves a
+   matching right gutter (52px = 36 icon + 16 spacing) so a long club name
+   never tucks under the icon. */
 .cp-leave-icon {
   position: absolute;
-  top: 8px;
-  right: 14px;
-  width: 34px;
-  height: 34px;
+  top: 14px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
   border-radius: 10px;
   border: 1px solid var(--brand-hairline-2);
   background: rgba(26, 33, 56, 0.55);
@@ -769,19 +772,25 @@ html, body {
 .cp-cover .body {
   flex: 1; min-width: 0;
   padding-top: 4px;
+  /* Reserve room for the leave-icon (36px) + 16px gap so the title can't
+     slide under it when the row has the icon visible. Owners / visitors
+     skip the icon entirely, but a constant gutter keeps the layout stable
+     across roles (no reflow on Quick role checks). */
+  padding-right: 52px;
 }
 .cp-cover .name {
   font-size: 23px;
   font-weight: 700;
   letter-spacing: -0.018em;
-  line-height: 1.18;
+  line-height: 1.2;
   color: var(--brand-ink);
-  margin: 0 0 8px;
+  margin: 0 0 14px;
+  word-break: break-word;
 }
 .cp-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 6px 8px;
   align-items: center;
 }
 .cp-chip {
