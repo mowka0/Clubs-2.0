@@ -206,3 +206,4 @@ Orchestrator → Analyst (спецификация) → Developer (код) → T
 - Spring Security: /actuator/** и /api/auth/** = permitAll, остальные /api/** = JWT
 - Telegram initData: получать через `retrieveLaunchParams().initDataRaw`, НЕ через mock fallback
 - Backend healthcheck в Docker: нужен curl в образе + start_period минимум 90s для JVM
+- Не читать `backend/src/generated/jooq/**` напрямую — это 68 файлов и впустую раздувает контекст. Для схемы — Flyway-миграции в `backend/src/main/resources/db/migration/`. Для имён колонок/enum/Record-полей — `grep` по коду.

@@ -55,18 +55,26 @@ Caller = владелец membership (`principal.userId`). Параметра us
 3. Cascade в одной транзакции:
    - DELETE `skladchina_participants` где `user_id=caller AND skladchina_id IN (SELECT id FROM skladchinas WHERE club_id=:clubId AND status='active')`.
    - DELETE `event_responses` где `user_id=caller AND event_id IN (SELECT id FROM events WHERE club_id=:clubId AND status IN ('upcoming','stage_1','stage_2'))`.
+   - DELETE `applications` где `user_id=caller AND club_id=:clubId AND status IN ('pending','approved')` — устраняет залипшие approved-but-unpaid состояния и **гарантирует, что повторное вступление в приватный клуб снова требует new заявки**.
 4. UPDATE `memberships`: `status='cancelled'`, `updated_at=now()`. Поля `joined_at` и `subscription_expires_at` НЕ трогаем (история).
 5. UPDATE `clubs.member_count -= 1`.
-6. НЕ трогаем: `user_club_reputation`, `transactions`, `applications`, прошлые завершённые события/сборы.
+6. НЕ трогаем: `user_club_reputation`, `transactions`, rejected/auto_rejected applications, прошлые завершённые события/сборы.
 
 ### Бизнес-правила (paid club)
 
 1. Найти membership active/grace_period → **404** если нет.
 2. Owner-check → **400** если caller=owner.
 3. UPDATE memberships: `status='cancelled'`, `updated_at=now()`. `subscription_expires_at` сохраняется.
-4. `clubs.member_count` НЕ декрементим — пользователь формально остаётся до expire.
-5. Cascade НЕ применяется — RSVP и членство в существующих сборах сохраняются до конца оплаченного периода.
-6. В новые сборы cancelled-пользователя нельзя добавить (см. Skladchina-интеграция).
+4. DELETE `applications` где `user_id=caller AND club_id=:clubId AND status IN ('pending','approved')` — убирает зависшую approved-but-unpaid application, иначе при перезагрузке клуб появлялся бы в «Ожидают оплаты» у пользователя и в «approved-but-unpaid applicants» у организатора.
+5. `clubs.member_count` НЕ декрементим — пользователь формально остаётся до expire.
+6. Cascade на `event_responses`/`skladchina_participants` НЕ применяется — RSVP и членство в существующих сборах сохраняются до конца оплаченного периода.
+7. В новые сборы cancelled-пользователя нельзя добавить (см. Skladchina-интеграция).
+
+### Видимость cancelled-в-периоде membership
+
+`MembershipRepository.findByUserId` (источник `GET /api/users/me/clubs`) возвращает membership со статусом `cancelled`, если `subscription_expires_at > now()`. Это значит, что paid-cancelled клуб остаётся в «Мои клубы → Активные» до истечения оплаченного периода. То же распространяется на `isMember` / `isActiveMemberInActiveClub` — cancelled-в-периоде пользователь сохраняет полный доступ (голосование, список участников, RSVP), как и обещает PRD §4.7.3 «Доступ сохраняется до конца оплаченного периода».
+
+После natural expire (`subscription_expires_at <= now`) пользователь автоматически перестаёт быть member для всех проверок без необходимости дополнительного эндпоинта.
 
 ### Изменения в `GET /api/clubs/{id}/members`
 
@@ -207,7 +215,7 @@ Confirm-modal:
 
 ## Риски и открытые вопросы
 
-- **Pre-existing gap (важно — для следующего PR в эпике)**: `MembershipRepository.isMember(userId, clubId)` возвращает `true` только для `status='active'`. Используется в `Stage2Service`, `VoteService`, `MemberService.getClubMembers` для access-control. Это значит, что **paid cancelled-в-периоде** пользователь, которому UI обещает «Доступ до DD MMMM YYYY», на самом деле получит **403** при попытке проголосовать в событии, увидеть список участников и т.п. ClubPage показывает табы для `isMember = active OR cancelled-in-period`, но реальные запросы провалятся. До PR-1 случай в проде практически не встречался (UI на cancel не было). **Backlog (рекомендуется до PR-2/PR-3)**: расширить `isMember` до `status IN ('active','cancelled') AND (subscription_expires_at IS NULL OR subscription_expires_at > now)`. Альтернатива — отдельный `hasAccess(userId, clubId)` и точечная замена call-sites.
+- **Resolved (закрыт в bug-fix-итерации этого PR)**: `MembershipRepository.isMember` / `isActiveMemberInActiveClub` / `findByUserId` теперь возвращают true для `status='cancelled' AND subscription_expires_at > now`. Это даёт paid-cancelled-в-периоде пользователю реальный доступ (голосование, список участников, моё членство), а не только UI-обещание. Существующий backlog-файл `docs/backlog/membership-ismember-cancelled-in-period.md` оставлен как trace; можно архивировать после следующего ревью.
 - **Open**: после `cancel` для paid → наступает natural expire (`subscription_expires_at < now`). Сейчас нет scheduled job, который выполнит cascade при expire. В результате могут остаться «висящие» `event_responses` и `skladchina_participants` для уже-не-member. **Backlog**: scheduled job `MembershipExpireProcessor` выполняет такой же cascade при переходе active/cancelled → expired.
 - **Decision**: `user_club_reputation` сохраняется при leave. Если пользователь повторно вступит в клуб — его прежние метрики возвращаются. Это разумный дефолт; если бизнес захочет «чистый старт» — переключаемся позже.
 - **Decision**: Pending applications при leave не удаляются. У active member pending application не должно быть по бизнес-инвариантам. Защита здесь избыточна.

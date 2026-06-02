@@ -362,7 +362,7 @@ GET /api/users/me/clubs
 См. формат в секции TASK-010 выше.
 
 ### Бизнес-правила
-- Возвращаются только membership'ы со статусом `active` или `grace_period`
+- Возвращаются membership'ы со статусом `active` / `grace_period`, **а также** `cancelled` при `subscription_expires_at > now` (paid-cancelled-в-периоде — см. [club-leave.md](club-leave.md) § «Видимость cancelled-в-периоде membership»)
 - Дополнительный фильтр: связанный `club.is_active = true` (soft-deleted клубы исключаются — см. PRD-Clubs.md §4.5.4)
 - Сортировка явно не задаётся — порядок зависит от БД (внутри одной транзакции стабилен)
 - Пустой список — валидный ответ (200 + `[]`)

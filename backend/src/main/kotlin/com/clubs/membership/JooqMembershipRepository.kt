@@ -45,17 +45,25 @@ class JooqMembershipRepository(
             .fetchOne()
             ?.let(mapper::toDomain)
 
-    override fun findByUserId(userId: UUID): List<Membership> =
-        dsl.select(*MEMBERSHIPS.fields())
+    override fun findByUserId(userId: UUID): List<Membership> {
+        val now = OffsetDateTime.now()
+        return dsl.select(*MEMBERSHIPS.fields())
             .from(MEMBERSHIPS)
             .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))
             .where(
                 MEMBERSHIPS.USER_ID.eq(userId)
-                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period))
                     .and(CLUBS.IS_ACTIVE.eq(true))
+                    .and(
+                        MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period)
+                            .or(
+                                MEMBERSHIPS.STATUS.eq(MembershipStatus.cancelled)
+                                    .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.greaterThan(now))
+                            )
+                    )
             )
             .fetchInto(MembershipsRecord::class.java)
             .map(mapper::toDomain)
+    }
 
     override fun findClubMembersWithUserInfo(clubId: UUID, includeCancelledInPeriod: Boolean): List<ClubMemberInfo> {
         val now = OffsetDateTime.now()
@@ -153,29 +161,45 @@ class JooqMembershipRepository(
                 )
             }
 
-    override fun isMember(userId: UUID, clubId: UUID): Boolean =
-        dsl.fetchExists(
+    override fun isMember(userId: UUID, clubId: UUID): Boolean {
+        val now = OffsetDateTime.now()
+        return dsl.fetchExists(
             dsl.selectOne()
                 .from(MEMBERSHIPS)
                 .where(
                     MEMBERSHIPS.USER_ID.eq(userId)
                         .and(MEMBERSHIPS.CLUB_ID.eq(clubId))
-                        .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active))
+                        .and(
+                            MEMBERSHIPS.STATUS.eq(MembershipStatus.active)
+                                .or(
+                                    MEMBERSHIPS.STATUS.eq(MembershipStatus.cancelled)
+                                        .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.greaterThan(now))
+                                )
+                        )
                 )
         )
+    }
 
-    override fun isActiveMemberInActiveClub(userId: UUID, clubId: UUID): Boolean =
-        dsl.fetchExists(
+    override fun isActiveMemberInActiveClub(userId: UUID, clubId: UUID): Boolean {
+        val now = OffsetDateTime.now()
+        return dsl.fetchExists(
             dsl.selectOne()
                 .from(MEMBERSHIPS)
                 .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))
                 .where(
                     MEMBERSHIPS.USER_ID.eq(userId)
                         .and(MEMBERSHIPS.CLUB_ID.eq(clubId))
-                        .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active))
+                        .and(
+                            MEMBERSHIPS.STATUS.eq(MembershipStatus.active)
+                                .or(
+                                    MEMBERSHIPS.STATUS.eq(MembershipStatus.cancelled)
+                                        .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.greaterThan(now))
+                                )
+                        )
                         .and(CLUBS.IS_ACTIVE.eq(true))
                 )
         )
+    }
 
     override fun countActiveByClubId(clubId: UUID): Int =
         dsl.selectCount().from(MEMBERSHIPS)

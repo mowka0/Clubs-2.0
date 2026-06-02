@@ -688,6 +688,52 @@ html, body {
   display: flex;
   gap: 16px;
   align-items: flex-start;
+  position: relative;
+}
+
+/* Compact leave-club affordance in the top-right of the hero. Active members
+   only (owner / cancelled-in-period / visitor never see it). Anchored to the
+   cover so long club names don't push it off the row. */
+.cp-leave-icon {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--brand-hairline-2);
+  background: rgba(26, 33, 56, 0.55);
+  color: var(--brand-ink-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+  padding: 0;
+  font-family: inherit;
+}
+.cp-leave-icon:hover,
+.cp-leave-icon:focus-visible {
+  color: #FF8B8B;
+  border-color: rgba(255, 139, 139, 0.45);
+  background: rgba(255, 139, 139, 0.08);
+  outline: none;
+}
+.cp-leave-icon:active { transform: scale(0.96); }
+
+/* Read-only banner shown to paid members who already cancelled the
+   subscription but are still inside the paid period (membership still grants
+   access; banner just communicates the lifecycle state). */
+.cp-cancelled-note {
+  margin: 4px 20px 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--brand-brass-soft);
+  border: 1px solid rgba(201, 160, 99, 0.28);
+  color: var(--brand-brass-deep);
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+  text-align: center;
 }
 .cp-avt {
   width: 88px; height: 88px;
@@ -3618,6 +3664,9 @@ select {
 .club-card.awaiting-payment-card {
   cursor: pointer;
   width: 100%;
+  /* button defaults to content-box → width:100% + padding + border overflow
+     the parent column. Force border-box so the card stays inside .mc-list. */
+  box-sizing: border-box;
 }
 .club-card.awaiting-payment-card:disabled {
   opacity: 0.6;

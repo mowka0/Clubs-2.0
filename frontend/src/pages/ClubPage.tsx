@@ -81,6 +81,14 @@ const ClosedChipIcon: FC = () => (
   </svg>
 );
 
+const LeaveIcon: FC = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <path d="M16 17l5-5-5-5" />
+    <path d="M21 12H9" />
+  </svg>
+);
+
 export const ClubPage: FC = () => {
   useBackButton(true);
   const { id } = useParams<{ id: string }>();
@@ -221,13 +229,20 @@ export const ClubPage: FC = () => {
   };
 
   const handleConfirmLeave = () => {
-    if (!id) return;
+    if (!id || !club) return;
     setLeaveError(null);
     haptic.impact('medium');
+    const isPaidLeave = club.subscriptionPrice > 0;
     leaveMutation.mutate(id, {
       onSuccess: () => {
         haptic.notify('success');
         setShowLeaveModal(false);
+        if (isPaidLeave) {
+          // Paid leave keeps the membership row (status=cancelled,
+          // subscription_expires_at in the future) — stay on the club so the
+          // cancelled-banner takes over from the leave icon.
+          return;
+        }
         navigate('/my-clubs', {
           replace: true,
           state: { toast: `Вы вышли из клуба «${club.name}»` },
@@ -335,51 +350,8 @@ export const ClubPage: FC = () => {
     return null;
   };
 
-  // Footer for users who are already inside the club. Owner has no exit CTA
-  // (transfer/delete arrive in later PRs); cancelled-paid sees a read-only
-  // note; everyone else sees the leave button. Hidden when the page is in
-  // the visitor flow (no `showTabs`).
-  const renderMemberFooter = () => {
-    if (isOwner) return null;
-    if (isCancelledInPeriod && membership?.subscriptionExpiresAt) {
-      return (
-        <div className="cp-cta-wrap">
-          <div
-            className="cp-cta outline"
-            role="status"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'default',
-              fontWeight: 500,
-              fontSize: 13.5,
-              lineHeight: 1.35,
-              textAlign: 'center',
-              padding: '0 16px',
-            }}
-          >
-            Подписка отменена. Доступ до {formatExpiryDate(membership.subscriptionExpiresAt)}
-          </div>
-        </div>
-      );
-    }
-    if (isActiveMember) {
-      return (
-        <div className="cp-cta-wrap">
-          <button
-            type="button"
-            className="cp-cta outline"
-            onClick={handleOpenLeaveModal}
-            style={{ color: 'var(--tgui--destructive_text_color, #E53935)' }}
-          >
-            Выйти из клуба
-          </button>
-        </div>
-      );
-    }
-    return null;
-  };
+  const showLeaveIcon = !isOwner && isActiveMember;
+  const showCancelledNote = !isOwner && isCancelledInPeriod && membership?.subscriptionExpiresAt;
 
   const leaveVariant: 'free' | 'paid' = club.subscriptionPrice > 0 ? 'paid' : 'free';
   const leavePaidUntilLabel = membership?.subscriptionExpiresAt
@@ -428,7 +400,24 @@ export const ClubPage: FC = () => {
             {roleBadgeLabel && <span className="cp-chip role">{roleBadgeLabel}</span>}
           </div>
         </div>
+        {showLeaveIcon && (
+          <button
+            type="button"
+            className="cp-leave-icon"
+            onClick={handleOpenLeaveModal}
+            aria-label="Выйти из клуба"
+            title="Выйти из клуба"
+          >
+            <LeaveIcon />
+          </button>
+        )}
       </div>
+
+      {showCancelledNote && membership?.subscriptionExpiresAt && (
+        <div className="cp-cancelled-note" role="status">
+          Подписка отменена · доступ до {formatExpiryDate(membership.subscriptionExpiresAt)}
+        </div>
+      )}
 
       {/* Stats row */}
       <div className="cp-stats">
@@ -505,8 +494,6 @@ export const ClubPage: FC = () => {
 
           {activeTab === 'activities' && <ClubActivitiesTab clubId={id} />}
           {activeTab === 'members' && <ClubMembersTab clubId={id} isOrganizer={isOrganizer} />}
-
-          {renderMemberFooter()}
         </>
       )}
 

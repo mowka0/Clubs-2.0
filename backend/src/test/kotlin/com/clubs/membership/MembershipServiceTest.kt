@@ -1,5 +1,6 @@
 package com.clubs.membership
 
+import com.clubs.application.ApplicationRepository
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
@@ -33,6 +34,7 @@ class MembershipServiceTest {
     private lateinit var freeMembershipActivator: FreeMembershipActivator
     private lateinit var eventResponseRepository: EventResponseRepository
     private lateinit var skladchinaRepository: SkladchinaRepository
+    private lateinit var applicationRepository: ApplicationRepository
     private lateinit var membershipService: MembershipService
 
     @BeforeEach
@@ -44,6 +46,7 @@ class MembershipServiceTest {
         freeMembershipActivator = mockk(relaxed = true)
         eventResponseRepository = mockk(relaxed = true)
         skladchinaRepository = mockk(relaxed = true)
+        applicationRepository = mockk(relaxed = true)
         membershipService = MembershipService(
             membershipRepository,
             clubRepository,
@@ -51,7 +54,8 @@ class MembershipServiceTest {
             mapper,
             freeMembershipActivator,
             eventResponseRepository,
-            skladchinaRepository
+            skladchinaRepository,
+            applicationRepository
         )
     }
 
@@ -362,6 +366,7 @@ class MembershipServiceTest {
         assertEquals(clubId, result.clubId)
         verify(exactly = 1) { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(userId, clubId) }
         verify(exactly = 1) { eventResponseRepository.deleteByUserAndClubAndActiveEvents(userId, clubId) }
+        verify(exactly = 1) { applicationRepository.deleteActiveByUserAndClub(userId, clubId) }
         verify(exactly = 1) { membershipRepository.cancel(activeMembership.id) }
         verify(exactly = 1) { clubRepository.decrementMemberCountSafely(clubId, 1) }
     }
@@ -383,6 +388,7 @@ class MembershipServiceTest {
         assertEquals(userId, result.userId)
         assertEquals(clubId, result.clubId)
         verify(exactly = 1) { membershipRepository.cancel(activeMembership.id) }
+        verify(exactly = 1) { applicationRepository.deleteActiveByUserAndClub(userId, clubId) }
         verify(exactly = 0) { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(any(), any()) }
         verify(exactly = 0) { eventResponseRepository.deleteByUserAndClubAndActiveEvents(any(), any()) }
         verify(exactly = 0) { clubRepository.decrementMemberCountSafely(any(), any()) }

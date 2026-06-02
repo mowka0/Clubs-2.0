@@ -10,6 +10,16 @@ interface ApplicationRepository {
     fun create(userId: UUID, clubId: UUID, answerText: String?): Application
     fun updateStatus(id: UUID, status: ApplicationStatus, reason: String? = null): Application
 
+    /**
+     * Hard-deletes any pending or approved application row for the (user, club)
+     * pair. Used by `MembershipService.leaveClub` so a returning user has to
+     * re-apply from scratch (free private club) and is no longer surfaced in
+     * the «Ожидают оплаты» list with a stale approval (paid club). Rejected /
+     * auto_rejected rows are preserved — they remain as audit history for the
+     * organizer's inbox decisions.
+     */
+    fun deleteActiveByUserAndClub(userId: UUID, clubId: UUID): Int
+
     // Lookups
     fun findById(id: UUID): Application?
     fun findByClubId(clubId: UUID, status: ApplicationStatus?): List<Application>

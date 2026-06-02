@@ -1,5 +1,6 @@
 package com.clubs.membership
 
+import com.clubs.application.ApplicationRepository
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
@@ -23,7 +24,8 @@ class MembershipService(
     private val mapper: MembershipMapper,
     private val freeMembershipActivator: FreeMembershipActivator,
     private val eventResponseRepository: EventResponseRepository,
-    private val skladchinaRepository: SkladchinaRepository
+    private val skladchinaRepository: SkladchinaRepository,
+    private val applicationRepository: ApplicationRepository
 ) {
 
     private val log = LoggerFactory.getLogger(MembershipService::class.java)
@@ -113,20 +115,25 @@ class MembershipService(
 
     private fun leavePaidClub(membership: Membership, clubId: UUID, userId: UUID): MembershipDto {
         membershipRepository.cancel(membership.id)
-        log.info("User cancelled paid subscription via /leave: clubId={} userId={}", clubId, userId)
+        val cascadedApplications = applicationRepository.deleteActiveByUserAndClub(userId, clubId)
+        log.info(
+            "User cancelled paid subscription via /leave: clubId={} userId={} cascadedApplications={}",
+            clubId, userId, cascadedApplications
+        )
         return mapper.toDto(membership.copy(status = MembershipStatus.cancelled))
     }
 
     private fun leaveFreeClub(membership: Membership, clubId: UUID, userId: UUID): MembershipDto {
         val cascadedSkladchinas = skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(userId, clubId)
         val cascadedEventResponses = eventResponseRepository.deleteByUserAndClubAndActiveEvents(userId, clubId)
+        val cascadedApplications = applicationRepository.deleteActiveByUserAndClub(userId, clubId)
 
         membershipRepository.cancel(membership.id)
         clubRepository.decrementMemberCountSafely(clubId, 1)
 
         log.info(
-            "User left free club: clubId={} userId={} cascadedSkladchinas={} cascadedEventResponses={}",
-            clubId, userId, cascadedSkladchinas, cascadedEventResponses
+            "User left free club: clubId={} userId={} cascadedSkladchinas={} cascadedEventResponses={} cascadedApplications={}",
+            clubId, userId, cascadedSkladchinas, cascadedEventResponses, cascadedApplications
         )
         return mapper.toDto(membership.copy(status = MembershipStatus.cancelled))
     }
