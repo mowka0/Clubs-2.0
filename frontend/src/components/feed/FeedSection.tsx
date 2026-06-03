@@ -9,9 +9,9 @@ interface FeedSectionProps {
 
 export const FeedSection: FC<FeedSectionProps> = ({ title, count, accent = false, children }) => (
   <>
-    <div className={accent ? 'feed-section-label accent' : 'feed-section-label'}>
-      {title} <span className="count">· {count}</span>
+    <div className="rd-section-sub-h" style={accent ? { color: 'var(--accent)' } : undefined}>
+      {title} <span className="rd-count">· {count}</span>
     </div>
-    <div className="feed-list">{children}</div>
+    <div>{children}</div>
   </>
 );

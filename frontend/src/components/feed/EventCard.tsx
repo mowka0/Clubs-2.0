@@ -11,20 +11,16 @@ interface Badge {
   accent: boolean;
 }
 
-const DATE_FORMATTER = new Intl.DateTimeFormat('ru-RU', {
-  weekday: 'short',
-  day: 'numeric',
-  month: 'long',
-});
+const WEEKDAY_FORMATTER = new Intl.DateTimeFormat('ru-RU', { weekday: 'short' });
 
 const TIME_FORMATTER = new Intl.DateTimeFormat('ru-RU', {
   hour: '2-digit',
   minute: '2-digit',
 });
 
-function formatDate(iso: string): { date: string; time: string } {
+function formatDateBadge(iso: string): string {
   const d = new Date(iso);
-  return { date: DATE_FORMATTER.format(d), time: TIME_FORMATTER.format(d) };
+  return `${WEEKDAY_FORMATTER.format(d).toUpperCase()} · ${TIME_FORMATTER.format(d)}`;
 }
 
 function getInitials(name: string): string {
@@ -67,40 +63,38 @@ function fillRatio(event: MyEventListItemDto): number {
 }
 
 export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
-  const { date, time } = formatDate(event.eventDatetime);
   const badge = pickBadge(event);
-  const stats = `${currentCount(event)}/${event.participantLimit}`;
+  const stats = `${currentCount(event)}/${event.participantLimit} мест`;
   const ratio = fillRatio(event);
   const clubInitials = getInitials(event.clubName);
-
-  const badgeClass = badge?.accent
-    ? 'feed-card-badge accent'
-    : 'feed-card-badge';
+  const meta = [event.locationText, stats].filter(Boolean).join(' · ');
 
   return (
-    <button type="button" className="feed-card" onClick={onClick}>
-      <div className="feed-card-date">
-        <span className="date">{date}</span>
-        <span className="time">{time}</span>
+    <button type="button" className="rd-activity-card" onClick={onClick}>
+      <div
+        className="rd-act-cover"
+        style={event.clubAvatarUrl ? { backgroundImage: `url(${event.clubAvatarUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+      >
+        <span className="rd-type-badge">СОБЫТИЕ</span>
+        <span className="rd-date-badge">{formatDateBadge(event.eventDatetime)}</span>
       </div>
-      <div className="feed-card-body">
-        <div className="title">{event.title}</div>
-        <div className="place">{event.locationText}</div>
-        <div className="club">
-          <span className="club-avt">
-            {event.clubAvatarUrl
-              ? <img src={event.clubAvatarUrl} alt="" />
-              : clubInitials}
+      <div className="rd-act-body">
+        <div className="rd-act-club-row">
+          <span className="rd-club-avt">
+            {event.clubAvatarUrl ? <img src={event.clubAvatarUrl} alt="" /> : clubInitials}
           </span>
-          <span className="club-name">{event.clubName}</span>
+          <span>{event.clubName}</span>
         </div>
-        <div className="footer-row">
-          {badge && <span className={badgeClass}>{badge.text}</span>}
-          <span className="stats">{stats}</span>
+        <div className="rd-act-ttl">{event.title}</div>
+        <div className="rd-act-meta">{meta}</div>
+        <div className="rd-progress" style={{ marginTop: 8 }} aria-hidden="true">
+          <span className="rd-fill" style={{ width: `${ratio * 100}%`, display: 'block', height: '100%' }} />
         </div>
-        <div className="feed-card-progress" aria-hidden="true">
-          <span className="bar" style={{ width: `${ratio * 100}%` }} />
-        </div>
+        {badge && (
+          <div className="rd-badges-row">
+            <span className={`rd-badge ${badge.accent ? 'rd-warn' : 'rd-neutral'}`}>{badge.text}</span>
+          </div>
+        )}
       </div>
     </button>
   );

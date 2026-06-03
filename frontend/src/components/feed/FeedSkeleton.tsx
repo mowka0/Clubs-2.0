@@ -5,12 +5,15 @@ interface FeedSkeletonProps {
 }
 
 export const FeedSkeleton: FC<FeedSkeletonProps> = ({ count = 3 }) => (
-  <div className="feed-list" aria-busy="true" aria-label="Загружаем события">
+  <div aria-busy="true" aria-label="Загружаем активности">
     {Array.from({ length: count }).map((_, i) => (
-      <div className="feed-skeleton" key={i}>
-        <div className="sk-row sk-row-date" />
-        <div className="sk-row sk-row-title" />
-        <div className="sk-row sk-row-meta" />
+      <div className="rd-skeleton" key={i}>
+        <div className="rd-sk-cover" />
+        <div className="rd-sk-body">
+          <div className="rd-sk-line rd-short" />
+          <div className="rd-sk-line" />
+          <div className="rd-sk-line rd-short" />
+        </div>
       </div>
     ))}
   </div>

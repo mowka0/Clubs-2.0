@@ -16,7 +16,6 @@ import {
 import { queryKeys } from '../queries/queryKeys';
 import { Toast } from '../components/Toast';
 import { CreateClubModal } from '../components/CreateClubModal';
-import { BrandBackdrop } from '../components/BrandBackdrop';
 import { ApplicationReviewModal } from '../components/applications/ApplicationReviewModal';
 import { formatPeerSignal } from '../features/applications-inbox/lib/peer-signal-format';
 import { getClub } from '../api/clubs';
@@ -106,38 +105,23 @@ const MyClubCard: FC<MyClubCardProps> = ({ membership, club, isOrganizer, onClic
   const name = club?.name ?? `Клуб ${membership.clubId.slice(0, 8)}…`;
   const category = club?.category ?? 'other';
   const initials = club ? getInitials(club.name) : '·';
-  const capacityPct = club && club.memberLimit > 0
-    ? Math.min(100, Math.round((club.memberCount / club.memberLimit) * 100))
-    : 0;
-  const almostFull = capacityPct >= 80;
-
-  const avtClass = `avt${isOrganizer ? ' organizer-ring' : ''}`;
+  const meta = [
+    isOrganizer ? 'организатор' : 'участник',
+    club ? (CATEGORY_LABELS[category] ?? category) : null,
+    club ? `${club.memberCount} / ${club.memberLimit}` : null,
+  ].filter(Boolean).join(' · ');
 
   return (
-    <button type="button" className="club-card" onClick={onClick}>
-      <span className={avtClass} data-cat={category}>
+    <button type="button" className="rd-rep-row" onClick={onClick}>
+      <span className="rd-ico">
         {club?.avatarUrl ? <img src={club.avatarUrl} alt="" /> : initials}
       </span>
-      <div className="body">
-        <div className="top">
-          <span className="name">{name}</span>
-          {isOrganizer && (
-            <span className="role-crown" aria-label="Вы организатор" title="Вы организатор">
-              👑
-            </span>
-          )}
+      <div className="rd-info">
+        <div className="rd-ttl">
+          {name}
+          {isOrganizer && <span aria-label="Вы организатор" title="Вы организатор"> 👑</span>}
         </div>
-        <div className="meta">
-          {club && <span className="cat">{CATEGORY_LABELS[category] ?? category}</span>}
-        </div>
-        {club && (
-          <div className="capacity">
-            <div className="capacity-bar"><div className="fill" style={{ width: `${capacityPct}%` }} /></div>
-            <span className={`capacity-num${almostFull ? ' almost-full' : ''}`}>
-              {club.memberCount} / {club.memberLimit}
-            </span>
-          </div>
-        )}
+        <div className="rd-met">{meta}</div>
       </div>
     </button>
   );
@@ -163,24 +147,23 @@ const AppCard: FC<AppCardProps> = ({ application, club, awaitingPayment, onClick
   // approved + still in awaiting-payment list = invoice unpaid. Surface the
   // lifecycle state ("Ожидает оплаты") rather than the misleading "Одобрено".
   const statusLabel = awaitingPayment ? AWAITING_PAYMENT_LABEL : (STATUS_LABELS[status] ?? status);
-  const statusClass = awaitingPayment ? 'awaiting-payment' : status;
-  const showReason =
-    (status === 'rejected' || status === 'auto_rejected') &&
-    Boolean(application.rejectedReason && application.rejectedReason.trim());
+  const isRejected = status === 'rejected' || status === 'auto_rejected';
+  const badgeTone = awaitingPayment ? 'rd-warn' : isRejected ? 'rd-decline' : status === 'approved' ? 'rd-going' : 'rd-neutral';
+  const showReason = isRejected && Boolean(application.rejectedReason && application.rejectedReason.trim());
 
   return (
-    <button type="button" className="mc-app" onClick={onClick}>
-      <span className="avt">{initials}</span>
-      <div className="body">
-        <span className="name">{name}</span>
+    <button type="button" className="rd-rep-row" onClick={onClick}>
+      <span className="rd-ico">{initials}</span>
+      <div className="rd-info">
+        <div className="rd-ttl">{name}</div>
         {application.createdAt && (
-          <span className="meta">Подана {formatApplicationDate(application.createdAt)}</span>
+          <div className="rd-met">Подана {formatApplicationDate(application.createdAt)}</div>
         )}
-        {showReason && (
-          <span className="reason">Причина: {application.rejectedReason}</span>
-        )}
+        {showReason && <div className="rd-met">Причина: {application.rejectedReason}</div>}
       </div>
-      <span className={`status ${statusClass}`}>{statusLabel}</span>
+      <div className="rd-score">
+        <span className={`rd-badge ${badgeTone}`}>{statusLabel}</span>
+      </div>
     </button>
   );
 };
@@ -201,20 +184,19 @@ const PendingAppCard: FC<PendingAppCardProps> = ({ pending, onClick }) => {
       : 'Время истекло';
 
   return (
-    <button type="button" className="mc-app pending-app-card" onClick={onClick}>
-      <span className="avt">
+    <button type="button" className="rd-rep-row" onClick={onClick}>
+      <span className="rd-ico">
         {applicant.avatarUrl ? <img src={applicant.avatarUrl} alt="" /> : initials}
       </span>
-      <div className="body">
-        <span className="name">
+      <div className="rd-info">
+        <div className="rd-ttl">
           {fullName}
           {applicant.telegramUsername && (
-            <span className="handle"> · @{applicant.telegramUsername}</span>
+            <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}> · @{applicant.telegramUsername}</span>
           )}
-        </span>
-        <span className="meta peer">{formatPeerSignal(peerStats)}</span>
-        <span className="club-chip">{club.name}</span>
-        <span className={`hours-hint${urgent ? ' urgent' : ''}`}>{hoursLabel}</span>
+        </div>
+        <div className="rd-met">{club.name} · {formatPeerSignal(peerStats)}</div>
+        <div className="rd-met" style={urgent ? { color: 'var(--accent)' } : undefined}>{hoursLabel}</div>
       </div>
     </button>
   );
@@ -269,32 +251,28 @@ const AwaitingPaymentCard: FC<AwaitingPaymentCardProps> = ({ item }) => {
     : `Цена: ${item.subscriptionPrice}⭐ · Нажмите чтобы оплатить`;
 
   return (
-    <div className="awaiting-payment-card-wrap">
+    <>
       <button
         type="button"
-        className="club-card awaiting-payment-card"
+        className="rd-rep-row"
         onClick={handleResend}
         disabled={resendMutation.isPending}
       >
-        <span className="avt">
+        <span className="rd-ico">
           {item.club.avatarUrl ? <img src={item.club.avatarUrl} alt="" /> : initials}
         </span>
-        <div className="body">
-          <div className="top">
-            <span className="name">{item.club.name}</span>
-          </div>
-          <div className="meta">
-            <span className="cat">{formatRelativeApprovedAt(item.approvedAt)}</span>
-          </div>
-          <div className="capacity">
-            <span className="awaiting-pay-inline">{inlineLabel}</span>
-          </div>
+        <div className="rd-info">
+          <div className="rd-ttl">{item.club.name}</div>
+          <div className="rd-met">{formatRelativeApprovedAt(item.approvedAt)}</div>
+          <div className="rd-met" style={{ color: 'var(--accent)' }}>{inlineLabel}</div>
         </div>
       </button>
       {feedback && (
-        <span className={`awaiting-pay-toast ${feedback.kind}`}>{feedback.text}</span>
+        <div className="rd-cta-hint" style={{ color: feedback.kind === 'error' ? 'var(--danger)' : 'var(--live)', textAlign: 'left' }}>
+          {feedback.text}
+        </div>
       )}
-    </div>
+    </>
   );
 };
 
@@ -318,20 +296,22 @@ const OrganizerAwaitingPaymentRow: FC<OrganizerAwaitingPaymentRowProps> = ({ ite
   const relative = formatRelativeApprovedAt(item.approvedAt);
 
   return (
-    <div className="mc-app organizer-pending-row">
-      <span className="avt">
+    <div className="rd-rep-row">
+      <span className="rd-ico">
         {item.avatarUrl ? <img src={item.avatarUrl} alt="" /> : initials}
       </span>
-      <div className="body">
-        <span className="name">
+      <div className="rd-info">
+        <div className="rd-ttl">
           {fullName}
           {item.telegramUsername && (
-            <span className="handle"> · @{item.telegramUsername}</span>
+            <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}> · @{item.telegramUsername}</span>
           )}
-        </span>
-        <span className="meta">{item.club.name} · {relative}</span>
+        </div>
+        <div className="rd-met">{item.club.name} · {relative}</div>
       </div>
-      <span className="status awaiting-payment">{AWAITING_PAYMENT_LABEL}</span>
+      <div className="rd-score">
+        <span className="rd-badge rd-warn">{AWAITING_PAYMENT_LABEL}</span>
+      </div>
     </div>
   );
 };
@@ -499,48 +479,46 @@ export const MyClubsPage: FC = () => {
   };
 
   return (
-    <div className="brand-page">
-      <BrandBackdrop />
-
-      {/* Hero */}
-      <header className="mc-hero">
-        {user?.firstName && (
-          <div className="greeting">Привет, {user.firstName} <span aria-hidden="true">👋</span></div>
-        )}
-        <div className="mc-hero-row">
-          <h1>
-            Твои <span className="accent">клубы</span>
-          </h1>
-          <button type="button" className="mc-create-btn" onClick={openCreate}>
-            <span className="plus">+</span>
-            Создать
-          </button>
+    <div className="rd-page">
+      {/* Header */}
+      <header className="rd-header">
+        <div className="rd-info">
+          <div className="rd-ft-eyebrow">
+            {user?.firstName ? `Привет, ${user.firstName} 👋` : 'В сообществе'}
+          </div>
+          <div className="rd-page-h">
+            Мои клубы{myClubs.length > 0 ? ` · ${myClubs.length}` : ''}
+          </div>
+          {(myClubs.length > 0 || applications.length > 0) && (
+            <div className="rd-sub" style={{ marginTop: 2, color: 'var(--text-dim)', fontSize: 13 }}>
+              {summaryLine(myClubs.length, applications.length)}
+            </div>
+          )}
         </div>
-        {(myClubs.length > 0 || applications.length > 0) && (
-          <div className="sub">{summaryLine(myClubs.length, applications.length)}</div>
-        )}
+        <button type="button" className="rd-city-pill" onClick={openCreate} aria-label="Создать клуб">
+          <span aria-hidden="true">+</span> Клуб
+        </button>
       </header>
 
       {/* Loading spinner */}
       {loading && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+        <div className="rd-spinner-row">
           <Spinner size="m" />
         </div>
       )}
 
       {/* Empty state */}
       {empty && (
-        <div className="mc-empty">
-          <div className="ico">{PEOPLE_ICON}</div>
-          <div className="title">Пока пусто</div>
-          <div className="sub">
+        <div className="rd-glass rd-empty">
+          <div style={{ color: 'var(--text-faint)', marginBottom: 8 }}>{PEOPLE_ICON}</div>
+          <div className="rd-title">Пока пусто</div>
+          <div className="rd-sub">
             Найдите подходящий клуб в&nbsp;«Поиске» или создайте свой — будете звать единомышленников сами.
           </div>
-          <div className="actions">
-            <button type="button" className="ghost-btn" onClick={handleSearchClick}>Открыть поиск</button>
-            <button type="button" className="mc-create-btn" onClick={openCreate}>
-              <span className="plus">+</span>
-              Создать клуб
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button type="button" className="rd-ghost-btn" onClick={handleSearchClick}>Открыть поиск</button>
+            <button type="button" className="rd-btn-primary" style={{ width: 'auto', padding: '10px 18px' }} onClick={openCreate}>
+              + Создать клуб
             </button>
           </div>
         </div>
@@ -558,10 +536,10 @@ export const MyClubsPage: FC = () => {
       {/* Awaiting payment — applicant must (re)open the Stars invoice */}
       {!loading && awaitingPayment.length > 0 && (
         <>
-          <div className="mc-section-label">
-            Ожидают оплаты <span className="count">· {awaitingPayment.length}</span>
+          <div className="rd-section-sub-h">
+            Ожидают оплаты <span className="rd-count">· {awaitingPayment.length}</span>
           </div>
-          <div className="mc-list">
+          <div className="rd-glass rd-rep-panel">
             {awaitingPayment.map((item) => (
               <AwaitingPaymentCard key={item.applicationId} item={item} />
             ))}
@@ -571,32 +549,31 @@ export const MyClubsPage: FC = () => {
 
       {/* Organizer cross-club inbox — pending applications across all owned clubs */}
       {!loading && pendingInbox.length > 0 && (
-        <div ref={inboxSectionRef}>
-          <div className="mc-section-label">
-            Заявки на рассмотрении <span className="count">· {pendingInbox.length}</span>
+        <div ref={inboxSectionRef} className="rd-glass-strong" style={{ padding: 0, marginBottom: 18 }}>
+          <div className="rd-inbox-head">
+            <div className="rd-eyebrow">Заявки</div>
+            <div className="rd-title">{pendingInbox.length} на рассмотрении</div>
           </div>
-          <div className="mc-list">
-            {pendingInbox.map((p) => (
-              <PendingAppCard
-                key={p.applicationId}
-                pending={p}
-                onClick={() => {
-                  haptic.impact('light');
-                  setReviewing(p);
-                }}
-              />
-            ))}
-          </div>
+          {pendingInbox.map((p) => (
+            <PendingAppCard
+              key={p.applicationId}
+              pending={p}
+              onClick={() => {
+                haptic.impact('light');
+                setReviewing(p);
+              }}
+            />
+          ))}
         </div>
       )}
 
       {/* Organizer cross-club awaiting-payment — applicants approved but unpaid */}
       {!loading && organizerAwaitingPayment.length > 0 && (
         <>
-          <div className="mc-section-label">
-            Ожидают оплаты от заявителей <span className="count">· {organizerAwaitingPayment.length}</span>
+          <div className="rd-section-sub-h">
+            Ожидают оплаты от заявителей <span className="rd-count">· {organizerAwaitingPayment.length}</span>
           </div>
-          <div className="mc-list">
+          <div className="rd-glass rd-rep-panel">
             {organizerAwaitingPayment.map((item) => (
               <OrganizerAwaitingPaymentRow key={item.applicationId} item={item} />
             ))}
@@ -607,10 +584,10 @@ export const MyClubsPage: FC = () => {
       {/* Active clubs */}
       {!loading && myClubs.length > 0 && (
         <>
-          <div className="mc-section-label">
-            Активные <span className="count">· {myClubs.length}</span>
+          <div className="rd-section-sub-h">
+            Где я состою <span className="rd-count">· {myClubs.length}</span>
           </div>
-          <div className="mc-list">
+          <div className="rd-glass rd-rep-panel">
             {myClubs.map((m) => {
               const club = clubDetails[m.clubId];
               const isOrganizer = m.role === 'organizer' || club?.ownerId === user?.id;
@@ -631,10 +608,10 @@ export const MyClubsPage: FC = () => {
       {/* Applications — applicant-side pending/rejected */}
       {!loading && applications.length > 0 && (
         <>
-          <div className="mc-section-label">
-            Заявки <span className="count">· {applications.length}</span>
+          <div className="rd-section-sub-h">
+            Заявки <span className="rd-count">· {applications.length}</span>
           </div>
-          <div className="mc-list">
+          <div className="rd-glass rd-rep-panel">
             {applications.map((app) => (
               <AppCard
                 key={app.id}
