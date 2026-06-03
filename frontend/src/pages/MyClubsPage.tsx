@@ -449,6 +449,19 @@ export const MyClubsPage: FC = () => {
     completeFreeMutation,
   ]);
 
+  // Inbox grouped by addressee (see docs/modules/my-clubs-unified.md):
+  //  - «Мои заявки» (outgoing): approved-awaiting-payment + pending/rejected.
+  //    Awaiting-payment apps render as rich AwaitingPaymentCard, so exclude
+  //    them from the plain AppCard list to avoid duplication.
+  //  - «Заявки в мои клубы» (organizer inbox): pending review + applicants
+  //    who were approved but haven't paid yet.
+  const myOtherApps = useMemo(
+    () => applications.filter((a) => !awaitingPaymentIds.has(a.id)),
+    [applications, awaitingPaymentIds],
+  );
+  const myApplicationsCount = awaitingPayment.length + myOtherApps.length;
+  const organizerInboxCount = pendingInbox.length + organizerAwaitingPayment.length;
+
   const loading = myClubsQuery.isPending || applicationsQuery.isPending;
   const empty =
     !loading &&
@@ -525,55 +538,52 @@ export const MyClubsPage: FC = () => {
       )}
 
       {/*
-        Section order (top → bottom): see docs/modules/my-clubs-unified.md.
-        1. «Ожидают оплаты» — applicant-side urgent CTA (re-send Stars invoice).
-        2. «Заявки на рассмотрении» — organizer-side cross-club inbox.
-        3. «Ожидают оплаты от заявителей» — organizer-side cross-club pending payments.
-        4. «Активные клубы» — current memberships.
-        5. «Заявки» — applicant-side pending/rejected applications.
+        Sections grouped by addressee (see docs/modules/my-clubs-unified.md):
+        1. «Мои заявки» — applicant-side: awaiting-payment + pending/rejected.
+        2. «Заявки в мои клубы» — organizer-side: pending review + applicants awaiting payment.
+        3. «Где я состою» — current memberships.
       */}
 
-      {/* Awaiting payment — applicant must (re)open the Stars invoice */}
-      {!loading && awaitingPayment.length > 0 && (
+      {/* 1. My applications (outgoing) — payment CTA + pending/rejected */}
+      {!loading && myApplicationsCount > 0 && (
         <>
           <div className="rd-section-sub-h">
-            Ожидают оплаты <span className="rd-count">· {awaitingPayment.length}</span>
+            Мои заявки <span className="rd-count">· {myApplicationsCount}</span>
           </div>
           <div className="rd-glass rd-rep-panel">
             {awaitingPayment.map((item) => (
               <AwaitingPaymentCard key={item.applicationId} item={item} />
             ))}
+            {myOtherApps.map((app) => (
+              <AppCard
+                key={app.id}
+                application={app}
+                club={clubDetails[app.clubId]}
+                awaitingPayment={false}
+                onClick={() => handleClubClick(app.clubId)}
+              />
+            ))}
           </div>
         </>
       )}
 
-      {/* Organizer cross-club inbox — pending applications across all owned clubs */}
-      {!loading && pendingInbox.length > 0 && (
-        <div ref={inboxSectionRef} className="rd-glass-strong" style={{ padding: 0, marginBottom: 18 }}>
-          <div className="rd-inbox-head">
-            <div className="rd-eyebrow">Заявки</div>
-            <div className="rd-title">{pendingInbox.length} на рассмотрении</div>
-          </div>
-          {pendingInbox.map((p) => (
-            <PendingAppCard
-              key={p.applicationId}
-              pending={p}
-              onClick={() => {
-                haptic.impact('light');
-                setReviewing(p);
-              }}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Organizer cross-club awaiting-payment — applicants approved but unpaid */}
-      {!loading && organizerAwaitingPayment.length > 0 && (
+      {/* 2. Applications to my clubs (organizer inbox) — review + awaiting payment */}
+      {!loading && organizerInboxCount > 0 && (
         <>
           <div className="rd-section-sub-h">
-            Ожидают оплаты от заявителей <span className="rd-count">· {organizerAwaitingPayment.length}</span>
+            Заявки в мои клубы <span className="rd-count">· {organizerInboxCount}</span>
           </div>
-          <div className="rd-glass rd-rep-panel">
+          <div ref={inboxSectionRef} className="rd-glass rd-rep-panel">
+            {pendingInbox.map((p) => (
+              <PendingAppCard
+                key={p.applicationId}
+                pending={p}
+                onClick={() => {
+                  haptic.impact('light');
+                  setReviewing(p);
+                }}
+              />
+            ))}
             {organizerAwaitingPayment.map((item) => (
               <OrganizerAwaitingPaymentRow key={item.applicationId} item={item} />
             ))}
@@ -581,7 +591,7 @@ export const MyClubsPage: FC = () => {
         </>
       )}
 
-      {/* Active clubs */}
+      {/* 3. Active clubs */}
       {!loading && myClubs.length > 0 && (
         <>
           <div className="rd-section-sub-h">
@@ -605,25 +615,6 @@ export const MyClubsPage: FC = () => {
         </>
       )}
 
-      {/* Applications — applicant-side pending/rejected */}
-      {!loading && applications.length > 0 && (
-        <>
-          <div className="rd-section-sub-h">
-            Заявки <span className="rd-count">· {applications.length}</span>
-          </div>
-          <div className="rd-glass rd-rep-panel">
-            {applications.map((app) => (
-              <AppCard
-                key={app.id}
-                application={app}
-                club={clubDetails[app.clubId]}
-                awaitingPayment={awaitingPaymentIds.has(app.id)}
-                onClick={() => handleClubClick(app.clubId)}
-              />
-            ))}
-          </div>
-        </>
-      )}
 
       {showCreateModal && (
         <Modal open onOpenChange={(open) => !open && setShowCreateModal(false)}>
