@@ -178,7 +178,7 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
         <div className="rd-sheet-body">
           {/* Hero — avatar + name + username */}
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <span className="rd-ico" style={{ width: 48, height: 48, fontSize: 18 }}>
+            <span className="rd-avatar" style={{ width: 48, height: 48, borderRadius: '50%', fontSize: 18 }}>
               {applicant.avatarUrl ? (
                 <img src={applicant.avatarUrl} alt="" />
               ) : (

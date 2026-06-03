@@ -100,7 +100,7 @@ export const InvitePage: FC = () => {
       <div className="rd-ft-eyebrow">Приглашение в клуб</div>
 
       <div style={{ display: 'flex', gap: 14, alignItems: 'center', margin: '6px 0 18px' }}>
-        <span className="rd-ico" style={{ width: 64, height: 64, borderRadius: 16, fontSize: 24 }}>
+        <span className="rd-avatar" style={{ width: 64, height: 64, borderRadius: 16, fontSize: 24 }}>
           {club.avatarUrl ? <img src={club.avatarUrl} alt="" /> : getClubInitials(club.name)}
         </span>
         <div style={{ minWidth: 0 }}>
