@@ -307,7 +307,7 @@
 /* ---------- Floating dock ---------- */
 .rd-dock {
   position: fixed;
-  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(9px + env(safe-area-inset-bottom, 0px));
   left: 14px; right: 14px;
   display: flex; gap: 10px; align-items: center;
   /* above page content (z 1) but below TGUI overlay (z 3) */
