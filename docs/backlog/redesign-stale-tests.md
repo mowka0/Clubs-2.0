@@ -1,6 +1,26 @@
 # Устаревшие тесты после Banco-редизайна (PR #48/#49)
 
-**Статус:** open · **Приоритет:** Medium (не блокер — логика не сломана) · **Найдено:** 2026-06-03
+**Статус:** ✅ RESOLVED (`bugfix/redesign-stale-tests`, 2026-06-03) · **Найдено:** 2026-06-03
+
+## Резолюция
+
+Ассерты приведены к фактической rd-разметке. `npm test` зелёный (81/81, было 84
+с 12 fail — 3 устаревших thumb/фото/эмодзи-теста ActivityCard консолидированы в 2,
+т.к. фичи удалены редизайном). Ключевые изменения:
+- `ActivityCard.test.tsx`: «5/20» → `rd-ft-stat-num`/`rd-ft-stat-cap`; thumb/фото/type-emoji
+  тесты схлопнуты в один «карточка текстовая»; `.completed`-класс → инлайн `opacity`;
+  складчина → «collected / goal» + `%` собрано.
+- `ClubPage.test.tsx`: цена «200 Stars / мес» — substring-match (единый hero-eyebrow).
+- `ActivitiesPageCreate.test.tsx` → переименован в `AppDockCreate.test.tsx`: in-page «+»
+  убран редизайном, гард организатора переехал в `AppDock` (FAB всегда виден; организатор →
+  поток, иначе → toast). `AppDock` экспортирован из `Layout.tsx` для теста.
+- `ActivityFeedList.test.tsx`: аккордеон `.activity-past-body.open`/`.activity-list.compact[hidden]`
+  → условный монтаж `.rd-rep-panel` + `aria-expanded`.
+
+---
+
+## (исходный контекст)
+
 
 ## Суть
 

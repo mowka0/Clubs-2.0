@@ -29,8 +29,11 @@ const PageFallback: FC = () => (
 /**
  * Floating dock + its FAB "create" flow. Rendered only when authenticated so
  * the organizer-clubs query never fires before a token exists.
+ *
+ * Exported for unit testing the FAB guardrail (organizer → open flow,
+ * non-organizer → toast). The FAB itself is always shown.
  */
-const AppDock: FC = () => {
+export const AppDock: FC = () => {
   const haptic = useHaptic();
   const { clubs: organizerClubs } = useOrganizerClubs();
   const canCreate = organizerClubs.length > 0;

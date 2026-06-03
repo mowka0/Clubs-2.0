@@ -68,54 +68,29 @@ function buildSkladchina(
 }
 
 describe('ActivityCard (full)', () => {
-  it('renders event title and going/limit badge', () => {
-    render(<ActivityCard activity={buildEvent()} onClick={vi.fn()} />);
-    expect(screen.getByText('Yoga in the park')).toBeInTheDocument();
-    expect(screen.getByText('5/20')).toBeInTheDocument();
-  });
-
-  it('puts the type icon in the top-right badge (not inline with the title)', () => {
+  it('renders event title and the going count with caption', () => {
     const { container } = render(
       <ActivityCard activity={buildEvent()} onClick={vi.fn()} />,
     );
-    const badge = container.querySelector('.activity-card .type-badge');
-    expect(badge?.textContent).toBe('🗓');
-    // Title lives in the middle content column and carries no leading emoji.
-    const title = container.querySelector('.activity-card .content .title');
-    expect(title?.textContent).toBe('Yoga in the park');
+    expect(screen.getByText('Yoga in the park')).toBeInTheDocument();
+    // Redesign (rd-feature): going count is a gradient stat, not a "5/20" badge.
+    expect(container.querySelector('.rd-ft-stat-num')?.textContent).toBe('5');
+    expect(container.querySelector('.rd-ft-stat-cap')?.textContent).toBe('идут');
   });
 
-  it('renders a placeholder thumb (with type emoji) when photoUrl is absent', () => {
-    const { container } = render(
-      <ActivityCard activity={buildEvent({ photoUrl: null })} onClick={vi.fn()} />,
-    );
-    const thumb = container.querySelector('.activity-card .activity-thumb');
-    expect(thumb).not.toBeNull();
-    expect(thumb?.classList.contains('placeholder')).toBe(true);
-    expect(thumb?.querySelector('img')).toBeNull();
-    expect(thumb?.querySelector('.placeholder-emoji')?.textContent).toBe('🗓');
-  });
-
-  it('renders the photo (cover img) on the left when photoUrl is present', () => {
+  it('is a text-only rd-feature card — no thumb, photo or type emoji', () => {
     const { container } = render(
       <ActivityCard
         activity={buildEvent({ photoUrl: 'https://cdn.example/e.jpg' })}
         onClick={vi.fn()}
       />,
     );
-    const thumb = container.querySelector('.activity-card .activity-thumb');
-    expect(thumb?.classList.contains('placeholder')).toBe(false);
-    const img = thumb?.querySelector('img');
-    expect(img?.getAttribute('src')).toBe('https://cdn.example/e.jpg');
-  });
-
-  it('uses the 💰 emoji placeholder for a photoless skladchina', () => {
-    const { container } = render(
-      <ActivityCard activity={buildSkladchina({ photoUrl: null })} onClick={vi.fn()} />,
-    );
-    const thumb = container.querySelector('.activity-card .activity-thumb.placeholder');
-    expect(thumb?.querySelector('.placeholder-emoji')?.textContent).toBe('💰');
-    expect(container.querySelector('.activity-card .type-badge')?.textContent).toBe('💰');
+    // The Banco redesign dropped the left thumbnail and the emoji type-badge.
+    expect(container.querySelector('.activity-thumb')).toBeNull();
+    expect(container.querySelector('.type-badge')).toBeNull();
+    expect(container.querySelector('img')).toBeNull();
+    const title = container.querySelector('.rd-feature .rd-ft-title');
+    expect(title?.textContent).toBe('Yoga in the park');
   });
 
   it('shows event date/time and location, not the creation date', () => {
@@ -144,31 +119,33 @@ describe('ActivityCard (full)', () => {
     ).toBeInTheDocument();
   });
 
-  it('does NOT render description row when descriptionPreview is null', () => {
+  it('renders only one rd-ft-sub row when descriptionPreview is null', () => {
     const { container } = render(
       <ActivityCard activity={buildEvent({ descriptionPreview: null })} onClick={vi.fn()} />,
     );
-    expect(container.querySelector('.sub.dim')).toBeNull();
+    // Event always renders the date/location sub; description adds a second one.
+    expect(container.querySelectorAll('.rd-ft-sub')).toHaveLength(1);
   });
 
-  it('applies completed style + ARIA label and shows Завершено badge', () => {
-    const { container } = render(
+  it('dims completed activities and keeps the «Завершено» aria-label', () => {
+    render(
       <ActivityCard
         activity={buildEvent({ isCompleted: true, status: 'completed' })}
         onClick={vi.fn()}
       />,
     );
-    expect(container.querySelector('.activity-card.completed')).not.toBeNull();
-    expect(screen.getByText('Завершено')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /yoga in the park\. завершено/i }),
-    ).toBeInTheDocument();
+    // Redesign dims via inline opacity (no `.completed` class, no visible badge).
+    const btn = screen.getByRole('button', { name: /yoga in the park\. завершено/i });
+    expect(btn).toBeInTheDocument();
+    expect((btn as HTMLButtonElement).style.opacity).toBe('0.6');
   });
 
-  it('renders skladchina with goal as "collected / goal" and paid/participant badge', () => {
-    render(<ActivityCard activity={buildSkladchina()} onClick={vi.fn()} />);
+  it('renders skladchina with goal as "collected / goal" and percent collected', () => {
+    const { container } = render(<ActivityCard activity={buildSkladchina()} onClick={vi.fn()} />);
     expect(screen.getByText('Sauna booking')).toBeInTheDocument();
-    expect(screen.getByText('1/5')).toBeInTheDocument();
+    // 100000 / 500000 kopecks = 20% collected.
+    expect(container.querySelector('.rd-ft-stat-num')?.textContent).toBe('20%');
+    expect(container.querySelector('.rd-ft-stat-cap')?.textContent).toBe('собрано');
     expect(screen.getByText(/1\s?000\s?₽/)).toBeInTheDocument();
     expect(screen.getByText(/5\s?000\s?₽/)).toBeInTheDocument();
   });
@@ -207,18 +184,17 @@ describe('ActivityCard (full)', () => {
 });
 
 describe('ActivityCompactRow (past)', () => {
-  it('renders a single-line dim row with icon, title and event short date', () => {
+  it('renders a compact rd-rep-row with title and event short date', () => {
     const { container } = render(
       <ActivityCompactRow
         activity={buildEvent({ isCompleted: true })}
         onClick={vi.fn()}
       />,
     );
-    const row = container.querySelector('.activity-compact-row');
+    const row = container.querySelector('.rd-rep-row');
     expect(row).not.toBeNull();
-    expect(row?.querySelector('.ico')?.textContent).toBe('🗓');
-    expect(row?.querySelector('.title')?.textContent).toBe('Yoga in the park');
-    expect(row?.querySelector('.date')?.textContent).toBe(
+    expect(row?.querySelector('.rd-ttl')?.textContent).toBe('Yoga in the park');
+    expect(row?.querySelector('.rd-cap')?.textContent).toBe(
       shortDate('2026-05-30T11:00:00Z'),
     );
   });
@@ -230,8 +206,7 @@ describe('ActivityCompactRow (past)', () => {
         onClick={vi.fn()}
       />,
     );
-    expect(container.querySelector('.activity-compact-row .ico')?.textContent).toBe('💰');
-    expect(container.querySelector('.activity-compact-row .date')?.textContent).toBe(
+    expect(container.querySelector('.rd-rep-row .rd-cap')?.textContent).toBe(
       shortDate('2026-05-28T12:00:00Z'),
     );
   });
