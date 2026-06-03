@@ -669,10 +669,8 @@ html, body {
      without this, the page body grows wider than the Telegram WebApp
      viewport and shows a dark strip on the right edge. */
   overflow-x: hidden;
-  background:
-    radial-gradient(circle at 92% 6%, var(--accent-soft), transparent 42%),
-    radial-gradient(circle at 8% 0%,  rgba(142, 93, 255, 0.10), transparent 45%),
-    var(--bg);
+  /* Flat, uniform canvas — same on every screen, matching the mockup. */
+  background: var(--bg);
   padding-bottom: 100px;
 }
 

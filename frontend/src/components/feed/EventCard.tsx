@@ -56,18 +56,10 @@ function currentCount(event: MyEventListItemDto): number {
   return event.status === 'stage_2' ? event.confirmedCount : event.goingCount;
 }
 
-/** Fill ratio clamped to [0, 1]; empty when there is no limit (avoids divide-by-zero). */
-function fillRatio(event: MyEventListItemDto): number {
-  if (event.participantLimit <= 0) return 0;
-  return Math.min(1, Math.max(0, currentCount(event) / event.participantLimit));
-}
-
 export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
   const badge = pickBadge(event);
-  const stats = `${currentCount(event)}/${event.participantLimit} мест`;
-  const ratio = fillRatio(event);
   const clubInitials = getInitials(event.clubName);
-  const meta = [event.locationText, stats].filter(Boolean).join(' · ');
+  const meta = [event.locationText, `${currentCount(event)} идут`].filter(Boolean).join(' · ');
 
   return (
     <button type="button" className="rd-activity-card" onClick={onClick}>
@@ -87,12 +79,9 @@ export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
         </div>
         <div className="rd-act-ttl">{event.title}</div>
         <div className="rd-act-meta">{meta}</div>
-        <div className="rd-progress" style={{ marginTop: 8 }} aria-hidden="true">
-          <span className="rd-fill" style={{ width: `${ratio * 100}%`, display: 'block', height: '100%' }} />
-        </div>
-        {badge && (
+        {badge?.accent && (
           <div className="rd-badges-row">
-            <span className={`rd-badge ${badge.accent ? 'rd-warn' : 'rd-neutral'}`}>{badge.text}</span>
+            <span className="rd-badge rd-warn">{badge.text}</span>
           </div>
         )}
       </div>

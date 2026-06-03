@@ -41,10 +41,8 @@
   width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
-  background:
-    radial-gradient(circle at 92% 4%, var(--accent-soft), transparent 42%),
-    radial-gradient(circle at 6% 0%, rgba(142, 93, 255, 0.10), transparent 46%),
-    var(--bg);
+  /* Flat, uniform canvas — same on every screen, matching the mockup. */
+  background: var(--bg);
   padding: 16px 16px calc(110px + env(safe-area-inset-bottom, 0px));
 }
 

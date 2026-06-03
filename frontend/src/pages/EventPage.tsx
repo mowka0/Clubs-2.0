@@ -1,9 +1,10 @@
 import { FC, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Spinner, Placeholder } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
+import { useClubQuery } from '../queries/clubs';
 import {
   useCastVoteMutation,
   useConfirmParticipationMutation,
@@ -11,6 +12,11 @@ import {
   useEventQuery,
   useMyVoteQuery,
 } from '../queries/events';
+
+function getInitials(name: string): string {
+  return name.replace(/[«»"']/g, '').split(/\s+/).filter(Boolean).slice(0, 2)
+    .map((w) => w.charAt(0).toUpperCase()).join('');
+}
 
 const VOTE_LABELS: Record<string, string> = {
   going: 'Пойду',
@@ -35,11 +41,13 @@ export const EventPage: FC = () => {
   useBackButton(true);
 
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const haptic = useHaptic();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const eventQuery = useEventQuery(isAuthenticated ? id : undefined);
   const myVoteQuery = useMyVoteQuery(isAuthenticated ? id : undefined);
+  const hostClubQuery = useClubQuery(eventQuery.data?.clubId);
 
   const castVoteMutation = useCastVoteMutation();
   const confirmMutation = useConfirmParticipationMutation();
@@ -136,6 +144,28 @@ export const EventPage: FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Host club */}
+      {hostClubQuery.data && (
+        <button
+          type="button"
+          className="rd-glass"
+          style={{ display: 'block', width: '100%', textAlign: 'left', padding: 0, marginBottom: 14, cursor: 'pointer' }}
+          onClick={() => { haptic.impact('light'); navigate(`/clubs/${event.clubId}`); }}
+        >
+          <div className="rd-host-row">
+            <span className="rd-ico">
+              {hostClubQuery.data.avatarUrl
+                ? <img src={hostClubQuery.data.avatarUrl} alt="" />
+                : getInitials(hostClubQuery.data.name)}
+            </span>
+            <div className="rd-info">
+              <div className="rd-ttl">{hostClubQuery.data.name}</div>
+              <div className="rd-met">организатор</div>
+            </div>
+          </div>
+        </button>
+      )}
 
       {/* Location */}
       {event.locationText && (
