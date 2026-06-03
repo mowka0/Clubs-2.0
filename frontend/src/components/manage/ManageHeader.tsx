@@ -16,7 +16,7 @@ export const ManageHeader: FC<ManageHeaderProps> = ({ club, onOpenClub }) => (
     type="button"
     className="rd-hero rd-compact"
     onClick={onOpenClub}
-    style={{ display: 'block', width: '100%', padding: 0, border: 0, background: 'transparent', font: 'inherit', textAlign: 'left', cursor: 'pointer' }}
+    style={{ display: 'block', padding: 0, border: 0, background: 'transparent', font: 'inherit', textAlign: 'left', cursor: 'pointer' }}
   >
     <div
       className="rd-hero-bg"
