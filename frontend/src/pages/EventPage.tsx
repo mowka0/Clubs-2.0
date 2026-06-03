@@ -235,7 +235,9 @@ export const EventPage: FC = () => {
         </div>
         <div className="rd-donut" style={donutStyle} aria-hidden="true">
           <div className="rd-donut-center">
-            <span className="rd-donut-num">{event.goingCount}/{event.participantLimit}</span>
+            <span className="rd-donut-num">
+              <sup>{event.goingCount}</sup><span className="rd-sl">/</span><sub>{event.participantLimit}</sub>
+            </span>
           </div>
         </div>
       </div>
@@ -249,11 +251,6 @@ export const EventPage: FC = () => {
       {(respondersQuery.data?.length ?? 0) > 0 && (
         <>
           <div className="rd-section-sub-h">Кто идёт <span className="rd-count">· {respondersQuery.data!.length}</span></div>
-          <div className="rd-legend" aria-hidden="true">
-            <span><i className="rd-vdot rd-d-go" /> идут</span>
-            <span><i className="rd-vdot rd-d-maybe" /> возможно</span>
-            <span><i className="rd-vdot rd-d-no" /> нет</span>
-          </div>
           <div className="rd-voters">
             {respondersQuery.data!.map((r) => {
               const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
