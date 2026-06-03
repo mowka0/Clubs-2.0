@@ -307,7 +307,9 @@
 /* ---------- Floating dock ---------- */
 .rd-dock {
   position: fixed;
-  bottom: calc(9px + env(safe-area-inset-bottom, 0px));
+  /* Keep ~half of the home-indicator safe-area as breathing room so the dock
+     sits visibly lower without touching the system indicator. */
+  bottom: calc(4px + env(safe-area-inset-bottom, 0px) * 0.4);
   left: 14px; right: 14px;
   display: flex; gap: 10px; align-items: center;
   /* above page content (z 1) but below TGUI overlay (z 3) */
