@@ -15,10 +15,6 @@ function formatShortDate(iso: string): string {
   return DATE_FMT.format(new Date(iso));
 }
 
-function activityIcon(activity: ActivityItemDto): string {
-  return activity.type === 'event' ? '🗓' : '💰';
-}
-
 function activityDate(activity: ActivityItemDto): string {
   const iso =
     activity.type === 'event' ? activity.eventDatetime : activity.deadline;
@@ -33,12 +29,13 @@ export const ActivityCompactRow: FC<ActivityCompactRowProps> = ({
     type="button"
     onClick={onClick}
     aria-label={`${activity.title}. Завершено`}
-    className="activity-compact-row"
+    className="rd-rep-row"
   >
-    <span className="ico" aria-hidden="true">
-      {activityIcon(activity)}
-    </span>
-    <span className="title">{activity.title}</span>
-    <span className="date">{activityDate(activity)}</span>
+    <div className="rd-info">
+      <div className="rd-ttl">{activity.title}</div>
+    </div>
+    <div className="rd-score">
+      <span className="rd-cap">{activityDate(activity)}</span>
+    </div>
   </button>
 );

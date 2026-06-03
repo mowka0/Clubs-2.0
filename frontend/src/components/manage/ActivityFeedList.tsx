@@ -25,16 +25,14 @@ export const ActivityFeedList: FC<ActivityFeedListProps> = ({
     <>
       {feed.upcoming.length > 0 && (
         <section>
-          <div className="activity-section-label">Предстоящие</div>
-          <div className="activity-list">
-            {feed.upcoming.map((item) => (
-              <ActivityCard
-                key={item.id}
-                activity={item}
-                onClick={() => onActivityClick(item)}
-              />
-            ))}
-          </div>
+          <div className="rd-section-sub-h">Предстоящие</div>
+          {feed.upcoming.map((item) => (
+            <ActivityCard
+              key={item.id}
+              activity={item}
+              onClick={() => onActivityClick(item)}
+            />
+          ))}
         </section>
       )}
 
@@ -42,21 +40,17 @@ export const ActivityFeedList: FC<ActivityFeedListProps> = ({
         <section>
           <button
             type="button"
-            className="activity-past-toggle"
+            className="rd-section-sub-h"
             aria-expanded={pastExpanded}
             onClick={togglePast}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 0, cursor: 'pointer', width: '100%' }}
           >
-            <span className="chevron" aria-hidden="true">
-              {pastExpanded ? '▾' : '▸'}
-            </span>
-            <span className="label">Прошедшие</span>
-            <span className="count">({feed.past.length})</span>
+            <span aria-hidden="true">{pastExpanded ? '▾' : '▸'}</span>
+            Прошедшие
+            <span className="rd-count">({feed.past.length})</span>
           </button>
-          {/* The list stays mounted; the grid wrapper animates row height so the
-              accordion slides open/closed instead of popping (no reload feel).
-              Hidden rows stay out of the a11y tree + tab order via `hidden`. */}
-          <div className={pastExpanded ? 'activity-past-body open' : 'activity-past-body'}>
-            <div className="activity-list compact" hidden={!pastExpanded}>
+          {pastExpanded && (
+            <div className="rd-glass rd-rep-panel">
               {feed.past.map((item) => (
                 <ActivityCompactRow
                   key={item.id}
@@ -65,7 +59,7 @@ export const ActivityFeedList: FC<ActivityFeedListProps> = ({
                 />
               ))}
             </div>
-          </div>
+          )}
         </section>
       )}
     </>

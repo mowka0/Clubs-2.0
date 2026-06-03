@@ -28,16 +28,7 @@ export const ActivityFilterChips: FC<ActivityFilterChipsProps> = ({ value, onCha
   };
 
   return (
-    <div
-      role="tablist"
-      aria-label="Фильтр активностей"
-      style={{
-        display: 'flex',
-        gap: 8,
-        padding: '8px 16px',
-        overflowX: 'auto',
-      }}
-    >
+    <div className="rd-cat-chips" role="tablist" aria-label="Фильтр активностей">
       {CHIPS.map((chip) => {
         const selected = value === chip.key;
         return (
@@ -47,24 +38,7 @@ export const ActivityFilterChips: FC<ActivityFilterChipsProps> = ({ value, onCha
             role="tab"
             aria-selected={selected}
             onClick={() => handleClick(chip.key)}
-            style={{
-              flex: '0 0 auto',
-              padding: '6px 14px',
-              borderRadius: 999,
-              border: selected
-                ? '1px solid var(--brand-brass, #C9A063)'
-                : '1px solid var(--tgui--divider, rgba(255,255,255,0.18))',
-              background: selected
-                ? 'var(--brand-brass, #C9A063)'
-                : 'transparent',
-              color: selected
-                ? 'var(--brand-ink-1, #1A2138)'
-                : 'var(--tgui--text_color, #fff)',
-              fontSize: 14,
-              fontWeight: selected ? 600 : 500,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
+            className={selected ? 'rd-cat-chip rd-active' : 'rd-cat-chip'}
           >
             {chip.label}
           </button>
