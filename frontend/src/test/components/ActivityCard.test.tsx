@@ -68,14 +68,14 @@ function buildSkladchina(
 }
 
 describe('ActivityCard (full)', () => {
-  it('renders event title and the going count with caption', () => {
+  it('renders event title and the going/limit fraction with caption', () => {
     const { container } = render(
       <ActivityCard activity={buildEvent()} onClick={vi.fn()} />,
     );
     expect(screen.getByText('Yoga in the park')).toBeInTheDocument();
-    // Redesign (rd-feature): going count is a gradient stat, not a "5/20" badge.
-    expect(container.querySelector('.rd-ft-stat-num')?.textContent).toBe('5');
-    expect(container.querySelector('.rd-ft-stat-cap')?.textContent).toBe('идут');
+    // going count shown as a "going/limit" gradient fraction.
+    expect(container.querySelector('.rd-ft-stat-num')?.textContent).toBe('5/20');
+    expect(container.querySelector('.rd-ft-stat-cap')?.textContent).toBe('идёт');
   });
 
   it('is a text-only rd-feature card — no thumb, photo or type emoji', () => {

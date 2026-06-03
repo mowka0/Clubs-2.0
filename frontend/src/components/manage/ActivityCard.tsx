@@ -42,8 +42,8 @@ const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => (
       )}
     </div>
     <div className="rd-ft-stat">
-      <div className="rd-ft-stat-num">{event.goingCount}</div>
-      <div className="rd-ft-stat-cap">идут</div>
+      <div className="rd-ft-stat-num">{event.goingCount}/{event.participantLimit}</div>
+      <div className="rd-ft-stat-cap">идёт</div>
     </div>
   </>
 );
