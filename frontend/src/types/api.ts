@@ -287,6 +287,15 @@ export interface EventListItemDto {
   status: string;
 }
 
+export interface EventResponderDto {
+  userId: string;
+  firstName: string;
+  lastName: string | null;
+  avatarUrl: string | null;
+  /** going | maybe | not_going | confirmed | waitlisted | declined */
+  status: string;
+}
+
 export type SkladchinaMode = 'fixed_equal' | 'fixed_individual' | 'voluntary';
 export type SkladchinaStatus = 'active' | 'closed_success' | 'closed_failed' | 'cancelled';
 export type SkladchinaParticipantStatus = 'pending' | 'paid' | 'declined' | 'expired_no_response';

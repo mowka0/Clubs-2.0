@@ -4,14 +4,11 @@ import type {
   EventActivityDto,
   SkladchinaActivityDto,
 } from '../../api/activities';
-import { ActivityThumb } from './ActivityThumb';
 
 interface ActivityCardProps {
   activity: ActivityItemDto;
   onClick: () => void;
 }
-
-const TYPE_EMOJI = { event: '🗓', skladchina: '💰' } as const;
 
 const DATETIME_FMT = new Intl.DateTimeFormat('ru-RU', {
   day: 'numeric',
@@ -35,89 +32,72 @@ function progressPercent(collected: number, goal: number): number {
 
 const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => (
   <>
-    <span className="title">{event.title}</span>
-    <span className="sub">
-      {formatDatetime(event.eventDatetime)} · {event.locationText}
-    </span>
-    {event.descriptionPreview !== null && (
-      <span className="sub dim">{event.descriptionPreview}</span>
-    )}
-    <div className="footer-row">
-      <span className="badge">
-        {event.goingCount}/{event.participantLimit}
-      </span>
+    <div className="rd-ft-body">
+      <div className="rd-ft-title">{event.title}</div>
+      <div className="rd-ft-sub">
+        {formatDatetime(event.eventDatetime)} · {event.locationText}
+      </div>
+      {event.descriptionPreview !== null && (
+        <div className="rd-ft-sub">{event.descriptionPreview}</div>
+      )}
+    </div>
+    <div className="rd-ft-stat">
+      <div className="rd-ft-stat-num">{event.goingCount}</div>
+      <div className="rd-ft-stat-cap">идут</div>
     </div>
   </>
 );
 
-const SkladchinaCardBody: FC<{ skladchina: SkladchinaActivityDto }> = ({
-  skladchina,
-}) => {
-  const hasGoal =
-    skladchina.totalGoalKopecks !== null && skladchina.totalGoalKopecks > 0;
+const SkladchinaCardBody: FC<{ skladchina: SkladchinaActivityDto }> = ({ skladchina }) => {
+  const hasGoal = skladchina.totalGoalKopecks !== null && skladchina.totalGoalKopecks > 0;
   const pct = hasGoal
     ? progressPercent(skladchina.collectedKopecks, skladchina.totalGoalKopecks!)
     : 0;
 
   return (
     <>
-      <span className="title">{skladchina.title}</span>
-      <span className="sub">
+      <div className="rd-ft-body">
+        <div className="rd-ft-title">{skladchina.title}</div>
+        <div className="rd-ft-sub">
+          {hasGoal
+            ? `${formatRub(skladchina.collectedKopecks)} / ${formatRub(skladchina.totalGoalKopecks!)}`
+            : `${formatRub(skladchina.collectedKopecks)} собрано`}
+          {skladchina.affectsReputation && ' · ⚠️ Репутация'}
+        </div>
+      </div>
+      <div className="rd-ft-stat">
         {hasGoal ? (
           <>
-            {formatRub(skladchina.collectedKopecks)} /{' '}
-            {formatRub(skladchina.totalGoalKopecks!)}
+            <div className="rd-ft-stat-num">{pct}%</div>
+            <div className="rd-ft-stat-cap">собрано</div>
           </>
         ) : (
-          <>{formatRub(skladchina.collectedKopecks)} собрано</>
+          <>
+            <div className="rd-ft-stat-num">{skladchina.paidCount}</div>
+            <div className="rd-ft-stat-cap">оплат</div>
+          </>
         )}
-        {skladchina.affectsReputation && (
-          <span className="reputation" title="Влияет на репутацию">
-            ⚠️ Репутация
-          </span>
-        )}
-      </span>
-      {hasGoal && (
-        <div className="progress-bar" aria-hidden="true">
-          <div className="fill" style={{ width: `${pct}%` }} />
-        </div>
-      )}
-      <div className="footer-row">
-        <span className="badge">
-          {skladchina.paidCount}/{skladchina.participantCount}
-        </span>
       </div>
     </>
   );
 };
 
 export const ActivityCard: FC<ActivityCardProps> = ({ activity, onClick }) => {
-  const className = activity.isCompleted
-    ? 'activity-card completed'
-    : 'activity-card';
-  const ariaLabel = activity.isCompleted
-    ? `${activity.title}. Завершено`
-    : activity.title;
+  const ariaLabel = activity.isCompleted ? `${activity.title}. Завершено` : activity.title;
 
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      className={className}
+      className="rd-feature rd-glass"
+      style={activity.isCompleted ? { opacity: 0.6 } : undefined}
     >
-      <span className="type-badge" aria-hidden="true">
-        {TYPE_EMOJI[activity.type]}
-      </span>
-      <ActivityThumb type={activity.type} photoUrl={activity.photoUrl} />
-      <div className="content">
-        {activity.isCompleted && <span className="done-badge">Завершено</span>}
-        {activity.type === 'event' ? (
-          <EventCardBody event={activity} />
-        ) : (
-          <SkladchinaCardBody skladchina={activity} />
-        )}
-      </div>
+      {activity.type === 'event' ? (
+        <EventCardBody event={activity} />
+      ) : (
+        <SkladchinaCardBody skladchina={activity} />
+      )}
     </button>
   );
 };

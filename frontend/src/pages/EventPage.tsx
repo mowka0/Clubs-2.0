@@ -1,16 +1,30 @@
 import { FC, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Spinner, Placeholder } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
+import { useClubQuery } from '../queries/clubs';
 import {
   useCastVoteMutation,
   useConfirmParticipationMutation,
   useDeclineParticipationMutation,
   useEventQuery,
+  useEventRespondersQuery,
   useMyVoteQuery,
 } from '../queries/events';
+
+function getInitials(name: string): string {
+  return name.replace(/[«»"']/g, '').split(/\s+/).filter(Boolean).slice(0, 2)
+    .map((w) => w.charAt(0).toUpperCase()).join('');
+}
+
+/** Maps a responder status to its dot color class (go / maybe / no). */
+function statusDotClass(status: string): string {
+  if (status === 'going' || status === 'confirmed') return 'rd-d-go';
+  if (status === 'maybe' || status === 'waitlisted') return 'rd-d-maybe';
+  return 'rd-d-no';
+}
 
 const VOTE_LABELS: Record<string, string> = {
   going: 'Пойду',
@@ -35,11 +49,14 @@ export const EventPage: FC = () => {
   useBackButton(true);
 
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const haptic = useHaptic();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const eventQuery = useEventQuery(isAuthenticated ? id : undefined);
   const myVoteQuery = useMyVoteQuery(isAuthenticated ? id : undefined);
+  const hostClubQuery = useClubQuery(eventQuery.data?.clubId);
+  const respondersQuery = useEventRespondersQuery(isAuthenticated ? id : undefined);
 
   const castVoteMutation = useCastVoteMutation();
   const confirmMutation = useConfirmParticipationMutation();
@@ -112,9 +129,17 @@ export const EventPage: FC = () => {
     );
   }
 
-  const fillPercent = event.participantLimit > 0
-    ? Math.min((event.goingCount / event.participantLimit) * 100, 100)
-    : 0;
+  // Donut chart of the vote split (going / maybe / not going).
+  const voteTotal = event.goingCount + event.maybeCount + event.notGoingCount;
+  const donutStyle: { background: string } = voteTotal === 0
+    ? { background: 'var(--surface-2)' }
+    : (() => {
+        const g = (event.goingCount / voteTotal) * 360;
+        const m = (event.maybeCount / voteTotal) * 360;
+        return {
+          background: `conic-gradient(#F47B3C 0 ${g}deg, #8E5DFF ${g}deg ${g + m}deg, #6B6B70 ${g + m}deg 360deg)`,
+        };
+      })();
 
   // Backend (`VoteService.castVote`) принимает голос ТОЛЬКО при status='upcoming'.
   const showVoting = event.status === 'upcoming';
@@ -125,9 +150,13 @@ export const EventPage: FC = () => {
 
   return (
     <div className="rd-page">
-      {/* Hero */}
+      {/* Hero — club avatar as backdrop (same as club page) */}
       <div className="rd-hero rd-compact">
-        <div className="rd-hero-bg" data-cat="sport" />
+        <div
+          className="rd-hero-bg"
+          data-cat={hostClubQuery.data?.category ?? 'sport'}
+          style={hostClubQuery.data?.avatarUrl ? { backgroundImage: `url(${hostClubQuery.data.avatarUrl})` } : undefined}
+        />
         <div className="rd-hero-meta">
           <div className="rd-hero-type-badge">СОБЫТИЕ</div>
           <div className="rd-hero-ttl">{event.title}</div>
@@ -136,6 +165,28 @@ export const EventPage: FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Host club */}
+      {hostClubQuery.data && (
+        <button
+          type="button"
+          className="rd-glass"
+          style={{ display: 'block', width: '100%', textAlign: 'left', padding: 0, marginBottom: 14, cursor: 'pointer' }}
+          onClick={() => { haptic.impact('light'); navigate(`/clubs/${event.clubId}`); }}
+        >
+          <div className="rd-host-row">
+            <span className="rd-ico">
+              {hostClubQuery.data.avatarUrl
+                ? <img src={hostClubQuery.data.avatarUrl} alt="" />
+                : getInitials(hostClubQuery.data.name)}
+            </span>
+            <div className="rd-info">
+              <div className="rd-ttl">{hostClubQuery.data.name}</div>
+              <div className="rd-met">организатор</div>
+            </div>
+          </div>
+        </button>
+      )}
 
       {/* Location */}
       {event.locationText && (
@@ -157,39 +208,62 @@ export const EventPage: FC = () => {
         </>
       )}
 
-      {/* Recruitment stats */}
+      {/* Recruitment — donut + voting (or read-only counts) */}
       <div className="rd-section-sub-h">Набор · {event.goingCount} / {event.participantLimit}</div>
-      <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
-        <div className="rd-progress">
-          <div className="rd-fill" style={{ width: `${fillPercent}%` }} />
-        </div>
-        <div className="rd-stat-line">
-          <span>Пойдут: {event.goingCount}</span>
-          <span>Возможно: {event.maybeCount}</span>
-          <span>Нет: {event.notGoingCount}</span>
-        </div>
-      </div>
-
-      {/* Voting */}
-      {showVoting && (
-        <>
-          <div className="rd-section-sub-h">Голосование</div>
-          {myVote && (
-            <div style={{ marginBottom: 10 }}>
-              <span className="rd-badge rd-going">Ваш голос: {VOTE_LABELS[myVote] ?? myVote}</span>
+      {actionError && <div className="rd-error">{actionError}</div>}
+      <div className="rd-vote-layout">
+        <div className="rd-vote-stack">
+          {showVoting ? (
+            <>
+              <button type="button" className={`rd-vote-btn${myVote === 'going' ? ' rd-active' : ''}`} onClick={() => handleVote('going')} disabled={voting}>
+                Пойду <span className="rd-vc">{event.goingCount}</span>
+              </button>
+              <button type="button" className={`rd-vote-btn${myVote === 'maybe' ? ' rd-active' : ''}`} onClick={() => handleVote('maybe')} disabled={voting}>
+                Возможно <span className="rd-vc">{event.maybeCount}</span>
+              </button>
+              <button type="button" className={`rd-vote-btn${myVote === 'not_going' ? ' rd-active' : ''}`} onClick={() => handleVote('not_going')} disabled={voting}>
+                Не пойду <span className="rd-vc">{event.notGoingCount}</span>
+              </button>
+            </>
+          ) : (
+            <div className="rd-glass" style={{ padding: '4px 4px' }}>
+              <div className="rd-kv">Пойдут <span className="rd-v">{event.goingCount}</span></div>
+              <div className="rd-kv">Возможно <span className="rd-v">{event.maybeCount}</span></div>
+              <div className="rd-kv">Не пойдут <span className="rd-v">{event.notGoingCount}</span></div>
             </div>
           )}
-          {actionError && <div className="rd-error">{actionError}</div>}
-          <div className="rd-vote-row" style={{ marginBottom: 18 }}>
-            <button type="button" className={`rd-vote-btn${myVote === 'going' ? ' rd-active' : ''}`} onClick={() => handleVote('going')} disabled={voting}>
-              Пойду
-            </button>
-            <button type="button" className={`rd-vote-btn${myVote === 'maybe' ? ' rd-active' : ''}`} onClick={() => handleVote('maybe')} disabled={voting}>
-              Возможно
-            </button>
-            <button type="button" className={`rd-vote-btn${myVote === 'not_going' ? ' rd-active' : ''}`} onClick={() => handleVote('not_going')} disabled={voting}>
-              Не пойду
-            </button>
+        </div>
+        <div className="rd-donut" style={donutStyle} aria-hidden="true">
+          <div className="rd-donut-center">
+            <span className="rd-donut-num">
+              <sup>{event.goingCount}</sup><span className="rd-sl">/</span><sub>{event.participantLimit}</sub>
+            </span>
+          </div>
+        </div>
+      </div>
+      {showVoting && myVote && (
+        <div style={{ marginBottom: 14 }}>
+          <span className="rd-badge rd-going">Ваш голос: {VOTE_LABELS[myVote] ?? myVote}</span>
+        </div>
+      )}
+
+      {/* Who responded */}
+      {(respondersQuery.data?.length ?? 0) > 0 && (
+        <>
+          <div className="rd-section-sub-h">Кто идёт <span className="rd-count">· {respondersQuery.data!.length}</span></div>
+          <div className="rd-voters">
+            {respondersQuery.data!.map((r) => {
+              const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
+              return (
+                <div className="rd-voter" key={r.userId}>
+                  <span className="rd-av">
+                    {r.avatarUrl ? <img src={r.avatarUrl} alt="" /> : getInitials(name)}
+                  </span>
+                  <span className="rd-vn">{name}</span>
+                  <span className={`rd-vdot ${statusDotClass(r.status)}`} title={r.status} />
+                </div>
+              );
+            })}
           </div>
         </>
       )}

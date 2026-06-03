@@ -63,56 +63,40 @@ export const SkladchinaCard: FC<SkladchinaCardProps> = ({ skladchina, onClick })
     ? Math.min(100, Math.round((skladchina.collectedKopecks / skladchina.totalGoalKopecks!) * 100))
     : null;
 
-  const isClosed = skladchina.status !== 'active';
-  const cardClass = isClosed ? 'skladchina-card closed' : 'skladchina-card';
+  const amounts = hasGoal
+    ? `${formatRubles(skladchina.collectedKopecks)} ₽ / ${formatRubles(skladchina.totalGoalKopecks!)} ₽${percent !== null ? ` · ${percent}%` : ''}`
+    : `${formatRubles(skladchina.collectedKopecks)} ₽ собрано (по желанию)`;
 
   return (
-    <button type="button" className={cardClass} onClick={onClick}>
-      <div className="skladchina-card-body">
-        <div className="title">{skladchina.title}</div>
-        <div className="club">
-          <span className="club-avt">
-            {skladchina.clubAvatarUrl
-              ? <img src={skladchina.clubAvatarUrl} alt="" />
-              : clubInitials}
+    <button type="button" className="rd-activity-card" onClick={onClick}>
+      <div className="rd-act-cover rd-c-coin">
+        <span className="rd-type-badge">СБОР</span>
+      </div>
+      <div className="rd-act-body">
+        <div className="rd-act-club-row">
+          <span className="rd-club-avt">
+            {skladchina.clubAvatarUrl ? <img src={skladchina.clubAvatarUrl} alt="" /> : clubInitials}
           </span>
-          <span className="club-name">{skladchina.clubName}</span>
+          <span>{skladchina.clubName}</span>
         </div>
-        <div className="amounts">
-          {hasGoal ? (
-            <>
-              <span className="collected">{formatRubles(skladchina.collectedKopecks)} ₽</span>
-              <span className="sep">/</span>
-              <span className="goal">{formatRubles(skladchina.totalGoalKopecks!)} ₽</span>
-              {percent !== null && <span className="percent">{percent}%</span>}
-            </>
-          ) : (
-            <>
-              <span className="collected">{formatRubles(skladchina.collectedKopecks)} ₽</span>
-              <span className="voluntary-note">собрано (по желанию)</span>
-            </>
-          )}
-        </div>
+        <div className="rd-act-ttl">{skladchina.title}</div>
+        <div className="rd-act-meta">{amounts}</div>
         {hasGoal && (
-          <div className="progress-bar">
-            <div className="fill" style={{ width: `${percent}%` }} />
+          <div className="rd-progress" style={{ marginTop: 8 }} aria-hidden="true">
+            <span className="rd-fill" style={{ width: `${percent}%`, display: 'block', height: '100%' }} />
           </div>
         )}
-        <div className="footer-row">
-          {badge && (
-            <span className={badge.accent ? 'skladchina-badge accent' : 'skladchina-badge'}>
-              {badge.text}
-            </span>
-          )}
-          {skladchina.affectsReputation && (
-            <span className="skladchina-badge reputation" title="Влияет на репутацию">
-              ⚠️ Репутация
-            </span>
-          )}
-          <span className="stats">
-            До {deadlineStr} · {skladchina.paidCount}/{skladchina.participantCount} оплатили
-          </span>
+        <div className="rd-act-meta">
+          До {deadlineStr} · {skladchina.paidCount}/{skladchina.participantCount} оплатили
         </div>
+        {(badge || skladchina.affectsReputation) && (
+          <div className="rd-badges-row">
+            {badge && <span className={`rd-badge ${badge.accent ? 'rd-warn' : 'rd-neutral'}`}>{badge.text}</span>}
+            {skladchina.affectsReputation && (
+              <span className="rd-badge rd-rep" title="Влияет на репутацию">⚠️ Репутация</span>
+            )}
+          </div>
+        )}
       </div>
     </button>
   );

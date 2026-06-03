@@ -41,10 +41,8 @@
   width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
-  background:
-    radial-gradient(circle at 92% 4%, var(--accent-soft), transparent 42%),
-    radial-gradient(circle at 6% 0%, rgba(142, 93, 255, 0.10), transparent 46%),
-    var(--bg);
+  /* Flat, uniform canvas — same on every screen, matching the mockup. */
+  background: var(--bg);
   padding: 16px 16px calc(110px + env(safe-area-inset-bottom, 0px));
 }
 
@@ -239,6 +237,11 @@
 .rd-cover[data-cat="board_games"] { background: radial-gradient(circle at 70% 30%, rgba(170,235,200,0.4), transparent 50%), linear-gradient(135deg, #2E9A6A 0%, #144a32 60%, #061a10 100%); }
 .rd-cover[data-cat="travel"]      { background: radial-gradient(circle at 70% 30%, rgba(255,190,210,0.4), transparent 50%), linear-gradient(135deg, #C44E7A 0%, #5a2438 60%, #1a0a14 100%); }
 
+/* ---------- Inbox panel head ---------- */
+.rd-inbox-head { padding: 14px 16px 8px; }
+.rd-inbox-head .rd-eyebrow { font-size: 11px; color: var(--text-dim); letter-spacing: 0.04em; margin-bottom: 4px; }
+.rd-inbox-head .rd-title { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
+
 /* ---------- Reputation / club rows ---------- */
 .rd-rep-panel { padding: 4px; }
 .rd-rep-row {
@@ -403,6 +406,41 @@
 .rd-act-club-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 11px; color: var(--text-dim); }
 .rd-act-ttl { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
 .rd-act-meta { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+.rd-act-club-row .rd-club-avt {
+  width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #ff7b4a, #c43a2a);
+}
+.rd-act-club-row .rd-club-avt img { width: 100%; height: 100%; object-fit: cover; }
+.rd-act-cover.rd-c-coin {
+  background: radial-gradient(circle at 70% 30%, rgba(255, 220, 170, 0.5), transparent 50%),
+    linear-gradient(135deg, #E8932E 0%, #5a3a14 60%, #1a0e04 100%);
+}
+.rd-badges-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.rd-badge.rd-neutral { background: var(--surface); color: var(--text-dim); border: 1px solid var(--hairline); }
+.rd-badge.rd-rep { background: var(--accent-soft); color: var(--accent); }
+
+/* segmented badge */
+.rd-seg-item { position: relative; }
+.rd-seg-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 16px; height: 16px; padding: 0 4px; margin-left: 6px;
+  border-radius: 999px; background: linear-gradient(135deg, #ff4d6a, #c4304a);
+  color: #fff; font-size: 10px; font-weight: 700; vertical-align: middle;
+}
+
+/* feed skeleton */
+.rd-skeleton {
+  border-radius: 18px; overflow: hidden; margin-bottom: 12px;
+  background: var(--glass-bg); border: 1px solid var(--hairline);
+  animation: rd-pulse 1.4s ease-in-out infinite;
+}
+.rd-skeleton .rd-sk-cover { height: 96px; background: var(--surface-2); }
+.rd-skeleton .rd-sk-body { padding: 12px 14px 14px; }
+.rd-skeleton .rd-sk-line { height: 12px; border-radius: 6px; background: var(--surface-2); margin-bottom: 8px; }
+.rd-skeleton .rd-sk-line.rd-short { width: 45%; }
+@keyframes rd-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
 /* ---------- Underline tabs ---------- */
 .rd-tabs { display: flex; gap: 20px; padding: 0 4px; margin-bottom: 16px; border-bottom: 1px solid var(--hairline); }
@@ -551,6 +589,46 @@
   background: var(--accent-grad); color: var(--on-accent);
   border-color: var(--accent-soft); box-shadow: 0 4px 12px var(--accent-glow);
 }
+/* voting: stacked buttons (left half) + donut chart (right half, ~50/50) */
+.rd-vote-layout { display: flex; gap: 14px; align-items: center; margin-bottom: 8px; }
+.rd-vote-stack { flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.rd-vote-stack .rd-vote-btn {
+  width: 100%; text-align: left; padding: 9px 12px; font-size: 13px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.rd-vote-btn .rd-vc { font-size: 12px; font-weight: 700; opacity: 0.85; }
+.rd-donut {
+  flex: 0 0 46%; aspect-ratio: 1 / 1; max-width: 168px;
+  border-radius: 50%; position: relative; align-self: center;
+}
+.rd-donut::after { content: ''; position: absolute; inset: 18px; border-radius: 50%; background: var(--bg); }
+.rd-donut-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 1; }
+/* Diagonal fraction (numerator raised, denominator lowered) — like a hand-written 3/4. */
+.rd-donut-num {
+  font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1;
+  white-space: nowrap;
+  background: var(--grad-num); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.rd-donut-num sup, .rd-donut-num sub { font-size: 0.78em; font-weight: 800; }
+.rd-donut-num .rd-sl { font-size: 1.25em; font-weight: 600; margin: 0 -1px; }
+.rd-donut-cap { font-size: 9px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 3px; }
+
+/* voters list — 2-column compact grid (avatar + name + status dot) */
+.rd-voters { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 12px; margin-bottom: 18px; }
+.rd-voter { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rd-voter .rd-av {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #FFA070, #F47B3C);
+}
+.rd-voter .rd-av img { width: 100%; height: 100%; object-fit: cover; }
+.rd-voter .rd-vn { font-size: 12.5px; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-voter .rd-vdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.rd-vdot.rd-d-go { background: var(--live); }
+.rd-vdot.rd-d-maybe { background: var(--accent); }
+.rd-vdot.rd-d-no { background: var(--text-faint); }
+
 .rd-progress { width: 100%; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
 .rd-progress .rd-fill { height: 100%; border-radius: 4px; background: var(--accent-grad); transition: width 0.3s ease; }
 .rd-stat-line { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim); margin-top: 6px; }

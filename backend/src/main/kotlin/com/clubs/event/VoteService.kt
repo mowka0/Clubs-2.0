@@ -58,4 +58,26 @@ class VoteService(
         val response = eventResponseRepository.findByEventAndUser(eventId, userId)
         return MyVoteDto(vote = response?.stage1Vote?.literal)
     }
+
+    /**
+     * Returns the list of responders (with user info + current intent) for the
+     * event. Restricted to club members — same visibility rule as voting itself.
+     */
+    fun getEventResponders(eventId: UUID, userId: UUID): List<EventResponderDto> {
+        val event = eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
+
+        if (!membershipRepository.isMember(userId, event.clubId)) {
+            throw ForbiddenException("Not a member of this club")
+        }
+
+        return eventResponseRepository.findRespondersWithUsers(eventId).map { r ->
+            EventResponderDto(
+                userId = r.userId,
+                firstName = r.firstName,
+                lastName = r.lastName,
+                avatarUrl = r.avatarUrl,
+                status = r.finalStatus?.literal ?: r.stage1Vote?.literal ?: "going"
+            )
+        }
+    }
 }

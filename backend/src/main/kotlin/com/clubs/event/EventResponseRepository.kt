@@ -62,4 +62,21 @@ interface EventResponseRepository {
      * the source of truth for reputation. Returns number of rows deleted.
      */
     fun deleteByUserAndClubAndActiveEvents(userId: UUID, clubId: UUID): Int
+
+    /**
+     * Returns all responders to the event (those with a stage-1 vote) joined with
+     * their user info, ordered going → maybe → not_going then by vote timestamp.
+     * Used to render the "who's coming" list on the event page.
+     */
+    fun findRespondersWithUsers(eventId: UUID): List<EventResponderInfo>
 }
+
+/** Repository row: a responder's user info + raw vote/final-status enums. */
+data class EventResponderInfo(
+    val userId: UUID,
+    val firstName: String,
+    val lastName: String?,
+    val avatarUrl: String?,
+    val stage1Vote: Stage_1Vote?,
+    val finalStatus: FinalStatus?
+)

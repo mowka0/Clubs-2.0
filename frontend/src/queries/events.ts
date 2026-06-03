@@ -6,6 +6,7 @@ import {
   declineParticipation,
   getClubEvents,
   getEvent,
+  getEventResponders,
   getMyEvents,
   getMyVote,
   markAttendance,
@@ -33,6 +34,14 @@ export function useMyVoteQuery(eventId: string | undefined, enabled = true) {
   return useQuery({
     queryKey: queryKeys.events.myVote(eventId ?? ''),
     queryFn: () => getMyVote(eventId!),
+    enabled: Boolean(eventId) && enabled,
+  });
+}
+
+export function useEventRespondersQuery(eventId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: [...queryKeys.events.detail(eventId ?? ''), 'responders'],
+    queryFn: () => getEventResponders(eventId!),
     enabled: Boolean(eventId) && enabled,
   });
 }

@@ -1,7 +1,6 @@
 import { FC, useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useHaptic } from '../hooks/useHaptic';
-import { BrandBackdrop } from '../components/BrandBackdrop';
 import { Toast } from '../components/Toast';
 import { EventsTab } from '../components/activities/EventsTab';
 import { SkladchinasTab } from '../components/activities/SkladchinasTab';
@@ -49,23 +48,20 @@ export const ActivitiesPage: FC = () => {
   );
 
   return (
-    <div className="brand-page">
-      <BrandBackdrop />
-
-      <header className="mc-hero">
-        <div className="mc-hero-row">
-          <h1>
-            Твои <span className="accent">активности</span>
-          </h1>
+    <div className="rd-page">
+      <header className="rd-header">
+        <div className="rd-info">
+          <div className="rd-ft-eyebrow">Что вокруг</div>
+          <div className="rd-page-h">Активности</div>
         </div>
       </header>
 
-      <div className="activities-segments" role="tablist" aria-label="Тип активностей">
+      <div className="rd-seg-control" role="tablist" aria-label="Тип активностей">
         <button
           type="button"
           role="tab"
           aria-selected={segment === 'events'}
-          className={segment === 'events' ? 'segment active' : 'segment'}
+          className={segment === 'events' ? 'rd-seg-item rd-active' : 'rd-seg-item'}
           onClick={() => handleSelect('events')}
         >
           События
@@ -74,12 +70,12 @@ export const ActivitiesPage: FC = () => {
           type="button"
           role="tab"
           aria-selected={segment === 'skladchina'}
-          className={segment === 'skladchina' ? 'segment active' : 'segment'}
+          className={segment === 'skladchina' ? 'rd-seg-item rd-active' : 'rd-seg-item'}
           onClick={() => handleSelect('skladchina')}
         >
           Сборы
           {unpaidCount > 0 && (
-            <span className="seg-badge" aria-label={`Требует оплаты: ${unpaidCount}`}>
+            <span className="rd-seg-badge" aria-label={`Требует оплаты: ${unpaidCount}`}>
               {unpaidCount}
             </span>
           )}
