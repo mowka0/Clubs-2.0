@@ -154,19 +154,19 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
 
   return createPortal(
     <>
-      <div className="pf-edit-overlay" onClick={submitting ? undefined : onClose} aria-hidden="true" />
+      <div className="rd-sheet-overlay" onClick={submitting ? undefined : onClose} aria-hidden="true" />
       <div
-        className="pf-edit-sheet"
+        className="rd-sheet"
         role="dialog"
         aria-modal="true"
         aria-label="Заявка в клуб"
       >
-        <div className="city-picker-grabber" aria-hidden="true" />
-        <div className="pf-edit-header">
+        <div className="rd-sheet-grabber" aria-hidden="true" />
+        <div className="rd-sheet-head">
           <h2>Заявка</h2>
           <button
             type="button"
-            className="city-picker-close"
+            className="rd-sheet-close"
             onClick={onClose}
             disabled={submitting}
             aria-label="Закрыть"
@@ -175,81 +175,81 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
           </button>
         </div>
 
-        <div className="pf-edit-body">
+        <div className="rd-sheet-body">
           {/* Hero — avatar + name + username */}
-          <div className="app-review-hero">
-            <div className="avt">
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <span className="rd-ico" style={{ width: 48, height: 48, fontSize: 18 }}>
               {applicant.avatarUrl ? (
                 <img src={applicant.avatarUrl} alt="" />
               ) : (
                 getInitials(applicant.firstName, applicant.lastName)
               )}
-            </div>
-            <div className="meta">
-              <div className="name">{fullName}</div>
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)' }}>{fullName}</div>
               {applicant.telegramUsername && (
-                <div className="handle">@{applicant.telegramUsername}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>@{applicant.telegramUsername}</div>
               )}
             </div>
           </div>
 
           {/* Location — only when city is present */}
           {locationLabel && (
-            <div className="app-review-location">{locationLabel}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>{locationLabel}</div>
           )}
 
           {/* About — full bio, wrapped */}
           {bio && (
-            <>
-              <label className="pf-edit-label">О себе</label>
-              <div className="app-review-bio">{bio}</div>
-            </>
+            <div className="rd-field">
+              <span className="rd-label">О себе</span>
+              <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{bio}</div>
+            </div>
           )}
 
           {/* Interests — pill chips */}
           {hasInterests && (
-            <>
-              <label className="pf-edit-label">Интересы</label>
-              <div className="app-review-interests">
+            <div className="rd-field">
+              <span className="rd-label">Интересы</span>
+              <div className="rd-tags" style={{ margin: 0 }}>
                 {applicant.interests.map((interest) => (
-                  <span key={interest} className="pf-tag">{interest}</span>
+                  <span key={interest} className="rd-tag">{interest}</span>
                 ))}
               </div>
-            </>
+            </div>
           )}
 
           {/* Peer-signal — big line under hero/profile */}
-          <div className="app-review-peer">{formatPeerSignal(peerStats)}</div>
+          <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>{formatPeerSignal(peerStats)}</div>
 
           {/* Club row */}
-          <div className="app-review-club">
+          <div style={{ fontSize: 14, color: 'var(--text)' }}>
             Клуб: <strong>{club.name}</strong>
           </div>
 
           {/* Q&A — optional */}
           {answerText && (
-            <>
-              <label className="pf-edit-label">Ответ на вопрос</label>
-              <div className="app-review-answer">{answerText}</div>
-            </>
+            <div className="rd-field">
+              <span className="rd-label">Ответ на вопрос</span>
+              <div className="rd-glass" style={{ padding: '12px 14px' }}>
+                <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{answerText}</div>
+              </div>
+            </div>
           )}
 
           {/* Auto-reject hint */}
-          <div className={`app-review-hint${hoursHint.urgent ? ' urgent' : ''}`}>
+          <div className="rd-hint" style={hoursHint.urgent ? { color: 'var(--danger)' } : undefined}>
             {hoursHint.label}
           </div>
 
-          {error && <div className="pf-edit-error">{error}</div>}
+          {error && <div className="rd-error" style={{ textAlign: 'left' }}>{error}</div>}
 
           {/* Reject-mode textarea inline so users see context above */}
           {rejectMode && (
-            <>
-              <label className="pf-edit-label" htmlFor="reject-reason">
-                Причина отказа
-              </label>
+            <div className="rd-field">
+              <span className="rd-label">Причина отказа</span>
               <textarea
                 id="reject-reason"
-                className="pf-edit-textarea"
+                className="rd-textarea"
                 value={reason}
                 maxLength={REASON_MAX}
                 rows={3}
@@ -257,19 +257,19 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
                 placeholder={`Объясните причину (минимум ${REASON_MIN} символов)`}
                 disabled={submitting}
               />
-              <div className="pf-edit-counter">
+              <div className="rd-hint" style={{ textAlign: 'right' }}>
                 {reason.length}/{REASON_MAX}
               </div>
-            </>
+            </div>
           )}
         </div>
 
-        <div className="pf-edit-actions">
+        <div className="rd-sheet-actions">
           {!rejectMode ? (
             <>
               <button
                 type="button"
-                className="ghost-btn"
+                className="rd-btn-outline"
                 onClick={handleRejectClick}
                 disabled={submitting}
               >
@@ -277,7 +277,7 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
               </button>
               <button
                 type="button"
-                className="mc-create-btn"
+                className="rd-btn-primary"
                 onClick={handleApprove}
                 disabled={submitting}
               >
@@ -288,7 +288,7 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
             <>
               <button
                 type="button"
-                className="ghost-btn"
+                className="rd-btn-outline"
                 onClick={handleRejectCancel}
                 disabled={submitting}
               >
@@ -296,7 +296,7 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
               </button>
               <button
                 type="button"
-                className="mc-create-btn"
+                className="rd-btn-primary"
                 onClick={handleRejectConfirm}
                 disabled={submitting || !reasonValid}
               >
