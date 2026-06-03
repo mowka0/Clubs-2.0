@@ -9,7 +9,6 @@ import {
   useMarkPaidMutation,
   useSkladchinaQuery,
 } from '../queries/skladchina';
-import { BrandBackdrop } from '../components/BrandBackdrop';
 import { Toast } from '../components/Toast';
 import { OrganizerParticipantList } from '../components/skladchina/OrganizerParticipantList';
 import type { SkladchinaDetailDto } from '../types/api';
@@ -60,9 +59,8 @@ export const SkladchinaPage: FC = () => {
 
   if (query.isPending) {
     return (
-      <div className="brand-page">
-        <BrandBackdrop />
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
+      <div className="rd-page">
+        <div className="rd-spinner-row" style={{ paddingTop: 60 }}>
           <Spinner size="m" />
         </div>
       </div>
@@ -71,9 +69,8 @@ export const SkladchinaPage: FC = () => {
 
   if (query.isError || !query.data) {
     return (
-      <div className="brand-page">
-        <BrandBackdrop />
-        <div style={{ padding: 40, textAlign: 'center', color: 'var(--brand-ink-3)' }}>
+      <div className="rd-page">
+        <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)' }}>
           Не удалось загрузить сбор. Попробуйте позже.
         </div>
       </div>
@@ -157,104 +154,109 @@ export const SkladchinaPage: FC = () => {
     navigate(`/clubs/${s.clubId}`);
   };
 
-  return (
-    <div className="brand-page">
-      <BrandBackdrop />
+  const statusCls =
+    s.status === 'closed_failed' ? 'rd-decline'
+    : s.status === 'cancelled' ? 'rd-neutral2'
+    : 'rd-going';
 
+  return (
+    <div className="rd-page">
       <button
         type="button"
-        className="sklad-club-card"
+        className="rd-glass rd-host-row"
         onClick={handleBackToClub}
         aria-label={`Открыть клуб ${s.clubName}`}
+        style={{ width: '100%', marginBottom: 14, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
       >
-        <span className="club-avt">
+        <span className="rd-ico">
           {s.clubAvatarUrl
             ? <img src={s.clubAvatarUrl} alt="" />
             : s.clubName.split(/\s+/).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join('')}
         </span>
-        <div className="club-body">
-          <span className="club-label">Сбор в клубе</span>
-          <span className="club-name">{s.clubName}</span>
+        <div className="rd-info">
+          <div className="rd-met">Сбор в клубе</div>
+          <div className="rd-ttl">{s.clubName}</div>
         </div>
-        <span className="chevron" aria-hidden="true">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-        </span>
+        <span aria-hidden="true" style={{ color: 'var(--text-faint)', fontSize: 20, lineHeight: 1 }}>›</span>
       </button>
 
-      <header className="sklad-hero">
-        <h1 className="sklad-title">{s.title}</h1>
-        <div className="sklad-meta">
-          <span className={`sklad-status sklad-status-${s.status}`}>{statusLabel(s.status)}</span>
-          <span className="sklad-mode">{paymentModeLabel(s.paymentMode)}</span>
-          {s.affectsReputation && (
-            <span className="sklad-reputation-tag" title="Этот сбор влияет на репутацию">
-              ⚠️ С репутацией
-            </span>
-          )}
-        </div>
-      </header>
+      <div className="rd-ft-eyebrow">Сбор</div>
+      <h1 className="rd-page-h" style={{ marginBottom: 10 }}>{s.title}</h1>
+      <div className="rd-badges-row" style={{ marginBottom: 16 }}>
+        <span className={`rd-badge ${statusCls}`}>{statusLabel(s.status)}</span>
+        <span className="rd-badge rd-neutral2">{paymentModeLabel(s.paymentMode)}</span>
+        {s.affectsReputation && (
+          <span className="rd-badge rd-warn" title="Этот сбор влияет на репутацию">⚠️ С репутацией</span>
+        )}
+      </div>
 
       {s.photoUrl && (
-        <div className="sklad-photo">
-          <img src={s.photoUrl} alt="Фото сбора" />
+        <div className="rd-glass" style={{ overflow: 'hidden', padding: 0, marginBottom: 14 }}>
+          <img src={s.photoUrl} alt="Фото сбора" style={{ width: '100%', display: 'block' }} />
         </div>
       )}
 
-      {s.description && <p className="sklad-description">{s.description}</p>}
+      {s.description && (
+        <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
+          <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{s.description}</div>
+        </div>
+      )}
 
       {s.rules && (
-        <div className="sklad-rules">
-          <div className="sklad-block-title">Правила</div>
-          <p>{s.rules}</p>
-        </div>
+        <>
+          <div className="rd-section-sub-h">Правила</div>
+          <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
+            <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{s.rules}</div>
+          </div>
+        </>
       )}
 
-      <div className="sklad-progress-block">
-        <div className="sklad-amounts">
+      <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
+        <div className="rd-amounts">
           {hasGoal ? (
             <>
-              <span className="collected">{formatRubles(s.collectedKopecks)} ₽</span>
-              <span className="sep">из</span>
-              <span className="goal">{formatRubles(s.totalGoalKopecks!)} ₽</span>
-              {percent !== null && <span className="percent">{percent}%</span>}
+              <span className="rd-collected">{formatRubles(s.collectedKopecks)} ₽</span>
+              <span className="rd-sep">из</span>
+              <span className="rd-goal">{formatRubles(s.totalGoalKopecks!)} ₽</span>
+              {percent !== null && <span className="rd-pct">{percent}%</span>}
             </>
           ) : (
             <>
-              <span className="collected">{formatRubles(s.collectedKopecks)} ₽</span>
-              <span className="voluntary-note">собрано (по желанию)</span>
+              <span className="rd-collected">{formatRubles(s.collectedKopecks)} ₽</span>
+              <span className="rd-vol-note">собрано (по желанию)</span>
             </>
           )}
         </div>
         {hasGoal && (
-          <div className="progress-bar">
-            <div className="fill" style={{ width: `${percent}%` }} />
+          <div className="rd-progress">
+            <div className="rd-fill" style={{ width: `${percent}%` }} />
           </div>
         )}
-        <div className="sklad-stats">
+        <div className="rd-sklad-stats">
           {s.paidCount}/{s.participantCount} оплатили · до {DEADLINE_FMT.format(new Date(s.deadline))}
         </div>
       </div>
 
-      <div className="sklad-payment-block">
-        <div className="sklad-block-title">Платёжная ссылка</div>
-        {s.paymentMethodNote && <div className="payment-note">{s.paymentMethodNote}</div>}
-        <button type="button" className="payment-link-btn" onClick={handleOpenPaymentLink}>
+      <div className="rd-section-sub-h">Платёжная ссылка</div>
+      <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
+        {s.paymentMethodNote && (
+          <div className="rd-body-text" style={{ margin: '0 0 10px', padding: 0 }}>{s.paymentMethodNote}</div>
+        )}
+        <button type="button" className="rd-btn-primary" onClick={handleOpenPaymentLink}>
           Открыть в банке
         </button>
-        <div className="payment-link-text">{s.paymentLink}</div>
+        <div className="rd-payment-link-text">{s.paymentLink}</div>
       </div>
 
       {isActive && isMemberParticipant && s.myStatus === 'pending' && (
-        <div className="sklad-action-block">
-          <div className="sklad-block-title">Подтвердите оплату</div>
+        <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
+          <div className="rd-section-sub-h" style={{ marginTop: 0 }}>Подтвердите оплату</div>
           {s.myExpectedAmountKopecks != null && (
-            <div className="expected-note">
+            <div className="rd-hint" style={{ marginBottom: 10 }}>
               Ожидаемая сумма: {formatRubles(s.myExpectedAmountKopecks)} ₽
             </div>
           )}
-          <div className="amount-row">
+          <div style={{ position: 'relative', marginBottom: 10 }}>
             <input
               type="number"
               inputMode="decimal"
@@ -264,15 +266,16 @@ export const SkladchinaPage: FC = () => {
               value={amountInput}
               onChange={(e) => setAmountInput(e.target.value)}
               readOnly={s.paymentMode !== 'voluntary' && expectedRub !== null}
-              className="amount-input"
+              className="rd-input"
+              style={{ paddingRight: 32 }}
             />
-            <span className="suffix">₽</span>
+            <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }}>₽</span>
           </div>
-          {actionError && <div className="action-error">{actionError}</div>}
-          <div className="action-row">
+          {actionError && <div className="rd-error">{actionError}</div>}
+          <div className="rd-form-actions">
             <button
               type="button"
-              className="primary-btn"
+              className="rd-btn-primary"
               onClick={handleMarkPaid}
               disabled={markPaidMut.isPending}
             >
@@ -280,7 +283,7 @@ export const SkladchinaPage: FC = () => {
             </button>
             <button
               type="button"
-              className="ghost-btn"
+              className="rd-btn-outline"
               onClick={handleDecline}
               disabled={declineMut.isPending}
             >
@@ -291,20 +294,22 @@ export const SkladchinaPage: FC = () => {
       )}
 
       {isMemberParticipant && s.myStatus !== 'pending' && (
-        <div className="sklad-my-status">
+        <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
           {s.myStatus === 'paid' && (
             <>
-              <div className="title">Вы оплатили</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Вы оплатили</div>
               {s.myDeclaredAmountKopecks != null && (
-                <div className="sub">{formatRubles(s.myDeclaredAmountKopecks)} ₽</div>
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>
+                  {formatRubles(s.myDeclaredAmountKopecks)} ₽
+                </div>
               )}
             </>
           )}
           {s.myStatus === 'declined' && (
-            <div className="title">Вы отказались от участия</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Вы отказались от участия</div>
           )}
           {s.myStatus === 'expired_no_response' && (
-            <div className="title">Срок истёк, оплата не зарегистрирована</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Срок истёк, оплата не зарегистрирована</div>
           )}
         </div>
       )}
@@ -317,16 +322,17 @@ export const SkladchinaPage: FC = () => {
       )}
 
       {isActive && isCreator && (
-        <div className="sklad-action-block">
+        <div style={{ marginTop: 4 }}>
           <button
             type="button"
-            className="ghost-btn"
+            className="rd-btn-outline"
             onClick={handleClose}
             disabled={closeMut.isPending}
+            style={{ color: 'var(--danger)' }}
           >
             {closeMut.isPending ? 'Закрываем…' : 'Закрыть сбор'}
           </button>
-          {actionError && <div className="action-error">{actionError}</div>}
+          {actionError && <div className="rd-error" style={{ marginTop: 8 }}>{actionError}</div>}
         </div>
       )}
 

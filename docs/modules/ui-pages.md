@@ -15,9 +15,10 @@ src/
     DiscoveryPage.tsx          — основная страница (brand layout: topbar + hero + search + chips + list)
   components/
     ClubCard.tsx               — карточка клуба (gradient avatar + capacity bar + featured state)
-    BrandBackdrop.tsx          — SVG абстракция (navy blobs + brass glows + contour lines). Используется на Discovery, ClubPage, MyClubsPage. Раньше назывался DiscoveryBackdrop, переименован в `feature/myclubs-redesign` (2026-05-16)
+    (BrandBackdrop.tsx удалён в `feature/redesign-skladchina-and-forms` — после Banco-редизайна все экраны на плоском `rd-page`, последний пользователь ушёл)
   styles/
-    brand-theme.css            — палитра navy + brass + component-CSS
+    brand-theme.css            — легаси палитра/компоненты (частично dead-CSS после Banco-редизайна)
+    redesign.css               — Banco-Plata rd-дизайн-система (см. redesign-banco-style.md)
   public/brand/                — production-ready brand assets (logo + 4 tab иконки)
 ```
 
@@ -259,7 +260,7 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 
 ## ProfilePage — Профиль (`/profile`, нижний таб «Профиль»)
 
-> **Status (2026-05-30):** ✅ реализовано в `feature/profile-reputation-and-skladchina-badge`. Полная спека — [`profile.md`](./profile.md). Файл `frontend/src/pages/ProfilePage.tsx`. Раньше — TGUI `List/Section/Cell`, теперь `.brand-page` + `BrandBackdrop` (единый бренд-стиль).
+> **Status (2026-05-30):** ✅ реализовано в `feature/profile-reputation-and-skladchina-badge`. Полная спека — [`profile.md`](./profile.md). Файл `frontend/src/pages/ProfilePage.tsx`. Переведён на Banco-редизайн (`rd-page`, см. [`redesign-banco-style.md`](./redesign-banco-style.md)).
 
 ### Структура
 

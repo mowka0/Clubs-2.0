@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
-import { BrandBackdrop } from '../components/BrandBackdrop';
 import { AvatarUpload } from '../components/AvatarUpload';
 import { useClubMembersQuery } from '../queries/members';
 import { useCreateSkladchinaMutation } from '../queries/skladchina';
@@ -80,9 +79,8 @@ export const CreateSkladchinaPage: FC = () => {
 
   if (!clubId) {
     return (
-      <div className="brand-page">
-        <BrandBackdrop />
-        <div style={{ padding: 40, textAlign: 'center', color: 'var(--brand-ink-3)' }}>
+      <div className="rd-page">
+        <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)' }}>
           Клуб не найден
         </div>
       </div>
@@ -162,50 +160,45 @@ export const CreateSkladchinaPage: FC = () => {
   };
 
   return (
-    <div className="brand-page">
-      <BrandBackdrop />
+    <div className="rd-page">
+      <div className="rd-ft-eyebrow">Создание</div>
+      <h1 className="rd-page-h" style={{ marginBottom: 18 }}>Новый сбор</h1>
 
-      <header className="mc-hero">
-        <div className="mc-hero-row">
-          <h1>Новый <span className="accent">сбор</span></h1>
-        </div>
-      </header>
-
-      <div className="sklad-create-modal sklad-create-as-page">
-        <label className="field">
-          <span className="label">Название *</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={255} />
+      <div className="rd-form">
+        <label className="rd-field">
+          <span className="rd-label">Название <span className="rd-req">*</span></span>
+          <input className="rd-input" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={255} />
         </label>
 
-        <label className="field">
-          <span className="label">Описание</span>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+        <label className="rd-field">
+          <span className="rd-label">Описание</span>
+          <textarea className="rd-textarea" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
         </label>
 
-        <label className="field">
-          <span className="label">Правила (опц.)</span>
-          <textarea value={rules} onChange={(e) => setRules(e.target.value)} rows={2} />
+        <label className="rd-field">
+          <span className="rd-label">Правила (опц.)</span>
+          <textarea className="rd-textarea" value={rules} onChange={(e) => setRules(e.target.value)} rows={2} />
         </label>
 
-        <div className="field">
-          <span className="label">Фото (опц.)</span>
+        <div className="rd-field">
+          <span className="rd-label">Фото (опц.)</span>
           <AvatarUpload value={photoUrl} onChange={setPhotoUrl} />
         </div>
 
-        <div className="field">
-          <span className="label">Порядок сбора *</span>
-          <div className="mode-options">
+        <div className="rd-field">
+          <span className="rd-label">Порядок сбора <span className="rd-req">*</span></span>
+          <div className="rd-mode-list">
             {(Object.keys(MODE_LABELS) as SkladchinaMode[]).map((m) => (
-              <label key={m} className={mode === m ? 'mode-option active' : 'mode-option'}>
+              <label key={m} className={mode === m ? 'rd-mode-option rd-active' : 'rd-mode-option'}>
                 <input
                   type="radio"
                   name="mode"
                   checked={mode === m}
                   onChange={() => setMode(m)}
                 />
-                <div className="mode-text">
-                  <div className="mode-title">{MODE_LABELS[m]}</div>
-                  <div className="mode-desc">{MODE_DESCRIPTIONS[m]}</div>
+                <div>
+                  <div className="rd-mo-title">{MODE_LABELS[m]}</div>
+                  <div className="rd-mo-desc">{MODE_DESCRIPTIONS[m]}</div>
                 </div>
               </label>
             ))}
@@ -213,9 +206,10 @@ export const CreateSkladchinaPage: FC = () => {
         </div>
 
         {mode === 'fixed_equal' && (
-          <label className="field">
-            <span className="label">Общая сумма (₽) *</span>
+          <label className="rd-field">
+            <span className="rd-label">Общая сумма (₽) <span className="rd-req">*</span></span>
             <input
+              className="rd-input"
               type="number"
               inputMode="decimal"
               min="1"
@@ -226,38 +220,41 @@ export const CreateSkladchinaPage: FC = () => {
           </label>
         )}
 
-        <label className="field">
-          <span className="label">Платёжная ссылка *</span>
+        <label className="rd-field">
+          <span className="rd-label">Платёжная ссылка <span className="rd-req">*</span></span>
           <input
+            className="rd-input"
             value={paymentLink}
             onChange={(e) => setPaymentLink(e.target.value)}
             placeholder="https://www.tinkoff.ru/cf/…"
           />
-          <span className="hint">⚠️ Ссылка будет видна всем участникам сбора</span>
+          <span className="rd-hint">⚠️ Ссылка будет видна всем участникам сбора</span>
         </label>
 
-        <label className="field">
-          <span className="label">Банк / способ (опц.)</span>
+        <label className="rd-field">
+          <span className="rd-label">Банк / способ (опц.)</span>
           <input
+            className="rd-input"
             value={paymentMethodNote}
             onChange={(e) => setPaymentMethodNote(e.target.value)}
             placeholder="Тинькофф, СБП, ВТБ…"
           />
         </label>
 
-        <label className="field">
-          <span className="label">Срок до *</span>
-          <div className="brand-datetime">
+        <label className="rd-field">
+          <span className="rd-label">Срок до <span className="rd-req">*</span></span>
+          <div className="rd-datetime">
             <input
+              className="rd-input"
               type="datetime-local"
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
             />
-            <span className="brand-datetime-ico" aria-hidden="true"><CalendarIcon /></span>
+            <span className="rd-dt-ico" aria-hidden="true"><CalendarIcon /></span>
           </div>
         </label>
 
-        <label className="field checkbox">
+        <label className="rd-check">
           <input
             type="checkbox"
             checked={affectsReputation}
@@ -266,39 +263,34 @@ export const CreateSkladchinaPage: FC = () => {
           <span>Влияет на репутацию участников (за неответ −25, за отказ −5)</span>
         </label>
 
-        <div className="field">
-          <span className="label">
-            Участники * <span className="count">· выбрано {selectedIds.size}</span>
+        <div className="rd-field">
+          <span className="rd-label">
+            Участники <span className="rd-req">*</span> <span className="rd-count">· выбрано {selectedIds.size}</span>
           </span>
           {membersQuery.isPending && <Spinner size="s" />}
           {!membersQuery.isPending && eligibleMembers.length === 0 && (
-            <div className="hint">В клубе пока нет активных участников.</div>
+            <div className="rd-hint">В клубе пока нет активных участников.</div>
           )}
           {eligibleMembers.length > 0 && (
-            <div className="participants-list">
+            <div className="rd-pick-list">
               {eligibleMembers.map((m) => {
                 const isSelected = selectedIds.has(m.userId);
                 const isCancelled = m.subscriptionCancelled === true;
-                const rowClass = [
-                  'p-row',
-                  isSelected ? 'selected' : '',
-                  isCancelled ? 'disabled' : '',
-                ].filter(Boolean).join(' ');
                 return (
-                  <div key={m.userId} className={rowClass}>
+                  <div key={m.userId} className="rd-pick-row">
                     <button
                       type="button"
-                      className="p-toggle"
+                      className={`rd-pick-toggle${isSelected ? ' rd-selected' : ''}`}
                       onClick={() => toggleParticipant(m.userId)}
                       disabled={isCancelled}
                       aria-disabled={isCancelled}
                     >
-                      <span className="check">{isSelected ? '✓' : ''}</span>
-                      <span className="name">
+                      <span className="rd-check-box">{isSelected ? '✓' : ''}</span>
+                      <span className="rd-pick-name">
                         {m.firstName}{m.lastName ? ` ${m.lastName}` : ''}
                       </span>
                       {isCancelled && (
-                        <span className="cancelled-note">Отменил подписку</span>
+                        <span className="rd-pick-note">Отменил подписку</span>
                       )}
                     </button>
                     {!isCancelled && mode === 'fixed_individual' && isSelected && (
@@ -307,7 +299,7 @@ export const CreateSkladchinaPage: FC = () => {
                         inputMode="decimal"
                         min="1"
                         placeholder="₽"
-                        className="individual-amount"
+                        className="rd-input rd-pick-amount"
                         value={individualAmounts[m.userId] ?? ''}
                         onChange={(e) =>
                           setIndividualAmounts((prev) => ({ ...prev, [m.userId]: e.target.value }))
@@ -321,13 +313,13 @@ export const CreateSkladchinaPage: FC = () => {
           )}
         </div>
 
-        {submitError && <div className="submit-error">{submitError}</div>}
+        {submitError && <div className="rd-error">{submitError}</div>}
 
-        <div className="modal-actions">
-          <button type="button" className="ghost-btn" onClick={handleCancel}>Отмена</button>
+        <div className="rd-form-actions">
+          <button type="button" className="rd-btn-outline" onClick={handleCancel}>Отмена</button>
           <button
             type="button"
-            className="primary-btn"
+            className="rd-btn-primary"
             onClick={handleSubmit}
             disabled={createMut.isPending}
           >

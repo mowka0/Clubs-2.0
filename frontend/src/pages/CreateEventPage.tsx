@@ -2,7 +2,6 @@ import { FC, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
-import { BrandBackdrop } from '../components/BrandBackdrop';
 import { BrandStepper } from '../components/BrandStepper';
 import { AvatarUpload } from '../components/AvatarUpload';
 import { useCreateEventMutation } from '../queries/events';
@@ -37,9 +36,8 @@ export const CreateEventPage: FC = () => {
 
   if (!clubId) {
     return (
-      <div className="brand-page">
-        <BrandBackdrop />
-        <div style={{ padding: 40, textAlign: 'center', color: 'var(--brand-ink-3)' }}>
+      <div className="rd-page">
+        <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)' }}>
           Клуб не найден
         </div>
       </div>
@@ -100,19 +98,15 @@ export const CreateEventPage: FC = () => {
   };
 
   return (
-    <div className="brand-page">
-      <BrandBackdrop />
+    <div className="rd-page">
+      <div className="rd-ft-eyebrow">Создание</div>
+      <h1 className="rd-page-h" style={{ marginBottom: 18 }}>Новое событие</h1>
 
-      <header className="mc-hero">
-        <div className="mc-hero-row">
-          <h1>Новое <span className="accent">событие</span></h1>
-        </div>
-      </header>
-
-      <div className="sklad-create-modal sklad-create-as-page">
-        <label className="field">
-          <span className="label">Название *</span>
+      <div className="rd-form">
+        <label className="rd-field">
+          <span className="rd-label">Название <span className="rd-req">*</span></span>
           <input
+            className="rd-input"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             maxLength={TITLE_MAX}
@@ -120,14 +114,15 @@ export const CreateEventPage: FC = () => {
           />
         </label>
 
-        <div className="field">
-          <span className="label">Фото (опц.)</span>
+        <div className="rd-field">
+          <span className="rd-label">Фото (опц.)</span>
           <AvatarUpload value={photoUrl} onChange={setPhotoUrl} />
         </div>
 
-        <label className="field">
-          <span className="label">Описание</span>
+        <label className="rd-field">
+          <span className="rd-label">Описание</span>
           <textarea
+            className="rd-textarea"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
@@ -135,9 +130,10 @@ export const CreateEventPage: FC = () => {
           />
         </label>
 
-        <label className="field">
-          <span className="label">Место *</span>
+        <label className="rd-field">
+          <span className="rd-label">Место <span className="rd-req">*</span></span>
           <input
+            className="rd-input"
             value={locationText}
             onChange={(e) => setLocationText(e.target.value)}
             maxLength={LOCATION_MAX}
@@ -145,20 +141,21 @@ export const CreateEventPage: FC = () => {
           />
         </label>
 
-        <label className="field">
-          <span className="label">Дата и время *</span>
-          <div className="brand-datetime">
+        <label className="rd-field">
+          <span className="rd-label">Дата и время <span className="rd-req">*</span></span>
+          <div className="rd-datetime">
             <input
+              className="rd-input"
               type="datetime-local"
               value={eventDatetime}
               onChange={(e) => setEventDatetime(e.target.value)}
             />
-            <span className="brand-datetime-ico" aria-hidden="true"><CalendarIcon /></span>
+            <span className="rd-dt-ico" aria-hidden="true"><CalendarIcon /></span>
           </div>
         </label>
 
-        <div className="field">
-          <span className="label">Лимит участников *</span>
+        <div className="rd-field">
+          <span className="rd-label">Лимит участников <span className="rd-req">*</span></span>
           <BrandStepper
             value={participantLimit}
             onChange={setParticipantLimit}
@@ -168,15 +165,15 @@ export const CreateEventPage: FC = () => {
           />
         </div>
 
-        {submitError && <div className="submit-error">{submitError}</div>}
+        {submitError && <div className="rd-error">{submitError}</div>}
 
-        <div className="modal-actions">
-          <button type="button" className="ghost-btn" onClick={handleCancel}>
+        <div className="rd-form-actions">
+          <button type="button" className="rd-btn-outline" onClick={handleCancel}>
             Отмена
           </button>
           <button
             type="button"
-            className="primary-btn"
+            className="rd-btn-primary"
             onClick={handleSubmit}
             disabled={createMut.isPending}
           >

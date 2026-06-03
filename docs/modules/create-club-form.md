@@ -26,6 +26,15 @@
 
 ## Решение `register` vs `Controller`
 
+> **[Banco-редизайн, `feature/redesign-skladchina-and-forms`]** Wizard переведён на rd-дизайн:
+> telegram-ui `Input/Select/Textarea/Section/Cell/Button` заменены на нативные элементы с
+> rd-классами (`rd-field`/`rd-label`/`rd-input`/`rd-textarea`/`rd-select`/`rd-mode-option`/
+> `rd-btn-*`). `register` ложится на нативные `<input>/<textarea>/<select>` напрямую — **Controller
+> не нужен**, forward-ref проблема снята. Лейблы остались текстовыми (`<label class="rd-field">`),
+> так что `getByLabelText` в тестах работает. Модалка-обёртка — telegram-ui `Modal` (в `MyClubsPage`),
+> контент в `.rd-modal-form` (box-sizing reset, т.к. портал вне `.rd-page`). Стили — `redesign.css`
+> § Forms. CSS-блок ниже описывает исходное (telegram-ui) решение — историчен.
+
 Telegram-UI компоненты (`Input`, `Textarea`, `Select`) — controlled (`value` + `onChange`). Forward ref может работать чисто, может нет.
 
 **Порядок действий Developer'а:**

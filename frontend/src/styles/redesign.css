@@ -654,3 +654,111 @@
   cursor: pointer; font-family: inherit;
 }
 .rd-spinner-row { display: flex; justify-content: center; padding: 24px 0; }
+
+/* ============================================================
+   Forms (create-event / create-skladchina / create-club / settings)
+   Native inputs styled to match the rd surface language. Works with
+   plain <input>/<textarea>/<select> and react-hook-form `register`.
+   ============================================================ */
+/* Modal-hosted forms render in a portal outside `.rd-page`, so they miss the
+   page-level border-box reset — scope one here. */
+.rd-modal-form, .rd-modal-form * { box-sizing: border-box; }
+
+.rd-form { display: flex; flex-direction: column; gap: 16px; }
+.rd-field { display: flex; flex-direction: column; gap: 7px; }
+.rd-field > .rd-label { font-size: 12px; font-weight: 600; color: var(--text-dim); padding-left: 2px; }
+.rd-field > .rd-label .rd-req { color: var(--accent); }
+.rd-field > .rd-label .rd-count { color: var(--text-faint); font-weight: 500; }
+
+.rd-input, .rd-textarea, .rd-select {
+  width: 100%; background: var(--surface); border: 1px solid var(--hairline);
+  border-radius: 14px; padding: 13px 14px; font-size: 15px; color: var(--text);
+  font-family: inherit; outline: 0; -webkit-appearance: none; appearance: none;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.rd-input::placeholder, .rd-textarea::placeholder { color: var(--text-faint); }
+.rd-input:focus, .rd-textarea:focus, .rd-select:focus {
+  border-color: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.rd-input.rd-invalid, .rd-textarea.rd-invalid { border-color: var(--danger); }
+.rd-textarea { resize: vertical; min-height: 78px; line-height: 1.45; }
+
+/* select — custom chevron via wrapper (appearance reset above) */
+.rd-select-wrap { position: relative; }
+.rd-select { padding-right: 36px; cursor: pointer; }
+.rd-select-wrap::after {
+  content: '▾'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--text-faint); pointer-events: none; font-size: 12px;
+}
+
+.rd-hint { font-size: 11.5px; color: var(--text-faint); line-height: 1.4; padding-left: 2px; }
+
+/* datetime — native control + trailing icon */
+.rd-datetime { position: relative; }
+.rd-datetime .rd-input { padding-right: 42px; }
+.rd-datetime .rd-dt-ico {
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--text-faint); pointer-events: none; display: flex;
+}
+
+/* form action row (Cancel / Submit side by side) */
+.rd-form-actions { display: flex; gap: 10px; margin-top: 6px; }
+.rd-form-actions > .rd-btn-primary, .rd-form-actions > .rd-btn-outline { flex: 1; width: auto; }
+
+/* radio "mode" cards */
+.rd-mode-list { display: flex; flex-direction: column; gap: 8px; }
+.rd-mode-option {
+  display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px;
+  border-radius: 14px; background: var(--surface); border: 1px solid var(--hairline);
+  cursor: pointer;
+}
+.rd-mode-option.rd-active { border-color: var(--accent-soft); background: var(--accent-soft); }
+.rd-mode-option input { margin-top: 2px; accent-color: var(--accent); flex-shrink: 0; }
+.rd-mode-option .rd-mo-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.rd-mode-option .rd-mo-desc { font-size: 12px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
+
+/* checkbox row */
+.rd-check { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.rd-check input { margin-top: 1px; width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--accent); }
+.rd-check span { font-size: 13px; color: var(--text-dim); line-height: 1.45; }
+
+/* participant picker */
+.rd-pick-list { display: flex; flex-direction: column; gap: 6px; }
+.rd-pick-row { display: flex; align-items: center; gap: 8px; }
+.rd-pick-toggle {
+  flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 11px 12px; border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--hairline);
+  color: var(--text); font-family: inherit; font-size: 14px; cursor: pointer; text-align: left;
+}
+.rd-pick-toggle.rd-selected { border-color: var(--accent-soft); background: var(--accent-soft); }
+.rd-pick-toggle:disabled { opacity: 0.45; cursor: default; }
+.rd-pick-toggle .rd-check-box {
+  width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0;
+  border: 1.5px solid var(--hairline-2); display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: var(--on-accent);
+}
+.rd-pick-toggle.rd-selected .rd-check-box { background: var(--accent-grad); border-color: transparent; }
+.rd-pick-toggle .rd-pick-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-pick-toggle .rd-pick-note { font-size: 11px; color: var(--text-faint); flex-shrink: 0; }
+.rd-pick-amount { width: 96px; flex-shrink: 0; }
+
+/* ============================================================
+   Skladchina detail page
+   ============================================================ */
+.rd-amounts { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.rd-amounts .rd-collected {
+  font-size: 30px; font-weight: 800; letter-spacing: -0.02em; line-height: 1;
+  background: var(--grad-num); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.rd-amounts .rd-sep { font-size: 13px; color: var(--text-faint); }
+.rd-amounts .rd-goal { font-size: 16px; font-weight: 600; color: var(--text-dim); }
+.rd-amounts .rd-pct { margin-left: auto; font-size: 14px; font-weight: 700; color: var(--accent); }
+.rd-amounts .rd-vol-note { font-size: 12px; color: var(--text-dim); }
+.rd-sklad-stats { font-size: 12px; color: var(--text-dim); margin-top: 8px; }
+.rd-payment-link-text {
+  font-size: 11px; color: var(--text-faint); margin-top: 8px;
+  word-break: break-all; line-height: 1.4;
+}
+.rd-badge.rd-neutral2 { background: var(--surface); color: var(--text-dim); border: 1px solid var(--hairline); }
