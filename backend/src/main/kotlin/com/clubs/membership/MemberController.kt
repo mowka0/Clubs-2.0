@@ -7,6 +7,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
@@ -17,9 +18,10 @@ class MemberController(private val memberService: MemberService) {
     @GetMapping("/{clubId}/members")
     fun getMembers(
         @PathVariable clubId: UUID,
+        @RequestParam(name = "includeCancelled", required = false, defaultValue = "false") includeCancelled: Boolean,
         @AuthenticationPrincipal caller: AuthenticatedUser
     ): ResponseEntity<List<MemberListItemDto>> =
-        ResponseEntity.ok(memberService.getClubMembers(clubId, caller.userId))
+        ResponseEntity.ok(memberService.getClubMembers(clubId, caller.userId, includeCancelled))
 
     @GetMapping("/{clubId}/members/{userId}")
     fun getMemberProfile(

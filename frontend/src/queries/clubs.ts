@@ -14,7 +14,7 @@ import {
   updateClub,
 } from '../api/clubs';
 import type { ClubFilters, CreateClubBody, UpdateClubBody } from '../api/clubs';
-import { applyToClub, joinByInviteCode, joinClub } from '../api/membership';
+import { applyToClub, joinByInviteCode, joinClub, leaveClub } from '../api/membership';
 import { queryKeys } from './queryKeys';
 
 const PAGE_SIZE = '20';
@@ -103,6 +103,38 @@ export function useJoinClubMutation() {
     onSuccess: (_data, clubId) => {
       qc.invalidateQueries({ queryKey: queryKeys.clubs.detail(clubId) });
       qc.invalidateQueries({ queryKey: queryKeys.clubs.my() });
+    },
+  });
+}
+
+/**
+ * Leave the club. Backend cascade for free clubs deletes the caller's RSVPs
+ * in active events and participation rows in active skladchinas, plus any
+ * pending/approved application. For paid clubs only the application + the
+ * subscription itself flip — RSVPs/skladchinas stay valid until expire.
+ * We invalidate aggressively so MyClubsPage, ClubPage, the feeds and per-
+ * skladchina/event detail caches all refetch instead of showing the user
+ * still in a sbor / awaiting-payment list.
+ */
+export function useLeaveClubMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (clubId: string) => leaveClub(clubId),
+    onSuccess: (_data, clubId) => {
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.my() });
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.detail(clubId) });
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.members(clubId) });
+      qc.invalidateQueries({ queryKey: queryKeys.applications.mine() });
+      qc.invalidateQueries({ queryKey: queryKeys.applications.myAwaitingPayment });
+      qc.invalidateQueries({ queryKey: queryKeys.applications.organizerAwaitingPayment });
+      qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingActionCounts });
+      qc.invalidateQueries({ queryKey: queryKeys.events.all });
+      qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.all });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.byClubActive(clubId) });
+      qc.invalidateQueries({ queryKey: queryKeys.activities.byClubAll(clubId) });
     },
   });
 }

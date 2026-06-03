@@ -26,6 +26,22 @@ export function joinClub(clubId: string): Promise<JoinClubResult> {
   return apiClient.post<JoinClubResult>(`/api/clubs/${clubId}/join`);
 }
 
+/**
+ * Cancel caller's membership in [clubId]. Backend semantics depend on the
+ * club's `subscription_price`:
+ *  - Free club  → immediate cascade-cancel (status=cancelled, member_count-=1,
+ *                 active skladchinas/event-responses cleared).
+ *  - Paid club  → autorenew off (status=cancelled, access kept until
+ *                 `subscription_expires_at`, no cascade, member_count unchanged).
+ * Errors:
+ *  - 400 «Owner cannot leave the club»
+ *  - 404 «Membership not found» (not a member, or already cancelled/expired).
+ * See docs/modules/club-leave.md.
+ */
+export function leaveClub(clubId: string): Promise<MembershipDto> {
+  return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/leave`);
+}
+
 export function applyToClub(clubId: string, answerText: string): Promise<ApplicationDto> {
   return apiClient.post<ApplicationDto>(`/api/clubs/${clubId}/apply`, { answerText });
 }
@@ -38,8 +54,24 @@ export function joinByInviteCode(code: string): Promise<JoinClubResult> {
   return apiClient.post<JoinClubResult>(`/api/invite/${code}/join`);
 }
 
-export function getClubMembers(clubId: string): Promise<MemberListItemDto[]> {
-  return apiClient.get<MemberListItemDto[]>(`/api/clubs/${clubId}/members`);
+export interface GetClubMembersOptions {
+  /**
+   * If true, include paid members who already cancelled their subscription but
+   * are still inside the paid period (`subscription_expires_at > now`). Used
+   * by the skladchina-create flow to render them as disabled with a
+   * «Отменил подписку» tag. Defaults to false — every other caller gets the
+   * legacy active-only list.
+   */
+  includeCancelled?: boolean;
+}
+
+export function getClubMembers(
+  clubId: string,
+  options: GetClubMembersOptions = {},
+): Promise<MemberListItemDto[]> {
+  const params: Record<string, string> = {};
+  if (options.includeCancelled) params.includeCancelled = 'true';
+  return apiClient.get<MemberListItemDto[]>(`/api/clubs/${clubId}/members`, params);
 }
 
 /**

@@ -16,6 +16,7 @@ import {
   useApplyToClubMutation,
   useClubQuery,
   useJoinClubMutation,
+  useLeaveClubMutation,
   useMyClubsQuery,
 } from '../queries/clubs';
 import {
@@ -27,6 +28,7 @@ import { isPendingPayment } from '../types/api';
 import { formatPrice } from '../utils/formatters';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
+import { LeaveClubModal } from '../components/club/LeaveClubModal';
 import { BrandBackdrop } from '../components/BrandBackdrop';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -57,6 +59,14 @@ function getClubInitials(name: string): string {
     .join('');
 }
 
+function formatExpiryDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
 const LockIcon: FC = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <rect x="4" y="11" width="16" height="11" rx="2.5" />
@@ -68,6 +78,14 @@ const ClosedChipIcon: FC = () => (
   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true">
     <rect x="5" y="11" width="14" height="10" rx="2" />
     <path d="M8 11V8a4 4 0 1 1 8 0v3" />
+  </svg>
+);
+
+const LeaveIcon: FC = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <path d="M16 17l5-5-5-5" />
+    <path d="M21 12H9" />
   </svg>
 );
 
@@ -85,6 +103,7 @@ export const ClubPage: FC = () => {
   const joinMutation = useJoinClubMutation();
   const applyMutation = useApplyToClubMutation();
   const completeFreeMutation = useCompleteFreeMembershipMutation();
+  const leaveMutation = useLeaveClubMutation();
 
   const [joinError, setJoinError] = useState<string | null>(null);
   const [showApplyModal, setShowApplyModal] = useState(false);
@@ -92,14 +111,26 @@ export const ClubPage: FC = () => {
   const [joinSuccess, setJoinSuccess] = useState(false);
   const [pendingPayment, setPendingPayment] = useState<{ priceStars: number; message: string } | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('activities');
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
 
   const club = clubQuery.data;
   const myClubs = myClubsQuery.data ?? [];
   const applications = applicationsQuery.data ?? [];
 
   const membership = myClubs.find((m) => m.clubId === id);
-  const isMember = !!membership && membership.status === 'active';
-  const isOrganizer = club?.ownerId === user?.id || membership?.role === 'organizer';
+  const isOwner = !!club && club.ownerId === user?.id;
+  const isOrganizer = isOwner || membership?.role === 'organizer';
+  // Active membership = full member; cancelled paid membership inside its
+  // paid period = "still inside the club" — tabs stay visible, but instead
+  // of «Выйти из клуба» the footer shows a read-only «Подписка отменена» note.
+  const isActiveMember = !!membership && membership.status === 'active';
+  const isCancelledInPeriod =
+    !!membership
+    && membership.status === 'cancelled'
+    && !!membership.subscriptionExpiresAt
+    && new Date(membership.subscriptionExpiresAt).getTime() > Date.now();
+  const isMember = isActiveMember || isCancelledInPeriod;
   const myApplication = applications.find((a) => a.clubId === id) ?? null;
 
   const joining = joinMutation.isPending || applyMutation.isPending || completeFreeMutation.isPending;
@@ -189,6 +220,39 @@ export const ClubPage: FC = () => {
         },
       },
     );
+  };
+
+  const handleOpenLeaveModal = () => {
+    haptic.impact('light');
+    setLeaveError(null);
+    setShowLeaveModal(true);
+  };
+
+  const handleConfirmLeave = () => {
+    if (!id || !club) return;
+    setLeaveError(null);
+    haptic.impact('medium');
+    const isPaidLeave = club.subscriptionPrice > 0;
+    leaveMutation.mutate(id, {
+      onSuccess: () => {
+        haptic.notify('success');
+        setShowLeaveModal(false);
+        if (isPaidLeave) {
+          // Paid leave keeps the membership row (status=cancelled,
+          // subscription_expires_at in the future) — stay on the club so the
+          // cancelled-banner takes over from the leave icon.
+          return;
+        }
+        navigate('/my-clubs', {
+          replace: true,
+          state: { toast: `Вы вышли из клуба «${club.name}»` },
+        });
+      },
+      onError: (e) => {
+        haptic.notify('error');
+        setLeaveError(e.message);
+      },
+    });
   };
 
   // Tab «Управление» is a navigate-link, not a state-toggle: tap fires haptic
@@ -286,6 +350,14 @@ export const ClubPage: FC = () => {
     return null;
   };
 
+  const showLeaveIcon = !isOwner && isActiveMember;
+  const showCancelledNote = !isOwner && isCancelledInPeriod && membership?.subscriptionExpiresAt;
+
+  const leaveVariant: 'free' | 'paid' = club.subscriptionPrice > 0 ? 'paid' : 'free';
+  const leavePaidUntilLabel = membership?.subscriptionExpiresAt
+    ? formatExpiryDate(membership.subscriptionExpiresAt)
+    : null;
+
   const showTabs = isMember || isOrganizer;
   const roleBadgeLabel = isOrganizer ? 'Вы организатор' : isMember ? 'Вы участник' : null;
 
@@ -328,7 +400,24 @@ export const ClubPage: FC = () => {
             {roleBadgeLabel && <span className="cp-chip role">{roleBadgeLabel}</span>}
           </div>
         </div>
+        {showLeaveIcon && (
+          <button
+            type="button"
+            className="cp-leave-icon"
+            onClick={handleOpenLeaveModal}
+            aria-label="Выйти из клуба"
+            title="Выйти из клуба"
+          >
+            <LeaveIcon />
+          </button>
+        )}
       </div>
+
+      {showCancelledNote && membership?.subscriptionExpiresAt && (
+        <div className="cp-cancelled-note" role="status">
+          Подписка отменена · доступ до {formatExpiryDate(membership.subscriptionExpiresAt)}
+        </div>
+      )}
 
       {/* Stats row */}
       <div className="cp-stats">
@@ -441,6 +530,21 @@ export const ClubPage: FC = () => {
           </div>
         </Modal>
       )}
+
+      <LeaveClubModal
+        open={showLeaveModal}
+        clubName={club.name}
+        variant={leaveVariant}
+        paidUntilLabel={leavePaidUntilLabel}
+        submitting={leaveMutation.isPending}
+        errorMessage={leaveError}
+        onConfirm={handleConfirmLeave}
+        onClose={() => {
+          if (leaveMutation.isPending) return;
+          setShowLeaveModal(false);
+          setLeaveError(null);
+        }}
+      />
     </div>
   );
 };

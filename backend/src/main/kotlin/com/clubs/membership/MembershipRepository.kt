@@ -10,7 +10,7 @@ interface MembershipRepository {
     fun findByUserAndClub(userId: UUID, clubId: UUID): Membership?
     fun findById(id: UUID): Membership?
     fun findByUserId(userId: UUID): List<Membership>
-    fun findClubMembersWithUserInfo(clubId: UUID): List<ClubMemberInfo>
+    fun findClubMembersWithUserInfo(clubId: UUID, includeCancelledInPeriod: Boolean = false): List<ClubMemberInfo>
     fun findUserClubsWithReputation(userId: UUID): List<UserClubReputationInfo>
     fun findExpiryRefByUserAndClub(userId: UUID, clubId: UUID): MembershipExpiryRef?
 

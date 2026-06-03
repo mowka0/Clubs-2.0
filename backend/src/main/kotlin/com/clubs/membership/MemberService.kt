@@ -17,11 +17,15 @@ class MemberService(
     private val mapper: MembershipMapper
 ) {
 
-    fun getClubMembers(clubId: UUID, callerId: UUID): List<MemberListItemDto> {
+    fun getClubMembers(
+        clubId: UUID,
+        callerId: UUID,
+        includeCancelled: Boolean = false
+    ): List<MemberListItemDto> {
         if (!membershipRepository.isMember(callerId, clubId)) {
             throw ForbiddenException("Not a member of this club")
         }
-        return membershipRepository.findClubMembersWithUserInfo(clubId)
+        return membershipRepository.findClubMembersWithUserInfo(clubId, includeCancelled)
             .map(mapper::toMemberListItemDto)
     }
 

@@ -54,4 +54,12 @@ interface EventResponseRepository {
      * Resolves a disputed attendance into attended/absent. Returns rows updated (0 if not disputed).
      */
     fun resolveDisputedAttendance(eventId: UUID, userId: UUID, attended: Boolean): Int
+
+    /**
+     * Cascade-delete on club leave: removes [userId]'s responses to all
+     * non-finalised events of [clubId] (status IN upcoming/stage_1/stage_2).
+     * Completed and cancelled events are preserved — attendance history is
+     * the source of truth for reputation. Returns number of rows deleted.
+     */
+    fun deleteByUserAndClubAndActiveEvents(userId: UUID, clubId: UUID): Int
 }

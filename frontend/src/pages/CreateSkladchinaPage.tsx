@@ -46,11 +46,21 @@ export const CreateSkladchinaPage: FC = () => {
   const { id: clubId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const haptic = useHaptic();
-  const membersQuery = useClubMembersQuery(clubId);
+  const membersQuery = useClubMembersQuery(clubId, { includeCancelled: true });
   const createMut = useCreateSkladchinaMutation();
 
+  // Cancelled-but-in-period members must remain visible (so organizer sees
+  // why they can't pick that person) but cannot be added to a new skladchina.
+  // Sort them to the end so the active roster reads first.
   const eligibleMembers = useMemo(
-    () => membersQuery.data ?? [],
+    () => {
+      const rows = membersQuery.data ?? [];
+      return [...rows].sort((a, b) => {
+        const aCanc = a.subscriptionCancelled ? 1 : 0;
+        const bCanc = b.subscriptionCancelled ? 1 : 0;
+        return aCanc - bCanc;
+      });
+    },
     [membersQuery.data],
   );
 
@@ -80,6 +90,8 @@ export const CreateSkladchinaPage: FC = () => {
   }
 
   const toggleParticipant = (userId: string) => {
+    const member = eligibleMembers.find((m) => m.userId === userId);
+    if (member?.subscriptionCancelled) return;
     haptic.select();
     const next = new Set(selectedIds);
     if (next.has(userId)) next.delete(userId);
@@ -266,19 +278,30 @@ export const CreateSkladchinaPage: FC = () => {
             <div className="participants-list">
               {eligibleMembers.map((m) => {
                 const isSelected = selectedIds.has(m.userId);
+                const isCancelled = m.subscriptionCancelled === true;
+                const rowClass = [
+                  'p-row',
+                  isSelected ? 'selected' : '',
+                  isCancelled ? 'disabled' : '',
+                ].filter(Boolean).join(' ');
                 return (
-                  <div key={m.userId} className={isSelected ? 'p-row selected' : 'p-row'}>
+                  <div key={m.userId} className={rowClass}>
                     <button
                       type="button"
                       className="p-toggle"
                       onClick={() => toggleParticipant(m.userId)}
+                      disabled={isCancelled}
+                      aria-disabled={isCancelled}
                     >
                       <span className="check">{isSelected ? '✓' : ''}</span>
                       <span className="name">
                         {m.firstName}{m.lastName ? ` ${m.lastName}` : ''}
                       </span>
+                      {isCancelled && (
+                        <span className="cancelled-note">Отменил подписку</span>
+                      )}
                     </button>
-                    {mode === 'fixed_individual' && isSelected && (
+                    {!isCancelled && mode === 'fixed_individual' && isSelected && (
                       <input
                         type="number"
                         inputMode="decimal"

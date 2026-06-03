@@ -1,15 +1,18 @@
 package com.clubs.membership
 
+import com.clubs.application.ApplicationRepository
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
+import com.clubs.event.EventResponseRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.payment.PaymentService
+import com.clubs.skladchina.SkladchinaRepository
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -29,6 +32,9 @@ class MembershipServiceTest {
     private lateinit var paymentService: PaymentService
     private lateinit var mapper: MembershipMapper
     private lateinit var freeMembershipActivator: FreeMembershipActivator
+    private lateinit var eventResponseRepository: EventResponseRepository
+    private lateinit var skladchinaRepository: SkladchinaRepository
+    private lateinit var applicationRepository: ApplicationRepository
     private lateinit var membershipService: MembershipService
 
     @BeforeEach
@@ -38,12 +44,18 @@ class MembershipServiceTest {
         paymentService = mockk(relaxed = true)
         mapper = MembershipMapper()
         freeMembershipActivator = mockk(relaxed = true)
+        eventResponseRepository = mockk(relaxed = true)
+        skladchinaRepository = mockk(relaxed = true)
+        applicationRepository = mockk(relaxed = true)
         membershipService = MembershipService(
             membershipRepository,
             clubRepository,
             paymentService,
             mapper,
-            freeMembershipActivator
+            freeMembershipActivator,
+            eventResponseRepository,
+            skladchinaRepository,
+            applicationRepository
         )
     }
 
@@ -85,8 +97,8 @@ class MembershipServiceTest {
     private fun freeClubRecord(clubId: UUID, ownerId: UUID = UUID.randomUUID(), memberLimit: Int = 50, memberCount: Int = 5): Club =
         makeClub(clubId, ownerId, name = "Open Club", description = "An open club", memberLimit = memberLimit, memberCount = memberCount, subscriptionPrice = 0)
 
-    private fun paidClubRecord(clubId: UUID, price: Int = 500, memberLimit: Int = 50, memberCount: Int = 5): Club =
-        makeClub(clubId, name = "Paid Club", description = "Stars-paid", memberLimit = memberLimit, memberCount = memberCount, subscriptionPrice = price)
+    private fun paidClubRecord(clubId: UUID, ownerId: UUID = UUID.randomUUID(), price: Int = 500, memberLimit: Int = 50, memberCount: Int = 5): Club =
+        makeClub(clubId, ownerId, name = "Paid Club", description = "Stars-paid", memberLimit = memberLimit, memberCount = memberCount, subscriptionPrice = price)
 
     private fun membership(userId: UUID, clubId: UUID, status: MembershipStatus = MembershipStatus.active): Membership {
         val now = OffsetDateTime.now()
@@ -329,6 +341,93 @@ class MembershipServiceTest {
         }
 
         assertEquals("Membership already cancelled", exception.message)
+        verify(exactly = 0) { membershipRepository.cancel(any()) }
+    }
+
+    // ----- leaveClub: AC-1..AC-4 from docs/modules/club-leave.md -----
+
+    @Test
+    fun `leaveClub free cascades active obligations and decrements member_count (AC-1)`() {
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val club = freeClubRecord(clubId, ownerId = ownerId)
+        val activeMembership = membership(userId, clubId)
+
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns activeMembership
+        every { clubRepository.findById(clubId) } returns club
+        every { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(userId, clubId) } returns 2
+        every { eventResponseRepository.deleteByUserAndClubAndActiveEvents(userId, clubId) } returns 1
+
+        val result = membershipService.leaveClub(clubId, userId)
+
+        assertEquals("cancelled", result.status)
+        assertEquals(userId, result.userId)
+        assertEquals(clubId, result.clubId)
+        verify(exactly = 1) { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(userId, clubId) }
+        verify(exactly = 1) { eventResponseRepository.deleteByUserAndClubAndActiveEvents(userId, clubId) }
+        verify(exactly = 1) { applicationRepository.deleteActiveByUserAndClub(userId, clubId) }
+        verify(exactly = 1) { membershipRepository.cancel(activeMembership.id) }
+        verify(exactly = 1) { clubRepository.decrementMemberCountSafely(clubId, 1) }
+    }
+
+    @Test
+    fun `leaveClub paid cancels subscription without cascade and without member_count change (AC-2)`() {
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val club = paidClubRecord(clubId, ownerId = ownerId, price = 500)
+        val activeMembership = membership(userId, clubId)
+
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns activeMembership
+        every { clubRepository.findById(clubId) } returns club
+
+        val result = membershipService.leaveClub(clubId, userId)
+
+        assertEquals("cancelled", result.status)
+        assertEquals(userId, result.userId)
+        assertEquals(clubId, result.clubId)
+        verify(exactly = 1) { membershipRepository.cancel(activeMembership.id) }
+        verify(exactly = 1) { applicationRepository.deleteActiveByUserAndClub(userId, clubId) }
+        verify(exactly = 0) { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(any(), any()) }
+        verify(exactly = 0) { eventResponseRepository.deleteByUserAndClubAndActiveEvents(any(), any()) }
+        verify(exactly = 0) { clubRepository.decrementMemberCountSafely(any(), any()) }
+    }
+
+    @Test
+    fun `leaveClub throws ValidationException when caller is the owner (AC-3)`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val club = freeClubRecord(clubId, ownerId = ownerId)
+        val ownerMembership = membership(ownerId, clubId)
+
+        every { membershipRepository.findActiveByUserAndClub(ownerId, clubId) } returns ownerMembership
+        every { clubRepository.findById(clubId) } returns club
+
+        val exception = assertThrows<ValidationException> {
+            membershipService.leaveClub(clubId, ownerId)
+        }
+
+        assertEquals("Owner cannot leave the club", exception.message)
+        verify(exactly = 0) { membershipRepository.cancel(any()) }
+        verify(exactly = 0) { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(any(), any()) }
+        verify(exactly = 0) { eventResponseRepository.deleteByUserAndClubAndActiveEvents(any(), any()) }
+        verify(exactly = 0) { clubRepository.decrementMemberCountSafely(any(), any()) }
+    }
+
+    @Test
+    fun `leaveClub throws NotFoundException when membership is absent (AC-4)`() {
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
+
+        val exception = assertThrows<NotFoundException> {
+            membershipService.leaveClub(clubId, userId)
+        }
+
+        assertEquals("Membership not found", exception.message)
+        verify(exactly = 0) { clubRepository.findById(any()) }
         verify(exactly = 0) { membershipRepository.cancel(any()) }
     }
 }

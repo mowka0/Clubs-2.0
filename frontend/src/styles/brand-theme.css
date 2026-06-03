@@ -684,10 +684,59 @@ html, body {
 
 /* =========== Header / Cover =========== */
 .cp-cover {
-  padding: 8px 20px 18px;
+  padding: 14px 20px 22px;
   display: flex;
   gap: 16px;
   align-items: flex-start;
+  position: relative;
+}
+
+/* Compact leave-club affordance in the top-right of the hero. Active members
+   only (owner / cancelled-in-period / visitor never see it). Top-aligned with
+   the avatar (same 14px top inset as `.cp-cover` padding) so it sits on the
+   same baseline as the avatar's top edge. `.cp-cover .body` reserves a
+   matching right gutter (52px = 36 icon + 16 spacing) so a long club name
+   never tucks under the icon. */
+.cp-leave-icon {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--brand-hairline-2);
+  background: rgba(26, 33, 56, 0.55);
+  color: var(--brand-ink-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+  padding: 0;
+  font-family: inherit;
+}
+.cp-leave-icon:hover,
+.cp-leave-icon:focus-visible {
+  color: #FF8B8B;
+  border-color: rgba(255, 139, 139, 0.45);
+  background: rgba(255, 139, 139, 0.08);
+  outline: none;
+}
+.cp-leave-icon:active { transform: scale(0.96); }
+
+/* Read-only banner shown to paid members who already cancelled the
+   subscription but are still inside the paid period (membership still grants
+   access; banner just communicates the lifecycle state). */
+.cp-cancelled-note {
+  margin: 4px 20px 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--brand-brass-soft);
+  border: 1px solid rgba(201, 160, 99, 0.28);
+  color: var(--brand-brass-deep);
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+  text-align: center;
 }
 .cp-avt {
   width: 88px; height: 88px;
@@ -723,19 +772,25 @@ html, body {
 .cp-cover .body {
   flex: 1; min-width: 0;
   padding-top: 4px;
+  /* Reserve room for the leave-icon (36px) + 16px gap so the title can't
+     slide under it when the row has the icon visible. Owners / visitors
+     skip the icon entirely, but a constant gutter keeps the layout stable
+     across roles (no reflow on Quick role checks). */
+  padding-right: 52px;
 }
 .cp-cover .name {
   font-size: 23px;
   font-weight: 700;
   letter-spacing: -0.018em;
-  line-height: 1.18;
+  line-height: 1.2;
   color: var(--brand-ink);
-  margin: 0 0 8px;
+  margin: 0 0 14px;
+  word-break: break-word;
 }
 .cp-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 6px 8px;
   align-items: center;
 }
 .cp-chip {
@@ -1653,6 +1708,11 @@ html, body {
   color: inherit;
   width: 100%;
   cursor: pointer;
+  /* width:100% + padding + border without border-box overflows the .mc-list
+     gutter (20px each side), so the card visually touches the screen edge.
+     Forcing border-box keeps every mc-app variant (pending inbox row +
+     OrganizerAwaitingPaymentRow) flush with the club cards above/below. */
+  box-sizing: border-box;
 }
 .mc-app .avt {
   width: 44px; height: 44px;
@@ -3009,6 +3069,19 @@ html, body {
   /* 16px обязательно — iOS zoom при focus на input < 16px */
   font-size: 16px;
 }
+.sklad-create-modal .p-row.disabled .p-toggle {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: var(--brand-navy-card-2);
+  border-color: var(--brand-hairline-2);
+}
+.sklad-create-modal .p-toggle .cancelled-note {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--brand-ink-3);
+  letter-spacing: 0;
+  font-weight: 500;
+}
 .sklad-create-modal .submit-error {
   margin: 10px 0;
   padding: 10px 12px;
@@ -3605,6 +3678,9 @@ select {
 .club-card.awaiting-payment-card {
   cursor: pointer;
   width: 100%;
+  /* button defaults to content-box → width:100% + padding + border overflow
+     the parent column. Force border-box so the card stays inside .mc-list. */
+  box-sizing: border-box;
 }
 .club-card.awaiting-payment-card:disabled {
   opacity: 0.6;

@@ -36,7 +36,8 @@ class MembershipMapper {
         role = info.role.literal,
         joinedAt = info.joinedAt,
         reliabilityIndex = info.reliabilityIndex,
-        promiseFulfillmentPct = info.promiseFulfillmentPct
+        promiseFulfillmentPct = info.promiseFulfillmentPct,
+        subscriptionCancelled = info.subscriptionCancelled
     )
 
     fun toUserClubReputationDto(info: UserClubReputationInfo): UserClubReputationDto = UserClubReputationDto(
