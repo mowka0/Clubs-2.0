@@ -1,15 +1,6 @@
 import { FC, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import {
-  List,
-  Section,
-  Cell,
-  Spinner,
-  Placeholder,
-  Text,
-  Button,
-  Badge,
-} from '@telegram-apps/telegram-ui';
+import { Spinner, Placeholder } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
@@ -61,9 +52,6 @@ export const EventPage: FC = () => {
   const loading = eventQuery.isPending || myVoteQuery.isPending;
   const voting =
     castVoteMutation.isPending || confirmMutation.isPending || declineMutation.isPending;
-  // Page-level error — only when we can't load the event itself.
-  // Mutation errors (`actionError`) live in `actionError` state and render INLINE
-  // near the voting buttons; they MUST NOT replace the whole page.
   const loadError = eventQuery.error?.message;
 
   const handleVote = (vote: 'going' | 'maybe' | 'not_going') => {
@@ -110,7 +98,7 @@ export const EventPage: FC = () => {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+      <div className="rd-page" style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
         <Spinner size="l" />
       </div>
     );
@@ -118,10 +106,9 @@ export const EventPage: FC = () => {
 
   if (loadError || !event) {
     return (
-      <Placeholder
-        header="Ошибка"
-        description={loadError ?? 'Событие не найдено'}
-      />
+      <div className="rd-page">
+        <Placeholder header="Ошибка" description={loadError ?? 'Событие не найдено'} />
+      </div>
     );
   }
 
@@ -129,8 +116,7 @@ export const EventPage: FC = () => {
     ? Math.min((event.goingCount / event.participantLimit) * 100, 100)
     : 0;
 
-  // Backend (`VoteService.castVote` line 40) принимает голос ТОЛЬКО при status='upcoming'.
-  // stage_1 в этой же строке раньше показывал кнопки которые firing'ались в 4xx-ошибку.
+  // Backend (`VoteService.castVote`) принимает голос ТОЛЬКО при status='upcoming'.
   const showVoting = event.status === 'upcoming';
   const showStage2 = event.status === 'stage_2';
   const showConfirmed =
@@ -138,239 +124,114 @@ export const EventPage: FC = () => {
     (event.status === 'stage_2' || event.status === 'completed');
 
   return (
-    <List>
-      {/* Event header */}
-      <Section>
-        <div style={{ padding: '16px 20px 12px' }}>
-          <Text weight="1" style={{ fontSize: 22, display: 'block', lineHeight: 1.3 }}>
-            {event.title}
-          </Text>
-          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ color: 'var(--tgui--hint_color)', fontSize: 15 }}>
-              {formatEventDate(event.eventDatetime)}
-            </span>
-            <span style={{ color: 'var(--tgui--hint_color)', fontSize: 15 }}>
-              {event.locationText}
-            </span>
-          </div>
-          {event.description && (
-            <div style={{ marginTop: 12, lineHeight: 1.5, color: 'var(--tgui--text_color)', fontSize: 15 }}>
-              {event.description}
-            </div>
-          )}
-        </div>
-      </Section>
-
-      {/* Stats section */}
-      <Section header="Статистика набора">
-        <Cell
-          after={
-            <span style={{ color: 'var(--tgui--hint_color)' }}>
-              {event.goingCount}
-            </span>
-          }
-        >
-          Хочу пойти
-        </Cell>
-        <Cell
-          after={
-            <span style={{ color: 'var(--tgui--hint_color)' }}>
-              {event.maybeCount}
-            </span>
-          }
-        >
-          Может быть
-        </Cell>
-        <Cell
-          after={
-            <span style={{ color: 'var(--tgui--hint_color)' }}>
-              {event.notGoingCount}
-            </span>
-          }
-        >
-          Не пойду
-        </Cell>
-
-        {/* Progress bar */}
-        <div style={{ padding: '8px 20px 16px' }}>
-          <div
-            style={{
-              width: '100%',
-              height: 8,
-              borderRadius: 4,
-              background: 'var(--tgui--secondary_bg_color)',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                width: `${fillPercent}%`,
-                height: '100%',
-                borderRadius: 4,
-                background: 'linear-gradient(90deg, #34C759, #30D158)',
-                transition: 'width 0.3s ease',
-              }}
-            />
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              marginTop: 6,
-              fontSize: 13,
-              color: 'var(--tgui--hint_color)',
-            }}
-          >
-            <span>{event.goingCount} / {event.participantLimit}</span>
-            <span>Мест: {event.participantLimit}</span>
+    <div className="rd-page">
+      {/* Hero */}
+      <div className="rd-hero rd-compact">
+        <div className="rd-hero-bg" data-cat="sport" />
+        <div className="rd-hero-meta">
+          <div className="rd-hero-type-badge">СОБЫТИЕ</div>
+          <div className="rd-hero-ttl">{event.title}</div>
+          <div className="rd-hero-eyebrow" style={{ marginTop: 6 }}>
+            {formatEventDate(event.eventDatetime)}
           </div>
         </div>
-      </Section>
+      </div>
 
-      {/* Voting section */}
-      {showVoting && (
-        <Section header="Голосование">
-          {myVote && (
-            <div style={{ padding: '8px 20px' }}>
-              <Badge type="number" mode="primary">
-                Ваш голос: {VOTE_LABELS[myVote] ?? myVote}
-              </Badge>
-            </div>
-          )}
-          {actionError && (
-            <div style={{ padding: '8px 20px', color: 'var(--tgui--destructive_text_color)', fontSize: 14 }}>
-              {actionError}
-            </div>
-          )}
-          <div
-            style={{
-              display: 'flex',
-              gap: 8,
-              padding: '12px 20px 16px',
-            }}
-          >
-            <Button
-              size="m"
-              mode={myVote === 'going' ? 'bezeled' : 'plain'}
-              onClick={() => handleVote('going')}
-              disabled={voting}
-              stretched
-            >
-              Пойду
-            </Button>
-            <Button
-              size="m"
-              mode={myVote === 'maybe' ? 'bezeled' : 'plain'}
-              onClick={() => handleVote('maybe')}
-              disabled={voting}
-              stretched
-            >
-              Возможно
-            </Button>
-            <Button
-              size="m"
-              mode={myVote === 'not_going' ? 'bezeled' : 'plain'}
-              onClick={() => handleVote('not_going')}
-              disabled={voting}
-              stretched
-            >
-              Не пойду
-            </Button>
+      {/* Location */}
+      {event.locationText && (
+        <div className="rd-glass" style={{ marginBottom: 14, overflow: 'hidden' }}>
+          <div className="rd-mini-map" />
+          <div className="rd-addr-body">
+            <div className="rd-a-ttl">{event.locationText}</div>
           </div>
-        </Section>
+        </div>
       )}
 
-      {/* Stage 2 section */}
+      {/* Description */}
+      {event.description && (
+        <>
+          <div className="rd-section-sub-h">Описание</div>
+          <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
+            <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{event.description}</div>
+          </div>
+        </>
+      )}
+
+      {/* Recruitment stats */}
+      <div className="rd-section-sub-h">Набор · {event.goingCount} / {event.participantLimit}</div>
+      <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
+        <div className="rd-progress">
+          <div className="rd-fill" style={{ width: `${fillPercent}%` }} />
+        </div>
+        <div className="rd-stat-line">
+          <span>Пойдут: {event.goingCount}</span>
+          <span>Возможно: {event.maybeCount}</span>
+          <span>Нет: {event.notGoingCount}</span>
+        </div>
+      </div>
+
+      {/* Voting */}
+      {showVoting && (
+        <>
+          <div className="rd-section-sub-h">Голосование</div>
+          {myVote && (
+            <div style={{ marginBottom: 10 }}>
+              <span className="rd-badge rd-going">Ваш голос: {VOTE_LABELS[myVote] ?? myVote}</span>
+            </div>
+          )}
+          {actionError && <div className="rd-error">{actionError}</div>}
+          <div className="rd-vote-row" style={{ marginBottom: 18 }}>
+            <button type="button" className={`rd-vote-btn${myVote === 'going' ? ' rd-active' : ''}`} onClick={() => handleVote('going')} disabled={voting}>
+              Пойду
+            </button>
+            <button type="button" className={`rd-vote-btn${myVote === 'maybe' ? ' rd-active' : ''}`} onClick={() => handleVote('maybe')} disabled={voting}>
+              Возможно
+            </button>
+            <button type="button" className={`rd-vote-btn${myVote === 'not_going' ? ' rd-active' : ''}`} onClick={() => handleVote('not_going')} disabled={voting}>
+              Не пойду
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Stage 2 — confirmation */}
       {showStage2 && (
-        <Section header="Подтверждение участия">
-          {/* Current status badge */}
-          <div style={{ padding: '8px 20px' }}>
-            {myVote === 'confirmed' && (
-              <Badge
-                type="number"
-                mode="primary"
-                style={{ background: '#34C759', color: '#fff' }}
-              >
-                Подтверждён
-              </Badge>
-            )}
-            {myVote === 'waitlisted' && (
-              <Badge
-                type="number"
-                mode="primary"
-                style={{ background: '#FF9500', color: '#fff' }}
-              >
-                Лист ожидания
-              </Badge>
-            )}
-            {myVote === 'declined' && (
-              <Badge
-                type="number"
-                mode="primary"
-                style={{ background: '#FF3B30', color: '#fff' }}
-              >
-                Отказался
-              </Badge>
-            )}
+        <>
+          <div className="rd-section-sub-h">Подтверждение участия</div>
+          <div style={{ marginBottom: 10 }}>
+            {myVote === 'confirmed' && <span className="rd-badge rd-going">Подтверждён</span>}
+            {myVote === 'waitlisted' && <span className="rd-badge rd-warn">Лист ожидания</span>}
+            {myVote === 'declined' && <span className="rd-badge rd-decline">Отказался</span>}
             {myVote && !['confirmed', 'waitlisted', 'declined'].includes(myVote) && (
-              <Text style={{ color: 'var(--tgui--hint_color)', fontSize: 14 }}>
-                Ваш статус: {VOTE_LABELS[myVote] ?? myVote}
-              </Text>
+              <span className="rd-badge rd-warn">Ваш статус: {VOTE_LABELS[myVote] ?? myVote}</span>
             )}
           </div>
-
-          {actionError && (
-            <div style={{ padding: '8px 20px', color: 'var(--tgui--destructive_text_color)', fontSize: 14 }}>
-              {actionError}
-            </div>
-          )}
-
-          {/* Action buttons for users who voted going/maybe but haven't confirmed yet */}
+          {actionError && <div className="rd-error">{actionError}</div>}
           {(myVote === 'going' || myVote === 'maybe') && (
-            <div
-              style={{
-                display: 'flex',
-                gap: 8,
-                padding: '12px 20px 16px',
-              }}
-            >
-              <Button
-                size="m"
-                mode="bezeled"
-                onClick={handleConfirm}
-                disabled={voting}
-                stretched
-              >
+            <div className="rd-cta-wrap">
+              <button type="button" className="rd-btn-primary" onClick={handleConfirm} disabled={voting}>
                 {voting ? <Spinner size="s" /> : 'Подтвердить участие'}
-              </Button>
-              <Button
-                size="m"
-                mode="plain"
-                onClick={handleDecline}
-                disabled={voting}
-                stretched
-              >
+              </button>
+              <button type="button" className="rd-btn-outline" style={{ marginTop: 8 }} onClick={handleDecline} disabled={voting}>
                 Отказаться
-              </Button>
+              </button>
             </div>
           )}
-        </Section>
+        </>
       )}
 
       {/* Confirmed participants */}
       {showConfirmed && (
-        <Section header="Участники">
-          <Cell
-            after={
-              <span style={{ color: 'var(--tgui--hint_color)' }}>
-                {event.confirmedCount} / {event.participantLimit}
-              </span>
-            }
-          >
-            Подтверждено
-          </Cell>
-        </Section>
+        <>
+          <div className="rd-section-sub-h">Участники</div>
+          <div className="rd-glass">
+            <div className="rd-kv">
+              Подтверждено
+              <span className="rd-v">{event.confirmedCount} / {event.participantLimit}</span>
+            </div>
+          </div>
+        </>
       )}
-    </List>
+    </div>
   );
 };

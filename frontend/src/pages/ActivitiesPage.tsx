@@ -5,8 +5,6 @@ import { BrandBackdrop } from '../components/BrandBackdrop';
 import { Toast } from '../components/Toast';
 import { EventsTab } from '../components/activities/EventsTab';
 import { SkladchinasTab } from '../components/activities/SkladchinasTab';
-import { CreateActivityFlow } from '../components/manage/CreateActivityFlow';
-import { useOrganizerClubs } from '../queries/organizerClubs';
 import { useSkladchinaActionRequiredCountQuery } from '../queries/skladchina';
 
 type SegmentKey = 'events' | 'skladchina';
@@ -31,10 +29,6 @@ export const ActivitiesPage: FC = () => {
 
   const segment = routeToSegment(location.pathname);
 
-  const { clubs: organizerClubs } = useOrganizerClubs();
-  const canCreate = organizerClubs.length > 0;
-  const [createOpen, setCreateOpen] = useState(false);
-
   const { data: unpaidCount = 0 } = useSkladchinaActionRequiredCountQuery();
 
   const navState = location.state as ActivitiesLocationState | null;
@@ -54,11 +48,6 @@ export const ActivitiesPage: FC = () => {
     [segment, navigate, haptic],
   );
 
-  const openCreate = () => {
-    haptic.impact('light');
-    setCreateOpen(true);
-  };
-
   return (
     <div className="brand-page">
       <BrandBackdrop />
@@ -68,12 +57,6 @@ export const ActivitiesPage: FC = () => {
           <h1>
             Твои <span className="accent">активности</span>
           </h1>
-          {canCreate && (
-            <button type="button" className="mc-create-btn" onClick={openCreate}>
-              <span className="plus">+</span>
-              Создать
-            </button>
-          )}
         </div>
       </header>
 
@@ -104,14 +87,6 @@ export const ActivitiesPage: FC = () => {
       </div>
 
       {segment === 'events' ? <EventsTab /> : <SkladchinasTab />}
-
-      {canCreate && (
-        <CreateActivityFlow
-          open={createOpen}
-          organizerClubs={organizerClubs}
-          onClose={() => setCreateOpen(false)}
-        />
-      )}
 
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
     </div>

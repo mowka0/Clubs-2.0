@@ -29,13 +29,6 @@ import { formatPrice } from '../utils/formatters';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { LeaveClubModal } from '../components/club/LeaveClubModal';
-import { BrandBackdrop } from '../components/BrandBackdrop';
-
-const CATEGORY_LABELS: Record<string, string> = {
-  sport: 'Спорт', creative: 'Творчество', food: 'Еда',
-  board_games: 'Настолки', cinema: 'Кино', education: 'Образование',
-  travel: 'Путешествия', other: 'Другое',
-};
 
 const ACCESS_LABELS: Record<string, string> = {
   open: 'Открытый', closed: 'По заявке', private: 'Приватный',
@@ -50,15 +43,6 @@ interface TabItem {
   selected: boolean;
 }
 
-function getClubInitials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w.charAt(0).toUpperCase())
-    .join('');
-}
-
 function formatExpiryDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ru-RU', {
     day: 'numeric',
@@ -71,13 +55,6 @@ const LockIcon: FC = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <rect x="4" y="11" width="16" height="11" rx="2.5" />
     <path d="M8 11V7a4 4 0 1 1 8 0v4" />
-  </svg>
-);
-
-const ClosedChipIcon: FC = () => (
-  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true">
-    <rect x="5" y="11" width="14" height="10" rx="2" />
-    <path d="M8 11V8a4 4 0 1 1 8 0v3" />
   </svg>
 );
 
@@ -137,7 +114,7 @@ export const ClubPage: FC = () => {
 
   if (clubQuery.isPending) {
     return (
-      <div className="brand-page" style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
+      <div className="rd-page" style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
         <Spinner size="l" />
       </div>
     );
@@ -145,7 +122,7 @@ export const ClubPage: FC = () => {
 
   if (clubQuery.error || !club) {
     return (
-      <div className="brand-page">
+      <div className="rd-page">
         <Placeholder header="Ошибка" description={clubQuery.error?.message ?? 'Клуб не найден'} />
       </div>
     );
@@ -271,16 +248,16 @@ export const ClubPage: FC = () => {
     if (pendingPayment) {
       return (
         <>
-          <button type="button" className="cp-cta outline" disabled>
+          <button type="button" className="rd-btn-outline" disabled>
             Ожидаем оплату — {pendingPayment.priceStars} Stars
           </button>
-          <div className="cp-cta-hint">{pendingPayment.message}</div>
+          <div className="rd-cta-hint">{pendingPayment.message}</div>
         </>
       );
     }
     if (myApplication?.status === 'pending') {
       return (
-        <button type="button" className="cp-cta outline" disabled>
+        <button type="button" className="rd-btn-outline" disabled>
           Заявка на рассмотрении
         </button>
       );
@@ -294,13 +271,13 @@ export const ClubPage: FC = () => {
           <>
             <button
               type="button"
-              className="cp-cta"
+              className="rd-btn-primary"
               onClick={handleCompleteFreeMembership}
               disabled={joining}
             >
               {joining ? <Spinner size="s" /> : 'Завершить вступление'}
             </button>
-            <div className="cp-cta-hint">
+            <div className="rd-cta-hint">
               Заявка одобрена. Нажмите чтобы вступить.
             </div>
           </>
@@ -308,10 +285,10 @@ export const ClubPage: FC = () => {
       }
       return (
         <>
-          <button type="button" className="cp-cta outline" disabled>
+          <button type="button" className="rd-btn-outline" disabled>
             Ожидаем оплату — {price} Stars
           </button>
-          <div className="cp-cta-hint">
+          <div className="rd-cta-hint">
             Заявка одобрена. Счёт отправлен в Telegram — оплатите его, чтобы вступить.
           </div>
         </>
@@ -319,14 +296,14 @@ export const ClubPage: FC = () => {
     }
     if (joinSuccess) {
       return (
-        <button type="button" className="cp-cta outline" disabled>
+        <button type="button" className="rd-btn-outline" disabled>
           Заявка отправлена
         </button>
       );
     }
     if (club.accessType === 'open') {
       return (
-        <button type="button" className="cp-cta" onClick={handleJoin} disabled={joining}>
+        <button type="button" className="rd-btn-primary" onClick={handleJoin} disabled={joining}>
           {joining ? <Spinner size="s" /> : 'Вступить'}
         </button>
       );
@@ -336,12 +313,12 @@ export const ClubPage: FC = () => {
         <>
           <button
             type="button"
-            className="cp-cta"
+            className="rd-btn-primary"
             onClick={() => { haptic.impact('light'); setShowApplyModal(true); }}
           >
             Хочу вступить
           </button>
-          <div className="cp-cta-hint">
+          <div className="rd-cta-hint">
             Организатор задаст один вопрос. Ответ увидит только он.
           </div>
         </>
@@ -369,41 +346,26 @@ export const ClubPage: FC = () => {
     tabItems.push({ key: 'manage', label: 'Управление', selected: false });
   }
 
-  const capacityPct = club.memberLimit > 0
-    ? Math.min(100, Math.round((club.memberCount / club.memberLimit) * 100))
-    : 0;
-  const locationLine = club.district ?? null;
-  const isPaid = club.subscriptionPrice > 0;
+  const heroMeta = [
+    ACCESS_LABELS[club.accessType] ?? club.accessType,
+    club.city,
+    `${club.memberCount} / ${club.memberLimit}`,
+    formatPrice(club.subscriptionPrice),
+  ].filter(Boolean).join(' · ');
 
   return (
-    <div className="brand-page">
-      <BrandBackdrop />
-
-      {/* Header / Cover */}
-      <div className="cp-cover">
+    <div className="rd-page">
+      {/* Hero cover */}
+      <div className="rd-hero rd-compact">
         <div
-          className={`cp-avt${showTabs ? ' featured' : ''}`}
+          className="rd-hero-bg"
           data-cat={club.category}
-        >
-          {club.avatarUrl
-            ? <img src={club.avatarUrl} alt="" />
-            : getClubInitials(club.name)}
-        </div>
-        <div className="body">
-          <h1 className="name">{club.name}</h1>
-          <div className="cp-chips">
-            <span className="cp-chip">{CATEGORY_LABELS[club.category] ?? club.category}</span>
-            <span className={`cp-chip${club.accessType === 'closed' ? ' closed' : ''}`}>
-              {club.accessType === 'closed' && <ClosedChipIcon />}
-              {ACCESS_LABELS[club.accessType] ?? club.accessType}
-            </span>
-            {roleBadgeLabel && <span className="cp-chip role">{roleBadgeLabel}</span>}
-          </div>
-        </div>
+          style={club.avatarUrl ? { backgroundImage: `url(${club.avatarUrl})` } : undefined}
+        />
         {showLeaveIcon && (
           <button
             type="button"
-            className="cp-leave-icon"
+            className="rd-hero-btn rd-right"
             onClick={handleOpenLeaveModal}
             aria-label="Выйти из клуба"
             title="Выйти из клуба"
@@ -411,66 +373,51 @@ export const ClubPage: FC = () => {
             <LeaveIcon />
           </button>
         )}
+        <div className="rd-hero-meta">
+          {roleBadgeLabel && (
+            <div className="rd-hero-type-badge">{roleBadgeLabel.toUpperCase()}</div>
+          )}
+          <div className="rd-hero-ttl">{club.name}</div>
+          <div className="rd-hero-eyebrow" style={{ marginTop: 6 }}>{heroMeta}</div>
+        </div>
       </div>
 
       {showCancelledNote && membership?.subscriptionExpiresAt && (
-        <div className="cp-cancelled-note" role="status">
+        <div className="rd-note" role="status">
           Подписка отменена · доступ до {formatExpiryDate(membership.subscriptionExpiresAt)}
         </div>
       )}
 
-      {/* Stats row */}
-      <div className="cp-stats">
-        <div className="cp-stat">
-          <span className="label">Участники</span>
-          <span className="value">{club.memberCount} / {club.memberLimit}</span>
-          <div className="capbar"><div className="fill" style={{ width: `${capacityPct}%` }} /></div>
-        </div>
-        <div className="cp-stat">
-          <span className="label">Подписка</span>
-          <span className="value" style={isPaid ? { fontSize: 14.5, letterSpacing: '-0.008em' } : undefined}>
-            {formatPrice(club.subscriptionPrice)}
-          </span>
-        </div>
-        <div className="cp-stat">
-          <span className="label">Где</span>
-          <span className="value" style={{ fontSize: 15 }}>{club.city}</span>
-          {locationLine && <span className="sub">{locationLine}</span>}
-        </div>
-      </div>
-
       {/* About */}
-      <div className="cp-card">
-        <span className="label">О клубе</span>
-        <div className="body-text">{club.description}</div>
+      <div className="rd-section-sub-h">О клубе</div>
+      <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
+        <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{club.description}</div>
       </div>
 
       {/* Rules (optional) */}
       {club.rules && (
-        <div className="cp-card rules">
-          <span className="label">Правила</span>
-          <div className="body-text">{club.rules}</div>
-        </div>
+        <>
+          <div className="rd-section-sub-h">Правила</div>
+          <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
+            <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{club.rules}</div>
+          </div>
+        </>
       )}
 
       {/* Visitor: lock placeholder + CTA */}
       {!showTabs && (
         <>
-          <div className="cp-locked">
-            <div className="ico"><LockIcon /></div>
-            <div className="text">
+          <div className="rd-glass rd-locked">
+            <div className="rd-lock-ico"><LockIcon /></div>
+            <div className="rd-text">
               <strong>Активности клуба доступны участникам</strong>
               Содержимое клуба открывается после вступления.
             </div>
           </div>
 
-          {joinError && (
-            <div style={{ padding: '0 20px 8px', color: '#FF8B8B', fontSize: 13, textAlign: 'center' }}>
-              {joinError}
-            </div>
-          )}
+          {joinError && <div className="rd-error">{joinError}</div>}
 
-          <div className="cp-cta-wrap">
+          <div className="rd-cta-wrap">
             {renderCta()}
           </div>
         </>
@@ -479,12 +426,12 @@ export const ClubPage: FC = () => {
       {/* Member / Organizer: role-aware tabs */}
       {showTabs && id && (
         <>
-          <div className="cp-tab-row" role="tablist">
+          <div className="rd-tabs" role="tablist">
             {tabItems.map((item) => (
               <button
                 key={item.key}
                 type="button"
-                className={`cp-tab${item.selected ? ' active' : ''}${item.key === 'manage' ? ' manage' : ''}`}
+                className={`rd-tab-link${item.selected ? ' rd-active' : ''}`}
                 onClick={() => handleTabClick(item.key)}
               >
                 {item.label}
