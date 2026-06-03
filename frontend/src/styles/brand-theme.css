@@ -1708,6 +1708,11 @@ html, body {
   color: inherit;
   width: 100%;
   cursor: pointer;
+  /* width:100% + padding + border without border-box overflows the .mc-list
+     gutter (20px each side), so the card visually touches the screen edge.
+     Forcing border-box keeps every mc-app variant (pending inbox row +
+     OrganizerAwaitingPaymentRow) flush with the club cards above/below. */
+  box-sizing: border-box;
 }
 .mc-app .avt {
   width: 44px; height: 44px;
