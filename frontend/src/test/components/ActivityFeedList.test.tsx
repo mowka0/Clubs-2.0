@@ -44,7 +44,7 @@ describe('ActivityFeedList', () => {
     expect(screen.getByText('Upcoming yoga')).toBeInTheDocument();
   });
 
-  it('animates the "Прошедшие (N)" accordion open via the grid wrapper (open class + hidden toggle)', async () => {
+  it('toggles the "Прошедшие (N)" accordion via aria-expanded', async () => {
     const user = userEvent.setup();
     const feed: ClubActivityFeed = {
       upcoming: [],
@@ -57,21 +57,21 @@ describe('ActivityFeedList', () => {
       <ActivityFeedList feed={feed} onActivityClick={vi.fn()} />,
     );
 
-    // Collapsed by default: rows stay mounted (for the smooth transition) but the
-    // wrapper has no `open` class and the list is hidden from the a11y tree.
-    expect(screen.getByText('Прошедшие')).toBeInTheDocument();
+    // Collapsed by default (redesign): the rd-rep-panel with the rows is not
+    // mounted; only the toggle button (aria-expanded=false) and the count show.
+    const toggle = screen.getByRole('button', { name: /прошедшие/i });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByText('(2)')).toBeInTheDocument();
-    const body = container.querySelector('.activity-past-body');
-    expect(body).not.toBeNull();
-    expect(body?.classList.contains('open')).toBe(false);
-    expect(container.querySelector('.activity-list.compact')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('.rd-rep-panel')).toBeNull();
+    expect(screen.queryByText('Old yoga')).toBeNull();
 
-    await user.click(screen.getByRole('button', { name: /прошедшие/i }));
+    await user.click(toggle);
 
-    // Expanded: wrapper gets `open`, rows become visible, and stay in the DOM.
-    expect(container.querySelector('.activity-past-body')?.classList.contains('open')).toBe(true);
-    expect(container.querySelector('.activity-list.compact')?.hasAttribute('hidden')).toBe(false);
-    expect(container.querySelectorAll('.activity-compact-row')).toHaveLength(2);
+    // Expanded: the panel mounts with the compact rd-rep-row rows.
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const panel = container.querySelector('.rd-rep-panel');
+    expect(panel).not.toBeNull();
+    expect(panel?.querySelectorAll('.rd-rep-row')).toHaveLength(2);
     expect(screen.getByText('Old yoga')).toBeInTheDocument();
   });
 

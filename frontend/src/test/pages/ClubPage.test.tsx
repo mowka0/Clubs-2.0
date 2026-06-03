@@ -515,7 +515,9 @@ describe('ClubPage', () => {
     });
 
     expect(screen.getByText('Клуб для любителей чтения')).toBeInTheDocument();
-    expect(screen.getByText('200 Stars / мес')).toBeInTheDocument();
+    // Redesign: price is part of the single hero-eyebrow meta line
+    // («доступ · город · N/limit · цена»), so match it as a substring.
+    expect(screen.getByText(/200 Stars \/ мес/)).toBeInTheDocument();
   });
 
   it('displays error placeholder when API returns an error', async () => {
