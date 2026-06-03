@@ -59,24 +59,24 @@ interface AwaitingPaymentRowProps {
 const AwaitingPaymentRow: FC<AwaitingPaymentRowProps> = ({ applicant }) => {
   const fullName = `${applicant.firstName}${applicant.lastName ? ` ${applicant.lastName}` : ''}`;
   return (
-    <div className="cp-member cp-member-awaiting-payment">
-      <div className="avt">
+    <div className="rd-rep-row" style={{ cursor: 'default' }}>
+      <span className="rd-ico">
         {applicant.avatarUrl
           ? <img src={applicant.avatarUrl} alt="" />
           : getInitials(applicant.firstName, applicant.lastName)}
-      </div>
-      <div className="body">
-        <div className="name">
-          <span>{fullName}</span>
+      </span>
+      <div className="rd-info">
+        <div className="rd-ttl">
+          {fullName}
           {applicant.telegramUsername && (
-            <span className="username">@{applicant.telegramUsername}</span>
+            <span style={{ color: 'var(--text-faint)', fontWeight: 400, marginLeft: 6 }}>
+              @{applicant.telegramUsername}
+            </span>
           )}
         </div>
-        <div className="reliability">
-          <span>{formatRelativeApprovedAt(applicant.approvedAt)}</span>
-        </div>
+        <div className="rd-met">{formatRelativeApprovedAt(applicant.approvedAt)}</div>
       </div>
-      <span className="mc-app-status status awaiting-payment">Ожидает оплаты</span>
+      <span className="rd-badge rd-warn">Ожидает оплаты</span>
     </div>
   );
 };
@@ -89,18 +89,14 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
 
   if (membersQuery.isPending) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+      <div className="rd-spinner-row">
         <Spinner size="l" />
       </div>
     );
   }
 
   if (membersQuery.error) {
-    return (
-      <div style={{ padding: '0 20px' }}>
-        <Placeholder header="Ошибка" description={membersQuery.error.message} />
-      </div>
-    );
+    return <Placeholder header="Ошибка" description={membersQuery.error.message} />;
   }
 
   const members = membersQuery.data ?? [];
@@ -110,8 +106,10 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
     <>
       {isOrganizer && awaitingApplicants.length > 0 && (
         <>
-          <div className="cp-section-label">Ожидают оплаты · {awaitingApplicants.length}</div>
-          <div className="cp-members">
+          <div className="rd-section-sub-h">
+            Ожидают оплаты <span className="rd-count">· {awaitingApplicants.length}</span>
+          </div>
+          <div className="rd-glass rd-rep-panel">
             {awaitingApplicants.map((applicant) => (
               <AwaitingPaymentRow key={applicant.applicationId} applicant={applicant} />
             ))}
@@ -119,14 +117,16 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
         </>
       )}
 
-      <div className="cp-section-label">Участники ({members.length})</div>
+      <div className="rd-section-sub-h">
+        Участники <span className="rd-count">· {members.length}</span>
+      </div>
 
       {members.length === 0 ? (
-        <div style={{ padding: '0 20px' }}>
-          <Placeholder description="Список участников пуст" />
+        <div className="rd-glass rd-empty">
+          <div className="rd-sub">Список участников пуст</div>
         </div>
       ) : (
-        <div className="cp-members">
+        <div className="rd-glass rd-rep-panel">
           {members.map((member) => {
             const fullName = `${member.firstName}${member.lastName ? ` ${member.lastName}` : ''}`;
             const tier = reliabilityTier(member.reliabilityIndex);
@@ -134,26 +134,29 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
               <button
                 key={member.userId}
                 type="button"
-                className="cp-member"
+                className="rd-rep-row"
                 onClick={() => { haptic.impact('light'); setSelectedMember(member); }}
               >
-                <div className="avt">
+                <span className="rd-ico">
                   {member.avatarUrl
                     ? <img src={member.avatarUrl} alt="" />
                     : getInitials(member.firstName, member.lastName)}
-                </div>
-                <div className="body">
-                  <div className="name">
-                    <span>{fullName}</span>
+                </span>
+                <div className="rd-info">
+                  <div className="rd-ttl">
+                    {fullName}
                     {member.role === 'organizer' && (
-                      <span className="org-badge">Организатор</span>
+                      <span className="rd-badge rd-rep" style={{ marginLeft: 8, fontSize: 10, padding: '2px 8px' }}>
+                        Орг
+                      </span>
                     )}
                   </div>
-                  <div className="reliability">
-                    <span className={`dot ${tier}`} />
-                    <span>Надёжность <span className="num">{member.reliabilityIndex}</span></span>
-                  </div>
+                  <div className="rd-met">Обещания {member.promiseFulfillmentPct}%</div>
                 </div>
+                <span className="rd-score">
+                  <span className={`rd-v rd-${tier}`}>{member.reliabilityIndex}</span>
+                  <span className="rd-cap">надёжность</span>
+                </span>
               </button>
             );
           })}

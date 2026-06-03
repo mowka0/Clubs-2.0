@@ -132,7 +132,7 @@ X = memberLimit * subscriptionPrice * 0.8
 | Файл | Источник данных | Заметки |
 |---|---|---|
 | `ClubActivitiesTab.tsx` | `useClubActivitiesQuery(clubId, { type? })` (`useQuery`, без пагинации) | Read-only unified-feed events + skladchinas клуба: секция `Предстоящие` (полные карточки, `relevantDate ASC`) + сворачиваемый аккордеон `Прошедшие (N)` (компактные строки, DESC). Tap по карточке → `/events/:id` или `/skladchina/:id`. Заменил `ClubEventsTab.tsx` (удалён) в `feature/unified-activity-creation`. |
-| `ClubMembersTab.tsx` | `useClubMembersQuery(clubId)` | Список с avatar/reliability, badge «Организатор» для `role === 'organizer'`. Тап по члену (включая себя) → `MemberProfileModal` с полными метриками. |
+| `ClubMembersTab.tsx` | `useClubMembersQuery(clubId)` | rd-список `rd-rep-row` (avatar/индекс надёжности `rd-high/mid/low`), badge «Орг» для `role === 'organizer'`. При `isOrganizer` — доп. секция «Ожидают оплаты». Тап по члену (включая себя) → `MemberProfileModal` с полными метриками. Используется и в member-view `ClubPage`, и в `OrganizerClubManage`. |
 | ~~`ClubProfileTab.tsx`~~ | — | **Удалён** в `feature/profile-reputation-and-skladchina-badge` (2026-05-30). Функция переехала в `ProfilePage` (см. ниже). |
 
 Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — non-active tabs не монтируются и их queries не выполняются. Visitor-режим вообще не подключает эти query.
@@ -198,18 +198,28 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 > Legacy deep-links `?tab=activities|events|skladchina` → fallback `Участники`.
 > Полная спека — [`unified-activity-creation.md`](./unified-activity-creation.md).
 
-### Brand-редизайн (итерация 2, 2026-05-24)
-Страница больше **не** плоский telegram-ui `List`. Структура:
-- Обёртка `brand-page` + `<BrandBackdrop />` (navy blobs + brass glows), как на Discovery / ClubPage / MyClubsPage
-- Шапка — brand-hero карточка `ManageHeader` (`components/manage/ManageHeader.tsx`) вместо плоского `Cell`-header
-- Вкладки — brass pill-tabs `ManageTabs` (`components/manage/ManageTabs.tsx`) вместо telegram-ui `TabsList`; фиксит обрезание длинных лейблов («Учас…»)
-- Внутренности вкладок (Участники / Финансы / Настройки) — **без изменений** относительно итерации 4. Таб «Заявки» удалён в `feature/applications-inbox` (см. update-блок выше).
-- CSS — в `frontend/src/styles/brand-theme.css`
+### Banco-редизайн (rd-, `feature/redesign-club-manage`)
+Страница переведена на rd-дизайн-систему (`frontend/src/styles/redesign.css`):
+- Обёртка `rd-page` (плоский `var(--bg)`); `BrandBackdrop` убран
+- Шапка — full-bleed `rd-hero rd-compact` (`components/manage/ManageHeader.tsx`): обложка по
+  `data-cat`/аватар клуба, бейдж «УПРАВЛЕНИЕ», заголовок, eyebrow `N/limit участников · город`.
+  Весь hero кликабелен → страница клуба (`/clubs/:id`), стрелка-шеврон подсказывает переход.
+- Вкладки — underline-табы `rd-tabs`/`rd-tab-link` (3 лейбла влезают без скролла). Компонент
+  `ManageTabs` удалён как dead code.
+- **Участники** — переиспользуется общий `ClubMembersTab` (`isOrganizer`), а не локальный
+  дубль `MembersTab` (удалён). Организатор теперь видит здесь и секцию «Ожидают оплаты» (как на
+  member-view странице клуба).
+- **Финансы** — карточки-метрики `rd-stats`/`rd-stat` (выручка градиентом, остальное `rd-plain`).
+- **Настройки** — секции под `rd-section-sub-h`; поля ввода остаются telegram-ui `Input/Textarea`
+  (rd-формы — отдельный пункт бэклога), read-only блок на `rd-kv`, кнопки «Сохранить»/«Удалить» —
+  `rd-btn-primary`/`rd-btn-outline`; модалка удаления — telegram-ui `Modal` (recolor).
+- Легаси `manage-hero`/`manage-tab*` CSS остаётся dead-CSS до общей чистки.
 
 ### Вкладки
 
-#### Участники (`MembersTab`)
-- Список участников через `GET /api/clubs/:id/members`
+#### Участники (`ClubMembersTab`, `isOrganizer`)
+- Список участников через `GET /api/clubs/:id/members` (строки `rd-rep-row` с avatar/индексом надёжности)
+- Секция «Ожидают оплаты» (`GET /api/clubs/:id/awaiting-payment`, gated `isOrganizer`)
 - Клик по участнику → `MemberProfileModal`
 
 #### MemberProfileModal
@@ -242,7 +252,7 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 - **Описание и правила:** `<Textarea>` Описание / Правила; `<Input>` «Вопрос для заявки» (только если `accessType === 'closed'`)
 - **Нельзя изменить:** read-only блок с категорией и типом доступа
 - Кнопка «Сохранить» — disabled если не dirty; при submit `PUT /api/clubs/:id`
-- **Опасная зона:** кнопка «🗑 Удалить клуб» → модалка подтверждения → `DELETE /api/clubs/:id` → редирект на `/my-clubs` с Toast «Клуб «X» удалён»
+- **Опасная зона:** кнопка «Удалить клуб» (`rd-btn-outline`, `--danger`) → модалка подтверждения → `DELETE /api/clubs/:id` → редирект на `/my-clubs` с Toast «Клуб «X» удалён»
 
 
 ---

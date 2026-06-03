@@ -1,38 +1,37 @@
 import { FC } from 'react';
 import type { ClubDetailDto } from '../../types/api';
 
-function getClubInitials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w.charAt(0).toUpperCase())
-    .join('');
-}
-
 interface ManageHeaderProps {
   club: ClubDetailDto;
   onOpenClub: () => void;
 }
 
 /**
- * Brand hero for the organizer Manage screen. Clickable — routes back to the
- * public ClubPage. Mirrors the `mc-hero` language used on MyClubsPage while
- * carrying a small club avatar like ClubPage's cover.
+ * Full-bleed `rd-hero` for the organizer Manage screen. The whole hero is
+ * clickable — tapping routes back to the public ClubPage (chevron hints at it).
+ * Mirrors the hero language used on ClubPage / EventPage.
  */
 export const ManageHeader: FC<ManageHeaderProps> = ({ club, onOpenClub }) => (
-  <button type="button" className="manage-hero" onClick={onOpenClub}>
-    <span className="manage-hero-avt" data-cat={club.category}>
-      {club.avatarUrl ? <img src={club.avatarUrl} alt="" /> : getClubInitials(club.name)}
+  <button
+    type="button"
+    className="rd-hero rd-compact"
+    onClick={onOpenClub}
+    style={{ display: 'block', width: '100%', padding: 0, border: 0, background: 'transparent', font: 'inherit', textAlign: 'left', cursor: 'pointer' }}
+  >
+    <div
+      className="rd-hero-bg"
+      data-cat={club.category}
+      style={club.avatarUrl ? { backgroundImage: `url(${club.avatarUrl})` } : undefined}
+    />
+    <span className="rd-hero-btn rd-right" aria-hidden="true" style={{ fontSize: 22, lineHeight: 1 }}>
+      ›
     </span>
-    <div className="manage-hero-body">
-      <h1 className="manage-hero-title">{club.name}</h1>
-      <div className="manage-hero-sub">
+    <div className="rd-hero-meta">
+      <div className="rd-hero-type-badge">УПРАВЛЕНИЕ</div>
+      <div className="rd-hero-ttl">{club.name}</div>
+      <div className="rd-hero-eyebrow" style={{ marginTop: 6 }}>
         {club.memberCount} / {club.memberLimit} участников · {club.city}
       </div>
     </div>
-    <span className="manage-hero-chevron" aria-hidden="true">
-      ›
-    </span>
   </button>
 );
