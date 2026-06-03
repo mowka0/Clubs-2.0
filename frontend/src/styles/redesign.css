@@ -6,6 +6,16 @@
    so every component works in both dark and light themes.
    ============================================================ */
 
+/* Border-box for all redesign elements — padding must not widen the box,
+   otherwise the 16px page padding pushes content past the viewport (legacy
+   brand-theme.css has no global reset). Scoped to rd- containers so the
+   legacy cascade is untouched. */
+.rd-page, .rd-page *, .rd-page *::before, .rd-page *::after,
+.rd-dock, .rd-dock *, .rd-dock *::before,
+.rd-sticky-cta, .rd-sticky-cta * {
+  box-sizing: border-box;
+}
+
 /* ---------- Surfaces ---------- */
 .rd-glass {
   background: var(--glass-bg);
