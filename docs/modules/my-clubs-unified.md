@@ -74,10 +74,11 @@
 >
 > **[ОБНОВЛЕНО Banco-редизайн, группировка по адресату]** Пять раздельных секций
 > читались непонятно (кто субъект — я или организатор). Перегруппированы в **три блока**:
-> 1. **«Мои заявки · N»** (applicant-side) — одна `rd-glass rd-rep-panel`, объединяет
->    awaiting-payment карточки (`AwaitingPaymentCard`, rich pay-CTA) + pending/rejected
->    (`AppCard`). Awaiting-payment заявки исключены из `AppCard`-списка (`myOtherApps =
->    applications.filter(!awaitingPaymentIds)`), чтобы не дублироваться.
+> 1. **«Мои заявки · N»** (applicant-side) — одна `rd-glass rd-rep-panel`, **только живые**
+>    заявки: awaiting-payment (`AwaitingPaymentCard`, нужно оплатить) + `pending`
+>    (`AppCard`, ждёт решения организатора). Завершённый жизненный цикл (`rejected` /
+>    `auto_rejected` / `approved`→членство) **не показывается** — это история, не действие.
+>    Фильтр: `myActiveApps = applications.filter(a => a.status === 'pending' && !awaitingPaymentIds)`.
 > 2. **«Заявки в мои клубы · N»** (organizer-side) — одна панель, объединяет pending-review
 >    (`PendingAppCard`, тап → `ApplicationReviewModal`) + approved-неоплаченные
 >    (`OrganizerAwaitingPaymentRow`). `inboxSectionRef` (deep-link `focus=inbox`) на этой панели.

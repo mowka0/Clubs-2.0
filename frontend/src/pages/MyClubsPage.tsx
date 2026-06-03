@@ -450,26 +450,26 @@ export const MyClubsPage: FC = () => {
   ]);
 
   // Inbox grouped by addressee (see docs/modules/my-clubs-unified.md):
-  //  - «Мои заявки» (outgoing): approved-awaiting-payment + pending/rejected.
-  //    Awaiting-payment apps render as rich AwaitingPaymentCard, so exclude
-  //    them from the plain AppCard list to avoid duplication.
+  //  - «Мои заявки» (outgoing): only LIVE applications — pending (awaiting the
+  //    organizer's decision) + approved-awaiting-payment (needs my payment).
+  //    Finished-lifecycle apps (rejected / auto_rejected / approved→member) are
+  //    excluded — they're history, not actionable. Awaiting-payment apps render
+  //    as rich AwaitingPaymentCard, so they're not in the pending AppCard list.
   //  - «Заявки в мои клубы» (organizer inbox): pending review + applicants
   //    who were approved but haven't paid yet.
-  const myOtherApps = useMemo(
-    () => applications.filter((a) => !awaitingPaymentIds.has(a.id)),
+  const myActiveApps = useMemo(
+    () => applications.filter((a) => a.status === 'pending' && !awaitingPaymentIds.has(a.id)),
     [applications, awaitingPaymentIds],
   );
-  const myApplicationsCount = awaitingPayment.length + myOtherApps.length;
+  const myApplicationsCount = awaitingPayment.length + myActiveApps.length;
   const organizerInboxCount = pendingInbox.length + organizerAwaitingPayment.length;
 
   const loading = myClubsQuery.isPending || applicationsQuery.isPending;
   const empty =
     !loading &&
     myClubs.length === 0 &&
-    applications.length === 0 &&
-    pendingInbox.length === 0 &&
-    awaitingPayment.length === 0 &&
-    organizerAwaitingPayment.length === 0;
+    myApplicationsCount === 0 &&
+    organizerInboxCount === 0;
 
   const handleCreated = (id: string) => {
     setShowCreateModal(false);
@@ -502,9 +502,9 @@ export const MyClubsPage: FC = () => {
           <div className="rd-page-h">
             Мои клубы{myClubs.length > 0 ? ` · ${myClubs.length}` : ''}
           </div>
-          {(myClubs.length > 0 || applications.length > 0) && (
+          {(myClubs.length > 0 || myApplicationsCount > 0) && (
             <div className="rd-sub" style={{ marginTop: 2, color: 'var(--text-dim)', fontSize: 13 }}>
-              {summaryLine(myClubs.length, applications.length)}
+              {summaryLine(myClubs.length, myApplicationsCount)}
             </div>
           )}
         </div>
@@ -554,7 +554,7 @@ export const MyClubsPage: FC = () => {
             {awaitingPayment.map((item) => (
               <AwaitingPaymentCard key={item.applicationId} item={item} />
             ))}
-            {myOtherApps.map((app) => (
+            {myActiveApps.map((app) => (
               <AppCard
                 key={app.id}
                 application={app}
