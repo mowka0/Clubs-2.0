@@ -1,8 +1,9 @@
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useClubsQuery } from '../queries/clubs';
+import { useMyReputationQuery } from '../queries/members';
+import { useAuthStore } from '../store/useAuthStore';
 import { ClubCard } from '../components/ClubCard';
-import { BrandBackdrop } from '../components/BrandBackdrop';
 import { CityPicker, useCityChoice } from '../components/CityPicker';
 import {
   PriceFilter,
@@ -33,6 +34,24 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced;
 }
 
+function getInitials(name: string): string {
+  return name
+    .replace(/[«»"']/g, '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w.charAt(0).toUpperCase())
+    .join('');
+}
+
+function pluralizeClubsIn(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'клубе';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'клубах';
+  return 'клубах';
+}
+
 const SEARCH_ICON = (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <circle cx="11" cy="11" r="7" />
@@ -41,7 +60,7 @@ const SEARCH_ICON = (
 );
 
 const CHEVRON_DOWN = (
-  <svg className="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg className="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="m6 9 6 6 6-6" />
   </svg>
 );
@@ -55,6 +74,16 @@ export const DiscoveryPage: FC = () => {
   const debouncedFilters = useDebounce(filters, 300);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const haptic = useHaptic();
+
+  const { user } = useAuthStore();
+  const reputationQuery = useMyReputationQuery();
+  const reputation = useMemo(() => reputationQuery.data ?? [], [reputationQuery.data]);
+  const clubsJoined = reputation.length;
+  const avgReputation = clubsJoined > 0
+    ? Math.round(reputation.reduce((sum, r) => sum + r.reliabilityIndex, 0) / clubsJoined)
+    : null;
+
+  const fullName = user ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}` : '';
 
   const queryFilters = useMemo<ClubFilters>(
     () => ({
@@ -104,26 +133,29 @@ export const DiscoveryPage: FC = () => {
   );
 
   const activeCategory = filters.category ?? '';
+  const priceActive = presetIdFromRange(priceRange) !== 'any';
 
   return (
-    <div className="discovery-page">
-      <BrandBackdrop />
-
-      <header className="discovery-topbar">
-        <div className="discovery-brand">
-          <img src="/brand/logo.png" alt="Clubs" />
-          <div>
-            <div className="name">Clubs</div>
-            <div className="tag">Сообщества</div>
+    <div className="rd-page">
+      <header className="rd-header">
+        <div className="rd-avt">
+          {user?.avatarUrl ? <img src={user.avatarUrl} alt="" /> : (getInitials(fullName) || '👤')}
+        </div>
+        <div className="rd-info">
+          <div className="rd-name">
+            {user?.firstName ?? 'Гость'}
+            <span className="rd-badge-star" aria-hidden="true" />
+          </div>
+          <div className="rd-sub">
+            {clubsJoined > 0
+              ? `Состоишь в ${clubsJoined} ${pluralizeClubsIn(clubsJoined)}`
+              : 'Найди свой первый клуб'}
           </div>
         </div>
         <button
           type="button"
-          className="discovery-city-pill"
-          onClick={() => {
-            haptic.select();
-            setPickerOpen(true);
-          }}
+          className="rd-city-pill"
+          onClick={() => { haptic.select(); setPickerOpen(true); }}
           aria-label="Выбрать город"
         >
           {cityChoice.city}
@@ -131,27 +163,37 @@ export const DiscoveryPage: FC = () => {
         </button>
       </header>
 
-      <section className="discovery-hero">
-        <h1>
-          Найди свой{' '}
-          <span className="accent">клуб</span>
-        </h1>
-      </section>
+      {clubsJoined > 0 && (
+        <div className="rd-stats">
+          <div className="rd-stat rd-glass">
+            <div className="rd-stat-label">Репутация</div>
+            <div className="rd-stat-value">{avgReputation}</div>
+            <div className="rd-stat-foot">средняя по клубам</div>
+          </div>
+          <div className="rd-stat rd-glass">
+            <div className="rd-stat-label">В клубах</div>
+            <div className="rd-stat-value rd-plain">{clubsJoined}</div>
+            <div className="rd-stat-foot">активных участий</div>
+          </div>
+        </div>
+      )}
 
-      <div className="discovery-search-wrap">
-        <label className="discovery-search">
-          {SEARCH_ICON}
-          <input
-            type="search"
-            placeholder="Беговой клуб, книжный, дегустации"
-            value={filters.search ?? ''}
-            onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value || undefined }))}
-            aria-label="Поиск клубов"
-          />
-        </label>
+      <div className="rd-section-h">
+        Найди свой <span className="rd-accent">клуб</span>
       </div>
 
-      <div className="discovery-chips" role="tablist" aria-label="Категории">
+      <label className="rd-search">
+        {SEARCH_ICON}
+        <input
+          type="search"
+          placeholder="Беговой клуб, книжный, дегустации"
+          value={filters.search ?? ''}
+          onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value || undefined }))}
+          aria-label="Поиск клубов"
+        />
+      </label>
+
+      <div className="rd-cat-chips" role="tablist" aria-label="Категории">
         {CATEGORY_CHIPS.map((chip) => {
           const isActive = activeCategory === chip.value;
           return (
@@ -160,48 +202,38 @@ export const DiscoveryPage: FC = () => {
               type="button"
               role="tab"
               aria-selected={isActive}
-              className={isActive ? 'discovery-chip active' : 'discovery-chip'}
+              className={isActive ? 'rd-cat-chip rd-active' : 'rd-cat-chip'}
               onClick={() => handleCategoryClick(chip.value)}
             >
               {chip.label}
             </button>
           );
         })}
-      </div>
-
-      <div className="discovery-meta-row">
-        <span className="count">{clubs.length} {pluralizeClubs(clubs.length)}</span>
         <button
           type="button"
-          className={
-            presetIdFromRange(priceRange) === 'any'
-              ? 'discovery-filter-pill'
-              : 'discovery-filter-pill active'
-          }
-          onClick={() => {
-            haptic.select();
-            setPriceOpen(true);
-          }}
+          className={priceActive ? 'rd-cat-chip rd-active' : 'rd-cat-chip'}
+          onClick={() => { haptic.select(); setPriceOpen(true); }}
           aria-label="Фильтр по стоимости подписки"
         >
           {pillLabelFromRange(priceRange)}
-          {CHEVRON_DOWN}
         </button>
-        <span className="sort">По релевантности</span>
       </div>
 
-      <div className="discovery-list">
+      <div>
         {error && (
-          <div className="discovery-error" role="alert">{error.message}</div>
+          <div className="rd-empty" role="alert">
+            <div className="rd-sub">{error.message}</div>
+          </div>
         )}
 
         {isPending && (
-          <div className="discovery-spinner-row"><Spinner size="m" /></div>
+          <div className="rd-spinner-row"><Spinner size="m" /></div>
         )}
 
         {!isPending && clubs.length === 0 && !error && (
-          <div className="discovery-empty">
-            Клубы не найдены. Попробуйте изменить фильтры.
+          <div className="rd-empty">
+            <div className="rd-title">Клубы не найдены</div>
+            <div className="rd-sub">Попробуйте изменить фильтры или город.</div>
           </div>
         )}
 
@@ -210,7 +242,7 @@ export const DiscoveryPage: FC = () => {
         ))}
 
         {isFetchingNextPage && (
-          <div className="discovery-spinner-row"><Spinner size="m" /></div>
+          <div className="rd-spinner-row"><Spinner size="m" /></div>
         )}
 
         <div ref={sentinelRef} style={{ height: 1 }} />
@@ -234,11 +266,3 @@ export const DiscoveryPage: FC = () => {
     </div>
   );
 };
-
-function pluralizeClubs(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return 'клуб';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'клуба';
-  return 'клубов';
-}
