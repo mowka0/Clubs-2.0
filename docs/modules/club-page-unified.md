@@ -199,7 +199,7 @@ const handleTabClick = (tab: TabId | 'manage') => {
 
 ## Tabs реализация
 
-**[ОБНОВЛЕНО brand-редизайн 2026-05-16]** Tabs выполнены как `<button className="cp-tab">` в `<div className="cp-tab-row">` — brand-стилизованные pill'ы (active = brass-fill, inactive = navy-card outline, manage = outline brass с стрелкой `→`). Стили живут в `frontend/src/styles/brand-theme.css` § cp-* (Club page). Tabs `OrganizerClubManage` **тоже** переведены на brand pill-tabs (компонент `ManageTabs`) в `feature/unified-activity-creation` итерация 2 (2026-05-24) — `TabsList` от `@telegram-apps/telegram-ui` там больше не используется. См. [`ui-pages.md`](./ui-pages.md) § OrganizerClubManage и [`unified-activity-creation.md`](./unified-activity-creation.md) Q-10.
+**[ОБНОВЛЕНО Banco-редизайн]** Tabs выполнены как underline-табы `<button className="rd-tab-link">` в `<div className="rd-tabs">` (active = градиентное подчёркивание `--accent-grad`). Стили — `frontend/src/styles/redesign.css` § Underline tabs. Таб «Управление» — navigate-link (не активируется), ведёт на `/clubs/:id/manage`. Tabs `OrganizerClubManage` **тоже** на `rd-tabs` (`feature/redesign-club-manage`) — прежний компонент `ManageTabs` удалён. См. [`ui-pages.md`](./ui-pages.md) § OrganizerClubManage и [`redesign-banco-style.md`](./redesign-banco-style.md) Этап 4.
 
 Аналогично header, about, rules, locked, CTA, events, members, profile — вынесены из telegram-ui-компонентов (`List/Section/Cell/Badge/Placeholder/Button`) в brand-классы `.cp-*` для единства с DiscoveryPage (PR #33). `Modal/Input/Spinner` для apply-modal — остались.
 

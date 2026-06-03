@@ -2,33 +2,24 @@ import { FC, useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Section,
-  Cell,
   Spinner,
   Placeholder,
-  Avatar,
-  Text,
   Button,
-  Badge,
   Modal,
   Input,
   Textarea,
+  Text,
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { AvatarUpload } from '../components/AvatarUpload';
 import { Toast } from '../components/Toast';
-import { BrandBackdrop } from '../components/BrandBackdrop';
 import { ManageHeader } from '../components/manage/ManageHeader';
-import { ManageTabs } from '../components/manage/ManageTabs';
+import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { useClubQuery, useDeleteClubMutation, useUpdateClubMutation } from '../queries/clubs';
-import { useClubMembersQuery } from '../queries/members';
-import { MemberProfileModal } from '../components/club/MemberProfileModal';
 import { useClubFinancesQuery } from '../queries/finances';
 import type { UpdateClubBody } from '../api/clubs';
-import type {
-  MemberListItemDto,
-  ClubDetailDto,
-} from '../types/api';
+import type { ClubDetailDto } from '../types/api';
 
 type TabKey = 'members' | 'finances' | 'settings';
 
@@ -51,67 +42,6 @@ function resolveInitialTab(raw: string | null): TabKey {
   return 'members';
 }
 
-// MemberProfileModal extracted to components/club/MemberProfileModal.tsx
-// (shared with ClubMembersTab inside unified ClubPage).
-
-// ---- Members Tab ----
-
-const MembersTab: FC<{ clubId: string }> = ({ clubId }) => {
-  const haptic = useHaptic();
-  const membersQuery = useClubMembersQuery(clubId);
-  const [selectedMember, setSelectedMember] = useState<MemberListItemDto | null>(null);
-
-  const members = membersQuery.data ?? [];
-
-  if (membersQuery.isPending) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
-        <Spinner size="m" />
-      </div>
-    );
-  }
-
-  if (members.length === 0) {
-    return <Placeholder description="В клубе пока нет участников" />;
-  }
-
-  return (
-    <>
-      <Section>
-        {members.map((m) => (
-          <Cell
-            key={m.userId}
-            onClick={() => { haptic.impact('light'); setSelectedMember(m); }}
-            before={
-              <Avatar
-                size={40}
-                src={m.avatarUrl ?? undefined}
-                acronym={`${m.firstName.charAt(0)}${m.lastName?.charAt(0) ?? ''}`}
-              />
-            }
-            subtitle={`Надёжность: ${m.reliabilityIndex} · Обещания: ${m.promiseFulfillmentPct}%`}
-            after={
-              m.role === 'organizer' ? (
-                <Badge type="number" mode="primary">Орг</Badge>
-              ) : undefined
-            }
-          >
-            {m.firstName} {m.lastName ?? ''}
-          </Cell>
-        ))}
-      </Section>
-
-      {selectedMember && (
-        <MemberProfileModal
-          member={selectedMember}
-          clubId={clubId}
-          onClose={() => setSelectedMember(null)}
-        />
-      )}
-    </>
-  );
-};
-
 // ---- Finances Tab ----
 
 const FinancesTab: FC<{ clubId: string }> = ({ clubId }) => {
@@ -120,7 +50,7 @@ const FinancesTab: FC<{ clubId: string }> = ({ clubId }) => {
 
   if (financesQuery.isPending) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
+      <div className="rd-spinner-row">
         <Spinner size="m" />
       </div>
     );
@@ -131,20 +61,30 @@ const FinancesTab: FC<{ clubId: string }> = ({ clubId }) => {
   }
 
   return (
-    <Section header="Финансовая сводка">
-      <Cell subtitle="Активных участников">
-        {finances.activeMembers}
-      </Cell>
-      <Cell subtitle="Выручка за месяц">
-        {finances.monthlyRevenue} Stars
-      </Cell>
-      <Cell subtitle={`Доля организатора (${finances.organizerSharePct}%)`}>
-        {finances.organizerShare} Stars
-      </Cell>
-      <Cell subtitle={`Комиссия платформы (${finances.platformFeePct}%)`}>
-        {finances.platformFee} Stars
-      </Cell>
-    </Section>
+    <>
+      <div className="rd-section-sub-h">Финансовая сводка</div>
+      <div className="rd-stats">
+        <div className="rd-glass rd-stat">
+          <div className="rd-stat-label">Активных участников</div>
+          <div className="rd-stat-value rd-plain">{finances.activeMembers}</div>
+        </div>
+        <div className="rd-glass rd-stat">
+          <div className="rd-stat-label">Выручка за месяц</div>
+          <div className="rd-stat-value">{finances.monthlyRevenue}</div>
+          <div className="rd-stat-foot">Stars</div>
+        </div>
+        <div className="rd-glass rd-stat">
+          <div className="rd-stat-label">Доля организатора · {finances.organizerSharePct}%</div>
+          <div className="rd-stat-value rd-plain">{finances.organizerShare}</div>
+          <div className="rd-stat-foot">Stars</div>
+        </div>
+        <div className="rd-glass rd-stat">
+          <div className="rd-stat-label">Комиссия платформы · {finances.platformFeePct}%</div>
+          <div className="rd-stat-value rd-plain">{finances.platformFee}</div>
+          <div className="rd-stat-foot">Stars</div>
+        </div>
+      </div>
+    </>
   );
 };
 
@@ -286,13 +226,13 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
 
   return (
     <>
-      <Section header="Аватар">
-        <div style={{ padding: 16 }}>
-          <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} disabled={saving || deleting} />
-        </div>
-      </Section>
+      <div className="rd-section-sub-h">Аватар</div>
+      <div className="rd-glass" style={{ padding: 16, marginBottom: 14, display: 'flex', justifyContent: 'center' }}>
+        <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} disabled={saving || deleting} />
+      </div>
 
-      <Section header="Основное">
+      <div className="rd-section-sub-h">Основное</div>
+      <Section>
         <Input header="Название" value={name} onChange={(e) => setName(e.target.value)} status={errorField === 'name' ? 'error' : undefined} />
         <Input header="Город" value={city} onChange={(e) => setCity(e.target.value)} status={errorField === 'city' ? 'error' : undefined} />
         <Input header="Район (опционально)" value={district} onChange={(e) => setDistrict(e.target.value)} />
@@ -312,7 +252,8 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
         />
       </Section>
 
-      <Section header="Описание и правила">
+      <div className="rd-section-sub-h">Описание и правила</div>
+      <Section>
         <Textarea
           header="Описание"
           value={description}
@@ -333,41 +274,41 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
         )}
       </Section>
 
-      <Section header="Нельзя изменить">
-        <Cell subtitle="Категория">{CATEGORY_LABELS_RU[club.category] ?? club.category}</Cell>
-        <Cell subtitle="Тип доступа">{ACCESS_LABELS_RU[club.accessType] ?? club.accessType}</Cell>
-        <div style={{ padding: '0 16px 12px', fontSize: 12, color: 'var(--tgui--hint_color)' }}>
-          Смена категории или типа доступа не поддерживается.
+      <div className="rd-section-sub-h">Нельзя изменить</div>
+      <div className="rd-glass rd-rep-panel">
+        <div className="rd-kv">
+          <span>Категория</span>
+          <span className="rd-v">{CATEGORY_LABELS_RU[club.category] ?? club.category}</span>
         </div>
-      </Section>
-
-      {error && (
-        <div style={{ padding: '0 16px 8px', color: 'var(--tgui--destructive_text_color, #d00)', fontSize: 13 }}>
-          {error}
+        <div className="rd-kv">
+          <span>Тип доступа</span>
+          <span className="rd-v">{ACCESS_LABELS_RU[club.accessType] ?? club.accessType}</span>
         </div>
-      )}
+      </div>
+      <div className="rd-cta-hint" style={{ textAlign: 'left', marginTop: 8, marginBottom: 4 }}>
+        Смена категории или типа доступа не поддерживается.
+      </div>
 
-      <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <Button size="l" stretched onClick={handleSave} disabled={!dirty || saving || deleting}>
+      {error && <div className="rd-error">{error}</div>}
+
+      <div className="rd-cta-wrap">
+        <button type="button" className="rd-btn-primary" onClick={handleSave} disabled={!dirty || saving || deleting}>
           {saving ? <Spinner size="s" /> : 'Сохранить'}
-        </Button>
+        </button>
       </div>
 
       {savedToast && <Toast message={savedToast} onClose={() => setSavedToast(null)} />}
 
-      <Section header="Опасная зона">
-        <div style={{ padding: 16 }}>
-          <Button
-            size="l"
-            stretched
-            mode="outline"
-            onClick={() => { haptic.impact('light'); setShowDeleteModal(true); }}
-            disabled={saving || deleting}
-          >
-            &#x1F5D1; Удалить клуб
-          </Button>
-        </div>
-      </Section>
+      <div className="rd-section-sub-h">Опасная зона</div>
+      <button
+        type="button"
+        className="rd-btn-outline"
+        onClick={() => { haptic.impact('light'); setShowDeleteModal(true); }}
+        disabled={saving || deleting}
+        style={{ color: 'var(--danger)' }}
+      >
+        Удалить клуб
+      </button>
 
       <Modal open={showDeleteModal} onOpenChange={(v) => !deleting && setShowDeleteModal(v)}>
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -442,13 +383,27 @@ export const OrganizerClubManage: FC = () => {
   const clubId = id ?? '';
   const clubQuery = useClubQuery(clubId || undefined);
   const club = clubQuery.data;
-  const clubLoading = clubQuery.isPending;
+
+  const handleTabChange = (key: TabKey) => {
+    if (key === activeTab) return;
+    haptic.select();
+    setActiveTab(key);
+  };
 
   if (!clubId) {
     return (
-      <div className="brand-page">
-        <BrandBackdrop />
+      <div className="rd-page">
         <Placeholder description="Клуб не найден" />
+      </div>
+    );
+  }
+
+  if (!club) {
+    return (
+      <div className="rd-page">
+        <div className="rd-spinner-row" style={{ paddingTop: 60 }}>
+          <Spinner size="l" />
+        </div>
       </div>
     );
   }
@@ -456,11 +411,10 @@ export const OrganizerClubManage: FC = () => {
   const renderTab = () => {
     switch (activeTab) {
       case 'members':
-        return <MembersTab clubId={clubId} />;
+        return <ClubMembersTab clubId={clubId} isOrganizer />;
       case 'finances':
         return <FinancesTab clubId={clubId} />;
       case 'settings':
-        if (!club) return <div style={{ padding: 16 }}><Spinner size="m" /></div>;
         return (
           <SettingsTab
             club={club}
@@ -476,22 +430,28 @@ export const OrganizerClubManage: FC = () => {
   };
 
   return (
-    <div className="brand-page">
-      <BrandBackdrop />
+    <div className="rd-page">
+      <ManageHeader
+        club={club}
+        onOpenClub={() => { haptic.impact('light'); navigate(`/clubs/${clubId}`); }}
+      />
 
-      {/* Brand hero — clickable, navigates back to public ClubPage */}
-      {!clubLoading && club && (
-        <ManageHeader
-          club={club}
-          onOpenClub={() => { haptic.impact('light'); navigate(`/clubs/${clubId}`); }}
-        />
-      )}
+      <div className="rd-tabs" role="tablist">
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            aria-selected={tab.key === activeTab}
+            className={`rd-tab-link${tab.key === activeTab ? ' rd-active' : ''}`}
+            onClick={() => handleTabChange(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-      {/* Pill-tabs (scrollable, full labels) */}
-      <ManageTabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
-
-      {/* Tab content */}
-      <div className="manage-tab-content">{renderTab()}</div>
+      {renderTab()}
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </div>
