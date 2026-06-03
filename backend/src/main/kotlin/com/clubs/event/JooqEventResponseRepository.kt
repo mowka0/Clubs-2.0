@@ -114,6 +114,33 @@ class JooqEventResponseRepository(
             .fetch()
             .map(mapper::toDomain)
 
+    override fun findRespondersWithUsers(eventId: UUID): List<EventResponderInfo> =
+        dsl.select(
+            EVENT_RESPONSES.USER_ID,
+            USERS.FIRST_NAME,
+            USERS.LAST_NAME,
+            USERS.AVATAR_URL,
+            EVENT_RESPONSES.STAGE_1_VOTE,
+            EVENT_RESPONSES.FINAL_STATUS
+        )
+            .from(EVENT_RESPONSES)
+            .join(USERS).on(USERS.ID.eq(EVENT_RESPONSES.USER_ID))
+            .where(
+                EVENT_RESPONSES.EVENT_ID.eq(eventId)
+                    .and(EVENT_RESPONSES.STAGE_1_VOTE.isNotNull)
+            )
+            .orderBy(EVENT_RESPONSES.STAGE_1_VOTE.asc(), EVENT_RESPONSES.STAGE_1_TIMESTAMP.asc())
+            .fetch { r ->
+                EventResponderInfo(
+                    userId = r.get(EVENT_RESPONSES.USER_ID)!!,
+                    firstName = r.get(USERS.FIRST_NAME)!!,
+                    lastName = r.get(USERS.LAST_NAME),
+                    avatarUrl = r.get(USERS.AVATAR_URL),
+                    stage1Vote = r.get(EVENT_RESPONSES.STAGE_1_VOTE),
+                    finalStatus = r.get(EVENT_RESPONSES.FINAL_STATUS)
+                )
+            }
+
     override fun findResponderTelegramIdsByEventId(eventId: UUID): List<Long> =
         dsl.select(USERS.TELEGRAM_ID)
             .from(EVENT_RESPONSES)

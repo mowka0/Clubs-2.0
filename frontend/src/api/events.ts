@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import type { EventDetailDto, EventListItemDto, MyEventListItemDto, PageResponse } from '../types/api';
+import type { EventDetailDto, EventListItemDto, EventResponderDto, MyEventListItemDto, PageResponse } from '../types/api';
 
 export interface CreateEventBody {
   title: string;
@@ -45,6 +45,10 @@ export function castVote(eventId: string, vote: string): Promise<{ eventId: stri
 
 export function getMyVote(eventId: string): Promise<{ vote: string | null }> {
   return apiClient.get(`/api/events/${eventId}/my-vote`);
+}
+
+export function getEventResponders(eventId: string): Promise<EventResponderDto[]> {
+  return apiClient.get(`/api/events/${eventId}/responses`);
 }
 
 export function confirmParticipation(eventId: string): Promise<{ eventId: string; status: string; confirmedCount: number; participantLimit: number }> {

@@ -72,6 +72,13 @@ class EventController(
     ): ResponseEntity<MyVoteDto> =
         ResponseEntity.ok(voteService.getMyVote(id, user.userId))
 
+    @GetMapping("/api/events/{id}/responses")
+    fun getEventResponders(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<List<EventResponderDto>> =
+        ResponseEntity.ok(voteService.getEventResponders(id, user.userId))
+
     @PostMapping("/api/events/{id}/confirm")
     fun confirmParticipation(
         @PathVariable id: UUID,

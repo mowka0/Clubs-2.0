@@ -10,12 +10,20 @@ import {
   useConfirmParticipationMutation,
   useDeclineParticipationMutation,
   useEventQuery,
+  useEventRespondersQuery,
   useMyVoteQuery,
 } from '../queries/events';
 
 function getInitials(name: string): string {
   return name.replace(/[«»"']/g, '').split(/\s+/).filter(Boolean).slice(0, 2)
     .map((w) => w.charAt(0).toUpperCase()).join('');
+}
+
+/** Maps a responder status to its dot color class (go / maybe / no). */
+function statusDotClass(status: string): string {
+  if (status === 'going' || status === 'confirmed') return 'rd-d-go';
+  if (status === 'maybe' || status === 'waitlisted') return 'rd-d-maybe';
+  return 'rd-d-no';
 }
 
 const VOTE_LABELS: Record<string, string> = {
@@ -48,6 +56,7 @@ export const EventPage: FC = () => {
   const eventQuery = useEventQuery(isAuthenticated ? id : undefined);
   const myVoteQuery = useMyVoteQuery(isAuthenticated ? id : undefined);
   const hostClubQuery = useClubQuery(eventQuery.data?.clubId);
+  const respondersQuery = useEventRespondersQuery(isAuthenticated ? id : undefined);
 
   const castVoteMutation = useCastVoteMutation();
   const confirmMutation = useConfirmParticipationMutation();
@@ -226,8 +235,7 @@ export const EventPage: FC = () => {
         </div>
         <div className="rd-donut" style={donutStyle} aria-hidden="true">
           <div className="rd-donut-center">
-            <span className="rd-donut-num">{event.goingCount}</span>
-            <span className="rd-donut-cap">идут</span>
+            <span className="rd-donut-num">{event.goingCount}/{event.participantLimit}</span>
           </div>
         </div>
       </div>
@@ -235,6 +243,32 @@ export const EventPage: FC = () => {
         <div style={{ marginBottom: 14 }}>
           <span className="rd-badge rd-going">Ваш голос: {VOTE_LABELS[myVote] ?? myVote}</span>
         </div>
+      )}
+
+      {/* Who responded */}
+      {(respondersQuery.data?.length ?? 0) > 0 && (
+        <>
+          <div className="rd-section-sub-h">Кто идёт <span className="rd-count">· {respondersQuery.data!.length}</span></div>
+          <div className="rd-legend" aria-hidden="true">
+            <span><i className="rd-vdot rd-d-go" /> идут</span>
+            <span><i className="rd-vdot rd-d-maybe" /> возможно</span>
+            <span><i className="rd-vdot rd-d-no" /> нет</span>
+          </div>
+          <div className="rd-voters">
+            {respondersQuery.data!.map((r) => {
+              const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
+              return (
+                <div className="rd-voter" key={r.userId}>
+                  <span className="rd-av">
+                    {r.avatarUrl ? <img src={r.avatarUrl} alt="" /> : getInitials(name)}
+                  </span>
+                  <span className="rd-vn">{name}</span>
+                  <span className={`rd-vdot ${statusDotClass(r.status)}`} title={r.status} />
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {/* Stage 2 — confirmation */}
