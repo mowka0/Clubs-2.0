@@ -15,9 +15,10 @@ src/
     DiscoveryPage.tsx          — основная страница (brand layout: topbar + hero + search + chips + list)
   components/
     ClubCard.tsx               — карточка клуба (gradient avatar + capacity bar + featured state)
-    BrandBackdrop.tsx          — SVG абстракция (navy blobs + brass glows + contour lines). Используется на Discovery, ClubPage, MyClubsPage. Раньше назывался DiscoveryBackdrop, переименован в `feature/myclubs-redesign` (2026-05-16)
+    (BrandBackdrop.tsx удалён в `feature/redesign-skladchina-and-forms` — после Banco-редизайна все экраны на плоском `rd-page`, последний пользователь ушёл)
   styles/
-    brand-theme.css            — палитра navy + brass + component-CSS
+    brand-theme.css            — легаси палитра/компоненты (частично dead-CSS после Banco-редизайна)
+    redesign.css               — Banco-Plata rd-дизайн-система (см. redesign-banco-style.md)
   public/brand/                — production-ready brand assets (logo + 4 tab иконки)
 ```
 
@@ -131,11 +132,26 @@ X = memberLimit * subscriptionPrice * 0.8
 
 | Файл | Источник данных | Заметки |
 |---|---|---|
-| `ClubActivitiesTab.tsx` | `useClubActivitiesQuery(clubId, { type? })` (`useQuery`, без пагинации) | Read-only unified-feed events + skladchinas клуба: секция `Предстоящие` (полные карточки, `relevantDate ASC`) + сворачиваемый аккордеон `Прошедшие (N)` (компактные строки, DESC). Tap по карточке → `/events/:id` или `/skladchina/:id`. Заменил `ClubEventsTab.tsx` (удалён) в `feature/unified-activity-creation`. |
+| `ClubActivitiesTab.tsx` | `useClubActivitiesQuery(clubId, { type? })` (`useQuery`, без пагинации) | Read-only unified-feed events + skladchinas клуба: секция `Предстоящие` (полные карточки, `relevantDate ASC`) + сворачиваемый аккордеон `Прошедшие (N)` (компактные строки, DESC). Tap по карточке → `/events/:id` или `/skladchina/:id`. Создание активностей — через **глобальный FAB** в доке (см. ниже § «FAB и контекст клуба»), не отдельной кнопкой в табе. Заменил `ClubEventsTab.tsx` (удалён) в `feature/unified-activity-creation`. |
 | `ClubMembersTab.tsx` | `useClubMembersQuery(clubId)` | rd-список `rd-rep-row` (avatar/индекс надёжности `rd-high/mid/low`), badge «Орг» для `role === 'organizer'`. При `isOrganizer` — доп. секция «Ожидают оплаты». Тап по члену (включая себя) → `MemberProfileModal` с полными метриками. Используется и в member-view `ClubPage`, и в `OrganizerClubManage`. |
 | ~~`ClubProfileTab.tsx`~~ | — | **Удалён** в `feature/profile-reputation-and-skladchina-badge` (2026-05-30). Функция переехала в `ProfilePage` (см. ниже). |
 
 Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — non-active tabs не монтируются и их queries не выполняются. Visitor-режим вообще не подключает эти query.
+
+### FAB и контекст клуба
+Глобальный FAB «+» (в доке, `Layout`/`AppDock`) при создании активности **учитывает текущий
+клуб**. Клубо-контекстные страницы (`ClubPage`, `OrganizerClubManage`, `EventPage`, `SkladchinaPage`)
+проставляют `clubId` в `useClubContextStore` (хук `useSetClubContext`, set на mount / null на unmount).
+`AppDock` вычисляет `presetClubId = contextClubId && организатор этого клуба ? contextClubId : null`
+и передаёт в `CreateActivityFlow`. Если `presetClubId` задан — после выбора типа (Событие/Сбор)
+поток **пропускает выбор клуба** и сразу ведёт на `/clubs/:id/events/new` или `/clubs/:id/skladchina/new`.
+Вне клуба (или если юзер не организатор просматриваемого клуба) — обычный поток `тип → клуб → форма`.
+Отдельной кнопки создания в табе активностей **нет** — всё через FAB.
+
+Когда `presetClubId` активен, FAB получает **акцентное кольцо** (`.rd-dock-action.rd-scoped`:
+оранжевая обводка + акцентный «+» + мягкое свечение; не сплошная заливка — она читалась бы как
+«уже нажата», как активный таб). Сигналит, что здесь можно создать активность в текущем клубе, и
+рекламирует skip-выбора-клуба. Проп `scoped` пробрасывается `AppDock` → `BottomTabBar`.
 
 ---
 
@@ -203,7 +219,8 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 - Обёртка `rd-page` (плоский `var(--bg)`); `BrandBackdrop` убран
 - Шапка — full-bleed `rd-hero rd-compact` (`components/manage/ManageHeader.tsx`): обложка по
   `data-cat`/аватар клуба, бейдж «УПРАВЛЕНИЕ», заголовок, eyebrow `N/limit участников · город`.
-  Весь hero кликабелен → страница клуба (`/clubs/:id`), стрелка-шеврон подсказывает переход.
+  Hero **не кликабелен**; back-стрелка (`rd-hero-btn rd-left`, ‹-иконка) слева сверху → страница
+  клуба (`/clubs/:id`). (Раньше кликабелен был весь hero с шевроном справа — путало с «вперёд».)
 - Вкладки — underline-табы `rd-tabs`/`rd-tab-link` (3 лейбла влезают без скролла). Компонент
   `ManageTabs` удалён как dead code.
 - **Участники** — переиспользуется общий `ClubMembersTab` (`isOrganizer`), а не локальный
@@ -223,10 +240,11 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 - Клик по участнику → `MemberProfileModal`
 
 #### MemberProfileModal
+rd-sheet bottom-sheet (`createPortal`, как CityPicker/ProfileEditModal — больше **не** telegram-ui Modal).
 Загружает `GET /api/clubs/:id/members/:userId/profile`. Показывает:
-- Аватар, имя, username
-- Роль и дата вступления
-- Репутация: индекс надёжности, % выполнения обещаний, подтверждения, посещения
+- Аватар (`rd-avatar`), имя, username
+- «Статус в клубе» (`rd-glass rd-rep-panel` + `rd-kv`): роль, дата вступления
+- «Репутация» (`rd-kv`): индекс надёжности, % выполнения обещаний, подтверждения, посещения
 
 #### ~~Заявки~~ (`ApplicationsTab`, удалён в `feature/applications-inbox`, 2026-05-30)
 - Кросс-клубовый organizer-inbox теперь живёт на `MyClubsPage` — секция «Заявки на рассмотрении».
@@ -259,7 +277,7 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 
 ## ProfilePage — Профиль (`/profile`, нижний таб «Профиль»)
 
-> **Status (2026-05-30):** ✅ реализовано в `feature/profile-reputation-and-skladchina-badge`. Полная спека — [`profile.md`](./profile.md). Файл `frontend/src/pages/ProfilePage.tsx`. Раньше — TGUI `List/Section/Cell`, теперь `.brand-page` + `BrandBackdrop` (единый бренд-стиль).
+> **Status (2026-05-30):** ✅ реализовано в `feature/profile-reputation-and-skladchina-badge`. Полная спека — [`profile.md`](./profile.md). Файл `frontend/src/pages/ProfilePage.tsx`. Переведён на Banco-редизайн (`rd-page`, см. [`redesign-banco-style.md`](./redesign-banco-style.md)).
 
 ### Структура
 

@@ -61,6 +61,11 @@ function resolveActivePath(pathname: string): string {
 interface BottomTabBarProps {
   /** Invoked by the dock's FAB — opens the unified create-activity flow. */
   onCreate: () => void;
+  /**
+   * The FAB is "armed" for the current club — tapping it creates an activity
+   * here without asking which club. Gets an accent ring to advertise it.
+   */
+  scoped?: boolean;
 }
 
 /**
@@ -68,7 +73,7 @@ interface BottomTabBarProps {
  * right (always "create"). Notification dots sit on the «Клубы» and «Активности»
  * tabs; the FAB carries no badge. Styling lives in redesign.css (`.rd-dock*`).
  */
-export const BottomTabBar: FC<BottomTabBarProps> = ({ onCreate }) => {
+export const BottomTabBar: FC<BottomTabBarProps> = ({ onCreate, scoped = false }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const haptic = useHaptic();
@@ -124,9 +129,9 @@ export const BottomTabBar: FC<BottomTabBarProps> = ({ onCreate }) => {
       </div>
       <button
         type="button"
-        className="rd-dock-action"
+        className={scoped ? 'rd-dock-action rd-scoped' : 'rd-dock-action'}
         onClick={onCreate}
-        aria-label="Создать активность"
+        aria-label={scoped ? 'Создать активность в этом клубе' : 'Создать активность'}
       >
         +
       </button>

@@ -75,33 +75,33 @@ export const PriceFilter: FC<PriceFilterProps> = ({ value, onChange, onClose }) 
 
   return createPortal(
     <>
-      <div className="city-picker-overlay" onClick={onClose} aria-hidden="true" />
+      <div className="rd-sheet-overlay" onClick={onClose} aria-hidden="true" />
       <div
-        className="city-picker-sheet"
+        className="rd-sheet"
         role="dialog"
         aria-modal="true"
         aria-label="Стоимость подписки"
       >
-        <div className="city-picker-grabber" aria-hidden="true" />
-        <div className="city-picker-header">
+        <div className="rd-sheet-grabber" aria-hidden="true" />
+        <div className="rd-sheet-head">
           <h2>Стоимость подписки</h2>
-          <button type="button" className="city-picker-close" onClick={onClose}>
+          <button type="button" className="rd-sheet-close" onClick={onClose}>
             Закрыть
           </button>
         </div>
 
-        <div className="city-picker-list">
+        <div className="rd-sheet-body">
           {PRESETS.map((preset) => {
             const isSelected = preset.id === activeId;
             return (
               <button
                 key={preset.id}
                 type="button"
-                className={isSelected ? 'city-picker-item selected' : 'city-picker-item'}
+                className={`rd-pick-item${isSelected ? ' rd-selected' : ''}`}
                 onClick={() => handlePick(preset)}
               >
                 <span>{preset.label}</span>
-                {isSelected && <span className="check">{CHECK_ICON}</span>}
+                {isSelected && <span className="rd-check">{CHECK_ICON}</span>}
               </button>
             );
           })}

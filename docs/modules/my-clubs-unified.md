@@ -72,6 +72,22 @@
 >
 > **Порядок секций** (top → bottom): Ожидают оплаты → Заявки на рассмотрении → Ожидают оплаты от заявителей → Активные клубы → Заявки. Логика — самые urgent действия пользователя сверху: applicant-side "оплати или потеряешь approved-заявку" → organizer-side "разбери заявки до автоотклонения" → organizer-visibility "кто из одобренных ещё не заплатил" → ежедневный контекст "мои клубы" → historical "мои поданные заявки".
 >
+> **[ОБНОВЛЕНО Banco-редизайн, группировка по адресату]** Пять раздельных секций
+> читались непонятно (кто субъект — я или организатор). Перегруппированы в **три блока**:
+> 1. **«Мои заявки · N»** (applicant-side) — одна `rd-glass rd-rep-panel`, **только живые**
+>    заявки: awaiting-payment (`AwaitingPaymentCard`, нужно оплатить) + `pending`
+>    (`AppCard`, ждёт решения организатора). Завершённый жизненный цикл (`rejected` /
+>    `auto_rejected` / `approved`→членство) **не показывается** — это история, не действие.
+>    Фильтр: `myActiveApps = applications.filter(a => a.status === 'pending' && !awaitingPaymentIds)`.
+> 2. **«Заявки в мои клубы · N»** (organizer-side) — одна панель, объединяет pending-review
+>    (`PendingAppCard`, тап → `ApplicationReviewModal`) + approved-неоплаченные
+>    (`OrganizerAwaitingPaymentRow`). `inboxSectionRef` (deep-link `focus=inbox`) на этой панели.
+> 3. **«Где я состою · N»** — членства (`MyClubCard`), без изменений.
+>
+> Прежний `rd-glass-strong` + `rd-inbox-head` для organizer-инбокса заменён на обычный
+> `rd-section-sub-h` + `rd-glass rd-rep-panel` (единообразие со всеми блоками). Карточки
+> (содержимое) — без изменений, поменялись только группировка и заголовки.
+>
 > Класс корня — `.brand-page` (общий канвас для Discovery/ClubPage/MyClubsPage). Inter font вынесен на `html, body` для единого шрифта во всём app.
 >
 > Старая структура (Section + Cell + tgui Button) сохранена ниже для истории.

@@ -1,15 +1,6 @@
 import { FC, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import {
-  Section,
-  Cell,
-  Button,
-  Input,
-  Select,
-  Textarea,
-  Spinner,
-  Placeholder,
-} from '@telegram-apps/telegram-ui';
+import { Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { useCreateClubMutation } from '../queries/clubs';
 import { AvatarUpload } from './AvatarUpload';
@@ -51,7 +42,7 @@ const STEP_FIELDS: Array<Array<keyof ClubFormValues>> = [
 
 const FieldError: FC<{ message?: string }> = ({ message }) =>
   message ? (
-    <div style={{ color: 'var(--tgui--destructive_text_color)', fontSize: 13, padding: '4px 16px 0' }}>
+    <div style={{ color: 'var(--danger)', fontSize: 13, paddingLeft: 2 }}>
       {message}
     </div>
   ) : null;
@@ -141,171 +132,186 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
   };
 
   return (
-    <div style={{ padding: 16 }}>
+    <div className="rd-modal-form" style={{ padding: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <span style={{ fontSize: 13, color: 'var(--tgui--hint_color)' }}>Шаг {step + 1} из {STEP_TITLES.length}: {STEP_TITLES[step]}</span>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--tgui--text_color)' }}>&#x2715;</button>
+        <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>Шаг {step + 1} из {STEP_TITLES.length}: {STEP_TITLES[step]}</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text)' }}>&#x2715;</button>
       </div>
 
       {error && (
-        <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(255,59,48,0.1)', color: 'var(--tgui--destructive_text_color)', marginBottom: 12, fontSize: 14 }}>
+        <div className="rd-error" style={{ textAlign: 'left', marginBottom: 12 }}>
           {error}
         </div>
       )}
 
       {step === 0 && (
-        <Section>
-          <Input
-            header="Название клуба *"
-            placeholder="Например: Книжный клуб Москвы"
-            status={errors.name ? 'error' : undefined}
-            {...register('name', {
-              validate: (v) => {
-                const t = v.trim();
-                if (t.length < 3) return 'Название: минимум 3 символа';
-                if (t.length > 60) return 'Название: максимум 60 символов';
-                return true;
-              },
-            })}
-          />
-          <FieldError message={errors.name?.message} />
-          <Input
-            header="Город *"
-            placeholder="Москва"
-            status={errors.city ? 'error' : undefined}
-            {...register('city', {
-              validate: (v) => v.trim().length > 0 || 'Укажите город',
-            })}
-          />
-          <FieldError message={errors.city?.message} />
-          <Input
-            header="Район (необязательно)"
-            placeholder="Центральный"
-            {...register('district')}
-          />
-        </Section>
+        <div className="rd-form">
+          <label className="rd-field">
+            <span className="rd-label">Название клуба <span className="rd-req">*</span></span>
+            <input
+              className={`rd-input${errors.name ? ' rd-invalid' : ''}`}
+              placeholder="Например: Книжный клуб Москвы"
+              {...register('name', {
+                validate: (v) => {
+                  const t = v.trim();
+                  if (t.length < 3) return 'Название: минимум 3 символа';
+                  if (t.length > 60) return 'Название: максимум 60 символов';
+                  return true;
+                },
+              })}
+            />
+            <FieldError message={errors.name?.message} />
+          </label>
+          <label className="rd-field">
+            <span className="rd-label">Город <span className="rd-req">*</span></span>
+            <input
+              className={`rd-input${errors.city ? ' rd-invalid' : ''}`}
+              placeholder="Москва"
+              {...register('city', {
+                validate: (v) => v.trim().length > 0 || 'Укажите город',
+              })}
+            />
+            <FieldError message={errors.city?.message} />
+          </label>
+          <label className="rd-field">
+            <span className="rd-label">Район (необязательно)</span>
+            <input className="rd-input" placeholder="Центральный" {...register('district')} />
+          </label>
+        </div>
       )}
 
       {step === 1 && (
-        <Section>
-          <Select header="Категория *" {...register('category', { required: 'Выберите категорию' })}>
-            {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-          </Select>
-          <FieldError message={errors.category?.message} />
-          <Cell
-            Component="label"
-            after={<input type="radio" value="open" {...register('accessType')} />}
-            description="Любой желающий может вступить"
-          >
-            Открытый клуб
-          </Cell>
-          <Cell
-            Component="label"
-            after={<input type="radio" value="closed" {...register('accessType')} />}
-            description="Вступление по заявке (организатор одобряет)"
-          >
-            Закрытый клуб
-          </Cell>
-        </Section>
+        <div className="rd-form">
+          <label className="rd-field">
+            <span className="rd-label">Категория <span className="rd-req">*</span></span>
+            <div className="rd-select-wrap">
+              <select className="rd-select" {...register('category', { required: 'Выберите категорию' })}>
+                {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+            </div>
+            <FieldError message={errors.category?.message} />
+          </label>
+          <div className="rd-mode-list">
+            <label className={`rd-mode-option${accessType === 'open' ? ' rd-active' : ''}`}>
+              <input type="radio" value="open" {...register('accessType')} />
+              <div>
+                <div className="rd-mo-title">Открытый клуб</div>
+                <div className="rd-mo-desc">Любой желающий может вступить</div>
+              </div>
+            </label>
+            <label className={`rd-mode-option${accessType === 'closed' ? ' rd-active' : ''}`}>
+              <input type="radio" value="closed" {...register('accessType')} />
+              <div>
+                <div className="rd-mo-title">Закрытый клуб</div>
+                <div className="rd-mo-desc">Вступление по заявке (организатор одобряет)</div>
+              </div>
+            </label>
+          </div>
+        </div>
       )}
 
       {step === 2 && (
-        <Section>
-          <Input
-            header="Лимит участников *"
-            type="number"
-            placeholder="30"
-            status={errors.memberLimit ? 'error' : undefined}
-            {...register('memberLimit', {
-              validate: (v) => {
-                const n = Number(v);
-                // Aligned with backend Bean Validation in CreateClubRequest.kt (10-80).
-                if (!v || !Number.isFinite(n) || n < 10 || n > 80) return 'Лимит участников: 10–80';
-                if (!Number.isInteger(n)) return 'Лимит участников: 10–80';
-                return true;
-              },
-            })}
-          />
-          <FieldError message={errors.memberLimit?.message} />
-          <Input
-            header="Цена подписки (Stars/мес)"
-            type="number"
-            placeholder="0 — бесплатно"
-            status={errors.subscriptionPrice ? 'error' : undefined}
-            {...register('subscriptionPrice', {
-              validate: (v) => {
-                const n = Number(v);
-                if (v === '' || !Number.isFinite(n) || n < 0) return 'Укажите корректную цену';
-                if (!Number.isInteger(n)) return 'Цена должна быть целым числом';
-                return true;
-              },
-            })}
-          />
-          <FieldError message={errors.subscriptionPrice?.message} />
+        <div className="rd-form">
+          <label className="rd-field">
+            <span className="rd-label">Лимит участников <span className="rd-req">*</span></span>
+            <input
+              className={`rd-input${errors.memberLimit ? ' rd-invalid' : ''}`}
+              type="number"
+              placeholder="30"
+              {...register('memberLimit', {
+                validate: (v) => {
+                  const n = Number(v);
+                  // Aligned with backend Bean Validation in CreateClubRequest.kt (10-80).
+                  if (!v || !Number.isFinite(n) || n < 10 || n > 80) return 'Лимит участников: 10–80';
+                  if (!Number.isInteger(n)) return 'Лимит участников: 10–80';
+                  return true;
+                },
+              })}
+            />
+            <FieldError message={errors.memberLimit?.message} />
+          </label>
+          <label className="rd-field">
+            <span className="rd-label">Цена подписки (Stars/мес)</span>
+            <input
+              className={`rd-input${errors.subscriptionPrice ? ' rd-invalid' : ''}`}
+              type="number"
+              placeholder="0 — бесплатно"
+              {...register('subscriptionPrice', {
+                validate: (v) => {
+                  const n = Number(v);
+                  if (v === '' || !Number.isFinite(n) || n < 0) return 'Укажите корректную цену';
+                  if (!Number.isInteger(n)) return 'Цена должна быть целым числом';
+                  return true;
+                },
+              })}
+            />
+            <FieldError message={errors.subscriptionPrice?.message} />
+          </label>
           {Number(subscriptionPrice) > 0 && Number(memberLimit) > 0 && (
-            <Cell description={`При ${memberLimit} участниках вы будете зарабатывать ${monthlyIncome} Stars в месяц (80% от дохода)`}>
-              Доход организатора
-            </Cell>
+            <div className="rd-hint">
+              При {memberLimit} участниках вы будете зарабатывать {monthlyIncome} Stars в месяц (80% от дохода)
+            </div>
           )}
-        </Section>
+        </div>
       )}
 
       {step === 3 && (
-        <Section>
-          <div style={{ padding: 16 }}>
-            <div style={{ fontSize: 13, color: 'var(--tgui--hint_color)', marginBottom: 8 }}>Аватар (необязательно)</div>
+        <div className="rd-form">
+          <div className="rd-field">
+            <span className="rd-label">Аватар (необязательно)</span>
             <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} disabled={submitting} />
           </div>
-          <Textarea
-            header="Описание клуба *"
-            placeholder="Расскажите о своём клубе (10-500 символов)"
-            status={errors.description ? 'error' : undefined}
-            {...register('description', {
-              validate: (v) => {
-                const t = v.trim();
-                if (t.length < 10) return 'Описание: минимум 10 символов';
-                if (t.length > 500) return 'Описание: максимум 500 символов';
-                return true;
-              },
-            })}
-          />
-          <FieldError message={errors.description?.message} />
-          <Textarea
-            header="Правила (необязательно)"
-            placeholder="Правила сообщества"
-            {...register('rules')}
-          />
-        </Section>
+          <label className="rd-field">
+            <span className="rd-label">Описание клуба <span className="rd-req">*</span></span>
+            <textarea
+              className={`rd-textarea${errors.description ? ' rd-invalid' : ''}`}
+              rows={4}
+              placeholder="Расскажите о своём клубе (10-500 символов)"
+              {...register('description', {
+                validate: (v) => {
+                  const t = v.trim();
+                  if (t.length < 10) return 'Описание: минимум 10 символов';
+                  if (t.length > 500) return 'Описание: максимум 500 символов';
+                  return true;
+                },
+              })}
+            />
+            <FieldError message={errors.description?.message} />
+          </label>
+          <label className="rd-field">
+            <span className="rd-label">Правила (необязательно)</span>
+            <textarea className="rd-textarea" rows={3} placeholder="Правила сообщества" {...register('rules')} />
+          </label>
+        </div>
       )}
 
       {step === 4 && (
-        <Section>
+        <div className="rd-form">
           {accessType === 'closed' ? (
-            <Input
-              header="Вопрос для вступления (необязательно)"
-              placeholder="Почему вы хотите вступить?"
-              {...register('applicationQuestion')}
-            />
+            <label className="rd-field">
+              <span className="rd-label">Вопрос для вступления (необязательно)</span>
+              <input className="rd-input" placeholder="Почему вы хотите вступить?" {...register('applicationQuestion')} />
+            </label>
           ) : (
-            <Placeholder description="Для открытого клуба вопрос при вступлении не нужен" />
+            <div className="rd-hint">Для открытого клуба вопрос при вступлении не нужен</div>
           )}
-        </Section>
+        </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+      <div className="rd-form-actions">
         {step > 0 && (
-          <Button size="m" mode="outline" onClick={() => { haptic.impact('light'); setStep((s) => s - 1); }} stretched>
+          <button type="button" className="rd-btn-outline" onClick={() => { haptic.impact('light'); setStep((s) => s - 1); }}>
             Назад
-          </Button>
+          </button>
         )}
         {step < STEP_TITLES.length - 1 ? (
-          <Button size="m" onClick={handleNext} stretched>
+          <button type="button" className="rd-btn-primary" onClick={handleNext}>
             Далее
-          </Button>
+          </button>
         ) : (
-          <Button size="m" onClick={handleSubmit(onValid, onInvalid)} disabled={submitting} stretched>
+          <button type="button" className="rd-btn-primary" onClick={handleSubmit(onValid, onInvalid)} disabled={submitting}>
             {submitting ? <Spinner size="s" /> : 'Создать клуб'}
-          </Button>
+          </button>
         )}
       </div>
     </div>

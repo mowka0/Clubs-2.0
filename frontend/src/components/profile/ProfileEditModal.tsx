@@ -64,45 +64,51 @@ export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, 
 
   return createPortal(
     <>
-      <div className="pf-edit-overlay" onClick={onClose} aria-hidden="true" />
-      <div className="pf-edit-sheet" role="dialog" aria-modal="true" aria-label="Редактировать профиль">
-        <div className="city-picker-grabber" aria-hidden="true" />
-        <div className="pf-edit-header">
+      <div className="rd-sheet-overlay" onClick={onClose} aria-hidden="true" />
+      <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Редактировать профиль">
+        <div className="rd-sheet-grabber" aria-hidden="true" />
+        <div className="rd-sheet-head">
           <h2>Профиль</h2>
-          <button type="button" className="city-picker-close" onClick={onClose}>Закрыть</button>
+          <button type="button" className="rd-sheet-close" onClick={onClose}>Закрыть</button>
         </div>
 
-        <div className="pf-edit-body">
-          <label className="pf-edit-label">Город</label>
-          <button
-            type="button"
-            className="pf-edit-field"
-            onClick={() => { haptic.select(); setCityPickerOpen(true); }}
-          >
-            <span className={hasCity ? '' : 'placeholder'}>{locationLabel}</span>
-            <span className="chevron" aria-hidden="true">›</span>
-          </button>
+        <div className="rd-sheet-body">
+          <div className="rd-field">
+            <span className="rd-label">Город</span>
+            <button
+              type="button"
+              className="rd-input rd-field-btn"
+              onClick={() => { haptic.select(); setCityPickerOpen(true); }}
+            >
+              <span className={hasCity ? '' : 'rd-placeholder'}>{locationLabel}</span>
+              <span className="rd-chev" aria-hidden="true">›</span>
+            </button>
+          </div>
 
-          <label className="pf-edit-label">О себе</label>
-          <textarea
-            className="pf-edit-textarea"
-            value={bio}
-            maxLength={BIO_MAX}
-            rows={3}
-            onChange={(e) => setBio(e.target.value)}
-            placeholder="Коротко о себе"
-          />
-          <div className="pf-edit-counter">{bio.length}/{BIO_MAX}</div>
+          <div className="rd-field">
+            <span className="rd-label">О себе</span>
+            <textarea
+              className="rd-textarea"
+              value={bio}
+              maxLength={BIO_MAX}
+              rows={3}
+              onChange={(e) => setBio(e.target.value)}
+              placeholder="Коротко о себе"
+            />
+            <div className="rd-hint" style={{ textAlign: 'right' }}>{bio.length}/{BIO_MAX}</div>
+          </div>
 
-          <label className="pf-edit-label">Интересы</label>
-          <InterestsInput value={interests} onChange={setInterests} />
+          <div className="rd-field">
+            <span className="rd-label">Интересы</span>
+            <InterestsInput value={interests} onChange={setInterests} />
+          </div>
 
-          {error && <div className="pf-edit-error">{error}</div>}
+          {error && <div className="rd-error" style={{ textAlign: 'left' }}>{error}</div>}
         </div>
 
-        <div className="pf-edit-actions">
-          <button type="button" className="ghost-btn" onClick={onClose} disabled={saving}>Отмена</button>
-          <button type="button" className="mc-create-btn" onClick={handleSave} disabled={saving}>
+        <div className="rd-sheet-actions">
+          <button type="button" className="rd-btn-outline" onClick={onClose} disabled={saving}>Отмена</button>
+          <button type="button" className="rd-btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? <Spinner size="s" /> : 'Сохранить'}
           </button>
         </div>

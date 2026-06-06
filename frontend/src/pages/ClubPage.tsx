@@ -12,6 +12,7 @@ import {
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
+import { useSetClubContext } from '../store/useClubContextStore';
 import {
   useApplyToClubMutation,
   useClubQuery,
@@ -72,6 +73,7 @@ export const ClubPage: FC = () => {
   const navigate = useNavigate();
   const haptic = useHaptic();
   const { user } = useAuthStore();
+  useSetClubContext(id);
 
   const clubQuery = useClubQuery(id);
   const myClubsQuery = useMyClubsQuery();

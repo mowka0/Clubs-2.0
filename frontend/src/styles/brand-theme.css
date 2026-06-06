@@ -53,6 +53,9 @@ html, body {
   --accent-deep:   #D5611C;
   --accent-soft:   rgba(244, 123, 60, 0.14);
   --accent-glow:   rgba(244, 123, 60, 0.4);
+  /* Tight 2-layer button glow — replaces the old diffuse 24px halo. */
+  --accent-shadow:      rgba(244, 123, 60, 0.30);
+  --accent-shadow-soft: rgba(244, 123, 60, 0.15);
   --accent-grad:        linear-gradient(135deg, #FFA070 0%, #F47B3C 100%);
   --accent-grad-strong: linear-gradient(135deg, #FFCDA8 0%, #F47B3C 50%, #D5611C 100%);
   --grad-text:     linear-gradient(90deg, #FF8A4A 0%, #E84C9A 50%, #8E5DFF 100%);
@@ -109,6 +112,8 @@ html, body {
 
   --accent-soft:   rgba(244, 123, 60, 0.12);
   --accent-glow:   rgba(213, 97, 28, 0.3);
+  --accent-shadow:      rgba(213, 97, 28, 0.24);
+  --accent-shadow-soft: rgba(213, 97, 28, 0.12);
   --accent-grad:        linear-gradient(135deg, #F47B3C 0%, #D5611C 100%);
   --accent-grad-strong: linear-gradient(135deg, #F47B3C 0%, #D5611C 100%);
   --grad-text:     linear-gradient(90deg, #E97339 0%, #C4407A 50%, #7A4FD9 100%);

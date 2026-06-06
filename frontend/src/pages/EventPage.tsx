@@ -5,6 +5,7 @@ import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useClubQuery } from '../queries/clubs';
+import { useSetClubContext } from '../store/useClubContextStore';
 import {
   useCastVoteMutation,
   useConfirmParticipationMutation,
@@ -57,6 +58,7 @@ export const EventPage: FC = () => {
   const myVoteQuery = useMyVoteQuery(isAuthenticated ? id : undefined);
   const hostClubQuery = useClubQuery(eventQuery.data?.clubId);
   const respondersQuery = useEventRespondersQuery(isAuthenticated ? id : undefined);
+  useSetClubContext(eventQuery.data?.clubId);
 
   const castVoteMutation = useCastVoteMutation();
   const confirmMutation = useConfirmParticipationMutation();

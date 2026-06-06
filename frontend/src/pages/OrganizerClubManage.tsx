@@ -1,17 +1,15 @@
 import { FC, useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  Section,
   Spinner,
   Placeholder,
   Button,
   Modal,
-  Input,
-  Textarea,
   Text,
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
+import { useSetClubContext } from '../store/useClubContextStore';
 import { AvatarUpload } from '../components/AvatarUpload';
 import { Toast } from '../components/Toast';
 import { ManageHeader } from '../components/manage/ManageHeader';
@@ -232,47 +230,78 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
       </div>
 
       <div className="rd-section-sub-h">Основное</div>
-      <Section>
-        <Input header="Название" value={name} onChange={(e) => setName(e.target.value)} status={errorField === 'name' ? 'error' : undefined} />
-        <Input header="Город" value={city} onChange={(e) => setCity(e.target.value)} status={errorField === 'city' ? 'error' : undefined} />
-        <Input header="Район (опционально)" value={district} onChange={(e) => setDistrict(e.target.value)} />
-        <Input
-          header="Лимит участников (10–80)"
-          type="number"
-          value={memberLimit}
-          onChange={(e) => setMemberLimit(e.target.value)}
-          status={errorField === 'memberLimit' ? 'error' : undefined}
-        />
-        <Input
-          header="Цена подписки (Stars/мес, 0 = бесплатно)"
-          type="number"
-          value={subscriptionPrice}
-          onChange={(e) => setSubscriptionPrice(e.target.value)}
-          status={errorField === 'subscriptionPrice' ? 'error' : undefined}
-        />
-      </Section>
+      <div className="rd-form" style={{ marginBottom: 14 }}>
+        <label className="rd-field">
+          <span className="rd-label">Название</span>
+          <input
+            className={`rd-input${errorField === 'name' ? ' rd-invalid' : ''}`}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
+        <label className="rd-field">
+          <span className="rd-label">Город</span>
+          <input
+            className={`rd-input${errorField === 'city' ? ' rd-invalid' : ''}`}
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+          />
+        </label>
+        <label className="rd-field">
+          <span className="rd-label">Район (опционально)</span>
+          <input className="rd-input" value={district} onChange={(e) => setDistrict(e.target.value)} />
+        </label>
+        <label className="rd-field">
+          <span className="rd-label">Лимит участников (10–80)</span>
+          <input
+            className={`rd-input${errorField === 'memberLimit' ? ' rd-invalid' : ''}`}
+            type="number"
+            value={memberLimit}
+            onChange={(e) => setMemberLimit(e.target.value)}
+          />
+        </label>
+        <label className="rd-field">
+          <span className="rd-label">Цена подписки (Stars/мес, 0 = бесплатно)</span>
+          <input
+            className={`rd-input${errorField === 'subscriptionPrice' ? ' rd-invalid' : ''}`}
+            type="number"
+            value={subscriptionPrice}
+            onChange={(e) => setSubscriptionPrice(e.target.value)}
+          />
+        </label>
+      </div>
 
       <div className="rd-section-sub-h">Описание и правила</div>
-      <Section>
-        <Textarea
-          header="Описание"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          status={errorField === 'description' ? 'error' : undefined}
-        />
-        <Textarea
-          header="Правила клуба (опционально)"
-          value={rules}
-          onChange={(e) => setRules(e.target.value)}
-        />
-        {club.accessType === 'closed' && (
-          <Input
-            header="Вопрос для заявки (опционально)"
-            value={applicationQuestion}
-            onChange={(e) => setApplicationQuestion(e.target.value)}
+      <div className="rd-form" style={{ marginBottom: 14 }}>
+        <label className="rd-field">
+          <span className="rd-label">Описание</span>
+          <textarea
+            className={`rd-textarea${errorField === 'description' ? ' rd-invalid' : ''}`}
+            rows={4}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
           />
+        </label>
+        <label className="rd-field">
+          <span className="rd-label">Правила клуба (опционально)</span>
+          <textarea
+            className="rd-textarea"
+            rows={3}
+            value={rules}
+            onChange={(e) => setRules(e.target.value)}
+          />
+        </label>
+        {club.accessType === 'closed' && (
+          <label className="rd-field">
+            <span className="rd-label">Вопрос для заявки (опционально)</span>
+            <input
+              className="rd-input"
+              value={applicationQuestion}
+              onChange={(e) => setApplicationQuestion(e.target.value)}
+            />
+          </label>
         )}
-      </Section>
+      </div>
 
       <div className="rd-section-sub-h">Нельзя изменить</div>
       <div className="rd-glass rd-rep-panel">
@@ -346,6 +375,7 @@ export const OrganizerClubManage: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  useSetClubContext(id);
 
   const initialTab = resolveInitialTab(searchParams.get('tab'));
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
@@ -433,7 +463,7 @@ export const OrganizerClubManage: FC = () => {
     <div className="rd-page">
       <ManageHeader
         club={club}
-        onOpenClub={() => { haptic.impact('light'); navigate(`/clubs/${clubId}`); }}
+        onBack={() => { haptic.impact('light'); navigate(`/clubs/${clubId}`); }}
       />
 
       <div className="rd-tabs" role="tablist">

@@ -15,13 +15,13 @@ function formatRubles(kopecks: number): string {
   return (Math.floor(kopecks / 100)).toLocaleString('ru-RU');
 }
 
-function statusLabel(status: string): { text: string; cls: string } {
+function statusBadge(status: string): { text: string; cls: string } {
   switch (status) {
-    case 'paid':                 return { text: 'Оплатил',   cls: 'paid' };
-    case 'declined':             return { text: 'Отказался', cls: 'declined' };
-    case 'expired_no_response':  return { text: 'Не ответил', cls: 'expired' };
-    case 'pending':              return { text: 'Ожидает',   cls: 'pending' };
-    default:                     return { text: status,      cls: 'pending' };
+    case 'paid':                 return { text: 'Оплатил',    cls: 'rd-going' };
+    case 'declined':             return { text: 'Отказался',  cls: 'rd-decline' };
+    case 'expired_no_response':  return { text: 'Не ответил', cls: 'rd-neutral2' };
+    case 'pending':              return { text: 'Ожидает',    cls: 'rd-warn' };
+    default:                     return { text: status,       cls: 'rd-warn' };
   }
 }
 
@@ -34,46 +34,43 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
   });
 
   return (
-    <div className="sklad-participants">
-      <div className="sklad-block-title">
-        Участники <span className="count">· {participants.length}</span>
+    <>
+      <div className="rd-section-sub-h">
+        Участники <span className="rd-count">· {participants.length}</span>
       </div>
-      <div className="sklad-participant-list">
+      <div className="rd-glass rd-rep-panel" style={{ marginBottom: 14 }}>
         {sorted.map((p) => {
-          const label = statusLabel(p.status);
+          const badge = statusBadge(p.status);
           const showDeclared = p.declaredAmountKopecks != null;
           const showExpected = p.expectedAmountKopecks != null;
           const mismatch = showDeclared && showExpected
             && p.declaredAmountKopecks !== p.expectedAmountKopecks;
+          const amounts = [
+            showExpected ? `ожид. ${formatRubles(p.expectedAmountKopecks!)} ₽` : null,
+            showDeclared ? `заявл. ${formatRubles(p.declaredAmountKopecks!)} ₽` : null,
+          ].filter(Boolean).join(' · ');
           return (
-            <div key={p.userId} className="sklad-participant-row">
-              <span className="avt">
+            <div key={p.userId} className="rd-rep-row" style={{ cursor: 'default' }}>
+              <span className="rd-ico">
                 {p.avatarUrl
                   ? <img src={p.avatarUrl} alt="" />
                   : getInitials(p.firstName, p.lastName)}
               </span>
-              <div className="body">
-                <div className="name">
+              <div className="rd-info">
+                <div className="rd-ttl">
                   {p.firstName}{p.lastName ? ` ${p.lastName}` : ''}
                 </div>
-                <div className="amounts">
-                  {showExpected && (
-                    <span className="expected">
-                      Ожидается: {formatRubles(p.expectedAmountKopecks!)} ₽
-                    </span>
-                  )}
-                  {showDeclared && (
-                    <span className={mismatch ? 'declared mismatch' : 'declared'}>
-                      Заявлено: {formatRubles(p.declaredAmountKopecks!)} ₽
-                    </span>
-                  )}
-                </div>
+                {amounts && (
+                  <div className="rd-met" style={mismatch ? { color: 'var(--danger)' } : undefined}>
+                    {amounts}
+                  </div>
+                )}
               </div>
-              <span className={`status status-${label.cls}`}>{label.text}</span>
+              <span className={`rd-badge ${badge.cls}`}>{badge.text}</span>
             </div>
           );
         })}
       </div>
-    </div>
+    </>
   );
 };

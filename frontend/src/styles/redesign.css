@@ -55,7 +55,7 @@
   font-size: 18px; font-weight: 700; color: #1A0E04;
   flex-shrink: 0; overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 4px 12px var(--accent-glow);
+  box-shadow: 0 3px 8px var(--accent-shadow);
 }
 .rd-header .rd-avt img { width: 100%; height: 100%; object-fit: cover; }
 .rd-header .rd-info { flex: 1; min-width: 0; }
@@ -129,7 +129,7 @@
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 12px rgba(232, 76, 154, 0.35));
+  filter: drop-shadow(0 1px 4px rgba(232, 76, 154, 0.3));
 }
 .rd-ft-stat-cap {
   font-size: 9.5px; color: var(--text-faint); margin-top: 4px;
@@ -205,7 +205,7 @@
 .rd-cat-chip.rd-active {
   background: var(--accent-grad); color: var(--on-accent);
   border-color: var(--accent-soft);
-  box-shadow: 0 4px 12px var(--accent-glow);
+  box-shadow: 0 2px 6px var(--accent-shadow);
 }
 
 /* ---------- Club card (cover) ---------- */
@@ -276,7 +276,7 @@
   display: flex; align-items: center; justify-content: center;
   font-size: 34px; font-weight: 700; color: #1A0E04; overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 8px 28px var(--accent-glow), inset 0 2px 0 rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px var(--accent-shadow), 0 8px 18px var(--accent-shadow-soft), inset 0 2px 0 rgba(255, 255, 255, 0.2);
 }
 .rd-pf-identity .rd-avt img { width: 100%; height: 100%; object-fit: cover; }
 .rd-pf-identity .rd-name {
@@ -339,7 +339,7 @@
 .rd-dock-item.rd-active {
   background: var(--accent-grad-strong); color: var(--on-accent);
   padding: 8px 14px;
-  box-shadow: 0 4px 14px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: 0 3px 8px var(--accent-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 .rd-dock-item .rd-dot {
   position: absolute; top: 4px; left: calc(50% + 8px);
@@ -356,6 +356,18 @@
   display: flex; align-items: center; justify-content: center;
   font-size: 26px; color: var(--text); cursor: pointer; font-family: inherit;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 40px rgba(0, 0, 0, 0.4);
+  transition: border-color 0.2s, color 0.2s, box-shadow 0.2s;
+}
+/* "armed" for the current club: accent ring + accent glyph (not a solid fill —
+   solid would read as "already pressed" like the active tab). */
+.rd-dock-action.rd-scoped {
+  border: 1.5px solid var(--accent);
+  color: var(--accent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 16px 40px rgba(0, 0, 0, 0.4),
+    0 0 0 3px var(--accent-soft),
+    0 2px 12px var(--accent-shadow);
 }
 
 /* dock backing — needs more opacity than glass tokens to float over content */
@@ -400,7 +412,7 @@
   position: absolute; top: 10px; right: 10px; padding: 4px 9px; border-radius: 6px;
   background: linear-gradient(135deg, #FFA070, #F47B3C);
   font-size: 10px; font-weight: 700; color: #2A0E04;
-  box-shadow: 0 4px 12px rgba(244, 123, 60, 0.35);
+  box-shadow: 0 2px 6px var(--accent-shadow);
 }
 .rd-act-body { padding: 12px 14px 14px; }
 .rd-act-club-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 11px; color: var(--text-dim); }
@@ -477,7 +489,7 @@
   flex: 1; background: var(--accent-grad); color: var(--on-accent);
   border: 0; padding: 15px 20px; border-radius: 14px;
   font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
-  box-shadow: 0 8px 24px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 10px var(--accent-shadow), 0 8px 18px var(--accent-shadow-soft), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 /* ---------- Hero (club / event) ---------- */
@@ -511,6 +523,7 @@
   color: #fff; z-index: 3; cursor: pointer; font-family: inherit;
 }
 .rd-hero-btn.rd-right { right: 16px; }
+.rd-hero-btn.rd-left { left: 16px; }
 .rd-hero-type-badge {
   display: inline-block; padding: 4px 9px; border-radius: 6px;
   background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(20px);
@@ -524,7 +537,7 @@
   border: 0; padding: 15px 20px; border-radius: 14px;
   font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  box-shadow: 0 8px 24px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 10px var(--accent-shadow), 0 8px 18px var(--accent-shadow-soft), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 .rd-btn-primary:disabled { opacity: 0.55; box-shadow: none; cursor: default; }
 .rd-btn-outline {
@@ -587,7 +600,7 @@
 .rd-vote-btn:disabled { opacity: 0.6; cursor: default; }
 .rd-vote-btn.rd-active {
   background: var(--accent-grad); color: var(--on-accent);
-  border-color: var(--accent-soft); box-shadow: 0 4px 12px var(--accent-glow);
+  border-color: var(--accent-soft); box-shadow: 0 2px 6px var(--accent-shadow);
 }
 /* voting: stacked buttons (left half) + donut chart (right half, ~50/50) */
 .rd-vote-layout { display: flex; gap: 14px; align-items: center; margin-bottom: 8px; }
@@ -654,3 +667,172 @@
   cursor: pointer; font-family: inherit;
 }
 .rd-spinner-row { display: flex; justify-content: center; padding: 24px 0; }
+
+/* ============================================================
+   Forms (create-event / create-skladchina / create-club / settings)
+   Native inputs styled to match the rd surface language. Works with
+   plain <input>/<textarea>/<select> and react-hook-form `register`.
+   ============================================================ */
+/* Modal-hosted forms render in a portal outside `.rd-page`, so they miss the
+   page-level border-box reset — scope one here. */
+.rd-modal-form, .rd-modal-form * { box-sizing: border-box; }
+
+.rd-form { display: flex; flex-direction: column; gap: 16px; }
+.rd-field { display: flex; flex-direction: column; gap: 7px; }
+.rd-field > .rd-label { font-size: 12px; font-weight: 600; color: var(--text-dim); padding-left: 2px; }
+.rd-field > .rd-label .rd-req { color: var(--accent); }
+.rd-field > .rd-label .rd-count { color: var(--text-faint); font-weight: 500; }
+
+.rd-input, .rd-textarea, .rd-select {
+  width: 100%; background: var(--surface); border: 1px solid var(--hairline);
+  border-radius: 14px; padding: 13px 14px; font-size: 15px; color: var(--text);
+  font-family: inherit; outline: 0; -webkit-appearance: none; appearance: none;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.rd-input::placeholder, .rd-textarea::placeholder { color: var(--text-faint); }
+.rd-input:focus, .rd-textarea:focus, .rd-select:focus {
+  border-color: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.rd-input.rd-invalid, .rd-textarea.rd-invalid { border-color: var(--danger); }
+.rd-textarea { resize: vertical; min-height: 78px; line-height: 1.45; }
+
+/* select — custom chevron via wrapper (appearance reset above) */
+.rd-select-wrap { position: relative; }
+.rd-select { padding-right: 36px; cursor: pointer; }
+.rd-select-wrap::after {
+  content: '▾'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--text-faint); pointer-events: none; font-size: 12px;
+}
+
+.rd-hint { font-size: 11.5px; color: var(--text-faint); line-height: 1.4; padding-left: 2px; }
+
+/* datetime — native control + trailing icon */
+.rd-datetime { position: relative; }
+.rd-datetime .rd-input { padding-right: 42px; }
+.rd-datetime .rd-dt-ico {
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--text-faint); pointer-events: none; display: flex;
+}
+
+/* form action row (Cancel / Submit side by side) */
+.rd-form-actions { display: flex; gap: 10px; margin-top: 6px; }
+.rd-form-actions > .rd-btn-primary, .rd-form-actions > .rd-btn-outline { flex: 1; width: auto; }
+
+/* radio "mode" cards */
+.rd-mode-list { display: flex; flex-direction: column; gap: 8px; }
+.rd-mode-option {
+  display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px;
+  border-radius: 14px; background: var(--surface); border: 1px solid var(--hairline);
+  cursor: pointer;
+}
+.rd-mode-option.rd-active { border-color: var(--accent-soft); background: var(--accent-soft); }
+.rd-mode-option input { margin-top: 2px; accent-color: var(--accent); flex-shrink: 0; }
+.rd-mode-option .rd-mo-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.rd-mode-option .rd-mo-desc { font-size: 12px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
+
+/* checkbox row */
+.rd-check { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.rd-check input { margin-top: 1px; width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--accent); }
+.rd-check span { font-size: 13px; color: var(--text-dim); line-height: 1.45; }
+
+/* participant picker */
+.rd-pick-list { display: flex; flex-direction: column; gap: 6px; }
+.rd-pick-row { display: flex; align-items: center; gap: 8px; }
+.rd-pick-toggle {
+  flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 11px 12px; border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--hairline);
+  color: var(--text); font-family: inherit; font-size: 14px; cursor: pointer; text-align: left;
+}
+.rd-pick-toggle.rd-selected { border-color: var(--accent-soft); background: var(--accent-soft); }
+.rd-pick-toggle:disabled { opacity: 0.45; cursor: default; }
+.rd-pick-toggle .rd-check-box {
+  width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0;
+  border: 1.5px solid var(--hairline-2); display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: var(--on-accent);
+}
+.rd-pick-toggle.rd-selected .rd-check-box { background: var(--accent-grad); border-color: transparent; }
+.rd-pick-toggle .rd-pick-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-pick-toggle .rd-pick-note { font-size: 11px; color: var(--text-faint); flex-shrink: 0; }
+.rd-pick-amount { width: 96px; flex-shrink: 0; }
+
+/* ============================================================
+   Skladchina detail page
+   ============================================================ */
+.rd-amounts { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.rd-amounts .rd-collected {
+  font-size: 30px; font-weight: 800; letter-spacing: -0.02em; line-height: 1;
+  background: var(--grad-num); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.rd-amounts .rd-sep { font-size: 13px; color: var(--text-faint); }
+.rd-amounts .rd-goal { font-size: 16px; font-weight: 600; color: var(--text-dim); }
+.rd-amounts .rd-pct { margin-left: auto; font-size: 14px; font-weight: 700; color: var(--accent); }
+.rd-amounts .rd-vol-note { font-size: 12px; color: var(--text-dim); }
+.rd-sklad-stats { font-size: 12px; color: var(--text-dim); margin-top: 8px; }
+.rd-payment-link-text {
+  font-size: 11px; color: var(--text-faint); margin-top: 8px;
+  word-break: break-all; line-height: 1.4;
+}
+.rd-badge.rd-neutral2 { background: var(--surface); color: var(--text-dim); border: 1px solid var(--hairline); }
+
+/* ============================================================
+   Bottom sheets (city / price / profile-edit / app-review)
+   Custom portal sheets — own box-sizing reset (rendered outside .rd-page).
+   ============================================================ */
+.rd-sheet-overlay {
+  position: fixed; inset: 0; z-index: 150;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+}
+.rd-sheet, .rd-sheet * { box-sizing: border-box; }
+.rd-sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 151;
+  display: flex; flex-direction: column; max-height: 88vh;
+  background: var(--glass-strong-bg);
+  backdrop-filter: blur(40px) saturate(180%); -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border-top: 1px solid var(--glass-strong-border);
+  border-radius: 26px 26px 0 0;
+  box-shadow: 0 -16px 50px rgba(0, 0, 0, 0.45);
+  padding: 8px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+}
+.rd-sheet-grabber { width: 40px; height: 4px; border-radius: 2px; background: var(--hairline-2); margin: 4px auto 14px; flex-shrink: 0; }
+.rd-sheet-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-shrink: 0; }
+.rd-sheet-head h2 { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); margin: 0; }
+.rd-sheet-close { background: none; border: 0; color: var(--accent); font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; padding: 4px 2px; }
+.rd-sheet-close:disabled { opacity: 0.5; }
+.rd-sheet-body { overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.rd-sheet-actions { display: flex; gap: 10px; margin-top: 16px; flex-shrink: 0; }
+.rd-sheet-actions > .rd-btn-primary, .rd-sheet-actions > .rd-btn-outline { flex: 1; width: auto; }
+
+/* horizontal country-tab chips inside a sheet */
+.rd-sheet-tabs { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 14px; padding-bottom: 2px; flex-shrink: 0; }
+.rd-sheet-tabs::-webkit-scrollbar { display: none; }
+
+/* single-select list rows (city / price) */
+.rd-pick-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; padding: 13px 14px; border-radius: 12px;
+  background: transparent; border: 0; color: var(--text);
+  font-size: 15px; font-family: inherit; cursor: pointer; text-align: left;
+}
+.rd-pick-item + .rd-pick-item { border-top: 1px solid var(--hairline); }
+.rd-pick-item.rd-selected { color: var(--accent); font-weight: 600; }
+.rd-pick-item .rd-check { display: flex; color: var(--accent); flex-shrink: 0; }
+
+/* standalone avatar (gradient + initials/photo) — unlike `.rd-ico`, not scoped
+   to rep/host rows, so it can be used anywhere (sheets, heroes). Size/radius
+   set inline by the caller. */
+.rd-avatar {
+  flex-shrink: 0; overflow: hidden; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #ff7b4a, #c43a2a);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+.rd-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+/* button styled as an rd-input (tap-to-open field, e.g. city selector) */
+.rd-field-btn { display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; cursor: pointer; }
+.rd-field-btn .rd-placeholder { color: var(--text-faint); }
+.rd-field-btn .rd-chev { color: var(--text-faint); font-size: 18px; flex-shrink: 0; }

@@ -135,22 +135,22 @@ export const CityPicker: FC<CityPickerProps> = ({ value, onChange, onClose }) =>
 
   return createPortal(
     <>
-      <div className="city-picker-overlay" onClick={onClose} aria-hidden="true" />
+      <div className="rd-sheet-overlay" onClick={onClose} aria-hidden="true" />
       <div
-        className="city-picker-sheet"
+        className="rd-sheet"
         role="dialog"
         aria-modal="true"
         aria-label="Выбор города"
       >
-        <div className="city-picker-grabber" aria-hidden="true" />
-        <div className="city-picker-header">
+        <div className="rd-sheet-grabber" aria-hidden="true" />
+        <div className="rd-sheet-head">
           <h2>Город</h2>
-          <button type="button" className="city-picker-close" onClick={onClose}>
+          <button type="button" className="rd-sheet-close" onClick={onClose}>
             Закрыть
           </button>
         </div>
 
-        <div className="city-picker-countries" role="tablist" aria-label="Страна">
+        <div className="rd-sheet-tabs" role="tablist" aria-label="Страна">
           {COUNTRIES.map((c) => {
             const isActive = c.code === activeCountry;
             return (
@@ -159,7 +159,7 @@ export const CityPicker: FC<CityPickerProps> = ({ value, onChange, onClose }) =>
                 type="button"
                 role="tab"
                 aria-selected={isActive}
-                className={isActive ? 'city-picker-country active' : 'city-picker-country'}
+                className={`rd-cat-chip${isActive ? ' rd-active' : ''}`}
                 onClick={() => {
                   haptic.select();
                   setActiveCountry(c.code);
@@ -171,18 +171,18 @@ export const CityPicker: FC<CityPickerProps> = ({ value, onChange, onClose }) =>
           })}
         </div>
 
-        <div className="city-picker-list">
+        <div className="rd-sheet-body">
           {country.cities.map((city) => {
             const isSelected = value.country === country.code && value.city === city;
             return (
               <button
                 key={city}
                 type="button"
-                className={isSelected ? 'city-picker-item selected' : 'city-picker-item'}
+                className={`rd-pick-item${isSelected ? ' rd-selected' : ''}`}
                 onClick={() => handlePick(city)}
               >
                 <span>{city}</span>
-                {isSelected && <span className="check">{CHECK_ICON}</span>}
+                {isSelected && <span className="rd-check">{CHECK_ICON}</span>}
               </button>
             );
           })}
