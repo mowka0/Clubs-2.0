@@ -1,0 +1,207 @@
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { Route, Routes } from 'react-router-dom';
+import { http, HttpResponse } from 'msw';
+import { server } from '../mocks/server';
+import { renderWithProviders } from '../utils/renderWithProviders';
+import type { EventDetailDto, EventResponderDto } from '../../types/api';
+
+// Mock Telegram SDK (same shape as ClubPage.test.tsx)
+vi.mock('@telegram-apps/sdk-react', () => ({
+  retrieveLaunchParams: () => ({ initDataRaw: 'test' }),
+  init: vi.fn(),
+  backButton: { show: vi.fn(), hide: vi.fn(), onClick: vi.fn(() => vi.fn()) },
+  mountBackButton: Object.assign(vi.fn(), { isAvailable: () => false }),
+  unmountBackButton: vi.fn(),
+  showBackButton: Object.assign(vi.fn(), { isAvailable: () => false }),
+  hideBackButton: Object.assign(vi.fn(), { isAvailable: () => false }),
+  onBackButtonClick: Object.assign(vi.fn(() => vi.fn()), { isAvailable: () => false }),
+  hapticFeedbackImpactOccurred: Object.assign(vi.fn(), { isAvailable: () => false }),
+  hapticFeedbackNotificationOccurred: Object.assign(vi.fn(), { isAvailable: () => false }),
+  hapticFeedbackSelectionChanged: Object.assign(vi.fn(), { isAvailable: () => false }),
+}));
+
+vi.mock('@telegram-apps/telegram-ui', () => import('../mocks/telegramUi'));
+vi.mock('../../telegram/sdk', () => ({
+  initTelegramSdk: vi.fn(),
+  getInitDataRaw: () => 'test-init-data',
+}));
+
+import { EventPage } from '../../pages/EventPage';
+import { useAuthStore } from '../../store/useAuthStore';
+
+const OWNER_ID = 'user-1';
+const EVENT_ID = 'event-1';
+const CLUB_ID = 'club-1';
+const PAST = new Date(Date.now() - 86_400_000).toISOString();
+
+function pastCompletedEvent(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
+  return {
+    id: EVENT_ID,
+    clubId: CLUB_ID,
+    title: 'Прошедшее событие',
+    description: null,
+    locationText: 'Бар',
+    eventDatetime: PAST,
+    participantLimit: 10,
+    votingOpensDaysBefore: 14,
+    status: 'completed',
+    goingCount: 2,
+    maybeCount: 0,
+    notGoingCount: 1,
+    confirmedCount: 1,
+    attendanceMarked: false,
+    attendanceFinalized: false,
+    createdAt: null,
+    ...overrides,
+  };
+}
+
+const RESPONDERS: EventResponderDto[] = [
+  { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed' },
+  { userId: 'u-going', firstName: 'Борис', lastName: null, avatarUrl: null, status: 'going' },
+  { userId: 'u-no', firstName: 'Виктор', lastName: null, avatarUrl: null, status: 'not_going' },
+];
+
+function mockEventEndpoints(opts: { ownerId: string; event?: EventDetailDto } = { ownerId: OWNER_ID }) {
+  const event = opts.event ?? pastCompletedEvent();
+  server.use(
+    http.get(`*/api/events/${EVENT_ID}`, () => HttpResponse.json(event)),
+    http.get(`*/api/events/${EVENT_ID}/my-vote`, () => HttpResponse.json({ vote: 'confirmed' })),
+    http.get(`*/api/events/${EVENT_ID}/responses`, () => HttpResponse.json(RESPONDERS)),
+    http.get(`*/api/clubs/${CLUB_ID}`, () => HttpResponse.json({
+      id: CLUB_ID,
+      ownerId: opts.ownerId,
+      name: 'Клуб',
+      description: 'd',
+      category: 'sport',
+      accessType: 'open',
+      city: 'Москва',
+      district: null,
+      memberLimit: 50,
+      subscriptionPrice: 0,
+      avatarUrl: null,
+      rules: null,
+      applicationQuestion: null,
+      inviteLink: null,
+      memberCount: 3,
+      activityRating: 0,
+      isActive: true,
+    })),
+  );
+}
+
+function renderEventPage() {
+  const user = userEvent.setup();
+  const result = renderWithProviders(
+    <Routes>
+      <Route path="/events/:id" element={<EventPage />} />
+    </Routes>,
+    { routerEntries: [`/events/${EVENT_ID}`] },
+  );
+  return { ...result, user };
+}
+
+beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
+
+beforeEach(() => {
+  useAuthStore.setState({
+    user: {
+      id: OWNER_ID,
+      telegramId: 1,
+      telegramUsername: 'owner',
+      firstName: 'Owner',
+      lastName: null,
+      avatarUrl: null,
+      city: null,
+      country: null,
+      bio: null,
+    },
+    isAuthenticated: true,
+    isLoading: false,
+  } as never);
+});
+
+describe('EventPage — отметка посещаемости', () => {
+  it('организатор после события видит блок и сохраняет посещаемость только для confirmed/going', async () => {
+    mockEventEndpoints({ ownerId: OWNER_ID });
+    let postedBody: { attendance: { userId: string; attended: boolean }[] } | null = null;
+    server.use(
+      http.post(`*/api/events/${EVENT_ID}/attendance`, async ({ request }) => {
+        postedBody = (await request.json()) as typeof postedBody;
+        return HttpResponse.json({ eventId: EVENT_ID, markedCount: 2 });
+      }),
+    );
+
+    const { user } = renderEventPage();
+
+    expect(await screen.findByText('Отметить посещаемость')).toBeInTheDocument();
+    // confirmed + going попадают в чеклист (как toggle-кнопки), not_going — нет.
+    // Имена также есть в «Кто идёт», поэтому ищем именно по роли button.
+    expect(screen.getByRole('button', { name: /Анна К\./ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Борис/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Виктор/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Сохранить посещаемость/ }));
+
+    await waitFor(() => expect(postedBody).not.toBeNull());
+    expect(postedBody!.attendance).toHaveLength(2);
+    // по умолчанию все отмечены пришедшими
+    expect(postedBody!.attendance.every((a) => a.attended)).toBe(true);
+    expect(postedBody!.attendance.map((a) => a.userId).sort()).toEqual(['u-confirmed', 'u-going']);
+    expect(await screen.findByText('Посещаемость отмечена')).toBeInTheDocument();
+  });
+
+  it('снятая галочка отправляет attended=false для участника', async () => {
+    mockEventEndpoints({ ownerId: OWNER_ID });
+    let postedBody: { attendance: { userId: string; attended: boolean }[] } | null = null;
+    server.use(
+      http.post(`*/api/events/${EVENT_ID}/attendance`, async ({ request }) => {
+        postedBody = (await request.json()) as typeof postedBody;
+        return HttpResponse.json({ eventId: EVENT_ID, markedCount: 2 });
+      }),
+    );
+
+    const { user } = renderEventPage();
+    await screen.findByText('Отметить посещаемость');
+
+    // Снять отметку у Бориса (going) — кликаем его toggle-кнопку
+    await user.click(screen.getByRole('button', { name: /Борис/ }));
+    await user.click(screen.getByRole('button', { name: /Сохранить посещаемость/ }));
+
+    await waitFor(() => expect(postedBody).not.toBeNull());
+    const boris = postedBody!.attendance.find((a) => a.userId === 'u-going');
+    expect(boris?.attended).toBe(false);
+    const anna = postedBody!.attendance.find((a) => a.userId === 'u-confirmed');
+    expect(anna?.attended).toBe(true);
+  });
+
+  it('после отметки организатор видит read-only статус без чеклиста', async () => {
+    mockEventEndpoints({ ownerId: OWNER_ID, event: pastCompletedEvent({ attendanceMarked: true }) });
+    renderEventPage();
+
+    expect(await screen.findByText(/Посещаемость отмечена/)).toBeInTheDocument();
+    expect(screen.queryByText('Отметить посещаемость')).not.toBeInTheDocument();
+  });
+
+  it('не-организатор не видит блок отметки', async () => {
+    mockEventEndpoints({ ownerId: 'someone-else' });
+    renderEventPage();
+
+    // дождаться загрузки страницы
+    expect(await screen.findByText('Прошедшее событие')).toBeInTheDocument();
+    expect(screen.queryByText('Отметить посещаемость')).not.toBeInTheDocument();
+  });
+
+  it('организатор до даты события не видит блок отметки', async () => {
+    const FUTURE = new Date(Date.now() + 86_400_000).toISOString();
+    mockEventEndpoints({ ownerId: OWNER_ID, event: pastCompletedEvent({ status: 'upcoming', eventDatetime: FUTURE }) });
+    renderEventPage();
+
+    expect(await screen.findByText('Прошедшее событие')).toBeInTheDocument();
+    expect(screen.queryByText('Отметить посещаемость')).not.toBeInTheDocument();
+  });
+});

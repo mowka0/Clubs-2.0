@@ -244,6 +244,16 @@ POST /api/events/{id}/decline
 Case A). 6-часовой grace ≪ 48-часового окна спора (PRD §4.4.3), поэтому автозавершение не пересекается
 с финализацией репутации.
 
+### Frontend — отметка посещаемости (`EventPage`)
+Секция «Отметить посещаемость» на `EventPage` (между «Кто идёт» и Stage 2). Видна организатору
+после события: `isOrganizer && event_datetime <= now && !attendanceMarked` (зеркалит серверный гейт
+`AttendanceService` — owner-only + время, **не статус**). Чеклист участников со статусом
+`confirmed`/`going` (toggle-кнопки, по умолчанию «пришёл»), submit → `POST /api/events/{id}/attendance`
+(`useMarkAttendanceMutation`). После отметки — read-only «✓ Посещаемость отмечена». Mark-once:
+UI спора/перемаркировки (dispute/resolve) пока нет — future scope. Восстановлено в
+`bugfix/attendance-marking-ui` (2026-06-06) после потери при унификации создания активностей; см.
+`docs/backlog/attendance-marking-ui-missing.md`.
+
 ### Corner Cases
 | Ситуация | Поведение |
 |----------|-----------|

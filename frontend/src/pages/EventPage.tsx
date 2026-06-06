@@ -6,12 +6,14 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useClubQuery } from '../queries/clubs';
 import { useSetClubContext } from '../store/useClubContextStore';
+import { Toast } from '../components/Toast';
 import {
   useCastVoteMutation,
   useConfirmParticipationMutation,
   useDeclineParticipationMutation,
   useEventQuery,
   useEventRespondersQuery,
+  useMarkAttendanceMutation,
   useMyVoteQuery,
 } from '../queries/events';
 
@@ -53,6 +55,7 @@ export const EventPage: FC = () => {
   const navigate = useNavigate();
   const haptic = useHaptic();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const userId = useAuthStore((s) => s.user?.id);
 
   const eventQuery = useEventQuery(isAuthenticated ? id : undefined);
   const myVoteQuery = useMyVoteQuery(isAuthenticated ? id : undefined);
@@ -63,8 +66,16 @@ export const EventPage: FC = () => {
   const castVoteMutation = useCastVoteMutation();
   const confirmMutation = useConfirmParticipationMutation();
   const declineMutation = useDeclineParticipationMutation();
+  const markAttendanceMutation = useMarkAttendanceMutation();
 
+  // Two separate error channels: actionError for vote/confirm/decline (rendered in
+  // the recruitment + Stage 2 sections), attendanceError for attendance marking.
+  // Each handler resets its own before firing, so they never collide in one slot.
   const [actionError, setActionError] = useState<string | null>(null);
+  const [attendanceError, setAttendanceError] = useState<string | null>(null);
+  // Explicit overrides only; an absent entry means "present" (attended[id] ?? true).
+  const [attended, setAttended] = useState<Record<string, boolean>>({});
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const event = eventQuery.data;
   const myVote = myVoteQuery.data?.vote ?? null;
@@ -115,6 +126,34 @@ export const EventPage: FC = () => {
     });
   };
 
+  const toggleAttended = (uid: string) => {
+    haptic.select();
+    setAttended((prev) => ({ ...prev, [uid]: !(prev[uid] ?? true) }));
+  };
+
+  const handleMarkAttendance = (candidates: { userId: string }[]) => {
+    if (!id || markAttendanceMutation.isPending) return;
+    haptic.impact('medium');
+    setAttendanceError(null);
+    const attendance = candidates.map((c) => ({
+      userId: c.userId,
+      attended: attended[c.userId] ?? true,
+    }));
+    markAttendanceMutation.mutate(
+      { eventId: id, attendance },
+      {
+        onSuccess: () => {
+          haptic.notify('success');
+          setToastMessage('Посещаемость отмечена');
+        },
+        onError: (e) => {
+          setAttendanceError(e.message);
+          haptic.notify('error');
+        },
+      },
+    );
+  };
+
   if (loading) {
     return (
       <div className="rd-page" style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
@@ -149,6 +188,18 @@ export const EventPage: FC = () => {
   const showConfirmed =
     event.confirmedCount > 0 &&
     (event.status === 'stage_2' || event.status === 'completed');
+
+  // Attendance marking — organizer only, once the event has taken place. Backend
+  // (AttendanceService) gates on event_datetime <= now + the attendance_marked
+  // flag, never on status (see events.md § attendance flow). Candidates = those
+  // who intended to come (confirmed via Stage 2, or going when no Stage 2).
+  const isOrganizer = !!hostClubQuery.data && hostClubQuery.data.ownerId === userId;
+  const eventHappened = new Date(event.eventDatetime).getTime() <= Date.now();
+  const attendanceCandidates = (respondersQuery.data ?? []).filter(
+    (r) => r.status === 'confirmed' || r.status === 'going',
+  );
+  const showAttendanceMarking = isOrganizer && eventHappened && !event.attendanceMarked;
+  const showAttendanceDone = isOrganizer && eventHappened && event.attendanceMarked;
 
   return (
     <div className="rd-page">
@@ -270,6 +321,68 @@ export const EventPage: FC = () => {
         </>
       )}
 
+      {/* Attendance — organizer marks who showed up, after the event */}
+      {showAttendanceMarking && (
+        <>
+          <div className="rd-section-sub-h">Отметить посещаемость</div>
+          {attendanceCandidates.length === 0 ? (
+            <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
+              <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
+                Нет подтверждённых участников для отметки.
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="rd-glass" style={{ padding: 8, marginBottom: 10 }}>
+                {attendanceCandidates.map((r) => {
+                  const present = attended[r.userId] ?? true;
+                  const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
+                  return (
+                    <div className="rd-pick-row" key={r.userId}>
+                      <button
+                        type="button"
+                        className={`rd-pick-toggle${present ? ' rd-selected' : ''}`}
+                        aria-pressed={present}
+                        aria-label={`${name}: ${present ? 'пришёл' : 'не пришёл'}`}
+                        onClick={() => toggleAttended(r.userId)}
+                      >
+                        <span className="rd-check-box">{present ? '✓' : ''}</span>
+                        <span className="rd-pick-name">{name}</span>
+                        <span className="rd-pick-note">{present ? 'пришёл' : 'не пришёл'}</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              {attendanceError && <div className="rd-error">{attendanceError}</div>}
+              <div className="rd-cta-wrap">
+                <button
+                  type="button"
+                  className="rd-btn-primary"
+                  onClick={() => handleMarkAttendance(attendanceCandidates)}
+                  disabled={markAttendanceMutation.isPending}
+                >
+                  {markAttendanceMutation.isPending ? <Spinner size="s" /> : 'Сохранить посещаемость'}
+                </button>
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {/* Attendance — recorded (read-only). Mark-once: re-marking after a member
+          dispute (AttendanceService dispute/resolve, 48h window) has no UI yet — future scope. */}
+      {showAttendanceDone && (
+        <>
+          <div className="rd-section-sub-h">Посещаемость</div>
+          <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
+            <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
+              ✓ Посещаемость отмечена{event.attendanceFinalized ? ' и закреплена' : ''}.
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Stage 2 — confirmation */}
       {showStage2 && (
         <>
@@ -308,6 +421,8 @@ export const EventPage: FC = () => {
           </div>
         </>
       )}
+
+      {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
     </div>
   );
 };

@@ -1,6 +1,29 @@
 # Отметка посещаемости события — потерян UI
 
-**Статус:** open · **Создано:** 2026-05-24 · **Origin:** обнаружено при round-3/4 unified-activity-creation
+**Статус:** ✅ RESOLVED (`bugfix/attendance-marking-ui`, 2026-06-06) · **Создано:** 2026-05-24 · **Origin:** обнаружено при round-3/4 unified-activity-creation
+
+## Резолюция (2026-06-06)
+
+UI отметки посещаемости восстановлен на `EventPage` (frontend-only — backend
+endpoint `POST /api/events/{id}/attendance`, `useMarkAttendanceMutation` и
+`useEventRespondersQuery` уже существовали).
+
+- **Где:** новая секция «Отметить посещаемость» на `EventPage`, между «Кто идёт»
+  и блоком Stage 2.
+- **Видимость:** `isOrganizer && eventHappened (event_datetime <= now) && !attendanceMarked`.
+  Совпадает с гейтом бэкенда (`AttendanceService`: owner-only + `event_datetime <= now`,
+  никогда по статусу). После отметки — read-only «✓ Посещаемость отмечена».
+- **Кандидаты:** responders со статусом `confirmed` ИЛИ `going` (покрывает оба
+  пути жизненного цикла — прошёл Stage 2 или нет). Чеклист toggle-кнопок
+  (`rd-pick-toggle`), по умолчанию все «пришёл»; снятие → `attended=false`.
+- **Фидбэк:** haptic + `Toast` «Посещаемость отмечена» (правило `haptic.md`:
+  тихий success без navigate ⇒ Toast). a11y: `aria-pressed` + `aria-label` на toggle.
+- **Scope:** mark-once. Re-mark после спора участника (`dispute`/`resolve`, окно 48ч)
+  — UI пока нет, future scope (backend поддерживает).
+- **Тесты:** `EventPageAttendance.test.tsx` (5 кейсов: рендер+сохранение payload,
+  toggle→false, read-only после отметки, не-организатор скрыт, до события скрыт);
+  `EventControllerSecurityTest` +2 (non-organizer→403, до события→400).
+- **Docs:** `events.md` (§ attendance — фронт-заметка) обновлён.
 
 ## Проблема
 
