@@ -8,6 +8,7 @@ import { CreateActivityFlow } from './manage/CreateActivityFlow';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
+import { useClubContextStore } from '../store/useClubContextStore';
 import { useOrganizerClubs } from '../queries/organizerClubs';
 
 /**
@@ -40,6 +41,13 @@ export const AppDock: FC = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
+  // When the user is viewing a club they organize, the FAB pre-selects that
+  // club and skips the picker — create straight into the current club. On any
+  // other screen (or a club they don't organize) the normal flow runs.
+  const clubContextId = useClubContextStore((s) => s.clubId);
+  const presetClubId =
+    clubContextId && organizerClubs.some((c) => c.id === clubContextId) ? clubContextId : null;
+
   const handleCreate = () => {
     haptic.impact('light');
     if (canCreate) {
@@ -56,6 +64,7 @@ export const AppDock: FC = () => {
         <CreateActivityFlow
           open={createOpen}
           organizerClubs={organizerClubs}
+          presetClubId={presetClubId}
           onClose={() => setCreateOpen(false)}
         />
       )}

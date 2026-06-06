@@ -9,6 +9,7 @@ import {
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
+import { useSetClubContext } from '../store/useClubContextStore';
 import { AvatarUpload } from '../components/AvatarUpload';
 import { Toast } from '../components/Toast';
 import { ManageHeader } from '../components/manage/ManageHeader';
@@ -374,6 +375,7 @@ export const OrganizerClubManage: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  useSetClubContext(id);
 
   const initialTab = resolveInitialTab(searchParams.get('tab'));
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);

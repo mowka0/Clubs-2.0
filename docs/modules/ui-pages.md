@@ -132,11 +132,21 @@ X = memberLimit * subscriptionPrice * 0.8
 
 | Файл | Источник данных | Заметки |
 |---|---|---|
-| `ClubActivitiesTab.tsx` | `useClubActivitiesQuery(clubId, { type? })` (`useQuery`, без пагинации) | Read-only unified-feed events + skladchinas клуба: секция `Предстоящие` (полные карточки, `relevantDate ASC`) + сворачиваемый аккордеон `Прошедшие (N)` (компактные строки, DESC). Tap по карточке → `/events/:id` или `/skladchina/:id`. **При `isOrganizer`** — компактная пилюля «+ Создать» (`rd-create-pill`) сверху → rd-sheet выбора типа (Событие/Сбор) → прямой переход на `/clubs/:id/events/new` или `/clubs/:id/skladchina/new` (club picker пропущен — клуб уже известен). Заменил `ClubEventsTab.tsx` (удалён) в `feature/unified-activity-creation`. |
+| `ClubActivitiesTab.tsx` | `useClubActivitiesQuery(clubId, { type? })` (`useQuery`, без пагинации) | Read-only unified-feed events + skladchinas клуба: секция `Предстоящие` (полные карточки, `relevantDate ASC`) + сворачиваемый аккордеон `Прошедшие (N)` (компактные строки, DESC). Tap по карточке → `/events/:id` или `/skladchina/:id`. Создание активностей — через **глобальный FAB** в доке (см. ниже § «FAB и контекст клуба»), не отдельной кнопкой в табе. Заменил `ClubEventsTab.tsx` (удалён) в `feature/unified-activity-creation`. |
 | `ClubMembersTab.tsx` | `useClubMembersQuery(clubId)` | rd-список `rd-rep-row` (avatar/индекс надёжности `rd-high/mid/low`), badge «Орг» для `role === 'organizer'`. При `isOrganizer` — доп. секция «Ожидают оплаты». Тап по члену (включая себя) → `MemberProfileModal` с полными метриками. Используется и в member-view `ClubPage`, и в `OrganizerClubManage`. |
 | ~~`ClubProfileTab.tsx`~~ | — | **Удалён** в `feature/profile-reputation-and-skladchina-badge` (2026-05-30). Функция переехала в `ProfilePage` (см. ниже). |
 
 Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — non-active tabs не монтируются и их queries не выполняются. Visitor-режим вообще не подключает эти query.
+
+### FAB и контекст клуба
+Глобальный FAB «+» (в доке, `Layout`/`AppDock`) при создании активности **учитывает текущий
+клуб**. Клубо-контекстные страницы (`ClubPage`, `OrganizerClubManage`, `EventPage`, `SkladchinaPage`)
+проставляют `clubId` в `useClubContextStore` (хук `useSetClubContext`, set на mount / null на unmount).
+`AppDock` вычисляет `presetClubId = contextClubId && организатор этого клуба ? contextClubId : null`
+и передаёт в `CreateActivityFlow`. Если `presetClubId` задан — после выбора типа (Событие/Сбор)
+поток **пропускает выбор клуба** и сразу ведёт на `/clubs/:id/events/new` или `/clubs/:id/skladchina/new`.
+Вне клуба (или если юзер не организатор просматриваемого клуба) — обычный поток `тип → клуб → форма`.
+Отдельной кнопки создания в табе активностей **нет** — всё через FAB.
 
 ---
 

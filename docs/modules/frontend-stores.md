@@ -290,6 +290,16 @@ interface UserDto {
 - Токен в `apiClient.token` (private field), не в localStorage — XSS-устойчивость
 - Все остальные сторы (`useClubsStore`, `useEventsStore`, `useApplicationsStore`) **удаляются** в этом PR
 
+### `useThemeStore` (`frontend/src/store/useThemeStore.ts`)
+Тема приложения (`system`/`light`/`dark`), `mode` persist в localStorage. Чисто клиентское — см. [`redesign-banco-style.md`](./redesign-banco-style.md).
+
+### `useClubContextStore` (`frontend/src/store/useClubContextStore.ts`)
+**Banco-редизайн.** Хранит `clubId: string | null` — клуб, который юзер сейчас просматривает. Чисто
+UI-контекст (не server state): клубо-контекстные страницы (`ClubPage`/`OrganizerClubManage`/`EventPage`/
+`SkladchinaPage`) проставляют его через хук `useSetClubContext(id)` (set на mount, `null` на unmount).
+Читает только `AppDock` (`Layout`) — чтобы FAB «+» создавал активность сразу в текущем клубе (если юзер
+его организатор), минуя выбор клуба. Без persist. См. [`unified-activity-creation.md`](./unified-activity-creation.md).
+
 ---
 
 ## Test infrastructure

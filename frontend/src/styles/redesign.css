@@ -820,27 +820,6 @@
 }
 .rd-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
-/* compact "+ Создать" pill on the club activities tab (organizer only) */
-.rd-create-pill {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 7px 14px; border-radius: 999px;
-  background: var(--accent-soft); color: var(--accent);
-  border: 1px solid var(--accent-soft);
-  font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer;
-}
-.rd-create-pill .rd-plus { font-size: 15px; line-height: 1; }
-
-/* activity-type option rows in the create chooser sheet */
-.rd-create-opt {
-  display: flex; align-items: center; gap: 14px; width: 100%;
-  padding: 14px; border-radius: 14px;
-  background: var(--surface); border: 1px solid var(--hairline);
-  cursor: pointer; font-family: inherit; text-align: left; color: var(--text);
-}
-.rd-create-opt .rd-emoji { font-size: 24px; width: 32px; text-align: center; flex-shrink: 0; }
-.rd-create-opt .rd-ttl { font-size: 16px; font-weight: 600; color: var(--text); }
-.rd-create-opt .rd-sub { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
-
 /* button styled as an rd-input (tap-to-open field, e.g. city selector) */
 .rd-field-btn { display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; cursor: pointer; }
 .rd-field-btn .rd-placeholder { color: var(--text-faint); }

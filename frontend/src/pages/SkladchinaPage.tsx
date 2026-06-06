@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
+import { useSetClubContext } from '../store/useClubContextStore';
 import {
   useCloseSkladchinaMutation,
   useDeclineSkladchinaMutation,
@@ -49,6 +50,7 @@ export const SkladchinaPage: FC = () => {
   const navigate = useNavigate();
   const haptic = useHaptic();
   const query = useSkladchinaQuery(id);
+  useSetClubContext(query.data?.clubId);
   const markPaidMut = useMarkPaidMutation();
   const declineMut = useDeclineSkladchinaMutation();
   const closeMut = useCloseSkladchinaMutation();

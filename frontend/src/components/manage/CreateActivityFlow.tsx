@@ -11,6 +11,12 @@ interface CreateActivityFlowProps {
   open: boolean;
   /** Clubs the user organizes — the flow only navigates within these. */
   organizerClubs: ClubPickerOption[];
+  /**
+   * When set, the club picker is skipped entirely — after choosing the type
+   * the flow navigates straight into this club. Used when the FAB is tapped
+   * from a club the user is currently viewing (and organizes).
+   */
+  presetClubId?: string | null;
   /** Closes the whole flow (resets internal step state). */
   onClose: () => void;
 }
@@ -38,6 +44,7 @@ function createRoute(clubId: string, type: ActivityType): string {
 export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   open,
   organizerClubs,
+  presetClubId,
   onClose,
 }) => {
   const navigate = useNavigate();
@@ -60,6 +67,11 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
 
   const handlePickType = (type: ActivityType) => {
     haptic.impact('medium');
+    // Current-club context (FAB on a club page) → skip the picker entirely.
+    if (presetClubId) {
+      goToCreate(presetClubId, type);
+      return;
+    }
     if (organizerClubs.length === 1) {
       goToCreate(organizerClubs[0]!.id, type);
       return;
