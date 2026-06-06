@@ -3,13 +3,13 @@ package com.clubs.event
 import com.clubs.common.dto.PageResponse
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
-import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
 import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import com.clubs.generated.jooq.tables.references.EVENTS
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
+import com.clubs.membership.MembershipAccess
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
@@ -89,11 +89,14 @@ class JooqEventRepository(
     override fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MyFeedItem> {
         val now = OffsetDateTime.now()
 
+        // Membership access must match the voting/DM access predicate, else a
+        // cancelled-but-still-paid member can vote on (and is DM'd about) an event
+        // that never shows up in their feed. Shared MembershipAccess predicate.
         val baseCondition = EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_2)
             .and(EVENTS.EVENT_DATETIME.gt(now))
             .and(CLUBS.IS_ACTIVE.eq(true))
             .and(MEMBERSHIPS.USER_ID.eq(userId))
-            .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active))
+            .and(MembershipAccess.hasAccess(now))
 
         val total = dsl.select(DSL.countDistinct(EVENTS.ID))
             .from(EVENTS)

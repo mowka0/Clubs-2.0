@@ -198,6 +198,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 
 Голосуйте в приложении:
 ```
+**Inline-кнопка:** «📅 Открыть событие» с `WebAppInfo`, deep-link на `webAppPath=/events/{eventId}` — открывает страницу события (голосование) напрямую через React Router, а не корень Mini App.
 **Подключение:** `EventService.createEvent` (`@Transactional`) публикует `EventCreatedEvent` после `eventRepository.create()`; `EventBotNotifier.onEventCreated` (`@TransactionalEventListener`, фаза AFTER_COMMIT) вызывает `sendEventCreated` (`@Async` — не блокирует HTTP-ответ при массовой рассылке). Те же транзакционные гарантии, что у Payment/Skladchina DM: при rollback `createEvent` DM не уходят. Per-DM ошибки Telegram ловятся и логируются внутри `sendDm` (fire-and-forget — сбой бота не валит создание события). Пустой список получателей → `WARN` + return.
 
 ### `sendStage2Started(event: EventsRecord)` — **orphan** `[GAP-004]`

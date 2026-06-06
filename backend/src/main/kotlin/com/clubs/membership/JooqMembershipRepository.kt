@@ -169,13 +169,7 @@ class JooqMembershipRepository(
                 .where(
                     MEMBERSHIPS.USER_ID.eq(userId)
                         .and(MEMBERSHIPS.CLUB_ID.eq(clubId))
-                        .and(
-                            MEMBERSHIPS.STATUS.eq(MembershipStatus.active)
-                                .or(
-                                    MEMBERSHIPS.STATUS.eq(MembershipStatus.cancelled)
-                                        .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.greaterThan(now))
-                                )
-                        )
+                        .and(MembershipAccess.hasAccess(now))
                 )
         )
     }
@@ -189,13 +183,7 @@ class JooqMembershipRepository(
                 .where(
                     MEMBERSHIPS.USER_ID.eq(userId)
                         .and(MEMBERSHIPS.CLUB_ID.eq(clubId))
-                        .and(
-                            MEMBERSHIPS.STATUS.eq(MembershipStatus.active)
-                                .or(
-                                    MEMBERSHIPS.STATUS.eq(MembershipStatus.cancelled)
-                                        .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.greaterThan(now))
-                                )
-                        )
+                        .and(MembershipAccess.hasAccess(now))
                         .and(CLUBS.IS_ACTIVE.eq(true))
                 )
         )
@@ -353,12 +341,10 @@ class JooqMembershipRepository(
             )
             .execute()
 
-    // Telegram IDs of members who currently have access to the club. Mirrors the
-    // isMember access predicate enforced by @RequiresMembership: active, OR
-    // cancelled-but-still-within-the-paid-period. expired/grace_period are
-    // excluded because isMember denies them club access — they can't open the
-    // event, so must not be DM'd about it. (GAP-010) Keep in lockstep with
-    // isMember above; if the access model changes, change both.
+    // Telegram IDs of members who currently have access to the club — the shared
+    // MembershipAccess predicate (active, or cancelled-but-still-paid). Members
+    // without access (expired/grace_period) must not be DM'd about an event they
+    // can't open. (GAP-010)
     override fun findMemberTelegramIds(clubId: UUID): List<Long> {
         val now = OffsetDateTime.now()
         return dsl.select(USERS.TELEGRAM_ID)
@@ -366,13 +352,7 @@ class JooqMembershipRepository(
             .join(USERS).on(USERS.ID.eq(MEMBERSHIPS.USER_ID))
             .where(
                 MEMBERSHIPS.CLUB_ID.eq(clubId)
-                    .and(
-                        MEMBERSHIPS.STATUS.eq(MembershipStatus.active)
-                            .or(
-                                MEMBERSHIPS.STATUS.eq(MembershipStatus.cancelled)
-                                    .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.greaterThan(now))
-                            )
-                    )
+                    .and(MembershipAccess.hasAccess(now))
             )
             .fetch(USERS.TELEGRAM_ID)
             .filterNotNull()
