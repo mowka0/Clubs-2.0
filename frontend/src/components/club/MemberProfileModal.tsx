@@ -1,5 +1,6 @@
-import { FC } from 'react';
-import { Modal, Section, Cell, Text, Avatar, Spinner } from '@telegram-apps/telegram-ui';
+import { FC, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { Spinner } from '@telegram-apps/telegram-ui';
 import { useMemberProfileQuery } from '../../queries/members';
 import type { MemberListItemDto } from '../../types/api';
 
@@ -14,60 +15,71 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({ member, clubId
   const profile = profileQuery.data;
   const loading = profileQuery.isPending;
 
+  // Lock background scroll while the sheet is open (same as the other rd-sheets).
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   const joinedAt = member.joinedAt
     ? new Date(member.joinedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
     : '—';
+  const roleLabel = member.role === 'organizer' ? 'Организатор' : 'Участник';
+  const initials = `${member.firstName.charAt(0)}${member.lastName?.charAt(0) ?? ''}`;
 
-  return (
-    <Modal open onOpenChange={(open) => !open && onClose()}>
-      <div style={{ padding: 16 }}>
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <Text weight="2" style={{ fontSize: 18 }}>Профиль участника</Text>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--tgui--text_color)' }}>&#x2715;</button>
+  return createPortal(
+    <>
+      <div className="rd-sheet-overlay" onClick={onClose} aria-hidden="true" />
+      <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Профиль участника">
+        <div className="rd-sheet-grabber" aria-hidden="true" />
+        <div className="rd-sheet-head">
+          <h2>Профиль участника</h2>
+          <button type="button" className="rd-sheet-close" onClick={onClose}>Закрыть</button>
         </div>
 
-        {/* Avatar + name */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-          <Avatar
-            size={48}
-            src={member.avatarUrl ?? undefined}
-            acronym={`${member.firstName.charAt(0)}${member.lastName?.charAt(0) ?? ''}`}
-          />
+        <div className="rd-sheet-body">
+          {/* Avatar + name */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span className="rd-avatar" style={{ width: 56, height: 56, borderRadius: '50%', fontSize: 18 }}>
+              {member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : initials}
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)' }}>
+                {member.firstName} {member.lastName ?? ''}
+              </div>
+              {profile?.username && (
+                <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>@{profile.username}</div>
+              )}
+            </div>
+          </div>
+
+          {/* Status in club */}
           <div>
-            <Text weight="1" style={{ fontSize: 17, display: 'block' }}>
-              {member.firstName} {member.lastName ?? ''}
-            </Text>
-            {profile?.username && (
-              <Text style={{ fontSize: 13, color: 'var(--tgui--hint_color)', display: 'block' }}>
-                @{profile.username}
-              </Text>
-            )}
+            <div className="rd-section-sub-h" style={{ margin: '0 0 8px' }}>Статус в клубе</div>
+            <div className="rd-glass rd-rep-panel">
+              <div className="rd-kv"><span className="rd-v">Роль</span><span>{roleLabel}</span></div>
+              <div className="rd-kv"><span className="rd-v">В клубе с</span><span>{joinedAt}</span></div>
+            </div>
           </div>
+
+          {/* Reputation */}
+          {loading ? (
+            <div className="rd-spinner-row" style={{ padding: '8px 0' }}><Spinner size="s" /></div>
+          ) : profile ? (
+            <div>
+              <div className="rd-section-sub-h" style={{ margin: '0 0 8px' }}>Репутация</div>
+              <div className="rd-glass rd-rep-panel">
+                <div className="rd-kv"><span className="rd-v">Индекс надёжности</span><span>{profile.reliabilityIndex}</span></div>
+                <div className="rd-kv"><span className="rd-v">Выполнение обещаний</span><span>{profile.promiseFulfillmentPct}%</span></div>
+                <div className="rd-kv"><span className="rd-v">Подтверждений участия</span><span>{profile.totalConfirmations}</span></div>
+                <div className="rd-kv"><span className="rd-v">Посещений событий</span><span>{profile.totalAttendances}</span></div>
+              </div>
+            </div>
+          ) : null}
         </div>
-
-        {/* Status in club */}
-        <Section header="Статус в клубе">
-          <Cell subtitle="Роль">
-            {member.role === 'organizer' ? 'Организатор' : 'Участник'}
-          </Cell>
-          <Cell subtitle="В клубе с">{joinedAt}</Cell>
-        </Section>
-
-        {/* Reputation */}
-        {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}>
-            <Spinner size="s" />
-          </div>
-        ) : profile ? (
-          <Section header="Репутация">
-            <Cell subtitle="Индекс надёжности">{profile.reliabilityIndex}</Cell>
-            <Cell subtitle="Выполнение обещаний">{profile.promiseFulfillmentPct}%</Cell>
-            <Cell subtitle="Подтверждений участия">{profile.totalConfirmations}</Cell>
-            <Cell subtitle="Посещений событий">{profile.totalAttendances}</Cell>
-          </Section>
-        ) : null}
       </div>
-    </Modal>
+    </>,
+    document.body,
   );
 };

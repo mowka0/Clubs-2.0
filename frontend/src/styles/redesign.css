@@ -55,7 +55,7 @@
   font-size: 18px; font-weight: 700; color: #1A0E04;
   flex-shrink: 0; overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 4px 12px var(--accent-glow);
+  box-shadow: 0 3px 8px var(--accent-shadow);
 }
 .rd-header .rd-avt img { width: 100%; height: 100%; object-fit: cover; }
 .rd-header .rd-info { flex: 1; min-width: 0; }
@@ -129,7 +129,7 @@
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 12px rgba(232, 76, 154, 0.35));
+  filter: drop-shadow(0 1px 4px rgba(232, 76, 154, 0.3));
 }
 .rd-ft-stat-cap {
   font-size: 9.5px; color: var(--text-faint); margin-top: 4px;
@@ -205,7 +205,7 @@
 .rd-cat-chip.rd-active {
   background: var(--accent-grad); color: var(--on-accent);
   border-color: var(--accent-soft);
-  box-shadow: 0 4px 12px var(--accent-glow);
+  box-shadow: 0 2px 6px var(--accent-shadow);
 }
 
 /* ---------- Club card (cover) ---------- */
@@ -276,7 +276,7 @@
   display: flex; align-items: center; justify-content: center;
   font-size: 34px; font-weight: 700; color: #1A0E04; overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 8px 28px var(--accent-glow), inset 0 2px 0 rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px var(--accent-shadow), 0 8px 18px var(--accent-shadow-soft), inset 0 2px 0 rgba(255, 255, 255, 0.2);
 }
 .rd-pf-identity .rd-avt img { width: 100%; height: 100%; object-fit: cover; }
 .rd-pf-identity .rd-name {
@@ -339,7 +339,7 @@
 .rd-dock-item.rd-active {
   background: var(--accent-grad-strong); color: var(--on-accent);
   padding: 8px 14px;
-  box-shadow: 0 4px 14px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: 0 3px 8px var(--accent-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 .rd-dock-item .rd-dot {
   position: absolute; top: 4px; left: calc(50% + 8px);
@@ -400,7 +400,7 @@
   position: absolute; top: 10px; right: 10px; padding: 4px 9px; border-radius: 6px;
   background: linear-gradient(135deg, #FFA070, #F47B3C);
   font-size: 10px; font-weight: 700; color: #2A0E04;
-  box-shadow: 0 4px 12px rgba(244, 123, 60, 0.35);
+  box-shadow: 0 2px 6px var(--accent-shadow);
 }
 .rd-act-body { padding: 12px 14px 14px; }
 .rd-act-club-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 11px; color: var(--text-dim); }
@@ -477,7 +477,7 @@
   flex: 1; background: var(--accent-grad); color: var(--on-accent);
   border: 0; padding: 15px 20px; border-radius: 14px;
   font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
-  box-shadow: 0 8px 24px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 10px var(--accent-shadow), 0 8px 18px var(--accent-shadow-soft), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 /* ---------- Hero (club / event) ---------- */
@@ -511,6 +511,7 @@
   color: #fff; z-index: 3; cursor: pointer; font-family: inherit;
 }
 .rd-hero-btn.rd-right { right: 16px; }
+.rd-hero-btn.rd-left { left: 16px; }
 .rd-hero-type-badge {
   display: inline-block; padding: 4px 9px; border-radius: 6px;
   background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(20px);
@@ -524,7 +525,7 @@
   border: 0; padding: 15px 20px; border-radius: 14px;
   font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  box-shadow: 0 8px 24px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 10px var(--accent-shadow), 0 8px 18px var(--accent-shadow-soft), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 .rd-btn-primary:disabled { opacity: 0.55; box-shadow: none; cursor: default; }
 .rd-btn-outline {
@@ -587,7 +588,7 @@
 .rd-vote-btn:disabled { opacity: 0.6; cursor: default; }
 .rd-vote-btn.rd-active {
   background: var(--accent-grad); color: var(--on-accent);
-  border-color: var(--accent-soft); box-shadow: 0 4px 12px var(--accent-glow);
+  border-color: var(--accent-soft); box-shadow: 0 2px 6px var(--accent-shadow);
 }
 /* voting: stacked buttons (left half) + donut chart (right half, ~50/50) */
 .rd-vote-layout { display: flex; gap: 14px; align-items: center; margin-bottom: 8px; }
@@ -818,6 +819,27 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 .rd-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+/* compact "+ Создать" pill on the club activities tab (organizer only) */
+.rd-create-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 14px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent);
+  border: 1px solid var(--accent-soft);
+  font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer;
+}
+.rd-create-pill .rd-plus { font-size: 15px; line-height: 1; }
+
+/* activity-type option rows in the create chooser sheet */
+.rd-create-opt {
+  display: flex; align-items: center; gap: 14px; width: 100%;
+  padding: 14px; border-radius: 14px;
+  background: var(--surface); border: 1px solid var(--hairline);
+  cursor: pointer; font-family: inherit; text-align: left; color: var(--text);
+}
+.rd-create-opt .rd-emoji { font-size: 24px; width: 32px; text-align: center; flex-shrink: 0; }
+.rd-create-opt .rd-ttl { font-size: 16px; font-weight: 600; color: var(--text); }
+.rd-create-opt .rd-sub { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
 
 /* button styled as an rd-input (tap-to-open field, e.g. city selector) */
 .rd-field-btn { display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; cursor: pointer; }

@@ -439,7 +439,7 @@ export const ClubPage: FC = () => {
             ))}
           </div>
 
-          {activeTab === 'activities' && <ClubActivitiesTab clubId={id} />}
+          {activeTab === 'activities' && <ClubActivitiesTab clubId={id} isOrganizer={isOrganizer} />}
           {activeTab === 'members' && <ClubMembersTab clubId={id} isOrganizer={isOrganizer} />}
         </>
       )}

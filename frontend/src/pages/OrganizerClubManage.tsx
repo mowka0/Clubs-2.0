@@ -461,7 +461,7 @@ export const OrganizerClubManage: FC = () => {
     <div className="rd-page">
       <ManageHeader
         club={club}
-        onOpenClub={() => { haptic.impact('light'); navigate(`/clubs/${clubId}`); }}
+        onBack={() => { haptic.impact('light'); navigate(`/clubs/${clubId}`); }}
       />
 
       <div className="rd-tabs" role="tablist">

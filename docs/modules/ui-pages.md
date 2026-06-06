@@ -132,7 +132,7 @@ X = memberLimit * subscriptionPrice * 0.8
 
 | Файл | Источник данных | Заметки |
 |---|---|---|
-| `ClubActivitiesTab.tsx` | `useClubActivitiesQuery(clubId, { type? })` (`useQuery`, без пагинации) | Read-only unified-feed events + skladchinas клуба: секция `Предстоящие` (полные карточки, `relevantDate ASC`) + сворачиваемый аккордеон `Прошедшие (N)` (компактные строки, DESC). Tap по карточке → `/events/:id` или `/skladchina/:id`. Заменил `ClubEventsTab.tsx` (удалён) в `feature/unified-activity-creation`. |
+| `ClubActivitiesTab.tsx` | `useClubActivitiesQuery(clubId, { type? })` (`useQuery`, без пагинации) | Read-only unified-feed events + skladchinas клуба: секция `Предстоящие` (полные карточки, `relevantDate ASC`) + сворачиваемый аккордеон `Прошедшие (N)` (компактные строки, DESC). Tap по карточке → `/events/:id` или `/skladchina/:id`. **При `isOrganizer`** — компактная пилюля «+ Создать» (`rd-create-pill`) сверху → rd-sheet выбора типа (Событие/Сбор) → прямой переход на `/clubs/:id/events/new` или `/clubs/:id/skladchina/new` (club picker пропущен — клуб уже известен). Заменил `ClubEventsTab.tsx` (удалён) в `feature/unified-activity-creation`. |
 | `ClubMembersTab.tsx` | `useClubMembersQuery(clubId)` | rd-список `rd-rep-row` (avatar/индекс надёжности `rd-high/mid/low`), badge «Орг» для `role === 'organizer'`. При `isOrganizer` — доп. секция «Ожидают оплаты». Тап по члену (включая себя) → `MemberProfileModal` с полными метриками. Используется и в member-view `ClubPage`, и в `OrganizerClubManage`. |
 | ~~`ClubProfileTab.tsx`~~ | — | **Удалён** в `feature/profile-reputation-and-skladchina-badge` (2026-05-30). Функция переехала в `ProfilePage` (см. ниже). |
 
@@ -204,7 +204,8 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 - Обёртка `rd-page` (плоский `var(--bg)`); `BrandBackdrop` убран
 - Шапка — full-bleed `rd-hero rd-compact` (`components/manage/ManageHeader.tsx`): обложка по
   `data-cat`/аватар клуба, бейдж «УПРАВЛЕНИЕ», заголовок, eyebrow `N/limit участников · город`.
-  Весь hero кликабелен → страница клуба (`/clubs/:id`), стрелка-шеврон подсказывает переход.
+  Hero **не кликабелен**; back-стрелка (`rd-hero-btn rd-left`, ‹-иконка) слева сверху → страница
+  клуба (`/clubs/:id`). (Раньше кликабелен был весь hero с шевроном справа — путало с «вперёд».)
 - Вкладки — underline-табы `rd-tabs`/`rd-tab-link` (3 лейбла влезают без скролла). Компонент
   `ManageTabs` удалён как dead code.
 - **Участники** — переиспользуется общий `ClubMembersTab` (`isOrganizer`), а не локальный
@@ -224,10 +225,11 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 - Клик по участнику → `MemberProfileModal`
 
 #### MemberProfileModal
+rd-sheet bottom-sheet (`createPortal`, как CityPicker/ProfileEditModal — больше **не** telegram-ui Modal).
 Загружает `GET /api/clubs/:id/members/:userId/profile`. Показывает:
-- Аватар, имя, username
-- Роль и дата вступления
-- Репутация: индекс надёжности, % выполнения обещаний, подтверждения, посещения
+- Аватар (`rd-avatar`), имя, username
+- «Статус в клубе» (`rd-glass rd-rep-panel` + `rd-kv`): роль, дата вступления
+- «Репутация» (`rd-kv`): индекс надёжности, % выполнения обещаний, подтверждения, посещения
 
 #### ~~Заявки~~ (`ApplicationsTab`, удалён в `feature/applications-inbox`, 2026-05-30)
 - Кросс-клубовый organizer-inbox теперь живёт на `MyClubsPage` — секция «Заявки на рассмотрении».
