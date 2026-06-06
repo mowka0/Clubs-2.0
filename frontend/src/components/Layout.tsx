@@ -59,7 +59,7 @@ export const AppDock: FC = () => {
 
   return (
     <>
-      <BottomTabBar onCreate={handleCreate} />
+      <BottomTabBar onCreate={handleCreate} scoped={presetClubId !== null} />
       {canCreate && (
         <CreateActivityFlow
           open={createOpen}
