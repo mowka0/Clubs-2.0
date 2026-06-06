@@ -36,6 +36,11 @@ class NotificationService(
     @Async
     fun sendEventCreated(event: Event) {
         val memberTelegramIds = membershipRepository.findMemberTelegramIds(event.clubId)
+        if (memberTelegramIds.isEmpty()) {
+            log.warn("Event-created DM SKIPPED — no members with access for clubId={}", event.clubId)
+            return
+        }
+        log.info("Event-created DM: eventId={} clubId={} recipients={}", event.id, event.clubId, memberTelegramIds.size)
         val dateStr = event.eventDatetime.format(fmt)
         val text = "🆕 Новое событие в клубе!\n\n📌 ${event.title}\n📍 ${event.locationText}\n🗓 $dateStr\n👥 Лимит: ${event.participantLimit}\n\nГолосуйте в приложении:"
 
