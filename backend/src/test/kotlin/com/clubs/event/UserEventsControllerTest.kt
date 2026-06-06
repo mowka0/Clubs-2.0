@@ -146,6 +146,33 @@ class UserEventsControllerTest {
     }
 
     @Test
+    fun `GET me-events shows events to cancelled-but-still-paid members and hides grace_period`() {
+        // Feed access must match the voting/DM predicate (MembershipAccess): a
+        // cancelled membership with a future subscription_expires_at still has
+        // access; grace_period does not. Regression: feed used status=active only,
+        // so a cancelled-but-paid member could vote on an event missing from feed.
+        val ownerId = UUID.randomUUID()
+        dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$ownerId', 2099, 'Owner')")
+        val cancelledPaidClub = UUID.randomUUID()
+        val gracePeriodClub = UUID.randomUUID()
+        insertClub(cancelledPaidClub, ownerId, "Echo", isActive = true)
+        insertClub(gracePeriodClub, ownerId, "Zeta", isActive = true)
+        insertMembership(memberUserId, cancelledPaidClub, status = "cancelled", subscriptionExpiresAt = future(10))
+        insertMembership(memberUserId, gracePeriodClub, status = "grace_period")
+
+        insertEvent(UUID.randomUUID(), cancelledPaidClub, "Echo Visible", future(2), status = "upcoming")
+        insertEvent(UUID.randomUUID(), gracePeriodClub, "Zeta Hidden", future(3), status = "upcoming")
+
+        mockMvc.perform(
+            get("/api/users/me/events")
+                .header("Authorization", "Bearer $memberToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].title").value("Echo Visible"))
+    }
+
+    @Test
     fun `GET me-events returns empty for user without memberships`() {
         insertEvent(UUID.randomUUID(), clubAlphaId, "Anything", future(2), status = "upcoming")
 
@@ -238,10 +265,22 @@ class UserEventsControllerTest {
         )
     }
 
-    private fun insertMembership(userId: UUID, clubId: UUID, status: String) {
-        dsl.execute(
-            "INSERT INTO memberships (user_id, club_id, status, role) VALUES ('$userId', '$clubId', '$status', 'member')"
-        )
+    private fun insertMembership(
+        userId: UUID,
+        clubId: UUID,
+        status: String,
+        subscriptionExpiresAt: OffsetDateTime? = null
+    ) {
+        if (subscriptionExpiresAt == null) {
+            dsl.execute(
+                "INSERT INTO memberships (user_id, club_id, status, role) VALUES ('$userId', '$clubId', '$status', 'member')"
+            )
+        } else {
+            dsl.execute(
+                "INSERT INTO memberships (user_id, club_id, status, role, subscription_expires_at) " +
+                    "VALUES ('$userId', '$clubId', '$status', 'member', '$subscriptionExpiresAt')"
+            )
+        }
     }
 
     private fun insertEvent(

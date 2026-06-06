@@ -6,23 +6,31 @@ import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.generated.jooq.enums.EventStatus
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
 @Service
 class EventService(
     private val eventRepository: EventRepository,
     private val clubRepository: ClubRepository,
-    private val eventMapper: EventMapper
+    private val eventMapper: EventMapper,
+    private val eventPublisher: ApplicationEventPublisher
 ) {
 
     private val log = LoggerFactory.getLogger(EventService::class.java)
 
+    @Transactional
     fun createEvent(clubId: UUID, request: CreateEventRequest, userId: UUID): EventDetailDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club organizer can create events")
         val event = eventRepository.create(request, clubId, userId)
         log.info("Event created: id={} clubId={} title='{}' userId={}", event.id, clubId, event.title, userId)
+        // Member DMs are dispatched AFTER_COMMIT by EventBotNotifier. Publishing
+        // inside the transaction lets the listener skip entirely if the outer
+        // @Transactional rolls back. Mirrors PaymentService / SkladchinaService.
+        eventPublisher.publishEvent(EventCreatedEvent(event))
         return eventMapper.toDetailDto(event, goingCount = 0, maybeCount = 0, notGoingCount = 0, confirmedCount = 0)
     }
 

@@ -36,11 +36,19 @@ class NotificationService(
     @Async
     fun sendEventCreated(event: Event) {
         val memberTelegramIds = membershipRepository.findMemberTelegramIds(event.clubId)
+        if (memberTelegramIds.isEmpty()) {
+            log.warn("Event-created DM SKIPPED — no members with access for clubId={}", event.clubId)
+            return
+        }
+        log.info("Event-created DM: eventId={} clubId={} recipients={}", event.id, event.clubId, memberTelegramIds.size)
         val dateStr = event.eventDatetime.format(fmt)
         val text = "🆕 Новое событие в клубе!\n\n📌 ${event.title}\n📍 ${event.locationText}\n🗓 $dateStr\n👥 Лимит: ${event.participantLimit}\n\nГолосуйте в приложении:"
+        // Deep-link straight to the event page so the button opens voting, not the
+        // generic app home. React Router renders EventPage at /events/:id.
+        val webAppPath = "/events/${event.id}"
 
         memberTelegramIds.forEach { telegramId ->
-            sendDm(telegramId.toString(), text)
+            sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
         }
     }
 

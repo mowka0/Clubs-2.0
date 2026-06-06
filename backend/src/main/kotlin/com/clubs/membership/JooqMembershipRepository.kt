@@ -169,13 +169,7 @@ class JooqMembershipRepository(
                 .where(
                     MEMBERSHIPS.USER_ID.eq(userId)
                         .and(MEMBERSHIPS.CLUB_ID.eq(clubId))
-                        .and(
-                            MEMBERSHIPS.STATUS.eq(MembershipStatus.active)
-                                .or(
-                                    MEMBERSHIPS.STATUS.eq(MembershipStatus.cancelled)
-                                        .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.greaterThan(now))
-                                )
-                        )
+                        .and(MembershipAccess.hasAccess(now))
                 )
         )
     }
@@ -189,13 +183,7 @@ class JooqMembershipRepository(
                 .where(
                     MEMBERSHIPS.USER_ID.eq(userId)
                         .and(MEMBERSHIPS.CLUB_ID.eq(clubId))
-                        .and(
-                            MEMBERSHIPS.STATUS.eq(MembershipStatus.active)
-                                .or(
-                                    MEMBERSHIPS.STATUS.eq(MembershipStatus.cancelled)
-                                        .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.greaterThan(now))
-                                )
-                        )
+                        .and(MembershipAccess.hasAccess(now))
                         .and(CLUBS.IS_ACTIVE.eq(true))
                 )
         )
@@ -353,15 +341,20 @@ class JooqMembershipRepository(
             )
             .execute()
 
-    // Preserves master-branch semantics: ALL rows for the club, regardless of
-    // status (cancelled/expired included). NotificationService relied on this
-    // for "event created" DMs. Tightening this filter is out of scope for the
-    // membership refactor — would change runtime behaviour.
-    override fun findMemberTelegramIds(clubId: UUID): List<Long> =
-        dsl.select(USERS.TELEGRAM_ID)
+    // Telegram IDs of members who currently have access to the club — the shared
+    // MembershipAccess predicate (active, or cancelled-but-still-paid). Members
+    // without access (expired/grace_period) must not be DM'd about an event they
+    // can't open. (GAP-010)
+    override fun findMemberTelegramIds(clubId: UUID): List<Long> {
+        val now = OffsetDateTime.now()
+        return dsl.select(USERS.TELEGRAM_ID)
             .from(MEMBERSHIPS)
             .join(USERS).on(USERS.ID.eq(MEMBERSHIPS.USER_ID))
-            .where(MEMBERSHIPS.CLUB_ID.eq(clubId))
+            .where(
+                MEMBERSHIPS.CLUB_ID.eq(clubId)
+                    .and(MembershipAccess.hasAccess(now))
+            )
             .fetch(USERS.TELEGRAM_ID)
             .filterNotNull()
+    }
 }

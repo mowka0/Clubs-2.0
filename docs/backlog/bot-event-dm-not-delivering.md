@@ -1,7 +1,25 @@
 # Bot не доставляет DM участникам при создании события
 
-**Статус:** root cause identified · **Создано:** 2026-05-12 · **Обновлено:** 2026-05-12 (post-flight `feature/refactor-bot`) · **Origin:** ручной staging-тест после `feature/refactor-membership`
+**Статус:** ✅ RESOLVED (`bugfix/event-dm-notification`, 2026-06-06) · **Создано:** 2026-05-12 · **Origin:** ручной staging-тест после `feature/refactor-membership`
 **Severity:** Medium (engagement-критично для core-loop клубов)
+
+## Резолюция (2026-06-06)
+
+Root cause (orphan `sendEventCreated`) закрыт по проверенному паттерну Payment/Skladchina DM:
+- `EventService.createEvent` стал `@Transactional`, публикует `EventCreatedEvent` после `eventRepository.create()`.
+- Новый `EventBotNotifier` (`@TransactionalEventListener`, AFTER_COMMIT) вызывает `sendEventCreated` — DM уходят только после успешного commit; при rollback пропускаются.
+- `sendEventCreated` остаётся `@Async` → не блокирует HTTP-ответ при массовой рассылке (backend-правило: mass notifications через @Async). Очередь Spring Boot executor'а unbounded → submit не блокирует commit-поток.
+- **GAP-010 закрыт вместе:** предикат доступа вынесен в общий `MembershipAccess.hasAccess` (`active` ИЛИ `cancelled` с неистёкшей подпиской; `expired`/`grace_period` исключены) и применён в `isMember`/`isActiveMemberInActiveClub`/`findMemberTelegramIds`.
+- Observability: пустой список → `WARN`; иначе `INFO` с числом получателей; per-DM ошибки уже логировались в `sendDm`.
+
+### Доп. правки по staging-тесту (2026-06-06)
+
+- **Лента «Активности» не показывала событие** `cancelled`-но-оплаченному участнику (мог голосовать + получал DM, но карточки не было). Root cause: `JooqEventRepository.findMyFeed` фильтровал по `status = active` only. Выровнено на тот же `MembershipAccess.hasAccess` — единый предикат для доступа/DM/ленты.
+- **Inline-кнопка DM вела в корень Mini App**, а не на событие. Теперь deep-link `webAppPath=/events/{id}`, текст «📅 Открыть событие».
+- Тесты: `EventServiceTest` (публикация / не публикует при forbidden+notfound), `EventBotNotifierTest` (listener → sendEventCreated), `UserEventsControllerTest` (+кейс: `cancelled`-оплаченный видит событие, `grace_period` — нет).
+- Спека: `telegram-bot.md` (§ sendEventCreated, AC-7), `events-feed.md` (privacy-фильтр) обновлены. См. `telegram-bot-prd-gaps.md` GAP-003/GAP-010.
+
+> ⚠️ **Drift для продукта:** GAP-010 предполагал, что `grace_period` сохраняет доступ (PRD §4.7.3.3). Фактический `isMember` в коде `grace_period` **не пускает**. Фикс синхронизирован с кодом (`isMember`), не с PRD. Если продукт решит, что grace_period должен иметь доступ — править `isMember` + `findMemberTelegramIds` в lockstep.
 
 ## Root cause (выявлено 2026-05-12)
 

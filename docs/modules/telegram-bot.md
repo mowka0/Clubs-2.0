@@ -24,7 +24,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
   - `sendDirectMessage(telegramId, text)` — generic DM (используется `PaymentNotificationHandler`, `SubscriptionScheduler`)
   - `sendDirectMessageWithDeepLink(telegramId, text, webAppPath, buttonText)` — DM с inline web_app button на конкретный путь Mini App (используется Skladchina, Applications Inbox)
   - `sendApplicationCreatedDM(organizerTelegramId, applicantDisplayName, clubName)` — organizer-DM при подаче новой заявки в закрытый клуб `[подключено к ApplicationService.submitApplication]`
-  - `sendEventCreated(event)` — анонс нового события участникам клуба `[не подключено, GAP-003]`
+  - `sendEventCreated(event)` — анонс нового события участникам клуба `[подключено: EventBotNotifier @TransactionalEventListener ← EventService.createEvent, GAP-003 ✅ / GAP-010 ✅]`
   - `sendStage2Started(event)` — напоминание о подтверждении Stage 2 `[не подключено, GAP-004]`
   - `sendAttendanceMarked(eventId)` — DM пользователям с `attendance=absent` `[не подключено, GAP-005]`
 - Generic DM имеют inline-кнопку «📱 Открыть Clubs» с `WebAppInfo("https://t.me/clubs_v2_bot/app")`. Deep-link DM (skladchina / application-created) — кнопку с кастомным `webAppPath` (например `/my-clubs?focus=inbox`).
@@ -32,7 +32,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 ### НЕ входит (в текущем состоянии кода)
 
 - `/события` — команда не реализована `[GAP-002, PRD §4.6.2]`
-- Анонс события в **групповой** чат клуба (PRD §4.6.1 первая буллет) — DM-вариант есть в коде (`sendEventCreated`), но он orphan; групповая публикация не реализована вообще.
+- Анонс события в **групповой** чат клуба (PRD §4.6.1 первая буллет) — DM-вариант участникам подключён (`sendEventCreated` через `EventBotNotifier`); публикация в **групповой** чат не реализована.
 - Напоминание о голосовании Stage 1 за N дней до события (PRD §4.6.1) — не реализовано.
 - Приветственное сообщение при добавлении нового участника в **групповой** чат (PRD §4.6.1) — не реализовано; welcome-DM есть только в payment-flow (`PaymentNotificationHandler.onPaymentConfirmed`).
 - Уведомления waitlist / освобождения места (PRD §4.6.3 буллет 3) `[GAP-006]`.
@@ -183,10 +183,10 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 **Privacy:** в DM попадают только `applicantDisplayName` (имя из Telegram — публичное) и `clubName` (публичное). `answerText`, `telegramUsername`, `avatarUrl` заявителя — **не отправляются**; organizer видит их после открытия Mini App.
 **Edge case:** если у организатора `telegramId` не найден (теоретически не бывает — NOT NULL в БД) — DM пропускается с `WARN`-логом «Skipping application-created DM: organizer not found ownerId=… clubId=…».
 
-### `sendEventCreated(event: EventsRecord)` — **orphan** `[GAP-003]`
+### `sendEventCreated(event: Event)` — **подключено** `[GAP-003 ✅, GAP-010 ✅]`
 
-**Назначение (по PRD §4.6.3):** при создании события — DM всем участникам клуба.
-**Получатели:** `membershipRepository.findMemberTelegramIds(event.clubId)` — возвращает все telegram_id из `MEMBERSHIPS` для клуба **без фильтра по `status`** (т.е. включая `cancelled`/`expired`/`grace_period`). См. комментарий в `JooqMembershipRepository.kt:248-250` и `docs/backlog/bot-event-dm-not-delivering.md` § Связанные. `[GAP-010]`
+**Назначение (по PRD §4.6.3):** при создании события — DM участникам клуба, имеющим доступ.
+**Получатели:** `membershipRepository.findMemberTelegramIds(event.clubId)` — telegram_id участников **с доступом к клубу**: `active` ИЛИ `cancelled` с неистёкшей подпиской (зеркалит предикат `isMember` / `@RequiresMembership`). `expired`/`grace_period` исключены — у них нет доступа к событию, не должны получать о нём DM. `[GAP-010 ✅]`
 **Текст** (`NotificationService.kt:37`):
 ```
 🆕 Новое событие в клубе!
@@ -198,7 +198,8 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 
 Голосуйте в приложении:
 ```
-**Текущее состояние:** метод определён, но `EventService.createEvent` его не зовёт — DM не доставляются.
+**Inline-кнопка:** «📅 Открыть событие» с `WebAppInfo`, deep-link на `webAppPath=/events/{eventId}` — открывает страницу события (голосование) напрямую через React Router, а не корень Mini App.
+**Подключение:** `EventService.createEvent` (`@Transactional`) публикует `EventCreatedEvent` после `eventRepository.create()`; `EventBotNotifier.onEventCreated` (`@TransactionalEventListener`, фаза AFTER_COMMIT) вызывает `sendEventCreated` (`@Async` — не блокирует HTTP-ответ при массовой рассылке). Те же транзакционные гарантии, что у Payment/Skladchina DM: при rollback `createEvent` DM не уходят. Per-DM ошибки Telegram ловятся и логируются внутри `sendDm` (fire-and-forget — сбой бота не валит создание события). Пустой список получателей → `WARN` + return.
 
 ### `sendStage2Started(event: EventsRecord)` — **orphan** `[GAP-004]`
 
@@ -307,14 +308,19 @@ THEN Telegram-пользователь получает DM с текстом + i
 AND отказ Telegram API логируется WARN, не пробрасывается caller'у
 ```
 
-### AC-7: Orphan-методы не доставляют DM (текущее поведение)
+### AC-7: DM участникам при создании события `[GAP-003 ✅ / GAP-010 ✅]`
 
 ```
 GIVEN organizer создаёт событие через POST /api/clubs/{id}/events
-WHEN EventService.createEvent отрабатывает
-THEN sendEventCreated НЕ вызывается (метод orphan)
-AND участники клуба НЕ получают DM
-   — известное расхождение с PRD §4.6.3, см. [GAP-003]
+WHEN транзакция EventService.createEvent коммитится
+THEN EventBotNotifier (AFTER_COMMIT) вызывает sendEventCreated
+AND участники с доступом к клубу (active | cancelled с неистёкшей подпиской)
+    получают DM с inline-кнопкой «📱 Открыть Clubs»
+AND участники со статусом expired/grace_period DM НЕ получают
+AND при rollback createEvent DM не отправляются
+
+GIVEN sendStage2Started / sendAttendanceMarked
+THEN остаются orphan — не подключены [GAP-004, GAP-005]
 ```
 
 (Аналогичные негативные AC для Stage 2 и attendance — см. `[GAP-004]`, `[GAP-005]`.)

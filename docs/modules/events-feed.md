@@ -73,12 +73,12 @@
 
 ### Только member-events (privacy)
 
-Лента показывает события **только из клубов где пользователь является active member** (включая organizer-роль). НЕ показывает:
+Лента показывает события **только из клубов где у пользователя есть доступ** (предикат `MembershipAccess`: `active` ИЛИ `cancelled` с неистёкшей подпиской; включая organizer-роль). НЕ показывает:
 - События из клубов где пользователь только подал application (pending)
 - Публичные события (этого слоя в продукте нет, см. `project_clubs_over_events_rationale.md` — мы намеренно clubs-first, не event-discovery)
 - События закрытых клубов где пользователь не состоит
 
-Это защищает приватность closed-club meetups (organizer контролирует кто видит расписание) и согласуется с `EventController.getClubEvents` membership check (закрыт через `@RequiresMembership` aspect — см. `docs/backlog/club-events-membership-check.md` ✅ RESOLVED). Реализация `/api/users/me/events` должна аналогично фильтровать по active memberships на бэкенде, не доверяя клиенту.
+Это защищает приватность closed-club meetups (organizer контролирует кто видит расписание) и согласуется с `EventController.getClubEvents` membership check (закрыт через `@RequiresMembership` aspect — см. `docs/backlog/club-events-membership-check.md` ✅ RESOLVED). Реализация `/api/users/me/events` фильтрует по общему предикату доступа `MembershipAccess` на бэкенде (тот же, что у `isMember` / `@RequiresMembership` и event-created DM), не доверяя клиенту.
 
 ### Action-first сортировка
 
@@ -228,7 +228,7 @@
 
 **Notes:**
 - Сортировка: `actionRequired DESC, eventDatetime ASC` — events требующие действия сверху, остальные хронологически
-- Данные включают events из клубов где user `MembershipStatus.active` (member ИЛИ organizer). Не включают: applications/pending, soft-deleted клубы
+- Данные включают events из клубов где у user есть доступ по `MembershipAccess` (`active` или `cancelled` с неистёкшей подпиской; member ИЛИ organizer). Не включают: applications/pending, soft-deleted клубы
 - Фильтр на стороне БД: `status IN ('upcoming', 'stage_2') AND event_datetime > now() AND clubs.deleted_at IS NULL`
 - `myParticipationStatus` мэппится из `EventResponse.finalStatus` (FinalStatus enum: confirmed/waitlisted/declined). Если запись `event_responses` отсутствует — null
 - `myVote` мэппится из `EventResponse.stage1Vote` (Stage_1Vote enum). null если не голосовал
