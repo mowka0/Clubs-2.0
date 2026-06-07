@@ -1,6 +1,7 @@
 package com.clubs.membership
 
 import com.clubs.generated.jooq.tables.records.MembershipsRecord
+import com.clubs.reputation.ReputationPolicy
 import org.springframework.stereotype.Component
 
 @Component
@@ -28,28 +29,34 @@ class MembershipMapper {
         subscriptionExpiresAt = membership.subscriptionExpiresAt
     )
 
-    fun toMemberListItemDto(info: ClubMemberInfo): MemberListItemDto = MemberListItemDto(
-        userId = info.userId,
-        firstName = info.firstName ?: "",
-        lastName = info.lastName,
-        avatarUrl = info.avatarUrl,
-        role = info.role.literal,
-        joinedAt = info.joinedAt,
-        reliabilityIndex = info.reliabilityIndex,
-        promiseFulfillmentPct = info.promiseFulfillmentPct,
-        subscriptionCancelled = info.subscriptionCancelled
-    )
+    fun toMemberListItemDto(info: ClubMemberInfo): MemberListItemDto {
+        val show = ReputationPolicy.isShown(info.outcomeCount)
+        return MemberListItemDto(
+            userId = info.userId,
+            firstName = info.firstName ?: "",
+            lastName = info.lastName,
+            avatarUrl = info.avatarUrl,
+            role = info.role.literal,
+            joinedAt = info.joinedAt,
+            reliabilityIndex = if (show) info.reliabilityIndex else null,
+            promiseFulfillmentPct = if (show) info.promiseFulfillmentPct else null,
+            subscriptionCancelled = info.subscriptionCancelled
+        )
+    }
 
-    fun toUserClubReputationDto(info: UserClubReputationInfo): UserClubReputationDto = UserClubReputationDto(
-        clubId = info.clubId,
-        clubName = info.clubName,
-        clubAvatarUrl = info.clubAvatarUrl,
-        category = info.category.literal,
-        role = info.role.literal,
-        joinedAt = info.joinedAt,
-        reliabilityIndex = info.reliabilityIndex,
-        promiseFulfillmentPct = info.promiseFulfillmentPct,
-        totalConfirmations = info.totalConfirmations,
-        totalAttendances = info.totalAttendances
-    )
+    fun toUserClubReputationDto(info: UserClubReputationInfo): UserClubReputationDto {
+        val show = ReputationPolicy.isShown(info.outcomeCount)
+        return UserClubReputationDto(
+            clubId = info.clubId,
+            clubName = info.clubName,
+            clubAvatarUrl = info.clubAvatarUrl,
+            category = info.category.literal,
+            role = info.role.literal,
+            joinedAt = info.joinedAt,
+            reliabilityIndex = if (show) info.reliabilityIndex else null,
+            promiseFulfillmentPct = if (show) info.promiseFulfillmentPct else null,
+            totalConfirmations = if (show) info.totalConfirmations else null,
+            totalAttendances = if (show) info.totalAttendances else null
+        )
+    }
 }

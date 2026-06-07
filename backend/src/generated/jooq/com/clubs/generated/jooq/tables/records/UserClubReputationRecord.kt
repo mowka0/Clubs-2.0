@@ -60,6 +60,10 @@ open class UserClubReputationRecord private constructor() : UpdatableRecordImpl<
         set(value): Unit = set(9, value)
         get(): OffsetDateTime? = get(9) as OffsetDateTime?
 
+    open var outcomeCount: Int?
+        set(value): Unit = set(10, value)
+        get(): Int? = get(10) as Int?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -69,7 +73,7 @@ open class UserClubReputationRecord private constructor() : UpdatableRecordImpl<
     /**
      * Create a detached, initialised UserClubReputationRecord
      */
-    constructor(id: UUID? = null, userId: UUID, clubId: UUID, reliabilityIndex: Int? = null, promiseFulfillmentPct: BigDecimal? = null, totalConfirmations: Int? = null, totalAttendances: Int? = null, spontaneityCount: Int? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, userId: UUID, clubId: UUID, reliabilityIndex: Int? = null, promiseFulfillmentPct: BigDecimal? = null, totalConfirmations: Int? = null, totalAttendances: Int? = null, spontaneityCount: Int? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, outcomeCount: Int? = null): this() {
         this.id = id
         this.userId = userId
         this.clubId = clubId
@@ -80,6 +84,7 @@ open class UserClubReputationRecord private constructor() : UpdatableRecordImpl<
         this.spontaneityCount = spontaneityCount
         this.createdAt = createdAt
         this.updatedAt = updatedAt
+        this.outcomeCount = outcomeCount
         resetChangedOnNotNull()
     }
 
@@ -98,6 +103,7 @@ open class UserClubReputationRecord private constructor() : UpdatableRecordImpl<
             this.spontaneityCount = value.spontaneityCount
             this.createdAt = value.createdAt
             this.updatedAt = value.updatedAt
+            this.outcomeCount = value.outcomeCount
             resetChangedOnNotNull()
         }
     }

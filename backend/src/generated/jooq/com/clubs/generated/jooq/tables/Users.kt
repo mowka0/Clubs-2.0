@@ -10,6 +10,7 @@ import com.clubs.generated.jooq.keys.CLUBS__CLUBS_OWNER_ID_FKEY
 import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CREATED_BY_FKEY
 import com.clubs.generated.jooq.keys.EVENT_RESPONSES__EVENT_RESPONSES_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY
+import com.clubs.generated.jooq.keys.REPUTATION_LEDGER__REPUTATION_LEDGER_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CLOSED_BY_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CREATOR_ID_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINA_PARTICIPANTS__SKLADCHINA_PARTICIPANTS_USER_ID_FKEY
@@ -24,6 +25,7 @@ import com.clubs.generated.jooq.tables.EventResponses.EventResponsesPath
 import com.clubs.generated.jooq.tables.Events.EventsPath
 import com.clubs.generated.jooq.tables.Interests.InterestsPath
 import com.clubs.generated.jooq.tables.Memberships.MembershipsPath
+import com.clubs.generated.jooq.tables.ReputationLedger.ReputationLedgerPath
 import com.clubs.generated.jooq.tables.SkladchinaParticipants.SkladchinaParticipantsPath
 import com.clubs.generated.jooq.tables.Skladchinas.SkladchinasPath
 import com.clubs.generated.jooq.tables.Transactions.TransactionsPath
@@ -265,6 +267,22 @@ open class Users(
 
     val memberships: MembershipsPath
         get(): MembershipsPath = memberships()
+
+    private lateinit var _reputationLedger: ReputationLedgerPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.reputation_ledger</code> table
+     */
+    fun reputationLedger(): ReputationLedgerPath {
+        if (!this::_reputationLedger.isInitialized)
+            _reputationLedger = ReputationLedgerPath(this, null, REPUTATION_LEDGER__REPUTATION_LEDGER_USER_ID_FKEY.inverseKey)
+
+        return _reputationLedger;
+    }
+
+    val reputationLedger: ReputationLedgerPath
+        get(): ReputationLedgerPath = reputationLedger()
 
     private lateinit var _skladchinaParticipants: SkladchinaParticipantsPath
 

@@ -1,30 +1,19 @@
 package com.clubs.reputation
 
-import com.clubs.generated.jooq.enums.AttendanceStatus
-import com.clubs.generated.jooq.enums.FinalStatus
-import com.clubs.generated.jooq.enums.Stage_1Vote
+import com.clubs.generated.jooq.enums.ReputationAxis
+import com.clubs.generated.jooq.enums.ReputationSource
 import org.slf4j.LoggerFactory
-import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
-import java.math.BigDecimal
-import java.math.RoundingMode
 import java.util.UUID
 
 /**
- * Reputation calculation based on PRD §4.4.4.
- *
- * reliabilityIndex = Σ всех начислений за всю историю (может быть отрицательным).
- * Стартовое значение для нового участника клуба = 0.
- *
- * Начисления:
- * "Железобетонный"      (going  → confirmed → attended): +100
- * "Пустозвон"           (going  → confirmed → absent):   -50
- * "Передумавший"        (going  → declined):              0
- * "Спонтанный"          (maybe  → confirmed → attended): +30, +1 spontaneity
- * "Зритель"             (maybe  → confirmed → absent):   -20
- * "Вечный сомневающийся" (maybe → not confirmed):         0
- * "Молчун"              (not_going → —):                  0
+ * Core reputation pipeline over the append-only ledger (reputation v2, P1a).
+ * The user_club_reputation table is a derived cache: recompute() is the ONLY writer.
+ * Bug B (hourly re-inflation) is dead by construction — ledger rows are unique per
+ * (user, source) and inserted ON CONFLICT DO NOTHING; aggregates are recomputed, not
+ * incremented. See docs/modules/reputation-v2.md.
  */
 @Service
 class ReputationService(
@@ -33,127 +22,48 @@ class ReputationService(
 
     private val log = LoggerFactory.getLogger(ReputationService::class.java)
 
-    @Scheduled(fixedDelay = 3_600_000) // every hour
-    @Transactional
-    fun processReputationForFinalizedEvents() {
-        val finalizedEvents = repository.findFinalizedEvents()
+    /**
+     * Processes one finalized event into the ledger. Called by both the event
+     * listener (low-latency) and the poll (durable backstop); the atomic claim makes
+     * them mutually exclusive. REQUIRES_NEW so each event commits independently and a
+     * failure rolls back the claim (the poll then retries) — must be invoked across a
+     * bean boundary (ReputationScheduler / AttendanceFinalizedListener) for the proxy.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    fun processFinalizedEvent(eventId: UUID) {
+        if (!repository.claimEvent(eventId)) return // already processed — no-op
 
-        finalizedEvents.forEach { event ->
-            try {
-                calculateReputation(event.eventId, event.clubId)
-            } catch (e: Exception) {
-                log.error("Failed to calculate reputation for event ${event.eventId}", e)
+        val ctx = repository.findEventContext(eventId) ?: return
+        val entries = repository.findConfirmedResponses(eventId)
+            .filter { it.userId != ctx.ownerId } // anti-farm rule 1: owner does not accrue in own club
+            .map { response ->
+                val kind = ReputationPolicy.attendanceKind(response.stage1Vote, response.attendance)
+                LedgerEntry(
+                    userId = response.userId,
+                    clubId = ctx.clubId,
+                    axis = ReputationAxis.attendance,
+                    kind = kind,
+                    points = ReputationPolicy.pointsFor(kind),
+                    occurredAt = ctx.eventDatetime,
+                    sourceType = ReputationSource.event,
+                    sourceId = eventId
+                )
             }
-        }
+
+        appendAndRecompute(entries)
+        log.info("Reputation processed: eventId={} entries={}", eventId, entries.size)
     }
-
-    fun calculateReputation(eventId: UUID, clubId: UUID) {
-        val responses = repository.findResponsesByEvent(eventId)
-
-        responses.forEach { response ->
-            val deltas = computeDeltas(response)
-            val existing = repository.findByUserAndClub(response.userId, clubId)
-            val updated = applyDeltas(existing, response.userId, clubId, deltas)
-            repository.save(updated)
-        }
-    }
-
-    private fun computeDeltas(response: ResponseForReputation): ReputationDeltas {
-        val reliabilityDelta = when {
-            // "Железобетонный": going → confirmed → attended
-            response.stage1Vote == Stage_1Vote.going &&
-                response.finalStatus == FinalStatus.confirmed &&
-                response.attendance == AttendanceStatus.attended -> 100
-
-            // "Пустозвон": going → confirmed → absent
-            response.stage1Vote == Stage_1Vote.going &&
-                response.finalStatus == FinalStatus.confirmed &&
-                response.attendance == AttendanceStatus.absent -> -50
-
-            // "Спонтанный": maybe → confirmed → attended
-            response.stage1Vote == Stage_1Vote.maybe &&
-                response.finalStatus == FinalStatus.confirmed &&
-                response.attendance == AttendanceStatus.attended -> 30
-
-            // "Зритель": maybe → confirmed → absent
-            response.stage1Vote == Stage_1Vote.maybe &&
-                response.finalStatus == FinalStatus.confirmed &&
-                response.attendance == AttendanceStatus.absent -> -20
-
-            else -> 0
-        }
-
-        val spontaneityDelta = if (
-            response.stage1Vote == Stage_1Vote.maybe &&
-            response.finalStatus == FinalStatus.confirmed &&
-            response.attendance == AttendanceStatus.attended
-        ) 1 else 0
-
-        val isConfirmedAndAttended = response.finalStatus == FinalStatus.confirmed &&
-            response.attendance == AttendanceStatus.attended
-        val isConfirmed = response.finalStatus == FinalStatus.confirmed
-
-        return ReputationDeltas(reliabilityDelta, spontaneityDelta, isConfirmedAndAttended, isConfirmed)
-    }
-
-    private fun applyDeltas(
-        existing: Reputation?,
-        userId: UUID,
-        clubId: UUID,
-        deltas: ReputationDeltas
-    ): Reputation {
-        val baseReliability = existing?.reliabilityIndex ?: 0
-        val newReliability = baseReliability + deltas.reliability
-
-        val newConfirmations = (existing?.totalConfirmations ?: 0) + (if (deltas.confirmed) 1 else 0)
-        val newAttendances = (existing?.totalAttendances ?: 0) + (if (deltas.confirmedAndAttended) 1 else 0)
-        val newSpontaneity = (existing?.spontaneityCount ?: 0) + deltas.spontaneity
-
-        val fulfillmentPct = if (newConfirmations > 0) {
-            BigDecimal(newAttendances * 100).divide(BigDecimal(newConfirmations), 2, RoundingMode.HALF_UP)
-        } else BigDecimal.ZERO
-
-        return Reputation(
-            userId = userId,
-            clubId = clubId,
-            reliabilityIndex = newReliability,
-            promiseFulfillmentPct = fulfillmentPct,
-            totalConfirmations = newConfirmations,
-            totalAttendances = newAttendances,
-            spontaneityCount = newSpontaneity
-        )
-    }
-
-    private data class ReputationDeltas(
-        val reliability: Int,
-        val spontaneity: Int,
-        val confirmedAndAttended: Boolean,
-        val confirmed: Boolean
-    )
 
     /**
-     * Adjust user's reliability index in a specific club by a fixed delta.
-     * Public API for non-event reputation sources (e.g. skladchina close).
-     * Does NOT touch event-specific counters (totalConfirmations, totalAttendances,
-     * spontaneityCount) — those stay event-bound. Creates a new row if reputation
-     * doesn't yet exist for this user+club pair.
+     * Appends ledger rows (idempotent) and recomputes the cache for every affected
+     * (user, club). No new transaction — joins the caller's (processFinalizedEvent's
+     * REQUIRES_NEW, or skladchina's close transaction).
      */
     @Transactional
-    fun addReliabilityDelta(userId: UUID, clubId: UUID, delta: Int, reason: String) {
-        val existing = repository.findByUserAndClub(userId, clubId)
-        val baseReliability = existing?.reliabilityIndex ?: 0
-        val newReliability = baseReliability + delta
-        val updated = Reputation(
-            userId = userId,
-            clubId = clubId,
-            reliabilityIndex = newReliability,
-            promiseFulfillmentPct = existing?.promiseFulfillmentPct ?: BigDecimal.ZERO,
-            totalConfirmations = existing?.totalConfirmations ?: 0,
-            totalAttendances = existing?.totalAttendances ?: 0,
-            spontaneityCount = existing?.spontaneityCount ?: 0
-        )
-        repository.save(updated)
-        log.info("Reliability delta applied: userId={} clubId={} delta={} reason={} newIndex={}",
-            userId, clubId, delta, reason, newReliability)
+    fun appendAndRecompute(entries: List<LedgerEntry>) {
+        if (entries.isEmpty()) return
+        repository.appendLedgerIfAbsent(entries)
+        entries.map { it.userId to it.clubId }.toSet()
+            .forEach { (userId, clubId) -> repository.recompute(userId, clubId) }
     }
 }

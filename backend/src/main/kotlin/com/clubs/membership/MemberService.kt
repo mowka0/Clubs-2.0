@@ -2,11 +2,12 @@ package com.clubs.membership
 
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
+import com.clubs.generated.jooq.enums.MembershipRole
+import com.clubs.reputation.ReputationPolicy
 import com.clubs.reputation.ReputationRepository
 import com.clubs.user.MemberProfileDto
 import com.clubs.user.UserRepository
 import org.springframework.stereotype.Service
-import java.math.BigDecimal
 import java.util.UUID
 
 @Service
@@ -34,17 +35,23 @@ class MemberService(
             throw ForbiddenException("Not a member of this club")
         }
         val user = userRepository.findById(userId) ?: throw NotFoundException("User not found")
+        val membership = membershipRepository.findByUserAndClub(userId, clubId)
         val reputation = reputationRepository.findByUserAndClub(userId, clubId)
+        // "Право на ошибку": show the real index only once a track record exists; below
+        // the threshold (or no row, or owner in own club) the whole block is suppressed
+        // and the frontend renders "Новичок" / the organizer framing (by role).
+        val show = reputation != null && ReputationPolicy.isShown(reputation.outcomeCount)
         return MemberProfileDto(
             userId = userId,
             clubId = clubId,
             firstName = user.firstName,
             username = user.telegramUsername,
             avatarUrl = user.avatarUrl,
-            reliabilityIndex = reputation?.reliabilityIndex ?: 100,
-            promiseFulfillmentPct = reputation?.promiseFulfillmentPct ?: BigDecimal.ZERO,
-            totalConfirmations = reputation?.totalConfirmations ?: 0,
-            totalAttendances = reputation?.totalAttendances ?: 0
+            role = (membership?.role ?: MembershipRole.member).literal,
+            reliabilityIndex = if (show) reputation!!.reliabilityIndex else null,
+            promiseFulfillmentPct = if (show) reputation!!.promiseFulfillmentPct else null,
+            totalConfirmations = if (show) reputation!!.totalConfirmations else null,
+            totalAttendances = if (show) reputation!!.totalAttendances else null
         )
     }
 }

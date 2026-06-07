@@ -144,4 +144,15 @@ open class UserClubReputationDao(configuration: Configuration?) : DAOImpl<UserCl
      * Fetch records that have <code>updated_at IN (values)</code>
      */
     fun fetchByUpdatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.UserClubReputation> = fetch(UserClubReputation.USER_CLUB_REPUTATION.UPDATED_AT, *values)
+
+    /**
+     * Fetch records that have <code>outcome_count BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfOutcomeCount(lowerInclusive: Int?, upperInclusive: Int?): List<com.clubs.generated.jooq.tables.pojos.UserClubReputation> = fetchRange(UserClubReputation.USER_CLUB_REPUTATION.OUTCOME_COUNT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>outcome_count IN (values)</code>
+     */
+    fun fetchByOutcomeCount(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.UserClubReputation> = fetch(UserClubReputation.USER_CLUB_REPUTATION.OUTCOME_COUNT, *values.toTypedArray())
 }

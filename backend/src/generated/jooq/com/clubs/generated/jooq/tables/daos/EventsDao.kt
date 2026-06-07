@@ -210,4 +210,15 @@ open class EventsDao(configuration: Configuration?) : DAOImpl<EventsRecord, com.
      * Fetch records that have <code>photo_url IN (values)</code>
      */
     fun fetchByPhotoUrl(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.PHOTO_URL, *values)
+
+    /**
+     * Fetch records that have <code>reputation_processed BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfReputationProcessed(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.REPUTATION_PROCESSED, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>reputation_processed IN (values)</code>
+     */
+    fun fetchByReputationProcessed(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.REPUTATION_PROCESSED, *values.toTypedArray())
 }

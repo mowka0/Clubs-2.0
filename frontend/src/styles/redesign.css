@@ -267,6 +267,8 @@
 .rd-rep-row .rd-v.rd-high { color: var(--live); }
 .rd-rep-row .rd-v.rd-mid  { color: var(--accent); }
 .rd-rep-row .rd-v.rd-low  { color: #E08A7A; }
+/* Newcomer / own-club organizer — neutral chip, no number yet (see reputation-v2). */
+.rd-rep-row .rd-v.rd-new  { color: var(--text-faint); font-size: 13px; font-weight: 600; }
 
 /* ---------- Profile identity ---------- */
 .rd-pf-identity { text-align: center; margin-bottom: 18px; }

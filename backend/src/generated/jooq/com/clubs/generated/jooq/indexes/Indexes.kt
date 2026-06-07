@@ -10,6 +10,7 @@ import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.Events
 import com.clubs.generated.jooq.tables.Interests
 import com.clubs.generated.jooq.tables.Memberships
+import com.clubs.generated.jooq.tables.ReputationLedger
 import com.clubs.generated.jooq.tables.SkladchinaParticipants
 import com.clubs.generated.jooq.tables.Skladchinas
 import com.clubs.generated.jooq.tables.Transactions
@@ -35,11 +36,14 @@ val IDX_CLUBS_OWNER_ID: Index = Internal.createIndex(DSL.name("idx_clubs_owner_i
 val IDX_EVENT_RESPONSES_EVENT_ID: Index = Internal.createIndex(DSL.name("idx_event_responses_event_id"), EventResponses.EVENT_RESPONSES, arrayOf(EventResponses.EVENT_RESPONSES.EVENT_ID), false)
 val IDX_EVENT_RESPONSES_USER_ID: Index = Internal.createIndex(DSL.name("idx_event_responses_user_id"), EventResponses.EVENT_RESPONSES, arrayOf(EventResponses.EVENT_RESPONSES.USER_ID), false)
 val IDX_EVENTS_CLUB_ID_DATETIME: Index = Internal.createIndex(DSL.name("idx_events_club_id_datetime"), Events.EVENTS, arrayOf(Events.EVENTS.CLUB_ID, Events.EVENTS.EVENT_DATETIME.desc()), false)
+val IDX_EVENTS_REPUTATION_PENDING: Index = Internal.createIndex(DSL.name("idx_events_reputation_pending"), Events.EVENTS, arrayOf(Events.EVENTS.ID), false)
 val IDX_EVENTS_STATUS: Index = Internal.createIndex(DSL.name("idx_events_status"), Events.EVENTS, arrayOf(Events.EVENTS.STATUS), false)
 val IDX_INTERESTS_NAME_PREFIX: Index = Internal.createIndex(DSL.name("idx_interests_name_prefix"), Interests.INTERESTS, arrayOf(Interests.INTERESTS.NAME), false)
 val IDX_MEMBERSHIPS_CLUB_ID: Index = Internal.createIndex(DSL.name("idx_memberships_club_id"), Memberships.MEMBERSHIPS, arrayOf(Memberships.MEMBERSHIPS.CLUB_ID), false)
 val IDX_MEMBERSHIPS_STATUS: Index = Internal.createIndex(DSL.name("idx_memberships_status"), Memberships.MEMBERSHIPS, arrayOf(Memberships.MEMBERSHIPS.STATUS), false)
 val IDX_MEMBERSHIPS_USER_ID: Index = Internal.createIndex(DSL.name("idx_memberships_user_id"), Memberships.MEMBERSHIPS, arrayOf(Memberships.MEMBERSHIPS.USER_ID), false)
+val IDX_REPUTATION_LEDGER_SOURCE: Index = Internal.createIndex(DSL.name("idx_reputation_ledger_source"), ReputationLedger.REPUTATION_LEDGER, arrayOf(ReputationLedger.REPUTATION_LEDGER.SOURCE_TYPE, ReputationLedger.REPUTATION_LEDGER.SOURCE_ID), false)
+val IDX_REPUTATION_LEDGER_USER_CLUB: Index = Internal.createIndex(DSL.name("idx_reputation_ledger_user_club"), ReputationLedger.REPUTATION_LEDGER, arrayOf(ReputationLedger.REPUTATION_LEDGER.USER_ID, ReputationLedger.REPUTATION_LEDGER.CLUB_ID), false)
 val IDX_SKLADCHINA_PARTICIPANTS_USER_ID: Index = Internal.createIndex(DSL.name("idx_skladchina_participants_user_id"), SkladchinaParticipants.SKLADCHINA_PARTICIPANTS, arrayOf(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.USER_ID), false)
 val IDX_SKLADCHINAS_CLUB_ID: Index = Internal.createIndex(DSL.name("idx_skladchinas_club_id"), Skladchinas.SKLADCHINAS, arrayOf(Skladchinas.SKLADCHINAS.CLUB_ID), false)
 val IDX_SKLADCHINAS_STATUS_DEADLINE: Index = Internal.createIndex(DSL.name("idx_skladchinas_status_deadline"), Skladchinas.SKLADCHINAS, arrayOf(Skladchinas.SKLADCHINAS.STATUS, Skladchinas.SKLADCHINAS.DEADLINE), false)

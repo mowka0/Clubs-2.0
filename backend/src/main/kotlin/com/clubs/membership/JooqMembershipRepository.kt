@@ -7,10 +7,10 @@ import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import com.clubs.generated.jooq.tables.references.USERS
 import com.clubs.generated.jooq.tables.references.USER_CLUB_REPUTATION
+import com.clubs.reputation.ReputationPolicy
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
-import java.math.BigDecimal
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -76,6 +76,14 @@ class JooqMembershipRepository(
         } else {
             MEMBERSHIPS.STATUS.eq(MembershipStatus.active)
         }
+        val outcomeCount = DSL.coalesce(USER_CLUB_REPUTATION.OUTCOME_COUNT, DSL.`val`(0))
+        // Sort by the DISPLAYED reliability: shown only once a track record exists
+        // (outcome_count >= threshold). Newcomers / sub-threshold / owners (no row) sort
+        // to the bottom via NULLS LAST — not the top, which raw DESC NULLS-FIRST would do.
+        val displayReliability = DSL.`when`(
+            outcomeCount.ge(ReputationPolicy.MIN_OUTCOMES_FOR_DISPLAY),
+            USER_CLUB_REPUTATION.RELIABILITY_INDEX
+        )
         return dsl.select(
             MEMBERSHIPS.USER_ID,
             MEMBERSHIPS.ROLE,
@@ -84,8 +92,9 @@ class JooqMembershipRepository(
             USERS.FIRST_NAME,
             USERS.LAST_NAME,
             USERS.AVATAR_URL,
-            DSL.coalesce(USER_CLUB_REPUTATION.RELIABILITY_INDEX, DSL.`val`(100)).`as`("reliability_index"),
-            DSL.coalesce(USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT, DSL.`val`(BigDecimal.ZERO)).`as`("promise_fulfillment_pct")
+            USER_CLUB_REPUTATION.RELIABILITY_INDEX,
+            USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT,
+            outcomeCount.`as`("outcome_count")
         )
             .from(MEMBERSHIPS)
             .join(USERS).on(USERS.ID.eq(MEMBERSHIPS.USER_ID))
@@ -94,7 +103,7 @@ class JooqMembershipRepository(
                     .and(USER_CLUB_REPUTATION.CLUB_ID.eq(clubId))
             )
             .where(MEMBERSHIPS.CLUB_ID.eq(clubId).and(statusCondition))
-            .orderBy(DSL.field("reliability_index").desc())
+            .orderBy(displayReliability.desc().nullsLast())
             .fetch { r ->
                 ClubMemberInfo(
                     userId = r.get(MEMBERSHIPS.USER_ID)!!,
@@ -103,8 +112,9 @@ class JooqMembershipRepository(
                     avatarUrl = r.get(USERS.AVATAR_URL),
                     role = r.get(MEMBERSHIPS.ROLE) ?: MembershipRole.member,
                     joinedAt = r.get(MEMBERSHIPS.JOINED_AT)!!,
-                    reliabilityIndex = r.get("reliability_index", Int::class.java) ?: 100,
-                    promiseFulfillmentPct = r.get("promise_fulfillment_pct", BigDecimal::class.java) ?: BigDecimal.ZERO,
+                    reliabilityIndex = r.get(USER_CLUB_REPUTATION.RELIABILITY_INDEX),
+                    promiseFulfillmentPct = r.get(USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT),
+                    outcomeCount = r.get("outcome_count", Int::class.java) ?: 0,
                     subscriptionCancelled = r.get(MEMBERSHIPS.STATUS) == MembershipStatus.cancelled
                 )
             }
@@ -118,10 +128,11 @@ class JooqMembershipRepository(
             CLUBS.CATEGORY,
             MEMBERSHIPS.ROLE,
             MEMBERSHIPS.JOINED_AT,
-            DSL.coalesce(USER_CLUB_REPUTATION.RELIABILITY_INDEX, DSL.`val`(100)).`as`("reliability_index"),
-            DSL.coalesce(USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT, DSL.`val`(BigDecimal.ZERO)).`as`("promise_fulfillment_pct"),
-            DSL.coalesce(USER_CLUB_REPUTATION.TOTAL_CONFIRMATIONS, DSL.`val`(0)).`as`("total_confirmations"),
-            DSL.coalesce(USER_CLUB_REPUTATION.TOTAL_ATTENDANCES, DSL.`val`(0)).`as`("total_attendances")
+            USER_CLUB_REPUTATION.RELIABILITY_INDEX,
+            USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT,
+            USER_CLUB_REPUTATION.TOTAL_CONFIRMATIONS,
+            USER_CLUB_REPUTATION.TOTAL_ATTENDANCES,
+            DSL.coalesce(USER_CLUB_REPUTATION.OUTCOME_COUNT, DSL.`val`(0)).`as`("outcome_count")
         )
             .from(MEMBERSHIPS)
             .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))
@@ -143,10 +154,11 @@ class JooqMembershipRepository(
                     category = r.get(CLUBS.CATEGORY)!!,
                     role = r.get(MEMBERSHIPS.ROLE) ?: MembershipRole.member,
                     joinedAt = r.get(MEMBERSHIPS.JOINED_AT),
-                    reliabilityIndex = r.get("reliability_index", Int::class.java) ?: 100,
-                    promiseFulfillmentPct = r.get("promise_fulfillment_pct", BigDecimal::class.java) ?: BigDecimal.ZERO,
-                    totalConfirmations = r.get("total_confirmations", Int::class.java) ?: 0,
-                    totalAttendances = r.get("total_attendances", Int::class.java) ?: 0
+                    reliabilityIndex = r.get(USER_CLUB_REPUTATION.RELIABILITY_INDEX),
+                    promiseFulfillmentPct = r.get(USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT),
+                    totalConfirmations = r.get(USER_CLUB_REPUTATION.TOTAL_CONFIRMATIONS),
+                    totalAttendances = r.get(USER_CLUB_REPUTATION.TOTAL_ATTENDANCES),
+                    outcomeCount = r.get("outcome_count", Int::class.java) ?: 0
                 )
             }
 

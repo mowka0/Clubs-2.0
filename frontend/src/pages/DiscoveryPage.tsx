@@ -79,8 +79,11 @@ export const DiscoveryPage: FC = () => {
   const reputationQuery = useMyReputationQuery();
   const reputation = useMemo(() => reputationQuery.data ?? [], [reputationQuery.data]);
   const clubsJoined = reputation.length;
-  const avgReputation = clubsJoined > 0
-    ? Math.round(reputation.reduce((sum, r) => sum + r.reliabilityIndex, 0) / clubsJoined)
+  // Average only over clubs with a real number — newcomer / own-club rows are null and
+  // must be excluded (summing null would poison the average to NaN).
+  const scoredClubs = reputation.filter((r) => r.reliabilityIndex !== null);
+  const avgReputation = scoredClubs.length > 0
+    ? Math.round(scoredClubs.reduce((sum, r) => sum + (r.reliabilityIndex ?? 0), 0) / scoredClubs.length)
     : null;
 
   const fullName = user ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}` : '';

@@ -18,8 +18,10 @@ data class UserClubReputationInfo(
     val category: ClubCategory,
     val role: MembershipRole,
     val joinedAt: OffsetDateTime?,
-    val reliabilityIndex: Int,
-    val promiseFulfillmentPct: BigDecimal,
-    val totalConfirmations: Int,
-    val totalAttendances: Int
+    // Raw cache values (nullable when no reputation row); threshold applied by mapper.
+    val reliabilityIndex: Int?,
+    val promiseFulfillmentPct: BigDecimal?,
+    val totalConfirmations: Int?,
+    val totalAttendances: Int?,
+    val outcomeCount: Int
 )

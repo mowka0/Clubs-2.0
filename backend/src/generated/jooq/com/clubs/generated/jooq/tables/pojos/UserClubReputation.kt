@@ -24,7 +24,8 @@ data class UserClubReputation(
     var totalAttendances: Int? = null,
     var spontaneityCount: Int? = null,
     var createdAt: OffsetDateTime? = null,
-    var updatedAt: OffsetDateTime? = null
+    var updatedAt: OffsetDateTime? = null,
+    var outcomeCount: Int? = null
 ): Serializable {
 
 
@@ -88,6 +89,12 @@ data class UserClubReputation(
         }
         else if (this.updatedAt != o.updatedAt)
             return false
+        if (this.outcomeCount == null) {
+            if (o.outcomeCount != null)
+                return false
+        }
+        else if (this.outcomeCount != o.outcomeCount)
+            return false
         return true
     }
 
@@ -104,6 +111,7 @@ data class UserClubReputation(
         result = prime * result + (if (this.spontaneityCount == null) 0 else this.spontaneityCount.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
+        result = prime * result + (if (this.outcomeCount == null) 0 else this.outcomeCount.hashCode())
         return result
     }
 
@@ -120,6 +128,7 @@ data class UserClubReputation(
         sb.append(", ").append(spontaneityCount)
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)
+        sb.append(", ").append(outcomeCount)
 
         sb.append(")")
         return sb.toString()

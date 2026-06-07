@@ -3,6 +3,7 @@ package com.clubs.bot
 import com.clubs.event.EventRepository
 import com.clubs.event.EventResponseRepository
 import com.clubs.payment.PaymentService
+import com.clubs.reputation.ReputationPolicy
 import com.clubs.reputation.ReputationRepository
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
@@ -188,7 +189,8 @@ class ClubsBot(
         }
 
         val reputation = reputationRepository.findLatestByUserId(user.id!!)
-        if (reputation == null) {
+        // "Право на ошибку": below the display threshold we don't surface a number yet.
+        if (reputation == null || !ReputationPolicy.isShown(reputation.outcomeCount)) {
             val msg = SendMessage
                 .builder()
                 .chatId(chatId)

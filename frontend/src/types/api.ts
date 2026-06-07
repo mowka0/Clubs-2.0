@@ -58,8 +58,10 @@ export interface MemberListItemDto {
   avatarUrl: string | null;
   role: string;
   joinedAt: string | null;
-  reliabilityIndex: number;
-  promiseFulfillmentPct: number;
+  // null = "Новичок" (no track record yet, or owner in own club — use `role` to render
+  // the organizer framing). The whole reputation block is suppressed when null.
+  reliabilityIndex: number | null;
+  promiseFulfillmentPct: number | null;
   /**
    * True iff the member is a paid-club subscriber who has already cancelled
    * autorenew but is still inside the paid period (`subscription_expires_at >
@@ -77,10 +79,13 @@ export interface MemberProfileDto {
   firstName: string;
   username: string | null;
   avatarUrl: string | null;
-  reliabilityIndex: number;
-  promiseFulfillmentPct: number;
-  totalConfirmations: number;
-  totalAttendances: number;
+  // "organizer" = club owner. Drives the organizer framing when reliabilityIndex is null.
+  role: string;
+  // null = "Новичок"/suppressed (no track record yet, or owner in own club).
+  reliabilityIndex: number | null;
+  promiseFulfillmentPct: number | null;
+  totalConfirmations: number | null;
+  totalAttendances: number | null;
 }
 
 export interface UserClubReputationDto {
@@ -90,10 +95,12 @@ export interface UserClubReputationDto {
   category: string;
   role: string;
   joinedAt: string | null;
-  reliabilityIndex: number;
-  promiseFulfillmentPct: number;
-  totalConfirmations: number;
-  totalAttendances: number;
+  // null = "Новичок"/suppressed (no track record yet, or owner in own club — `role`
+  // = "organizer" renders the organizer framing).
+  reliabilityIndex: number | null;
+  promiseFulfillmentPct: number | null;
+  totalConfirmations: number | null;
+  totalAttendances: number | null;
 }
 
 export interface ActionRequiredCountDto {

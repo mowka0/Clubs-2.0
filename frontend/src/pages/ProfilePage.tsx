@@ -32,13 +32,17 @@ function getInitials(name: string): string {
     .join('');
 }
 
-function reliabilityTier(score: number): 'high' | 'mid' | 'low' {
+type ReliabilityTier = 'high' | 'mid' | 'low' | 'new';
+
+function reliabilityTier(score: number | null): ReliabilityTier {
+  if (score === null) return 'new';
   if (score >= 85) return 'high';
   if (score >= 70) return 'mid';
   return 'low';
 }
 
-function tierLabel(tier: 'high' | 'mid' | 'low'): string {
+function tierLabel(tier: ReliabilityTier): string {
+  if (tier === 'new') return '';
   return tier === 'high' ? 'высокая' : tier === 'mid' ? 'средняя' : 'низкая';
 }
 
@@ -86,8 +90,11 @@ export const ProfilePage: FC = () => {
     .join(' · ');
 
   const clubsJoined = reputation.length;
-  const avgReputation = clubsJoined > 0
-    ? Math.round(reputation.reduce((sum, r) => sum + r.reliabilityIndex, 0) / clubsJoined)
+  // Average only over clubs with a real number — newcomers and own-club (organizer)
+  // rows are null and must be excluded, not counted as 0 (and never poison the avg).
+  const scoredClubs = reputation.filter((r) => r.reliabilityIndex !== null);
+  const avgReputation = scoredClubs.length > 0
+    ? Math.round(scoredClubs.reduce((sum, r) => sum + (r.reliabilityIndex ?? 0), 0) / scoredClubs.length)
     : null;
   const avgTier = avgReputation !== null ? reliabilityTier(avgReputation) : null;
 
@@ -177,11 +184,14 @@ export const ProfilePage: FC = () => {
       ) : (
         <div className="rd-glass rd-rep-panel">
           {reputation.map((r) => {
+            const isOwnClub = r.role === 'organizer';
+            const hasScore = r.reliabilityIndex !== null;
             const tier = reliabilityTier(r.reliabilityIndex);
             const hasActivity =
-              r.totalAttendances > 0 ||
-              r.totalConfirmations > 0 ||
-              r.promiseFulfillmentPct > 0;
+              hasScore &&
+              ((r.totalAttendances ?? 0) > 0 ||
+                (r.totalConfirmations ?? 0) > 0 ||
+                (r.promiseFulfillmentPct ?? 0) > 0);
             return (
               <button
                 key={r.clubId}
@@ -196,13 +206,30 @@ export const ProfilePage: FC = () => {
                   <div className="rd-ttl">{r.clubName}</div>
                   {hasActivity && (
                     <div className="rd-met">
-                      обещания {Math.round(r.promiseFulfillmentPct)}% · {r.totalConfirmations} подтв. · {r.totalAttendances} посещ.
+                      обещания {Math.round(r.promiseFulfillmentPct ?? 0)}% · {r.totalConfirmations} подтв. · {r.totalAttendances} посещ.
                     </div>
+                  )}
+                  {!hasScore && isOwnClub && (
+                    <div className="rd-met">Здесь репутация начисляется за организаторские качества</div>
                   )}
                 </div>
                 <div className="rd-score">
-                  <span className={`rd-v rd-${tier}`}>{r.reliabilityIndex}</span>
-                  <span className="rd-cap">надёжность</span>
+                  {hasScore ? (
+                    <>
+                      <span className={`rd-v rd-${tier}`}>{r.reliabilityIndex}</span>
+                      <span className="rd-cap">надёжность</span>
+                    </>
+                  ) : isOwnClub ? (
+                    <>
+                      <span className="rd-v rd-new">Организатор</span>
+                      <span className="rd-cap">ваш клуб</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="rd-v rd-new">Новичок</span>
+                      <span className="rd-cap">пока нет данных</span>
+                    </>
+                  )}
                 </div>
               </button>
             );

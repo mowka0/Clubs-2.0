@@ -254,7 +254,7 @@ class JooqEventRepository(
             .execute()
     }
 
-    override fun finalizeAttendanceBefore(eventDatetimeCutoff: OffsetDateTime): Int =
+    override fun finalizeAttendanceBefore(eventDatetimeCutoff: OffsetDateTime): List<UUID> =
         dsl.update(EVENTS)
             .set(EVENTS.ATTENDANCE_FINALIZED, true)
             .where(
@@ -262,7 +262,9 @@ class JooqEventRepository(
                     .and(EVENTS.ATTENDANCE_FINALIZED.eq(false))
                     .and(EVENTS.EVENT_DATETIME.lessOrEqual(eventDatetimeCutoff))
             )
-            .execute()
+            .returningResult(EVENTS.ID)
+            .fetch()
+            .mapNotNull { it.value1() }
 
     override fun markPastEventsCompleted(cutoff: OffsetDateTime): Int =
         dsl.update(EVENTS)
