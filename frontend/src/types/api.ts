@@ -301,6 +301,8 @@ export interface EventResponderDto {
   avatarUrl: string | null;
   /** going | maybe | not_going | confirmed | waitlisted | declined | expired_no_confirm */
   status: string;
+  /** Post-event attendance mark, once the organizer marked it; null before marking. */
+  attendance: 'attended' | 'absent' | 'disputed' | null;
 }
 
 export type SkladchinaMode = 'fixed_equal' | 'fixed_individual' | 'voluntary';

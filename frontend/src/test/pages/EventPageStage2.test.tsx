@@ -126,8 +126,8 @@ describe('EventPage — Stage 2 window (Bug B) + expired status', () => {
 
   it('responder со статусом expired_no_confirm получает отдельную точку и исключён из отметки явки', async () => {
     const responders: EventResponderDto[] = [
-      { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed' },
-      { userId: 'u-expired', firstName: 'Глеб', lastName: null, avatarUrl: null, status: 'expired_no_confirm' },
+      { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed', attendance: null },
+      { userId: 'u-expired', firstName: 'Глеб', lastName: null, avatarUrl: null, status: 'expired_no_confirm', attendance: null },
     ];
     // Организатор смотрит прошедшее событие → виден блок отметки явки.
     mockEndpoints({

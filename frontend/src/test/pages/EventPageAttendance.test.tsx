@@ -59,13 +59,13 @@ function pastCompletedEvent(overrides: Partial<EventDetailDto> = {}): EventDetai
 }
 
 const RESPONDERS: EventResponderDto[] = [
-  { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed' },
-  { userId: 'u-confirmed2', firstName: 'Дмитрий', lastName: null, avatarUrl: null, status: 'confirmed' },
+  { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed', attendance: null },
+  { userId: 'u-confirmed2', firstName: 'Дмитрий', lastName: null, avatarUrl: null, status: 'confirmed', attendance: null },
   // Final roster = confirmed only (PRD §4.4.3). The rest must be EXCLUDED from the
   // attendance checklist: going = forgot to confirm, expired = booking burned, not_going.
-  { userId: 'u-going', firstName: 'Борис', lastName: null, avatarUrl: null, status: 'going' },
-  { userId: 'u-expired', firstName: 'Глеб', lastName: null, avatarUrl: null, status: 'expired_no_confirm' },
-  { userId: 'u-no', firstName: 'Виктор', lastName: null, avatarUrl: null, status: 'not_going' },
+  { userId: 'u-going', firstName: 'Борис', lastName: null, avatarUrl: null, status: 'going', attendance: null },
+  { userId: 'u-expired', firstName: 'Глеб', lastName: null, avatarUrl: null, status: 'expired_no_confirm', attendance: null },
+  { userId: 'u-no', firstName: 'Виктор', lastName: null, avatarUrl: null, status: 'not_going', attendance: null },
 ];
 
 function mockEventEndpoints(opts: { ownerId: string; event?: EventDetailDto } = { ownerId: OWNER_ID }) {
@@ -210,5 +210,79 @@ describe('EventPage — отметка посещаемости', () => {
 
     expect(await screen.findByText('Прошедшее событие')).toBeInTheDocument();
     expect(screen.queryByText('Отметить посещаемость')).not.toBeInTheDocument();
+  });
+
+  it('EXP-2: нейтрально закрытое событие (finalized, не marked) — окно истекло, чеклиста нет', async () => {
+    mockEventEndpoints({
+      ownerId: OWNER_ID,
+      event: pastCompletedEvent({ attendanceMarked: false, attendanceFinalized: true }),
+    });
+    renderEventPage();
+
+    expect(await screen.findByText(/Окно отметки явки истекло/)).toBeInTheDocument();
+    // Backend rejects a late mark on a finalized event, so the marking UI must be gone.
+    expect(screen.queryByText('Отметить посещаемость')).not.toBeInTheDocument();
+  });
+
+  it('организатор видит оспоренные отметки и резолвит «Пришёл»', async () => {
+    mockEventEndpoints({
+      ownerId: OWNER_ID,
+      event: pastCompletedEvent({ attendanceMarked: true, attendanceFinalized: false }),
+    });
+    let resolveUrl: string | null = null;
+    let resolveBody: { attended: boolean } | null = null;
+    server.use(
+      http.get(`*/api/events/${EVENT_ID}/responses`, () => HttpResponse.json([
+        { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed', attendance: 'disputed' },
+        { userId: 'u-confirmed2', firstName: 'Дмитрий', lastName: null, avatarUrl: null, status: 'confirmed', attendance: 'attended' },
+      ] satisfies EventResponderDto[])),
+      http.post(`*/api/events/${EVENT_ID}/attendance/:userId/resolve`, async ({ request, params }) => {
+        resolveUrl = String(params.userId);
+        resolveBody = (await request.json()) as typeof resolveBody;
+        return HttpResponse.json({ eventId: EVENT_ID, markedCount: 1 });
+      }),
+    );
+
+    const { user } = renderEventPage();
+
+    expect(await screen.findByText('Оспоренные отметки')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Пришёл' }));
+
+    await waitFor(() => expect(resolveBody).not.toBeNull());
+    expect(resolveUrl).toBe('u-confirmed');
+    expect(resolveBody!.attended).toBe(true);
+  });
+
+  it('участник, отмеченный отсутствующим, видит «Оспорить» и оспаривает', async () => {
+    // Viewer is the absent participant, NOT the organizer.
+    useAuthStore.setState({
+      user: {
+        id: 'u-confirmed', telegramId: 2, telegramUsername: 'anna', firstName: 'Анна',
+        lastName: 'К', avatarUrl: null, city: null, country: null, bio: null,
+      },
+      isAuthenticated: true,
+      isLoading: false,
+    } as never);
+    mockEventEndpoints({
+      ownerId: 'someone-else',
+      event: pastCompletedEvent({ attendanceMarked: true, attendanceFinalized: false }),
+    });
+    let disputeCalled = false;
+    server.use(
+      http.get(`*/api/events/${EVENT_ID}/responses`, () => HttpResponse.json([
+        { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed', attendance: 'absent' },
+      ] satisfies EventResponderDto[])),
+      http.post(`*/api/events/${EVENT_ID}/dispute`, () => {
+        disputeCalled = true;
+        return HttpResponse.json({ eventId: EVENT_ID, markedCount: 1 });
+      }),
+    );
+
+    const { user } = renderEventPage();
+
+    expect(await screen.findByText('Ваша явка')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Оспорить' }));
+
+    await waitFor(() => expect(disputeCalled).toBe(true));
   });
 });

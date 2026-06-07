@@ -77,6 +77,11 @@ events:
   # Attendance dispute window before reputation finalizes. Minutes so staging can
   # set a literal 5. Default 2880 = 48h (PRD §4.4.3). Env: ATTENDANCE_DISPUTE_WINDOW_MINUTES
   dispute-window-minutes: ${ATTENDANCE_DISPUTE_WINDOW_MINUTES:2880}
+  # EXP-2: deadline (minutes after event_datetime) after which a past event whose attendance
+  # was never marked is neutrally auto-finalized (all confirmed → 0, no ledger rows). Protects
+  # reliable participants from an inactive organizer. Default 2880 = 48h (24h organizer reminder
+  # + 24h grace). Minutes so staging can set a literal 5. Env: ATTENDANCE_AUTO_FINALIZE_UNMARKED_MINUTES
+  auto-finalize-unmarked-minutes: ${ATTENDANCE_AUTO_FINALIZE_UNMARKED_MINUTES:2880}
   # AttendanceService.finalizeAttendance poll period (ms). Default 3600000 = 1h.
   finalize-poll-ms: ${ATTENDANCE_FINALIZE_POLL_MS:3600000}
   # Stage2Service.expireUnconfirmedParticipants poll period (ms). Default 300000 = 5min.

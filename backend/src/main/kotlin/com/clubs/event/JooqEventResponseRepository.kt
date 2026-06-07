@@ -145,7 +145,8 @@ class JooqEventResponseRepository(
             USERS.LAST_NAME,
             USERS.AVATAR_URL,
             EVENT_RESPONSES.STAGE_1_VOTE,
-            EVENT_RESPONSES.FINAL_STATUS
+            EVENT_RESPONSES.FINAL_STATUS,
+            EVENT_RESPONSES.ATTENDANCE
         )
             .from(EVENT_RESPONSES)
             .join(USERS).on(USERS.ID.eq(EVENT_RESPONSES.USER_ID))
@@ -161,7 +162,8 @@ class JooqEventResponseRepository(
                     lastName = r.get(USERS.LAST_NAME),
                     avatarUrl = r.get(USERS.AVATAR_URL),
                     stage1Vote = r.get(EVENT_RESPONSES.STAGE_1_VOTE),
-                    finalStatus = r.get(EVENT_RESPONSES.FINAL_STATUS)
+                    finalStatus = r.get(EVENT_RESPONSES.FINAL_STATUS),
+                    attendance = r.get(EVENT_RESPONSES.ATTENDANCE)
                 )
             }
 
@@ -228,6 +230,22 @@ class JooqEventResponseRepository(
                     .and(EVENT_RESPONSES.ATTENDANCE.eq(AttendanceStatus.disputed))
             )
             .execute()
+
+    override fun resolveExpiredDisputesToAbsent(eventIds: List<UUID>): Int {
+        if (eventIds.isEmpty()) return 0
+        return dsl.update(EVENT_RESPONSES)
+            .set(EVENT_RESPONSES.ATTENDANCE, AttendanceStatus.absent)
+            .where(
+                EVENT_RESPONSES.EVENT_ID.`in`(eventIds)
+                    .and(EVENT_RESPONSES.ATTENDANCE.eq(AttendanceStatus.disputed))
+                    // Only the final (confirmed) roster feeds reputation. A disputed mark can only
+                    // exist on a confirmed row today (setAttendance guards on confirmed), but guard
+                    // here too so a non-confirmed disputed row (corruption / future change) can never
+                    // be silently mutated while the ledger ignores it. Mirrors setAttendance.
+                    .and(EVENT_RESPONSES.FINAL_STATUS.eq(FinalStatus.confirmed))
+            )
+            .execute()
+    }
 
     override fun deleteByUserAndClubAndActiveEvents(userId: UUID, clubId: UUID): Int {
         val activeEventIds = dsl.select(EVENTS.ID)

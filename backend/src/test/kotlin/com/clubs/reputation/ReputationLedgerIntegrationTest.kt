@@ -183,6 +183,23 @@ class ReputationLedgerIntegrationTest {
     }
 
     @Test
+    fun `neutrally finalized unmarked event yields no reputation (EXP-2)`() {
+        // EXP-2 closes an unmarked past event with finalized=true / marked=false. The pipeline
+        // claims only marked+finalized events, so such an event is invisible to the poll and a
+        // direct claim no-ops — a confirmed-but-never-marked participant accrues nothing.
+        val eventId = insertNeutrallyFinalizedEvent()
+        val member = insertUser("Unscored")
+        insertConfirmed(eventId, member, "going", null)
+
+        assertFalse(eventId in reputationRepository.findPendingFinalizedEventIds())
+        assertFalse(reputationRepository.claimEvent(eventId), "unmarked event cannot be claimed")
+        reputationService.processFinalizedEvent(eventId)
+
+        assertNull(reputationRepository.findByUserAndClub(member, clubId), "no reputation for a neutral close")
+        assertEquals(0, ledgerRows(member, eventId))
+    }
+
+    @Test
     fun `finance entries contribute to reliability but not attendance counters`() {
         val member = insertUser("Payer")
         val skladchinaId = UUID.randomUUID()
@@ -294,6 +311,21 @@ class ReputationLedgerIntegrationTest {
                                 participant_limit, voting_opens_days_before, status,
                                 attendance_marked, attendance_finalized)
             VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$past', 10, 14, 'completed', true, true)
+            """.trimIndent()
+        )
+        return id
+    }
+
+    /** EXP-2: a past event closed neutrally — finalized but never marked. */
+    private fun insertNeutrallyFinalizedEvent(): UUID {
+        val id = UUID.randomUUID()
+        val past = OffsetDateTime.now().minusDays(3)
+        dsl.execute(
+            """
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime,
+                                participant_limit, voting_opens_days_before, status,
+                                attendance_marked, attendance_finalized)
+            VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$past', 10, 14, 'completed', false, true)
             """.trimIndent()
         )
         return id

@@ -11,10 +11,12 @@ import {
   useCastVoteMutation,
   useConfirmParticipationMutation,
   useDeclineParticipationMutation,
+  useDisputeAttendanceMutation,
   useEventQuery,
   useEventRespondersQuery,
   useMarkAttendanceMutation,
   useMyVoteQuery,
+  useResolveDisputeMutation,
 } from '../queries/events';
 
 function getInitials(name: string): string {
@@ -69,6 +71,8 @@ export const EventPage: FC = () => {
   const confirmMutation = useConfirmParticipationMutation();
   const declineMutation = useDeclineParticipationMutation();
   const markAttendanceMutation = useMarkAttendanceMutation();
+  const disputeMutation = useDisputeAttendanceMutation();
+  const resolveMutation = useResolveDisputeMutation();
 
   // Two separate error channels: actionError for vote/confirm/decline (rendered in
   // the recruitment + Stage 2 sections), attendanceError for attendance marking.
@@ -156,6 +160,44 @@ export const EventPage: FC = () => {
     );
   };
 
+  // ATT-3: a participant marked absent contests the mark (absent → disputed). Reachable only
+  // while the dispute window is open (marked && !finalized) — see the gating below.
+  const handleDispute = () => {
+    if (!id || disputeMutation.isPending) return;
+    haptic.impact('medium');
+    setAttendanceError(null);
+    disputeMutation.mutate(id, {
+      onSuccess: () => {
+        haptic.notify('success');
+        setToastMessage('Отметка оспорена — организатор примет решение');
+      },
+      onError: (e) => {
+        setAttendanceError(e.message);
+        haptic.notify('error');
+      },
+    });
+  };
+
+  // Organizer resolves a disputed mark into attended/absent before the window closes.
+  const handleResolve = (targetUserId: string, attendedResult: boolean) => {
+    if (!id || resolveMutation.isPending) return;
+    haptic.impact('medium');
+    setAttendanceError(null);
+    resolveMutation.mutate(
+      { eventId: id, userId: targetUserId, attended: attendedResult },
+      {
+        onSuccess: () => {
+          haptic.notify('success');
+          setToastMessage(attendedResult ? 'Засчитано «Пришёл»' : 'Засчитано «Не пришёл»');
+        },
+        onError: (e) => {
+          setAttendanceError(e.message);
+          haptic.notify('error');
+        },
+      },
+    );
+  };
+
   if (loading) {
     return (
       <div className="rd-page" style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
@@ -207,8 +249,21 @@ export const EventPage: FC = () => {
   const attendanceCandidates = (respondersQuery.data ?? []).filter(
     (r) => r.status === 'confirmed',
   );
-  const showAttendanceMarking = isOrganizer && eventHappened && !event.attendanceMarked;
+  // Dispute window = attendance marked but not yet finalized (the 48h before reputation locks).
+  const disputeWindowOpen = event.attendanceMarked && !event.attendanceFinalized;
+  // EXP-2: a neutrally auto-finalized event is finalized but never marked. The marking UI must
+  // hide in that state (backend rejects a late mark with "Attendance has been finalized").
+  const showAttendanceMarking =
+    isOrganizer && eventHappened && !event.attendanceMarked && !event.attendanceFinalized;
   const showAttendanceDone = isOrganizer && eventHappened && event.attendanceMarked;
+  const showAttendanceExpired =
+    isOrganizer && eventHappened && !event.attendanceMarked && event.attendanceFinalized;
+  // Organizer's resolve list: confirmed participants whose mark is currently disputed.
+  const disputedCandidates = attendanceCandidates.filter((r) => r.attendance === 'disputed');
+  // Current user's own attendance, for the participant-facing dispute controls.
+  const myResponder = (respondersQuery.data ?? []).find((r) => r.userId === userId);
+  const canDispute = disputeWindowOpen && myResponder?.attendance === 'absent';
+  const myDisputePending = disputeWindowOpen && myResponder?.attendance === 'disputed';
 
   return (
     <div className="rd-page">
@@ -379,16 +434,100 @@ export const EventPage: FC = () => {
         </>
       )}
 
-      {/* Attendance — recorded (read-only). Mark-once: re-marking after a member
-          dispute (AttendanceService dispute/resolve, 48h window) has no UI yet — future scope. */}
+      {/* Attendance — recorded. Read-only summary + (while the dispute window is open) the
+          organizer's resolve controls for any contested marks (ATT-2/ATT-3). */}
       {showAttendanceDone && (
         <>
           <div className="rd-section-sub-h">Посещаемость</div>
-          <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
+          <div
+            className="rd-glass"
+            style={{ padding: '14px 16px', marginBottom: disputeWindowOpen && disputedCandidates.length > 0 ? 10 : 14 }}
+          >
             <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
               ✓ Посещаемость отмечена{event.attendanceFinalized ? ' и закреплена' : ''}.
             </div>
           </div>
+          {disputeWindowOpen && disputedCandidates.length > 0 && (
+            <>
+              <div className="rd-section-sub-h">Оспоренные отметки</div>
+              {attendanceError && <div className="rd-error">{attendanceError}</div>}
+              <div className="rd-glass" style={{ padding: 8, marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {disputedCandidates.map((r) => {
+                  const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
+                  return (
+                    <div className="rd-pick-row" key={r.userId}>
+                      <span
+                        className="rd-pick-name"
+                        style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      >
+                        {name}
+                      </span>
+                      <button
+                        type="button"
+                        className="rd-btn-outline"
+                        style={{ width: 'auto', padding: '8px 12px' }}
+                        onClick={() => handleResolve(r.userId, true)}
+                        disabled={resolveMutation.isPending}
+                      >
+                        Пришёл
+                      </button>
+                      <button
+                        type="button"
+                        className="rd-btn-outline"
+                        style={{ width: 'auto', padding: '8px 12px' }}
+                        onClick={() => handleResolve(r.userId, false)}
+                        disabled={resolveMutation.isPending}
+                      >
+                        Не пришёл
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {/* EXP-2: organizer never marked, deadline passed → event closed neutrally (no reputation). */}
+      {showAttendanceExpired && (
+        <>
+          <div className="rd-section-sub-h">Посещаемость</div>
+          <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
+            <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
+              Окно отметки явки истекло. Событие закрыто без отметки — репутация участникам
+              за него не начислена.
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Participant-facing dispute (ATT-3): shown to whoever was marked absent, while the window is open. */}
+      {(canDispute || myDisputePending) && (
+        <>
+          <div className="rd-section-sub-h">Ваша явка</div>
+          <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: canDispute ? 10 : 14 }}>
+            <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
+              {myDisputePending
+                ? 'Вы оспорили отметку об отсутствии. Организатор примет решение до закрытия окна.'
+                : 'Организатор отметил вас как отсутствующего. Если это ошибка — оспорьте, и организатор пересмотрит.'}
+            </div>
+          </div>
+          {canDispute && (
+            <>
+              {attendanceError && <div className="rd-error">{attendanceError}</div>}
+              <div className="rd-cta-wrap">
+                <button
+                  type="button"
+                  className="rd-btn-primary"
+                  onClick={handleDispute}
+                  disabled={disputeMutation.isPending}
+                >
+                  {disputeMutation.isPending ? <Spinner size="s" /> : 'Оспорить'}
+                </button>
+              </div>
+            </>
+          )}
         </>
       )}
 

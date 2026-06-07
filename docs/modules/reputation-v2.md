@@ -151,6 +151,18 @@ disputed/null attendance.
 другой kind после обработки не происходит. Точный паритет: текущий `computeDeltas` для confirmed+null
 и confirmed+disputed даёт reliability 0, conf+1, att+0 — идентично.
 
+> **Блок 1 (живой путь, 2026-06-07) — взаимодействие с пайплайном** (детали и AC в
+> `docs/modules/events.md` § «Репутация — Блок 1»):
+> - **ATT-2:** `AttendanceService.finalizeAttendance` конвертирует остаточные `disputed → absent` **до**
+>   публикации `AttendanceFinalizedEvent` (в той же транзакции; листенер читает ростер AFTER_COMMIT).
+>   Поэтому `disputed` до пайплайна на финализированном событии не доходит → `(going, absent) = no_show`.
+>   Ветка `disputed → confirmed_unresolved` в `attendanceKind` остаётся **defensive**-страховкой; `null`
+>   по-прежнему достижим (confirmed-участник, которого орг не включил в отметку) → `confirmed_unresolved`.
+> - **EXP-2:** нейтральная авто-финализация ставит `attendance_finalized=true` при `attendance_marked=false`.
+>   Клейм (`claimEvent` / `findPendingFinalizedEventIds`) требует `attendance_marked=true`, поэтому такие
+>   события **никогда не входят в пайплайн** — ledger-строк ноль без отдельного флага. `AttendanceFinalizedEvent`
+>   для них не публикуется.
+
 ### Ось «финансы»: Складчина → ledger (значения P1a без изменений)
 
 | `skladchina_participant_status` | kind | points |

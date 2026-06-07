@@ -28,7 +28,7 @@ class AttendanceServiceTest {
     private val eventResponseRepository = mockk<EventResponseRepository>(relaxed = true)
     private val clubRepository = mockk<ClubRepository>()
     private val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
-    private val service = AttendanceService(eventRepository, eventResponseRepository, clubRepository, publisher, 2880L)
+    private val service = AttendanceService(eventRepository, eventResponseRepository, clubRepository, publisher, 2880L, 2880L)
 
     private val eventId = UUID.randomUUID()
     private val organizerId = UUID.randomUUID()
@@ -91,5 +91,78 @@ class AttendanceServiceTest {
         assertEquals(1, result.markedCount)
         verify { eventResponseRepository.setAttendance(eventId, attendeeId, true) }
         verify { eventRepository.markAttendanceMarked(eventId) }
+    }
+
+    @Test
+    fun `markAttendance publishes AttendanceMarkedEvent so absent participants get a dispute DM (ATT-3)`() {
+        every { eventRepository.findById(eventId) } returns event()
+        stubClub()
+        every { eventResponseRepository.setAttendance(eventId, attendeeId, true) } returns 1
+        every { eventRepository.markAttendanceMarked(eventId) } just Runs
+
+        service.markAttendance(eventId, organizerId, request)
+
+        verify { publisher.publishEvent(AttendanceMarkedEvent(eventId)) }
+    }
+
+    @Test
+    fun `finalizeAttendance converts expired disputes then publishes one finalized event per id (ATT-2)`() {
+        val id1 = UUID.randomUUID()
+        val id2 = UUID.randomUUID()
+        every { eventRepository.finalizeAttendanceBefore(any()) } returns listOf(id1, id2)
+        every { eventResponseRepository.resolveExpiredDisputesToAbsent(any()) } returns 1
+
+        service.finalizeAttendance()
+
+        // ATT-2: leftover disputes must be turned into absent for the finalized ids before the
+        // reputation listener reads the roster (which it does AFTER_COMMIT, after this method).
+        verify { eventResponseRepository.resolveExpiredDisputesToAbsent(listOf(id1, id2)) }
+        verify { publisher.publishEvent(AttendanceFinalizedEvent(id1)) }
+        verify { publisher.publishEvent(AttendanceFinalizedEvent(id2)) }
+    }
+
+    @Test
+    fun `finalizeAttendance does nothing when no events are due`() {
+        every { eventRepository.finalizeAttendanceBefore(any()) } returns emptyList()
+
+        service.finalizeAttendance()
+
+        verify(exactly = 0) { eventResponseRepository.resolveExpiredDisputesToAbsent(any()) }
+        verify(exactly = 0) { publisher.publishEvent(any()) }
+    }
+
+    @Test
+    fun `resolveDispute throws when there is no disputed mark to resolve`() {
+        every { eventRepository.findById(eventId) } returns event()
+        stubClub()
+        every { eventResponseRepository.resolveDisputedAttendance(eventId, attendeeId, true) } returns 0
+
+        val ex = assertFailsWith<ValidationException> {
+            service.resolveDispute(eventId, organizerId, attendeeId, true)
+        }
+        assertEquals("No disputed attendance to resolve for this user", ex.message)
+    }
+
+    @Test
+    fun `resolveDispute returns the updated count on success`() {
+        every { eventRepository.findById(eventId) } returns event()
+        stubClub()
+        every { eventResponseRepository.resolveDisputedAttendance(eventId, attendeeId, true) } returns 1
+
+        val result = service.resolveDispute(eventId, organizerId, attendeeId, true)
+
+        assertEquals(1, result.markedCount)
+    }
+
+    @Test
+    fun `neutrallyFinalizeUnmarkedEvents never publishes a finalized event - neutral means no reputation (EXP-2)`() {
+        every { eventRepository.neutrallyFinalizeUnmarkedBefore(any()) } returns listOf(UUID.randomUUID())
+
+        service.neutrallyFinalizeUnmarkedEvents()
+
+        // The whole point of EXP-2's neutral path: the event is closed but NO AttendanceFinalizedEvent
+        // is emitted, so the reputation pipeline never runs for it (also guarded by the marked=true
+        // claim). Reliable participants are not punished, nobody is rewarded.
+        verify(exactly = 0) { publisher.publishEvent(any()) }
     }
 }

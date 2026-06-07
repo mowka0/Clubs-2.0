@@ -246,11 +246,13 @@ Case A). 6-часовой grace ≪ 48-часового окна спора (PRD
 
 ### Frontend — отметка посещаемости (`EventPage`)
 Секция «Отметить посещаемость» на `EventPage` (между «Кто идёт» и Stage 2). Видна организатору
-после события: `isOrganizer && event_datetime <= now && !attendanceMarked` (зеркалит серверный гейт
-`AttendanceService` — owner-only + время, **не статус**). Чеклист участников со статусом
-`confirmed`/`going` (toggle-кнопки, по умолчанию «пришёл»), submit → `POST /api/events/{id}/attendance`
-(`useMarkAttendanceMutation`). После отметки — read-only «✓ Посещаемость отмечена». Mark-once:
-UI спора/перемаркировки (dispute/resolve) пока нет — future scope. Восстановлено в
+после события: `isOrganizer && event_datetime <= now && !attendanceMarked && !attendanceFinalized`
+(зеркалит серверный гейт `AttendanceService` — owner-only + время, **не статус**; `!attendanceFinalized`
+добавлен в Блоке 1 для EXP-2 — после нейтрального авто-закрытия отметка уже невозможна). Чеклист
+участников со статусом `confirmed` (toggle-кнопки, по умолчанию «пришёл»), submit →
+`POST /api/events/{id}/attendance` (`useMarkAttendanceMutation`). После отметки — read-only
+«✓ Посещаемость отмечена» + (пока окно спора открыто) список оспоренных отметок с резолвом.
+UI спора/резолва добавлен в Блоке 1 (см. ниже § «Репутация — Блок 1»). Восстановлено в
 `bugfix/attendance-marking-ui` (2026-06-06) после потери при унификации создания активностей; см.
 `docs/backlog/attendance-marking-ui-missing.md`.
 
@@ -402,6 +404,117 @@ UI спора/перемаркировки (dispute/resolve) пока нет —
   рендерит только `accent`-бейджи (action-required), поэтому терминальные статусы
   (`confirmed`/`declined`/`expired_no_confirm`) бейдж не показывают — это консистентно с
   существующим поведением, видимый эффект для `expired_no_confirm` — отсутствие бейджа.
+
+---
+
+## Репутация — Блок 1 (живой путь): EXP-2 + ATT-2 + ATT-3 + UI оспаривания
+
+> **Реализовано** в `feature/two-stage-confirmation-gaps` (2026-06-07). Закрывает три бага «живого пути»
+> репутации (подтверждение → явка → финализация → начисление) одним сквозным e2e. Реестр багов:
+> `docs/backlog/two-stage-reputation-bug-register.md`. Контракт начислений: `docs/modules/reputation-v2.md`.
+
+### EXP-2 — нейтральная авто-финализация непомеченных событий
+
+**Проблема:** финализация (а с ней — начисление репутации) гейтит на `attendance_marked = true`. Если
+организатор не открыл приложение и не отметил явку, событие **никогда** не финализировалось → надёжный
+участник, который пришёл, получал **0** вместо +100. Главная причина «5 событий подтвердил — всё ещё Новичок».
+
+**Решение (продуктовое, зафиксировано 2026-06-07):** на дедлайне непомеченное прошедшее событие
+**авто-финализируется нейтрально** — событие просто не засчитывается: ни +100, ни −50 никому. Никого не
+наказываем и не награждаем за бездействие организатора.
+
+**Реализация (без миграции, без новой колонки):**
+- `EventRepository.neutrallyFinalizeUnmarkedBefore(cutoff)` — `UPDATE events SET attendance_finalized = true
+  WHERE attendance_marked = false AND attendance_finalized = false AND event_datetime <= cutoff AND status <> cancelled
+  RETURNING id`. Ставит `finalized = true`, но **оставляет `marked = false`**.
+- `AttendanceService.neutrallyFinalizeUnmarkedEvents` — `@Scheduled(fixedDelayString = "${events.finalize-poll-ms}")`,
+  `@Transactional`. Дедлайн = `now − events.auto-finalize-unmarked-minutes` (дефолт **2880 = 48ч**:
+  24ч на напоминание оргу + 24ч на реакцию). **Публикует `AttendanceFinalizedEvent` — НЕ публикует.**
+- **Почему «нейтрально» = нет строк в ledger, бесплатно:** пайплайн репутации клеймит события только
+  с `attendance_marked = true` (`JooqReputationRepository.claimEvent` / `findPendingFinalizedEventIds`).
+  Немаркированное событие невидимо и для poll'а, и для прямого клейма → ledger-строк ноль, счётчики не
+  растут, `promise_fulfillment_pct` не портится. Отдельный флаг не нужен — состояние `finalized && !marked`
+  само по себе однозначно означает «закрыто нейтрально».
+- **Гонка с поздней отметкой** доброкачественна: если орг отмечает в последнюю секунду перед дедлайном,
+  `markAttendance` либо проходит (его отметки засчитываются — это и есть корректный исход), либо
+  отклоняется гардом `attendanceFinalized` (нейтральный финалайзер успел первым). Оба исхода безопасны.
+- **Фронт (`EventPage`):** гейт отметки = `isOrganizer && eventHappened && !attendanceMarked && !attendanceFinalized`;
+  при `finalized && !marked` показывается «Окно отметки явки истекло».
+
+### ATT-2 — нерешённый спор больше не обнуляет штраф −50
+
+**Проблема:** `(going, confirmed, absent)` = −50 «Пустозвон». Участник жал «Оспорить» → `attendance = disputed`.
+Если организатор не реагировал, на финализации оставался `disputed` → `attendanceKind = confirmed_unresolved`
+= **0**. Любой ненадёжный участник обнулял −50 одним тапом + бездействием организатора.
+
+**Решение (PRD-aligned):** на финализации остаточные `disputed` конвертируются обратно в `absent` (окно
+оспаривания истекло без коррекции организатора → действует исходная отметка). Тогда `(going, absent) = no_show
+(−50)`, `(maybe, absent) = spectator (−20)`.
+
+**Реализация:**
+- `EventResponseRepository.resolveExpiredDisputesToAbsent(eventIds)` — `UPDATE event_responses SET attendance = absent
+  WHERE attendance = disputed AND event_id IN (:eventIds)`.
+- Вызывается в `AttendanceService.finalizeAttendance` **в той же транзакции** сразу после
+  `finalizeAttendanceBefore`, до публикации `AttendanceFinalizedEvent`. Реп-листенер читает ростер AFTER_COMMIT —
+  то есть уже после конвертации. `disputed`-строка может существовать только на помеченном событии, поэтому
+  нейтрально закрытых (немаркированных) событий это не касается.
+- `ReputationPolicy.attendanceKind` оставлен без изменений: ветка `disputed → confirmed_unresolved` —
+  defensive-страховка (после конвертации `disputed` до пайплайна не доходит; `null` всё ещё может — это
+  существующее поведение confirmed-но-не-отмеченных).
+
+### ATT-3 — спор стал достижим (DM + UI)
+
+**Проблема:** `NotificationService.sendAttendanceMarked` (DM «вас отметили отсутствующим, оспорьте») был
+**мёртвым кодом** (ноль вызовов), а на фронте **не было UI оспаривания вообще**. Absent-участник не знал, что
+надо спорить, и не мог.
+
+**Решение — DM (бэкенд):**
+- `AttendanceService.markAttendance` после `markAttendanceMarked` публикует `AttendanceMarkedEvent(eventId)`.
+- `bot/AttendanceMarkedListener` (`@TransactionalEventListener(AFTER_COMMIT)`) зовёт
+  `notificationService.sendAttendanceMarked(eventId)`. **Почему AFTER_COMMIT:** `sendAttendanceMarked` —
+  `@Async`, читает только что записанные `absent`-строки на отдельном соединении, которое видит их лишь после
+  коммита транзакции `markAttendance`. Тот же паттерн, что у `AttendanceFinalizedListener`.
+
+**Решение — UI оспаривания (фронт, полный):**
+- В ростер добавлено поле `attendance` (`attended | absent | disputed | null`): `EventResponderInfo`,
+  `findRespondersWithUsers` (select `EVENT_RESPONSES.ATTENDANCE`), `EventResponderDto`, фронт-тип `EventResponderDto`.
+- **Участник** (`EventPage`, блок «Ваша явка»): если его строка `attendance = absent` и окно открыто
+  (`attendanceMarked && !attendanceFinalized`) — кнопка «Оспорить» → `POST /api/events/{id}/dispute`
+  (`useDisputeAttendanceMutation`). После спора (`disputed`) — текст «ждёт решения организатора».
+- **Организатор** (`EventPage`, блок «Оспоренные отметки» внутри «Посещаемость отмечена», пока окно открыто):
+  список confirmed-участников с `attendance = disputed`, по каждому кнопки «Пришёл» / «Не пришёл» →
+  `POST /api/events/{id}/attendance/{userId}/resolve` (`useResolveDisputeMutation`).
+
+### Конфигурация (новая env var)
+
+| Property | Env var | Default | Назначение |
+|---|---|---|---|
+| `events.auto-finalize-unmarked-minutes` | `ATTENDANCE_AUTO_FINALIZE_UNMARKED_MINUTES` | `2880` (48ч) | EXP-2: дедлайн нейтрального авто-закрытия немаркированных событий |
+
+> **Тест на staging:** чтобы проверить EXP-2, в Coolify-приложении staging выставить
+> `ATTENDANCE_AUTO_FINALIZE_UNMARKED_MINUTES=5` (и НЕ отмечать явку) — событие закроется нейтрально через
+> ~5 мин + 1 цикл финализатора. После теста переменную удалить.
+
+### Acceptance Criteria
+
+- **AC-EXP2-1:** GIVEN прошедшее событие, `attendance_marked=false`, `event_datetime <= now − дедлайн`, не
+  cancelled WHEN отработал `neutrallyFinalizeUnmarkedEvents` THEN `attendance_finalized=true`, `attendance_marked`
+  остаётся `false`; `AttendanceFinalizedEvent` НЕ опубликован.
+- **AC-EXP2-2 (нет репутации):** confirmed-участник нейтрально закрытого события **не** получает ledger-строки;
+  `findPendingFinalizedEventIds` его не возвращает; `claimEvent` = false.
+- **AC-EXP2-3 (изоляция):** помеченные (`marked=true`), cancelled, будущие и уже финализированные события
+  нейтральный финалайзер не трогает; повторный прогон — 0 строк.
+- **AC-EXP2-4 (фронт):** при `finalized && !marked` организатор видит «Окно отметки явки истекло», блока
+  «Отметить посещаемость» нет.
+- **AC-ATT2-1:** GIVEN confirmed+going участник с `attendance=disputed` на финализируемом событии, орг не
+  резолвил WHEN `finalizeAttendance` THEN `disputed → absent` (в одной транзакции до публикации) → начисление
+  `no_show (−50)`. Спор на другом, не финализируемом, событии не затронут.
+- **AC-ATT3-1 (DM):** GIVEN организатор отметил явку, есть absent-участники WHEN транзакция закоммичена THEN
+  им уходит DM «оспорьте» (`AttendanceMarkedListener` AFTER_COMMIT).
+- **AC-ATT3-2 (участник):** GIVEN участник `attendance=absent`, окно открыто WHEN открыт `EventPage` THEN
+  виден блок «Ваша явка» с «Оспорить»; клик → `disputed`.
+- **AC-ATT3-3 (организатор):** GIVEN confirmed-участник `attendance=disputed`, окно открыто WHEN организатор
+  открыл `EventPage` THEN виден блок «Оспоренные отметки» с «Пришёл»/«Не пришёл»; клик резолвит.
 
 ---
 

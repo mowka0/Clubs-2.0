@@ -73,6 +73,13 @@ interface EventResponseRepository {
     fun resolveDisputedAttendance(eventId: UUID, userId: UUID, attended: Boolean): Int
 
     /**
+     * ATT-2: at finalization, converts any still-`disputed` attendance on the given events back to
+     * `absent` (the dispute window expired without an organizer correction → the original mark
+     * stands). Returns rows updated. Empty input → 0 (no query).
+     */
+    fun resolveExpiredDisputesToAbsent(eventIds: List<UUID>): Int
+
+    /**
      * Cascade-delete on club leave: removes [userId]'s responses to all
      * non-finalised events of [clubId] (status IN upcoming/stage_1/stage_2).
      * Completed and cancelled events are preserved — attendance history is
@@ -88,12 +95,13 @@ interface EventResponseRepository {
     fun findRespondersWithUsers(eventId: UUID): List<EventResponderInfo>
 }
 
-/** Repository row: a responder's user info + raw vote/final-status enums. */
+/** Repository row: a responder's user info + raw vote/final-status/attendance enums. */
 data class EventResponderInfo(
     val userId: UUID,
     val firstName: String,
     val lastName: String?,
     val avatarUrl: String?,
     val stage1Vote: Stage_1Vote?,
-    val finalStatus: FinalStatus?
+    val finalStatus: FinalStatus?,
+    val attendance: AttendanceStatus?
 )

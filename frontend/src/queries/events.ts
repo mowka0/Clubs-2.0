@@ -4,12 +4,14 @@ import {
   confirmParticipation,
   createEvent,
   declineParticipation,
+  disputeAttendance,
   getClubEvents,
   getEvent,
   getEventResponders,
   getMyEvents,
   getMyVote,
   markAttendance,
+  resolveDispute,
 } from '../api/events';
 import type { CreateEventBody } from '../api/events';
 import { queryKeys, type EventListParams } from './queryKeys';
@@ -130,6 +132,36 @@ export function useMarkAttendanceMutation() {
   return useMutation({
     mutationFn: ({ eventId, attendance }: MarkAttendanceArgs) =>
       markAttendance(eventId, attendance),
+    onSuccess: (_data, { eventId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
+    },
+  });
+}
+
+// Disputing/resolving changes the per-responder attendance. The responders query key extends
+// the detail key with a `responders` suffix, and TanStack invalidates by prefix — so
+// invalidating the detail key also refreshes the responders list (same trick as queryKeys.ts).
+export function useDisputeAttendanceMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (eventId: string) => disputeAttendance(eventId),
+    onSuccess: (_data, eventId) => {
+      qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
+    },
+  });
+}
+
+interface ResolveDisputeArgs {
+  eventId: string;
+  userId: string;
+  attended: boolean;
+}
+
+export function useResolveDisputeMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ eventId, userId, attended }: ResolveDisputeArgs) =>
+      resolveDispute(eventId, userId, attended),
     onSuccess: (_data, { eventId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
     },

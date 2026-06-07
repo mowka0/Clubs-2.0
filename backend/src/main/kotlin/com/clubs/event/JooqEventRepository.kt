@@ -320,6 +320,19 @@ class JooqEventRepository(
             .fetch()
             .mapNotNull { it.value1() }
 
+    override fun neutrallyFinalizeUnmarkedBefore(eventDatetimeCutoff: OffsetDateTime): List<UUID> =
+        dsl.update(EVENTS)
+            .set(EVENTS.ATTENDANCE_FINALIZED, true)
+            .where(
+                EVENTS.ATTENDANCE_MARKED.eq(false)
+                    .and(EVENTS.ATTENDANCE_FINALIZED.eq(false))
+                    .and(EVENTS.EVENT_DATETIME.lessOrEqual(eventDatetimeCutoff))
+                    .and(EVENTS.STATUS.ne(EventStatus.cancelled))
+            )
+            .returningResult(EVENTS.ID)
+            .fetch()
+            .mapNotNull { it.value1() }
+
     override fun markPastEventsCompleted(cutoff: OffsetDateTime): Int =
         dsl.update(EVENTS)
             .set(EVENTS.STATUS, EventStatus.completed)

@@ -57,6 +57,15 @@ interface EventRepository {
     fun finalizeAttendanceBefore(eventDatetimeCutoff: OffsetDateTime): List<UUID>
 
     /**
+     * EXP-2: neutrally finalizes past, **unmarked**, not-yet-finalized, non-cancelled events whose
+     * datetime is at/before [eventDatetimeCutoff]. Sets `attendance_finalized = true` while leaving
+     * `attendance_marked = false`, so the reputation pipeline (which claims only marked+finalized
+     * events) never produces ledger rows for them — the event simply doesn't count. Returns the
+     * finalized event ids (for logging). NO AttendanceFinalizedEvent is published for these.
+     */
+    fun neutrallyFinalizeUnmarkedBefore(eventDatetimeCutoff: OffsetDateTime): List<UUID>
+
+    /**
      * Moves active events (upcoming / stage_1 / stage_2) whose datetime is before [cutoff]
      * to [EventStatus.completed]. Does not touch already-completed or cancelled events.
      * Returns the number of rows updated.
