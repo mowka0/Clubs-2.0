@@ -14,6 +14,7 @@ class ReputationMapper {
         totalConfirmations = record.totalConfirmations!!,
         totalAttendances = record.totalAttendances!!,
         spontaneityCount = record.spontaneityCount!!,
+        outcomeCount = record.outcomeCount!!,
         updatedAt = record.updatedAt!!
     )
 }

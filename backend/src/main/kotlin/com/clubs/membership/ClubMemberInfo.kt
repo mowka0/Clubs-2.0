@@ -22,7 +22,10 @@ data class ClubMemberInfo(
     val avatarUrl: String?,
     val role: MembershipRole,
     val joinedAt: OffsetDateTime,
-    val reliabilityIndex: Int,
-    val promiseFulfillmentPct: BigDecimal,
+    // Raw cache values (nullable when the user has no reputation row in this club);
+    // the "Новичок" threshold (outcomeCount) is applied by the mapper at the DTO edge.
+    val reliabilityIndex: Int?,
+    val promiseFulfillmentPct: BigDecimal?,
+    val outcomeCount: Int,
     val subscriptionCancelled: Boolean = false
 )

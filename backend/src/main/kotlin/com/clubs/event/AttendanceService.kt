@@ -5,6 +5,7 @@ import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -15,7 +16,8 @@ import java.util.UUID
 class AttendanceService(
     private val eventRepository: EventRepository,
     private val eventResponseRepository: EventResponseRepository,
-    private val clubRepository: ClubRepository
+    private val clubRepository: ClubRepository,
+    private val eventPublisher: ApplicationEventPublisher
 ) {
 
     private val log = LoggerFactory.getLogger(AttendanceService::class.java)
@@ -84,8 +86,13 @@ class AttendanceService(
     @Transactional
     fun finalizeAttendance() {
         val cutoff = OffsetDateTime.now().minusHours(DISPUTE_WINDOW_HOURS)
-        val count = eventRepository.finalizeAttendanceBefore(cutoff)
-        if (count > 0) log.info("Finalized attendance for $count events")
+        val finalizedEventIds = eventRepository.finalizeAttendanceBefore(cutoff)
+        if (finalizedEventIds.isEmpty()) return
+
+        log.info("Finalized attendance for {} events", finalizedEventIds.size)
+        // Reputation listener (AFTER_COMMIT) picks these up for low-latency ledger
+        // processing; the hourly poll is the durable backstop. See reputation-v2.md.
+        finalizedEventIds.forEach { eventPublisher.publishEvent(AttendanceFinalizedEvent(it)) }
     }
 
     companion object {

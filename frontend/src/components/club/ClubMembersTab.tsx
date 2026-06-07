@@ -25,7 +25,8 @@ function getInitials(firstName: string, lastName: string | null): string {
   return first + last;
 }
 
-function reliabilityTier(score: number): 'high' | 'mid' | 'low' {
+function reliabilityTier(score: number | null): 'high' | 'mid' | 'low' | 'new' {
+  if (score === null) return 'new';
   if (score >= 85) return 'high';
   if (score >= 70) return 'mid';
   return 'low';
@@ -129,6 +130,8 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
         <div className="rd-glass rd-rep-panel">
           {members.map((member) => {
             const fullName = `${member.firstName}${member.lastName ? ` ${member.lastName}` : ''}`;
+            const isOwner = member.role === 'organizer';
+            const hasScore = member.reliabilityIndex !== null;
             const tier = reliabilityTier(member.reliabilityIndex);
             return (
               <button
@@ -151,11 +154,23 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
                       </span>
                     )}
                   </div>
-                  <div className="rd-met">Обещания {member.promiseFulfillmentPct}%</div>
+                  <div className="rd-met">
+                    {hasScore
+                      ? `Обещания ${Math.round(member.promiseFulfillmentPct ?? 0)}%`
+                      : isOwner
+                        ? 'Репутация за организаторские качества'
+                        : 'Пока нет данных'}
+                  </div>
                 </div>
                 <span className="rd-score">
-                  <span className={`rd-v rd-${tier}`}>{member.reliabilityIndex}</span>
-                  <span className="rd-cap">надёжность</span>
+                  {hasScore ? (
+                    <>
+                      <span className={`rd-v rd-${tier}`}>{member.reliabilityIndex}</span>
+                      <span className="rd-cap">надёжность</span>
+                    </>
+                  ) : (
+                    <span className="rd-v rd-new">{isOwner ? 'Орг' : 'Новичок'}</span>
+                  )}
                 </span>
               </button>
             );

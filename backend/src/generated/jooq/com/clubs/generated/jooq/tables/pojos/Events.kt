@@ -31,7 +31,8 @@ data class Events(
     var attendanceFinalized: Boolean? = null,
     var createdAt: OffsetDateTime? = null,
     var updatedAt: OffsetDateTime? = null,
-    var photoUrl: String? = null
+    var photoUrl: String? = null,
+    var reputationProcessed: Boolean? = null
 ): Serializable {
 
 
@@ -115,6 +116,12 @@ data class Events(
         }
         else if (this.photoUrl != o.photoUrl)
             return false
+        if (this.reputationProcessed == null) {
+            if (o.reputationProcessed != null)
+                return false
+        }
+        else if (this.reputationProcessed != o.reputationProcessed)
+            return false
         return true
     }
 
@@ -137,6 +144,7 @@ data class Events(
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
         result = prime * result + (if (this.photoUrl == null) 0 else this.photoUrl.hashCode())
+        result = prime * result + (if (this.reputationProcessed == null) 0 else this.reputationProcessed.hashCode())
         return result
     }
 
@@ -159,6 +167,7 @@ data class Events(
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)
         sb.append(", ").append(photoUrl)
+        sb.append(", ").append(reputationProcessed)
 
         sb.append(")")
         return sb.toString()

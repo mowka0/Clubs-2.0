@@ -10,6 +10,7 @@ import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.Events
 import com.clubs.generated.jooq.tables.Interests
 import com.clubs.generated.jooq.tables.Memberships
+import com.clubs.generated.jooq.tables.ReputationLedger
 import com.clubs.generated.jooq.tables.SkladchinaParticipants
 import com.clubs.generated.jooq.tables.Skladchinas
 import com.clubs.generated.jooq.tables.Transactions
@@ -68,6 +69,11 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val MEMBERSHIPS: Memberships get() = Memberships.MEMBERSHIPS
 
     /**
+     * The table <code>public.reputation_ledger</code>.
+     */
+    val REPUTATION_LEDGER: ReputationLedger get() = ReputationLedger.REPUTATION_LEDGER
+
+    /**
      * The table <code>public.skladchina_participants</code>.
      */
     val SKLADCHINA_PARTICIPANTS: SkladchinaParticipants get() = SkladchinaParticipants.SKLADCHINA_PARTICIPANTS
@@ -106,6 +112,7 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         Events.EVENTS,
         Interests.INTERESTS,
         Memberships.MEMBERSHIPS,
+        ReputationLedger.REPUTATION_LEDGER,
         SkladchinaParticipants.SKLADCHINA_PARTICIPANTS,
         Skladchinas.SKLADCHINAS,
         Transactions.TRANSACTIONS,

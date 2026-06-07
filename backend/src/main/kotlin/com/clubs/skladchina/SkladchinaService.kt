@@ -4,9 +4,13 @@ import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
+import com.clubs.generated.jooq.enums.ReputationAxis
+import com.clubs.generated.jooq.enums.ReputationSource
 import com.clubs.generated.jooq.enums.SkladchinaMode
 import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
 import com.clubs.generated.jooq.enums.SkladchinaStatus
+import com.clubs.reputation.LedgerEntry
+import com.clubs.reputation.ReputationPolicy
 import com.clubs.reputation.ReputationService
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
@@ -241,7 +245,14 @@ class SkladchinaService(
      * Internal helper, used by both manual close (creator) and auto-close (scheduler / goal-reached).
      * Determines final status, expires pending participants, applies reputation deltas idempotently,
      * notifies organizer.
+     *
+     * @Transactional so the scheduler/auto-close path (SkladchinaScheduler -> closeInternal, a
+     * cross-bean call with no ambient tx) commits expire/status/reputation atomically. The already
+     * transactional callers (markPaid/decline/closeManually) self-invoke this and simply run inside
+     * their existing tx. Atomicity guarantees a ledger-append failure rolls back the
+     * reputation_applied marks too, so backfill/retry can recover (no orphaned participants).
      */
+    @Transactional
     fun closeInternal(skladchinaId: UUID, closedBy: UUID?, manualClose: Boolean) {
         val skladchina = skladchinaRepository.findById(skladchinaId)
             ?: throw NotFoundException("Skladchina not found")
@@ -260,12 +271,13 @@ class SkladchinaService(
         val paidCount = skladchinaRepository.countParticipantsByStatus(skladchinaId, SkladchinaParticipantStatus.paid)
 
         val finalStatus = computeFinalStatus(skladchina, collected, manualClose)
-        skladchinaRepository.updateStatus(skladchinaId, finalStatus, closedBy, OffsetDateTime.now())
+        val closedAt = OffsetDateTime.now()
+        skladchinaRepository.updateStatus(skladchinaId, finalStatus, closedBy, closedAt)
         log.info("Skladchina closed: id={} status={} collected={} paid={}/{}",
             skladchinaId, finalStatus, collected, paidCount, totalParticipants)
 
         if (skladchina.affectsReputation) {
-            applyReputationDeltas(skladchinaId, skladchina.clubId)
+            applyReputationDeltas(skladchinaId, skladchina.clubId, club.ownerId, closedAt)
         }
 
         eventPublisher.publishEvent(
@@ -299,25 +311,44 @@ class SkladchinaService(
         }
     }
 
-    private fun applyReputationDeltas(skladchinaId: UUID, clubId: UUID) {
+    /**
+     * Routes skladchina outcomes into the finance axis of the reputation ledger
+     * (idempotent — ON CONFLICT + per-participant reputation_applied guard). Values
+     * and mechanic unchanged from the legacy direct-write (paid +10 / declined -5 /
+     * expired -25, see ReputationPolicy). Anti-farm rule 1: the club owner does not
+     * accrue in their own club. occurredAt = skladchina closed_at.
+     */
+    private fun applyReputationDeltas(
+        skladchinaId: UUID,
+        clubId: UUID,
+        ownerId: UUID,
+        occurredAt: OffsetDateTime
+    ) {
         val participants = skladchinaRepository.findParticipants(skladchinaId)
+        val entries = mutableListOf<LedgerEntry>()
+        val toMark = mutableListOf<UUID>()
         participants.forEach { p ->
             if (p.reputationApplied) return@forEach
-            val delta = when (p.status) {
-                SkladchinaParticipantStatus.paid -> REP_DELTA_PAID
-                SkladchinaParticipantStatus.declined -> REP_DELTA_DECLINED
-                SkladchinaParticipantStatus.expired_no_response -> REP_DELTA_NO_RESPONSE
-                SkladchinaParticipantStatus.pending -> 0  // should be expired by now, fallback
+            val kind = ReputationPolicy.financeKind(p.status)
+            if (kind != null && p.userId != ownerId) {
+                entries += LedgerEntry(
+                    userId = p.userId,
+                    clubId = clubId,
+                    axis = ReputationAxis.finance,
+                    kind = kind,
+                    points = ReputationPolicy.pointsFor(kind),
+                    occurredAt = occurredAt,
+                    sourceType = ReputationSource.skladchina,
+                    sourceId = skladchinaId
+                )
             }
-            if (delta != 0) {
-                try {
-                    reputationService.addReliabilityDelta(p.userId, clubId, delta, "skladchina_${p.status.literal}")
-                } catch (e: Exception) {
-                    log.error("Failed to apply reputation delta for user ${p.userId} skladchina $skladchinaId", e)
-                }
-            }
-            skladchinaRepository.markReputationApplied(skladchinaId, p.userId)
+            toMark += p.userId
         }
+        if (entries.isNotEmpty()) reputationService.appendAndRecompute(entries)
+        // Mark AFTER the ledger append so reputation_applied can never precede the write.
+        // closeInternal is @Transactional, so the marks and the append commit atomically
+        // (or roll back together) — a failed append leaves reputation_applied=false for retry.
+        toMark.forEach { skladchinaRepository.markReputationApplied(skladchinaId, it) }
     }
 
     private fun parseMode(modeStr: String): SkladchinaMode =
@@ -373,10 +404,5 @@ class SkladchinaService(
         private const val MIN_DEADLINE_HOURS = 1L
         private const val MAX_DEADLINE_DAYS = 90L
         private const val SUCCESS_THRESHOLD = 0.80     // fixed-mode: ≥80% → success at deadline
-        private const val REP_DELTA_PAID = 10
-        // Явный отказ слабее чем «не ответил» — мы наказываем безответственность,
-        // не несогласие. См. фидбек #6 по skladchina-mvp staging.
-        private const val REP_DELTA_DECLINED = -5
-        private const val REP_DELTA_NO_RESPONSE = -25
     }
 }

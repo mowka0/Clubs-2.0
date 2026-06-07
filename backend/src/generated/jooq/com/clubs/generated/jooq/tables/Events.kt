@@ -7,6 +7,7 @@ package com.clubs.generated.jooq.tables
 import com.clubs.generated.jooq.Public
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.indexes.IDX_EVENTS_CLUB_ID_DATETIME
+import com.clubs.generated.jooq.indexes.IDX_EVENTS_REPUTATION_PENDING
 import com.clubs.generated.jooq.indexes.IDX_EVENTS_STATUS
 import com.clubs.generated.jooq.keys.EVENTS_PKEY
 import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CLUB_ID_FKEY
@@ -165,6 +166,11 @@ open class Events(
      */
     val PHOTO_URL: TableField<EventsRecord, String?> = createField(DSL.name("photo_url"), SQLDataType.CLOB, this, "")
 
+    /**
+     * The column <code>public.events.reputation_processed</code>.
+     */
+    val REPUTATION_PROCESSED: TableField<EventsRecord, Boolean?> = createField(DSL.name("reputation_processed"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "")
+
     private constructor(alias: Name, aliased: Table<EventsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<EventsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<EventsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -197,7 +203,7 @@ open class Events(
         override fun `as`(alias: Table<*>): EventsPath = EventsPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(IDX_EVENTS_CLUB_ID_DATETIME, IDX_EVENTS_STATUS)
+    override fun getIndexes(): List<Index> = listOf(IDX_EVENTS_CLUB_ID_DATETIME, IDX_EVENTS_REPUTATION_PENDING, IDX_EVENTS_STATUS)
     override fun getPrimaryKey(): UniqueKey<EventsRecord> = EVENTS_PKEY
     override fun getReferences(): List<ForeignKey<EventsRecord, *>> = listOf(EVENTS__EVENTS_CLUB_ID_FKEY, EVENTS__EVENTS_CREATED_BY_FKEY)
 

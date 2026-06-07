@@ -84,6 +84,10 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
         set(value): Unit = set(15, value)
         get(): String? = get(15) as String?
 
+    open var reputationProcessed: Boolean?
+        set(value): Unit = set(16, value)
+        get(): Boolean? = get(16) as Boolean?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -93,7 +97,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
     /**
      * Create a detached, initialised EventsRecord
      */
-    constructor(id: UUID? = null, clubId: UUID, createdBy: UUID, title: String, description: String? = null, locationText: String, eventDatetime: OffsetDateTime, participantLimit: Int, votingOpensDaysBefore: Int? = null, status: EventStatus? = null, stage_2Triggered: Boolean? = null, attendanceMarked: Boolean? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, photoUrl: String? = null): this() {
+    constructor(id: UUID? = null, clubId: UUID, createdBy: UUID, title: String, description: String? = null, locationText: String, eventDatetime: OffsetDateTime, participantLimit: Int, votingOpensDaysBefore: Int? = null, status: EventStatus? = null, stage_2Triggered: Boolean? = null, attendanceMarked: Boolean? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, photoUrl: String? = null, reputationProcessed: Boolean? = null): this() {
         this.id = id
         this.clubId = clubId
         this.createdBy = createdBy
@@ -110,6 +114,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
         this.createdAt = createdAt
         this.updatedAt = updatedAt
         this.photoUrl = photoUrl
+        this.reputationProcessed = reputationProcessed
         resetChangedOnNotNull()
     }
 
@@ -134,6 +139,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
             this.createdAt = value.createdAt
             this.updatedAt = value.updatedAt
             this.photoUrl = value.photoUrl
+            this.reputationProcessed = value.reputationProcessed
             resetChangedOnNotNull()
         }
     }

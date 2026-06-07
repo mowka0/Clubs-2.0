@@ -73,6 +73,7 @@ function mockEmptyTabData(clubId: string = 'club-123') {
       firstName: 'Test',
       username: 'testuser',
       avatarUrl: null,
+      role: 'member',
       reliabilityIndex: 100,
       promiseFulfillmentPct: 100,
       totalConfirmations: 0,
@@ -377,6 +378,40 @@ describe('ClubPage', () => {
     expect(screen.queryByRole('button', { name: /^управление$/i })).not.toBeInTheDocument();
     expect(screen.getByText(/вы участник/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^вступить$/i })).not.toBeInTheDocument();
+  });
+
+  it('members tab renders score / "Новичок" / organizer framing per reliabilityIndex', async () => {
+    server.use(
+      http.get('*/api/clubs/:id', () =>
+        HttpResponse.json({ ...mockClubDetail, ownerId: 'other-owner' } as ClubDetailDto)),
+      http.get('*/api/users/me/clubs', () =>
+        HttpResponse.json([
+          { id: 'mem-1', userId: 'user-1', clubId: 'club-123', status: 'active', role: 'member', joinedAt: '2025-01-01T00:00:00Z', subscriptionExpiresAt: null },
+        ] as MembershipDto[])),
+      http.get('*/api/clubs/club-123/activities', () => HttpResponse.json({ upcoming: [], past: [] })),
+      http.get('*/api/clubs/club-123/events', () =>
+        HttpResponse.json({ content: [], totalElements: 0, totalPages: 0, page: 0, size: 100 })),
+      http.get('*/api/clubs/club-123/members', () =>
+        HttpResponse.json([
+          { userId: 'u-vet', firstName: 'Vet', lastName: null, avatarUrl: null, role: 'member', joinedAt: '2025-01-01T00:00:00Z', reliabilityIndex: 90, promiseFulfillmentPct: 95 },
+          { userId: 'u-new', firstName: 'Newbie', lastName: null, avatarUrl: null, role: 'member', joinedAt: '2025-02-01T00:00:00Z', reliabilityIndex: null, promiseFulfillmentPct: null },
+          { userId: 'u-org', firstName: 'Org', lastName: null, avatarUrl: null, role: 'organizer', joinedAt: '2025-01-01T00:00:00Z', reliabilityIndex: null, promiseFulfillmentPct: null },
+        ])),
+    );
+
+    const { user } = renderClubPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^участники$/i })).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole('button', { name: /^участники$/i }));
+
+    // Veteran: real number + tier. Newcomer: "Новичок", no number. Owner: organizer framing.
+    await waitFor(() => {
+      expect(screen.getByText('90')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Новичок')).toBeInTheDocument();
+    expect(screen.getByText(/репутация за организаторские качества/i)).toBeInTheDocument();
   });
 
   it('organizer sees extra "Управление" tab when ownerId matches user id', async () => {

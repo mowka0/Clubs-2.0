@@ -56,7 +56,12 @@ class VoteService(
     fun getMyVote(eventId: UUID, userId: UUID): MyVoteDto {
         eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
         val response = eventResponseRepository.findByEventAndUser(eventId, userId)
-        return MyVoteDto(vote = response?.stage1Vote?.literal)
+        // After Stage 2 the user's effective status is final_status (confirmed / waitlisted /
+        // declined); before Stage 2 it's the stage-1 vote. The EventPage keys BOTH the
+        // confirm/decline buttons and the status badge off this single field, so a confirmed
+        // user must read back "confirmed" — not the unchanged stage-1 "going" — or the UI never
+        // reflects the confirm/decline. Same precedence as getEventResponders below.
+        return MyVoteDto(vote = response?.finalStatus?.literal ?: response?.stage1Vote?.literal)
     }
 
     /**

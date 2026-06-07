@@ -10,6 +10,7 @@ import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.Events
 import com.clubs.generated.jooq.tables.Interests
 import com.clubs.generated.jooq.tables.Memberships
+import com.clubs.generated.jooq.tables.ReputationLedger
 import com.clubs.generated.jooq.tables.SkladchinaParticipants
 import com.clubs.generated.jooq.tables.Skladchinas
 import com.clubs.generated.jooq.tables.Transactions
@@ -48,6 +49,11 @@ val INTERESTS: Interests = Interests.INTERESTS
  * The table <code>public.memberships</code>.
  */
 val MEMBERSHIPS: Memberships = Memberships.MEMBERSHIPS
+
+/**
+ * The table <code>public.reputation_ledger</code>.
+ */
+val REPUTATION_LEDGER: ReputationLedger = ReputationLedger.REPUTATION_LEDGER
 
 /**
  * The table <code>public.skladchina_participants</code>.

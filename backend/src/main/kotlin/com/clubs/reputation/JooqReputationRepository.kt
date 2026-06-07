@@ -1,11 +1,18 @@
 package com.clubs.reputation
 
-import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
+import com.clubs.generated.jooq.enums.FinalStatus
+import com.clubs.generated.jooq.enums.ReputationAxis
+import com.clubs.generated.jooq.enums.ReputationKind
+import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.generated.jooq.tables.references.EVENTS
+import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
+import com.clubs.generated.jooq.tables.references.REPUTATION_LEDGER
 import com.clubs.generated.jooq.tables.references.USER_CLUB_REPUTATION
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -15,84 +22,11 @@ class JooqReputationRepository(
     private val mapper: ReputationMapper
 ) : ReputationRepository {
 
-    override fun findByUserAndClub(userId: UUID, clubId: UUID): Reputation? {
-        return dsl.selectFrom(USER_CLUB_REPUTATION)
-            .where(
-                USER_CLUB_REPUTATION.USER_ID.eq(userId)
-                    .and(USER_CLUB_REPUTATION.CLUB_ID.eq(clubId))
-            )
+    override fun findByUserAndClub(userId: UUID, clubId: UUID): Reputation? =
+        dsl.selectFrom(USER_CLUB_REPUTATION)
+            .where(USER_CLUB_REPUTATION.USER_ID.eq(userId).and(USER_CLUB_REPUTATION.CLUB_ID.eq(clubId)))
             .fetchOne()
             ?.let(mapper::toDomain)
-    }
-
-    override fun save(reputation: Reputation) {
-        val existing = dsl.selectCount()
-            .from(USER_CLUB_REPUTATION)
-            .where(
-                USER_CLUB_REPUTATION.USER_ID.eq(reputation.userId)
-                    .and(USER_CLUB_REPUTATION.CLUB_ID.eq(reputation.clubId))
-            )
-            .fetchOne(0, Int::class.java) ?: 0
-
-        if (existing == 0) {
-            dsl.insertInto(USER_CLUB_REPUTATION)
-                .set(USER_CLUB_REPUTATION.USER_ID, reputation.userId)
-                .set(USER_CLUB_REPUTATION.CLUB_ID, reputation.clubId)
-                .set(USER_CLUB_REPUTATION.RELIABILITY_INDEX, reputation.reliabilityIndex)
-                .set(USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT, reputation.promiseFulfillmentPct)
-                .set(USER_CLUB_REPUTATION.TOTAL_CONFIRMATIONS, reputation.totalConfirmations)
-                .set(USER_CLUB_REPUTATION.TOTAL_ATTENDANCES, reputation.totalAttendances)
-                .set(USER_CLUB_REPUTATION.SPONTANEITY_COUNT, reputation.spontaneityCount)
-                .execute()
-        } else {
-            dsl.update(USER_CLUB_REPUTATION)
-                .set(USER_CLUB_REPUTATION.RELIABILITY_INDEX, reputation.reliabilityIndex)
-                .set(USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT, reputation.promiseFulfillmentPct)
-                .set(USER_CLUB_REPUTATION.TOTAL_CONFIRMATIONS, reputation.totalConfirmations)
-                .set(USER_CLUB_REPUTATION.TOTAL_ATTENDANCES, reputation.totalAttendances)
-                .set(USER_CLUB_REPUTATION.SPONTANEITY_COUNT, reputation.spontaneityCount)
-                .set(USER_CLUB_REPUTATION.UPDATED_AT, OffsetDateTime.now())
-                .where(
-                    USER_CLUB_REPUTATION.USER_ID.eq(reputation.userId)
-                        .and(USER_CLUB_REPUTATION.CLUB_ID.eq(reputation.clubId))
-                )
-                .execute()
-        }
-    }
-
-    override fun findFinalizedEvents(): List<FinalizedEventRef> {
-        return dsl.select(EVENTS.ID, EVENTS.CLUB_ID)
-            .from(EVENTS)
-            .where(
-                EVENTS.ATTENDANCE_FINALIZED.eq(true)
-                    .and(EVENTS.ATTENDANCE_MARKED.eq(true))
-            )
-            .fetch { record ->
-                FinalizedEventRef(
-                    eventId = record.get(EVENTS.ID)!!,
-                    clubId = record.get(EVENTS.CLUB_ID)!!
-                )
-            }
-    }
-
-    override fun findResponsesByEvent(eventId: UUID): List<ResponseForReputation> {
-        return dsl.select(
-            EVENT_RESPONSES.USER_ID,
-            EVENT_RESPONSES.STAGE_1_VOTE,
-            EVENT_RESPONSES.FINAL_STATUS,
-            EVENT_RESPONSES.ATTENDANCE
-        )
-            .from(EVENT_RESPONSES)
-            .where(EVENT_RESPONSES.EVENT_ID.eq(eventId))
-            .fetch { record ->
-                ResponseForReputation(
-                    userId = record.get(EVENT_RESPONSES.USER_ID)!!,
-                    stage1Vote = record.get(EVENT_RESPONSES.STAGE_1_VOTE),
-                    finalStatus = record.get(EVENT_RESPONSES.FINAL_STATUS),
-                    attendance = record.get(EVENT_RESPONSES.ATTENDANCE)
-                )
-            }
-    }
 
     override fun findLatestByUserId(userId: UUID): Reputation? =
         dsl.selectFrom(USER_CLUB_REPUTATION)
@@ -122,5 +56,139 @@ class JooqReputationRepository(
                     totalAttendances = record.get(attendSum).toInt()
                 )
             }
+    }
+
+    // --- Ledger pipeline ---
+
+    override fun claimEvent(eventId: UUID): Boolean =
+        dsl.update(EVENTS)
+            .set(EVENTS.REPUTATION_PROCESSED, true)
+            .where(
+                EVENTS.ID.eq(eventId)
+                    .and(EVENTS.REPUTATION_PROCESSED.isFalse)
+                    // Defensive: never mark an event that is not actually finalized+marked,
+                    // regardless of which caller hands us the id.
+                    .and(EVENTS.ATTENDANCE_FINALIZED.isTrue)
+                    .and(EVENTS.ATTENDANCE_MARKED.isTrue)
+            )
+            .execute() > 0
+
+    override fun findPendingFinalizedEventIds(): List<UUID> =
+        dsl.select(EVENTS.ID)
+            .from(EVENTS)
+            .where(
+                EVENTS.ATTENDANCE_FINALIZED.isTrue
+                    .and(EVENTS.ATTENDANCE_MARKED.isTrue)
+                    .and(EVENTS.REPUTATION_PROCESSED.isFalse)
+            )
+            .fetch(EVENTS.ID)
+            .filterNotNull()
+
+    override fun findEventContext(eventId: UUID): EventReputationContext? =
+        dsl.select(EVENTS.CLUB_ID, CLUBS.OWNER_ID, EVENTS.EVENT_DATETIME)
+            .from(EVENTS)
+            .join(CLUBS).on(CLUBS.ID.eq(EVENTS.CLUB_ID))
+            .where(EVENTS.ID.eq(eventId))
+            .fetchOne { r ->
+                EventReputationContext(
+                    clubId = r.get(EVENTS.CLUB_ID)!!,
+                    ownerId = r.get(CLUBS.OWNER_ID)!!,
+                    eventDatetime = r.get(EVENTS.EVENT_DATETIME)!!
+                )
+            }
+
+    override fun findConfirmedResponses(eventId: UUID): List<ConfirmedResponse> =
+        dsl.select(EVENT_RESPONSES.USER_ID, EVENT_RESPONSES.STAGE_1_VOTE, EVENT_RESPONSES.ATTENDANCE)
+            .from(EVENT_RESPONSES)
+            .where(
+                EVENT_RESPONSES.EVENT_ID.eq(eventId)
+                    .and(EVENT_RESPONSES.FINAL_STATUS.eq(FinalStatus.confirmed))
+            )
+            .fetch { r ->
+                ConfirmedResponse(
+                    userId = r.get(EVENT_RESPONSES.USER_ID)!!,
+                    stage1Vote = r.get(EVENT_RESPONSES.STAGE_1_VOTE),
+                    attendance = r.get(EVENT_RESPONSES.ATTENDANCE)
+                )
+            }
+
+    override fun appendLedgerIfAbsent(entries: List<LedgerEntry>) {
+        entries.forEach { e ->
+            dsl.insertInto(REPUTATION_LEDGER)
+                .set(REPUTATION_LEDGER.USER_ID, e.userId)
+                .set(REPUTATION_LEDGER.CLUB_ID, e.clubId)
+                .set(REPUTATION_LEDGER.AXIS, e.axis)
+                .set(REPUTATION_LEDGER.KIND, e.kind)
+                .set(REPUTATION_LEDGER.POINTS, e.points)
+                .set(REPUTATION_LEDGER.OCCURRED_AT, e.occurredAt)
+                .set(REPUTATION_LEDGER.SOURCE_TYPE, e.sourceType)
+                .set(REPUTATION_LEDGER.SOURCE_ID, e.sourceId)
+                .onConflict(REPUTATION_LEDGER.USER_ID, REPUTATION_LEDGER.SOURCE_TYPE, REPUTATION_LEDGER.SOURCE_ID)
+                .doNothing()
+                .execute()
+        }
+    }
+
+    override fun recompute(userId: UUID, clubId: UUID) {
+        // Serialize recompute per (user, club) across transactions so the ledger aggregate
+        // is read against a stable snapshot. Without this, two concurrent recomputes from
+        // different sources (event attendance + skladchina finance) for the same pair could
+        // each miss the other's not-yet-committed ledger row under READ COMMITTED and clobber
+        // the cache (lost update). The xact advisory lock releases automatically on commit.
+        dsl.execute("SELECT pg_advisory_xact_lock(hashtext(?))", "$userId:$clubId")
+
+        val l = REPUTATION_LEDGER
+        val attendanceRow = l.AXIS.eq(ReputationAxis.attendance)
+        val attendedKinds = l.KIND.`in`(ReputationKind.ironclad, ReputationKind.spontaneous)
+
+        val rec = dsl.select(
+            DSL.sum(l.POINTS),
+            DSL.count().filterWhere(attendanceRow),
+            DSL.count().filterWhere(attendanceRow.and(attendedKinds)),
+            DSL.count().filterWhere(l.KIND.eq(ReputationKind.spontaneous)),
+            DSL.count(),
+            DSL.max(l.OCCURRED_AT)
+        )
+            .from(l)
+            .where(l.USER_ID.eq(userId).and(l.CLUB_ID.eq(clubId)))
+            .fetchOne()!!
+
+        val outcome = rec.value5() ?: 0
+        // No ledger rows for this (user, club): nothing to cache. In the live path
+        // recompute is only called right after an append, so outcome >= 1; this
+        // guard only matters for defensive / future delete paths.
+        if (outcome == 0) return
+
+        val reliability = (rec.value1() ?: BigDecimal.ZERO).toInt()
+        val confirmations = rec.value2() ?: 0
+        val attendances = rec.value3() ?: 0
+        val spontaneity = rec.value4() ?: 0
+        val updatedAt = rec.value6() ?: OffsetDateTime.now()
+        val fulfillmentPct = if (confirmations > 0) {
+            BigDecimal(attendances * 100).divide(BigDecimal(confirmations), 2, RoundingMode.HALF_UP)
+        } else {
+            BigDecimal.ZERO
+        }
+
+        dsl.insertInto(USER_CLUB_REPUTATION)
+            .set(USER_CLUB_REPUTATION.USER_ID, userId)
+            .set(USER_CLUB_REPUTATION.CLUB_ID, clubId)
+            .set(USER_CLUB_REPUTATION.RELIABILITY_INDEX, reliability)
+            .set(USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT, fulfillmentPct)
+            .set(USER_CLUB_REPUTATION.TOTAL_CONFIRMATIONS, confirmations)
+            .set(USER_CLUB_REPUTATION.TOTAL_ATTENDANCES, attendances)
+            .set(USER_CLUB_REPUTATION.SPONTANEITY_COUNT, spontaneity)
+            .set(USER_CLUB_REPUTATION.OUTCOME_COUNT, outcome)
+            .set(USER_CLUB_REPUTATION.UPDATED_AT, updatedAt)
+            .onConflict(USER_CLUB_REPUTATION.USER_ID, USER_CLUB_REPUTATION.CLUB_ID)
+            .doUpdate()
+            .set(USER_CLUB_REPUTATION.RELIABILITY_INDEX, reliability)
+            .set(USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT, fulfillmentPct)
+            .set(USER_CLUB_REPUTATION.TOTAL_CONFIRMATIONS, confirmations)
+            .set(USER_CLUB_REPUTATION.TOTAL_ATTENDANCES, attendances)
+            .set(USER_CLUB_REPUTATION.SPONTANEITY_COUNT, spontaneity)
+            .set(USER_CLUB_REPUTATION.OUTCOME_COUNT, outcome)
+            .set(USER_CLUB_REPUTATION.UPDATED_AT, updatedAt)
+            .execute()
     }
 }

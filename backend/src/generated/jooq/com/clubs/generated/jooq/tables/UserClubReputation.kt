@@ -131,6 +131,11 @@ open class UserClubReputation(
      */
     val UPDATED_AT: TableField<UserClubReputationRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "")
 
+    /**
+     * The column <code>public.user_club_reputation.outcome_count</code>.
+     */
+    val OUTCOME_COUNT: TableField<UserClubReputationRecord, Int?> = createField(DSL.name("outcome_count"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("0"), SQLDataType.INTEGER)), this, "")
+
     private constructor(alias: Name, aliased: Table<UserClubReputationRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<UserClubReputationRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<UserClubReputationRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

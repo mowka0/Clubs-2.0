@@ -32,7 +32,8 @@ interface EventRepository {
 
     fun markAttendanceMarked(id: UUID)
 
-    fun finalizeAttendanceBefore(eventDatetimeCutoff: OffsetDateTime): Int
+    /** Finalizes attendance for past, marked, not-yet-finalized events. Returns the finalized event ids. */
+    fun finalizeAttendanceBefore(eventDatetimeCutoff: OffsetDateTime): List<UUID>
 
     /**
      * Moves active events (upcoming / stage_1 / stage_2) whose datetime is before [cutoff]
