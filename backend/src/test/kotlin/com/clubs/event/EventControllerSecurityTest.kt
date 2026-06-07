@@ -59,6 +59,7 @@ class EventControllerSecurityTest {
     @Autowired lateinit var dsl: DSLContext
 
     private lateinit var clubId: UUID
+    private lateinit var organizerId: UUID
     private lateinit var nonMemberToken: String
     private lateinit var memberToken: String
     private lateinit var organizerToken: String
@@ -76,7 +77,7 @@ class EventControllerSecurityTest {
 
         val nonMemberId = UUID.randomUUID()
         val memberId = UUID.randomUUID()
-        val organizerId = UUID.randomUUID()
+        organizerId = UUID.randomUUID()
         clubId = UUID.randomUUID()
 
         dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$nonMemberId', 1001, 'NonMember')")
@@ -178,6 +179,44 @@ class EventControllerSecurityTest {
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.content[0].photoUrl").value(photoUrl))
+    }
+
+    @Test
+    fun `POST attendance as non-organizer should return 403`() {
+        // Owner check in AttendanceService runs before the event-time check, so a
+        // plain member (not the club owner) is rejected regardless of event timing.
+        val eventId = insertEvent(OffsetDateTime.now().minusDays(1), status = "completed")
+        mockMvc.perform(
+            post("/api/events/$eventId/attendance")
+                .header("Authorization", "Bearer $memberToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"attendance":[]}""")
+        )
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.error").value("FORBIDDEN"))
+    }
+
+    @Test
+    fun `POST attendance before the event happens should return 400`() {
+        val eventId = insertEvent(OffsetDateTime.now().plusDays(5), status = "upcoming")
+        mockMvc.perform(
+            post("/api/events/$eventId/attendance")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"attendance":[]}""")
+        )
+            .andExpect(status().isBadRequest)
+    }
+
+    private fun insertEvent(eventDatetime: OffsetDateTime, status: String): UUID {
+        val eventId = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, voting_opens_days_before, status)
+            VALUES ('$eventId', '$clubId', '$organizerId', 'Att Event', 'Place', '$eventDatetime', 10, 14, '$status'::event_status)
+            """.trimIndent()
+        )
+        return eventId
     }
 
     @Test
