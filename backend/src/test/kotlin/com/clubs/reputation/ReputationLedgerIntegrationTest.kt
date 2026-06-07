@@ -130,14 +130,20 @@ class ReputationLedgerIntegrationTest {
         val eventId = insertFinalizedEvent()
         val declined = insertUser("Declined")
         val noFinal = insertUser("NoFinal")
+        // expired_no_confirm (Feature A) must score 0 exactly like declined / null — the
+        // pipeline reads only final_status=confirmed, so "бронь сгорела" never reaches it.
+        val expired = insertUser("Expired")
         insertResponse(eventId, declined, "going", "declined", "absent")
         insertResponse(eventId, noFinal, "maybe", null, null)
+        insertResponse(eventId, expired, "going", "expired_no_confirm", null)
 
         reputationService.processFinalizedEvent(eventId)
 
         assertNull(reputationRepository.findByUserAndClub(declined, clubId))
         assertNull(reputationRepository.findByUserAndClub(noFinal, clubId))
+        assertNull(reputationRepository.findByUserAndClub(expired, clubId))
         assertEquals(0, ledgerRows(declined, eventId))
+        assertEquals(0, ledgerRows(expired, eventId))
     }
 
     @Test

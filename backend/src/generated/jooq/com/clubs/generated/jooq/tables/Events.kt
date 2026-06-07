@@ -171,6 +171,16 @@ open class Events(
      */
     val REPUTATION_PROCESSED: TableField<EventsRecord, Boolean?> = createField(DSL.name("reputation_processed"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "")
 
+    /**
+     * The column <code>public.events.confirm_reminder_sent</code>.
+     */
+    val CONFIRM_REMINDER_SENT: TableField<EventsRecord, Boolean?> = createField(DSL.name("confirm_reminder_sent"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "")
+
+    /**
+     * The column <code>public.events.attendance_reminder_sent</code>.
+     */
+    val ATTENDANCE_REMINDER_SENT: TableField<EventsRecord, Boolean?> = createField(DSL.name("attendance_reminder_sent"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "")
+
     private constructor(alias: Name, aliased: Table<EventsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<EventsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<EventsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

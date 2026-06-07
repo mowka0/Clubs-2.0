@@ -9,6 +9,7 @@ import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import com.clubs.generated.jooq.tables.references.EVENTS
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
+import com.clubs.generated.jooq.tables.references.USERS
 import com.clubs.membership.MembershipAccess
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
@@ -253,6 +254,59 @@ class JooqEventRepository(
             .where(EVENTS.ID.eq(id))
             .execute()
     }
+
+    override fun findEventsNeedingConfirmReminder(now: OffsetDateTime, until: OffsetDateTime): List<Event> =
+        dsl.selectFrom(EVENTS)
+            .where(
+                EVENTS.STATUS.eq(EventStatus.stage_2)
+                    .and(EVENTS.CONFIRM_REMINDER_SENT.isFalse)
+                    .and(EVENTS.EVENT_DATETIME.greaterThan(now))      // not started yet
+                    .and(EVENTS.EVENT_DATETIME.lessOrEqual(until))    // within the "hours before" window
+            )
+            .fetch()
+            .map(mapper::toDomain)
+
+    override fun markConfirmReminderSent(id: UUID) {
+        dsl.update(EVENTS)
+            .set(EVENTS.CONFIRM_REMINDER_SENT, true)
+            .where(EVENTS.ID.eq(id))
+            .execute()
+    }
+
+    override fun findEventsNeedingAttendanceReminder(cutoff: OffsetDateTime): List<Event> =
+        dsl.selectFrom(EVENTS)
+            .where(
+                EVENTS.ATTENDANCE_MARKED.isFalse
+                    .and(EVENTS.ATTENDANCE_REMINDER_SENT.isFalse)
+                    .and(EVENTS.EVENT_DATETIME.lessOrEqual(cutoff))   // event was >= "hours after" ago
+                    .and(EVENTS.STATUS.ne(EventStatus.cancelled))
+                    // CC-2: only nag the organizer when there is actually a roster to mark — a
+                    // past event with zero confirmed participants has nothing to attend (and
+                    // setAttendance only touches final_status=confirmed rows anyway).
+                    .andExists(
+                        DSL.selectOne().from(EVENT_RESPONSES).where(
+                            EVENT_RESPONSES.EVENT_ID.eq(EVENTS.ID)
+                                .and(EVENT_RESPONSES.FINAL_STATUS.eq(FinalStatus.confirmed))
+                        )
+                    )
+            )
+            .fetch()
+            .map(mapper::toDomain)
+
+    override fun markAttendanceReminderSent(id: UUID) {
+        dsl.update(EVENTS)
+            .set(EVENTS.ATTENDANCE_REMINDER_SENT, true)
+            .where(EVENTS.ID.eq(id))
+            .execute()
+    }
+
+    override fun findOrganizerTelegramId(eventId: UUID): Long? =
+        dsl.select(USERS.TELEGRAM_ID)
+            .from(EVENTS)
+            .join(CLUBS).on(CLUBS.ID.eq(EVENTS.CLUB_ID))
+            .join(USERS).on(USERS.ID.eq(CLUBS.OWNER_ID))
+            .where(EVENTS.ID.eq(eventId))
+            .fetchOne(USERS.TELEGRAM_ID)
 
     override fun finalizeAttendanceBefore(eventDatetimeCutoff: OffsetDateTime): List<UUID> =
         dsl.update(EVENTS)

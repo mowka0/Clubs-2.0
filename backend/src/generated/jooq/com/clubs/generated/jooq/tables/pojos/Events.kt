@@ -32,7 +32,9 @@ data class Events(
     var createdAt: OffsetDateTime? = null,
     var updatedAt: OffsetDateTime? = null,
     var photoUrl: String? = null,
-    var reputationProcessed: Boolean? = null
+    var reputationProcessed: Boolean? = null,
+    var confirmReminderSent: Boolean? = null,
+    var attendanceReminderSent: Boolean? = null
 ): Serializable {
 
 
@@ -122,6 +124,18 @@ data class Events(
         }
         else if (this.reputationProcessed != o.reputationProcessed)
             return false
+        if (this.confirmReminderSent == null) {
+            if (o.confirmReminderSent != null)
+                return false
+        }
+        else if (this.confirmReminderSent != o.confirmReminderSent)
+            return false
+        if (this.attendanceReminderSent == null) {
+            if (o.attendanceReminderSent != null)
+                return false
+        }
+        else if (this.attendanceReminderSent != o.attendanceReminderSent)
+            return false
         return true
     }
 
@@ -145,6 +159,8 @@ data class Events(
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
         result = prime * result + (if (this.photoUrl == null) 0 else this.photoUrl.hashCode())
         result = prime * result + (if (this.reputationProcessed == null) 0 else this.reputationProcessed.hashCode())
+        result = prime * result + (if (this.confirmReminderSent == null) 0 else this.confirmReminderSent.hashCode())
+        result = prime * result + (if (this.attendanceReminderSent == null) 0 else this.attendanceReminderSent.hashCode())
         return result
     }
 
@@ -168,6 +184,8 @@ data class Events(
         sb.append(", ").append(updatedAt)
         sb.append(", ").append(photoUrl)
         sb.append(", ").append(reputationProcessed)
+        sb.append(", ").append(confirmReminderSent)
+        sb.append(", ").append(attendanceReminderSent)
 
         sb.append(")")
         return sb.toString()

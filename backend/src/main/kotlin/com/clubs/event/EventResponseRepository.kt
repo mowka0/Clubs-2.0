@@ -4,6 +4,7 @@ import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
+import java.time.OffsetDateTime
 import java.util.UUID
 
 interface EventResponseRepository {
@@ -23,6 +24,22 @@ interface EventResponseRepository {
     fun findGoingByEventOrderByTimestamp(eventId: UUID): List<EventResponse>
 
     fun findMaybeByEventOrderByTimestamp(eventId: UUID): List<EventResponse>
+
+    /**
+     * Feature A auto-expire: for every started, stage-2-triggered, non-cancelled event,
+     * moves going/maybe responses that were never confirmed (stage_2_vote IS NULL) to
+     * [com.clubs.generated.jooq.enums.Stage_2Vote.expired_no_confirm] /
+     * [com.clubs.generated.jooq.enums.FinalStatus.expired_no_confirm]. Single bulk update;
+     * the NULL predicate makes it idempotent and leaves confirmed/waitlisted/declined
+     * untouched. Returns rows updated.
+     */
+    fun expireUnconfirmedForStartedEvents(now: OffsetDateTime): Int
+
+    /**
+     * Telegram ids of going/maybe voters who have NOT yet confirmed (stage_2_vote IS NULL).
+     * Target of the Feature A "подтверди участие" reminder (~2h before the event).
+     */
+    fun findUnconfirmedVoterTelegramIds(eventId: UUID): List<Long>
 
     /**
      * Returns telegram IDs of users who have ANY stage_1_vote response for the event

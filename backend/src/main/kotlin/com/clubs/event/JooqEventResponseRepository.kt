@@ -114,6 +114,30 @@ class JooqEventResponseRepository(
             .fetch()
             .map(mapper::toDomain)
 
+    override fun expireUnconfirmedForStartedEvents(now: OffsetDateTime): Int {
+        // Started, stage-2-triggered, non-cancelled events. Status-independent on purpose:
+        // EventCompletionService flips stage_2 -> completed after a 6h grace, so gating on
+        // status = stage_2 would miss no-confirms on events older than the grace.
+        val startedTriggeredEventIds = dsl.select(EVENTS.ID)
+            .from(EVENTS)
+            .where(
+                EVENTS.STAGE_2_TRIGGERED.isTrue
+                    .and(EVENTS.EVENT_DATETIME.lessOrEqual(now))
+                    .and(EVENTS.STATUS.ne(EventStatus.cancelled))
+            )
+        return dsl.update(EVENT_RESPONSES)
+            .set(EVENT_RESPONSES.STAGE_2_VOTE, Stage_2Vote.expired_no_confirm)
+            .set(EVENT_RESPONSES.FINAL_STATUS, FinalStatus.expired_no_confirm)
+            .set(EVENT_RESPONSES.STAGE_2_TIMESTAMP, now)
+            .set(EVENT_RESPONSES.UPDATED_AT, now)
+            .where(
+                EVENT_RESPONSES.STAGE_2_VOTE.isNull
+                    .and(EVENT_RESPONSES.STAGE_1_VOTE.`in`(Stage_1Vote.going, Stage_1Vote.maybe))
+                    .and(EVENT_RESPONSES.EVENT_ID.`in`(startedTriggeredEventIds))
+            )
+            .execute()
+    }
+
     override fun findRespondersWithUsers(eventId: UUID): List<EventResponderInfo> =
         dsl.select(
             EVENT_RESPONSES.USER_ID,
@@ -141,6 +165,18 @@ class JooqEventResponseRepository(
                 )
             }
 
+    override fun findUnconfirmedVoterTelegramIds(eventId: UUID): List<Long> =
+        dsl.select(USERS.TELEGRAM_ID)
+            .from(EVENT_RESPONSES)
+            .join(USERS).on(USERS.ID.eq(EVENT_RESPONSES.USER_ID))
+            .where(
+                EVENT_RESPONSES.EVENT_ID.eq(eventId)
+                    .and(EVENT_RESPONSES.STAGE_1_VOTE.`in`(Stage_1Vote.going, Stage_1Vote.maybe))
+                    .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull)
+            )
+            .fetch(USERS.TELEGRAM_ID)
+            .filterNotNull()
+
     override fun findResponderTelegramIdsByEventId(eventId: UUID): List<Long> =
         dsl.select(USERS.TELEGRAM_ID)
             .from(EVENT_RESPONSES)
@@ -166,6 +202,10 @@ class JooqEventResponseRepository(
             .where(
                 EVENT_RESPONSES.EVENT_ID.eq(eventId)
                     .and(EVENT_RESPONSES.USER_ID.eq(userId))
+                    // Only the final roster is markable (PRD §4.4.3). A going/maybe voter
+                    // who never confirmed is not on it — reputation ignores non-confirmed
+                    // rows anyway, so marking them was a no-op that only cluttered the UI.
+                    .and(EVENT_RESPONSES.FINAL_STATUS.eq(FinalStatus.confirmed))
             )
             .execute()
 

@@ -32,6 +32,27 @@ interface EventRepository {
 
     fun markAttendanceMarked(id: UUID)
 
+    // --- Reminder schedulers (EventReminderScheduler) ---
+
+    /**
+     * Feature A: events in stage_2 that start within (now, until] and whose confirm reminder
+     * hasn't been sent. `until` = now + the "hours before" window (default 2h).
+     */
+    fun findEventsNeedingConfirmReminder(now: OffsetDateTime, until: OffsetDateTime): List<Event>
+
+    fun markConfirmReminderSent(id: UUID)
+
+    /**
+     * Feature B: past, non-cancelled events whose attendance is still unmarked and whose
+     * organizer reminder hasn't been sent. [cutoff] = now - the "hours after" window (default 24h).
+     */
+    fun findEventsNeedingAttendanceReminder(cutoff: OffsetDateTime): List<Event>
+
+    fun markAttendanceReminderSent(id: UUID)
+
+    /** Telegram id of the event's club organizer (owner), or null if unset. */
+    fun findOrganizerTelegramId(eventId: UUID): Long?
+
     /** Finalizes attendance for past, marked, not-yet-finalized events. Returns the finalized event ids. */
     fun finalizeAttendanceBefore(eventDatetimeCutoff: OffsetDateTime): List<UUID>
 

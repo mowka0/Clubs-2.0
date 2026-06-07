@@ -39,9 +39,12 @@ function pickBadge(event: MyEventListItemDto): Badge | null {
     return { text: 'Проголосуй', accent: true };
   }
   switch (event.myParticipationStatus) {
-    case 'confirmed':  return { text: 'Подтверждён',   accent: false };
-    case 'waitlisted': return { text: 'Лист ожидания', accent: false };
-    case 'declined':   return { text: 'Отказался',     accent: false };
+    case 'confirmed':          return { text: 'Подтверждён',   accent: false };
+    case 'waitlisted':         return { text: 'Лист ожидания', accent: false };
+    case 'declined':           return { text: 'Отказался',     accent: false };
+    // Booking burned — they voted going/maybe but never confirmed. Must win over
+    // the stale stage-1 vote below, else a no-confirm shows as "Иду"/"Возможно".
+    case 'expired_no_confirm': return { text: 'Не подтвердил', accent: false };
   }
   switch (event.myVote) {
     case 'going':     return { text: 'Иду',      accent: false };

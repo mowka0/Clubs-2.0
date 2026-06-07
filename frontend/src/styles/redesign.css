@@ -643,6 +643,8 @@
 .rd-vdot.rd-d-go { background: var(--live); }
 .rd-vdot.rd-d-maybe { background: var(--accent); }
 .rd-vdot.rd-d-no { background: var(--text-faint); }
+/* Booking burned (voted going/maybe, never confirmed) — distinct from grey "не пришёл". */
+.rd-vdot.rd-d-expired { background: var(--danger); }
 
 .rd-progress { width: 100%; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
 .rd-progress .rd-fill { height: 100%; border-radius: 4px; background: var(--accent-grad); transition: width 0.3s ease; }

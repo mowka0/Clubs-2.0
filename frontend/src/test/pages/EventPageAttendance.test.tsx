@@ -60,7 +60,11 @@ function pastCompletedEvent(overrides: Partial<EventDetailDto> = {}): EventDetai
 
 const RESPONDERS: EventResponderDto[] = [
   { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed' },
+  { userId: 'u-confirmed2', firstName: 'Дмитрий', lastName: null, avatarUrl: null, status: 'confirmed' },
+  // Final roster = confirmed only (PRD §4.4.3). The rest must be EXCLUDED from the
+  // attendance checklist: going = forgot to confirm, expired = booking burned, not_going.
   { userId: 'u-going', firstName: 'Борис', lastName: null, avatarUrl: null, status: 'going' },
+  { userId: 'u-expired', firstName: 'Глеб', lastName: null, avatarUrl: null, status: 'expired_no_confirm' },
   { userId: 'u-no', firstName: 'Виктор', lastName: null, avatarUrl: null, status: 'not_going' },
 ];
 
@@ -126,7 +130,7 @@ beforeEach(() => {
 });
 
 describe('EventPage — отметка посещаемости', () => {
-  it('организатор после события видит блок и сохраняет посещаемость только для confirmed/going', async () => {
+  it('организатор после события видит блок и сохраняет посещаемость ТОЛЬКО для confirmed (не going/expired)', async () => {
     mockEventEndpoints({ ownerId: OWNER_ID });
     let postedBody: { attendance: { userId: string; attended: boolean }[] } | null = null;
     server.use(
@@ -139,10 +143,13 @@ describe('EventPage — отметка посещаемости', () => {
     const { user } = renderEventPage();
 
     expect(await screen.findByText('Отметить посещаемость')).toBeInTheDocument();
-    // confirmed + going попадают в чеклист (как toggle-кнопки), not_going — нет.
-    // Имена также есть в «Кто идёт», поэтому ищем именно по роли button.
+    // Только confirmed попадают в чеклист (как toggle-кнопки). Имена также есть в
+    // «Кто идёт», поэтому ищем именно по роли button.
     expect(screen.getByRole('button', { name: /Анна К\./ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Борис/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Дмитрий/ })).toBeInTheDocument();
+    // «Забывшие подтвердить» (going/expired) и not_going — НЕ в финальном ростере.
+    expect(screen.queryByRole('button', { name: /Борис/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Глеб/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Виктор/ })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Сохранить посещаемость/ }));
@@ -151,7 +158,7 @@ describe('EventPage — отметка посещаемости', () => {
     expect(postedBody!.attendance).toHaveLength(2);
     // по умолчанию все отмечены пришедшими
     expect(postedBody!.attendance.every((a) => a.attended)).toBe(true);
-    expect(postedBody!.attendance.map((a) => a.userId).sort()).toEqual(['u-confirmed', 'u-going']);
+    expect(postedBody!.attendance.map((a) => a.userId).sort()).toEqual(['u-confirmed', 'u-confirmed2']);
     expect(await screen.findByText('Посещаемость отмечена')).toBeInTheDocument();
   });
 
@@ -168,13 +175,13 @@ describe('EventPage — отметка посещаемости', () => {
     const { user } = renderEventPage();
     await screen.findByText('Отметить посещаемость');
 
-    // Снять отметку у Бориса (going) — кликаем его toggle-кнопку
-    await user.click(screen.getByRole('button', { name: /Борис/ }));
+    // Снять отметку у Дмитрия (confirmed) — кликаем его toggle-кнопку
+    await user.click(screen.getByRole('button', { name: /Дмитрий/ }));
     await user.click(screen.getByRole('button', { name: /Сохранить посещаемость/ }));
 
     await waitFor(() => expect(postedBody).not.toBeNull());
-    const boris = postedBody!.attendance.find((a) => a.userId === 'u-going');
-    expect(boris?.attended).toBe(false);
+    const dmitry = postedBody!.attendance.find((a) => a.userId === 'u-confirmed2');
+    expect(dmitry?.attended).toBe(false);
     const anna = postedBody!.attendance.find((a) => a.userId === 'u-confirmed');
     expect(anna?.attended).toBe(true);
   });

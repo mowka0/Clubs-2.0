@@ -5,6 +5,7 @@ import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
@@ -17,7 +18,10 @@ class AttendanceService(
     private val eventRepository: EventRepository,
     private val eventResponseRepository: EventResponseRepository,
     private val clubRepository: ClubRepository,
-    private val eventPublisher: ApplicationEventPublisher
+    private val eventPublisher: ApplicationEventPublisher,
+    // Dispute window (minutes) before attendance finalizes (PRD §4.4.3 default 48h = 2880).
+    // Minutes unit lets staging set a literal 5 for an end-to-end reputation test.
+    @Value("\${events.dispute-window-minutes:2880}") private val disputeWindowMinutes: Long
 ) {
 
     private val log = LoggerFactory.getLogger(AttendanceService::class.java)
@@ -28,6 +32,13 @@ class AttendanceService(
 
         val club = clubRepository.findById(event.clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != organizerId) throw ForbiddenException("Only the club organizer can mark attendance")
+
+        // ATT-4: once finalized the roster is frozen and reputation is computed; re-marking
+        // would silently desync the displayed attendance from the locked-in ledger (recompute
+        // never re-runs — claimEvent is one-shot). Mirror dispute/resolve, which already guard this.
+        if (event.attendanceFinalized) {
+            throw ValidationException("Attendance has been finalized")
+        }
 
         if (event.eventDatetime.isAfter(OffsetDateTime.now())) {
             throw ValidationException("Cannot mark attendance before the event takes place")
@@ -82,10 +93,10 @@ class AttendanceService(
         return AttendanceResultDto(eventId, 1)
     }
 
-    @Scheduled(fixedDelay = FINALIZE_SCHEDULER_PERIOD_MS)
+    @Scheduled(fixedDelayString = "\${events.finalize-poll-ms:3600000}")
     @Transactional
     fun finalizeAttendance() {
-        val cutoff = OffsetDateTime.now().minusHours(DISPUTE_WINDOW_HOURS)
+        val cutoff = OffsetDateTime.now().minusMinutes(disputeWindowMinutes)
         val finalizedEventIds = eventRepository.finalizeAttendanceBefore(cutoff)
         if (finalizedEventIds.isEmpty()) return
 
@@ -93,10 +104,5 @@ class AttendanceService(
         // Reputation listener (AFTER_COMMIT) picks these up for low-latency ledger
         // processing; the hourly poll is the durable backstop. See reputation-v2.md.
         finalizedEventIds.forEach { eventPublisher.publishEvent(AttendanceFinalizedEvent(it)) }
-    }
-
-    companion object {
-        private const val FINALIZE_SCHEDULER_PERIOD_MS = 3_600_000L
-        private const val DISPUTE_WINDOW_HOURS = 48L
     }
 }

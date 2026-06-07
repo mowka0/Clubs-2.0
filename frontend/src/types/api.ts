@@ -299,7 +299,7 @@ export interface EventResponderDto {
   firstName: string;
   lastName: string | null;
   avatarUrl: string | null;
-  /** going | maybe | not_going | confirmed | waitlisted | declined */
+  /** going | maybe | not_going | confirmed | waitlisted | declined | expired_no_confirm */
   status: string;
 }
 
@@ -394,7 +394,7 @@ export interface MyEventListItemDto {
   clubName: string;
   clubAvatarUrl: string | null;
   myVote: 'going' | 'maybe' | 'not_going' | null;
-  myParticipationStatus: 'confirmed' | 'waitlisted' | 'declined' | null;
+  myParticipationStatus: 'confirmed' | 'waitlisted' | 'declined' | 'expired_no_confirm' | null;
   goingCount: number;
   confirmedCount: number;
   participantLimit: number;

@@ -66,6 +66,36 @@ class NotificationService(
     }
 
     /**
+     * Feature A reminder (~2h before the event): nudge going/maybe voters who have NOT
+     * confirmed yet to confirm before the window closes at event start.
+     */
+    @Async
+    fun sendConfirmReminder(event: Event) {
+        val telegramIds = eventResponseRepository.findUnconfirmedVoterTelegramIds(event.id)
+        if (telegramIds.isEmpty()) {
+            log.info("Confirm reminder SKIPPED — no unconfirmed voters for eventId={}", event.id)
+            return
+        }
+        log.info("Confirm reminder DM: eventId={} recipients={}", event.id, telegramIds.size)
+        val text = "⏰ Скоро начало: «${event.title}» — ${event.eventDatetime.format(fmt)}.\n\n" +
+            "Подтвердите участие, иначе место освободится:"
+        val path = "/events/${event.id}"
+        telegramIds.forEach { sendDm(it.toString(), text, webAppPath = path, buttonText = "✅ Подтвердить участие") }
+    }
+
+    /**
+     * Feature B reminder (~24h after the event): nudge the organizer to mark attendance.
+     * Until they mark it, reputation is never finalized for the event (see events.md, EXP-2).
+     */
+    @Async
+    fun sendAttendanceReminder(event: Event, organizerTelegramId: Long) {
+        log.info("Attendance reminder DM: eventId={} organizerTelegramId={}", event.id, organizerTelegramId)
+        val text = "📋 Событие «${event.title}» (${event.eventDatetime.format(fmt)}) прошло.\n\n" +
+            "Отметьте, кто пришёл — без этого репутация участников не начислится:"
+        sendDm(organizerTelegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Отметить явку")
+    }
+
+    /**
      * Notify absent members after attendance is marked, offering dispute option.
      */
     @Async

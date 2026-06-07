@@ -18,7 +18,8 @@ import org.jooq.Schema
 enum class Stage_2Vote(@get:JvmName("literal") public val literal: String) : EnumType {
     confirmed("confirmed"),
     declined("declined"),
-    waitlisted("waitlisted");
+    waitlisted("waitlisted"),
+    expired_no_confirm("expired_no_confirm");
     override fun getCatalog(): Catalog? = schema.catalog
     override fun getSchema(): Schema = Public.PUBLIC
     override fun getName(): String = "stage_2_vote"

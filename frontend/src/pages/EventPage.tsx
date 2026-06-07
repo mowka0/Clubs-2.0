@@ -22,10 +22,11 @@ function getInitials(name: string): string {
     .map((w) => w.charAt(0).toUpperCase()).join('');
 }
 
-/** Maps a responder status to its dot color class (go / maybe / no). */
+/** Maps a responder status to its dot color class (go / maybe / expired / no). */
 function statusDotClass(status: string): string {
   if (status === 'going' || status === 'confirmed') return 'rd-d-go';
   if (status === 'maybe' || status === 'waitlisted') return 'rd-d-maybe';
+  if (status === 'expired_no_confirm') return 'rd-d-expired';
   return 'rd-d-no';
 }
 
@@ -36,6 +37,7 @@ const VOTE_LABELS: Record<string, string> = {
   confirmed: 'Подтверждён',
   waitlisted: 'Лист ожидания',
   declined: 'Отказался',
+  expired_no_confirm: 'Не подтвердил',
 };
 
 function formatEventDate(iso: string): string {
@@ -182,21 +184,28 @@ export const EventPage: FC = () => {
         };
       })();
 
+  const eventHappened = new Date(event.eventDatetime).getTime() <= Date.now();
+
   // Backend (`VoteService.castVote`) принимает голос ТОЛЬКО при status='upcoming'.
   const showVoting = event.status === 'upcoming';
-  const showStage2 = event.status === 'stage_2';
+  // Bug B: confirm/decline close at event start. Status stays 'stage_2' until the
+  // hourly completion sweep, so gate on !eventHappened too — mirrors the backend
+  // `event_datetime > now` guard in Stage2Service. See events.md.
+  const showStage2 = event.status === 'stage_2' && !eventHappened;
   const showConfirmed =
     event.confirmedCount > 0 &&
     (event.status === 'stage_2' || event.status === 'completed');
 
   // Attendance marking — organizer only, once the event has taken place. Backend
   // (AttendanceService) gates on event_datetime <= now + the attendance_marked
-  // flag, never on status (see events.md § attendance flow). Candidates = those
-  // who intended to come (confirmed via Stage 2, or going when no Stage 2).
+  // flag, never on status (see events.md § attendance flow). Candidates = the FINAL
+  // roster: only Stage-2-confirmed members (PRD §4.4.3 "список финальных участников,
+  // кто подтвердил на Этапе 2"). Going/maybe voters who never confirmed ("забыли
+  // подтвердить" → expired_no_confirm) are NOT on the roster — they're excluded here
+  // and reputation ignores them (it reads only final_status=confirmed).
   const isOrganizer = !!hostClubQuery.data && hostClubQuery.data.ownerId === userId;
-  const eventHappened = new Date(event.eventDatetime).getTime() <= Date.now();
   const attendanceCandidates = (respondersQuery.data ?? []).filter(
-    (r) => r.status === 'confirmed' || r.status === 'going',
+    (r) => r.status === 'confirmed',
   );
   const showAttendanceMarking = isOrganizer && eventHappened && !event.attendanceMarked;
   const showAttendanceDone = isOrganizer && eventHappened && event.attendanceMarked;
