@@ -96,8 +96,8 @@ mc-section-label «Моя репутация»
 - **Avatar**: `r.clubAvatarUrl ? <img/> : initials` (нейтральный фон, без category-gradient — лишний шум на этом блоке).
 - **Body**:
   - `<div className="name">{clubName}</div>`
-  - `<div className="metrics">обещания N% · M подтв. · K посещ.</div>` — рендерится только если `r.totalAttendances > 0 || r.totalConfirmations > 0 || r.promiseFulfillmentPct > 0` (новичкам без активности не показываем обманчивые нули).
-- **Score**: `r.reliabilityIndex` крупным числом + caption «надёжность», цвет по тиру:
+  - `<div className="metrics">обещания N% · M подтв. · K посещ.</div>` — рендерится только при `hasScore` (есть число) и ненулевой активности (новичкам/owner не показываем обманчивые нули).
+- **Score**: при `reliabilityIndex !== null` — крупное число + caption «надёжность», цвет по тиру; при `null` — **«Новичок»** (нет числа), а для своего клуба (`role === 'organizer'`) — организаторская рамка «репутация за организаторские качества». Средняя надёжность в шапке **исключает** null-клубы (не NaN). Тиры:
   - high (≥85) → `var(--brand-live)` (зелёный)
   - mid (70–84) → `var(--brand-brass-deep)` (латунь)
   - low (<70) → `var(--brand-ink-3)` (серый)
@@ -207,10 +207,10 @@ data class UserClubReputationDto(
     val category: String,            // .literal от ClubCategory
     val role: String,                // .literal от MembershipRole
     val joinedAt: OffsetDateTime?,   // используется в peer-view, в карточке скрыт
-    val reliabilityIndex: Int,       // coalesce 100 для новичка (как везде)
-    val promiseFulfillmentPct: BigDecimal,
-    val totalConfirmations: Int,
-    val totalAttendances: Int
+    val reliabilityIndex: Int?,      // null = «Новичок» (outcome_count < 3) или владелец своего клуба
+    val promiseFulfillmentPct: BigDecimal?,
+    val totalConfirmations: Int?,
+    val totalAttendances: Int?
 )
 ```
 
@@ -324,7 +324,7 @@ AND тап → `/clubs/{clubId}`
 ### AC-3: новичок без активности
 GIVEN юзер только что вступил в клуб, ни одного финализированного события
 WHEN открывает «Профиль»
-THEN карточка показывает индекс 100 (default), без строки метрик
+THEN карточка показывает «Новичок» (нет числа, `reliabilityIndex = null`), без строки метрик
 
 ### AC-4: плашка при нулевой репутации
 GIVEN юзер не состоит ни в одном клубе
@@ -403,7 +403,7 @@ AND на повторном старте (V16 уже применена) — exi
 
 ## Non-functional
 
-- **Производительность.** `GET /me/reputation` — один SELECT с двумя join'ами и coalesce'ами; покрывается существующими PK/FK. `GET /me/interests` — два таблицы, через PK. Suggest — индекс `varchar_pattern_ops` даёт O(log n) + matched rows для `LIKE 'prefix%'`. На текущем масштабе (десятки тысяч интересов в перспективе) — < 10ms на запрос.
+- **Производительность.** `GET /me/reputation` — один SELECT с двумя join'ами (без coalesce-дефолтов; порог «Новичок» применяется маппером); покрывается существующими PK/FK. `GET /me/interests` — два таблицы, через PK. Suggest — индекс `varchar_pattern_ops` даёт O(log n) + matched rows для `LIKE 'prefix%'`. На текущем масштабе (десятки тысяч интересов в перспективе) — < 10ms на запрос.
 - **Безопасность.** Все новые эндпоинты под `/api/users/me/**` или `/api/interests/**` → JWT (`SecurityConfig`). `UpdateMeRequest` валидирует `@Size`. `PATCH /me` действует ТОЛЬКО над `user.userId` из принципала — IDOR невозможен. `q` для suggest нормализуется (нет SQL-инъекции — jOOQ параметризует, `startsWith` escape'ит `%/_`). Интересы — публичный словарь, без PII.
 - **Rate limiting.** Глобальный `RateLimitFilter` (60/мин на юзера для `/api/**`) покрывает оба новых эндпоинта. Дебаунс 250 мс + `enabled: q.length >= 2` на фронте дополнительно сжимают трафик.
 - **Логирование.** `InterestService.replaceUserInterests` пишет `INFO` с counts (`added=`, `removed=`). Sensitive данных нет.
@@ -412,7 +412,7 @@ AND на повторном старте (V16 уже применена) — exi
 
 ## Связанные модули и backlog
 
-- [`reputation.md`](./reputation.md) § «Per-user reputation overview» — endpoint детали + правила coalesce.
+- [`reputation.md`](./reputation.md) § «Per-user reputation overview» — endpoint детали + правила порога «Новичок» (модель v2 ledger).
 - [`skladchina.md`](./skladchina.md) § «Action-required count» — связанный фронт-сигнал (бейдж на табе «Сборы») реализован в той же ветке.
 - [`club-page-unified.md`](./club-page-unified.md) — устаревшее «Мой профиль» upd-блок наверху.
 - [`ui-pages.md`](./ui-pages.md) § «ProfilePage» — это место в общей навигации фронт-страниц.

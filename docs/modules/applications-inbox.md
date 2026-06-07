@@ -536,7 +536,14 @@ notificationService.sendApplicationCreatedDM(
 
 ## Peer-signal — формула и edge cases
 
-**Источник**: таблица `user_club_reputation` (одна строка per `(user_id, club_id)`).
+**Источник**: таблица `user_club_reputation` (одна строка per `(user_id, club_id)`) — теперь
+производный кэш над `reputation_ledger` (модель v2, см. [`reputation.md`](./reputation.md)).
+
+> **Семантика `memberClubCount` = «клубы с track-record»** (где у юзера есть строка в
+> `user_club_reputation`). После анти-фарм правила 1 владелец **не входит** в счёт по **своему**
+> клубу (там ему репутация не начисляется → строки нет). Новичок без исходов тоже не имеет строки.
+> Поэтому «В N клубах» считает клубы, где есть реальный track-record (надёжность зарабатывается в
+> чужих клубах) — это намеренно, не баг. Edge-cases ниже без изменений.
 
 Поля:
 - `memberClubCount` = `COUNT(*) FROM user_club_reputation WHERE user_id = :id`

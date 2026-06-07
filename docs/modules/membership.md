@@ -238,8 +238,8 @@ GET /api/clubs/{id}/members
 
 ### Бизнес-правила
 - Возвращаются ТОЛЬКО участники со статусом `active` (grace_period, cancelled, expired — не входят)
-- Сортировка: `reliability_index DESC`. При NULL репутации — coalesce до значения 100 (default нового участника), но реальная репутация в БД не создаётся
-- `promiseFulfillmentPct` для участников без записи в `user_club_reputation` = 0
+- Сортировка по **отображаемому** индексу `... DESC NULLS LAST` (CASE: число только при `outcome_count >= 3`), поэтому новички/sub-threshold/владельцы (показ = «Новичок») уходят **вниз**, а не наверх. Coalesce-дефолта 100 больше нет (модель v2 ledger)
+- Для новичка (`outcome_count < 3`, или владелец своего клуба) `reliabilityIndex` и сиблинги (`promiseFulfillmentPct`/счётчики) = **null** (блок подавлен → UI «Новичок» / организаторская рамка)
 - Дефолт role при отсутствии — `member`
 
 ### Authorization
@@ -252,8 +252,8 @@ GIVEN caller — active member клуба X, в клубе 3 активных у
 WHEN GET /api/clubs/X/members
 THEN 200 OK
 AND response — массив из 3 элементов
-AND элементы упорядочены по reliabilityIndex DESC
-AND для участника без репутации reliabilityIndex=100, promiseFulfillmentPct=0
+AND элементы упорядочены по отображаемому reliabilityIndex DESC NULLS LAST
+AND для участника с `outcome_count < 3` (или владельца) reliabilityIndex=null, promiseFulfillmentPct=null («Новичок»)
 
 **AC-2: не-член клуба получает 403**
 GIVEN caller не состоит в клубе X (или status != active)
@@ -304,11 +304,13 @@ GET /api/clubs/{clubId}/members/{userId}
 ### Бизнес-правила
 - Caller должен быть `active` member клуба `clubId` → иначе 403
 - Пользователь `userId` должен существовать в `users` → иначе 404 "User not found"
-- При отсутствии записи в `user_club_reputation` для пары (userId, clubId) — дефолты:
-  - `reliabilityIndex = 100`
-  - `promiseFulfillmentPct = 0`
-  - `totalConfirmations = 0`
-  - `totalAttendances = 0`
+- При отсутствии записи в `user_club_reputation` ИЛИ `outcome_count < 3` (или владелец своего клуба) —
+  блок репутации подавлен (модель v2 ledger):
+  - `reliabilityIndex = null`
+  - `promiseFulfillmentPct = null`
+  - `totalConfirmations = null`
+  - `totalAttendances = null`
+  - `role` несётся в DTO → фронт рендерит «Новичок» (member) или организаторскую рамку (organizer)
 - Проверка того, что `userId` — реально member клуба `clubId`, **не выполняется** в текущей реализации. Endpoint вернёт профиль любого существующего пользователя при дефолтных метриках репутации, если в этой паре с клубом нет записи. (См. risks ниже.)
 
 ### Authorization
@@ -331,7 +333,7 @@ THEN 403 "Not a member of this club"
 **AC-3: участник без репутации**
 GIVEN Y — member клуба X, но в user_club_reputation нет записи
 WHEN GET /api/clubs/X/members/Y
-THEN 200 OK с reliabilityIndex=100, promiseFulfillmentPct=0, totalConfirmations=0, totalAttendances=0
+THEN 200 OK с reliabilityIndex=null, promiseFulfillmentPct=null, totalConfirmations=null, totalAttendances=null («Новичок»; либо организаторская рамка, если Y — владелец X)
 
 ### Corner Cases
 | Ситуация | Код | Сообщение |

@@ -63,7 +63,14 @@ class JooqReputationRepository(
     override fun claimEvent(eventId: UUID): Boolean =
         dsl.update(EVENTS)
             .set(EVENTS.REPUTATION_PROCESSED, true)
-            .where(EVENTS.ID.eq(eventId).and(EVENTS.REPUTATION_PROCESSED.isFalse))
+            .where(
+                EVENTS.ID.eq(eventId)
+                    .and(EVENTS.REPUTATION_PROCESSED.isFalse)
+                    // Defensive: never mark an event that is not actually finalized+marked,
+                    // regardless of which caller hands us the id.
+                    .and(EVENTS.ATTENDANCE_FINALIZED.isTrue)
+                    .and(EVENTS.ATTENDANCE_MARKED.isTrue)
+            )
             .execute() > 0
 
     override fun findPendingFinalizedEventIds(): List<UUID> =
@@ -123,6 +130,13 @@ class JooqReputationRepository(
     }
 
     override fun recompute(userId: UUID, clubId: UUID) {
+        // Serialize recompute per (user, club) across transactions so the ledger aggregate
+        // is read against a stable snapshot. Without this, two concurrent recomputes from
+        // different sources (event attendance + skladchina finance) for the same pair could
+        // each miss the other's not-yet-committed ledger row under READ COMMITTED and clobber
+        // the cache (lost update). The xact advisory lock releases automatically on commit.
+        dsl.execute("SELECT pg_advisory_xact_lock(hashtext(?))", "$userId:$clubId")
+
         val l = REPUTATION_LEDGER
         val attendanceRow = l.AXIS.eq(ReputationAxis.attendance)
         val attendedKinds = l.KIND.`in`(ReputationKind.ironclad, ReputationKind.spontaneous)

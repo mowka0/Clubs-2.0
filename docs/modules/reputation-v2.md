@@ -121,8 +121,12 @@ ON CONFLICT (user_id, club_id) DO UPDATE SET
   `ReputationService.kt:113`. В V18 (чистый SQL) — `ROUND(att*100.0::numeric / conf, 2)` (numeric, не
   double — Postgres ROUND на double = half-to-even).
 - recompute читает ledger **в той же транзакции** что upsert (консистентный снапшот, коммутативность
-  под конкуренцией — блокер #2). Last-writer-wins безопасен: оба конкурентных recompute выводят
-  одинаковые значения из одного ledger.
+  под конкуренцией — блокер #2). **Сериализация per (user, club):** в начале recompute берётся
+  `pg_advisory_xact_lock(hashtext("$userId:$clubId"))` (освобождается на commit). Без него два
+  конкурентных recompute из **разных источников** (явка + сбор) для одной пары под READ COMMITTED
+  могли бы не увидеть несзакоммиченную строку друг друга и затереть кэш (lost update). С advisory-локом
+  последний recompute видит обе закоммиченные строки → итог корректен. Это критично для scale-out
+  (несколько реплик / async listener executor), где claimEvent уже не делает обработку эксклюзивной.
 - В live ledger append-only → у юзера никогда не «исчезают» строки → recompute всегда вызывается, когда
   есть ≥1 строка. Удаление кэш-строки нужно только в бэкфилле (rebuild, см. V18).
 

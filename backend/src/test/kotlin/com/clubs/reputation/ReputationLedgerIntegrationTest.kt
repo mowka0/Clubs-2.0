@@ -4,6 +4,7 @@ import com.clubs.generated.jooq.enums.ReputationAxis
 import com.clubs.generated.jooq.enums.ReputationKind
 import com.clubs.generated.jooq.enums.ReputationSource
 import com.clubs.generated.jooq.tables.references.REPUTATION_LEDGER
+import com.clubs.membership.MemberService
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -59,6 +60,7 @@ class ReputationLedgerIntegrationTest {
 
     @Autowired lateinit var reputationService: ReputationService
     @Autowired lateinit var reputationRepository: ReputationRepository
+    @Autowired lateinit var memberService: MemberService
     @Autowired lateinit var dsl: DSLContext
 
     private lateinit var ownerId: UUID
@@ -228,7 +230,48 @@ class ReputationLedgerIntegrationTest {
         assertReputation(member, reliability = 100, conf = 1, att = 1, spont = 0, pct = "100.00", outcome = 1)
     }
 
+    @Test
+    fun `read path suppresses sub-threshold reliability and sorts newcomers last (AC-4, AC-4b)`() {
+        insertMembership(ownerId, "organizer")
+        val veteran = insertUser("Veteran"); insertMembership(veteran, "member")
+        val newcomer = insertUser("Newcomer"); insertMembership(newcomer, "member")
+
+        // veteran: 3 ironclad events -> reliability 300, outcome_count 3 (>= threshold, shown)
+        repeat(3) {
+            val e = insertFinalizedEvent()
+            insertConfirmed(e, veteran, "going", "attended")
+            reputationService.processFinalizedEvent(e)
+        }
+        // newcomer: a single no_show -> reliability -50, outcome_count 1 (< threshold, suppressed)
+        val e = insertFinalizedEvent()
+        insertConfirmed(e, newcomer, "going", "absent")
+        reputationService.processFinalizedEvent(e)
+
+        val members = memberService.getClubMembers(clubId, ownerId)
+        val vet = members.first { it.userId == veteran }
+        val newb = members.first { it.userId == newcomer }
+        assertEquals(300, vet.reliabilityIndex, "veteran (>=3 outcomes) shows the real number")
+        assertNull(newb.reliabilityIndex, "sub-threshold reliability is suppressed to null (Новичок)")
+        assertNull(newb.promiseFulfillmentPct, "sub-threshold siblings are suppressed too")
+
+        // NULLS LAST: the scored veteran sorts before the suppressed newcomer.
+        val vetIdx = members.indexOfFirst { it.userId == veteran }
+        val newbIdx = members.indexOfFirst { it.userId == newcomer }
+        assertTrue(vetIdx < newbIdx, "newcomer (null) sorts after the scored veteran")
+
+        // Member profile read path applies the same suppression.
+        assertNull(memberService.getMemberProfile(clubId, newcomer, ownerId).reliabilityIndex)
+        assertEquals(300, memberService.getMemberProfile(clubId, veteran, ownerId).reliabilityIndex)
+    }
+
     // --- helpers ---
+
+    private fun insertMembership(userId: UUID, role: String) {
+        dsl.execute(
+            "INSERT INTO memberships (id, user_id, club_id, status, role, joined_at) " +
+                "VALUES ('${UUID.randomUUID()}', '$userId', '$clubId', 'active', '$role'::membership_role, NOW())"
+        )
+    }
 
     private fun insertUser(name: String): UUID {
         val id = UUID.randomUUID()

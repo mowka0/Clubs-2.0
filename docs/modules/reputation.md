@@ -1,121 +1,69 @@
 # Module: Reputation
 
-Система репутации участников в рамках клуба.
-Соответствует PRD §4.4.4. Источник истины для бизнес-правил — PRD.
+Система репутации участников в рамках клуба. Соответствует PRD §4.4.4 (по значениям начислений).
+
+> **Модель v2 (ledger) — актуальна.** Полный имплементируемый контракт и обоснование:
+> [`reputation-v2.md`](./reputation-v2.md). Источник истины расчёта — **append-only
+> `reputation_ledger`**; `user_club_reputation` — производный кэш, пересчитываемый из ledger
+> (`recompute`). Старая аддитивная модель (`@Scheduled` → инкрементальный `save`,
+> `computeDeltas`/`addReliabilityDelta`, новичок = COALESCE→100) **удалена** в P1a
+> (ветка `feature/reputation-ledger`). Этот файл — краткий обзор текущей реальности + контракты
+> отображения; формулы и фазы — в `reputation-v2.md`.
 
 ## Назначение
-Считает и хранит per-club метрики поведения участника на событиях: надёжность, процент выполнения обещаний, счётчик спонтанности.
+Считает и хранит per-club метрики поведения участника на событиях и сборах: индекс надёжности,
+% выполнения обещаний, счётчики подтверждений / посещений / спонтанности. Сегодня репутация
+**только отображается** (профиль, карточка участника, инбокс заявок), ничего не гейтит.
 
-## Архитектура
+## Модель (кратко; детали — reputation-v2.md)
 
-```
-@Scheduled → ReputationService
-                   │
-                   ▼
-            ReputationRepository (interface)
-                   │
-                   ▼
-          JooqReputationRepository ──▶ ReputationMapper ──▶ Reputation (domain)
-```
+- **`reputation_ledger`** (append-only, V17) — источник истины. Одна строка на (user, source);
+  идемпотентность через `ON CONFLICT (user_id, source_type, source_id) DO NOTHING` — структурно
+  убивает прежний баг почасовой инфляции.
+- **`user_club_reputation`** — кэш; единственный писатель = `recompute(user, club)` (атомарный upsert,
+  агрегат из ledger через `COUNT(*) FILTER`; сериализация per (user, club) через
+  `pg_advisory_xact_lock`).
+- **Оси:** `attendance` (явка, 5 kind'ов: ironclad +100 / no_show −50 / spontaneous +30 /
+  spectator −20 / confirmed_unresolved 0) и `finance` (сборы: paid +10 / declined −5 / expired −25).
+  `reliability_index` = Σ points по **всем** осям; счётчики (`total_confirmations/attendances`,
+  `spontaneity_count`) — только по оси `attendance`.
+- **Событийная связь:** `AttendanceFinalizedEvent` (`@TransactionalEventListener(AFTER_COMMIT)`,
+  low-latency) + атомарный клейм `events.reputation_processed` + почасовой poll-backstop
+  (`ReputationScheduler`). Складчина пишет finance-строки на закрытии (`SkladchinaService.closeInternal`,
+  `@Transactional`).
+- **Анти-фарм правило 1:** владелец **не копит** репутацию в своём клубе (ledger-строки не пишутся;
+  в live и в бэкфилле). Применяется ретроактивно в V18.
+- **Новичок / «право на ошибку»:** реальное число показывается только при `outcome_count >= 3`
+  (`ReputationPolicy.MIN_OUTCOMES_FOR_DISPLAY`); иначе UI показывает **«Новичок»** (без числа).
+  Владельцу в своём клубе — **организаторская рамка** («репутация за организаторские качества»).
+  `reliabilityIndex` nullable **только на DTO-границе**; домен `Reputation` и кэш-колонка — NOT NULL.
+  Полный «буфер прощения» (Trust 0–100 с оптимистичным приором) — P1b.
 
 ### Файлы
 | Файл | Роль |
 |---|---|
-| `Reputation.kt` | Domain data classes (Reputation, FinalizedEventRef, ResponseForReputation) |
-| `ReputationRepository.kt` | Интерфейс |
-| `JooqReputationRepository.kt` | Реализация с jOOQ |
-| `ReputationMapper.kt` | Record → domain |
-| `ReputationService.kt` | Оркестрация + бизнес-правила |
+| `reputation/ReputationPolicy.kt` | Чистый маппинг исход → (kind, points) + порог показа (single source of truth) |
+| `reputation/LedgerEntry.kt` | Доменные типы (LedgerEntry, EventReputationContext, ConfirmedResponse) |
+| `reputation/ReputationService.kt` | `processFinalizedEvent` (claim + ledger + recompute, REQUIRES_NEW) + `appendAndRecompute` |
+| `reputation/ReputationScheduler.kt` | Почасовой poll-backstop |
+| `reputation/AttendanceFinalizedListener.kt` | AFTER_COMMIT listener (low-latency) |
+| `reputation/{ReputationRepository,JooqReputationRepository,ReputationMapper}.kt` | Persistence: ledger + кэш + reads |
 
 ### Хранение
-Таблица `user_club_reputation` (см. миграцию V7, V10):
-- `reliability_index` INT (default 0, без границ, может быть отрицательным)
-- `promise_fulfillment_pct` NUMERIC(5,2) (default 0)
-- `total_confirmations`, `total_attendances`, `spontaneity_count` INT
-- UNIQUE (user_id, club_id) — одна запись на пару юзер+клуб
-
-## Бизнес-правила (из PRD §4.4.4)
-
-### Начисления надёжности
-
-| Сценарий | Этап 1 | Этап 2 | Приход | Δ reliability | Δ spontaneity |
-|---|---|---|---|---|---|
-| Железобетонный | going | confirmed | attended | +100 | — |
-| Пустозвон | going | confirmed | absent | −50 | — |
-| Передумавший | going | declined | — | 0 | — |
-| Спонтанный | maybe | confirmed | attended | +30 | +1 |
-| Зритель | maybe | confirmed | absent | −20 | — |
-| Вечный сомневающийся | maybe | not confirmed | — | 0 | — |
-| Молчун | not_going | — | — | 0 | — |
-
-### Формулы
-
-- **reliabilityIndex** = Σ всех начислений за всю историю. Стартует с 0. **Может быть отрицательным.** Не ограничен сверху.
-- **promiseFulfillmentPct** = totalAttendances / totalConfirmations × 100, округление HALF_UP до 2 знаков. При totalConfirmations = 0 → 0.
-- **spontaneityCount** = число случаев "maybe → confirmed → attended".
-- **totalConfirmations** = число случаев finalStatus = confirmed.
-- **totalAttendances** = число случаев confirmed + attendance = attended.
-
-### Когда пересчитывается
-`@Scheduled(fixedDelay = 1h)` в `ReputationService.processReputationForFinalizedEvents()`:
-- Находит события где `attendance_finalized = true AND attendance_marked = true`
-- Для каждого прогоняет `calculateReputation(eventId, clubId)`
-- Для каждого response: считает deltas → загружает существующую репутацию → применяет deltas → сохраняет
-
-## Acceptance Criteria
-
-**AC-1: deltas по таблице**
-```
-GIVEN новая запись (существующей репутации нет)
-WHEN event response (going, confirmed, attended)
-THEN reliability = 0 + 100 = 100, confirmations = 1, attendances = 1, fulfillmentPct = 100
-```
-
-**AC-2: отрицательная репутация допустима**
-```
-GIVEN reliability = 0 (новый юзер)
-WHEN event response (going, confirmed, absent) — "Пустозвон" -50
-THEN reliability = -50 (не клампится в 0)
-```
-
-**AC-3: declined → 0**
-```
-GIVEN любая существующая репутация
-WHEN event response (finalStatus = declined)
-THEN reliability не меняется (+0)
-```
-
-**AC-4: спонтанность только для "maybe → confirmed → attended"**
-```
-GIVEN ...
-WHEN event response (maybe, confirmed, attended)
-THEN reliability += 30 AND spontaneityCount += 1
-```
-
-**AC-5: изоляция по клубу**
-```
-GIVEN у юзера есть репутация в клубе A
-WHEN event в клубе B добавляет reliability
-THEN меняется только запись user_club_reputation для клуба B, клуб A не тронут
-```
-
-## Интеграции
-
-- Таблица `EVENTS` (read): `ATTENDANCE_FINALIZED`, `ATTENDANCE_MARKED`
-- Таблица `EVENT_RESPONSES` (read): `STAGE_1_VOTE`, `FINAL_STATUS`, `ATTENDANCE`
-- Чтение репутации из других модулей (bot, membership) идёт **напрямую к таблице** — это будет вынесено в `ReputationRepository` при рефакторинге этих модулей.
+`reputation_ledger` (V17), `user_club_reputation` (V7 + `outcome_count` в V17). Бэкфилл из истории +
+rebuild кэша — V18 (с форензик-снапшотом `user_club_reputation_pre_v18`).
 
 ---
 
-## Per-user reputation overview (NEW, 2026-05-30)
+## Per-user reputation overview (отображение)
 
-> Контекст: `feature/profile-reputation-and-skladchina-badge`. Полная UI-спека — [`profile.md`](./profile.md).
-
-Раньше per-club метрики были видны юзеру только внутри карточки клуба (таб «Мой профиль», теперь удалён). Сейчас они выведены агрегатом в глобальный «Профиль» (`/profile` → секция «Моя репутация»), плюс остаются доступны через `MemberProfileModal` в табе «Участники» (peer-view = self-view, одна модалка для всех).
+Per-club метрики выведены агрегатом в глобальный «Профиль» (`/profile` → секция «Моя репутация»),
+плюс доступны через `MemberProfileModal` в табе «Участники» (peer-view = self-view).
 
 ### `GET /api/users/me/reputation`
 
-JWT-protected (под `/api/**`). Возвращает `List<UserClubReputationDto>` — по одной записи на клуб, где юзер `status IN active|grace_period` и `club.is_active = true`. Order: `MEMBERSHIPS.JOINED_AT DESC NULLS LAST`.
+JWT-protected. Возвращает `List<UserClubReputationDto>` — по одной записи на клуб, где юзер
+`status IN active|grace_period` и `club.is_active = true`. Order: `MEMBERSHIPS.JOINED_AT DESC NULLS LAST`.
 
 ```kotlin
 data class UserClubReputationDto(
@@ -123,34 +71,43 @@ data class UserClubReputationDto(
     val clubName: String,
     val clubAvatarUrl: String?,
     val category: String,
-    val role: String,
+    val role: String,                      // "organizer" = владелец → организаторская рамка
     val joinedAt: OffsetDateTime?,
-    val reliabilityIndex: Int,        // coalesce 100 для новичка без записи в user_club_reputation
-    val promiseFulfillmentPct: BigDecimal,
-    val totalConfirmations: Int,
-    val totalAttendances: Int
+    val reliabilityIndex: Int?,            // null = «Новичок»/подавлено (outcome_count < 3, или владелец)
+    val promiseFulfillmentPct: BigDecimal?,
+    val totalConfirmations: Int?,
+    val totalAttendances: Int?
 )
 ```
 
-Под капотом — один SELECT с `MEMBERSHIPS ⨝ CLUBS LEFT JOIN USER_CLUB_REPUTATION` + coalesce для дефолтов (`reliability_index → 100`, остальные счётчики → 0). Совпадает с правилами defaults в `MemberService.getMemberProfile` и `findClubMembersWithUserInfo` — единая семантика «у новичка надёжность 100 (benefit of the doubt)».
+Под капотом — один SELECT `MEMBERSHIPS ⨝ CLUBS LEFT JOIN USER_CLUB_REPUTATION` (без coalesce-дефолтов);
+порог `outcome_count >= 3` применяется маппером (`MembershipMapper`), весь блок подавляется в null для
+новичка. **Семантика новичка:** не «100 (benefit of the doubt)», а честный «Новичок» — не судим, пока
+нет ≥3 исходов («право на ошибку», см. reputation-v2.md § Новичок).
 
 ### Где отображается
 
-| Локация | Что показывает | Источник данных |
+| Локация | Что показывает | Источник |
 |---|---|---|
-| `/profile` → секция «Моя репутация» (карточки `.pf-rep-card`) | Список всех клубов + индекс надёжности; для клубов с активностью ещё строка «обещания N% · M подтв. · K посещ.» | `GET /api/users/me/reputation` |
-| `/clubs/:id` → таб «Участники» → тап → `MemberProfileModal` | Полные метрики (надёжность / обещания % / подтверждения / посещения / роль / joined_at) для любого участника, включая себя | `GET /api/clubs/:id/members/:userId` (`useMemberProfileQuery`) |
-| `/my-clubs` → секция «Заявки на рассмотрении» (organizer-inbox) + `ApplicationReviewModal` | **Peer-signal** агрегата заявителя: «В N клубах · посетил X из Y событий» (или «Новый пользователь» / «В N клубах · ещё не было событий» для edge cases). Бэкенд отдаёт сырые числа, фраза собирается на фронте (`features/applications-inbox/lib/peer-signal-format.ts`). | `GET /api/users/me/applications-pending` → `peerStats` (`memberClubCount`, `totalConfirmations`, `totalAttendances`), под капотом — `ReputationRepository.aggregateByUserIds(userIds)` = batch SQL `SELECT user_id, COUNT(*), COALESCE(SUM(total_confirmations), 0), COALESCE(SUM(total_attendances), 0) FROM user_club_reputation WHERE user_id IN (...) GROUP BY user_id`. Подробно — [`applications-inbox.md`](./applications-inbox.md) § «Peer-signal — формула и edge cases». |
+| `/profile` → «Моя репутация» | список клубов + индекс; новичок → «Новичок»; свой клуб → организаторская рамка; средняя надёжность **исключает** null-клубы | `GET /api/users/me/reputation` |
+| `/clubs/:id` → «Участники» → `MemberProfileModal` | полные метрики; null → «Новичок»; владелец → рамка | `GET /api/clubs/:id/members/:userId` (`MemberProfileDto`, теперь с `role` + nullable полями) |
+| `/my-clubs` → «Заявки» + `ApplicationReviewModal` | **Peer-signal** заявителя: «В N клубах · посетил X из Y» | `GET /api/users/me/applications-pending` → `peerStats` |
 
-В карточке клуба отдельного таба «Мой профиль» больше нет (был `ClubProfileTab.tsx`, удалён). См. [`club-page-unified.md`](./club-page-unified.md) update-блок наверху.
+В списке участников (`findClubMembersWithUserInfo`) сортировка — по отображаемому индексу
+`... DESC NULLS LAST`, поэтому новички/sub-threshold/владельцы (null) уходят вниз, а не наверх.
 
-### Применение метрик за пределами «Моей репутации»
+### Peer-signal в Applications Inbox
 
-- **Peer-signal в Applications Inbox** (organizer-side): агрегатные `total_confirmations` / `total_attendances` + COUNT clubs из `user_club_reputation` подаются как «социальный сигнал» о заявителе — organizer оценивает надёжность ещё до открытия профиля. Не модифицирует данные репутации, только читает. Edge cases: новичок без записей → `EMPTY` aggregate → фронт показывает «Новый пользователь».
-- Этот use-case **не вводит** новых формул — переиспользует уже существующие raw-метрики per-club, агрегируя batch SQL'ом для N applicants за один запрос (anti N+1).
+Агрегат `ReputationRepository.aggregateByUserIds` (batch): `memberClubCount` =
+`COUNT(user_club_reputation.club_id)`, `total_confirmations/attendances` = SUM. Семантика
+`memberClubCount` = **«клубы с track-record»** (где есть строка в `user_club_reputation`). После
+анти-фарм правила 1 владелец **не входит** в счёт по своему клубу (нет строки); новичок без исходов
+тоже не входит → фронт показывает «Новый пользователь». Это намеренно (надёжность зарабатывается
+в **чужих** клубах). Подробно — [`applications-inbox.md`](./applications-inbox.md).
 
 ## Non-functional
 
-- `@Transactional` на `processReputationForFinalizedEvents`
-- Ошибки при расчёте одного event логируются, не роняют весь батч
-- Пересчёт идёт раз в час (fixed delay)
+- `recompute` — единственный писатель кэша; атомарный upsert + advisory-lock сериализация per (user, club).
+- Listener (`AFTER_COMMIT` + `REQUIRES_NEW`) — best-effort; poll (`@Scheduled`, 1ч) — durable backstop.
+  Ошибка обработки одного события логируется и не роняет финализацию.
+- Партиал-индекс на poll-предикат; индексы ledger на (user_id, club_id) и (source_type, source_id).

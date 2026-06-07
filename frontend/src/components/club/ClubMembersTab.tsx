@@ -156,7 +156,7 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
                   </div>
                   <div className="rd-met">
                     {hasScore
-                      ? `Обещания ${member.promiseFulfillmentPct}%`
+                      ? `Обещания ${Math.round(member.promiseFulfillmentPct ?? 0)}%`
                       : isOwner
                         ? 'Репутация за организаторские качества'
                         : 'Пока нет данных'}

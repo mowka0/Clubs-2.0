@@ -73,7 +73,7 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({ member, clubId
                 {profile.reliabilityIndex !== null ? (
                   <>
                     <div className="rd-kv"><span className="rd-v">Индекс надёжности</span><span>{profile.reliabilityIndex}</span></div>
-                    <div className="rd-kv"><span className="rd-v">Выполнение обещаний</span><span>{profile.promiseFulfillmentPct}%</span></div>
+                    <div className="rd-kv"><span className="rd-v">Выполнение обещаний</span><span>{Math.round(profile.promiseFulfillmentPct ?? 0)}%</span></div>
                     <div className="rd-kv"><span className="rd-v">Подтверждений участия</span><span>{profile.totalConfirmations}</span></div>
                     <div className="rd-kv"><span className="rd-v">Посещений событий</span><span>{profile.totalAttendances}</span></div>
                   </>

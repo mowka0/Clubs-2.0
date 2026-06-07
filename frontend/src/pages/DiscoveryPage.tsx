@@ -170,8 +170,8 @@ export const DiscoveryPage: FC = () => {
         <div className="rd-stats">
           <div className="rd-stat rd-glass">
             <div className="rd-stat-label">Репутация</div>
-            <div className="rd-stat-value">{avgReputation}</div>
-            <div className="rd-stat-foot">средняя по клубам</div>
+            <div className="rd-stat-value">{avgReputation ?? '—'}</div>
+            <div className="rd-stat-foot">{avgReputation !== null ? 'средняя по клубам' : 'пока нет данных'}</div>
           </div>
           <div className="rd-stat rd-glass">
             <div className="rd-stat-label">В клубах</div>

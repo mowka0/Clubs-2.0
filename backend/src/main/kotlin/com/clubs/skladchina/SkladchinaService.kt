@@ -245,7 +245,14 @@ class SkladchinaService(
      * Internal helper, used by both manual close (creator) and auto-close (scheduler / goal-reached).
      * Determines final status, expires pending participants, applies reputation deltas idempotently,
      * notifies organizer.
+     *
+     * @Transactional so the scheduler/auto-close path (SkladchinaScheduler -> closeInternal, a
+     * cross-bean call with no ambient tx) commits expire/status/reputation atomically. The already
+     * transactional callers (markPaid/decline/closeManually) self-invoke this and simply run inside
+     * their existing tx. Atomicity guarantees a ledger-append failure rolls back the
+     * reputation_applied marks too, so backfill/retry can recover (no orphaned participants).
      */
+    @Transactional
     fun closeInternal(skladchinaId: UUID, closedBy: UUID?, manualClose: Boolean) {
         val skladchina = skladchinaRepository.findById(skladchinaId)
             ?: throw NotFoundException("Skladchina not found")
@@ -319,6 +326,7 @@ class SkladchinaService(
     ) {
         val participants = skladchinaRepository.findParticipants(skladchinaId)
         val entries = mutableListOf<LedgerEntry>()
+        val toMark = mutableListOf<UUID>()
         participants.forEach { p ->
             if (p.reputationApplied) return@forEach
             val kind = ReputationPolicy.financeKind(p.status)
@@ -334,9 +342,13 @@ class SkladchinaService(
                     sourceId = skladchinaId
                 )
             }
-            skladchinaRepository.markReputationApplied(skladchinaId, p.userId)
+            toMark += p.userId
         }
         if (entries.isNotEmpty()) reputationService.appendAndRecompute(entries)
+        // Mark AFTER the ledger append so reputation_applied can never precede the write.
+        // closeInternal is @Transactional, so the marks and the append commit atomically
+        // (or roll back together) — a failed append leaves reputation_applied=false for retry.
+        toMark.forEach { skladchinaRepository.markReputationApplied(skladchinaId, it) }
     }
 
     private fun parseMode(modeStr: String): SkladchinaMode =
