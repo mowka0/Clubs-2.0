@@ -86,6 +86,8 @@ export interface MemberProfileDto {
   promiseFulfillmentPct: number | null;
   totalConfirmations: number | null;
   totalAttendances: number | null;
+  // "Возможно → Подтвердил → Пришёл": came though only said "maybe".
+  spontaneityCount: number | null;
 }
 
 export interface UserClubReputationDto {
@@ -101,6 +103,7 @@ export interface UserClubReputationDto {
   promiseFulfillmentPct: number | null;
   totalConfirmations: number | null;
   totalAttendances: number | null;
+  spontaneityCount: number | null;
 }
 
 export interface ActionRequiredCountDto {

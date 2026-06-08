@@ -78,7 +78,7 @@ class NotificationService(
         }
         log.info("Confirm reminder DM: eventId={} recipients={}", event.id, telegramIds.size)
         val text = "⏰ Скоро начало: «${event.title}» — ${event.eventDatetime.format(fmt)}.\n\n" +
-            "Подтвердите участие, иначе место освободится:"
+            "Подтвердите участие, иначе место займут другие:"
         val path = "/events/${event.id}"
         telegramIds.forEach { sendDm(it.toString(), text, webAppPath = path, buttonText = "✅ Подтвердить участие") }
     }

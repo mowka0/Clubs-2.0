@@ -16,5 +16,7 @@ data class MemberProfileDto(
     val reliabilityIndex: Int?,
     val promiseFulfillmentPct: BigDecimal?,
     val totalConfirmations: Int?,
-    val totalAttendances: Int?
+    val totalAttendances: Int?,
+    // "Возможно → Подтвердил → Пришёл": пришёл, хотя обещал только «возможно». Позитивный сигнал.
+    val spontaneityCount: Int?
 )

@@ -76,6 +76,7 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({ member, clubId
                     <div className="rd-kv"><span className="rd-v">Выполнение обещаний</span><span>{Math.round(profile.promiseFulfillmentPct ?? 0)}%</span></div>
                     <div className="rd-kv"><span className="rd-v">Подтверждений участия</span><span>{profile.totalConfirmations}</span></div>
                     <div className="rd-kv"><span className="rd-v">Посещений событий</span><span>{profile.totalAttendances}</span></div>
+                    <div className="rd-kv"><span className="rd-v">Спонтанные визиты</span><span>{profile.spontaneityCount ?? 0}</span></div>
                   </>
                 ) : profile.role === 'organizer' ? (
                   <div className="rd-kv"><span>Здесь репутация начисляется за организаторские качества</span></div>

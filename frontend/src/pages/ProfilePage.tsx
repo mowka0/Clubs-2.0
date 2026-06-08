@@ -207,6 +207,7 @@ export const ProfilePage: FC = () => {
                   {hasActivity && (
                     <div className="rd-met">
                       обещания {Math.round(r.promiseFulfillmentPct ?? 0)}% · {r.totalConfirmations} подтв. · {r.totalAttendances} посещ.
+                      {(r.spontaneityCount ?? 0) > 0 && ` · ${r.spontaneityCount} спонт.`}
                     </div>
                   )}
                   {!hasScore && isOwnClub && (

@@ -214,17 +214,25 @@ export const EventPage: FC = () => {
     );
   }
 
-  // Donut chart of the vote split (going / maybe / not going).
-  const voteTotal = event.goingCount + event.maybeCount + event.notGoingCount;
-  const donutStyle: { background: string } = voteTotal === 0
-    ? { background: 'var(--surface-2)' }
-    : (() => {
-        const g = (event.goingCount / voteTotal) * 360;
-        const m = (event.maybeCount / voteTotal) * 360;
-        return {
-          background: `conic-gradient(#F47B3C 0 ${g}deg, #8E5DFF ${g}deg ${g + m}deg, #6B6B70 ${g + m}deg 360deg)`,
-        };
-      })();
+  // Phase split: Stage 1 (upcoming) gauges interest (going/maybe vote split); from Stage 2 on
+  // the roster is the confirmed list, so the headline/donut/counts switch to confirmations.
+  // Resolves the "decliner still counted as going" bug — declined/expired drop out of "идут".
+  const finalComposition = event.status === 'stage_2' || event.status === 'completed';
+
+  // Donut chart: Stage 1 = vote split (going / maybe / not going); Stage 2+ = confirmed vs free.
+  const donutStyle: { background: string } = (() => {
+    if (finalComposition) {
+      const limit = event.participantLimit || 1;
+      const filled = Math.min(event.confirmedCount, limit);
+      const c = (filled / limit) * 360;
+      return { background: `conic-gradient(#F47B3C 0 ${c}deg, #6B6B70 ${c}deg 360deg)` };
+    }
+    const voteTotal = event.goingCount + event.maybeCount + event.notGoingCount;
+    if (voteTotal === 0) return { background: 'var(--surface-2)' };
+    const g = (event.goingCount / voteTotal) * 360;
+    const m = (event.maybeCount / voteTotal) * 360;
+    return { background: `conic-gradient(#F47B3C 0 ${g}deg, #8E5DFF ${g}deg ${g + m}deg, #6B6B70 ${g + m}deg 360deg)` };
+  })();
 
   const eventHappened = new Date(event.eventDatetime).getTime() <= Date.now();
 
@@ -234,9 +242,6 @@ export const EventPage: FC = () => {
   // hourly completion sweep, so gate on !eventHappened too — mirrors the backend
   // `event_datetime > now` guard in Stage2Service. See events.md.
   const showStage2 = event.status === 'stage_2' && !eventHappened;
-  const showConfirmed =
-    event.confirmedCount > 0 &&
-    (event.status === 'stage_2' || event.status === 'completed');
 
   // Attendance marking — organizer only, once the event has taken place. Backend
   // (AttendanceService) gates on event_datetime <= now + the attendance_marked
@@ -264,6 +269,14 @@ export const EventPage: FC = () => {
   const myResponder = (respondersQuery.data ?? []).find((r) => r.userId === userId);
   const canDispute = disputeWindowOpen && myResponder?.attendance === 'absent';
   const myDisputePending = disputeWindowOpen && myResponder?.attendance === 'disputed';
+
+  // Phase-aware "who's coming". Stage 1: every responder (interest list, unchanged). Stage 2+:
+  // only the confirmed roster — pending (still going/maybe, not confirmed), waitlisted, declined
+  // and expired are summarized as counts, not shown as "идут".
+  const responders = respondersQuery.data ?? [];
+  const pendingCount = responders.filter((r) => r.status === 'going' || r.status === 'maybe').length;
+  const waitlistedCount = responders.filter((r) => r.status === 'waitlisted').length;
+  const comingList = finalComposition ? responders.filter((r) => r.status === 'confirmed') : responders;
 
   return (
     <div className="rd-page">
@@ -325,8 +338,12 @@ export const EventPage: FC = () => {
         </>
       )}
 
-      {/* Recruitment — donut + voting (or read-only counts) */}
-      <div className="rd-section-sub-h">Набор · {event.goingCount} / {event.participantLimit}</div>
+      {/* Recruitment (Stage 1) / roster (Stage 2+) — donut + voting or read-only counts */}
+      <div className="rd-section-sub-h">
+        {finalComposition
+          ? `Состав · ${event.confirmedCount} / ${event.participantLimit}`
+          : `Набор · ${event.goingCount} / ${event.participantLimit}`}
+      </div>
       {actionError && <div className="rd-error">{actionError}</div>}
       <div className="rd-vote-layout">
         <div className="rd-vote-stack">
@@ -342,6 +359,12 @@ export const EventPage: FC = () => {
                 Не пойду <span className="rd-vc">{event.notGoingCount}</span>
               </button>
             </>
+          ) : finalComposition ? (
+            <div className="rd-glass" style={{ padding: '4px 4px' }}>
+              <div className="rd-kv">Подтвердили <span className="rd-v">{event.confirmedCount}</span></div>
+              {pendingCount > 0 && <div className="rd-kv">Ждут подтверждения <span className="rd-v">{pendingCount}</span></div>}
+              {waitlistedCount > 0 && <div className="rd-kv">Лист ожидания <span className="rd-v">{waitlistedCount}</span></div>}
+            </div>
           ) : (
             <div className="rd-glass" style={{ padding: '4px 4px' }}>
               <div className="rd-kv">Пойдут <span className="rd-v">{event.goingCount}</span></div>
@@ -353,7 +376,7 @@ export const EventPage: FC = () => {
         <div className="rd-donut" style={donutStyle} aria-hidden="true">
           <div className="rd-donut-center">
             <span className="rd-donut-num">
-              <sup>{event.goingCount}</sup><span className="rd-sl">/</span><sub>{event.participantLimit}</sub>
+              <sup>{finalComposition ? event.confirmedCount : event.goingCount}</sup><span className="rd-sl">/</span><sub>{event.participantLimit}</sub>
             </span>
           </div>
         </div>
@@ -364,12 +387,12 @@ export const EventPage: FC = () => {
         </div>
       )}
 
-      {/* Who responded */}
-      {(respondersQuery.data?.length ?? 0) > 0 && (
+      {/* Who's coming. Stage 1: all responders (interest). Stage 2+: confirmed roster only. */}
+      {comingList.length > 0 && (
         <>
-          <div className="rd-section-sub-h">Кто идёт <span className="rd-count">· {respondersQuery.data!.length}</span></div>
+          <div className="rd-section-sub-h">Кто идёт <span className="rd-count">· {comingList.length}</span></div>
           <div className="rd-voters">
-            {respondersQuery.data!.map((r) => {
+            {comingList.map((r) => {
               const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
               return (
                 <div className="rd-voter" key={r.userId}>
@@ -558,18 +581,6 @@ export const EventPage: FC = () => {
       )}
 
       {/* Confirmed participants */}
-      {showConfirmed && (
-        <>
-          <div className="rd-section-sub-h">Участники</div>
-          <div className="rd-glass">
-            <div className="rd-kv">
-              Подтверждено
-              <span className="rd-v">{event.confirmedCount} / {event.participantLimit}</span>
-            </div>
-          </div>
-        </>
-      )}
-
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
     </div>
   );

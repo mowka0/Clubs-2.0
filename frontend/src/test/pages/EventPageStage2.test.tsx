@@ -124,7 +124,7 @@ describe('EventPage — Stage 2 window (Bug B) + expired status', () => {
     expect(screen.queryByRole('button', { name: /Подтвердить участие/ })).not.toBeInTheDocument();
   });
 
-  it('responder со статусом expired_no_confirm получает отдельную точку и исключён из отметки явки', async () => {
+  it('на прошедшем событии «Кто идёт» = только confirmed; expired выпадает из состава и из отметки явки', async () => {
     const responders: EventResponderDto[] = [
       { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed', attendance: null },
       { userId: 'u-expired', firstName: 'Глеб', lastName: null, avatarUrl: null, status: 'expired_no_confirm', attendance: null },
@@ -138,14 +138,38 @@ describe('EventPage — Stage 2 window (Bug B) + expired status', () => {
     });
     renderEventPage();
 
-    // В списке «Кто идёт» expired-участник присутствует с отдельной точкой.
-    expect(await screen.findByText('Глеб')).toBeInTheDocument();
-    const expiredDot = document.querySelector('.rd-vdot.rd-d-expired');
-    expect(expiredDot).not.toBeNull();
+    // Фазовый показ: с Этапа 2 «Кто идёт» = подтверждённый состав. «Бронь сгорела» (expired)
+    // в состав не входит — Глеб не показывается нигде.
+    expect(await screen.findByText(/Кто идёт/)).toBeInTheDocument();
+    expect(screen.queryByText('Глеб')).not.toBeInTheDocument();
 
-    // Но в чеклист отметки явки он НЕ попадает (только confirmed/going).
+    // И в чеклист отметки явки он тоже не попадает (только confirmed).
     expect(await screen.findByText('Отметить посещаемость')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Анна К\./ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Глеб/ })).not.toBeInTheDocument();
+  });
+
+  it('фазовый счёт: после старта Этапа 2 отказавшийся не считается идущим', async () => {
+    // Сценарий из теста: проголосовал «Пойду», на Этапе 2 «Отказался». Не должен попадать
+    // ни в счётчик «Состав», ни в список «Кто идёт» — он больше не идёт.
+    const responders: EventResponderDto[] = [
+      { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed', attendance: null },
+      { userId: 'u-declined', firstName: 'Борис', lastName: null, avatarUrl: null, status: 'declined', attendance: null },
+    ];
+    mockEndpoints({
+      // confirmedCount=1: один подтвердил, один отказался.
+      event: stage2Event({ status: 'stage_2', confirmedCount: 1, goingCount: 2 }),
+      myVote: 'declined',
+      responders,
+      ownerId: 'someone-else',
+    });
+    renderEventPage();
+
+    // Заголовок состава считается по подтверждениям, а не по голосам Этапа 1.
+    expect(await screen.findByText(/Состав · 1 \/ 10/)).toBeInTheDocument();
+    // «Кто идёт» = только подтверждённые; отказавшийся выпал.
+    expect(screen.getByText(/Кто идёт/)).toBeInTheDocument();
+    expect(screen.queryByText('Борис')).not.toBeInTheDocument();
+    expect(screen.getByText('Анна К.')).toBeInTheDocument();
   });
 });
