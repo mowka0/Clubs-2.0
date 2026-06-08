@@ -141,11 +141,16 @@ export function useMarkAttendanceMutation() {
 // Disputing/resolving changes the per-responder attendance. The responders query key extends
 // the detail key with a `responders` suffix, and TanStack invalidates by prefix — so
 // invalidating the detail key also refreshes the responders list (same trick as queryKeys.ts).
+interface DisputeArgs {
+  eventId: string;
+  note?: string;
+}
+
 export function useDisputeAttendanceMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (eventId: string) => disputeAttendance(eventId),
-    onSuccess: (_data, eventId) => {
+    mutationFn: ({ eventId, note }: DisputeArgs) => disputeAttendance(eventId, note),
+    onSuccess: (_data, { eventId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
     },
   });

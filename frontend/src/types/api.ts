@@ -306,6 +306,8 @@ export interface EventResponderDto {
   status: string;
   /** Post-event attendance mark, once the organizer marked it; null before marking. */
   attendance: 'attended' | 'absent' | 'disputed' | null;
+  /** Optional note the participant left when disputing (shown to the organizer). */
+  disputeNote?: string | null;
 }
 
 export type SkladchinaMode = 'fixed_equal' | 'fixed_individual' | 'voluntary';

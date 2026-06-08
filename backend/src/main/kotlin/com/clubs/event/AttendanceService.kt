@@ -67,7 +67,7 @@ class AttendanceService(
     }
 
     @Transactional
-    fun disputeAttendance(eventId: UUID, userId: UUID): AttendanceResultDto {
+    fun disputeAttendance(eventId: UUID, userId: UUID, note: String?): AttendanceResultDto {
         val event = eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
 
         if (event.attendanceFinalized) {
@@ -78,12 +78,12 @@ class AttendanceService(
             throw ValidationException("Attendance has not been marked yet")
         }
 
-        val updated = eventResponseRepository.disputeAbsentAttendance(eventId, userId)
+        val updated = eventResponseRepository.disputeAbsentAttendance(eventId, userId, note?.trim()?.ifBlank { null })
         if (updated == 0) {
             throw ValidationException("No absent attendance to dispute")
         }
 
-        log.info("Attendance disputed: eventId={} userId={}", eventId, userId)
+        log.info("Attendance disputed: eventId={} userId={} hasNote={}", eventId, userId, note != null)
         return AttendanceResultDto(eventId, updated)
     }
 

@@ -101,10 +101,12 @@ class NotificationService(
     @Async
     fun sendAttendanceMarked(eventId: UUID) {
         val absentTelegramIds = eventResponseRepository.findTelegramIdsByEventAndAttendance(eventId, AttendanceStatus.absent)
-        val text = "📋 Организатор отметил присутствие на событии.\n\nВас отметили как отсутствующего. Если это ошибка — оспорьте в приложении:"
+        val text = "📋 Организатор отметил присутствие на событии.\n\nВас отметили как отсутствующего. Если это ошибка — оспорьте на странице события:"
+        // Deep-link straight to the event page so the dispute button is one tap away (ATT-3).
+        val webAppPath = "/events/$eventId"
 
         absentTelegramIds.forEach { telegramId ->
-            sendDm(telegramId.toString(), text)
+            sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "Оспорить явку")
         }
     }
 

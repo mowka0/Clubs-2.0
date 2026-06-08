@@ -110,10 +110,11 @@ class EventController(
     @PostMapping("/api/events/{id}/dispute")
     fun disputeAttendance(
         @PathVariable id: UUID,
+        @RequestBody(required = false) @Valid request: DisputeAttendanceRequest?,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<AttendanceResultDto> {
         log.info("Dispute attendance: eventId={} userId={}", id, user.userId)
-        return ResponseEntity.ok(attendanceService.disputeAttendance(id, user.userId))
+        return ResponseEntity.ok(attendanceService.disputeAttendance(id, user.userId, request?.note))
     }
 
     @PostMapping("/api/events/{id}/attendance/{userId}/resolve")

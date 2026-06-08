@@ -82,6 +82,8 @@ export const EventPage: FC = () => {
   // Explicit overrides only; an absent entry means "present" (attended[id] ?? true).
   const [attended, setAttended] = useState<Record<string, boolean>>({});
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  // Optional free-text note the participant attaches when disputing being marked absent.
+  const [disputeNote, setDisputeNote] = useState('');
 
   const event = eventQuery.data;
   const myVote = myVoteQuery.data?.vote ?? null;
@@ -166,16 +168,20 @@ export const EventPage: FC = () => {
     if (!id || disputeMutation.isPending) return;
     haptic.impact('medium');
     setAttendanceError(null);
-    disputeMutation.mutate(id, {
-      onSuccess: () => {
-        haptic.notify('success');
-        setToastMessage('Отметка оспорена — организатор примет решение');
+    disputeMutation.mutate(
+      { eventId: id, note: disputeNote.trim() || undefined },
+      {
+        onSuccess: () => {
+          haptic.notify('success');
+          setDisputeNote('');
+          setToastMessage('Отметка оспорена — организатор примет решение');
+        },
+        onError: (e) => {
+          setAttendanceError(e.message);
+          haptic.notify('error');
+        },
       },
-      onError: (e) => {
-        setAttendanceError(e.message);
-        haptic.notify('error');
-      },
-    });
+    );
   };
 
   // Organizer resolves a disputed mark into attended/absent before the window closes.
@@ -478,31 +484,38 @@ export const EventPage: FC = () => {
                 {disputedCandidates.map((r) => {
                   const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
                   return (
-                    <div className="rd-pick-row" key={r.userId}>
-                      <span
-                        className="rd-pick-name"
-                        style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                      >
-                        {name}
-                      </span>
-                      <button
-                        type="button"
-                        className="rd-btn-outline"
-                        style={{ width: 'auto', padding: '8px 12px' }}
-                        onClick={() => handleResolve(r.userId, true)}
-                        disabled={resolveMutation.isPending}
-                      >
-                        Пришёл
-                      </button>
-                      <button
-                        type="button"
-                        className="rd-btn-outline"
-                        style={{ width: 'auto', padding: '8px 12px' }}
-                        onClick={() => handleResolve(r.userId, false)}
-                        disabled={resolveMutation.isPending}
-                      >
-                        Не пришёл
-                      </button>
+                    <div key={r.userId} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div className="rd-pick-row">
+                        <span
+                          className="rd-pick-name"
+                          style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        >
+                          {name}
+                        </span>
+                        <button
+                          type="button"
+                          className="rd-btn-outline"
+                          style={{ width: 'auto', padding: '8px 12px' }}
+                          onClick={() => handleResolve(r.userId, true)}
+                          disabled={resolveMutation.isPending}
+                        >
+                          Пришёл
+                        </button>
+                        <button
+                          type="button"
+                          className="rd-btn-outline"
+                          style={{ width: 'auto', padding: '8px 12px' }}
+                          onClick={() => handleResolve(r.userId, false)}
+                          disabled={resolveMutation.isPending}
+                        >
+                          Не пришёл
+                        </button>
+                      </div>
+                      {r.disputeNote && (
+                        <div className="rd-body-text" style={{ margin: 0, padding: '0 2px', fontSize: 13, color: 'var(--text-dim)' }}>
+                          «{r.disputeNote}»
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -538,6 +551,14 @@ export const EventPage: FC = () => {
           </div>
           {canDispute && (
             <>
+              <textarea
+                className="rd-textarea"
+                style={{ width: '100%', marginBottom: 10, boxSizing: 'border-box' }}
+                placeholder="Комментарий организатору (необязательно)"
+                maxLength={500}
+                value={disputeNote}
+                onChange={(e) => setDisputeNote(e.target.value)}
+              />
               {attendanceError && <div className="rd-error">{attendanceError}</div>}
               <div className="rd-cta-wrap">
                 <button

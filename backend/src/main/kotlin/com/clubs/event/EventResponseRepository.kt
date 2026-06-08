@@ -63,9 +63,10 @@ interface EventResponseRepository {
     fun setAttendance(eventId: UUID, userId: UUID, attended: Boolean): Int
 
     /**
-     * Marks an absent attendance as disputed. Returns rows updated (0 if user is not absent).
+     * Marks an absent attendance as disputed, storing an optional free-text [note] from the
+     * participant. Returns rows updated (0 if user is not absent).
      */
-    fun disputeAbsentAttendance(eventId: UUID, userId: UUID): Int
+    fun disputeAbsentAttendance(eventId: UUID, userId: UUID, note: String?): Int
 
     /**
      * Resolves a disputed attendance into attended/absent. Returns rows updated (0 if not disputed).
@@ -103,5 +104,6 @@ data class EventResponderInfo(
     val avatarUrl: String?,
     val stage1Vote: Stage_1Vote?,
     val finalStatus: FinalStatus?,
-    val attendance: AttendanceStatus?
+    val attendance: AttendanceStatus?,
+    val disputeNote: String?
 )

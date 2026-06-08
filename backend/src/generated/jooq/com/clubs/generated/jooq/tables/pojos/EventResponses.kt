@@ -30,7 +30,8 @@ data class EventResponses(
     var attendance: AttendanceStatus? = null,
     var attendanceFinalized: Boolean? = null,
     var createdAt: OffsetDateTime? = null,
-    var updatedAt: OffsetDateTime? = null
+    var updatedAt: OffsetDateTime? = null,
+    var disputeNote: String? = null
 ): Serializable {
 
 
@@ -106,6 +107,12 @@ data class EventResponses(
         }
         else if (this.updatedAt != o.updatedAt)
             return false
+        if (this.disputeNote == null) {
+            if (o.disputeNote != null)
+                return false
+        }
+        else if (this.disputeNote != o.disputeNote)
+            return false
         return true
     }
 
@@ -124,6 +131,7 @@ data class EventResponses(
         result = prime * result + (if (this.attendanceFinalized == null) 0 else this.attendanceFinalized.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
+        result = prime * result + (if (this.disputeNote == null) 0 else this.disputeNote.hashCode())
         return result
     }
 
@@ -142,6 +150,7 @@ data class EventResponses(
         sb.append(", ").append(attendanceFinalized)
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)
+        sb.append(", ").append(disputeNote)
 
         sb.append(")")
         return sb.toString()

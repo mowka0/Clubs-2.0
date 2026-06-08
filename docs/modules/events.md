@@ -540,6 +540,29 @@ UI спора/резолва добавлен в Блоке 1 (см. ниже §
 мапперы) и отображается: «Спонтанные визиты» в `MemberProfileModal`; «· N спонт.» в карточке клуба
 «Моя репутация» на `ProfilePage` (только при N>0). Подавляется порогом «Новичок», как остальные метрики.
 
+#### Раунд 2 staging-теста (2026-06-08)
+
+**`confirmedCount` больше не захардкожен 0.** `EventService.getEvent` возвращал `confirmedCount = 0`
+константой — поэтому донат/«Состав»/«Подтвердили» всегда показывали 0, хотя в ростере подтверждённые
+были (баг проявился после фазового показа). Теперь `EventRepository.getVoteCounts` дополнительно
+считает `confirmed` (`stage_2_vote = confirmed`, как `fetchConfirmedCounts`), и `getEvent` его
+прокидывает. Инвалидация detail-запроса на confirm/decline теперь обновляет донат (раньше всегда 0).
+
+**Deep-link в DM оспаривания.** `NotificationService.sendAttendanceMarked` шлёт DM с inline-кнопкой
+«Оспорить явку» и `webAppPath = /events/{id}` (раньше — дефолтная кнопка без перехода на событие).
+
+**Заметка к оспариванию (`dispute_note`, миграция V22).** Участник при оспаривании может оставить
+необязательный комментарий организатору (≤500 символов). Хранение — `event_responses.dispute_note TEXT`
+(`V22__add_dispute_note.sql`, idempotent `ADD COLUMN IF NOT EXISTS`). Сквозной путь:
+- `POST /api/events/{id}/dispute` принимает необязательное тело `{ note?: string }`
+  (`DisputeAttendanceRequest`, `@Size(max=500)`; `@RequestBody(required=false)` — старый вызов без тела
+  по-прежнему работает). Пустая/пробельная заметка нормализуется в `null`.
+- `EventResponseRepository.disputeAbsentAttendance(eventId, userId, note)` пишет `attendance=disputed`
+  и `dispute_note`. Заметка выводится оргу: `EventResponderInfo`/`EventResponderDto` несут `disputeNote`
+  (`findRespondersWithUsers` селектит колонку); в блоке «Оспоренные отметки» на `EventPage` она
+  показывается под именем оспорившего. Фронт: textarea «Комментарий организатору (необязательно)»
+  в блоке «Ваша явка».
+
 ---
 
 ## Архитектура

@@ -146,7 +146,8 @@ class JooqEventResponseRepository(
             USERS.AVATAR_URL,
             EVENT_RESPONSES.STAGE_1_VOTE,
             EVENT_RESPONSES.FINAL_STATUS,
-            EVENT_RESPONSES.ATTENDANCE
+            EVENT_RESPONSES.ATTENDANCE,
+            EVENT_RESPONSES.DISPUTE_NOTE
         )
             .from(EVENT_RESPONSES)
             .join(USERS).on(USERS.ID.eq(EVENT_RESPONSES.USER_ID))
@@ -163,7 +164,8 @@ class JooqEventResponseRepository(
                     avatarUrl = r.get(USERS.AVATAR_URL),
                     stage1Vote = r.get(EVENT_RESPONSES.STAGE_1_VOTE),
                     finalStatus = r.get(EVENT_RESPONSES.FINAL_STATUS),
-                    attendance = r.get(EVENT_RESPONSES.ATTENDANCE)
+                    attendance = r.get(EVENT_RESPONSES.ATTENDANCE),
+                    disputeNote = r.get(EVENT_RESPONSES.DISPUTE_NOTE)
                 )
             }
 
@@ -211,9 +213,10 @@ class JooqEventResponseRepository(
             )
             .execute()
 
-    override fun disputeAbsentAttendance(eventId: UUID, userId: UUID): Int =
+    override fun disputeAbsentAttendance(eventId: UUID, userId: UUID, note: String?): Int =
         dsl.update(EVENT_RESPONSES)
             .set(EVENT_RESPONSES.ATTENDANCE, AttendanceStatus.disputed)
+            .set(EVENT_RESPONSES.DISPUTE_NOTE, note)
             .where(
                 EVENT_RESPONSES.EVENT_ID.eq(eventId)
                     .and(EVENT_RESPONSES.USER_ID.eq(userId))

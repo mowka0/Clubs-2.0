@@ -33,5 +33,7 @@ data class EventResponderDto(
     val lastName: String?,
     val avatarUrl: String?,
     val status: String,
-    val attendance: String?
+    val attendance: String?,
+    // Optional free-text note the participant left when disputing (shown to the organizer).
+    val disputeNote: String?
 )

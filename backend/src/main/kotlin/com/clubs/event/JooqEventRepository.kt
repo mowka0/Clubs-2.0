@@ -209,7 +209,12 @@ class JooqEventRepository(
         val going = countVotes(eventId, Stage_1Vote.going)
         val maybe = countVotes(eventId, Stage_1Vote.maybe)
         val notGoing = countVotes(eventId, Stage_1Vote.not_going)
-        return mapOf("going" to going, "maybe" to maybe, "notGoing" to notGoing)
+        // Stage-2 confirmed roster size. Mirrors fetchConfirmedCounts / countConfirmed
+        // (stage_2_vote = confirmed) — getEvent previously hardcoded this to 0.
+        val confirmed = dsl.selectCount().from(EVENT_RESPONSES)
+            .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.STAGE_2_VOTE.eq(Stage_2Vote.confirmed)))
+            .fetchOne(0, Int::class.java) ?: 0
+        return mapOf("going" to going, "maybe" to maybe, "notGoing" to notGoing, "confirmed" to confirmed)
     }
 
     override fun findEventsToTriggerStage2(): List<Event> {

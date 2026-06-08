@@ -233,8 +233,8 @@ describe('EventPage — отметка посещаемости', () => {
     let resolveBody: { attended: boolean } | null = null;
     server.use(
       http.get(`*/api/events/${EVENT_ID}/responses`, () => HttpResponse.json([
-        { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed', attendance: 'disputed' },
-        { userId: 'u-confirmed2', firstName: 'Дмитрий', lastName: null, avatarUrl: null, status: 'confirmed', attendance: 'attended' },
+        { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed', attendance: 'disputed', disputeNote: 'Я был, отметьте заново' },
+        { userId: 'u-confirmed2', firstName: 'Дмитрий', lastName: null, avatarUrl: null, status: 'confirmed', attendance: 'attended', disputeNote: null },
       ] satisfies EventResponderDto[])),
       http.post(`*/api/events/${EVENT_ID}/attendance/:userId/resolve`, async ({ request, params }) => {
         resolveUrl = String(params.userId);
@@ -246,6 +246,8 @@ describe('EventPage — отметка посещаемости', () => {
     const { user } = renderEventPage();
 
     expect(await screen.findByText('Оспоренные отметки')).toBeInTheDocument();
+    // Заметка участника видна организатору.
+    expect(screen.getByText(/Я был, отметьте заново/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Пришёл' }));
 
     await waitFor(() => expect(resolveBody).not.toBeNull());
@@ -267,13 +269,13 @@ describe('EventPage — отметка посещаемости', () => {
       ownerId: 'someone-else',
       event: pastCompletedEvent({ attendanceMarked: true, attendanceFinalized: false }),
     });
-    let disputeCalled = false;
+    let disputeBody: { note?: string } | null = null;
     server.use(
       http.get(`*/api/events/${EVENT_ID}/responses`, () => HttpResponse.json([
         { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed', attendance: 'absent' },
       ] satisfies EventResponderDto[])),
-      http.post(`*/api/events/${EVENT_ID}/dispute`, () => {
-        disputeCalled = true;
+      http.post(`*/api/events/${EVENT_ID}/dispute`, async ({ request }) => {
+        disputeBody = (await request.json().catch(() => null)) as typeof disputeBody;
         return HttpResponse.json({ eventId: EVENT_ID, markedCount: 1 });
       }),
     );
@@ -281,8 +283,11 @@ describe('EventPage — отметка посещаемости', () => {
     const { user } = renderEventPage();
 
     expect(await screen.findByText('Ваша явка')).toBeInTheDocument();
+    // Необязательная заметка организатору уходит в теле запроса.
+    await user.type(screen.getByPlaceholderText(/Комментарий организатору/), 'Я точно был');
     await user.click(screen.getByRole('button', { name: 'Оспорить' }));
 
-    await waitFor(() => expect(disputeCalled).toBe(true));
+    await waitFor(() => expect(disputeBody).not.toBeNull());
+    expect(disputeBody!.note).toBe('Я точно был');
   });
 });

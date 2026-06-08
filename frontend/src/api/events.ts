@@ -63,9 +63,9 @@ export function markAttendance(eventId: string, attendance: { userId: string; at
   return apiClient.post(`/api/events/${eventId}/attendance`, { attendance });
 }
 
-/** Participant disputes being marked absent (ATT-3). Backend: absent → disputed. */
-export function disputeAttendance(eventId: string): Promise<{ eventId: string; markedCount: number }> {
-  return apiClient.post(`/api/events/${eventId}/dispute`);
+/** Participant disputes being marked absent (ATT-3), with an optional note. Backend: absent → disputed. */
+export function disputeAttendance(eventId: string, note?: string): Promise<{ eventId: string; markedCount: number }> {
+  return apiClient.post(`/api/events/${eventId}/dispute`, note ? { note } : undefined);
 }
 
 /** Organizer resolves a disputed mark into attended/absent. */

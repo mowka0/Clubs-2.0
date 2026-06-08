@@ -35,10 +35,14 @@ class AttendanceServiceTest {
     private val clubId = UUID.randomUUID()
     private val attendeeId = UUID.randomUUID()
 
-    private fun event(finalized: Boolean = false, eventDatetime: OffsetDateTime = OffsetDateTime.now().minusHours(1)) = Event(
+    private fun event(
+        finalized: Boolean = false,
+        marked: Boolean = false,
+        eventDatetime: OffsetDateTime = OffsetDateTime.now().minusHours(1)
+    ) = Event(
         id = eventId, clubId = clubId, createdBy = organizerId, title = "E", description = null,
         locationText = "P", eventDatetime = eventDatetime, participantLimit = 10, votingOpensDaysBefore = 14,
-        status = EventStatus.completed, stage2Triggered = true, attendanceMarked = false,
+        status = EventStatus.completed, stage2Triggered = true, attendanceMarked = marked,
         attendanceFinalized = finalized, photoUrl = null, createdAt = null, updatedAt = null
     )
 
@@ -129,6 +133,29 @@ class AttendanceServiceTest {
 
         verify(exactly = 0) { eventResponseRepository.resolveExpiredDisputesToAbsent(any()) }
         verify(exactly = 0) { publisher.publishEvent(any()) }
+    }
+
+    @Test
+    fun `disputeAttendance trims the note and forwards it to the repository`() {
+        every { eventRepository.findById(eventId) } returns event(marked = true)
+        every { eventResponseRepository.disputeAbsentAttendance(eventId, attendeeId, "был там") } returns 1
+
+        val result = service.disputeAttendance(eventId, attendeeId, "  был там  ")
+
+        assertEquals(1, result.markedCount)
+        verify { eventResponseRepository.disputeAbsentAttendance(eventId, attendeeId, "был там") }
+    }
+
+    @Test
+    fun `disputeAttendance normalizes a blank note to null and rejects when nothing to dispute`() {
+        every { eventRepository.findById(eventId) } returns event(marked = true)
+        every { eventResponseRepository.disputeAbsentAttendance(eventId, attendeeId, null) } returns 0
+
+        val ex = assertFailsWith<ValidationException> {
+            service.disputeAttendance(eventId, attendeeId, "   ")
+        }
+        assertEquals("No absent attendance to dispute", ex.message)
+        verify { eventResponseRepository.disputeAbsentAttendance(eventId, attendeeId, null) }
     }
 
     @Test

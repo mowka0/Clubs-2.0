@@ -86,7 +86,8 @@ class VoteService(
                 lastName = r.lastName,
                 avatarUrl = r.avatarUrl,
                 status = r.finalStatus?.literal ?: r.stage1Vote?.literal ?: "going",
-                attendance = r.attendance?.literal
+                attendance = r.attendance?.literal,
+                disputeNote = r.disputeNote
             )
         }
     }
