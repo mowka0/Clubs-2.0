@@ -66,6 +66,22 @@ Telegram Mini App для создания и управления платным
 - Bot Token: хранится в env var TELEGRAM_BOT_TOKEN
 - Mini App открывается через menu button бота
 
+## Команды (test / build / codegen)
+Единый список проверочных команд — прогонять перед коммитом.
+
+### Frontend (из `frontend/`)
+- Установка: `npm install --legacy-peer-deps` (флаг обязателен — конфликт telegram-ui × React 19)
+- Тесты: `npm test` (`vitest run`)
+- Тесты в watch-режиме: `npm run test:watch`
+- Сборка: `npm run build` (`tsc && vite build` — падает на ошибках типов)
+- Dev-сервер: `npm run dev`
+
+### Backend (из `backend/`)
+- Тесты: `./gradlew test`
+- jOOQ codegen: `./gradlew generateJooq` (после изменения схемы/миграций; НЕ `generateMainJooqSchemaSource`)
+- Компиляция: `./gradlew compileKotlin`
+- Сборка: `./gradlew build`
+
 ## Работа с задачами (tasks.json)
 - Задачи имеют id, category, priority, dependencies, status
 - Статусы: pending → in_progress → done
