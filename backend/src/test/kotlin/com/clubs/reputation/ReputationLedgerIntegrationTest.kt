@@ -104,9 +104,9 @@ class ReputationLedgerIntegrationTest {
         reputationService.processFinalizedEvent(eventId)
 
         assertReputation(ironclad, reliability = 100, conf = 1, att = 1, spont = 0, pct = "100.00", outcome = 1)
-        assertReputation(noShow, reliability = -50, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
+        assertReputation(noShow, reliability = -200, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
         assertReputation(spontaneous, reliability = 100, conf = 1, att = 1, spont = 1, pct = "100.00", outcome = 1)
-        assertReputation(spectator, reliability = -50, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
+        assertReputation(spectator, reliability = -200, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
     }
 
     @Test
@@ -265,7 +265,7 @@ class ReputationLedgerIntegrationTest {
             insertConfirmed(e, veteran, "going", "attended")
             reputationService.processFinalizedEvent(e)
         }
-        // newcomer: a single no_show -> reliability -50, outcome_count 1 (< threshold, suppressed)
+        // newcomer: a single no_show -> reliability -200, outcome_count 1 (< threshold, suppressed)
         val e = insertFinalizedEvent()
         insertConfirmed(e, newcomer, "going", "absent")
         reputationService.processFinalizedEvent(e)

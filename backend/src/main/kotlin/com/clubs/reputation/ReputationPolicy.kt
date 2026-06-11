@@ -47,11 +47,13 @@ object ReputationPolicy {
 
     fun pointsFor(kind: ReputationKind): Int = when (kind) {
         ReputationKind.ironclad -> 100
-        ReputationKind.no_show -> -50
+        // A confirmed booking that is skipped burns the slot and the organizer's
+        // plan: one no-show costs two attendances (break-even attendance = 67%).
+        ReputationKind.no_show -> -200
         // Same as ironclad/no_show: once the stage-2 booking is confirmed, the
         // promise (and the damage of breaking it) does not depend on the stage-1 vote.
         ReputationKind.spontaneous -> 100
-        ReputationKind.spectator -> -50
+        ReputationKind.spectator -> -200
         ReputationKind.confirmed_unresolved -> 0
         ReputationKind.skladchina_paid -> 10
         // Explicit decline is weaker than ghosting — we punish unreliability, not

@@ -23,8 +23,8 @@
 - **`user_club_reputation`** — кэш; единственный писатель = `recompute(user, club)` (атомарный upsert,
   агрегат из ledger через `COUNT(*) FILTER`; сериализация per (user, club) через
   `pg_advisory_xact_lock`).
-- **Оси:** `attendance` (явка, 5 kind'ов: ironclad +100 / no_show −50 / spontaneous +100 /
-  spectator −50 / confirmed_unresolved 0; с 2026-06-11 очки привязаны только к этапу-2 × явке —
+- **Оси:** `attendance` (явка, 5 kind'ов: ironclad +100 / no_show −200 / spontaneous +100 /
+  spectator −200 / confirmed_unresolved 0; с 2026-06-11 очки привязаны только к этапу-2 × явке —
   stage-1 голос различает kind для черты «спонтанность», но не очки) и `finance` (сборы:
   paid +10 / declined −5 / expired −25).
   `reliability_index` = Σ points по **всем** осям; счётчики (`total_confirmations/attendances`,

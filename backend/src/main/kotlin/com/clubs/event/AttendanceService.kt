@@ -53,6 +53,13 @@ class AttendanceService(
             if (updated > 0) markedCount++
         }
 
+        // Saving the form is the organizer's statement about the WHOLE roster: confirmed
+        // participants left unmarked count as absent (decision 2026-06-11). They get the same
+        // "вас отметили отсутствующим" DM below and a full dispute window, so an accidental
+        // omission is correctable. Runs before the event publish so the DM query sees them.
+        // EXP-2 (form never saved at all) stays neutral — this path requires an explicit save.
+        val defaultedAbsent = eventResponseRepository.markUnmarkedConfirmedAbsent(eventId)
+
         eventRepository.markAttendanceMarked(eventId)
 
         // ATT-3: notify absent participants (DM "вас отметили отсутствующим, оспорьте") so the
@@ -62,7 +69,10 @@ class AttendanceService(
         // reputation pipeline solves for AttendanceFinalizedEvent.
         eventPublisher.publishEvent(AttendanceMarkedEvent(eventId))
 
-        log.info("Attendance marked: eventId={} markedCount={} organizerId={}", eventId, markedCount, organizerId)
+        log.info(
+            "Attendance marked: eventId={} markedCount={} defaultedAbsent={} organizerId={}",
+            eventId, markedCount, defaultedAbsent, organizerId
+        )
         return AttendanceResultDto(eventId, markedCount)
     }
 
@@ -82,6 +92,11 @@ class AttendanceService(
         if (updated == 0) {
             throw ValidationException("No absent attendance to dispute")
         }
+
+        // The organizer must hear about the dispute while the window is still open: silence
+        // converts it back to absent (no_show penalty) on finalization. AFTER_COMMIT hop for
+        // the same reason as AttendanceMarkedEvent — the @Async DM reads committed rows.
+        eventPublisher.publishEvent(AttendanceDisputedEvent(eventId, userId))
 
         log.info("Attendance disputed: eventId={} userId={} hasNote={}", eventId, userId, note != null)
         return AttendanceResultDto(eventId, updated)
@@ -119,7 +134,7 @@ class AttendanceService(
         // ATT-2: the dispute window expired without an organizer correction, so the original
         // mark stands — convert leftover `disputed` back to `absent`. This runs in the same
         // transaction, before the reputation listener reads the roster (AFTER_COMMIT), so
-        // (going, absent) maps to no_show (−50) instead of confirmed_unresolved (0). A disputed
+        // (going, absent) maps to no_show instead of confirmed_unresolved (0). A disputed
         // mark can only exist on a marked event, so neutrally-finalized (unmarked) events are
         // unaffected. See events.md § ATT-2.
         val resolved = eventResponseRepository.resolveExpiredDisputesToAbsent(finalizedEventIds)

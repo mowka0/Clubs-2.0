@@ -136,7 +136,9 @@ export const EventPage: FC = () => {
 
   const toggleAttended = (uid: string) => {
     haptic.select();
-    setAttended((prev) => ({ ...prev, [uid]: !(prev[uid] ?? true) }));
+    // Default is "не пришёл": saving the form is a statement about the whole roster, so the
+    // organizer explicitly ticks who came (attendance-taking), everyone else counts absent.
+    setAttended((prev) => ({ ...prev, [uid]: !(prev[uid] ?? false) }));
   };
 
   const handleMarkAttendance = (candidates: { userId: string }[]) => {
@@ -145,7 +147,7 @@ export const EventPage: FC = () => {
     setAttendanceError(null);
     const attendance = candidates.map((c) => ({
       userId: c.userId,
-      attended: attended[c.userId] ?? true,
+      attended: attended[c.userId] ?? false,
     }));
     markAttendanceMutation.mutate(
       { eventId: id, attendance },
@@ -428,7 +430,7 @@ export const EventPage: FC = () => {
             <>
               <div className="rd-glass" style={{ padding: 8, marginBottom: 10 }}>
                 {attendanceCandidates.map((r) => {
-                  const present = attended[r.userId] ?? true;
+                  const present = attended[r.userId] ?? false;
                   const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
                   return (
                     <div className="rd-pick-row" key={r.userId}>
@@ -446,6 +448,9 @@ export const EventPage: FC = () => {
                     </div>
                   );
                 })}
+              </div>
+              <div className="rd-hint" style={{ marginBottom: 10 }}>
+                Отметьте галочкой тех, кто пришёл. Не отмеченные будут считаться не пришедшими.
               </div>
               {attendanceError && <div className="rd-error">{attendanceError}</div>}
               <div className="rd-cta-wrap">

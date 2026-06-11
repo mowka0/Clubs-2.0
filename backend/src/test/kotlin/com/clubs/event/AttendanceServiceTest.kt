@@ -110,6 +110,43 @@ class AttendanceServiceTest {
     }
 
     @Test
+    fun `markAttendance defaults unmarked confirmed participants to absent before the dispute DM goes out`() {
+        every { eventRepository.findById(eventId) } returns event()
+        stubClub()
+        every { eventResponseRepository.setAttendance(eventId, attendeeId, true) } returns 1
+        every { eventResponseRepository.markUnmarkedConfirmedAbsent(eventId) } returns 2
+        every { eventRepository.markAttendanceMarked(eventId) } just Runs
+
+        service.markAttendance(eventId, organizerId, request)
+
+        // Saving the form is a statement about the whole roster: the omitted confirmed
+        // participants become absent IN the same save, so the AttendanceMarkedEvent DM query
+        // (absent rows) already sees them and they get their dispute window.
+        verify { eventResponseRepository.markUnmarkedConfirmedAbsent(eventId) }
+        verify { publisher.publishEvent(AttendanceMarkedEvent(eventId)) }
+    }
+
+    @Test
+    fun `disputeAttendance publishes AttendanceDisputedEvent so the organizer gets a DM`() {
+        every { eventRepository.findById(eventId) } returns event(marked = true)
+        every { eventResponseRepository.disputeAbsentAttendance(eventId, attendeeId, null) } returns 1
+
+        service.disputeAttendance(eventId, attendeeId, null)
+
+        verify { publisher.publishEvent(AttendanceDisputedEvent(eventId, attendeeId)) }
+    }
+
+    @Test
+    fun `disputeAttendance does not notify the organizer when there is nothing to dispute`() {
+        every { eventRepository.findById(eventId) } returns event(marked = true)
+        every { eventResponseRepository.disputeAbsentAttendance(eventId, attendeeId, null) } returns 0
+
+        assertFailsWith<ValidationException> { service.disputeAttendance(eventId, attendeeId, null) }
+
+        verify(exactly = 0) { publisher.publishEvent(any()) }
+    }
+
+    @Test
     fun `finalizeAttendance converts expired disputes then publishes one finalized event per id (ATT-2)`() {
         val id1 = UUID.randomUUID()
         val id2 = UUID.randomUUID()

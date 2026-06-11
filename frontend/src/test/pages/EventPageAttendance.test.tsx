@@ -156,13 +156,14 @@ describe('EventPage — отметка посещаемости', () => {
 
     await waitFor(() => expect(postedBody).not.toBeNull());
     expect(postedBody!.attendance).toHaveLength(2);
-    // по умолчанию все отмечены пришедшими
-    expect(postedBody!.attendance.every((a) => a.attended)).toBe(true);
+    // По умолчанию НИКТО не отмечен пришедшим: сохранение формы — заявление о составе
+    // целиком, организатор явно отмечает галочкой пришедших (решение 2026-06-11).
+    expect(postedBody!.attendance.every((a) => !a.attended)).toBe(true);
     expect(postedBody!.attendance.map((a) => a.userId).sort()).toEqual(['u-confirmed', 'u-confirmed2']);
     expect(await screen.findByText('Посещаемость отмечена')).toBeInTheDocument();
   });
 
-  it('снятая галочка отправляет attended=false для участника', async () => {
+  it('поставленная галочка отправляет attended=true, не тронутые — attended=false', async () => {
     mockEventEndpoints({ ownerId: OWNER_ID });
     let postedBody: { attendance: { userId: string; attended: boolean }[] } | null = null;
     server.use(
@@ -175,15 +176,16 @@ describe('EventPage — отметка посещаемости', () => {
     const { user } = renderEventPage();
     await screen.findByText('Отметить посещаемость');
 
-    // Снять отметку у Дмитрия (confirmed) — кликаем его toggle-кнопку
+    // Отметить Дмитрия (confirmed) пришедшим — кликаем его toggle-кнопку
     await user.click(screen.getByRole('button', { name: /Дмитрий/ }));
     await user.click(screen.getByRole('button', { name: /Сохранить посещаемость/ }));
 
     await waitFor(() => expect(postedBody).not.toBeNull());
     const dmitry = postedBody!.attendance.find((a) => a.userId === 'u-confirmed2');
-    expect(dmitry?.attended).toBe(false);
+    expect(dmitry?.attended).toBe(true);
+    // Анну не трогали — по умолчанию «не пришла» (перекличка пришедших).
     const anna = postedBody!.attendance.find((a) => a.userId === 'u-confirmed');
-    expect(anna?.attended).toBe(true);
+    expect(anna?.attended).toBe(false);
   });
 
   it('после отметки организатор видит read-only статус без чеклиста', async () => {

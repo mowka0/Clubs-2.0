@@ -213,6 +213,18 @@ class JooqEventResponseRepository(
             )
             .execute()
 
+    override fun markUnmarkedConfirmedAbsent(eventId: UUID): Int =
+        dsl.update(EVENT_RESPONSES)
+            .set(EVENT_RESPONSES.ATTENDANCE, AttendanceStatus.absent)
+            .where(
+                EVENT_RESPONSES.EVENT_ID.eq(eventId)
+                    .and(EVENT_RESPONSES.FINAL_STATUS.eq(FinalStatus.confirmed))
+                    // NULL-only: explicitly marked and disputed rows keep their state — this
+                    // backfills the organizer's omissions, it never overrides decisions.
+                    .and(EVENT_RESPONSES.ATTENDANCE.isNull)
+            )
+            .execute()
+
     override fun disputeAbsentAttendance(eventId: UUID, userId: UUID, note: String?): Int =
         dsl.update(EVENT_RESPONSES)
             .set(EVENT_RESPONSES.ATTENDANCE, AttendanceStatus.disputed)

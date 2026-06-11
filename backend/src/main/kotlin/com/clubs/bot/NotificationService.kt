@@ -110,6 +110,18 @@ class NotificationService(
         }
     }
 
+    /**
+     * ATT-3: a participant disputed their "absent" mark — the organizer must resolve it before
+     * the dispute window closes, otherwise the original mark stands and the penalty lands.
+     */
+    @Async
+    fun sendAttendanceDisputed(event: Event, organizerTelegramId: Long, disputerName: String) {
+        log.info("Attendance-disputed DM: eventId={} organizerTelegramId={}", event.id, organizerTelegramId)
+        val text = "⚖️ $disputerName оспорил отметку «не пришёл» на событии «${event.title}».\n\n" +
+            "Разберите спор до закрытия окна оспаривания — иначе останется исходная отметка, и участник получит штраф:"
+        sendDm(organizerTelegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Разобрать спор")
+    }
+
     fun sendDirectMessage(telegramId: Long, text: String) {
         sendDm(telegramId.toString(), text, webAppPath = null, buttonText = DEFAULT_BUTTON_TEXT)
     }
