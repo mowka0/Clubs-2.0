@@ -451,7 +451,7 @@ UI спора/резолва добавлен в Блоке 1 (см. ниже §
 
 **Решение (PRD-aligned):** на финализации остаточные `disputed` конвертируются обратно в `absent` (окно
 оспаривания истекло без коррекции организатора → действует исходная отметка). Тогда `(going, absent) = no_show
-(−50)`, `(maybe, absent) = spectator (−20)`.
+(−50)`, `(maybe, absent) = spectator (−50; до решения 2026-06-11 «очки только от этапа-2» было −20)`.
 
 **Реализация:**
 - `EventResponseRepository.resolveExpiredDisputesToAbsent(eventIds)` — `UPDATE event_responses SET attendance = absent

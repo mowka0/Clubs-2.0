@@ -130,7 +130,7 @@ ON CONFLICT (user_id, club_id) DO UPDATE SET
 - В live ledger append-only → у юзера никогда не «исчезают» строки → recompute всегда вызывается, когда
   есть ≥1 строка. Удаление кэш-строки нужно только в бэкфилле (rebuild, см. V18).
 
-### Ось «явка»: маппинг ответа → kind (паритет)
+### Ось «явка»: маппинг ответа → kind
 
 Строка ledger пишется **только** для `event_responses.final_status = 'confirmed'`. Не-confirmed
 (declined / waitlisted / null) → строки нет (вклад 0 во всё, как и в текущем коде). Инвариант
@@ -138,12 +138,19 @@ ON CONFLICT (user_id, club_id) DO UPDATE SET
 отвергает прочие до выставления `confirmed`) → ветка `else` ниже достижима только через
 disputed/null attendance.
 
+> **Решение 2026-06-11 — очки только от этапа-2 × явки.** Голос этапа-1 — опрос для планирования,
+> репутацию не формирует: после подтверждения брони награда/штраф одинаковы для going и maybe
+> (+100 пришёл / −50 не пришёл). `kind` при этом по-прежнему различается по stage-1 голосу —
+> он питает **отображаемую черту** `spontaneity_count`, не очки. Ledger-строки, записанные до
+> решения (spontaneous +30 / spectator −20), не реконсилировались (намеренно: только staging-объёмы;
+> points в append-only строках остаются как записаны).
+
 | stage_1_vote | attendance | kind | points | conf | att | spont |
 |---|---|---|---|---|---|---|
 | going | attended | `ironclad` | +100 | 1 | 1 | 0 |
 | going | absent | `no_show` | −50 | 1 | 0 | 0 |
-| maybe | attended | `spontaneous` | +30 | 1 | 1 | 1 |
-| maybe | absent | `spectator` | −20 | 1 | 0 | 0 |
+| maybe | attended | `spontaneous` | +100 | 1 | 1 | 1 |
+| maybe | absent | `spectator` | −50 | 1 | 0 | 0 |
 | (любой) | disputed **OR** null | `confirmed_unresolved` | 0 | 1 | 0 | 0 |
 
 `confirmed_unresolved` — **терминальный** kind, не плейсхолдер: после финализации attendance

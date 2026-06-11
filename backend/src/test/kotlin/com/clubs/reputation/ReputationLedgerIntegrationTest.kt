@@ -105,8 +105,8 @@ class ReputationLedgerIntegrationTest {
 
         assertReputation(ironclad, reliability = 100, conf = 1, att = 1, spont = 0, pct = "100.00", outcome = 1)
         assertReputation(noShow, reliability = -50, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
-        assertReputation(spontaneous, reliability = 30, conf = 1, att = 1, spont = 1, pct = "100.00", outcome = 1)
-        assertReputation(spectator, reliability = -20, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
+        assertReputation(spontaneous, reliability = 100, conf = 1, att = 1, spont = 1, pct = "100.00", outcome = 1)
+        assertReputation(spectator, reliability = -50, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
     }
 
     @Test

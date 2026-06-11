@@ -38,8 +38,8 @@ class ReputationPolicyTest {
     fun `attendance points match the legacy deltas`() {
         assertEquals(100, ReputationPolicy.pointsFor(ReputationKind.ironclad))
         assertEquals(-50, ReputationPolicy.pointsFor(ReputationKind.no_show))
-        assertEquals(30, ReputationPolicy.pointsFor(ReputationKind.spontaneous))
-        assertEquals(-20, ReputationPolicy.pointsFor(ReputationKind.spectator))
+        assertEquals(100, ReputationPolicy.pointsFor(ReputationKind.spontaneous))
+        assertEquals(-50, ReputationPolicy.pointsFor(ReputationKind.spectator))
         assertEquals(0, ReputationPolicy.pointsFor(ReputationKind.confirmed_unresolved))
     }
 
