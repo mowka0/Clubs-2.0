@@ -136,9 +136,9 @@ export const EventPage: FC = () => {
 
   const toggleAttended = (uid: string) => {
     haptic.select();
-    // Default is "не пришёл": saving the form is a statement about the whole roster, so the
-    // organizer explicitly ticks who came (attendance-taking), everyone else counts absent.
-    setAttended((prev) => ({ ...prev, [uid]: !(prev[uid] ?? false) }));
+    // Default is "пришёл": absentees are the minority, so the organizer unticks only those
+    // who did not show up (decision 2026-06-11, rev. 2).
+    setAttended((prev) => ({ ...prev, [uid]: !(prev[uid] ?? true) }));
   };
 
   const handleMarkAttendance = (candidates: { userId: string }[]) => {
@@ -147,7 +147,7 @@ export const EventPage: FC = () => {
     setAttendanceError(null);
     const attendance = candidates.map((c) => ({
       userId: c.userId,
-      attended: attended[c.userId] ?? false,
+      attended: attended[c.userId] ?? true,
     }));
     markAttendanceMutation.mutate(
       { eventId: id, attendance },
@@ -430,7 +430,7 @@ export const EventPage: FC = () => {
             <>
               <div className="rd-glass" style={{ padding: 8, marginBottom: 10 }}>
                 {attendanceCandidates.map((r) => {
-                  const present = attended[r.userId] ?? false;
+                  const present = attended[r.userId] ?? true;
                   const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
                   return (
                     <div className="rd-pick-row" key={r.userId}>
@@ -450,7 +450,7 @@ export const EventPage: FC = () => {
                 })}
               </div>
               <div className="rd-hint" style={{ marginBottom: 10 }}>
-                Отметьте галочкой тех, кто пришёл. Не отмеченные будут считаться не пришедшими.
+                По умолчанию все отмечены как пришедшие — снимите галочку с тех, кто не пришёл.
               </div>
               {attendanceError && <div className="rd-error">{attendanceError}</div>}
               <div className="rd-cta-wrap">

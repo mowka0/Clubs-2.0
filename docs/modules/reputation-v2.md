@@ -155,14 +155,13 @@ disputed/null attendance.
 | maybe | absent | `spectator` | −200 | 1 | 0 | 0 |
 | (любой) | disputed **OR** null | `confirmed_unresolved` | 0 | 1 | 0 | 0 |
 
-> **Частичная отметка (решение 2026-06-11):** сохранение формы отметки — заявление о составе
-> целиком. `markAttendance` после записи payload конвертирует оставшиеся
-> `confirmed + attendance IS NULL → absent` (`markUnmarkedConfirmedAbsent`), до публикации
-> `AttendanceMarkedEvent` — сконвертированные получают тот же DM «оспорьте» и полное окно спора.
-> Ветка `confirmed_unresolved` через `null` становится практически недостижимой (остаётся
-> defensive). EXP-2 (форма не сохранялась вовсе) по-прежнему нейтрален. При споре организатору
-> уходит DM (`AttendanceDisputedEvent` → `sendAttendanceDisputed`) — игнор спора осознанный,
-> а не случайный.
+> **Отметка явки (решение 2026-06-11, рев. 2):** в форме отметки все confirmed по умолчанию
+> «пришёл», организатор снимает галочку с отсутствующих; UI шлёт явное значение для каждого
+> видимого участника (снятая галочка = absent → −200 + DM «оспорьте»). `confirmed + attendance
+> IS NULL → confirmed_unresolved (0)` остаётся достижимым только через гонку «подтвердился после
+> загрузки формы» (defensive). EXP-2 (форма не сохранялась вовсе) нейтрален. При споре
+> организатору уходит DM (`AttendanceDisputedEvent` → `sendAttendanceDisputed`) — игнор спора
+> осознанный, а не случайный.
 
 `confirmed_unresolved` — **терминальный** kind, не плейсхолдер: после финализации attendance
 заморожен (`resolveDispute` требует `!finalized`; повторная отметка невозможна), поэтому переход в

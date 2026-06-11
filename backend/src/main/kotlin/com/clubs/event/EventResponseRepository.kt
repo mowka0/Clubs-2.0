@@ -63,14 +63,6 @@ interface EventResponseRepository {
     fun setAttendance(eventId: UUID, userId: UUID, attended: Boolean): Int
 
     /**
-     * Defaults every confirmed participant the organizer left unmarked (ATTENDANCE IS NULL) to
-     * absent. Saving the marking form is a statement about the whole roster: unmarked = did not
-     * come. Rows already marked or disputed (attendance not null) are untouched. Returns rows
-     * updated.
-     */
-    fun markUnmarkedConfirmedAbsent(eventId: UUID): Int
-
-    /**
      * Marks an absent attendance as disputed, storing an optional free-text [note] from the
      * participant. Returns rows updated (0 if user is not absent).
      */

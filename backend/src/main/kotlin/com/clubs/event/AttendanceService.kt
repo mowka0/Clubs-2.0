@@ -53,13 +53,6 @@ class AttendanceService(
             if (updated > 0) markedCount++
         }
 
-        // Saving the form is the organizer's statement about the WHOLE roster: confirmed
-        // participants left unmarked count as absent (decision 2026-06-11). They get the same
-        // "вас отметили отсутствующим" DM below and a full dispute window, so an accidental
-        // omission is correctable. Runs before the event publish so the DM query sees them.
-        // EXP-2 (form never saved at all) stays neutral — this path requires an explicit save.
-        val defaultedAbsent = eventResponseRepository.markUnmarkedConfirmedAbsent(eventId)
-
         eventRepository.markAttendanceMarked(eventId)
 
         // ATT-3: notify absent participants (DM "вас отметили отсутствующим, оспорьте") so the
@@ -69,10 +62,7 @@ class AttendanceService(
         // reputation pipeline solves for AttendanceFinalizedEvent.
         eventPublisher.publishEvent(AttendanceMarkedEvent(eventId))
 
-        log.info(
-            "Attendance marked: eventId={} markedCount={} defaultedAbsent={} organizerId={}",
-            eventId, markedCount, defaultedAbsent, organizerId
-        )
+        log.info("Attendance marked: eventId={} markedCount={} organizerId={}", eventId, markedCount, organizerId)
         return AttendanceResultDto(eventId, markedCount)
     }
 

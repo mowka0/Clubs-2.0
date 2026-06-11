@@ -110,23 +110,6 @@ class AttendanceServiceTest {
     }
 
     @Test
-    fun `markAttendance defaults unmarked confirmed participants to absent before the dispute DM goes out`() {
-        every { eventRepository.findById(eventId) } returns event()
-        stubClub()
-        every { eventResponseRepository.setAttendance(eventId, attendeeId, true) } returns 1
-        every { eventResponseRepository.markUnmarkedConfirmedAbsent(eventId) } returns 2
-        every { eventRepository.markAttendanceMarked(eventId) } just Runs
-
-        service.markAttendance(eventId, organizerId, request)
-
-        // Saving the form is a statement about the whole roster: the omitted confirmed
-        // participants become absent IN the same save, so the AttendanceMarkedEvent DM query
-        // (absent rows) already sees them and they get their dispute window.
-        verify { eventResponseRepository.markUnmarkedConfirmedAbsent(eventId) }
-        verify { publisher.publishEvent(AttendanceMarkedEvent(eventId)) }
-    }
-
-    @Test
     fun `disputeAttendance publishes AttendanceDisputedEvent so the organizer gets a DM`() {
         every { eventRepository.findById(eventId) } returns event(marked = true)
         every { eventResponseRepository.disputeAbsentAttendance(eventId, attendeeId, null) } returns 1
