@@ -20,6 +20,15 @@ interface EventRepository {
      */
     fun findAllByClubWithGoingCount(clubId: UUID): List<EventWithGoingCount>
 
+    /**
+     * IDs of the club's events that require an action from [userId] right now:
+     * a stage-1 vote (voting open, not yet voted) or a stage-2 confirmation
+     * (voted going/maybe, not yet confirmed). Used by the activity feed to pin
+     * action-required events to the top. Same predicate as [findMyFeed]'s
+     * action-required ordering.
+     */
+    fun findActionRequiredEventIds(clubId: UUID, userId: UUID, now: OffsetDateTime): Set<UUID>
+
     fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MyFeedItem>
 
     fun getVoteCounts(eventId: UUID): Map<String, Int>

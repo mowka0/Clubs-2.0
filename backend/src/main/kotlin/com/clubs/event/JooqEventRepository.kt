@@ -87,6 +87,37 @@ class JooqEventRepository(
         return events.map { EventWithGoingCount(event = it, goingCount = goingCounts[it.id] ?: 0) }
     }
 
+    override fun findActionRequiredEventIds(clubId: UUID, userId: UUID, now: OffsetDateTime): Set<UUID> {
+        // Stage-1 vote pending: voting window open (event_datetime - voting_opens_days_before <= now),
+        // status still upcoming, this user has not voted.
+        val stage1Pending = EVENTS.STATUS.eq(EventStatus.upcoming)
+            .and(EVENT_RESPONSES.STAGE_1_VOTE.isNull)
+            .and(
+                DSL.condition(
+                    "{0} - ({1} * INTERVAL '1 day') <= {2}",
+                    EVENTS.EVENT_DATETIME,
+                    EVENTS.VOTING_OPENS_DAYS_BEFORE,
+                    DSL.value(now)
+                )
+            )
+        // Stage-2 confirmation pending: voted going/maybe in stage 1, not yet confirmed/declined.
+        val stage2Pending = EVENTS.STATUS.eq(EventStatus.stage_2)
+            .and(EVENT_RESPONSES.STAGE_1_VOTE.`in`(Stage_1Vote.going, Stage_1Vote.maybe))
+            .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull)
+
+        return dsl.select(EVENTS.ID)
+            .from(EVENTS)
+            .leftJoin(EVENT_RESPONSES).on(
+                EVENT_RESPONSES.EVENT_ID.eq(EVENTS.ID)
+                    .and(EVENT_RESPONSES.USER_ID.eq(userId))
+            )
+            .where(EVENTS.CLUB_ID.eq(clubId))
+            .and(stage1Pending.or(stage2Pending))
+            .fetch(EVENTS.ID)
+            .filterNotNull()
+            .toSet()
+    }
+
     override fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MyFeedItem> {
         val now = OffsetDateTime.now()
 

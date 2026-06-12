@@ -39,9 +39,10 @@ class ActivityService(
     @Transactional(readOnly = true)
     fun getClubActivities(
         clubId: UUID,
+        userId: UUID,
         typeFilter: ActivityType?
     ): ClubActivityFeedDto {
-        log.info("Fetch activities: clubId={} type={}", clubId, typeFilter)
+        log.info("Fetch activities: clubId={} userId={} type={}", clubId, userId, typeFilter)
 
         val events: List<ActivityItemDto.EventActivity> = if (typeFilter == ActivityType.SKLADCHINA) {
             emptyList()
@@ -55,10 +56,21 @@ class ActivityService(
             loadSkladchinas(clubId)
         }
 
+        // Events awaiting this user's stage-1 vote or stage-2 confirmation — pinned to the top
+        // of `upcoming` so the action the user owes is the first thing they see.
+        val actionRequiredIds: Set<UUID> = if (events.isEmpty()) {
+            emptySet()
+        } else {
+            eventRepository.findActionRequiredEventIds(clubId, userId, OffsetDateTime.now())
+        }
+
         val all: List<ActivityItemDto> = events + skladchinas
         val (past, upcoming) = all.partition { it.isCompleted }
 
-        val sortedUpcoming = upcoming.sortedWith(UPCOMING_ORDER)
+        val upcomingOrder = compareByDescending<ActivityItemDto> {
+            it is ActivityItemDto.EventActivity && it.id in actionRequiredIds
+        }.then(UPCOMING_ORDER)
+        val sortedUpcoming = upcoming.sortedWith(upcomingOrder)
         val sortedPast = past.sortedWith(PAST_ORDER)
 
         log.info(
