@@ -4,6 +4,7 @@ import { Spinner } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { AvatarUpload } from '../components/AvatarUpload';
+import { ApiError } from '../api/apiClient';
 import { useClubMembersQuery } from '../queries/members';
 import { useCreateSkladchinaMutation } from '../queries/skladchina';
 import type { CreateSkladchinaRequest, SkladchinaMode } from '../types/api';
@@ -38,6 +39,27 @@ function defaultDeadlineLocal(): string {
   d.setDate(d.getDate() + 3);
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   return d.toISOString().slice(0, 16);
+}
+
+// Anti-ambush rule from the reputation redesign: an important skladchina
+// must give participants at least 24h to react before the -40 penalty.
+const IMPORTANT_MIN_DEADLINE_HOURS = 24;
+
+const REPUTATION_HELPER_TEXT =
+  'Влияет на репутацию участников: оплата +10, отказ — без штрафа, молчание до дедлайна −40';
+
+function createErrorMessage(e: unknown): string {
+  if (e instanceof ApiError) {
+    // Skladchina business gates (24h deadline, ≤3 important per 7 days, etc.)
+    // come back as 400/409 with a user-facing Russian message — surface it.
+    if ((e.status === 400 || e.status === 409) && e.message) {
+      return e.message;
+    }
+    if (e.status === 429) {
+      return 'Слишком много запросов. Подождите немного и попробуйте снова.';
+    }
+  }
+  return 'Не удалось создать сбор. Проверьте поля и попробуйте снова.';
 }
 
 export const CreateSkladchinaPage: FC = () => {
@@ -102,6 +124,13 @@ export const CreateSkladchinaPage: FC = () => {
     setSubmitError(msg);
   };
 
+  // A voluntary skladchina never affects reputation ("voluntary with a silence
+  // penalty" is a contradiction) — drop the flag when switching to that mode.
+  const handleModeChange = (next: SkladchinaMode) => {
+    setMode(next);
+    if (next === 'voluntary') setAffectsReputation(false);
+  };
+
   const handleSubmit = async () => {
     setSubmitError(null);
     if (!title.trim()) return fail('Введите название сбора');
@@ -112,6 +141,10 @@ export const CreateSkladchinaPage: FC = () => {
     if (mode === 'fixed_equal') {
       totalKopecks = rubToKopecks(totalRub);
       if (totalKopecks === null) return fail('Укажите общую сумму (₽)');
+    } else if (mode === 'voluntary' && totalRub.trim() !== '') {
+      // Optional indicative goal for voluntary pools (e.g. a gift target).
+      totalKopecks = rubToKopecks(totalRub);
+      if (totalKopecks === null) return fail('Целевая сумма должна быть числом больше нуля');
     }
 
     const participants = Array.from(selectedIds).map((userId) => {
@@ -127,6 +160,14 @@ export const CreateSkladchinaPage: FC = () => {
       if (missing) return fail('Укажите сумму для каждого участника');
     }
 
+    if (affectsReputation) {
+      const minDeadline = Date.now() + IMPORTANT_MIN_DEADLINE_HOURS * 60 * 60 * 1000;
+      if (new Date(deadline).getTime() < minDeadline) {
+        // Same wording as the backend gate (SkladchinaService.validateReputationGates).
+        return fail('Для важного сбора дедлайн должен быть не раньше чем через 24 часа');
+      }
+    }
+
     const deadlineIso = new Date(deadline).toISOString();
     const body: CreateSkladchinaRequest = {
       title: title.trim(),
@@ -134,7 +175,7 @@ export const CreateSkladchinaPage: FC = () => {
       rules: rules.trim() || null,
       photoUrl,
       paymentMode: mode,
-      totalGoalKopecks: mode === 'fixed_equal' ? totalKopecks : null,
+      totalGoalKopecks: mode === 'fixed_individual' ? null : totalKopecks,
       paymentLink: paymentLink.trim(),
       paymentMethodNote: paymentMethodNote.trim() || null,
       deadline: deadlineIso,
@@ -150,7 +191,7 @@ export const CreateSkladchinaPage: FC = () => {
     } catch (e) {
       console.error('createSkladchina failed', e);
       haptic.notify('error');
-      setSubmitError('Не удалось создать сбор. Проверьте поля и попробуйте снова.');
+      setSubmitError(createErrorMessage(e));
     }
   };
 
@@ -194,7 +235,7 @@ export const CreateSkladchinaPage: FC = () => {
                   type="radio"
                   name="mode"
                   checked={mode === m}
-                  onChange={() => setMode(m)}
+                  onChange={() => handleModeChange(m)}
                 />
                 <div>
                   <div className="rd-mo-title">{MODE_LABELS[m]}</div>
@@ -205,9 +246,13 @@ export const CreateSkladchinaPage: FC = () => {
           </div>
         </div>
 
-        {mode === 'fixed_equal' && (
+        {mode !== 'fixed_individual' && (
           <label className="rd-field">
-            <span className="rd-label">Общая сумма (₽) <span className="rd-req">*</span></span>
+            <span className="rd-label">
+              {mode === 'fixed_equal'
+                ? <>Общая сумма (₽) <span className="rd-req">*</span></>
+                : 'Целевая сумма (₽)'}
+            </span>
             <input
               className="rd-input"
               type="number"
@@ -217,6 +262,9 @@ export const CreateSkladchinaPage: FC = () => {
               onChange={(e) => setTotalRub(e.target.value)}
               placeholder="Например, 5000"
             />
+            {mode === 'voluntary' && (
+              <span className="rd-hint">Необязательно: участники увидят прогресс сбора к цели</span>
+            )}
           </label>
         )}
 
@@ -254,13 +302,19 @@ export const CreateSkladchinaPage: FC = () => {
           </div>
         </label>
 
-        <label className="rd-check">
+        <label className="rd-check" style={mode === 'voluntary' ? { opacity: 0.55, cursor: 'default' } : undefined}>
           <input
             type="checkbox"
             checked={affectsReputation}
+            disabled={mode === 'voluntary'}
             onChange={(e) => setAffectsReputation(e.target.checked)}
           />
-          <span>Влияет на репутацию участников (за неответ −25, за отказ −5)</span>
+          <span>
+            <span style={{ display: 'block', fontWeight: 600, color: 'var(--text)' }}>Важный сбор</span>
+            {mode === 'voluntary'
+              ? 'Добровольный сбор не влияет на репутацию'
+              : REPUTATION_HELPER_TEXT}
+          </span>
         </label>
 
         <div className="rd-field">

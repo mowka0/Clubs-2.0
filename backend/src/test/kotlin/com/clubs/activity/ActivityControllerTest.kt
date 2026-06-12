@@ -156,6 +156,13 @@ class ActivityControllerTest {
                     '$createdAt', '$createdAt', false)
             """.trimIndent()
         )
+        // The member votes stage-1 so the event is NOT action-required: an unvoted
+        // upcoming event would be pinned to the top of the feed (two-stage UI-полиш),
+        // and this test exercises pure relevant-date interleaving, not the pinning.
+        dsl.execute(
+            "INSERT INTO event_responses (id, event_id, user_id, stage_1_vote) " +
+                "VALUES ('${UUID.randomUUID()}', '$eventId', '$memberId', 'going')"
+        )
 
         mockMvc.perform(
             get("/api/clubs/$clubId/activities")

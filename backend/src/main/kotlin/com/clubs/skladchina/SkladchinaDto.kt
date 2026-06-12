@@ -74,7 +74,7 @@ data class SkladchinaDetailDto(
     val closedAt: OffsetDateTime?,
 
     val isOrganizerView: Boolean,                  // caller == creator
-    val myStatus: String?,                         // pending|paid|declined|expired_no_response or null
+    val myStatus: String?,                         // pending|paid|declined|expired_no_response|released or null
     val myExpectedAmountKopecks: Long?,
     val myDeclaredAmountKopecks: Long?,
 

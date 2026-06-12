@@ -187,14 +187,14 @@ describe('ActivityCard (full)', () => {
     expect(screen.getByText(/собрано/)).toBeInTheDocument();
   });
 
-  it('renders ⚠️ Репутация when affectsReputation', () => {
+  it('renders ⚠️ Важный сбор when affectsReputation', () => {
     render(
       <ActivityCard
         activity={buildSkladchina({ affectsReputation: true })}
         onClick={vi.fn()}
       />,
     );
-    expect(screen.getByText(/Репутация/)).toBeInTheDocument();
+    expect(screen.getByText(/Важный сбор/)).toBeInTheDocument();
   });
 
   it('calls onClick when the card is tapped', async () => {

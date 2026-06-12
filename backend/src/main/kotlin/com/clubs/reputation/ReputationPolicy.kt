@@ -37,11 +37,22 @@ object ReputationPolicy {
         else -> ReputationKind.confirmed_unresolved
     }
 
-    /** Skladchina terminal participant status → finance kind. Null for non-reputational statuses. */
+    /**
+     * Skladchina terminal participant status → finance kind. Null for non-reputational
+     * statuses (see docs/backlog/skladchina-reputation-redesign.md):
+     *  - declined: an explicit refusal is the DESIRED behaviour ("can't pay — say so
+     *    now") and the free exit from a punitive skladchina. No row at all (not a
+     *    0-point row): three one-tap declines must not graduate a user out of
+     *    "Новичок" (outcome_count inflation). Historic skladchina_declined rows keep
+     *    their stored points; the kind stays in the enum but is never emitted again.
+     *  - released: the skladchina closed BEFORE its deadline (F5-02). The promise was
+     *    "answer by the deadline" and the deadline never came — no promise broken.
+     */
     fun financeKind(status: SkladchinaParticipantStatus): ReputationKind? = when (status) {
         SkladchinaParticipantStatus.paid -> ReputationKind.skladchina_paid
-        SkladchinaParticipantStatus.declined -> ReputationKind.skladchina_declined
         SkladchinaParticipantStatus.expired_no_response -> ReputationKind.skladchina_expired
+        SkladchinaParticipantStatus.declined -> null
+        SkladchinaParticipantStatus.released -> null
         SkladchinaParticipantStatus.pending -> null
     }
 
@@ -55,11 +66,19 @@ object ReputationPolicy {
         ReputationKind.spontaneous -> 100
         ReputationKind.spectator -> -200
         ReputationKind.confirmed_unresolved -> 0
+        // 1/10 of ironclad (+100): attendance is verified by the organizer, payment
+        // is self-declared. Symbolic plus until org-confirmation lands (P2).
         ReputationKind.skladchina_paid -> 10
-        // Explicit decline is weaker than ghosting — we punish unreliability, not
-        // disagreement. See SkladchinaService history (#6 skladchina-mvp feedback).
-        ReputationKind.skladchina_declined -> -5
-        ReputationKind.skladchina_expired -> -25
+        // Historic kind — no longer emitted (financeKind(declined) = null since the
+        // 2026-06-12 redesign). Old -5 rows on staging keep their stored points; the
+        // ledger reads stored points, never this function, so 0 here only guards a
+        // hypothetical future caller.
+        ReputationKind.skladchina_declined -> 0
+        // 1/5 of no_show (-200): the harm is comparable (a burned booking), but the
+        // obligation was imposed by the organizer — the participant never pressed
+        // "confirm" as in event stage 2. Break-even ≈ 80% payments, slightly above
+        // the "≥70% pay on time" success metric.
+        ReputationKind.skladchina_expired -> -40
     }
 
     /** Presentational gate: show the real index only once a track record exists. */

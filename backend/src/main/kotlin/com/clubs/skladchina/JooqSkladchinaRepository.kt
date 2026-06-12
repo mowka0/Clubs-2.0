@@ -280,15 +280,18 @@ class JooqSkladchinaRepository(
             .fetch()
             .map(mapper::toDomain)
 
-    override fun updateStatus(id: UUID, status: SkladchinaStatus, closedBy: UUID?, closedAt: OffsetDateTime) {
+    override fun claimClose(id: UUID, status: SkladchinaStatus, closedBy: UUID?, closedAt: OffsetDateTime): Boolean =
         dsl.update(SKLADCHINAS)
             .set(SKLADCHINAS.STATUS, status)
             .set(SKLADCHINAS.CLOSED_AT, closedAt)
             .set(SKLADCHINAS.CLOSED_BY, closedBy)
             .set(SKLADCHINAS.UPDATED_AT, OffsetDateTime.now())
-            .where(SKLADCHINAS.ID.eq(id))
-            .execute()
-    }
+            .where(
+                SKLADCHINAS.ID.eq(id)
+                    // F5-12: only one concurrent closer can flip active → terminal.
+                    .and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active))
+            )
+            .execute() > 0
 
     override fun findParticipantsWithInfo(skladchinaId: UUID): List<SkladchinaParticipantInfo> =
         dsl.select(
@@ -346,6 +349,10 @@ class JooqSkladchinaRepository(
             .where(
                 SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
                     .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
+                    // F5-03: a concurrent close may have just expired/released this
+                    // participant — never overwrite a terminal status (a paid-over-expired
+                    // row would contradict its already-written -40 ledger entry forever).
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
             )
             .execute()
 
@@ -360,12 +367,23 @@ class JooqSkladchinaRepository(
             .where(
                 SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
                     .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
+                    // F5-03: same pending-only guard as setParticipantPaid.
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
             )
             .execute()
 
     override fun expirePendingParticipants(skladchinaId: UUID): Int =
         dsl.update(SKLADCHINA_PARTICIPANTS)
             .set(SKLADCHINA_PARTICIPANTS.STATUS, SkladchinaParticipantStatus.expired_no_response)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
+            )
+            .execute()
+
+    override fun releasePendingParticipants(skladchinaId: UUID): Int =
+        dsl.update(SKLADCHINA_PARTICIPANTS)
+            .set(SKLADCHINA_PARTICIPANTS.STATUS, SkladchinaParticipantStatus.released)
             .where(
                 SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
                     .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
@@ -397,6 +415,34 @@ class JooqSkladchinaRepository(
         dsl.selectCount().from(SKLADCHINA_PARTICIPANTS)
             .where(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId))
             .fetchOne(0, Int::class.java) ?: 0
+
+    override fun countReputationAffectingCreatedSince(clubId: UUID, since: OffsetDateTime): Int =
+        dsl.selectCount().from(SKLADCHINAS)
+            .where(
+                SKLADCHINAS.CLUB_ID.eq(clubId)
+                    .and(SKLADCHINAS.AFFECTS_REPUTATION.isTrue)
+                    .and(SKLADCHINAS.CREATED_AT.greaterThan(since))
+            )
+            .fetchOne(0, Int::class.java) ?: 0
+
+    override fun findNeedingDeadlineReminder(now: OffsetDateTime, until: OffsetDateTime): List<Skladchina> =
+        dsl.selectFrom(SKLADCHINAS)
+            .where(
+                SKLADCHINAS.STATUS.eq(SkladchinaStatus.active)
+                    .and(SKLADCHINAS.AFFECTS_REPUTATION.isTrue)
+                    .and(SKLADCHINAS.DEADLINE.greaterThan(now))
+                    .and(SKLADCHINAS.DEADLINE.lessOrEqual(until))
+                    .and(SKLADCHINAS.REMINDER_SENT_AT.isNull)
+            )
+            .fetch()
+            .map(mapper::toDomain)
+
+    override fun markReminderSent(skladchinaId: UUID, at: OffsetDateTime) {
+        dsl.update(SKLADCHINAS)
+            .set(SKLADCHINAS.REMINDER_SENT_AT, at)
+            .where(SKLADCHINAS.ID.eq(skladchinaId))
+            .execute()
+    }
 
     override fun countParticipantsByStatus(skladchinaId: UUID, status: SkladchinaParticipantStatus): Int =
         dsl.selectCount().from(SKLADCHINA_PARTICIPANTS)

@@ -18,6 +18,7 @@ data class SkladchinaCreatedEvent(
     val paymentMode: String,
     val totalGoalKopecks: Long?,
     val deadline: java.time.OffsetDateTime,
+    val affectsReputation: Boolean,
     val participantUserIds: List<UUID>
 )
 
@@ -36,5 +37,12 @@ data class SkladchinaClosedEvent(
     val totalGoalKopecks: Long?,
     val paidCount: Int,
     val participantCount: Int,
-    val affectsReputation: Boolean
+    val affectsReputation: Boolean,
+    /**
+     * Participants who stayed silent until the deadline and just received the -40
+     * ledger entry. Non-empty ONLY for a reputation-affecting close at/after the
+     * deadline — the notifier DMs each of them about the penalty (launch-blocker
+     * notification #3 of the redesign).
+     */
+    val expiredParticipantUserIds: List<UUID> = emptyList()
 )

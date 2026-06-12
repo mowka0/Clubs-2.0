@@ -3,8 +3,6 @@ package com.clubs.bot
 import com.clubs.event.EventRepository
 import com.clubs.event.EventResponseRepository
 import com.clubs.payment.PaymentService
-import com.clubs.reputation.ReputationRepository
-import com.clubs.user.UserRepository
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -24,8 +22,6 @@ class ClubsBotTest {
     private lateinit var paymentService: PaymentService
     private lateinit var eventRepository: EventRepository
     private lateinit var eventResponseRepository: EventResponseRepository
-    private lateinit var userRepository: UserRepository
-    private lateinit var reputationRepository: ReputationRepository
     private lateinit var bot: ClubsBot
 
     @BeforeEach
@@ -34,16 +30,12 @@ class ClubsBotTest {
         paymentService = mockk(relaxed = true)
         eventRepository = mockk(relaxed = true)
         eventResponseRepository = mockk(relaxed = true)
-        userRepository = mockk(relaxed = true)
-        reputationRepository = mockk(relaxed = true)
         bot = ClubsBot(
             botToken = "dummy-token",
             telegramClient = telegramClient,
             paymentService = paymentService,
             eventRepository = eventRepository,
-            eventResponseRepository = eventResponseRepository,
-            userRepository = userRepository,
-            reputationRepository = reputationRepository
+            eventResponseRepository = eventResponseRepository
         )
     }
 

@@ -10,6 +10,7 @@ import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
 import com.clubs.generated.jooq.indexes.IDX_EVENT_RESPONSES_EVENT_ID
+import com.clubs.generated.jooq.indexes.IDX_EVENT_RESPONSES_PENDING_STAGE2
 import com.clubs.generated.jooq.indexes.IDX_EVENT_RESPONSES_USER_ID
 import com.clubs.generated.jooq.keys.EVENT_RESPONSES_EVENT_ID_USER_ID_KEY
 import com.clubs.generated.jooq.keys.EVENT_RESPONSES_PKEY
@@ -183,7 +184,7 @@ open class EventResponses(
         override fun `as`(alias: Table<*>): EventResponsesPath = EventResponsesPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(IDX_EVENT_RESPONSES_EVENT_ID, IDX_EVENT_RESPONSES_USER_ID)
+    override fun getIndexes(): List<Index> = listOf(IDX_EVENT_RESPONSES_EVENT_ID, IDX_EVENT_RESPONSES_PENDING_STAGE2, IDX_EVENT_RESPONSES_USER_ID)
     override fun getPrimaryKey(): UniqueKey<EventResponsesRecord> = EVENT_RESPONSES_PKEY
     override fun getUniqueKeys(): List<UniqueKey<EventResponsesRecord>> = listOf(EVENT_RESPONSES_EVENT_ID_USER_ID_KEY)
     override fun getReferences(): List<ForeignKey<EventResponsesRecord, *>> = listOf(EVENT_RESPONSES__EVENT_RESPONSES_EVENT_ID_FKEY, EVENT_RESPONSES__EVENT_RESPONSES_USER_ID_FKEY)

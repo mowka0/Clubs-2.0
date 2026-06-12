@@ -555,6 +555,11 @@
   padding: 9px 12px; margin-bottom: 12px;
   background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px;
 }
+.rd-warn-block {
+  font-size: 13px; line-height: 1.45; color: var(--accent);
+  padding: 10px 12px; margin-bottom: 10px;
+  background: var(--accent-soft); border-radius: 12px;
+}
 
 /* ---------- Locked placeholder ---------- */
 .rd-locked { display: flex; gap: 12px; align-items: center; padding: 16px; margin-bottom: 14px; }

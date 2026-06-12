@@ -71,7 +71,7 @@ const SkladchinaCardBody: FC<{ skladchina: SkladchinaActivityDto }> = ({ skladch
           {hasGoal
             ? `${formatRub(skladchina.collectedKopecks)} / ${formatRub(skladchina.totalGoalKopecks!)}`
             : `${formatRub(skladchina.collectedKopecks)} собрано`}
-          {skladchina.affectsReputation && ' · ⚠️ Репутация'}
+          {skladchina.affectsReputation && ' · ⚠️ Важный сбор'}
         </div>
       </div>
       <div className="rd-ft-stat">

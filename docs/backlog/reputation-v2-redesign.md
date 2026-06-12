@@ -71,10 +71,12 @@ promise_fulfillment_pct, total_confirmations, total_attendances, spontaneity_cou
 Пересчёт — после финализации (48ч окно оспаривания). Сегодня репутация **только отображается**
 (профиль, карточка участника, инбокс заявок), ничего не гейтит.
 
-**Сборы (текущий хук, будет переделан):** при закрытии сбора, если `affects_reputation=true` —
-paid **+10**, declined **−5**, expired_no_response **−25**
+**Сборы (хук на момент дизайна; переделан 2026-06-12):** при закрытии сбора, если
+`affects_reputation=true` — paid **+10**, declined **−5**, expired_no_response **−25**
 ([SkladchinaService.applyReputationDeltas ~302-321](../../backend/src/main/kotlin/com/clubs/skladchina/SkladchinaService.kt)).
 Оплата — **honor-system** (самозаявка «оплатил», без верификации).
+*(Актуальные веса с 2026-06-12: paid +10 / declined — строки нет / expired −40 /
+released — строки нет; см. `skladchina-reputation-redesign.md`.)*
 
 ---
 
@@ -122,6 +124,20 @@ paid **+10**, declined **−5**, expired_no_response **−25**
 
 ## 5. Финансовая ось (сборы) — РЕШЕНО
 
+> **Update 2026-06-12** (редизайн репутации складчины,
+> `docs/backlog/skladchina-reputation-redesign.md`) — два пересмотра против таблицы ниже:
+> 1. **Бонус +15 за voluntary-оплату — ВЫЧЕРКНУТ.** Это фарм-канал: плюс без обязательств
+>    и риска (создал voluntary-сбор другу → оплатил копейку → +15 без какой-либо ставки).
+>    Voluntary-сборы полностью вне репутации (тумблер «Важный сбор» для них недоступен).
+>    Признание щедрости — кандидат на **черту профиля** в P1b (информация), не очки.
+> 2. **Org-confirm («организатор сверил поступления») остаётся в P2, но только с
+>    отложенной эмиссией** (пост-close окно подтверждения). Причина: синхронное
+>    авто-закрытие схлопывает окно подтверждения в ноль — сбор закрывается последним
+>    ответом в той же транзакции, и честные плательщики получали бы 0.
+>
+> Актуальные P1-веса (paid +10 / declined без строки / expired −40 / released без строки) —
+> `docs/modules/reputation-v2.md` § «Ось „финансы"».
+
 **Опирается на подтверждение организатором, не на самозаявку** (иначе фарм). Нужна **новая
 механика: «организатор сверил поступления»** (как отметка явки) — самозаявка = провизорно,
 плюс даёт только подтверждённое.
@@ -129,7 +145,7 @@ paid **+10**, declined **−5**, expired_no_response **−25**
 | Исход | XP | Trust |
 |---|---|---|
 | оплатил, **подтверждено орг.** | +10 | + засчитан |
-| **voluntary**-сбор оплатил (подтв.) | **+15** | + (бонус: сдержал, хоть не обязан — цель 2) |
+| ~~**voluntary**-сбор оплатил (подтв.)~~ | ~~**+15**~~ | ~~+ (бонус: сдержал, хоть не обязан — цель 2)~~ **вычеркнуто 2026-06-12, см. note выше** |
 | самозаявка, не подтверждено | 0 (провизорно) | — |
 | честный отказ заранее | 0 | нейтрально (вне знаменателя) |
 | ghosting (`expired_no_response`) | 0, стрик сгорает | **−− (вес ×2 в знаменателе)** |
@@ -310,7 +326,7 @@ Headline: **«репутацию нельзя выписать себе»** = в
 
 - Репутация: `backend/.../reputation/{ReputationService,JooqReputationRepository,ReputationRepository,Reputation,ReputationMapper}.kt`
 - Явка/события: `backend/.../event/{AttendanceService,JooqEventRepository,JooqEventResponseRepository}.kt`
-- Сборы: `backend/.../skladchina/SkladchinaService.kt` (`applyReputationDeltas`, `addReliabilityDelta` caller)
+- Сборы: `backend/.../skladchina/SkladchinaService.kt` (`applyReputationDeltas`; на момент дизайна звал `addReliabilityDelta` — метод удалён в P1a, теперь ledger `appendAndRecompute`)
 - Миграции: `V7__create_user_club_reputation.sql`, `V6__create_event_responses.sql`, `V14__create_skladchinas.sql`
 - Фронт (показ): `ProfilePage.tsx`, `components/club/{ClubMembersTab,MemberProfileModal}.tsx`, `MyClubsPage.tsx` (peer-signal)
 - PRD: §4.4 (репутация/двухэтапное подтверждение), §5.1 (`user_club_reputation`, `clubs.activity_rating`), §10, §11 (будущая кросс-клубная)

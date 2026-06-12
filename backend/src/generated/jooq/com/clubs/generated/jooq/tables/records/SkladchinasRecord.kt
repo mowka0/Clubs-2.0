@@ -93,6 +93,10 @@ open class SkladchinasRecord private constructor() : UpdatableRecordImpl<Skladch
         set(value): Unit = set(17, value)
         get(): OffsetDateTime? = get(17) as OffsetDateTime?
 
+    open var reminderSentAt: OffsetDateTime?
+        set(value): Unit = set(18, value)
+        get(): OffsetDateTime? = get(18) as OffsetDateTime?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -102,7 +106,7 @@ open class SkladchinasRecord private constructor() : UpdatableRecordImpl<Skladch
     /**
      * Create a detached, initialised SkladchinasRecord
      */
-    constructor(id: UUID? = null, clubId: UUID, creatorId: UUID, title: String, description: String? = null, rules: String? = null, photoUrl: String? = null, paymentMode: SkladchinaMode, totalGoalKopecks: Long? = null, paymentLink: String, paymentMethodNote: String? = null, deadline: OffsetDateTime, affectsReputation: Boolean? = null, status: SkladchinaStatus? = null, closedAt: OffsetDateTime? = null, closedBy: UUID? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, clubId: UUID, creatorId: UUID, title: String, description: String? = null, rules: String? = null, photoUrl: String? = null, paymentMode: SkladchinaMode, totalGoalKopecks: Long? = null, paymentLink: String, paymentMethodNote: String? = null, deadline: OffsetDateTime, affectsReputation: Boolean? = null, status: SkladchinaStatus? = null, closedAt: OffsetDateTime? = null, closedBy: UUID? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, reminderSentAt: OffsetDateTime? = null): this() {
         this.id = id
         this.clubId = clubId
         this.creatorId = creatorId
@@ -121,6 +125,7 @@ open class SkladchinasRecord private constructor() : UpdatableRecordImpl<Skladch
         this.closedBy = closedBy
         this.createdAt = createdAt
         this.updatedAt = updatedAt
+        this.reminderSentAt = reminderSentAt
         resetChangedOnNotNull()
     }
 
@@ -147,6 +152,7 @@ open class SkladchinasRecord private constructor() : UpdatableRecordImpl<Skladch
             this.closedBy = value.closedBy
             this.createdAt = value.createdAt
             this.updatedAt = value.updatedAt
+            this.reminderSentAt = value.reminderSentAt
             resetChangedOnNotNull()
         }
     }

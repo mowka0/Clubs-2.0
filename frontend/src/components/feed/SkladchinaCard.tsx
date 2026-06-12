@@ -93,7 +93,7 @@ export const SkladchinaCard: FC<SkladchinaCardProps> = ({ skladchina, onClick })
           <div className="rd-badges-row">
             {badge && <span className={`rd-badge ${badge.accent ? 'rd-warn' : 'rd-neutral'}`}>{badge.text}</span>}
             {skladchina.affectsReputation && (
-              <span className="rd-badge rd-rep" title="Влияет на репутацию">⚠️ Репутация</span>
+              <span className="rd-badge rd-rep" title="Важный сбор: влияет на репутацию участников">⚠️ Важный сбор</span>
             )}
           </div>
         )}

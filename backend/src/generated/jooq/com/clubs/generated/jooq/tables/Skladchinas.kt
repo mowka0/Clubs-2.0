@@ -177,6 +177,11 @@ open class Skladchinas(
      */
     val UPDATED_AT: TableField<SkladchinasRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "")
 
+    /**
+     * The column <code>public.skladchinas.reminder_sent_at</code>.
+     */
+    val REMINDER_SENT_AT: TableField<SkladchinasRecord, OffsetDateTime?> = createField(DSL.name("reminder_sent_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "")
+
     private constructor(alias: Name, aliased: Table<SkladchinasRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<SkladchinasRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<SkladchinasRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
