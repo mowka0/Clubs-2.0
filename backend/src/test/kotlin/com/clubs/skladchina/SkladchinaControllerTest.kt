@@ -288,7 +288,7 @@ class SkladchinaControllerTest {
     @Test
     fun `GET me-skladchinas returns active skladchinas only for participant`() {
         val id1 = createSkladchina(listOf(memberAId))   // memberA participant
-        val id2 = createSkladchina(listOf(memberBId))   // memberB participant, memberA not
+        createSkladchina(listOf(memberBId))             // memberB participant, memberA not — must not leak into A's feed
 
         mockMvc.perform(
             get("/api/users/me/skladchinas")
@@ -352,6 +352,51 @@ class SkladchinaControllerTest {
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.paymentMode").value("voluntary"))
             .andExpect(jsonPath("$.totalGoalKopecks").doesNotExist())
+    }
+
+    @Test
+    fun `create voluntary with optional goal persists it and rejects non-positive`() {
+        // Staging feedback 2026-06-12: gift pools want an indicative target too.
+        val participants = """{"userId": "$memberAId"}"""
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "title": "Voluntary with goal",
+                      "paymentMode": "voluntary",
+                      "totalGoalKopecks": 500000,
+                      "paymentLink": "https://x.com",
+                      "deadline": "${OffsetDateTime.now().plusDays(2)}",
+                      "participants": [$participants]
+                    }
+                    """.trimIndent()
+                )
+        )
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.paymentMode").value("voluntary"))
+            .andExpect(jsonPath("$.totalGoalKopecks").value(500000))
+
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "title": "Voluntary bad goal",
+                      "paymentMode": "voluntary",
+                      "totalGoalKopecks": 0,
+                      "paymentLink": "https://x.com",
+                      "deadline": "${OffsetDateTime.now().plusDays(2)}",
+                      "participants": [$participants]
+                    }
+                    """.trimIndent()
+                )
+        )
+            .andExpect(status().isBadRequest)
     }
 
     // ---- declared-amount validation (redesign § Валидации) ----

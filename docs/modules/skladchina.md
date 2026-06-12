@@ -394,7 +394,7 @@ CREATE TABLE skladchinas (
     payment_mode        skladchina_mode NOT NULL,
                         -- enum: fixed_equal, fixed_individual, voluntary
 
-    total_goal_kopecks  BIGINT,                 -- nullable: для voluntary = NULL
+    total_goal_kopecks  BIGINT,                 -- nullable: для voluntary опционально (индикативная цель)
                         -- для fixed_equal: required. для fixed_individual: sum of participant amounts
     payment_link        TEXT NOT NULL,          -- ссылка на банк/СБП
     payment_method_note TEXT,                   -- "Тинькофф / Сбер /..." свободный текст
@@ -426,7 +426,9 @@ CREATE INDEX idx_skladchinas_status_deadline ON skladchinas(status, deadline);
   — последнему берёт +diff)
 - `fixed_individual` — admin задаёт `expected_amount` каждому
   участнику в форме; `total_goal_kopecks = sum(expected_amounts)`
-- `voluntary` — `total_goal_kopecks = NULL`, у participants
+- `voluntary` — `total_goal_kopecks` опционален (индикативная цель для прогресс-бара,
+  добавлено 2026-06-12 по staging-фидбеку; при наличии работает по общим правилам
+  закрытия/статусов), у participants
   `expected_amount = NULL`, user указывает сам при «оплатил»
 
 **`status` enum:**
@@ -540,7 +542,7 @@ guard от double-application; структурный backstop — UNIQUE-клю
   rules: string | null,
   photoUrl: string | null,                // URL загруженного фото (через AvatarUpload pattern)
   paymentMode: 'fixed_equal' | 'fixed_individual' | 'voluntary',
-  totalGoalKopecks: number | null,        // required для fixed_equal; null для voluntary
+  totalGoalKopecks: number | null,        // required для fixed_equal; optional для voluntary (цель); null для fixed_individual (считается из долей)
   paymentLink: string,                    // required, max 1000
   paymentMethodNote: string | null,       // "Тинькофф" и т.п.
   deadline: string,                       // ISO 8601, must be > now + 1h
@@ -566,7 +568,7 @@ guard от double-application; структурный backstop — UNIQUE-клю
 - Все participant.userId должны быть active members этого клуба (MembershipStatus.active)
 - `fixed_equal`: `totalGoalKopecks > 0` обязателен
 - `fixed_individual`: каждому participant.expectedAmountKopecks > 0; `total = sum(amounts)` вычисляется
-- `voluntary`: `totalGoalKopecks` ignored
+- `voluntary`: `totalGoalKopecks` опционален; если задан — должен быть > 0 (400 иначе)
 - `deadline > now + 1h` И `deadline < now + 90 дней`
 
 **Гейты `affectsReputation = true`** («Важный сбор», 2026-06-12; все нарушения → 400):
@@ -1070,7 +1072,7 @@ goal-reached / «все остальные ответили»)
 - `participants[i].userId` не active member клуба → 403
 - `deadline < now + 1h` → 400
 - `fixed_equal` без `totalGoalKopecks` → 400
-- `voluntary` с `totalGoalKopecks` → ignored (или 400 — на выбор разработчика, в спеке = ignored с warning в response)
+- `voluntary` с `totalGoalKopecks` → принимается и сохраняется (изменено 2026-06-12; ранее ignored); `<= 0` → 400
 - `affectsReputation=true` + `voluntary` → 400
 - `affectsReputation=true` + `deadline < now + 24h` → 400
 - `affectsReputation=true` + в клубе уже 3 реп-сбора за последние 7 дней → 400

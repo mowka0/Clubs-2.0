@@ -74,7 +74,10 @@ class SkladchinaService(
             photoUrl = request.photoUrl,
             paymentMode = mode,
             totalGoalKopecks = when (mode) {
-                SkladchinaMode.voluntary -> null
+                // Voluntary: optional goal, purely indicative for participants — once set
+                // it flows through the same progress/auto-close/final-status mechanics as
+                // fixed modes (staging feedback 2026-06-12: gift pools want a target too).
+                SkladchinaMode.voluntary -> request.totalGoalKopecks
                 SkladchinaMode.fixed_equal -> request.totalGoalKopecks
                 SkladchinaMode.fixed_individual -> participants.sumOf { it.second ?: 0L }
             },
@@ -484,7 +487,11 @@ class SkladchinaService(
                 }
             }
             SkladchinaMode.voluntary -> {
-                // total ignored, expected ignored. Nothing to validate.
+                // Optional indicative goal (drives the progress bar and the generic
+                // close-status rules); expected amounts ignored.
+                if (request.totalGoalKopecks != null && request.totalGoalKopecks <= 0) {
+                    throw ValidationException("totalGoalKopecks must be positive")
+                }
             }
         }
     }
