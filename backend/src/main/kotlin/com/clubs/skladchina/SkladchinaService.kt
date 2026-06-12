@@ -177,10 +177,12 @@ class SkladchinaService(
             throw ValidationException("You have already declined this skladchina")
         }
 
-        validateDeclaredAmount(skladchina.paymentMode, participant.expectedAmountKopecks, declaredAmountKopecks)
+        val effectiveAmountKopecks = resolveDeclaredAmount(
+            skladchina.paymentMode, participant.expectedAmountKopecks, declaredAmountKopecks
+        )
 
         val updated = skladchinaRepository.setParticipantPaid(
-            skladchinaId, callerId, declaredAmountKopecks, OffsetDateTime.now()
+            skladchinaId, callerId, effectiveAmountKopecks, OffsetDateTime.now()
         )
         if (updated == 0) {
             // F5-03: the participant left `pending` between our read and this UPDATE
@@ -188,7 +190,7 @@ class SkladchinaService(
             // overwriting the terminal status its ledger row was emitted for.
             throw ConflictException("Сбор уже закрыт — изменить ответ нельзя. Обновите экран")
         }
-        log.info("Skladchina mark-paid: id={} userId={} amount={}", skladchinaId, callerId, declaredAmountKopecks)
+        log.info("Skladchina mark-paid: id={} userId={} amount={}", skladchinaId, callerId, effectiveAmountKopecks)
 
         maybeAutoCloseAfterStateChange(skladchinaId)
 
@@ -443,27 +445,29 @@ class SkladchinaService(
     }
 
     /**
-     * Fixed modes: declared must equal the assigned share — a self-declared larger
-     * amount let a participant "reach the goal" alone, instantly closing the
-     * skladchina and (pre-released) minus-ing every pending participant (F5-02
-     * amplifier), and painted a fake collected sum. Voluntary: sanity cap only.
+     * Fixed modes: the participant has no choice anyway (the UI field is read-only),
+     * so the server records its own assigned share verbatim and IGNORES the client
+     * value. Found on staging 2026-06-12: the UI rounds kopecks to whole rubles
+     * (33333 → "333" → 33300), so the previous strict `declared == expected` check
+     * rejected every honest payment of a non-divisible share. Server-authoritative
+     * recording keeps `collected` exact and still kills the "declare ≥ goal to slam
+     * the skladchina shut" amplifier of F5-02. Voluntary: the declared amount IS the
+     * data — sanity cap only.
      */
-    private fun validateDeclaredAmount(mode: SkladchinaMode, expectedAmountKopecks: Long?, declaredAmountKopecks: Long) {
+    private fun resolveDeclaredAmount(mode: SkladchinaMode, expectedAmountKopecks: Long?, declaredAmountKopecks: Long): Long =
         when (mode) {
-            SkladchinaMode.fixed_equal, SkladchinaMode.fixed_individual -> {
-                if (declaredAmountKopecks != expectedAmountKopecks) {
-                    throw ValidationException("Сумма оплаты должна совпадать с назначенной суммой")
-                }
-            }
+            SkladchinaMode.fixed_equal, SkladchinaMode.fixed_individual ->
+                expectedAmountKopecks
+                    ?: throw ValidationException("Сумма участника не назначена — обратитесь к организатору")
             SkladchinaMode.voluntary -> {
                 if (declaredAmountKopecks > DECLARED_AMOUNT_MAX_KOPECKS) {
                     throw ValidationException(
                         "Сумма не может превышать ${DECLARED_AMOUNT_MAX_KOPECKS / 100} ₽"
                     )
                 }
+                declaredAmountKopecks
             }
         }
-    }
 
     private fun validateRequest(request: CreateSkladchinaRequest, mode: SkladchinaMode) {
         when (mode) {

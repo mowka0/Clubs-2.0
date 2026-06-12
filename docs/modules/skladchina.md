@@ -516,8 +516,9 @@ CREATE INDEX idx_skladchina_participants_user_id ON skladchina_participants(user
 Сумма `declared_amount` сохраняется для recon-а организатора, но не
 влияет на points — частичную оплату не штрафуем (honor system и так
 позволяет фейк, а доплачивать руками после клика «оплатил» неудобно).
-В fixed-режимах `declared == expected` форсится валидацией markPaid
-(см. § API), так что расхождение возможно только в voluntary.
+В fixed-режимах сервер записывает назначенную `expected`-долю сам,
+игнорируя клиентское значение (см. § API), так что расхождение возможно
+только в voluntary.
 
 `reputation_applied = TRUE` после успешного применения — skladchina-side
 guard от double-application; структурный backstop — UNIQUE-ключ ledger
@@ -695,10 +696,11 @@ SELECT COUNT(*) FROM skladchina_participants sp
 **Response 200:** обновлённый `SkladchinaDetailDto`
 
 **Валидации (2026-06-12):**
-- `fixed_equal` / `fixed_individual`: **`declared == expected`**, иначе 400.
-  UI и так readOnly; серверная проверка убивает усилитель F5-02 (заявка
-  ≥ goal → мгновенное авто-закрытие → минусы всем pending) и
-  «нарисованный» collected.
+- `fixed_equal` / `fixed_individual`: **сервер записывает назначенную долю
+  (server-authoritative)**, клиентское `declaredAmountKopecks` игнорируется.
+  UI округляет копейки до рублей (33333 → «333»), поэтому строгая проверка
+  равенства резала бы честные оплаты; авторитетность сервера так же убивает
+  усилитель F5-02 (заявить ≥ goal нельзя) и «нарисованный» collected.
 - `voluntary`: sanity-cap **`declared ≤ 10_000_000` копеек (100 000 ₽)** —
   гигиена статистики, иначе 400.
 - Переход только из `pending`: UPDATE с предикатом `WHERE status='pending'`

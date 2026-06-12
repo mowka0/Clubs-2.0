@@ -357,7 +357,11 @@ class SkladchinaControllerTest {
     // ---- declared-amount validation (redesign § Валидации) ----
 
     @Test
-    fun `mark-paid with declared not equal to expected in fixed mode returns 400`() {
+    fun `mark-paid in fixed mode records the assigned share, ignoring the client value`() {
+        // Server-authoritative recording (staging bug 2026-06-12): the UI rounds kopecks
+        // to whole rubles, so a strict declared == expected check rejected honest payments
+        // of non-divisible shares. The client value must not be able to inflate `collected`
+        // (F5-02 amplifier) — nor block a payment over a 33-kopeck rounding gap.
         val id = createSkladchina(listOf(memberAId, memberBId))  // fixed_equal, 50000 each
         mockMvc.perform(
             post("/api/skladchinas/$id/mark-paid")
@@ -365,7 +369,10 @@ class SkladchinaControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"declaredAmountKopecks": 100000}""")
         )
-            .andExpect(status().isBadRequest)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.myStatus").value("paid"))
+            .andExpect(jsonPath("$.myDeclaredAmountKopecks").value(50000))
+            .andExpect(jsonPath("$.collectedKopecks").value(50000))
     }
 
     @Test
