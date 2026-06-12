@@ -17,11 +17,13 @@ function formatRubles(kopecks: number): string {
 
 function statusBadge(status: string): { text: string; cls: string } {
   switch (status) {
-    case 'paid':                 return { text: 'Оплатил',    cls: 'rd-going' };
-    case 'declined':             return { text: 'Отказался',  cls: 'rd-decline' };
-    case 'expired_no_response':  return { text: 'Не ответил', cls: 'rd-neutral2' };
-    case 'pending':              return { text: 'Ожидает',    cls: 'rd-warn' };
-    default:                     return { text: status,       cls: 'rd-warn' };
+    case 'paid':                 return { text: 'Оплатил',        cls: 'rd-going' };
+    case 'declined':             return { text: 'Отказался',      cls: 'rd-decline' };
+    case 'expired_no_response':  return { text: 'Не ответил',     cls: 'rd-neutral2' };
+    // Closed before the deadline while still pending — neutral, no penalty.
+    case 'released':             return { text: 'Не потребовался', cls: 'rd-neutral2' };
+    case 'pending':              return { text: 'Ожидает',        cls: 'rd-warn' };
+    default:                     return { text: status,           cls: 'rd-warn' };
   }
 }
 
@@ -29,7 +31,7 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
   participants,
 }) => {
   const sorted = [...participants].sort((a, b) => {
-    const order: Record<string, number> = { paid: 0, pending: 1, declined: 2, expired_no_response: 3 };
+    const order: Record<string, number> = { paid: 0, pending: 1, declined: 2, released: 3, expired_no_response: 4 };
     return (order[a.status] ?? 99) - (order[b.status] ?? 99);
   });
 

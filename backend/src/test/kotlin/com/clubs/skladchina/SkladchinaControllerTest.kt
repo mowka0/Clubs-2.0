@@ -1,6 +1,9 @@
 package com.clubs.skladchina
 
 import com.clubs.auth.JwtService
+import com.clubs.generated.jooq.enums.ReputationKind
+import com.clubs.generated.jooq.enums.SkladchinaStatus
+import com.clubs.generated.jooq.tables.references.REPUTATION_LEDGER
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
@@ -22,6 +25,9 @@ import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import java.time.OffsetDateTime
 import java.util.UUID
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -58,6 +64,8 @@ class SkladchinaControllerTest {
     @Autowired lateinit var jwtService: JwtService
     @Autowired lateinit var dsl: DSLContext
     @Autowired lateinit var objectMapper: ObjectMapper
+    @Autowired lateinit var skladchinaService: SkladchinaService
+    @Autowired lateinit var skladchinaRepository: SkladchinaRepository
 
     private lateinit var organizerId: UUID
     private lateinit var memberAId: UUID
@@ -71,6 +79,7 @@ class SkladchinaControllerTest {
 
     @BeforeEach
     fun setUp() {
+        dsl.execute("DELETE FROM reputation_ledger")
         dsl.execute("DELETE FROM skladchina_participants")
         dsl.execute("DELETE FROM skladchinas")
         dsl.execute("DELETE FROM event_responses")
@@ -345,6 +354,222 @@ class SkladchinaControllerTest {
             .andExpect(jsonPath("$.totalGoalKopecks").doesNotExist())
     }
 
+    // ---- declared-amount validation (redesign § Валидации) ----
+
+    @Test
+    fun `mark-paid with declared not equal to expected in fixed mode returns 400`() {
+        val id = createSkladchina(listOf(memberAId, memberBId))  // fixed_equal, 50000 each
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"declaredAmountKopecks": 100000}""")
+        )
+            .andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `mark-paid voluntary above sanity cap returns 400, below cap is accepted`() {
+        val id = createVoluntarySkladchina(listOf(memberAId, memberBId))
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"declaredAmountKopecks": 10000001}""")
+        )
+            .andExpect(status().isBadRequest)
+
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"declaredAmountKopecks": 10000000}""")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.myStatus").value("paid"))
+    }
+
+    // ---- "важный сбор" toggle gates ----
+
+    @Test
+    fun `create reputation-affecting voluntary skladchina returns 400`() {
+        val body = """
+            {
+              "title": "Voluntary punitive",
+              "paymentMode": "voluntary",
+              "paymentLink": "https://x.com",
+              "deadline": "${OffsetDateTime.now().plusDays(2)}",
+              "affectsReputation": true,
+              "participants": [{"userId": "$memberAId"}]
+            }
+        """.trimIndent()
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+        )
+            .andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `create reputation-affecting skladchina with deadline under 24h returns 400`() {
+        // 2h ahead passes the generic 1h-minimum but fails the 24h reputation gate.
+        val body = """
+            {
+              "title": "Ambush",
+              "paymentMode": "fixed_equal",
+              "totalGoalKopecks": 100000,
+              "paymentLink": "https://x.com",
+              "deadline": "${OffsetDateTime.now().plusHours(2)}",
+              "affectsReputation": true,
+              "participants": [{"userId": "$memberAId"}]
+            }
+        """.trimIndent()
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+        )
+            .andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `fourth reputation-affecting skladchina within 7 days returns 400`() {
+        repeat(3) {
+            mockMvc.perform(
+                post("/api/clubs/$clubId/skladchinas")
+                    .header("Authorization", "Bearer $organizerToken")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(createRepBodyFor(listOf(memberAId, memberBId)))
+            ).andExpect(status().isCreated)
+        }
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createRepBodyFor(listOf(memberAId, memberBId)))
+        )
+            .andExpect(status().isBadRequest)
+
+        // A non-reputation skladchina is NOT rate-limited.
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createBodyFor(listOf(memberAId, memberBId)))
+        )
+            .andExpect(status().isCreated)
+    }
+
+    // ---- released vs expired predicate (F5-02) ----
+
+    @Test
+    fun `early close releases pending participants - no ledger row, paid keeps +10`() {
+        val id = createRepSkladchina(listOf(memberAId, memberBId))
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"declaredAmountKopecks": 50000}""")
+        ).andExpect(status().isOk)
+
+        // Manual close BEFORE the deadline: memberB never answered, but the deadline
+        // never came — released, neutral.
+        mockMvc.perform(
+            post("/api/skladchinas/$id/close")
+                .header("Authorization", "Bearer $organizerToken")
+        ).andExpect(status().isOk)
+
+        assertEquals("released", participantStatus(id, memberBId))
+        assertEquals(0, ledgerRows(memberBId, id), "released participant must have NO ledger row")
+        assertEquals(1, ledgerRows(memberAId, id), "paid participant accrues +10")
+        assertEquals(ReputationKind.skladchina_paid, soleLedgerKind(memberAId, id))
+        assertEquals(10, soleLedgerPoints(memberAId, id))
+    }
+
+    @Test
+    fun `close at deadline expires pending participants with -40 ledger row`() {
+        val id = createRepSkladchina(listOf(memberAId, memberBId))
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"declaredAmountKopecks": 50000}""")
+        ).andExpect(status().isOk)
+
+        // Simulate the deadline passing, then the scheduler path closing it.
+        dsl.execute("UPDATE skladchinas SET deadline = NOW() - INTERVAL '1 hour' WHERE id = '$id'")
+        skladchinaService.closeInternal(id, closedBy = null, manualClose = false)
+
+        assertEquals("expired_no_response", participantStatus(id, memberBId))
+        assertEquals(ReputationKind.skladchina_expired, soleLedgerKind(memberBId, id))
+        assertEquals(-40, soleLedgerPoints(memberBId, id))
+        assertEquals(10, soleLedgerPoints(memberAId, id))
+    }
+
+    // ---- F5-03: pending-only transition guard ----
+
+    @Test
+    fun `mark-paid after concurrent expiry returns 409 and keeps the terminal status`() {
+        val id = createSkladchina(listOf(memberAId, memberBId))
+        // The race's intermediate state: skladchina still active, participant already resolved.
+        dsl.execute(
+            "UPDATE skladchina_participants SET status = 'expired_no_response' " +
+                "WHERE skladchina_id = '$id' AND user_id = '$memberAId'"
+        )
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"declaredAmountKopecks": 50000}""")
+        )
+            .andExpect(status().isConflict)
+        assertEquals("expired_no_response", participantStatus(id, memberAId))
+    }
+
+    @Test
+    fun `decline after concurrent expiry returns 409`() {
+        val id = createSkladchina(listOf(memberAId, memberBId))
+        dsl.execute(
+            "UPDATE skladchina_participants SET status = 'expired_no_response' " +
+                "WHERE skladchina_id = '$id' AND user_id = '$memberAId'"
+        )
+        mockMvc.perform(
+            post("/api/skladchinas/$id/decline")
+                .header("Authorization", "Bearer $memberAToken")
+        )
+            .andExpect(status().isConflict)
+        assertEquals("expired_no_response", participantStatus(id, memberAId))
+    }
+
+    // ---- F5-12: atomic close claim ----
+
+    @Test
+    fun `claimClose flips active exactly once`() {
+        val id = createSkladchina(listOf(memberAId, memberBId))
+        val now = OffsetDateTime.now()
+        assertTrue(skladchinaRepository.claimClose(id, SkladchinaStatus.cancelled, organizerId, now))
+        assertFalse(
+            skladchinaRepository.claimClose(id, SkladchinaStatus.closed_failed, organizerId, now),
+            "second closer must lose the claim"
+        )
+        assertEquals("cancelled", skladchinaStatus(id))
+    }
+
+    @Test
+    fun `double closeInternal is a no-op the second time`() {
+        val id = createRepSkladchina(listOf(memberAId, memberBId))
+        skladchinaService.closeInternal(id, closedBy = organizerId, manualClose = true)
+        val statusAfterFirst = skladchinaStatus(id)
+        // No exception, status untouched, no duplicate participant resolution.
+        skladchinaService.closeInternal(id, closedBy = null, manualClose = false)
+        assertEquals(statusAfterFirst, skladchinaStatus(id))
+        assertEquals("released", participantStatus(id, memberAId))
+        assertEquals(0, ledgerRows(memberAId, id))
+    }
+
     // ---- helpers ----
 
     private fun createBodyFor(participantIds: List<UUID>): String {
@@ -361,8 +586,69 @@ class SkladchinaControllerTest {
         """.trimIndent()
     }
 
-    private fun createSkladchina(participantIds: List<UUID>): UUID {
-        val body = createBodyFor(participantIds)
+    private fun createRepBodyFor(participantIds: List<UUID>): String {
+        val participants = participantIds.joinToString(", ") { """{"userId": "$it"}""" }
+        return """
+            {
+              "title": "Important",
+              "paymentMode": "fixed_equal",
+              "totalGoalKopecks": 100000,
+              "paymentLink": "https://tinkoff.ru/pay/xyz",
+              "deadline": "${OffsetDateTime.now().plusDays(2)}",
+              "affectsReputation": true,
+              "participants": [$participants]
+            }
+        """.trimIndent()
+    }
+
+    private fun createRepSkladchina(participantIds: List<UUID>): UUID =
+        createFromBody(createRepBodyFor(participantIds))
+
+    private fun createVoluntarySkladchina(participantIds: List<UUID>): UUID {
+        val participants = participantIds.joinToString(", ") { """{"userId": "$it"}""" }
+        return createFromBody(
+            """
+            {
+              "title": "Voluntary",
+              "paymentMode": "voluntary",
+              "paymentLink": "https://x.com",
+              "deadline": "${OffsetDateTime.now().plusDays(2)}",
+              "participants": [$participants]
+            }
+            """.trimIndent()
+        )
+    }
+
+    private fun participantStatus(skladchinaId: UUID, userId: UUID): String =
+        dsl.fetchOne(
+            "SELECT status::text FROM skladchina_participants WHERE skladchina_id = ? AND user_id = ?",
+            skladchinaId, userId
+        )!!.get(0, String::class.java)!!
+
+    private fun skladchinaStatus(skladchinaId: UUID): String =
+        dsl.fetchOne("SELECT status::text FROM skladchinas WHERE id = ?", skladchinaId)!!
+            .get(0, String::class.java)!!
+
+    private fun ledgerRows(userId: UUID, sourceId: UUID): Int =
+        dsl.fetchCount(
+            REPUTATION_LEDGER,
+            REPUTATION_LEDGER.USER_ID.eq(userId).and(REPUTATION_LEDGER.SOURCE_ID.eq(sourceId))
+        )
+
+    private fun soleLedgerKind(userId: UUID, sourceId: UUID): ReputationKind =
+        dsl.select(REPUTATION_LEDGER.KIND).from(REPUTATION_LEDGER)
+            .where(REPUTATION_LEDGER.USER_ID.eq(userId).and(REPUTATION_LEDGER.SOURCE_ID.eq(sourceId)))
+            .fetchOne(REPUTATION_LEDGER.KIND)!!
+
+    private fun soleLedgerPoints(userId: UUID, sourceId: UUID): Int =
+        dsl.select(REPUTATION_LEDGER.POINTS).from(REPUTATION_LEDGER)
+            .where(REPUTATION_LEDGER.USER_ID.eq(userId).and(REPUTATION_LEDGER.SOURCE_ID.eq(sourceId)))
+            .fetchOne(REPUTATION_LEDGER.POINTS)!!
+
+    private fun createSkladchina(participantIds: List<UUID>): UUID =
+        createFromBody(createBodyFor(participantIds))
+
+    private fun createFromBody(body: String): UUID {
         val result = mockMvc.perform(
             post("/api/clubs/$clubId/skladchinas")
                 .header("Authorization", "Bearer $organizerToken")

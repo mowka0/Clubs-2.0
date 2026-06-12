@@ -1,6 +1,7 @@
 package com.clubs.skladchina
 
 import com.clubs.club.ClubRepository
+import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
@@ -46,6 +47,9 @@ class SkladchinaService(
         }
         if (deadlineMaxAge > MAX_DEADLINE_DAYS) {
             throw ValidationException("Deadline must be at most $MAX_DEADLINE_DAYS days ahead")
+        }
+        if (request.affectsReputation) {
+            validateReputationGates(clubId, mode, deadlineMinAge, now)
         }
 
         val userIds = request.participants.map { it.userId }.distinct()
@@ -102,6 +106,7 @@ class SkladchinaService(
                 paymentMode = created.paymentMode.literal,
                 totalGoalKopecks = created.totalGoalKopecks,
                 deadline = created.deadline,
+                affectsReputation = created.affectsReputation,
                 participantUserIds = userIds
             )
         )
@@ -172,7 +177,17 @@ class SkladchinaService(
             throw ValidationException("You have already declined this skladchina")
         }
 
-        skladchinaRepository.setParticipantPaid(skladchinaId, callerId, declaredAmountKopecks, OffsetDateTime.now())
+        validateDeclaredAmount(skladchina.paymentMode, participant.expectedAmountKopecks, declaredAmountKopecks)
+
+        val updated = skladchinaRepository.setParticipantPaid(
+            skladchinaId, callerId, declaredAmountKopecks, OffsetDateTime.now()
+        )
+        if (updated == 0) {
+            // F5-03: the participant left `pending` between our read and this UPDATE
+            // (a concurrent close expired/released them) — refuse instead of
+            // overwriting the terminal status its ledger row was emitted for.
+            throw ConflictException("Сбор уже закрыт — изменить ответ нельзя. Обновите экран")
+        }
         log.info("Skladchina mark-paid: id={} userId={} amount={}", skladchinaId, callerId, declaredAmountKopecks)
 
         maybeAutoCloseAfterStateChange(skladchinaId)
@@ -195,7 +210,11 @@ class SkladchinaService(
         if (participant.status == SkladchinaParticipantStatus.paid) {
             throw ValidationException("Already paid, cannot decline")
         }
-        skladchinaRepository.setParticipantDeclined(skladchinaId, callerId, OffsetDateTime.now())
+        val updated = skladchinaRepository.setParticipantDeclined(skladchinaId, callerId, OffsetDateTime.now())
+        if (updated == 0) {
+            // F5-03: same race as markPaid — concurrent close already resolved this participant.
+            throw ConflictException("Сбор уже закрыт — изменить ответ нельзя. Обновите экран")
+        }
         log.info("Skladchina declined: id={} userId={}", skladchinaId, callerId)
         maybeAutoCloseAfterStateChange(skladchinaId)
         return getDetail(skladchinaId, callerId)
@@ -205,25 +224,33 @@ class SkladchinaService(
      * Auto-close trigger that fires after mark-paid or decline. Closes if:
      *  - goal is reached (fixed-modes), OR
      *  - all participants are in a terminal status (paid / declined) — no more pending.
-     * Quiet no-op otherwise. Errors don't propagate up — they're logged in closeInternal.
+     * Quiet no-op otherwise.
+     *
+     * F5-18: a close/reputation failure is caught and logged HERE so the participant's
+     * own markPaid/decline never 500s because of it (NFR skladchina.md). Scope note:
+     * this is a self-invocation, so closeInternal joins the caller's transaction —
+     * the catch shields against application-level failures; a DB-level error inside
+     * closeInternal still aborts the shared Postgres transaction.
      */
     private fun maybeAutoCloseAfterStateChange(skladchinaId: UUID) {
         val skladchina = skladchinaRepository.findById(skladchinaId) ?: return
         if (skladchina.status != SkladchinaStatus.active) return
 
-        if (skladchina.totalGoalKopecks != null) {
-            val collected = skladchinaRepository.sumCollectedKopecks(skladchinaId)
-            if (collected >= skladchina.totalGoalKopecks) {
-                closeInternal(skladchinaId, closedBy = null, manualClose = false)
-                return
-            }
-        }
-
-        val pendingCount = skladchinaRepository.countParticipantsByStatus(
+        val goalReached = skladchina.totalGoalKopecks
+            ?.let { goal -> skladchinaRepository.sumCollectedKopecks(skladchinaId) >= goal }
+            ?: false
+        val shouldClose = goalReached || skladchinaRepository.countParticipantsByStatus(
             skladchinaId, SkladchinaParticipantStatus.pending
-        )
-        if (pendingCount == 0) {
+        ) == 0
+        if (!shouldClose) return
+
+        try {
             closeInternal(skladchinaId, closedBy = null, manualClose = false)
+        } catch (e: Exception) {
+            log.error(
+                "Auto-close failed for skladchina {} — keeping the participant's state change",
+                skladchinaId, e
+            )
         }
     }
 
@@ -243,14 +270,23 @@ class SkladchinaService(
 
     /**
      * Internal helper, used by both manual close (creator) and auto-close (scheduler / goal-reached).
-     * Determines final status, expires pending participants, applies reputation deltas idempotently,
-     * notifies organizer.
+     * Claims the close atomically, resolves pending participants, applies reputation deltas
+     * idempotently, notifies organizer.
+     *
+     * F5-12: the status flip is an atomic claim (`UPDATE … WHERE status = 'active'`, pattern
+     * claimEvent) — a concurrent closer (scheduler × auto-close × manual) loses the claim and
+     * no-ops, so participants are resolved once and SkladchinaClosedEvent fires exactly once.
+     *
+     * F5-02: pending participants are `expired_no_response` (-40) ONLY when the close happens
+     * at/after the deadline. An early close (goal reached / everyone answered / manual) moves
+     * them to `released` — the promise was "answer by the deadline", and the deadline never
+     * came, so no ledger row is emitted (financeKind(released) = null).
      *
      * @Transactional so the scheduler/auto-close path (SkladchinaScheduler -> closeInternal, a
-     * cross-bean call with no ambient tx) commits expire/status/reputation atomically. The already
+     * cross-bean call with no ambient tx) commits resolve/status/reputation atomically. The already
      * transactional callers (markPaid/decline/closeManually) self-invoke this and simply run inside
-     * their existing tx. Atomicity guarantees a ledger-append failure rolls back the
-     * reputation_applied marks too, so backfill/retry can recover (no orphaned participants).
+     * their existing tx. Atomicity guarantees a ledger-append failure rolls back the claim and
+     * the reputation_applied marks too, so a retry can recover (no orphaned participants).
      */
     @Transactional
     fun closeInternal(skladchinaId: UUID, closedBy: UUID?, manualClose: Boolean) {
@@ -263,21 +299,41 @@ class SkladchinaService(
         val club = clubRepository.findById(skladchina.clubId)
             ?: throw NotFoundException("Club not found")
 
-        // Expire all pending participants first
-        skladchinaRepository.expirePendingParticipants(skladchinaId)
-
         val collected = skladchinaRepository.sumCollectedKopecks(skladchinaId)
-        val totalParticipants = skladchinaRepository.countParticipants(skladchinaId)
-        val paidCount = skladchinaRepository.countParticipantsByStatus(skladchinaId, SkladchinaParticipantStatus.paid)
-
         val finalStatus = computeFinalStatus(skladchina, collected, manualClose)
         val closedAt = OffsetDateTime.now()
-        skladchinaRepository.updateStatus(skladchinaId, finalStatus, closedBy, closedAt)
-        log.info("Skladchina closed: id={} status={} collected={} paid={}/{}",
-            skladchinaId, finalStatus, collected, paidCount, totalParticipants)
+
+        if (!skladchinaRepository.claimClose(skladchinaId, finalStatus, closedBy, closedAt)) {
+            log.info("Skladchina close claim lost: id={} — already closed concurrently, no-op", skladchinaId)
+            return
+        }
+
+        val deadlineReached = !closedAt.isBefore(skladchina.deadline)
+        if (deadlineReached) {
+            skladchinaRepository.expirePendingParticipants(skladchinaId)
+        } else {
+            skladchinaRepository.releasePendingParticipants(skladchinaId)
+        }
+
+        val totalParticipants = skladchinaRepository.countParticipants(skladchinaId)
+        val paidCount = skladchinaRepository.countParticipantsByStatus(skladchinaId, SkladchinaParticipantStatus.paid)
+        log.info("Skladchina closed: id={} status={} collected={} paid={}/{} pendingResolvedAs={}",
+            skladchinaId, finalStatus, collected, paidCount, totalParticipants,
+            if (deadlineReached) "expired_no_response" else "released")
 
         if (skladchina.affectsReputation) {
             applyReputationDeltas(skladchinaId, skladchina.clubId, club.ownerId, closedAt)
+        }
+
+        // Only THIS close can have produced expired_no_response rows (single claim winner,
+        // statuses never leave terminal states), so the query is an exact list for the
+        // "репутация снижена на 40" DM.
+        val expiredUserIds = if (deadlineReached && skladchina.affectsReputation) {
+            skladchinaRepository.findParticipants(skladchinaId)
+                .filter { it.status == SkladchinaParticipantStatus.expired_no_response }
+                .map { it.userId }
+        } else {
+            emptyList()
         }
 
         eventPublisher.publishEvent(
@@ -291,7 +347,8 @@ class SkladchinaService(
                 totalGoalKopecks = skladchina.totalGoalKopecks,
                 paidCount = paidCount,
                 participantCount = totalParticipants,
-                affectsReputation = skladchina.affectsReputation
+                affectsReputation = skladchina.affectsReputation,
+                expiredParticipantUserIds = expiredUserIds
             )
         )
     }
@@ -313,10 +370,12 @@ class SkladchinaService(
 
     /**
      * Routes skladchina outcomes into the finance axis of the reputation ledger
-     * (idempotent — ON CONFLICT + per-participant reputation_applied guard). Values
-     * and mechanic unchanged from the legacy direct-write (paid +10 / declined -5 /
-     * expired -25, see ReputationPolicy). Anti-farm rule 1: the club owner does not
-     * accrue in their own club. occurredAt = skladchina closed_at.
+     * (idempotent — ON CONFLICT + per-participant reputation_applied guard).
+     * Weights and the no-row statuses (declined / released) live in ReputationPolicy.
+     * Anti-farm rule 1: the club owner does not accrue in their own club.
+     * occurredAt = skladchina closed_at. reputation_applied is marked for EVERY
+     * resolved participant, including the no-row ones — it means "the reputation
+     * decision for this participant has been made", not "a ledger row exists".
      */
     private fun applyReputationDeltas(
         skladchinaId: UUID,
@@ -354,6 +413,57 @@ class SkladchinaService(
     private fun parseMode(modeStr: String): SkladchinaMode =
         SkladchinaMode.values().find { it.literal == modeStr }
             ?: throw ValidationException("Invalid payment mode: $modeStr")
+
+    /**
+     * Gates for the "важный сбор" toggle (affects_reputation = true), per the
+     * 2026-06-12 redesign. Messages are user-facing (organizer's create form).
+     */
+    private fun validateReputationGates(clubId: UUID, mode: SkladchinaMode, deadlineHoursAhead: Long, now: OffsetDateTime) {
+        if (mode == SkladchinaMode.voluntary) {
+            // "Voluntary with a silence penalty" is an oxymoron — the toggle is fixed-modes only.
+            throw ValidationException("Добровольный сбор не может влиять на репутацию")
+        }
+        if (deadlineHoursAhead < MIN_REPUTATION_DEADLINE_HOURS) {
+            // Anti-"сбор-засада": participants must get a real window to answer
+            // (creation DM + the 24h-before reminder DM).
+            throw ValidationException("Для важного сбора дедлайн должен быть не раньше чем через 24 часа")
+        }
+        val recentCount = skladchinaRepository.countReputationAffectingCreatedSince(
+            clubId, now.minusDays(REPUTATION_RATE_LIMIT_WINDOW_DAYS)
+        )
+        if (recentCount >= REPUTATION_RATE_LIMIT_MAX) {
+            // The only real anti-farm AND anti-griefing mechanism: caps farming at
+            // +30/week/club per friend and griefing at -120/week per ignored victim.
+            throw ValidationException(
+                "Лимит важных сборов: не больше $REPUTATION_RATE_LIMIT_MAX за " +
+                    "$REPUTATION_RATE_LIMIT_WINDOW_DAYS дней в одном клубе. " +
+                    "Создайте сбор без влияния на репутацию или попробуйте позже"
+            )
+        }
+    }
+
+    /**
+     * Fixed modes: declared must equal the assigned share — a self-declared larger
+     * amount let a participant "reach the goal" alone, instantly closing the
+     * skladchina and (pre-released) minus-ing every pending participant (F5-02
+     * amplifier), and painted a fake collected sum. Voluntary: sanity cap only.
+     */
+    private fun validateDeclaredAmount(mode: SkladchinaMode, expectedAmountKopecks: Long?, declaredAmountKopecks: Long) {
+        when (mode) {
+            SkladchinaMode.fixed_equal, SkladchinaMode.fixed_individual -> {
+                if (declaredAmountKopecks != expectedAmountKopecks) {
+                    throw ValidationException("Сумма оплаты должна совпадать с назначенной суммой")
+                }
+            }
+            SkladchinaMode.voluntary -> {
+                if (declaredAmountKopecks > DECLARED_AMOUNT_MAX_KOPECKS) {
+                    throw ValidationException(
+                        "Сумма не может превышать ${DECLARED_AMOUNT_MAX_KOPECKS / 100} ₽"
+                    )
+                }
+            }
+        }
+    }
 
     private fun validateRequest(request: CreateSkladchinaRequest, mode: SkladchinaMode) {
         when (mode) {
@@ -404,5 +514,12 @@ class SkladchinaService(
         private const val MIN_DEADLINE_HOURS = 1L
         private const val MAX_DEADLINE_DAYS = 90L
         private const val SUCCESS_THRESHOLD = 0.80     // fixed-mode: ≥80% → success at deadline
+
+        // "Важный сбор" gates (docs/backlog/skladchina-reputation-redesign.md § Валидации):
+        private const val MIN_REPUTATION_DEADLINE_HOURS = 24L   // anti-ambush; 48h rejected (breaks "бронь на завтра")
+        private const val REPUTATION_RATE_LIMIT_MAX = 3         // per club, rolling window
+        private const val REPUTATION_RATE_LIMIT_WINDOW_DAYS = 7L
+        // Voluntary sanity cap: 100 000 ₽ — statistics hygiene, not an anti-abuse bound.
+        private const val DECLARED_AMOUNT_MAX_KOPECKS = 10_000_000L
     }
 }

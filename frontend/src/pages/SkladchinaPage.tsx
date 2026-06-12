@@ -188,7 +188,7 @@ export const SkladchinaPage: FC = () => {
         <span className={`rd-badge ${statusCls}`}>{statusLabel(s.status)}</span>
         <span className="rd-badge rd-neutral2">{paymentModeLabel(s.paymentMode)}</span>
         {s.affectsReputation && (
-          <span className="rd-badge rd-warn" title="Этот сбор влияет на репутацию">⚠️ С репутацией</span>
+          <span className="rd-badge rd-warn" title="Важный сбор: влияет на репутацию участников">⚠️ Важный сбор</span>
         )}
       </div>
 
@@ -274,6 +274,12 @@ export const SkladchinaPage: FC = () => {
             <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }}>₽</span>
           </div>
           {actionError && <div className="rd-error">{actionError}</div>}
+          {s.affectsReputation && (
+            <div className="rd-warn-block">
+              Это важный сбор. Оплатите или откажитесь до{' '}
+              {DEADLINE_FMT.format(new Date(s.deadline))}: молчание снизит репутацию на 40
+            </div>
+          )}
           <div className="rd-form-actions">
             <button
               type="button"
@@ -312,6 +318,16 @@ export const SkladchinaPage: FC = () => {
           )}
           {s.myStatus === 'expired_no_response' && (
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Срок истёк, оплата не зарегистрирована</div>
+          )}
+          {s.myStatus === 'released' && (
+            <>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+                Сбор закрыли досрочно — ваш ответ не потребовался
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>
+                Репутация не изменилась
+              </div>
+            </>
           )}
         </div>
       )}

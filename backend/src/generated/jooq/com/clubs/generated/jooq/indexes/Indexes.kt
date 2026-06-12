@@ -34,6 +34,7 @@ val IDX_CLUBS_CATEGORY: Index = Internal.createIndex(DSL.name("idx_clubs_categor
 val IDX_CLUBS_CITY: Index = Internal.createIndex(DSL.name("idx_clubs_city"), Clubs.CLUBS, arrayOf(Clubs.CLUBS.CITY), false)
 val IDX_CLUBS_OWNER_ID: Index = Internal.createIndex(DSL.name("idx_clubs_owner_id"), Clubs.CLUBS, arrayOf(Clubs.CLUBS.OWNER_ID), false)
 val IDX_EVENT_RESPONSES_EVENT_ID: Index = Internal.createIndex(DSL.name("idx_event_responses_event_id"), EventResponses.EVENT_RESPONSES, arrayOf(EventResponses.EVENT_RESPONSES.EVENT_ID), false)
+val IDX_EVENT_RESPONSES_PENDING_STAGE2: Index = Internal.createIndex(DSL.name("idx_event_responses_pending_stage2"), EventResponses.EVENT_RESPONSES, arrayOf(EventResponses.EVENT_RESPONSES.EVENT_ID), false)
 val IDX_EVENT_RESPONSES_USER_ID: Index = Internal.createIndex(DSL.name("idx_event_responses_user_id"), EventResponses.EVENT_RESPONSES, arrayOf(EventResponses.EVENT_RESPONSES.USER_ID), false)
 val IDX_EVENTS_CLUB_ID_DATETIME: Index = Internal.createIndex(DSL.name("idx_events_club_id_datetime"), Events.EVENTS, arrayOf(Events.EVENTS.CLUB_ID, Events.EVENTS.EVENT_DATETIME.desc()), false)
 val IDX_EVENTS_REPUTATION_PENDING: Index = Internal.createIndex(DSL.name("idx_events_reputation_pending"), Events.EVENTS, arrayOf(Events.EVENTS.ID), false)

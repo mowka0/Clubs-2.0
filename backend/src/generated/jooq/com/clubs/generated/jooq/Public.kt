@@ -15,6 +15,7 @@ import com.clubs.generated.jooq.tables.SkladchinaParticipants
 import com.clubs.generated.jooq.tables.Skladchinas
 import com.clubs.generated.jooq.tables.Transactions
 import com.clubs.generated.jooq.tables.UserClubReputation
+import com.clubs.generated.jooq.tables.UserClubReputationPreV18
 import com.clubs.generated.jooq.tables.UserInterests
 import com.clubs.generated.jooq.tables.Users
 
@@ -94,6 +95,11 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val USER_CLUB_REPUTATION: UserClubReputation get() = UserClubReputation.USER_CLUB_REPUTATION
 
     /**
+     * The table <code>public.user_club_reputation_pre_v18</code>.
+     */
+    val USER_CLUB_REPUTATION_PRE_V18: UserClubReputationPreV18 get() = UserClubReputationPreV18.USER_CLUB_REPUTATION_PRE_V18
+
+    /**
      * The table <code>public.user_interests</code>.
      */
     val USER_INTERESTS: UserInterests get() = UserInterests.USER_INTERESTS
@@ -117,6 +123,7 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         Skladchinas.SKLADCHINAS,
         Transactions.TRANSACTIONS,
         UserClubReputation.USER_CLUB_REPUTATION,
+        UserClubReputationPreV18.USER_CLUB_REPUTATION_PRE_V18,
         UserInterests.USER_INTERESTS,
         Users.USERS
     )

@@ -95,6 +95,16 @@ events:
   # Default 1440 (= 24h). Minutes unit for the same reason.
   attendance-reminder-minutes-after: ${ATTENDANCE_REMINDER_MINUTES_AFTER:1440}
 
+# Skladchina notification timing knobs (SkladchinaReminderScheduler). Externalised so
+# staging can shrink them for an end-to-end "важный сбор" test without a rebuild.
+skladchinas:
+  # SkladchinaReminderScheduler poll period (ms). Default 300000 = 5min.
+  reminder-poll-ms: ${SKLADCHINA_REMINDER_POLL_MS:300000}
+  # Deadline reminder DM window: minutes before the deadline it fires for pending
+  # participants of a reputation-affecting skladchina. Default 1440 (= 24h). Minutes
+  # unit so staging can set a small value (e.g. 5) for testing.
+  deadline-reminder-minutes-before: ${SKLADCHINA_DEADLINE_REMINDER_MINUTES_BEFORE:1440}
+
 ---
 spring:
   config:

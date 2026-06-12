@@ -233,4 +233,15 @@ open class SkladchinasDao(configuration: Configuration?) : DAOImpl<SkladchinasRe
      * Fetch records that have <code>updated_at IN (values)</code>
      */
     fun fetchByUpdatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.UPDATED_AT, *values)
+
+    /**
+     * Fetch records that have <code>reminder_sent_at BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfReminderSentAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.REMINDER_SENT_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>reminder_sent_at IN (values)</code>
+     */
+    fun fetchByReminderSentAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.REMINDER_SENT_AT, *values)
 }

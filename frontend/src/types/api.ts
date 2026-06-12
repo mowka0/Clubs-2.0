@@ -312,7 +312,14 @@ export interface EventResponderDto {
 
 export type SkladchinaMode = 'fixed_equal' | 'fixed_individual' | 'voluntary';
 export type SkladchinaStatus = 'active' | 'closed_success' | 'closed_failed' | 'cancelled';
-export type SkladchinaParticipantStatus = 'pending' | 'paid' | 'declined' | 'expired_no_response';
+export type SkladchinaParticipantStatus =
+  | 'pending'
+  | 'paid'
+  | 'declined'
+  | 'expired_no_response'
+  // Skladchina closed before the deadline while the participant was still pending:
+  // no obligation was broken, no reputation entry is emitted.
+  | 'released';
 
 export interface SkladchinaParticipantDto {
   userId: string;

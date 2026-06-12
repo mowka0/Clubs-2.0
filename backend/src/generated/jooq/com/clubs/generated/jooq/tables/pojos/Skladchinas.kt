@@ -34,7 +34,8 @@ data class Skladchinas(
     var closedAt: OffsetDateTime? = null,
     var closedBy: UUID? = null,
     var createdAt: OffsetDateTime? = null,
-    var updatedAt: OffsetDateTime? = null
+    var updatedAt: OffsetDateTime? = null,
+    var reminderSentAt: OffsetDateTime? = null
 ): Serializable {
 
 
@@ -130,6 +131,12 @@ data class Skladchinas(
         }
         else if (this.updatedAt != o.updatedAt)
             return false
+        if (this.reminderSentAt == null) {
+            if (o.reminderSentAt != null)
+                return false
+        }
+        else if (this.reminderSentAt != o.reminderSentAt)
+            return false
         return true
     }
 
@@ -154,6 +161,7 @@ data class Skladchinas(
         result = prime * result + (if (this.closedBy == null) 0 else this.closedBy.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
+        result = prime * result + (if (this.reminderSentAt == null) 0 else this.reminderSentAt.hashCode())
         return result
     }
 
@@ -178,6 +186,7 @@ data class Skladchinas(
         sb.append(", ").append(closedBy)
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)
+        sb.append(", ").append(reminderSentAt)
 
         sb.append(")")
         return sb.toString()

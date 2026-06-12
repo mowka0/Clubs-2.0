@@ -44,15 +44,22 @@ class ReputationPolicyTest {
     }
 
     @Test
-    fun `finance kinds and points match the legacy skladchina deltas`() {
+    fun `finance kinds and points match the 2026-06-12 skladchina redesign`() {
         assertEquals(ReputationKind.skladchina_paid, ReputationPolicy.financeKind(SkladchinaParticipantStatus.paid))
-        assertEquals(ReputationKind.skladchina_declined, ReputationPolicy.financeKind(SkladchinaParticipantStatus.declined))
         assertEquals(ReputationKind.skladchina_expired, ReputationPolicy.financeKind(SkladchinaParticipantStatus.expired_no_response))
+        // Decline is the desired behaviour and the free exit from a punitive skladchina:
+        // NO ledger row at all (a 0-row would inflate outcome_count out of "Новичок").
+        assertNull(ReputationPolicy.financeKind(SkladchinaParticipantStatus.declined))
+        // Released (closed before the deadline, F5-02): no promise broken — no row.
+        assertNull(ReputationPolicy.financeKind(SkladchinaParticipantStatus.released))
         assertNull(ReputationPolicy.financeKind(SkladchinaParticipantStatus.pending))
 
         assertEquals(10, ReputationPolicy.pointsFor(ReputationKind.skladchina_paid))
-        assertEquals(-5, ReputationPolicy.pointsFor(ReputationKind.skladchina_declined))
-        assertEquals(-25, ReputationPolicy.pointsFor(ReputationKind.skladchina_expired))
+        // -40 = 1/5 of no_show: comparable harm, but the obligation was imposed by the
+        // organizer (no stage-2-style "confirm" press). Was -25 before the redesign.
+        assertEquals(-40, ReputationPolicy.pointsFor(ReputationKind.skladchina_expired))
+        // Historic kind — never emitted since the redesign, 0 guards hypothetical callers.
+        assertEquals(0, ReputationPolicy.pointsFor(ReputationKind.skladchina_declined))
     }
 
     @Test

@@ -39,7 +39,14 @@ interface SkladchinaRepository {
 
     fun findExpiredActive(now: OffsetDateTime): List<Skladchina>
 
-    fun updateStatus(id: UUID, status: SkladchinaStatus, closedBy: UUID?, closedAt: OffsetDateTime)
+    /**
+     * Atomic close claim (F5-12): sets the final status/closed_at/closed_by ONLY if
+     * the skladchina is still `active`. Returns false when another closer (scheduler ×
+     * auto-close × manual) already won — the loser must no-op, so participants are
+     * expired/released once and SkladchinaClosedEvent is published exactly once.
+     * Same rows-affected pattern as JooqReputationRepository.claimEvent.
+     */
+    fun claimClose(id: UUID, status: SkladchinaStatus, closedBy: UUID?, closedAt: OffsetDateTime): Boolean
 
     /** Returns participants joined with user info — for organizer view + reputation hook. */
     fun findParticipantsWithInfo(skladchinaId: UUID): List<SkladchinaParticipantInfo>
@@ -49,6 +56,11 @@ interface SkladchinaRepository {
 
     fun findParticipant(skladchinaId: UUID, userId: UUID): SkladchinaParticipant?
 
+    /**
+     * Transitions the participant `pending` → `paid` (F5-03: guarded by
+     * `WHERE status = 'pending'`). Returns affected rows — 0 means the participant
+     * was concurrently expired/released/declined and the caller must 409.
+     */
     fun setParticipantPaid(
         skladchinaId: UUID,
         userId: UUID,
@@ -56,14 +68,22 @@ interface SkladchinaRepository {
         paidAt: OffsetDateTime
     ): Int
 
+    /** Transitions `pending` → `declined`; same rows-affected contract as [setParticipantPaid]. */
     fun setParticipantDeclined(
         skladchinaId: UUID,
         userId: UUID,
         declinedAt: OffsetDateTime
     ): Int
 
-    /** Move all `pending` participants to `expired_no_response` for given skladchina. */
+    /** Move all `pending` participants to `expired_no_response` (close at/after the deadline). */
     fun expirePendingParticipants(skladchinaId: UUID): Int
+
+    /**
+     * Move all `pending` participants to `released` — the skladchina closed BEFORE its
+     * deadline, so silence broke no promise (F5-02). Neutral: no ledger rows are
+     * emitted for this status (ReputationPolicy.financeKind(released) = null).
+     */
+    fun releasePendingParticipants(skladchinaId: UUID): Int
 
     fun markReputationApplied(skladchinaId: UUID, userId: UUID)
 
@@ -76,6 +96,22 @@ interface SkladchinaRepository {
 
     /** Returns subset of given userIds that are NOT active members of given club. */
     fun findNonActiveMembers(clubId: UUID, userIds: Collection<UUID>): Set<UUID>
+
+    /**
+     * Count of the club's reputation-affecting skladchinas created after [since] —
+     * feeds the "≤3 important skladchinas per club per rolling 7 days" rate limit
+     * (the redesign's only real anti-farm AND anti-griefing mechanism).
+     */
+    fun countReputationAffectingCreatedSince(clubId: UUID, since: OffsetDateTime): Int
+
+    /**
+     * Active reputation-affecting skladchinas whose deadline falls in (now, until]
+     * and whose reminder DM has not been sent yet — feed for SkladchinaReminderScheduler.
+     */
+    fun findNeedingDeadlineReminder(now: OffsetDateTime, until: OffsetDateTime): List<Skladchina>
+
+    /** Dedup stamp for the deadline-reminder DM (set BEFORE sending, like event reminders). */
+    fun markReminderSent(skladchinaId: UUID, at: OffsetDateTime)
 
     /**
      * Cascade-delete on club leave: removes [userId] from every active skladchina

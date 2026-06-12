@@ -53,6 +53,11 @@ class SkladchinaBotNotifier(
             }
             append("\n\n").append(expectedNote)
             append("\n⏰ До: ").append(event.deadline.format(fmt))
+            if (event.affectsReputation) {
+                // The -40 silence penalty is legitimate only if the price list was
+                // announced up front (redesign launch-blocker, notification #1).
+                append("\n\n⚠️ Важный сбор: оплата +10, отказ — без штрафа, молчание до дедлайна −40")
+            }
             append("\n\n💳 Платёжная ссылка:\n").append(event.paymentLink)
             append("\n\nПосле оплаты — отметьте в приложении, чтобы организатор увидел.")
         }
@@ -72,6 +77,8 @@ class SkladchinaBotNotifier(
 
     @TransactionalEventListener(fallbackExecution = true)
     fun onSkladchinaClosed(event: SkladchinaClosedEvent) {
+        notifyExpiredParticipants(event)
+
         val creatorTelegramId = userRepository.findById(event.creatorId)?.telegramId
         if (creatorTelegramId == null) {
             log.warn("Skladchina-closed DM SKIPPED — creator telegramId missing: id={}", event.skladchinaId)
@@ -97,5 +104,28 @@ class SkladchinaBotNotifier(
         notificationService.sendDirectMessage(creatorTelegramId, text)
         log.info("Skladchina-closed DM sent: id={} status={} creator={}",
             event.skladchinaId, event.finalStatus, creatorTelegramId)
+    }
+
+    /**
+     * Notification #3 of the redesign's launch-blocker trio (price DM → 24h reminder →
+     * penalty report): everyone who just got the -40 must be told, not left to discover
+     * it on their profile. [SkladchinaClosedEvent.expiredParticipantUserIds] is non-empty
+     * only for a reputation-affecting close at/after the deadline.
+     */
+    private fun notifyExpiredParticipants(event: SkladchinaClosedEvent) {
+        if (event.expiredParticipantUserIds.isEmpty()) return
+        val telegramIds = userRepository.findTelegramIds(event.expiredParticipantUserIds)
+        log.info("Skladchina-expired DM: id={} expired={} resolved telegramIds={}",
+            event.skladchinaId, event.expiredParticipantUserIds.size, telegramIds.size)
+        val text = "⚠️ Сбор «${event.title}» в клубе «${event.clubName}» закрыт.\n\n" +
+            "Вы не ответили на важный сбор до дедлайна — репутация снижена на 40."
+        telegramIds.forEach { telegramId ->
+            notificationService.sendDirectMessageWithDeepLink(
+                telegramId = telegramId,
+                text = text,
+                webAppPath = "/skladchina/${event.skladchinaId}",
+                buttonText = "💰 Открыть сбор"
+            )
+        }
     }
 }

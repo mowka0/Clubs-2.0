@@ -227,11 +227,15 @@ class ReputationLedgerIntegrationTest {
         reputationService.processFinalizedEvent(eventId)
         reputationService.appendAndRecompute(
             listOf(
-                LedgerEntry(member, clubId, ReputationAxis.finance, ReputationKind.skladchina_expired, -25, OffsetDateTime.now(), ReputationSource.skladchina, UUID.randomUUID())
+                LedgerEntry(
+                    member, clubId, ReputationAxis.finance, ReputationKind.skladchina_expired,
+                    ReputationPolicy.pointsFor(ReputationKind.skladchina_expired), // -40
+                    OffsetDateTime.now(), ReputationSource.skladchina, UUID.randomUUID()
+                )
             )
         )
 
-        assertReputation(member, reliability = 75, conf = 1, att = 1, spont = 0, pct = "100.00", outcome = 2)
+        assertReputation(member, reliability = 60, conf = 1, att = 1, spont = 0, pct = "100.00", outcome = 2)
     }
 
     @Test

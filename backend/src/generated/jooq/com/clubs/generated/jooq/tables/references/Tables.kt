@@ -15,6 +15,7 @@ import com.clubs.generated.jooq.tables.SkladchinaParticipants
 import com.clubs.generated.jooq.tables.Skladchinas
 import com.clubs.generated.jooq.tables.Transactions
 import com.clubs.generated.jooq.tables.UserClubReputation
+import com.clubs.generated.jooq.tables.UserClubReputationPreV18
 import com.clubs.generated.jooq.tables.UserInterests
 import com.clubs.generated.jooq.tables.Users
 
@@ -74,6 +75,11 @@ val TRANSACTIONS: Transactions = Transactions.TRANSACTIONS
  * The table <code>public.user_club_reputation</code>.
  */
 val USER_CLUB_REPUTATION: UserClubReputation = UserClubReputation.USER_CLUB_REPUTATION
+
+/**
+ * The table <code>public.user_club_reputation_pre_v18</code>.
+ */
+val USER_CLUB_REPUTATION_PRE_V18: UserClubReputationPreV18 = UserClubReputationPreV18.USER_CLUB_REPUTATION_PRE_V18
 
 /**
  * The table <code>public.user_interests</code>.

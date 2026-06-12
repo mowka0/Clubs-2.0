@@ -63,7 +63,12 @@ class ReputationService(
     fun appendAndRecompute(entries: List<LedgerEntry>) {
         if (entries.isEmpty()) return
         repository.appendLedgerIfAbsent(entries)
+        // Deterministic (user, club) order — recompute takes one advisory xact-lock per
+        // pair, and two concurrent transactions (event attendance × skladchina close of
+        // the same club) acquiring the same pairs in different orders deadlock (40P01).
+        // Sorting makes every caller lock in the same global order (F5-13).
         entries.map { it.userId to it.clubId }.toSet()
+            .sortedWith(compareBy({ it.first }, { it.second }))
             .forEach { (userId, clubId) -> repository.recompute(userId, clubId) }
     }
 }
