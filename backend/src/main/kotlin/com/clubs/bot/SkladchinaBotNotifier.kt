@@ -101,7 +101,15 @@ class SkladchinaBotNotifier(
             }
         }
 
-        notificationService.sendDirectMessage(creatorTelegramId, text)
+        // Deep-link to the skladchina itself, not the app root — the organizer lands
+        // on the closed pool (participant statuses, collected sum), like every other
+        // skladchina DM (staging feedback 2026-06-12).
+        notificationService.sendDirectMessageWithDeepLink(
+            telegramId = creatorTelegramId,
+            text = text,
+            webAppPath = "/skladchina/${event.skladchinaId}",
+            buttonText = "💰 Открыть сбор"
+        )
         log.info("Skladchina-closed DM sent: id={} status={} creator={}",
             event.skladchinaId, event.finalStatus, creatorTelegramId)
     }
