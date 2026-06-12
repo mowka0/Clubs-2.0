@@ -16,7 +16,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 - **Команды**:
   - `/start` — приветствие + inline-кнопка «Открыть Clubs»
   - `/кто_идет` (alias `/kto_idet`) — карточка ближайшего события (по всем клубам)
-  - `/мой_рейтинг` (alias `/moy_reyting`) — репутация пользователя
+  - ~~`/мой_рейтинг`~~ — **удалена 2026-06-12** (продуктовое решение: команда не нужна). Репутация видна в Mini App (профиль, карточка участника). Вместе с ней удалён `ReputationRepository.findLatestByUserId` → закрыты баги REP-3/F5-24.
 - **Telegram Stars handlers**:
   - `pre_checkout_query` — подтверждение формата payload в течение 10 с
   - `successful_payment` — делегирование в `PaymentService.handleSuccessfulPayment`
@@ -85,7 +85,6 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 5. Диспатч по `text.startsWith(...)`:
    - `/start` → `handleStart(chatId)`
    - `/кто_идет` или `/kto_idet` → `handleWhoIsGoing(chatId)`
-   - `/мой_рейтинг` или `/moy_reyting` → `handleMyRating(chatId, telegramId)`
 
 Любое исключение во время диспатча команды ловится `catch (e: Exception)` на уровне `consume` и логируется `ERROR`. Long-polling loop при этом не падает.
 
@@ -122,24 +121,14 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 
 **Privacy примечание:** команда показывает ближайшее событие любого клуба, в т.ч. closed/private. Поля `title`, `locationText`, счётчики — текущее поведение (pre-existing, не связано с рефакторингом). Эскалировано отдельно в backlog (`docs/backlog/telegram-bot-prd-gaps.md` § Privacy notes).
 
-### `/мой_рейтинг` (alias `/moy_reyting`)
+### ~~`/мой_рейтинг`~~ — удалена (2026-06-12)
 
-**Триггер:** message text начинается с `/мой_рейтинг` или `/moy_reyting`.
-**Логика:**
-1. Если `update.message.from?.id == null` → ответить «Не удалось определить ваш Telegram ID.», return.
-2. `user = userRepository.findByTelegramId(telegramId)` — `UsersRecord?`.
-3. Если `user == null` → ответить «Вы ещё не зарегистрированы в Clubs. Откройте приложение, чтобы начать!», return.
-4. `reputation = reputationRepository.findLatestByUserId(user.id)` — **репутация одного клуба**, выбранного по `ORDER BY USER_CLUB_REPUTATION.UPDATED_AT DESC LIMIT 1`. Это **не агрегат** `[GAP-001]`.
-5. Если `reputation == null` → ответить «Репутация ещё не сформирована. Участвуйте в событиях клуба!», return.
-6. Формирование текста (`ClubsBot.handleMyRating`, строки 207-212):
-   ```
-   ⭐ Ваша репутация:
-   Индекс надёжности: {reliabilityIndex}
-   Выполнение обещаний: {promiseFulfillmentPct}%
-   Подтверждений: {totalConfirmations}
-   ```
-
-**Inline-кнопка:** отсутствует `[GAP-008]`.
+Команда и её обработчик `handleMyRating` удалены по продуктовому решению (репутация
+доступна в Mini App — профиль и карточка участника, с порогом «право на ошибку»).
+Вместе с командой удалён её единственный потребитель `ReputationRepository.findLatestByUserId`
+(выбор «последней» строки по `updated_at DESC` + порог `isShown`), что закрыло баги
+**REP-3** и **F5-24** в `docs/backlog/two-stage-reputation-bug-register.md`. Исторический
+контракт ответа — в git-истории.
 
 ### `pre_checkout_query` (Telegram Stars)
 
@@ -252,26 +241,9 @@ WHEN пользователь отправляет /кто_идет
 THEN получает «Нет ближайших событий»
 ```
 
-### AC-3: `/мой_рейтинг` показывает репутацию или соответствующее сообщение
+### ~~AC-3: `/мой_рейтинг`~~ — снят (команда удалена 2026-06-12)
 
-```
-GIVEN telegram_id не определён в Update
-WHEN пользователь отправляет /мой_рейтинг
-THEN получает «Не удалось определить ваш Telegram ID.»
-
-GIVEN telegram_id определён, но в users отсутствует запись
-WHEN отправляет /мой_рейтинг
-THEN получает «Вы ещё не зарегистрированы в Clubs. Откройте приложение, чтобы начать!»
-
-GIVEN пользователь зарегистрирован, но в user_club_reputation нет ни одной строки
-WHEN отправляет /мой_рейтинг
-THEN получает «Репутация ещё не сформирована. Участвуйте в событиях клуба!»
-
-GIVEN пользователь имеет ≥1 строку в user_club_reputation
-WHEN отправляет /мой_рейтинг
-THEN получает текст с reliability_index, promise_fulfillment_pct, total_confirmations
-   из строки с MAX(updated_at) (одна, не агрегат — [GAP-001])
-```
+Команда `/мой_рейтинг` удалена; критерии приёмки сняты. Репутация доступна в Mini App.
 
 ### AC-4: `pre_checkout_query` отвечает за <10 секунд
 
@@ -328,7 +300,7 @@ THEN остаются orphan — не подключены [GAP-004, GAP-005]
 ## Non-functional
 
 - **Производительность**:
-  - Все команды отвечают за <2 с (PRD §4.6 AC). Текущее: 1 SELECT + 1-3 COUNT (для `/кто_идет`) или 2 SELECT (`/мой_рейтинг`) — укладывается.
+  - Все команды отвечают за <2 с (PRD §4.6 AC). Текущее: 1 SELECT + 1-3 COUNT (для `/кто_идет`) — укладывается.
   - `pre_checkout_query` confirm до 10 с (Telegram API hard limit). Текущее: одна операция execute, без БД-IO.
 - **Безопасность**:
   - Bot Token — только env var `TELEGRAM_BOT_TOKEN`. См. `.claude/rules/security.md` § Secrets.
@@ -347,8 +319,6 @@ THEN остаются orphan — не подключены [GAP-004, GAP-005]
 
 - **`payment` модуль** (`PaymentService`): `handlePreCheckoutQuery` и `successful_payment` диспатчатся в `ClubsBot.consume`; `PaymentNotificationHandler` зовёт `NotificationService.sendDirectMessage` после `PaymentConfirmedEvent`. См. `docs/modules/payment.md` § Интеграции.
 - **`event` модуль** (`EventRepository`, `EventResponseRepository`): `findNextUpcomingEvent`, `countByVote` для `/кто_идет`; `findResponderTelegramIdsByEventId`, `findTelegramIdsByEventAndAttendance` — для orphan-методов нотификаций.
-- **`user` модуль** (`UserRepository`): `findByTelegramId` для `/мой_рейтинг`.
-- **`reputation` модуль** (`ReputationRepository`): `findLatestByUserId` для `/мой_рейтинг`.
 - **`membership` модуль** (`MembershipRepository`): `findMemberTelegramIds(clubId)` для orphan `sendEventCreated`. См. `docs/modules/membership.md`.
 - **Telegram Bot API** (через `TelegramClient` из `BotConfig`):
   - `SendMessage` (команды, DM).
@@ -359,14 +329,14 @@ THEN остаются orphan — не подключены [GAP-004, GAP-005]
 
 ### Расхождения с PRD (см. `docs/backlog/telegram-bot-prd-gaps.md`)
 
-- `[GAP-001]` `/мой_рейтинг` возвращает репутацию одного клуба (по MAX(updated_at)), а не агрегат. PRD §4.6.2 не уточняет — требует решения пользователя.
+- ~~`[GAP-001]`~~ **снят 2026-06-12**: команда `/мой_рейтинг` удалена (продуктовое решение), вопрос «один клуб vs агрегат» неактуален.
 - `[GAP-002]` Команда `/события` (PRD §4.6.2) не реализована.
 - `[GAP-003]` `sendEventCreated` не подключён к `EventService.createEvent` — DM участникам клуба не приходят.
 - `[GAP-004]` `sendStage2Started` не подключён к Stage 2 переходу.
 - `[GAP-005]` `sendAttendanceMarked` не подключён к `AttendanceService` после Q1-фикса (баг с фильтром закрыт, метод теперь корректен).
 - `[GAP-006]` Уведомления waitlist / освобождения места (PRD §4.6.3 буллет 3) не реализованы.
 - `[GAP-007]` Уведомления **заявителю** об approve/reject заявок в закрытые клубы (PRD §4.6.3 буллет 5) не реализованы. **Частично закрыт** в `feature/applications-inbox` (2026-05-30): DM **организатору** на submit теперь реализован через `sendApplicationCreatedDM`. Уведомления заявителю об approve/reject — по-прежнему gap.
-- `[GAP-008]` Ответы команд `/кто_идет` и `/мой_рейтинг` не содержат inline-кнопку «Открыть Clubs» — нарушает PRD §4.6 AC.
+- `[GAP-008]` Ответ команды `/кто_идет` не содержит inline-кнопку «Открыть Clubs» — нарушает PRD §4.6 AC. (`/мой_рейтинг` удалён.)
 - `[GAP-009]` `sendStage2Started` (orphan) шлёт всем воутерам, включая `not_going`. PRD §4.6.3 требует только going+maybe.
 - `[GAP-010]` `findMemberTelegramIds` (membership module) возвращает все membership rows клуба без фильтра по `status` — `sendEventCreated` при подключении будет слать DM и `cancelled`/`expired`. Pre-existing, дублирует комментарий в `JooqMembershipRepository.kt:248` и упомянуто в `docs/backlog/bot-event-dm-not-delivering.md`.
 

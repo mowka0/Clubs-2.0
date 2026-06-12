@@ -498,8 +498,9 @@ UI спора/резолва добавлен в Блоке 1 (см. ниже §
   (`attendanceMarked && !attendanceFinalized`) — кнопка «Оспорить» → `POST /api/events/{id}/dispute`
   (`useDisputeAttendanceMutation`). После спора (`disputed`) — текст «ждёт решения организатора».
 - **Организатор** (`EventPage`, блок «Оспоренные отметки» внутри «Посещаемость отмечена», пока окно открыто):
-  список confirmed-участников с `attendance = disputed`, по каждому кнопки «Пришёл» / «Не пришёл» →
-  `POST /api/events/{id}/attendance/{userId}/resolve` (`useResolveDisputeMutation`).
+  список confirmed-участников с `attendance = disputed`, по каждому — иконки-кнопки ✓ (зелёная, «Пришёл») /
+  ✗ (красная, «Не пришёл»; `aria-label` сохраняет эти имена) → `POST /api/events/{id}/attendance/{userId}/resolve`
+  (`useResolveDisputeMutation`).
 
 ### Конфигурация (новая env var)
 

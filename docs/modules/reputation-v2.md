@@ -275,8 +275,9 @@ disputed/null attendance.
    = «как должно было быть» (net-positive self-heal), может отличаться от текущего инфлированного прода.
 4. `UPDATE events SET reputation_processed = true WHERE attendance_finalized AND attendance_marked;`
 5. **Rebuild кэша**: `DELETE FROM user_club_reputation;` затем `INSERT ... SELECT` агрегата из ledger
-   (FILTER-форма выше), `updated_at = MAX(occurred_at)` per (user, club) — чтобы
-   `ClubsBot.findLatestByUserId` (order by `updated_at DESC`) оставался осмысленным.
+   (FILTER-форма выше), `updated_at = MAX(occurred_at)` per (user, club). (Исторически от этого
+   зависел `ClubsBot.findLatestByUserId`; команда `/мой_рейтинг` и сам метод удалены 2026-06-12,
+   но `updated_at = MAX(occurred_at)` сохранено — на нём строится свежесть кэша.)
 6. `RAISE NOTICE` с числом подавленных owner-пар и снятых очков (аудит).
 
 **Оракул валидации** (не в миграции — в интеграционном тесте): на засеянной истории независимо
