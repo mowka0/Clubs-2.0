@@ -153,7 +153,7 @@ Severity — консенсус скептиков (местами ниже за
 относится к недобору (Сценарий Б), а не к отзыву подтверждения.
 
 ### F5-02 — досрочное закрытие складчины по цели даёт pending-участникам −25 до дедлайна
-> ✅ **РЕШЕНО (продуктовое решение 2026-06-12, реализация в пакете 3):** нейтрально —
+> ✅ **РЕШЕНО и РЕАЛИЗОВАНО (PR #58, 2026-06-12):** нейтрально —
 > при `closed_at < deadline` pending получают новый статус `released`, **ledger-строки нет**
 > («обещание — ответить к дедлайну; дедлайн не наступил — нарушения нет»). Усилитель убит
 > валидацией `declared == expected` в fixed-режимах. Глоссарий побеждает §Closure.
@@ -173,7 +173,7 @@ Severity — консенсус скептиков (местами ниже за
 
 | ID | Проблема | Где | Фикс-хинт |
 |---|---|---|---|
-| **F5-03** | Гонка `markPaid`/`decline` × `closeInternal`: оплата на дедлайне перетирает `expired_no_response` → в БД `paid`, в ledger −25 навсегда | `JooqSkladchinaRepository.kt:336-364`, `SkladchinaService.kt:159-181` | предикат `WHERE status='pending'` в `setParticipantPaid`/`setParticipantDeclined` + проверка rows-affected (0 → 409) |
+| ~~**F5-03**~~ ✅ | **Исправлено в PR #58 (пакет 3)**: предикат `WHERE status='pending'` + rows-affected → 409 «Сбор уже закрыт» | — | — |
 | **F5-04** | Участник без активного членства (вышел/подписка истекла): DM «оспорьте» приходит, но `/responses` → 403 (`isMember`-гейт) → UI спора недостижим, а −50 пишется | `VoteService.kt:75-80`, `AttendanceService.kt:69-88`, `EventPage.tsx:275-276` | согласовать гейты цепочки ATT-3: либо пускать «участника события» (есть response) к своей строке, либо не слать DM не-членам |
 | **F5-05** | = **ATT-1, усиленный**: окно спора от `event_datetime` + поздняя отметка → своевременный спор конвертируется ATT-2 в −50 (раньше 0) | `AttendanceService.kt:112-130`, `JooqEventRepository.kt:316-326` | фикс ATT-1 (`attendance_marked_at`); приоритет поднять — цена бага выросла |
 | **F5-06** | **Privacy**: `dispute_note` (комментарий организатору) отдаётся всем членам клуба в `GET /api/events/{id}/responses`; фильтрация только client-side | `VoteService.kt:75-93`, `JooqEventResponseRepository.kt:150` | в DTO отдавать `disputeNote` только организатору (или владельцу строки); A01 Broken Access Control |
@@ -187,13 +187,13 @@ Severity — консенсус скептиков (местами ниже за
 | **F5-09** | TOCTOU `markAttendance` × EXP-2: отметка в момент нейтральной финализации → `finalized+marked` → пайплайн начисляет −50 при нулевом окне спора | `AttendanceService.kt:42-56,142-150`, `JooqEventRepository.kt:256-261` | предикат `attendance_finalized=false` в UPDATE `markAttendanceMarked` + rows-affected |
 | **F5-10** | TOCTOU `disputeAttendance` × финализация: спор на границе окна обходит ATT-2 (0 вместо −50) или замораживает вечную disputed-строку | `AttendanceService.kt:70-88`, `JooqEventResponseRepository.kt:216-225` | в UPDATE спора — join/предикат на `attendance_finalized=false` |
 | **F5-11** | Гонка двух decline: оба промоутят одного waitlisted → освободившийся слот теряется навсегда (decline-сторона S2-01). ⚠ После реклассификации F5-01 (подтверждение необратимо) decline confirmed-участника недостижим — гонка остаётся только на до-подтверждения decline (going/maybe → «Не смогу»), приоритет ниже | `Stage2Service.kt:142-150` | общий advisory-lock с F5-07 |
-| **F5-12** | Двойной `closeInternal` (scheduler × auto-close × ручное): дубль `SkladchinaClosedEvent` → два DM оргу, недетерминированный статус cancelled/closed_success | `SkladchinaService.kt:256-297`, `JooqSkladchinaRepository.kt:283-291` | `UPDATE ... WHERE status='active'` + rows-affected как клейм (паттерн `claimEvent`) |
-| **F5-13** | Deadlock advisory-локов: пары (user,club) лочатся в insertion-порядке; событие × складчина того же клуба → 40P01, 500 на «Я оплатил» | `ReputationService.kt:66-67` | отсортировать пары перед взятием локов (детерминированный порядок) |
+| ~~**F5-12**~~ ✅ | **Исправлено в PR #58 (пакет 3)**: атомарный клейм `claimClose` (`UPDATE … WHERE status='active'`), проигравший no-op | — | — |
+| ~~**F5-13**~~ ✅ | **Исправлено в PR #58 (пакет 3)**: пары (user,club) сортируются перед захватом локов | — | — |
 | **F5-14** 🧭 | Отмена события недостижима: `EventStatus.cancelled` нигде не присваивается — нет endpoint/UI; сорвавшаяся встреча живёт полный цикл (reminder'ы, выжигание `expired_no_confirm`); ошибочная отметка явки даст −50 за несостоявшееся событие | `EventService.kt` (нет cancel), `EventController.kt` | **фича, не багфикс**: endpoint + UI + правила (что с confirmed/репутацией при отмене). PRD §4.4.2 Сценарий Б шаг 4 |
 | **F5-15** | Повторный `POST /attendance` (stale-вкладка) молча затирает активные споры мимо resolve-флоу + дублирует DM всем absent | `AttendanceService.kt:32-67`, `JooqEventResponseRepository.kt:203-214` | не перезаписывать `disputed` в setAttendance (или гейт на `attendanceMarked` + явный re-mark флоу); DM слать только новым absent |
 | **F5-16** | Резолв «Не пришёл» не терминален: `absent` после резолва снова даёт `canDispute=true` → пинг-понг споров до финализации | `EventPage.tsx:276,541-576`, `JooqEventResponseRepository.kt:216-236` | признак «спор уже резолвлен» (колонка/флаг) либо UI-текст «спор отклонён» без повторной кнопки |
 | **F5-17** | EXP-2 регрессия: DM оргу «отметьте явку» уходит по уже нейтрально финализированному событию → гарантированный 400 | `JooqEventRepository.kt:281-299` | добавить `ATTENDANCE_FINALIZED.isFalse` в предикат `findEventsNeedingAttendanceReminder` |
-| **F5-18** | Ложный KDoc `maybeAutoCloseAfterStateChange` («errors are logged») — try/catch нет; падение реп-хука откатывает `markPaid` юзера (500), вопреки NFR `skladchina.md` | `SkladchinaService.kt:204-228` | try/catch + log.error вокруг closeInternal в auto-close пути (как в scheduler) — либо поправить KDoc и NFR осознанно |
+| ~~**F5-18**~~ ✅ | **Исправлено в PR #58 (пакет 3)**: try/catch + log.error вокруг auto-close; KDoc стал правдой (scope-оговорка про общую tx задокументирована) | — | — |
 | **F5-19** | Тиры `>=85 high / >=70 mid` откалиброваны под шкалу 0–100, применяются к неограниченной Σ ledger: пустозвон с +500 (50% no-show) зелёный, плательщик с +30 красный | `ProfilePage.tsx:37-47`, дубль `ClubMembersTab.tsx:28-33` | по-настоящему чинится только Trust 0–100 (**P1b**); до того — рассмотреть нейтральную раскраску |
 | **F5-20** | Ошибка `GET /users/me/reputation` рендерится как «у тебя нет клубов» + CTA «Найти клуб» (ProfilePage); Discovery — «Найди свой первый клуб» | `ProfilePage.tsx:59,68,92,139,170-183`, `DiscoveryPage.tsx:80-81,152-156` | error-ветка (как в `ClubMembersTab:99-101`): сообщение + retry, не onboarding |
 | **F5-21** | Карточки в ленте активностей показывают stage-1 `goingCount` («5/10 идёт») после этапа 2; внутри события «Состав · 2/10» — противоречие. `confirmedCount` в unified-feed DTO не прокинут | `ActivityCard.tsx:44-47`, `ActivityItemDto` | прокинуть `confirmedCount`+`status` в EventActivity, фазовый показ как на EventPage (events.md AC-PH1) |
@@ -208,10 +208,9 @@ Severity — консенсус скептиков (местами ниже за
 
 1. **PR «attendance/dispute integrity»** (бэкенд): F5-04, F5-06, F5-09, F5-10, F5-15, F5-16(бэк-часть), F5-17 + ATT-1/F5-05 (если решён вопрос `attendance_marked_at`).
 2. **PR «stage2 races»**: F5-07/S2-01 + F5-11 (advisory-lock confirm/decline). ~~F5-01~~ снят с пакета — реклассифицирован как «не баг» (подтверждение необратимо, решение 2026-06-12).
-3. **PR «skladchina»**: F5-03, F5-12, F5-13, F5-18 + F5-02 (решение принято 2026-06-12) —
-   пакет расширен редизайном репутации складчины, полный scope в
-   `docs/backlog/skladchina-reputation-redesign.md` (новые веса, `released`, валидации,
-   reminder-DM, UI «Важный сбор»).
+3. ~~**PR «skladchina»**~~ ✅ **ВЫПОЛНЕН — PR #58, смержен 2026-06-12**: F5-02/03/12/13/18 +
+   полный редизайн репутации складчины (`docs/backlog/skladchina-reputation-redesign.md`),
+   протестирован на staging (Ф1–Ф5, машина времени).
 4. **PR «UI полировка»** (фронт): F5-08, F5-16(фронт), F5-20, F5-21, F5-22, F5-23.
 5. **Отложить осознанно**: F5-14 (фича «отмена события» — спека), F5-19 (ждёт P1b Trust), F5-25 (не чинить). (~~F5-24~~ и ~~REP-3~~ закрыты удалением `/мой_рейтинг`.)
 
