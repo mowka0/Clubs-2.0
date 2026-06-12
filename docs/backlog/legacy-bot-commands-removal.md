@@ -29,7 +29,7 @@
 - `dispatch`-ветка для этих команд в `consume()`
 - `EventRepository.findNextUpcomingEvent` — становится unused
 - `ReputationRepository.findLatestByUserId` — становится unused
-- `EventResponseRepository.findResponderTelegramIdsByEventId` — **остаётся** (используется в orphan `sendStage2Started`, который сам по себе GAP-004 — отдельный вопрос)
+- `EventResponseRepository.findResponderTelegramIdsByEventId` — **остаётся** (используется в orphan `sendStage2Started`, который сам по себе GAP-004 — отдельный вопрос). *(Update 2026-06-13: метод переименован в `findStage2TargetTelegramIds` + фильтр going/maybe, `sendStage2Started` подключён — GAP-004/GAP-009 закрыты в `bugfix/stage2-dm-and-slot-races`.)*
 - Тесты `ClubsBotTest.kt` для этих команд (если будут добавлены)
 - Зависимости в конструкторе `ClubsBot`: `eventRepository`, `reputationRepository` — становятся не нужны (если только остальные команды их не используют — проверить)
 

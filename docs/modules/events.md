@@ -173,6 +173,9 @@ fun countByVote(eventId: UUID): Map<String, Int>   // going/maybe/not_going
 2. Получить всех going-участников (stage_1_vote = going), отсортированных по stage_1_timestamp ASC
 3. Первые N (где N = participant_limit) → они могут подтвердить первыми
 4. Если going < participant_limit → добавить maybe-участников в очередь
+5. Опубликовать `Stage2StartedEvent` → после коммита транзакции going/maybe-воутерам уходит
+   DM «Этап 2 начался — подтвердите участие» (S2T-2 ✅, 2026-06-13; см.
+   § «DM при старте Этапа 2 + сериализация слотов» ниже и `telegram-bot.md` § `sendStage2Started`)
 
 ### Confirm/Decline endpoints
 ```
@@ -197,14 +200,18 @@ POST /api/events/{id}/decline
 ### Логика confirm
 1. Событие должно быть в stage_2 → 400
 2. Пользователь должен быть участником клуба → 403
-3. У пользователя должен быть going/maybe голос → 400 "You didn't vote going or maybe"
-4. Текущий confirmed count < participant_limit → stage_2_vote = confirmed, final_status = confirmed
-5. Иначе → stage_2_vote = waitlisted, final_status = waitlisted
+3. Взять per-event advisory-lock `lockEventSlots(eventId)` — **до любого чтения**
+   `event_responses` (S2-01/F5-07 ✅, см. § «DM при старте Этапа 2 + сериализация слотов»)
+4. У пользователя должен быть going/maybe голос → 400 "You didn't vote going or maybe"
+5. Текущий confirmed count < participant_limit → stage_2_vote = confirmed, final_status = confirmed
+6. Иначе → stage_2_vote = waitlisted, final_status = waitlisted
 
 ### Логика decline
-1. Найти response пользователя
-2. stage_2_vote = declined, final_status = declined
-3. Найти первого waitlisted участника (по stage_1_timestamp) → promote to confirmed
+1. Проверки события/членства (симметрично confirm), затем тот же advisory-lock
+   `lockEventSlots(eventId)` (F5-11 ✅)
+2. Найти response пользователя
+3. stage_2_vote = declined, final_status = declined
+4. Найти первого waitlisted участника (по stage_1_timestamp) → promote to confirmed
 
 ### Corner Cases
 | Ситуация | Поведение |
@@ -371,8 +378,10 @@ UI спора/резолва добавлен в Блоке 1 (см. ниже §
 > **Отклонение от PRD (узаконено продуктом 2026-06-07):** PRD §4.4.2 предполагает уведомление о
 > подтверждении **при старте Этапа 2 (за 24ч)**, а §4.4.3 — напоминание оргу **через 12ч**. Принято:
 > подтверждение-напоминание — **за 2ч** (один nudge близко к событию), орг-напоминание — **через 24ч**.
-> PRD-уведомление при старте Этапа 2 (`sendStage2Started`, S2T-2) остаётся **не подключённым** —
-> см. `docs/backlog/two-stage-reputation-bug-register.md`.
+> PRD-уведомление при старте Этапа 2 (`sendStage2Started`, S2T-2) **подключено 2026-06-13**
+> (`bugfix/stage2-dm-and-slot-races`) — см. § «DM при старте Этапа 2 + сериализация слотов» ниже.
+> Итого участник получает **два** nudge: при старте Этапа 2 (≈за 24ч) и за 2ч до события
+> (только не подтвердившим).
 >
 > **Отложено (C):** штраф организатору, если явка не отмечена через 48ч — реализуется вместе с
 > «репутацией организатора» (бэклог).
@@ -406,6 +415,56 @@ UI спора/резолва добавлен в Блоке 1 (см. ниже §
   `accent`-бейджи (action-required), поэтому терминальные статусы
   (`confirmed`/`declined`/`expired_no_confirm`) бейдж не показывают — видимый эффект для
   `expired_no_confirm` это отсутствие бейджа.
+
+---
+
+## DM при старте Этапа 2 + сериализация слотов (S2T-2 + S2-01/F5-07 + F5-11)
+
+> **Реализовано** в `bugfix/stage2-dm-and-slot-races` (2026-06-13) — «пакет 2 / PR stage2 races»
+> из `docs/backlog/two-stage-reputation-bug-register.md`. Закрывает последний разрыв «живого
+> пути» двухэтапки (участников никто не звал подтверждать) и обе слот-гонки.
+
+### S2T-2 — DM «Этап 2 начался» (+ GAP-004/GAP-009)
+- `Stage2Service.triggerStage2` (в транзакции scheduler'а, **после** назначения overflow →
+  waitlist) публикует `Stage2StartedEvent` (`event/Stage2StartedEvent.kt`, несёт snapshot
+  domain-`Event`).
+- `bot/Stage2StartedListener` (`@TransactionalEventListener`, AFTER_COMMIT) зовёт
+  `NotificationService.sendStage2Started` (`@Async`, best-effort: сбой Telegram не валит
+  триггер). AFTER_COMMIT обязателен — `@Async`-DM читает строки воутеров на отдельном
+  соединении, видящем переход только после коммита.
+- Получатели — `EventResponseRepository.findStage2TargetTelegramIds(eventId)`:
+  **только** `stage_1_vote IN (going, maybe)` (PRD §4.4.2 шаг 1; `not_going` исключены —
+  GAP-009). Метод переименован из `findResponderTelegramIdsByEventId` (старый — без фильтра).
+- DM с deep-link кнопкой «✅ Подтвердить участие» на `/events/{id}`. Текст и контракт —
+  `telegram-bot.md` § `sendStage2Started`.
+
+### S2-01/F5-07 + F5-11 — advisory-lock на слоты этапа 2
+- Новый `EventResponseRepository.lockEventSlots(eventId)` =
+  `pg_advisory_xact_lock(hashtext('event-slots:<eventId>'))` — транзакционный
+  per-event лок (паттерн `JooqReputationRepository.recompute`; префикс ключа разводит
+  пространства). Авто-release на commit/rollback, явного unlock нет.
+- Берётся в начале `confirmParticipation` **и** `declineParticipation`: после
+  authz-проверок (404/403 не держат лок), но **до любого чтения** `event_responses` —
+  заблокированная транзакция после захвата перечитывает уже закоммиченное состояние.
+- Закрывает: двойной confirm на последний слот (оба видели `9<10` → 11/10 confirmed,
+  S2-01/F5-07) и двойной decline с промоутом одного waitlisted на два освободившихся
+  слота (потерянный слот, F5-11).
+- Покрытие: `Stage2SlotRaceIntegrationTest` (Testcontainers, реальный Postgres,
+  конкурентные транзакции через Spring-прокси) воспроизводит обе гонки; верифицировано,
+  что **без лока тесты падают**. Порядок «лок до чтения» — unit-тесты `Stage2ServiceTest`
+  (`verifyOrder`).
+- Остаточная LOW boundary-гонка confirm × expire-sweep (проверка окна до лока, sweep лок
+  не берёт) — зафиксирована как **S2-06** в реестре багов, осознанно не чинится здесь.
+
+### Acceptance Criteria
+- **AC-S2T2-1:** GIVEN событие переходит в `stage_2` WHEN транзакция триггера закоммичена
+  THEN going/maybe-воутерам уходит DM с кнопкой «✅ Подтвердить участие» (`/events/{id}`);
+  `not_going`-воутерам — нет; при rollback DM не уходит.
+- **AC-S2T2-2:** отказ Telegram API логируется `WARN` и не влияет на переход в `stage_2`.
+- **AC-LOCK-1:** GIVEN 1 свободный слот WHEN два параллельных confirm THEN ровно один
+  `confirmed`, второй `waitlisted` (никогда `confirmed > participant_limit`).
+- **AC-LOCK-2:** GIVEN 2 параллельных decline и ≥2 waitlisted THEN промоутятся **два разных**
+  waitlisted-участника (слот не теряется).
 
 ---
 

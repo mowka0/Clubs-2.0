@@ -9,6 +9,7 @@ import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
 import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -19,7 +20,8 @@ import java.util.UUID
 class Stage2Service(
     private val eventRepository: EventRepository,
     private val eventResponseRepository: EventResponseRepository,
-    private val membershipRepository: MembershipRepository
+    private val membershipRepository: MembershipRepository,
+    private val eventPublisher: ApplicationEventPublisher
 ) {
     private val log = LoggerFactory.getLogger(Stage2Service::class.java)
 
@@ -29,7 +31,7 @@ class Stage2Service(
         val events = eventRepository.findEventsToTriggerStage2()
         events.forEach { event ->
             try {
-                triggerStage2(event.id, event.participantLimit)
+                triggerStage2(event)
                 log.info("Stage 2 triggered for event ${event.id}")
             } catch (e: Exception) {
                 log.error("Failed to trigger Stage 2 for event ${event.id}", e)
@@ -37,17 +39,22 @@ class Stage2Service(
         }
     }
 
-    private fun triggerStage2(eventId: UUID, participantLimit: Int) {
-        eventRepository.transitionToStage2(eventId)
+    private fun triggerStage2(event: Event) {
+        eventRepository.transitionToStage2(event.id)
 
         // First N going voters (by stage_1_timestamp) keep stage_2_vote = null — they confirm explicitly.
         // Extras start as waitlisted.
-        val goingVoters = eventResponseRepository.findGoingByEventOrderByTimestamp(eventId)
+        val goingVoters = eventResponseRepository.findGoingByEventOrderByTimestamp(event.id)
         goingVoters.forEachIndexed { index, response ->
-            if (index >= participantLimit) {
+            if (index >= event.participantLimit) {
                 eventResponseRepository.updateStage2Vote(response.id, Stage_2Vote.waitlisted, FinalStatus.waitlisted)
             }
         }
+
+        // S2T-2: ask going/maybe voters to confirm. Without this DM nobody learns Stage 2
+        // started, nobody confirms, and everyone auto-expires at event start. AFTER_COMMIT
+        // hop (Stage2StartedListener) — the @Async DM must read committed rows.
+        eventPublisher.publishEvent(Stage2StartedEvent(event))
     }
 
     @Transactional
@@ -68,6 +75,14 @@ class Stage2Service(
         if (!membershipRepository.isMember(userId, event.clubId)) {
             throw ForbiddenException("Not a member of this club")
         }
+
+        // S2-01/F5-07: the slot decision below is a non-atomic read-modify-write
+        // (countConfirmed < limit → updateStage2Vote). Two concurrent confirms on the last
+        // slot would both pass the check and overbook. The per-event advisory lock serializes
+        // every slot mutation (shared with declineParticipation, which covers F5-11 — double
+        // promotion of the same waitlisted user). Taken before ANY event_responses read so a
+        // blocked transaction re-reads committed state once it acquires the lock.
+        eventResponseRepository.lockEventSlots(eventId)
 
         val response = eventResponseRepository.findByEventAndUser(eventId, userId)
             ?: throw ValidationException("You didn't vote in this event")
@@ -130,6 +145,11 @@ class Stage2Service(
         if (!membershipRepository.isMember(userId, event.clubId)) {
             throw ForbiddenException("Not a member of this club")
         }
+
+        // F5-11: same advisory lock as confirmParticipation — two concurrent declines would
+        // both read the same findFirstWaitlisted row and promote one user for two freed slots,
+        // permanently losing a slot.
+        eventResponseRepository.lockEventSlots(eventId)
 
         val response = eventResponseRepository.findByEventAndUser(eventId, userId)
             ?: throw ValidationException("You didn't vote in this event")

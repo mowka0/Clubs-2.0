@@ -91,14 +91,14 @@ eventRepository.finalizeAttendanceBefore(cutoff)
 
 ---
 
-## GAP-6: Stage 2 уведомление таргетит **всех** проголосовавших, не только going+maybe
+## ~~GAP-6~~: Stage 2 уведомление таргетит **всех** проголосовавших, не только going+maybe — **ЗАКРЫТ 2026-06-13**
 
 **Где обещано:** PRD `§4.4.2` line 233:
 > «Система отправляет уведомление ВСЕМ из статуса «Пойду»: ...»
 
-**Реальность:** `EventResponseRepository.findResponderTelegramIdsByEventId` фильтрует только по `event_id`, без filter по `STAGE_1_VOTE`. Это значит, что юзер с голосом `not_going` тоже получит DM «Этап 2 начался — подтвердите участие».
+**Реальность (была):** `EventResponseRepository.findResponderTelegramIdsByEventId` фильтровал только по `event_id`, без filter по `STAGE_1_VOTE` — юзер с голосом `not_going` тоже получил бы DM «Этап 2 начался — подтвердите участие».
 
-**Status:** уже зафиксировано в `docs/backlog/telegram-bot-prd-gaps.md`, здесь cross-link.
+**Status:** ✅ закрыт (`bugfix/stage2-dm-and-slot-races`, 2026-06-13): метод переименован в `findStage2TargetTelegramIds`, фильтр `stage_1_vote IN (going, maybe)`; тем же PR рассылка при старте Этапа 2 подключена (= GAP-004/GAP-009 в `docs/backlog/telegram-bot-prd-gaps.md`, S2T-2 в реестре багов).
 
 ---
 
@@ -111,6 +111,6 @@ eventRepository.finalizeAttendanceBefore(cutoff)
 | GAP-3 stage_1 enum dead value | Low | feature/chore | event-фича или миграция |
 | **GAP-4 dispute window bug** | **Medium** | **bugfix** | **event-bugfix (миграция + код)** |
 | GAP-5 DM vs group notification | Medium | feature | bot-фича |
-| GAP-6 Stage 2 target audience | Medium | bugfix | bot-bugfix |
+| ~~GAP-6~~ Stage 2 target audience | Medium | bugfix | ✅ закрыт 2026-06-13 (`bugfix/stage2-dm-and-slot-races`) |
 
 Рефакторинг `feature/refactor-event` намеренно не трогает ни один из этих gap'ов — behavior-preserving.

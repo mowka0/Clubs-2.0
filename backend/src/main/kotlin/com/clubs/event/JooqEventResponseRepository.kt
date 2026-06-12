@@ -71,6 +71,13 @@ class JooqEventResponseRepository(
             )
             .fetchOne(0, Int::class.java) ?: 0
 
+    override fun lockEventSlots(eventId: UUID) {
+        // Transaction-scoped: auto-released on commit/rollback, so no unlock call and no leak
+        // on exception. hashtext on a prefixed key — same pattern as JooqReputationRepository
+        // .recompute; the prefix keeps the key space distinct from the recompute locks.
+        dsl.execute("SELECT pg_advisory_xact_lock(hashtext(?))", "event-slots:$eventId")
+    }
+
     override fun findFirstWaitlisted(eventId: UUID): EventResponse? =
         dsl.selectFrom(EVENT_RESPONSES)
             .where(
@@ -181,11 +188,14 @@ class JooqEventResponseRepository(
             .fetch(USERS.TELEGRAM_ID)
             .filterNotNull()
 
-    override fun findResponderTelegramIdsByEventId(eventId: UUID): List<Long> =
+    override fun findStage2TargetTelegramIds(eventId: UUID): List<Long> =
         dsl.select(USERS.TELEGRAM_ID)
             .from(EVENT_RESPONSES)
             .join(USERS).on(USERS.ID.eq(EVENT_RESPONSES.USER_ID))
-            .where(EVENT_RESPONSES.EVENT_ID.eq(eventId))
+            .where(
+                EVENT_RESPONSES.EVENT_ID.eq(eventId)
+                    .and(EVENT_RESPONSES.STAGE_1_VOTE.`in`(Stage_1Vote.going, Stage_1Vote.maybe))
+            )
             .fetch(USERS.TELEGRAM_ID)
             .filterNotNull()
 
