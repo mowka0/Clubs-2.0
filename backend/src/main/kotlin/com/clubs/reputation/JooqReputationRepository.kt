@@ -28,14 +28,6 @@ class JooqReputationRepository(
             .fetchOne()
             ?.let(mapper::toDomain)
 
-    override fun findLatestByUserId(userId: UUID): Reputation? =
-        dsl.selectFrom(USER_CLUB_REPUTATION)
-            .where(USER_CLUB_REPUTATION.USER_ID.eq(userId))
-            .orderBy(USER_CLUB_REPUTATION.UPDATED_AT.desc())
-            .limit(1)
-            .fetchOne()
-            ?.let(mapper::toDomain)
-
     override fun aggregateByUserIds(userIds: Collection<UUID>): Map<UUID, PeerStatsAggregate> {
         if (userIds.isEmpty()) return emptyMap()
 

@@ -4,18 +4,9 @@ import java.util.UUID
 
 interface ReputationRepository {
 
-    // --- Reads (consumed by MemberService, ClubsBot, peer-signal) ---
+    // --- Reads (consumed by MemberService, peer-signal) ---
 
     fun findByUserAndClub(userId: UUID, clubId: UUID): Reputation?
-
-    /**
-     * Returns the most recently updated reputation row for a user across all clubs.
-     * Used by ClubsBot.handleMyRating (/мой_рейтинг command).
-     * NOTE: semantically returns a single-club row picked by updated_at DESC,
-     * not a cross-club aggregate. Pre-existing behaviour, see
-     * docs/backlog/telegram-bot-prd-gaps.md.
-     */
-    fun findLatestByUserId(userId: UUID): Reputation?
 
     /**
      * Cross-club reputation aggregate for a batch of users (one SQL query).
