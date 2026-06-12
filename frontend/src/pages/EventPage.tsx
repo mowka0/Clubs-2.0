@@ -233,13 +233,13 @@ export const EventPage: FC = () => {
       const limit = event.participantLimit || 1;
       const filled = Math.min(event.confirmedCount, limit);
       const c = (filled / limit) * 360;
-      return { background: `conic-gradient(#F47B3C 0 ${c}deg, #6B6B70 ${c}deg 360deg)` };
+      return { background: `conic-gradient(var(--vote-go) 0 ${c}deg, var(--vote-no) ${c}deg 360deg)` };
     }
     const voteTotal = event.goingCount + event.maybeCount + event.notGoingCount;
     if (voteTotal === 0) return { background: 'var(--surface-2)' };
     const g = (event.goingCount / voteTotal) * 360;
     const m = (event.maybeCount / voteTotal) * 360;
-    return { background: `conic-gradient(#F47B3C 0 ${g}deg, #8E5DFF ${g}deg ${g + m}deg, #6B6B70 ${g + m}deg 360deg)` };
+    return { background: `conic-gradient(var(--vote-go) 0 ${g}deg, var(--vote-maybe) ${g}deg ${g + m}deg, var(--vote-no) ${g + m}deg 360deg)` };
   })();
 
   const eventHappened = new Date(event.eventDatetime).getTime() <= Date.now();
@@ -357,13 +357,13 @@ export const EventPage: FC = () => {
         <div className="rd-vote-stack">
           {showVoting ? (
             <>
-              <button type="button" className={`rd-vote-btn${myVote === 'going' ? ' rd-active' : ''}`} onClick={() => handleVote('going')} disabled={voting}>
+              <button type="button" className={`rd-vote-btn rd-vb-go${myVote === 'going' ? ' rd-active' : ''}`} onClick={() => handleVote('going')} disabled={voting}>
                 Пойду <span className="rd-vc">{event.goingCount}</span>
               </button>
-              <button type="button" className={`rd-vote-btn${myVote === 'maybe' ? ' rd-active' : ''}`} onClick={() => handleVote('maybe')} disabled={voting}>
+              <button type="button" className={`rd-vote-btn rd-vb-maybe${myVote === 'maybe' ? ' rd-active' : ''}`} onClick={() => handleVote('maybe')} disabled={voting}>
                 Возможно <span className="rd-vc">{event.maybeCount}</span>
               </button>
-              <button type="button" className={`rd-vote-btn${myVote === 'not_going' ? ' rd-active' : ''}`} onClick={() => handleVote('not_going')} disabled={voting}>
+              <button type="button" className={`rd-vote-btn rd-vb-no${myVote === 'not_going' ? ' rd-active' : ''}`} onClick={() => handleVote('not_going')} disabled={voting}>
                 Не пойду <span className="rd-vc">{event.notGoingCount}</span>
               </button>
             </>
@@ -485,42 +485,42 @@ export const EventPage: FC = () => {
             <>
               <div className="rd-section-sub-h">Оспоренные отметки</div>
               {attendanceError && <div className="rd-error">{attendanceError}</div>}
-              <div className="rd-glass" style={{ padding: 8, marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="rd-glass rd-dispute-list">
                 {disputedCandidates.map((r) => {
                   const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
                   return (
-                    <div key={r.userId} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <div className="rd-pick-row">
-                        <span
-                          className="rd-pick-name"
-                          style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                        >
-                          {name}
-                        </span>
-                        <button
-                          type="button"
-                          className="rd-btn-outline"
-                          style={{ width: 'auto', padding: '8px 12px' }}
-                          onClick={() => handleResolve(r.userId, true)}
-                          disabled={resolveMutation.isPending}
-                        >
-                          Пришёл
-                        </button>
-                        <button
-                          type="button"
-                          className="rd-btn-outline"
-                          style={{ width: 'auto', padding: '8px 12px' }}
-                          onClick={() => handleResolve(r.userId, false)}
-                          disabled={resolveMutation.isPending}
-                        >
-                          Не пришёл
-                        </button>
-                      </div>
-                      {r.disputeNote && (
-                        <div className="rd-body-text" style={{ margin: 0, padding: '0 2px', fontSize: 13, color: 'var(--text-dim)' }}>
-                          «{r.disputeNote}»
+                    <div key={r.userId} className="rd-dispute-item">
+                      <div className="rd-dispute-row">
+                        <span className="rd-dispute-name">{name}</span>
+                        <div className="rd-dispute-actions">
+                          <button
+                            type="button"
+                            className="rd-resolve-btn rd-resolve-yes"
+                            aria-label="Пришёл"
+                            title="Пришёл"
+                            onClick={() => handleResolve(r.userId, true)}
+                            disabled={resolveMutation.isPending}
+                          >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            className="rd-resolve-btn rd-resolve-no"
+                            aria-label="Не пришёл"
+                            title="Не пришёл"
+                            onClick={() => handleResolve(r.userId, false)}
+                            disabled={resolveMutation.isPending}
+                          >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="18" y1="6" x2="6" y2="18" />
+                              <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                          </button>
                         </div>
-                      )}
+                      </div>
+                      {r.disputeNote && <div className="rd-dispute-note">«{r.disputeNote}»</div>}
                     </div>
                   );
                 })}
