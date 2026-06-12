@@ -146,6 +146,11 @@ open class EventResponses(
      */
     val UPDATED_AT: TableField<EventResponsesRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "")
 
+    /**
+     * The column <code>public.event_responses.dispute_note</code>.
+     */
+    val DISPUTE_NOTE: TableField<EventResponsesRecord, String?> = createField(DSL.name("dispute_note"), SQLDataType.CLOB, this, "")
+
     private constructor(alias: Name, aliased: Table<EventResponsesRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<EventResponsesRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<EventResponsesRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

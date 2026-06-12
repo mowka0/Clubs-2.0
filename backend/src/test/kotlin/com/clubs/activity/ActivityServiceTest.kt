@@ -29,12 +29,15 @@ class ActivityServiceTest {
     private lateinit var service: ActivityService
 
     private val clubId = UUID.randomUUID()
+    private val userId = UUID.randomUUID()
     private val now: OffsetDateTime = OffsetDateTime.parse("2026-05-22T18:30:00Z")
 
     @BeforeEach
     fun setUp() {
         eventRepository = mockk()
         skladchinaRepository = mockk()
+        // Default: nothing awaits the user's action — existing ordering tests are unaffected.
+        every { eventRepository.findActionRequiredEventIds(any(), any(), any()) } returns emptySet()
         service = ActivityService(
             eventRepository = eventRepository,
             skladchinaRepository = skladchinaRepository,
@@ -59,11 +62,34 @@ class ActivityServiceTest {
             SkladchinaWithAggregates(sklad2, 50, 2, 1)
         )
 
-        val result = service.getClubActivities(clubId, null)
+        val result = service.getClubActivities(clubId, userId, null)
 
         assertTrue(result.past.isEmpty())
         val titles = result.upcoming.map { it.title }
         assertEquals(listOf("Sklad +1d", "Event +3d", "Sklad +5d", "Event +7d"), titles)
+    }
+
+    @Test
+    fun `upcoming pins action-required events to the top, ahead of sooner non-action items`() {
+        val actionEventId = UUID.randomUUID()
+        // Action-required event is the LATEST by date, yet must surface first.
+        val actionEvent = makeEvent(id = actionEventId, eventDatetime = now.plusDays(7), title = "Needs vote +7d")
+        val plainEvent = makeEvent(eventDatetime = now.plusDays(3), title = "Event +3d")
+        val sklad = makeSkladchina(deadline = now.plusDays(1), title = "Sklad +1d")
+
+        every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
+            EventWithGoingCount(actionEvent, 0),
+            EventWithGoingCount(plainEvent, 0)
+        )
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns listOf(
+            SkladchinaWithAggregates(sklad, 0, 0, 0)
+        )
+        every { eventRepository.findActionRequiredEventIds(clubId, userId, any()) } returns setOf(actionEventId)
+
+        val result = service.getClubActivities(clubId, userId, null)
+
+        // Pinned first; the remainder keeps soonest-first by date.
+        assertEquals(listOf("Needs vote +7d", "Sklad +1d", "Event +3d"), result.upcoming.map { it.title })
     }
 
     @Test
@@ -90,7 +116,7 @@ class ActivityServiceTest {
             SkladchinaWithAggregates(sklad2, 0, 0, 0)
         )
 
-        val result = service.getClubActivities(clubId, null)
+        val result = service.getClubActivities(clubId, userId, null)
 
         assertTrue(result.upcoming.isEmpty())
         val titles = result.past.map { it.title }
@@ -115,7 +141,7 @@ class ActivityServiceTest {
             SkladchinaWithAggregates(closedSklad, 0, 0, 0)
         )
 
-        val result = service.getClubActivities(clubId, null)
+        val result = service.getClubActivities(clubId, userId, null)
 
         assertEquals(2, result.upcoming.size)
         assertEquals(3, result.past.size)
@@ -141,7 +167,7 @@ class ActivityServiceTest {
             SkladchinaWithAggregates(secondActivity, 0, 0, 0)
         )
 
-        val result = service.getClubActivities(clubId, null)
+        val result = service.getClubActivities(clubId, userId, null)
 
         assertEquals(listOf("First", "Second"), result.upcoming.map { it.title })
     }
@@ -155,7 +181,7 @@ class ActivityServiceTest {
             EventWithGoingCount(pastEvent, 1)
         )
 
-        val result = service.getClubActivities(clubId, ActivityType.EVENT)
+        val result = service.getClubActivities(clubId, userId, ActivityType.EVENT)
 
         assertTrue(result.upcoming.all { it is ActivityItemDto.EventActivity })
         assertTrue(result.past.all { it is ActivityItemDto.EventActivity })
@@ -174,7 +200,7 @@ class ActivityServiceTest {
             SkladchinaWithAggregates(closedSklad, 0, 2, 0)
         )
 
-        val result = service.getClubActivities(clubId, ActivityType.SKLADCHINA)
+        val result = service.getClubActivities(clubId, userId, ActivityType.SKLADCHINA)
 
         assertTrue(result.upcoming.all { it is ActivityItemDto.SkladchinaActivity })
         assertTrue(result.past.all { it is ActivityItemDto.SkladchinaActivity })
@@ -187,7 +213,7 @@ class ActivityServiceTest {
         every { eventRepository.findAllByClubWithGoingCount(clubId) } returns emptyList()
         every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
 
-        val result = service.getClubActivities(clubId, null)
+        val result = service.getClubActivities(clubId, userId, null)
 
         assertTrue(result.upcoming.isEmpty())
         assertTrue(result.past.isEmpty())
@@ -201,7 +227,7 @@ class ActivityServiceTest {
         )
         every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
 
-        val result = service.getClubActivities(clubId, null)
+        val result = service.getClubActivities(clubId, userId, null)
         val item = result.upcoming.single() as ActivityItemDto.EventActivity
 
         assertNull(item.descriptionPreview)
@@ -215,7 +241,7 @@ class ActivityServiceTest {
         )
         every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
 
-        val result = service.getClubActivities(clubId, null)
+        val result = service.getClubActivities(clubId, userId, null)
         val item = result.upcoming.single() as ActivityItemDto.EventActivity
 
         assertNull(item.descriptionPreview)
@@ -229,7 +255,7 @@ class ActivityServiceTest {
         )
         every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
 
-        val result = service.getClubActivities(clubId, null)
+        val result = service.getClubActivities(clubId, userId, null)
         val item = result.upcoming.single() as ActivityItemDto.EventActivity
 
         assertEquals("short text", item.descriptionPreview)
@@ -244,7 +270,7 @@ class ActivityServiceTest {
         )
         every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
 
-        val result = service.getClubActivities(clubId, null)
+        val result = service.getClubActivities(clubId, userId, null)
         val item = result.upcoming.single() as ActivityItemDto.EventActivity
 
         assertNotNull(item.descriptionPreview)
@@ -259,7 +285,7 @@ class ActivityServiceTest {
         )
         every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
 
-        val result = service.getClubActivities(clubId, null)
+        val result = service.getClubActivities(clubId, userId, null)
         val item = result.upcoming.single() as ActivityItemDto.EventActivity
 
         assertEquals("https://cdn.example.com/event.jpg", item.photoUrl)
@@ -273,7 +299,7 @@ class ActivityServiceTest {
         )
         every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
 
-        val result = service.getClubActivities(clubId, null)
+        val result = service.getClubActivities(clubId, userId, null)
         val item = result.upcoming.single() as ActivityItemDto.EventActivity
 
         assertNull(item.photoUrl)
@@ -287,7 +313,7 @@ class ActivityServiceTest {
             SkladchinaWithAggregates(sklad, 0, 0, 0)
         )
 
-        val result = service.getClubActivities(clubId, null)
+        val result = service.getClubActivities(clubId, userId, null)
         val item = result.upcoming.single() as ActivityItemDto.SkladchinaActivity
 
         assertEquals("https://cdn.example.com/sklad.jpg", item.photoUrl)

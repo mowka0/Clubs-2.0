@@ -86,6 +86,8 @@ export interface MemberProfileDto {
   promiseFulfillmentPct: number | null;
   totalConfirmations: number | null;
   totalAttendances: number | null;
+  // "Возможно → Подтвердил → Пришёл": came though only said "maybe".
+  spontaneityCount: number | null;
 }
 
 export interface UserClubReputationDto {
@@ -101,6 +103,7 @@ export interface UserClubReputationDto {
   promiseFulfillmentPct: number | null;
   totalConfirmations: number | null;
   totalAttendances: number | null;
+  spontaneityCount: number | null;
 }
 
 export interface ActionRequiredCountDto {
@@ -299,8 +302,12 @@ export interface EventResponderDto {
   firstName: string;
   lastName: string | null;
   avatarUrl: string | null;
-  /** going | maybe | not_going | confirmed | waitlisted | declined */
+  /** going | maybe | not_going | confirmed | waitlisted | declined | expired_no_confirm */
   status: string;
+  /** Post-event attendance mark, once the organizer marked it; null before marking. */
+  attendance: 'attended' | 'absent' | 'disputed' | null;
+  /** Optional note the participant left when disputing (shown to the organizer). */
+  disputeNote?: string | null;
 }
 
 export type SkladchinaMode = 'fixed_equal' | 'fixed_individual' | 'voluntary';
@@ -394,7 +401,7 @@ export interface MyEventListItemDto {
   clubName: string;
   clubAvatarUrl: string | null;
   myVote: 'going' | 'maybe' | 'not_going' | null;
-  myParticipationStatus: 'confirmed' | 'waitlisted' | 'declined' | null;
+  myParticipationStatus: 'confirmed' | 'waitlisted' | 'declined' | 'expired_no_confirm' | null;
   goingCount: number;
   confirmedCount: number;
   participantLimit: number;

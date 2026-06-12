@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.OffsetDateTime
 import java.util.UUID
 
 @Service
@@ -57,6 +58,13 @@ class Stage2Service(
             throw ValidationException("Event is not in confirmation stage")
         }
 
+        // Bug B: the confirmation window closes at event start. Otherwise a past event
+        // stays stage_2 until the hourly EventCompletionService sweep, leaving a window
+        // where one could confirm an event that already happened. See events.md.
+        if (!event.eventDatetime.isAfter(OffsetDateTime.now())) {
+            throw ValidationException("Confirmation window has closed")
+        }
+
         if (!membershipRepository.isMember(userId, event.clubId)) {
             throw ForbiddenException("Not a member of this club")
         }
@@ -75,6 +83,15 @@ class Stage2Service(
 
         if (response.stage2Vote == Stage_2Vote.declined) {
             throw ValidationException("You already declined participation")
+        }
+
+        if (response.stage2Vote == Stage_2Vote.waitlisted) {
+            // FIFO (S2-02/S2T-3): promotion off the waitlist is system-driven — it happens
+            // only when a confirmed member declines (declineParticipation → findFirstWaitlisted),
+            // strictly by stage_1_timestamp. A waitlisted user re-confirming must NOT race into a
+            // freed slot ahead of an earlier-queued member, so we keep them waitlisted (idempotent).
+            val count = eventResponseRepository.countConfirmed(eventId)
+            return ConfirmResponseDto(eventId, "waitlisted", count, event.participantLimit)
         }
 
         val confirmedCount = eventResponseRepository.countConfirmed(eventId)
@@ -103,6 +120,17 @@ class Stage2Service(
             throw ValidationException("Event is not in confirmation stage")
         }
 
+        // Bug B: mirrors confirmParticipation — no decline after the event has started.
+        if (!event.eventDatetime.isAfter(OffsetDateTime.now())) {
+            throw ValidationException("Confirmation window has closed")
+        }
+
+        // S2-05 (OWASP A01): decline is a state change that frees a slot and promotes the
+        // first waitlisted member — it must require active membership, symmetric with confirm.
+        if (!membershipRepository.isMember(userId, event.clubId)) {
+            throw ForbiddenException("Not a member of this club")
+        }
+
         val response = eventResponseRepository.findByEventAndUser(eventId, userId)
             ?: throw ValidationException("You didn't vote in this event")
 
@@ -123,6 +151,22 @@ class Stage2Service(
 
         val count = eventResponseRepository.countConfirmed(eventId)
         return ConfirmResponseDto(eventId, "declined", count, event.participantLimit)
+    }
+
+    /**
+     * Feature A (PRD §4.4.2 / §623 "авто-отклонение"): once an event has started, any
+     * going/maybe voter who never confirmed (stage_2_vote IS NULL) is moved to the explicit
+     * terminal state [Stage_2Vote.expired_no_confirm] so the roster is honest instead of
+     * carrying ambiguous NULL holes. A single idempotent bulk update — the
+     * `stage_2_vote IS NULL` predicate makes re-runs no-ops and never touches
+     * confirmed/waitlisted/declined rows. Reputation is unaffected (it reads only
+     * final_status = confirmed). See events.md § "Закрытие окна подтверждения".
+     */
+    @Scheduled(fixedDelayString = "\${events.stage2-expire-poll-ms:300000}")
+    @Transactional
+    fun expireUnconfirmedParticipants() {
+        val count = eventResponseRepository.expireUnconfirmedForStartedEvents(OffsetDateTime.now())
+        if (count > 0) log.info("Auto-expired {} unconfirmed Stage 2 responses", count)
     }
 
     companion object {

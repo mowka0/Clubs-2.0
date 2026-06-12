@@ -23,11 +23,17 @@ data class MyVoteDto(
  * [status] is the user's current intent: stage-2 final status when present
  * (confirmed | waitlisted | declined), otherwise the stage-1 vote
  * (going | maybe | not_going).
+ * [attendance] is the post-event mark, once the organizer has marked it
+ * (attended | absent | disputed), else null. Drives the dispute UI: an absent
+ * participant can dispute; the organizer resolves a disputed one.
  */
 data class EventResponderDto(
     val userId: UUID,
     val firstName: String,
     val lastName: String?,
     val avatarUrl: String?,
-    val status: String
+    val status: String,
+    val attendance: String?,
+    // Optional free-text note the participant left when disputing (shown to the organizer).
+    val disputeNote: String?
 )

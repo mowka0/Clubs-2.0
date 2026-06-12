@@ -18,7 +18,8 @@ import org.jooq.Schema
 enum class FinalStatus(@get:JvmName("literal") public val literal: String) : EnumType {
     confirmed("confirmed"),
     waitlisted("waitlisted"),
-    declined("declined");
+    declined("declined"),
+    expired_no_confirm("expired_no_confirm");
     override fun getCatalog(): Catalog? = schema.catalog
     override fun getSchema(): Schema = Public.PUBLIC
     override fun getName(): String = "final_status"

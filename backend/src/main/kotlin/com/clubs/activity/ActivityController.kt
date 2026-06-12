@@ -3,7 +3,9 @@ package com.clubs.activity
 import com.clubs.activity.dto.ClubActivityFeedDto
 import com.clubs.common.auth.RequiresMembership
 import com.clubs.common.exception.ValidationException
+import com.clubs.common.security.AuthenticatedUser
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestParam
@@ -19,11 +21,12 @@ class ActivityController(
     @GetMapping("/api/clubs/{id}/activities")
     fun getClubActivities(
         @PathVariable id: UUID,
-        @RequestParam(required = false) type: String?
+        @RequestParam(required = false) type: String?,
+        @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<ClubActivityFeedDto> {
         val parsedType = parseType(type)
         return ResponseEntity.ok(
-            activityService.getClubActivities(clubId = id, typeFilter = parsedType)
+            activityService.getClubActivities(clubId = id, userId = user.userId, typeFilter = parsedType)
         )
     }
 

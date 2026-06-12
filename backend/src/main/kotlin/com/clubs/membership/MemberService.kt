@@ -51,7 +51,8 @@ class MemberService(
             reliabilityIndex = if (show) reputation!!.reliabilityIndex else null,
             promiseFulfillmentPct = if (show) reputation!!.promiseFulfillmentPct else null,
             totalConfirmations = if (show) reputation!!.totalConfirmations else null,
-            totalAttendances = if (show) reputation!!.totalAttendances else null
+            totalAttendances = if (show) reputation!!.totalAttendances else null,
+            spontaneityCount = if (show) reputation!!.spontaneityCount else null
         )
     }
 }

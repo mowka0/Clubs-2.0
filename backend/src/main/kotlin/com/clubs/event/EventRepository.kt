@@ -20,6 +20,15 @@ interface EventRepository {
      */
     fun findAllByClubWithGoingCount(clubId: UUID): List<EventWithGoingCount>
 
+    /**
+     * IDs of the club's events that require an action from [userId] right now:
+     * a stage-1 vote (voting open, not yet voted) or a stage-2 confirmation
+     * (voted going/maybe, not yet confirmed). Used by the activity feed to pin
+     * action-required events to the top. Same predicate as [findMyFeed]'s
+     * action-required ordering.
+     */
+    fun findActionRequiredEventIds(clubId: UUID, userId: UUID, now: OffsetDateTime): Set<UUID>
+
     fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MyFeedItem>
 
     fun getVoteCounts(eventId: UUID): Map<String, Int>
@@ -32,8 +41,38 @@ interface EventRepository {
 
     fun markAttendanceMarked(id: UUID)
 
+    // --- Reminder schedulers (EventReminderScheduler) ---
+
+    /**
+     * Feature A: events in stage_2 that start within (now, until] and whose confirm reminder
+     * hasn't been sent. `until` = now + the "hours before" window (default 2h).
+     */
+    fun findEventsNeedingConfirmReminder(now: OffsetDateTime, until: OffsetDateTime): List<Event>
+
+    fun markConfirmReminderSent(id: UUID)
+
+    /**
+     * Feature B: past, non-cancelled events whose attendance is still unmarked and whose
+     * organizer reminder hasn't been sent. [cutoff] = now - the "hours after" window (default 24h).
+     */
+    fun findEventsNeedingAttendanceReminder(cutoff: OffsetDateTime): List<Event>
+
+    fun markAttendanceReminderSent(id: UUID)
+
+    /** Telegram id of the event's club organizer (owner), or null if unset. */
+    fun findOrganizerTelegramId(eventId: UUID): Long?
+
     /** Finalizes attendance for past, marked, not-yet-finalized events. Returns the finalized event ids. */
     fun finalizeAttendanceBefore(eventDatetimeCutoff: OffsetDateTime): List<UUID>
+
+    /**
+     * EXP-2: neutrally finalizes past, **unmarked**, not-yet-finalized, non-cancelled events whose
+     * datetime is at/before [eventDatetimeCutoff]. Sets `attendance_finalized = true` while leaving
+     * `attendance_marked = false`, so the reputation pipeline (which claims only marked+finalized
+     * events) never produces ledger rows for them — the event simply doesn't count. Returns the
+     * finalized event ids (for logging). NO AttendanceFinalizedEvent is published for these.
+     */
+    fun neutrallyFinalizeUnmarkedBefore(eventDatetimeCutoff: OffsetDateTime): List<UUID>
 
     /**
      * Moves active events (upcoming / stage_1 / stage_2) whose datetime is before [cutoff]

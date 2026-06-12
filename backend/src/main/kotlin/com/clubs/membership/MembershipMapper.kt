@@ -56,7 +56,8 @@ class MembershipMapper {
             reliabilityIndex = if (show) info.reliabilityIndex else null,
             promiseFulfillmentPct = if (show) info.promiseFulfillmentPct else null,
             totalConfirmations = if (show) info.totalConfirmations else null,
-            totalAttendances = if (show) info.totalAttendances else null
+            totalAttendances = if (show) info.totalAttendances else null,
+            spontaneityCount = if (show) info.spontaneityCount else null
         )
     }
 }

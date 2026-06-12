@@ -600,10 +600,12 @@
   cursor: pointer; font-family: inherit;
 }
 .rd-vote-btn:disabled { opacity: 0.6; cursor: default; }
-.rd-vote-btn.rd-active {
-  background: var(--accent-grad); color: var(--on-accent);
-  border-color: var(--accent-soft); box-shadow: 0 2px 6px var(--accent-shadow);
-}
+/* Active vote button takes its own vote colour — matches the donut slice and the status dot
+   (going = orange, maybe = purple, not going = grey; see --vote-* in brand-theme.css). */
+.rd-vote-btn.rd-active { color: #fff; border-color: transparent; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28); }
+.rd-vote-btn.rd-active.rd-vb-go { background: var(--vote-go); color: var(--on-accent); box-shadow: 0 2px 6px var(--accent-shadow); }
+.rd-vote-btn.rd-active.rd-vb-maybe { background: var(--vote-maybe); }
+.rd-vote-btn.rd-active.rd-vb-no { background: var(--vote-no); }
 /* voting: stacked buttons (left half) + donut chart (right half, ~50/50) */
 .rd-vote-layout { display: flex; gap: 14px; align-items: center; margin-bottom: 8px; }
 .rd-vote-stack { flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
@@ -640,9 +642,35 @@
 .rd-voter .rd-av img { width: 100%; height: 100%; object-fit: cover; }
 .rd-voter .rd-vn { font-size: 12.5px; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rd-voter .rd-vdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.rd-vdot.rd-d-go { background: var(--live); }
-.rd-vdot.rd-d-maybe { background: var(--accent); }
-.rd-vdot.rd-d-no { background: var(--text-faint); }
+/* Dots mirror the vote palette: going = orange, maybe = purple, not going = grey —
+   same colours as the donut chart and the vote buttons (see --vote-* in brand-theme.css). */
+.rd-vdot.rd-d-go { background: var(--vote-go); }
+.rd-vdot.rd-d-maybe { background: var(--vote-maybe); }
+.rd-vdot.rd-d-no { background: var(--vote-no); }
+/* Booking burned (voted going/maybe, never confirmed) — distinct from grey "не пришёл". */
+.rd-vdot.rd-d-expired { background: var(--danger); }
+
+/* Contested-attendance resolve list (organizer): name on the left, ✓/✗ icon buttons on the
+   right, optional participant note underneath. */
+.rd-dispute-list { padding: 8px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; }
+.rd-dispute-item { display: flex; flex-direction: column; gap: 6px; }
+.rd-dispute-row { display: flex; align-items: center; gap: 10px; }
+.rd-dispute-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 14px; color: var(--text);
+}
+.rd-dispute-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.rd-resolve-btn {
+  width: 36px; height: 36px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 10px; border: 1px solid transparent; cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.rd-resolve-btn:disabled { opacity: 0.5; cursor: default; }
+.rd-resolve-btn:active:not(:disabled) { transform: scale(0.94); }
+.rd-resolve-yes { background: var(--live-soft); border-color: rgba(102, 212, 154, 0.35); color: var(--live); }
+.rd-resolve-no { background: rgba(255, 139, 139, 0.14); border-color: rgba(255, 139, 139, 0.35); color: var(--danger); }
+.rd-dispute-note { font-size: 13px; color: var(--text-dim); padding: 0 2px; line-height: 1.4; }
 
 .rd-progress { width: 100%; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
 .rd-progress .rd-fill { height: 100%; border-radius: 4px; background: var(--accent-grad); transition: width 0.3s ease; }

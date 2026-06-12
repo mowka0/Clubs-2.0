@@ -61,7 +61,17 @@
   событий+сборов из одного клуба, **без пагинации**, возвращает
   `ClubActivityFeedDto { upcoming, past }` (партиционирование по `isCompleted`,
   сортировка по `relevantDate`: upcoming ASC / past DESC, ties `id ASC`)
-- DTO `ActivityItemDto` — discriminated union (поле `type: 'event' | 'skladchina'`)
+  > **Update 2026-06-12 — action-first пиннинг (per-user):** endpoint теперь
+  > учитывает вызывающего юзера (`@AuthenticationPrincipal`). В группе `upcoming`
+  > **первыми** идут события, требующие действия пользователя (открытый stage-1
+  > голос без голоса ИЛИ stage_2 без подтверждения при голосе going/maybe),
+  > затем — прежний порядок по `relevantDate ASC`. Признак считается запросом
+  > `EventRepository.findActionRequiredEventIds(clubId, userId, now)` (тот же
+  > предикат, что у глобальной `findMyFeed`) и прокидывается в DTO как
+  > `EventActivity.actionRequired`. Зеркалит поведение глобальной ленты
+  > (`events-feed.md` § «Action-first сортировка»), но в scope одного клуба.
+- DTO `ActivityItemDto` — discriminated union (поле `type: 'event' | 'skladchina'`).
+  `EventActivity` несёт `actionRequired: Boolean` (см. Update выше) — драйвер бейджа в карточке
 - DTO `ClubActivityFeedDto` — обёртка с двумя пред-отсортированными группами
 - Новый сервис `ActivityService` в пакете `com.clubs.activity` (новый пакет)
 - Расширение `SkladchinaRepository` методом `findAllByClubWithAggregates(clubId, includeCompleted)`
@@ -87,6 +97,9 @@
 - Новый компонент `ActivityCard` — рендерит и event-карточку, и skladchina-карточку
   (внутри switch по `type`) — полная карточка для `upcoming`; прошедшие
   рендерятся компактным `ActivityCompactRow`
+  > **Update 2026-06-12:** event-карточка показывает бейдж `rd-badge rd-warn`
+  > при `actionRequired` — текст «Подтверди участие» в `stage_2`, иначе
+  > «Проголосуй» (та же логика и тот же класс, что в глобальной `feed/EventCard`).
 - Новый api/queries слой `api/activities.ts` + `queries/activities.ts`
 - Доработка `ClubPage` / `ClubEventsTab` → новый `ClubActivitiesTab` (read-only,
   без `+ Создать`-кнопки); таб переименовывается «События» → «Активности»

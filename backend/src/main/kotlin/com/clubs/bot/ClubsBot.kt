@@ -3,9 +3,6 @@ package com.clubs.bot
 import com.clubs.event.EventRepository
 import com.clubs.event.EventResponseRepository
 import com.clubs.payment.PaymentService
-import com.clubs.reputation.ReputationPolicy
-import com.clubs.reputation.ReputationRepository
-import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
@@ -30,8 +27,6 @@ class ClubsBot(
     private val paymentService: PaymentService,
     private val eventRepository: EventRepository,
     private val eventResponseRepository: EventResponseRepository,
-    private val userRepository: UserRepository,
-    private val reputationRepository: ReputationRepository
 ) : SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
     private val log = LoggerFactory.getLogger(ClubsBot::class.java)
@@ -70,13 +65,11 @@ class ClubsBot(
 
         val text = update.message.text
         val chatId = update.message.chatId.toString()
-        val telegramId = update.message.from?.id
 
         try {
             when {
                 text.startsWith("/start") -> handleStart(chatId)
                 text.startsWith("/кто_идет") || text.startsWith("/kto_idet") -> handleWhoIsGoing(chatId)
-                text.startsWith("/мой_рейтинг") || text.startsWith("/moy_reyting") -> handleMyRating(chatId, telegramId)
             }
         } catch (e: Exception) {
             log.error("Error handling command '{}' from chat {}: {}", text, chatId, e.message, e)
@@ -155,56 +148,6 @@ class ClubsBot(
             appendLine("\u2705 Пойдут: $goingCount")
             appendLine("\uD83E\uDD14 Возможно: $maybeCount")
             append("\uD83D\uDC65 Лимит: ${event.participantLimit}")
-        }
-
-        val msg = SendMessage
-            .builder()
-            .chatId(chatId)
-            .text(text)
-            .build()
-
-        telegramClient.execute(msg)
-    }
-
-    private fun handleMyRating(chatId: String, telegramId: Long?) {
-        if (telegramId == null) {
-            val msg = SendMessage
-                .builder()
-                .chatId(chatId)
-                .text("Не удалось определить ваш Telegram ID.")
-                .build()
-            telegramClient.execute(msg)
-            return
-        }
-
-        val user = userRepository.findByTelegramId(telegramId)
-        if (user == null) {
-            val msg = SendMessage
-                .builder()
-                .chatId(chatId)
-                .text("Вы ещё не зарегистрированы в Clubs. Откройте приложение, чтобы начать!")
-                .build()
-            telegramClient.execute(msg)
-            return
-        }
-
-        val reputation = reputationRepository.findLatestByUserId(user.id!!)
-        // "Право на ошибку": below the display threshold we don't surface a number yet.
-        if (reputation == null || !ReputationPolicy.isShown(reputation.outcomeCount)) {
-            val msg = SendMessage
-                .builder()
-                .chatId(chatId)
-                .text("Репутация ещё не сформирована. Участвуйте в событиях клуба!")
-                .build()
-            telegramClient.execute(msg)
-            return
-        }
-
-        val text = buildString {
-            appendLine("\u2B50 Ваша репутация:")
-            appendLine("Индекс надёжности: ${reputation.reliabilityIndex}")
-            appendLine("Выполнение обещаний: ${reputation.promiseFulfillmentPct}%")
-            append("Подтверждений: ${reputation.totalConfirmations}")
         }
 
         val msg = SendMessage

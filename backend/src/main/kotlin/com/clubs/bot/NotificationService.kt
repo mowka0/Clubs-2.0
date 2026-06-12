@@ -66,16 +66,60 @@ class NotificationService(
     }
 
     /**
+     * Feature A reminder (~2h before the event): nudge going/maybe voters who have NOT
+     * confirmed yet to confirm before the window closes at event start.
+     */
+    @Async
+    fun sendConfirmReminder(event: Event) {
+        val telegramIds = eventResponseRepository.findUnconfirmedVoterTelegramIds(event.id)
+        if (telegramIds.isEmpty()) {
+            log.info("Confirm reminder SKIPPED — no unconfirmed voters for eventId={}", event.id)
+            return
+        }
+        log.info("Confirm reminder DM: eventId={} recipients={}", event.id, telegramIds.size)
+        val text = "⏰ Скоро начало: «${event.title}» — ${event.eventDatetime.format(fmt)}.\n\n" +
+            "Подтвердите участие, иначе место займут другие:"
+        val path = "/events/${event.id}"
+        telegramIds.forEach { sendDm(it.toString(), text, webAppPath = path, buttonText = "✅ Подтвердить участие") }
+    }
+
+    /**
+     * Feature B reminder (~24h after the event): nudge the organizer to mark attendance.
+     * Until they mark it, reputation is never finalized for the event (see events.md, EXP-2).
+     */
+    @Async
+    fun sendAttendanceReminder(event: Event, organizerTelegramId: Long) {
+        log.info("Attendance reminder DM: eventId={} organizerTelegramId={}", event.id, organizerTelegramId)
+        val text = "📋 Событие «${event.title}» (${event.eventDatetime.format(fmt)}) прошло.\n\n" +
+            "Отметьте, кто пришёл — без этого репутация участников не начислится:"
+        sendDm(organizerTelegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Отметить явку")
+    }
+
+    /**
      * Notify absent members after attendance is marked, offering dispute option.
      */
     @Async
     fun sendAttendanceMarked(eventId: UUID) {
         val absentTelegramIds = eventResponseRepository.findTelegramIdsByEventAndAttendance(eventId, AttendanceStatus.absent)
-        val text = "📋 Организатор отметил присутствие на событии.\n\nВас отметили как отсутствующего. Если это ошибка — оспорьте в приложении:"
+        val text = "📋 Организатор отметил присутствие на событии.\n\nВас отметили как отсутствующего. Если это ошибка — оспорьте на странице события:"
+        // Deep-link straight to the event page so the dispute button is one tap away (ATT-3).
+        val webAppPath = "/events/$eventId"
 
         absentTelegramIds.forEach { telegramId ->
-            sendDm(telegramId.toString(), text)
+            sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "Оспорить явку")
         }
+    }
+
+    /**
+     * ATT-3: a participant disputed their "absent" mark — the organizer must resolve it before
+     * the dispute window closes, otherwise the original mark stands and the penalty lands.
+     */
+    @Async
+    fun sendAttendanceDisputed(event: Event, organizerTelegramId: Long, disputerName: String) {
+        log.info("Attendance-disputed DM: eventId={} organizerTelegramId={}", event.id, organizerTelegramId)
+        val text = "⚖️ $disputerName оспорил отметку «не пришёл» на событии «${event.title}».\n\n" +
+            "Разберите спор до закрытия окна оспаривания — иначе останется исходная отметка, и участник получит штраф:"
+        sendDm(organizerTelegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Разобрать спор")
     }
 
     fun sendDirectMessage(telegramId: Long, text: String) {

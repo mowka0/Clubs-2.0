@@ -51,7 +51,7 @@ class EventService(
             goingCount = counts["going"] ?: 0,
             maybeCount = counts["maybe"] ?: 0,
             notGoingCount = counts["notGoing"] ?: 0,
-            confirmedCount = 0
+            confirmedCount = counts["confirmed"] ?: 0
         )
     }
 }

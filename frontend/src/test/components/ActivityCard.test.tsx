@@ -40,6 +40,7 @@ function buildEvent(overrides: Partial<EventActivityDto> = {}): EventActivityDto
     status: 'upcoming',
     descriptionPreview: null,
     photoUrl: null,
+    actionRequired: false,
     ...overrides,
   };
 }
@@ -76,6 +77,28 @@ describe('ActivityCard (full)', () => {
     // going count shown as a "going/limit" gradient fraction.
     expect(container.querySelector('.rd-ft-stat-num')?.textContent).toBe('5/20');
     expect(container.querySelector('.rd-ft-stat-cap')?.textContent).toBe('идёт');
+  });
+
+  it('shows "Проголосуй" badge when action is required (stage-1 vote pending)', () => {
+    render(
+      <ActivityCard activity={buildEvent({ actionRequired: true, status: 'upcoming' })} onClick={vi.fn()} />,
+    );
+    expect(screen.getByText('Проголосуй')).toBeInTheDocument();
+  });
+
+  it('shows "Подтверди участие" badge when action is required in stage 2', () => {
+    render(
+      <ActivityCard activity={buildEvent({ actionRequired: true, status: 'stage_2' })} onClick={vi.fn()} />,
+    );
+    expect(screen.getByText('Подтверди участие')).toBeInTheDocument();
+  });
+
+  it('shows no action badge when nothing is required', () => {
+    render(
+      <ActivityCard activity={buildEvent({ actionRequired: false })} onClick={vi.fn()} />,
+    );
+    expect(screen.queryByText('Проголосуй')).toBeNull();
+    expect(screen.queryByText('Подтверди участие')).toBeNull();
   });
 
   it('is a text-only rd-feature card — no thumb, photo or type emoji', () => {

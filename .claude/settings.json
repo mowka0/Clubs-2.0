@@ -11,7 +11,52 @@
       "Bash(npx tsc:*)",
       "Bash(./gradlew compileKotlin --no-daemon)",
       "Bash(./gradlew compileKotlin --no-daemon --info)",
-      "Bash(./gradlew compileKotlin)"
+      "Bash(./gradlew compileKotlin)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(cd:*)",
+      "Bash(rg:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(sed:*)",
+      "Bash(awk:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git --no-pager log:*)",
+      "Bash(git --no-pager diff:*)",
+      "Bash(git --no-pager show:*)",
+      "Bash(git --no-pager branch:*)",
+      "Bash(git --no-pager status:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/safety-guard.py\"",
+            "statusMessage": "safety-guard"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/safety-guard.py\"",
+            "statusMessage": "safety-guard"
+          }
+        ]
+      }
     ]
   }
 }

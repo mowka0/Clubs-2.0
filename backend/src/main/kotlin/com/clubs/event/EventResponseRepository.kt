@@ -4,6 +4,7 @@ import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
+import java.time.OffsetDateTime
 import java.util.UUID
 
 interface EventResponseRepository {
@@ -23,6 +24,22 @@ interface EventResponseRepository {
     fun findGoingByEventOrderByTimestamp(eventId: UUID): List<EventResponse>
 
     fun findMaybeByEventOrderByTimestamp(eventId: UUID): List<EventResponse>
+
+    /**
+     * Feature A auto-expire: for every started, stage-2-triggered, non-cancelled event,
+     * moves going/maybe responses that were never confirmed (stage_2_vote IS NULL) to
+     * [com.clubs.generated.jooq.enums.Stage_2Vote.expired_no_confirm] /
+     * [com.clubs.generated.jooq.enums.FinalStatus.expired_no_confirm]. Single bulk update;
+     * the NULL predicate makes it idempotent and leaves confirmed/waitlisted/declined
+     * untouched. Returns rows updated.
+     */
+    fun expireUnconfirmedForStartedEvents(now: OffsetDateTime): Int
+
+    /**
+     * Telegram ids of going/maybe voters who have NOT yet confirmed (stage_2_vote IS NULL).
+     * Target of the Feature A "подтверди участие" reminder (~2h before the event).
+     */
+    fun findUnconfirmedVoterTelegramIds(eventId: UUID): List<Long>
 
     /**
      * Returns telegram IDs of users who have ANY stage_1_vote response for the event
@@ -46,14 +63,22 @@ interface EventResponseRepository {
     fun setAttendance(eventId: UUID, userId: UUID, attended: Boolean): Int
 
     /**
-     * Marks an absent attendance as disputed. Returns rows updated (0 if user is not absent).
+     * Marks an absent attendance as disputed, storing an optional free-text [note] from the
+     * participant. Returns rows updated (0 if user is not absent).
      */
-    fun disputeAbsentAttendance(eventId: UUID, userId: UUID): Int
+    fun disputeAbsentAttendance(eventId: UUID, userId: UUID, note: String?): Int
 
     /**
      * Resolves a disputed attendance into attended/absent. Returns rows updated (0 if not disputed).
      */
     fun resolveDisputedAttendance(eventId: UUID, userId: UUID, attended: Boolean): Int
+
+    /**
+     * ATT-2: at finalization, converts any still-`disputed` attendance on the given events back to
+     * `absent` (the dispute window expired without an organizer correction → the original mark
+     * stands). Returns rows updated. Empty input → 0 (no query).
+     */
+    fun resolveExpiredDisputesToAbsent(eventIds: List<UUID>): Int
 
     /**
      * Cascade-delete on club leave: removes [userId]'s responses to all
@@ -71,12 +96,14 @@ interface EventResponseRepository {
     fun findRespondersWithUsers(eventId: UUID): List<EventResponderInfo>
 }
 
-/** Repository row: a responder's user info + raw vote/final-status enums. */
+/** Repository row: a responder's user info + raw vote/final-status/attendance enums. */
 data class EventResponderInfo(
     val userId: UUID,
     val firstName: String,
     val lastName: String?,
     val avatarUrl: String?,
     val stage1Vote: Stage_1Vote?,
-    val finalStatus: FinalStatus?
+    val finalStatus: FinalStatus?,
+    val attendance: AttendanceStatus?,
+    val disputeNote: String?
 )

@@ -221,4 +221,26 @@ open class EventsDao(configuration: Configuration?) : DAOImpl<EventsRecord, com.
      * Fetch records that have <code>reputation_processed IN (values)</code>
      */
     fun fetchByReputationProcessed(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.REPUTATION_PROCESSED, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>confirm_reminder_sent BETWEEN
+     * lowerInclusive AND upperInclusive</code>
+     */
+    fun fetchRangeOfConfirmReminderSent(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.CONFIRM_REMINDER_SENT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>confirm_reminder_sent IN (values)</code>
+     */
+    fun fetchByConfirmReminderSent(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.CONFIRM_REMINDER_SENT, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>attendance_reminder_sent BETWEEN
+     * lowerInclusive AND upperInclusive</code>
+     */
+    fun fetchRangeOfAttendanceReminderSent(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.ATTENDANCE_REMINDER_SENT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>attendance_reminder_sent IN (values)</code>
+     */
+    fun fetchByAttendanceReminderSent(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.ATTENDANCE_REMINDER_SENT, *values.toTypedArray())
 }

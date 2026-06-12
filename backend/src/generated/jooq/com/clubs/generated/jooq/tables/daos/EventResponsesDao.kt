@@ -169,4 +169,15 @@ open class EventResponsesDao(configuration: Configuration?) : DAOImpl<EventRespo
      * Fetch records that have <code>updated_at IN (values)</code>
      */
     fun fetchByUpdatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.EventResponses> = fetch(EventResponses.EVENT_RESPONSES.UPDATED_AT, *values)
+
+    /**
+     * Fetch records that have <code>dispute_note BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfDisputeNote(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.EventResponses> = fetchRange(EventResponses.EVENT_RESPONSES.DISPUTE_NOTE, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>dispute_note IN (values)</code>
+     */
+    fun fetchByDisputeNote(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.EventResponses> = fetch(EventResponses.EVENT_RESPONSES.DISPUTE_NOTE, *values)
 }

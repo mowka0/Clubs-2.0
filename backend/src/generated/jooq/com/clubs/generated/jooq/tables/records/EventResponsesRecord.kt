@@ -71,6 +71,10 @@ open class EventResponsesRecord private constructor() : UpdatableRecordImpl<Even
         set(value): Unit = set(11, value)
         get(): OffsetDateTime? = get(11) as OffsetDateTime?
 
+    open var disputeNote: String?
+        set(value): Unit = set(12, value)
+        get(): String? = get(12) as String?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -80,7 +84,7 @@ open class EventResponsesRecord private constructor() : UpdatableRecordImpl<Even
     /**
      * Create a detached, initialised EventResponsesRecord
      */
-    constructor(id: UUID? = null, eventId: UUID, userId: UUID, stage_1Vote: Stage_1Vote? = null, stage_1Timestamp: OffsetDateTime? = null, stage_2Vote: Stage_2Vote? = null, stage_2Timestamp: OffsetDateTime? = null, finalStatus: FinalStatus? = null, attendance: AttendanceStatus? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, eventId: UUID, userId: UUID, stage_1Vote: Stage_1Vote? = null, stage_1Timestamp: OffsetDateTime? = null, stage_2Vote: Stage_2Vote? = null, stage_2Timestamp: OffsetDateTime? = null, finalStatus: FinalStatus? = null, attendance: AttendanceStatus? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, disputeNote: String? = null): this() {
         this.id = id
         this.eventId = eventId
         this.userId = userId
@@ -93,6 +97,7 @@ open class EventResponsesRecord private constructor() : UpdatableRecordImpl<Even
         this.attendanceFinalized = attendanceFinalized
         this.createdAt = createdAt
         this.updatedAt = updatedAt
+        this.disputeNote = disputeNote
         resetChangedOnNotNull()
     }
 
@@ -113,6 +118,7 @@ open class EventResponsesRecord private constructor() : UpdatableRecordImpl<Even
             this.attendanceFinalized = value.attendanceFinalized
             this.createdAt = value.createdAt
             this.updatedAt = value.updatedAt
+            this.disputeNote = value.disputeNote
             resetChangedOnNotNull()
         }
     }

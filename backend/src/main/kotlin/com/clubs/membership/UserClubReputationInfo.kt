@@ -23,5 +23,6 @@ data class UserClubReputationInfo(
     val promiseFulfillmentPct: BigDecimal?,
     val totalConfirmations: Int?,
     val totalAttendances: Int?,
+    val spontaneityCount: Int?,
     val outcomeCount: Int
 )

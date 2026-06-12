@@ -104,9 +104,9 @@ class ReputationLedgerIntegrationTest {
         reputationService.processFinalizedEvent(eventId)
 
         assertReputation(ironclad, reliability = 100, conf = 1, att = 1, spont = 0, pct = "100.00", outcome = 1)
-        assertReputation(noShow, reliability = -50, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
-        assertReputation(spontaneous, reliability = 30, conf = 1, att = 1, spont = 1, pct = "100.00", outcome = 1)
-        assertReputation(spectator, reliability = -20, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
+        assertReputation(noShow, reliability = -200, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
+        assertReputation(spontaneous, reliability = 100, conf = 1, att = 1, spont = 1, pct = "100.00", outcome = 1)
+        assertReputation(spectator, reliability = -200, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
     }
 
     @Test
@@ -130,14 +130,20 @@ class ReputationLedgerIntegrationTest {
         val eventId = insertFinalizedEvent()
         val declined = insertUser("Declined")
         val noFinal = insertUser("NoFinal")
+        // expired_no_confirm (Feature A) must score 0 exactly like declined / null — the
+        // pipeline reads only final_status=confirmed, so "бронь сгорела" never reaches it.
+        val expired = insertUser("Expired")
         insertResponse(eventId, declined, "going", "declined", "absent")
         insertResponse(eventId, noFinal, "maybe", null, null)
+        insertResponse(eventId, expired, "going", "expired_no_confirm", null)
 
         reputationService.processFinalizedEvent(eventId)
 
         assertNull(reputationRepository.findByUserAndClub(declined, clubId))
         assertNull(reputationRepository.findByUserAndClub(noFinal, clubId))
+        assertNull(reputationRepository.findByUserAndClub(expired, clubId))
         assertEquals(0, ledgerRows(declined, eventId))
+        assertEquals(0, ledgerRows(expired, eventId))
     }
 
     @Test
@@ -174,6 +180,23 @@ class ReputationLedgerIntegrationTest {
         assertTrue(eventId in reputationRepository.findPendingFinalizedEventIds())
         reputationService.processFinalizedEvent(eventId)
         assertFalse(eventId in reputationRepository.findPendingFinalizedEventIds())
+    }
+
+    @Test
+    fun `neutrally finalized unmarked event yields no reputation (EXP-2)`() {
+        // EXP-2 closes an unmarked past event with finalized=true / marked=false. The pipeline
+        // claims only marked+finalized events, so such an event is invisible to the poll and a
+        // direct claim no-ops — a confirmed-but-never-marked participant accrues nothing.
+        val eventId = insertNeutrallyFinalizedEvent()
+        val member = insertUser("Unscored")
+        insertConfirmed(eventId, member, "going", null)
+
+        assertFalse(eventId in reputationRepository.findPendingFinalizedEventIds())
+        assertFalse(reputationRepository.claimEvent(eventId), "unmarked event cannot be claimed")
+        reputationService.processFinalizedEvent(eventId)
+
+        assertNull(reputationRepository.findByUserAndClub(member, clubId), "no reputation for a neutral close")
+        assertEquals(0, ledgerRows(member, eventId))
     }
 
     @Test
@@ -242,7 +265,7 @@ class ReputationLedgerIntegrationTest {
             insertConfirmed(e, veteran, "going", "attended")
             reputationService.processFinalizedEvent(e)
         }
-        // newcomer: a single no_show -> reliability -50, outcome_count 1 (< threshold, suppressed)
+        // newcomer: a single no_show -> reliability -200, outcome_count 1 (< threshold, suppressed)
         val e = insertFinalizedEvent()
         insertConfirmed(e, newcomer, "going", "absent")
         reputationService.processFinalizedEvent(e)
@@ -288,6 +311,21 @@ class ReputationLedgerIntegrationTest {
                                 participant_limit, voting_opens_days_before, status,
                                 attendance_marked, attendance_finalized)
             VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$past', 10, 14, 'completed', true, true)
+            """.trimIndent()
+        )
+        return id
+    }
+
+    /** EXP-2: a past event closed neutrally — finalized but never marked. */
+    private fun insertNeutrallyFinalizedEvent(): UUID {
+        val id = UUID.randomUUID()
+        val past = OffsetDateTime.now().minusDays(3)
+        dsl.execute(
+            """
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime,
+                                participant_limit, voting_opens_days_before, status,
+                                attendance_marked, attendance_finalized)
+            VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$past', 10, 14, 'completed', false, true)
             """.trimIndent()
         )
         return id

@@ -41,7 +41,10 @@ sealed class ActivityItemDto {
         val goingCount: Int,
         val status: String,
         val descriptionPreview: String?,
-        val photoUrl: String?
+        val photoUrl: String?,
+        // True when this event awaits the requesting user's stage-1 vote or stage-2
+        // confirmation — drives the "Проголосуй"/"Подтверди участие" badge in the feed.
+        val actionRequired: Boolean
     ) : ActivityItemDto() {
         override val type: String = "event"
     }

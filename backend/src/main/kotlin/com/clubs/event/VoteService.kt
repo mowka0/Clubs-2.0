@@ -9,7 +9,6 @@ import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.OffsetDateTime
-import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 @Service
@@ -32,8 +31,13 @@ class VoteService(
             throw ValidationException("Voting is not available for this event")
         }
 
-        val daysUntilEvent = ChronoUnit.DAYS.between(OffsetDateTime.now(), event.eventDatetime)
-        if (daysUntilEvent > event.votingOpensDaysBefore) {
+        // S1-001: the voting window must use the SAME precise boundary as the feed
+        // (EventMapper.computeActionRequired / JooqEventRepository.findMyFeed):
+        // open iff event_datetime - votingOpensDaysBefore days <= now. ChronoUnit.DAYS.between
+        // truncates the fractional day, opening voting up to ~24h early and diverging from the
+        // UI's "action required" badge. See events.md § voting window.
+        val votingOpensAt = event.eventDatetime.minusDays(event.votingOpensDaysBefore.toLong())
+        if (OffsetDateTime.now().isBefore(votingOpensAt)) {
             throw ValidationException("Voting has not started yet")
         }
 
@@ -81,7 +85,9 @@ class VoteService(
                 firstName = r.firstName,
                 lastName = r.lastName,
                 avatarUrl = r.avatarUrl,
-                status = r.finalStatus?.literal ?: r.stage1Vote?.literal ?: "going"
+                status = r.finalStatus?.literal ?: r.stage1Vote?.literal ?: "going",
+                attendance = r.attendance?.literal,
+                disputeNote = r.disputeNote
             )
         }
     }

@@ -63,6 +63,16 @@ export function markAttendance(eventId: string, attendance: { userId: string; at
   return apiClient.post(`/api/events/${eventId}/attendance`, { attendance });
 }
 
+/** Participant disputes being marked absent (ATT-3), with an optional note. Backend: absent → disputed. */
+export function disputeAttendance(eventId: string, note?: string): Promise<{ eventId: string; markedCount: number }> {
+  return apiClient.post(`/api/events/${eventId}/dispute`, note ? { note } : undefined);
+}
+
+/** Organizer resolves a disputed mark into attended/absent. */
+export function resolveDispute(eventId: string, userId: string, attended: boolean): Promise<{ eventId: string; markedCount: number }> {
+  return apiClient.post(`/api/events/${eventId}/attendance/${userId}/resolve`, { attended });
+}
+
 export function getFinances(clubId: string): Promise<import('../types/api').FinancesDto> {
   return apiClient.get(`/api/clubs/${clubId}/finances`);
 }

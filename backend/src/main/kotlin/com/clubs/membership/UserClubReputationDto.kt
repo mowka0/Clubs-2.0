@@ -17,5 +17,6 @@ data class UserClubReputationDto(
     val reliabilityIndex: Int?,
     val promiseFulfillmentPct: BigDecimal?,
     val totalConfirmations: Int?,
-    val totalAttendances: Int?
+    val totalAttendances: Int?,
+    val spontaneityCount: Int?
 )

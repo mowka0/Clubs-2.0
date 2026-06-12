@@ -29,6 +29,7 @@ function buildEvent(overrides: Partial<EventActivityDto> = {}): EventActivityDto
     status: 'upcoming',
     descriptionPreview: null,
     photoUrl: null,
+    actionRequired: false,
     ...overrides,
   };
 }

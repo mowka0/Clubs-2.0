@@ -132,6 +132,7 @@ class JooqMembershipRepository(
             USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT,
             USER_CLUB_REPUTATION.TOTAL_CONFIRMATIONS,
             USER_CLUB_REPUTATION.TOTAL_ATTENDANCES,
+            USER_CLUB_REPUTATION.SPONTANEITY_COUNT,
             DSL.coalesce(USER_CLUB_REPUTATION.OUTCOME_COUNT, DSL.`val`(0)).`as`("outcome_count")
         )
             .from(MEMBERSHIPS)
@@ -158,6 +159,7 @@ class JooqMembershipRepository(
                     promiseFulfillmentPct = r.get(USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT),
                     totalConfirmations = r.get(USER_CLUB_REPUTATION.TOTAL_CONFIRMATIONS),
                     totalAttendances = r.get(USER_CLUB_REPUTATION.TOTAL_ATTENDANCES),
+                    spontaneityCount = r.get(USER_CLUB_REPUTATION.SPONTANEITY_COUNT),
                     outcomeCount = r.get("outcome_count", Int::class.java) ?: 0
                 )
             }

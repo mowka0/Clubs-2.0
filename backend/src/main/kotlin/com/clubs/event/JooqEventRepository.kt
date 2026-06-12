@@ -9,6 +9,7 @@ import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import com.clubs.generated.jooq.tables.references.EVENTS
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
+import com.clubs.generated.jooq.tables.references.USERS
 import com.clubs.membership.MembershipAccess
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
@@ -84,6 +85,37 @@ class JooqEventRepository(
 
         val goingCounts = fetchGoingCounts(events.map { it.id })
         return events.map { EventWithGoingCount(event = it, goingCount = goingCounts[it.id] ?: 0) }
+    }
+
+    override fun findActionRequiredEventIds(clubId: UUID, userId: UUID, now: OffsetDateTime): Set<UUID> {
+        // Stage-1 vote pending: voting window open (event_datetime - voting_opens_days_before <= now),
+        // status still upcoming, this user has not voted.
+        val stage1Pending = EVENTS.STATUS.eq(EventStatus.upcoming)
+            .and(EVENT_RESPONSES.STAGE_1_VOTE.isNull)
+            .and(
+                DSL.condition(
+                    "{0} - ({1} * INTERVAL '1 day') <= {2}",
+                    EVENTS.EVENT_DATETIME,
+                    EVENTS.VOTING_OPENS_DAYS_BEFORE,
+                    DSL.value(now)
+                )
+            )
+        // Stage-2 confirmation pending: voted going/maybe in stage 1, not yet confirmed/declined.
+        val stage2Pending = EVENTS.STATUS.eq(EventStatus.stage_2)
+            .and(EVENT_RESPONSES.STAGE_1_VOTE.`in`(Stage_1Vote.going, Stage_1Vote.maybe))
+            .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull)
+
+        return dsl.select(EVENTS.ID)
+            .from(EVENTS)
+            .leftJoin(EVENT_RESPONSES).on(
+                EVENT_RESPONSES.EVENT_ID.eq(EVENTS.ID)
+                    .and(EVENT_RESPONSES.USER_ID.eq(userId))
+            )
+            .where(EVENTS.CLUB_ID.eq(clubId))
+            .and(stage1Pending.or(stage2Pending))
+            .fetch(EVENTS.ID)
+            .filterNotNull()
+            .toSet()
     }
 
     override fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MyFeedItem> {
@@ -208,7 +240,12 @@ class JooqEventRepository(
         val going = countVotes(eventId, Stage_1Vote.going)
         val maybe = countVotes(eventId, Stage_1Vote.maybe)
         val notGoing = countVotes(eventId, Stage_1Vote.not_going)
-        return mapOf("going" to going, "maybe" to maybe, "notGoing" to notGoing)
+        // Stage-2 confirmed roster size. Mirrors fetchConfirmedCounts / countConfirmed
+        // (stage_2_vote = confirmed) — getEvent previously hardcoded this to 0.
+        val confirmed = dsl.selectCount().from(EVENT_RESPONSES)
+            .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.STAGE_2_VOTE.eq(Stage_2Vote.confirmed)))
+            .fetchOne(0, Int::class.java) ?: 0
+        return mapOf("going" to going, "maybe" to maybe, "notGoing" to notGoing, "confirmed" to confirmed)
     }
 
     override fun findEventsToTriggerStage2(): List<Event> {
@@ -254,6 +291,59 @@ class JooqEventRepository(
             .execute()
     }
 
+    override fun findEventsNeedingConfirmReminder(now: OffsetDateTime, until: OffsetDateTime): List<Event> =
+        dsl.selectFrom(EVENTS)
+            .where(
+                EVENTS.STATUS.eq(EventStatus.stage_2)
+                    .and(EVENTS.CONFIRM_REMINDER_SENT.isFalse)
+                    .and(EVENTS.EVENT_DATETIME.greaterThan(now))      // not started yet
+                    .and(EVENTS.EVENT_DATETIME.lessOrEqual(until))    // within the "hours before" window
+            )
+            .fetch()
+            .map(mapper::toDomain)
+
+    override fun markConfirmReminderSent(id: UUID) {
+        dsl.update(EVENTS)
+            .set(EVENTS.CONFIRM_REMINDER_SENT, true)
+            .where(EVENTS.ID.eq(id))
+            .execute()
+    }
+
+    override fun findEventsNeedingAttendanceReminder(cutoff: OffsetDateTime): List<Event> =
+        dsl.selectFrom(EVENTS)
+            .where(
+                EVENTS.ATTENDANCE_MARKED.isFalse
+                    .and(EVENTS.ATTENDANCE_REMINDER_SENT.isFalse)
+                    .and(EVENTS.EVENT_DATETIME.lessOrEqual(cutoff))   // event was >= "hours after" ago
+                    .and(EVENTS.STATUS.ne(EventStatus.cancelled))
+                    // CC-2: only nag the organizer when there is actually a roster to mark — a
+                    // past event with zero confirmed participants has nothing to attend (and
+                    // setAttendance only touches final_status=confirmed rows anyway).
+                    .andExists(
+                        DSL.selectOne().from(EVENT_RESPONSES).where(
+                            EVENT_RESPONSES.EVENT_ID.eq(EVENTS.ID)
+                                .and(EVENT_RESPONSES.FINAL_STATUS.eq(FinalStatus.confirmed))
+                        )
+                    )
+            )
+            .fetch()
+            .map(mapper::toDomain)
+
+    override fun markAttendanceReminderSent(id: UUID) {
+        dsl.update(EVENTS)
+            .set(EVENTS.ATTENDANCE_REMINDER_SENT, true)
+            .where(EVENTS.ID.eq(id))
+            .execute()
+    }
+
+    override fun findOrganizerTelegramId(eventId: UUID): Long? =
+        dsl.select(USERS.TELEGRAM_ID)
+            .from(EVENTS)
+            .join(CLUBS).on(CLUBS.ID.eq(EVENTS.CLUB_ID))
+            .join(USERS).on(USERS.ID.eq(CLUBS.OWNER_ID))
+            .where(EVENTS.ID.eq(eventId))
+            .fetchOne(USERS.TELEGRAM_ID)
+
     override fun finalizeAttendanceBefore(eventDatetimeCutoff: OffsetDateTime): List<UUID> =
         dsl.update(EVENTS)
             .set(EVENTS.ATTENDANCE_FINALIZED, true)
@@ -261,6 +351,19 @@ class JooqEventRepository(
                 EVENTS.ATTENDANCE_MARKED.eq(true)
                     .and(EVENTS.ATTENDANCE_FINALIZED.eq(false))
                     .and(EVENTS.EVENT_DATETIME.lessOrEqual(eventDatetimeCutoff))
+            )
+            .returningResult(EVENTS.ID)
+            .fetch()
+            .mapNotNull { it.value1() }
+
+    override fun neutrallyFinalizeUnmarkedBefore(eventDatetimeCutoff: OffsetDateTime): List<UUID> =
+        dsl.update(EVENTS)
+            .set(EVENTS.ATTENDANCE_FINALIZED, true)
+            .where(
+                EVENTS.ATTENDANCE_MARKED.eq(false)
+                    .and(EVENTS.ATTENDANCE_FINALIZED.eq(false))
+                    .and(EVENTS.EVENT_DATETIME.lessOrEqual(eventDatetimeCutoff))
+                    .and(EVENTS.STATUS.ne(EventStatus.cancelled))
             )
             .returningResult(EVENTS.ID)
             .fetch()

@@ -130,7 +130,7 @@ ON CONFLICT (user_id, club_id) DO UPDATE SET
 - В live ledger append-only → у юзера никогда не «исчезают» строки → recompute всегда вызывается, когда
   есть ≥1 строка. Удаление кэш-строки нужно только в бэкфилле (rebuild, см. V18).
 
-### Ось «явка»: маппинг ответа → kind (паритет)
+### Ось «явка»: маппинг ответа → kind
 
 Строка ledger пишется **только** для `event_responses.final_status = 'confirmed'`. Не-confirmed
 (declined / waitlisted / null) → строки нет (вклад 0 во всё, как и в текущем коде). Инвариант
@@ -138,18 +138,47 @@ ON CONFLICT (user_id, club_id) DO UPDATE SET
 отвергает прочие до выставления `confirmed`) → ветка `else` ниже достижима только через
 disputed/null attendance.
 
+> **Решение 2026-06-11 — очки только от этапа-2 × явки.** Голос этапа-1 — опрос для планирования,
+> репутацию не формирует: после подтверждения брони награда/штраф одинаковы для going и maybe
+> (+100 пришёл / −200 не пришёл). `kind` при этом по-прежнему различается по stage-1 голосу —
+> он питает **отображаемую черту** `spontaneity_count`, не очки.
+> **Штраф асимметричен намеренно** (−200 = два посещения; break-even явки 67%): прогул
+> подтверждённой брони сжигает слот и план организатора. Ledger-строки, записанные до решений
+> (spontaneous +30 / spectator −20 / прогулы −50), не реконсилировались (намеренно: только
+> staging-объёмы; points в append-only строках остаются как записаны).
+
 | stage_1_vote | attendance | kind | points | conf | att | spont |
 |---|---|---|---|---|---|---|
 | going | attended | `ironclad` | +100 | 1 | 1 | 0 |
-| going | absent | `no_show` | −50 | 1 | 0 | 0 |
-| maybe | attended | `spontaneous` | +30 | 1 | 1 | 1 |
-| maybe | absent | `spectator` | −20 | 1 | 0 | 0 |
+| going | absent | `no_show` | −200 | 1 | 0 | 0 |
+| maybe | attended | `spontaneous` | +100 | 1 | 1 | 1 |
+| maybe | absent | `spectator` | −200 | 1 | 0 | 0 |
 | (любой) | disputed **OR** null | `confirmed_unresolved` | 0 | 1 | 0 | 0 |
+
+> **Отметка явки (решение 2026-06-11, рев. 2):** в форме отметки все confirmed по умолчанию
+> «пришёл», организатор снимает галочку с отсутствующих; UI шлёт явное значение для каждого
+> видимого участника (снятая галочка = absent → −200 + DM «оспорьте»). `confirmed + attendance
+> IS NULL → confirmed_unresolved (0)` остаётся достижимым только через гонку «подтвердился после
+> загрузки формы» (defensive). EXP-2 (форма не сохранялась вовсе) нейтрален. При споре
+> организатору уходит DM (`AttendanceDisputedEvent` → `sendAttendanceDisputed`) — игнор спора
+> осознанный, а не случайный.
 
 `confirmed_unresolved` — **терминальный** kind, не плейсхолдер: после финализации attendance
 заморожен (`resolveDispute` требует `!finalized`; повторная отметка невозможна), поэтому переход в
 другой kind после обработки не происходит. Точный паритет: текущий `computeDeltas` для confirmed+null
 и confirmed+disputed даёт reliability 0, conf+1, att+0 — идентично.
+
+> **Блок 1 (живой путь, 2026-06-07) — взаимодействие с пайплайном** (детали и AC в
+> `docs/modules/events.md` § «Репутация — Блок 1»):
+> - **ATT-2:** `AttendanceService.finalizeAttendance` конвертирует остаточные `disputed → absent` **до**
+>   публикации `AttendanceFinalizedEvent` (в той же транзакции; листенер читает ростер AFTER_COMMIT).
+>   Поэтому `disputed` до пайплайна на финализированном событии не доходит → `(going, absent) = no_show`.
+>   Ветка `disputed → confirmed_unresolved` в `attendanceKind` остаётся **defensive**-страховкой; `null`
+>   по-прежнему достижим (confirmed-участник, которого орг не включил в отметку) → `confirmed_unresolved`.
+> - **EXP-2:** нейтральная авто-финализация ставит `attendance_finalized=true` при `attendance_marked=false`.
+>   Клейм (`claimEvent` / `findPendingFinalizedEventIds`) требует `attendance_marked=true`, поэтому такие
+>   события **никогда не входят в пайплайн** — ledger-строк ноль без отдельного флага. `AttendanceFinalizedEvent`
+>   для них не публикуется.
 
 ### Ось «финансы»: Складчина → ledger (значения P1a без изменений)
 
@@ -246,8 +275,9 @@ disputed/null attendance.
    = «как должно было быть» (net-positive self-heal), может отличаться от текущего инфлированного прода.
 4. `UPDATE events SET reputation_processed = true WHERE attendance_finalized AND attendance_marked;`
 5. **Rebuild кэша**: `DELETE FROM user_club_reputation;` затем `INSERT ... SELECT` агрегата из ledger
-   (FILTER-форма выше), `updated_at = MAX(occurred_at)` per (user, club) — чтобы
-   `ClubsBot.findLatestByUserId` (order by `updated_at DESC`) оставался осмысленным.
+   (FILTER-форма выше), `updated_at = MAX(occurred_at)` per (user, club). (Исторически от этого
+   зависел `ClubsBot.findLatestByUserId`; команда `/мой_рейтинг` и сам метод удалены 2026-06-12,
+   но `updated_at = MAX(occurred_at)` сохранено — на нём строится свежесть кэша.)
 6. `RAISE NOTICE` с числом подавленных owner-пар и снятых очков (аудит).
 
 **Оракул валидации** (не в миграции — в интеграционном тесте): на засеянной истории независимо
@@ -262,9 +292,9 @@ disputed/null attendance.
 **Продуктовое решение (право на ошибку):** не судим, пока мало данных. Юзер показывается как
 **«Новичок» (без числа) всем**, пока у него `outcome_count < N` в этом клубе, где
 `N = MIN_OUTCOMES_FOR_REPUTATION_DISPLAY = 3` (internal-константа, tunable). Одна ранняя оплошность
-(пустозвон = −50) не клеймит новичка — число не показывается, пока нет ≥3 исходов. Статистически
+(пустозвон = −200) не клеймит новичка — число не показывается, пока нет ≥3 исходов. Статистически
 честно (1 точка данных — не репутация). **Факты при этом видны** в peer-сигнале («посетил 0 из 1») —
-организатор не слепой, но ярлыка «−50» нет. Полноценный «буфер прощения» — в P1b: **Trust 0–100 с
+организатор не слепой, но ярлыка «−200» нет. Полноценный «буфер прощения» — в P1b: **Trust 0–100 с
 оптимистичным приором** (новичок стартует с кредитом доверия ~85; одна ошибка слегка просаживает,
 **паттерн** ошибок роняет, поведение восстанавливает: `Trust = (kept + K·prior)/(total + K)`,
 `prior≈0.85`, `K≈3` — internal).
@@ -334,8 +364,8 @@ WHEN обработка/бэкфилл. THEN ledger-строк для владе
 `reliabilityIndex = null`; в списке участников сортируется внизу (NULLS LAST); фронт рендерит «Новичок»;
 средняя надёжность в профиле не включает его (не NaN, не 0).
 
-**AC-4b (право на ошибку, порог N):** GIVEN юзер с одним исходом (пустозвон −50, `outcome_count = 1`).
-WHEN любой read репутации. THEN `reliabilityIndex = null` (показывается «Новичок», не «−50»), т.к.
+**AC-4b (право на ошибку, порог N):** GIVEN юзер с одним исходом (пустозвон −200, `outcome_count = 1`).
+WHEN любой read репутации. THEN `reliabilityIndex = null` (показывается «Новичок», не «−200»), т.к.
 `outcome_count < 3`. GIVEN юзер с `outcome_count = 3`. WHEN read. THEN показывается реальное число.
 Кэш при этом всегда хранит истинный `reliability_index` (порог — презентационный).
 

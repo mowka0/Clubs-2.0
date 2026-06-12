@@ -8,8 +8,12 @@ import com.clubs.generated.jooq.enums.Stage_1Vote
 /**
  * Pure mapping of a behaviour outcome to a `reputation_ledger` kind + points.
  * Single source of truth for the PRD §4.4.4 attendance table and the skladchina
- * finance deltas. Exact parity with the legacy ReputationService.computeDeltas.
- * See docs/modules/reputation-v2.md.
+ * finance deltas. See docs/modules/reputation-v2.md.
+ *
+ * Points are keyed to the stage-2 commitment only: a confirmed booking that is
+ * attended/missed scores the same regardless of the stage-1 vote. The stage-1
+ * vote still selects the kind (ironclad vs spontaneous, no_show vs spectator) —
+ * kinds feed display traits like spontaneity_count, not the score.
  */
 object ReputationPolicy {
 
@@ -43,9 +47,13 @@ object ReputationPolicy {
 
     fun pointsFor(kind: ReputationKind): Int = when (kind) {
         ReputationKind.ironclad -> 100
-        ReputationKind.no_show -> -50
-        ReputationKind.spontaneous -> 30
-        ReputationKind.spectator -> -20
+        // A confirmed booking that is skipped burns the slot and the organizer's
+        // plan: one no-show costs two attendances (break-even attendance = 67%).
+        ReputationKind.no_show -> -200
+        // Same as ironclad/no_show: once the stage-2 booking is confirmed, the
+        // promise (and the damage of breaking it) does not depend on the stage-1 vote.
+        ReputationKind.spontaneous -> 100
+        ReputationKind.spectator -> -200
         ReputationKind.confirmed_unresolved -> 0
         ReputationKind.skladchina_paid -> 10
         // Explicit decline is weaker than ghosting — we punish unreliability, not
