@@ -28,6 +28,8 @@ export interface EventActivityDto extends ActivityBase {
   status: EventActivityStatus;
   descriptionPreview: string | null;
   photoUrl: string | null;
+  /** Event awaits the current user's stage-1 vote or stage-2 confirmation. */
+  actionRequired: boolean;
 }
 
 export type SkladchinaActivityStatus =

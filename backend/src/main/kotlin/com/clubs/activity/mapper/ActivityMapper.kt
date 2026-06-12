@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component
 @Component
 class ActivityMapper {
 
-    fun toEventActivity(event: Event, goingCount: Int): ActivityItemDto.EventActivity {
+    fun toEventActivity(event: Event, goingCount: Int, actionRequired: Boolean): ActivityItemDto.EventActivity {
         // events.created_at is NOT NULL at DB level; domain type is nullable only because
         // the create-path constructs the object before the row is fetched back. Reads always
         // have createdAt populated. Falling back to event_datetime would corrupt sort order,
@@ -30,7 +30,8 @@ class ActivityMapper {
             goingCount = goingCount,
             status = event.status.literal,
             descriptionPreview = buildDescriptionPreview(event.description),
-            photoUrl = event.photoUrl
+            photoUrl = event.photoUrl,
+            actionRequired = actionRequired
         )
     }
 

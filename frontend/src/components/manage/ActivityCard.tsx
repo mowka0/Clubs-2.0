@@ -30,23 +30,32 @@ function progressPercent(collected: number, goal: number): number {
   return Math.min(100, Math.max(0, Math.round((collected / goal) * 100)));
 }
 
-const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => (
-  <>
-    <div className="rd-ft-body">
-      <div className="rd-ft-title">{event.title}</div>
-      <div className="rd-ft-sub">
-        {formatDatetime(event.eventDatetime)} · {event.locationText}
+const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => {
+  // Same wording as the global feed (feed/EventCard): confirm prompt in stage 2, else vote.
+  const actionLabel = event.status === 'stage_2' ? 'Подтверди участие' : 'Проголосуй';
+  return (
+    <>
+      <div className="rd-ft-body">
+        <div className="rd-ft-title">{event.title}</div>
+        <div className="rd-ft-sub">
+          {formatDatetime(event.eventDatetime)} · {event.locationText}
+        </div>
+        {event.descriptionPreview !== null && (
+          <div className="rd-ft-sub">{event.descriptionPreview}</div>
+        )}
+        {event.actionRequired && (
+          <div className="rd-badges-row">
+            <span className="rd-badge rd-warn">{actionLabel}</span>
+          </div>
+        )}
       </div>
-      {event.descriptionPreview !== null && (
-        <div className="rd-ft-sub">{event.descriptionPreview}</div>
-      )}
-    </div>
-    <div className="rd-ft-stat">
-      <div className="rd-ft-stat-num">{event.goingCount}/{event.participantLimit}</div>
-      <div className="rd-ft-stat-cap">идёт</div>
-    </div>
-  </>
-);
+      <div className="rd-ft-stat">
+        <div className="rd-ft-stat-num">{event.goingCount}/{event.participantLimit}</div>
+        <div className="rd-ft-stat-cap">идёт</div>
+      </div>
+    </>
+  );
+};
 
 const SkladchinaCardBody: FC<{ skladchina: SkladchinaActivityDto }> = ({ skladchina }) => {
   const hasGoal = skladchina.totalGoalKopecks !== null && skladchina.totalGoalKopecks > 0;

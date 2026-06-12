@@ -44,10 +44,22 @@ class ActivityService(
     ): ClubActivityFeedDto {
         log.info("Fetch activities: clubId={} userId={} type={}", clubId, userId, typeFilter)
 
-        val events: List<ActivityItemDto.EventActivity> = if (typeFilter == ActivityType.SKLADCHINA) {
+        val rawEvents: List<EventWithGoingCount> = if (typeFilter == ActivityType.SKLADCHINA) {
             emptyList()
         } else {
-            loadEvents(clubId)
+            eventRepository.findAllByClubWithGoingCount(clubId)
+        }
+
+        // Events awaiting this user's stage-1 vote or stage-2 confirmation. Drives both the
+        // "Проголосуй"/"Подтверди участие" badge (per-event flag) and the top-of-feed pinning.
+        val actionRequiredIds: Set<UUID> = if (rawEvents.isEmpty()) {
+            emptySet()
+        } else {
+            eventRepository.findActionRequiredEventIds(clubId, userId, OffsetDateTime.now())
+        }
+
+        val events: List<ActivityItemDto.EventActivity> = rawEvents.map {
+            activityMapper.toEventActivity(it.event, it.goingCount, actionRequired = it.event.id in actionRequiredIds)
         }
 
         val skladchinas: List<ActivityItemDto.SkladchinaActivity> = if (typeFilter == ActivityType.EVENT) {
@@ -56,19 +68,11 @@ class ActivityService(
             loadSkladchinas(clubId)
         }
 
-        // Events awaiting this user's stage-1 vote or stage-2 confirmation — pinned to the top
-        // of `upcoming` so the action the user owes is the first thing they see.
-        val actionRequiredIds: Set<UUID> = if (events.isEmpty()) {
-            emptySet()
-        } else {
-            eventRepository.findActionRequiredEventIds(clubId, userId, OffsetDateTime.now())
-        }
-
         val all: List<ActivityItemDto> = events + skladchinas
         val (past, upcoming) = all.partition { it.isCompleted }
 
         val upcomingOrder = compareByDescending<ActivityItemDto> {
-            it is ActivityItemDto.EventActivity && it.id in actionRequiredIds
+            it is ActivityItemDto.EventActivity && it.actionRequired
         }.then(UPCOMING_ORDER)
         val sortedUpcoming = upcoming.sortedWith(upcomingOrder)
         val sortedPast = past.sortedWith(PAST_ORDER)
@@ -79,11 +83,6 @@ class ActivityService(
         )
 
         return ClubActivityFeedDto(upcoming = sortedUpcoming, past = sortedPast)
-    }
-
-    private fun loadEvents(clubId: UUID): List<ActivityItemDto.EventActivity> {
-        val raw: List<EventWithGoingCount> = eventRepository.findAllByClubWithGoingCount(clubId)
-        return raw.map { activityMapper.toEventActivity(it.event, it.goingCount) }
     }
 
     private fun loadSkladchinas(clubId: UUID): List<ActivityItemDto.SkladchinaActivity> {

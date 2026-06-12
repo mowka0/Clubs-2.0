@@ -36,7 +36,8 @@ class ActivityItemDtoTest {
             goingCount = 5,
             status = "PUBLISHED",
             descriptionPreview = "Bring your laptop",
-            photoUrl = "https://cdn.example.com/event.jpg"
+            photoUrl = "https://cdn.example.com/event.jpg",
+            actionRequired = false
         )
 
         val json = mapper.writeValueAsString(dto)
@@ -68,7 +69,8 @@ class ActivityItemDtoTest {
             goingCount = 0,
             status = "PUBLISHED",
             descriptionPreview = null,
-            photoUrl = null
+            photoUrl = null,
+            actionRequired = false
         )
 
         val json = mapper.writeValueAsString(dto)
