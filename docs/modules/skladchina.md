@@ -478,9 +478,11 @@ CREATE INDEX idx_skladchina_participants_user_id ON skladchina_participants(user
 - `declined` — user явно отказался
 - `expired_no_response` — **deadline истёк И статус был `pending`**
   (`closed_at ≥ deadline`) → переходит в `expired_no_response` при closure
-- `released` — **сбор закрыт досрочно** (`closed_at < deadline`: цель
-  достигнута / все остальные ответили / ручное закрытие), ответ не
-  потребовался; **репутация не затронута** (ledger-строки нет)
+- `released` — ответ участника не потребовался, **репутация не затронута**
+  (ledger-строки нет). Достижимо двумя путями: (1) **сбор закрыт досрочно**
+  (`closed_at < deadline`: цель достигнута / все остальные ответили / ручное
+  закрытие); (2) **клуб удалён** при `active`-сборе (каскад
+  `cancelActiveByClub`, минуя `closeInternal` — см. § «Удаление клуба»)
 
 ### Reputation deltas (если `affects_reputation = true`)
 
@@ -765,6 +767,30 @@ service'а).
 - **F5-18:** `closeInternal` в auto-close пути (`maybeAutoCloseAfterStateChange`
   из markPaid/decline) обёрнут в try/catch + `log.error` — падение
   закрытия/реп-хука не откатывает действие пользователя.
+
+### Удаление клуба — каскадная отмена складчин (2026-06-13)
+
+При soft-delete клуба (`ClubService.deleteClub` → `DELETE /api/clubs/{id}`)
+все его **`active`-складчины каскадно отменяются**, чтобы шедулеры не
+обрабатывали зомби-сборы удалённого клуба и их страницы не упирались в
+скрытый клуб. Каскад живёт в `SkladchinaRepository.cancelActiveByClub(clubId)`
+и **намеренно минует `SkladchinaService.closeInternal`**:
+
+- `active`-складчины клуба → **`cancelled`** (`updated_at = now()`).
+  Уже закрытые/отменённые (`closed_success`/`closed_failed`/`cancelled`)
+  не трогаются.
+- их `pending`-участники → **`released`** (нейтральный терминальный статус,
+  тот же, что при досрочном закрытии). **НЕ `expired_no_response`** — удаление
+  клуба не должно штрафовать за «молчание»: дедлайн ещё не наступил, обещание
+  «ответить к дедлайну» не нарушено. `released` ⇒ `ReputationPolicy.financeKind`
+  возвращает `null` ⇒ **ledger-строки нет**.
+- `paid`/`declined`/уже-`expired_no_response` участники не трогаются.
+
+**Почему минуя `closeInternal`** — это требование «удаление клуба не трогает
+репутацию» (продуктовое решение 2026-06-13): обычный close применил бы
+reputation-дельты (paid +10, expired −40) и разослал бы `SkladchinaClosedEvent`-DM.
+Каскад делает только статусные UPDATE'ы — **никаких ledger-строк и никаких DM**.
+Контекст и остаток (applications) — `docs/backlog/orphan-memberships-cleanup.md`.
 
 ### Reminder-DM за 24ч до дедлайна — internal (scheduler, 2026-06-12)
 

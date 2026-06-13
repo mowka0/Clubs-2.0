@@ -2,6 +2,39 @@
 
 Обнаружено 2026-04-25 при тесте PR #24 (`feature/pre-design-stores`) на staging.
 
+---
+
+## Статус (обновлено 2026-06-13)
+
+**Частично закрыто** веткой `bugfix/club-delete-cascade`. При soft-delete клуба
+(`ClubService.deleteClub`) теперь каскадно отменяются дочерние активности —
+но это **статусная отмена, а не cleanup orphan-записей** (Вариант A ниже не реализован
+для memberships/applications; для events/skladchinas сделана статусная отмена):
+
+- ✅ **События** — нефинализированные (`upcoming/stage_1/stage_2`,
+  `attendance_finalized = false`) → `cancelled` (`EventRepository.cancelActiveEventsByClub`).
+  Шедулеры перестают их обрабатывать, фантомных «отметьте явку»-DM нет.
+  Финализированные/`completed` не трогаются (репутация сохранена).
+  Детали — `docs/modules/events.md` § «Каскадная отмена событий при удалении клуба».
+- ✅ **Складчины** — `active` → `cancelled`, их `pending`-участники → `released`
+  (репутационно-нейтрально, без ledger-строк; минуя `closeInternal`).
+  Детали — `docs/modules/skladchina.md` § «Удаление клуба».
+- ✅ **Заявки (applications)** — `pending`/`approved` заявки в удалённый клуб
+  hard-удаляются (`ApplicationRepository.deleteActiveByClub`), зеркало
+  `deleteActiveByUserAndClub` из `leaveClub`. Терминальные `rejected`/`auto_rejected`
+  сохраняются как аудит-история. Висящих в «Моих заявках» сирот больше нет.
+  (Добавлено 2026-06-13 по запросу пользователя — изначально было вне scope.)
+- ➖ **Memberships** — каскад **не нужен**: `«Мои клубы»` уже фильтруют `clubs.is_active`
+  (см. `docs/modules/membership.md` § AC-2). Orphan-membership в выдачу не попадает.
+
+**Что НЕ изменилось:** репутацию каскад намеренно не трогает (продуктовое требование);
+hard-delete клуба и Вариант B (stub-response для soft-deleted клуба) по-прежнему не
+реализованы. После каскада events/skladchinas/applications orphan-строк в пользовательских
+выдачах не остаётся, но прямой переход на удалённый клуб (`useClubQuery(id)`) всё ещё даёт
+404 — это ожидаемо (клуб скрыт).
+
+---
+
 ## Что не так
 
 В DevTools Console на MyClubsPage / ProfilePage появляется 404 (прежде также на OrganizerPage до его удаления в `feature/restructure-bottom-tabs`):

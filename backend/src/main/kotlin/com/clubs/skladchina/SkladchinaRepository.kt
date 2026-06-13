@@ -119,6 +119,16 @@ interface SkladchinaRepository {
      * obligations. Returns number of rows deleted.
      */
     fun deleteParticipantFromActiveSkladchinasInClub(userId: UUID, clubId: UUID): Int
+
+    /**
+     * Club soft-delete cascade: cancels every active skladchina of [clubId] and releases its
+     * pending participants (pending → released — the reputation-neutral terminal status, NOT
+     * expired_no_response which would penalize). Deliberately bypasses
+     * SkladchinaService.closeInternal so no reputation deltas and no SkladchinaClosedEvent DM
+     * fire for a club that is being deleted. Already closed/cancelled skladchinas are left
+     * untouched. Returns the number of skladchinas cancelled.
+     */
+    fun cancelActiveByClub(clubId: UUID): Int
 }
 
 /**

@@ -282,6 +282,22 @@ class JooqEventRepository(
             .execute()
     }
 
+    override fun cancelActiveEventsByClub(clubId: UUID): Int =
+        dsl.update(EVENTS)
+            .set(EVENTS.STATUS, EventStatus.cancelled)
+            .set(EVENTS.UPDATED_AT, OffsetDateTime.now())
+            .where(
+                EVENTS.CLUB_ID.eq(clubId)
+                    .and(EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_1, EventStatus.stage_2))
+                    // Load-bearing: a stage_2 event can already be attendance-marked (marking is
+                    // allowed in the ~6h before the completion sweep). We must NOT cancel an event
+                    // whose reputation is already locked. The matching finalize guard
+                    // (finalizeAttendanceBefore + claimEvent exclude `cancelled`) then stops a
+                    // still-unfinalized but marked event from accruing reputation after cancel.
+                    .and(EVENTS.ATTENDANCE_FINALIZED.eq(false))
+            )
+            .execute()
+
     override fun markAttendanceMarked(id: UUID) {
         dsl.update(EVENTS)
             .set(EVENTS.ATTENDANCE_MARKED, true)
@@ -349,6 +365,11 @@ class JooqEventRepository(
                 EVENTS.ATTENDANCE_MARKED.eq(true)
                     .and(EVENTS.ATTENDANCE_FINALIZED.eq(false))
                     .and(EVENTS.EVENT_DATETIME.lessOrEqual(eventDatetimeCutoff))
+                    // A cancelled event must never finalize and accrue reputation. Reachable since
+                    // the club-delete cascade can cancel an already-attendance-marked stage_2 event
+                    // (marking is allowed in the ~6h before completion). Mirrors the sibling
+                    // neutrallyFinalizeUnmarkedBefore, which already excludes cancelled.
+                    .and(EVENTS.STATUS.ne(EventStatus.cancelled))
             )
             .returningResult(EVENTS.ID)
             .fetch()

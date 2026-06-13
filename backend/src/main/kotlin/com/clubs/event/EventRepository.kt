@@ -44,6 +44,14 @@ interface EventRepository {
 
     fun transitionToStage2(id: UUID)
 
+    /**
+     * Club soft-delete cascade: cancels every non-finalized event of [clubId]
+     * (status IN upcoming/stage_1/stage_2, attendance not finalized) so schedulers stop
+     * processing them and they drop out of feeds. Completed/cancelled and already-finalized
+     * events are left untouched — their reputation is locked. Returns rows updated.
+     */
+    fun cancelActiveEventsByClub(clubId: UUID): Int
+
     fun markAttendanceMarked(id: UUID)
 
     // --- Reminder schedulers (EventReminderScheduler) ---

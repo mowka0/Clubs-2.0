@@ -191,6 +191,32 @@ class AttendanceFinalizeRepositoryTest {
         assertEquals(0, eventResponseRepository.resolveExpiredDisputesToAbsent(emptyList()))
     }
 
+    // ---- finalizeAttendanceBefore: cancelled events must not finalize (club-delete cascade) ----
+
+    @Test
+    fun `finalize finalizes a marked past event`() {
+        val event = insertEvent(hoursFromNow(-1), "stage_2", marked = true, finalized = false)
+
+        val ids = eventRepository.finalizeAttendanceBefore(OffsetDateTime.now())
+
+        assertEquals(listOf(event), ids)
+        assertTrue(boolField(event, "attendance_finalized"))
+    }
+
+    @Test
+    fun `finalize skips a cancelled but marked event so reputation never accrues`() {
+        // Club-delete cascade can cancel a stage_2 event that was already attendance-marked
+        // (marking is allowed in the ~6h before the completion sweep). Such an event must NOT
+        // finalize — otherwise AttendanceFinalizedEvent → claimEvent would write a ledger row
+        // for a deleted club, violating "keep reputation untouched".
+        val event = insertEvent(hoursFromNow(-1), "cancelled", marked = true, finalized = false)
+
+        val ids = eventRepository.finalizeAttendanceBefore(OffsetDateTime.now())
+
+        assertTrue(ids.isEmpty())
+        assertFalse(boolField(event, "attendance_finalized"))
+    }
+
     // ---- helpers ----
 
     private fun newUser(): UUID {
