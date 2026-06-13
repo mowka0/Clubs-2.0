@@ -37,7 +37,7 @@ const MEMBER: MemberListItemDto = {
   avatarUrl: null,
   role: 'member',
   joinedAt: null,
-  reliabilityIndex: null,
+  trust: null,
   promiseFulfillmentPct: null,
   subscriptionCancelled: false,
 };

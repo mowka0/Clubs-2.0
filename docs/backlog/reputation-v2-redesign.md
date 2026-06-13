@@ -207,6 +207,10 @@ Headline: **«репутацию нельзя выписать себе»** = в
 > (`MEMBERSHIPS.STATUS IN ('active','grace_period') AND CLUBS.IS_ACTIVE`); «общая» = клиентское
 > среднее на `ProfilePage` по активным. **Ledger выход переживает** (никогда не удаляется и не
 > пересчитывается), но активный фильтр его прячет.
+>
+> **✅ Закрыто в P1b PR-a** (ветка `feature/reputation-p1b-trust`): server-side global «N из M» по
+> ВСЕЙ истории (`GlobalTrustDto`), `/me/reputation` отдаёт `MyReputationDto` с покинутыми клубами в
+> «История», клиентское среднее `avgReputation` удалено. Контракт — `reputation-v2.md` § P1b.
 
 **Две дыры в текущей модели:**
 - **A (отображение):** −200 лежит в ledger вечно, но активный фильтр прячет его после выхода →

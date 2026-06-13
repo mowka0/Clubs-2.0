@@ -136,6 +136,21 @@ open class UserClubReputation(
      */
     val OUTCOME_COUNT: TableField<UserClubReputationRecord, Int?> = createField(DSL.name("outcome_count"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("0"), SQLDataType.INTEGER)), this, "")
 
+    /**
+     * The column <code>public.user_club_reputation.kept_count</code>.
+     */
+    val KEPT_COUNT: TableField<UserClubReputationRecord, Int?> = createField(DSL.name("kept_count"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("0"), SQLDataType.INTEGER)), this, "")
+
+    /**
+     * The column <code>public.user_club_reputation.broke_count</code>.
+     */
+    val BROKE_COUNT: TableField<UserClubReputationRecord, Int?> = createField(DSL.name("broke_count"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("0"), SQLDataType.INTEGER)), this, "")
+
+    /**
+     * The column <code>public.user_club_reputation.neutral_count</code>.
+     */
+    val NEUTRAL_COUNT: TableField<UserClubReputationRecord, Int?> = createField(DSL.name("neutral_count"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("0"), SQLDataType.INTEGER)), this, "")
+
     private constructor(alias: Name, aliased: Table<UserClubReputationRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<UserClubReputationRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<UserClubReputationRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

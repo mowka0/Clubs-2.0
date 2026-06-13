@@ -8,7 +8,7 @@ import com.clubs.event.MyEventListItemDto
 import com.clubs.event.UserEventsService
 import com.clubs.membership.MembershipDto
 import com.clubs.membership.MembershipService
-import com.clubs.membership.UserClubReputationDto
+import com.clubs.membership.MyReputationDto
 import com.clubs.skladchina.ActionRequiredCountDto
 import com.clubs.skladchina.MySkladchinaListItemDto
 import com.clubs.skladchina.UserSkladchinasService
@@ -60,8 +60,8 @@ class UserController(
     @GetMapping("/me/reputation")
     fun getMyReputation(
         @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<List<UserClubReputationDto>> =
-        ResponseEntity.ok(membershipService.getUserClubsWithReputation(user.userId))
+    ): ResponseEntity<MyReputationDto> =
+        ResponseEntity.ok(membershipService.getMyReputation(user.userId))
 
     @GetMapping("/me/applications")
     fun getMyApplications(

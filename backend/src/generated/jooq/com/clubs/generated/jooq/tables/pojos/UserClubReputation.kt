@@ -25,7 +25,10 @@ data class UserClubReputation(
     var spontaneityCount: Int? = null,
     var createdAt: OffsetDateTime? = null,
     var updatedAt: OffsetDateTime? = null,
-    var outcomeCount: Int? = null
+    var outcomeCount: Int? = null,
+    var keptCount: Int? = null,
+    var brokeCount: Int? = null,
+    var neutralCount: Int? = null
 ): Serializable {
 
 
@@ -95,6 +98,24 @@ data class UserClubReputation(
         }
         else if (this.outcomeCount != o.outcomeCount)
             return false
+        if (this.keptCount == null) {
+            if (o.keptCount != null)
+                return false
+        }
+        else if (this.keptCount != o.keptCount)
+            return false
+        if (this.brokeCount == null) {
+            if (o.brokeCount != null)
+                return false
+        }
+        else if (this.brokeCount != o.brokeCount)
+            return false
+        if (this.neutralCount == null) {
+            if (o.neutralCount != null)
+                return false
+        }
+        else if (this.neutralCount != o.neutralCount)
+            return false
         return true
     }
 
@@ -112,6 +133,9 @@ data class UserClubReputation(
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
         result = prime * result + (if (this.outcomeCount == null) 0 else this.outcomeCount.hashCode())
+        result = prime * result + (if (this.keptCount == null) 0 else this.keptCount.hashCode())
+        result = prime * result + (if (this.brokeCount == null) 0 else this.brokeCount.hashCode())
+        result = prime * result + (if (this.neutralCount == null) 0 else this.neutralCount.hashCode())
         return result
     }
 
@@ -129,6 +153,9 @@ data class UserClubReputation(
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)
         sb.append(", ").append(outcomeCount)
+        sb.append(", ").append(keptCount)
+        sb.append(", ").append(brokeCount)
+        sb.append(", ").append(neutralCount)
 
         sb.append(")")
         return sb.toString()

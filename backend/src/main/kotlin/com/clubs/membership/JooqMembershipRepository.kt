@@ -7,7 +7,6 @@ import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import com.clubs.generated.jooq.tables.references.USERS
 import com.clubs.generated.jooq.tables.references.USER_CLUB_REPUTATION
-import com.clubs.reputation.ReputationPolicy
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
@@ -77,13 +76,8 @@ class JooqMembershipRepository(
             MEMBERSHIPS.STATUS.eq(MembershipStatus.active)
         }
         val outcomeCount = DSL.coalesce(USER_CLUB_REPUTATION.OUTCOME_COUNT, DSL.`val`(0))
-        // Sort by the DISPLAYED reliability: shown only once a track record exists
-        // (outcome_count >= threshold). Newcomers / sub-threshold / owners (no row) sort
-        // to the bottom via NULLS LAST — not the top, which raw DESC NULLS-FIRST would do.
-        val displayReliability = DSL.`when`(
-            outcomeCount.ge(ReputationPolicy.MIN_OUTCOMES_FOR_DISPLAY),
-            USER_CLUB_REPUTATION.RELIABILITY_INDEX
-        )
+        // Order is a stable base only: MemberService re-sorts by the displayed Trust (computed on
+        // read from the ledger), which the SQL cannot express. outcome_count gates "Новичок".
         return dsl.select(
             MEMBERSHIPS.USER_ID,
             MEMBERSHIPS.ROLE,
@@ -92,7 +86,6 @@ class JooqMembershipRepository(
             USERS.FIRST_NAME,
             USERS.LAST_NAME,
             USERS.AVATAR_URL,
-            USER_CLUB_REPUTATION.RELIABILITY_INDEX,
             USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT,
             outcomeCount.`as`("outcome_count")
         )
@@ -103,7 +96,7 @@ class JooqMembershipRepository(
                     .and(USER_CLUB_REPUTATION.CLUB_ID.eq(clubId))
             )
             .where(MEMBERSHIPS.CLUB_ID.eq(clubId).and(statusCondition))
-            .orderBy(displayReliability.desc().nullsLast())
+            .orderBy(MEMBERSHIPS.JOINED_AT.desc())
             .fetch { r ->
                 ClubMemberInfo(
                     userId = r.get(MEMBERSHIPS.USER_ID)!!,
@@ -112,7 +105,6 @@ class JooqMembershipRepository(
                     avatarUrl = r.get(USERS.AVATAR_URL),
                     role = r.get(MEMBERSHIPS.ROLE) ?: MembershipRole.member,
                     joinedAt = r.get(MEMBERSHIPS.JOINED_AT)!!,
-                    reliabilityIndex = r.get(USER_CLUB_REPUTATION.RELIABILITY_INDEX),
                     promiseFulfillmentPct = r.get(USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT),
                     outcomeCount = r.get("outcome_count", Int::class.java) ?: 0,
                     subscriptionCancelled = r.get(MEMBERSHIPS.STATUS) == MembershipStatus.cancelled
@@ -120,20 +112,33 @@ class JooqMembershipRepository(
             }
     }
 
-    override fun findUserClubsWithReputation(userId: UUID): List<UserClubReputationInfo> =
-        dsl.select(
+    override fun findUserClubsWithReputation(userId: UUID): List<UserClubReputationInfo> {
+        val now = OffsetDateTime.now()
+        val outcomeCount = DSL.coalesce(USER_CLUB_REPUTATION.OUTCOME_COUNT, DSL.`val`(0))
+        // "Active" in the profile = member still has access AND the club is alive. Everything else
+        // that survives below (a left/expired membership) is "История" — it appears only because a
+        // reputation track record (outcome_count > 0) lives on. P1b: the global aggregate is
+        // all-history, so this query no longer drops left clubs (closes the active-only hole A).
+        val activeCondition = MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period)
+            .or(
+                MEMBERSHIPS.STATUS.eq(MembershipStatus.cancelled)
+                    .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.greaterThan(now))
+            )
+            .and(CLUBS.IS_ACTIVE.eq(true))
+        val activeField = DSL.field(activeCondition).`as`("active")
+        return dsl.select(
             CLUBS.ID,
             CLUBS.NAME,
             CLUBS.AVATAR_URL,
             CLUBS.CATEGORY,
             MEMBERSHIPS.ROLE,
             MEMBERSHIPS.JOINED_AT,
-            USER_CLUB_REPUTATION.RELIABILITY_INDEX,
             USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT,
             USER_CLUB_REPUTATION.TOTAL_CONFIRMATIONS,
             USER_CLUB_REPUTATION.TOTAL_ATTENDANCES,
             USER_CLUB_REPUTATION.SPONTANEITY_COUNT,
-            DSL.coalesce(USER_CLUB_REPUTATION.OUTCOME_COUNT, DSL.`val`(0)).`as`("outcome_count")
+            outcomeCount.`as`("outcome_count"),
+            activeField
         )
             .from(MEMBERSHIPS)
             .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))
@@ -143,8 +148,7 @@ class JooqMembershipRepository(
             )
             .where(
                 MEMBERSHIPS.USER_ID.eq(userId)
-                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period))
-                    .and(CLUBS.IS_ACTIVE.eq(true))
+                    .and(activeCondition.or(outcomeCount.gt(0)))
             )
             .orderBy(MEMBERSHIPS.JOINED_AT.desc().nullsLast())
             .fetch { r ->
@@ -155,14 +159,15 @@ class JooqMembershipRepository(
                     category = r.get(CLUBS.CATEGORY)!!,
                     role = r.get(MEMBERSHIPS.ROLE) ?: MembershipRole.member,
                     joinedAt = r.get(MEMBERSHIPS.JOINED_AT),
-                    reliabilityIndex = r.get(USER_CLUB_REPUTATION.RELIABILITY_INDEX),
                     promiseFulfillmentPct = r.get(USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT),
                     totalConfirmations = r.get(USER_CLUB_REPUTATION.TOTAL_CONFIRMATIONS),
                     totalAttendances = r.get(USER_CLUB_REPUTATION.TOTAL_ATTENDANCES),
                     spontaneityCount = r.get(USER_CLUB_REPUTATION.SPONTANEITY_COUNT),
-                    outcomeCount = r.get("outcome_count", Int::class.java) ?: 0
+                    outcomeCount = r.get("outcome_count", Int::class.java) ?: 0,
+                    active = r.get(activeField) ?: false
                 )
             }
+    }
 
     override fun findExpiryRefByUserAndClub(userId: UUID, clubId: UUID): MembershipExpiryRef? =
         dsl.select(MEMBERSHIPS.ID, MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT)

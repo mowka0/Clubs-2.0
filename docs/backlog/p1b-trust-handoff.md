@@ -97,7 +97,7 @@ recency-decay, веса осей, XP/уровни, блок организато
 ## 6. Ключевые файлы (§13 design-дока)
 
 - Репутация: `backend/.../reputation/{ReputationService,JooqReputationRepository,ReputationRepository,ReputationPolicy,ReputationMapper}.kt`
-- Агрегация overall (текущая, active-only — менять): `JooqMembershipRepository` (запрос `/users/me/reputation`), фронт `ProfilePage.tsx` (клиентское среднее `avgReputation`)
+- Агрегация overall (была active-only — **заменена в PR-a** на server-side global all-history `GlobalTrustDto`; `avgReputation` удалён): `JooqMembershipRepository`/`MembershipService.getMyReputation` (`/users/me/reputation` → `MyReputationDto`), `TrustService`, фронт `ProfilePage.tsx`/`DiscoveryPage.tsx`
 - Явка/события (данные): `backend/.../event/{AttendanceService,JooqEventRepository,JooqEventResponseRepository}.kt`
 - Сборы: `backend/.../skladchina/SkladchinaService.kt`
 - Выход из клуба: `MembershipService`, `JooqMembershipRepository.cancel`, `deleteByUserAndClubAndActiveEvents`

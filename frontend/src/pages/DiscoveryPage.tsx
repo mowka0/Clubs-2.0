@@ -77,14 +77,16 @@ export const DiscoveryPage: FC = () => {
 
   const { user } = useAuthStore();
   const reputationQuery = useMyReputationQuery();
-  const reputation = useMemo(() => reputationQuery.data ?? [], [reputationQuery.data]);
-  const clubsJoined = reputation.length;
-  // Average only over clubs with a real number — newcomer / own-club rows are null and
-  // must be excluded (summing null would poison the average to NaN).
-  const scoredClubs = reputation.filter((r) => r.reliabilityIndex !== null);
-  const avgReputation = scoredClubs.length > 0
-    ? Math.round(scoredClubs.reduce((sum, r) => sum + (r.reliabilityIndex ?? 0), 0) / scoredClubs.length)
-    : null;
+  const rep = reputationQuery.data;
+  const activeCount = rep?.activeClubs.length ?? 0;
+  const global = rep?.global;
+  const globalScore = global?.score ?? null;
+  // Primary signal "надёжен в N из M клубов" over all history; the score is the secondary number.
+  const hasReputation = activeCount > 0 || (global?.trackRecordClubs ?? 0) > 0;
+  const reliablePhrase =
+    global && global.trackRecordClubs > 0
+      ? `надёжен в ${global.reliableClubs} из ${global.trackRecordClubs} клубов`
+      : 'пока недостаточно истории';
 
   const fullName = user ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}` : '';
 
@@ -150,8 +152,8 @@ export const DiscoveryPage: FC = () => {
             <span className="rd-badge-star" aria-hidden="true" />
           </div>
           <div className="rd-sub">
-            {clubsJoined > 0
-              ? `Состоишь в ${clubsJoined} ${pluralizeClubsIn(clubsJoined)}`
+            {activeCount > 0
+              ? `Состоишь в ${activeCount} ${pluralizeClubsIn(activeCount)}`
               : 'Найди свой первый клуб'}
           </div>
         </div>
@@ -166,16 +168,16 @@ export const DiscoveryPage: FC = () => {
         </button>
       </header>
 
-      {clubsJoined > 0 && (
+      {hasReputation && (
         <div className="rd-stats">
           <div className="rd-stat rd-glass">
             <div className="rd-stat-label">Репутация</div>
-            <div className="rd-stat-value">{avgReputation ?? '—'}</div>
-            <div className="rd-stat-foot">{avgReputation !== null ? 'средняя по клубам' : 'пока нет данных'}</div>
+            <div className="rd-stat-value">{globalScore ?? '—'}</div>
+            <div className="rd-stat-foot">{reliablePhrase}</div>
           </div>
           <div className="rd-stat rd-glass">
             <div className="rd-stat-label">В клубах</div>
-            <div className="rd-stat-value rd-plain">{clubsJoined}</div>
+            <div className="rd-stat-value rd-plain">{activeCount}</div>
             <div className="rd-stat-foot">активных участий</div>
           </div>
         </div>

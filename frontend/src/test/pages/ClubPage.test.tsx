@@ -74,7 +74,7 @@ function mockEmptyTabData(clubId: string = 'club-123') {
       username: 'testuser',
       avatarUrl: null,
       role: 'member',
-      reliabilityIndex: 100,
+      trust: 100,
       promiseFulfillmentPct: 100,
       totalConfirmations: 0,
       totalAttendances: 0,
@@ -380,7 +380,7 @@ describe('ClubPage', () => {
     expect(screen.queryByRole('button', { name: /^вступить$/i })).not.toBeInTheDocument();
   });
 
-  it('members tab renders score / "Новичок" / organizer framing per reliabilityIndex', async () => {
+  it('members tab renders score / "Новичок" / organizer framing per trust', async () => {
     server.use(
       http.get('*/api/clubs/:id', () =>
         HttpResponse.json({ ...mockClubDetail, ownerId: 'other-owner' } as ClubDetailDto)),
@@ -393,9 +393,9 @@ describe('ClubPage', () => {
         HttpResponse.json({ content: [], totalElements: 0, totalPages: 0, page: 0, size: 100 })),
       http.get('*/api/clubs/club-123/members', () =>
         HttpResponse.json([
-          { userId: 'u-vet', firstName: 'Vet', lastName: null, avatarUrl: null, role: 'member', joinedAt: '2025-01-01T00:00:00Z', reliabilityIndex: 90, promiseFulfillmentPct: 95 },
-          { userId: 'u-new', firstName: 'Newbie', lastName: null, avatarUrl: null, role: 'member', joinedAt: '2025-02-01T00:00:00Z', reliabilityIndex: null, promiseFulfillmentPct: null },
-          { userId: 'u-org', firstName: 'Org', lastName: null, avatarUrl: null, role: 'organizer', joinedAt: '2025-01-01T00:00:00Z', reliabilityIndex: null, promiseFulfillmentPct: null },
+          { userId: 'u-vet', firstName: 'Vet', lastName: null, avatarUrl: null, role: 'member', joinedAt: '2025-01-01T00:00:00Z', trust: 90, promiseFulfillmentPct: 95 },
+          { userId: 'u-new', firstName: 'Newbie', lastName: null, avatarUrl: null, role: 'member', joinedAt: '2025-02-01T00:00:00Z', trust: null, promiseFulfillmentPct: null },
+          { userId: 'u-org', firstName: 'Org', lastName: null, avatarUrl: null, role: 'organizer', joinedAt: '2025-01-01T00:00:00Z', trust: null, promiseFulfillmentPct: null },
         ])),
     );
 

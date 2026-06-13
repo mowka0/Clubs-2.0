@@ -41,3 +41,23 @@ data class ConfirmedResponse(
     val stage1Vote: Stage_1Vote?,
     val attendance: AttendanceStatus?
 )
+
+/**
+ * One of a user's ledger outcomes (club + kind + behaviour time), read for on-read P1b Trust.
+ * `occurredAt` anchors the recency decay; `kind` is classified kept/broke/neutral by TrustPolicy.
+ */
+data class ClubLedgerOutcome(
+    val clubId: UUID,
+    val kind: ReputationKind,
+    val occurredAt: OffsetDateTime
+)
+
+/**
+ * A club member's ledger outcome (user + kind + behaviour time) — batch-read for the club member
+ * list so per-member Trust is computed from one query rather than an N+1 over members.
+ */
+data class MemberLedgerOutcome(
+    val userId: UUID,
+    val kind: ReputationKind,
+    val occurredAt: OffsetDateTime
+)

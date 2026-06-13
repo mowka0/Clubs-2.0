@@ -89,18 +89,32 @@ mc-section-label «Моя репутация»
 > на `/my-clubs`. Соответствующие импорты (`useMyApplicationsQuery`,
 > `useQueries`, `getClub`, `ClubDetailDto`) удалены из `ProfilePage.tsx`.
 
-### Карточка `.pf-rep-card`
+### Глобальная шапка + секции «Репутация» / «История» (P1b)
 
-Лаконичная: avatar + название клуба + (опц. строка метрик) + индекс надёжности справа.
+Шапка `.rd-stats`: первичный сигнал «**надёжен в N из M клубов**» (вся история, `global` из
+`MyReputationDto`) + вторичное число `global.score` (0-100; `—` при `trackRecordClubs === 0` /
+`«пока недостаточно истории»`). Второй стат — `activeClubs.length` («активных участий»).
+
+Per-club строки рендерятся компонентом `ReputationRow` в двух секциях: **«Репутация»** (`activeClubs`)
+и **«История»** (`historyClubs` — покинутые клубы с сохранившимся track record); каждая секция
+показывается только если её список непуст.
+
+### Карточка `.pf-rep-card` / `ReputationRow`
+
+Лаконичная: avatar + название клуба + (опц. строка метрик) + **Trust** справа.
 
 - **Avatar**: `r.clubAvatarUrl ? <img/> : initials` (нейтральный фон, без category-gradient — лишний шум на этом блоке).
 - **Body**:
   - `<div className="name">{clubName}</div>`
   - `<div className="metrics">обещания N% · M подтв. · K посещ.</div>` — рендерится только при `hasScore` (есть число) и ненулевой активности (новичкам/owner не показываем обманчивые нули).
-- **Score**: при `reliabilityIndex !== null` — крупное число + caption «надёжность», цвет по тиру; при `null` — **«Новичок»** (нет числа), а для своего клуба (`role === 'organizer'`) — организаторская рамка «репутация за организаторские качества». Средняя надёжность в шапке **исключает** null-клубы (не NaN). Тиры:
+- **Score**: при `trust !== null` — крупное число + caption «надёжность», цвет по тиру; при `null` — **«Новичок»** (нет числа), а для своего клуба (`role === 'organizer'`) — организаторская рамка «репутация за организаторские качества». Тиры:
   - high (≥85) → `var(--brand-live)` (зелёный)
   - mid (70–84) → `var(--brand-brass-deep)` (латунь)
   - low (<70) → `var(--brand-ink-3)` (серый)
+
+> Прежнее **клиентское среднее** `avgReputation` по активным клубам **удалено**: общий показатель
+> теперь server-side global «N из M» (по всей истории, с decay + water-filling cap), а не среднее
+> на фронте. То же на `DiscoveryPage`.
 
 Тап по карточке → `navigate('/clubs/{r.clubId}')`.
 
@@ -108,7 +122,7 @@ mc-section-label «Моя репутация»
 
 ### Плашка «нет клубов»
 
-Когда `reputation.length === 0` — секция «Моя репутация» рендерит `.mc-empty` (тот же класс что у пустого MyClubsPage) с текстом «Тут появится репутация. Вступи в клуб — будем считать твою надёжность по каждому из них» и CTA `ghost-btn` «Найти клуб» → `/`.
+Когда `activeClubs.length + historyClubs.length === 0` — секция «Репутация» рендерит `.rd-empty` с текстом «Тут появится репутация. Вступи в клуб — будем считать твою надёжность по каждому из них» и CTA `ghost-btn` «Найти клуб» → `/`.
 
 Это **заменяет** прежний нижний placeholder «Профиль пока пуст» — теперь подсказка живёт прямо рядом с интересами/секцией репутации, где её и должно быть видно.
 
@@ -193,13 +207,25 @@ data class UpdateMeRequest(
 
 Возвращает обновлённый `UserDto`. Имя / аватар / @username при этом **не трогаются** — они синхронизируются из Telegram через `UserRepository.upsert` на каждый auth и были бы перезаписаны.
 
-### `GET /api/users/me/reputation` (NEW)
+### `GET /api/users/me/reputation` (P1b)
 
-Агрегат: моя репутация по всем клубам, где состою (`status IN active|grace_period`, `club.is_active = true`). Один запрос вместо N вызовов `GET /api/clubs/{id}/members/{userId}` — питает «Моя репутация» в Profile.
-
-Response: `List<UserClubReputationDto>`, упорядочен по `MEMBERSHIPS.JOINED_AT DESC NULLS LAST`.
+Агрегат: моя репутация по **всей истории** — global «надёжен в N из M клубов» + per-club Trust,
+разбитый на активные клубы и «История» (покинутые клубы с сохранившимся track record). Один запрос
+вместо N вызовов `GET /api/clubs/{id}/members/{userId}` — питает «Моя репутация» в Profile и stat-шапку
+Discovery. P1b сменил прежний плоский active-only `List<UserClubReputationDto>` на обёртку `MyReputationDto`.
 
 ```kotlin
+data class MyReputationDto(
+    val global: GlobalTrustDto,
+    val activeClubs: List<UserClubReputationDto>,   // доступ есть И клуб активен; ORDER BY JOINED_AT DESC
+    val historyClubs: List<UserClubReputationDto>   // покинутые клубы с track record («История»)
+)
+data class GlobalTrustDto(
+    val reliableClubs: Int,        // N — клубы с per-club Trust >= 70
+    val trackRecordClubs: Int,     // M — клубы с outcome_count >= 3 (вся история)
+    val score: Int?                // вторичное 0-100; null при trackRecordClubs == 0
+)
+
 data class UserClubReputationDto(
     val clubId: UUID,
     val clubName: String,
@@ -207,14 +233,17 @@ data class UserClubReputationDto(
     val category: String,            // .literal от ClubCategory
     val role: String,                // .literal от MembershipRole
     val joinedAt: OffsetDateTime?,   // используется в peer-view, в карточке скрыт
-    val reliabilityIndex: Int?,      // null = «Новичок» (outcome_count < 3) или владелец своего клуба
+    val trust: Int?,                 // P1b Trust 0-100; null = «Новичок» (outcome_count < 3) или владелец своего клуба
     val promiseFulfillmentPct: BigDecimal?,
     val totalConfirmations: Int?,
     val totalAttendances: Int?
 )
 ```
 
-> `category` / `role` / `joinedAt` сейчас не используются на фронте (в карточке оставлены только название + метрики + индекс), но возвращаются для будущих UI-итераций и совместимости. Удалять преждевременно — лишний цикл миграции при возврате.
+Полный контракт + формула Trust — `reputation-v2.md` § P1b. `trust`/global считаются on-read из ledger
+(`TrustService`); список клубов включает покинутые (active-only фильтр снят — дыра A).
+
+> `category` / `role` / `joinedAt` сейчас не используются на фронте (в карточке оставлены только название + метрики + Trust), но возвращаются для будущих UI-итераций и совместимости. Удалять преждевременно — лишний цикл миграции при возврате.
 
 ### `GET /api/users/me/interests` (NEW)
 
@@ -313,18 +342,19 @@ GIVEN авторизованный юзер открывает `/profile`
 THEN страница в `.brand-page` + `BrandBackdrop` (визуальное единство с MyClubsPage/ClubPage)
 AND видны: шапка-идентичность, секция «Моя репутация», шестерёнка ⚙️
 
-### AC-2: репутация по всем клубам в одном списке
-GIVEN юзер состоит в 3 клубах (active или grace_period, клубы is_active=true)
+### AC-2: репутация по всем клубам + global + История
+GIVEN юзер состоит в 3 активных клубах + покинул 1 клуб с track record
 WHEN открывает «Профиль»
-THEN видит ровно 3 карточки «Моя репутация» (одна на клуб)
-AND каждая карточка содержит название клуба + индекс надёжности справа
+THEN шапка показывает «надёжен в N из M клубов» + вторичное число (global по всей истории)
+AND секция «Репутация» содержит 3 карточки (активные клубы), секция «История» — 1 карточку (покинутый)
+AND каждая карточка содержит название клуба + Trust (`trust`) справа
 AND для клубов с активностью (totalAttendances>0 OR totalConfirmations>0 OR promiseFulfillmentPct>0) под названием — строка «обещания N% · M подтв. · K посещ.»
 AND тап → `/clubs/{clubId}`
 
 ### AC-3: новичок без активности
 GIVEN юзер только что вступил в клуб, ни одного финализированного события
 WHEN открывает «Профиль»
-THEN карточка показывает «Новичок» (нет числа, `reliabilityIndex = null`), без строки метрик
+THEN карточка показывает «Новичок» (нет числа, `trust = null`), без строки метрик
 
 ### AC-4: плашка при нулевой репутации
 GIVEN юзер не состоит ни в одном клубе
@@ -403,7 +433,7 @@ AND на повторном старте (V16 уже применена) — exi
 
 ## Non-functional
 
-- **Производительность.** `GET /me/reputation` — один SELECT с двумя join'ами (без coalesce-дефолтов; порог «Новичок» применяется маппером); покрывается существующими PK/FK. `GET /me/interests` — два таблицы, через PK. Suggest — индекс `varchar_pattern_ops` даёт O(log n) + matched rows для `LIKE 'prefix%'`. На текущем масштабе (десятки тысяч интересов в перспективе) — < 10ms на запрос.
+- **Производительность.** `GET /me/reputation` (P1b) — SELECT membership-проекции (два join'а, включает покинутые клубы с track record) + один batch-read ledger-исходов юзера для on-read Trust (`TrustService.computeForUser`, без N+1); покрывается существующими PK/FK + индексом `(user_id, club_id)` на `reputation_ledger`. `GET /me/interests` — два таблицы, через PK. Suggest — индекс `varchar_pattern_ops` даёт O(log n) + matched rows для `LIKE 'prefix%'`. На текущем масштабе (десятки тысяч интересов в перспективе) — < 10ms на запрос.
 - **Безопасность.** Все новые эндпоинты под `/api/users/me/**` или `/api/interests/**` → JWT (`SecurityConfig`). `UpdateMeRequest` валидирует `@Size`. `PATCH /me` действует ТОЛЬКО над `user.userId` из принципала — IDOR невозможен. `q` для suggest нормализуется (нет SQL-инъекции — jOOQ параметризует, `startsWith` escape'ит `%/_`). Интересы — публичный словарь, без PII.
 - **Rate limiting.** Глобальный `RateLimitFilter` (60/мин на юзера для `/api/**`) покрывает оба новых эндпоинта. Дебаунс 250 мс + `enabled: q.length >= 2` на фронте дополнительно сжимают трафик.
 - **Логирование.** `InterestService.replaceUserInterests` пишет `INFO` с counts (`added=`, `removed=`). Sensitive данных нет.

@@ -7,6 +7,12 @@
 > Этот документ — **имплементируемый контракт P1a**. Рационал и продуктовые «зачем» — в
 > `docs/backlog/reputation-v2-redesign.md`. После мержа P1a и post-flight alignment содержимое
 > сворачивается в `docs/modules/reputation.md` (текущая спека описывает **старую** аддитивную модель).
+>
+> **⚠️ Терминология P1b (см. § P1b ниже).** В разделе P1a отображаемое пользователю число
+> репутации называется `reliabilityIndex` (= сырой `reliability_index`). **В P1b оно переименовано
+> в `trust` (Trust 0-100) во всех DTO**, а сырой `reliability_index` стал internal-сырьём. Где ниже
+> в P1a-тексте встречается `reliabilityIndex` как DTO-поле / показ — читать как `trust`. Актуальный
+> API-контракт — § P1b «API-контракты (PR-a)».
 
 ---
 
@@ -430,3 +436,143 @@ WHEN recompute. THEN тест **фиксирует** переатрибуцию 
   redeploy.
 - **occurred_at заморожен** на `event_datetime`/`closed_at` — P1b decay читает эти значения; менять
   семантику после записи нельзя.
+
+---
+
+# P1b — Trust 0–100 + Global + выход-с-обязательствами + XP
+
+**Статус:** дизайн залочен 2026-06-13 (ultracode-сессия, 3 workflow + AskUserQuestion) · **Ветка:**
+`feature/reputation-p1b-trust` · core-first. Рационал — `docs/backlog/p1b-trust-handoff.md` +
+`reputation-v2-redesign.md`. Память: [[project_reputation_v2_design]].
+
+> P1a показывает сырой `reliability_index = Σpoints`. P1b заменяет его на **Trust 0–100** — байесовскую
+> recency-взвешенную долю сдержанных слов, выводимую ИЗ ledger **по kind** (не по points: V18 забэкфиллил
+> stale-магнитуды, points через границу V18 ненадёжны). `reliability_index` остаётся internal-сырьём.
+
+## Фазы (порядок зависимостей)
+
+- **PR-0** (фундамент): миграция **V25** — `kept_count/broke_count/neutral_count` в `user_club_reputation`;
+  recompute заполняет их COUNT-FILTER по kind. Backfill данных НЕ нужен (ledger полон) — один recompute-прогон.
+- **PR-a** (корень): per-club Trust + Global «N из M» по ВСЕЙ истории + UI «История клубов». Замена
+  active-only `avgReputation` (ProfilePage/DiscoveryPage — клиентский дубль) на server-side агрегат.
+- **PR-b** (независим): выход-с-обязательствами (закрывает дыру B).
+- **PR-c**: XP/уровни/бейджи (стрик отложен). **PR-e**: финализация visibility-тиров.
+
+## H1 — per-club Trust (approach B)
+
+kept/broke/neutral по **kind** (магнитудо-независимо, корректно через границу V18):
+
+| kept | broke | neutral (вне знаменателя) |
+|---|---|---|
+| `ironclad`, `spontaneous`, `skladchina_paid` | `no_show`, `spectator`, `skladchina_expired` | `confirmed_unresolved`, `skladchina_declined` (историч.) |
+
+```
+decay_i = 0.5 ^ (age_days(occurred_at) / 90)
+w_i     = 1 (kept) | 2 (broke)        # ASYM=2
+Trust   = round( 100 · ( Σ_kept decay_i + K·prior ) / ( Σ_kept decay_i + 2·Σ_broke decay_i + K ) )
+          prior = 0.85, K = 3
+```
+Decay читает `reputation_ledger.occurred_at` (время поведения), считается **on-read** (меняется со
+временем → НЕ кэшируется). Кэш-счётчики (V25) дают дешёвый non-decay знаменатель для read-проекций.
+Контрольные числа (залочены в `TrustPolicyTest`): новичок=85, 1 промах=52, 3 явки=92, 5:1=76,
+3 прогула=30, восстановление 3 события=89.
+
+## H2 — Global «надёжен в N из M клубов»
+
+По **ВСЕЙ истории** (вкл. покинутые клубы — источник `reputation_ledger`/`user_club_reputation` по
+`user_id`, БЕЗ active-only фильтра).
+- `M` = клубы с `outcome_count ≥ 3` (есть track record); `N` = из них с per-club `Trust ≥ 70`.
+- Число (вторичное) = diversity/recency-взвешенное среднее per-club Trust, вес клуба
+  `w_c = (outcome/(outcome+3)) · 0.5^(мес_с_посл/12)`, нормированный вес клипуется на **0.5** (water-filling).
+- Главный показ — «Надёжен в N из M клубов»; число — вспомогательное `{Global}/100`.
+
+## H6 — Новичок / нет данных (UI)
+
+- per-club `outcome_count < 3` → «Новичок» (без числа), как P1a.
+- Global `M = 0` → «Пока недостаточно истории», число скрыто. **Никогда** «0 из 0» / сырой 85 из <3-клуба.
+- Global `N = 0, M ≥ 1` → «Надёжен в 0 из M клубов», число показывается (честный сигнал).
+- Владелец в своём клубе → «Организатор» рамка (анти-фарм rule 1).
+
+## API-контракты (PR-a — реализовано)
+
+Эндпоинт не меняет URL, меняет **форму ответа**. `reliabilityIndex` (P1a) → `trust` во всех
+per-club DTO; `GET /api/users/me/reputation` теперь возвращает **обёртку** `MyReputationDto`
+(global + два списка) вместо плоского active-only `List<UserClubReputationDto>`.
+
+### `GET /api/users/me/reputation` → `MyReputationDto`
+
+```kotlin
+data class MyReputationDto(
+    val global: GlobalTrustDto,
+    val activeClubs: List<UserClubReputationDto>,   // member имеет доступ И клуб активен
+    val historyClubs: List<UserClubReputationDto>   // покинутые клубы с track record («История»)
+)
+
+data class GlobalTrustDto(
+    val reliableClubs: Int,        // N — клубы с per-club Trust >= 70
+    val trackRecordClubs: Int,     // M — клубы с outcome_count >= 3 (вся история)
+    val score: Int?                // вторичное 0-100; null при trackRecordClubs == 0
+)
+```
+
+- Список клубов теперь включает покинутые (`active-only` фильтр снят — закрыта дыра A); `active`
+  вычисляется в SQL (`status active|grace_period` ИЛИ ещё не истёкшая подписка, И `club.is_active`),
+  membership-сторона делит на `activeClubs`/`historyClubs`.
+- `per-club Trust` и global считаются **on-read** из ledger (`TrustService`), НЕ из кэша
+  (decay меняется со временем). Кэш-счётчики (`kept/broke/neutral_count`, V25) — дешёвый non-decay
+  знаменатель, не сам показ.
+
+### Per-club DTO (`UserClubReputationDto`, `MemberProfileDto`, `MemberListItemDto`)
+
+Поле `reliabilityIndex: Int?` → **`trust: Int?`** (P1b Trust 0-100). `null` = «Новичок»/подавлено
+(`outcome_count < 3`, или владелец своего клуба). Сиблинги (`promiseFulfillmentPct`/счётчики)
+подавляются вместе с ним. Сортировка списка участников (`GET /api/clubs/:id/members`) —
+по **отображаемому Trust** DESC в `MemberService` (новички/null уходят вниз), а не SQL `ORDER BY`.
+
+## H5 — выход-с-обязательствами (PR-b)
+
+Дыра B: `MembershipService.leaveFreeClub` хард-DELETE'ит `confirmed` `event_responses` ДО отмены →
+−200 за брошенную бронь не приземляется. Фикс: **enumerate ДО каскада**, в одной `@Transactional`:
+- type-1 = `confirmed` ответы на НЕ-finalized событиях → **−200** (kind `no_show`) + промоут waitlist;
+- type-2 = `pending` участия в `affects_reputation` складчинах с не прошедшим дедлайном → **−40** (kind
+  `skladchina_expired`); `occurred_at` = deadline.
+- Переиспользуем существующие kinds (без новой миграции); идемпотентность через
+  `UNIQUE(user_id, source_type, source_id)` (ON CONFLICT DO NOTHING — natural-строка при закрытии события
+  не задвоит). Owner не leaving (`leaveClub` режет owner). **Paid-клуб не штрафует сразу** (доступ до конца подписки).
+- UX 2-call: GET preview (count + «сломаете N обязательств») → confirm. Penalty-математика server-side (internal).
+
+## H3 — XP / уровни / бейджи (PR-c; стрик отложен)
+
+Отдельный от Trust канал: копится, **не падает** (broken promise = 0 XP, не минус). Derive из ledger on-read.
+- XP-веса: `ironclad +10`, `spontaneous +8`, `skladchina_paid +3`, негативы 0; organizer-событие (≥3 реальных)
+  +15, складчина закрыта (≥2 оплативших) +8; diversity +20 за первый kept в новом клубе.
+- 10 уровней `XP(n)=round(40·n^1.85)`: Гость / Свой / Участник / Завсегдатай / Активист / Энтузиаст /
+  Душа компании / Столп сообщества / Легенда / Амбассадор.
+- Анти-фарм наследуется (owner копит только organizer-XP; diversity + пороги ≥3/≥2). Бейджи показывают
+  пройденный порог, не сырой score.
+
+## H8 — visibility-тиры
+
+- `self`: точное XP + прогресс-бар, бейджи, разбивка «почему», «сломаете N обязательств» при выходе.
+- `others`: название уровня, публичные бейджи, «надёжен в N из M», вторичное Global-число.
+- `internal`: diversity/Sybil-confidence, **все константы** (K/prior/ASYM/decay/веса/cap), сырой
+  `reliability_index`/минус, fraud-флаги, ranking/match-score, провизорные начисления.
+
+## Acceptance Criteria (P1b)
+
+**AC-P1b-1 (счётчики V25):** после recompute `kept_count/broke_count/neutral_count` равны
+COUNT-FILTER по kind; `kept+broke+neutral = outcome_count`. Backfill данных не выполняется.
+
+**AC-P1b-2 (Trust новичок):** `outcome_count < 3` → Trust не показывается («Новичок»). При 0 broke и
+0 kept формула даёт 85 (prior).
+
+**AC-P1b-3 (decay):** старый `no_show` (age ≫ 90д) вносит экспоненциально меньший вклад, чем свежий —
+восстановление поведением поднимает Trust.
+
+**AC-P1b-4 (Global all-history):** покинутый клуб с track record входит в `M` и в Global-число (НЕ
+отфильтрован active-only); один плохой клуб не обнуляет Global (cap 0.5 + decay).
+
+**AC-P1b-5 (выход-с-обязательствами):** выход из free-клуба с `confirmed` бронью на не-finalized событии
+пишет −200 ДО каскада; повторный/двойной выход не задваивает (UNIQUE). Paid-клуб не штрафует немедленно.
+
+**AC-P1b-6 (XP не падает):** негативный исход даёт 0 XP (не минус); уровень не понижается.

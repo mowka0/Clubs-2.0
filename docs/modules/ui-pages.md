@@ -133,7 +133,7 @@ X = memberLimit * subscriptionPrice * 0.8
 | Файл | Источник данных | Заметки |
 |---|---|---|
 | `ClubActivitiesTab.tsx` | `useClubActivitiesQuery(clubId, { type? })` (`useQuery`, без пагинации) | Read-only unified-feed events + skladchinas клуба: секция `Предстоящие` (полные карточки, `relevantDate ASC`) + сворачиваемый аккордеон `Прошедшие (N)` (компактные строки, DESC). Tap по карточке → `/events/:id` или `/skladchina/:id`. Создание активностей — через **глобальный FAB** в доке (см. ниже § «FAB и контекст клуба»), не отдельной кнопкой в табе. Заменил `ClubEventsTab.tsx` (удалён) в `feature/unified-activity-creation`. |
-| `ClubMembersTab.tsx` | `useClubMembersQuery(clubId)` | rd-список `rd-rep-row` (avatar/индекс надёжности `rd-high/mid/low`), badge «Орг» для `role === 'organizer'`. При `isOrganizer` — доп. секция «Ожидают оплаты». Тап по члену (включая себя) → `MemberProfileModal` с полными метриками. Используется и в member-view `ClubPage`, и в `OrganizerClubManage`. |
+| `ClubMembersTab.tsx` | `useClubMembersQuery(clubId)` | rd-список `rd-rep-row` (avatar/Trust `member.trust` с тиром `rd-high/mid/low`; null → «Новичок»), badge «Орг» для `role === 'organizer'`. При `isOrganizer` — доп. секция «Ожидают оплаты». Тап по члену (включая себя) → `MemberProfileModal` с полными метриками. Используется и в member-view `ClubPage`, и в `OrganizerClubManage`. |
 | ~~`ClubProfileTab.tsx`~~ | — | **Удалён** в `feature/profile-reputation-and-skladchina-badge` (2026-05-30). Функция переехала в `ProfilePage` (см. ниже). |
 
 Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — non-active tabs не монтируются и их queries не выполняются. Visitor-режим вообще не подключает эти query.
@@ -244,7 +244,7 @@ rd-sheet bottom-sheet (`createPortal`, как CityPicker/ProfileEditModal — б
 Загружает `GET /api/clubs/:id/members/:userId/profile`. Показывает:
 - Аватар (`rd-avatar`), имя, username
 - «Статус в клубе» (`rd-glass rd-rep-panel` + `rd-kv`): роль, дата вступления
-- «Репутация» (`rd-kv`): индекс надёжности, % выполнения обещаний, подтверждения, посещения
+- «Репутация» (`rd-kv`): надёжность (Trust `profile.trust`), % выполнения обещаний, подтверждения, посещения; при `trust === null` — «Новичок» / организаторская рамка
 
 #### ~~Заявки~~ (`ApplicationsTab`, удалён в `feature/applications-inbox`, 2026-05-30)
 - Кросс-клубовый organizer-inbox теперь живёт на `MyClubsPage` — секция «Заявки на рассмотрении».
@@ -287,10 +287,10 @@ rd-sheet bottom-sheet (`createPortal`, как CityPicker/ProfileEditModal — б
 | `.pf-identity` (avatar + имя + @username + город/страна) | всегда | `useAuthStore.user` |
 | `.pf-bio` (свободный текст «о себе») | если `user.bio` задан | `useAuthStore.user.bio` |
 | Секция «Интересы» (чипы `.pf-tag`) | если `interests.length > 0` | `useMyInterestsQuery()` |
-| Секция «Моя репутация» — карточки клубов ИЛИ плашка | **всегда** (плашка `.mc-empty` при пустоте) | `useMyReputationQuery()` |
+| Global-шапка «надёжен в N из M клубов» + секции «Репутация» (активные) / «История» (покинутые) ИЛИ плашка | **всегда** (плашка `.rd-empty` при пустоте) | `useMyReputationQuery()` → `MyReputationDto` |
 | Секция «Активные заявки» | если есть pending / rejected / auto_rejected applications | `useMyApplicationsQuery()` + `useQueries(getClub)` для названий. Для отклонённых заявок с `rejectedReason` рендерится третья строка `.reason` с причиной отказа — см. [`profile.md`](./profile.md) § «AC-12». |
 
-Карточка `.pf-rep-card`: avatar + название клуба + (опц.) `обещания N% · M подтв. · K посещ.` + индекс надёжности справа (цвет по тиру: high ≥85 / mid ≥70 / low). Тап → `/clubs/{clubId}`.
+Карточка `ReputationRow`/`.pf-rep-card`: avatar + название клуба + (опц.) `обещания N% · M подтв. · K посещ.` + Trust (`trust`) справа (цвет по тиру: high ≥85 / mid ≥70 / low; null → «Новичок» / «Организатор» рамка). Тап → `/clubs/{clubId}`.
 
 ### Редактирование (⚙️ → `ProfileEditModal`)
 
