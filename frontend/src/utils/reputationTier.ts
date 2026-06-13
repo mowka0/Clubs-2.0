@@ -11,3 +11,20 @@ export function reliabilityTier(score: number | null): ReliabilityTier {
   if (score >= 70) return 'mid';
   return 'low';
 }
+
+const TIER_WORD: Record<ReliabilityTier, string> = {
+  high: 'высокая надёжность',
+  mid: 'средняя надёжность',
+  low: 'низкая надёжность',
+  new: '',
+};
+
+/** Russian tier label for the global headline ("высокая/средняя/низкая надёжность"). */
+export function tierWord(score: number | null): string {
+  return TIER_WORD[reliabilityTier(score)];
+}
+
+/** "клубе" (1) / "клубах" (2+) — prepositional plural for "опыт в N …". */
+export function clubsPrepositional(n: number): string {
+  return n === 1 ? 'клубе' : 'клубах';
+}

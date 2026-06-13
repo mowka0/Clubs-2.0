@@ -28,12 +28,16 @@ class MemberService(
         if (!membershipRepository.isMember(callerId, clubId)) {
             throw ForbiddenException("Not a member of this club")
         }
-        // Per-member Trust comes from one batch ledger read; sort by the DISPLAYED Trust so the
-        // list order matches the shown numbers (newcomers / suppressed rows fall to the bottom).
+        // Per-member Trust comes from one batch ledger read. Order: organizer first (they do not
+        // accrue Trust in their own club — anti-farm rule 1 — so by Trust alone they'd sort last),
+        // then everyone else by the DISPLAYED Trust, newcomers / suppressed rows at the bottom.
         val trustByUser = trustService.trustForClubMembers(clubId)
         return membershipRepository.findClubMembersWithUserInfo(clubId, includeCancelled)
             .map { mapper.toMemberListItemDto(it, trustByUser[it.userId]) }
-            .sortedWith(compareByDescending { it.trust ?: Int.MIN_VALUE })
+            .sortedWith(
+                compareByDescending<MemberListItemDto> { it.role == "organizer" }
+                    .thenByDescending { it.trust ?: Int.MIN_VALUE }
+            )
     }
 
     fun getMemberProfile(clubId: UUID, userId: UUID, callerId: UUID): MemberProfileDto {

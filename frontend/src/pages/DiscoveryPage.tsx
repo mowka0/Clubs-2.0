@@ -2,6 +2,7 @@ import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useClubsQuery } from '../queries/clubs';
 import { useMyReputationQuery } from '../queries/members';
+import { tierWord, clubsPrepositional } from '../utils/reputationTier';
 import { useAuthStore } from '../store/useAuthStore';
 import { ClubCard } from '../components/ClubCard';
 import { CityPicker, useCityChoice } from '../components/CityPicker';
@@ -81,11 +82,11 @@ export const DiscoveryPage: FC = () => {
   const activeCount = rep?.activeClubs.length ?? 0;
   const global = rep?.global;
   const globalScore = global?.score ?? null;
-  // Primary signal "надёжен в N из M клубов" over all history; the score is the secondary number.
+  // Score 0-100 + tier word + breadth ("опыт в N клубах"); the internal "N из M" feeds ranking.
   const hasReputation = activeCount > 0 || (global?.trackRecordClubs ?? 0) > 0;
   const reliablePhrase =
-    global && global.trackRecordClubs > 0
-      ? `надёжен в ${global.reliableClubs} из ${global.trackRecordClubs} клубов`
+    global && global.trackRecordClubs > 0 && globalScore !== null
+      ? `${tierWord(globalScore)} · опыт в ${global.trackRecordClubs} ${clubsPrepositional(global.trackRecordClubs)}`
       : 'пока недостаточно истории';
 
   const fullName = user ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}` : '';

@@ -5,6 +5,7 @@ import { Modal, Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useMyClubsQuery } from '../queries/clubs';
+import { useMyReputationQuery } from '../queries/members';
 import {
   useCompleteFreeMembershipMutation,
   useMyApplicationsQuery,
@@ -20,12 +21,14 @@ import { ApplicationReviewModal } from '../components/applications/ApplicationRe
 import { formatPeerSignal } from '../features/applications-inbox/lib/peer-signal-format';
 import { getClub } from '../api/clubs';
 import { ApiError } from '../api/apiClient';
+import { reliabilityTier } from '../utils/reputationTier';
 import type {
   AwaitingPaymentApplicationDto,
   ClubDetailDto,
   MembershipDto,
   OrganizerAwaitingPaymentApplicantDto,
   PendingApplicationDto,
+  UserClubReputationDto,
 } from '../types/api';
 import type { ApplicationDto } from '../api/membership';
 
@@ -131,6 +134,34 @@ const CATEGORY_LABELS: Record<string, string> = {
   sport: 'Спорт', creative: 'Творчество', food: 'Еда',
   board_games: 'Настолки', cinema: 'Кино', education: 'Образование',
   travel: 'Путешествия', other: 'Другое',
+};
+
+interface HistoryClubCardProps {
+  club: UserClubReputationDto;
+  onClick: () => void;
+}
+
+/** A club the user left but still has a reputation track record in ("История"). */
+const HistoryClubCard: FC<HistoryClubCardProps> = ({ club, onClick }) => {
+  const tier = reliabilityTier(club.trust);
+  const meta = [CATEGORY_LABELS[club.category] ?? club.category, 'вы покинули'].filter(Boolean).join(' · ');
+  return (
+    <button type="button" className="rd-rep-row" onClick={onClick}>
+      <span className="rd-ico">
+        {club.clubAvatarUrl ? <img src={club.clubAvatarUrl} alt="" /> : getInitials(club.clubName)}
+      </span>
+      <div className="rd-info">
+        <div className="rd-ttl">{club.clubName}</div>
+        <div className="rd-met">{meta}</div>
+      </div>
+      {club.trust !== null && (
+        <div className="rd-score">
+          <span className={`rd-v rd-${tier}`}>{club.trust}</span>
+          <span className="rd-cap">надёжность</span>
+        </div>
+      )}
+    </button>
+  );
 };
 
 interface AppCardProps {
@@ -328,6 +359,7 @@ export const MyClubsPage: FC = () => {
   const pendingInboxQuery = useMyPendingApplicationsQuery();
   const awaitingPaymentQuery = useMyAwaitingPaymentQuery();
   const organizerAwaitingPaymentQuery = useOrganizerAwaitingPaymentQuery();
+  const reputationQuery = useMyReputationQuery();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [reviewing, setReviewing] = useState<PendingApplicationDto | null>(null);
 
@@ -336,6 +368,7 @@ export const MyClubsPage: FC = () => {
   const pendingInbox = pendingInboxQuery.data ?? [];
   const awaitingPayment = awaitingPaymentQuery.data ?? [];
   const organizerAwaitingPayment = organizerAwaitingPaymentQuery.data ?? [];
+  const historyClubs = reputationQuery.data?.historyClubs ?? [];
   const awaitingPaymentIds = useMemo(
     () => new Set(awaitingPayment.map((item) => item.applicationId)),
     [awaitingPayment],
@@ -469,7 +502,8 @@ export const MyClubsPage: FC = () => {
     !loading &&
     myClubs.length === 0 &&
     myApplicationsCount === 0 &&
-    organizerInboxCount === 0;
+    organizerInboxCount === 0 &&
+    historyClubs.length === 0;
 
   const handleCreated = (id: string) => {
     setShowCreateModal(false);
@@ -615,6 +649,20 @@ export const MyClubsPage: FC = () => {
         </>
       )}
 
+
+      {/* 4. История — clubs the user left but still has a reputation track record in */}
+      {!loading && historyClubs.length > 0 && (
+        <>
+          <div className="rd-section-sub-h">
+            История <span className="rd-count">· {historyClubs.length}</span>
+          </div>
+          <div className="rd-glass rd-rep-panel">
+            {historyClubs.map((c) => (
+              <HistoryClubCard key={c.clubId} club={c} onClick={() => handleClubClick(c.clubId)} />
+            ))}
+          </div>
+        </>
+      )}
 
       {showCreateModal && (
         <Modal open onOpenChange={(open) => !open && setShowCreateModal(false)}>

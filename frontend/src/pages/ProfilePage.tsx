@@ -8,7 +8,7 @@ import { useMyReputationQuery } from '../queries/members';
 import { useMyInterestsQuery } from '../queries/profile';
 import { countryNameByCode } from '../components/CityPicker';
 import { ProfileEditModal } from '../components/profile/ProfileEditModal';
-import { reliabilityTier } from '../utils/reputationTier';
+import { reliabilityTier, tierWord, clubsPrepositional } from '../utils/reputationTier';
 import type { UserClubReputationDto } from '../types/api';
 
 const GearIcon: FC = () => (
@@ -135,15 +135,17 @@ export const ProfilePage: FC = () => {
 
   const rep = reputationQuery.data;
   const activeClubs = rep?.activeClubs ?? [];
-  const historyClubs = rep?.historyClubs ?? [];
   const global = rep?.global;
-  const totalClubs = activeClubs.length + historyClubs.length;
+  // История (покинутые клубы) живёт во вкладке «Клубы»; профиль показывает активную репутацию
+  // + глобальный показатель (он считается по всей истории, включая покинутые клубы).
+  const hasReputation = activeClubs.length > 0 || (global?.trackRecordClubs ?? 0) > 0;
 
-  // Global headline: primary "надёжен в N из M клубов", the score is the secondary number.
+  // Global headline: the score 0-100 + a tier word + the breadth ("опыт в N клубах"). The
+  // internal "N из M reliable" feeds ranking, not the card (see TrustPolicy / design §9.1).
   const globalScore = global?.score ?? null;
   const reliablePhrase =
-    global && global.trackRecordClubs > 0
-      ? `надёжен в ${global.reliableClubs} из ${global.trackRecordClubs} клубов`
+    global && global.trackRecordClubs > 0 && globalScore !== null
+      ? `${tierWord(globalScore)} · опыт в ${global.trackRecordClubs} ${clubsPrepositional(global.trackRecordClubs)}`
       : 'пока недостаточно истории';
 
   const openClub = (clubId: string) => {
@@ -189,7 +191,7 @@ export const ProfilePage: FC = () => {
 
       {user.bio && <div className="rd-bio">{user.bio}</div>}
 
-      {totalClubs > 0 && (
+      {hasReputation && (
         <div className="rd-stats">
           <div className="rd-stat rd-glass">
             <div className="rd-stat-label">Надёжность</div>
@@ -215,7 +217,7 @@ export const ProfilePage: FC = () => {
         </>
       )}
 
-      {totalClubs === 0 ? (
+      {!hasReputation ? (
         <>
           <div className="rd-section-sub-h">Репутация</div>
           <div className="rd-glass rd-empty">
@@ -232,35 +234,24 @@ export const ProfilePage: FC = () => {
             </button>
           </div>
         </>
+      ) : activeClubs.length > 0 ? (
+        <>
+          <div className="rd-section-sub-h">
+            Репутация
+            <span className="rd-count"> · {activeClubs.length}</span>
+          </div>
+          <div className="rd-glass rd-rep-panel">
+            {activeClubs.map((r) => (
+              <ReputationRow key={r.clubId} row={r} onOpen={openClub} />
+            ))}
+          </div>
+        </>
       ) : (
         <>
-          {activeClubs.length > 0 && (
-            <>
-              <div className="rd-section-sub-h">
-                Репутация
-                <span className="rd-count"> · {activeClubs.length}</span>
-              </div>
-              <div className="rd-glass rd-rep-panel">
-                {activeClubs.map((r) => (
-                  <ReputationRow key={r.clubId} row={r} onOpen={openClub} />
-                ))}
-              </div>
-            </>
-          )}
-
-          {historyClubs.length > 0 && (
-            <>
-              <div className="rd-section-sub-h">
-                История
-                <span className="rd-count"> · {historyClubs.length}</span>
-              </div>
-              <div className="rd-glass rd-rep-panel">
-                {historyClubs.map((r) => (
-                  <ReputationRow key={r.clubId} row={r} onOpen={openClub} />
-                ))}
-              </div>
-            </>
-          )}
+          <div className="rd-section-sub-h">Репутация</div>
+          <div className="rd-glass rd-empty">
+            <div className="rd-sub">Активных клубов сейчас нет — история клубов во&nbsp;вкладке «Клубы».</div>
+          </div>
         </>
       )}
 
