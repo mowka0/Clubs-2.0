@@ -58,9 +58,9 @@ export interface MemberListItemDto {
   avatarUrl: string | null;
   role: string;
   joinedAt: string | null;
-  // null = "Новичок" (no track record yet, or owner in own club — use `role` to render
-  // the organizer framing). The whole reputation block is suppressed when null.
-  reliabilityIndex: number | null;
+  // P1b Trust 0-100. null = "Новичок" (no track record yet, or owner in own club — use `role`
+  // to render the organizer framing). The whole reputation block is suppressed when null.
+  trust: number | null;
   promiseFulfillmentPct: number | null;
   /**
    * True iff the member is a paid-club subscriber who has already cancelled
@@ -79,10 +79,10 @@ export interface MemberProfileDto {
   firstName: string;
   username: string | null;
   avatarUrl: string | null;
-  // "organizer" = club owner. Drives the organizer framing when reliabilityIndex is null.
+  // "organizer" = club owner. Drives the organizer framing when trust is null.
   role: string;
-  // null = "Новичок"/suppressed (no track record yet, or owner in own club).
-  reliabilityIndex: number | null;
+  // P1b Trust 0-100. null = "Новичок"/suppressed (no track record yet, or owner in own club).
+  trust: number | null;
   promiseFulfillmentPct: number | null;
   totalConfirmations: number | null;
   totalAttendances: number | null;
@@ -97,13 +97,29 @@ export interface UserClubReputationDto {
   category: string;
   role: string;
   joinedAt: string | null;
-  // null = "Новичок"/suppressed (no track record yet, or owner in own club — `role`
-  // = "organizer" renders the organizer framing).
-  reliabilityIndex: number | null;
+  // P1b Trust 0-100. null = "Новичок"/suppressed (no track record yet, or owner in own club —
+  // `role` = "organizer" renders the organizer framing).
+  trust: number | null;
   promiseFulfillmentPct: number | null;
   totalConfirmations: number | null;
   totalAttendances: number | null;
   spontaneityCount: number | null;
+}
+
+/** Global reputation: primary "надёжен в reliableClubs из trackRecordClubs клубов". */
+export interface GlobalTrustDto {
+  reliableClubs: number;
+  trackRecordClubs: number;
+  // Secondary 0-100 number; null when there is no track record anywhere (trackRecordClubs === 0).
+  score: number | null;
+}
+
+/** The authenticated user's reputation overview: global aggregate + per-club lists. */
+export interface MyReputationDto {
+  global: GlobalTrustDto;
+  activeClubs: UserClubReputationDto[];
+  // Clubs the user left but still has a track record in ("История").
+  historyClubs: UserClubReputationDto[];
 }
 
 export interface ActionRequiredCountDto {

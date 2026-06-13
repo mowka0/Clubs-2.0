@@ -4,7 +4,9 @@ import com.clubs.generated.jooq.enums.ReputationAxis
 import com.clubs.generated.jooq.enums.ReputationKind
 import com.clubs.generated.jooq.enums.ReputationSource
 import com.clubs.generated.jooq.tables.references.REPUTATION_LEDGER
+import com.clubs.generated.jooq.tables.references.USER_CLUB_REPUTATION
 import com.clubs.membership.MemberService
+import com.clubs.membership.MembershipService
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -61,6 +63,7 @@ class ReputationLedgerIntegrationTest {
     @Autowired lateinit var reputationService: ReputationService
     @Autowired lateinit var reputationRepository: ReputationRepository
     @Autowired lateinit var memberService: MemberService
+    @Autowired lateinit var membershipService: MembershipService
     @Autowired lateinit var dsl: DSLContext
 
     private lateinit var ownerId: UUID
@@ -239,6 +242,86 @@ class ReputationLedgerIntegrationTest {
     }
 
     @Test
+    fun `recompute fills kept-broke-neutral counts by kind, invariant outcome = kept + broke + neutral (AC-P1b-1)`() {
+        // P1b PR-0: Trust 0-100 is a Bayesian fraction over KEPT promises, classified BY KIND.
+        // kept = {ironclad, spontaneous, skladchina_paid}; broke = {no_show, spectator,
+        // skladchina_expired}; neutral = {confirmed_unresolved, skladchina_declined}.
+        val member = insertUser("Counted")
+        val e1 = insertFinalizedEvent(); insertConfirmed(e1, member, "going", "attended") // ironclad -> kept
+        val e2 = insertFinalizedEvent(); insertConfirmed(e2, member, "going", "absent")   // no_show  -> broke
+        val e3 = insertFinalizedEvent(); insertConfirmed(e3, member, "going", null)       // confirmed_unresolved -> neutral
+        reputationService.processFinalizedEvent(e1)
+        reputationService.processFinalizedEvent(e2)
+        reputationService.processFinalizedEvent(e3)
+        reputationService.appendAndRecompute(
+            listOf(
+                financeEntry(member, ReputationKind.skladchina_paid),   // kept
+                financeEntry(member, ReputationKind.skladchina_expired) // broke
+            )
+        )
+
+        val (kept, broke, neutral) = counts(member)
+        assertEquals(2, kept, "kept_count (ironclad + skladchina_paid)")
+        assertEquals(2, broke, "broke_count (no_show + skladchina_expired)")
+        assertEquals(1, neutral, "neutral_count (confirmed_unresolved)")
+        val outcome = reputationRepository.findByUserAndClub(member, clubId)!!.outcomeCount
+        assertEquals(outcome, kept + broke + neutral, "invariant: outcome = kept + broke + neutral")
+    }
+
+    @Test
+    fun `getMyReputation splits active vs История and aggregates global over ALL clubs (closes hole A)`() {
+        val member = insertUser("Member")
+        val seedTime = OffsetDateTime.now()
+        // club1 (fixture clubId): ACTIVE membership + 3 kept → Trust high, reliable
+        insertMembership(member, "member")
+        reputationService.appendAndRecompute((1..3).map { financeEntry(member, ReputationKind.skladchina_paid, seedTime) })
+        // club2: a LEFT club (cancelled membership, no remaining subscription) + 3 broke → Trust low
+        val club2 = insertExtraClub("Left Club")
+        dsl.execute(
+            "INSERT INTO memberships (id, user_id, club_id, status, role, joined_at) " +
+                "VALUES ('${UUID.randomUUID()}', '$member', '$club2', 'cancelled', 'member'::membership_role, NOW())"
+        )
+        reputationService.appendAndRecompute((1..3).map {
+            LedgerEntry(
+                member, club2, ReputationAxis.finance, ReputationKind.skladchina_expired,
+                ReputationPolicy.pointsFor(ReputationKind.skladchina_expired), seedTime,
+                ReputationSource.skladchina, UUID.randomUUID()
+            )
+        })
+
+        val result = membershipService.getMyReputation(member)
+
+        // Global is all-history: BOTH clubs have a track record, only the active one is reliable.
+        assertEquals(2, result.global.trackRecordClubs, "left club still counts toward M")
+        assertEquals(1, result.global.reliableClubs)
+        assertTrue(result.global.score != null && result.global.score!! in 55..65, "score between the two clubs")
+        // The left club lives in История, not the active list — but it is NOT dropped (hole A).
+        assertEquals(listOf(clubId), result.activeClubs.map { it.clubId })
+        assertEquals(listOf(club2), result.historyClubs.map { it.clubId })
+        assertTrue(result.activeClubs.single().trust!! >= 90, "3 kept → high Trust")
+        assertTrue(result.historyClubs.single().trust!! < 40, "3 broken promises → low Trust survives leaving")
+    }
+
+    @Test
+    fun `TrustService computeForUser derives per-club Trust and an all-history global from the ledger`() {
+        val member = insertUser("Trusted")
+        val seedTime = OffsetDateTime.now()
+        // 3 kept finance outcomes at age 0 (decay = 1) → keptW = 3.0
+        // Trust = round(100 * (3 + 3*0.85) / (3 + 2*0 + 3)) = round(92.5) = 93
+        reputationService.appendAndRecompute((1..3).map { financeEntry(member, ReputationKind.skladchina_paid, seedTime) })
+
+        val result = TrustService(reputationRepository).computeForUser(member, seedTime)
+
+        val club = result.perClub.single()
+        assertEquals(clubId, club.clubId)
+        assertEquals(3, club.outcomeCount)
+        assertEquals(93, club.trust)
+        assertEquals(1, result.global.trackRecordClubs)
+        assertEquals(1, result.global.reliableClubs, "Trust 93 >= 70 → reliable")
+        assertEquals(93, result.global.score)
+    }
+
+    @Test
     fun `recompute is owner-agnostic on existing ledger rows (PR-2 transfer landmine)`() {
         // Earned reputation survives an ownership transfer: recompute only sums existing
         // ledger rows, it does NOT re-apply rule 1 from the current owner. The real risk
@@ -258,18 +341,18 @@ class ReputationLedgerIntegrationTest {
     }
 
     @Test
-    fun `read path suppresses sub-threshold reliability and sorts newcomers last (AC-4, AC-4b)`() {
+    fun `read path suppresses sub-threshold Trust and sorts newcomers last (AC-4, AC-4b)`() {
         insertMembership(ownerId, "organizer")
         val veteran = insertUser("Veteran"); insertMembership(veteran, "member")
         val newcomer = insertUser("Newcomer"); insertMembership(newcomer, "member")
 
-        // veteran: 3 ironclad events -> reliability 300, outcome_count 3 (>= threshold, shown)
+        // veteran: 3 ironclad events -> 3 kept, no broke -> Trust in [85, 93], outcome_count 3 (shown)
         repeat(3) {
             val e = insertFinalizedEvent()
             insertConfirmed(e, veteran, "going", "attended")
             reputationService.processFinalizedEvent(e)
         }
-        // newcomer: a single no_show -> reliability -200, outcome_count 1 (< threshold, suppressed)
+        // newcomer: a single no_show -> Trust low, but outcome_count 1 (< threshold, suppressed)
         val e = insertFinalizedEvent()
         insertConfirmed(e, newcomer, "going", "absent")
         reputationService.processFinalizedEvent(e)
@@ -277,18 +360,18 @@ class ReputationLedgerIntegrationTest {
         val members = memberService.getClubMembers(clubId, ownerId)
         val vet = members.first { it.userId == veteran }
         val newb = members.first { it.userId == newcomer }
-        assertEquals(300, vet.reliabilityIndex, "veteran (>=3 outcomes) shows the real number")
-        assertNull(newb.reliabilityIndex, "sub-threshold reliability is suppressed to null (Новичок)")
+        assertTrue(vet.trust != null && vet.trust >= 70, "veteran (>=3 kept outcomes) shows a high Trust")
+        assertNull(newb.trust, "sub-threshold Trust is suppressed to null (Новичок)")
         assertNull(newb.promiseFulfillmentPct, "sub-threshold siblings are suppressed too")
 
-        // NULLS LAST: the scored veteran sorts before the suppressed newcomer.
+        // Sorted by displayed Trust: the scored veteran sorts before the suppressed newcomer.
         val vetIdx = members.indexOfFirst { it.userId == veteran }
         val newbIdx = members.indexOfFirst { it.userId == newcomer }
-        assertTrue(vetIdx < newbIdx, "newcomer (null) sorts after the scored veteran")
+        assertTrue(vetIdx < newbIdx, "newcomer (null Trust) sorts after the scored veteran")
 
         // Member profile read path applies the same suppression.
-        assertNull(memberService.getMemberProfile(clubId, newcomer, ownerId).reliabilityIndex)
-        assertEquals(300, memberService.getMemberProfile(clubId, veteran, ownerId).reliabilityIndex)
+        assertNull(memberService.getMemberProfile(clubId, newcomer, ownerId).trust)
+        assertTrue(memberService.getMemberProfile(clubId, veteran, ownerId).trust!! >= 70)
     }
 
     // --- helpers ---
@@ -298,6 +381,17 @@ class ReputationLedgerIntegrationTest {
             "INSERT INTO memberships (id, user_id, club_id, status, role, joined_at) " +
                 "VALUES ('${UUID.randomUUID()}', '$userId', '$clubId', 'active', '$role'::membership_role, NOW())"
         )
+    }
+
+    private fun insertExtraClub(name: String): UUID {
+        val id = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO clubs (id, owner_id, name, description, category, access_type, city, member_limit, subscription_price, is_active)
+            VALUES ('$id', '$ownerId', '$name', 'desc', 'sport', 'open', 'Moscow', 20, 0, true)
+            """.trimIndent()
+        )
+        return id
     }
 
     private fun insertUser(name: String): UUID {
@@ -369,5 +463,20 @@ class ReputationLedgerIntegrationTest {
         assertEquals(spont, r.spontaneityCount, "spontaneityCount")
         assertEquals(outcome, r.outcomeCount, "outcomeCount")
         assertEquals(0, BigDecimal(pct).compareTo(r.promiseFulfillmentPct), "promiseFulfillmentPct ($pct vs ${r.promiseFulfillmentPct})")
+    }
+
+    private fun financeEntry(userId: UUID, kind: ReputationKind, occurredAt: OffsetDateTime = OffsetDateTime.now()) = LedgerEntry(
+        userId, clubId, ReputationAxis.finance, kind, ReputationPolicy.pointsFor(kind),
+        occurredAt, ReputationSource.skladchina, UUID.randomUUID()
+    )
+
+    /** Reads the P1b kept/broke/neutral cache columns directly — PR-0 writes them; the read
+     *  path (TrustService) lands in PR-a, so the test queries the table straight through dsl. */
+    private fun counts(userId: UUID): Triple<Int, Int, Int> {
+        val r = dsl.select(USER_CLUB_REPUTATION.KEPT_COUNT, USER_CLUB_REPUTATION.BROKE_COUNT, USER_CLUB_REPUTATION.NEUTRAL_COUNT)
+            .from(USER_CLUB_REPUTATION)
+            .where(USER_CLUB_REPUTATION.USER_ID.eq(userId).and(USER_CLUB_REPUTATION.CLUB_ID.eq(clubId)))
+            .fetchOne() ?: error("no reputation row for $userId")
+        return Triple(r.value1()!!, r.value2()!!, r.value3()!!)
     }
 }

@@ -29,7 +29,7 @@ class MembershipMapper {
         subscriptionExpiresAt = membership.subscriptionExpiresAt
     )
 
-    fun toMemberListItemDto(info: ClubMemberInfo): MemberListItemDto {
+    fun toMemberListItemDto(info: ClubMemberInfo, trust: Int?): MemberListItemDto {
         val show = ReputationPolicy.isShown(info.outcomeCount)
         return MemberListItemDto(
             userId = info.userId,
@@ -38,13 +38,13 @@ class MembershipMapper {
             avatarUrl = info.avatarUrl,
             role = info.role.literal,
             joinedAt = info.joinedAt,
-            reliabilityIndex = if (show) info.reliabilityIndex else null,
+            trust = if (show) trust else null,
             promiseFulfillmentPct = if (show) info.promiseFulfillmentPct else null,
             subscriptionCancelled = info.subscriptionCancelled
         )
     }
 
-    fun toUserClubReputationDto(info: UserClubReputationInfo): UserClubReputationDto {
+    fun toUserClubReputationDto(info: UserClubReputationInfo, trust: Int?): UserClubReputationDto {
         val show = ReputationPolicy.isShown(info.outcomeCount)
         return UserClubReputationDto(
             clubId = info.clubId,
@@ -53,7 +53,7 @@ class MembershipMapper {
             category = info.category.literal,
             role = info.role.literal,
             joinedAt = info.joinedAt,
-            reliabilityIndex = if (show) info.reliabilityIndex else null,
+            trust = if (show) trust else null,
             promiseFulfillmentPct = if (show) info.promiseFulfillmentPct else null,
             totalConfirmations = if (show) info.totalConfirmations else null,
             totalAttendances = if (show) info.totalAttendances else null,

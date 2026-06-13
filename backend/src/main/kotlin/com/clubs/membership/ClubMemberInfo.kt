@@ -22,9 +22,8 @@ data class ClubMemberInfo(
     val avatarUrl: String?,
     val role: MembershipRole,
     val joinedAt: OffsetDateTime,
-    // Raw cache values (nullable when the user has no reputation row in this club);
-    // the "Новичок" threshold (outcomeCount) is applied by the mapper at the DTO edge.
-    val reliabilityIndex: Int?,
+    // Raw cache sibling (nullable when no reputation row); the "Новичок" threshold (outcomeCount)
+    // is applied by the mapper. P1b shows Trust (computed in MemberService), not the raw index.
     val promiseFulfillmentPct: BigDecimal?,
     val outcomeCount: Int,
     val subscriptionCancelled: Boolean = false

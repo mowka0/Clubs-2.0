@@ -5,6 +5,7 @@ import com.clubs.common.exception.NotFoundException
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.reputation.ReputationPolicy
 import com.clubs.reputation.ReputationRepository
+import com.clubs.reputation.TrustService
 import com.clubs.user.MemberProfileDto
 import com.clubs.user.UserRepository
 import org.springframework.stereotype.Service
@@ -15,6 +16,7 @@ class MemberService(
     private val membershipRepository: MembershipRepository,
     private val userRepository: UserRepository,
     private val reputationRepository: ReputationRepository,
+    private val trustService: TrustService,
     private val mapper: MembershipMapper
 ) {
 
@@ -26,8 +28,16 @@ class MemberService(
         if (!membershipRepository.isMember(callerId, clubId)) {
             throw ForbiddenException("Not a member of this club")
         }
+        // Per-member Trust comes from one batch ledger read. Order: organizer first (they do not
+        // accrue Trust in their own club — anti-farm rule 1 — so by Trust alone they'd sort last),
+        // then everyone else by the DISPLAYED Trust, newcomers / suppressed rows at the bottom.
+        val trustByUser = trustService.trustForClubMembers(clubId)
         return membershipRepository.findClubMembersWithUserInfo(clubId, includeCancelled)
-            .map(mapper::toMemberListItemDto)
+            .map { mapper.toMemberListItemDto(it, trustByUser[it.userId]) }
+            .sortedWith(
+                compareByDescending<MemberListItemDto> { it.role == "organizer" }
+                    .thenByDescending { it.trust ?: Int.MIN_VALUE }
+            )
     }
 
     fun getMemberProfile(clubId: UUID, userId: UUID, callerId: UUID): MemberProfileDto {
@@ -41,6 +51,7 @@ class MemberService(
         // the threshold (or no row, or owner in own club) the whole block is suppressed
         // and the frontend renders "Новичок" / the organizer framing (by role).
         val show = reputation != null && ReputationPolicy.isShown(reputation.outcomeCount)
+        val trust = if (show) trustService.trustForUserInClub(userId, clubId) else null
         return MemberProfileDto(
             userId = userId,
             clubId = clubId,
@@ -48,7 +59,7 @@ class MemberService(
             username = user.telegramUsername,
             avatarUrl = user.avatarUrl,
             role = (membership?.role ?: MembershipRole.member).literal,
-            reliabilityIndex = if (show) reputation!!.reliabilityIndex else null,
+            trust = trust,
             promiseFulfillmentPct = if (show) reputation!!.promiseFulfillmentPct else null,
             totalConfirmations = if (show) reputation!!.totalConfirmations else null,
             totalAttendances = if (show) reputation!!.totalAttendances else null,

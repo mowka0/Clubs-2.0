@@ -155,4 +155,37 @@ open class UserClubReputationDao(configuration: Configuration?) : DAOImpl<UserCl
      * Fetch records that have <code>outcome_count IN (values)</code>
      */
     fun fetchByOutcomeCount(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.UserClubReputation> = fetch(UserClubReputation.USER_CLUB_REPUTATION.OUTCOME_COUNT, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>kept_count BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfKeptCount(lowerInclusive: Int?, upperInclusive: Int?): List<com.clubs.generated.jooq.tables.pojos.UserClubReputation> = fetchRange(UserClubReputation.USER_CLUB_REPUTATION.KEPT_COUNT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>kept_count IN (values)</code>
+     */
+    fun fetchByKeptCount(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.UserClubReputation> = fetch(UserClubReputation.USER_CLUB_REPUTATION.KEPT_COUNT, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>broke_count BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfBrokeCount(lowerInclusive: Int?, upperInclusive: Int?): List<com.clubs.generated.jooq.tables.pojos.UserClubReputation> = fetchRange(UserClubReputation.USER_CLUB_REPUTATION.BROKE_COUNT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>broke_count IN (values)</code>
+     */
+    fun fetchByBrokeCount(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.UserClubReputation> = fetch(UserClubReputation.USER_CLUB_REPUTATION.BROKE_COUNT, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>neutral_count BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfNeutralCount(lowerInclusive: Int?, upperInclusive: Int?): List<com.clubs.generated.jooq.tables.pojos.UserClubReputation> = fetchRange(UserClubReputation.USER_CLUB_REPUTATION.NEUTRAL_COUNT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>neutral_count IN (values)</code>
+     */
+    fun fetchByNeutralCount(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.UserClubReputation> = fetch(UserClubReputation.USER_CLUB_REPUTATION.NEUTRAL_COUNT, *values.toTypedArray())
 }

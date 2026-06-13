@@ -6,10 +6,10 @@ import type {
   MemberListItemDto,
   MembershipDto,
   MemberProfileDto,
+  MyReputationDto,
   OrganizerAwaitingPaymentApplicantDto,
   PendingApplicationDto,
   PendingApplicationsCountDto,
-  UserClubReputationDto,
 } from '../types/api';
 
 export interface ApplicationDto {
@@ -92,8 +92,8 @@ export function getMemberProfile(clubId: string, userId: string): Promise<Member
   return apiClient.get<MemberProfileDto>(`/api/clubs/${clubId}/members/${userId}`);
 }
 
-export function getMyReputation(): Promise<UserClubReputationDto[]> {
-  return apiClient.get<UserClubReputationDto[]>('/api/users/me/reputation');
+export function getMyReputation(): Promise<MyReputationDto> {
+  return apiClient.get<MyReputationDto>('/api/users/me/reputation');
 }
 
 export function getClubApplications(

@@ -64,6 +64,18 @@ open class UserClubReputationRecord private constructor() : UpdatableRecordImpl<
         set(value): Unit = set(10, value)
         get(): Int? = get(10) as Int?
 
+    open var keptCount: Int?
+        set(value): Unit = set(11, value)
+        get(): Int? = get(11) as Int?
+
+    open var brokeCount: Int?
+        set(value): Unit = set(12, value)
+        get(): Int? = get(12) as Int?
+
+    open var neutralCount: Int?
+        set(value): Unit = set(13, value)
+        get(): Int? = get(13) as Int?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -73,7 +85,7 @@ open class UserClubReputationRecord private constructor() : UpdatableRecordImpl<
     /**
      * Create a detached, initialised UserClubReputationRecord
      */
-    constructor(id: UUID? = null, userId: UUID, clubId: UUID, reliabilityIndex: Int? = null, promiseFulfillmentPct: BigDecimal? = null, totalConfirmations: Int? = null, totalAttendances: Int? = null, spontaneityCount: Int? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, outcomeCount: Int? = null): this() {
+    constructor(id: UUID? = null, userId: UUID, clubId: UUID, reliabilityIndex: Int? = null, promiseFulfillmentPct: BigDecimal? = null, totalConfirmations: Int? = null, totalAttendances: Int? = null, spontaneityCount: Int? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, outcomeCount: Int? = null, keptCount: Int? = null, brokeCount: Int? = null, neutralCount: Int? = null): this() {
         this.id = id
         this.userId = userId
         this.clubId = clubId
@@ -85,6 +97,9 @@ open class UserClubReputationRecord private constructor() : UpdatableRecordImpl<
         this.createdAt = createdAt
         this.updatedAt = updatedAt
         this.outcomeCount = outcomeCount
+        this.keptCount = keptCount
+        this.brokeCount = brokeCount
+        this.neutralCount = neutralCount
         resetChangedOnNotNull()
     }
 
@@ -104,6 +119,9 @@ open class UserClubReputationRecord private constructor() : UpdatableRecordImpl<
             this.createdAt = value.createdAt
             this.updatedAt = value.updatedAt
             this.outcomeCount = value.outcomeCount
+            this.keptCount = value.keptCount
+            this.brokeCount = value.brokeCount
+            this.neutralCount = value.neutralCount
             resetChangedOnNotNull()
         }
     }

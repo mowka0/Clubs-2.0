@@ -16,6 +16,19 @@ interface ReputationRepository {
      */
     fun aggregateByUserIds(userIds: Collection<UUID>): Map<UUID, PeerStatsAggregate>
 
+    /**
+     * All of a user's ledger outcomes across ALL clubs (incl. left clubs) — the on-read source
+     * for P1b Trust + the all-history global aggregate. No active-membership / is_active filter:
+     * a left club's penalty survives in the ledger and must still count toward the global view.
+     */
+    fun findTrustOutcomesByUser(userId: UUID): List<ClubLedgerOutcome>
+
+    /**
+     * All ledger outcomes in one club, one row per (user, outcome) — the batch source for
+     * per-member Trust on the club member list (avoids an N+1 over members).
+     */
+    fun findClubMemberOutcomes(clubId: UUID): List<MemberLedgerOutcome>
+
     // --- Ledger pipeline (write side, source of truth) ---
 
     /**

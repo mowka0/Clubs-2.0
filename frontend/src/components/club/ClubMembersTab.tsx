@@ -6,6 +6,7 @@ import {
 } from '../../queries/members';
 import { useHaptic } from '../../hooks/useHaptic';
 import { MemberProfileModal } from './MemberProfileModal';
+import { reliabilityTier } from '../../utils/reputationTier';
 import type { AwaitingPaymentApplicantDto, MemberListItemDto } from '../../types/api';
 
 interface ClubMembersTabProps {
@@ -23,13 +24,6 @@ function getInitials(firstName: string, lastName: string | null): string {
   const first = firstName.charAt(0).toUpperCase();
   const last = lastName ? lastName.charAt(0).toUpperCase() : '';
   return first + last;
-}
-
-function reliabilityTier(score: number | null): 'high' | 'mid' | 'low' | 'new' {
-  if (score === null) return 'new';
-  if (score >= 85) return 'high';
-  if (score >= 70) return 'mid';
-  return 'low';
 }
 
 /** Russian plural picker — same shape as MyClubsPage helper. */
@@ -131,8 +125,8 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
           {members.map((member) => {
             const fullName = `${member.firstName}${member.lastName ? ` ${member.lastName}` : ''}`;
             const isOwner = member.role === 'organizer';
-            const hasScore = member.reliabilityIndex !== null;
-            const tier = reliabilityTier(member.reliabilityIndex);
+            const hasScore = member.trust !== null;
+            const tier = reliabilityTier(member.trust);
             return (
               <button
                 key={member.userId}
@@ -165,7 +159,7 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
                 <span className="rd-score">
                   {hasScore ? (
                     <>
-                      <span className={`rd-v rd-${tier}`}>{member.reliabilityIndex}</span>
+                      <span className={`rd-v rd-${tier}`}>{member.trust}</span>
                       <span className="rd-cap">надёжность</span>
                     </>
                   ) : (

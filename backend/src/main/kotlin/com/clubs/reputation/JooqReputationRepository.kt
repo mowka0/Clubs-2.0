@@ -124,6 +124,34 @@ class JooqReputationRepository(
         }
     }
 
+    override fun findTrustOutcomesByUser(userId: UUID): List<ClubLedgerOutcome> {
+        val l = REPUTATION_LEDGER
+        return dsl.select(l.CLUB_ID, l.KIND, l.OCCURRED_AT)
+            .from(l)
+            .where(l.USER_ID.eq(userId))
+            .fetch { r ->
+                ClubLedgerOutcome(
+                    clubId = r.get(l.CLUB_ID)!!,
+                    kind = r.get(l.KIND)!!,
+                    occurredAt = r.get(l.OCCURRED_AT)!!
+                )
+            }
+    }
+
+    override fun findClubMemberOutcomes(clubId: UUID): List<MemberLedgerOutcome> {
+        val l = REPUTATION_LEDGER
+        return dsl.select(l.USER_ID, l.KIND, l.OCCURRED_AT)
+            .from(l)
+            .where(l.CLUB_ID.eq(clubId))
+            .fetch { r ->
+                MemberLedgerOutcome(
+                    userId = r.get(l.USER_ID)!!,
+                    kind = r.get(l.KIND)!!,
+                    occurredAt = r.get(l.OCCURRED_AT)!!
+                )
+            }
+    }
+
     override fun recompute(userId: UUID, clubId: UUID) {
         // Serialize recompute per (user, club) across transactions so the ledger aggregate
         // is read against a stable snapshot. Without this, two concurrent recomputes from
@@ -136,13 +164,23 @@ class JooqReputationRepository(
         val attendanceRow = l.AXIS.eq(ReputationAxis.attendance)
         val attendedKinds = l.KIND.`in`(ReputationKind.ironclad, ReputationKind.spontaneous)
 
+        // Trust 0-100 (P1b) classifies outcomes BY KIND, not by points (V18 backfilled stale
+        // magnitudes, so points lie across the V18 boundary; kept/broke-by-kind is magnitude-
+        // independent). These cached counts give read-projections a non-decay denominator without
+        // re-scanning the ledger; the decay-weighted Trust itself is computed on-read from occurred_at.
+        // neutral = outcome - kept - broke (confirmed_unresolved + historic skladchina_declined).
+        val keptKinds = l.KIND.`in`(ReputationKind.ironclad, ReputationKind.spontaneous, ReputationKind.skladchina_paid)
+        val brokeKinds = l.KIND.`in`(ReputationKind.no_show, ReputationKind.spectator, ReputationKind.skladchina_expired)
+
         val rec = dsl.select(
             DSL.sum(l.POINTS),
             DSL.count().filterWhere(attendanceRow),
             DSL.count().filterWhere(attendanceRow.and(attendedKinds)),
             DSL.count().filterWhere(l.KIND.eq(ReputationKind.spontaneous)),
             DSL.count(),
-            DSL.max(l.OCCURRED_AT)
+            DSL.max(l.OCCURRED_AT),
+            DSL.count().filterWhere(keptKinds),
+            DSL.count().filterWhere(brokeKinds)
         )
             .from(l)
             .where(l.USER_ID.eq(userId).and(l.CLUB_ID.eq(clubId)))
@@ -159,6 +197,9 @@ class JooqReputationRepository(
         val attendances = rec.value3() ?: 0
         val spontaneity = rec.value4() ?: 0
         val updatedAt = rec.value6() ?: OffsetDateTime.now()
+        val kept = rec.value7() ?: 0
+        val broke = rec.value8() ?: 0
+        val neutral = outcome - kept - broke
         val fulfillmentPct = if (confirmations > 0) {
             BigDecimal(attendances * 100).divide(BigDecimal(confirmations), 2, RoundingMode.HALF_UP)
         } else {
@@ -174,6 +215,9 @@ class JooqReputationRepository(
             .set(USER_CLUB_REPUTATION.TOTAL_ATTENDANCES, attendances)
             .set(USER_CLUB_REPUTATION.SPONTANEITY_COUNT, spontaneity)
             .set(USER_CLUB_REPUTATION.OUTCOME_COUNT, outcome)
+            .set(USER_CLUB_REPUTATION.KEPT_COUNT, kept)
+            .set(USER_CLUB_REPUTATION.BROKE_COUNT, broke)
+            .set(USER_CLUB_REPUTATION.NEUTRAL_COUNT, neutral)
             .set(USER_CLUB_REPUTATION.UPDATED_AT, updatedAt)
             .onConflict(USER_CLUB_REPUTATION.USER_ID, USER_CLUB_REPUTATION.CLUB_ID)
             .doUpdate()
@@ -183,6 +227,9 @@ class JooqReputationRepository(
             .set(USER_CLUB_REPUTATION.TOTAL_ATTENDANCES, attendances)
             .set(USER_CLUB_REPUTATION.SPONTANEITY_COUNT, spontaneity)
             .set(USER_CLUB_REPUTATION.OUTCOME_COUNT, outcome)
+            .set(USER_CLUB_REPUTATION.KEPT_COUNT, kept)
+            .set(USER_CLUB_REPUTATION.BROKE_COUNT, broke)
+            .set(USER_CLUB_REPUTATION.NEUTRAL_COUNT, neutral)
             .set(USER_CLUB_REPUTATION.UPDATED_AT, updatedAt)
             .execute()
     }

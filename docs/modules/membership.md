@@ -231,15 +231,17 @@ GET /api/clubs/{id}/members
   "avatarUrl": "string|null",
   "role": "member|organizer",
   "joinedAt": "ISO datetime|null",
-  "reliabilityIndex": 150,
+  "trust": 88,
   "promiseFulfillmentPct": 87.5
 }
 ```
 
+`trust` — P1b Trust 0-100 (on-read из ledger), сменил прежнее `reliabilityIndex`.
+
 ### Бизнес-правила
 - Возвращаются ТОЛЬКО участники со статусом `active` (grace_period, cancelled, expired — не входят)
-- Сортировка по **отображаемому** индексу `... DESC NULLS LAST` (CASE: число только при `outcome_count >= 3`), поэтому новички/sub-threshold/владельцы (показ = «Новичок») уходят **вниз**, а не наверх. Coalesce-дефолта 100 больше нет (модель v2 ledger)
-- Для новичка (`outcome_count < 3`, или владелец своего клуба) `reliabilityIndex` и сиблинги (`promiseFulfillmentPct`/счётчики) = **null** (блок подавлен → UI «Новичок» / организаторская рамка)
+- Per-member Trust считается одним batch-запросом (`TrustService.trustForClubMembers`, без N+1); список сортируется в `MemberService` по **отображаемому Trust** DESC, поэтому новички/sub-threshold/владельцы (показ = «Новичок», Trust = null) уходят **вниз**, а не наверх
+- Для новичка (`outcome_count < 3`, или владелец своего клуба) `trust` и сиблинги (`promiseFulfillmentPct`/счётчики) = **null** (блок подавлен → UI «Новичок» / организаторская рамка)
 - Дефолт role при отсутствии — `member`
 
 ### Authorization
@@ -252,8 +254,8 @@ GIVEN caller — active member клуба X, в клубе 3 активных у
 WHEN GET /api/clubs/X/members
 THEN 200 OK
 AND response — массив из 3 элементов
-AND элементы упорядочены по отображаемому reliabilityIndex DESC NULLS LAST
-AND для участника с `outcome_count < 3` (или владельца) reliabilityIndex=null, promiseFulfillmentPct=null («Новичок»)
+AND элементы упорядочены по отображаемому trust DESC (новички/null — внизу)
+AND для участника с `outcome_count < 3` (или владельца) trust=null, promiseFulfillmentPct=null («Новичок»)
 
 **AC-2: не-член клуба получает 403**
 GIVEN caller не состоит в клубе X (или status != active)
@@ -292,7 +294,8 @@ GET /api/clubs/{clubId}/members/{userId}
   "firstName": "string",
   "username": "string|null",
   "avatarUrl": "string|null",
-  "reliabilityIndex": 150,
+  "role": "member|organizer",
+  "trust": 88,
   "promiseFulfillmentPct": 87.5,
   "totalConfirmations": 8,
   "totalAttendances": 7
@@ -300,13 +303,14 @@ GET /api/clubs/{clubId}/members/{userId}
 ```
 
 `username` — telegram username (без `@`). `lastName` в этом DTO **не возвращается** — только firstName.
+`trust` — P1b Trust 0-100 (сменил `reliabilityIndex`); `role` несётся для организаторской рамки.
 
 ### Бизнес-правила
 - Caller должен быть `active` member клуба `clubId` → иначе 403
 - Пользователь `userId` должен существовать в `users` → иначе 404 "User not found"
 - При отсутствии записи в `user_club_reputation` ИЛИ `outcome_count < 3` (или владелец своего клуба) —
   блок репутации подавлен (модель v2 ledger):
-  - `reliabilityIndex = null`
+  - `trust = null`
   - `promiseFulfillmentPct = null`
   - `totalConfirmations = null`
   - `totalAttendances = null`
@@ -333,7 +337,7 @@ THEN 403 "Not a member of this club"
 **AC-3: участник без репутации**
 GIVEN Y — member клуба X, но в user_club_reputation нет записи
 WHEN GET /api/clubs/X/members/Y
-THEN 200 OK с reliabilityIndex=null, promiseFulfillmentPct=null, totalConfirmations=null, totalAttendances=null («Новичок»; либо организаторская рамка, если Y — владелец X)
+THEN 200 OK с trust=null, promiseFulfillmentPct=null, totalConfirmations=null, totalAttendances=null («Новичок»; либо организаторская рамка, если Y — владелец X)
 
 ### Corner Cases
 | Ситуация | Код | Сообщение |

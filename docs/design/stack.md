@@ -406,8 +406,8 @@ interface MemberListItemDto {
   avatarUrl: string | null;
   role: string;                     // 'organizer' | 'member'
   joinedAt: string | null;
-  reliabilityIndex: number;         // рейтинг надёжности
-  promiseFulfillmentPct: number;    // % выполненных обещаний
+  trust: number | null;             // P1b Trust 0-100; null = «Новичок»/подавлено
+  promiseFulfillmentPct: number | null; // % выполненных обещаний
 }
 ```
 
@@ -419,10 +419,11 @@ interface MemberProfileDto {
   firstName: string;
   username: string | null;
   avatarUrl: string | null;
-  reliabilityIndex: number;
-  promiseFulfillmentPct: number;
-  totalConfirmations: number;
-  totalAttendances: number;
+  role: string;                     // 'organizer' | 'member'
+  trust: number | null;             // P1b Trust 0-100; null = «Новичок»/подавлено
+  promiseFulfillmentPct: number | null;
+  totalConfirmations: number | null;
+  totalAttendances: number | null;
 }
 ```
 

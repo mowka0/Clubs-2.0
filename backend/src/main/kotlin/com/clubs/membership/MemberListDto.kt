@@ -11,9 +11,9 @@ data class MemberListItemDto(
     val avatarUrl: String?,
     val role: String,
     val joinedAt: OffsetDateTime?,
-    // null = "Новичок" (no track record yet, or owner in own club — frontend uses `role`
-    // to render the organizer framing). Whole reputation block is suppressed when null.
-    val reliabilityIndex: Int?,
+    // P1b Trust 0-100. null = "Новичок" (no track record yet, or owner in own club — frontend
+    // uses `role` to render the organizer framing). Whole reputation block is suppressed when null.
+    val trust: Int?,
     val promiseFulfillmentPct: BigDecimal?,
     val subscriptionCancelled: Boolean = false
 )

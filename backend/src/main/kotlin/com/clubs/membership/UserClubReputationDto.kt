@@ -12,9 +12,9 @@ data class UserClubReputationDto(
     val category: String,
     val role: String,
     val joinedAt: OffsetDateTime?,
-    // null = "Новичок"/suppressed (no track record yet, or owner in own club — use `role`
-    // to render the organizer framing "репутация начисляется за организаторские качества").
-    val reliabilityIndex: Int?,
+    // P1b Trust 0-100. null = "Новичок"/suppressed (no track record yet — outcome_count below the
+    // display threshold — or owner in own club; use `role` to render the organizer framing).
+    val trust: Int?,
     val promiseFulfillmentPct: BigDecimal?,
     val totalConfirmations: Int?,
     val totalAttendances: Int?,

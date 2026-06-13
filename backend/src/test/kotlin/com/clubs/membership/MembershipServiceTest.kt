@@ -6,6 +6,7 @@ import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
+import com.clubs.reputation.TrustService
 import com.clubs.event.EventResponseRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
@@ -35,6 +36,7 @@ class MembershipServiceTest {
     private lateinit var eventResponseRepository: EventResponseRepository
     private lateinit var skladchinaRepository: SkladchinaRepository
     private lateinit var applicationRepository: ApplicationRepository
+    private lateinit var trustService: TrustService
     private lateinit var membershipService: MembershipService
 
     @BeforeEach
@@ -47,6 +49,7 @@ class MembershipServiceTest {
         eventResponseRepository = mockk(relaxed = true)
         skladchinaRepository = mockk(relaxed = true)
         applicationRepository = mockk(relaxed = true)
+        trustService = mockk(relaxed = true)
         membershipService = MembershipService(
             membershipRepository,
             clubRepository,
@@ -55,7 +58,8 @@ class MembershipServiceTest {
             freeMembershipActivator,
             eventResponseRepository,
             skladchinaRepository,
-            applicationRepository
+            applicationRepository,
+            trustService
         )
     }
 

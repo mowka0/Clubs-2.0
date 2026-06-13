@@ -63,7 +63,8 @@ export function useMemberProfileQuery(
   });
 }
 
-/** Authenticated user's reliability index in every club they belong to. */
+/** Authenticated user's reputation overview: the global "N из M" aggregate + per-club Trust,
+ *  split into active clubs and "История" (left clubs that still carry a track record). */
 export function useMyReputationQuery() {
   return useQuery({
     queryKey: queryKeys.clubs.myReputation(),

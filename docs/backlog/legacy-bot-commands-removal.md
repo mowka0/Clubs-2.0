@@ -15,7 +15,7 @@
 | Команда бота | Что показывает | Аналог в Mini App |
 |---|---|---|
 | `/кто_идет` | ближайшее событие любого клуба + going/maybe count | Таб «События» в клубе → детальная страница события (`EventPage`) — список RSVP с counter'ом |
-| `/мой_рейтинг` | reliabilityIndex + promiseFulfillmentPct + totalConfirmations (одного случайного клуба) | Профиль участника (`MemberProfileDto`) — те же метрики, плюс per-club разбивка |
+| `/мой_рейтинг` | reliabilityIndex + promiseFulfillmentPct + totalConfirmations (одного случайного клуба) | Профиль участника (`MemberProfileDto`) — те же метрики (число надёжности теперь `trust`, P1b Trust 0-100), плюс per-club разбивка |
 
 Команды — наследие initial design phase, когда бот мыслился как primary surface. После того как Mini App стал основным интерфейсом, эти команды никогда не были интегрированы в актуальный продуктовый experience (в `/start` welcome нет упоминания этих команд, в Mini App нет кнопок «попробовать через бота»).
 

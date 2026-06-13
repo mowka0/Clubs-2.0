@@ -10,6 +10,7 @@ import com.clubs.event.EventResponseRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.payment.PaymentService
+import com.clubs.reputation.TrustService
 import com.clubs.skladchina.SkladchinaRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -25,7 +26,8 @@ class MembershipService(
     private val freeMembershipActivator: FreeMembershipActivator,
     private val eventResponseRepository: EventResponseRepository,
     private val skladchinaRepository: SkladchinaRepository,
-    private val applicationRepository: ApplicationRepository
+    private val applicationRepository: ApplicationRepository,
+    private val trustService: TrustService
 ) {
 
     private val log = LoggerFactory.getLogger(MembershipService::class.java)
@@ -109,9 +111,27 @@ class MembershipService(
     fun getUserMemberships(userId: UUID): List<MembershipDto> =
         membershipRepository.findByUserId(userId).map(mapper::toDto)
 
+    /**
+     * The authenticated user's reputation for the Profile tab: the all-history global aggregate
+     * ("надёжен в N из M клубов") + per-club Trust, split into active clubs and "История" (left
+     * clubs that still carry a track record). Trust is computed on-read from the ledger
+     * ([TrustService]); the club list + active/История split comes from memberships.
+     */
     @Transactional(readOnly = true)
-    fun getUserClubsWithReputation(userId: UUID): List<UserClubReputationDto> =
-        membershipRepository.findUserClubsWithReputation(userId).map(mapper::toUserClubReputationDto)
+    fun getMyReputation(userId: UUID): MyReputationDto {
+        val trust = trustService.computeForUser(userId)
+        val trustByClub = trust.perClub.associate { it.clubId to it.trust }
+        val (active, history) = membershipRepository.findUserClubsWithReputation(userId).partition { it.active }
+        return MyReputationDto(
+            global = GlobalTrustDto(
+                reliableClubs = trust.global.reliableClubs,
+                trackRecordClubs = trust.global.trackRecordClubs,
+                score = trust.global.score
+            ),
+            activeClubs = active.map { mapper.toUserClubReputationDto(it, trustByClub[it.clubId]) },
+            historyClubs = history.map { mapper.toUserClubReputationDto(it, trustByClub[it.clubId]) }
+        )
+    }
 
     private fun leavePaidClub(membership: Membership, clubId: UUID, userId: UUID): MembershipDto {
         membershipRepository.cancel(membership.id)
