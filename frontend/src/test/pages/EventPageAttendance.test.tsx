@@ -5,7 +5,7 @@ import { Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { renderWithProviders } from '../utils/renderWithProviders';
-import type { EventDetailDto, EventResponderDto } from '../../types/api';
+import type { EventDetailDto, EventResponderDto, MyAttendanceDto } from '../../types/api';
 
 // Mock Telegram SDK (same shape as ClubPage.test.tsx)
 vi.mock('@telegram-apps/sdk-react', () => ({
@@ -74,6 +74,9 @@ function mockEventEndpoints(opts: { ownerId: string; event?: EventDetailDto } = 
     http.get(`*/api/events/${EVENT_ID}`, () => HttpResponse.json(event)),
     http.get(`*/api/events/${EVENT_ID}/my-vote`, () => HttpResponse.json({ vote: 'confirmed' })),
     http.get(`*/api/events/${EVENT_ID}/responses`, () => HttpResponse.json(RESPONDERS)),
+    // F5-04: default = caller has no participation row (organizer / non-participant) → 404.
+    // Tests exercising the participant dispute UI override this with their own state.
+    http.get(`*/api/events/${EVENT_ID}/my-attendance`, () => new HttpResponse(null, { status: 404 })),
     http.get(`*/api/clubs/${CLUB_ID}`, () => HttpResponse.json({
       id: CLUB_ID,
       ownerId: opts.ownerId,
@@ -276,6 +279,12 @@ describe('EventPage — отметка посещаемости', () => {
       http.get(`*/api/events/${EVENT_ID}/responses`, () => HttpResponse.json([
         { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed', attendance: 'absent' },
       ] satisfies EventResponderDto[])),
+      // F5-04: the dispute controls now read the caller's own attendance from /my-attendance
+      // (reachable without club membership). canDispute is computed server-side.
+      http.get(`*/api/events/${EVENT_ID}/my-attendance`, () => HttpResponse.json({
+        attendance: 'absent', attendanceMarked: true, attendanceFinalized: false,
+        disputeTerminal: false, canDispute: true, disputeNote: null,
+      } satisfies MyAttendanceDto)),
       http.post(`*/api/events/${EVENT_ID}/dispute`, async ({ request }) => {
         disputeBody = (await request.json().catch(() => null)) as typeof disputeBody;
         return HttpResponse.json({ eventId: EVENT_ID, markedCount: 1 });
@@ -291,5 +300,31 @@ describe('EventPage — отметка посещаемости', () => {
 
     await waitFor(() => expect(disputeBody).not.toBeNull());
     expect(disputeBody!.note).toBe('Я точно был');
+  });
+
+  it('после терминального резолва участник видит «спор рассмотрен», кнопки «Оспорить» нет (F5-16)', async () => {
+    useAuthStore.setState({
+      user: {
+        id: 'u-confirmed', telegramId: 2, telegramUsername: 'anna', firstName: 'Анна',
+        lastName: 'К', avatarUrl: null, city: null, country: null, bio: null,
+      },
+      isAuthenticated: true,
+      isLoading: false,
+    } as never);
+    mockEventEndpoints({
+      ownerId: 'someone-else',
+      event: pastCompletedEvent({ attendanceMarked: true, attendanceFinalized: false }),
+    });
+    server.use(
+      http.get(`*/api/events/${EVENT_ID}/my-attendance`, () => HttpResponse.json({
+        attendance: 'absent', attendanceMarked: true, attendanceFinalized: false,
+        disputeTerminal: true, canDispute: false, disputeNote: null,
+      } satisfies MyAttendanceDto)),
+    );
+
+    renderEventPage();
+
+    expect(await screen.findByText(/Организатор рассмотрел ваш спор/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Оспорить' })).not.toBeInTheDocument();
   });
 });

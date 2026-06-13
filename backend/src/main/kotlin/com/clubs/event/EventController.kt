@@ -97,6 +97,18 @@ class EventController(
         return ResponseEntity.ok(stage2Service.declineParticipation(id, user.userId))
     }
 
+    /**
+     * F5-04: the caller's OWN attendance state for the event. Intentionally has no
+     * @RequiresMembership — a participant who left the club still needs to reach the dispute UI
+     * after the deep-link DM. The service scopes the result to the caller's own response row.
+     */
+    @GetMapping("/api/events/{id}/my-attendance")
+    fun getMyAttendance(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<MyAttendanceDto> =
+        ResponseEntity.ok(attendanceService.getMyAttendance(id, user.userId))
+
     @PostMapping("/api/events/{id}/attendance")
     fun markAttendance(
         @PathVariable id: UUID,

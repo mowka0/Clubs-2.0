@@ -9,6 +9,7 @@ import com.clubs.generated.jooq.tables.references.EVENTS
 import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import com.clubs.generated.jooq.tables.references.USERS
 import org.jooq.DSLContext
+import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -199,20 +200,27 @@ class JooqEventResponseRepository(
             .fetch(USERS.TELEGRAM_ID)
             .filterNotNull()
 
-    override fun findTelegramIdsByEventAndAttendance(eventId: UUID, attendance: AttendanceStatus): List<Long> =
-        dsl.select(USERS.TELEGRAM_ID)
+    override fun findTelegramIdsByEventAndUserIds(eventId: UUID, userIds: List<UUID>): List<Long> {
+        if (userIds.isEmpty()) return emptyList()
+        return dsl.select(USERS.TELEGRAM_ID)
             .from(EVENT_RESPONSES)
             .join(USERS).on(USERS.ID.eq(EVENT_RESPONSES.USER_ID))
             .where(
                 EVENT_RESPONSES.EVENT_ID.eq(eventId)
-                    .and(EVENT_RESPONSES.ATTENDANCE.eq(attendance))
+                    .and(EVENT_RESPONSES.USER_ID.`in`(userIds))
             )
             .fetch(USERS.TELEGRAM_ID)
             .filterNotNull()
+    }
 
-    override fun setAttendance(eventId: UUID, userId: UUID, attended: Boolean): Int =
-        dsl.update(EVENT_RESPONSES)
-            .set(EVENT_RESPONSES.ATTENDANCE, if (attended) AttendanceStatus.attended else AttendanceStatus.absent)
+    override fun setAttendance(eventId: UUID, userId: UUID, attended: Boolean): Int {
+        val target = if (attended) AttendanceStatus.attended else AttendanceStatus.absent
+        return dsl.update(EVENT_RESPONSES)
+            .set(EVENT_RESPONSES.ATTENDANCE, target)
+            // F5-16: a fresh organizer mark re-opens the dispute right (the participant may
+            // contest the NEW mark). Idempotent re-submits match 0 rows (IS DISTINCT FROM target
+            // below), so a previously resolved/terminal row is never re-opened by a no-op re-mark.
+            .set(EVENT_RESPONSES.DISPUTE_TERMINAL, false)
             .where(
                 EVENT_RESPONSES.EVENT_ID.eq(eventId)
                     .and(EVENT_RESPONSES.USER_ID.eq(userId))
@@ -220,8 +228,21 @@ class JooqEventResponseRepository(
                     // who never confirmed is not on it — reputation ignores non-confirmed
                     // rows anyway, so marking them was a no-op that only cluttered the UI.
                     .and(EVENT_RESPONSES.FINAL_STATUS.eq(FinalStatus.confirmed))
+                    // F5-15(1): never overwrite an active dispute — only resolveDispute may move
+                    // a `disputed` row. IS DISTINCT FROM, NOT <>: a first mark has attendance=NULL
+                    // and `NULL <> 'disputed'` is NULL (row silently skipped → happy-path broken).
+                    .and(EVENT_RESPONSES.ATTENDANCE.isDistinctFrom(AttendanceStatus.disputed))
+                    // Only genuine transitions: an idempotent re-submit (row already at target)
+                    // matches 0 rows. So markedCount counts real changes and `updated > 0 && !attended`
+                    // means exactly "newly absent" for the DM (F5-15.2) without a prior-state read.
+                    .and(EVENT_RESPONSES.ATTENDANCE.isDistinctFrom(target))
+                    // F5-09: never write attendance onto an already-finalized event (TOCTOU with the
+                    // finalizer). Subquery on EVENTS — event_responses.attendance_finalized is dead
+                    // (never written); the live flag lives on events.
+                    .and(EVENT_RESPONSES.EVENT_ID.`in`(notFinalizedEvent(eventId)))
             )
             .execute()
+    }
 
     override fun disputeAbsentAttendance(eventId: UUID, userId: UUID, note: String?): Int =
         dsl.update(EVENT_RESPONSES)
@@ -231,12 +252,23 @@ class JooqEventResponseRepository(
                 EVENT_RESPONSES.EVENT_ID.eq(eventId)
                     .and(EVENT_RESPONSES.USER_ID.eq(userId))
                     .and(EVENT_RESPONSES.ATTENDANCE.eq(AttendanceStatus.absent))
+                    // F5-16: a resolved/terminal mark cannot be re-disputed (ping-pong). The dispute
+                    // endpoint has no authz beyond JWT, so this DB guard — not just the UI — is
+                    // load-bearing.
+                    .and(EVENT_RESPONSES.DISPUTE_TERMINAL.isFalse)
+                    // F5-10 (ordering A): if the finalizer already committed attendance_finalized=true
+                    // the window is closed — refuse (no spurious disputed row, no false organizer DM).
+                    // ATT-2 (resolveExpiredDisputesToAbsent) remains the backstop for ordering B
+                    // (dispute commits before ATT-2 in the same finalize txn) — do NOT remove it.
+                    .and(EVENT_RESPONSES.EVENT_ID.`in`(notFinalizedEvent(eventId)))
             )
             .execute()
 
     override fun resolveDisputedAttendance(eventId: UUID, userId: UUID, attended: Boolean): Int =
         dsl.update(EVENT_RESPONSES)
             .set(EVENT_RESPONSES.ATTENDANCE, if (attended) AttendanceStatus.attended else AttendanceStatus.absent)
+            // F5-16: the organizer has ruled — the mark is terminal, no re-dispute.
+            .set(EVENT_RESPONSES.DISPUTE_TERMINAL, true)
             .where(
                 EVENT_RESPONSES.EVENT_ID.eq(eventId)
                     .and(EVENT_RESPONSES.USER_ID.eq(userId))
@@ -248,6 +280,9 @@ class JooqEventResponseRepository(
         if (eventIds.isEmpty()) return 0
         return dsl.update(EVENT_RESPONSES)
             .set(EVENT_RESPONSES.ATTENDANCE, AttendanceStatus.absent)
+            // F5-16: the window expired with the dispute unresolved — the mark is terminal too
+            // (audit symmetry; attendance_finalized already blocks re-dispute, this is belt-and-suspenders).
+            .set(EVENT_RESPONSES.DISPUTE_TERMINAL, true)
             .where(
                 EVENT_RESPONSES.EVENT_ID.`in`(eventIds)
                     .and(EVENT_RESPONSES.ATTENDANCE.eq(AttendanceStatus.disputed))
@@ -259,6 +294,13 @@ class JooqEventResponseRepository(
             )
             .execute()
     }
+
+    // F5-09 / F5-10: "this event is not yet finalized" as a subquery on EVENTS, for use inside
+    // EVENT_RESPONSES UPDATEs. event_responses.attendance_finalized is dead (never written) — the
+    // authoritative flag is events.attendance_finalized, set by the finalizer.
+    private fun notFinalizedEvent(eventId: UUID) =
+        DSL.select(EVENTS.ID).from(EVENTS)
+            .where(EVENTS.ID.eq(eventId).and(EVENTS.ATTENDANCE_FINALIZED.isFalse))
 
     override fun deleteByUserAndClubAndActiveEvents(userId: UUID, clubId: UUID): Int {
         val activeEventIds = dsl.select(EVENTS.ID)

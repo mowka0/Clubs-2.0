@@ -281,8 +281,15 @@
 
 **Acceptance criteria:**
 - Push-уведомление организатору отправляется через 12 часов после времени окончания события.
-- Уведомление об оспаривании отправляется участнику сразу после сохранения отметок.
-- Окно оспаривания: 48 часов с момента сохранения отметок.
+- Уведомление об оспаривании отправляется участнику сразу после сохранения отметок (только тем,
+  кто **впервые** отмечен «Не пришёл» в этой отметке — повторная/корректирующая отметка не
+  пере-уведомляет уже-absent).
+- Окно оспаривания: 48 часов **с момента сохранения отметок** (`events.attendance_marked_at`, V24);
+  финализация гейтит по `COALESCE(attendance_marked_at, event_datetime)`.
+- Разрешённый организатором или истёкший спор **терминален** (`event_responses.dispute_terminal`):
+  переоспорить ту же отметку нельзя. Свежая отметка организатора сбрасывает терминальность.
+- Кнопку «Оспорить» участник видит даже после выхода из клуба (`GET /api/events/{id}/my-attendance` —
+  без проверки членства); комментарий к спору видит только владелец клуба.
 - После финализации результатов запускается пересчёт репутации.
 
 #### 4.4.4 Начисление репутации
@@ -591,6 +598,7 @@
 - voting_opens_days_before: integer (default 14, 1≤x≤14) — поднят с 5 миграцией V13
 - stage_2_triggered: boolean (default false)
 - attendance_marked: boolean (default false)
+- attendance_marked_at: timestamptz — nullable (момент отметки явки; окно спора от него, V24)
 - attendance_finalized: boolean (default false)
 - status: enum (upcoming, stage_1, stage_2, completed, cancelled)
 - created_at: timestamp
@@ -606,6 +614,7 @@
 - stage_2_timestamp: timestamp
 - final_status: enum (confirmed, waitlisted, declined)
 - attendance: enum (attended, absent, disputed) — nullable
+- dispute_terminal: boolean (default false) — спор разрешён/истёк → переоспорить нельзя (V24)
 - attendance_finalized: boolean (default false)
 - UNIQUE(event_id, user_id)
 

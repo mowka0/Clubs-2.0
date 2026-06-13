@@ -26,3 +26,18 @@ data class DisputeAttendanceRequest(
     @field:Size(max = 500)
     val note: String? = null
 )
+
+/**
+ * F5-04: the caller's OWN attendance state for an event (GET /api/events/{id}/my-attendance).
+ * Readable without club membership so a participant who left the club can still reach the dispute
+ * UI after the deep-link DM. [canDispute] is computed server-side (window open AND attendance=absent
+ * AND not yet terminal) — the frontend keys the "Оспорить" button off it.
+ */
+data class MyAttendanceDto(
+    val attendance: String?,        // attended | absent | disputed | null
+    val attendanceMarked: Boolean,
+    val attendanceFinalized: Boolean,
+    val disputeTerminal: Boolean,
+    val canDispute: Boolean,
+    val disputeNote: String?        // the caller's own note (their own row only)
+)

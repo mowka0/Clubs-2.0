@@ -136,6 +136,22 @@ class EventReminderRepositoryTest {
     }
 
     @Test
+    fun `attendance reminder excludes a neutrally-finalized event (F5-17)`() {
+        val now = OffsetDateTime.now()
+        // EXP-2 neutral finalize leaves marked=false, finalized=true. Without the finalized guard
+        // the reminder still fires → organizer taps "mark" → markAttendance throws finalized → 400.
+        val neutrallyFinalized = insertEvent(now.minusHours(25), "completed", attendanceFinalized = true)
+        insertResponseUser(neutrallyFinalized, "going", "confirmed")
+        // regression guard: a still-open unmarked event is still reminded
+        val stillDue = insertEvent(now.minusHours(25), "completed")
+        insertResponseUser(stillDue, "going", "confirmed")
+
+        val result = eventRepository.findEventsNeedingAttendanceReminder(now.minusHours(24)).map { it.id }
+
+        assertEquals(listOf(stillDue), result)
+    }
+
+    @Test
     fun `markAttendanceReminderSent flips the flag (dedup)`() {
         val now = OffsetDateTime.now()
         val id = insertEvent(now.minusHours(25), "completed")
@@ -167,16 +183,17 @@ class EventReminderRepositoryTest {
         status: String,
         confirmReminderSent: Boolean = false,
         attendanceMarked: Boolean = false,
-        attendanceReminderSent: Boolean = false
+        attendanceReminderSent: Boolean = false,
+        attendanceFinalized: Boolean = false
     ): UUID {
         val id = UUID.randomUUID()
         dsl.execute(
             """
             INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime,
                 participant_limit, voting_opens_days_before, status, stage_2_triggered,
-                attendance_marked, confirm_reminder_sent, attendance_reminder_sent)
+                attendance_marked, confirm_reminder_sent, attendance_reminder_sent, attendance_finalized)
             VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$eventDatetime', 10, 14,
-                '$status'::event_status, true, $attendanceMarked, $confirmReminderSent, $attendanceReminderSent)
+                '$status'::event_status, true, $attendanceMarked, $confirmReminderSent, $attendanceReminderSent, $attendanceFinalized)
             """.trimIndent()
         )
         return id

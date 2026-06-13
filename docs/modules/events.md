@@ -250,7 +250,9 @@ POST /api/events/{id}/decline
 ### Независимость от attendance flow
 Перевод статуса в `completed` **не влияет** на flow отметки присутствия. `AttendanceService`
 (mark / dispute / resolve / finalize) гейтит **только** на булевых флагах `attendance_marked` /
-`attendance_finalized` и на `event_datetime` — **никогда на `status`** (подтверждено code review,
+`attendance_finalized`, на времени (`event_datetime` для гарда отметки, `attendance_marked_at`
+для финализации — см. § «Окно спора отсчитывается от момента отметки») и на
+`event_responses.dispute_terminal` — **никогда на `status`** (подтверждено code review,
 Case A). 6-часовой grace ≪ 48-часового окна спора (PRD §4.4.3), поэтому автозавершение не пересекается
 с финализацией репутации.
 
@@ -409,8 +411,12 @@ penalty-флоу), а их страницы упираются в скрытый
 > тик шедулера → событие уходит в `stage_2`, DM «Этап 2 начался». Условие наличия фазы
 > голосования: `(минут до старта) > STAGE2_TRIGGER_MINUTES_BEFORE`.
 > Тот же образ, только env. После теста — удалить переменные (prod-дефолты не меняются).
-> NB: окно оспаривания отсчитывается от `event_datetime` (нет колонки `attendance_marked_at`),
-> а не от момента отметки — pre-existing, см. `reputation-v2.md`.
+> NB: окно оспаривания отсчитывается от **момента отметки явки** (`events.attendance_marked_at`,
+> колонка V24, F5-05/б), а не от `event_datetime`. `finalizeAttendanceBefore` гейтит по
+> `COALESCE(attendance_marked_at, event_datetime) <= cutoff` — legacy-строки, помеченные до V24
+> (`attendance_marked_at IS NULL`), остаются на старом базисе `event_datetime` без бэкфилла.
+> Это приводит реализацию в соответствие с PRD §4.4.3 («48 часов с момента сохранения отметок»).
+> Подробности окна — § «Окно спора отсчитывается от момента отметки» ниже.
 
 ### Напоминания событий (`EventReminderScheduler`, bot-модуль)
 
@@ -569,8 +575,10 @@ penalty-флоу), а их страницы упираются в скрытый
 случайным, организатору при споре уходит DM (см. ATT-3).
 
 **Реализация:**
-- `EventResponseRepository.resolveExpiredDisputesToAbsent(eventIds)` — `UPDATE event_responses SET attendance = absent
-  WHERE attendance = disputed AND event_id IN (:eventIds)`.
+- `EventResponseRepository.resolveExpiredDisputesToAbsent(eventIds)` — `UPDATE event_responses SET attendance = absent,
+  dispute_terminal = true WHERE attendance = disputed AND event_id IN (:eventIds)`. `dispute_terminal = true`
+  (колонка V24, F5-16) делает истёкший спор **терминальным** — повторно оспорить его нельзя (бэкстоп
+  ordering B; см. ниже § «Окно спора отсчитывается от момента отметки»).
 - Вызывается в `AttendanceService.finalizeAttendance` **в той же транзакции** сразу после
   `finalizeAttendanceBefore`, до публикации `AttendanceFinalizedEvent`. Реп-листенер читает ростер AFTER_COMMIT —
   то есть уже после конвертации. `disputed`-строка может существовать только на помеченном событии, поэтому
@@ -586,11 +594,16 @@ penalty-флоу), а их страницы упираются в скрытый
 надо спорить, и не мог.
 
 **Решение — DM (бэкенд):**
-- `AttendanceService.markAttendance` после `markAttendanceMarked` публикует `AttendanceMarkedEvent(eventId)`.
+- `AttendanceService.markAttendance` после `markAttendanceMarked` публикует
+  `AttendanceMarkedEvent(eventId, newlyAbsentUserIds)`. `newlyAbsentUserIds` (F5-15.2) — только те
+  участники, чья строка `setAttendance` вернул > 0 при `attended=false`, т.е. **впервые** стали absent
+  в этой отметке. При повторной/корректирующей отметке уже-absent-строки матчатся 0 строк и в список не
+  попадают → нет повторного DM-blast. Список собран синхронно в `markAttendance` (не перезапрашивается),
+  поэтому fresh-connection visibility-hazard не реоткрывается.
 - `bot/AttendanceMarkedListener` (`@TransactionalEventListener(AFTER_COMMIT)`) зовёт
-  `notificationService.sendAttendanceMarked(eventId)`. **Почему AFTER_COMMIT:** `sendAttendanceMarked` —
-  `@Async`, читает только что записанные `absent`-строки на отдельном соединении, которое видит их лишь после
-  коммита транзакции `markAttendance`. Тот же паттерн, что у `AttendanceFinalizedListener`.
+  `notificationService.sendAttendanceMarked` для участников из `newlyAbsentUserIds`. **Почему AFTER_COMMIT:**
+  DM — `@Async`, читает только что записанные `absent`-строки на отдельном соединении, которое видит их
+  лишь после коммита транзакции `markAttendance`. Тот же паттерн, что у `AttendanceFinalizedListener`.
 - **DM оргу при споре (2026-06-11):** `disputeAttendance` публикует `AttendanceDisputedEvent(eventId, userId)`
   → `bot/AttendanceDisputedListener` (AFTER_COMMIT) → `sendAttendanceDisputed` — DM организатору
   «N оспорил отметку, разберите до закрытия окна» с deep-link. Без этого орг, не открывающий событие,
@@ -690,6 +703,125 @@ penalty-флоу), а их страницы упираются в скрытый
   (`findRespondersWithUsers` селектит колонку); в блоке «Оспоренные отметки» на `EventPage` она
   показывается под именем оспорившего. Фронт: textarea «Комментарий организатору (необязательно)»
   в блоке «Ваша явка».
+- **Приватность заметки — только владельцу клуба (F5-06, `bugfix/attendance-dispute-integrity`).**
+  В `GET /api/events/{id}/responses` поле `disputeNote` теперь возвращается **только владельцу клуба**
+  (`VoteService.getEventResponders`: `disputeNote = if (isOwner) r.disputeNote else null`, где
+  `isOwner = clubRepository.findById(event.clubId)?.ownerId == userId`); остальным участникам поле
+  приходит `null`. Раньше нота уходила всем участникам, а скрытие было только клиентским. SQL
+  по-прежнему селектит колонку (владельцу нота нужна), нуллится в маппинге; DTO без изменений.
+
+---
+
+## Целостность отметки/спора (пакет 1 F5, `bugfix/attendance-dispute-integrity`)
+
+> **Реализовано** в `bugfix/attendance-dispute-integrity` (2026-06-13). Дизайн (LOCKED):
+> `docs/backlog/package1-attendance-dispute-design.md`; реестр: `docs/backlog/two-stage-reputation-bug-register.md`
+> § «Аудит F5». Один backend-PR + минимальный фронт `canDispute`. **Миграция V24**
+> (`V24__add_attendance_marked_at_and_dispute_terminal.sql`) добавляет две колонки
+> (`ADD COLUMN IF NOT EXISTS`): `events.attendance_marked_at TIMESTAMPTZ` (nullable),
+> `event_responses.dispute_terminal BOOLEAN NOT NULL DEFAULT FALSE`. Бэкфилл не нужен.
+
+### Окно спора отсчитывается от момента отметки (F5-05/б)
+
+Часы окна спора считаются от **момента отметки явки**, а не от `event_datetime`. `markAttendanceMarked`
+пишет `events.attendance_marked_at = now()` (вместе с `attendance_marked = true`).
+`finalizeAttendanceBefore` гейтит по `COALESCE(attendance_marked_at, event_datetime) <= cutoff`
+(`cutoff = now − disputeWindowMinutes`). Так поздняя отметка даёт участнику полное окно от момента
+фиксации (приводит код к PRD §4.4.3 «48 часов с момента сохранения отметок»). Legacy-строки,
+помеченные до V24 (`attendance_marked_at IS NULL`), остаются на старом базисе `event_datetime` через
+`COALESCE` — без бэкфилла и регрессии. **EXP-2 не меняем:** `neutrallyFinalizeUnmarkedBefore` остаётся
+на `event_datetime` (немаркированное событие не имеет `attendance_marked_at`); финалайзеры работают на
+disjoint-строках (`marked=true` vs `marked=false`).
+
+### Терминальность спора — без ping-pong (F5-16)
+
+`event_responses.dispute_terminal` (boolean) делает разрешённый/истёкший спор **окончательным**:
+- `resolveDispute` (любой исход, owner) и ATT-2 (`resolveExpiredDisputesToAbsent`) ставят
+  `dispute_terminal = true`.
+- `disputeAbsentAttendance` несёт `AND dispute_terminal = false` — **load-bearing DB-guard**: повторная
+  попытка оспорить терминальную отметку матчит 0 строк → `ValidationException("Спор по этой отметке уже
+  рассмотрен")`. У dispute-эндпоинта нет авторизации сверх JWT, поэтому UI-гейта недостаточно.
+- `setAttendance` сбрасывает `dispute_terminal = false` на каждой свежей отметке — иначе re-mark в новый
+  `absent` унаследовал бы stale `true` и стал бы неоспоримым.
+- **Boolean, не 4-е значение enum `attendance`** — новый enum-литерал молча выпал бы из
+  `ReputationPolicy.attendanceKind` и был бы необратим.
+
+### Свой статус явки без членства (F5-04)
+
+Новый `GET /api/events/{id}/my-attendance` возвращает состояние **своей** строки вызывающего —
+**без `@RequiresMembership`-гейта**, чтобы вышедший из клуба участник всё ещё мог дойти до UI спора по
+deep-link из DM (он по-прежнему получает штраф −200 и должен иметь право оспорить). Ответ `MyAttendanceDto`:
+
+```json
+{
+  "attendance": "absent",        // attended | absent | disputed | null
+  "attendanceMarked": true,
+  "attendanceFinalized": false,
+  "disputeTerminal": false,
+  "canDispute": true,            // window open AND attendance=absent AND !disputeTerminal — считается на сервере
+  "disputeNote": "..."           // СВОЯ заметка (только своя строка)
+}
+```
+
+- `404` если у вызывающего нет `event_response` на этом событии.
+- `canDispute` — единственный источник правды, по которому фронт (`EventPage`) показывает кнопку
+  «Оспорить» (раньше — из member-gated роутера `/responses`, недостижимого для вышедшего из клуба).
+- `GET /api/events/{id}/responses` остаётся **member-only** (F5-06 его не расширяет) — два разных
+  контракта: `/responses` member-gated (ростер для организатора/участников), `/my-attendance`
+  participation-scoped (своя строка, без членства).
+
+### Защита записи от финалайзера — TOCTOU (F5-09 / F5-10)
+
+Запись отметки/спора защищена от гонки с финалайзером на уровне БД-предикатов (без нового advisory lock):
+- **F5-09 (mark × finalize):** `markAttendanceMarked` гейтит `AND attendance_finalized = false` и
+  возвращает `Int`; в `markAttendance` 0 строк ⇒ `ValidationException("Attendance has been finalized")` —
+  полный rollback `@Transactional` (включая `setAttendance`-записи). Durable-форма: тот же `event NOT
+  finalized`-подзапрос внутрь `setAttendance` (на уровне `EVENT_RESPONSES`), чтобы каждая запись была
+  независимо безопасна.
+- **F5-10 (dispute × finalize):** `disputeAbsentAttendance` несёт подзапрос `AND event_id IN (SELECT id
+  FROM events WHERE id=? AND attendance_finalized=false)` — закрывает ordering A (флаг уже видимо
+  закоммичен). **Ordering B** (спор коммитит до ATT-2 в той же finalize-txn) остаётся на бэкстопе
+  **ATT-2** (`disputed→absent`, `dispute_terminal=true`, −200) — `resolveExpiredDisputesToAbsent` удалять
+  нельзя.
+
+### Re-mark не стирает активный спор (F5-15.1)
+
+`setAttendance` несёт `AND attendance IS DISTINCT FROM 'disputed'` (строго `IS DISTINCT FROM`, не
+`<>`/`ne()` — первая отметка имеет `attendance=NULL`, и `NULL <> 'disputed'` пропустила бы строку,
+сломав happy-path). Повторная отметка по `disputed`-строке матчит 0 строк → спор сохранён, строка
+исключена из `markedCount`; единственный путь её мутации — `resolveDispute`. Про сокращение DM до
+newly-absent (F5-15.2) — см. § ATT-3 выше.
+
+### Reminder не для нейтрально-финализированных (F5-17)
+
+`findEventsNeedingAttendanceReminder` несёт `AND attendance_finalized = false` — после EXP-2 нейтрального
+авто-закрытия «отметьте явку»-DM больше не уходит (отметка всё равно была бы отклонена гардом
+`attendanceFinalized`). Строго субтрактивно.
+
+### Acceptance Criteria (пакет 1 F5)
+
+- **AC-F5-05 (окно от marked_at):** GIVEN `event_datetime = now−47ч`, отметка `now()` (`marked_at=now`),
+  `window=48ч` WHEN `finalizeAttendance` THEN событие НЕ финализируется (`COALESCE(marked_at,
+  event_datetime) > cutoff`); legacy `marked_at=NULL` финализируется по `event_datetime`.
+- **AC-F5-16-1 (terminal):** GIVEN resolve-to-absent (`dispute_terminal=true`) WHEN участник повторно
+  оспаривает THEN `disputeAbsentAttendance` → 0 строк → `ValidationException`.
+- **AC-F5-16-2 (reset):** GIVEN resolved-to-absent, орг делает свежую отметку absent WHEN `setAttendance`
+  THEN `dispute_terminal=false`; последующий dispute снова проходит.
+- **AC-F5-04 (без членства):** GIVEN вышедший из клуба, есть `event_response`, `attendance='absent'`
+  WHEN `GET /my-attendance` THEN `200` со своей строкой и `canDispute=true`; `POST /dispute` проходит;
+  `GET /responses` тому же юзеру → `403` (роутер остаётся member-only).
+- **AC-F5-06 (owner-only нота):** GIVEN owner и non-owner-member читают `/responses` THEN
+  non-owner → `disputeNote=null`; owner → нота.
+- **AC-F5-09 (mark × finalize):** GIVEN финалайзер закоммитил `finalized=true` между TOCTOU-read и
+  `markAttendanceMarked` THEN `markAttendance` бросает `ValidationException`, `setAttendance`-записи
+  откачены.
+- **AC-F5-10 (dispute × finalize A):** GIVEN финалайзер закоммитил `finalized=true` до старта
+  dispute-statement THEN `disputeAbsentAttendance` → 0 строк, dispute отклонён,
+  `AttendanceDisputedEvent` НЕ публикуется.
+- **AC-F5-15.1 (re-mark over disputed):** GIVEN `attendance='disputed'`, повторная отметка THEN
+  `setAttendance` → 0 для этой строки, спор сохранён, исключён из `markedCount`.
+- **AC-F5-17 (reminder):** GIVEN `marked=false, finalized=true`, past-cutoff THEN
+  `findEventsNeedingAttendanceReminder` НЕ возвращает; `finalized=false` всё ещё возвращается.
 
 ---
 
@@ -727,14 +859,14 @@ EventController ──┬─► EventService ────► EventRepository ─
 | `EventMapper.kt` | `@Component`: `toDomain(EventsRecord) → Event`, `toDetailDto(Event, counts)`, `toListItemDto`. Содержит `DEFAULT_VOTING_OPENS_DAYS_BEFORE = 14` |
 | `EventResponseMapper.kt` | `@Component`: `toDomain(EventResponsesRecord) → EventResponse` |
 | `EventRepository.kt` | Interface. Методы автозавершения: `markPastEventsCompleted(cutoff): Int`. Reminder-методы: `findEventsNeedingConfirmReminder`, `markConfirmReminderSent`, `findEventsNeedingAttendanceReminder`, `markAttendanceReminderSent`, `findOrganizerTelegramId` |
-| `JooqEventRepository.kt` | Реализация. Все DDL/DML через jOOQ. Методы: `markAttendanceMarked`, `finalizeAttendanceBefore`, `markPastEventsCompleted`, reminder-finds/marks + `findOrganizerTelegramId` (`findEventsNeedingAttendanceReminder` фильтрует на наличие confirmed-ростера — CC-2) |
+| `JooqEventRepository.kt` | Реализация. Все DDL/DML через jOOQ. Методы: `markAttendanceMarked` (пишет `attendance_marked_at=now()`, гейтит `attendance_finalized=false`, возвращает `Int` — F5-05/F5-09), `finalizeAttendanceBefore` (гейтит `COALESCE(attendance_marked_at, event_datetime) <= cutoff` — F5-05/б), `neutrallyFinalizeUnmarkedBefore` (на `event_datetime` — EXP-2, не меняется), `markPastEventsCompleted`, reminder-finds/marks + `findOrganizerTelegramId` (`findEventsNeedingAttendanceReminder` фильтрует на наличие confirmed-ростера — CC-2 — и `attendance_finalized=false` — F5-17) |
 | `EventResponseRepository.kt` | Interface |
-| `JooqEventResponseRepository.kt` | Реализация. Новые методы: `setAttendance` (только `final_status=confirmed`), `disputeAbsentAttendance`, `resolveDisputedAttendance`, `findUnconfirmedVoterTelegramIds` |
+| `JooqEventResponseRepository.kt` | Реализация. Методы: `setAttendance` (только `final_status=confirmed`; `IS DISTINCT FROM 'disputed'` + `dispute_terminal=false` reset + durable `event NOT finalized`-подзапрос), `disputeAbsentAttendance` (`+ dispute_terminal=false` + `event NOT finalized`-подзапрос), `resolveDisputedAttendance`/`resolveExpiredDisputesToAbsent` (`+ dispute_terminal=true`), `findByEventAndUser` (F5-04), `findUnconfirmedVoterTelegramIds` |
 | `EventController.kt` | HTTP. Делегирует в 4 сервиса |
 | `EventService.kt` | CRUD событий, без extension `toDetailDto` (вынесено в Mapper) |
-| `VoteService.kt` | Stage 1 голосование. Использует `MembershipRepository.isMember` |
+| `VoteService.kt` | Stage 1 голосование + `getEventResponders` (ростер). Использует `MembershipRepository.isMember`; инжектит `ClubRepository` для owner-only `disputeNote` (F5-06) |
 | `Stage2Service.kt` | Stage 2 переход + confirm/decline (гард `event_datetime <= now` — Bug B) + авто-истечение брони (Feature A). 2× `@Scheduled` (trigger 5 мин, expire `events.stage2-expire-poll-ms`) |
-| `AttendanceService.kt` | mark / dispute / resolve / finalize. `DSLContext` убран — все update через Repository. Окно оспаривания и период финализации — `@Value`/`fixedDelayString` (`events.dispute-window-minutes`, `events.finalize-poll-ms`) |
+| `AttendanceService.kt` | mark / dispute / resolve / finalize + `getMyAttendance` (F5-04, `GET /my-attendance`, без членства). `DSLContext` убран — все update через Repository. Окно оспаривания и период финализации — `@Value`/`fixedDelayString` (`events.dispute-window-minutes`, `events.finalize-poll-ms`). TOCTOU-гарды F5-09/F5-10 + терминальность спора F5-16 |
 | `JooqEventResponseRepository.kt` | + `expireUnconfirmedForStartedEvents(now)` — bulk-UPDATE `NULL → expired_no_confirm` |
 | `EventCompletionService.kt` | Автозавершение прошедших событий `upcoming/stage_1/stage_2 → completed`. `@Scheduled` каждый час, grace 6ч. Делегирует в `EventRepository.markPastEventsCompleted` |
 | `bot/EventReminderScheduler.kt` | **bot-модуль.** 2× `@Scheduled` (`events.reminder-poll-ms`): A — `remindUnconfirmedVoters` (DM за 2ч), B — `remindOrganizersToMarkAttendance` (DM оргу через 24ч). Без `@Transactional` (mark-before-send, EXP-3). Делегирует в `EventRepository` + `NotificationService` |

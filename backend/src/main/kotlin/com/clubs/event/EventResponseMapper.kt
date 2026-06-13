@@ -18,6 +18,8 @@ class EventResponseMapper {
         attendance = record.attendance,
         attendanceFinalized = record.attendanceFinalized ?: false,
         createdAt = record.createdAt,
-        updatedAt = record.updatedAt
+        updatedAt = record.updatedAt,
+        disputeTerminal = record.disputeTerminal ?: false,
+        disputeNote = record.disputeNote
     )
 }

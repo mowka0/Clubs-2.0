@@ -75,6 +75,10 @@ open class EventResponsesRecord private constructor() : UpdatableRecordImpl<Even
         set(value): Unit = set(12, value)
         get(): String? = get(12) as String?
 
+    open var disputeTerminal: Boolean?
+        set(value): Unit = set(13, value)
+        get(): Boolean? = get(13) as Boolean?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -84,7 +88,7 @@ open class EventResponsesRecord private constructor() : UpdatableRecordImpl<Even
     /**
      * Create a detached, initialised EventResponsesRecord
      */
-    constructor(id: UUID? = null, eventId: UUID, userId: UUID, stage_1Vote: Stage_1Vote? = null, stage_1Timestamp: OffsetDateTime? = null, stage_2Vote: Stage_2Vote? = null, stage_2Timestamp: OffsetDateTime? = null, finalStatus: FinalStatus? = null, attendance: AttendanceStatus? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, disputeNote: String? = null): this() {
+    constructor(id: UUID? = null, eventId: UUID, userId: UUID, stage_1Vote: Stage_1Vote? = null, stage_1Timestamp: OffsetDateTime? = null, stage_2Vote: Stage_2Vote? = null, stage_2Timestamp: OffsetDateTime? = null, finalStatus: FinalStatus? = null, attendance: AttendanceStatus? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, disputeNote: String? = null, disputeTerminal: Boolean? = null): this() {
         this.id = id
         this.eventId = eventId
         this.userId = userId
@@ -98,6 +102,7 @@ open class EventResponsesRecord private constructor() : UpdatableRecordImpl<Even
         this.createdAt = createdAt
         this.updatedAt = updatedAt
         this.disputeNote = disputeNote
+        this.disputeTerminal = disputeTerminal
         resetChangedOnNotNull()
     }
 
@@ -119,6 +124,7 @@ open class EventResponsesRecord private constructor() : UpdatableRecordImpl<Even
             this.createdAt = value.createdAt
             this.updatedAt = value.updatedAt
             this.disputeNote = value.disputeNote
+            this.disputeTerminal = value.disputeTerminal
             resetChangedOnNotNull()
         }
     }

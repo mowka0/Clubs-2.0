@@ -26,7 +26,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
   - `sendApplicationCreatedDM(organizerTelegramId, applicantDisplayName, clubName)` — organizer-DM при подаче новой заявки в закрытый клуб `[подключено к ApplicationService.submitApplication]`
   - `sendEventCreated(event)` — анонс нового события участникам клуба `[подключено: EventBotNotifier @TransactionalEventListener ← EventService.createEvent, GAP-003 ✅ / GAP-010 ✅]`
   - `sendStage2Started(event)` — DM «Этап 2 начался — подтвердите участие» going/maybe-воутерам `[подключено: Stage2StartedListener @TransactionalEventListener ← Stage2Service.triggerStage2, GAP-004 ✅ / GAP-009 ✅ / S2T-2 ✅, 2026-06-13]`
-  - `sendAttendanceMarked(eventId)` — DM пользователям с `attendance=absent` `[подключено: AttendanceMarkedListener @TransactionalEventListener ← AttendanceService.markAttendance, GAP-005 ✅ / ATT-3 ✅, Блок 1 2026-06-07]`
+  - `sendAttendanceMarked(eventId, newlyAbsentUserIds)` — DM участникам, **впервые** отмеченным `absent` в этой отметке (F5-15.2; раньше — всем `attendance=absent`) `[подключено: AttendanceMarkedListener @TransactionalEventListener ← AttendanceService.markAttendance, GAP-005 ✅ / ATT-3 ✅, Блок 1 2026-06-07]`
   - `sendConfirmReminder(event)` / `sendAttendanceReminder(event, organizerTelegramId)` — poll-напоминания «подтверди участие» (за 2ч) / «отметь явку» (через 24ч), зовутся из `EventReminderScheduler` (Блок 1; детали и дедуп-флаги — `docs/modules/events.md` § «Напоминания событий»)
   - `sendAttendanceDisputed(event, organizerTelegramId, disputerName)` — DM организатору при споре отметки (`AttendanceDisputedListener`, Блок 1, см. `events.md` § ATT-3)
 - Generic DM имеют inline-кнопку «📱 Открыть Clubs» с `WebAppInfo("https://t.me/clubs_v2_bot/app")`. Deep-link DM (skladchina / application-created) — кнопку с кастомным `webAppPath` (например `/my-clubs?focus=inbox`).
@@ -207,11 +207,11 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 **Inline-кнопка:** «✅ Подтвердить участие» с `WebAppInfo`, deep-link на `webAppPath=/events/{eventId}` — открывает страницу события (кнопки этапа 2) напрямую.
 **Подключение:** `Stage2Service.triggerStage2` (в транзакции scheduler'а, после `transitionToStage2` и назначения overflow → waitlist) публикует `Stage2StartedEvent` (`event/Stage2StartedEvent.kt`, несёт snapshot domain-`Event` — DM нужны title/datetime); `bot/Stage2StartedListener.onStage2Started` (`@TransactionalEventListener`, фаза AFTER_COMMIT) вызывает `sendStage2Started` (`@Async`). AFTER_COMMIT обязателен: `@Async`-DM читает строки воутеров на отдельном соединении, которое видит переход и waitlist-назначения только после коммита. Best-effort: ошибки доставки гасятся внутри `sendDm` (`WARN`), сбой Telegram не валит триггер этапа 2. Пустой список получателей → `INFO` + return. Та же схема, что у `EventBotNotifier` (GAP-003) и `AttendanceMarkedListener` (ATT-3).
 
-### `sendAttendanceMarked(eventId: UUID)` — **подключено** `[GAP-005 ✅, ATT-3 ✅]`
+### `sendAttendanceMarked(eventId: UUID, newlyAbsentUserIds: List<UUID>)` — **подключено** `[GAP-005 ✅, ATT-3 ✅]`
 
-**Назначение (по PRD §4.6.3):** уведомить отсутствующих с возможностью оспорить. Подключено в Блоке 1 (`feature/two-stage-confirmation-gaps`, 2026-06-07).
-**Получатели:** `eventResponseRepository.findTelegramIdsByEventAndAttendance(eventId, ATTENDANCE=absent)` — пользователи с `event_responses.attendance = 'absent'`.
-**Историческое примечание:** до рефакторинга `feature/refactor-bot` метод фильтровал по `FINAL_STATUS=declined` (баг — имя обещало attendance, а SQL фильтровал final_status). Исправлено в этом рефакторинге с согласия пользователя; функциональное изменение risk-0, потому что caller-ов не было.
+**Назначение (по PRD §4.6.3):** уведомить **впервые** отмеченных «Не пришёл» с возможностью оспорить. Подключено в Блоке 1 (`feature/two-stage-confirmation-gaps`, 2026-06-07).
+**Получатели (с F5-15.2, `bugfix/attendance-dispute-integrity`):** `eventResponseRepository.findTelegramIdsByEventAndUserIds(eventId, newlyAbsentUserIds)` — telegram-id только тех участников, чья строка **впервые** стала `absent` в этой отметке (id'ы приходят на `AttendanceMarkedEvent.newlyAbsentUserIds`, собраны синхронно в `markAttendance`). Пустой список → ранний return. Раньше DM уходил **всем** `attendance='absent'` (`findTelegramIdsByEventAndAttendance`), из-за чего повторная/корректирующая отметка пере-спамила уже-уведомлённых.
+**Историческое примечание:** до рефакторинга `feature/refactor-bot` метод фильтровал по `FINAL_STATUS=declined` (баг — имя обещало attendance, а SQL фильтровал final_status). Исправлено в том рефакторинге; затем (F5-15.2) recipient-набор сузился до newly-absent.
 **Текст** (`NotificationService.kt`):
 ```
 📋 Организатор отметил присутствие на событии.
@@ -219,7 +219,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 Вас отметили как отсутствующего. Если это ошибка — оспорьте на странице события:
 ```
 **Inline-кнопка:** «Оспорить явку», deep-link на `/events/{eventId}`.
-**Подключение:** `AttendanceService.markAttendance` публикует `AttendanceMarkedEvent`; `bot/AttendanceMarkedListener` (`@TransactionalEventListener`, AFTER_COMMIT) зовёт `@Async sendAttendanceMarked`. Детали потока спора — `docs/modules/events.md` § «Репутация — Блок 1» → ATT-3.
+**Подключение:** `AttendanceService.markAttendance` публикует `AttendanceMarkedEvent(eventId, newlyAbsentUserIds)`; `bot/AttendanceMarkedListener` (`@TransactionalEventListener`, AFTER_COMMIT) зовёт `@Async sendAttendanceMarked`. Детали потока спора — `docs/modules/events.md` § «Репутация — Блок 1» → ATT-3 и § «Целостность отметки/спора (пакет 1 F5)».
 
 ## Acceptance Criteria
 
@@ -330,7 +330,7 @@ AND отказ Telegram API не откатывает переход в stage_2 
 ## Интеграции
 
 - **`payment` модуль** (`PaymentService`): `handlePreCheckoutQuery` и `successful_payment` диспатчатся в `ClubsBot.consume`; `PaymentNotificationHandler` зовёт `NotificationService.sendDirectMessage` после `PaymentConfirmedEvent`. См. `docs/modules/payment.md` § Интеграции.
-- **`event` модуль** (`EventRepository`, `EventResponseRepository`): `findNextUpcomingEvent`, `countByVote` для `/кто_идет`; `findStage2TargetTelegramIds` (going/maybe-воутеры, для `sendStage2Started`), `findTelegramIdsByEventAndAttendance` (absent, для `sendAttendanceMarked`), `findUnconfirmedVoterTelegramIds` (для `sendConfirmReminder`). Доменные события: `Stage2StartedEvent`, `AttendanceMarkedEvent` (+ disputed) — слушатели в bot-пакете.
+- **`event` модуль** (`EventRepository`, `EventResponseRepository`): `findNextUpcomingEvent`, `countByVote` для `/кто_идет`; `findStage2TargetTelegramIds` (going/maybe-воутеры, для `sendStage2Started`), `findTelegramIdsByEventAndUserIds` (newly-absent набор, для `sendAttendanceMarked` — F5-15.2), `findUnconfirmedVoterTelegramIds` (для `sendConfirmReminder`). Доменные события: `Stage2StartedEvent`, `AttendanceMarkedEvent(eventId, newlyAbsentUserIds)` (+ disputed) — слушатели в bot-пакете.
 - **`membership` модуль** (`MembershipRepository`): `findMemberTelegramIds(clubId)` для `sendEventCreated`. См. `docs/modules/membership.md`.
 - **Telegram Bot API** (через `TelegramClient` из `BotConfig`):
   - `SendMessage` (команды, DM).

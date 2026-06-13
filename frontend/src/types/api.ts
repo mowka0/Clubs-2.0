@@ -310,6 +310,22 @@ export interface EventResponderDto {
   disputeNote?: string | null;
 }
 
+/**
+ * F5-04: the caller's OWN attendance state (GET /api/events/{id}/my-attendance).
+ * Readable without club membership so a participant who left the club still reaches the
+ * dispute UI from the deep-link DM. [canDispute] is computed server-side (window open AND
+ * attendance=absent AND not yet terminal).
+ */
+export interface MyAttendanceDto {
+  attendance: 'attended' | 'absent' | 'disputed' | null;
+  attendanceMarked: boolean;
+  attendanceFinalized: boolean;
+  /** True once the organizer (or ATT-2) resolved the dispute — no re-dispute (F5-16). */
+  disputeTerminal: boolean;
+  canDispute: boolean;
+  disputeNote: string | null;
+}
+
 export type SkladchinaMode = 'fixed_equal' | 'fixed_individual' | 'voluntary';
 export type SkladchinaStatus = 'active' | 'closed_success' | 'closed_failed' | 'cancelled';
 export type SkladchinaParticipantStatus =

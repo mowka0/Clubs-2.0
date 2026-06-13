@@ -96,6 +96,10 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
         set(value): Unit = set(18, value)
         get(): Boolean? = get(18) as Boolean?
 
+    open var attendanceMarkedAt: OffsetDateTime?
+        set(value): Unit = set(19, value)
+        get(): OffsetDateTime? = get(19) as OffsetDateTime?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -105,7 +109,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
     /**
      * Create a detached, initialised EventsRecord
      */
-    constructor(id: UUID? = null, clubId: UUID, createdBy: UUID, title: String, description: String? = null, locationText: String, eventDatetime: OffsetDateTime, participantLimit: Int, votingOpensDaysBefore: Int? = null, status: EventStatus? = null, stage_2Triggered: Boolean? = null, attendanceMarked: Boolean? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, photoUrl: String? = null, reputationProcessed: Boolean? = null, confirmReminderSent: Boolean? = null, attendanceReminderSent: Boolean? = null): this() {
+    constructor(id: UUID? = null, clubId: UUID, createdBy: UUID, title: String, description: String? = null, locationText: String, eventDatetime: OffsetDateTime, participantLimit: Int, votingOpensDaysBefore: Int? = null, status: EventStatus? = null, stage_2Triggered: Boolean? = null, attendanceMarked: Boolean? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, photoUrl: String? = null, reputationProcessed: Boolean? = null, confirmReminderSent: Boolean? = null, attendanceReminderSent: Boolean? = null, attendanceMarkedAt: OffsetDateTime? = null): this() {
         this.id = id
         this.clubId = clubId
         this.createdBy = createdBy
@@ -125,6 +129,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
         this.reputationProcessed = reputationProcessed
         this.confirmReminderSent = confirmReminderSent
         this.attendanceReminderSent = attendanceReminderSent
+        this.attendanceMarkedAt = attendanceMarkedAt
         resetChangedOnNotNull()
     }
 
@@ -152,6 +157,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
             this.reputationProcessed = value.reputationProcessed
             this.confirmReminderSent = value.confirmReminderSent
             this.attendanceReminderSent = value.attendanceReminderSent
+            this.attendanceMarkedAt = value.attendanceMarkedAt
             resetChangedOnNotNull()
         }
     }

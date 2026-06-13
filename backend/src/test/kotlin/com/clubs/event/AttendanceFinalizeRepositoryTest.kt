@@ -217,6 +217,147 @@ class AttendanceFinalizeRepositoryTest {
         assertFalse(boolField(event, "attendance_finalized"))
     }
 
+    // ---- finalize window basis = attendance_marked_at (решение б=A) ----
+
+    @Test
+    fun `finalize measures the window from marked_at, not event_datetime`() {
+        // The event happened 49h ago but the organizer only marked it just now → the dispute
+        // window runs from marked_at, so it is NOT yet due (would be, on the old event_datetime basis).
+        val event = insertEvent(hoursFromNow(-49), "stage_2", marked = true, finalized = false, markedAt = OffsetDateTime.now())
+
+        val ids = eventRepository.finalizeAttendanceBefore(OffsetDateTime.now().minusHours(48))
+
+        assertTrue(ids.isEmpty(), "COALESCE(marked_at, event_datetime) > cutoff → not due")
+        assertFalse(boolField(event, "attendance_finalized"))
+    }
+
+    @Test
+    fun `finalize falls back to event_datetime when marked_at is null (legacy rows)`() {
+        val event = insertEvent(hoursFromNow(-49), "stage_2", marked = true, finalized = false, markedAt = null)
+
+        val ids = eventRepository.finalizeAttendanceBefore(OffsetDateTime.now().minusHours(48))
+
+        assertEquals(listOf(event), ids)
+    }
+
+    @Test
+    fun `finalize is due once marked_at is older than the window`() {
+        val event = insertEvent(hoursFromNow(-72), "stage_2", marked = true, finalized = false, markedAt = hoursFromNow(-49))
+
+        val ids = eventRepository.finalizeAttendanceBefore(OffsetDateTime.now().minusHours(48))
+
+        assertEquals(listOf(event), ids)
+    }
+
+    // ---- setAttendance write guards (F5-09 durable / F5-15.1 / F5-16 reset) ----
+
+    @Test
+    fun `setAttendance writes a NULL row on the first mark`() {
+        val event = insertEvent(hoursFromNow(-1), "completed", marked = true, finalized = false)
+        val user = insertConfirmedResponse(event, attendance = null)
+
+        assertEquals(1, eventResponseRepository.setAttendance(event, user, attended = false))
+        assertEquals("absent", attendanceByUser(event, user))
+    }
+
+    @Test
+    fun `setAttendance never overwrites a disputed row (F5-15_1)`() {
+        val event = insertEvent(hoursFromNow(-1), "completed", marked = true, finalized = false)
+        val user = insertConfirmedResponse(event, attendance = "disputed")
+
+        assertEquals(0, eventResponseRepository.setAttendance(event, user, attended = true))
+        assertEquals("disputed", attendanceByUser(event, user), "an active dispute is preserved")
+    }
+
+    @Test
+    fun `setAttendance is a no-op on an idempotent re-mark`() {
+        val event = insertEvent(hoursFromNow(-1), "completed", marked = true, finalized = false)
+        val user = insertConfirmedResponse(event, attendance = "absent")
+
+        assertEquals(0, eventResponseRepository.setAttendance(event, user, attended = false), "absent → absent matches 0 rows")
+    }
+
+    @Test
+    fun `setAttendance refuses to write on an already-finalized event (F5-09 durable)`() {
+        val event = insertEvent(hoursFromNow(-1), "completed", marked = true, finalized = true)
+        val user = insertConfirmedResponse(event, attendance = null)
+
+        assertEquals(0, eventResponseRepository.setAttendance(event, user, attended = false))
+        assertNull(attendanceByUser(event, user), "frozen-ledger roster is never mutated")
+    }
+
+    @Test
+    fun `setAttendance resets dispute_terminal on a genuine re-mark (F5-16)`() {
+        val event = insertEvent(hoursFromNow(-1), "completed", marked = true, finalized = false)
+        val user = insertConfirmedResponse(event, attendance = "absent", disputeTerminal = true)
+
+        assertEquals(1, eventResponseRepository.setAttendance(event, user, attended = true))
+        assertEquals("attended", attendanceByUser(event, user))
+        assertFalse(terminalByUser(event, user), "a fresh mark re-opens the dispute right")
+    }
+
+    @Test
+    fun `setAttendance preserves dispute_terminal on an idempotent re-mark (no re-open, F5-16)`() {
+        val event = insertEvent(hoursFromNow(-1), "completed", marked = true, finalized = false)
+        val user = insertConfirmedResponse(event, attendance = "absent", disputeTerminal = true)
+
+        assertEquals(0, eventResponseRepository.setAttendance(event, user, attended = false))
+        assertTrue(terminalByUser(event, user), "a no-op re-submit must NOT re-open a resolved dispute")
+    }
+
+    // ---- disputeAbsentAttendance guards (F5-10 ordering A / F5-16 no ping-pong) ----
+
+    @Test
+    fun `dispute moves absent to disputed on an open event`() {
+        val event = insertEvent(hoursFromNow(-1), "completed", marked = true, finalized = false)
+        val user = insertConfirmedResponse(event, attendance = "absent")
+
+        assertEquals(1, eventResponseRepository.disputeAbsentAttendance(event, user, "был там"))
+        assertEquals("disputed", attendanceByUser(event, user))
+    }
+
+    @Test
+    fun `dispute is refused once the event is finalized (F5-10 ordering A)`() {
+        val event = insertEvent(hoursFromNow(-1), "completed", marked = true, finalized = true)
+        val user = insertConfirmedResponse(event, attendance = "absent")
+
+        assertEquals(0, eventResponseRepository.disputeAbsentAttendance(event, user, null))
+        assertEquals("absent", attendanceByUser(event, user))
+    }
+
+    @Test
+    fun `dispute is refused on a terminal mark (F5-16 no ping-pong)`() {
+        val event = insertEvent(hoursFromNow(-1), "completed", marked = true, finalized = false)
+        val user = insertConfirmedResponse(event, attendance = "absent", disputeTerminal = true)
+
+        assertEquals(0, eventResponseRepository.disputeAbsentAttendance(event, user, null))
+        assertEquals("absent", attendanceByUser(event, user))
+    }
+
+    // ---- resolveDisputedAttendance / ATT-2 make the mark terminal (F5-16) ----
+
+    @Test
+    fun `resolve makes the mark terminal so it cannot be re-disputed (F5-16)`() {
+        val event = insertEvent(hoursFromNow(-1), "completed", marked = true, finalized = false)
+        val user = insertConfirmedResponse(event, attendance = "disputed")
+
+        assertEquals(1, eventResponseRepository.resolveDisputedAttendance(event, user, attended = false))
+        assertEquals("absent", attendanceByUser(event, user))
+        assertTrue(terminalByUser(event, user))
+        assertEquals(0, eventResponseRepository.disputeAbsentAttendance(event, user, null), "no re-dispute after resolve")
+    }
+
+    @Test
+    fun `expired dispute conversion also marks the row terminal (ATT-2 + F5-16)`() {
+        val event = insertEvent(hoursFromNow(-49), "completed", marked = true, finalized = false)
+        val user = insertConfirmedResponse(event, attendance = "disputed")
+
+        eventResponseRepository.resolveExpiredDisputesToAbsent(listOf(event))
+
+        assertEquals("absent", attendanceByUser(event, user))
+        assertTrue(terminalByUser(event, user))
+    }
+
     // ---- helpers ----
 
     private fun newUser(): UUID {
@@ -225,19 +366,48 @@ class AttendanceFinalizeRepositoryTest {
         return id
     }
 
-    private fun insertEvent(eventDatetime: OffsetDateTime, status: String, marked: Boolean, finalized: Boolean): UUID {
+    private fun insertEvent(
+        eventDatetime: OffsetDateTime,
+        status: String,
+        marked: Boolean,
+        finalized: Boolean,
+        markedAt: OffsetDateTime? = null
+    ): UUID {
         val id = UUID.randomUUID()
+        val markedAtSql = markedAt?.let { "'$it'" } ?: "NULL"
         dsl.execute(
             """
             INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime,
                                 participant_limit, voting_opens_days_before, status,
-                                stage_2_triggered, attendance_marked, attendance_finalized)
+                                stage_2_triggered, attendance_marked, attendance_finalized, attendance_marked_at)
             VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$eventDatetime', 10, 14,
-                    '$status'::event_status, true, $marked, $finalized)
+                    '$status'::event_status, true, $marked, $finalized, $markedAtSql)
             """.trimIndent()
         )
         return id
     }
+
+    /** Inserts a confirmed roster row and returns the participant's userId (for setAttendance/dispute calls). */
+    private fun insertConfirmedResponse(eventId: UUID, attendance: String?, disputeTerminal: Boolean = false): UUID {
+        val userId = newUser()
+        val att = attendance?.let { "'$it'::attendance_status" } ?: "NULL"
+        dsl.execute(
+            """
+            INSERT INTO event_responses (id, event_id, user_id, stage_1_vote, stage_1_timestamp, stage_2_vote, final_status, attendance, dispute_terminal)
+            VALUES ('${UUID.randomUUID()}', '$eventId', '$userId', 'going'::stage_1_vote, NOW(),
+                    'confirmed'::stage_2_vote, 'confirmed'::final_status, $att, $disputeTerminal)
+            """.trimIndent()
+        )
+        return userId
+    }
+
+    private fun attendanceByUser(eventId: UUID, userId: UUID): String? =
+        dsl.fetchOne("SELECT attendance FROM event_responses WHERE event_id = ? AND user_id = ?", eventId, userId)!!
+            .get(0, String::class.java)
+
+    private fun terminalByUser(eventId: UUID, userId: UUID): Boolean =
+        dsl.fetchOne("SELECT dispute_terminal FROM event_responses WHERE event_id = ? AND user_id = ?", eventId, userId)!!
+            .get(0, Boolean::class.java)
 
     private fun insertResponseWithAttendance(eventId: UUID, stage1: String, finalStatus: String, attendance: String?): UUID {
         val id = UUID.randomUUID()

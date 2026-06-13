@@ -180,4 +180,15 @@ open class EventResponsesDao(configuration: Configuration?) : DAOImpl<EventRespo
      * Fetch records that have <code>dispute_note IN (values)</code>
      */
     fun fetchByDisputeNote(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.EventResponses> = fetch(EventResponses.EVENT_RESPONSES.DISPUTE_NOTE, *values)
+
+    /**
+     * Fetch records that have <code>dispute_terminal BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfDisputeTerminal(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.EventResponses> = fetchRange(EventResponses.EVENT_RESPONSES.DISPUTE_TERMINAL, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>dispute_terminal IN (values)</code>
+     */
+    fun fetchByDisputeTerminal(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.EventResponses> = fetch(EventResponses.EVENT_RESPONSES.DISPUTE_TERMINAL, *values.toTypedArray())
 }
