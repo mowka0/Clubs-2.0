@@ -107,13 +107,15 @@ Backend явно не принимает category/accessType в `UpdateClubReque
     `SkladchinaService.closeInternal`, чтобы не начислить штраф и не разослать DM). Уже
     закрытые/отменённые складчины не трогаются. Подробности — `docs/modules/skladchina.md`
     § «Удаление клуба».
+  - `applicationRepository.deleteActiveByClub(id)` — `pending`/`approved` заявки в клуб
+    hard-удаляются (зеркало `deleteActiveByUserAndClub` из `leaveClub`), чтобы не висели сиротами
+    в «Моих заявках». Терминальные `rejected`/`auto_rejected` сохраняются как аудит-история.
 - Устанавливает `clubs.is_active = false` + `updated_at = now()`
 - **Репутацию не трогает** — это явное продуктовое требование (2026-06-13): удаление клуба
   не должно ни начислять, ни списывать очки. Поэтому каскад работает через репозитории напрямую,
   минуя сервисы с реп-хуками
-- **Membership'ы и applications не трогает** — `«Мои клубы»` уже фильтруют `clubs.is_active`
-  (см. `membership.md` § AC-2). Висячие **заявки** в удалённый клуб остаются в «Моих заявках» —
-  осознанный остаток, см. `docs/backlog/orphan-memberships-cleanup.md`
+- **Membership'ы не трогает** — `«Мои клубы»` уже фильтруют `clubs.is_active`
+  (см. `membership.md` § AC-2), orphan-membership в выдачу не попадает
 - `transactions` остаются в БД для audit trail
 - Активные подписки не возвращаются (refund вне scope MVP)
 - Telegram-группу клуба (`telegram_group_id`) **не трогает** — остаётся как есть
@@ -221,14 +223,14 @@ AND под ними подсказка о невозможности смены
 - `Button` "Сохранить" disabled пока форма pristine или идёт сохранение
 - `Button` "Удалить" всегда active, но подтверждение блокирует случайность
 - Upload — только через authenticated request (Bearer JWT), не анонимный
-- В логах backend'а: `log.info("Club soft-deleted: id={} userId={} cancelledEvents={} cancelledSkladchinas={}")` (счётчики каскада добавлены в `bugfix/club-delete-cascade`)
+- В логах backend'а: `log.info("Club soft-deleted: id={} userId={} cancelledEvents={} cancelledSkladchinas={} deletedApplications={}")` (счётчики каскада добавлены в `bugfix/club-delete-cascade`)
 
 ### Out of scope (в backlog)
 - Возможность восстановить клуб после удаления (админ-UI или user-action). **Примечание:**
   каскад событий/складчин **необратим** — восстановление клуба не вернёт их из `cancelled`
-- Hard delete клуба. _Каскад на events/skladchinas реализован (статусная отмена, не hard-delete) —
-  `bugfix/club-delete-cascade` 2026-06-13; каскад на memberships не нужен (UI фильтрует
-  `is_active`), на applications — остаётся открытым, см. `docs/backlog/orphan-memberships-cleanup.md`_
+- Hard delete клуба. _Каскад на events/skladchinas (статусная отмена) + applications (hard-delete
+  pending/approved) реализован — `bugfix/club-delete-cascade` 2026-06-13; каскад на memberships не
+  нужен (UI фильтрует `is_active`). См. `docs/backlog/orphan-memberships-cleanup.md`_
 - Смена category / accessType (требует проработки бизнес-правил для active membership'ов)
 - Cancel всех active subscriptions при удалении клуба (зависит от GAP-2 cancel-flow)
 

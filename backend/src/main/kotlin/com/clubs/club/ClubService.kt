@@ -5,6 +5,7 @@ import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
+import com.clubs.application.ApplicationRepository
 import com.clubs.event.EventRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
@@ -24,6 +25,7 @@ class ClubService(
     private val membershipRepository: MembershipRepository,
     private val eventRepository: EventRepository,
     private val skladchinaRepository: SkladchinaRepository,
+    private val applicationRepository: ApplicationRepository,
     private val mapper: ClubMapper
 ) {
 
@@ -103,20 +105,21 @@ class ClubService(
         val club = clubRepository.findById(id) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club owner can delete it")
 
-        // Cascade: a soft-deleted club must not leave live events/skladchinas behind. Otherwise
-        // schedulers keep processing them (phantom "mark attendance" DMs, late expiry penalties)
-        // and their detail pages 404 on the now-hidden club. We cancel non-finalized events and
-        // active skladchinas via the repositories directly — NOT through their Services — so the
-        // cascade never touches reputation (finalized events keep their ledger; pending skladchina
-        // participants are released, not penalized). See docs/backlog/orphan-memberships-cleanup.md.
-        // Memberships/applications need no action here: "my clubs" already filter clubs.is_active.
+        // Cascade: a soft-deleted club must not leave live activity behind. Otherwise schedulers
+        // keep processing it (phantom "mark attendance" DMs, late expiry penalties) and its detail
+        // pages 404 on the now-hidden club. We cancel non-finalized events and active skladchinas,
+        // and delete pending/approved applications, via the repositories directly — NOT through
+        // their Services — so the cascade never touches reputation (finalized events keep their
+        // ledger; pending skladchina participants are released, not penalized). Memberships need no
+        // action: "my clubs" already filter clubs.is_active. See orphan-memberships-cleanup.md.
         val cancelledEvents = eventRepository.cancelActiveEventsByClub(id)
         val cancelledSkladchinas = skladchinaRepository.cancelActiveByClub(id)
+        val deletedApplications = applicationRepository.deleteActiveByClub(id)
 
         clubRepository.softDelete(id)
         log.info(
-            "Club soft-deleted: id={} userId={} cancelledEvents={} cancelledSkladchinas={}",
-            id, userId, cancelledEvents, cancelledSkladchinas
+            "Club soft-deleted: id={} userId={} cancelledEvents={} cancelledSkladchinas={} deletedApplications={}",
+            id, userId, cancelledEvents, cancelledSkladchinas, deletedApplications
         )
     }
 

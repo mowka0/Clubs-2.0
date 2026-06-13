@@ -19,18 +19,19 @@
 - ✅ **Складчины** — `active` → `cancelled`, их `pending`-участники → `released`
   (репутационно-нейтрально, без ledger-строк; минуя `closeInternal`).
   Детали — `docs/modules/skladchina.md` § «Удаление клуба».
-- ⏳ **Заявки (applications)** — **остаётся открытым.** Заявки в удалённый клуб
-  по-прежнему висят в «Моих заявках»: `JooqApplicationRepository.findByUserId` не
-  джойнит `CLUBS` / не фильтрует `is_active`. **Осознанно не вошло в каскад**
-  (scope ветки = события + складчины, продуктовое решение 2026-06-13). Фикс по
-  аналогии с membership (фильтр `club.is_active = true` в `findByUserId`) — кандидат
-  в отдельную ветку.
+- ✅ **Заявки (applications)** — `pending`/`approved` заявки в удалённый клуб
+  hard-удаляются (`ApplicationRepository.deleteActiveByClub`), зеркало
+  `deleteActiveByUserAndClub` из `leaveClub`. Терминальные `rejected`/`auto_rejected`
+  сохраняются как аудит-история. Висящих в «Моих заявках» сирот больше нет.
+  (Добавлено 2026-06-13 по запросу пользователя — изначально было вне scope.)
 - ➖ **Memberships** — каскад **не нужен**: `«Мои клубы»` уже фильтруют `clubs.is_active`
   (см. `docs/modules/membership.md` § AC-2). Orphan-membership в выдачу не попадает.
 
 **Что НЕ изменилось:** репутацию каскад намеренно не трогает (продуктовое требование);
-hard-delete и Вариант B (stub-response для soft-deleted) по-прежнему не реализованы —
-консьюмеры `useClubQuery(id)` для orphan-application всё ещё получат 404 (см. ниже).
+hard-delete клуба и Вариант B (stub-response для soft-deleted клуба) по-прежнему не
+реализованы. После каскада events/skladchinas/applications orphan-строк в пользовательских
+выдачах не остаётся, но прямой переход на удалённый клуб (`useClubQuery(id)`) всё ещё даёт
+404 — это ожидаемо (клуб скрыт).
 
 ---
 

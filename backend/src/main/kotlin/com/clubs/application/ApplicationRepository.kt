@@ -20,6 +20,14 @@ interface ApplicationRepository {
      */
     fun deleteActiveByUserAndClub(userId: UUID, clubId: UUID): Int
 
+    /**
+     * Club soft-delete cascade: hard-deletes every pending/approved application to [clubId]
+     * (for all users) so they stop appearing as orphan rows in applicants' «Мои заявки» — the
+     * club is gone, the request is moot. Rejected / auto_rejected rows are preserved as audit
+     * history, mirroring [deleteActiveByUserAndClub]. Returns rows deleted.
+     */
+    fun deleteActiveByClub(clubId: UUID): Int
+
     // Lookups
     fun findById(id: UUID): Application?
     fun findByClubId(clubId: UUID, status: ApplicationStatus?): List<Application>

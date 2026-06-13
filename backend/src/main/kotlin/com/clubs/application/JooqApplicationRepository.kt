@@ -65,6 +65,14 @@ class JooqApplicationRepository(
             )
             .execute()
 
+    override fun deleteActiveByClub(clubId: UUID): Int =
+        dsl.deleteFrom(APPLICATIONS)
+            .where(
+                APPLICATIONS.CLUB_ID.eq(clubId)
+                    .and(APPLICATIONS.STATUS.`in`(ApplicationStatus.pending, ApplicationStatus.approved))
+            )
+            .execute()
+
     override fun findActiveByUserAndClub(userId: UUID, clubId: UUID): Application? =
         dsl.selectFrom(APPLICATIONS)
             .where(

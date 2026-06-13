@@ -1,5 +1,6 @@
 package com.clubs.club
 
+import com.clubs.application.ApplicationRepository
 import com.clubs.event.EventRepository
 import com.clubs.skladchina.SkladchinaRepository
 import org.jooq.DSLContext
@@ -57,6 +58,7 @@ class ClubDeleteCascadeIntegrationTest {
 
     @Autowired lateinit var eventRepository: EventRepository
     @Autowired lateinit var skladchinaRepository: SkladchinaRepository
+    @Autowired lateinit var applicationRepository: ApplicationRepository
     @Autowired lateinit var dsl: DSLContext
 
     private lateinit var ownerId: UUID
@@ -70,6 +72,7 @@ class ClubDeleteCascadeIntegrationTest {
         dsl.execute("DELETE FROM skladchinas")
         dsl.execute("DELETE FROM event_responses")
         dsl.execute("DELETE FROM events")
+        dsl.execute("DELETE FROM applications")
         dsl.execute("DELETE FROM memberships")
         dsl.execute("DELETE FROM clubs")
         dsl.execute("DELETE FROM users")
@@ -133,6 +136,26 @@ class ClubDeleteCascadeIntegrationTest {
         assertEquals("pending", participantStatusOf(otherClubSkladchina, otherPending))
     }
 
+    @Test
+    fun `deleteActiveByClub deletes pending and approved applications but preserves terminal ones`() {
+        val pending = insertApplication(clubA, newUser(), "pending")
+        val approved = insertApplication(clubA, newUser(), "approved")
+        val rejected = insertApplication(clubA, newUser(), "rejected")
+        val autoRejected = insertApplication(clubA, newUser(), "auto_rejected")
+        val otherClubPending = insertApplication(clubB, newUser(), "pending")
+
+        val deleted = applicationRepository.deleteActiveByClub(clubA)
+
+        assertEquals(2, deleted)
+        assertEquals(0, applicationCount(pending))
+        assertEquals(0, applicationCount(approved))
+        // Terminal applications survive as audit history.
+        assertEquals(1, applicationCount(rejected))
+        assertEquals(1, applicationCount(autoRejected))
+        // Another club's application is untouched.
+        assertEquals(1, applicationCount(otherClubPending))
+    }
+
     // ---- helpers ----
 
     private fun newUser(): UUID {
@@ -184,6 +207,20 @@ class ClubDeleteCascadeIntegrationTest {
             """.trimIndent()
         )
     }
+
+    private fun insertApplication(clubId: UUID, userId: UUID, status: String): UUID {
+        val id = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO applications (id, user_id, club_id, status)
+            VALUES ('$id', '$userId', '$clubId', '$status'::application_status)
+            """.trimIndent()
+        )
+        return id
+    }
+
+    private fun applicationCount(id: UUID): Int =
+        dsl.fetchOne("SELECT count(*) FROM applications WHERE id = ?", id)!!.get(0, Int::class.java)!!
 
     private fun statusOf(table: String, id: UUID): String? =
         dsl.fetchOne("SELECT status FROM $table WHERE id = ?", id)?.get(0, String::class.java)

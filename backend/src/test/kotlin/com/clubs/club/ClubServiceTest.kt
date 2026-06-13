@@ -4,6 +4,7 @@ import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
+import com.clubs.application.ApplicationRepository
 import com.clubs.event.EventRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
@@ -25,6 +26,7 @@ class ClubServiceTest {
     private lateinit var membershipRepository: MembershipRepository
     private lateinit var eventRepository: EventRepository
     private lateinit var skladchinaRepository: SkladchinaRepository
+    private lateinit var applicationRepository: ApplicationRepository
     private lateinit var mapper: ClubMapper
     private lateinit var clubService: ClubService
 
@@ -34,8 +36,9 @@ class ClubServiceTest {
         membershipRepository = mockk(relaxed = true)
         eventRepository = mockk(relaxed = true)
         skladchinaRepository = mockk(relaxed = true)
+        applicationRepository = mockk(relaxed = true)
         mapper = ClubMapper()
-        clubService = ClubService(clubRepository, membershipRepository, eventRepository, skladchinaRepository, mapper)
+        clubService = ClubService(clubRepository, membershipRepository, eventRepository, skladchinaRepository, applicationRepository, mapper)
     }
 
     private fun makeClub(
@@ -264,7 +267,7 @@ class ClubServiceTest {
     }
 
     @Test
-    fun `deleteClub soft-deletes and cancels the club's live events and skladchinas`() {
+    fun `deleteClub soft-deletes and cancels the club's live events, skladchinas and applications`() {
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
         every { clubRepository.findById(clubId) } returns makeClub(clubId = clubId, ownerId = ownerId)
@@ -274,6 +277,7 @@ class ClubServiceTest {
         // Cascade runs before the soft-delete, scoped to this club only.
         verify(exactly = 1) { eventRepository.cancelActiveEventsByClub(clubId) }
         verify(exactly = 1) { skladchinaRepository.cancelActiveByClub(clubId) }
+        verify(exactly = 1) { applicationRepository.deleteActiveByClub(clubId) }
         verify(exactly = 1) { clubRepository.softDelete(clubId) }
     }
 
@@ -292,6 +296,7 @@ class ClubServiceTest {
         // A non-owner triggers no cascade and no delete.
         verify(exactly = 0) { eventRepository.cancelActiveEventsByClub(any()) }
         verify(exactly = 0) { skladchinaRepository.cancelActiveByClub(any()) }
+        verify(exactly = 0) { applicationRepository.deleteActiveByClub(any()) }
         verify(exactly = 0) { clubRepository.softDelete(any()) }
     }
 
@@ -308,6 +313,7 @@ class ClubServiceTest {
         assertEquals("Club not found", exception.message)
         verify(exactly = 0) { eventRepository.cancelActiveEventsByClub(any()) }
         verify(exactly = 0) { skladchinaRepository.cancelActiveByClub(any()) }
+        verify(exactly = 0) { applicationRepository.deleteActiveByClub(any()) }
         verify(exactly = 0) { clubRepository.softDelete(any()) }
     }
 }
