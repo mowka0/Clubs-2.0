@@ -86,6 +86,11 @@ events:
   finalize-poll-ms: ${ATTENDANCE_FINALIZE_POLL_MS:3600000}
   # Stage2Service.expireUnconfirmedParticipants poll period (ms). Default 300000 = 5min.
   stage2-expire-poll-ms: ${STAGE2_EXPIRE_POLL_MS:300000}
+  # Lead time (minutes before event start) at which an upcoming event auto-transitions to
+  # Stage 2 (confirmation). Default 1440 = 24h (PRD §4.4.2). Minutes so staging can set a
+  # small value and keep a brief Stage-1 voting window before the flip, making the full
+  # two-stage flow testable end-to-end. Env: STAGE2_TRIGGER_MINUTES_BEFORE
+  stage2-trigger-minutes-before: ${STAGE2_TRIGGER_MINUTES_BEFORE:1440}
   # EventReminderScheduler poll period (ms). Default 300000 = 5min.
   reminder-poll-ms: ${EVENT_REMINDER_POLL_MS:300000}
   # Confirm-participation reminder DM window: minutes before the event it fires.

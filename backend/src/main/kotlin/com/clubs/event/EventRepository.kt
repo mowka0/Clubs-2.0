@@ -33,7 +33,12 @@ interface EventRepository {
 
     fun getVoteCounts(eventId: UUID): Map<String, Int>
 
-    fun findEventsToTriggerStage2(): List<Event>
+    /**
+     * Events ready to enter Stage 2: still `upcoming`, not yet triggered, and starting at or
+     * before [cutoff]. The caller computes the cutoff from a configurable lead time so staging
+     * can shorten it for end-to-end testing of the two-stage flow.
+     */
+    fun findEventsToTriggerStage2(cutoff: OffsetDateTime): List<Event>
 
     fun findNextUpcomingEvent(now: OffsetDateTime): Event?
 

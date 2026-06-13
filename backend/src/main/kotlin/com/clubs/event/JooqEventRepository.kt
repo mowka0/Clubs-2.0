@@ -248,9 +248,8 @@ class JooqEventRepository(
         return mapOf("going" to going, "maybe" to maybe, "notGoing" to notGoing, "confirmed" to confirmed)
     }
 
-    override fun findEventsToTriggerStage2(): List<Event> {
-        val cutoff = OffsetDateTime.now().plusHours(STAGE_2_TRIGGER_HOURS_BEFORE_EVENT)
-        return dsl.selectFrom(EVENTS)
+    override fun findEventsToTriggerStage2(cutoff: OffsetDateTime): List<Event> =
+        dsl.selectFrom(EVENTS)
             .where(
                 EVENTS.STATUS.eq(EventStatus.upcoming)
                     .and(EVENTS.STAGE_2_TRIGGERED.eq(false))
@@ -258,7 +257,6 @@ class JooqEventRepository(
             )
             .fetch()
             .map(mapper::toDomain)
-    }
 
     /**
      * Returns the nearest upcoming event across all clubs.
@@ -409,7 +407,4 @@ class JooqEventRepository(
             .associate { it.value1()!! to it.value2() }
     }
 
-    companion object {
-        private const val STAGE_2_TRIGGER_HOURS_BEFORE_EVENT = 24L
-    }
 }

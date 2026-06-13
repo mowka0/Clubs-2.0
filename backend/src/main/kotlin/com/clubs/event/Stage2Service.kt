@@ -9,6 +9,7 @@ import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
 import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
@@ -21,14 +22,19 @@ class Stage2Service(
     private val eventRepository: EventRepository,
     private val eventResponseRepository: EventResponseRepository,
     private val membershipRepository: MembershipRepository,
-    private val eventPublisher: ApplicationEventPublisher
+    private val eventPublisher: ApplicationEventPublisher,
+    // Lead time (minutes before event start) at which an upcoming event transitions to Stage 2.
+    // Default 24h. Minutes unit lets staging shorten it for an end-to-end two-stage test:
+    // a short value keeps a brief Stage-1 voting window before the event flips to confirmation.
+    @Value("\${events.stage2-trigger-minutes-before:1440}") private val stage2TriggerMinutesBefore: Long
 ) {
     private val log = LoggerFactory.getLogger(Stage2Service::class.java)
 
     @Scheduled(fixedDelay = STAGE_2_SCHEDULER_PERIOD_MS)
     @Transactional
     fun triggerStage2ForReadyEvents() {
-        val events = eventRepository.findEventsToTriggerStage2()
+        val cutoff = OffsetDateTime.now().plusMinutes(stage2TriggerMinutesBefore)
+        val events = eventRepository.findEventsToTriggerStage2(cutoff)
         events.forEach { event ->
             try {
                 triggerStage2(event)

@@ -31,7 +31,7 @@ class Stage2ServiceTest {
     private val eventResponseRepository = mockk<EventResponseRepository>(relaxed = true)
     private val membershipRepository = mockk<MembershipRepository>()
     private val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
-    private val service = Stage2Service(eventRepository, eventResponseRepository, membershipRepository, eventPublisher)
+    private val service = Stage2Service(eventRepository, eventResponseRepository, membershipRepository, eventPublisher, stage2TriggerMinutesBefore = 1440)
 
     private val eventId = UUID.randomUUID()
     private val userId = UUID.randomUUID()
@@ -146,7 +146,7 @@ class Stage2ServiceTest {
         // S2T-2: without this publication nobody learns Stage 2 started and everyone
         // auto-expires at event start.
         val event = event(eventDatetime = OffsetDateTime.now().plusDays(1), status = EventStatus.stage_1)
-        every { eventRepository.findEventsToTriggerStage2() } returns listOf(event)
+        every { eventRepository.findEventsToTriggerStage2(any()) } returns listOf(event)
         justRun { eventRepository.transitionToStage2(eventId) }
         every { eventResponseRepository.findGoingByEventOrderByTimestamp(eventId) } returns emptyList()
 
@@ -161,7 +161,7 @@ class Stage2ServiceTest {
         // publication must follow the overflow assignment so a failed assignment also skips the DM.
         val event = event(eventDatetime = OffsetDateTime.now().plusDays(1), status = EventStatus.stage_1)
         val overflow = response(stage1 = Stage_1Vote.going, stage2 = null)
-        every { eventRepository.findEventsToTriggerStage2() } returns listOf(event)
+        every { eventRepository.findEventsToTriggerStage2(any()) } returns listOf(event)
         justRun { eventRepository.transitionToStage2(eventId) }
         // participantLimit = 10 → 11 going voters, the last one overflows to waitlist.
         every { eventResponseRepository.findGoingByEventOrderByTimestamp(eventId) } returns
