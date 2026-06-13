@@ -165,7 +165,10 @@ fun countByVote(eventId: UUID): Map<String, Int>   // going/maybe/not_going
 
 ### Cron-задача (Spring Scheduler)
 - Запускается каждые 5 минут: `@Scheduled(fixedDelay = 300_000)`
-- Ищет события: `status = upcoming AND stage_2_triggered = false AND event_datetime <= now() + 24h`
+- Ищет события: `status = upcoming AND stage_2_triggered = false AND event_datetime <= now() + lead`,
+  где `lead` = `events.stage2-trigger-minutes-before` (дефолт 1440 мин = 24ч; cutoff считается в
+  `Stage2Service`, передаётся в `findEventsToTriggerStage2(cutoff)`). На staging значение можно ужать
+  (`STAGE2_TRIGGER_MINUTES_BEFORE`), чтобы протестировать полный поток голос → переход → подтверждение
 - Для каждого такого события: переводит в Stage 2
 
 ### Логика перехода в Stage 2
@@ -344,6 +347,7 @@ UI спора/резолва добавлен в Блоке 1 (см. ниже §
 | `events.dispute-window-minutes` | `ATTENDANCE_DISPUTE_WINDOW_MINUTES` | `2880` (48ч) | Окно оспаривания явки до финализации репутации |
 | `events.finalize-poll-ms` | `ATTENDANCE_FINALIZE_POLL_MS` | `3600000` (1ч) | Период `AttendanceService.finalizeAttendance` |
 | `events.stage2-expire-poll-ms` | `STAGE2_EXPIRE_POLL_MS` | `300000` (5мин) | Период авто-истечения брони |
+| `events.stage2-trigger-minutes-before` | `STAGE2_TRIGGER_MINUTES_BEFORE` | `1440` (24ч) | За сколько **минут** до старта `upcoming`-событие авто-переходит в `stage_2` |
 | `events.reminder-poll-ms` | `EVENT_REMINDER_POLL_MS` | `300000` (5мин) | Период `EventReminderScheduler` |
 | `events.confirm-reminder-minutes-before` | `CONFIRM_REMINDER_MINUTES_BEFORE` | `120` (2ч) | За сколько **минут** до события слать «подтверди участие» |
 | `events.attendance-reminder-minutes-after` | `ATTENDANCE_REMINDER_MINUTES_AFTER` | `1440` (24ч) | Через сколько **минут** после события напомнить оргу отметить явку |
@@ -354,6 +358,10 @@ UI спора/резолва добавлен в Блоке 1 (см. ниже §
 
 > **Тест на staging:** в Coolify-приложении staging выставить `ATTENDANCE_DISPUTE_WINDOW_MINUTES=5`,
 > `ATTENDANCE_FINALIZE_POLL_MS=60000` (1 мин), при желании `STAGE2_EXPIRE_POLL_MS=60000`.
+> Для проверки полного двухэтапного потока — `STAGE2_TRIGGER_MINUTES_BEFORE=5`: создать событие
+> со стартом > 5 мин в будущем (останется `upcoming`, голосуем), дождаться окна перехода +
+> тик шедулера → событие уходит в `stage_2`, DM «Этап 2 начался». Условие наличия фазы
+> голосования: `(минут до старта) > STAGE2_TRIGGER_MINUTES_BEFORE`.
 > Тот же образ, только env. После теста — удалить переменные (prod-дефолты не меняются).
 > NB: окно оспаривания отсчитывается от `event_datetime` (нет колонки `attendance_marked_at`),
 > а не от момента отметки — pre-existing, см. `reputation-v2.md`.
