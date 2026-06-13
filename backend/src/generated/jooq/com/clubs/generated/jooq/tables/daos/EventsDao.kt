@@ -243,4 +243,15 @@ open class EventsDao(configuration: Configuration?) : DAOImpl<EventsRecord, com.
      * Fetch records that have <code>attendance_reminder_sent IN (values)</code>
      */
     fun fetchByAttendanceReminderSent(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.ATTENDANCE_REMINDER_SENT, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>attendance_marked_at BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfAttendanceMarkedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.ATTENDANCE_MARKED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>attendance_marked_at IN (values)</code>
+     */
+    fun fetchByAttendanceMarkedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.ATTENDANCE_MARKED_AT, *values)
 }

@@ -2,7 +2,6 @@ package com.clubs.bot
 
 import com.clubs.event.Event
 import com.clubs.event.EventResponseRepository
-import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -103,11 +102,14 @@ class NotificationService(
     }
 
     /**
-     * Notify absent members after attendance is marked, offering dispute option.
+     * Notify the participants who NEWLY became absent in this mark, offering the dispute option.
+     * Recipients are passed in (F5-15.2) rather than re-queried by attendance=absent, so a re-mark
+     * does not re-DM participants already marked absent on a previous mark.
      */
     @Async
-    fun sendAttendanceMarked(eventId: UUID) {
-        val absentTelegramIds = eventResponseRepository.findTelegramIdsByEventAndAttendance(eventId, AttendanceStatus.absent)
+    fun sendAttendanceMarked(eventId: UUID, newlyAbsentUserIds: List<UUID>) {
+        if (newlyAbsentUserIds.isEmpty()) return
+        val absentTelegramIds = eventResponseRepository.findTelegramIdsByEventAndUserIds(eventId, newlyAbsentUserIds)
         val text = "📋 Организатор отметил присутствие на событии.\n\nВас отметили как отсутствующего. Если это ошибка — оспорьте на странице события:"
         // Deep-link straight to the event page so the dispute button is one tap away (ATT-3).
         val webAppPath = "/events/$eventId"

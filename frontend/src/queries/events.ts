@@ -8,6 +8,7 @@ import {
   getClubEvents,
   getEvent,
   getEventResponders,
+  getMyAttendance,
   getMyEvents,
   getMyVote,
   markAttendance,
@@ -45,6 +46,21 @@ export function useEventRespondersQuery(eventId: string | undefined, enabled = t
     queryKey: [...queryKeys.events.detail(eventId ?? ''), 'responders'],
     queryFn: () => getEventResponders(eventId!),
     enabled: Boolean(eventId) && enabled,
+  });
+}
+
+/**
+ * F5-04: the caller's own attendance state — drives the participant dispute controls even for a
+ * member who left the club (the member-gated responders query 403s for them). Key extends the
+ * detail key, so dispute/resolve/mark mutations (which invalidate detail) refresh it by prefix.
+ * 404 (organizer / non-participant) is an expected outcome — no retry.
+ */
+export function useMyAttendanceQuery(eventId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: [...queryKeys.events.detail(eventId ?? ''), 'my-attendance'],
+    queryFn: () => getMyAttendance(eventId!),
+    enabled: Boolean(eventId) && enabled,
+    retry: false,
   });
 }
 

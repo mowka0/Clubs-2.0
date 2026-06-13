@@ -59,6 +59,11 @@ status: enum (upcoming, stage_1, stage_2, completed, cancelled)
 
 ## GAP-4 (BUG): окно оспаривания считается от `event_datetime`, не от момента markAttendance
 
+> ✅ **ИСПРАВЛЕНО** в `bugfix/attendance-dispute-integrity` (2026-06-13, = ATT-1/F5-05).
+> Колонка `events.attendance_marked_at` (миграция V24), `markAttendance` её проставляет,
+> `finalizeAttendanceBefore` гейтит по `COALESCE(attendance_marked_at, event_datetime)`.
+> Реализация теперь PRD-совместима. См. `events.md` § «Окно спора отсчитывается от момента отметки».
+
 **Где обещано:** PRD `§4.4.3` line 271:
 > «Окно оспаривания: 48 часов с момента сохранения отметок.»
 

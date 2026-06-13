@@ -1,5 +1,6 @@
 package com.clubs.event
 
+import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
@@ -15,7 +16,8 @@ import java.util.UUID
 class VoteService(
     private val eventRepository: EventRepository,
     private val eventResponseRepository: EventResponseRepository,
-    private val membershipRepository: MembershipRepository
+    private val membershipRepository: MembershipRepository,
+    private val clubRepository: ClubRepository
 ) {
 
     private val log = LoggerFactory.getLogger(VoteService::class.java)
@@ -79,6 +81,12 @@ class VoteService(
             throw ForbiddenException("Not a member of this club")
         }
 
+        // F5-06 (A01): dispute_note is a private message addressed to the organizer — only the
+        // club owner may read it, not every club member. Keyed on club.ownerId (NOT event.createdBy:
+        // a non-owner creator must not see it, and the owner who resolves disputes must). The note
+        // stays in the SQL projection; we null it here so members never receive it over the wire.
+        val isOwner = clubRepository.findById(event.clubId)?.ownerId == userId
+
         return eventResponseRepository.findRespondersWithUsers(eventId).map { r ->
             EventResponderDto(
                 userId = r.userId,
@@ -87,7 +95,7 @@ class VoteService(
                 avatarUrl = r.avatarUrl,
                 status = r.finalStatus?.literal ?: r.stage1Vote?.literal ?: "going",
                 attendance = r.attendance?.literal,
-                disputeNote = r.disputeNote
+                disputeNote = if (isOwner) r.disputeNote else null
             )
         }
     }

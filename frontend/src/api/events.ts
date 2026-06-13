@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import type { EventDetailDto, EventListItemDto, EventResponderDto, MyEventListItemDto, PageResponse } from '../types/api';
+import type { EventDetailDto, EventListItemDto, EventResponderDto, MyAttendanceDto, MyEventListItemDto, PageResponse } from '../types/api';
 
 export interface CreateEventBody {
   title: string;
@@ -49,6 +49,15 @@ export function getMyVote(eventId: string): Promise<{ vote: string | null }> {
 
 export function getEventResponders(eventId: string): Promise<EventResponderDto[]> {
   return apiClient.get(`/api/events/${eventId}/responses`);
+}
+
+/**
+ * F5-04: the caller's own attendance state. Unlike /responses this is NOT member-gated, so a
+ * participant who left the club can still reach the dispute UI. 404 if the caller has no
+ * response row (organizer / non-participant).
+ */
+export function getMyAttendance(eventId: string): Promise<MyAttendanceDto> {
+  return apiClient.get(`/api/events/${eventId}/my-attendance`);
 }
 
 export function confirmParticipation(eventId: string): Promise<{ eventId: string; status: string; confirmedCount: number; participantLimit: number }> {

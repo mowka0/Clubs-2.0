@@ -298,12 +298,21 @@ class JooqEventRepository(
             )
             .execute()
 
-    override fun markAttendanceMarked(id: UUID) {
+    override fun markAttendanceMarked(id: UUID): Int =
         dsl.update(EVENTS)
             .set(EVENTS.ATTENDANCE_MARKED, true)
-            .where(EVENTS.ID.eq(id))
+            // решение (б)=A: the dispute window is measured from this moment, not event_datetime
+            // (a late mark must still give the participant a full window). finalizeAttendanceBefore
+            // gates on COALESCE(attendance_marked_at, event_datetime).
+            .set(EVENTS.ATTENDANCE_MARKED_AT, OffsetDateTime.now())
+            .where(
+                EVENTS.ID.eq(id)
+                    // F5-09: lose the TOCTOU against the finalizer. Under READ COMMITTED the
+                    // finalizer's committed attendance_finalized=true makes this match 0 rows;
+                    // markAttendance throws and rolls back the setAttendance writes in the same txn.
+                    .and(EVENTS.ATTENDANCE_FINALIZED.eq(false))
+            )
             .execute()
-    }
 
     override fun findEventsNeedingConfirmReminder(now: OffsetDateTime, until: OffsetDateTime): List<Event> =
         dsl.selectFrom(EVENTS)
@@ -328,6 +337,10 @@ class JooqEventRepository(
             .where(
                 EVENTS.ATTENDANCE_MARKED.isFalse
                     .and(EVENTS.ATTENDANCE_REMINDER_SENT.isFalse)
+                    // F5-17: EXP-2 neutrally-finalizes unmarked past events (marked=false,
+                    // finalized=true). Without this, the reminder still fires on them → the
+                    // organizer taps "mark" → markAttendance throws finalized → guaranteed 400.
+                    .and(EVENTS.ATTENDANCE_FINALIZED.isFalse)
                     .and(EVENTS.EVENT_DATETIME.lessOrEqual(cutoff))   // event was >= "hours after" ago
                     .and(EVENTS.STATUS.ne(EventStatus.cancelled))
                     // CC-2: only nag the organizer when there is actually a roster to mark — a
@@ -364,7 +377,10 @@ class JooqEventRepository(
             .where(
                 EVENTS.ATTENDANCE_MARKED.eq(true)
                     .and(EVENTS.ATTENDANCE_FINALIZED.eq(false))
-                    .and(EVENTS.EVENT_DATETIME.lessOrEqual(eventDatetimeCutoff))
+                    // решение (б)=A: window measured from mark time. COALESCE falls back to
+                    // event_datetime for rows marked before V24 (attendance_marked_at IS NULL),
+                    // so legacy marked-but-not-finalized events finalize on the old basis — no backfill.
+                    .and(DSL.coalesce(EVENTS.ATTENDANCE_MARKED_AT, EVENTS.EVENT_DATETIME).lessOrEqual(eventDatetimeCutoff))
                     // A cancelled event must never finalize and accrue reputation. Reachable since
                     // the club-delete cascade can cancel an already-attendance-marked stage_2 event
                     // (marking is allowed in the ~6h before completion). Mirrors the sibling

@@ -1,6 +1,7 @@
 package com.clubs.event
 
 import com.clubs.club.ClubRepository
+import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
@@ -47,23 +48,63 @@ class AttendanceService(
             throw ValidationException("Cannot mark attendance before the event takes place")
         }
 
+        val newlyAbsentUserIds = mutableListOf<UUID>()
         var markedCount = 0
         request.attendance.forEach { entry ->
             val updated = eventResponseRepository.setAttendance(eventId, entry.userId, entry.attended)
-            if (updated > 0) markedCount++
+            if (updated > 0) {
+                markedCount++
+                // setAttendance only matches genuine transitions (IS DISTINCT FROM target), so
+                // updated > 0 with attended=false means this row NEWLY became absent — exactly who
+                // gets the "оспорьте" DM. A re-mark of an already-absent row matches 0 rows → no
+                // re-DM (F5-15.2).
+                if (!entry.attended) newlyAbsentUserIds.add(entry.userId)
+            }
         }
 
-        eventRepository.markAttendanceMarked(eventId)
+        // F5-09: markAttendanceMarked is guarded on attendance_finalized=false. 0 rows means the
+        // finalizer won the TOCTOU and finalized the event between the guard read above and now —
+        // reject and roll back the setAttendance writes (single @Transactional).
+        if (eventRepository.markAttendanceMarked(eventId) == 0) {
+            throw ValidationException("Attendance has been finalized")
+        }
 
-        // ATT-3: notify absent participants (DM "вас отметили отсутствующим, оспорьте") so the
-        // dispute window is actually reachable. Published, not called directly: the @Async DM reads
-        // the just-written absent rows, which are only visible to a separate connection AFTER this
-        // transaction commits. AttendanceMarkedListener reacts AFTER_COMMIT — same hazard the
-        // reputation pipeline solves for AttendanceFinalizedEvent.
-        eventPublisher.publishEvent(AttendanceMarkedEvent(eventId))
+        // ATT-3 / F5-15.2: notify only the NEWLY-absent participants (DM "вас отметили
+        // отсутствующим, оспорьте") so the dispute window is reachable without spamming everyone
+        // on a re-mark. Published, not called directly: the @Async DM resolves recipients on a
+        // separate connection AFTER this transaction commits. AttendanceMarkedListener reacts
+        // AFTER_COMMIT — same hazard the reputation pipeline solves for AttendanceFinalizedEvent.
+        eventPublisher.publishEvent(AttendanceMarkedEvent(eventId, newlyAbsentUserIds))
 
-        log.info("Attendance marked: eventId={} markedCount={} organizerId={}", eventId, markedCount, organizerId)
+        log.info("Attendance marked: eventId={} markedCount={} newlyAbsent={} organizerId={}", eventId, markedCount, newlyAbsentUserIds.size, organizerId)
         return AttendanceResultDto(eventId, markedCount)
+    }
+
+    /**
+     * F5-04: the caller's OWN attendance state for the event. Deliberately NOT gated on club
+     * membership — a participant who has left the club (or whose subscription lapsed) still
+     * receives the no_show penalty and the "оспорьте" DM, so they must be able to reach the
+     * dispute UI. Scoped to their own response row; [MyAttendanceDto.canDispute] is the single
+     * source of truth the frontend keys the dispute button off.
+     */
+    @Transactional(readOnly = true)
+    fun getMyAttendance(eventId: UUID, userId: UUID): MyAttendanceDto {
+        val event = eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
+        val response = eventResponseRepository.findByEventAndUser(eventId, userId)
+            ?: throw NotFoundException("No participation in this event")
+
+        val windowOpen = event.attendanceMarked && !event.attendanceFinalized
+        val canDispute = windowOpen &&
+            response.attendance == AttendanceStatus.absent &&
+            !response.disputeTerminal
+        return MyAttendanceDto(
+            attendance = response.attendance?.literal,
+            attendanceMarked = event.attendanceMarked,
+            attendanceFinalized = event.attendanceFinalized,
+            disputeTerminal = response.disputeTerminal,
+            canDispute = canDispute,
+            disputeNote = response.disputeNote
+        )
     }
 
     @Transactional

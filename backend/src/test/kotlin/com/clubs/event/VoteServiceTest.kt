@@ -1,7 +1,10 @@
 package com.clubs.event
 
+import com.clubs.club.Club
+import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.ValidationException
+import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
@@ -27,7 +30,8 @@ class VoteServiceTest {
     private val eventRepository = mockk<EventRepository>()
     private val eventResponseRepository = mockk<EventResponseRepository>()
     private val membershipRepository = mockk<MembershipRepository>()
-    private val service = VoteService(eventRepository, eventResponseRepository, membershipRepository)
+    private val clubRepository = mockk<ClubRepository>()
+    private val service = VoteService(eventRepository, eventResponseRepository, membershipRepository, clubRepository)
 
     private val eventId = UUID.randomUUID()
     private val userId = UUID.randomUUID()
@@ -125,6 +129,35 @@ class VoteServiceTest {
             service.castVote(eventId, userId, CastVoteRequest("going"))
         }
         assertEquals("Voting is not available for this event", ex.message)
+    }
+
+    // --- getEventResponders: dispute_note privacy (F5-06) ---
+
+    private fun responderWithNote(note: String?) = EventResponderInfo(
+        userId = UUID.randomUUID(), firstName = "A", lastName = null, avatarUrl = null,
+        stage1Vote = Stage_1Vote.going, finalStatus = FinalStatus.confirmed,
+        attendance = AttendanceStatus.disputed, disputeNote = note
+    )
+
+    private fun stubRespondersWithNote(ownerId: UUID, viewerId: UUID) {
+        every { eventRepository.findById(eventId) } returns upcomingEvent(OffsetDateTime.now().plusDays(1))
+        every { membershipRepository.isMember(viewerId, clubId) } returns true
+        val club = mockk<Club>()
+        every { club.ownerId } returns ownerId
+        every { clubRepository.findById(clubId) } returns club
+        every { eventResponseRepository.findRespondersWithUsers(eventId) } returns listOf(responderWithNote("был там"))
+    }
+
+    @Test
+    fun `getEventResponders exposes disputeNote to the club owner (F5-06)`() {
+        stubRespondersWithNote(ownerId = userId, viewerId = userId)
+        assertEquals("был там", service.getEventResponders(eventId, userId).single().disputeNote)
+    }
+
+    @Test
+    fun `getEventResponders hides disputeNote from a non-owner member (F5-06)`() {
+        stubRespondersWithNote(ownerId = UUID.randomUUID(), viewerId = userId)
+        assertNull(service.getEventResponders(eventId, userId).single().disputeNote)
     }
 
     private fun stubResponse(stage1: Stage_1Vote?, final: FinalStatus?) {

@@ -22,7 +22,7 @@ class AttendanceMarkedListener(
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun onAttendanceMarked(event: AttendanceMarkedEvent) {
-        log.info("Attendance marked for event {} — notifying absent participants", event.eventId)
-        notificationService.sendAttendanceMarked(event.eventId)
+        log.info("Attendance marked for event {} — notifying {} newly-absent participant(s)", event.eventId, event.newlyAbsentUserIds.size)
+        notificationService.sendAttendanceMarked(event.eventId, event.newlyAbsentUserIds)
     }
 }

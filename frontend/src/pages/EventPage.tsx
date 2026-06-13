@@ -15,6 +15,7 @@ import {
   useEventQuery,
   useEventRespondersQuery,
   useMarkAttendanceMutation,
+  useMyAttendanceQuery,
   useMyVoteQuery,
   useResolveDisputeMutation,
 } from '../queries/events';
@@ -65,6 +66,14 @@ export const EventPage: FC = () => {
   const myVoteQuery = useMyVoteQuery(isAuthenticated ? id : undefined);
   const hostClubQuery = useClubQuery(eventQuery.data?.clubId);
   const respondersQuery = useEventRespondersQuery(isAuthenticated ? id : undefined);
+  // F5-04: the caller's own attendance — drives the dispute controls even for a member who left
+  // the club (the member-gated responders query 403s for them). Only needed while the dispute
+  // window is open; 404 (organizer / non-participant) is expected and handled as "no dispute UI".
+  const myAttendanceQuery = useMyAttendanceQuery(
+    isAuthenticated && eventQuery.data?.attendanceMarked && !eventQuery.data?.attendanceFinalized
+      ? id
+      : undefined,
+  );
   useSetClubContext(eventQuery.data?.clubId);
 
   const castVoteMutation = useCastVoteMutation();
@@ -273,10 +282,17 @@ export const EventPage: FC = () => {
     isOrganizer && eventHappened && !event.attendanceMarked && event.attendanceFinalized;
   // Organizer's resolve list: confirmed participants whose mark is currently disputed.
   const disputedCandidates = attendanceCandidates.filter((r) => r.attendance === 'disputed');
-  // Current user's own attendance, for the participant-facing dispute controls.
-  const myResponder = (respondersQuery.data ?? []).find((r) => r.userId === userId);
-  const canDispute = disputeWindowOpen && myResponder?.attendance === 'absent';
-  const myDisputePending = disputeWindowOpen && myResponder?.attendance === 'disputed';
+  // F5-04: the participant's own attendance comes from /my-attendance (reachable without
+  // membership), not the member-gated responders list. canDispute is computed server-side
+  // (window open AND absent AND not yet terminal — F5-16), so the button can't ping-pong.
+  const myAttendance = myAttendanceQuery.data;
+  // AND with the live disputeWindowOpen too: the query is disabled once the event finalizes, so
+  // its cached canDispute could otherwise stay true against fresh event data showing finalized.
+  const canDispute = disputeWindowOpen && !!myAttendance?.canDispute;
+  const myDisputePending = disputeWindowOpen && myAttendance?.attendance === 'disputed';
+  // F5-16: the organizer rejected the dispute (resolve='не пришёл') — terminal, no re-dispute.
+  const myDisputeRejected =
+    disputeWindowOpen && myAttendance?.attendance === 'absent' && !!myAttendance?.disputeTerminal;
 
   // Phase-aware "who's coming". Stage 1: every responder (interest list, unchanged). Stage 2+:
   // only the confirmed roster — pending (still going/maybe, not confirmed), waitlisted, declined
@@ -544,14 +560,16 @@ export const EventPage: FC = () => {
       )}
 
       {/* Participant-facing dispute (ATT-3): shown to whoever was marked absent, while the window is open. */}
-      {(canDispute || myDisputePending) && (
+      {(canDispute || myDisputePending || myDisputeRejected) && (
         <>
           <div className="rd-section-sub-h">Ваша явка</div>
           <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: canDispute ? 10 : 14 }}>
             <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
               {myDisputePending
                 ? 'Вы оспорили отметку об отсутствии. Организатор примет решение до закрытия окна.'
-                : 'Организатор отметил вас как отсутствующего. Если это ошибка — оспорьте, и организатор пересмотрит.'}
+                : myDisputeRejected
+                  ? 'Организатор рассмотрел ваш спор — отметка «не пришёл» осталась.'
+                  : 'Организатор отметил вас как отсутствующего. Если это ошибка — оспорьте, и организатор пересмотрит.'}
             </div>
           </div>
           {canDispute && (

@@ -57,10 +57,11 @@ interface EventResponseRepository {
     fun findStage2TargetTelegramIds(eventId: UUID): List<Long>
 
     /**
-     * Returns telegram IDs of users whose ATTENDANCE matches the given value
-     * for the event. Used by NotificationService.sendAttendanceMarked.
+     * F5-15(2): telegram IDs for the given (eventId, userIds) — the participants who NEWLY became
+     * absent in this mark. Used by NotificationService.sendAttendanceMarked so a re-mark does not
+     * re-DM everyone already marked absent. Empty input → empty result (no query).
      */
-    fun findTelegramIdsByEventAndAttendance(eventId: UUID, attendance: AttendanceStatus): List<Long>
+    fun findTelegramIdsByEventAndUserIds(eventId: UUID, userIds: List<UUID>): List<Long>
 
     /**
      * Bulk-sets ATTENDANCE for the given (eventId, userId) pair to attended/absent.

@@ -52,7 +52,12 @@ interface EventRepository {
      */
     fun cancelActiveEventsByClub(clubId: UUID): Int
 
-    fun markAttendanceMarked(id: UUID)
+    /**
+     * Flags the event attendance-marked and stamps attendance_marked_at = now() (решение (б):
+     * the dispute window runs from mark time). Guarded on attendance_finalized=false (F5-09):
+     * returns 0 if the finalizer already finalized the event, so the caller can reject the mark.
+     */
+    fun markAttendanceMarked(id: UUID): Int
 
     // --- Reminder schedulers (EventReminderScheduler) ---
 
