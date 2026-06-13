@@ -485,4 +485,33 @@ class JooqSkladchinaRepository(
             )
             .execute()
     }
+
+    override fun cancelActiveByClub(clubId: UUID): Int {
+        val activeSkladchinaIds = dsl.select(SKLADCHINAS.ID)
+            .from(SKLADCHINAS)
+            .where(
+                SKLADCHINAS.CLUB_ID.eq(clubId)
+                    .and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active))
+            )
+        // Release pending participants first (pending → released, no reputation) while their
+        // skladchinas are still `active` and selectable. released ⇒ ReputationPolicy.financeKind
+        // returns null ⇒ no ledger row: deleting a club must not penalize anyone for "silence"
+        // (unlike expired_no_response, which closeInternal would assign past the deadline).
+        dsl.update(SKLADCHINA_PARTICIPANTS)
+            .set(SKLADCHINA_PARTICIPANTS.STATUS, SkladchinaParticipantStatus.released)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.`in`(activeSkladchinaIds)
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
+            )
+            .execute()
+
+        return dsl.update(SKLADCHINAS)
+            .set(SKLADCHINAS.STATUS, SkladchinaStatus.cancelled)
+            .set(SKLADCHINAS.UPDATED_AT, OffsetDateTime.now())
+            .where(
+                SKLADCHINAS.CLUB_ID.eq(clubId)
+                    .and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active))
+            )
+            .execute()
+    }
 }

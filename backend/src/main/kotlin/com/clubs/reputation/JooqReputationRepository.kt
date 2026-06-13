@@ -1,5 +1,6 @@
 package com.clubs.reputation
 
+import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.enums.ReputationAxis
 import com.clubs.generated.jooq.enums.ReputationKind
@@ -59,9 +60,11 @@ class JooqReputationRepository(
                 EVENTS.ID.eq(eventId)
                     .and(EVENTS.REPUTATION_PROCESSED.isFalse)
                     // Defensive: never mark an event that is not actually finalized+marked,
-                    // regardless of which caller hands us the id.
+                    // or that was cancelled (e.g. by the club-delete cascade) — reputation must
+                    // not accrue on it, regardless of which caller hands us the id.
                     .and(EVENTS.ATTENDANCE_FINALIZED.isTrue)
                     .and(EVENTS.ATTENDANCE_MARKED.isTrue)
+                    .and(EVENTS.STATUS.ne(EventStatus.cancelled))
             )
             .execute() > 0
 

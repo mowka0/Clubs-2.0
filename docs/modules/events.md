@@ -271,8 +271,54 @@ UI спора/резолва добавлен в Блоке 1 (см. ниже §
 |----------|-----------|
 | Событие уже `completed`/`cancelled` | Не трогается (`status IN` фильтр) |
 | Событие в пределах grace-периода (`event_datetime` в прошлом < 6ч назад) | Остаётся в текущем статусе до следующего прогона |
-| Событие `cancelled` с прошедшей датой | Остаётся `cancelled` (организаторская отмена не перезатирается) |
+| Событие `cancelled` с прошедшей датой | Остаётся `cancelled` (отмена при удалении клуба не перезатирается; см. § «Каскадная отмена событий при удалении клуба») |
 | attendance ещё не финализирован | Статус → `completed` независимо; attendance-scheduler работает по своим флагам |
+
+---
+
+## Каскадная отмена событий при удалении клуба (`upcoming/stage_1/stage_2 → cancelled`)
+
+> **Реализовано** в `bugfix/club-delete-cascade` (2026-06-13). Это **первый** код-путь,
+> который реально выставляет `events.status = cancelled` — до него событий в статусе
+> `cancelled` не существовало (организаторской отмены события в коде не было; единственный
+> `cancelled`-corner-case в спеке был гипотетическим). Поэтому фича вскрыла и закрыла gap
+> в финализации (см. ниже).
+
+### Цель
+Soft-delete клуба (`ClubService.deleteClub`) не должен оставлять «живые» события позади:
+иначе шедулеры продолжают их обрабатывать (фантомные «отметьте явку»-DM, поздние
+penalty-флоу), а их страницы упираются в скрытый клуб. При удалении клуба все его
+**нефинализированные** события отменяются.
+
+### Логика отмены
+- `EventRepository.cancelActiveEventsByClub(clubId)` (в той же `@Transactional`, что и
+  soft-delete; **перед** `clubRepository.softDelete`):
+  `UPDATE events SET status = cancelled, updated_at = now()
+   WHERE club_id = :id AND status IN (upcoming, stage_1, stage_2) AND attendance_finalized = false`
+- **`attendance_finalized = false` — load-bearing:** `stage_2`-событие может быть уже
+  отмечено по явке (`attendance_marked`, отметка разрешена в ~6ч до completion-sweep).
+  Такое событие, если оно уже **финализировано**, имеет запертую репутацию — его отменять
+  нельзя. Завершённые (`completed`) / уже `cancelled` события тоже не трогаются (`status IN` фильтр).
+- **Репутацию каскад не трогает** (продуктовое требование 2026-06-13): финализированные
+  события сохраняют свои ledger-строки, отменяются только ещё-не-финализированные.
+
+### Гарды финализации — отменённое событие не начисляет репутацию
+Отмена может зацепить событие, которое **уже `attendance_marked`, но ещё не финализировано**
+(`stage_2`, отмеченное в окне до sweep'а). Без гардов шедулер `AttendanceService.finalizeAttendance`
+позже финализировал бы его и начислил репутацию за удалённый клуб. Закрыто двумя гардами:
+- `JooqEventRepository.finalizeAttendanceBefore` теперь исключает `status = cancelled`
+  (`AND status <> cancelled`) — зеркалит соседний `neutrallyFinalizeUnmarkedBefore`, который
+  уже исключал `cancelled`. **Это и был баг-блокер, найденный ревью:** `finalizeAttendanceBefore`
+  единственный из finalize-методов не фильтровал `cancelled`.
+- `JooqReputationRepository.claimEvent` — defensive-гард `AND status <> cancelled` (в дополнение
+  к `attendance_finalized` / `attendance_marked`): отменённое событие не клеймится под репутацию
+  никаким caller'ом.
+
+### Связь с автозавершением и attendance-flow
+В отличие от `EventCompletionService` (status-независимого, гейтит на флагах), здесь статус
+`cancelled` **load-bearing для финализации** — именно поэтому добавлены гарды выше. Складчины
+этого же клуба отменяются параллельно (`SkladchinaRepository.cancelActiveByClub`) — см.
+`docs/modules/skladchina.md` § «Удаление клуба» и `docs/modules/clubs.md` § DELETE.
 
 ---
 

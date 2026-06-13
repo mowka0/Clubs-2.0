@@ -5,9 +5,11 @@ import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
+import com.clubs.event.EventRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.membership.MembershipRepository
+import com.clubs.skladchina.SkladchinaRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -20,6 +22,8 @@ private const val INVITE_CODE_LENGTH = 16
 class ClubService(
     private val clubRepository: ClubRepository,
     private val membershipRepository: MembershipRepository,
+    private val eventRepository: EventRepository,
+    private val skladchinaRepository: SkladchinaRepository,
     private val mapper: ClubMapper
 ) {
 
@@ -98,8 +102,22 @@ class ClubService(
     fun deleteClub(id: UUID, userId: UUID) {
         val club = clubRepository.findById(id) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club owner can delete it")
+
+        // Cascade: a soft-deleted club must not leave live events/skladchinas behind. Otherwise
+        // schedulers keep processing them (phantom "mark attendance" DMs, late expiry penalties)
+        // and their detail pages 404 on the now-hidden club. We cancel non-finalized events and
+        // active skladchinas via the repositories directly — NOT through their Services — so the
+        // cascade never touches reputation (finalized events keep their ledger; pending skladchina
+        // participants are released, not penalized). See docs/backlog/orphan-memberships-cleanup.md.
+        // Memberships/applications need no action here: "my clubs" already filter clubs.is_active.
+        val cancelledEvents = eventRepository.cancelActiveEventsByClub(id)
+        val cancelledSkladchinas = skladchinaRepository.cancelActiveByClub(id)
+
         clubRepository.softDelete(id)
-        log.info("Club soft-deleted: id={} userId={}", id, userId)
+        log.info(
+            "Club soft-deleted: id={} userId={} cancelledEvents={} cancelledSkladchinas={}",
+            id, userId, cancelledEvents, cancelledSkladchinas
+        )
     }
 
     private fun generateInviteCode(): String =
