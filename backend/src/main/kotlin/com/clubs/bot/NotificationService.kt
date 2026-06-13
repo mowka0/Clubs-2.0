@@ -53,15 +53,22 @@ class NotificationService(
     }
 
     /**
-     * Notify going/maybe voters when Stage 2 starts, asking them to confirm.
+     * Notify going/maybe voters when Stage 2 starts, asking them to confirm (PRD §4.4.2 step 1).
+     * not_going voters are excluded — they have nothing to confirm (GAP-009).
      */
     @Async
     fun sendStage2Started(event: Event) {
-        val voterTelegramIds = eventResponseRepository.findResponderTelegramIdsByEventId(event.id)
+        val voterTelegramIds = eventResponseRepository.findStage2TargetTelegramIds(event.id)
+        if (voterTelegramIds.isEmpty()) {
+            log.info("Stage 2 DM SKIPPED — no going/maybe voters for eventId={}", event.id)
+            return
+        }
+        log.info("Stage 2 DM: eventId={} recipients={}", event.id, voterTelegramIds.size)
         val text = "⏰ Этап 2 начался!\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\nПодтвердите или откажитесь от участия в приложении:"
+        val webAppPath = "/events/${event.id}"
 
         voterTelegramIds.forEach { telegramId ->
-            sendDm(telegramId.toString(), text)
+            sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "✅ Подтвердить участие")
         }
     }
 

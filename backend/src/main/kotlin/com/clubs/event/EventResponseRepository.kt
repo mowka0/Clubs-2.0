@@ -17,6 +17,14 @@ interface EventResponseRepository {
 
     fun countConfirmed(eventId: UUID): Int
 
+    /**
+     * S2-01/F5-07/F5-11: takes a per-event transaction-scoped Postgres advisory lock
+     * (`pg_advisory_xact_lock`) serializing Stage 2 slot mutations. Must be called inside a
+     * transaction; released automatically on commit/rollback. Both confirm and decline take it
+     * before reading slot state, so capacity checks and waitlist promotion never race.
+     */
+    fun lockEventSlots(eventId: UUID)
+
     fun findFirstWaitlisted(eventId: UUID): EventResponse?
 
     fun updateStage2Vote(id: UUID, vote: Stage_2Vote, finalStatus: FinalStatus): EventResponse
@@ -42,13 +50,11 @@ interface EventResponseRepository {
     fun findUnconfirmedVoterTelegramIds(eventId: UUID): List<Long>
 
     /**
-     * Returns telegram IDs of users who have ANY stage_1_vote response for the event
-     * (no filter by vote value). Used by NotificationService.sendStage2Started.
-     * NOTE: name reflects current SQL semantics (no Stage_1Vote filter).
-     * PRD says reminder should target going+maybe — tracked as GAP in
-     * docs/backlog/telegram-bot-prd-gaps.md.
+     * Telegram ids of going/maybe voters — the users who must confirm participation when
+     * Stage 2 starts (PRD §4.4.2 step 1). not_going voters have nothing to confirm and are
+     * excluded (GAP-009). Used by NotificationService.sendStage2Started.
      */
-    fun findResponderTelegramIdsByEventId(eventId: UUID): List<Long>
+    fun findStage2TargetTelegramIds(eventId: UUID): List<Long>
 
     /**
      * Returns telegram IDs of users whose ATTENDANCE matches the given value

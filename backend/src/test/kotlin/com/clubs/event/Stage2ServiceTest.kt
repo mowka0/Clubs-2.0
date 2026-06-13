@@ -8,16 +8,20 @@ import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
 import com.clubs.membership.MembershipRepository
 import io.mockk.every
+import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.verify
+import io.mockk.verifyOrder
 import org.junit.jupiter.api.Test
+import org.springframework.context.ApplicationEventPublisher
 import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 /**
- * Stage 2 window-close (Bug B) and auto-expire delegation (Feature A).
+ * Stage 2 window-close (Bug B), auto-expire delegation (Feature A), Stage-2-started DM
+ * publication (S2T-2) and slot-lock ordering (S2-01/F5-07, F5-11).
  * Bug B: confirm/decline must be rejected once the event has started, even while the
  * status still reads stage_2 (the hourly completion sweep hasn't run yet).
  */
@@ -26,7 +30,8 @@ class Stage2ServiceTest {
     private val eventRepository = mockk<EventRepository>()
     private val eventResponseRepository = mockk<EventResponseRepository>(relaxed = true)
     private val membershipRepository = mockk<MembershipRepository>()
-    private val service = Stage2Service(eventRepository, eventResponseRepository, membershipRepository)
+    private val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
+    private val service = Stage2Service(eventRepository, eventResponseRepository, membershipRepository, eventPublisher, stage2TriggerMinutesBefore = 1440)
 
     private val eventId = UUID.randomUUID()
     private val userId = UUID.randomUUID()
@@ -134,6 +139,81 @@ class Stage2ServiceTest {
 
         assertFailsWith<ForbiddenException> { service.declineParticipation(eventId, userId) }
         verify(exactly = 0) { eventResponseRepository.updateStage2Vote(any(), any(), any()) }
+    }
+
+    @Test
+    fun `stage 2 trigger publishes Stage2StartedEvent so voters get the confirm DM`() {
+        // S2T-2: without this publication nobody learns Stage 2 started and everyone
+        // auto-expires at event start.
+        val event = event(eventDatetime = OffsetDateTime.now().plusDays(1), status = EventStatus.stage_1)
+        every { eventRepository.findEventsToTriggerStage2(any()) } returns listOf(event)
+        justRun { eventRepository.transitionToStage2(eventId) }
+        every { eventResponseRepository.findGoingByEventOrderByTimestamp(eventId) } returns emptyList()
+
+        service.triggerStage2ForReadyEvents()
+
+        verify(exactly = 1) { eventPublisher.publishEvent(Stage2StartedEvent(event)) }
+    }
+
+    @Test
+    fun `stage 2 trigger publishes after the waitlist overflow is assigned`() {
+        // The AFTER_COMMIT listener reads voter rows fresh — but within the transaction the
+        // publication must follow the overflow assignment so a failed assignment also skips the DM.
+        val event = event(eventDatetime = OffsetDateTime.now().plusDays(1), status = EventStatus.stage_1)
+        val overflow = response(stage1 = Stage_1Vote.going, stage2 = null)
+        every { eventRepository.findEventsToTriggerStage2(any()) } returns listOf(event)
+        justRun { eventRepository.transitionToStage2(eventId) }
+        // participantLimit = 10 → 11 going voters, the last one overflows to waitlist.
+        every { eventResponseRepository.findGoingByEventOrderByTimestamp(eventId) } returns
+            List(10) { response(stage1 = Stage_1Vote.going, stage2 = null) } + overflow
+
+        service.triggerStage2ForReadyEvents()
+
+        verifyOrder {
+            eventResponseRepository.updateStage2Vote(overflow.id, Stage_2Vote.waitlisted, FinalStatus.waitlisted)
+            eventPublisher.publishEvent(Stage2StartedEvent(event))
+        }
+    }
+
+    @Test
+    fun `confirm takes the per-event slot lock before reading slot state`() {
+        // S2-01/F5-07: the capacity check is a read-modify-write — the lock must come first,
+        // so a blocked transaction re-reads committed state after acquiring it.
+        every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = null)
+        every { eventResponseRepository.countConfirmed(eventId) } returns 0
+        every { eventResponseRepository.updateStage2Vote(any(), any(), any()) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+
+        service.confirmParticipation(eventId, userId)
+
+        verifyOrder {
+            eventResponseRepository.lockEventSlots(eventId)
+            eventResponseRepository.findByEventAndUser(eventId, userId)
+            eventResponseRepository.countConfirmed(eventId)
+        }
+    }
+
+    @Test
+    fun `decline takes the per-event slot lock before promoting from the waitlist`() {
+        // F5-11: two unserialized declines would promote the same waitlisted user twice,
+        // permanently losing a freed slot.
+        every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+        every { eventResponseRepository.findFirstWaitlisted(eventId) } returns null
+        every { eventResponseRepository.countConfirmed(eventId) } returns 0
+
+        service.declineParticipation(eventId, userId)
+
+        verifyOrder {
+            eventResponseRepository.lockEventSlots(eventId)
+            eventResponseRepository.findByEventAndUser(eventId, userId)
+            eventResponseRepository.findFirstWaitlisted(eventId)
+        }
     }
 
     @Test
