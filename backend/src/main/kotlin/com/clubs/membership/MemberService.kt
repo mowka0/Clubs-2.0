@@ -3,6 +3,7 @@ package com.clubs.membership
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.generated.jooq.enums.MembershipRole
+import com.clubs.interest.InterestRepository
 import com.clubs.reputation.ReputationPolicy
 import com.clubs.reputation.ReputationRepository
 import com.clubs.reputation.TrustService
@@ -17,6 +18,7 @@ class MemberService(
     private val userRepository: UserRepository,
     private val reputationRepository: ReputationRepository,
     private val trustService: TrustService,
+    private val interestRepository: InterestRepository,
     private val mapper: MembershipMapper
 ) {
 
@@ -51,19 +53,24 @@ class MemberService(
         // the threshold (or no row, or owner in own club) the whole block is suppressed
         // and the frontend renders "Новичок" / the organizer framing (by role).
         val show = reputation != null && ReputationPolicy.isShown(reputation.outcomeCount)
-        val trust = if (show) trustService.trustForUserInClub(userId, clubId) else null
+        // One ledger read powers both per-club rings (Trust + skladchina); null below the gate.
+        val summary = if (show) trustService.clubSummary(userId, clubId) else null
         return MemberProfileDto(
             userId = userId,
             clubId = clubId,
             firstName = user.firstName,
             username = user.telegramUsername,
             avatarUrl = user.avatarUrl,
+            bio = user.bio,
+            interests = interestRepository.findUserInterestNames(userId),
             role = (membership?.role ?: MembershipRole.member).literal,
-            trust = trust,
+            trust = summary?.trust,
             promiseFulfillmentPct = if (show) reputation!!.promiseFulfillmentPct else null,
             totalConfirmations = if (show) reputation!!.totalConfirmations else null,
             totalAttendances = if (show) reputation!!.totalAttendances else null,
-            spontaneityCount = if (show) reputation!!.spontaneityCount else null
+            spontaneityCount = if (show) reputation!!.spontaneityCount else null,
+            skladchinaPaid = summary?.skladchinaPaid,
+            skladchinaTotal = summary?.skladchinaTotal
         )
     }
 }

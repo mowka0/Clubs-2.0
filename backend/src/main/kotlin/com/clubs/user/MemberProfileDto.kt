@@ -9,6 +9,10 @@ data class MemberProfileDto(
     val firstName: String,
     val username: String?,
     val avatarUrl: String?,
+    // Public profile fields, shown to every club member on the member card alongside the
+    // per-club reputation rings. Already public on the profile and the application card.
+    val bio: String?,
+    val interests: List<String>,
     // Membership role ("organizer" = club owner). The frontend uses it to render the
     // organizer framing when trust is null in the user's own club.
     val role: String,
@@ -18,5 +22,9 @@ data class MemberProfileDto(
     val totalConfirmations: Int?,
     val totalAttendances: Int?,
     // "Возможно → Подтвердил → Пришёл": пришёл, хотя обещал только «возможно». Позитивный сигнал.
-    val spontaneityCount: Int?
+    val spontaneityCount: Int?,
+    // Reputation-affecting skladchina record in THIS club: paid / (paid + expired). null when the
+    // reputation block is suppressed; the frontend hides the "Сборы" ring when total == 0.
+    val skladchinaPaid: Int?,
+    val skladchinaTotal: Int?
 )

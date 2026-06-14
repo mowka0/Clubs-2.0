@@ -529,6 +529,25 @@ data class GlobalTrustDto(
 подавляются вместе с ним. Сортировка списка участников (`GET /api/clubs/:id/members`) —
 по **отображаемому Trust** DESC в `MemberService` (новички/null уходят вниз), а не SQL `ORDER BY`.
 
+### H7 — карточка участника `MemberProfileModal` (per-club; реализовано 2026-06-14)
+
+**Только per-club**, без глобального уровня/бейджей: глобальный сигнал на клубной поверхности
+смысловая ошибка (PR-e «уровень другим в мембер-листе» отвергнут PO). Хэндофф/дизайн —
+`docs/backlog/member-rep-cards-handoff.md`, мокап `docs/design/member-rep-redesign/mockups/final.html`.
+
+`MemberProfileDto` обогащён (`GET /api/clubs/:id/members/:userId`):
+- `bio: String?`, `interests: List<String>` — публичны (показываются всем членам клуба, как в профиле).
+- `skladchinaPaid: Int?`, `skladchinaTotal: Int?` — **репутационные** складчины: оплачено / (оплачено+просрочено).
+  Не-репутационные складчины не пишут ledger-строк → исключены по построению. `null` под гейтом «Новичок».
+
+UI: 3 кольца-доната в один ряд — **Надёжность** (Trust 0–100, тир-цвет: зелёный ≥70 / accent / danger),
+**Посещаемость** (`totalAttendances/totalConfirmations`), **Сборы** (`skladchinaPaid/skladchinaTotal`).
+Посещаемость и Сборы рендерятся условно (нет данных → кольца нет — без пустых «0/0»); Надёжность всегда.
++ секции «О себе» / «Интересы». Гейт «Новичок»/организаторская рамка сохранён.
+
+Надёжность + Сборы считаются из **одного** ledger-чтения (`TrustService.clubSummary`, заменил
+`trustForUserInClub` — без второго скана того же `(user, club)`).
+
 ## H5 — выход-с-обязательствами (PR-b) ✅ реализовано
 
 Дыра B: `MembershipService.leaveFreeClub` хард-DELETE'ил `confirmed` `event_responses` ДО отмены →
