@@ -28,7 +28,7 @@
 ### Неприкосновенное (исторические данные)
 Cascade при выходе из клуба **никогда** не трогает следующее, даже для free-клубов:
 
-- **`user_club_reputation`** — per-club метрики. Сквозная репутация профиля (`Reputation.kt`, `Cross-club aggregate`) считается агрегатом этих записей по всем клубам. Удаление = потеря вклада клуба в сквозной reliability_index профиля.
+- **`user_club_reputation`** — per-club метрики. Сквозная репутация профиля (`Reputation.kt`, `Cross-club aggregate`) считается агрегатом этих записей по всем клубам. Cascade **никогда не удаляет** прошлый вклад. (P1b PR-b: выход **дописывает** в `reputation_ledger` штраф-строки за брошенные обязательства и делает recompute — кэш обновляется новым значением, но историческое сырьё не стирается. Это начисление, не удаление.)
 - **`event_responses` для завершённых событий** (status `completed` / `cancelled`) — история attendance. Используется для счётчика «посещений» и для расчёта спонтанности/железобетонности в profile reputation. Cascade удаляет только записи для **активных/будущих** событий (`upcoming`/`stage_1`/`stage_2`).
 - **`skladchina_participants` в закрытых сборах** (status `closed_success` / `closed_failed` / `cancelled`) — история обязательств. Cascade удаляет только участие в **активных** сборах (`status='active'`).
 - **`transactions`** — финансовая история (для аудита, бухгалтерии, возможных рефандов).
@@ -52,13 +52,17 @@ Caller = владелец membership (`principal.userId`). Параметра us
 
 1. Найти membership для (caller, clubId) со статусом `active` или `grace_period` → иначе **404** "Membership not found".
 2. Если caller = `club.owner_id` → **400** "Owner cannot leave the club".
-3. Cascade в одной транзакции:
+3. **Штраф за брошенные обязательства (P1b PR-b) — ДО каскада, в той же транзакции.** Enumerate открытые обязательства, записать штрафы в `reputation_ledger`, потом каскад (см. § «Выход-с-обязательствами» ниже):
+   - confirmed бронь на активном НЕ-finalized событии → `no_show` (**−200**), `occurred_at = event_datetime`;
+   - pending участие в `affects_reputation` складчине (статус `active`) → `skladchina_expired` (**−40**), `occurred_at = deadline`.
+4. Cascade в одной транзакции:
    - DELETE `skladchina_participants` где `user_id=caller AND skladchina_id IN (SELECT id FROM skladchinas WHERE club_id=:clubId AND status='active')`.
-   - DELETE `event_responses` где `user_id=caller AND event_id IN (SELECT id FROM events WHERE club_id=:clubId AND status IN ('upcoming','stage_1','stage_2'))`.
+   - DELETE `event_responses` где `user_id=caller AND event_id IN (SELECT id FROM events WHERE club_id=:clubId AND status IN ('upcoming','stage_1','stage_2') AND NOT attendance_finalized)`. **attendance-finalized событие исключено** — его реальный исход (attended/no_show) принадлежит reputation-пайплайну, а не выходу (событие может быть finalized, пока статус ещё `stage_2`).
+   - **Промоут листа ожидания:** на каждый освободившийся confirmed-слот первый `waitlisted` (по `stage_1_timestamp`) → `confirmed`. Под `pg_advisory_xact_lock` на событие (как confirm/decline) — без гонок с подтверждением.
    - DELETE `applications` где `user_id=caller AND club_id=:clubId AND status IN ('pending','approved')` — устраняет залипшие approved-but-unpaid состояния и **гарантирует, что повторное вступление в приватный клуб снова требует new заявки**.
-4. UPDATE `memberships`: `status='cancelled'`, `updated_at=now()`. Поля `joined_at` и `subscription_expires_at` НЕ трогаем (история).
-5. UPDATE `clubs.member_count -= 1`.
-6. НЕ трогаем: `user_club_reputation`, `transactions`, rejected/auto_rejected applications, прошлые завершённые события/сборы.
+5. UPDATE `memberships`: `status='cancelled'`, `updated_at=now()`. Поля `joined_at` и `subscription_expires_at` НЕ трогаем (история).
+6. UPDATE `clubs.member_count -= 1`.
+7. НЕ трогаем: `user_club_reputation` сырьё прошлых исходов, `transactions`, rejected/auto_rejected applications, прошлые завершённые события/сборы. (Per-club Trust пересчитывается из ledger по факту новых штраф-строк — это и есть «не трогаем кэш напрямую, recompute из ledger».)
 
 ### Бизнес-правила (paid club)
 
@@ -69,6 +73,35 @@ Caller = владелец membership (`principal.userId`). Параметра us
 5. `clubs.member_count` НЕ декрементим — пользователь формально остаётся до expire.
 6. Cascade на `event_responses`/`skladchina_participants` НЕ применяется — RSVP и членство в существующих сборах сохраняются до конца оплаченного периода.
 7. В новые сборы cancelled-пользователя нельзя добавить (см. Skladchina-интеграция).
+
+## Выход-с-обязательствами (P1b PR-b)
+
+Закрывает дыру B: раньше free-leave хард-DELETE'ил `confirmed` `event_responses` и pending складчина-участия ДО какого-либо начисления → штраф −200 за брошенную бронь не приземлялся, выход с обязательств был бесплатен. Теперь обязательства **перечисляются и штрафуются ДО каскада**, в той же `@Transactional`.
+
+**Инвариант:** каскад + штраф вместе покрывают каждую удаляемую строку-обязательство ровно один раз.
+- **События:** штраф покрывает confirmed-брони на НЕ-finalized событиях; finalized события каскад **не удаляет** (их реальный исход пишет reputation-пайплайн). Обе стороны исключают finalized — scope совпадает.
+- **Складчины:** штраф покрывает все pending-участия в активных `affects_reputation` складчинах **без фильтра по дедлайну**. Каскад удаляет ровно их же. Дедлайн не фильтруется намеренно: участие с уже прошедшим дедлайном каскад всё равно удалит, и без штрафа-на-выходе оно ускользнуло бы и от выхода, и от естественного expiry (натуральный исход был бы тот же `skladchina_expired −40`).
+
+**Идемпотентность:** `reputation_ledger` UNIQUE `(user_id, source_type, source_id)` + `ON CONFLICT DO NOTHING`. Натуральная строка при последующем закрытии события/складчины сталкивается с exit-строкой → выигрывает первая (exit), задвоения нет. Повторный/двойной выход невозможен (membership уже `cancelled` → 404), а если бы случился — UNIQUE защищает.
+
+**Paid-клуб не штрафует** (`leavePaidClub` не каскадит — доступ до конца подписки, обязательства гасятся естественно).
+
+**Видимость (H8):** величины штрафов (−200/−40) — internal. Наружу (preview + UI) идёт только **счётчик** брошенных обязательств.
+
+### `GET /api/clubs/{id}/leave-preview`
+
+Пре-выходный счётчик для confirm-диалога — сколько открытых обязательств сломает выход.
+
+```
+Path: id = clubId (UUID)
+Auth: JWT обязателен; caller = принципал (нельзя смотреть за другого)
+Response 200: LeavePreviewDto { eventObligations: Int, skladchinaObligations: Int, totalObligations: Int }
+Errors: 400 (owner), 404 (нет active membership)
+```
+
+- Только счётчики — penalty-математика server-side. Paid-клуб → все нули (ничего не ломается до expire).
+- Та же enumerate-логика, что и сам выход (те же 2 SELECT), без записи.
+- Frontend: при открытии модалки выхода из free-клуба тянет preview (`useLeavePreviewQuery`, enabled = модалка открыта И free), и при `totalObligations > 0` показывает предупреждение «Вы бросите N обязательств перед клубом — это снизит вашу надёжность».
 
 ### Видимость cancelled-в-периоде membership
 
@@ -136,6 +169,40 @@ Endpoint используется UI создания складчины. Рас
 **WHEN** GET /api/clubs/X/members
 **THEN** Z в ответе отсутствует
 
+### AC-8: Free leave с confirmed бронью → −200 ДО каскада (P1b PR-b)
+**GIVEN** caller — active member free-клуба X; есть активное НЕ-finalized событие со `final_status=confirmed` бронью caller
+**WHEN** POST /api/clubs/X/leave
+**THEN** в `reputation_ledger` строка `no_show` (−200), `source_type=event`, `occurred_at=event_datetime`
+**AND** строка `event_responses` удалена ПОСЛЕ начисления
+**AND** повторная натуральная `no_show` для того же события не задваивает (UNIQUE, остаётся −200)
+
+### AC-9: Free leave с pending reputation складчиной → −40 (P1b PR-b)
+**GIVEN** caller — active member free-клуба X; есть `active` `affects_reputation` складчина с pending-участием caller
+**WHEN** POST /api/clubs/X/leave
+**THEN** в `reputation_ledger` строка `skladchina_expired` (−40), `source_type=skladchina`, `occurred_at=deadline`
+**AND** штраф пишется даже при уже прошедшем дедлайне (каскад иначе стёр бы участие без штрафа)
+**AND** не-`affects_reputation` складчина штрафа не даёт
+
+### AC-10: Finalized-but-stage_2 событие не стирается выходом
+**GIVEN** caller — active member free-клуба X; событие `attendance_finalized=true` (статус ещё `stage_2`, репутация не обработана) с confirmed бронью caller, отмеченной `absent`
+**WHEN** POST /api/clubs/X/leave
+**THEN** штраф-на-выходе для этого события НЕ пишется (enumerate исключает finalized)
+**AND** `event_responses` строка сохранена (каскад исключает finalized)
+**AND** последующий `processFinalizedEvent` пишет реальный исход `no_show` (−200)
+
+### AC-11: Промоут листа ожидания на освободившийся слот
+**GIVEN** активное событие лимит=1: caller=confirmed, второй участник=waitlisted
+**WHEN** caller выходит из free-клуба
+**THEN** бронь caller удалена, waitlisted-участник промоутнут в `confirmed`
+**AND** caller всё равно получает −200 (промоут смягчает план организатора, но не отменяет нарушенное обещание)
+
+### AC-12: Leave-preview счётчик
+**GIVEN** caller — active member free-клуба X с 1 confirmed бронью + 1 pending reputation складчиной
+**WHEN** GET /api/clubs/X/leave-preview
+**THEN** `{ eventObligations: 1, skladchinaObligations: 1, totalObligations: 2 }`
+**AND** для paid-клуба — все нули
+**AND** owner → 400, не-member → 404
+
 ## Non-functional
 
 ### Транзакционность
@@ -155,9 +222,11 @@ Endpoint используется UI создания складчины. Рас
 - Rate-limiting через bucket4j (общий policy для membership-операций)
 
 ### Логирование
-- INFO `"User left free club: clubId={} userId={} cascadedSkladchinas={} cascadedEventResponses={}"`
+- INFO `"User left free club: clubId={} userId={} eventNoShows={} skladchinaExpiries={} promotedWaitlist={} cascadedSkladchinas={} cascadedEventResponses={} cascadedApplications={}"`
+- INFO `"Exit penalties written: userId={} clubId={} eventNoShows={} skladchinaExpiries={}"` (из `ReputationService.penalizeExit`)
 - INFO `"User cancelled paid subscription via /leave: clubId={} userId={}"`
 - WARN `"Owner attempted to leave own club: clubId={} userId={}"`
+- Величины штрафов (−200/−40) в логи НЕ пишутся (internal) — только счётчики.
 
 ## Интеграции
 
@@ -166,16 +235,19 @@ Endpoint используется UI создания складчины. Рас
 - Возврат средств не реализуется (out of scope)
 
 ### С events
-- Cascade удаляет `event_responses` для активных events (`upcoming`/`stage_1`/`stage_2`)
-- Прошлые/завершённые/отменённые events — сохраняются (история attendance, репутация)
-- В коде `EventResponseRepository` добавляется метод `deleteByUserAndClubAndActiveEvents(userId, clubId)`
+- Cascade удаляет `event_responses` для активных **НЕ-finalized** events (`upcoming`/`stage_1`/`stage_2` AND NOT `attendance_finalized`)
+- Прошлые/завершённые/отменённые **и attendance-finalized** events — сохраняются (история attendance / не-обработанный исход для reputation-пайплайна; событие бывает finalized, пока статус ещё `stage_2`)
+- `EventResponseRepository.deleteByUserAndClubAndActiveEvents(userId, clubId)` (каскад) + `findConfirmedActiveEventObligations(userId, clubId)` (enumerate для штрафа) + `promoteFirstWaitlisted(eventId)` (промоут слота)
 
 ### С skladchina
 - Cascade удаляет `skladchina_participants` для активных сборов (`status='active'`)
 - Завершённые сборы — сохраняются
-- Reputation не пересчитывается (выход не считается «отказом» от обязательств в смысле штрафа)
-- В `SkladchinaParticipantRepository` добавляется метод `deleteByUserAndClubAndActiveSkladchinas(userId, clubId)`
+- **Reputation пересчитывается (P1b PR-b):** брошенное pending-участие в `affects_reputation` складчине → `skladchina_expired −40` ДО каскада (см. § «Выход-с-обязательствами»). Не-`affects_reputation` складчины штрафа не дают.
+- `SkladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(userId, clubId)` (каскад) + `findPendingReputationObligations(userId, clubId)` (enumerate для штрафа)
 - Новые сборы: в `MemberService` (или новом методе) фильтр расширяется до active+cancelled-в-периоде
+
+### С reputation
+- `MembershipService` инжектит `ReputationService`; выход зовёт `penalizeExit(userId, clubId, eventNoShows, skladchinaExpiries)` — он строит ledger-строки (kind/points/axis/source — внутри reputation-модуля) и зовёт `appendAndRecompute`. Membership передаёт только `ExitObligation(sourceId, occurredAt)`.
 
 ### С reputation
 - `user_club_reputation` НЕ удаляется при leave — это вклад клуба в сквозную репутацию профиля. Удаление исказило бы агрегированный `reliability_index`, `promiseFulfillmentPct`, счётчики `totalConfirmations` / `totalAttendances` в профиле пользователя

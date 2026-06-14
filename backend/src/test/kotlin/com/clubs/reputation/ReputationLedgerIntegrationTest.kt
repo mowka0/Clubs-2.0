@@ -1,9 +1,13 @@
 package com.clubs.reputation
 
+import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.enums.ReputationAxis
 import com.clubs.generated.jooq.enums.ReputationKind
 import com.clubs.generated.jooq.enums.ReputationSource
+import com.clubs.generated.jooq.tables.references.EVENTS
+import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import com.clubs.generated.jooq.tables.references.REPUTATION_LEDGER
+import com.clubs.generated.jooq.tables.references.SKLADCHINAS
 import com.clubs.generated.jooq.tables.references.USER_CLUB_REPUTATION
 import com.clubs.membership.MemberService
 import com.clubs.membership.MembershipService
@@ -374,6 +378,162 @@ class ReputationLedgerIntegrationTest {
         assertTrue(memberService.getMemberProfile(clubId, veteran, ownerId).trust!! >= 70)
     }
 
+    // --- PR-b: exit-with-obligations (AC-P1b-5) ---
+
+    @Test
+    fun `leaving a free club penalizes a confirmed booking before the cascade deletes it (AC-P1b-5)`() {
+        val member = insertUser("Leaver"); insertMembership(member, "member")
+        val eventId = insertActiveEvent()
+        insertConfirmed(eventId, member, "going", null) // active confirmed booking, not yet happened
+
+        membershipService.leaveClub(clubId, member)
+
+        // −200 no_show written for the abandoned booking; counters match a natural no_show.
+        assertReputation(member, reliability = -200, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
+        assertEquals(ReputationKind.no_show, soleKind(member, eventId))
+        // occurred_at is the behaviour time (event datetime), not leave time — the decay anchor.
+        assertEquals(eventDatetime(eventId).toInstant(), ledgerOccurredAt(member, eventId).toInstant())
+        // the source booking is cascaded away AFTER the penalty landed.
+        assertFalse(eventResponseExists(eventId, member), "confirmed booking cascaded away")
+    }
+
+    @Test
+    fun `exit no_show is not doubled by a later natural close on the same event (UNIQUE, AC-P1b-5)`() {
+        val member = insertUser("Leaver")
+        val eventId = insertActiveEvent()
+        reputationService.penalizeExit(
+            member, clubId, listOf(ExitObligation(eventId, OffsetDateTime.now().plusDays(3))), emptyList()
+        )
+        assertReputation(member, reliability = -200, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
+        assertEquals(1, ledgerRows(member, eventId))
+
+        // A later natural finalize tries to write a no_show for the same (user, event) → UNIQUE
+        // collision, ON CONFLICT DO NOTHING. No second row, reliability stays −200 (not −400).
+        reputationService.appendAndRecompute(
+            listOf(
+                LedgerEntry(
+                    member, clubId, ReputationAxis.attendance, ReputationKind.no_show,
+                    ReputationPolicy.pointsFor(ReputationKind.no_show), OffsetDateTime.now().plusDays(3),
+                    ReputationSource.event, eventId
+                )
+            )
+        )
+
+        assertReputation(member, reliability = -200, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
+        assertEquals(1, ledgerRows(member, eventId), "still exactly one ledger row")
+    }
+
+    @Test
+    fun `leaving penalizes a pending reputation skladchina with an unexpired deadline (−40)`() {
+        val member = insertUser("Leaver"); insertMembership(member, "member")
+        val deadline = OffsetDateTime.now().plusDays(2)
+        val skladchinaId = insertActiveSkladchina(affectsReputation = true, deadline = deadline)
+        insertPendingParticipant(skladchinaId, member)
+
+        membershipService.leaveClub(clubId, member)
+
+        assertReputation(member, reliability = -40, conf = 0, att = 0, spont = 0, pct = "0.00", outcome = 1)
+        assertEquals(ReputationKind.skladchina_expired, soleKind(member, skladchinaId))
+        assertEquals(skladchinaDeadline(skladchinaId).toInstant(), ledgerOccurredAt(member, skladchinaId).toInstant())
+    }
+
+    @Test
+    fun `leaving penalizes a pending reputation skladchina even with a passed deadline (cascade would erase it)`() {
+        val member = insertUser("Leaver"); insertMembership(member, "member")
+        // Deadline already passed but the skladchina is still active (the expiry sweep hasn't fired).
+        // The cascade deletes the pending row, so the exit path must own the −40 — otherwise it
+        // escapes both the exit penalty and natural expiry (the reopened symmetric hole B).
+        val skladchinaId = insertActiveSkladchina(affectsReputation = true, deadline = OffsetDateTime.now().minusHours(1))
+        insertPendingParticipant(skladchinaId, member)
+
+        membershipService.leaveClub(clubId, member)
+
+        assertReputation(member, reliability = -40, conf = 0, att = 0, spont = 0, pct = "0.00", outcome = 1)
+        assertEquals(ReputationKind.skladchina_expired, soleKind(member, skladchinaId))
+        assertEquals(skladchinaDeadline(skladchinaId).toInstant(), ledgerOccurredAt(member, skladchinaId).toInstant())
+    }
+
+    @Test
+    fun `leaving preserves a finalized-but-unprocessed event so the pipeline still writes the real outcome`() {
+        val member = insertUser("Leaver"); insertMembership(member, "member")
+        // attendance_finalized=true but status still stage_2 (completion is a separate later sweep);
+        // reputation not yet processed. A real no_show the pipeline still owns.
+        val eventId = insertFinalizedStage2Event()
+        insertConfirmed(eventId, member, "going", "absent")
+
+        membershipService.leaveClub(clubId, member)
+
+        // No exit penalty for a finalized event, and the booking survives the cascade.
+        assertEquals(0, ledgerRows(member, eventId), "no exit penalty for a finalized event")
+        assertTrue(eventResponseExists(eventId, member), "finalized event's booking preserved for the pipeline")
+
+        // The pipeline still produces the real outcome (−200 no_show) — not erased by leaving.
+        reputationService.processFinalizedEvent(eventId)
+        assertReputation(member, reliability = -200, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
+    }
+
+    @Test
+    fun `leaving does not penalize a pending non-reputation skladchina`() {
+        val member = insertUser("Leaver"); insertMembership(member, "member")
+        val skladchinaId = insertActiveSkladchina(affectsReputation = false, deadline = OffsetDateTime.now().plusDays(2))
+        insertPendingParticipant(skladchinaId, member)
+
+        membershipService.leaveClub(clubId, member)
+
+        assertNull(reputationRepository.findByUserAndClub(member, clubId), "non-reputation skladchina never scores")
+        assertEquals(0, ledgerRows(member, skladchinaId))
+    }
+
+    @Test
+    fun `leaving a paid club writes no exit penalty and keeps the booking`() {
+        val paidClub = insertPaidClub()
+        val member = insertUser("PaidLeaver"); insertMembershipInClub(member, paidClub)
+        val eventId = insertActiveEvent(club = paidClub)
+        insertConfirmed(eventId, member, "going", null)
+
+        membershipService.leaveClub(paidClub, member)
+
+        // Paid leave keeps access until expire → no obligation broken, no cascade.
+        assertNull(reputationRepository.findByUserAndClub(member, paidClub), "paid leave does not penalize")
+        assertEquals(0, ledgerRows(member, eventId))
+        assertTrue(eventResponseExists(eventId, member), "paid leave keeps the booking until expire")
+    }
+
+    @Test
+    fun `leaving promotes the first waitlisted member into the vacated confirmed slot`() {
+        val leaver = insertUser("Leaver"); insertMembership(leaver, "member")
+        val waiter = insertUser("Waiter"); insertMembership(waiter, "member")
+        val eventId = insertActiveEvent(limit = 1)
+        insertConfirmed(eventId, leaver, "going", null)
+        insertWaitlisted(eventId, waiter, OffsetDateTime.now().minusHours(1))
+
+        membershipService.leaveClub(clubId, leaver)
+
+        assertFalse(eventResponseExists(eventId, leaver), "leaver's booking removed")
+        assertEquals(FinalStatus.confirmed, finalStatusOf(eventId, waiter), "waitlisted member promoted into the freed slot")
+        // The leaver still eats the −200 — the slot refill mitigates the org's plan, it doesn't absolve the broken promise.
+        assertReputation(leaver, reliability = -200, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
+    }
+
+    @Test
+    fun `leave preview counts open obligations for a free club, zero for a paid club`() {
+        val member = insertUser("Previewer"); insertMembership(member, "member")
+        val eventId = insertActiveEvent(); insertConfirmed(eventId, member, "going", null)
+        val skladchinaId = insertActiveSkladchina(affectsReputation = true, deadline = OffsetDateTime.now().plusDays(2))
+        insertPendingParticipant(skladchinaId, member)
+
+        val preview = membershipService.getLeavePreview(clubId, member)
+        assertEquals(1, preview.eventObligations)
+        assertEquals(1, preview.skladchinaObligations)
+        assertEquals(2, preview.totalObligations)
+
+        // Paid club: obligations stay valid until expire → preview is all zeros.
+        val paidClub = insertPaidClub()
+        val paidMember = insertUser("PaidPreviewer"); insertMembershipInClub(paidMember, paidClub)
+        val paidEvent = insertActiveEvent(club = paidClub); insertConfirmed(paidEvent, paidMember, "going", null)
+        assertEquals(0, membershipService.getLeavePreview(paidClub, paidMember).totalObligations)
+    }
+
     // --- helpers ---
 
     private fun insertMembership(userId: UUID, role: String) {
@@ -431,6 +591,107 @@ class ReputationLedgerIntegrationTest {
 
     private fun insertConfirmed(eventId: UUID, userId: UUID, stage1: String, attendance: String?) =
         insertResponse(eventId, userId, stage1, "confirmed", attendance)
+
+    /** An active (not-yet-finalized) event a member can hold a live confirmed booking on. */
+    private fun insertActiveEvent(
+        limit: Int = 10,
+        datetime: OffsetDateTime = OffsetDateTime.now().plusDays(3),
+        club: UUID = clubId
+    ): UUID {
+        val id = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime,
+                                participant_limit, voting_opens_days_before, status,
+                                attendance_marked, attendance_finalized)
+            VALUES ('$id', '$club', '$ownerId', 'Active', 'Place', '$datetime', $limit, 14, 'stage_2', false, false)
+            """.trimIndent()
+        )
+        return id
+    }
+
+    /** A past event already attendance-finalized but still `stage_2` (completion is a later sweep). */
+    private fun insertFinalizedStage2Event(): UUID {
+        val id = UUID.randomUUID()
+        val past = OffsetDateTime.now().minusHours(2)
+        dsl.execute(
+            """
+            INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime,
+                                participant_limit, voting_opens_days_before, status,
+                                attendance_marked, attendance_finalized)
+            VALUES ('$id', '$clubId', '$ownerId', 'Finalized', 'Place', '$past', 10, 14, 'stage_2', true, true)
+            """.trimIndent()
+        )
+        return id
+    }
+
+    private fun insertWaitlisted(eventId: UUID, userId: UUID, stage1Timestamp: OffsetDateTime) {
+        dsl.execute(
+            """
+            INSERT INTO event_responses (id, event_id, user_id, stage_1_vote, stage_2_vote, final_status, stage_1_timestamp)
+            VALUES ('${UUID.randomUUID()}', '$eventId', '$userId',
+                    'going'::stage_1_vote, 'waitlisted'::stage_2_vote, 'waitlisted'::final_status, '$stage1Timestamp')
+            """.trimIndent()
+        )
+    }
+
+    private fun insertActiveSkladchina(affectsReputation: Boolean, deadline: OffsetDateTime): UUID {
+        val id = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO skladchinas (id, club_id, creator_id, title, payment_mode, payment_link, deadline, affects_reputation, status)
+            VALUES ('$id', '$clubId', '$ownerId', 'Sbor', 'voluntary'::skladchina_mode, 'http://pay',
+                    '$deadline', $affectsReputation, 'active'::skladchina_status)
+            """.trimIndent()
+        )
+        return id
+    }
+
+    private fun insertPendingParticipant(skladchinaId: UUID, userId: UUID) {
+        dsl.execute(
+            """
+            INSERT INTO skladchina_participants (skladchina_id, user_id, status)
+            VALUES ('$skladchinaId', '$userId', 'pending'::skladchina_participant_status)
+            """.trimIndent()
+        )
+    }
+
+    private fun insertPaidClub(): UUID {
+        val id = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO clubs (id, owner_id, name, description, category, access_type, city, member_limit, subscription_price, is_active)
+            VALUES ('$id', '$ownerId', 'Paid', 'desc', 'sport', 'open', 'Moscow', 20, 100, true)
+            """.trimIndent()
+        )
+        return id
+    }
+
+    private fun insertMembershipInClub(userId: UUID, club: UUID, role: String = "member") {
+        dsl.execute(
+            "INSERT INTO memberships (id, user_id, club_id, status, role, joined_at) " +
+                "VALUES ('${UUID.randomUUID()}', '$userId', '$club', 'active', '$role'::membership_role, NOW())"
+        )
+    }
+
+    private fun eventResponseExists(eventId: UUID, userId: UUID): Boolean =
+        dsl.fetchCount(EVENT_RESPONSES, EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.USER_ID.eq(userId))) > 0
+
+    private fun finalStatusOf(eventId: UUID, userId: UUID): FinalStatus? =
+        dsl.select(EVENT_RESPONSES.FINAL_STATUS).from(EVENT_RESPONSES)
+            .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.USER_ID.eq(userId)))
+            .fetchOne(EVENT_RESPONSES.FINAL_STATUS)
+
+    private fun eventDatetime(eventId: UUID): OffsetDateTime =
+        dsl.select(EVENTS.EVENT_DATETIME).from(EVENTS).where(EVENTS.ID.eq(eventId)).fetchOne(EVENTS.EVENT_DATETIME)!!
+
+    private fun skladchinaDeadline(skladchinaId: UUID): OffsetDateTime =
+        dsl.select(SKLADCHINAS.DEADLINE).from(SKLADCHINAS).where(SKLADCHINAS.ID.eq(skladchinaId)).fetchOne(SKLADCHINAS.DEADLINE)!!
+
+    private fun ledgerOccurredAt(userId: UUID, sourceId: UUID): OffsetDateTime =
+        dsl.select(REPUTATION_LEDGER.OCCURRED_AT).from(REPUTATION_LEDGER)
+            .where(REPUTATION_LEDGER.USER_ID.eq(userId).and(REPUTATION_LEDGER.SOURCE_ID.eq(sourceId)))
+            .fetchOne(REPUTATION_LEDGER.OCCURRED_AT)!!
 
     private fun insertResponse(eventId: UUID, userId: UUID, stage1: String?, finalStatus: String?, attendance: String?) {
         val s1 = stage1?.let { "'$it'::stage_1_vote" } ?: "NULL"

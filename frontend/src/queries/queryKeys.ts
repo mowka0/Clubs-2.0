@@ -29,6 +29,7 @@ export const queryKeys = {
       ['clubs', 'detail', clubId, 'awaiting-payment-applicants'] as const,
     memberProfile: (clubId: string, userId: string) =>
       ['clubs', 'detail', clubId, 'members', userId] as const,
+    leavePreview: (clubId: string) => ['clubs', 'detail', clubId, 'leave-preview'] as const,
     myReputation: () => ['clubs', 'my', 'reputation'] as const,
     myInterests: () => ['users', 'me', 'interests'] as const,
     applications: (clubId: string, status?: string) =>

@@ -1,6 +1,7 @@
 package com.clubs.reputation
 
 import com.clubs.generated.jooq.enums.ReputationAxis
+import com.clubs.generated.jooq.enums.ReputationKind
 import com.clubs.generated.jooq.enums.ReputationSource
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -52,6 +53,53 @@ class ReputationService(
 
         appendAndRecompute(entries)
         log.info("Reputation processed: eventId={} entries={}", eventId, entries.size)
+    }
+
+    /**
+     * Exit-with-obligations (P1b hole B): writes the penalties for the obligations a user
+     * abandons by leaving a club, BEFORE the membership cascade deletes their source rows.
+     * Each abandoned confirmed booking → a `no_show` (−200); each pending reputation-affecting
+     * skladchina with an unexpired deadline → a `skladchina_expired` (−40). Joins the caller's
+     * leave transaction so penalty + cascade commit atomically. Idempotent by construction: the
+     * ledger UNIQUE(user, source_type, source_id) + ON CONFLICT DO NOTHING means a later natural
+     * outcome for the same source collides and the exit row wins — a double leave never double-counts.
+     */
+    @Transactional
+    fun penalizeExit(
+        userId: UUID,
+        clubId: UUID,
+        eventNoShows: List<ExitObligation>,
+        skladchinaExpiries: List<ExitObligation>
+    ) {
+        if (eventNoShows.isEmpty() && skladchinaExpiries.isEmpty()) return
+        val entries = eventNoShows.map {
+            LedgerEntry(
+                userId = userId,
+                clubId = clubId,
+                axis = ReputationAxis.attendance,
+                kind = ReputationKind.no_show,
+                points = ReputationPolicy.pointsFor(ReputationKind.no_show),
+                occurredAt = it.occurredAt,
+                sourceType = ReputationSource.event,
+                sourceId = it.sourceId
+            )
+        } + skladchinaExpiries.map {
+            LedgerEntry(
+                userId = userId,
+                clubId = clubId,
+                axis = ReputationAxis.finance,
+                kind = ReputationKind.skladchina_expired,
+                points = ReputationPolicy.pointsFor(ReputationKind.skladchina_expired),
+                occurredAt = it.occurredAt,
+                sourceType = ReputationSource.skladchina,
+                sourceId = it.sourceId
+            )
+        }
+        appendAndRecompute(entries)
+        log.info(
+            "Exit penalties written: userId={} clubId={} eventNoShows={} skladchinaExpiries={}",
+            userId, clubId, eventNoShows.size, skladchinaExpiries.size
+        )
     }
 
     /**

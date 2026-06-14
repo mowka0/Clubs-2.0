@@ -11,6 +11,13 @@ interface LeaveClubModalProps {
    */
   variant: 'free' | 'paid';
   paidUntilLabel: string | null;
+  /**
+   * Number of open obligations (confirmed bookings + pending reputation skladchinas) the
+   * caller would break by leaving a free club. > 0 → show a reliability warning. Ignored for
+   * the paid variant (nothing breaks until expire). 0 while [obligationsLoading].
+   */
+  obligationsCount: number;
+  obligationsLoading: boolean;
   submitting: boolean;
   errorMessage: string | null;
   onConfirm: () => void;
@@ -24,11 +31,23 @@ function paidBody(paidUntil: string): string {
   return `Подписка будет отменена. Доступ к клубу сохранится до ${paidUntil}. После этой даты вы будете удалены из клуба.`;
 }
 
+/** Russian plural for «обязательство» (1 / 2-4 / 5+). */
+function obligationsWord(n: number): string {
+  const mod100 = n % 100;
+  const mod10 = n % 10;
+  if (mod100 >= 11 && mod100 <= 14) return 'обязательств';
+  if (mod10 === 1) return 'обязательство';
+  if (mod10 >= 2 && mod10 <= 4) return 'обязательства';
+  return 'обязательств';
+}
+
 export const LeaveClubModal: FC<LeaveClubModalProps> = ({
   open,
   clubName,
   variant,
   paidUntilLabel,
+  obligationsCount,
+  obligationsLoading,
   submitting,
   errorMessage,
   onConfirm,
@@ -40,6 +59,9 @@ export const LeaveClubModal: FC<LeaveClubModalProps> = ({
     variant === 'free'
       ? `Вы выйдете из клуба «${clubName}». ${FREE_BODY}`
       : paidBody(paidUntilLabel ?? '');
+
+  const showObligationsWarning =
+    variant === 'free' && !obligationsLoading && obligationsCount > 0;
 
   return (
     <Modal open onOpenChange={(o) => !o && onClose()}>
@@ -57,6 +79,22 @@ export const LeaveClubModal: FC<LeaveClubModalProps> = ({
         >
           {body}
         </div>
+        {showObligationsWarning && (
+          <div
+            style={{
+              padding: '10px 12px',
+              marginBottom: 12,
+              borderRadius: 10,
+              background: 'var(--tgui--secondary_fill, rgba(255,149,0,0.12))',
+              color: 'var(--tgui--text_color)',
+              fontSize: 14,
+              lineHeight: 1.45,
+            }}
+          >
+            Вы бросите {obligationsCount} {obligationsWord(obligationsCount)} перед клубом — это
+            снизит вашу надёжность.
+          </div>
+        )}
         {errorMessage && (
           <div
             style={{

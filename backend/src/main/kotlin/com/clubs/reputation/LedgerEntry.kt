@@ -24,6 +24,18 @@ data class LedgerEntry(
     val sourceId: UUID
 )
 
+/**
+ * One open obligation a leaving user abandons (the source row + its behaviour time), passed
+ * to [ReputationService.penalizeExit]. `occurredAt` = the event datetime (no_show) or the
+ * skladchina deadline (skladchina_expired) — the immutable decay anchor, not leave time.
+ * The reputation module owns the kind/points/axis/source mapping; the caller only supplies
+ * which obligations broke and when they were due.
+ */
+data class ExitObligation(
+    val sourceId: UUID,
+    val occurredAt: OffsetDateTime
+)
+
 /** Club context needed to build attendance ledger rows for one finalized event. */
 data class EventReputationContext(
     val clubId: UUID,

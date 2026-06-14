@@ -10,6 +10,8 @@ import com.clubs.event.EventResponseRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.payment.PaymentService
+import com.clubs.reputation.ExitObligation
+import com.clubs.reputation.ReputationService
 import com.clubs.reputation.TrustService
 import com.clubs.skladchina.SkladchinaRepository
 import org.slf4j.LoggerFactory
@@ -27,7 +29,8 @@ class MembershipService(
     private val eventResponseRepository: EventResponseRepository,
     private val skladchinaRepository: SkladchinaRepository,
     private val applicationRepository: ApplicationRepository,
-    private val trustService: TrustService
+    private val trustService: TrustService,
+    private val reputationService: ReputationService
 ) {
 
     private val log = LoggerFactory.getLogger(MembershipService::class.java)
@@ -143,19 +146,70 @@ class MembershipService(
         return mapper.toDto(membership.copy(status = MembershipStatus.cancelled))
     }
 
+    /**
+     * Free-club leave is also "exit-with-obligations" (P1b hole B): open obligations are
+     * enumerated and penalized BEFORE the cascade deletes their source rows, otherwise leaving a
+     * confirmed booking behind would be free. Penalty (internal) + cascade + waitlist promotion
+     * all run in the single [leaveClub] transaction so they commit atomically.
+     */
     private fun leaveFreeClub(membership: Membership, clubId: UUID, userId: UUID): MembershipDto {
+        // Enumerate BEFORE any delete — the cascade below removes exactly these source rows.
+        val eventObligations = eventResponseRepository.findConfirmedActiveEventObligations(userId, clubId)
+        val skladchinaObligations = skladchinaRepository.findPendingReputationObligations(userId, clubId)
+
+        // Penalties first: a confirmed booking → no_show (−200), a pending reputation skladchina →
+        // skladchina_expired (−40). Idempotent via the ledger UNIQUE — a later natural outcome for
+        // the same source collides and the exit row wins, so a double leave never double-counts.
+        reputationService.penalizeExit(
+            userId, clubId,
+            eventObligations.map { ExitObligation(it.eventId, it.eventDatetime) },
+            skladchinaObligations.map { ExitObligation(it.skladchinaId, it.deadline) }
+        )
+
+        // Hold the per-event slot lock (sorted → deadlock-free, released on commit) across the
+        // delete + promotion so waitlist promotion never races a concurrent confirm/decline.
+        val freedEventIds = eventObligations.map { it.eventId }.sorted()
+        freedEventIds.forEach { eventResponseRepository.lockEventSlots(it) }
+
         val cascadedSkladchinas = skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(userId, clubId)
         val cascadedEventResponses = eventResponseRepository.deleteByUserAndClubAndActiveEvents(userId, clubId)
+        // Each vacated confirmed slot promotes the next waitlisted member so leaving doesn't shrink the roster.
+        val promotedWaitlist = freedEventIds.count { eventResponseRepository.promoteFirstWaitlisted(it) }
         val cascadedApplications = applicationRepository.deleteActiveByUserAndClub(userId, clubId)
 
         membershipRepository.cancel(membership.id)
         clubRepository.decrementMemberCountSafely(clubId, 1)
 
         log.info(
-            "User left free club: clubId={} userId={} cascadedSkladchinas={} cascadedEventResponses={} cascadedApplications={}",
-            clubId, userId, cascadedSkladchinas, cascadedEventResponses, cascadedApplications
+            "User left free club: clubId={} userId={} eventNoShows={} skladchinaExpiries={} promotedWaitlist={} " +
+                "cascadedSkladchinas={} cascadedEventResponses={} cascadedApplications={}",
+            clubId, userId, eventObligations.size, skladchinaObligations.size, promotedWaitlist,
+            cascadedSkladchinas, cascadedEventResponses, cascadedApplications
         )
         return mapper.toDto(membership.copy(status = MembershipStatus.cancelled))
+    }
+
+    /**
+     * Pre-leave preview for the confirm dialog: how many open obligations the caller would break
+     * by leaving (and thus lose reliability for). Penalty magnitudes stay server-side (internal,
+     * H8) — only counts are returned. Paid clubs keep obligations valid until expire, so they
+     * break nothing (zeros).
+     */
+    @Transactional(readOnly = true)
+    fun getLeavePreview(clubId: UUID, userId: UUID): LeavePreviewDto {
+        membershipRepository.findActiveByUserAndClub(userId, clubId)
+            ?: throw NotFoundException("Membership not found")
+        val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
+        if (club.ownerId == userId) throw ValidationException("Owner cannot leave the club")
+        if (club.subscriptionPrice > 0) return LeavePreviewDto(0, 0, 0)
+
+        val events = eventResponseRepository.findConfirmedActiveEventObligations(userId, clubId).size
+        val skladchinas = skladchinaRepository.findPendingReputationObligations(userId, clubId).size
+        return LeavePreviewDto(
+            eventObligations = events,
+            skladchinaObligations = skladchinas,
+            totalObligations = events + skladchinas
+        )
     }
 
     private fun joinOrRequestPayment(club: Club, userId: UUID, source: String): JoinResult {

@@ -3,6 +3,7 @@ import type {
   AwaitingPaymentApplicantDto,
   AwaitingPaymentApplicationDto,
   JoinClubResult,
+  LeavePreviewDto,
   MemberListItemDto,
   MembershipDto,
   MemberProfileDto,
@@ -40,6 +41,16 @@ export function joinClub(clubId: string): Promise<JoinClubResult> {
  */
 export function leaveClub(clubId: string): Promise<MembershipDto> {
   return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/leave`);
+}
+
+/**
+ * Pre-leave preview: how many open obligations (confirmed bookings + pending
+ * reputation skladchinas) leaving a free club would break. Drives the warning
+ * line in the leave confirm dialog. Paid clubs return all-zero (nothing breaks
+ * until the subscription expires). See docs/modules/club-leave.md § "выход-с-обязательствами".
+ */
+export function getLeavePreview(clubId: string): Promise<LeavePreviewDto> {
+  return apiClient.get<LeavePreviewDto>(`/api/clubs/${clubId}/leave-preview`);
 }
 
 export function applyToClub(clubId: string, answerText: string): Promise<ApplicationDto> {

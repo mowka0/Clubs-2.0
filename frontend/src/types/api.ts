@@ -122,6 +122,17 @@ export interface MyReputationDto {
   historyClubs: UserClubReputationDto[];
 }
 
+/**
+ * Pre-leave preview for the «Выйти из клуба?» dialog: how many open obligations leaving a
+ * free club would break (and thus cost the user reliability). Counts only — penalty
+ * magnitudes are server-internal. Paid clubs break nothing (all zero).
+ */
+export interface LeavePreviewDto {
+  eventObligations: number;
+  skladchinaObligations: number;
+  totalObligations: number;
+}
+
 export interface ActionRequiredCountDto {
   count: number;
 }

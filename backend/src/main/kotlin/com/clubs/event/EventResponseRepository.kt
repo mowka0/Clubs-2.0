@@ -88,10 +88,30 @@ interface EventResponseRepository {
     fun resolveExpiredDisputesToAbsent(eventIds: List<UUID>): Int
 
     /**
-     * Cascade-delete on club leave: removes [userId]'s responses to all
-     * non-finalised events of [clubId] (status IN upcoming/stage_1/stage_2).
-     * Completed and cancelled events are preserved — attendance history is
-     * the source of truth for reputation. Returns number of rows deleted.
+     * Exit-with-obligations (P1b hole B): [userId]'s CONFIRMED bookings on [clubId]'s active,
+     * not-yet-finalized events — the obligations broken by leaving. Exactly the same event scope as
+     * [deleteByUserAndClubAndActiveEvents] (status IN upcoming/stage_1/stage_2 AND NOT
+     * attendance_finalized), filtered to confirmed rows and returned with each event's datetime
+     * (the no_show decay anchor). Finalized events are excluded from BOTH this enumeration and the
+     * cascade: their real attendance outcome is owned by the reputation pipeline. Read BEFORE the
+     * cascade deletes the rows.
+     */
+    fun findConfirmedActiveEventObligations(userId: UUID, clubId: UUID): List<EventObligation>
+
+    /**
+     * Promotes [eventId]'s earliest-queued waitlisted response (by stage-1 timestamp) to
+     * confirmed, filling a slot a leaving confirmed member just vacated. Returns true iff one
+     * was promoted. Caller MUST hold [lockEventSlots] so it never races a concurrent
+     * confirm/decline promoting the same row.
+     */
+    fun promoteFirstWaitlisted(eventId: UUID): Boolean
+
+    /**
+     * Cascade-delete on club leave: removes [userId]'s responses to all active, NOT-yet-finalized
+     * events of [clubId] (status IN upcoming/stage_1/stage_2 AND NOT attendance_finalized).
+     * Completed, cancelled AND attendance-finalized events are preserved — their attendance is
+     * recorded history / a not-yet-processed reputation outcome the pipeline still owns (an event
+     * can be finalized while status is still stage_2). Returns number of rows deleted.
      */
     fun deleteByUserAndClubAndActiveEvents(userId: UUID, clubId: UUID): Int
 
@@ -102,6 +122,15 @@ interface EventResponseRepository {
      */
     fun findRespondersWithUsers(eventId: UUID): List<EventResponderInfo>
 }
+
+/**
+ * A confirmed booking a leaving user holds on an active event: the event id (ledger source_id)
+ * + its datetime (no_show occurred_at). Read on club leave to penalize abandoned obligations.
+ */
+data class EventObligation(
+    val eventId: UUID,
+    val eventDatetime: OffsetDateTime
+)
 
 /** Repository row: a responder's user info + raw vote/final-status/attendance enums. */
 data class EventResponderInfo(

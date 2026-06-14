@@ -471,6 +471,19 @@ class JooqSkladchinaRepository(
         return userIds.toSet() - activeMembers
     }
 
+    override fun findPendingReputationObligations(userId: UUID, clubId: UUID): List<SkladchinaObligation> =
+        dsl.select(SKLADCHINAS.ID, SKLADCHINAS.DEADLINE)
+            .from(SKLADCHINA_PARTICIPANTS)
+            .join(SKLADCHINAS).on(SKLADCHINAS.ID.eq(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID))
+            .where(
+                SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId)
+                    .and(SKLADCHINAS.CLUB_ID.eq(clubId))
+                    .and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active))
+                    .and(SKLADCHINAS.AFFECTS_REPUTATION.isTrue)
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
+            )
+            .fetch { r -> SkladchinaObligation(r.get(SKLADCHINAS.ID)!!, r.get(SKLADCHINAS.DEADLINE)!!) }
+
     override fun deleteParticipantFromActiveSkladchinasInClub(userId: UUID, clubId: UUID): Int {
         val activeSkladchinaIds = dsl.select(SKLADCHINAS.ID)
             .from(SKLADCHINAS)

@@ -302,12 +302,39 @@ class JooqEventResponseRepository(
         DSL.select(EVENTS.ID).from(EVENTS)
             .where(EVENTS.ID.eq(eventId).and(EVENTS.ATTENDANCE_FINALIZED.isFalse))
 
+    override fun findConfirmedActiveEventObligations(userId: UUID, clubId: UUID): List<EventObligation> =
+        dsl.select(EVENTS.ID, EVENTS.EVENT_DATETIME)
+            .from(EVENT_RESPONSES)
+            .join(EVENTS).on(EVENTS.ID.eq(EVENT_RESPONSES.EVENT_ID))
+            .where(
+                EVENT_RESPONSES.USER_ID.eq(userId)
+                    .and(EVENTS.CLUB_ID.eq(clubId))
+                    .and(EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_1, EventStatus.stage_2))
+                    // A finalized event's outcome belongs to the attendance pipeline — never
+                    // override real attendance with an exit no_show.
+                    .and(EVENTS.ATTENDANCE_FINALIZED.isFalse)
+                    .and(EVENT_RESPONSES.FINAL_STATUS.eq(FinalStatus.confirmed))
+            )
+            .fetch { r -> EventObligation(r.get(EVENTS.ID)!!, r.get(EVENTS.EVENT_DATETIME)!!) }
+
+    override fun promoteFirstWaitlisted(eventId: UUID): Boolean {
+        val first = findFirstWaitlisted(eventId) ?: return false
+        updateStage2Vote(first.id, Stage_2Vote.confirmed, FinalStatus.confirmed)
+        return true
+    }
+
     override fun deleteByUserAndClubAndActiveEvents(userId: UUID, clubId: UUID): Int {
         val activeEventIds = dsl.select(EVENTS.ID)
             .from(EVENTS)
             .where(
                 EVENTS.CLUB_ID.eq(clubId)
                     .and(EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_1, EventStatus.stage_2))
+                    // Exclude attendance-finalized events (reachable while status is still stage_2 —
+                    // finalize flips the flag, a separate sweep flips status later). Their REAL
+                    // attendance outcome is owned by the reputation pipeline; deleting the confirmed
+                    // row here would erase a not-yet-processed no_show. Same scope the exit
+                    // enumeration uses (findConfirmedActiveEventObligations also excludes finalized).
+                    .and(EVENTS.ATTENDANCE_FINALIZED.isFalse)
             )
         return dsl.deleteFrom(EVENT_RESPONSES)
             .where(

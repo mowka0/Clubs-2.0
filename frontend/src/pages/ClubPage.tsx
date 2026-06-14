@@ -18,6 +18,7 @@ import {
   useClubQuery,
   useJoinClubMutation,
   useLeaveClubMutation,
+  useLeavePreviewQuery,
   useMyClubsQuery,
 } from '../queries/clubs';
 import {
@@ -92,6 +93,12 @@ export const ClubPage: FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>('activities');
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
+  // Obligation count for the leave dialog — only fetched for a free club while the modal
+  // is open (paid leave breaks nothing). Penalty magnitudes stay server-internal.
+  const leavePreviewQuery = useLeavePreviewQuery(
+    id,
+    showLeaveModal && (clubQuery.data?.subscriptionPrice ?? 1) <= 0,
+  );
 
   const club = clubQuery.data;
   const myClubs = myClubsQuery.data ?? [];
@@ -485,6 +492,8 @@ export const ClubPage: FC = () => {
         clubName={club.name}
         variant={leaveVariant}
         paidUntilLabel={leavePaidUntilLabel}
+        obligationsCount={leavePreviewQuery.data?.totalObligations ?? 0}
+        obligationsLoading={leavePreviewQuery.isLoading}
         submitting={leaveMutation.isPending}
         errorMessage={leaveError}
         onConfirm={handleConfirmLeave}
