@@ -4,10 +4,11 @@ import { Spinner, Placeholder } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useThemeStore } from '../store/useThemeStore';
-import { useMyReputationQuery } from '../queries/members';
+import { useMyReputationQuery, useMyGamificationQuery } from '../queries/members';
 import { useMyInterestsQuery } from '../queries/profile';
 import { countryNameByCode } from '../components/CityPicker';
 import { ProfileEditModal } from '../components/profile/ProfileEditModal';
+import { GamificationPanel } from '../components/profile/GamificationPanel';
 import { reliabilityTier, tierWord, clubsPrepositional } from '../utils/reputationTier';
 import type { UserClubReputationDto } from '../types/api';
 
@@ -99,6 +100,7 @@ export const ProfilePage: FC = () => {
   const cycleTheme = useThemeStore((s) => s.cycle);
 
   const reputationQuery = useMyReputationQuery();
+  const gamificationQuery = useMyGamificationQuery();
   const interestsQuery = useMyInterestsQuery();
 
   const interests = useMemo(() => interestsQuery.data ?? [], [interestsQuery.data]);
@@ -134,6 +136,7 @@ export const ProfilePage: FC = () => {
     .join(' · ');
 
   const rep = reputationQuery.data;
+  const gam = gamificationQuery.data;
   const activeClubs = rep?.activeClubs ?? [];
   const global = rep?.global;
   // История (покинутые клубы) живёт во вкладке «Клубы»; профиль показывает активную репутацию
@@ -204,6 +207,13 @@ export const ProfilePage: FC = () => {
             <div className="rd-stat-foot">активных участий</div>
           </div>
         </div>
+      )}
+
+      {gam && (gam.xp > 0 || gam.badges.length > 0) && (
+        <>
+          <div className="rd-section-sub-h">Уровень</div>
+          <GamificationPanel data={gam} />
+        </>
       )}
 
       {interests.length > 0 && (

@@ -9,6 +9,8 @@ import com.clubs.event.UserEventsService
 import com.clubs.membership.MembershipDto
 import com.clubs.membership.MembershipService
 import com.clubs.membership.MyReputationDto
+import com.clubs.reputation.GamificationDto
+import com.clubs.reputation.XpService
 import com.clubs.skladchina.ActionRequiredCountDto
 import com.clubs.skladchina.MySkladchinaListItemDto
 import com.clubs.skladchina.UserSkladchinasService
@@ -29,7 +31,8 @@ class UserController(
     private val applicationService: ApplicationService,
     private val membershipService: MembershipService,
     private val userEventsService: UserEventsService,
-    private val userSkladchinasService: UserSkladchinasService
+    private val userSkladchinasService: UserSkladchinasService,
+    private val xpService: XpService
 ) {
 
     @GetMapping("/me")
@@ -62,6 +65,12 @@ class UserController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<MyReputationDto> =
         ResponseEntity.ok(membershipService.getMyReputation(user.userId))
+
+    @GetMapping("/me/gamification")
+    fun getMyGamification(
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<GamificationDto> =
+        ResponseEntity.ok(xpService.getGamification(user.userId))
 
     @GetMapping("/me/applications")
     fun getMyApplications(

@@ -2,6 +2,7 @@ import { apiClient } from './apiClient';
 import type {
   AwaitingPaymentApplicantDto,
   AwaitingPaymentApplicationDto,
+  GamificationDto,
   JoinClubResult,
   LeavePreviewDto,
   MemberListItemDto,
@@ -105,6 +106,11 @@ export function getMemberProfile(clubId: string, userId: string): Promise<Member
 
 export function getMyReputation(): Promise<MyReputationDto> {
   return apiClient.get<MyReputationDto>('/api/users/me/reputation');
+}
+
+/** Self-view gamification panel: XP, level + progress, badges. See reputation-v2.md §H3. */
+export function getMyGamification(): Promise<GamificationDto> {
+  return apiClient.get<GamificationDto>('/api/users/me/gamification');
 }
 
 export function getClubApplications(

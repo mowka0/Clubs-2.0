@@ -3,6 +3,7 @@ import {
   getClubAwaitingPaymentApplicants,
   getClubMembers,
   getMemberProfile,
+  getMyGamification,
   getMyReputation,
 } from '../api/membership';
 import type { GetClubMembersOptions } from '../api/membership';
@@ -69,5 +70,13 @@ export function useMyReputationQuery() {
   return useQuery({
     queryKey: queryKeys.clubs.myReputation(),
     queryFn: getMyReputation,
+  });
+}
+
+/** Authenticated user's gamification panel (XP, level, progress, badges). Self-view only. */
+export function useMyGamificationQuery() {
+  return useQuery({
+    queryKey: queryKeys.clubs.myGamification(),
+    queryFn: getMyGamification,
   });
 }
