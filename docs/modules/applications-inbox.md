@@ -395,7 +395,13 @@ data class ApplicantInfoDto(
 data class PeerStatsDto(
     val memberClubCount: Int,
     val totalConfirmations: Int,
-    val totalAttendances: Int
+    val totalAttendances: Int,
+    // P1b cross-club reputation (реализовано 2026-06-14, on-read из ledger через ApplicantSignalService):
+    val reliableClubs: Int,       // N — клубы с Trust ≥ 70 среди клубов с track-record
+    val trackRecordClubs: Int,    // M — клубы с ≥3 исходами (донат «надёжен в N из M клубов»)
+    val level: Int,               // глобальный уровень геймификации (1..10)
+    val levelName: String,
+    val levelTier: String         // "base" | "mid" | "top" — цвет пилла (gold у top)
 )
 
 data class ClubBriefDto(
@@ -627,6 +633,7 @@ export function useMyPendingApplicationsCountQuery() {
 - Avatar (40px) — `applicant.avatarUrl` или инициалы.
 - Body:
   - top: `{firstName} {lastName ?? ''}` + `@{telegramUsername}` (если есть)
+    + компактный level-чип (`LevelPill size="sm"`) **только для mid/top тиров** (base/«Гость» не шумит)
   - meta: peer-signal-строка (см. формат выше)
   - club-chip: маленький pill «{club.name}» (≤ 20 chars, ellipsis)
   - hint: `{hoursUntilAutoReject}ч до автоотклонения` (red если ≤ 6,
@@ -641,9 +648,14 @@ export function useMyPendingApplicationsCountQuery() {
 Паттерн модалки — как у `ProfileEditModal` (`createPortal`, z-index `150`).
 
 Контент:
-- Hero: avatar (большой) + firstName + lastName + `@username`.
-- Peer-signal block: «В {N} клубах · посетил {X} из {Y} событий» крупно;
-  «надёжность» индикатор если ≥1 клуб с активностью.
+- Hero: avatar (большой) + firstName + lastName + `@username` + город + **пилл уровня**
+  (`levelName · ур.N`, gold у top-тира / accent у mid / нейтральный у base).
+- «О себе» + «Интересы» (chips) — из `ApplicantInfoDto`.
+- **«Активность на платформе»** (`PlatformActivity`): донат «N из M клубов» (`reliableClubs/trackRecordClubs`)
+  + заголовок «Надёжен в N из M клубов» + строка `formatPeerSignal` («В N клубах · посетил X из Y событий»).
+  Edge: `memberClubCount === 0` или `trackRecordClubs === 0` → без доната, только строка. Дисклеймер
+  «(не организаторский опыт)» НЕ добавляется — заголовок сам задаёт рамку (owner-blind: глобальная репа
+  слепа к организаторству, т.к. ledger не пишет строк в своём клубе владельца).
 - Club row: «Клуб: **{club.name}**».
 - Q&A: если `answerText` есть — «Ответ на вопрос:» + текст (с переносами).
 - Hint: «До автоотклонения: {hours}ч».
@@ -755,7 +767,8 @@ Frontend: `MyClubsPage` читает `useSearchParams().get('focus')`. Если
 | `application/ApplicationMapper.kt` | Добавить `toAwaitingPaymentApplicant(application, applicantRecord): AwaitingPaymentApplicantDto`. |
 | `application/PendingApplicationDto.kt` | Добавить `AwaitingPaymentApplicantDto` (organizer-side mirror). |
 | `bot/NotificationService.kt` | Новый `@Async fun sendApplicationCreatedDM(organizerTelegramId: Long, applicantDisplayName: String, clubName: String)`. Внутри использует существующий `sendDirectMessageWithDeepLink(telegramId, text, webAppPath = "/my-clubs?focus=inbox", buttonText = "Открыть заявки")`. |
-| `reputation/ReputationRepository.kt` | Новый метод `aggregateByUserIds(userIds: List<UUID>): Map<UUID, PeerStatsDto>` (или domain-эквивалент). Возвращает `userId → (memberClubCount, totalConfirmations, totalAttendances)`. |
+| `reputation/ReputationRepository.kt` | `aggregateByUserIds(userIds): Map<UUID, PeerStatsAggregate>` (memberClubCount/confirmations/attendances). **P1b:** + `findOutcomesByUserIds(userIds): Map<UUID, List<ClubLedgerOutcome>>` (батч ledger). |
+| `reputation/ApplicantSignalService.kt` | **NEW (P1b)** — `signalsFor(userIds): Map<UUID, ApplicantSignal>`: «N из M» (`TrustService.globalForOutcomes`) + уровень/тир (`XpService.levelForOutcomes`) одним батч-чтением. `ApplicationService.getMyPendingApplications` мёржит в `PeerStatsDto`. |
 | `club/ClubRepository.kt` | Если ещё нет — `findIdsByOwnerId(ownerId: UUID): List<UUID>`. |
 
 ## Frontend — изменения по файлам
