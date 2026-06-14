@@ -271,13 +271,13 @@
 .rd-rep-row .rd-v.rd-new  { color: var(--text-faint); font-size: 13px; font-weight: 600; }
 
 /* ---------- Reputation rings (member card + application card) ---------- */
-.rd-rings { display: flex; flex-wrap: wrap; justify-content: space-around; gap: 16px 12px; padding: 18px 8px; }
-.rd-ring { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+/* Single row, no wrap — up to 3 rings share the width equally (flex:1 + min-width:0). */
+.rd-rings { display: flex; flex-wrap: nowrap; justify-content: space-around; gap: 8px; padding: 16px 4px; }
+.rd-ring { display: flex; flex-direction: column; align-items: center; gap: 7px; flex: 1 1 0; min-width: 0; }
 .rd-ring-l {
-  font-size: 10px; color: var(--text-faint); font-weight: 600; text-align: center;
-  line-height: 1.3; text-transform: uppercase; letter-spacing: 0.04em;
+  font-size: 9.5px; color: var(--text-faint); font-weight: 600; text-align: center;
+  line-height: 1.3; text-transform: uppercase; letter-spacing: 0.03em;
 }
-.rd-ring-l .rd-ring-sub { display: block; text-transform: none; letter-spacing: 0; opacity: 0.7; margin-top: 2px; }
 .rd-ring-num { font-size: 19px; font-weight: 800; color: var(--text); }
 .rd-ring-frac { font-size: 15px; font-weight: 800; color: var(--text); }
 .rd-ring-cap { font-size: 8.5px; font-weight: 600; color: var(--text-faint); margin-top: 1px; }

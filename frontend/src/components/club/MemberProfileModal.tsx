@@ -32,7 +32,7 @@ const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
       <div className="rd-glass rd-rings">
         <div className="rd-ring">
           <DonutRing
-            size={84}
+            size={72}
             fraction={trust / 100}
             color={TRUST_TIER_COLOR[trustTier(trust)]}
             ariaLabel={`Надёжность ${trust} из 100`}
@@ -40,15 +40,13 @@ const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
             <span className="rd-ring-num">{trust}</span>
             <span className="rd-ring-cap">ИЗ 100</span>
           </DonutRing>
-          <div className="rd-ring-l">
-            надёжность<span className="rd-ring-sub">умный показатель</span>
-          </div>
+          <div className="rd-ring-l">надёжность</div>
         </div>
 
         {confirmations > 0 && (
           <div className="rd-ring">
             <DonutRing
-              size={84}
+              size={72}
               fraction={attendances / confirmations}
               color="var(--accent)"
               ariaLabel={`Посещаемость ${attendances} из ${confirmations}`}
@@ -56,16 +54,14 @@ const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
               <span className="rd-ring-frac">{attendances}/{confirmations}</span>
               <span className="rd-ring-cap">{attendancePct}%</span>
             </DonutRing>
-            <div className="rd-ring-l">
-              посещаемость<span className="rd-ring-sub">пришёл из подтверждённых</span>
-            </div>
+            <div className="rd-ring-l">посещаемость</div>
           </div>
         )}
 
         {skladchinaTotal > 0 && (
           <div className="rd-ring">
             <DonutRing
-              size={84}
+              size={72}
               fraction={skladchinaPaid / skladchinaTotal}
               color="var(--accent)"
               ariaLabel={`Сборы: оплачено ${skladchinaPaid} из ${skladchinaTotal}`}
@@ -73,9 +69,7 @@ const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
               <span className="rd-ring-frac">{skladchinaPaid}/{skladchinaTotal}</span>
               <span className="rd-ring-cap">{skladchinaPct}%</span>
             </DonutRing>
-            <div className="rd-ring-l">
-              сборы<span className="rd-ring-sub">оплачено из обязательных</span>
-            </div>
+            <div className="rd-ring-l">сборы</div>
           </div>
         )}
       </div>
