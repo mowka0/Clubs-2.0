@@ -40,8 +40,9 @@ object XpPolicy {
         "Энтузиаст", "Душа компании", "Столп сообщества", "Легенда", "Амбассадор"
     )
 
-    /** XP threshold to reach level index [i] (0-based): round(40·i^1.85). Level 0 = 0 XP. */
-    fun levelThreshold(i: Int): Int = (40.0 * i.toDouble().pow(1.85)).roundToInt()
+    /** XP threshold to reach level index [i] (0-based): round(50·i^2). Level 0 = 0 XP.
+     *  Curve calibrated 2026-06-14 (40·i^1.85 → 50·i^2) to make higher levels rarer. */
+    fun levelThreshold(i: Int): Int = (50.0 * i.toDouble().pow(2.0)).roundToInt()
 
     /** 0-based level index for a given XP — the highest level whose threshold is reached. */
     fun levelIndexFor(xp: Int): Int =
@@ -79,16 +80,18 @@ object XpPolicy {
         val earned: (XpStats) -> Boolean
     )
 
+    // Thresholds calibrated 2026-06-14 to make badges rarer. `first_step` and `reliable_1` stay
+    // attainable on purpose (a new member needs a visible starter goal); the rest are real milestones.
     val BADGES: List<Badge> = listOf(
         Badge("first_step", "Первый шаг", BadgeFamily.PARTICIPATION) { it.totalKept >= 1 },
-        Badge("ironclad_10", "Железобетон", BadgeFamily.PARTICIPATION) { it.ironcladCount >= 10 },
-        Badge("spontaneous_5", "Лёгок на подъём", BadgeFamily.PARTICIPATION) { it.spontaneousCount >= 5 },
-        Badge("payer_3", "Надёжный плательщик", BadgeFamily.PARTICIPATION) { it.skladchinaPaidCount >= 3 },
-        Badge("diverse_3", "Разносторонний", BadgeFamily.DIVERSITY) { it.distinctKeptClubs >= 3 },
-        Badge("diverse_5", "Вездесущий", BadgeFamily.DIVERSITY) { it.distinctKeptClubs >= 5 },
+        Badge("ironclad_20", "Железобетон", BadgeFamily.PARTICIPATION) { it.ironcladCount >= 20 },
+        Badge("spontaneous_10", "Лёгок на подъём", BadgeFamily.PARTICIPATION) { it.spontaneousCount >= 10 },
+        Badge("payer_8", "Надёжный плательщик", BadgeFamily.PARTICIPATION) { it.skladchinaPaidCount >= 8 },
+        Badge("diverse_5", "Разносторонний", BadgeFamily.DIVERSITY) { it.distinctKeptClubs >= 5 },
+        Badge("diverse_8", "Вездесущий", BadgeFamily.DIVERSITY) { it.distinctKeptClubs >= 8 },
         Badge("reliable_1", "Надёжный", BadgeFamily.TRUST) { it.reliableClubs >= 1 },
-        Badge("rock_solid", "Кремень", BadgeFamily.TRUST) { it.maxTrustWithRecord >= 90 },
-        Badge("reliable_3", "Столп доверия", BadgeFamily.TRUST) { it.reliableClubs >= 3 }
+        Badge("rock_solid", "Кремень", BadgeFamily.TRUST) { it.maxTrustWithRecord >= 95 },
+        Badge("reliable_5", "Столп доверия", BadgeFamily.TRUST) { it.reliableClubs >= 5 }
     )
 
     /** Earned badges for the given stats, in declaration order. */

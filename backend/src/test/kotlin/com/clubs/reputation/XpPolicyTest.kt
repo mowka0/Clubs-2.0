@@ -26,8 +26,8 @@ class XpPolicyTest {
     }
 
     @Test
-    fun `level thresholds follow round(40 n^1_85) — contract numbers`() {
-        val expected = listOf(0, 40, 144, 305, 520, 786, 1101, 1464, 1874, 2330)
+    fun `level thresholds follow round(50 n^2) — contract numbers`() {
+        val expected = listOf(0, 50, 200, 450, 800, 1250, 1800, 2450, 3200, 4050)
         assertEquals(expected, (0..9).map { XpPolicy.levelThreshold(it) })
         assertEquals(10, XpPolicy.LEVEL_NAMES.size)
         assertEquals("Гость", XpPolicy.LEVEL_NAMES.first())
@@ -37,11 +37,11 @@ class XpPolicyTest {
     @Test
     fun `levelIndexFor picks the highest reached threshold`() {
         assertEquals(0, XpPolicy.levelIndexFor(0))     // Гость floor
-        assertEquals(0, XpPolicy.levelIndexFor(39))
-        assertEquals(1, XpPolicy.levelIndexFor(40))    // Свой
-        assertEquals(1, XpPolicy.levelIndexFor(143))
-        assertEquals(2, XpPolicy.levelIndexFor(144))   // Участник
-        assertEquals(9, XpPolicy.levelIndexFor(2330))  // Амбассадор
+        assertEquals(0, XpPolicy.levelIndexFor(49))
+        assertEquals(1, XpPolicy.levelIndexFor(50))    // Свой
+        assertEquals(1, XpPolicy.levelIndexFor(199))
+        assertEquals(2, XpPolicy.levelIndexFor(200))   // Участник
+        assertEquals(9, XpPolicy.levelIndexFor(4050))  // Амбассадор
         assertEquals(9, XpPolicy.levelIndexFor(999_999)) // capped at max
     }
 
@@ -65,20 +65,20 @@ class XpPolicyTest {
         assertEquals(setOf("first_step"), XpPolicy.badgesFor(fresh).map { it.id }.toSet())
 
         val veteran = statsOf(
-            ironclad = 12, spontaneous = 6, skladchinaPaid = 4,
-            distinctKeptClubs = 5, reliableClubs = 3, maxTrustWithRecord = 95
+            ironclad = 25, spontaneous = 12, skladchinaPaid = 10,
+            distinctKeptClubs = 10, reliableClubs = 6, maxTrustWithRecord = 96
         )
         val ids = XpPolicy.badgesFor(veteran).map { it.id }.toSet()
         assertEquals(
-            setOf("first_step", "ironclad_10", "spontaneous_5", "payer_3", "diverse_3", "diverse_5", "reliable_1", "rock_solid", "reliable_3"),
+            setOf("first_step", "ironclad_20", "spontaneous_10", "payer_8", "diverse_5", "diverse_8", "reliable_1", "rock_solid", "reliable_5"),
             ids
         )
 
-        // boundary: reliable but not rock-solid, diverse_3 but not diverse_5
-        val mid = statsOf(ironclad = 2, distinctKeptClubs = 3, reliableClubs = 1, maxTrustWithRecord = 80)
+        // boundary: reliable but not rock-solid, diverse_5 but not diverse_8, reliable_1 but not reliable_5
+        val mid = statsOf(ironclad = 2, distinctKeptClubs = 5, reliableClubs = 1, maxTrustWithRecord = 80)
         val midIds = XpPolicy.badgesFor(mid).map { it.id }.toSet()
-        assertTrue("reliable_1" in midIds && "diverse_3" in midIds)
-        assertFalse("rock_solid" in midIds || "diverse_5" in midIds || "reliable_3" in midIds)
+        assertTrue("reliable_1" in midIds && "diverse_5" in midIds)
+        assertFalse("rock_solid" in midIds || "diverse_8" in midIds || "reliable_5" in midIds)
     }
 
     private fun statsOf(

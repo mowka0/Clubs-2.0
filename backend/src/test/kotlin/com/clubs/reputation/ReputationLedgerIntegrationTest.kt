@@ -569,8 +569,9 @@ class ReputationLedgerIntegrationTest {
     fun `gamification sums participation XP plus diversity, derives level and badges from the ledger`() {
         val member = insertUser("Gamer")
         val seed = OffsetDateTime.now()
-        // club1 (fixture): 3 ironclad attendances → 30 XP, trust ~93 (track record, reliable + rock-solid)
-        repeat(3) {
+        // club1 (fixture): 7 ironclad attendances → 70 XP, trust ~96 (track record, reliable + rock-solid;
+        // rock-solid needs trust ≥95 since the 2026-06-14 calibration → ≥6 fresh kept outcomes).
+        repeat(7) {
             val e = insertFinalizedEvent()
             insertConfirmed(e, member, "going", "attended")
             reputationService.processFinalizedEvent(e)
@@ -589,15 +590,15 @@ class ReputationLedgerIntegrationTest {
 
         val g = xpService.getGamification(member, seed)
 
-        assertEquals(3 * 10 + 1 * 3 + 2 * 20, g.xp, "30 (ironclad) + 3 (paid) + 40 (diversity) = 73")
-        assertEquals(2, g.level)        // 73 ∈ [40,144) → level index 1 → "Свой"
+        assertEquals(7 * 10 + 1 * 3 + 2 * 20, g.xp, "70 (ironclad) + 3 (paid) + 40 (diversity) = 113")
+        assertEquals(2, g.level)        // 113 ∈ [50,200) → level index 1 → "Свой"
         assertEquals("Свой", g.levelName)
         assertEquals("Участник", g.nextLevelName)
         val badgeIds = g.badges.map { it.id }.toSet()
         assertTrue("first_step" in badgeIds)
         assertTrue("reliable_1" in badgeIds, "club1 trust ≥70")
-        assertTrue("rock_solid" in badgeIds, "club1 trust ≥90")
-        assertFalse("diverse_3" in badgeIds, "only 2 kept clubs")
+        assertTrue("rock_solid" in badgeIds, "club1 trust ≥95")
+        assertFalse("diverse_5" in badgeIds, "only 2 kept clubs, diverse needs ≥5")
     }
 
     @Test
