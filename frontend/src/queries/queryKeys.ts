@@ -31,6 +31,7 @@ export const queryKeys = {
       ['clubs', 'detail', clubId, 'members', userId] as const,
     leavePreview: (clubId: string) => ['clubs', 'detail', clubId, 'leave-preview'] as const,
     myReputation: () => ['clubs', 'my', 'reputation'] as const,
+    myGamification: () => ['users', 'me', 'gamification'] as const,
     myInterests: () => ['users', 'me', 'interests'] as const,
     applications: (clubId: string, status?: string) =>
       ['clubs', 'detail', clubId, 'applications', status ?? 'all'] as const,

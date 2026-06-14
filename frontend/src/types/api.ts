@@ -133,6 +133,27 @@ export interface LeavePreviewDto {
   totalObligations: number;
 }
 
+/** A passed-threshold gamification badge. */
+export interface BadgeDto {
+  id: string;
+  name: string;
+  family: string;
+}
+
+/**
+ * The authenticated user's gamification panel (`self` view): exact XP, current level + progress to
+ * the next, earned badges. XP is participation-only and only accumulates. See reputation-v2.md §H3.
+ */
+export interface GamificationDto {
+  xp: number;
+  level: number;
+  levelName: string;
+  nextLevelName: string | null;
+  xpIntoLevel: number;
+  xpSpanToNext: number | null;
+  badges: BadgeDto[];
+}
+
 export interface ActionRequiredCountDto {
   count: number;
 }

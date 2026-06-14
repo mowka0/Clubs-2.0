@@ -70,6 +70,7 @@ class ReputationLedgerIntegrationTest {
     @Autowired lateinit var memberService: MemberService
     @Autowired lateinit var membershipService: MembershipService
     @Autowired lateinit var membershipRepository: MembershipRepository
+    @Autowired lateinit var xpService: XpService
     @Autowired lateinit var dsl: DSLContext
 
     private lateinit var ownerId: UUID
@@ -560,6 +561,58 @@ class ReputationLedgerIntegrationTest {
         val paidMember = insertUser("PaidPreviewer"); insertMembershipInClub(paidMember, paidClub)
         val paidEvent = insertActiveEvent(club = paidClub); insertConfirmed(paidEvent, paidMember, "going", null)
         assertEquals(0, membershipService.getLeavePreview(paidClub, paidMember).totalObligations)
+    }
+
+    // --- PR-c: XP / уровни / бейджи (gamification) ---
+
+    @Test
+    fun `gamification sums participation XP plus diversity, derives level and badges from the ledger`() {
+        val member = insertUser("Gamer")
+        val seed = OffsetDateTime.now()
+        // club1 (fixture): 7 ironclad attendances → 70 XP, trust ~96 (track record, reliable + rock-solid;
+        // rock-solid needs trust ≥95 since the 2026-06-14 calibration → ≥6 fresh kept outcomes).
+        repeat(7) {
+            val e = insertFinalizedEvent()
+            insertConfirmed(e, member, "going", "attended")
+            reputationService.processFinalizedEvent(e)
+        }
+        // club2: 1 skladchina_paid → 3 XP. Two distinct kept clubs → 2×20 diversity.
+        val club2 = insertExtraClub("Club2")
+        reputationService.appendAndRecompute(
+            listOf(
+                LedgerEntry(
+                    member, club2, ReputationAxis.finance, ReputationKind.skladchina_paid,
+                    ReputationPolicy.pointsFor(ReputationKind.skladchina_paid), seed,
+                    ReputationSource.skladchina, UUID.randomUUID()
+                )
+            )
+        )
+
+        val g = xpService.getGamification(member, seed)
+
+        assertEquals(7 * 10 + 1 * 3 + 2 * 20, g.xp, "70 (ironclad) + 3 (paid) + 40 (diversity) = 113")
+        assertEquals(2, g.level)        // 113 ∈ [50,200) → level index 1 → "Свой"
+        assertEquals("Свой", g.levelName)
+        assertEquals("Участник", g.nextLevelName)
+        val badgeIds = g.badges.map { it.id }.toSet()
+        assertTrue("first_step" in badgeIds)
+        assertTrue("reliable_1" in badgeIds, "club1 trust ≥70")
+        assertTrue("rock_solid" in badgeIds, "club1 trust ≥95")
+        assertFalse("diverse_5" in badgeIds, "only 2 kept clubs, diverse needs ≥5")
+    }
+
+    @Test
+    fun `a broken promise adds no XP and never lowers the level`() {
+        val member = insertUser("NoShow")
+        val eventId = insertFinalizedEvent()
+        insertConfirmed(eventId, member, "going", "absent") // no_show
+        reputationService.processFinalizedEvent(eventId)
+
+        val g = xpService.getGamification(member)
+        assertEquals(0, g.xp, "a broken promise is 0 XP, not a minus")
+        assertEquals(1, g.level)
+        assertEquals("Гость", g.levelName)
+        assertTrue(g.badges.isEmpty())
     }
 
     // --- helpers ---
