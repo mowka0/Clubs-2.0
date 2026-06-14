@@ -3,6 +3,7 @@ package com.clubs.membership
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.generated.jooq.enums.MembershipRole
+import com.clubs.interest.InterestRepository
 import com.clubs.reputation.ReputationPolicy
 import com.clubs.reputation.ReputationRepository
 import com.clubs.reputation.TrustService
@@ -17,6 +18,7 @@ class MemberService(
     private val userRepository: UserRepository,
     private val reputationRepository: ReputationRepository,
     private val trustService: TrustService,
+    private val interestRepository: InterestRepository,
     private val mapper: MembershipMapper
 ) {
 
@@ -58,6 +60,8 @@ class MemberService(
             firstName = user.firstName,
             username = user.telegramUsername,
             avatarUrl = user.avatarUrl,
+            bio = user.bio,
+            interests = interestRepository.findUserInterestNames(userId),
             role = (membership?.role ?: MembershipRole.member).literal,
             trust = trust,
             promiseFulfillmentPct = if (show) reputation!!.promiseFulfillmentPct else null,

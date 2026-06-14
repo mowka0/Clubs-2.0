@@ -2,13 +2,62 @@ import { FC, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useMemberProfileQuery } from '../../queries/members';
-import type { MemberListItemDto } from '../../types/api';
+import { DonutRing } from '../reputation/DonutRing';
+import { TRUST_TIER_COLOR, trustTier } from '../reputation/trust-tier';
+import type { MemberListItemDto, MemberProfileDto } from '../../types/api';
 
 interface MemberProfileModalProps {
   member: MemberListItemDto;
   clubId: string;
   onClose: () => void;
 }
+
+/** Per-club reputation: two rings (Надёжность + Посещаемость) + spontaneity/role footer. */
+const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
+  const trust = profile.trust ?? 0;
+  const confirmations = profile.totalConfirmations ?? 0;
+  const attendances = profile.totalAttendances ?? 0;
+  const attendancePct = confirmations > 0 ? Math.round((attendances / confirmations) * 100) : 0;
+  const roleLabel = profile.role === 'organizer' ? 'Организатор' : 'Участник';
+
+  return (
+    <>
+      <div className="rd-glass rd-rings">
+        <div className="rd-ring">
+          <DonutRing
+            size={88}
+            fraction={trust / 100}
+            color={TRUST_TIER_COLOR[trustTier(trust)]}
+            ariaLabel={`Надёжность ${trust} из 100`}
+          >
+            <span className="rd-ring-num">{trust}</span>
+            <span className="rd-ring-cap">ИЗ 100</span>
+          </DonutRing>
+          <div className="rd-ring-l">
+            надёжность<span className="rd-ring-sub">умный показатель</span>
+          </div>
+        </div>
+        <div className="rd-ring">
+          <DonutRing
+            size={88}
+            fraction={confirmations > 0 ? attendances / confirmations : 0}
+            color="var(--accent)"
+            ariaLabel={`Посещаемость ${attendances} из ${confirmations}`}
+          >
+            <span className="rd-ring-frac">{attendances}/{confirmations}</span>
+            <span className="rd-ring-cap">{attendancePct}%</span>
+          </DonutRing>
+          <div className="rd-ring-l">
+            посещаемость<span className="rd-ring-sub">пришёл из подтверждённых</span>
+          </div>
+        </div>
+      </div>
+      <div className="rd-rep-foot">
+        Спонтанных визитов: <b>{profile.spontaneityCount ?? 0}</b> · Роль: {roleLabel}
+      </div>
+    </>
+  );
+};
 
 export const MemberProfileModal: FC<MemberProfileModalProps> = ({ member, clubId, onClose }) => {
   const profileQuery = useMemberProfileQuery(clubId, member.userId);
@@ -24,9 +73,10 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({ member, clubId
 
   const joinedAt = member.joinedAt
     ? new Date(member.joinedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
-    : '—';
-  const roleLabel = member.role === 'organizer' ? 'Организатор' : 'Участник';
+    : null;
   const initials = `${member.firstName.charAt(0)}${member.lastName?.charAt(0) ?? ''}`;
+  const bio = profile?.bio?.trim();
+  const hasInterests = (profile?.interests.length ?? 0) > 0;
 
   return createPortal(
     <>
@@ -39,7 +89,7 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({ member, clubId
         </div>
 
         <div className="rd-sheet-body">
-          {/* Avatar + name */}
+          {/* Avatar + name + (@username · в клубе с DATE) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span className="rd-avatar" style={{ width: 56, height: 56, borderRadius: '50%', fontSize: 18 }}>
               {member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : initials}
@@ -48,44 +98,53 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({ member, clubId
               <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)' }}>
                 {member.firstName} {member.lastName ?? ''}
               </div>
-              {profile?.username && (
-                <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>@{profile.username}</div>
-              )}
-            </div>
-          </div>
-
-          {/* Status in club */}
-          <div>
-            <div className="rd-section-sub-h" style={{ margin: '0 0 8px' }}>Статус в клубе</div>
-            <div className="rd-glass rd-rep-panel">
-              <div className="rd-kv"><span className="rd-v">Роль</span><span>{roleLabel}</span></div>
-              <div className="rd-kv"><span className="rd-v">В клубе с</span><span>{joinedAt}</span></div>
-            </div>
-          </div>
-
-          {/* Reputation */}
-          {loading ? (
-            <div className="rd-spinner-row" style={{ padding: '8px 0' }}><Spinner size="s" /></div>
-          ) : profile ? (
-            <div>
-              <div className="rd-section-sub-h" style={{ margin: '0 0 8px' }}>Репутация</div>
-              <div className="rd-glass rd-rep-panel">
-                {profile.trust !== null ? (
-                  <>
-                    <div className="rd-kv"><span className="rd-v">Надёжность</span><span>{profile.trust}</span></div>
-                    <div className="rd-kv"><span className="rd-v">Выполнение обещаний</span><span>{Math.round(profile.promiseFulfillmentPct ?? 0)}%</span></div>
-                    <div className="rd-kv"><span className="rd-v">Подтверждений участия</span><span>{profile.totalConfirmations}</span></div>
-                    <div className="rd-kv"><span className="rd-v">Посещений событий</span><span>{profile.totalAttendances}</span></div>
-                    <div className="rd-kv"><span className="rd-v">Спонтанные визиты</span><span>{profile.spontaneityCount ?? 0}</span></div>
-                  </>
-                ) : profile.role === 'organizer' ? (
-                  <div className="rd-kv"><span>Здесь репутация начисляется за организаторские качества</span></div>
-                ) : (
-                  <div className="rd-kv"><span>Новичок — пока недостаточно данных</span></div>
-                )}
+              <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>
+                {[profile?.username ? `@${profile.username}` : null, joinedAt ? `в клубе с ${joinedAt}` : null]
+                  .filter(Boolean)
+                  .join(' · ')}
               </div>
             </div>
-          ) : null}
+          </div>
+
+          {/* About */}
+          {bio && (
+            <div className="rd-field">
+              <span className="rd-label">О себе</span>
+              <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{bio}</div>
+            </div>
+          )}
+
+          {/* Interests */}
+          {hasInterests && (
+            <div className="rd-field">
+              <span className="rd-label">Интересы</span>
+              <div className="rd-tags" style={{ margin: 0 }}>
+                {profile!.interests.map((interest) => (
+                  <span key={interest} className="rd-tag">{interest}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Reputation in this club */}
+          <div>
+            <div className="rd-section-sub-h" style={{ margin: '0 0 8px' }}>Репутация в этом клубе</div>
+            {loading ? (
+              <div className="rd-spinner-row" style={{ padding: '8px 0' }}><Spinner size="s" /></div>
+            ) : profile && profile.trust !== null ? (
+              <ReputationRings profile={profile} />
+            ) : (
+              <div className="rd-glass rd-rep-panel">
+                <div className="rd-kv">
+                  <span>
+                    {profile?.role === 'organizer'
+                      ? 'Здесь репутация начисляется за организаторские качества'
+                      : 'Новичок — пока недостаточно данных'}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>,

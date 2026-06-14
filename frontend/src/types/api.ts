@@ -79,6 +79,9 @@ export interface MemberProfileDto {
   firstName: string;
   username: string | null;
   avatarUrl: string | null;
+  // Public profile fields, shown to every club member on the member card.
+  bio: string | null;
+  interests: string[];
   // "organizer" = club owner. Drives the organizer framing when trust is null.
   role: string;
   // P1b Trust 0-100. null = "Новичок"/suppressed (no track record yet, or owner in own club).
