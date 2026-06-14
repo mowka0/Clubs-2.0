@@ -217,15 +217,18 @@ class JooqMembershipRepository(
             .fetchOne(0, Int::class.java) ?: 0
 
     override fun create(userId: UUID, clubId: UUID): Membership {
-        val now = OffsetDateTime.now()
+        // Free-club membership (the only caller is FreeMembershipActivator). A free membership has
+        // NO subscription → subscription_expires_at stays NULL. Setting a 30-day expiry here (the
+        // historical bug) made every free member look like a cancelled-in-period paid subscriber:
+        // phantom "доступ до DATE" banner, and a free leaver lingering as a member for 30 days.
+        // The paid path is activateSubscription (real Stars-billed expiry); reactivateFree also nulls it.
         val record = dsl.insertInto(MEMBERSHIPS)
             .set(MEMBERSHIPS.ID, UUID.randomUUID())
             .set(MEMBERSHIPS.USER_ID, userId)
             .set(MEMBERSHIPS.CLUB_ID, clubId)
             .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
             .set(MEMBERSHIPS.ROLE, MembershipRole.member)
-            .set(MEMBERSHIPS.JOINED_AT, now)
-            .set(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT, now.plusDays(30))
+            .set(MEMBERSHIPS.JOINED_AT, OffsetDateTime.now())
             .returning()
             .fetchOne()!!
         return mapper.toDomain(record)

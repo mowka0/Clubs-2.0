@@ -110,7 +110,7 @@ POST /api/invite/{code}/join
 
 | Состояние строки в `memberships` | Действие | `clubs.member_count` |
 |---|---|---|
-| Нет строки | INSERT (`status=active`, `joined_at=now`, `subscription_expires_at=now+30d`*) | `+= 1` |
+| Нет строки | INSERT (`status=active`, `joined_at=now`, `subscription_expires_at=null`*) | `+= 1` |
 | `status ∈ {cancelled, expired}` | UPDATE: `status=active`, `joined_at=now`, `subscription_expires_at=null`, `updated_at=now` | `+= 1` (см. note ниже) |
 | `status ∈ {active, grace_period}` | `IllegalStateException` | — |
 
@@ -123,9 +123,11 @@ POST /api/invite/{code}/join
 > `member_count` фактически сместится на +1 относительно state до PR. Это
 > сознательная цена за корректность нового /leave-цикла.
 
-(*) `subscription_expires_at = now+30d` — текущее поведение `repository.create`,
-актуально только для свежего INSERT. Реактивация ставит `null` (бесплатный
-клуб не имеет Stars-биллинга).
+(*) `subscription_expires_at = null` — бесплатное членство НЕ имеет подписки/срока
+(Stars-биллинга нет). Платный путь — отдельный (`PaymentService` → `activateSubscription`,
+ставит реальную дату). Исторически `repository.create` ошибочно ставил `now+30d` всем
+бесплатным (фантомная подписка: ложная плашка «доступ до DATE», free-выходящий висел
+участником 30 дней). Исправлено; миграция **V26** обнулила фантомные сроки на free-клубах.
 
 > **`IllegalStateException` для активного membership** — defensive: caller
 > ОБЯЗАН проверить `findActiveByUserAndClub` до вызова и сурфейснуть

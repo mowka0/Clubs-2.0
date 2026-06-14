@@ -10,6 +10,7 @@ import com.clubs.generated.jooq.tables.references.REPUTATION_LEDGER
 import com.clubs.generated.jooq.tables.references.SKLADCHINAS
 import com.clubs.generated.jooq.tables.references.USER_CLUB_REPUTATION
 import com.clubs.membership.MemberService
+import com.clubs.membership.MembershipRepository
 import com.clubs.membership.MembershipService
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
@@ -68,6 +69,7 @@ class ReputationLedgerIntegrationTest {
     @Autowired lateinit var reputationRepository: ReputationRepository
     @Autowired lateinit var memberService: MemberService
     @Autowired lateinit var membershipService: MembershipService
+    @Autowired lateinit var membershipRepository: MembershipRepository
     @Autowired lateinit var dsl: DSLContext
 
     private lateinit var ownerId: UUID
@@ -497,6 +499,13 @@ class ReputationLedgerIntegrationTest {
         assertNull(reputationRepository.findByUserAndClub(member, paidClub), "paid leave does not penalize")
         assertEquals(0, ledgerRows(member, eventId))
         assertTrue(eventResponseExists(eventId, member), "paid leave keeps the booking until expire")
+    }
+
+    @Test
+    fun `free-club membership is created without a subscription expiry (no phantom paid period)`() {
+        val member = insertUser("FreeJoiner")
+        val created = membershipRepository.create(member, clubId) // fixture club is free (price 0)
+        assertNull(created.subscriptionExpiresAt, "a free membership carries no subscription expiry")
     }
 
     @Test
