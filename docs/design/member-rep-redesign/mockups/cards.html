@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Карточка участника (по клубу) + Заявка (общая статистика) — варианты</title>
+<style>
+:root{
+  --bg:#0B0B0E; --text:#F4F4F6; --text-dim:rgba(244,244,246,.6); --text-faint:rgba(244,244,246,.45);
+  --glass-strong-bg:linear-gradient(135deg,rgba(255,255,255,.06) 0%,rgba(255,255,255,.01) 100%),rgba(20,22,32,.5);
+  --glass-strong-border:rgba(255,255,255,.09);
+  --surface:rgba(255,255,255,.04); --hairline:rgba(255,255,255,.06); --hairline-2:rgba(255,255,255,.1);
+  --accent:#F47B3C; --accent-soft:rgba(244,123,60,.14);
+  --accent-grad-strong:linear-gradient(135deg,#FFCDA8 0%,#F47B3C 50%,#D5611C 100%);
+  --on-accent:#2A0E04; --live:#66D49A; --purple:#8E5DFF;
+  --gold-grad:linear-gradient(135deg,#FFD89B 0%,#E9A23C 100%);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;background:#070709;}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:var(--text);
+  -webkit-font-smoothing:antialiased;padding:28px 20px 64px;}
+.head{max-width:1500px;margin:0 auto 22px;}
+.head h1{font-size:23px;font-weight:800;letter-spacing:-.02em;margin:0 0 8px;}
+.head p{font-size:13.5px;line-height:1.55;color:var(--text-dim);margin:4px 0;max-width:920px;}
+.sect-h{max-width:1500px;margin:34px auto 16px;font-size:13px;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--accent);border-top:1px solid var(--hairline);padding-top:20px;}
+.sect-h span{color:var(--text-faint);font-weight:500;letter-spacing:0;text-transform:none;margin-left:8px;font-size:12.5px;}
+.gallery{display:flex;flex-wrap:wrap;gap:30px;justify-content:center;align-items:flex-start;max-width:1500px;margin:0 auto;}
+.col{width:360px;}
+.col > .tag{font-size:12px;font-weight:700;letter-spacing:.03em;display:inline-block;padding:5px 12px;
+  border-radius:999px;margin-bottom:6px;background:var(--surface);color:var(--text);}
+.col.rec > .tag{background:var(--accent-soft);color:var(--accent);}
+.col > .note{font-size:12px;color:var(--text-faint);line-height:1.45;margin:0 0 14px;min-height:32px;}
+
+/* modal card (rd-sheet, static) */
+.card{background:var(--glass-strong-bg);border:1px solid var(--glass-strong-border);border-radius:22px;
+  padding:8px 16px 18px;box-shadow:0 16px 50px rgba(0,0,0,.45);}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--hairline-2);margin:4px auto 14px;}
+.m-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+.m-head h2{font-size:18px;font-weight:700;letter-spacing:-.01em;margin:0;}
+.m-head .close{color:var(--accent);font-size:14px;font-weight:600;}
+.m-id{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+.avatar{width:52px;height:52px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-weight:700;color:#fff;font-size:17px;background:linear-gradient(135deg,#ff7b4a,#c43a2a);
+  box-shadow:0 2px 6px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.15);}
+.m-name{font-size:17px;font-weight:700;color:var(--text);line-height:1.2;}
+.m-handle{font-size:13px;color:var(--text-dim);margin-top:2px;}
+.sub-h{font-size:11px;color:var(--text-faint);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px;font-weight:600;}
+.panel{background:var(--surface);border:1px solid var(--hairline);border-radius:14px;overflow:hidden;}
+.kv{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;font-size:13.5px;color:var(--text);}
+.kv + .kv{border-top:1px solid var(--hairline);}
+.kv .k{color:var(--text-dim);}
+.foot{font-size:11px;color:var(--text-faint);margin-top:10px;line-height:1.4;}
+
+/* level pill + gold hero */
+.lvl-pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;}
+.lvl-pill.gold{background:var(--gold-grad);color:#2A1A04;}
+.lvl-pill.accent{background:var(--accent-soft);color:var(--accent);}
+.hero{border-radius:16px;padding:14px 16px;}
+.hero.gold{background:var(--gold-grad);color:#2A1A04;}
+.hero .l1{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}
+.hero .lvlname{font-size:17px;font-weight:800;letter-spacing:-.01em;}
+.hero .lvltag{font-size:11px;font-weight:700;opacity:.75;text-transform:uppercase;letter-spacing:.05em;}
+.hero .l2{font-size:13px;font-weight:600;margin-top:6px;opacity:.9;}
+
+/* stat tiles */
+.tiles{display:flex;gap:8px;}
+.tile{flex:1;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;padding:11px 6px;text-align:center;min-width:0;}
+.tile .n{font-size:19px;font-weight:800;color:var(--text);letter-spacing:-.01em;line-height:1;}
+.tile .n.green{color:var(--live);} .tile .n.accent{color:var(--accent);} .tile .n.gold{color:#E9A23C;}
+.tile .l{font-size:9px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text-faint);margin-top:6px;line-height:1.25;}
+
+/* bars */
+.bar-row{margin-bottom:13px;}
+.bar-row:last-child{margin-bottom:0;}
+.bar-row .top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;}
+.bar-row .top .k{color:var(--text-dim);} .bar-row .top .v{font-weight:800;}
+.bar-row .top .v.green{color:var(--live);} .bar-row .top .v.purple{color:var(--purple);}
+.track{height:8px;border-radius:999px;background:var(--hairline-2);overflow:hidden;}
+.fill{height:100%;border-radius:999px;}
+.fill.green{background:var(--live);} .fill.purple{background:var(--purple);} .fill.accent{background:var(--accent);}
+
+/* rings */
+.rings{display:flex;justify-content:space-around;gap:4px;}
+.ring{display:flex;flex-direction:column;align-items:center;gap:7px;}
+.ring .l{font-size:9.5px;color:var(--text-faint);font-weight:600;text-align:center;line-height:1.2;text-transform:uppercase;letter-spacing:.04em;}
+.donut-wrap{position:relative;display:inline-flex;}
+
+.answer{background:var(--surface);border:1px solid var(--hairline);border-radius:12px;padding:11px 14px;font-size:13.5px;color:var(--text-dim);line-height:1.45;}
+.actions{display:flex;gap:10px;margin-top:16px;}
+.btn{flex:1;height:46px;border-radius:13px;font-weight:700;font-size:14.5px;display:flex;align-items:center;justify-content:center;}
+.btn.primary{background:var(--accent-grad-strong);color:var(--on-accent);border:0;}
+.btn.outline{background:transparent;color:var(--text);border:1px solid var(--hairline-2);font-weight:600;}
+</style>
+</head>
+<body>
+
+<div class="head">
+  <h1>Карточка участника (по клубу) · Заявка на вступление (общая статистика)</h1>
+  <p><b>Карточка участника</b> — теперь ТОЛЬКО про этот клуб, без глобального уровня: красивая инфографика по локальным данным (надёжность, посещаемость, обещания). <b>Заявка</b> — наоборот, общая статистика по платформе (кандидата ещё нет в клубе → глобальное уместно), с уровнем в стиле, который понравился. По 3 варианта на каждую.</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="sect-h">Карточка участника <span>— только статистика этого клуба, без глобального уровня</span></div>
+<div class="gallery">
+
+  <!-- M1 — big gauge -->
+  <div class="col rec">
+    <span class="tag">Вариант 1 — донат надёжности</span>
+    <p class="note">Крупный круговой индикатор надёжности (заголовок), под ним — мелкие плитки. Один сильный фокус.</p>
+    <div class="card">
+      <div class="grab"></div>
+      <div class="m-head"><h2>Профиль участника</h2><span class="close">Закрыть</span></div>
+      <div class="m-id"><div class="avatar">ИС</div><div><div class="m-name">Игорь Светлов</div><div class="m-handle">@svetlov · в клубе с 3 марта 2025</div></div></div>
+      <div class="sub-h">Репутация в этом клубе</div>
+      <div class="panel" style="padding:16px;display:flex;align-items:center;gap:18px;">
+        <svg width="116" height="116" viewBox="0 0 120 120" style="flex-shrink:0;">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="var(--hairline-2)" stroke-width="10"/>
+          <circle cx="60" cy="60" r="50" fill="none" stroke="var(--live)" stroke-width="10" stroke-linecap="round"
+            stroke-dasharray="289 315" transform="rotate(-90 60 60)"/>
+          <text x="60" y="58" text-anchor="middle" font-size="34" font-weight="800" fill="var(--text)">92</text>
+          <text x="60" y="78" text-anchor="middle" font-size="11" font-weight="600" fill="var(--text-faint)">из 100</text>
+        </svg>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:700;color:var(--text);">Высокая надёжность</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-top:4px;line-height:1.4;">Держит слово на встречах этого клуба</div>
+        </div>
+      </div>
+      <div class="tiles" style="margin-top:10px;">
+        <div class="tile"><div class="n">96%</div><div class="l">обещания</div></div>
+        <div class="tile"><div class="n">38<span style="font-size:12px;color:var(--text-faint);font-weight:600;">/41</span></div><div class="l">посещений</div></div>
+        <div class="tile"><div class="n">5</div><div class="l">спонтанных</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- M2 — activity rings -->
+  <div class="col">
+    <span class="tag">Вариант 2 — кольца активности</span>
+    <p class="note">Три кольца (надёжность / посещаемость / обещания) в стиле activity-rings. Максимум инфографики.</p>
+    <div class="card">
+      <div class="grab"></div>
+      <div class="m-head"><h2>Профиль участника</h2><span class="close">Закрыть</span></div>
+      <div class="m-id"><div class="avatar">ИС</div><div><div class="m-name">Игорь Светлов</div><div class="m-handle">@svetlov · в клубе с 3 марта 2025</div></div></div>
+      <div class="sub-h">Репутация в этом клубе</div>
+      <div class="panel" style="padding:20px 10px;">
+        <div class="rings" style="gap:40px;">
+          <div class="ring">
+            <svg width="92" height="92" viewBox="0 0 64 64">
+              <circle cx="32" cy="32" r="26" fill="none" stroke="var(--hairline-2)" stroke-width="6"/>
+              <circle cx="32" cy="32" r="26" fill="none" stroke="var(--live)" stroke-width="6" stroke-linecap="round" stroke-dasharray="150 164" transform="rotate(-90 32 32)"/>
+              <text x="32" y="34" text-anchor="middle" font-size="18" font-weight="800" fill="var(--text)">92</text>
+              <text x="32" y="44" text-anchor="middle" font-size="6.5" font-weight="600" fill="var(--text-faint)">ИЗ 100</text>
+            </svg>
+            <div class="l">надёжность<br><span style="text-transform:none;letter-spacing:0;opacity:.7;">умный показатель</span></div>
+          </div>
+          <div class="ring">
+            <svg width="92" height="92" viewBox="0 0 64 64">
+              <circle cx="32" cy="32" r="26" fill="none" stroke="var(--hairline-2)" stroke-width="6"/>
+              <circle cx="32" cy="32" r="26" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-dasharray="151 164" transform="rotate(-90 32 32)"/>
+              <text x="32" y="34" text-anchor="middle" font-size="15" font-weight="800" fill="var(--text)">38/41</text>
+              <text x="32" y="44" text-anchor="middle" font-size="6.5" font-weight="600" fill="var(--text-faint)">93%</text>
+            </svg>
+            <div class="l">посещаемость<br><span style="text-transform:none;letter-spacing:0;opacity:.7;">пришёл из подтверждённых</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="foot" style="text-align:center;">Спонтанных визитов («возможно»→пришёл): <b style="color:var(--text-dim);">5</b> · Роль: Участник</div>
+    </div>
+  </div>
+
+  <!-- M3 — bars + tiles -->
+  <div class="col">
+    <span class="tag">Вариант 3 — полосы + числа</span>
+    <p class="note">Горизонтальные полосы прогресса + плитки чисел. Дашборд без кругов, плотно и быстро читается.</p>
+    <div class="card">
+      <div class="grab"></div>
+      <div class="m-head"><h2>Профиль участника</h2><span class="close">Закрыть</span></div>
+      <div class="m-id"><div class="avatar">ИС</div><div><div class="m-name">Игорь Светлов</div><div class="m-handle">@svetlov · в клубе с 3 марта 2025</div></div></div>
+      <div class="sub-h">Репутация в этом клубе</div>
+      <div class="panel" style="padding:16px;">
+        <div class="bar-row">
+          <div class="top"><span class="k">Надёжность</span><span class="v green">92<span style="color:var(--text-faint);font-weight:600;font-size:11px;">/100</span></span></div>
+          <div class="track"><div class="fill green" style="width:92%;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="top"><span class="k">Выполнение обещаний</span><span class="v purple">96%</span></div>
+          <div class="track"><div class="fill purple" style="width:96%;"></div></div>
+        </div>
+      </div>
+      <div class="tiles" style="margin-top:10px;">
+        <div class="tile"><div class="n">41</div><div class="l">подтверждений</div></div>
+        <div class="tile"><div class="n accent">38</div><div class="l">посещений</div></div>
+        <div class="tile"><div class="n">5</div><div class="l">спонтанных</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================ -->
+<div class="sect-h">Заявка на вступление <span>— общая статистика профиля (активность на платформе)</span></div>
+<div class="gallery">
+
+  <!-- A1 — gold hero + rows (the liked look, made global) -->
+  <div class="col rec">
+    <span class="tag">Вариант 1 — золотой блок уровня</span>
+    <p class="note">Тот самый hero-блок, что понравился, но с ОБЩЕЙ статистикой. Уровень + охват крупно, детали строками.</p>
+    <div class="card">
+      <div class="grab"></div>
+      <div class="m-head"><h2>Заявка</h2><span class="close">Закрыть</span></div>
+      <div class="m-id"><div class="avatar">МК</div><div><div class="m-name">Марина Котова</div><div class="m-handle">@kotova · Москва</div></div></div>
+      <div class="hero gold">
+        <div class="l1"><span class="lvlname">Столп сообщества</span><span class="lvltag">ур. 8</span></div>
+        <div class="l2">Активна в 8 клубах · надёжна в 7 из 8</div>
+      </div>
+      <div class="sub-h">Активность на платформе</div>
+      <div class="panel">
+        <div class="kv"><span class="k">Надёжна в клубах</span><span>7 из 8</span></div>
+        <div class="kv"><span class="k">Посетила событий</span><span>64 из 70</span></div>
+        <div class="kv"><span class="k">Участвует в клубах</span><span>8</span></div>
+      </div>
+      <div class="foot">Это активность как <b>участника</b> в других клубах (не организаторский опыт).</div>
+      <div class="sub-h">Ответ на вопрос</div>
+      <div class="answer">Давно слежу за клубом, хочу ходить на ваши встречи и помогать с организацией.</div>
+      <div class="actions"><div class="btn outline">Отклонить</div><div class="btn primary">Принять</div></div>
+    </div>
+  </div>
+
+  <!-- A2 — global reliability donut -->
+  <div class="col">
+    <span class="tag">Вариант 2 — донат «N из M»</span>
+    <p class="note">Крупный круговой индикатор глобальной надёжности «в скольких клубах надёжна», уровень — пиллом. Инфографика.</p>
+    <div class="card">
+      <div class="grab"></div>
+      <div class="m-head"><h2>Заявка</h2><span class="close">Закрыть</span></div>
+      <div class="m-id"><div class="avatar">МК</div><div><div class="m-name">Марина Котова</div>
+        <div class="m-handle">@kotova · Москва</div>
+        <span class="lvl-pill gold" style="margin-top:6px;">Столп сообщества · ур.8</span></div></div>
+      <div class="sub-h">Активность на платформе</div>
+      <div class="panel" style="padding:16px;display:flex;align-items:center;gap:18px;">
+        <svg width="104" height="104" viewBox="0 0 104 104" style="flex-shrink:0;">
+          <circle cx="52" cy="52" r="44" fill="none" stroke="var(--hairline-2)" stroke-width="9"/>
+          <circle cx="52" cy="52" r="44" fill="none" stroke="var(--live)" stroke-width="9" stroke-linecap="round" stroke-dasharray="242 277" transform="rotate(-90 52 52)"/>
+          <text x="52" y="50" text-anchor="middle" font-size="26" font-weight="800" fill="var(--text)">7/8</text>
+          <text x="52" y="68" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text-faint)">КЛУБОВ</text>
+        </svg>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:700;">Надёжна в 7 из 8 клубов</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-top:6px;line-height:1.4;">Посетила <b style="color:var(--text);">64 из 70</b> событий · активна в <b style="color:var(--text);">8</b> клубах</div>
+        </div>
+      </div>
+      <div class="foot">Статистика участия на платформе (не организаторский опыт).</div>
+      <div class="sub-h">Ответ на вопрос</div>
+      <div class="answer">Давно слежу за клубом, хочу ходить на ваши встречи и помогать с организацией.</div>
+      <div class="actions"><div class="btn outline">Отклонить</div><div class="btn primary">Принять</div></div>
+    </div>
+  </div>
+
+  <!-- A3 — passport tiles (dense) -->
+  <div class="col">
+    <span class="tag">Вариант 3 — «паспорт» плитками</span>
+    <p class="note">Без большого блока: уровень пиллом + ряд плиток. Плотно и быстро — удобно сканировать много заявок.</p>
+    <div class="card">
+      <div class="grab"></div>
+      <div class="m-head"><h2>Заявка</h2><span class="close">Закрыть</span></div>
+      <div class="m-id"><div class="avatar">МК</div><div><div class="m-name">Марина Котова <span class="lvl-pill gold" style="font-size:11px;vertical-align:1px;">Столп сообщества</span></div>
+        <div class="m-handle">@kotova · Москва</div></div></div>
+      <div class="sub-h">Активность на платформе</div>
+      <div class="tiles">
+        <div class="tile"><div class="n green">7<span style="font-size:12px;color:var(--text-faint);font-weight:600;">/8</span></div><div class="l">надёжна в клубах</div></div>
+        <div class="tile"><div class="n accent">64<span style="font-size:12px;color:var(--text-faint);font-weight:600;">/70</span></div><div class="l">посетила событий</div></div>
+        <div class="tile"><div class="n">8</div><div class="l">клубов</div></div>
+      </div>
+      <div class="foot">Уровень и числа — общий профиль участника на платформе (не организаторство).</div>
+      <div class="sub-h">Ответ на вопрос</div>
+      <div class="answer">Давно слежу за клубом, хочу ходить на ваши встречи и помогать с организацией.</div>
+      <div class="actions"><div class="btn outline">Отклонить</div><div class="btn primary">Принять</div></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
