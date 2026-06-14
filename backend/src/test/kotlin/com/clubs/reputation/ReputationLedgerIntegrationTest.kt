@@ -500,6 +500,25 @@ class ReputationLedgerIntegrationTest {
     }
 
     @Test
+    fun `leaving a free-priced club with an active paid period is a soft cancel (no penalty, no cascade)`() {
+        val member = insertUser("PaidPeriodLeaver")
+        // Free-priced club (fixture clubId, subscription_price=0) but the membership still holds a
+        // future paid period (club was switched paid→free). Leave must route to the soft cancel —
+        // no obligations-penalty, no cascade — because the user can still attend until expire.
+        insertMembershipWithPaidPeriod(member, clubId, OffsetDateTime.now().plusMonths(1))
+        val eventId = insertActiveEvent()
+        insertConfirmed(eventId, member, "going", null)
+
+        assertEquals(0, membershipService.getLeavePreview(clubId, member).totalObligations, "paid-period preview is zero")
+
+        membershipService.leaveClub(clubId, member)
+
+        assertNull(reputationRepository.findByUserAndClub(member, clubId), "soft cancel writes no penalty")
+        assertEquals(0, ledgerRows(member, eventId))
+        assertTrue(eventResponseExists(eventId, member), "soft cancel keeps the booking until expire")
+    }
+
+    @Test
     fun `leaving promotes the first waitlisted member into the vacated confirmed slot`() {
         val leaver = insertUser("Leaver"); insertMembership(leaver, "member")
         val waiter = insertUser("Waiter"); insertMembership(waiter, "member")
@@ -665,6 +684,13 @@ class ReputationLedgerIntegrationTest {
             """.trimIndent()
         )
         return id
+    }
+
+    private fun insertMembershipWithPaidPeriod(userId: UUID, club: UUID, expiresAt: OffsetDateTime) {
+        dsl.execute(
+            "INSERT INTO memberships (id, user_id, club_id, status, role, joined_at, subscription_expires_at) " +
+                "VALUES ('${UUID.randomUUID()}', '$userId', '$club', 'active', 'member'::membership_role, NOW(), '$expiresAt')"
+        )
     }
 
     private fun insertMembershipInClub(userId: UUID, club: UUID, role: String = "member") {

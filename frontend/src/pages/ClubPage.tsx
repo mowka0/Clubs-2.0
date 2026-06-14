@@ -93,18 +93,24 @@ export const ClubPage: FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>('activities');
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
-  // Obligation count for the leave dialog — only fetched for a free club while the modal
-  // is open (paid leave breaks nothing). Penalty magnitudes stay server-internal.
-  const leavePreviewQuery = useLeavePreviewQuery(
-    id,
-    showLeaveModal && (clubQuery.data?.subscriptionPrice ?? 1) <= 0,
-  );
 
   const club = clubQuery.data;
   const myClubs = myClubsQuery.data ?? [];
   const applications = applicationsQuery.data ?? [];
 
   const membership = myClubs.find((m) => m.clubId === id);
+  // "Leave" is a soft subscription-cancel for anyone who still holds a paid period — including a
+  // club switched paid→free (price 0 but the membership has a future subscription_expires_at).
+  // Only a genuinely free membership takes the hard exit-with-obligations path. Mirrors the
+  // backend routing (MembershipService.hasActivePaidAccess) so the UI matches the actual penalty.
+  const hasActivePaidAccess =
+    (!!club && club.subscriptionPrice > 0)
+    || (!!membership?.subscriptionExpiresAt
+      && new Date(membership.subscriptionExpiresAt).getTime() > Date.now());
+  // Obligation count for the leave dialog — only fetched for a genuinely free leave while the
+  // modal is open (a paid/paid-period leave breaks nothing). Penalty magnitudes stay server-internal.
+  const leavePreviewQuery = useLeavePreviewQuery(id, showLeaveModal && !hasActivePaidAccess);
+
   const isOwner = !!club && club.ownerId === user?.id;
   const isOrganizer = isOwner || membership?.role === 'organizer';
   // Active membership = full member; cancelled paid membership inside its
@@ -218,13 +224,12 @@ export const ClubPage: FC = () => {
     if (!id || !club) return;
     setLeaveError(null);
     haptic.impact('medium');
-    const isPaidLeave = club.subscriptionPrice > 0;
     leaveMutation.mutate(id, {
       onSuccess: () => {
         haptic.notify('success');
         setShowLeaveModal(false);
-        if (isPaidLeave) {
-          // Paid leave keeps the membership row (status=cancelled,
+        if (hasActivePaidAccess) {
+          // Soft cancel keeps the membership row (status=cancelled,
           // subscription_expires_at in the future) — stay on the club so the
           // cancelled-banner takes over from the leave icon.
           return;
@@ -339,7 +344,7 @@ export const ClubPage: FC = () => {
   const showLeaveIcon = !isOwner && isActiveMember;
   const showCancelledNote = !isOwner && isCancelledInPeriod && membership?.subscriptionExpiresAt;
 
-  const leaveVariant: 'free' | 'paid' = club.subscriptionPrice > 0 ? 'paid' : 'free';
+  const leaveVariant: 'free' | 'paid' = hasActivePaidAccess ? 'paid' : 'free';
   const leavePaidUntilLabel = membership?.subscriptionExpiresAt
     ? formatExpiryDate(membership.subscriptionExpiresAt)
     : null;
