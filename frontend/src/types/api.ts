@@ -197,10 +197,19 @@ export interface ApplicantInfoDto {
   interests: string[];
 }
 
+export type LevelTier = 'base' | 'mid' | 'top';
+
 export interface PeerStatsDto {
   memberClubCount: number;
   totalConfirmations: number;
   totalAttendances: number;
+  // Cross-club reputation for the review card: "надёжен в reliableClubs из trackRecordClubs клубов".
+  reliableClubs: number;
+  trackRecordClubs: number;
+  // Global gamification level (others projection) for the pill.
+  level: number;
+  levelName: string;
+  levelTier: LevelTier;
 }
 
 export interface ClubBriefDto {

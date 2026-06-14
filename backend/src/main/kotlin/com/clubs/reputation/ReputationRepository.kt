@@ -24,6 +24,14 @@ interface ReputationRepository {
     fun findTrustOutcomesByUser(userId: UUID): List<ClubLedgerOutcome>
 
     /**
+     * Batch variant of [findTrustOutcomesByUser]: every ledger outcome for a set of users in one
+     * query, grouped `userId → outcomes`. Powers the applicant cross-club signal (level + "N из M")
+     * for the organizer inbox without an N+1 over applicants. Users with no outcomes are absent from
+     * the map; empty input → emptyMap (no SQL hit).
+     */
+    fun findOutcomesByUserIds(userIds: Collection<UUID>): Map<UUID, List<ClubLedgerOutcome>>
+
+    /**
      * All ledger outcomes in one club, one row per (user, outcome) — the batch source for
      * per-member Trust on the club member list (avoids an N+1 over members).
      */

@@ -22,7 +22,7 @@ class XpService(
 
     @Transactional(readOnly = true)
     fun getGamification(userId: UUID, now: OffsetDateTime = OffsetDateTime.now()): GamificationDto {
-        val stats = computeStats(userId, now)
+        val stats = statsForOutcomes(reputationRepository.findTrustOutcomesByUser(userId), now)
         val xp = XpPolicy.totalXp(stats)
         val idx = XpPolicy.levelIndexFor(xp)
         val isMax = idx == XpPolicy.LEVEL_NAMES.lastIndex
@@ -37,7 +37,17 @@ class XpService(
         )
     }
 
-    private fun computeStats(userId: UUID, now: OffsetDateTime): XpPolicy.XpStats {
+    /**
+     * Global level (name + 0-based index) from a pre-fetched outcome list — the projection shown to
+     * OTHERS (e.g. the applicant pill on the review card), without XP/progress/badges. Outcome-based
+     * so the batch applicant path ([ApplicantSignalService]) fetches once for many users.
+     */
+    fun levelForOutcomes(outcomes: List<ClubLedgerOutcome>, now: OffsetDateTime = OffsetDateTime.now()): LevelInfo {
+        val idx = XpPolicy.levelIndexFor(XpPolicy.totalXp(statsForOutcomes(outcomes, now)))
+        return LevelInfo(level = idx + 1, name = XpPolicy.LEVEL_NAMES[idx], index = idx)
+    }
+
+    private fun statsForOutcomes(outcomes: List<ClubLedgerOutcome>, now: OffsetDateTime): XpPolicy.XpStats {
         var ironclad = 0
         var spontaneous = 0
         var skladchinaPaid = 0
@@ -45,7 +55,7 @@ class XpService(
         var reliableClubs = 0
         var maxTrustWithRecord = 0
 
-        reputationRepository.findTrustOutcomesByUser(userId)
+        outcomes
             .groupBy { it.clubId }
             .forEach { (_, rows) ->
                 var clubHasKept = false
@@ -76,3 +86,6 @@ class XpService(
         )
     }
 }
+
+/** The `others` level projection: 1-based level, its name, and the 0-based index (for tiering). */
+data class LevelInfo(val level: Int, val name: String, val index: Int)

@@ -16,6 +16,8 @@ import com.clubs.membership.MembershipDto
 import com.clubs.membership.MembershipMapper
 import com.clubs.membership.MembershipRepository
 import com.clubs.payment.PaymentService
+import com.clubs.reputation.ApplicantSignal
+import com.clubs.reputation.ApplicantSignalService
 import com.clubs.reputation.PeerStatsAggregate
 import com.clubs.reputation.ReputationRepository
 import com.clubs.user.UserRepository
@@ -40,6 +42,7 @@ class ApplicationService(
     private val notificationService: NotificationService,
     private val userRepository: UserRepository,
     private val reputationRepository: ReputationRepository,
+    private val applicantSignalService: ApplicantSignalService,
     private val interestRepository: InterestRepository,
     private val membershipMapper: MembershipMapper,
     private val freeMembershipActivator: FreeMembershipActivator
@@ -232,6 +235,7 @@ class ApplicationService(
 
         val applicantsById = userRepository.findByIds(applicantIds).associateBy { it.id!! }
         val peerStatsByUser = reputationRepository.aggregateByUserIds(applicantIds)
+        val signalsByUser = applicantSignalService.signalsFor(applicantIds)
         val interestsByUser = interestRepository.findUserInterestNamesByUserIds(applicantIds)
         val clubsById = clubRepository.findByIds(applicantClubIds).associateBy { it.id }
 
@@ -243,7 +247,10 @@ class ApplicationService(
             mapper.toPendingDto(
                 application = application,
                 applicant = mapper.toApplicantInfo(applicantRecord, interests),
-                peerStats = mapper.toPeerStats(peerStatsByUser[application.userId] ?: PeerStatsAggregate.EMPTY),
+                peerStats = mapper.toPeerStats(
+                    peerStatsByUser[application.userId] ?: PeerStatsAggregate.EMPTY,
+                    signalsByUser[application.userId] ?: ApplicantSignal.EMPTY
+                ),
                 club = mapper.toClubBrief(club),
                 now = now
             )

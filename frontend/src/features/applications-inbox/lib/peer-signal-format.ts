@@ -40,3 +40,19 @@ export function formatPeerSignal(stats: PeerStatsDto): string {
   const eventsWord = pluralRu(totalConfirmations, ['события', 'событий', 'событий']);
   return `В ${memberClubCount} ${clubsWord} · посетил ${totalAttendances} из ${totalConfirmations} ${eventsWord}`;
 }
+
+/**
+ * Genitive form of «клуб» after a count in an "из M" construction: «из 1 клуба»,
+ * «из 2/5/8 клубов», «из 21 клуба». (1 and counts ending in 1 except 11 → singular.)
+ */
+function clubsGenitive(n: number): string {
+  return n % 10 === 1 && n % 100 !== 11 ? 'клуба' : 'клубов';
+}
+
+/**
+ * Headline for the application card "Активность на платформе" donut: «Надёжен в N из M клубов».
+ * Only meaningful when the applicant has a track record (trackRecordClubs ≥ 1); the caller gates it.
+ */
+export function formatReliabilityHeadline(reliableClubs: number, trackRecordClubs: number): string {
+  return `Надёжен в ${reliableClubs} из ${trackRecordClubs} ${clubsGenitive(trackRecordClubs)}`;
+}

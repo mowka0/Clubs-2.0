@@ -284,6 +284,19 @@
 .rd-rep-foot { font-size: 11px; color: var(--text-faint); margin-top: 10px; line-height: 1.4; text-align: center; }
 .rd-rep-foot b { color: var(--text-dim); }
 
+/* Application card: «надёжен в N из M клубов» donut row. */
+.rd-activity { display: flex; align-items: center; gap: 16px; padding: 16px; }
+
+/* ---------- Level pill (gamification level — application card + inbox row) ---------- */
+.rd-lvl-pill {
+  display: inline-block; padding: 3px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 700; line-height: 1.25; white-space: nowrap;
+}
+.rd-lvl-pill.rd-sm { padding: 2px 8px; font-size: 10px; }
+.rd-lvl-pill--top { background: linear-gradient(135deg, #FFD89B 0%, #E9A23C 100%); color: #2A1A04; }
+.rd-lvl-pill--mid { background: var(--accent-soft); color: var(--accent); }
+.rd-lvl-pill--base { background: var(--surface); color: var(--text-dim); border: 1px solid var(--hairline); }
+
 /* ---------- Profile identity ---------- */
 .rd-pf-identity { text-align: center; margin-bottom: 18px; }
 .rd-pf-identity .rd-avt {

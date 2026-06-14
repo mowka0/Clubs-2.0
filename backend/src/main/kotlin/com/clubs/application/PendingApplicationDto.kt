@@ -33,18 +33,27 @@ data class ApplicantInfoDto(
 )
 
 /**
- * Cross-club aggregate over `user_club_reputation` for one applicant.
- * Backend returns raw counts; phrasing happens on the frontend.
+ * Cross-club applicant signal for the organizer review card. Backend returns raw counts; phrasing
+ * happens on the frontend.
  *
- * Semantics (see docs/modules/reputation.md):
+ * Participation counts (from `user_club_reputation`, see docs/modules/reputation.md):
  *  - memberClubCount    = number of clubs with a reputation row for the user.
  *  - totalConfirmations = sum of stage-2 commitments (final "идёт"/"не идёт").
  *  - totalAttendances   = sum of actually-attended events from those commitments.
+ *
+ * Cross-club reputation (on-read from the ledger, see [com.clubs.reputation.ApplicantSignalService]):
+ *  - reliableClubs / trackRecordClubs = the "надёжен в N из M клубов" donut.
+ *  - level / levelName / levelTier     = global gamification level (others projection) for the pill.
  */
 data class PeerStatsDto(
     val memberClubCount: Int,
     val totalConfirmations: Int,
-    val totalAttendances: Int
+    val totalAttendances: Int,
+    val reliableClubs: Int,
+    val trackRecordClubs: Int,
+    val level: Int,
+    val levelName: String,
+    val levelTier: String
 )
 
 data class ClubBriefDto(
