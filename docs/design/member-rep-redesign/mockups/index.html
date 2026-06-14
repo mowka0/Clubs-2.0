@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Уровень участника — варианты (список + карточка)</title>
+<style>
+/* Tokens copied from frontend/src/styles/brand-theme.css (DARK) — self-contained mockup. */
+:root{
+  --bg:#0B0B0E; --text:#F4F4F6; --text-dim:rgba(244,244,246,.6); --text-faint:rgba(244,244,246,.45);
+  --glass-bg:linear-gradient(135deg,rgba(255,255,255,.07) 0%,rgba(255,255,255,.015) 100%);
+  --glass-border:rgba(255,255,255,.08);
+  --glass-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 24px rgba(0,0,0,.25);
+  --glass-strong-bg:linear-gradient(135deg,rgba(255,255,255,.06) 0%,rgba(255,255,255,.01) 100%),rgba(20,22,32,.5);
+  --glass-strong-border:rgba(255,255,255,.09);
+  --surface:rgba(255,255,255,.04); --hairline:rgba(255,255,255,.06); --hairline-2:rgba(255,255,255,.1);
+  --accent:#F47B3C; --accent-deep:#D5611C; --accent-soft:rgba(244,123,60,.14);
+  --accent-grad-strong:linear-gradient(135deg,#FFCDA8 0%,#F47B3C 50%,#D5611C 100%);
+  --on-accent:#2A0E04; --live:#66D49A; --live-soft:rgba(79,160,120,.18);
+  /* mockup-only: "gold" top tier (warm end of the brand accent) */
+  --gold:#E9B45E; --gold-soft:rgba(233,180,94,.16);
+  --gold-grad:linear-gradient(135deg,#FFD89B 0%,#E9A23C 100%);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;background:#070709;}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:var(--text);
+  -webkit-font-smoothing:antialiased;padding:28px 20px 64px;}
+.head{max-width:1480px;margin:0 auto 26px;}
+.head h1{font-size:24px;font-weight:800;letter-spacing:-.02em;margin:0 0 8px;}
+.head p{font-size:14px;line-height:1.55;color:var(--text-dim);margin:4px 0;max-width:900px;}
+.head .legend{display:flex;flex-wrap:wrap;gap:10px 18px;margin-top:14px;font-size:12.5px;color:var(--text-dim);}
+.head .legend b{color:var(--text);font-weight:600;}
+.swatch{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}
+
+.gallery{display:flex;flex-wrap:wrap;gap:30px;justify-content:center;align-items:flex-start;max-width:1480px;margin:0 auto;}
+.col{width:344px;}
+.col > .tag{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  display:inline-block;padding:5px 12px;border-radius:999px;margin-bottom:6px;}
+.col.before > .tag{background:rgba(255,139,139,.14);color:#FF8B8B;}
+.col.rec > .tag{background:var(--accent-soft);color:var(--accent);}
+.col > .note{font-size:12px;color:var(--text-faint);line-height:1.45;margin:0 0 14px;min-height:34px;}
+.cap{font-size:10.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--text-faint);
+  margin:16px 4px 8px;}
+
+/* === device canvas === */
+.screen{background:var(--bg);border-radius:20px;padding:12px;border:1px solid var(--hairline);}
+
+/* === rd-* (copied 1:1 from redesign.css) === */
+.rd-glass{background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:22px;box-shadow:var(--glass-shadow);}
+.rd-rep-panel{padding:4px;}
+.rd-rep-row{display:flex;align-items:center;gap:12px;padding:14px;width:100%;text-align:left;}
+.rd-rep-row + .rd-rep-row{border-top:1px solid var(--hairline);}
+.rd-ico{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden;
+  box-shadow:0 2px 6px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.15);
+  background:linear-gradient(135deg,#ff7b4a,#c43a2a);}
+.rd-info{flex:1;min-width:0;}
+.rd-ttl{font-size:14px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.rd-met{font-size:11px;color:var(--text-faint);margin-top:3px;}
+.rd-score{text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;}
+.rd-score .rd-v{font-size:18px;font-weight:700;letter-spacing:-.01em;}
+.rd-score .rd-cap{font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.08em;}
+.rd-v.rd-high{color:var(--live);} .rd-v.rd-mid{color:var(--accent);} .rd-v.rd-low{color:#E08A7A;}
+.rd-v.rd-new{color:var(--text-faint);font-size:13px;font-weight:600;}
+.rd-badge{display:inline-block;padding:4px 9px;border-radius:999px;font-size:11px;font-weight:600;}
+.rd-badge.rd-rep{background:var(--accent-soft);color:var(--accent);}
+.rd-badge.rd-neutral{background:var(--surface);color:var(--text-dim);border:1px solid var(--hairline);}
+.org{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;
+  background:var(--accent-soft);color:var(--accent);border-radius:5px;}
+.rd-section-sub-h{font-size:11px;color:var(--text-faint);letter-spacing:.1em;text-transform:uppercase;
+  margin:16px 0 8px;font-weight:600;}
+.rd-kv{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;font-size:13.5px;color:var(--text);}
+.rd-kv + .rd-kv{border-top:1px solid var(--hairline);}
+.rd-kv .k{color:var(--text-dim);}
+
+/* modal as static card (rd-sheet styling, not fixed) */
+.modal-card{background:var(--glass-strong-bg);border:1px solid var(--glass-strong-border);
+  border-radius:22px;padding:8px 16px 18px;box-shadow:0 16px 50px rgba(0,0,0,.45);}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--hairline-2);margin:4px auto 14px;}
+.m-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+.m-head h2{font-size:18px;font-weight:700;letter-spacing:-.01em;margin:0;}
+.m-head .close{color:var(--accent);font-size:14px;font-weight:600;}
+.m-id{display:flex;align-items:center;gap:12px;}
+.rd-avatar{width:56px;height:56px;border-radius:50%;flex-shrink:0;overflow:hidden;display:flex;
+  align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:18px;
+  background:linear-gradient(135deg,#ff7b4a,#c43a2a);box-shadow:0 2px 6px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.15);}
+.m-name{font-size:17px;font-weight:700;color:var(--text);line-height:1.2;}
+.m-handle{font-size:13px;color:var(--text-dim);margin-top:2px;}
+.panel{background:var(--surface);border:1px solid var(--hairline);border-radius:14px;overflow:hidden;}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+
+/* === Variant 1: ring + number on avatar === */
+.avt-wrap{position:relative;flex-shrink:0;}
+.ring-gold{box-shadow:0 0 0 2px var(--gold),0 2px 6px rgba(0,0,0,.25);}
+.ring-accent{box-shadow:0 0 0 2px var(--accent),0 2px 6px rgba(0,0,0,.25);}
+.lvl-num{position:absolute;bottom:-4px;right:-4px;min-width:16px;height:16px;padding:0 3px;border-radius:999px;
+  font-size:9px;font-weight:800;color:var(--on-accent);display:flex;align-items:center;justify-content:center;
+  border:1.5px solid var(--bg);}
+.lvl-num.gold{background:var(--gold);} .lvl-num.accent{background:var(--accent);}
+.lvl-name-accent{color:var(--accent);font-size:13px;font-weight:600;margin-top:3px;}
+
+/* === Variant 2: glyph + second status line === */
+.statusline{font-size:11.5px;color:var(--text-faint);margin-top:3px;}
+.glyph{color:var(--accent);font-weight:700;}
+
+/* === Variant 3: colored level pill + hero band === */
+.lvl-pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.01em;white-space:nowrap;}
+.lvl-pill.gold{background:var(--gold-grad);color:#2A1A04;}
+.lvl-pill.accent{background:var(--accent-soft);color:var(--accent);}
+.lvl-pill.neutral{background:var(--surface);color:var(--text-dim);border:1px solid var(--hairline);}
+.hero{border-radius:16px;padding:13px 15px;margin-top:2px;}
+.hero.gold{background:var(--gold-grad);color:#2A1A04;}
+.hero.accent{background:var(--accent-grad-strong);color:var(--on-accent);}
+.hero .l1{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}
+.hero .lvlname{font-size:16px;font-weight:800;letter-spacing:-.01em;}
+.hero .lvltag{font-size:11px;font-weight:700;opacity:.8;text-transform:uppercase;letter-spacing:.04em;}
+.hero .l2{font-size:12.5px;font-weight:600;margin-top:5px;opacity:.92;}
+</style>
+</head>
+<body>
+
+<div class="head">
+  <h1>Уровень участника — глобальная репутация на странице клуба</h1>
+  <p>Один и тот же список и одна карточка в 4 исполнениях. Слева — как сейчас (то, что не нравится),
+     дальше три варианта. Уровень — <b>глобальный</b> (по всем клубам), показывается <b>другим</b>: только название уровня + кросс-клубный охват, точное XP наружу не уходит. Per-club «надёжность» (Trust справа) остаётся.</p>
+  <div class="legend">
+    <span><span class="swatch" style="background:var(--gold)"></span><b>Золото</b> — топ-уровни (Столп+)</span>
+    <span><span class="swatch" style="background:var(--accent)"></span><b>Accent</b> — средние (Активист…Душа)</span>
+    <span><span class="swatch" style="background:var(--surface);border:1px solid var(--hairline)"></span><b>Серый</b> — базовые (Свой…Завсегдатай)</span>
+    <span><span class="swatch" style="background:var(--live)"></span><b>Зелёный</b> — высокий Trust (закреплён за надёжностью)</span>
+    <span>Новичок (ур. «Гость») → уровень скрыт</span>
+  </div>
+</div>
+
+<div class="gallery">
+
+  <!-- ============ BEFORE ============ -->
+  <div class="col before">
+    <span class="tag">Сейчас — как есть</span>
+    <p class="note">Серый чип уровня прилеплен к имени рядом с «Орг» и спорит с Trust справа. Нет иерархии, нет охвата.</p>
+    <div class="cap">Список участников</div>
+    <div class="rd-glass rd-rep-panel screen">
+      <div class="rd-rep-row">
+        <div class="rd-ico">ИС</div>
+        <div class="rd-info"><div class="rd-ttl">Игорь Светлов <span class="rd-badge rd-neutral">Столп сообщества</span></div>
+          <div class="rd-met">Обещания 96%</div></div>
+        <div class="rd-score"><span class="rd-v rd-high">92</span><span class="rd-cap">надёжность</span></div>
+      </div>
+      <div class="rd-rep-row">
+        <div class="rd-ico">ЛО</div>
+        <div class="rd-info"><div class="rd-ttl">Лена Орлова <span class="org">Орг</span> <span class="rd-badge rd-neutral">Душа компании</span></div>
+          <div class="rd-met">Репутация за организаторские качества</div></div>
+        <div class="rd-score"><span class="rd-v rd-new">Орг</span></div>
+      </div>
+      <div class="rd-rep-row">
+        <div class="rd-ico">АМ</div>
+        <div class="rd-info"><div class="rd-ttl">Аня Мороз <span class="rd-badge rd-neutral">Активист</span></div>
+          <div class="rd-met">Обещания 92%</div></div>
+        <div class="rd-score"><span class="rd-v rd-high">88</span><span class="rd-cap">надёжность</span></div>
+      </div>
+      <div class="rd-rep-row">
+        <div class="rd-ico">КЛ</div>
+        <div class="rd-info"><div class="rd-ttl">Костя Лиде <span class="rd-badge rd-neutral">Завсегдатай</span></div>
+          <div class="rd-met">Обещания 70%</div></div>
+        <div class="rd-score"><span class="rd-v rd-low">64</span><span class="rd-cap">надёжность</span></div>
+      </div>
+      <div class="rd-rep-row">
+        <div class="rd-ico">НК</div>
+        <div class="rd-info"><div class="rd-ttl">Ника Котова</div><div class="rd-met">пока нет данных</div></div>
+        <div class="rd-score"><span class="rd-v rd-new">Новичок</span></div>
+      </div>
+    </div>
+    <div class="cap">Карточка участника</div>
+    <div class="modal-card">
+      <div class="grab"></div>
+      <div class="m-head"><h2>Профиль участника</h2><span class="close">Закрыть</span></div>
+      <div class="m-id"><div class="rd-avatar">ИС</div>
+        <div><div class="m-name">Игорь Светлов</div><div class="m-handle">@svetlov</div>
+          <span class="rd-badge rd-neutral" style="margin-top:6px;">Столп сообщества</span></div></div>
+      <div class="rd-section-sub-h">Статус в клубе</div>
+      <div class="panel"><div class="rd-kv"><span class="k">Роль</span><span>Участник</span></div>
+        <div class="rd-kv"><span class="k">В клубе с</span><span>3 марта 2025</span></div></div>
+      <div class="rd-section-sub-h">Репутация</div>
+      <div class="panel"><div class="rd-kv"><span class="k">Надёжность</span><span>92</span></div>
+        <div class="rd-kv"><span class="k">Выполнение обещаний</span><span>96%</span></div>
+        <div class="rd-kv"><span class="k">Посещений событий</span><span>38</span></div></div>
+    </div>
+  </div>
+
+  <!-- ============ VARIANT 1 — RING ============ -->
+  <div class="col">
+    <span class="tag">Вариант 1 — кольцо на аватаре</span>
+    <p class="note">Уровень живёт НА аватаре: цветное кольцо + номер. Имя чистое, охват под именем. Максимальный «вау», но дороже всех (кольцо вокруг скруглённого квадрата).</p>
+    <div class="cap">Список участников</div>
+    <div class="rd-glass rd-rep-panel screen">
+      <div class="rd-rep-row">
+        <div class="avt-wrap"><div class="rd-ico ring-gold">ИС</div><span class="lvl-num gold">8</span></div>
+        <div class="rd-info"><div class="rd-ttl">Игорь Светлов</div><div class="rd-met">в 7 клубах · надёжен в 6 из 7</div></div>
+        <div class="rd-score"><span class="rd-v rd-high">92</span><span class="rd-cap">надёжность</span></div>
+      </div>
+      <div class="rd-rep-row">
+        <div class="avt-wrap"><div class="rd-ico ring-accent">ЛО</div><span class="lvl-num accent">6</span></div>
+        <div class="rd-info"><div class="rd-ttl">Лена Орлова <span class="org">Орг</span></div><div class="rd-met">в 9 клубах</div></div>
+        <div class="rd-score"><span class="rd-v rd-new">Орг</span></div>
+      </div>
+      <div class="rd-rep-row">
+        <div class="avt-wrap"><div class="rd-ico ring-accent">АМ</div><span class="lvl-num accent">5</span></div>
+        <div class="rd-info"><div class="rd-ttl">Аня Мороз</div><div class="rd-met">в 4 клубах · надёжна в 3 из 4</div></div>
+        <div class="rd-score"><span class="rd-v rd-high">88</span><span class="rd-cap">надёжность</span></div>
+      </div>
+      <div class="rd-rep-row">
+        <div class="avt-wrap"><div class="rd-ico">КЛ</div></div>
+        <div class="rd-info"><div class="rd-ttl">Костя Лиде</div><div class="rd-met">в 2 клубах · уровень «Завсегдатай»</div></div>
+        <div class="rd-score"><span class="rd-v rd-low">64</span><span class="rd-cap">надёжность</span></div>
+      </div>
+      <div class="rd-rep-row">
+        <div class="avt-wrap"><div class="rd-ico">НК</div></div>
+        <div class="rd-info"><div class="rd-ttl">Ника Котова</div><div class="rd-met">пока нет данных</div></div>
+        <div class="rd-score"><span class="rd-v rd-new">Новичок</span></div>
+      </div>
+    </div>
+    <div class="cap">Карточка участника</div>
+    <div class="modal-card">
+      <div class="grab"></div>
+      <div class="m-head"><h2>Профиль участника</h2><span class="close">Закрыть</span></div>
+      <div class="m-id">
+        <div class="avt-wrap"><div class="rd-avatar ring-gold">ИС</div><span class="lvl-num gold" style="bottom:0;right:0;width:20px;height:20px;font-size:10px;">8</span></div>
+        <div><div class="m-name">Игорь Светлов</div><div class="m-handle">@svetlov</div>
+          <div class="lvl-name-accent">Столп сообщества · уровень 8</div></div></div>
+      <div style="font-size:12.5px;color:var(--text-dim);margin-top:12px;">Активен в 7 клубах · надёжен в 6 из 7</div>
+      <div class="chips" style="margin-top:8px;">
+        <span class="rd-badge rd-rep">Старожил</span><span class="rd-badge rd-rep">Душа тусы</span>
+        <span class="rd-badge rd-rep">Слово держит</span><span class="rd-badge rd-neutral">+1</span></div>
+      <div class="rd-section-sub-h">Статус в клубе</div>
+      <div class="panel"><div class="rd-kv"><span class="k">Роль</span><span>Участник</span></div>
+        <div class="rd-kv"><span class="k">В клубе с</span><span>3 марта 2025</span></div></div>
+      <div class="rd-section-sub-h">Репутация (в этом клубе)</div>
+      <div class="panel"><div class="rd-kv"><span class="k">Надёжность</span><span>92</span></div>
+        <div class="rd-kv"><span class="k">Выполнение обещаний</span><span>96%</span></div>
+        <div class="rd-kv"><span class="k">Посещений событий</span><span>38</span></div></div>
+    </div>
+  </div>
+
+  <!-- ============ VARIANT 2 — STATUS LINE ============ -->
+  <div class="col">
+    <span class="tag">Вариант 2 — вторая строка</span>
+    <p class="note">Уровень и охват — приглушённой второй строкой под именем. Самый чистый и дешёвый, но визуально скромный (ранг не «выпячен»).</p>
+    <div class="cap">Список участников</div>
+    <div class="rd-glass rd-rep-panel screen">
+      <div class="rd-rep-row">
+        <div class="rd-ico">ИС</div>
+        <div class="rd-info"><div class="rd-ttl">Игорь Светлов</div>
+          <div class="statusline"><span class="glyph">•</span> в 7 клубах · Столп сообщества</div></div>
+        <div class="rd-score"><span class="rd-v rd-high">92</span><span class="rd-cap">надёжность</span></div>
+      </div>
+      <div class="rd-rep-row">
+        <div class="rd-ico">ЛО</div>
+        <div class="rd-info"><div class="rd-ttl">Лена Орлова <span class="org">Орг</span></div>
+          <div class="statusline"><span class="glyph">•</span> в 9 клубах · Душа компании</div></div>
+        <div class="rd-score"><span class="rd-v rd-new">Орг</span></div>
+      </div>
+      <div class="rd-rep-row">
+        <div class="rd-ico">АМ</div>
+        <div class="rd-info"><div class="rd-ttl">Аня Мороз</div>
+          <div class="statusline"><span class="glyph">•</span> в 4 клубах · Активист</div></div>
+        <div class="rd-score"><span class="rd-v rd-high">88</span><span class="rd-cap">надёжность</span></div>
+      </div>
+      <div class="rd-rep-row">
+        <div class="rd-ico">КЛ</div>
+        <div class="rd-info"><div class="rd-ttl">Костя Лиде</div>
+          <div class="statusline">◦ в 2 клубах · Завсегдатай</div></div>
+        <div class="rd-score"><span class="rd-v rd-low">64</span><span class="rd-cap">надёжность</span></div>
+      </div>
+      <div class="rd-rep-row">
+        <div class="rd-ico">НК</div>
+        <div class="rd-info"><div class="rd-ttl">Ника Котова</div><div class="statusline">пока нет данных</div></div>
+        <div class="rd-score"><span class="rd-v rd-new">Новичок</span></div>
+      </div>
+    </div>
+    <div class="cap">Карточка участника</div>
+    <div class="modal-card">
+      <div class="grab"></div>
+      <div class="m-head"><h2>Профиль участника</h2><span class="close">Закрыть</span></div>
+      <div class="m-id"><div class="rd-avatar">ИС</div>
+        <div><div class="m-name">Игорь Светлов</div><div class="m-handle">@svetlov</div>
+          <span class="rd-badge rd-rep" style="margin-top:6px;">• Столп сообщества</span></div></div>
+      <div class="rd-section-sub-h">На платформе</div>
+      <div class="panel">
+        <div class="rd-kv"><span class="k">Уровень</span><span><span class="glyph">•</span> Столп сообщества</span></div>
+        <div class="rd-kv"><span class="k">Активен в</span><span>7 клубах</span></div>
+        <div class="rd-kv"><span class="k">Надёжен в</span><span>6 из 7 клубов</span></div>
+        <div class="rd-kv"><span class="k">Бейджи</span><span class="chips"><span class="rd-badge rd-rep">Старожил</span><span class="rd-badge rd-rep">Душа тусы</span></span></div>
+      </div>
+      <div class="rd-section-sub-h">В этом клубе</div>
+      <div class="panel"><div class="rd-kv"><span class="k">Надёжность</span><span>92</span></div>
+        <div class="rd-kv"><span class="k">Выполнение обещаний</span><span>96%</span></div>
+        <div class="rd-kv"><span class="k">Посещений событий</span><span>38</span></div></div>
+    </div>
+  </div>
+
+  <!-- ============ VARIANT 3 — PILL (RECOMMENDED) ============ -->
+  <div class="col rec">
+    <span class="tag">Вариант 3 — цветной пилл · рекомендую</span>
+    <p class="note">Ранг — цветной пилл (золото у топа), охват «· N клубов» под именем. В карточке — цветная HERO-полоса. Сразу читается и «желанен», строится на готовых стилях.</p>
+    <div class="cap">Список участников</div>
+    <div class="rd-glass rd-rep-panel screen">
+      <div class="rd-rep-row">
+        <div class="rd-ico">ИС</div>
+        <div class="rd-info"><div class="rd-ttl">Игорь Светлов <span class="lvl-pill gold">Столп сообщества</span></div>
+          <div class="rd-met">· 7 клубов</div></div>
+        <div class="rd-score"><span class="rd-v rd-high">92</span><span class="rd-cap">надёжность</span></div>
+      </div>
+      <div class="rd-rep-row">
+        <div class="rd-ico">ЛО</div>
+        <div class="rd-info"><div class="rd-ttl">Лена Орлова <span class="lvl-pill accent">Душа компании</span> <span class="org">Орг</span></div>
+          <div class="rd-met">· 9 клубов</div></div>
+        <div class="rd-score"><span class="rd-v rd-new">Орг</span></div>
+      </div>
+      <div class="rd-rep-row">
+        <div class="rd-ico">АМ</div>
+        <div class="rd-info"><div class="rd-ttl">Аня Мороз <span class="lvl-pill accent">Активист</span></div>
+          <div class="rd-met">· 4 клуба</div></div>
+        <div class="rd-score"><span class="rd-v rd-high">88</span><span class="rd-cap">надёжность</span></div>
+      </div>
+      <div class="rd-rep-row">
+        <div class="rd-ico">КЛ</div>
+        <div class="rd-info"><div class="rd-ttl">Костя Лиде <span class="lvl-pill neutral">Завсегдатай</span></div>
+          <div class="rd-met">· 2 клуба</div></div>
+        <div class="rd-score"><span class="rd-v rd-low">64</span><span class="rd-cap">надёжность</span></div>
+      </div>
+      <div class="rd-rep-row">
+        <div class="rd-ico">НК</div>
+        <div class="rd-info"><div class="rd-ttl">Ника Котова</div><div class="rd-met">в клубе с 12 июня</div></div>
+        <div class="rd-score"><span class="rd-v rd-new">Новичок</span></div>
+      </div>
+    </div>
+    <div class="cap">Карточка участника</div>
+    <div class="modal-card">
+      <div class="grab"></div>
+      <div class="m-head"><h2>Профиль участника</h2><span class="close">Закрыть</span></div>
+      <div class="m-id"><div class="rd-avatar">ИС</div>
+        <div><div class="m-name">Игорь Светлов</div><div class="m-handle">@svetlov</div></div></div>
+      <div class="hero gold" style="margin-top:12px;">
+        <div class="l1"><span class="lvlname">Столп сообщества</span><span class="lvltag">ур. 8</span></div>
+        <div class="l2">Активен в 7 клубах · надёжен в 6 из 7</div>
+      </div>
+      <div class="rd-section-sub-h">Достижения</div>
+      <div class="chips"><span class="rd-badge rd-rep">Старожил</span><span class="rd-badge rd-rep">Душа тусы</span>
+        <span class="rd-badge rd-rep">Слово держит</span><span class="rd-badge rd-neutral">+1</span></div>
+      <div class="rd-section-sub-h">Статус в клубе</div>
+      <div class="panel"><div class="rd-kv"><span class="k">Роль</span><span>Участник</span></div>
+        <div class="rd-kv"><span class="k">В клубе с</span><span>3 марта 2025</span></div></div>
+      <div class="rd-section-sub-h">Репутация (в этом клубе)</div>
+      <div class="panel"><div class="rd-kv"><span class="k">Надёжность</span><span>92</span></div>
+        <div class="rd-kv"><span class="k">Выполнение обещаний</span><span>96%</span></div>
+        <div class="rd-kv"><span class="k">Посещений событий</span><span>38</span></div></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
