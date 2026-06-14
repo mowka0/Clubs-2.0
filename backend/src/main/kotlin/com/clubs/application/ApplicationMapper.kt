@@ -3,6 +3,7 @@ package com.clubs.application
 import com.clubs.club.Club
 import com.clubs.generated.jooq.tables.records.ApplicationsRecord
 import com.clubs.generated.jooq.tables.records.UsersRecord
+import com.clubs.reputation.ApplicantSignal
 import com.clubs.reputation.PeerStatsAggregate
 import org.springframework.stereotype.Component
 import java.time.Duration
@@ -47,10 +48,15 @@ class ApplicationMapper {
         interests = interests
     )
 
-    fun toPeerStats(aggregate: PeerStatsAggregate): PeerStatsDto = PeerStatsDto(
+    fun toPeerStats(aggregate: PeerStatsAggregate, signal: ApplicantSignal): PeerStatsDto = PeerStatsDto(
         memberClubCount = aggregate.memberClubCount,
         totalConfirmations = aggregate.totalConfirmations,
-        totalAttendances = aggregate.totalAttendances
+        totalAttendances = aggregate.totalAttendances,
+        reliableClubs = signal.reliableClubs,
+        trackRecordClubs = signal.trackRecordClubs,
+        level = signal.level,
+        levelName = signal.levelName,
+        levelTier = signal.levelTier
     )
 
     fun toClubBrief(club: Club): ClubBriefDto = ClubBriefDto(

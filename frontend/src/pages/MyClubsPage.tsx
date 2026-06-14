@@ -19,6 +19,7 @@ import { Toast } from '../components/Toast';
 import { CreateClubModal } from '../components/CreateClubModal';
 import { ApplicationReviewModal } from '../components/applications/ApplicationReviewModal';
 import { formatPeerSignal } from '../features/applications-inbox/lib/peer-signal-format';
+import { LevelPill } from '../components/reputation/LevelPill';
 import { getClub } from '../api/clubs';
 import { ApiError } from '../api/apiClient';
 import { reliabilityTier } from '../utils/reputationTier';
@@ -224,6 +225,11 @@ const PendingAppCard: FC<PendingAppCardProps> = ({ pending, onClick }) => {
           {fullName}
           {applicant.telegramUsername && (
             <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}> · @{applicant.telegramUsername}</span>
+          )}
+          {peerStats.levelTier !== 'base' && (
+            <span style={{ marginLeft: 6 }}>
+              <LevelPill levelName={peerStats.levelName} tier={peerStats.levelTier} size="sm" />
+            </span>
           )}
         </div>
         <div className="rd-met">{club.name} · {formatPeerSignal(peerStats)}</div>

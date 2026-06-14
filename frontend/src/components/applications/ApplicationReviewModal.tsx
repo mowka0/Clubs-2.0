@@ -6,8 +6,9 @@ import {
   useApproveApplicationMutation,
   useRejectApplicationMutation,
 } from '../../queries/applications';
-import { formatPeerSignal } from '../../features/applications-inbox/lib/peer-signal-format';
 import { countryNameByCode } from '../CityPicker';
+import { LevelPill } from '../reputation/LevelPill';
+import { PlatformActivity } from './PlatformActivity';
 import type { PendingApplicationDto } from '../../types/api';
 
 const REASON_MIN = 5;
@@ -198,6 +199,11 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
             <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>{locationLabel}</div>
           )}
 
+          {/* Global gamification level */}
+          <div>
+            <LevelPill levelName={peerStats.levelName} tier={peerStats.levelTier} level={peerStats.level} />
+          </div>
+
           {/* About — full bio, wrapped */}
           {bio && (
             <div className="rd-field">
@@ -218,8 +224,11 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
             </div>
           )}
 
-          {/* Peer-signal — big line under hero/profile */}
-          <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>{formatPeerSignal(peerStats)}</div>
+          {/* Platform activity — «надёжен в N из M клубов» donut + participation line */}
+          <div className="rd-field">
+            <span className="rd-label">Активность на платформе</span>
+            <PlatformActivity stats={peerStats} />
+          </div>
 
           {/* Club row */}
           <div style={{ fontSize: 14, color: 'var(--text)' }}>

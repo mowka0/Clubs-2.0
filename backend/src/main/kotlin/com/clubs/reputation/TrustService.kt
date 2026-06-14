@@ -26,7 +26,8 @@ class TrustService(
      */
     @Transactional(readOnly = true)
     fun computeForUser(userId: UUID, now: OffsetDateTime = OffsetDateTime.now()): UserTrust {
-        val clubs = reputationRepository.findTrustOutcomesByUser(userId)
+        val outcomes = reputationRepository.findTrustOutcomesByUser(userId)
+        val clubs = outcomes
             .groupBy { it.clubId }
             .map { (clubId, rows) ->
                 ClubTrust(
@@ -36,8 +37,27 @@ class TrustService(
                     lastOccurredAt = rows.maxOf { it.occurredAt }
                 )
             }
-        val standings = clubs.map { TrustPolicy.ClubStanding(it.trust, it.outcomeCount, it.lastOccurredAt) }
-        return UserTrust(perClub = clubs, global = TrustPolicy.global(standings, now))
+        return UserTrust(perClub = clubs, global = globalForOutcomes(outcomes, now))
+    }
+
+    /**
+     * The all-history global aggregate ("надёжен в N из M клубов") from a pre-fetched outcome list.
+     * Single place that derives [TrustPolicy.GlobalTrust] from outcomes — shared by the self overview
+     * ([computeForUser]) and the batch applicant signal ([ApplicantSignalService]), which fetches once
+     * for many users and so must not re-query per user.
+     */
+    fun globalForOutcomes(
+        outcomes: List<ClubLedgerOutcome>,
+        now: OffsetDateTime = OffsetDateTime.now()
+    ): TrustPolicy.GlobalTrust {
+        val standings = outcomes.groupBy { it.clubId }.map { (_, rows) ->
+            TrustPolicy.ClubStanding(
+                trust = TrustPolicy.perClubTrust(rows.map { TrustPolicy.Outcome(it.kind, it.occurredAt) }, now),
+                outcomeCount = rows.size,
+                lastOccurredAt = rows.maxOf { it.occurredAt }
+            )
+        }
+        return TrustPolicy.global(standings, now)
     }
 
     /**

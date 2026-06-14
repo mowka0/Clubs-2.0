@@ -138,6 +138,21 @@ class JooqReputationRepository(
             }
     }
 
+    override fun findOutcomesByUserIds(userIds: Collection<UUID>): Map<UUID, List<ClubLedgerOutcome>> {
+        if (userIds.isEmpty()) return emptyMap()
+        val l = REPUTATION_LEDGER
+        return dsl.select(l.USER_ID, l.CLUB_ID, l.KIND, l.OCCURRED_AT)
+            .from(l)
+            .where(l.USER_ID.`in`(userIds))
+            .fetchGroups({ it.get(l.USER_ID)!! }, { r ->
+                ClubLedgerOutcome(
+                    clubId = r.get(l.CLUB_ID)!!,
+                    kind = r.get(l.KIND)!!,
+                    occurredAt = r.get(l.OCCURRED_AT)!!
+                )
+            })
+    }
+
     override fun findClubMemberOutcomes(clubId: UUID): List<MemberLedgerOutcome> {
         val l = REPUTATION_LEDGER
         return dsl.select(l.USER_ID, l.KIND, l.OCCURRED_AT)

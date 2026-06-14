@@ -16,6 +16,7 @@ import com.clubs.membership.Membership
 import com.clubs.membership.MembershipMapper
 import com.clubs.membership.MembershipRepository
 import com.clubs.payment.PaymentService
+import com.clubs.reputation.ApplicantSignalService
 import com.clubs.reputation.ReputationRepository
 import com.clubs.user.UserRepository
 import io.mockk.every
@@ -39,6 +40,7 @@ class ApplicationServiceTest {
     private lateinit var notificationService: NotificationService
     private lateinit var userRepository: UserRepository
     private lateinit var reputationRepository: ReputationRepository
+    private lateinit var applicantSignalService: ApplicantSignalService
     private lateinit var interestRepository: InterestRepository
     private lateinit var membershipMapper: MembershipMapper
     private lateinit var freeMembershipActivator: FreeMembershipActivator
@@ -54,6 +56,7 @@ class ApplicationServiceTest {
         notificationService = mockk(relaxed = true)
         userRepository = mockk(relaxed = true)
         reputationRepository = mockk(relaxed = true)
+        applicantSignalService = mockk(relaxed = true)
         interestRepository = mockk(relaxed = true)
         membershipMapper = MembershipMapper()
         freeMembershipActivator = mockk(relaxed = true)
@@ -66,6 +69,7 @@ class ApplicationServiceTest {
             notificationService,
             userRepository,
             reputationRepository,
+            applicantSignalService,
             interestRepository,
             membershipMapper,
             freeMembershipActivator
