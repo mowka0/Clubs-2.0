@@ -14,7 +14,13 @@ import {
   updateClub,
 } from '../api/clubs';
 import type { ClubFilters, CreateClubBody, UpdateClubBody } from '../api/clubs';
-import { applyToClub, joinByInviteCode, joinClub, leaveClub } from '../api/membership';
+import {
+  applyToClub,
+  getLeavePreview,
+  joinByInviteCode,
+  joinClub,
+  leaveClub,
+} from '../api/membership';
 import { queryKeys } from './queryKeys';
 
 const PAGE_SIZE = '20';
@@ -136,6 +142,20 @@ export function useLeaveClubMutation() {
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.byClubActive(clubId) });
       qc.invalidateQueries({ queryKey: queryKeys.activities.byClubAll(clubId) });
     },
+  });
+}
+
+/**
+ * Pre-leave obligation preview, fetched lazily when the leave dialog opens (pass
+ * `enabled` = dialog-open AND free club — paid clubs always break nothing). Always
+ * fresh: obligations change as the user votes/pays, so `staleTime: 0`.
+ */
+export function useLeavePreviewQuery(clubId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.clubs.leavePreview(clubId ?? ''),
+    queryFn: () => getLeavePreview(clubId!),
+    enabled: Boolean(clubId) && enabled,
+    staleTime: 0,
   });
 }
 

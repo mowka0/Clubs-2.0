@@ -114,6 +114,17 @@ interface SkladchinaRepository {
     fun markReminderSent(skladchinaId: UUID, at: OffsetDateTime)
 
     /**
+     * Exit-with-obligations (P1b hole B): [userId]'s PENDING participations in [clubId]'s active,
+     * reputation-affecting skladchinas — the finance obligations broken by leaving (each → a
+     * skladchina_expired −40, occurred_at = deadline). Deadline is NOT filtered: the leave cascade
+     * deletes every such participant row, so a deadline-passed pending would otherwise escape both
+     * the exit penalty and natural expiry. The exit outcome equals what natural expiry would write
+     * (−40), and a later natural row collides on the ledger UNIQUE — no double. Same scope the
+     * cascade deletes ([deleteParticipantFromActiveSkladchinasInClub]). Read BEFORE the cascade.
+     */
+    fun findPendingReputationObligations(userId: UUID, clubId: UUID): List<SkladchinaObligation>
+
+    /**
      * Cascade-delete on club leave: removes [userId] from every active skladchina
      * of [clubId]. Closed/cancelled skladchinas are preserved as historical
      * obligations. Returns number of rows deleted.
@@ -130,6 +141,15 @@ interface SkladchinaRepository {
      */
     fun cancelActiveByClub(clubId: UUID): Int
 }
+
+/**
+ * A pending reputation-affecting participation a leaving user abandons: the skladchina id
+ * (ledger source_id) + its deadline (skladchina_expired occurred_at). Read on club leave.
+ */
+data class SkladchinaObligation(
+    val skladchinaId: UUID,
+    val deadline: OffsetDateTime
+)
 
 /**
  * Caller-agnostic feed row: a skladchina plus the aggregates used by the unified

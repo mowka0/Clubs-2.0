@@ -6,6 +6,7 @@ import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
+import com.clubs.reputation.ReputationService
 import com.clubs.reputation.TrustService
 import com.clubs.event.EventResponseRepository
 import com.clubs.generated.jooq.enums.AccessType
@@ -37,6 +38,7 @@ class MembershipServiceTest {
     private lateinit var skladchinaRepository: SkladchinaRepository
     private lateinit var applicationRepository: ApplicationRepository
     private lateinit var trustService: TrustService
+    private lateinit var reputationService: ReputationService
     private lateinit var membershipService: MembershipService
 
     @BeforeEach
@@ -50,6 +52,7 @@ class MembershipServiceTest {
         skladchinaRepository = mockk(relaxed = true)
         applicationRepository = mockk(relaxed = true)
         trustService = mockk(relaxed = true)
+        reputationService = mockk(relaxed = true)
         membershipService = MembershipService(
             membershipRepository,
             clubRepository,
@@ -59,7 +62,8 @@ class MembershipServiceTest {
             eventResponseRepository,
             skladchinaRepository,
             applicationRepository,
-            trustService
+            trustService,
+            reputationService
         )
     }
 
@@ -104,7 +108,16 @@ class MembershipServiceTest {
     private fun paidClubRecord(clubId: UUID, ownerId: UUID = UUID.randomUUID(), price: Int = 500, memberLimit: Int = 50, memberCount: Int = 5): Club =
         makeClub(clubId, ownerId, name = "Paid Club", description = "Stars-paid", memberLimit = memberLimit, memberCount = memberCount, subscriptionPrice = price)
 
-    private fun membership(userId: UUID, clubId: UUID, status: MembershipStatus = MembershipStatus.active): Membership {
+    private fun membership(
+        userId: UUID,
+        clubId: UUID,
+        status: MembershipStatus = MembershipStatus.active,
+        // null = a genuinely free membership (free clubs never set an expiry — see
+        // FreeMembershipActivator). Leave routing keys on this: a non-null future expiry takes the
+        // soft paid-cancel path even in a now-free club. Default null so a plain `membership(...)`
+        // models the free case; paid tests pass a future date explicitly.
+        subscriptionExpiresAt: OffsetDateTime? = null
+    ): Membership {
         val now = OffsetDateTime.now()
         return Membership(
             id = UUID.randomUUID(),
@@ -113,7 +126,7 @@ class MembershipServiceTest {
             status = status,
             role = MembershipRole.member,
             joinedAt = now,
-            subscriptionExpiresAt = now.plusDays(30),
+            subscriptionExpiresAt = subscriptionExpiresAt,
             createdAt = now,
             updatedAt = now
         )
@@ -396,6 +409,29 @@ class MembershipServiceTest {
         verify(exactly = 0) { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(any(), any()) }
         verify(exactly = 0) { eventResponseRepository.deleteByUserAndClubAndActiveEvents(any(), any()) }
         verify(exactly = 0) { clubRepository.decrementMemberCountSafely(any(), any()) }
+    }
+
+    @Test
+    fun `leaveClub on a free-priced club with an active paid period is a soft cancel (no cascade)`() {
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        // Free-priced club (price 0) but the membership still holds a future paid period (club was
+        // switched paid→free). Must route to the soft cancel: no cascade, no penalty, member_count
+        // untouched — the user can still attend until the subscription expires.
+        val club = freeClubRecord(clubId, ownerId = ownerId)
+        val paidPeriodMembership = membership(userId, clubId, subscriptionExpiresAt = OffsetDateTime.now().plusDays(30))
+
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns paidPeriodMembership
+        every { clubRepository.findById(clubId) } returns club
+
+        membershipService.leaveClub(clubId, userId)
+
+        verify(exactly = 1) { membershipRepository.cancel(paidPeriodMembership.id) }
+        verify(exactly = 0) { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(any(), any()) }
+        verify(exactly = 0) { eventResponseRepository.deleteByUserAndClubAndActiveEvents(any(), any()) }
+        verify(exactly = 0) { clubRepository.decrementMemberCountSafely(any(), any()) }
+        verify(exactly = 0) { reputationService.penalizeExit(any(), any(), any(), any()) }
     }
 
     @Test

@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
@@ -34,6 +35,13 @@ class MembershipController(private val membershipService: MembershipService) {
         log.info("Cancel membership in club {}: userId={}", id, user.userId)
         return ResponseEntity.ok(membershipService.cancelMembership(id, user.userId))
     }
+
+    @GetMapping("/{id}/leave-preview")
+    fun leavePreview(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<LeavePreviewDto> =
+        ResponseEntity.ok(membershipService.getLeavePreview(id, user.userId))
 
     @PostMapping("/{id}/leave")
     fun leaveClub(
