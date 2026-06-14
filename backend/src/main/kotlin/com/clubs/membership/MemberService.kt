@@ -53,7 +53,8 @@ class MemberService(
         // the threshold (or no row, or owner in own club) the whole block is suppressed
         // and the frontend renders "Новичок" / the organizer framing (by role).
         val show = reputation != null && ReputationPolicy.isShown(reputation.outcomeCount)
-        val trust = if (show) trustService.trustForUserInClub(userId, clubId) else null
+        // One ledger read powers both per-club rings (Trust + skladchina); null below the gate.
+        val summary = if (show) trustService.clubSummary(userId, clubId) else null
         return MemberProfileDto(
             userId = userId,
             clubId = clubId,
@@ -63,11 +64,13 @@ class MemberService(
             bio = user.bio,
             interests = interestRepository.findUserInterestNames(userId),
             role = (membership?.role ?: MembershipRole.member).literal,
-            trust = trust,
+            trust = summary?.trust,
             promiseFulfillmentPct = if (show) reputation!!.promiseFulfillmentPct else null,
             totalConfirmations = if (show) reputation!!.totalConfirmations else null,
             totalAttendances = if (show) reputation!!.totalAttendances else null,
-            spontaneityCount = if (show) reputation!!.spontaneityCount else null
+            spontaneityCount = if (show) reputation!!.spontaneityCount else null,
+            skladchinaPaid = summary?.skladchinaPaid,
+            skladchinaTotal = summary?.skladchinaTotal
         )
     }
 }

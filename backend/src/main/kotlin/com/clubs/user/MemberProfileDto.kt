@@ -22,5 +22,9 @@ data class MemberProfileDto(
     val totalConfirmations: Int?,
     val totalAttendances: Int?,
     // "Возможно → Подтвердил → Пришёл": пришёл, хотя обещал только «возможно». Позитивный сигнал.
-    val spontaneityCount: Int?
+    val spontaneityCount: Int?,
+    // Reputation-affecting skladchina record in THIS club: paid / (paid + expired). null when the
+    // reputation block is suppressed; the frontend hides the "Сборы" ring when total == 0.
+    val skladchinaPaid: Int?,
+    val skladchinaTotal: Int?
 )

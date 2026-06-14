@@ -1,5 +1,6 @@
 package com.clubs.reputation
 
+import com.clubs.generated.jooq.enums.ReputationKind
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
@@ -51,15 +52,35 @@ class TrustService(
                 TrustPolicy.perClubTrust(rows.map { TrustPolicy.Outcome(it.kind, it.occurredAt) }, now)
             }
 
-    /** One member's Trust in one club, or null if they have no ledger outcomes there. */
+    /**
+     * One member's per-club reputation for the member card — Trust + the reputation-affecting
+     * skladchina record — from a SINGLE ledger read. null if they have no ledger outcomes there.
+     * Both rings come from one query: no second scan of the same (user, club) ledger.
+     */
     @Transactional(readOnly = true)
-    fun trustForUserInClub(userId: UUID, clubId: UUID, now: OffsetDateTime = OffsetDateTime.now()): Int? {
-        val outcomes = reputationRepository.findTrustOutcomesByUser(userId)
-            .filter { it.clubId == clubId }
-            .map { TrustPolicy.Outcome(it.kind, it.occurredAt) }
-        return if (outcomes.isEmpty()) null else TrustPolicy.perClubTrust(outcomes, now)
+    fun clubSummary(userId: UUID, clubId: UUID, now: OffsetDateTime = OffsetDateTime.now()): ClubReputationSummary? {
+        val outcomes = reputationRepository.findTrustOutcomesByUser(userId).filter { it.clubId == clubId }
+        if (outcomes.isEmpty()) return null
+        return ClubReputationSummary(
+            trust = TrustPolicy.perClubTrust(outcomes.map { TrustPolicy.Outcome(it.kind, it.occurredAt) }, now),
+            skladchinaPaid = outcomes.count { it.kind == ReputationKind.skladchina_paid },
+            skladchinaTotal = outcomes.count {
+                it.kind == ReputationKind.skladchina_paid || it.kind == ReputationKind.skladchina_expired
+            }
+        )
     }
 }
+
+/**
+ * One member's per-club reputation as the member card shows it, all from one ledger read.
+ *  - trust          = per-club Trust 0-100.
+ *  - skladchinaPaid / skladchinaTotal = reputation-affecting skladchina record (paid / paid+expired).
+ */
+data class ClubReputationSummary(
+    val trust: Int,
+    val skladchinaPaid: Int,
+    val skladchinaTotal: Int
+)
 
 /** A user's computed Trust in one club. `trust` is always present; the display gate is presentational. */
 data class ClubTrust(

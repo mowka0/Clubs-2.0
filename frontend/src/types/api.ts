@@ -91,6 +91,10 @@ export interface MemberProfileDto {
   totalAttendances: number | null;
   // "Возможно → Подтвердил → Пришёл": came though only said "maybe".
   spontaneityCount: number | null;
+  // Reputation-affecting skladchina record in this club: paid / (paid + expired).
+  // null when suppressed; the "Сборы" ring is hidden when skladchinaTotal === 0.
+  skladchinaPaid: number | null;
+  skladchinaTotal: number | null;
 }
 
 export interface UserClubReputationDto {

@@ -271,7 +271,7 @@
 .rd-rep-row .rd-v.rd-new  { color: var(--text-faint); font-size: 13px; font-weight: 600; }
 
 /* ---------- Reputation rings (member card + application card) ---------- */
-.rd-rings { display: flex; justify-content: space-around; gap: 28px; padding: 18px 8px; }
+.rd-rings { display: flex; flex-wrap: wrap; justify-content: space-around; gap: 16px 12px; padding: 18px 8px; }
 .rd-ring { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .rd-ring-l {
   font-size: 10px; color: var(--text-faint); font-weight: 600; text-align: center;

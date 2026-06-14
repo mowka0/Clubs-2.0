@@ -12,12 +12,19 @@ interface MemberProfileModalProps {
   onClose: () => void;
 }
 
-/** Per-club reputation: two rings (Надёжность + Посещаемость) + spontaneity/role footer. */
+/**
+ * Per-club reputation rings + spontaneity/role footer. Надёжность (smart composite) always shows;
+ * Посещаемость (events) and Сборы (reputation-affecting skladchina) appear only when there's data,
+ * so a member with only one axis never sees an empty "0/0" ring.
+ */
 const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
   const trust = profile.trust ?? 0;
   const confirmations = profile.totalConfirmations ?? 0;
   const attendances = profile.totalAttendances ?? 0;
   const attendancePct = confirmations > 0 ? Math.round((attendances / confirmations) * 100) : 0;
+  const skladchinaPaid = profile.skladchinaPaid ?? 0;
+  const skladchinaTotal = profile.skladchinaTotal ?? 0;
+  const skladchinaPct = skladchinaTotal > 0 ? Math.round((skladchinaPaid / skladchinaTotal) * 100) : 0;
   const roleLabel = profile.role === 'organizer' ? 'Организатор' : 'Участник';
 
   return (
@@ -25,7 +32,7 @@ const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
       <div className="rd-glass rd-rings">
         <div className="rd-ring">
           <DonutRing
-            size={88}
+            size={84}
             fraction={trust / 100}
             color={TRUST_TIER_COLOR[trustTier(trust)]}
             ariaLabel={`Надёжность ${trust} из 100`}
@@ -37,20 +44,40 @@ const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
             надёжность<span className="rd-ring-sub">умный показатель</span>
           </div>
         </div>
-        <div className="rd-ring">
-          <DonutRing
-            size={88}
-            fraction={confirmations > 0 ? attendances / confirmations : 0}
-            color="var(--accent)"
-            ariaLabel={`Посещаемость ${attendances} из ${confirmations}`}
-          >
-            <span className="rd-ring-frac">{attendances}/{confirmations}</span>
-            <span className="rd-ring-cap">{attendancePct}%</span>
-          </DonutRing>
-          <div className="rd-ring-l">
-            посещаемость<span className="rd-ring-sub">пришёл из подтверждённых</span>
+
+        {confirmations > 0 && (
+          <div className="rd-ring">
+            <DonutRing
+              size={84}
+              fraction={attendances / confirmations}
+              color="var(--accent)"
+              ariaLabel={`Посещаемость ${attendances} из ${confirmations}`}
+            >
+              <span className="rd-ring-frac">{attendances}/{confirmations}</span>
+              <span className="rd-ring-cap">{attendancePct}%</span>
+            </DonutRing>
+            <div className="rd-ring-l">
+              посещаемость<span className="rd-ring-sub">пришёл из подтверждённых</span>
+            </div>
           </div>
-        </div>
+        )}
+
+        {skladchinaTotal > 0 && (
+          <div className="rd-ring">
+            <DonutRing
+              size={84}
+              fraction={skladchinaPaid / skladchinaTotal}
+              color="var(--accent)"
+              ariaLabel={`Сборы: оплачено ${skladchinaPaid} из ${skladchinaTotal}`}
+            >
+              <span className="rd-ring-frac">{skladchinaPaid}/{skladchinaTotal}</span>
+              <span className="rd-ring-cap">{skladchinaPct}%</span>
+            </DonutRing>
+            <div className="rd-ring-l">
+              сборы<span className="rd-ring-sub">оплачено из обязательных</span>
+            </div>
+          </div>
+        )}
       </div>
       <div className="rd-rep-foot">
         Спонтанных визитов: <b>{profile.spontaneityCount ?? 0}</b> · Роль: {roleLabel}
