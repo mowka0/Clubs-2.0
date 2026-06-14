@@ -147,6 +147,11 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
                         Орг
                       </span>
                     )}
+                    {member.levelName && (
+                      <span className="rd-badge rd-neutral" style={{ marginLeft: 8, fontSize: 10, padding: '2px 8px' }}>
+                        {member.levelName}
+                      </span>
+                    )}
                   </div>
                   <div className="rd-met">
                     {hasScore

@@ -29,7 +29,7 @@ class MembershipMapper {
         subscriptionExpiresAt = membership.subscriptionExpiresAt
     )
 
-    fun toMemberListItemDto(info: ClubMemberInfo, trust: Int?): MemberListItemDto {
+    fun toMemberListItemDto(info: ClubMemberInfo, trust: Int?, levelName: String?): MemberListItemDto {
         val show = ReputationPolicy.isShown(info.outcomeCount)
         return MemberListItemDto(
             userId = info.userId,
@@ -40,6 +40,8 @@ class MembershipMapper {
             joinedAt = info.joinedAt,
             trust = if (show) trust else null,
             promiseFulfillmentPct = if (show) info.promiseFulfillmentPct else null,
+            // Global level — passed through as-is, NOT gated by this club's `show` (track record).
+            levelName = levelName,
             subscriptionCancelled = info.subscriptionCancelled
         )
     }

@@ -51,6 +51,15 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({ member, clubId
               {profile?.username && (
                 <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>@{profile.username}</div>
               )}
+              {member.levelName && (
+                <span
+                  className="rd-badge rd-neutral"
+                  style={{ marginTop: 4, fontSize: 10, padding: '2px 8px', display: 'inline-block' }}
+                  title="Глобальный уровень участника"
+                >
+                  {member.levelName}
+                </span>
+              )}
             </div>
           </div>
 

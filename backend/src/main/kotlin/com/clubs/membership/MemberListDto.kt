@@ -15,5 +15,9 @@ data class MemberListItemDto(
     // uses `role` to render the organizer framing). Whole reputation block is suppressed when null.
     val trust: Int?,
     val promiseFulfillmentPct: BigDecimal?,
+    // P1b §H8 others-tier: the member's GLOBAL account level NAME (e.g. "Активист"), or null below
+    // the floor level ("Гость"). A global signal — NOT gated by this club's track record, unlike
+    // `trust`. Exact XP / badges / formula internals are never exposed here.
+    val levelName: String?,
     val subscriptionCancelled: Boolean = false
 )

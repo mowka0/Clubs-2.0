@@ -6,6 +6,7 @@ import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.reputation.ReputationPolicy
 import com.clubs.reputation.ReputationRepository
 import com.clubs.reputation.TrustService
+import com.clubs.reputation.XpService
 import com.clubs.user.MemberProfileDto
 import com.clubs.user.UserRepository
 import org.springframework.stereotype.Service
@@ -17,6 +18,7 @@ class MemberService(
     private val userRepository: UserRepository,
     private val reputationRepository: ReputationRepository,
     private val trustService: TrustService,
+    private val xpService: XpService,
     private val mapper: MembershipMapper
 ) {
 
@@ -32,8 +34,11 @@ class MemberService(
         // accrue Trust in their own club — anti-farm rule 1 — so by Trust alone they'd sort last),
         // then everyone else by the DISPLAYED Trust, newcomers / suppressed rows at the bottom.
         val trustByUser = trustService.trustForClubMembers(clubId)
-        return membershipRepository.findClubMembersWithUserInfo(clubId, includeCancelled)
-            .map { mapper.toMemberListItemDto(it, trustByUser[it.userId]) }
+        val members = membershipRepository.findClubMembersWithUserInfo(clubId, includeCancelled)
+        // GLOBAL level name per member, one batch query (no N+1), shown alongside per-club Trust.
+        val levelByUser = xpService.publicLevelNames(members.map { it.userId })
+        return members
+            .map { mapper.toMemberListItemDto(it, trustByUser[it.userId], levelByUser[it.userId]) }
             .sortedWith(
                 compareByDescending<MemberListItemDto> { it.role == "organizer" }
                     .thenByDescending { it.trust ?: Int.MIN_VALUE }
@@ -52,6 +57,9 @@ class MemberService(
         // and the frontend renders "Новичок" / the organizer framing (by role).
         val show = reputation != null && ReputationPolicy.isShown(reputation.outcomeCount)
         val trust = if (show) trustService.trustForUserInClub(userId, clubId) else null
+        // Global level — independent of this club's track record (a newcomer here may carry a level
+        // earned elsewhere), so it is computed separately from the per-club `show` gate.
+        val levelName = xpService.publicLevelNames(listOf(userId))[userId]
         return MemberProfileDto(
             userId = userId,
             clubId = clubId,
@@ -63,7 +71,8 @@ class MemberService(
             promiseFulfillmentPct = if (show) reputation!!.promiseFulfillmentPct else null,
             totalConfirmations = if (show) reputation!!.totalConfirmations else null,
             totalAttendances = if (show) reputation!!.totalAttendances else null,
-            spontaneityCount = if (show) reputation!!.spontaneityCount else null
+            spontaneityCount = if (show) reputation!!.spontaneityCount else null,
+            levelName = levelName
         )
     }
 }

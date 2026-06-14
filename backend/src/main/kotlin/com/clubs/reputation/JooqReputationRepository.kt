@@ -152,6 +152,22 @@ class JooqReputationRepository(
             }
     }
 
+    override fun findOutcomesByUsers(userIds: Collection<UUID>): List<UserLedgerOutcome> {
+        if (userIds.isEmpty()) return emptyList()
+        val l = REPUTATION_LEDGER
+        return dsl.select(l.USER_ID, l.CLUB_ID, l.KIND, l.OCCURRED_AT)
+            .from(l)
+            .where(l.USER_ID.`in`(userIds))
+            .fetch { r ->
+                UserLedgerOutcome(
+                    userId = r.get(l.USER_ID)!!,
+                    clubId = r.get(l.CLUB_ID)!!,
+                    kind = r.get(l.KIND)!!,
+                    occurredAt = r.get(l.OCCURRED_AT)!!
+                )
+            }
+    }
+
     override fun recompute(userId: UUID, clubId: UUID) {
         // Serialize recompute per (user, club) across transactions so the ledger aggregate
         // is read against a stable snapshot. Without this, two concurrent recomputes from

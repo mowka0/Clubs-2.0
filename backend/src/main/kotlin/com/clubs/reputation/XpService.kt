@@ -37,6 +37,46 @@ class XpService(
         )
     }
 
+    /**
+     * §H8 others-tier projection: the GLOBAL level NAME for a batch of users, for display to OTHER
+     * members (e.g. the club member list) — one batch query, no N+1. ONLY the level name crosses the
+     * boundary: exact XP, weights, thresholds, badges and the raw ledger never leave the server.
+     *
+     * The level is the user's global account level (independent of any single club's track record),
+     * computed identically to [getGamification] (same XP). Returns userId → level name only above the
+     * floor level (index ≥ 1, i.e. past "Гость"); level-0 / no-history users are absent so the caller
+     * renders no level chip — the same "nothing notable yet" spirit as the self panel hiding at 0 XP.
+     */
+    @Transactional(readOnly = true)
+    fun publicLevelNames(userIds: Collection<UUID>): Map<UUID, String> {
+        if (userIds.isEmpty()) return emptyMap()
+        return reputationRepository.findOutcomesByUsers(userIds)
+            .groupBy { it.userId }
+            .mapNotNull { (userId, rows) ->
+                val idx = XpPolicy.levelIndexFor(XpPolicy.totalXp(xpCountsOnly(rows)))
+                if (idx >= 1) userId to XpPolicy.LEVEL_NAMES[idx] else null
+            }
+            .toMap()
+    }
+
+    /** XP-only stats from raw rows: kept counts + distinct kept clubs. Trust fields are irrelevant to
+     *  XP (and thus to the level), so they stay 0 — no per-club Trust is computed for the batch. */
+    private fun xpCountsOnly(rows: List<UserLedgerOutcome>): XpPolicy.XpStats {
+        var ironclad = 0
+        var spontaneous = 0
+        var skladchinaPaid = 0
+        val keptClubs = HashSet<UUID>()
+        rows.forEach { o ->
+            when (o.kind) {
+                ReputationKind.ironclad -> { ironclad++; keptClubs.add(o.clubId) }
+                ReputationKind.spontaneous -> { spontaneous++; keptClubs.add(o.clubId) }
+                ReputationKind.skladchina_paid -> { skladchinaPaid++; keptClubs.add(o.clubId) }
+                else -> Unit
+            }
+        }
+        return XpPolicy.XpStats(ironclad, spontaneous, skladchinaPaid, keptClubs.size, 0, 0)
+    }
+
     private fun computeStats(userId: UUID, now: OffsetDateTime): XpPolicy.XpStats {
         var ironclad = 0
         var spontaneous = 0

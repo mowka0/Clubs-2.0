@@ -14,13 +14,12 @@
 | PR-0 | счётчики V25 (kept/broke/neutral) | ✅ в проде |
 | PR-a | Trust 0–100 + Global «N из M» + История | ✅ в проде (#62) |
 | PR-b | выход-с-обязательствами + фикс фантомной подписки free | ✅ в проде (#63) |
-| **PR-c** | **XP / уровни / бейджи (участие-only)** | 🟡 **на staging, ветка `feature/reputation-p1b-xp` (a77f09c), НЕ смержен** |
-| PR-e | visibility-тиры (показ уровня/бейджей ДРУГИМ) | ⬜ после теста PR-c |
+| **PR-c** | **XP / уровни / бейджи (участие-only)** | ✅ **в проде (#64)** — математика верифицирована на staging, пороги откалиброваны реже |
+| PR-e | показ ГЛОБАЛЬНОГО уровня ДРУГИМ на карточках участников (others-tier) | 🟡 **на ветке `feature/reputation-p1b-pr-e`** — `levelName` в member-list/профиле, гейт ≥«Свой», батч без N+1 |
 | Пакет 4 F5 | UI-полировка репутации | ⬜ |
 
-**Следующий шаг сессии:** оттестировать PR-c на staging (раздел 4) → когда математика/логика
-подтверждена → `git checkout feature/reputation-p1b-xp` → мерж (`gh pr create` + `gh pr merge --squash`,
-БЕЗ `--delete-branch`) → затем PR-e.
+**Следующий шаг сессии:** оттестировать PR-e на staging (уровень на карточках участников) → мерж
+(`gh pr create` + `gh pr merge --squash`, БЕЗ `--delete-branch`) → затем Пакет 4 F5.
 
 > Текущая рабочая ветка на момент хэндоффа: `feature/reputation-p1b-xp`. `.claude/settings.json`
 > (permission-allowlist) изменён в рабочем дереве — НЕ коммитить в PR-c (не часть фичи).

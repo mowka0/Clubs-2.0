@@ -602,6 +602,49 @@ class ReputationLedgerIntegrationTest {
     }
 
     @Test
+    fun `publicLevelNames returns the global level for others and hides the floor level`() {
+        val seed = OffsetDateTime.now()
+        // userA: 7 ironclad (club1) + 1 skladchina_paid (club2) → XP 113 → level idx1 "Свой" (above floor).
+        val userA = insertUser("Leveled")
+        repeat(7) {
+            val e = insertFinalizedEvent()
+            insertConfirmed(e, userA, "going", "attended")
+            reputationService.processFinalizedEvent(e)
+        }
+        val club2 = insertExtraClub("Club2")
+        reputationService.appendAndRecompute(
+            listOf(
+                LedgerEntry(
+                    userA, club2, ReputationAxis.finance, ReputationKind.skladchina_paid,
+                    ReputationPolicy.pointsFor(ReputationKind.skladchina_paid), seed,
+                    ReputationSource.skladchina, UUID.randomUUID()
+                )
+            )
+        )
+        // userB: 1 skladchina_paid → XP 23 → level idx0 "Гость" (floor) → hidden from others.
+        val userB = insertUser("Floor")
+        val club3 = insertExtraClub("Club3")
+        reputationService.appendAndRecompute(
+            listOf(
+                LedgerEntry(
+                    userB, club3, ReputationAxis.finance, ReputationKind.skladchina_paid,
+                    ReputationPolicy.pointsFor(ReputationKind.skladchina_paid), seed,
+                    ReputationSource.skladchina, UUID.randomUUID()
+                )
+            )
+        )
+        // userC: no ledger outcomes at all → absent.
+        val userC = insertUser("Nobody")
+
+        val levels = xpService.publicLevelNames(listOf(userA, userB, userC))
+
+        assertEquals("Свой", levels[userA], "global level (113 XP) is exposed to others")
+        assertFalse(userB in levels, "level-0 (Гость) is hidden from others")
+        assertFalse(userC in levels, "no history → absent")
+        assertEquals(1, levels.size)
+    }
+
+    @Test
     fun `a broken promise adds no XP and never lowers the level`() {
         val member = insertUser("NoShow")
         val eventId = insertFinalizedEvent()

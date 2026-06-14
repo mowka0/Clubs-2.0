@@ -18,5 +18,9 @@ data class MemberProfileDto(
     val totalConfirmations: Int?,
     val totalAttendances: Int?,
     // "Возможно → Подтвердил → Пришёл": пришёл, хотя обещал только «возможно». Позитивный сигнал.
-    val spontaneityCount: Int?
+    val spontaneityCount: Int?,
+    // P1b §H8 others-tier: member's GLOBAL account level name (e.g. "Активист"), or null below
+    // "Гость". A global signal independent of this club's track record (a newcomer here can still
+    // carry a level earned elsewhere). Exact XP / badges / internals are never exposed.
+    val levelName: String?
 )

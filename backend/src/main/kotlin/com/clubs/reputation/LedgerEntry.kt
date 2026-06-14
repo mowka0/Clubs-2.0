@@ -73,3 +73,15 @@ data class MemberLedgerOutcome(
     val kind: ReputationKind,
     val occurredAt: OffsetDateTime
 )
+
+/**
+ * A user's ledger outcome WITH its club, batch-read across a set of users (one query) — the source
+ * for each member's GLOBAL XP level on the club member list (§H8 others-tier), without an N+1.
+ * `clubId` is needed because the diversity bonus counts distinct kept clubs.
+ */
+data class UserLedgerOutcome(
+    val userId: UUID,
+    val clubId: UUID,
+    val kind: ReputationKind,
+    val occurredAt: OffsetDateTime
+)

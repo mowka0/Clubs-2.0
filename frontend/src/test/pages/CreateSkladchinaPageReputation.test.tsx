@@ -39,6 +39,7 @@ const MEMBER: MemberListItemDto = {
   joinedAt: null,
   trust: null,
   promiseFulfillmentPct: null,
+  levelName: null,
   subscriptionCancelled: false,
 };
 

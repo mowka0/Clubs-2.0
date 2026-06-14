@@ -234,16 +234,19 @@ GET /api/clubs/{id}/members
   "role": "member|organizer",
   "joinedAt": "ISO datetime|null",
   "trust": 88,
-  "promiseFulfillmentPct": 87.5
+  "promiseFulfillmentPct": 87.5,
+  "levelName": "Активист|null"
 }
 ```
 
 `trust` — P1b Trust 0-100 (on-read из ledger), сменил прежнее `reliabilityIndex`.
+`levelName` — название ГЛОБАЛЬНОГО уровня XP участника (others-tier, §H8 reputation-v2.md).
 
 ### Бизнес-правила
 - Возвращаются ТОЛЬКО участники со статусом `active` (grace_period, cancelled, expired — не входят)
 - Per-member Trust считается одним batch-запросом (`TrustService.trustForClubMembers`, без N+1); список сортируется в `MemberService` по **отображаемому Trust** DESC, поэтому новички/sub-threshold/владельцы (показ = «Новичок», Trust = null) уходят **вниз**, а не наверх
 - Для новичка (`outcome_count < 3`, или владелец своего клуба) `trust` и сиблинги (`promiseFulfillmentPct`/счётчики) = **null** (блок подавлен → UI «Новичок» / организаторская рамка)
+- `levelName` — **глобальный** уровень аккаунта (`XpService.publicLevelNames`, один batch-запрос на список, без N+1). НЕ гейтится «Новичком» этого клуба (новичок здесь может нести уровень из других клубов). Показывается только **выше пола** (≥ «Свой»); уровень «Гость» / нет истории → `null` (чип скрыт). Точное XP/бейджи наружу не отдаются.
 - Дефолт role при отсутствии — `member`
 
 ### Authorization
@@ -300,12 +303,15 @@ GET /api/clubs/{clubId}/members/{userId}
   "trust": 88,
   "promiseFulfillmentPct": 87.5,
   "totalConfirmations": 8,
-  "totalAttendances": 7
+  "totalAttendances": 7,
+  "spontaneityCount": 2,
+  "levelName": "Активист|null"
 }
 ```
 
 `username` — telegram username (без `@`). `lastName` в этом DTO **не возвращается** — только firstName.
 `trust` — P1b Trust 0-100 (сменил `reliabilityIndex`); `role` несётся для организаторской рамки.
+`levelName` — глобальный уровень XP участника (others-tier): **не** гейтится per-club «Новичком», скрыт ниже «Свой» (см. §H8). Считается тем же XP, что и self-эндпоинт `/me/gamification`.
 
 ### Бизнес-правила
 - Caller должен быть `active` member клуба `clubId` → иначе 403

@@ -62,6 +62,9 @@ export interface MemberListItemDto {
   // to render the organizer framing). The whole reputation block is suppressed when null.
   trust: number | null;
   promiseFulfillmentPct: number | null;
+  // P1b §H8 others-tier: the member's GLOBAL account level name (e.g. "Активист"), or null below
+  // the floor level ("Гость"). A global signal — NOT gated by this club's track record like `trust`.
+  levelName: string | null;
   /**
    * True iff the member is a paid-club subscriber who has already cancelled
    * autorenew but is still inside the paid period (`subscription_expires_at >
@@ -88,6 +91,9 @@ export interface MemberProfileDto {
   totalAttendances: number | null;
   // "Возможно → Подтвердил → Пришёл": came though only said "maybe".
   spontaneityCount: number | null;
+  // P1b §H8 others-tier: member's GLOBAL account level name, or null below "Гость". Independent of
+  // this club's track record.
+  levelName: string | null;
 }
 
 export interface UserClubReputationDto {

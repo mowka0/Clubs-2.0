@@ -29,6 +29,13 @@ interface ReputationRepository {
      */
     fun findClubMemberOutcomes(clubId: UUID): List<MemberLedgerOutcome>
 
+    /**
+     * Every ledger outcome across ALL clubs for a batch of users — the source for each member's
+     * GLOBAL XP level on the member list (§H8 others-tier), without an N+1. Empty input → emptyList
+     * (no SQL hit).
+     */
+    fun findOutcomesByUsers(userIds: Collection<UUID>): List<UserLedgerOutcome>
+
     // --- Ledger pipeline (write side, source of truth) ---
 
     /**
