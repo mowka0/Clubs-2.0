@@ -66,6 +66,7 @@ class SkladchinaControllerTest {
     @Autowired lateinit var objectMapper: ObjectMapper
     @Autowired lateinit var skladchinaService: SkladchinaService
     @Autowired lateinit var skladchinaRepository: SkladchinaRepository
+    @Autowired lateinit var rateLimitFilter: com.clubs.common.security.RateLimitFilter
 
     private lateinit var organizerId: UUID
     private lateinit var memberAId: UUID
@@ -79,6 +80,9 @@ class SkladchinaControllerTest {
 
     @BeforeEach
     fun setUp() {
+        // Filter runs before auth → MockMvc requests share one ip:127.0.0.1 bucket. Reset per
+        // test so the shared 60/min API bucket isn't drained across the whole suite.
+        rateLimitFilter.resetBuckets()
         dsl.execute("DELETE FROM reputation_ledger")
         dsl.execute("DELETE FROM skladchina_participants")
         dsl.execute("DELETE FROM skladchinas")
@@ -902,17 +906,19 @@ class SkladchinaControllerTest {
             skladchinaId, userId
         )!!.get(0, String::class.java)!!
 
+    // get(0) returns the boxed column value (Long or null). Long::class.java is the PRIMITIVE
+    // `long`, which jOOQ coerces NULL → 0 — wrong for a "declared is null after unmark" check.
     private fun participantDeclared(skladchinaId: UUID, userId: UUID): Long? =
         dsl.fetchOne(
             "SELECT declared_amount_kopecks FROM skladchina_participants WHERE skladchina_id = ? AND user_id = ?",
             skladchinaId, userId
-        )!!.get(0, Long::class.java)
+        )?.get(0) as Long?
 
     private fun participantExpected(skladchinaId: UUID, userId: UUID): Long? =
         dsl.fetchOne(
             "SELECT expected_amount_kopecks FROM skladchina_participants WHERE skladchina_id = ? AND user_id = ?",
             skladchinaId, userId
-        )!!.get(0, Long::class.java)
+        )?.get(0) as Long?
 
     private fun skladchinaStatus(skladchinaId: UUID): String =
         dsl.fetchOne("SELECT status::text FROM skladchinas WHERE id = ?", skladchinaId)!!

@@ -54,6 +54,18 @@ class RateLimitFilter : OncePerRequestFilter() {
         }
     }
 
+    /**
+     * Test support: clears all accumulated buckets. The filter runs BEFORE authentication
+     * (SecurityConfig), so MockMvc requests — all from 127.0.0.1 with no principal — share a
+     * single `ip:127.0.0.1` bucket. An integration-test class that fires >60 requests within a
+     * minute would otherwise drain the shared API bucket and start getting 429s. Never called
+     * in production.
+     */
+    fun resetBuckets() {
+        apiBuckets.clear()
+        authBuckets.clear()
+    }
+
     private fun resolveKey(request: HttpServletRequest): String {
         val auth = SecurityContextHolder.getContext().authentication
         if (auth != null && auth.isAuthenticated && auth.principal is AuthenticatedUser) {
