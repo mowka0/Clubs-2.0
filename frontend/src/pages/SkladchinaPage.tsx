@@ -8,11 +8,14 @@ import {
   useCloseSkladchinaMutation,
   useDeclineSkladchinaMutation,
   useMarkPaidMutation,
+  useOrganizerMarkPaidMutation,
+  useOrganizerUnmarkMutation,
+  useRedistributeSkladchinaMutation,
   useSkladchinaQuery,
 } from '../queries/skladchina';
 import { Toast } from '../components/Toast';
 import { OrganizerParticipantList } from '../components/skladchina/OrganizerParticipantList';
-import type { SkladchinaDetailDto } from '../types/api';
+import type { SkladchinaDetailDto, SkladchinaParticipantDto } from '../types/api';
 
 const DEADLINE_FMT = new Intl.DateTimeFormat('ru-RU', {
   day: 'numeric',
@@ -54,10 +57,14 @@ export const SkladchinaPage: FC = () => {
   const markPaidMut = useMarkPaidMutation();
   const declineMut = useDeclineSkladchinaMutation();
   const closeMut = useCloseSkladchinaMutation();
+  const orgMarkMut = useOrganizerMarkPaidMutation();
+  const orgUnmarkMut = useOrganizerUnmarkMutation();
+  const redistributeMut = useRedistributeSkladchinaMutation();
 
   const [amountInput, setAmountInput] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [deficitDismissed, setDeficitDismissed] = useState(false);
 
   if (query.isPending) {
     return (
@@ -83,16 +90,36 @@ export const SkladchinaPage: FC = () => {
   const isActive = s.status === 'active';
   const isCreator = s.isOrganizerView;
   const isMemberParticipant = s.myStatus !== null;
+  const isFixed = s.paymentMode !== 'voluntary';
   const hasGoal = s.totalGoalKopecks != null && s.totalGoalKopecks > 0;
-  const percent = hasGoal
-    ? Math.min(100, Math.round((s.collectedKopecks / s.totalGoalKopecks!) * 100))
-    : null;
 
-  // Mark-paid: prefilled expected for fixed modes, empty for voluntary
+  // A-5: people-progress is the headline metric; money is decoration below it.
+  const peoplePercent = s.participantCount > 0
+    ? Math.round((s.paidCount / s.participantCount) * 100)
+    : 0;
+
+  // A-1: fixed modes show a one-tap "Я оплатил {доля} ₽" — the server records the share.
   const expectedRub = s.myExpectedAmountKopecks != null
     ? Math.floor(s.myExpectedAmountKopecks / 100)
     : null;
-  const prefilledForMode = s.paymentMode === 'voluntary' ? '' : (expectedRub?.toString() ?? '');
+
+  // A-3: organizer-only "не хватает X ₽" panel (fixed modes with a goal).
+  const pendingCount = s.participants?.filter((p) => p.status === 'pending').length ?? 0;
+  const deficitKopecks = isFixed && hasGoal
+    ? Math.max(0, s.totalGoalKopecks! - s.collectedKopecks)
+    : 0;
+  const perPendingRub = pendingCount > 0 ? Math.floor(deficitKopecks / pendingCount / 100) : 0;
+  // Hide the panel for sub-1₽-per-head leftovers: the preview would read "≈ 0 ₽" and there is
+  // nothing meaningful to spread. perPendingRub > 0 ⇒ deficit ≥ 100·pending ⇒ backend accepts.
+  const showDeficitPanel = isActive && isCreator && perPendingRub > 0 && pendingCount > 0 && !deficitDismissed;
+
+  // A-2: which participant row is mid-mutation (disable its buttons).
+  const busyUserId = (
+    orgMarkMut.isPending ? orgMarkMut.variables?.userId
+    : orgUnmarkMut.isPending ? orgUnmarkMut.variables?.userId
+    : undefined
+  ) ?? null;
+  const canManagePayments = isActive && isCreator && isFixed;
 
   const handleOpenPaymentLink = () => {
     haptic.impact('light');
@@ -101,16 +128,20 @@ export const SkladchinaPage: FC = () => {
 
   const handleMarkPaid = async () => {
     setActionError(null);
-    const valueRaw = (amountInput || prefilledForMode).trim();
-    const rub = Number(valueRaw);
-    if (!Number.isFinite(rub) || rub <= 0) {
-      setActionError('Введите корректную сумму');
-      haptic.notify('error');
-      return;
+    // A-1: fixed modes send no amount (server records the assigned share); voluntary parses input.
+    let declaredAmountKopecks: number | null = null;
+    if (!isFixed) {
+      const rub = Number(amountInput.trim());
+      if (!Number.isFinite(rub) || rub <= 0) {
+        setActionError('Введите корректную сумму');
+        haptic.notify('error');
+        return;
+      }
+      declaredAmountKopecks = Math.round(rub * 100);
     }
     try {
       haptic.impact('medium');
-      await markPaidMut.mutateAsync({ id: s.id, declaredAmountKopecks: Math.round(rub * 100) });
+      await markPaidMut.mutateAsync({ id: s.id, declaredAmountKopecks });
       haptic.notify('success');
       setToastMessage('Спасибо! Сбор обновлён.');
       setAmountInput('');
@@ -118,6 +149,61 @@ export const SkladchinaPage: FC = () => {
       console.error('markPaid failed', e);
       haptic.notify('error');
       setActionError('Не удалось отметить оплату. Попробуйте ещё раз.');
+    }
+  };
+
+  const handleRedistribute = async () => {
+    const confirmMsg =
+      `Перераспределить ${formatRubles(deficitKopecks)} ₽ на ${pendingCount} неоплативших? ` +
+      `Каждому ≈ ${perPendingRub.toLocaleString('ru-RU')} ₽. Уже оплативших не трогаем.`;
+    if (!window.confirm(confirmMsg)) return;
+    setActionError(null);
+    try {
+      haptic.impact('medium');
+      await redistributeMut.mutateAsync(s.id);
+      haptic.notify('success');
+      setToastMessage('Суммы пересчитаны.');
+      setDeficitDismissed(false);
+    } catch (e) {
+      console.error('redistribute failed', e);
+      haptic.notify('error');
+      setActionError('Не удалось перераспределить. Попробуйте ещё раз.');
+    }
+  };
+
+  const participantName = (p: SkladchinaParticipantDto) =>
+    `${p.firstName}${p.lastName ? ` ${p.lastName}` : ''}`;
+
+  const handleOrgMarkPaid = async (p: SkladchinaParticipantDto) => {
+    if (!window.confirm(`Отметить, что ${participantName(p)} оплатил(а)? Деньги получены наличными или переводом.`)) return;
+    setActionError(null);
+    try {
+      haptic.impact('medium');
+      await orgMarkMut.mutateAsync({ id: s.id, userId: p.userId });
+      haptic.notify('success');
+      setToastMessage('Оплата отмечена.');
+    } catch (e) {
+      console.error('organizer mark-paid failed', e);
+      haptic.notify('error');
+      setActionError('Не удалось отметить оплату. Попробуйте ещё раз.');
+    }
+  };
+
+  const handleOrgUnmark = async (p: SkladchinaParticipantDto) => {
+    const warn = s.affectsReputation
+      ? `Снять отметку оплаты у ${participantName(p)}? Участник вернётся в «ожидает» — в важном сборе это снова подставит его под −40 за молчание до дедлайна.`
+      : `Снять отметку оплаты у ${participantName(p)}? Участник вернётся в «ожидает».`;
+    if (!window.confirm(warn)) return;
+    setActionError(null);
+    try {
+      haptic.impact('medium');
+      await orgUnmarkMut.mutateAsync({ id: s.id, userId: p.userId });
+      haptic.notify('success');
+      setToastMessage('Отметка снята.');
+    } catch (e) {
+      console.error('organizer unmark failed', e);
+      haptic.notify('error');
+      setActionError('Не удалось снять отметку. Попробуйте ещё раз.');
     }
   };
 
@@ -214,28 +300,17 @@ export const SkladchinaPage: FC = () => {
       )}
 
       <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
-        <div className="rd-amounts">
-          {hasGoal ? (
-            <>
-              <span className="rd-collected">{formatRubles(s.collectedKopecks)} ₽</span>
-              <span className="rd-sep">из</span>
-              <span className="rd-goal">{formatRubles(s.totalGoalKopecks!)} ₽</span>
-              {percent !== null && <span className="rd-pct">{percent}%</span>}
-            </>
-          ) : (
-            <>
-              <span className="rd-collected">{formatRubles(s.collectedKopecks)} ₽</span>
-              <span className="rd-vol-note">собрано (по желанию)</span>
-            </>
-          )}
+        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>
+          Скинулись {s.paidCount} из {s.participantCount}
         </div>
-        {hasGoal && (
-          <div className="rd-progress">
-            <div className="rd-fill" style={{ width: `${percent}%` }} />
-          </div>
-        )}
+        <div className="rd-progress">
+          <div className="rd-fill" style={{ width: `${peoplePercent}%` }} />
+        </div>
         <div className="rd-sklad-stats">
-          {s.paidCount}/{s.participantCount} оплатили · до {DEADLINE_FMT.format(new Date(s.deadline))}
+          {hasGoal
+            ? `Собрано ${formatRubles(s.collectedKopecks)} ₽ из ${formatRubles(s.totalGoalKopecks!)} ₽`
+            : `Собрано ${formatRubles(s.collectedKopecks)} ₽`}
+          {' · до '}{DEADLINE_FMT.format(new Date(s.deadline))}
         </div>
       </div>
 
@@ -253,26 +328,24 @@ export const SkladchinaPage: FC = () => {
       {isActive && isMemberParticipant && s.myStatus === 'pending' && (
         <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
           <div className="rd-section-sub-h" style={{ marginTop: 0 }}>Подтвердите оплату</div>
-          {s.myExpectedAmountKopecks != null && (
-            <div className="rd-hint" style={{ marginBottom: 10 }}>
-              Ожидаемая сумма: {formatRubles(s.myExpectedAmountKopecks)} ₽
+
+          {/* A-1: fixed modes — no amount field; voluntary keeps the input. */}
+          {!isFixed && (
+            <div style={{ position: 'relative', marginBottom: 10 }}>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="1"
+                step="1"
+                placeholder="Сумма, ₽"
+                value={amountInput}
+                onChange={(e) => setAmountInput(e.target.value)}
+                className="rd-input"
+                style={{ paddingRight: 32 }}
+              />
+              <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }}>₽</span>
             </div>
           )}
-          <div style={{ position: 'relative', marginBottom: 10 }}>
-            <input
-              type="number"
-              inputMode="decimal"
-              min="1"
-              step="1"
-              placeholder={prefilledForMode || 'Сумма, ₽'}
-              value={amountInput}
-              onChange={(e) => setAmountInput(e.target.value)}
-              readOnly={s.paymentMode !== 'voluntary' && expectedRub !== null}
-              className="rd-input"
-              style={{ paddingRight: 32 }}
-            />
-            <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }}>₽</span>
-          </div>
           {actionError && <div className="rd-error">{actionError}</div>}
           {s.affectsReputation && (
             <div className="rd-warn-block">
@@ -287,7 +360,11 @@ export const SkladchinaPage: FC = () => {
               onClick={handleMarkPaid}
               disabled={markPaidMut.isPending}
             >
-              {markPaidMut.isPending ? 'Сохраняем…' : 'Я оплатил'}
+              {markPaidMut.isPending
+                ? 'Сохраняем…'
+                : isFixed && expectedRub != null
+                  ? `Я оплатил ${expectedRub.toLocaleString('ru-RU')} ₽`
+                  : 'Я оплатил'}
             </button>
             <button
               type="button"
@@ -332,10 +409,45 @@ export const SkladchinaPage: FC = () => {
         </div>
       )}
 
+      {showDeficitPanel && (
+        <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
+          <div className="rd-section-sub-h" style={{ marginTop: 0 }}>
+            Не хватает {formatRubles(deficitKopecks)} ₽
+          </div>
+          <div className="rd-hint" style={{ marginBottom: 10 }}>
+            Можно разложить недостачу на {pendingCount}{' '}
+            {pendingCount === 1 ? 'неоплатившего' : 'неоплативших'} — по ≈{' '}
+            {perPendingRub.toLocaleString('ru-RU')} ₽. Уже оплативших не трогаем.
+          </div>
+          {actionError && <div className="rd-error">{actionError}</div>}
+          <div className="rd-form-actions">
+            <button
+              type="button"
+              className="rd-btn-primary"
+              onClick={handleRedistribute}
+              disabled={redistributeMut.isPending}
+            >
+              {redistributeMut.isPending ? 'Пересчитываем…' : 'Перераспределить на неоплативших'}
+            </button>
+            <button
+              type="button"
+              className="rd-btn-outline"
+              onClick={() => setDeficitDismissed(true)}
+            >
+              Оставить как есть
+            </button>
+          </div>
+        </div>
+      )}
+
       {isCreator && s.participants && (
         <OrganizerParticipantList
           participants={s.participants}
           totalGoalKopecks={s.totalGoalKopecks}
+          canManagePayments={canManagePayments}
+          busyUserId={busyUserId}
+          onMarkPaid={handleOrgMarkPaid}
+          onUnmark={handleOrgUnmark}
         />
       )}
 

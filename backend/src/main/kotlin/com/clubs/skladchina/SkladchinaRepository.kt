@@ -75,6 +75,20 @@ interface SkladchinaRepository {
         declinedAt: OffsetDateTime
     ): Int
 
+    /**
+     * A-2 (organizer un-mark): transitions `paid` → `pending`, clearing declared_amount
+     * and paid_at. Guarded by `WHERE status = 'paid'` — returns affected rows (0 means the
+     * participant was concurrently resolved by a close and must not be reopened).
+     */
+    fun revertParticipantToPending(skladchinaId: UUID, userId: UUID): Int
+
+    /**
+     * A-3 (redistribute): overwrites a participant's expected_amount_kopecks. Guarded by
+     * `WHERE status = 'pending'` — never touches a participant who already paid/declined.
+     * Returns affected rows.
+     */
+    fun setExpectedAmount(skladchinaId: UUID, userId: UUID, expectedAmountKopecks: Long): Int
+
     /** Move all `pending` participants to `expired_no_response` (close at/after the deadline). */
     fun expirePendingParticipants(skladchinaId: UUID): Int
 

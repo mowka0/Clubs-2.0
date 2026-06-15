@@ -246,24 +246,43 @@ class SkladchinaControllerTest {
     }
 
     @Test
-    fun `goal-reached triggers auto-close to closed_success`() {
-        // Goal = 100, two members fixed_equal → 50 each. Both pay → closed.
+    fun `all-answered triggers auto-close to closed_success`() {
+        // Goal = 100, two members fixed_equal → 50 each. Both pay → no pending left → closed.
+        // (Phase A: closure is by everyone-answered, not by goal-reached — see the test below.)
         val id = createSkladchina(listOf(memberAId, memberBId))
         mockMvc.perform(
             post("/api/skladchinas/$id/mark-paid")
                 .header("Authorization", "Bearer $memberAToken")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"declaredAmountKopecks": 50000}""")
+                .content("{}")
         ).andExpect(status().isOk)
 
         mockMvc.perform(
             post("/api/skladchinas/$id/mark-paid")
                 .header("Authorization", "Bearer $memberBToken")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"declaredAmountKopecks": 50000}""")
+                .content("{}")
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value("closed_success"))
+    }
+
+    @Test
+    fun `goal reached while a participant is still pending does NOT auto-close (Phase A A-4)`() {
+        // Voluntary with goal 50000; memberA declares 60000 (≥ goal) but memberB stays pending.
+        // Pre-Phase-A this force-closed on goal-reached; now money is decoration → stays active.
+        val id = createVoluntaryWithGoal(listOf(memberAId, memberBId), 50000)
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"declaredAmountKopecks": 60000}""")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value("active"))
+            .andExpect(jsonPath("$.collectedKopecks").value(60000))
+        assertEquals("active", skladchinaStatus(id))
+        assertEquals("pending", participantStatus(id, memberBId))
     }
 
     @Test
@@ -622,6 +641,196 @@ class SkladchinaControllerTest {
         assertEquals(0, ledgerRows(memberAId, id))
     }
 
+    // ---- Phase A: organizer mark-paid / unmark / redistribute ----
+
+    @Test
+    fun `organizer marks a pending participant paid in fixed mode (records the share)`() {
+        val id = createSkladchina(listOf(memberAId, memberBId)) // fixed_equal 100000 → 50000 each
+        mockMvc.perform(
+            post("/api/skladchinas/$id/participants/$memberAId/mark-paid")
+                .header("Authorization", "Bearer $organizerToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.collectedKopecks").value(50000))
+        assertEquals("paid", participantStatus(id, memberAId))
+        assertEquals(50000L, participantDeclared(id, memberAId))
+    }
+
+    @Test
+    fun `organizer mark-paid is rejected for voluntary mode with 400`() {
+        val id = createVoluntarySkladchina(listOf(memberAId, memberBId))
+        mockMvc.perform(
+            post("/api/skladchinas/$id/participants/$memberAId/mark-paid")
+                .header("Authorization", "Bearer $organizerToken")
+        )
+            .andExpect(status().isBadRequest)
+        assertEquals("pending", participantStatus(id, memberAId))
+    }
+
+    @Test
+    fun `organizer mark-paid by a non-creator returns 403`() {
+        val id = createSkladchina(listOf(memberAId, memberBId))
+        mockMvc.perform(
+            post("/api/skladchinas/$id/participants/$memberBId/mark-paid")
+                .header("Authorization", "Bearer $memberAToken") // member, not creator
+        )
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `organizer unmark reverts a paid participant to pending and clears the amount`() {
+        val id = createSkladchina(listOf(memberAId, memberBId))
+        // Member pays themselves first (fixed → empty body, server records the share).
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}")
+        ).andExpect(status().isOk)
+        assertEquals("paid", participantStatus(id, memberAId))
+
+        mockMvc.perform(
+            post("/api/skladchinas/$id/participants/$memberAId/unmark")
+                .header("Authorization", "Bearer $organizerToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.collectedKopecks").value(0))
+        assertEquals("pending", participantStatus(id, memberAId))
+        assertEquals(null, participantDeclared(id, memberAId))
+    }
+
+    @Test
+    fun `organizer mark-paid in an important skladchina accrues +10 at close (org vouches)`() {
+        val id = createRepSkladchina(listOf(memberAId, memberBId)) // fixed_equal, affectsReputation
+        // Organizer marks BOTH paid (cash) → no pending left → early auto-close → +10 each.
+        mockMvc.perform(
+            post("/api/skladchinas/$id/participants/$memberAId/mark-paid")
+                .header("Authorization", "Bearer $organizerToken")
+        ).andExpect(status().isOk)
+        mockMvc.perform(
+            post("/api/skladchinas/$id/participants/$memberBId/mark-paid")
+                .header("Authorization", "Bearer $organizerToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value("closed_success"))
+        assertEquals(ReputationKind.skladchina_paid, soleLedgerKind(memberAId, id))
+        assertEquals(10, soleLedgerPoints(memberAId, id))
+        assertEquals(10, soleLedgerPoints(memberBId, id))
+    }
+
+    @Test
+    fun `redistribute spreads the deficit onto pending only, leaving paid untouched`() {
+        // A 3rd member makes the split meaningful (paid A, declined B, pending C).
+        val memberCId = UUID.randomUUID()
+        dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$memberCId', 3005, 'MemberC')")
+        dsl.execute("INSERT INTO memberships (user_id, club_id, status, role) VALUES ('$memberCId', '$clubId', 'active', 'member')")
+
+        // fixed_equal goal 90000, 3 participants → 30000 each
+        val id = createFromBody(
+            """
+            {
+              "title": "Court",
+              "paymentMode": "fixed_equal",
+              "totalGoalKopecks": 90000,
+              "paymentLink": "https://x.com",
+              "deadline": "${OffsetDateTime.now().plusDays(2)}",
+              "participants": [{"userId":"$memberAId"},{"userId":"$memberBId"},{"userId":"$memberCId"}]
+            }
+            """.trimIndent()
+        )
+        // A pays → collected 30000
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON).content("{}")
+        ).andExpect(status().isOk)
+        // B declines → still goal 90000, collected 30000, pending = {C}
+        mockMvc.perform(
+            post("/api/skladchinas/$id/decline").header("Authorization", "Bearer $memberBToken")
+        ).andExpect(status().isOk)
+
+        // Redistribute: deficit 60000 across pending {C} → C's share becomes 60000
+        mockMvc.perform(
+            post("/api/skladchinas/$id/redistribute").header("Authorization", "Bearer $organizerToken")
+        ).andExpect(status().isOk)
+
+        assertEquals(30000L, participantExpected(id, memberAId), "paid participant's share is untouched")
+        assertEquals(60000L, participantExpected(id, memberCId), "pending participant absorbs the deficit")
+    }
+
+    @Test
+    fun `redistribute is rejected for voluntary mode with 400`() {
+        val id = createVoluntarySkladchina(listOf(memberAId, memberBId))
+        mockMvc.perform(
+            post("/api/skladchinas/$id/redistribute").header("Authorization", "Bearer $organizerToken")
+        )
+            .andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `redistribute by a non-creator returns 403`() {
+        val id = createSkladchina(listOf(memberAId, memberBId))
+        mockMvc.perform(
+            post("/api/skladchinas/$id/redistribute").header("Authorization", "Bearer $memberAToken")
+        )
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `voluntary self mark-paid without an amount returns 400 (A-1 contract)`() {
+        // A-1 moved "amount required" from the DTO @NotNull to the service (per-mode). A voluntary
+        // self-mark with an empty body must still be rejected — fixed modes are the only ones that
+        // may omit it.
+        val id = createVoluntarySkladchina(listOf(memberAId, memberBId))
+        mockMvc.perform(
+            post("/api/skladchinas/$id/mark-paid")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}")
+        )
+            .andExpect(status().isBadRequest)
+        assertEquals("pending", participantStatus(id, memberAId))
+    }
+
+    @Test
+    fun `organizer mark-paid is idempotent and unmark is idempotent`() {
+        val id = createSkladchina(listOf(memberAId, memberBId))
+        // Mark twice — second call is a no-op returning the current (paid) state.
+        repeat(2) {
+            mockMvc.perform(
+                post("/api/skladchinas/$id/participants/$memberAId/mark-paid")
+                    .header("Authorization", "Bearer $organizerToken")
+            ).andExpect(status().isOk)
+        }
+        assertEquals("paid", participantStatus(id, memberAId))
+        // Unmark twice — second call is a no-op returning the current (pending) state.
+        repeat(2) {
+            mockMvc.perform(
+                post("/api/skladchinas/$id/participants/$memberAId/unmark")
+                    .header("Authorization", "Bearer $organizerToken")
+            )
+                .andExpect(status().isOk)
+        }
+        assertEquals("pending", participantStatus(id, memberAId))
+    }
+
+    @Test
+    fun `organizer actions on a closed skladchina return 400`() {
+        val id = createSkladchina(listOf(memberAId, memberBId))
+        // Close it manually first.
+        mockMvc.perform(
+            post("/api/skladchinas/$id/close").header("Authorization", "Bearer $organizerToken")
+        ).andExpect(status().isOk)
+
+        mockMvc.perform(
+            post("/api/skladchinas/$id/participants/$memberAId/mark-paid")
+                .header("Authorization", "Bearer $organizerToken")
+        ).andExpect(status().isBadRequest)
+        mockMvc.perform(
+            post("/api/skladchinas/$id/redistribute").header("Authorization", "Bearer $organizerToken")
+        ).andExpect(status().isBadRequest)
+    }
+
     // ---- helpers ----
 
     private fun createBodyFor(participantIds: List<UUID>): String {
@@ -671,11 +880,39 @@ class SkladchinaControllerTest {
         )
     }
 
+    private fun createVoluntaryWithGoal(participantIds: List<UUID>, goalKopecks: Long): UUID {
+        val participants = participantIds.joinToString(", ") { """{"userId": "$it"}""" }
+        return createFromBody(
+            """
+            {
+              "title": "Voluntary with goal",
+              "paymentMode": "voluntary",
+              "totalGoalKopecks": $goalKopecks,
+              "paymentLink": "https://x.com",
+              "deadline": "${OffsetDateTime.now().plusDays(2)}",
+              "participants": [$participants]
+            }
+            """.trimIndent()
+        )
+    }
+
     private fun participantStatus(skladchinaId: UUID, userId: UUID): String =
         dsl.fetchOne(
             "SELECT status::text FROM skladchina_participants WHERE skladchina_id = ? AND user_id = ?",
             skladchinaId, userId
         )!!.get(0, String::class.java)!!
+
+    private fun participantDeclared(skladchinaId: UUID, userId: UUID): Long? =
+        dsl.fetchOne(
+            "SELECT declared_amount_kopecks FROM skladchina_participants WHERE skladchina_id = ? AND user_id = ?",
+            skladchinaId, userId
+        )!!.get(0, Long::class.java)
+
+    private fun participantExpected(skladchinaId: UUID, userId: UUID): Long? =
+        dsl.fetchOne(
+            "SELECT expected_amount_kopecks FROM skladchina_participants WHERE skladchina_id = ? AND user_id = ?",
+            skladchinaId, userId
+        )!!.get(0, Long::class.java)
 
     private fun skladchinaStatus(skladchinaId: UUID): String =
         dsl.fetchOne("SELECT status::text FROM skladchinas WHERE id = ?", skladchinaId)!!

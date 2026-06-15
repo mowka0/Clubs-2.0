@@ -46,8 +46,11 @@ data class CreateSkladchinaParticipantRequest(
 )
 
 data class MarkPaidRequest(
-    @field:NotNull @field:Positive
-    val declaredAmountKopecks: Long
+    // Nullable since Phase A (A-1): in fixed modes the server records the assigned
+    // share and the client sends nothing. Required only for voluntary (validated in
+    // the service, per-mode). @Positive applies only when present.
+    @field:Positive
+    val declaredAmountKopecks: Long? = null
 )
 
 data class SkladchinaDetailDto(

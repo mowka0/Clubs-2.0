@@ -37,11 +37,12 @@ export function createSkladchina(
 
 export function markPaidSkladchina(
   id: string,
-  declaredAmountKopecks: number,
+  declaredAmountKopecks?: number | null,
 ): Promise<SkladchinaDetailDto> {
-  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/mark-paid`, {
-    declaredAmountKopecks,
-  });
+  // A-1: fixed modes send no amount (the server records the assigned share);
+  // voluntary sends the user-declared amount.
+  const body = declaredAmountKopecks != null ? { declaredAmountKopecks } : {};
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/mark-paid`, body);
 }
 
 export function declineSkladchina(id: string): Promise<SkladchinaDetailDto> {
@@ -50,4 +51,19 @@ export function declineSkladchina(id: string): Promise<SkladchinaDetailDto> {
 
 export function closeSkladchina(id: string): Promise<SkladchinaDetailDto> {
   return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/close`);
+}
+
+// A-2: organizer marks a participant paid ("получил наличкой") — fixed modes only.
+export function organizerMarkPaidParticipant(id: string, userId: string): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/participants/${userId}/mark-paid`);
+}
+
+// A-2 (toggle): organizer reverts a participant's payment back to pending.
+export function organizerUnmarkParticipant(id: string, userId: string): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/participants/${userId}/unmark`);
+}
+
+// A-3: organizer redistributes the remaining deficit across pending participants.
+export function redistributeSkladchina(id: string): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/redistribute`);
 }

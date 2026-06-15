@@ -372,6 +372,31 @@ class JooqSkladchinaRepository(
             )
             .execute()
 
+    override fun revertParticipantToPending(skladchinaId: UUID, userId: UUID): Int =
+        dsl.update(SKLADCHINA_PARTICIPANTS)
+            .set(SKLADCHINA_PARTICIPANTS.STATUS, SkladchinaParticipantStatus.pending)
+            .setNull(SKLADCHINA_PARTICIPANTS.DECLARED_AMOUNT_KOPECKS)
+            .setNull(SKLADCHINA_PARTICIPANTS.PAID_AT)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
+                    // A-2: only undo a real payment; never reopen a participant a concurrent
+                    // close already moved to a terminal status.
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid))
+            )
+            .execute()
+
+    override fun setExpectedAmount(skladchinaId: UUID, userId: UUID, expectedAmountKopecks: Long): Int =
+        dsl.update(SKLADCHINA_PARTICIPANTS)
+            .set(SKLADCHINA_PARTICIPANTS.EXPECTED_AMOUNT_KOPECKS, expectedAmountKopecks)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
+                    // A-3: redistribution only ever changes shares of those who have NOT paid.
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
+            )
+            .execute()
+
     override fun expirePendingParticipants(skladchinaId: UUID): Int =
         dsl.update(SKLADCHINA_PARTICIPANTS)
             .set(SKLADCHINA_PARTICIPANTS.STATUS, SkladchinaParticipantStatus.expired_no_response)

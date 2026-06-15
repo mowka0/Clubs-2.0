@@ -161,9 +161,7 @@ class SkladchinaService(
     }
 
     @Transactional
-    fun markPaid(skladchinaId: UUID, callerId: UUID, declaredAmountKopecks: Long): SkladchinaDetailDto {
-        if (declaredAmountKopecks <= 0) throw ValidationException("Declared amount must be positive")
-
+    fun markPaid(skladchinaId: UUID, callerId: UUID, declaredAmountKopecks: Long?): SkladchinaDetailDto {
         val skladchina = skladchinaRepository.findById(skladchinaId)
             ?: throw NotFoundException("Skladchina not found")
         if (skladchina.status != SkladchinaStatus.active) {
@@ -226,10 +224,147 @@ class SkladchinaService(
     }
 
     /**
-     * Auto-close trigger that fires after mark-paid or decline. Closes if:
-     *  - goal is reached (fixed-modes), OR
-     *  - all participants are in a terminal status (paid / declined) — no more pending.
-     * Quiet no-op otherwise.
+     * A-2: the organizer marks a participant paid ("получил наличкой"). Fixed modes only —
+     * the assigned share is recorded in one tap; voluntary has no canonical amount, so the
+     * participant marks it themselves. In an important skladchina this accrues +10 at close
+     * exactly like a self-mark: the organizer vouches for the cash (PO decision 2026-06-15),
+     * and farming is bounded by the 3-important-per-club-per-week rate limit. Idempotent
+     * when the participant is already paid.
+     */
+    @Transactional
+    fun organizerMarkPaid(skladchinaId: UUID, callerId: UUID, targetUserId: UUID): SkladchinaDetailDto {
+        val skladchina = requireActiveAsCreator(skladchinaId, callerId)
+        requireFixedMode(skladchina.paymentMode)
+
+        val participant = skladchinaRepository.findParticipant(skladchinaId, targetUserId)
+            ?: throw NotFoundException("Participant not found in this skladchina")
+        if (participant.status == SkladchinaParticipantStatus.paid) {
+            return getDetail(skladchinaId, callerId) // idempotent
+        }
+        if (participant.status != SkladchinaParticipantStatus.pending) {
+            throw ValidationException("Можно отметить оплату только у ожидающего участника")
+        }
+        val share = participant.expectedAmountKopecks
+            ?: throw ValidationException("Сумма участника не назначена")
+
+        val updated = skladchinaRepository.setParticipantPaid(skladchinaId, targetUserId, share, OffsetDateTime.now())
+        if (updated == 0) {
+            // F5-03: a concurrent close expired/released the participant between read and UPDATE.
+            throw ConflictException("Сбор уже закрыт — изменить нельзя. Обновите экран")
+        }
+        log.info("Skladchina organizer-mark-paid: id={} target={} by={} amount={}",
+            skladchinaId, targetUserId, callerId, share)
+        maybeAutoCloseAfterStateChange(skladchinaId)
+        return getDetail(skladchinaId, callerId)
+    }
+
+    /**
+     * A-2 (toggle): the organizer reverts a paid participant back to `pending` — undoing a
+     * mis-tap. Fixed modes only (symmetric with the mark). Clears declared_amount/paid_at.
+     * Does NOT auto-close (un-marking only grows `pending`, never empties it). Safe because
+     * reputation is applied only at close — while active there is no ledger row to contradict.
+     * Idempotent when the participant is already pending.
+     */
+    @Transactional
+    fun organizerUnmarkPaid(skladchinaId: UUID, callerId: UUID, targetUserId: UUID): SkladchinaDetailDto {
+        val skladchina = requireActiveAsCreator(skladchinaId, callerId)
+        requireFixedMode(skladchina.paymentMode)
+
+        val participant = skladchinaRepository.findParticipant(skladchinaId, targetUserId)
+            ?: throw NotFoundException("Participant not found in this skladchina")
+        if (participant.status == SkladchinaParticipantStatus.pending) {
+            return getDetail(skladchinaId, callerId) // idempotent
+        }
+        if (participant.status != SkladchinaParticipantStatus.paid) {
+            throw ValidationException("Снять отметку можно только у оплатившего участника")
+        }
+
+        val updated = skladchinaRepository.revertParticipantToPending(skladchinaId, targetUserId)
+        if (updated == 0) {
+            throw ConflictException("Сбор уже закрыт — изменить нельзя. Обновите экран")
+        }
+        log.info("Skladchina organizer-unmark: id={} target={} by={}", skladchinaId, targetUserId, callerId)
+        return getDetail(skladchinaId, callerId)
+    }
+
+    /**
+     * A-3: the organizer spreads the remaining deficit (goal − collected) across the
+     * still-`pending` participants. Paid participants are NEVER touched; declined / expired /
+     * released are excluded (not pending). Fixed modes only (voluntary has no fixed shares).
+     * Remainder to the last participant (sorted by userId), deterministic like create.
+     * Repeatable. After it, the (paid + pending) expected-sum equals the goal again
+     * (collected + deficit = goal); declined/expired/released keep their stale shares.
+     */
+    @Transactional
+    fun redistributeDeficit(skladchinaId: UUID, callerId: UUID): SkladchinaDetailDto {
+        val skladchina = requireActiveAsCreator(skladchinaId, callerId)
+        if (skladchina.paymentMode == SkladchinaMode.voluntary) {
+            throw ValidationException("Перераспределение доступно только для сборов с фиксированными суммами")
+        }
+        val goal = skladchina.totalGoalKopecks
+            ?: throw ValidationException("У сбора нет цели для перераспределения")
+        val collected = skladchinaRepository.sumCollectedKopecks(skladchinaId)
+        val deficit = goal - collected
+        if (deficit <= 0) {
+            throw ValidationException("Цель уже собрана — перераспределять нечего")
+        }
+        val pending = skladchinaRepository.findParticipants(skladchinaId)
+            .filter { it.status == SkladchinaParticipantStatus.pending }
+            .sortedBy { it.userId }
+        if (pending.isEmpty()) {
+            throw ValidationException("Нет неоплативших участников для перераспределения")
+        }
+        val n = pending.size
+        if (deficit < n) {
+            // Sub-kopeck-per-head leftover: nothing meaningful to spread, and a 0-share
+            // would violate the expected_amount_kopecks > 0 CHECK.
+            throw ValidationException("Остаток слишком мал для перераспределения")
+        }
+        val baseShare = deficit / n
+        val remainder = deficit - baseShare * n
+        pending.forEachIndexed { idx, p ->
+            val amount = if (idx == n - 1) baseShare + remainder else baseShare
+            // setExpectedAmount is guarded by WHERE status='pending'. If a participant was
+            // concurrently paid/closed between our read and this UPDATE, it returns 0 — the
+            // deficit would be under-distributed and the expected-sum=goal invariant broken.
+            // Fail clean (the @Transactional rolls back every prior UPDATE) so the organizer
+            // retries against fresh state rather than silently dropping someone's share.
+            if (skladchinaRepository.setExpectedAmount(skladchinaId, p.userId, amount) == 0) {
+                throw ConflictException("Состав сбора изменился — обновите экран и попробуйте снова")
+            }
+        }
+        log.info("Skladchina redistribute: id={} by={} deficit={} pending={} baseShare={}",
+            skladchinaId, callerId, deficit, n, baseShare)
+        return getDetail(skladchinaId, callerId)
+    }
+
+    /** Loads a skladchina for an organizer-only mutation: must exist, caller must be creator, must be active. */
+    private fun requireActiveAsCreator(skladchinaId: UUID, callerId: UUID): Skladchina {
+        val skladchina = skladchinaRepository.findById(skladchinaId)
+            ?: throw NotFoundException("Skladchina not found")
+        if (skladchina.creatorId != callerId) {
+            throw ForbiddenException("Only the organizer can manage this skladchina")
+        }
+        if (skladchina.status != SkladchinaStatus.active) {
+            throw ValidationException("Skladchina is not active")
+        }
+        return skladchina
+    }
+
+    private fun requireFixedMode(mode: SkladchinaMode) {
+        if (mode == SkladchinaMode.voluntary) {
+            throw ValidationException("Отметка оплаты организатором доступна только для сборов с фиксированными суммами")
+        }
+    }
+
+    /**
+     * Auto-close trigger that fires after mark-paid / decline / organizer-mark-paid.
+     * Closes ONLY when every participant is in a terminal status (no more `pending`).
+     *
+     * Phase A (A-4): goal-reached NO LONGER force-closes (it was the source of F5-02
+     * complexity). Money is decoration now — the app is a tracker, not a payment system —
+     * so collecting the target early just sits there; closure is by deadline / manual /
+     * everyone-answered. Org-unmark never reaches here (it only grows `pending`).
      *
      * F5-18: a close/reputation failure is caught and logged HERE so the participant's
      * own markPaid/decline never 500s because of it (NFR skladchina.md). Scope note:
@@ -241,13 +376,10 @@ class SkladchinaService(
         val skladchina = skladchinaRepository.findById(skladchinaId) ?: return
         if (skladchina.status != SkladchinaStatus.active) return
 
-        val goalReached = skladchina.totalGoalKopecks
-            ?.let { goal -> skladchinaRepository.sumCollectedKopecks(skladchinaId) >= goal }
-            ?: false
-        val shouldClose = goalReached || skladchinaRepository.countParticipantsByStatus(
+        val noPendingLeft = skladchinaRepository.countParticipantsByStatus(
             skladchinaId, SkladchinaParticipantStatus.pending
         ) == 0
-        if (!shouldClose) return
+        if (!noPendingLeft) return
 
         try {
             closeInternal(skladchinaId, closedBy = null, manualClose = false)
@@ -448,27 +580,30 @@ class SkladchinaService(
     }
 
     /**
-     * Fixed modes: the participant has no choice anyway (the UI field is read-only),
-     * so the server records its own assigned share verbatim and IGNORES the client
-     * value. Found on staging 2026-06-12: the UI rounds kopecks to whole rubles
-     * (33333 → "333" → 33300), so the previous strict `declared == expected` check
-     * rejected every honest payment of a non-divisible share. Server-authoritative
-     * recording keeps `collected` exact and still kills the "declare ≥ goal to slam
-     * the skladchina shut" amplifier of F5-02. Voluntary: the declared amount IS the
-     * data — sanity cap only.
+     * Fixed modes: the participant has no choice anyway (Phase A removed the UI field
+     * entirely — A-1), so the server records its own assigned share verbatim and
+     * IGNORES the client value (which is now null). Found on staging 2026-06-12: the
+     * UI rounds kopecks to whole rubles (33333 → "333" → 33300), so the previous
+     * strict `declared == expected` check rejected every honest payment of a
+     * non-divisible share. Server-authoritative recording keeps `collected` exact and
+     * still kills the "declare ≥ goal to slam the skladchina shut" amplifier of F5-02.
+     * Voluntary: the declared amount IS the data — required (null/≤0 → 400), sanity cap only.
      */
-    private fun resolveDeclaredAmount(mode: SkladchinaMode, expectedAmountKopecks: Long?, declaredAmountKopecks: Long): Long =
+    private fun resolveDeclaredAmount(mode: SkladchinaMode, expectedAmountKopecks: Long?, declaredAmountKopecks: Long?): Long =
         when (mode) {
             SkladchinaMode.fixed_equal, SkladchinaMode.fixed_individual ->
                 expectedAmountKopecks
                     ?: throw ValidationException("Сумма участника не назначена — обратитесь к организатору")
             SkladchinaMode.voluntary -> {
-                if (declaredAmountKopecks > DECLARED_AMOUNT_MAX_KOPECKS) {
+                val declared = declaredAmountKopecks
+                    ?: throw ValidationException("Укажите сумму оплаты")
+                if (declared <= 0) throw ValidationException("Сумма должна быть положительной")
+                if (declared > DECLARED_AMOUNT_MAX_KOPECKS) {
                     throw ValidationException(
                         "Сумма не может превышать ${DECLARED_AMOUNT_MAX_KOPECKS / 100} ₽"
                     )
                 }
-                declaredAmountKopecks
+                declared
             }
         }
 

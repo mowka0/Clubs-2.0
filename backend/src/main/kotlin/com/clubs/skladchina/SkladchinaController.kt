@@ -68,6 +68,38 @@ class SkladchinaController(
         return ResponseEntity.ok(skladchinaService.decline(id, user.userId))
     }
 
+    // A-2: organizer marks a participant paid ("получил наличкой"). Creator-only (checked in service).
+    @PostMapping("/api/skladchinas/{id}/participants/{userId}/mark-paid")
+    fun organizerMarkPaid(
+        @PathVariable id: UUID,
+        @PathVariable userId: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<SkladchinaDetailDto> {
+        log.info("Skladchina organizer-mark-paid: id={} target={} by={}", id, userId, user.userId)
+        return ResponseEntity.ok(skladchinaService.organizerMarkPaid(id, user.userId, userId))
+    }
+
+    // A-2 (toggle): organizer reverts a participant's payment back to pending.
+    @PostMapping("/api/skladchinas/{id}/participants/{userId}/unmark")
+    fun organizerUnmarkPaid(
+        @PathVariable id: UUID,
+        @PathVariable userId: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<SkladchinaDetailDto> {
+        log.info("Skladchina organizer-unmark: id={} target={} by={}", id, userId, user.userId)
+        return ResponseEntity.ok(skladchinaService.organizerUnmarkPaid(id, user.userId, userId))
+    }
+
+    // A-3: organizer redistributes the deficit across pending participants.
+    @PostMapping("/api/skladchinas/{id}/redistribute")
+    fun redistribute(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<SkladchinaDetailDto> {
+        log.info("Skladchina redistribute: id={} by={}", id, user.userId)
+        return ResponseEntity.ok(skladchinaService.redistributeDeficit(id, user.userId))
+    }
+
     @PostMapping("/api/skladchinas/{id}/close")
     fun close(
         @PathVariable id: UUID,

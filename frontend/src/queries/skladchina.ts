@@ -8,6 +8,9 @@ import {
   getSkladchina,
   getSkladchinaActionRequiredCount,
   markPaidSkladchina,
+  organizerMarkPaidParticipant,
+  organizerUnmarkParticipant,
+  redistributeSkladchina,
 } from '../api/skladchina';
 import type { CreateSkladchinaRequest } from '../types/api';
 import { queryKeys } from './queryKeys';
@@ -75,7 +78,8 @@ export function useCreateSkladchinaMutation() {
 
 interface MarkPaidArgs {
   id: string;
-  declaredAmountKopecks: number;
+  // A-1: omitted for fixed modes (server records the share); the declared amount for voluntary.
+  declaredAmountKopecks?: number | null;
 }
 
 export function useMarkPaidMutation() {
@@ -87,6 +91,48 @@ export function useMarkPaidMutation() {
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
+    },
+  });
+}
+
+interface OrganizerParticipantArgs {
+  id: string;
+  userId: string;
+}
+
+/** A-2: organizer marks a participant paid / reverts it. Shared invalidation for both. */
+function invalidateAfterOrganizerAction(qc: ReturnType<typeof useQueryClient>, id: string) {
+  qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
+  qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
+  // The marked participant's "action required" obligation changed — refresh the badge count.
+  qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
+}
+
+export function useOrganizerMarkPaidMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, userId }: OrganizerParticipantArgs) => organizerMarkPaidParticipant(id, userId),
+    onSuccess: (_data, { id }) => invalidateAfterOrganizerAction(qc, id),
+  });
+}
+
+export function useOrganizerUnmarkMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, userId }: OrganizerParticipantArgs) => organizerUnmarkParticipant(id, userId),
+    onSuccess: (_data, { id }) => invalidateAfterOrganizerAction(qc, id),
+  });
+}
+
+/** A-3: organizer redistributes the deficit onto pending participants. */
+export function useRedistributeSkladchinaMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => redistributeSkladchina(id),
+    onSuccess: (_data, id) => {
+      // Only `expected` shares change — paid/action-required counts are untouched, so the
+      // feed and badge-count queries don't need invalidating (unlike mark/unmark).
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
     },
   });
 }

@@ -164,3 +164,78 @@ describe('SkladchinaPage — reputation redesign UI', () => {
     expect(screen.getByText('Не ответил')).toBeInTheDocument();
   });
 });
+
+describe('SkladchinaPage — Phase A', () => {
+  it('A-1: fixed-режим — одна кнопка «Я оплатил {доля} ₽» без поля суммы', async () => {
+    mockDetail(buildDetail({ paymentMode: 'fixed_equal', myStatus: 'pending', myExpectedAmountKopecks: 100000 }));
+    renderPage();
+
+    expect(await screen.findByText('Я оплатил 1 000 ₽')).toBeInTheDocument();
+    // No amount input for fixed modes.
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+  });
+
+  it('A-1: voluntary — поле суммы остаётся, кнопка «Я оплатил» без суммы', async () => {
+    mockDetail(buildDetail({ paymentMode: 'voluntary', myStatus: 'pending', myExpectedAmountKopecks: null, totalGoalKopecks: null }));
+    renderPage();
+
+    expect(await screen.findByRole('spinbutton')).toBeInTheDocument();
+    expect(screen.getByText('Я оплатил')).toBeInTheDocument();
+  });
+
+  it('A-5: прогресс показан в людях «Скинулись N из M»', async () => {
+    mockDetail(buildDetail({ paidCount: 1, participantCount: 5 }));
+    renderPage();
+
+    expect(await screen.findByText('Скинулись 1 из 5')).toBeInTheDocument();
+  });
+
+  it('A-2/A-3: организатор fixed active — кнопки отметки и панель «Не хватает X ₽»', async () => {
+    const participants: SkladchinaParticipantDto[] = [
+      {
+        userId: 'u-pending', firstName: 'Иван', lastName: null, avatarUrl: null,
+        expectedAmountKopecks: 100000, declaredAmountKopecks: null, status: 'pending', paidAt: null,
+      },
+      {
+        userId: 'u-paid', firstName: 'Пётр', lastName: null, avatarUrl: null,
+        expectedAmountKopecks: 100000, declaredAmountKopecks: 100000, status: 'paid',
+        paidAt: new Date().toISOString(),
+      },
+    ];
+    mockDetail(buildDetail({
+      paymentMode: 'fixed_equal',
+      isOrganizerView: true,
+      myStatus: null,
+      participants,
+      collectedKopecks: 100000,
+      totalGoalKopecks: 500000,
+    }));
+    renderPage();
+
+    expect(await screen.findByText('Отметить оплату')).toBeInTheDocument(); // pending row
+    expect(screen.getByText('Отменить')).toBeInTheDocument();               // paid row
+    expect(screen.getByText('Не хватает 4 000 ₽')).toBeInTheDocument();     // 500000 − 100000
+    expect(screen.getByText('Перераспределить на неоплативших')).toBeInTheDocument();
+  });
+
+  it('A-2: для voluntary у организатора нет кнопок отметки оплаты', async () => {
+    const participants: SkladchinaParticipantDto[] = [
+      {
+        userId: 'u-pending', firstName: 'Иван', lastName: null, avatarUrl: null,
+        expectedAmountKopecks: null, declaredAmountKopecks: null, status: 'pending', paidAt: null,
+      },
+    ];
+    mockDetail(buildDetail({
+      paymentMode: 'voluntary',
+      isOrganizerView: true,
+      myStatus: null,
+      participants,
+      totalGoalKopecks: null,
+    }));
+    renderPage();
+
+    expect(await screen.findByText('Иван')).toBeInTheDocument();
+    expect(screen.queryByText('Отметить оплату')).not.toBeInTheDocument();
+    expect(screen.queryByText('Не хватает')).not.toBeInTheDocument();
+  });
+});

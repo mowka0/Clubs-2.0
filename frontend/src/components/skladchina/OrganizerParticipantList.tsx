@@ -1,10 +1,27 @@
-import { FC } from 'react';
+import { FC, CSSProperties } from 'react';
 import type { SkladchinaParticipantDto } from '../../types/api';
 
 interface OrganizerParticipantListProps {
   participants: SkladchinaParticipantDto[];
   totalGoalKopecks: number | null;
+  // A-2: organizer can mark/unmark payments (fixed modes, active skladchina only).
+  canManagePayments?: boolean;
+  busyUserId?: string | null;
+  onMarkPaid?: (p: SkladchinaParticipantDto) => void;
+  onUnmark?: (p: SkladchinaParticipantDto) => void;
 }
+
+const rowActionStyle: CSSProperties = {
+  fontSize: 12,
+  padding: '4px 10px',
+  borderRadius: 8,
+  border: '1px solid var(--text-faint)',
+  background: 'transparent',
+  color: 'var(--text)',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  whiteSpace: 'nowrap',
+};
 
 function getInitials(firstName: string, lastName: string | null): string {
   const last = lastName ? lastName.charAt(0).toUpperCase() : '';
@@ -29,6 +46,10 @@ function statusBadge(status: string): { text: string; cls: string } {
 
 export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
   participants,
+  canManagePayments = false,
+  busyUserId = null,
+  onMarkPaid,
+  onUnmark,
 }) => {
   const sorted = [...participants].sort((a, b) => {
     const order: Record<string, number> = { paid: 0, pending: 1, declined: 2, released: 3, expired_no_response: 4 };
@@ -51,6 +72,23 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
             showExpected ? `ожид. ${formatRubles(p.expectedAmountKopecks!)} ₽` : null,
             showDeclared ? `заявл. ${formatRubles(p.declaredAmountKopecks!)} ₽` : null,
           ].filter(Boolean).join(' · ');
+          const busy = busyUserId === p.userId;
+          // A-2: pending → "Отметить оплату"; paid → "Отменить". Other terminal statuses get nothing.
+          const action = !canManagePayments ? null
+            : p.status === 'pending' ? (
+              <button type="button" style={rowActionStyle} disabled={busy} onClick={() => onMarkPaid?.(p)}>
+                {busy ? '…' : 'Отметить оплату'}
+              </button>
+            ) : p.status === 'paid' ? (
+              <button
+                type="button"
+                style={{ ...rowActionStyle, color: 'var(--text-dim)' }}
+                disabled={busy}
+                onClick={() => onUnmark?.(p)}
+              >
+                {busy ? '…' : 'Отменить'}
+              </button>
+            ) : null;
           return (
             <div key={p.userId} className="rd-rep-row" style={{ cursor: 'default' }}>
               <span className="rd-ico">
@@ -68,7 +106,10 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
                   </div>
                 )}
               </div>
-              <span className={`rd-badge ${badge.cls}`}>{badge.text}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                <span className={`rd-badge ${badge.cls}`}>{badge.text}</span>
+                {action}
+              </div>
             </div>
           );
         })}
