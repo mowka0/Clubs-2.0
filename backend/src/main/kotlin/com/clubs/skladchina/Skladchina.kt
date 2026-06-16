@@ -2,6 +2,7 @@ package com.clubs.skladchina
 
 import com.clubs.generated.jooq.enums.SkladchinaMode
 import com.clubs.generated.jooq.enums.SkladchinaStatus
+import com.clubs.generated.jooq.enums.SkladchinaTemplate
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -15,10 +16,12 @@ data class Skladchina(
     val rules: String?,
     val photoUrl: String?,
 
+    val template: SkladchinaTemplate,
     val paymentMode: SkladchinaMode,
     val totalGoalKopecks: Long?,
     val paymentLink: String,
     val paymentMethodNote: String?,
+    val eventId: UUID?,                 // split_bill: the source event whose bill is split
 
     val deadline: OffsetDateTime,
     val affectsReputation: Boolean,

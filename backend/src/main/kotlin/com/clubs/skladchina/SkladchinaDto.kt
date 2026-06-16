@@ -3,7 +3,6 @@ package com.clubs.skladchina
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Future
 import jakarta.validation.constraints.NotBlank
-import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
 import jakarta.validation.constraints.Size
@@ -18,11 +17,16 @@ data class CreateSkladchinaRequest(
     val rules: String? = null,
     val photoUrl: String? = null,
 
+    // Selects the template strategy. Default "custom" = the Phase A behaviour.
+    val template: String = "custom",               // "custom" | "split_bill" | "gear" | "booking" | "birthday"
+    // split_bill: the source event whose bill is being split. Ignored by other templates.
+    val eventId: UUID? = null,
+
     @field:NotNull
     val paymentMode: String,                       // "fixed_equal" | "fixed_individual" | "voluntary"
 
     @field:Positive
-    val totalGoalKopecks: Long? = null,            // required for fixed_equal; ignored for voluntary
+    val totalGoalKopecks: Long? = null,            // fixed_equal goal; split_bill: the bill total
 
     @field:NotBlank @field:Size(max = 1000)
     val paymentLink: String,
@@ -34,8 +38,10 @@ data class CreateSkladchinaRequest(
 
     val affectsReputation: Boolean = false,
 
-    @field:NotEmpty @field:Valid
-    val participants: List<CreateSkladchinaParticipantRequest>
+    // Required for custom/fixed modes; ignored by split_bill (participants come from attendance).
+    // Per-template validation lives in the strategy, not the DTO.
+    @field:Valid
+    val participants: List<CreateSkladchinaParticipantRequest> = emptyList()
 )
 
 data class CreateSkladchinaParticipantRequest(
@@ -65,6 +71,8 @@ data class SkladchinaDetailDto(
     val rules: String?,
     val photoUrl: String?,
 
+    val template: String,                          // custom | split_bill | gear | booking | birthday
+    val eventId: UUID?,                            // split_bill: source event (else null)
     val paymentMode: String,
     val totalGoalKopecks: Long?,
     val collectedKopecks: Long,
@@ -103,6 +111,7 @@ data class MySkladchinaListItemDto(
     val clubId: UUID,
     val clubName: String,
     val clubAvatarUrl: String?,
+    val template: String,
     val paymentMode: String,
     val totalGoalKopecks: Long?,
     val collectedKopecks: Long,

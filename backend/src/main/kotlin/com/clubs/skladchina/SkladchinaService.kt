@@ -10,9 +10,11 @@ import com.clubs.generated.jooq.enums.ReputationSource
 import com.clubs.generated.jooq.enums.SkladchinaMode
 import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
 import com.clubs.generated.jooq.enums.SkladchinaStatus
+import com.clubs.generated.jooq.enums.SkladchinaTemplate
 import com.clubs.reputation.LedgerEntry
 import com.clubs.reputation.ReputationPolicy
 import com.clubs.reputation.ReputationService
+import com.clubs.skladchina.template.SkladchinaTemplateRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
@@ -27,6 +29,7 @@ class SkladchinaService(
     private val clubRepository: ClubRepository,
     private val mapper: SkladchinaMapper,
     private val reputationService: ReputationService,
+    private val templateRegistry: SkladchinaTemplateRegistry,
     private val eventPublisher: ApplicationEventPublisher
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaService::class.java)
@@ -36,8 +39,9 @@ class SkladchinaService(
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != creatorId) throw ForbiddenException("Only the club organizer can create skladchina")
 
-        val mode = parseMode(request.paymentMode)
-        validateRequest(request, mode)
+        val templateType = SkladchinaTemplate.values().find { it.literal == request.template }
+            ?: throw ValidationException("Invalid template: ${request.template}")
+        val strategy = templateRegistry.forType(templateType)
 
         val now = OffsetDateTime.now()
         val deadlineMinAge = ChronoUnit.HOURS.between(now, request.deadline)
@@ -48,20 +52,14 @@ class SkladchinaService(
         if (deadlineMaxAge > MAX_DEADLINE_DAYS) {
             throw ValidationException("Deadline must be at most $MAX_DEADLINE_DAYS days ahead")
         }
+
+        // The template owns participant sourcing + amount resolution + its own validation;
+        // the engine owns club/owner, deadline bounds, reputation gates, persistence and DM.
+        val resolution = strategy.resolveCreation(clubId, creatorId, request)
+
         if (request.affectsReputation) {
-            validateReputationGates(clubId, mode, deadlineMinAge, now)
+            validateReputationGates(clubId, resolution.mode, deadlineMinAge, now)
         }
-
-        val userIds = request.participants.map { it.userId }.distinct()
-        if (userIds.size != request.participants.size) {
-            throw ValidationException("Duplicate userId in participants list")
-        }
-        val notActive = skladchinaRepository.findNonActiveMembers(clubId, userIds)
-        if (notActive.isNotEmpty()) {
-            throw ForbiddenException("Some participants are not active members of this club")
-        }
-
-        val participants = buildParticipantsForCreate(mode, request)
 
         val skladchinaId = UUID.randomUUID()
         val domain = Skladchina(
@@ -72,17 +70,12 @@ class SkladchinaService(
             description = request.description,
             rules = request.rules,
             photoUrl = request.photoUrl,
-            paymentMode = mode,
-            totalGoalKopecks = when (mode) {
-                // Voluntary: optional goal, purely indicative for participants — once set
-                // it flows through the same progress/auto-close/final-status mechanics as
-                // fixed modes (staging feedback 2026-06-12: gift pools want a target too).
-                SkladchinaMode.voluntary -> request.totalGoalKopecks
-                SkladchinaMode.fixed_equal -> request.totalGoalKopecks
-                SkladchinaMode.fixed_individual -> participants.sumOf { it.second ?: 0L }
-            },
+            template = templateType,
+            paymentMode = resolution.mode,
+            totalGoalKopecks = resolution.totalGoalKopecks,
             paymentLink = request.paymentLink,
             paymentMethodNote = request.paymentMethodNote,
+            eventId = resolution.eventId,
             deadline = request.deadline,
             affectsReputation = request.affectsReputation,
             status = SkladchinaStatus.active,
@@ -92,9 +85,9 @@ class SkladchinaService(
             updatedAt = now
         )
 
-        val created = skladchinaRepository.create(domain, participants)
-        log.info("Skladchina created: id={} clubId={} creatorId={} mode={} participants={}",
-            created.id, clubId, creatorId, mode, participants.size)
+        val created = skladchinaRepository.create(domain, resolution.participants)
+        log.info("Skladchina created: id={} clubId={} creatorId={} template={} mode={} participants={}",
+            created.id, clubId, creatorId, templateType, resolution.mode, resolution.participants.size)
 
         // DM-рассылка идёт через @TransactionalEventListener в SkladchinaBotNotifier —
         // гарантия отправки ПОСЛЕ commit'а транзакции (тот же паттерн что PaymentNotificationHandler).
@@ -110,7 +103,7 @@ class SkladchinaService(
                 totalGoalKopecks = created.totalGoalKopecks,
                 deadline = created.deadline,
                 affectsReputation = created.affectsReputation,
-                participantUserIds = userIds
+                participantUserIds = resolution.participants.map { it.first }
             )
         )
 
@@ -547,10 +540,6 @@ class SkladchinaService(
         toMark.forEach { skladchinaRepository.markReputationApplied(skladchinaId, it) }
     }
 
-    private fun parseMode(modeStr: String): SkladchinaMode =
-        SkladchinaMode.values().find { it.literal == modeStr }
-            ?: throw ValidationException("Invalid payment mode: $modeStr")
-
     /**
      * Gates for the "важный сбор" toggle (affects_reputation = true), per the
      * 2026-06-12 redesign. Messages are user-facing (organizer's create form).
@@ -606,55 +595,6 @@ class SkladchinaService(
                 declared
             }
         }
-
-    private fun validateRequest(request: CreateSkladchinaRequest, mode: SkladchinaMode) {
-        when (mode) {
-            SkladchinaMode.fixed_equal -> {
-                val total = request.totalGoalKopecks
-                    ?: throw ValidationException("totalGoalKopecks required for fixed_equal mode")
-                if (total <= 0) throw ValidationException("totalGoalKopecks must be positive")
-            }
-            SkladchinaMode.fixed_individual -> {
-                request.participants.forEach { p ->
-                    if (p.expectedAmountKopecks == null || p.expectedAmountKopecks <= 0) {
-                        throw ValidationException("expectedAmountKopecks required for each participant in fixed_individual mode")
-                    }
-                }
-            }
-            SkladchinaMode.voluntary -> {
-                // Optional indicative goal (drives the progress bar and the generic
-                // close-status rules); expected amounts ignored.
-                if (request.totalGoalKopecks != null && request.totalGoalKopecks <= 0) {
-                    throw ValidationException("totalGoalKopecks must be positive")
-                }
-            }
-        }
-    }
-
-    /**
-     * For fixed_equal: split total equally with remainder going to last participant
-     * (deterministic — last in sorted UUID order, see test).
-     */
-    private fun buildParticipantsForCreate(
-        mode: SkladchinaMode,
-        request: CreateSkladchinaRequest
-    ): List<Pair<UUID, Long?>> {
-        return when (mode) {
-            SkladchinaMode.voluntary -> request.participants.map { it.userId to null }
-            SkladchinaMode.fixed_individual -> request.participants.map { it.userId to it.expectedAmountKopecks }
-            SkladchinaMode.fixed_equal -> {
-                val total = request.totalGoalKopecks!!
-                val n = request.participants.size
-                val baseShare = total / n
-                val remainder = total - baseShare * n
-                val sorted = request.participants.sortedBy { it.userId }
-                sorted.mapIndexed { idx, p ->
-                    val amount = if (idx == n - 1) baseShare + remainder else baseShare
-                    p.userId to amount
-                }
-            }
-        }
-    }
 
     companion object {
         private const val MIN_DEADLINE_HOURS = 1L

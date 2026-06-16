@@ -6,6 +6,7 @@ package com.clubs.generated.jooq.tables.records
 
 import com.clubs.generated.jooq.enums.SkladchinaMode
 import com.clubs.generated.jooq.enums.SkladchinaStatus
+import com.clubs.generated.jooq.enums.SkladchinaTemplate
 import com.clubs.generated.jooq.tables.Skladchinas
 
 import java.time.OffsetDateTime
@@ -97,6 +98,14 @@ open class SkladchinasRecord private constructor() : UpdatableRecordImpl<Skladch
         set(value): Unit = set(18, value)
         get(): OffsetDateTime? = get(18) as OffsetDateTime?
 
+    open var template: SkladchinaTemplate?
+        set(value): Unit = set(19, value)
+        get(): SkladchinaTemplate? = get(19) as SkladchinaTemplate?
+
+    open var eventId: UUID?
+        set(value): Unit = set(20, value)
+        get(): UUID? = get(20) as UUID?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -106,7 +115,7 @@ open class SkladchinasRecord private constructor() : UpdatableRecordImpl<Skladch
     /**
      * Create a detached, initialised SkladchinasRecord
      */
-    constructor(id: UUID? = null, clubId: UUID, creatorId: UUID, title: String, description: String? = null, rules: String? = null, photoUrl: String? = null, paymentMode: SkladchinaMode, totalGoalKopecks: Long? = null, paymentLink: String, paymentMethodNote: String? = null, deadline: OffsetDateTime, affectsReputation: Boolean? = null, status: SkladchinaStatus? = null, closedAt: OffsetDateTime? = null, closedBy: UUID? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, reminderSentAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, clubId: UUID, creatorId: UUID, title: String, description: String? = null, rules: String? = null, photoUrl: String? = null, paymentMode: SkladchinaMode, totalGoalKopecks: Long? = null, paymentLink: String, paymentMethodNote: String? = null, deadline: OffsetDateTime, affectsReputation: Boolean? = null, status: SkladchinaStatus? = null, closedAt: OffsetDateTime? = null, closedBy: UUID? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, reminderSentAt: OffsetDateTime? = null, template: SkladchinaTemplate? = null, eventId: UUID? = null): this() {
         this.id = id
         this.clubId = clubId
         this.creatorId = creatorId
@@ -126,6 +135,8 @@ open class SkladchinasRecord private constructor() : UpdatableRecordImpl<Skladch
         this.createdAt = createdAt
         this.updatedAt = updatedAt
         this.reminderSentAt = reminderSentAt
+        this.template = template
+        this.eventId = eventId
         resetChangedOnNotNull()
     }
 
@@ -153,6 +164,8 @@ open class SkladchinasRecord private constructor() : UpdatableRecordImpl<Skladch
             this.createdAt = value.createdAt
             this.updatedAt = value.updatedAt
             this.reminderSentAt = value.reminderSentAt
+            this.template = value.template
+            this.eventId = value.eventId
             resetChangedOnNotNull()
         }
     }

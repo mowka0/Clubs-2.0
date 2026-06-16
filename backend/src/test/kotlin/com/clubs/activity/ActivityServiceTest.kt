@@ -8,6 +8,7 @@ import com.clubs.event.EventWithGoingCount
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.SkladchinaMode
 import com.clubs.generated.jooq.enums.SkladchinaStatus
+import com.clubs.generated.jooq.enums.SkladchinaTemplate
 import com.clubs.skladchina.Skladchina
 import com.clubs.skladchina.SkladchinaRepository
 import com.clubs.skladchina.SkladchinaWithAggregates
@@ -363,10 +364,12 @@ class ActivityServiceTest {
         description = null,
         rules = null,
         photoUrl = photoUrl,
+        template = SkladchinaTemplate.custom,
         paymentMode = SkladchinaMode.fixed_equal,
         totalGoalKopecks = 100000L,
         paymentLink = "https://pay.me",
         paymentMethodNote = null,
+        eventId = null,
         deadline = deadline,
         affectsReputation = false,
         status = status,

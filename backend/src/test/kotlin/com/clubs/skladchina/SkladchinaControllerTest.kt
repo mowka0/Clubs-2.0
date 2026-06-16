@@ -835,7 +835,164 @@ class SkladchinaControllerTest {
         ).andExpect(status().isBadRequest)
     }
 
+    // ---- split_bill template ----
+
+    @Test
+    fun `split_bill creates from attendance with equal shares and links the event`() {
+        val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        val id = createFromBody(splitBody(eventId, 90000))
+
+        mockMvc.perform(
+            get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.template").value("split_bill"))
+            .andExpect(jsonPath("$.eventId").value(eventId.toString()))
+            .andExpect(jsonPath("$.paymentMode").value("fixed_equal"))
+            .andExpect(jsonPath("$.totalGoalKopecks").value(90000))
+            .andExpect(jsonPath("$.participantCount").value(2))
+        assertEquals(45000L, participantExpected(id, memberAId))
+        assertEquals(45000L, participantExpected(id, memberBId))
+    }
+
+    @Test
+    fun `split_bill includes only attended active members (absent + non-members excluded)`() {
+        val memberCId = UUID.randomUUID()
+        dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$memberCId', 3006, 'MemberC')")
+        dsl.execute("INSERT INTO memberships (user_id, club_id, status, role) VALUES ('$memberCId', '$clubId', 'active', 'member')")
+        // A,B attended; outsider attended but is NOT a club member; C absent.
+        val eventId = createEventWithAttendance(
+            attended = listOf(memberAId, memberBId, outsiderId),
+            absent = listOf(memberCId)
+        )
+        val id = createFromBody(splitBody(eventId, 80000))
+
+        mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.participantCount").value(2)) // A and B only
+        assertEquals(40000L, participantExpected(id, memberAId))
+        assertEquals(40000L, participantExpected(id, memberBId))
+        assertEquals(null, participantExpected(id, memberCId), "absent member excluded")
+        assertEquals(null, participantExpected(id, outsiderId), "non-member excluded")
+    }
+
+    @Test
+    fun `split_bill with fewer than 2 attended returns 400`() {
+        val eventId = createEventWithAttendance(attended = listOf(memberAId))
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(splitBody(eventId, 90000))
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `split_bill validation - missing event, unmarked attendance, missing bill`() {
+        // no eventId
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "title": "Счёт", "template": "split_bill", "paymentMode": "fixed_equal",
+                      "totalGoalKopecks": 90000, "paymentLink": "https://pay.me",
+                      "deadline": "${OffsetDateTime.now().plusDays(2)}", "participants": []
+                    }
+                    """.trimIndent()
+                )
+        ).andExpect(status().isBadRequest)
+
+        // attendance not marked yet
+        val unmarked = createEventWithAttendance(attended = listOf(memberAId, memberBId), marked = false)
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(splitBody(unmarked, 90000))
+        ).andExpect(status().isBadRequest)
+
+        // missing bill (no totalGoalKopecks)
+        val ev = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "title": "Счёт", "template": "split_bill", "eventId": "$ev",
+                      "paymentMode": "fixed_equal", "paymentLink": "https://pay.me",
+                      "deadline": "${OffsetDateTime.now().plusDays(2)}", "participants": []
+                    }
+                    """.trimIndent()
+                )
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `split_bill rejects an event from another club`() {
+        val otherClubId = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO clubs (id, owner_id, name, description, category, access_type, city, member_limit, subscription_price)
+            VALUES ('$otherClubId', '$organizerId', 'Other Club', 'desc', 'sport', 'open', 'Moscow', 20, 0)
+            """.trimIndent()
+        )
+        val eventId = UUID.randomUUID()
+        dsl.execute(
+            "INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, attendance_marked) " +
+                "VALUES ('$eventId', '$otherClubId', '$organizerId', 'E', 'Court', NOW() - INTERVAL '1 day', 20, 'completed', true)"
+        )
+        dsl.execute("INSERT INTO event_responses (event_id, user_id, attendance) VALUES ('$eventId', '$memberAId', 'attended')")
+        dsl.execute("INSERT INTO event_responses (event_id, user_id, attendance) VALUES ('$eventId', '$memberBId', 'attended')")
+
+        // Split it from THIS club's create endpoint → event belongs to another club → 400.
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(splitBody(eventId, 90000))
+        ).andExpect(status().isBadRequest)
+    }
+
     // ---- helpers ----
+
+    /** Inserts a past, completed event with attendance marked and per-user attendance rows. */
+    private fun createEventWithAttendance(
+        attended: List<UUID>,
+        absent: List<UUID> = emptyList(),
+        marked: Boolean = true,
+        daysAgo: Long = 1
+    ): UUID {
+        val eventId = UUID.randomUUID()
+        dsl.execute(
+            "INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime, participant_limit, status, attendance_marked) " +
+                "VALUES ('$eventId', '$clubId', '$organizerId', 'Game', 'Court', NOW() - INTERVAL '$daysAgo days', 20, 'completed', $marked)"
+        )
+        attended.forEach {
+            dsl.execute("INSERT INTO event_responses (event_id, user_id, attendance) VALUES ('$eventId', '$it', 'attended')")
+        }
+        absent.forEach {
+            dsl.execute("INSERT INTO event_responses (event_id, user_id, attendance) VALUES ('$eventId', '$it', 'absent')")
+        }
+        return eventId
+    }
+
+    private fun splitBody(eventId: UUID, billKopecks: Long): String = """
+        {
+          "title": "Счёт за корт",
+          "template": "split_bill",
+          "eventId": "$eventId",
+          "paymentMode": "fixed_equal",
+          "totalGoalKopecks": $billKopecks,
+          "paymentLink": "https://pay.me",
+          "deadline": "${OffsetDateTime.now().plusDays(2)}",
+          "participants": []
+        }
+    """.trimIndent()
 
     private fun createBodyFor(participantIds: List<UUID>): String {
         val participants = participantIds.joinToString(", ") { """{"userId": "$it"}""" }
