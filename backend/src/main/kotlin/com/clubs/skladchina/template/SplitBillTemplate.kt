@@ -13,13 +13,19 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * "Разделить счёт" — split a past event's bill equally across those who ACTUALLY attended.
+ * "Разделить счёт" — split a past event's bill across those who ACTUALLY attended.
  *
  * The unique template with a VERIFIED anchor: the participant set comes from organizer-marked
  * attendance, not the organizer's free choice — so randoms can't be mobilized, and the benefit was
  * already consumed (you were there), which removes the free-rider escape. `totalGoalKopecks` is the
- * bill; the share is bill ÷ attended (server-authoritative). Deliberate cross-module read of the
+ * bill (= the goal the progress bar fills to) in either mode. Deliberate cross-module read of the
  * event domain (skladchina → event) — split is inherently about an event; the dependency is one-way.
+ *
+ * Two split modes (organizer's choice on the form):
+ *  - `fixed_equal`  — the bill is split equally across attendees; each pays a server-assigned share.
+ *  - `voluntary`    — each attendee enters their own amount; the bar fills toward the bill by what
+ *                     people contribute (uneven orders). `fixed_individual` is NOT offered — split
+ *                     never has the organizer assign per-head amounts up front.
  */
 @Component
 class SplitBillTemplate(
@@ -49,6 +55,14 @@ class SplitBillTemplate(
             throw ValidationException("Событие старше $MAX_EVENT_AGE_DAYS дней — счёт уже не разделить")
         }
 
+        // Split offers exactly two modes; fixed_individual (organizer assigns per-head) makes no
+        // sense when the bill is the anchor, so it's rejected rather than silently coerced.
+        val mode = when (request.paymentMode) {
+            SkladchinaMode.fixed_equal.literal -> SkladchinaMode.fixed_equal
+            SkladchinaMode.voluntary.literal -> SkladchinaMode.voluntary
+            else -> throw ValidationException("Для счёта выберите режим: поровну или каждый сам")
+        }
+
         val bill = request.totalGoalKopecks
             ?: throw ValidationException("Укажите сумму чека")
         if (bill <= 0) throw ValidationException("Сумма чека должна быть положительной")
@@ -62,8 +76,12 @@ class SplitBillTemplate(
             throw ValidationException("Нужно минимум $MIN_ATTENDED пришедших участника для разделения счёта")
         }
 
-        val participants = SkladchinaShares.equal(bill, attended).map { it.first to (it.second as Long?) }
-        return TemplateResolution(SkladchinaMode.fixed_equal, bill, participants, eventId)
+        // fixed_equal: server-assigned equal share. voluntary: no assigned share — each enters
+        // their own amount when paying; the bill stays the goal the bar fills toward.
+        val participants: List<Pair<UUID, Long?>> =
+            if (mode == SkladchinaMode.voluntary) attended.map { it to null }
+            else SkladchinaShares.equal(bill, attended).map { it.first to (it.second as Long?) }
+        return TemplateResolution(mode, bill, participants, eventId)
     }
 
     companion object {

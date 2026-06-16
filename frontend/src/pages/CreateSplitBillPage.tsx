@@ -50,6 +50,7 @@ export const CreateSplitBillPage: FC = () => {
   const createMut = useCreateSkladchinaMutation();
 
   const [selectedEventId, setSelectedEventId] = useState<string | null>(searchParams.get('eventId'));
+  const [mode, setMode] = useState<'fixed_equal' | 'voluntary'>('fixed_equal');
   const [title, setTitle] = useState('');
   const [billRub, setBillRub] = useState('');
   const [paymentLink, setPaymentLink] = useState('');
@@ -101,7 +102,7 @@ export const CreateSplitBillPage: FC = () => {
       title: (title.trim() || defaultTitle).slice(0, 255),
       template: 'split_bill',
       eventId: selectedEventId,
-      paymentMode: 'fixed_equal',
+      paymentMode: mode,
       totalGoalKopecks: total,
       paymentLink: paymentLink.trim(),
       paymentMethodNote: paymentMethodNote.trim() || null,
@@ -176,6 +177,36 @@ export const CreateSplitBillPage: FC = () => {
             )}
           </div>
 
+          <div className="rd-field">
+            <span className="rd-label">Как делим <span className="rd-req">*</span></span>
+            <div className="rd-mode-list">
+              <label className={mode === 'fixed_equal' ? 'rd-mode-option rd-active' : 'rd-mode-option'}>
+                <input
+                  type="radio"
+                  name="split-mode"
+                  checked={mode === 'fixed_equal'}
+                  onChange={() => { haptic.select(); setMode('fixed_equal'); }}
+                />
+                <div>
+                  <div className="rd-mo-title">Поровну</div>
+                  <div className="rd-mo-desc">Сумма чека делится на всех пришедших поровну</div>
+                </div>
+              </label>
+              <label className={mode === 'voluntary' ? 'rd-mode-option rd-active' : 'rd-mode-option'}>
+                <input
+                  type="radio"
+                  name="split-mode"
+                  checked={mode === 'voluntary'}
+                  onChange={() => { haptic.select(); setMode('voluntary'); }}
+                />
+                <div>
+                  <div className="rd-mo-title">Каждый сам</div>
+                  <div className="rd-mo-desc">Каждый вводит свою сумму при оплате; собираем до цели</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
           <label className="rd-field">
             <span className="rd-label">Название</span>
             <input
@@ -188,7 +219,9 @@ export const CreateSplitBillPage: FC = () => {
           </label>
 
           <label className="rd-field">
-            <span className="rd-label">Сумма чека (₽) <span className="rd-req">*</span></span>
+            <span className="rd-label">
+              {mode === 'voluntary' ? 'Сумма чека — цель (₽)' : 'Сумма чека (₽)'} <span className="rd-req">*</span>
+            </span>
             <input
               className="rd-input"
               type="number"
@@ -198,8 +231,11 @@ export const CreateSplitBillPage: FC = () => {
               onChange={(e) => setBillRub(e.target.value)}
               placeholder="Например, 4000"
             />
-            {perPersonRub != null && attendedCount >= 2 && (
+            {mode === 'fixed_equal' && perPersonRub != null && attendedCount >= 2 && (
               <span className="rd-hint">≈ по {perPersonRub.toLocaleString('ru-RU')} ₽ с каждого ({attendedCount} чел.)</span>
+            )}
+            {mode === 'voluntary' && (
+              <span className="rd-hint">Прогресс-бар заполняется до этой суммы; каждый вносит свою часть сам</span>
             )}
           </label>
 

@@ -856,6 +856,32 @@ class SkladchinaControllerTest {
     }
 
     @Test
+    fun `split_bill voluntary mode keeps the bill as goal but assigns no per-person share`() {
+        val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        val id = createFromBody(splitBodyMode(eventId, 90000, "voluntary"))
+
+        mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.paymentMode").value("voluntary"))
+            .andExpect(jsonPath("$.totalGoalKopecks").value(90000)) // bill stays the goal the bar fills to
+            .andExpect(jsonPath("$.participantCount").value(2))
+        // "Каждый сам": no assigned share — each enters their own amount when paying.
+        assertEquals(null, participantExpected(id, memberAId))
+        assertEquals(null, participantExpected(id, memberBId))
+    }
+
+    @Test
+    fun `split_bill rejects fixed_individual mode`() {
+        val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(splitBodyMode(eventId, 90000, "fixed_individual"))
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
     fun `split_bill includes only attended active members (absent + non-members excluded)`() {
         val memberCId = UUID.randomUUID()
         dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$memberCId', 3006, 'MemberC')")
@@ -1089,12 +1115,15 @@ class SkladchinaControllerTest {
         return eventId
     }
 
-    private fun splitBody(eventId: UUID, billKopecks: Long): String = """
+    private fun splitBody(eventId: UUID, billKopecks: Long): String =
+        splitBodyMode(eventId, billKopecks, "fixed_equal")
+
+    private fun splitBodyMode(eventId: UUID, billKopecks: Long, mode: String): String = """
         {
           "title": "Счёт за корт",
           "template": "split_bill",
           "eventId": "$eventId",
-          "paymentMode": "fixed_equal",
+          "paymentMode": "$mode",
           "totalGoalKopecks": $billKopecks,
           "paymentLink": "https://pay.me",
           "deadline": "${OffsetDateTime.now().plusDays(2)}",

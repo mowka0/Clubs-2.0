@@ -105,6 +105,12 @@ export const SkladchinaPage: FC = () => {
   const peoplePercent = s.participantCount > 0
     ? Math.round((s.paidCount / s.participantCount) * 100)
     : 0;
+  // "Каждый сам" split (voluntary + goal): shares are uneven, so money toward the goal IS the
+  // meaningful signal — the bar fills by rubles and the headline leads with money instead of people.
+  const moneyPercent = hasGoal
+    ? Math.min(100, Math.round((s.collectedKopecks / s.totalGoalKopecks!) * 100))
+    : 0;
+  const useMoneyBar = s.paymentMode === 'voluntary' && hasGoal;
 
   // A-1: fixed modes show a one-tap "Я оплатил {доля} ₽" — the server records the share.
   const expectedRub = s.myExpectedAmountKopecks != null
@@ -377,15 +383,19 @@ export const SkladchinaPage: FC = () => {
 
       <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>
-          Скинулись {s.paidCount} из {s.participantCount}
+          {useMoneyBar
+            ? `Собрано ${formatRubles(s.collectedKopecks)} ₽ из ${formatRubles(s.totalGoalKopecks!)} ₽`
+            : `Скинулись ${s.paidCount} из ${s.participantCount}`}
         </div>
         <div className="rd-progress">
-          <div className="rd-fill" style={{ width: `${peoplePercent}%` }} />
+          <div className="rd-fill" style={{ width: `${useMoneyBar ? moneyPercent : peoplePercent}%` }} />
         </div>
         <div className="rd-sklad-stats">
-          {hasGoal
-            ? `Собрано ${formatRubles(s.collectedKopecks)} ₽ из ${formatRubles(s.totalGoalKopecks!)} ₽`
-            : `Собрано ${formatRubles(s.collectedKopecks)} ₽`}
+          {useMoneyBar
+            ? `Внесли ${s.paidCount} из ${s.participantCount}`
+            : hasGoal
+              ? `Собрано ${formatRubles(s.collectedKopecks)} ₽ из ${formatRubles(s.totalGoalKopecks!)} ₽`
+              : `Собрано ${formatRubles(s.collectedKopecks)} ₽`}
           {' · до '}{DEADLINE_FMT.format(new Date(s.deadline))}
         </div>
       </div>
