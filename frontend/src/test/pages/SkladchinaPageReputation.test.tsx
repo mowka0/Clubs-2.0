@@ -56,6 +56,9 @@ function buildDetail(overrides: Partial<SkladchinaDetailDto> = {}): SkladchinaDe
     myStatus: 'pending',
     myExpectedAmountKopecks: 100000,
     myDeclaredAmountKopecks: null,
+    declineRequiresApproval: false,
+    myDeclineRequested: false,
+    myDeclineRejected: false,
     participants: null,
     participantCount: 5,
     paidCount: 1,
@@ -146,11 +149,13 @@ describe('SkladchinaPage — reputation redesign UI', () => {
         userId: 'u-released', firstName: 'Анна', lastName: null, avatarUrl: null,
         expectedAmountKopecks: 100000, declaredAmountKopecks: null,
         status: 'released', paidAt: null,
+        declineRequested: false, declineNote: null, declineRejected: false,
       },
       {
         userId: 'u-expired', firstName: 'Глеб', lastName: null, avatarUrl: null,
         expectedAmountKopecks: 100000, declaredAmountKopecks: null,
         status: 'expired_no_response', paidAt: null,
+        declineRequested: false, declineNote: null, declineRejected: false,
       },
     ];
     mockDetail(buildDetail({
@@ -197,11 +202,13 @@ describe('SkladchinaPage — Phase A', () => {
       {
         userId: 'u-pending', firstName: 'Иван', lastName: null, avatarUrl: null,
         expectedAmountKopecks: 100000, declaredAmountKopecks: null, status: 'pending', paidAt: null,
+        declineRequested: false, declineNote: null, declineRejected: false,
       },
       {
         userId: 'u-paid', firstName: 'Пётр', lastName: null, avatarUrl: null,
         expectedAmountKopecks: 100000, declaredAmountKopecks: 100000, status: 'paid',
         paidAt: new Date().toISOString(),
+        declineRequested: false, declineNote: null, declineRejected: false,
       },
     ];
     mockDetail(buildDetail({
@@ -225,6 +232,7 @@ describe('SkladchinaPage — Phase A', () => {
       {
         userId: 'u-pending', firstName: 'Иван', lastName: null, avatarUrl: null,
         expectedAmountKopecks: null, declaredAmountKopecks: null, status: 'pending', paidAt: null,
+        declineRequested: false, declineNote: null, declineRejected: false,
       },
     ];
     mockDetail(buildDetail({
@@ -239,5 +247,57 @@ describe('SkladchinaPage — Phase A', () => {
     expect(await screen.findByText('Иван')).toBeInTheDocument();
     expect(screen.queryByText('Отметить оплату')).not.toBeInTheDocument();
     expect(screen.queryByText('Не хватает')).not.toBeInTheDocument();
+  });
+});
+
+describe('SkladchinaPage — decline-with-approval (V28)', () => {
+  it('approval-сбор: pending → кнопка «Запросить отказ», не «Отказаться»', async () => {
+    mockDetail(buildDetail({ declineRequiresApproval: true, myStatus: 'pending' }));
+    renderPage();
+    expect(await screen.findByText('Запросить отказ')).toBeInTheDocument();
+    expect(screen.queryByText('Отказаться')).not.toBeInTheDocument();
+  });
+
+  it('FREE-сбор: pending → обычная «Отказаться»', async () => {
+    mockDetail(buildDetail({ declineRequiresApproval: false, myStatus: 'pending' }));
+    renderPage();
+    expect(await screen.findByText('Отказаться')).toBeInTheDocument();
+    expect(screen.queryByText('Запросить отказ')).not.toBeInTheDocument();
+  });
+
+  it('запрос на отказ отправлен → плашка ожидания, без кнопки отказа', async () => {
+    mockDetail(buildDetail({ declineRequiresApproval: true, myStatus: 'pending', myDeclineRequested: true }));
+    renderPage();
+    expect(await screen.findByText(/Запрос на отказ отправлен/)).toBeInTheDocument();
+    expect(screen.queryByText('Запросить отказ')).not.toBeInTheDocument();
+  });
+
+  it('отказ отклонён → плашка «нужно оплатить»', async () => {
+    mockDetail(buildDetail({ declineRequiresApproval: true, myStatus: 'pending', myDeclineRejected: true }));
+    renderPage();
+    expect(await screen.findByText(/Запрос на отказ отклонён/)).toBeInTheDocument();
+  });
+
+  it('организатор видит заявку на отказ с запиской и кнопками', async () => {
+    const participants: SkladchinaParticipantDto[] = [
+      {
+        userId: 'u-1', firstName: 'Иван', lastName: null, avatarUrl: null,
+        expectedAmountKopecks: 100000, declaredAmountKopecks: null, status: 'pending', paidAt: null,
+        declineRequested: true, declineNote: 'не ел, только смотрел', declineRejected: false,
+      },
+    ];
+    mockDetail(buildDetail({
+      declineRequiresApproval: true,
+      paymentMode: 'fixed_equal',
+      isOrganizerView: true,
+      myStatus: null,
+      participants,
+    }));
+    renderPage();
+
+    expect(await screen.findByText('Просит отказаться')).toBeInTheDocument();
+    expect(screen.getByText('«не ел, только смотрел»')).toBeInTheDocument();
+    expect(screen.getByText('Одобрить отказ')).toBeInTheDocument();
+    expect(screen.getByText('Отклонить')).toBeInTheDocument();
   });
 });

@@ -11,6 +11,8 @@ import {
   useOrganizerMarkPaidMutation,
   useOrganizerUnmarkMutation,
   useRedistributeSkladchinaMutation,
+  useRequestDeclineMutation,
+  useResolveDeclineMutation,
   useSkladchinaQuery,
 } from '../queries/skladchina';
 import { Toast } from '../components/Toast';
@@ -60,11 +62,15 @@ export const SkladchinaPage: FC = () => {
   const orgMarkMut = useOrganizerMarkPaidMutation();
   const orgUnmarkMut = useOrganizerUnmarkMutation();
   const redistributeMut = useRedistributeSkladchinaMutation();
+  const requestDeclineMut = useRequestDeclineMutation();
+  const resolveDeclineMut = useResolveDeclineMutation();
 
   const [amountInput, setAmountInput] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [deficitDismissed, setDeficitDismissed] = useState(false);
+  const [showDeclineForm, setShowDeclineForm] = useState(false);
+  const [declineReason, setDeclineReason] = useState('');
 
   if (query.isPending) {
     return (
@@ -117,6 +123,7 @@ export const SkladchinaPage: FC = () => {
   const busyUserId = (
     orgMarkMut.isPending ? orgMarkMut.variables?.userId
     : orgUnmarkMut.isPending ? orgUnmarkMut.variables?.userId
+    : resolveDeclineMut.isPending ? resolveDeclineMut.variables?.userId
     : undefined
   ) ?? null;
   const canManagePayments = isActive && isCreator && isFixed;
@@ -207,7 +214,17 @@ export const SkladchinaPage: FC = () => {
     }
   };
 
-  const handleDecline = async () => {
+  // V28: approval templates (split_bill) open a reason form instead of an instant decline.
+  const handleDeclineClick = () => {
+    setActionError(null);
+    if (s.declineRequiresApproval) {
+      setShowDeclineForm(true);
+      return;
+    }
+    void handleInstantDecline();
+  };
+
+  const handleInstantDecline = async () => {
     if (!window.confirm('Отказаться от участия в сборе?')) return;
     setActionError(null);
     try {
@@ -219,6 +236,47 @@ export const SkladchinaPage: FC = () => {
       console.error('decline failed', e);
       haptic.notify('error');
       setActionError('Не удалось отказаться. Попробуйте ещё раз.');
+    }
+  };
+
+  const handleRequestDecline = async () => {
+    const reason = declineReason.trim();
+    if (!reason) {
+      setActionError('Укажите причину отказа');
+      haptic.notify('error');
+      return;
+    }
+    setActionError(null);
+    try {
+      haptic.impact('medium');
+      await requestDeclineMut.mutateAsync({ id: s.id, reason });
+      haptic.notify('success');
+      setShowDeclineForm(false);
+      setDeclineReason('');
+      setToastMessage('Запрос на отказ отправлен организатору.');
+    } catch (e) {
+      console.error('requestDecline failed', e);
+      haptic.notify('error');
+      setActionError('Не удалось отправить запрос. Попробуйте ещё раз.');
+    }
+  };
+
+  const handleResolveDecline = async (p: SkladchinaParticipantDto, approve: boolean) => {
+    const who = `${p.firstName}${p.lastName ? ` ${p.lastName}` : ''}`;
+    const msg = approve
+      ? `Одобрить отказ ${who}? Участник будет освобождён от оплаты.`
+      : `Отклонить отказ ${who}? Участнику нужно будет оплатить счёт.`;
+    if (!window.confirm(msg)) return;
+    setActionError(null);
+    try {
+      haptic.impact('medium');
+      await resolveDeclineMut.mutateAsync({ id: s.id, userId: p.userId, approve });
+      haptic.notify('success');
+      setToastMessage(approve ? 'Отказ одобрен.' : 'Отказ отклонён.');
+    } catch (e) {
+      console.error('resolveDecline failed', e);
+      haptic.notify('error');
+      setActionError('Не удалось обработать заявку. Попробуйте ещё раз.');
     }
   };
 
@@ -363,28 +421,73 @@ export const SkladchinaPage: FC = () => {
               {DEADLINE_FMT.format(new Date(s.deadline))}: молчание снизит репутацию на 40
             </div>
           )}
-          <div className="rd-form-actions">
-            <button
-              type="button"
-              className="rd-btn-primary"
-              onClick={handleMarkPaid}
-              disabled={markPaidMut.isPending}
-            >
-              {markPaidMut.isPending
-                ? 'Сохраняем…'
-                : isFixed && expectedRub != null
-                  ? `Я оплатил ${expectedRub.toLocaleString('ru-RU')} ₽`
-                  : 'Я оплатил'}
-            </button>
-            <button
-              type="button"
-              className="rd-btn-outline"
-              onClick={handleDecline}
-              disabled={declineMut.isPending}
-            >
-              Отказаться
-            </button>
-          </div>
+
+          {/* V28: decline-with-approval states */}
+          {s.myDeclineRejected && (
+            <div className="rd-warn-block" style={{ marginBottom: 10 }}>
+              Запрос на отказ отклонён — нужно оплатить счёт.
+            </div>
+          )}
+          {s.myDeclineRequested && !s.myDeclineRejected && (
+            <div className="rd-hint" style={{ marginBottom: 10 }}>
+              ⏳ Запрос на отказ отправлен — ждём решения организатора.
+            </div>
+          )}
+
+          {showDeclineForm ? (
+            <div>
+              <textarea
+                className="rd-textarea"
+                rows={3}
+                placeholder="Причина отказа (обязательно)"
+                value={declineReason}
+                onChange={(e) => setDeclineReason(e.target.value)}
+                maxLength={500}
+              />
+              <div className="rd-form-actions" style={{ marginTop: 10 }}>
+                <button
+                  type="button"
+                  className="rd-btn-primary"
+                  onClick={handleRequestDecline}
+                  disabled={requestDeclineMut.isPending}
+                >
+                  {requestDeclineMut.isPending ? 'Отправляем…' : 'Отправить запрос'}
+                </button>
+                <button
+                  type="button"
+                  className="rd-btn-outline"
+                  onClick={() => { setShowDeclineForm(false); setActionError(null); }}
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="rd-form-actions">
+              <button
+                type="button"
+                className="rd-btn-primary"
+                onClick={handleMarkPaid}
+                disabled={markPaidMut.isPending}
+              >
+                {markPaidMut.isPending
+                  ? 'Сохраняем…'
+                  : isFixed && expectedRub != null
+                    ? `Я оплатил ${expectedRub.toLocaleString('ru-RU')} ₽`
+                    : 'Я оплатил'}
+              </button>
+              {!s.myDeclineRequested && !s.myDeclineRejected && (
+                <button
+                  type="button"
+                  className="rd-btn-outline"
+                  onClick={handleDeclineClick}
+                  disabled={declineMut.isPending}
+                >
+                  {s.declineRequiresApproval ? 'Запросить отказ' : 'Отказаться'}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -458,6 +561,7 @@ export const SkladchinaPage: FC = () => {
           busyUserId={busyUserId}
           onMarkPaid={handleOrgMarkPaid}
           onUnmark={handleOrgUnmark}
+          onResolveDecline={handleResolveDecline}
         />
       )}
 

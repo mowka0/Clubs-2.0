@@ -958,6 +958,114 @@ class SkladchinaControllerTest {
         ).andExpect(status().isBadRequest)
     }
 
+    // ---- split_bill decline-with-approval (V28) ----
+
+    @Test
+    fun `split_bill blocks instant decline — must request with a reason`() {
+        val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        val id = createFromBody(splitBody(eventId, 90000))
+        mockMvc.perform(post("/api/skladchinas/$id/decline").header("Authorization", "Bearer $memberAToken"))
+            .andExpect(status().isBadRequest)
+        assertEquals("pending", participantStatus(id, memberAId))
+    }
+
+    @Test
+    fun `split_bill decline request then organizer approves leads to declined`() {
+        val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        val id = createFromBody(splitBody(eventId, 90000))
+
+        mockMvc.perform(
+            post("/api/skladchinas/$id/request-decline")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"reason":"Я не ел, только смотрел"}""")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.myStatus").value("pending"))
+            .andExpect(jsonPath("$.myDeclineRequested").value(true))
+        assertEquals("Я не ел, только смотрел", participantDeclineNote(id, memberAId))
+
+        mockMvc.perform(
+            post("/api/skladchinas/$id/participants/$memberAId/resolve-decline")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"approve":true}""")
+        ).andExpect(status().isOk)
+        assertEquals("declined", participantStatus(id, memberAId))
+    }
+
+    @Test
+    fun `split_bill decline rejected means must pay and cannot re-request`() {
+        val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        val id = createFromBody(splitBody(eventId, 90000))
+
+        mockMvc.perform(
+            post("/api/skladchinas/$id/request-decline")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"reason":"не хочу"}""")
+        ).andExpect(status().isOk)
+
+        mockMvc.perform(
+            post("/api/skladchinas/$id/participants/$memberAId/resolve-decline")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"approve":false}""")
+        ).andExpect(status().isOk)
+        assertEquals("pending", participantStatus(id, memberAId))
+        assertTrue(participantDeclineRejected(id, memberAId))
+
+        // Re-request is blocked — the decline path is closed.
+        mockMvc.perform(
+            post("/api/skladchinas/$id/request-decline")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"reason":"ну пожалуйста"}""")
+        ).andExpect(status().isBadRequest)
+
+        mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $memberAToken"))
+            .andExpect(jsonPath("$.myDeclineRejected").value(true))
+    }
+
+    @Test
+    fun `request-decline without a reason returns 400`() {
+        val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        val id = createFromBody(splitBody(eventId, 90000))
+        mockMvc.perform(
+            post("/api/skladchinas/$id/request-decline")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"reason":"   "}""")
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `request-decline on a custom skladchina is rejected (free decline)`() {
+        val id = createSkladchina(listOf(memberAId, memberBId)) // custom template
+        mockMvc.perform(
+            post("/api/skladchinas/$id/request-decline")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"reason":"x"}""")
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `resolve-decline by a non-creator returns 403`() {
+        val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        val id = createFromBody(splitBody(eventId, 90000))
+        mockMvc.perform(
+            post("/api/skladchinas/$id/request-decline")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON).content("""{"reason":"x"}""")
+        ).andExpect(status().isOk)
+        mockMvc.perform(
+            post("/api/skladchinas/$id/participants/$memberAId/resolve-decline")
+                .header("Authorization", "Bearer $memberBToken") // not the creator
+                .contentType(MediaType.APPLICATION_JSON).content("""{"approve":true}""")
+        ).andExpect(status().isForbidden)
+    }
+
     // ---- helpers ----
 
     /** Inserts a past, completed event with attendance marked and per-user attendance rows. */
@@ -1076,6 +1184,18 @@ class SkladchinaControllerTest {
             "SELECT expected_amount_kopecks FROM skladchina_participants WHERE skladchina_id = ? AND user_id = ?",
             skladchinaId, userId
         )?.get(0) as Long?
+
+    private fun participantDeclineNote(skladchinaId: UUID, userId: UUID): String? =
+        dsl.fetchOne(
+            "SELECT decline_note FROM skladchina_participants WHERE skladchina_id = ? AND user_id = ?",
+            skladchinaId, userId
+        )?.get(0) as String?
+
+    private fun participantDeclineRejected(skladchinaId: UUID, userId: UUID): Boolean =
+        (dsl.fetchOne(
+            "SELECT decline_rejected FROM skladchina_participants WHERE skladchina_id = ? AND user_id = ?",
+            skladchinaId, userId
+        )?.get(0) as Boolean?) ?: false
 
     private fun skladchinaStatus(skladchinaId: UUID): String =
         dsl.fetchOne("SELECT status::text FROM skladchinas WHERE id = ?", skladchinaId)!!

@@ -40,6 +40,9 @@ class SkladchinaMapper {
         paidAt = record.paidAt,
         declinedAt = record.declinedAt,
         reputationApplied = record.reputationApplied ?: false,
+        declineNote = record.declineNote,
+        declineRequestedAt = record.declineRequestedAt,
+        declineRejected = record.declineRejected ?: false,
         createdAt = record.createdAt!!
     )
 
@@ -49,7 +52,8 @@ class SkladchinaMapper {
         clubAvatarUrl: String?,
         callerUserId: UUID,
         participants: List<SkladchinaParticipantInfo>,
-        collectedKopecks: Long
+        collectedKopecks: Long,
+        declineRequiresApproval: Boolean
     ): SkladchinaDetailDto {
         val isOrganizerView = skladchina.creatorId == callerUserId
         val myParticipant = participants.firstOrNull { it.userId == callerUserId }
@@ -80,6 +84,9 @@ class SkladchinaMapper {
             myStatus = myParticipant?.status?.literal,
             myExpectedAmountKopecks = myParticipant?.expectedAmountKopecks,
             myDeclaredAmountKopecks = myParticipant?.declaredAmountKopecks,
+            declineRequiresApproval = declineRequiresApproval,
+            myDeclineRequested = myParticipant?.declineRequestedAt != null,
+            myDeclineRejected = myParticipant?.declineRejected ?: false,
             participants = if (isOrganizerView) participants.map(::toParticipantDto) else null,
             participantCount = participants.size,
             paidCount = paidCount
@@ -121,6 +128,9 @@ class SkladchinaMapper {
             expectedAmountKopecks = info.expectedAmountKopecks,
             declaredAmountKopecks = info.declaredAmountKopecks,
             status = info.status.literal,
-            paidAt = info.paidAt
+            paidAt = info.paidAt,
+            declineRequested = info.declineRequestedAt != null,
+            declineNote = info.declineNote,
+            declineRejected = info.declineRejected
         )
 }

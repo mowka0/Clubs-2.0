@@ -68,6 +68,29 @@ class SkladchinaController(
         return ResponseEntity.ok(skladchinaService.decline(id, user.userId))
     }
 
+    // V28: participant opens a decline request with a reason (REQUIRES_APPROVAL templates, e.g. split_bill).
+    @PostMapping("/api/skladchinas/{id}/request-decline")
+    fun requestDecline(
+        @PathVariable id: UUID,
+        @RequestBody @Valid request: RequestDeclineRequest,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<SkladchinaDetailDto> {
+        log.info("Skladchina decline-request: id={} userId={}", id, user.userId)
+        return ResponseEntity.ok(skladchinaService.requestDecline(id, user.userId, request.reason))
+    }
+
+    // V28: organizer approves/rejects a participant's decline request.
+    @PostMapping("/api/skladchinas/{id}/participants/{userId}/resolve-decline")
+    fun resolveDecline(
+        @PathVariable id: UUID,
+        @PathVariable userId: UUID,
+        @RequestBody @Valid request: ResolveDeclineRequest,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<SkladchinaDetailDto> {
+        log.info("Skladchina resolve-decline: id={} target={} by={} approve={}", id, userId, user.userId, request.approve)
+        return ResponseEntity.ok(skladchinaService.resolveDecline(id, user.userId, userId, request.approve))
+    }
+
     // A-2: organizer marks a participant paid ("получил наличкой"). Creator-only (checked in service).
     @PostMapping("/api/skladchinas/{id}/participants/{userId}/mark-paid")
     fun organizerMarkPaid(

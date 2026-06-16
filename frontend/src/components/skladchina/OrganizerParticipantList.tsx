@@ -9,6 +9,8 @@ interface OrganizerParticipantListProps {
   busyUserId?: string | null;
   onMarkPaid?: (p: SkladchinaParticipantDto) => void;
   onUnmark?: (p: SkladchinaParticipantDto) => void;
+  // V28: organizer resolves a participant's decline request.
+  onResolveDecline?: (p: SkladchinaParticipantDto, approve: boolean) => void;
 }
 
 const rowActionStyle: CSSProperties = {
@@ -50,6 +52,7 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
   busyUserId = null,
   onMarkPaid,
   onUnmark,
+  onResolveDecline,
 }) => {
   const sorted = [...participants].sort((a, b) => {
     const order: Record<string, number> = { paid: 0, pending: 1, declined: 2, released: 3, expired_no_response: 4 };
@@ -73,8 +76,10 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
             showDeclared ? `заявл. ${formatRubles(p.declaredAmountKopecks!)} ₽` : null,
           ].filter(Boolean).join(' · ');
           const busy = busyUserId === p.userId;
-          // A-2: pending → "Отметить оплату"; paid → "Отменить". Other terminal statuses get nothing.
-          const action = !canManagePayments ? null
+          const showDeclineRequest = !!onResolveDecline && p.declineRequested;
+          // A-2: pending → "Отметить оплату"; paid → "Отменить". A participant with an open decline
+          // request shows the request controls below instead of the mark button.
+          const action = !canManagePayments || showDeclineRequest ? null
             : p.status === 'pending' ? (
               <button type="button" style={rowActionStyle} disabled={busy} onClick={() => onMarkPaid?.(p)}>
                 {busy ? '…' : 'Отметить оплату'}
@@ -90,26 +95,50 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
               </button>
             ) : null;
           return (
-            <div key={p.userId} className="rd-rep-row" style={{ cursor: 'default' }}>
-              <span className="rd-ico">
-                {p.avatarUrl
-                  ? <img src={p.avatarUrl} alt="" />
-                  : getInitials(p.firstName, p.lastName)}
-              </span>
-              <div className="rd-info">
-                <div className="rd-ttl">
-                  {p.firstName}{p.lastName ? ` ${p.lastName}` : ''}
-                </div>
-                {amounts && (
-                  <div className="rd-met" style={mismatch ? { color: 'var(--danger)' } : undefined}>
-                    {amounts}
+            <div key={p.userId}>
+              <div className="rd-rep-row" style={{ cursor: 'default' }}>
+                <span className="rd-ico">
+                  {p.avatarUrl
+                    ? <img src={p.avatarUrl} alt="" />
+                    : getInitials(p.firstName, p.lastName)}
+                </span>
+                <div className="rd-info">
+                  <div className="rd-ttl">
+                    {p.firstName}{p.lastName ? ` ${p.lastName}` : ''}
                   </div>
-                )}
+                  {amounts && (
+                    <div className="rd-met" style={mismatch ? { color: 'var(--danger)' } : undefined}>
+                      {amounts}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                  <span className={`rd-badge ${showDeclineRequest ? 'rd-warn' : badge.cls}`}>
+                    {showDeclineRequest ? 'Просит отказаться' : badge.text}
+                  </span>
+                  {action}
+                </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                <span className={`rd-badge ${badge.cls}`}>{badge.text}</span>
-                {action}
-              </div>
+              {showDeclineRequest && (
+                <div style={{ padding: '0 0 10px 46px' }}>
+                  {p.declineNote && (
+                    <div className="rd-met" style={{ marginBottom: 8 }}>«{p.declineNote}»</div>
+                  )}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button type="button" style={rowActionStyle} disabled={busy} onClick={() => onResolveDecline!(p, true)}>
+                      {busy ? '…' : 'Одобрить отказ'}
+                    </button>
+                    <button
+                      type="button"
+                      style={{ ...rowActionStyle, color: 'var(--text-dim)' }}
+                      disabled={busy}
+                      onClick={() => onResolveDecline!(p, false)}
+                    >
+                      Отклонить
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}

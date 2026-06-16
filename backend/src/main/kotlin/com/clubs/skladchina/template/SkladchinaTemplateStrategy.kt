@@ -18,6 +18,13 @@ interface SkladchinaTemplateStrategy {
     val type: SkladchinaTemplate
 
     /**
+     * How a participant may decline. FREE = the instant, free `decline` (custom/voluntary — declining
+     * is desired behaviour). REQUIRES_APPROVAL = a justified request the organizer approves/rejects
+     * (split_bill — you already consumed the good, so a free decline is free-riding). V28.
+     */
+    val declinePolicy: DeclinePolicy
+
+    /**
      * Whether reputation outcomes from this template are organizer/rail-VERIFIED (vs honor-system
      * self-declared). Bridges to the future "financial responsibility" derivation: only verified
      * outcomes are trustworthy enough to score. (Not yet persisted — no template emits ledger rows
@@ -31,6 +38,14 @@ interface SkladchinaTemplateStrategy {
      * (400) / ForbiddenException (403) / NotFoundException (404) on invalid input.
      */
     fun resolveCreation(clubId: UUID, creatorId: UUID, request: CreateSkladchinaRequest): TemplateResolution
+}
+
+/** How declining works for a template (V28). */
+enum class DeclinePolicy {
+    /** Instant, free, participant-controlled decline. */
+    FREE,
+    /** A justified request the organizer approves (→ declined) or rejects (→ must pay). */
+    REQUIRES_APPROVAL,
 }
 
 /** What a template resolves a create request into; the engine persists this verbatim. */

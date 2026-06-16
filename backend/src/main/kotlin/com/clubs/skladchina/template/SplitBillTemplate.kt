@@ -30,6 +30,9 @@ class SplitBillTemplate(
 
     override val type = SkladchinaTemplate.split_bill
     override val outcomesVerified = true
+    // You already consumed the good (you attended) — a free decline would be free-riding, so a
+    // decline must be justified and organizer-approved (V28).
+    override val declinePolicy = DeclinePolicy.REQUIRES_APPROVAL
 
     override fun resolveCreation(clubId: UUID, creatorId: UUID, request: CreateSkladchinaRequest): TemplateResolution {
         val eventId = request.eventId

@@ -304,7 +304,10 @@ class JooqSkladchinaRepository(
             SKLADCHINA_PARTICIPANTS.EXPECTED_AMOUNT_KOPECKS,
             SKLADCHINA_PARTICIPANTS.DECLARED_AMOUNT_KOPECKS,
             SKLADCHINA_PARTICIPANTS.STATUS,
-            SKLADCHINA_PARTICIPANTS.PAID_AT
+            SKLADCHINA_PARTICIPANTS.PAID_AT,
+            SKLADCHINA_PARTICIPANTS.DECLINE_NOTE,
+            SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT,
+            SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED
         )
             .from(SKLADCHINA_PARTICIPANTS)
             .join(USERS).on(USERS.ID.eq(SKLADCHINA_PARTICIPANTS.USER_ID))
@@ -319,7 +322,10 @@ class JooqSkladchinaRepository(
                     expectedAmountKopecks = r.get(SKLADCHINA_PARTICIPANTS.EXPECTED_AMOUNT_KOPECKS),
                     declaredAmountKopecks = r.get(SKLADCHINA_PARTICIPANTS.DECLARED_AMOUNT_KOPECKS),
                     status = r.get(SKLADCHINA_PARTICIPANTS.STATUS)!!,
-                    paidAt = r.get(SKLADCHINA_PARTICIPANTS.PAID_AT)
+                    paidAt = r.get(SKLADCHINA_PARTICIPANTS.PAID_AT),
+                    declineNote = r.get(SKLADCHINA_PARTICIPANTS.DECLINE_NOTE),
+                    declineRequestedAt = r.get(SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT),
+                    declineRejected = r.get(SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED) ?: false
                 )
             }
 
@@ -385,6 +391,30 @@ class JooqSkladchinaRepository(
                     // A-2: only undo a real payment; never reopen a participant a concurrent
                     // close already moved to a terminal status.
                     .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid))
+            )
+            .execute()
+
+    override fun requestDecline(skladchinaId: UUID, userId: UUID, note: String, requestedAt: OffsetDateTime): Int =
+        dsl.update(SKLADCHINA_PARTICIPANTS)
+            .set(SKLADCHINA_PARTICIPANTS.DECLINE_NOTE, note)
+            .set(SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT, requestedAt)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
+                    .and(SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED.isFalse)
+            )
+            .execute()
+
+    override fun rejectDeclineRequest(skladchinaId: UUID, userId: UUID): Int =
+        dsl.update(SKLADCHINA_PARTICIPANTS)
+            .set(SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED, true)
+            .setNull(SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
+                    .and(SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT.isNotNull)
             )
             .execute()
 

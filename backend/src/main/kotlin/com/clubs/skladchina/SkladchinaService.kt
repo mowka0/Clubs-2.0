@@ -14,6 +14,7 @@ import com.clubs.generated.jooq.enums.SkladchinaTemplate
 import com.clubs.reputation.LedgerEntry
 import com.clubs.reputation.ReputationPolicy
 import com.clubs.reputation.ReputationService
+import com.clubs.skladchina.template.DeclinePolicy
 import com.clubs.skladchina.template.SkladchinaTemplateRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
@@ -150,7 +151,11 @@ class SkladchinaService(
 
         val participants = skladchinaRepository.findParticipantsWithInfo(skladchinaId)
         val collected = skladchinaRepository.sumCollectedKopecks(skladchinaId)
-        return mapper.toDetailDto(skladchina, club.name, club.avatarUrl, callerId, participants, collected)
+        val declineRequiresApproval =
+            templateRegistry.forType(skladchina.template).declinePolicy == DeclinePolicy.REQUIRES_APPROVAL
+        return mapper.toDetailDto(
+            skladchina, club.name, club.avatarUrl, callerId, participants, collected, declineRequiresApproval
+        )
     }
 
     @Transactional
@@ -198,6 +203,11 @@ class SkladchinaService(
         if (skladchina.status != SkladchinaStatus.active) {
             throw ValidationException("Skladchina is not active")
         }
+        // V28: REQUIRES_APPROVAL templates (split_bill) don't allow an instant free decline —
+        // the participant must submit a request the organizer resolves (see requestDecline).
+        if (templateRegistry.forType(skladchina.template).declinePolicy == DeclinePolicy.REQUIRES_APPROVAL) {
+            throw ValidationException("Для этого сбора отказ оформляется заявкой с причиной")
+        }
         val participant = skladchinaRepository.findParticipant(skladchinaId, callerId)
             ?: throw ForbiddenException("Not a participant of this skladchina")
         if (participant.status == SkladchinaParticipantStatus.declined) {
@@ -213,6 +223,69 @@ class SkladchinaService(
         }
         log.info("Skladchina declined: id={} userId={}", skladchinaId, callerId)
         maybeAutoCloseAfterStateChange(skladchinaId)
+        return getDetail(skladchinaId, callerId)
+    }
+
+    /**
+     * V28: a participant opens a decline request with a reason (REQUIRES_APPROVAL templates only,
+     * e.g. split_bill). The participant stays `pending` until the organizer resolves it. Idempotent
+     * when a request is already open; a rejected path can't be reopened (the participant must pay).
+     */
+    @Transactional
+    fun requestDecline(skladchinaId: UUID, callerId: UUID, reason: String): SkladchinaDetailDto {
+        val skladchina = skladchinaRepository.findById(skladchinaId)
+            ?: throw NotFoundException("Skladchina not found")
+        if (skladchina.status != SkladchinaStatus.active) throw ValidationException("Skladchina is not active")
+        if (templateRegistry.forType(skladchina.template).declinePolicy != DeclinePolicy.REQUIRES_APPROVAL) {
+            throw ValidationException("Этот сбор не поддерживает заявки на отказ")
+        }
+        val note = reason.trim()
+        if (note.isEmpty()) throw ValidationException("Укажите причину отказа")
+
+        val participant = skladchinaRepository.findParticipant(skladchinaId, callerId)
+            ?: throw ForbiddenException("Not a participant of this skladchina")
+        if (participant.status != SkladchinaParticipantStatus.pending) {
+            throw ValidationException("Заявку на отказ можно подать только до оплаты или ответа")
+        }
+        if (participant.declineRejected) {
+            throw ValidationException("Ваш отказ отклонён — нужно оплатить счёт")
+        }
+        if (participant.declineRequestedAt != null) {
+            return getDetail(skladchinaId, callerId) // idempotent — request already open
+        }
+
+        val updated = skladchinaRepository.requestDecline(
+            skladchinaId, callerId, note.take(DECLINE_NOTE_MAX), OffsetDateTime.now()
+        )
+        if (updated == 0) throw ConflictException("Сбор уже закрыт — обновите экран")
+        log.info("Skladchina decline-request: id={} userId={}", skladchinaId, callerId)
+        return getDetail(skladchinaId, callerId)
+    }
+
+    /**
+     * V28: the organizer resolves a participant's decline request. Approve → `declined` (excused);
+     * reject → decline path closed (`decline_rejected`), participant stays `pending` and must pay.
+     * Creator-only. Approving the last pending participant can auto-close the skladchina.
+     */
+    @Transactional
+    fun resolveDecline(skladchinaId: UUID, callerId: UUID, targetUserId: UUID, approve: Boolean): SkladchinaDetailDto {
+        requireActiveAsCreator(skladchinaId, callerId)
+        val participant = skladchinaRepository.findParticipant(skladchinaId, targetUserId)
+            ?: throw NotFoundException("Participant not found in this skladchina")
+        if (participant.status != SkladchinaParticipantStatus.pending || participant.declineRequestedAt == null) {
+            throw ValidationException("Нет открытой заявки на отказ у этого участника")
+        }
+
+        if (approve) {
+            val updated = skladchinaRepository.setParticipantDeclined(skladchinaId, targetUserId, OffsetDateTime.now())
+            if (updated == 0) throw ConflictException("Сбор уже закрыт — обновите экран")
+            log.info("Skladchina decline-approved: id={} target={} by={}", skladchinaId, targetUserId, callerId)
+            maybeAutoCloseAfterStateChange(skladchinaId)
+        } else {
+            val updated = skladchinaRepository.rejectDeclineRequest(skladchinaId, targetUserId)
+            if (updated == 0) throw ConflictException("Сбор уже закрыт — обновите экран")
+            log.info("Skladchina decline-rejected: id={} target={} by={}", skladchinaId, targetUserId, callerId)
+        }
         return getDetail(skladchinaId, callerId)
     }
 
@@ -607,5 +680,6 @@ class SkladchinaService(
         private const val REPUTATION_RATE_LIMIT_WINDOW_DAYS = 7L
         // Voluntary sanity cap: 100 000 ₽ — statistics hygiene, not an anti-abuse bound.
         private const val DECLARED_AMOUNT_MAX_KOPECKS = 10_000_000L
+        private const val DECLINE_NOTE_MAX = 500
     }
 }

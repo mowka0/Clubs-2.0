@@ -21,6 +21,7 @@ class CustomTemplate(
 
     override val type = SkladchinaTemplate.custom
     override val outcomesVerified = false
+    override val declinePolicy = DeclinePolicy.FREE
 
     override fun resolveCreation(clubId: UUID, creatorId: UUID, request: CreateSkladchinaRequest): TemplateResolution {
         val mode = SkladchinaMode.values().find { it.literal == request.paymentMode }

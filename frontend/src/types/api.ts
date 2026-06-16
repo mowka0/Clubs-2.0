@@ -411,6 +411,10 @@ export interface SkladchinaParticipantDto {
   declaredAmountKopecks: number | null;
   status: SkladchinaParticipantStatus;
   paidAt: string | null;
+  // V28 decline-with-approval (organizer view)
+  declineRequested: boolean;
+  declineNote: string | null;
+  declineRejected: boolean;
 }
 
 export interface SkladchinaDetailDto {
@@ -438,6 +442,10 @@ export interface SkladchinaDetailDto {
   myStatus: SkladchinaParticipantStatus | null;
   myExpectedAmountKopecks: number | null;
   myDeclaredAmountKopecks: number | null;
+  // V28 decline-with-approval
+  declineRequiresApproval: boolean;
+  myDeclineRequested: boolean;
+  myDeclineRejected: boolean;
   participants: SkladchinaParticipantDto[] | null;
   participantCount: number;
   paidCount: number;

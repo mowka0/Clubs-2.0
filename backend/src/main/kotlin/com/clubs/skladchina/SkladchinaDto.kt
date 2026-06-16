@@ -59,6 +59,18 @@ data class MarkPaidRequest(
     val declaredAmountKopecks: Long? = null
 )
 
+// V28: a participant's decline request (REQUIRES_APPROVAL templates) — reason is mandatory.
+data class RequestDeclineRequest(
+    @field:NotBlank @field:Size(max = 500)
+    val reason: String
+)
+
+// V28: organizer resolves a decline request.
+data class ResolveDeclineRequest(
+    @field:NotNull
+    val approve: Boolean
+)
+
 data class SkladchinaDetailDto(
     val id: UUID,
     val clubId: UUID,
@@ -89,6 +101,11 @@ data class SkladchinaDetailDto(
     val myExpectedAmountKopecks: Long?,
     val myDeclaredAmountKopecks: Long?,
 
+    // V28 decline-with-approval
+    val declineRequiresApproval: Boolean,          // template policy — frontend uses the request flow
+    val myDeclineRequested: Boolean,               // caller has an open decline request awaiting the organizer
+    val myDeclineRejected: Boolean,                // caller's decline was rejected — must pay
+
     val participants: List<SkladchinaParticipantDto>?,   // non-null ONLY for organizer
     val participantCount: Int,
     val paidCount: Int
@@ -102,7 +119,11 @@ data class SkladchinaParticipantDto(
     val expectedAmountKopecks: Long?,
     val declaredAmountKopecks: Long?,
     val status: String,
-    val paidAt: OffsetDateTime?
+    val paidAt: OffsetDateTime?,
+    // V28: open decline request (organizer view) — show the note + approve/reject controls.
+    val declineRequested: Boolean,
+    val declineNote: String?,
+    val declineRejected: Boolean
 )
 
 data class MySkladchinaListItemDto(

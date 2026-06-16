@@ -11,6 +11,8 @@ import {
   organizerMarkPaidParticipant,
   organizerUnmarkParticipant,
   redistributeSkladchina,
+  requestDeclineSkladchina,
+  resolveDeclineSkladchina,
 } from '../api/skladchina';
 import type { CreateSkladchinaRequest } from '../types/api';
 import { queryKeys } from './queryKeys';
@@ -121,6 +123,32 @@ export function useOrganizerUnmarkMutation() {
   return useMutation({
     mutationFn: ({ id, userId }: OrganizerParticipantArgs) => organizerUnmarkParticipant(id, userId),
     onSuccess: (_data, { id }) => invalidateAfterOrganizerAction(qc, id),
+  });
+}
+
+/** V28: participant requests to decline a bill with a reason (split_bill). */
+export function useRequestDeclineMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => requestDeclineSkladchina(id, reason),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
+    },
+  });
+}
+
+/** V28: organizer approves/rejects a participant's decline request. */
+export function useResolveDeclineMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, userId, approve }: { id: string; userId: string; approve: boolean }) =>
+      resolveDeclineSkladchina(id, userId, approve),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
+    },
   });
 }
 

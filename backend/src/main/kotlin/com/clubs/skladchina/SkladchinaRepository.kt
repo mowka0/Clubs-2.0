@@ -83,6 +83,20 @@ interface SkladchinaRepository {
     fun revertParticipantToPending(skladchinaId: UUID, userId: UUID): Int
 
     /**
+     * V28: opens a decline request (REQUIRES_APPROVAL templates) — note + timestamp. Guarded to a
+     * still-`pending` participant whose decline path isn't already closed (decline_rejected=false).
+     * Returns affected rows.
+     */
+    fun requestDecline(skladchinaId: UUID, userId: UUID, note: String, requestedAt: OffsetDateTime): Int
+
+    /**
+     * V28: organizer rejects the decline request — closes the path (decline_rejected=true) and
+     * clears the open request; participant stays `pending` (must pay). Guarded to a pending
+     * participant with an open request. Returns affected rows.
+     */
+    fun rejectDeclineRequest(skladchinaId: UUID, userId: UUID): Int
+
+    /**
      * A-3 (redistribute): overwrites a participant's expected_amount_kopecks. Guarded by
      * `WHERE status = 'pending'` — never touches a participant who already paid/declined.
      * Returns affected rows.

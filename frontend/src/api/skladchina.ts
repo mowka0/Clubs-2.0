@@ -49,6 +49,16 @@ export function declineSkladchina(id: string): Promise<SkladchinaDetailDto> {
   return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/decline`);
 }
 
+// V28: participant opens a decline request with a reason (REQUIRES_APPROVAL templates).
+export function requestDeclineSkladchina(id: string, reason: string): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/request-decline`, { reason });
+}
+
+// V28: organizer approves/rejects a participant's decline request.
+export function resolveDeclineSkladchina(id: string, userId: string, approve: boolean): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/participants/${userId}/resolve-decline`, { approve });
+}
+
 export function closeSkladchina(id: string): Promise<SkladchinaDetailDto> {
   return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/close`);
 }
