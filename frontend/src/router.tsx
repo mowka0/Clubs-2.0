@@ -21,6 +21,9 @@ const SkladchinaPage = lazy(() =>
 const CreateSkladchinaPage = lazy(() =>
   import('./pages/CreateSkladchinaPage').then((m) => ({ default: m.CreateSkladchinaPage })),
 );
+const CreateSplitBillPage = lazy(() =>
+  import('./pages/CreateSplitBillPage').then((m) => ({ default: m.CreateSplitBillPage })),
+);
 const CreateEventPage = lazy(() =>
   import('./pages/CreateEventPage').then((m) => ({ default: m.CreateEventPage })),
 );
@@ -103,6 +106,10 @@ export const router = createBrowserRouter([
       {
         path: '/clubs/:id/skladchina/new',
         element: <CreateSkladchinaPage />,
+      },
+      {
+        path: '/clubs/:id/skladchina/split',
+        element: <CreateSplitBillPage />,
       },
       {
         path: '/invite/:code',

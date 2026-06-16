@@ -276,6 +276,16 @@ export const SkladchinaPage: FC = () => {
         {s.affectsReputation && (
           <span className="rd-badge rd-warn" title="Важный сбор: влияет на репутацию участников">⚠️ Важный сбор</span>
         )}
+        {s.template === 'split_bill' && s.eventId && (
+          <button
+            type="button"
+            className="rd-badge rd-neutral2"
+            style={{ cursor: 'pointer', border: 'none', font: 'inherit' }}
+            onClick={() => { haptic.impact('light'); navigate(`/events/${s.eventId}`); }}
+          >
+            🧾 Счёт по событию ›
+          </button>
+        )}
       </div>
 
       {s.photoUrl && (

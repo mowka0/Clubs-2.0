@@ -43,6 +43,7 @@ function renderFlow(clubs: ClubPickerOption[]) {
       />
       <Route path="/clubs/:id/events/new" element={<LocationProbe />} />
       <Route path="/clubs/:id/skladchina/new" element={<LocationProbe />} />
+      <Route path="/clubs/:id/skladchina/split" element={<LocationProbe />} />
     </Routes>,
     { routerEntries: ['/'] },
   );
@@ -63,18 +64,30 @@ describe('CreateActivityFlow', () => {
     expect(screen.getByTestId('location').textContent).toBe('/clubs/club-1/events/new');
   });
 
-  it('shows a club picker when the user organizes multiple clubs, then navigates to the picked club', async () => {
+  it('Сбор → template step → club picker → custom create route', async () => {
     const { user } = renderFlow(TWO_CLUBS);
 
     await user.click(screen.getByText('Сбор'));
 
-    // Step 2: club picker appears with all organizer clubs.
+    // New step: pick the skladchina template before the club.
+    expect(screen.getByText('Разделить счёт')).toBeInTheDocument();
+    await user.click(screen.getByText('Свой сбор'));
+
+    // Then the club picker appears with all organizer clubs.
     expect(screen.getByText('Выберите клуб')).toBeInTheDocument();
     expect(screen.getByText('Alpha Club')).toBeInTheDocument();
-    expect(screen.getByText('Beta Club')).toBeInTheDocument();
-
     await user.click(screen.getByText('Beta Club'));
 
     expect(screen.getByTestId('location').textContent).toBe('/clubs/club-2/skladchina/new');
+  });
+
+  it('Сбор → «Разделить счёт» routes to the split-bill page', async () => {
+    const { user } = renderFlow(TWO_CLUBS);
+
+    await user.click(screen.getByText('Сбор'));
+    await user.click(screen.getByText('Разделить счёт'));
+    await user.click(screen.getByText('Beta Club'));
+
+    expect(screen.getByTestId('location').textContent).toBe('/clubs/club-2/skladchina/split');
   });
 });

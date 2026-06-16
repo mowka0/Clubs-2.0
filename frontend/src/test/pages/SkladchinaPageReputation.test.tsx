@@ -41,6 +41,8 @@ function buildDetail(overrides: Partial<SkladchinaDetailDto> = {}): SkladchinaDe
     description: null,
     rules: null,
     photoUrl: null,
+    template: 'custom',
+    eventId: null,
     paymentMode: 'fixed_equal',
     totalGoalKopecks: 500000,
     collectedKopecks: 100000,

@@ -99,3 +99,41 @@ export const ActivityTypeOptions: FC<ActivityTypeOptionsProps> = ({ onPick }) =>
     ))}
   </div>
 );
+
+// Only the built templates are shown. As gear/booking/birthday land, add them here.
+export type SkladchinaTemplateKey = 'split_bill' | 'custom';
+
+interface SkladchinaTemplateOptionsProps {
+  onPick: (template: SkladchinaTemplateKey) => void;
+}
+
+const SKLADCHINA_OPTIONS: { key: SkladchinaTemplateKey; emoji: string; title: string; subtitle: string }[] = [
+  {
+    key: 'split_bill',
+    emoji: '🧾',
+    title: 'Разделить счёт',
+    subtitle: 'Поделить расходы прошедшего события поровну между пришедшими',
+  },
+  {
+    key: 'custom',
+    emoji: '💰',
+    title: 'Свой сбор',
+    subtitle: 'Сумма, участники и сроки — вручную',
+  },
+];
+
+/** Template picker shown after «Сбор» in the create flow. Content-only (no Modal wrapper). */
+export const SkladchinaTemplateOptions: FC<SkladchinaTemplateOptionsProps> = ({ onPick }) => (
+  <div style={{ paddingBottom: 8 }}>
+    <div style={headerStyle}>Тип сбора</div>
+    {SKLADCHINA_OPTIONS.map((opt) => (
+      <button key={opt.key} type="button" style={optionStyle} onClick={() => onPick(opt.key)}>
+        <span style={emojiStyle} aria-hidden="true">{opt.emoji}</span>
+        <span style={textStyle}>
+          <span style={titleStyle}>{opt.title}</span>
+          <span style={subtitleStyle}>{opt.subtitle}</span>
+        </span>
+      </button>
+    ))}
+  </div>
+);

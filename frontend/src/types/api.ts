@@ -391,6 +391,7 @@ export interface MyAttendanceDto {
 }
 
 export type SkladchinaMode = 'fixed_equal' | 'fixed_individual' | 'voluntary';
+export type SkladchinaTemplate = 'custom' | 'split_bill' | 'gear' | 'booking' | 'birthday';
 export type SkladchinaStatus = 'active' | 'closed_success' | 'closed_failed' | 'cancelled';
 export type SkladchinaParticipantStatus =
   | 'pending'
@@ -422,6 +423,8 @@ export interface SkladchinaDetailDto {
   description: string | null;
   rules: string | null;
   photoUrl: string | null;
+  template: SkladchinaTemplate;
+  eventId: string | null;
   paymentMode: SkladchinaMode;
   totalGoalKopecks: number | null;
   collectedKopecks: number;
@@ -446,6 +449,7 @@ export interface MySkladchinaListItemDto {
   clubId: string;
   clubName: string;
   clubAvatarUrl: string | null;
+  template: SkladchinaTemplate;
   paymentMode: SkladchinaMode;
   totalGoalKopecks: number | null;
   collectedKopecks: number;
@@ -469,13 +473,15 @@ export interface CreateSkladchinaRequest {
   description?: string | null;
   rules?: string | null;
   photoUrl?: string | null;
+  template?: SkladchinaTemplate;          // default "custom" server-side
+  eventId?: string | null;                // split_bill: the source event
   paymentMode: SkladchinaMode;
   totalGoalKopecks?: number | null;
   paymentLink: string;
   paymentMethodNote?: string | null;
   deadline: string;
   affectsReputation: boolean;
-  participants: CreateSkladchinaParticipantInput[];
+  participants?: CreateSkladchinaParticipantInput[];  // omitted/[] for split_bill
 }
 
 export interface MyEventListItemDto {

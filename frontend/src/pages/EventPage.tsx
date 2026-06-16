@@ -497,6 +497,18 @@ export const EventPage: FC = () => {
               ✓ Посещаемость отмечена{event.attendanceFinalized ? ' и закреплена' : ''}.
             </div>
           </div>
+          {/* split_bill entry: split this event's bill equally across those who attended. */}
+          <button
+            type="button"
+            className="rd-btn-outline"
+            style={{ marginBottom: 14 }}
+            onClick={() => {
+              haptic.impact('medium');
+              navigate(`/clubs/${event.clubId}/skladchina/split?eventId=${event.id}`);
+            }}
+          >
+            🧾 Разделить счёт
+          </button>
           {disputeWindowOpen && disputedCandidates.length > 0 && (
             <>
               <div className="rd-section-sub-h">Оспоренные отметки</div>

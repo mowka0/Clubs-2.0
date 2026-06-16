@@ -11,6 +11,7 @@ function buildItem(overrides: Partial<MySkladchinaListItemDto> = {}): MySkladchi
     clubId: 'club-1',
     clubName: 'Клуб',
     clubAvatarUrl: null,
+    template: 'custom',
     paymentMode: 'fixed_equal',
     totalGoalKopecks: 500000,
     collectedKopecks: 100000,
