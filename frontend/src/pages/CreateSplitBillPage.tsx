@@ -6,6 +6,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { ApiError } from '../api/apiClient';
 import { useClubEventsQuery, useEventQuery, useEventRespondersQuery } from '../queries/events';
 import { useCreateSkladchinaMutation } from '../queries/skladchina';
+import { PhotoAttach } from '../components/PhotoAttach';
 import type { CreateSkladchinaRequest } from '../types/api';
 
 const DATE_FMT = new Intl.DateTimeFormat('ru-RU', {
@@ -53,6 +54,7 @@ export const CreateSplitBillPage: FC = () => {
   const [billRub, setBillRub] = useState('');
   const [paymentLink, setPaymentLink] = useState('');
   const [paymentMethodNote, setPaymentMethodNote] = useState('');
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [deadline, setDeadline] = useState(defaultDeadlineLocal());
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -103,6 +105,7 @@ export const CreateSplitBillPage: FC = () => {
       totalGoalKopecks: total,
       paymentLink: paymentLink.trim(),
       paymentMethodNote: paymentMethodNote.trim() || null,
+      photoUrl,
       deadline: new Date(deadline).toISOString(),
       affectsReputation: false,
       participants: [],
@@ -220,6 +223,12 @@ export const CreateSplitBillPage: FC = () => {
               placeholder="Тинькофф, СБП, ВТБ…"
             />
           </label>
+
+          <div className="rd-field">
+            <span className="rd-label">Чек / фото (опц.)</span>
+            <PhotoAttach value={photoUrl} onChange={setPhotoUrl} addLabel="Прикрепить чек" />
+            <span className="rd-hint">Участники откроют чек на весь экран и посчитают свою часть</span>
+          </div>
 
           <label className="rd-field">
             <span className="rd-label">Срок до <span className="rd-req">*</span></span>

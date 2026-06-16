@@ -16,6 +16,7 @@ import {
   useSkladchinaQuery,
 } from '../queries/skladchina';
 import { Toast } from '../components/Toast';
+import { ImageLightbox } from '../components/ImageLightbox';
 import { OrganizerParticipantList } from '../components/skladchina/OrganizerParticipantList';
 import type { SkladchinaDetailDto, SkladchinaParticipantDto } from '../types/api';
 
@@ -71,6 +72,7 @@ export const SkladchinaPage: FC = () => {
   const [deficitDismissed, setDeficitDismissed] = useState(false);
   const [showDeclineForm, setShowDeclineForm] = useState(false);
   const [declineReason, setDeclineReason] = useState('');
+  const [photoZoomed, setPhotoZoomed] = useState(false);
 
   if (query.isPending) {
     return (
@@ -347,10 +349,16 @@ export const SkladchinaPage: FC = () => {
       </div>
 
       {s.photoUrl && (
-        <div className="rd-glass" style={{ overflow: 'hidden', padding: 0, marginBottom: 14 }}>
+        <button
+          type="button"
+          className="rd-glass"
+          onClick={() => { haptic.impact('light'); setPhotoZoomed(true); }}
+          style={{ overflow: 'hidden', padding: 0, marginBottom: 14, border: 'none', cursor: 'pointer', display: 'block', width: '100%' }}
+        >
           <img src={s.photoUrl} alt="Фото сбора" style={{ width: '100%', display: 'block' }} />
-        </div>
+        </button>
       )}
+      <ImageLightbox src={photoZoomed ? s.photoUrl : null} onClose={() => setPhotoZoomed(false)} />
 
       {s.description && (
         <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
