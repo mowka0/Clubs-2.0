@@ -8,7 +8,7 @@ import java.time.OffsetDateTime
 @Service
 class SkladchinaScheduler(
     private val skladchinaRepository: SkladchinaRepository,
-    private val skladchinaService: SkladchinaService
+    private val lifecycleService: SkladchinaLifecycleService
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaScheduler::class.java)
 
@@ -24,7 +24,7 @@ class SkladchinaScheduler(
         log.info("Auto-closing {} expired skladchinas", expired.size)
         expired.forEach { s ->
             try {
-                skladchinaService.closeInternal(s.id, closedBy = null, manualClose = false)
+                lifecycleService.closeInternal(s.id, closedBy = null, manualClose = false)
             } catch (e: Exception) {
                 log.error("Failed to auto-close skladchina ${s.id}", e)
             }

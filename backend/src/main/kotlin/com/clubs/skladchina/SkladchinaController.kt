@@ -16,7 +16,10 @@ import java.util.UUID
 
 @RestController
 class SkladchinaController(
-    private val skladchinaService: SkladchinaService
+    private val creationService: SkladchinaCreationService,
+    private val queryService: SkladchinaQueryService,
+    private val paymentService: SkladchinaPaymentService,
+    private val lifecycleService: SkladchinaLifecycleService
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaController::class.java)
 
@@ -26,7 +29,7 @@ class SkladchinaController(
         @PathVariable clubId: UUID,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<List<MySkladchinaListItemDto>> {
-        val list = skladchinaService.getClubActiveSkladchinas(clubId, user.userId)
+        val list = queryService.getClubActiveSkladchinas(clubId, user.userId)
         return ResponseEntity.ok(list)
     }
 
@@ -38,7 +41,7 @@ class SkladchinaController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
         log.info("Create skladchina: clubId={} userId={} title='{}'", clubId, user.userId, request.title)
-        val dto = skladchinaService.createSkladchina(clubId, request, user.userId)
+        val dto = creationService.createSkladchina(clubId, request, user.userId)
         return ResponseEntity.status(HttpStatus.CREATED).body(dto)
     }
 
@@ -47,7 +50,7 @@ class SkladchinaController(
         @PathVariable id: UUID,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> =
-        ResponseEntity.ok(skladchinaService.getDetail(id, user.userId))
+        ResponseEntity.ok(queryService.getDetail(id, user.userId))
 
     @PostMapping("/api/skladchinas/{id}/mark-paid")
     fun markPaid(
@@ -56,7 +59,7 @@ class SkladchinaController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
         log.info("Skladchina mark-paid: id={} userId={} amount={}", id, user.userId, request.declaredAmountKopecks)
-        return ResponseEntity.ok(skladchinaService.markPaid(id, user.userId, request.declaredAmountKopecks))
+        return ResponseEntity.ok(paymentService.markPaid(id, user.userId, request.declaredAmountKopecks))
     }
 
     @PostMapping("/api/skladchinas/{id}/decline")
@@ -65,7 +68,7 @@ class SkladchinaController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
         log.info("Skladchina decline: id={} userId={}", id, user.userId)
-        return ResponseEntity.ok(skladchinaService.decline(id, user.userId))
+        return ResponseEntity.ok(paymentService.decline(id, user.userId))
     }
 
     // V28: participant opens a decline request with a reason (REQUIRES_APPROVAL templates, e.g. split_bill).
@@ -76,7 +79,7 @@ class SkladchinaController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
         log.info("Skladchina decline-request: id={} userId={}", id, user.userId)
-        return ResponseEntity.ok(skladchinaService.requestDecline(id, user.userId, request.reason))
+        return ResponseEntity.ok(paymentService.requestDecline(id, user.userId, request.reason))
     }
 
     // V28: organizer approves/rejects a participant's decline request.
@@ -88,7 +91,7 @@ class SkladchinaController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
         log.info("Skladchina resolve-decline: id={} target={} by={} approve={}", id, userId, user.userId, request.approve)
-        return ResponseEntity.ok(skladchinaService.resolveDecline(id, user.userId, userId, request.approve))
+        return ResponseEntity.ok(paymentService.resolveDecline(id, user.userId, userId, request.approve))
     }
 
     // A-2: organizer marks a participant paid ("получил наличкой"). Creator-only (checked in service).
@@ -99,7 +102,7 @@ class SkladchinaController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
         log.info("Skladchina organizer-mark-paid: id={} target={} by={}", id, userId, user.userId)
-        return ResponseEntity.ok(skladchinaService.organizerMarkPaid(id, user.userId, userId))
+        return ResponseEntity.ok(paymentService.organizerMarkPaid(id, user.userId, userId))
     }
 
     // A-2 (toggle): organizer reverts a participant's payment back to pending.
@@ -110,7 +113,7 @@ class SkladchinaController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
         log.info("Skladchina organizer-unmark: id={} target={} by={}", id, userId, user.userId)
-        return ResponseEntity.ok(skladchinaService.organizerUnmarkPaid(id, user.userId, userId))
+        return ResponseEntity.ok(paymentService.organizerUnmarkPaid(id, user.userId, userId))
     }
 
     // A-3: organizer redistributes the deficit across pending participants.
@@ -120,7 +123,7 @@ class SkladchinaController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
         log.info("Skladchina redistribute: id={} by={}", id, user.userId)
-        return ResponseEntity.ok(skladchinaService.redistributeDeficit(id, user.userId))
+        return ResponseEntity.ok(paymentService.redistributeDeficit(id, user.userId))
     }
 
     @PostMapping("/api/skladchinas/{id}/close")
@@ -129,6 +132,6 @@ class SkladchinaController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
         log.info("Skladchina close: id={} userId={}", id, user.userId)
-        return ResponseEntity.ok(skladchinaService.closeManually(id, user.userId))
+        return ResponseEntity.ok(lifecycleService.closeManually(id, user.userId))
     }
 }

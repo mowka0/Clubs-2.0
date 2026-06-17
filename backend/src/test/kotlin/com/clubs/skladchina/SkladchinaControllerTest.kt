@@ -64,7 +64,7 @@ class SkladchinaControllerTest {
     @Autowired lateinit var jwtService: JwtService
     @Autowired lateinit var dsl: DSLContext
     @Autowired lateinit var objectMapper: ObjectMapper
-    @Autowired lateinit var skladchinaService: SkladchinaService
+    @Autowired lateinit var lifecycleService: SkladchinaLifecycleService
     @Autowired lateinit var skladchinaRepository: SkladchinaRepository
     @Autowired lateinit var rateLimitFilter: com.clubs.common.security.RateLimitFilter
 
@@ -576,7 +576,7 @@ class SkladchinaControllerTest {
 
         // Simulate the deadline passing, then the scheduler path closing it.
         dsl.execute("UPDATE skladchinas SET deadline = NOW() - INTERVAL '1 hour' WHERE id = '$id'")
-        skladchinaService.closeInternal(id, closedBy = null, manualClose = false)
+        lifecycleService.closeInternal(id, closedBy = null, manualClose = false)
 
         assertEquals("expired_no_response", participantStatus(id, memberBId))
         assertEquals(ReputationKind.skladchina_expired, soleLedgerKind(memberBId, id))
@@ -636,10 +636,10 @@ class SkladchinaControllerTest {
     @Test
     fun `double closeInternal is a no-op the second time`() {
         val id = createRepSkladchina(listOf(memberAId, memberBId))
-        skladchinaService.closeInternal(id, closedBy = organizerId, manualClose = true)
+        lifecycleService.closeInternal(id, closedBy = organizerId, manualClose = true)
         val statusAfterFirst = skladchinaStatus(id)
         // No exception, status untouched, no duplicate participant resolution.
-        skladchinaService.closeInternal(id, closedBy = null, manualClose = false)
+        lifecycleService.closeInternal(id, closedBy = null, manualClose = false)
         assertEquals(statusAfterFirst, skladchinaStatus(id))
         assertEquals("released", participantStatus(id, memberAId))
         assertEquals(0, ledgerRows(memberAId, id))
