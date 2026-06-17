@@ -30,6 +30,7 @@ import { isPendingPayment } from '../types/api';
 import { formatPrice } from '../utils/formatters';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
+import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
 import { LeaveClubModal } from '../components/club/LeaveClubModal';
 
 const ACCESS_LABELS: Record<string, string> = {
@@ -407,6 +408,9 @@ export const ClubPage: FC = () => {
       <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
         <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{club.description}</div>
       </div>
+
+      {/* Club quality — public L1 facts (social proof), visible to every viewer */}
+      {id && <ClubQualityFacts clubId={id} />}
 
       {/* Rules (optional) */}
       {club.rules && (

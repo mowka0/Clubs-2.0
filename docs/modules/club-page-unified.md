@@ -116,6 +116,8 @@ frontend/src/
   <Section>          ← About (member count, price, description, rules)
   </Section>
 
+  {all viewers}      ← «Качество клуба» — L1-факты клуба (см. § ниже + club-quality.md)
+
   {visitor-only}     ← Placeholder «События доступны участникам клуба»
                        + CTA Section («Вступить» / «Хочу вступить»)
 
@@ -144,6 +146,15 @@ frontend/src/
 - price (`formatPrice(subscriptionPrice)`)
 - description (block, lineHeight 1.5)
 - rules (block, hint color) — если `club.rules`
+
+### Качество клуба — visible всем (post `feature/club-quality-foundation`, 2026-06-17)
+
+Между описанием («О клубе») и «Правилами» — блок **«Качество клуба»** (`ClubQualityFacts`,
+`components/club/ClubQualityFacts.tsx`): публичные L1-факты клуба (соц-пруф для «вступать ли»).
+2×2 сетка `rd-stat`-тайлов — `встреч/мес · обычно приходит · ядро · возраст`; клуб без событий →
+честный empty-state вместо нулей. Данные — `GET /api/clubs/{clubId}/quality` (модуль `clubquality`).
+Fail-soft: при загрузке/ошибке блок просто не рендерится. Полная спека и контракт — [`club-quality.md`](./club-quality.md).
+Это **первый («Фундамент») срез** клуб-трека; кольца L2, owner-«Статистика» и скрытый L3-ранг — следующими PR.
 
 ### Visitor-specific
 

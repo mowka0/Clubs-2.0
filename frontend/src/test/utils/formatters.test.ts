@@ -1,5 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import { formatPrice, formatDatetime } from '../../utils/formatters';
+import { formatPrice, formatDatetime, pluralRu } from '../../utils/formatters';
+
+describe('pluralRu', () => {
+  const months: [string, string, string] = ['месяц', 'месяца', 'месяцев'];
+
+  it('picks the "one" form for 1, 21, 31 (but not 11)', () => {
+    expect(pluralRu(1, months)).toBe('месяц');
+    expect(pluralRu(21, months)).toBe('месяц');
+    expect(pluralRu(11, months)).toBe('месяцев');
+  });
+
+  it('picks the "few" form for 2..4, 22..24', () => {
+    expect(pluralRu(2, months)).toBe('месяца');
+    expect(pluralRu(4, months)).toBe('месяца');
+    expect(pluralRu(23, months)).toBe('месяца');
+  });
+
+  it('picks the "many" form for 0, 5..20', () => {
+    expect(pluralRu(0, months)).toBe('месяцев');
+    expect(pluralRu(5, months)).toBe('месяцев');
+    expect(pluralRu(14, months)).toBe('месяцев');
+  });
+});
 
 describe('formatPrice', () => {
   it('returns "Бесплатно" when price is 0', () => {
