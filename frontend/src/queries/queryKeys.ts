@@ -36,6 +36,7 @@ export const queryKeys = {
     applications: (clubId: string, status?: string) =>
       ['clubs', 'detail', clubId, 'applications', status ?? 'all'] as const,
     finances: (clubId: string) => ['clubs', 'detail', clubId, 'finances'] as const,
+    quality: (clubId: string) => ['clubs', 'detail', clubId, 'quality'] as const,
   },
   events: {
     all: ['events'] as const,

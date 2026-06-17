@@ -1,0 +1,156 @@
+# Модуль «Качество клуба» (clubquality)
+
+**Статус:** в разработке (feature/club-quality-foundation) · **Создано:** 2026-06-17
+**Дизайн-контракт:** `docs/backlog/club-quality-gamification.md` (§0–11, design locked).
+Память: [[project_club_quality_track]].
+
+> Эта спека покрывает **только первый срез — «Фундамент»**: новый top-level модуль
+> `com.clubs.clubquality` + L1-факты клуба, derive read-only, surface на странице клуба
+> простыми числами. Кольца (L2), owner-«Статистика», скрытый L3-ранг, `membership_history`,
+> фикс `activity_rating` — **вне этого среза**, следующими PR.
+
+---
+
+## 1. Зачем
+
+Клуб = ядро приложения. Выбирающему клуб нужен соц-пруф «живой ли клуб, стоит ли вступать».
+Сегодня страница клуба показывает только название/описание/правила — ни одного факта о
+реальной жизни клуба. Этот срез добавляет **честные публичные факты**, выводимые из уже
+существующих данных, без новой схемы.
+
+Архитектурно — закладываем **отдельный модуль-пир** `com.clubs.clubquality` (якорь `club_id`),
+рядом с `com.clubs.reputation` (якорь `user_id`). Это фундамент, на который позже лягут кольца,
+owner-статистика и скрытый L3-ранг (§10 дизайн-дока).
+
+---
+
+## 2. Границы модуля (из §10 дизайн-дока)
+
+- `com.clubs.clubquality` — **пир** рядом с `reputation` / `club` / `event`, **не ребёнок** `club`.
+- Субъект — **МЕСТО** (`club_id`), не человек. Это НЕ среднее Trust участников (запрещено —
+  создало бы фарм-вектор через накрутку участников).
+- Модуль **read-only**: считает агрегаты по существующим таблицам (`events`, `event_responses`,
+  `clubs`). Своих таблиц в этом срезе НЕ заводит (ноль миграций).
+- **Чтение чужих таблиц через jOOQ-агрегации — допустимо** и имеет прецедент: `JooqReputationRepository`
+  уже читает `events`/`event_responses`. Правило «фичи не импортируют друг друга» — про импорт
+  Kotlin-классов другого модуля (Service/Repository), а не про read-only SQL по общим jOOQ-таблицам.
+- `reputation_ledger` в этом срезе **не читаем** (он нужен L3 для негативов — споры/ghosting).
+  Когда дойдём до L3 — читать ledger через **read-port** `reputation`, не напрямую из его репозитория.
+
+---
+
+## 3. L1-факты (что считаем)
+
+Все факты — **«now»**-derivable из §11.4 дизайн-дока. Видимость — `others` (публично, видит и
+не-участник: это соц-пруф для «вступать ли»).
+
+| Поле DTO | Смысл (ось будущего кольца) | Определение |
+|---|---|---|
+| `meetingsPerMonth: Double` | Активность | held-события за 90 дней ÷ 3, округление до 1 знака |
+| `avgAttendance: Int` | Приходит (среднее на встречу) | Σ явок ÷ число финализированных встреч за 90 дней, округление |
+| `coreSize: Int` | Сплочённость (ядро) | distinct юзеров с ≥3 явками («attended») по НЕ-cancelled событиям клуба, all-time |
+| `ageMonths: Int` | Возраст | полные месяцы от `clubs.created_at` до now |
+
+**Определения (точные):**
+- **held-событие** = `events.event_datetime < now()` AND `events.status <> 'cancelled'`.
+- **meetingsPerMonth** = `count(held-событий за [now-90d, now)) / 3.0`, round(1).
+- **финализированная встреча** = held-событие с `events.attendance_finalized = true`.
+- **avgAttendance** = `count(event_responses.attendance = 'attended' по финализ. встречам за 90д)`
+  `÷ count(distinct финализ. встреч за 90д)`, round(0). Если знаменатель 0 → `0`.
+  (Встреча, куда никто не пришёл, входит в знаменатель — честно занижает среднее.)
+- **coreSize** = `count(distinct user_id, имеющих ≥3 строки attendance='attended'` по НЕ-cancelled событиям
+  этого клуба, без ограничения по времени). Cancelled-событие исключается, т.к. club-delete cascade может
+  отменить уже отмеченное по явке событие — его строки `attended` не должны раздувать ядро (как и в
+  held-фактах cancelled не считается).
+- **ageMonths** = `Period.between(created_at::date, now::date).toTotalMonths()`, не меньше 0.
+
+**Анти-фарм (важно для ревью):** в этом срезе факты — слой **L1/L2** (показываем, считаем щедро,
+owner-усилие допускается). Distinct-account / абсолюты / decay / min-K — защиты слоя **L3** (скрытый
+ранг), которого в этом срезе НЕТ. Поэтому self-marked явка в фактах — допустима по дизайну (§3:
+owner-данные → L1/L2, бан только из L3). `coreSize` уже использует distinct-юзеров и абсолют (≥3) —
+это и есть «честная» форма факта, читается приятно и не врёт о масштабе.
+
+---
+
+## 4. API
+
+### `GET /api/clubs/{clubId}/quality`
+
+- **Auth:** JWT (любой аутентифицированный пользователь). Факты `others`-видимы → ownership-проверки нет.
+- **404** если клуб не найден (нет строки `clubs` с таким id).
+- **Response 200:** `ClubFactsDto`
+
+```jsonc
+{
+  "meetingsPerMonth": 2.7,
+  "avgAttendance": 11,
+  "coreSize": 8,
+  "ageMonths": 14
+}
+```
+
+Эндпоинт живёт в **новом** `ClubQualityController` (`@RequestMapping("/api/clubs")`,
+метод `@GetMapping("/{clubId}/quality")`) внутри модуля `clubquality` — НЕ в `ClubController`
+(модульная граница).
+
+---
+
+## 5. Структура модуля (по образцу reputation)
+
+```
+backend/src/main/kotlin/com/clubs/clubquality/
+├── ClubQualityController.kt   # GET /api/clubs/{clubId}/quality
+├── ClubQualityService.kt      # @Transactional(readOnly=true); проверка существования клуба → 404; маппинг
+├── ClubQualityRepository.kt   # интерфейс: findClubFacts(clubId): ClubFacts?  (null = клуб не найден)
+├── JooqClubQualityRepository.kt # read-only агрегации по events/event_responses/clubs
+├── ClubFacts.kt               # domain: ClubFacts(meetingsPerMonth, avgAttendance, coreSize, ageMonths)
+├── ClubFactsDto.kt            # HTTP DTO
+└── ClubQualityMapper.kt       # ClubFacts -> ClubFactsDto
+```
+
+- **Cutoff-окна** считаются в Kotlin (`OffsetDateTime.now().minusDays(90)`) и биндятся как параметры —
+  без SQL-interval, детерминированно и тестируемо.
+- **Существование клуба:** репозиторий возвращает `ClubFacts?` (null, если строки `clubs` нет);
+  сервис кидает общий `NotFoundException("Club not found")` (тот же, что `ClubService`), который
+  `GlobalExceptionHandler` мапит в HTTP 404.
+
+---
+
+## 6. Frontend
+
+- `api/clubQuality.ts` → `getClubQuality(clubId): Promise<ClubFactsDto>` (паттерн `api/clubs.ts`).
+- `queries/clubQuality.ts` → `useClubQualityQuery(clubId)` (TanStack Query, `enabled: Boolean(clubId)`).
+- Тип `ClubFactsDto` в `types/api.ts`.
+- Новый компонент `components/club/ClubQualityFacts.tsx` — блок «Качество клуба»: 2×2 сетка тайлов
+  `meetingsPerMonth` / `avgAttendance` / `coreSize` / `ageMonths` (возраст — четвёртым тайлом).
+  Нулевые sub-метрики показываем «—». Клуб без событий (`hasActivity=false`) — вместо нулевых тайлов
+  честный empty-state «Пока нет данных о встречах. Клубу N …» (молодой/дремлющий клуб не выглядит «мёртвым»).
+- Встраивание в `pages/ClubPage.tsx`: блок **«Качество клуба»** после «О клубе», **до** табов/lock —
+  виден всем зрителям (участник, организатор, гость). Стиль — `rd-glass` / существующие классы.
+
+---
+
+## 7. Критерии приёмки
+
+1. `GET /api/clubs/{id}/quality` возвращает 200 + 4 факта для существующего клуба.
+2. Несуществующий клуб → 404 (не 500).
+3. Клуб без событий → `meetingsPerMonth=0.0, avgAttendance=0, coreSize=0`, `ageMonths` корректен.
+4. `meetingsPerMonth` считает только held-события (будущие и `cancelled` — не входят).
+5. `avgAttendance` считает только финализированные встречи; встреча с 0 явок занижает среднее.
+6. `coreSize` = distinct-юзеры с ≥3 «attended», не сумма явок.
+7. Блок «Качество клуба» виден на странице клуба всем зрителям; молодой/пустой клуб не выглядит сломанным.
+8. Backend: `./gradlew test` зелёный; есть unit-тест на агрегации (позитив + пустой клуб + 404).
+9. Frontend: `npm run build` зелёный; `npm test` зелёный.
+
+---
+
+## 8. Вне среза (следующими PR)
+
+- L2-кольца (Сплочённость/Активность/Приходит) поверх этих же фактов — `DonutRing`.
+- Карточка Discovery: участники · встреч/мес · вовлечённость% + майлстоны.
+- owner-«Статистика» (рычаги/нуджи/зона внимания) — нужны ownership-проверки.
+- Скрытый L3-ранг (композит 4 осей) — нужна калибровка §8, читает ledger через read-port.
+- `membership_history` (фундамент retention) — строить чисто, без backfill.
+- Фикс мёртвого `activity_rating` (живой баг дискавери) — отдельным PR.
+</content>
+</invoke>
