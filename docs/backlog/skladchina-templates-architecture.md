@@ -84,21 +84,31 @@ data class CommitmentOutcome(
 
 ## Архитектура — backend
 
+> **Обновлено 2026-06-17:** god-`SkladchinaService` разбит по ответственности на 4 `@Service`
+> (поведение сохранено, 50→54 теста green). Движок — это уже не один класс, а связка четырёх.
+
 ```
 com.clubs.skladchina
-  SkladchinaService.kt          // ДВИЖОК: FSM/lifecycle, делегирует стратегии
+  SkladchinaQueryService.kt     // чтения: getDetail / getClubActive / findEventSplitState (leaf)
+  SkladchinaCreationService.kt  // создание + reputation-гейты
+  SkladchinaPaymentService.kt   // действия участника/орга: mark/decline/request/resolve/org-mark
+  SkladchinaLifecycleService.kt // закрытие + репутация-при-закрытии (close/auto-close/expire/release)
   Skladchina(Controller|Repository|Mapper|Dto).kt
   template/
-    SkladchinaTemplate.kt       // strategy interface (растёт инкрементально)
+    SkladchinaTemplateStrategy.kt   // strategy interface (растёт инкрементально)
     SkladchinaTemplateRegistry.kt   // Map<type, strategy>, Spring собирает все бины
-    CustomTemplate.kt           // = текущее поведение Фазы A
-    SplitBillTemplate.kt  GearTemplate.kt  BookingTemplate.kt  BirthdayTemplate.kt
+    CustomTemplate.kt           // = поведение Фазы A
+    SplitBillTemplate.kt        // ✅ реализован; Gear/Booking/Birthday — отложены (дизайн есть)
 ```
 
+- Граф зависимостей без циклов: `Payment → Lifecycle → Query`, `Creation → Query`.
+  `maybeAutoClose → closeInternal` оставлены в одном бине (`Lifecycle`) ради транзакционной
+  семантики (F5-18: self-invoke не метит транзакцию rollback-only).
 - Стратегии — stateless `@Component`, **только правила, не персистентность** (split инжектит
   `EventResponseRepository` для явки → возвращает решение, пишет движок/репо).
-- Реестр через `List<SkladchinaTemplate>` (Spring auto-wire) → `associateBy { type }`.
-- **Интерфейс растёт от split_bill**, не проектируется «8×5» вперёд (иначе куча no-op).
+- Реестр через `List<SkladchinaTemplateStrategy>` (Spring auto-wire) → `associateBy { type }`.
+- **Слой-на-шаблон отвергнут** (2026-06-17): один движок + тонкая стратегия; отдельные
+  service/repo/mapper на шаблон дублировали бы FSM ×5 (Shotgun Surgery).
 
 ## Архитектура — frontend
 

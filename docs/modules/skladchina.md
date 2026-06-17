@@ -78,19 +78,13 @@ voluntary → поле суммы + «Я оплатил».
 Снятие очищает `declared_amount` и `paid_at`, возвращает `pending`. До закрытия
 `reputation_applied = false` у всех — toggle безопасен (ledger-строк ещё нет).
 
-### A-3. «Не хватает X ₽» вместо автопересчёта
+### A-3. «Не хватает X ₽» вместо автопересчёта — ❌ УДАЛЕНО (2026-06-17)
 
-При отказе участника доли **не пересчитываются автоматически** (так было и есть —
-`decline` только меняет статус). Орг видит разрыв и решает сам:
-
-- Фронт показывает оргу панель **«Не хватает {goal − collected} ₽»** с кнопками
-  **«Перераспределить на неоплативших»** и **«Оставить как есть»** (локальный dismiss).
-- Перераспределение: новая доля `pending`-участников = `(goal − collected) ÷ pending`,
-  остаток — последнему (детерминированно по `userId`). **Уже оплативших не трогаем
-  никогда.** `declined` / `expired` / `released` исключены (не `pending`).
-- Только **fixed-режимы** (у `voluntary` нет фиксированных долей → 400).
-- После перераспределения сумма всех `expected` снова равна `goal`
-  (`collected + deficit = goal`). Повторяемо (можно жать ещё после новых отказов).
+> Перераспределение недостачи (`POST /redistribute` + панель «Не хватает X ₽» +
+> `setExpectedAmount`) **удалено полностью** по решению PO — фича себя не оправдала.
+> Эндпоинт, сервисный метод, репозиторный `setExpectedAmount` и UI-панель убраны;
+> тесты сняты. При отказе участника доли по-прежнему не пересчитываются автоматически,
+> но и ручного перераспределения больше нет — орг закрывает сбор как есть.
 
 ### A-4. Убрать автозакрытие по достижению цели
 
@@ -114,7 +108,10 @@ voluntary → поле суммы + «Я оплатил».
 |---|---|---|
 | `POST /api/skladchinas/{id}/participants/{userId}/mark-paid` | Орг отмечает оплату участника (fixed-only). Записывает `expected`-долю. Идемпотентно при уже-`paid`. | 400 (voluntary / не active / участник не `pending`), 403 (не creator), 404, 409 (гонка с закрытием) |
 | `POST /api/skladchinas/{id}/participants/{userId}/unmark` | Орг снимает отметку оплаты (`paid → pending`, fixed-only). Идемпотентно при уже-`pending`. **Авто-закрытие не триггерит** (снятие увеличивает `pending`). | 400 (voluntary / не active / участник не `paid`), 403, 404, 409 |
-| `POST /api/skladchinas/{id}/redistribute` | Перераспределить недостачу на `pending` (fixed-only). | 400 (voluntary / нет цели / `deficit ≤ 0` / нет `pending` / остаток < числа pending), 403, 404 |
+
+> `POST /redistribute` удалён (см. A-3 выше). Эндпоинты заявок на отказ
+> (`request-decline` / `resolve-decline`) и `GET /api/events/{id}/skladchina` —
+> см. § «Шаблоны».
 
 `markPaid` (`POST /api/skladchinas/{id}/mark-paid`) — тело `declaredAmountKopecks`
 теперь опционально (см. A-1).
@@ -122,11 +119,91 @@ voluntary → поле суммы + «Я оплатил».
 ### Что **не** менялось в Фазе A
 
 - Схема БД (миграции нет): org-отметка переиспользует `paid`/`pending`, +10 идёт
-  тем же ledger-путём — флаг «кто отметил» не нужен. Перераспределение пишет в
-  существующий `expected_amount_kopecks`.
+  тем же ledger-путём — флаг «кто отметил» не нужен.
 - Веса/механика репутации, гейты «важного сбора», статусы участника, каскады
   выхода/удаления клуба, шедулеры (auto-close по дедлайну, reminder-DM).
 - `computeFinalStatus` и денежный success-порог 80% (теперь это только бейдж).
+
+## Шаблоны (templates) + split_bill (2026-06-17)
+
+Сборы получили слой **шаблонов** поверх одного движка. Полный дизайн-контракт —
+`docs/backlog/skladchina-templates-architecture.md`; направление —
+`docs/backlog/skladchina-2.0-roadmap.md`. Здесь — фактическое состояние в коде.
+
+### Архитектура движка (рефактор по ответственности)
+
+Бывший god-`SkladchinaService` разбит на 4 когезивных `@Service` (поведение сохранено):
+
+| Сервис | Ответственность |
+|---|---|
+| `SkladchinaQueryService` | чтения: `getDetail`, `getClubActiveSkladchinas`, `findEventSplitState` |
+| `SkladchinaCreationService` | создание + гейты «важного сбора» |
+| `SkladchinaPaymentService` | действия участника/орга: mark-paid, decline, request/resolve-decline, org-mark/unmark |
+| `SkladchinaLifecycleService` | закрытие + репутация-при-закрытии (close / auto-close / expire / release) |
+
+Граф зависимостей без циклов: `Payment → Lifecycle → Query`, `Creation → Query`. Связка
+`maybeAutoCloseAfterStateChange → closeInternal` оставлена внутри `Lifecycle` (один бин) —
+участник-действие зовёт её в своей транзакции, `closeInternal` = self-invoke, поэтому
+пойманная app-ошибка не метит транзакцию rollback-only (F5-18).
+
+Шаблоны — **Strategy + Registry**: `SkladchinaTemplateStrategy` (поле `template` в
+`skladchinas`, enum `custom|split_bill|gear|booking|birthday`) + `SkladchinaTemplateRegistry`
+(Spring собирает все бины). Новый шаблон = новый `@Component`, движок не трогаем (Open/Closed).
+**Слой-на-шаблон не вводим** (дублировал бы FSM ×5).
+
+### split_bill — «Разделить счёт»
+
+Единственный шаблон с **верифицированным якорем**: состав берётся из отмеченной организатором
+**явки** события (`event_responses.attendance = attended`), а не свободного выбора. Поля:
+`skladchinas.event_id` (FK, V27), `template = split_bill`.
+
+- **Создание:** `POST /api/clubs/{clubId}/skladchinas` с `template=split_bill`, `eventId`,
+  `totalGoalKopecks` (= чек), `paymentMode`. Состав = пришедшие активные члены клуба.
+  Валидации: событие клуба, явка отмечена, событие ≤ 30 дней, ≥ 2 пришедших.
+- **Два режима:** `fixed_equal` (чек ÷ пришедших, доля сервер-authoritative) или `voluntary`
+  (каждый вводит свою сумму, чек = цель прогресс-бара). `fixed_individual` отклоняется (400).
+- **«Исключить себя» (`excludeSelf`):** орг, отмеченный пришедшим, исключается из состава
+  (доля делится на остальных, панель оплаты ему не показывается). Минимум 2 после исключения.
+- **Один сбор на событие:** активный сбор блокирует создание второго (400; кнопка ведёт на него);
+  **успешно закрытый** (`closed_success`) тоже блокирует (счёт уже собран). Провальный/отменённый
+  не блокирует — можно собрать заново. `repo.findBlockingByEventId` + `GET /api/events/{id}/skladchina`
+  (`EventSplitStateDto`) для кнопки на `EventPage`.
+- **Всегда влияет на репутацию** (оба режима): verified-шаблон форсит `affects_reputation=true` и
+  **минует гейты «важного сбора»** (rate-limit / 24h / voluntary-block) — якорь явки и есть анти-фарм.
+  split исключён из rate-limit-счётчика (`countReputationAffectingCreatedSince`). Веса те же
+  (оплата +10 / молчание до дедлайна −40), применяются при закрытии.
+- **Дедлайн-пресет +48ч**, важность скрыта (форсится).
+- **Фото/чек:** опциональное фото в форме (`PhotoAttach` → `/api/upload`), `photoUrl` показывается
+  на странице сбора с открытием на весь экран + pinch-зум (`ImageLightbox`).
+
+### Отказ-с-одобрением (V28/V29, только split_bill — `declinePolicy=REQUIRES_APPROVAL`)
+
+Благо уже потреблено (ты был на событии) → мгновенный бесплатный `decline` запрещён (400).
+
+- **Заявка:** `POST /api/skladchinas/{id}/request-decline` `{reason}` (причина обязательна).
+  Участник остаётся `pending`, `decline_requested_at` ставится. При <48ч до дедлайна **дедлайн
+  продлевается до now+48ч** (`extendDeadline`, только наружу) — оргу гарантировано окно на решение.
+  Организатору уходит **DM с причиной + кнопкой** на сбор (`SkladchinaDeclineRequestedEvent`).
+- **Решение орга:** `POST /api/skladchinas/{id}/participants/{userId}/resolve-decline`
+  `{approve, rejectReason?}`. Одобрить → `declined` (нейтрально). **Отклонить → причина обязательна**
+  (`decline_reject_note`, V29); участник остаётся `pending` (должен платить), повторная заявка
+  закрыта; участнику уходит **DM с причиной + кнопкой** (`SkladchinaDeclineRejectedEvent`).
+  Причина видна отклонённому на странице сбора (`myDeclineRejectNote`).
+- Миграции: V28 (`decline_note`/`decline_requested_at`/`decline_rejected`), V29 (`decline_reject_note`).
+
+### UI-заметки
+
+- Режим `voluntary` называется **«Ваша сумма»** (бейдж + плейсхолдер поля).
+- Последнему неоплатившему в voluntary-сборе в поле суммы подсказка **«Осталось закрыть X ₽»**
+  (`pendingCount` в `SkladchinaDetailDto`).
+- После оплаты — зелёная ✅ «Вы оплатили» + «+ к репутации (при закрытии)».
+- Прогресс-бар: для `voluntary`+цель — по деньгам (`collected/goal`); иначе — по людям (A-5).
+
+### Что отложено
+
+- Шаблоны **gear / booking / birthday** — не реализованы (дизайн-контракт есть, паркуются).
+- Колонка `reputation_ledger.verified` (метка проверенного исхода для «шага 2») **не добавлена** —
+  split пишет обычную finance-репутацию. Вводить, если клуб-трек потребует различать verified.
 
 ## Post-staging hotfixes round 2 (2026-05-23 вечер)
 
