@@ -31,7 +31,6 @@ import { formatPrice } from '../utils/formatters';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
-import { ClubAchievements } from '../components/club/ClubAchievements';
 import { LeaveClubModal } from '../components/club/LeaveClubModal';
 
 const ACCESS_LABELS: Record<string, string> = {
@@ -410,11 +409,8 @@ export const ClubPage: FC = () => {
         <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{club.description}</div>
       </div>
 
-      {/* Club quality — public L2 rings over L1 facts (social proof), visible to every viewer */}
+      {/* Club quality — unified public block (rings + age/activity caption), visible to every viewer */}
       {id && <ClubQualityFacts clubId={id} memberCount={club.memberCount} />}
-
-      {/* Club achievements — public milestones + age badge, visible to every viewer */}
-      {id && <ClubAchievements clubId={id} />}
 
       {/* Rules (optional) */}
       {club.rules && (
