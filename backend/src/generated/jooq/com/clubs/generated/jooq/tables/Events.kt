@@ -13,8 +13,10 @@ import com.clubs.generated.jooq.keys.EVENTS_PKEY
 import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CREATED_BY_FKEY
 import com.clubs.generated.jooq.keys.EVENT_RESPONSES__EVENT_RESPONSES_EVENT_ID_FKEY
+import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_EVENT_ID_FKEY
 import com.clubs.generated.jooq.tables.Clubs.ClubsPath
 import com.clubs.generated.jooq.tables.EventResponses.EventResponsesPath
+import com.clubs.generated.jooq.tables.Skladchinas.SkladchinasPath
 import com.clubs.generated.jooq.tables.Users.UsersPath
 import com.clubs.generated.jooq.tables.records.EventsRecord
 
@@ -267,6 +269,22 @@ open class Events(
 
     val eventResponses: EventResponsesPath
         get(): EventResponsesPath = eventResponses()
+
+    private lateinit var _skladchinas: SkladchinasPath
+
+    /**
+     * Get the implicit to-many join path to the <code>public.skladchinas</code>
+     * table
+     */
+    fun skladchinas(): SkladchinasPath {
+        if (!this::_skladchinas.isInitialized)
+            _skladchinas = SkladchinasPath(this, null, SKLADCHINAS__SKLADCHINAS_EVENT_ID_FKEY.inverseKey)
+
+        return _skladchinas;
+    }
+
+    val skladchinas: SkladchinasPath
+        get(): SkladchinasPath = skladchinas()
     override fun getChecks(): List<Check<EventsRecord>> = listOf(
         Internal.createCheck(this, DSL.name("events_participant_limit_check"), "((participant_limit > 0))", true),
         Internal.createCheck(this, DSL.name("events_voting_opens_days_before_check"), "(((voting_opens_days_before >= 1) AND (voting_opens_days_before <= 14)))", true)

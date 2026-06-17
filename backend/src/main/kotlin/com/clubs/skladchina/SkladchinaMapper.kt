@@ -16,10 +16,12 @@ class SkladchinaMapper {
         description = record.description,
         rules = record.rules,
         photoUrl = record.photoUrl,
+        template = record.template!!,
         paymentMode = record.paymentMode,
         totalGoalKopecks = record.totalGoalKopecks,
         paymentLink = record.paymentLink,
         paymentMethodNote = record.paymentMethodNote,
+        eventId = record.eventId,
         deadline = record.deadline,
         affectsReputation = record.affectsReputation ?: false,
         status = record.status!!,
@@ -38,6 +40,9 @@ class SkladchinaMapper {
         paidAt = record.paidAt,
         declinedAt = record.declinedAt,
         reputationApplied = record.reputationApplied ?: false,
+        declineNote = record.declineNote,
+        declineRequestedAt = record.declineRequestedAt,
+        declineRejected = record.declineRejected ?: false,
         createdAt = record.createdAt!!
     )
 
@@ -47,11 +52,13 @@ class SkladchinaMapper {
         clubAvatarUrl: String?,
         callerUserId: UUID,
         participants: List<SkladchinaParticipantInfo>,
-        collectedKopecks: Long
+        collectedKopecks: Long,
+        declineRequiresApproval: Boolean
     ): SkladchinaDetailDto {
         val isOrganizerView = skladchina.creatorId == callerUserId
         val myParticipant = participants.firstOrNull { it.userId == callerUserId }
         val paidCount = participants.count { it.status.literal == "paid" }
+        val pendingCount = participants.count { it.status.literal == "pending" }
 
         return SkladchinaDetailDto(
             id = skladchina.id,
@@ -63,6 +70,8 @@ class SkladchinaMapper {
             description = skladchina.description,
             rules = skladchina.rules,
             photoUrl = skladchina.photoUrl,
+            template = skladchina.template.literal,
+            eventId = skladchina.eventId,
             paymentMode = skladchina.paymentMode.literal,
             totalGoalKopecks = skladchina.totalGoalKopecks,
             collectedKopecks = collectedKopecks,
@@ -76,9 +85,14 @@ class SkladchinaMapper {
             myStatus = myParticipant?.status?.literal,
             myExpectedAmountKopecks = myParticipant?.expectedAmountKopecks,
             myDeclaredAmountKopecks = myParticipant?.declaredAmountKopecks,
+            declineRequiresApproval = declineRequiresApproval,
+            myDeclineRequested = myParticipant?.declineRequestedAt != null,
+            myDeclineRejected = myParticipant?.declineRejected ?: false,
+            myDeclineRejectNote = myParticipant?.declineRejectNote,
             participants = if (isOrganizerView) participants.map(::toParticipantDto) else null,
             participantCount = participants.size,
-            paidCount = paidCount
+            paidCount = paidCount,
+            pendingCount = pendingCount
         )
     }
 
@@ -93,6 +107,7 @@ class SkladchinaMapper {
             clubId = item.skladchina.clubId,
             clubName = item.clubName,
             clubAvatarUrl = item.clubAvatarUrl,
+            template = item.skladchina.template.literal,
             paymentMode = item.skladchina.paymentMode.literal,
             totalGoalKopecks = item.skladchina.totalGoalKopecks,
             collectedKopecks = item.collectedKopecks,
@@ -116,6 +131,10 @@ class SkladchinaMapper {
             expectedAmountKopecks = info.expectedAmountKopecks,
             declaredAmountKopecks = info.declaredAmountKopecks,
             status = info.status.literal,
-            paidAt = info.paidAt
+            paidAt = info.paidAt,
+            declineRequested = info.declineRequestedAt != null,
+            declineNote = info.declineNote,
+            declineRejected = info.declineRejected,
+            declineRejectNote = info.declineRejectNote
         )
 }

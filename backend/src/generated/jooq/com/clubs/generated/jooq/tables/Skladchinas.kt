@@ -7,14 +7,18 @@ package com.clubs.generated.jooq.tables
 import com.clubs.generated.jooq.Public
 import com.clubs.generated.jooq.enums.SkladchinaMode
 import com.clubs.generated.jooq.enums.SkladchinaStatus
+import com.clubs.generated.jooq.enums.SkladchinaTemplate
 import com.clubs.generated.jooq.indexes.IDX_SKLADCHINAS_CLUB_ID
+import com.clubs.generated.jooq.indexes.IDX_SKLADCHINAS_EVENT_ID
 import com.clubs.generated.jooq.indexes.IDX_SKLADCHINAS_STATUS_DEADLINE
 import com.clubs.generated.jooq.keys.SKLADCHINAS_PKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CLOSED_BY_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CREATOR_ID_FKEY
+import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_EVENT_ID_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINA_PARTICIPANTS__SKLADCHINA_PARTICIPANTS_SKLADCHINA_ID_FKEY
 import com.clubs.generated.jooq.tables.Clubs.ClubsPath
+import com.clubs.generated.jooq.tables.Events.EventsPath
 import com.clubs.generated.jooq.tables.SkladchinaParticipants.SkladchinaParticipantsPath
 import com.clubs.generated.jooq.tables.Users.UsersPath
 import com.clubs.generated.jooq.tables.records.SkladchinasRecord
@@ -182,6 +186,16 @@ open class Skladchinas(
      */
     val REMINDER_SENT_AT: TableField<SkladchinasRecord, OffsetDateTime?> = createField(DSL.name("reminder_sent_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "")
 
+    /**
+     * The column <code>public.skladchinas.template</code>.
+     */
+    val TEMPLATE: TableField<SkladchinasRecord, SkladchinaTemplate?> = createField(DSL.name("template"), SQLDataType.VARCHAR.nullable(false).defaultValue(DSL.field(DSL.raw("'custom'::skladchina_template"), SQLDataType.VARCHAR)).asEnumDataType(SkladchinaTemplate::class.java), this, "")
+
+    /**
+     * The column <code>public.skladchinas.event_id</code>.
+     */
+    val EVENT_ID: TableField<SkladchinasRecord, UUID?> = createField(DSL.name("event_id"), SQLDataType.UUID, this, "")
+
     private constructor(alias: Name, aliased: Table<SkladchinasRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<SkladchinasRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<SkladchinasRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -214,9 +228,9 @@ open class Skladchinas(
         override fun `as`(alias: Table<*>): SkladchinasPath = SkladchinasPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(IDX_SKLADCHINAS_CLUB_ID, IDX_SKLADCHINAS_STATUS_DEADLINE)
+    override fun getIndexes(): List<Index> = listOf(IDX_SKLADCHINAS_CLUB_ID, IDX_SKLADCHINAS_EVENT_ID, IDX_SKLADCHINAS_STATUS_DEADLINE)
     override fun getPrimaryKey(): UniqueKey<SkladchinasRecord> = SKLADCHINAS_PKEY
-    override fun getReferences(): List<ForeignKey<SkladchinasRecord, *>> = listOf(SKLADCHINAS__SKLADCHINAS_CLOSED_BY_FKEY, SKLADCHINAS__SKLADCHINAS_CLUB_ID_FKEY, SKLADCHINAS__SKLADCHINAS_CREATOR_ID_FKEY)
+    override fun getReferences(): List<ForeignKey<SkladchinasRecord, *>> = listOf(SKLADCHINAS__SKLADCHINAS_CLOSED_BY_FKEY, SKLADCHINAS__SKLADCHINAS_CLUB_ID_FKEY, SKLADCHINAS__SKLADCHINAS_CREATOR_ID_FKEY, SKLADCHINAS__SKLADCHINAS_EVENT_ID_FKEY)
 
     private lateinit var _skladchinasClosedByFkey: UsersPath
 
@@ -264,6 +278,21 @@ open class Skladchinas(
 
     val skladchinasCreatorIdFkey: UsersPath
         get(): UsersPath = skladchinasCreatorIdFkey()
+
+    private lateinit var _events: EventsPath
+
+    /**
+     * Get the implicit join path to the <code>public.events</code> table.
+     */
+    fun events(): EventsPath {
+        if (!this::_events.isInitialized)
+            _events = EventsPath(this, SKLADCHINAS__SKLADCHINAS_EVENT_ID_FKEY, null)
+
+        return _events;
+    }
+
+    val events: EventsPath
+        get(): EventsPath = events()
 
     private lateinit var _skladchinaParticipants: SkladchinaParticipantsPath
 

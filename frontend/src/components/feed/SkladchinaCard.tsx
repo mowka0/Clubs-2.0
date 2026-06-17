@@ -59,13 +59,13 @@ export const SkladchinaCard: FC<SkladchinaCardProps> = ({ skladchina, onClick })
   const deadlineStr = DEADLINE_FMT.format(new Date(skladchina.deadline));
 
   const hasGoal = skladchina.totalGoalKopecks != null && skladchina.totalGoalKopecks > 0;
-  const percent = hasGoal
-    ? Math.min(100, Math.round((skladchina.collectedKopecks / skladchina.totalGoalKopecks!) * 100))
-    : null;
-
-  const amounts = hasGoal
-    ? `${formatRubles(skladchina.collectedKopecks)} ₽ / ${formatRubles(skladchina.totalGoalKopecks!)} ₽${percent !== null ? ` · ${percent}%` : ''}`
-    : `${formatRubles(skladchina.collectedKopecks)} ₽ собрано (по желанию)`;
+  // A-5: people-progress is the headline; money is a muted secondary line.
+  const peoplePercent = skladchina.participantCount > 0
+    ? Math.round((skladchina.paidCount / skladchina.participantCount) * 100)
+    : 0;
+  const moneyLine = hasGoal
+    ? `${formatRubles(skladchina.collectedKopecks)} ₽ из ${formatRubles(skladchina.totalGoalKopecks!)} ₽`
+    : `${formatRubles(skladchina.collectedKopecks)} ₽ собрано`;
 
   return (
     <button type="button" className="rd-activity-card" onClick={onClick}>
@@ -80,14 +80,14 @@ export const SkladchinaCard: FC<SkladchinaCardProps> = ({ skladchina, onClick })
           <span>{skladchina.clubName}</span>
         </div>
         <div className="rd-act-ttl">{skladchina.title}</div>
-        <div className="rd-act-meta">{amounts}</div>
-        {hasGoal && (
-          <div className="rd-progress" style={{ marginTop: 8 }} aria-hidden="true">
-            <span className="rd-fill" style={{ width: `${percent}%`, display: 'block', height: '100%' }} />
-          </div>
-        )}
+        <div className="rd-act-meta" style={{ fontWeight: 600, color: 'var(--text)' }}>
+          Скинулись {skladchina.paidCount} из {skladchina.participantCount}
+        </div>
+        <div className="rd-progress" style={{ marginTop: 8 }} aria-hidden="true">
+          <span className="rd-fill" style={{ width: `${peoplePercent}%`, display: 'block', height: '100%' }} />
+        </div>
         <div className="rd-act-meta">
-          До {deadlineStr} · {skladchina.paidCount}/{skladchina.participantCount} оплатили
+          {moneyLine} · до {deadlineStr}
         </div>
         {(badge || skladchina.affectsReputation) && (
           <div className="rd-badges-row">

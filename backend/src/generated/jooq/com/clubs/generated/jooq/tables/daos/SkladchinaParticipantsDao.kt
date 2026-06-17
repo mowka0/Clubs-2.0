@@ -129,4 +129,48 @@ open class SkladchinaParticipantsDao(configuration: Configuration?) : DAOImpl<Sk
      * Fetch records that have <code>created_at IN (values)</code>
      */
     fun fetchByCreatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetch(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.CREATED_AT, *values)
+
+    /**
+     * Fetch records that have <code>decline_note BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfDeclineNote(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetchRange(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.DECLINE_NOTE, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>decline_note IN (values)</code>
+     */
+    fun fetchByDeclineNote(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetch(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.DECLINE_NOTE, *values)
+
+    /**
+     * Fetch records that have <code>decline_requested_at BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfDeclineRequestedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetchRange(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>decline_requested_at IN (values)</code>
+     */
+    fun fetchByDeclineRequestedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetch(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT, *values)
+
+    /**
+     * Fetch records that have <code>decline_rejected BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfDeclineRejected(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetchRange(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>decline_rejected IN (values)</code>
+     */
+    fun fetchByDeclineRejected(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetch(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>decline_reject_note BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfDeclineRejectNote(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetchRange(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.DECLINE_REJECT_NOTE, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>decline_reject_note IN (values)</code>
+     */
+    fun fetchByDeclineRejectNote(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetch(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.DECLINE_REJECT_NOTE, *values)
 }

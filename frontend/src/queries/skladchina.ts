@@ -4,10 +4,15 @@ import {
   createSkladchina,
   declineSkladchina,
   getClubActiveSkladchinas,
+  getEventSplitState,
   getMySkladchinas,
   getSkladchina,
   getSkladchinaActionRequiredCount,
   markPaidSkladchina,
+  organizerMarkPaidParticipant,
+  organizerUnmarkParticipant,
+  requestDeclineSkladchina,
+  resolveDeclineSkladchina,
 } from '../api/skladchina';
 import type { CreateSkladchinaRequest } from '../types/api';
 import { queryKeys } from './queryKeys';
@@ -53,6 +58,15 @@ export function useClubActiveSkladchinasQuery(clubId: string | undefined) {
   });
 }
 
+/** Existing split for an event — drives the EventPage "Разделить счёт" button. */
+export function useEventSplitStateQuery(eventId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.skladchinas.eventState(eventId ?? ''),
+    queryFn: () => getEventSplitState(eventId!),
+    enabled: Boolean(eventId),
+  });
+}
+
 interface CreateSkladchinaArgs {
   clubId: string;
   body: CreateSkladchinaRequest;
@@ -75,7 +89,8 @@ export function useCreateSkladchinaMutation() {
 
 interface MarkPaidArgs {
   id: string;
-  declaredAmountKopecks: number;
+  // A-1: omitted for fixed modes (server records the share); the declared amount for voluntary.
+  declaredAmountKopecks?: number | null;
 }
 
 export function useMarkPaidMutation() {
@@ -83,6 +98,61 @@ export function useMarkPaidMutation() {
   return useMutation({
     mutationFn: ({ id, declaredAmountKopecks }: MarkPaidArgs) =>
       markPaidSkladchina(id, declaredAmountKopecks),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
+    },
+  });
+}
+
+interface OrganizerParticipantArgs {
+  id: string;
+  userId: string;
+}
+
+/** A-2: organizer marks a participant paid / reverts it. Shared invalidation for both. */
+function invalidateAfterOrganizerAction(qc: ReturnType<typeof useQueryClient>, id: string) {
+  qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
+  qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
+  // The marked participant's "action required" obligation changed — refresh the badge count.
+  qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
+}
+
+export function useOrganizerMarkPaidMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, userId }: OrganizerParticipantArgs) => organizerMarkPaidParticipant(id, userId),
+    onSuccess: (_data, { id }) => invalidateAfterOrganizerAction(qc, id),
+  });
+}
+
+export function useOrganizerUnmarkMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, userId }: OrganizerParticipantArgs) => organizerUnmarkParticipant(id, userId),
+    onSuccess: (_data, { id }) => invalidateAfterOrganizerAction(qc, id),
+  });
+}
+
+/** V28: participant requests to decline a bill with a reason (split_bill). */
+export function useRequestDeclineMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => requestDeclineSkladchina(id, reason),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
+    },
+  });
+}
+
+/** V28/V29: organizer approves/rejects a participant's decline request (reject needs a reason). */
+export function useResolveDeclineMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, userId, approve, rejectReason }: { id: string; userId: string; approve: boolean; rejectReason?: string }) =>
+      resolveDeclineSkladchina(id, userId, approve, rejectReason),
     onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });

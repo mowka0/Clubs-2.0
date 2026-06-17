@@ -15,6 +15,13 @@ interface SkladchinaRepository {
 
     fun findById(id: UUID): Skladchina?
 
+    /**
+     * The split that BLOCKS a new one for [eventId]: an active OR successfully-closed pool. Active
+     * is returned first (the EventPage button links to it); otherwise the latest closed_success.
+     * null → no blocker, a new split may be created. A failed/cancelled split does NOT block (retry).
+     */
+    fun findBlockingByEventId(eventId: UUID): Skladchina?
+
     fun findActiveByClub(clubId: UUID): List<Skladchina>
 
     /**
@@ -74,6 +81,34 @@ interface SkladchinaRepository {
         userId: UUID,
         declinedAt: OffsetDateTime
     ): Int
+
+    /**
+     * A-2 (organizer un-mark): transitions `paid` → `pending`, clearing declared_amount
+     * and paid_at. Guarded by `WHERE status = 'paid'` — returns affected rows (0 means the
+     * participant was concurrently resolved by a close and must not be reopened).
+     */
+    fun revertParticipantToPending(skladchinaId: UUID, userId: UUID): Int
+
+    /**
+     * V28: opens a decline request (REQUIRES_APPROVAL templates) — note + timestamp. Guarded to a
+     * still-`pending` participant whose decline path isn't already closed (decline_rejected=false).
+     * Returns affected rows.
+     */
+    fun requestDecline(skladchinaId: UUID, userId: UUID, note: String, requestedAt: OffsetDateTime): Int
+
+    /**
+     * V28/V29: organizer rejects the decline request — closes the path (decline_rejected=true),
+     * stores the mandatory justification [note], and clears the open request; participant stays
+     * `pending` (must pay). Guarded to a pending participant with an open request. Returns affected rows.
+     */
+    fun rejectDeclineRequest(skladchinaId: UUID, userId: UUID, note: String): Int
+
+    /**
+     * Pushes the deadline OUT to [newDeadline] (guarded: active + current deadline earlier than the
+     * new one). Used when a decline request lands with <48h left — the organizer must always get a
+     * 48h window to resolve it. Returns affected rows (0 = no change needed).
+     */
+    fun extendDeadline(skladchinaId: UUID, newDeadline: OffsetDateTime): Int
 
     /** Move all `pending` participants to `expired_no_response` (close at/after the deadline). */
     fun expirePendingParticipants(skladchinaId: UUID): Int

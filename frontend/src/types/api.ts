@@ -391,6 +391,7 @@ export interface MyAttendanceDto {
 }
 
 export type SkladchinaMode = 'fixed_equal' | 'fixed_individual' | 'voluntary';
+export type SkladchinaTemplate = 'custom' | 'split_bill' | 'gear' | 'booking' | 'birthday';
 export type SkladchinaStatus = 'active' | 'closed_success' | 'closed_failed' | 'cancelled';
 export type SkladchinaParticipantStatus =
   | 'pending'
@@ -410,6 +411,11 @@ export interface SkladchinaParticipantDto {
   declaredAmountKopecks: number | null;
   status: SkladchinaParticipantStatus;
   paidAt: string | null;
+  // V28 decline-with-approval (organizer view)
+  declineRequested: boolean;
+  declineNote: string | null;
+  declineRejected: boolean;
+  declineRejectNote: string | null;       // V29: organizer's reason if the decline was rejected
 }
 
 export interface SkladchinaDetailDto {
@@ -422,6 +428,8 @@ export interface SkladchinaDetailDto {
   description: string | null;
   rules: string | null;
   photoUrl: string | null;
+  template: SkladchinaTemplate;
+  eventId: string | null;
   paymentMode: SkladchinaMode;
   totalGoalKopecks: number | null;
   collectedKopecks: number;
@@ -435,9 +443,22 @@ export interface SkladchinaDetailDto {
   myStatus: SkladchinaParticipantStatus | null;
   myExpectedAmountKopecks: number | null;
   myDeclaredAmountKopecks: number | null;
+  // V28 decline-with-approval
+  declineRequiresApproval: boolean;
+  myDeclineRequested: boolean;
+  myDeclineRejected: boolean;
+  myDeclineRejectNote: string | null;     // V29: organizer's reason for rejecting my decline
   participants: SkladchinaParticipantDto[] | null;
   participantCount: number;
   paidCount: number;
+  pendingCount: number;                   // #3: lets the last pending participant see what's left
+}
+
+// State of the split linked to an event — drives the EventPage "Разделить счёт" button.
+// skladchinaId null = no split yet (create); status active → open it; closed_success → already collected.
+export interface EventSplitStateDto {
+  skladchinaId: string | null;
+  status: SkladchinaStatus | null;
 }
 
 export interface MySkladchinaListItemDto {
@@ -446,6 +467,7 @@ export interface MySkladchinaListItemDto {
   clubId: string;
   clubName: string;
   clubAvatarUrl: string | null;
+  template: SkladchinaTemplate;
   paymentMode: SkladchinaMode;
   totalGoalKopecks: number | null;
   collectedKopecks: number;
@@ -469,13 +491,16 @@ export interface CreateSkladchinaRequest {
   description?: string | null;
   rules?: string | null;
   photoUrl?: string | null;
+  template?: SkladchinaTemplate;          // default "custom" server-side
+  eventId?: string | null;                // split_bill: the source event
+  excludeSelf?: boolean;                  // split_bill: drop the organizer from the charged attendees
   paymentMode: SkladchinaMode;
   totalGoalKopecks?: number | null;
   paymentLink: string;
   paymentMethodNote?: string | null;
   deadline: string;
   affectsReputation: boolean;
-  participants: CreateSkladchinaParticipantInput[];
+  participants?: CreateSkladchinaParticipantInput[];  // omitted/[] for split_bill
 }
 
 export interface MyEventListItemDto {

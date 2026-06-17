@@ -13,6 +13,11 @@ data class SkladchinaParticipant(
     val paidAt: OffsetDateTime?,
     val declinedAt: OffsetDateTime?,
     val reputationApplied: Boolean,
+    // V28: decline-with-approval (REQUIRES_APPROVAL templates). An open request = status `pending`
+    // AND declineRequestedAt != null. declineRejected closes the path (must pay, no re-request).
+    val declineNote: String?,
+    val declineRequestedAt: OffsetDateTime?,
+    val declineRejected: Boolean,
     val createdAt: OffsetDateTime
 )
 
@@ -41,5 +46,9 @@ data class SkladchinaParticipantInfo(
     val expectedAmountKopecks: Long?,
     val declaredAmountKopecks: Long?,
     val status: SkladchinaParticipantStatus,
-    val paidAt: OffsetDateTime?
+    val paidAt: OffsetDateTime?,
+    val declineNote: String?,
+    val declineRequestedAt: OffsetDateTime?,
+    val declineRejected: Boolean,
+    val declineRejectNote: String?
 )

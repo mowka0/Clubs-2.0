@@ -6,6 +6,7 @@ package com.clubs.generated.jooq.tables.daos
 
 import com.clubs.generated.jooq.enums.SkladchinaMode
 import com.clubs.generated.jooq.enums.SkladchinaStatus
+import com.clubs.generated.jooq.enums.SkladchinaTemplate
 import com.clubs.generated.jooq.tables.Skladchinas
 import com.clubs.generated.jooq.tables.records.SkladchinasRecord
 
@@ -244,4 +245,26 @@ open class SkladchinasDao(configuration: Configuration?) : DAOImpl<SkladchinasRe
      * Fetch records that have <code>reminder_sent_at IN (values)</code>
      */
     fun fetchByReminderSentAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.REMINDER_SENT_AT, *values)
+
+    /**
+     * Fetch records that have <code>template BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfTemplate(lowerInclusive: SkladchinaTemplate?, upperInclusive: SkladchinaTemplate?): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.TEMPLATE, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>template IN (values)</code>
+     */
+    fun fetchByTemplate(vararg values: SkladchinaTemplate): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.TEMPLATE, *values)
+
+    /**
+     * Fetch records that have <code>event_id BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfEventId(lowerInclusive: UUID?, upperInclusive: UUID?): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetchRange(Skladchinas.SKLADCHINAS.EVENT_ID, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>event_id IN (values)</code>
+     */
+    fun fetchByEventId(vararg values: UUID): List<com.clubs.generated.jooq.tables.pojos.Skladchinas> = fetch(Skladchinas.SKLADCHINAS.EVENT_ID, *values)
 }

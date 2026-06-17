@@ -344,6 +344,16 @@ class JooqEventResponseRepository(
             .execute()
     }
 
+    override fun findAttendedUserIds(eventId: UUID): List<UUID> =
+        dsl.select(EVENT_RESPONSES.USER_ID)
+            .from(EVENT_RESPONSES)
+            .where(
+                EVENT_RESPONSES.EVENT_ID.eq(eventId)
+                    .and(EVENT_RESPONSES.ATTENDANCE.eq(AttendanceStatus.attended))
+            )
+            .fetch()
+            .mapNotNull { it.value1() }
+
     private fun countByStage1Vote(eventId: UUID, vote: Stage_1Vote): Int =
         dsl.selectCount().from(EVENT_RESPONSES)
             .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.STAGE_1_VOTE.eq(vote)))

@@ -47,6 +47,7 @@ val IDX_REPUTATION_LEDGER_SOURCE: Index = Internal.createIndex(DSL.name("idx_rep
 val IDX_REPUTATION_LEDGER_USER_CLUB: Index = Internal.createIndex(DSL.name("idx_reputation_ledger_user_club"), ReputationLedger.REPUTATION_LEDGER, arrayOf(ReputationLedger.REPUTATION_LEDGER.USER_ID, ReputationLedger.REPUTATION_LEDGER.CLUB_ID), false)
 val IDX_SKLADCHINA_PARTICIPANTS_USER_ID: Index = Internal.createIndex(DSL.name("idx_skladchina_participants_user_id"), SkladchinaParticipants.SKLADCHINA_PARTICIPANTS, arrayOf(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.USER_ID), false)
 val IDX_SKLADCHINAS_CLUB_ID: Index = Internal.createIndex(DSL.name("idx_skladchinas_club_id"), Skladchinas.SKLADCHINAS, arrayOf(Skladchinas.SKLADCHINAS.CLUB_ID), false)
+val IDX_SKLADCHINAS_EVENT_ID: Index = Internal.createIndex(DSL.name("idx_skladchinas_event_id"), Skladchinas.SKLADCHINAS, arrayOf(Skladchinas.SKLADCHINAS.EVENT_ID), false)
 val IDX_SKLADCHINAS_STATUS_DEADLINE: Index = Internal.createIndex(DSL.name("idx_skladchinas_status_deadline"), Skladchinas.SKLADCHINAS, arrayOf(Skladchinas.SKLADCHINAS.STATUS, Skladchinas.SKLADCHINAS.DEADLINE), false)
 val IDX_TRANSACTIONS_CLUB_ID_CREATED: Index = Internal.createIndex(DSL.name("idx_transactions_club_id_created"), Transactions.TRANSACTIONS, arrayOf(Transactions.TRANSACTIONS.CLUB_ID, Transactions.TRANSACTIONS.CREATED_AT), false)
 val IDX_TRANSACTIONS_USER_ID: Index = Internal.createIndex(DSL.name("idx_transactions_user_id"), Transactions.TRANSACTIONS, arrayOf(Transactions.TRANSACTIONS.USER_ID), false)

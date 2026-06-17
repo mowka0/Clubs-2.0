@@ -3,6 +3,8 @@ package com.clubs.bot
 import com.clubs.generated.jooq.enums.SkladchinaStatus
 import com.clubs.skladchina.SkladchinaClosedEvent
 import com.clubs.skladchina.SkladchinaCreatedEvent
+import com.clubs.skladchina.SkladchinaDeclineRejectedEvent
+import com.clubs.skladchina.SkladchinaDeclineRequestedEvent
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -73,6 +75,61 @@ class SkladchinaBotNotifier(
                 buttonText = "💰 Открыть сбор"
             )
         }
+    }
+
+    /**
+     * #6: a participant asked to be excused from paying (REQUIRES_APPROVAL templates). DM the
+     * organizer the requester + reason with a button to decide on the skladchina page.
+     */
+    @TransactionalEventListener(fallbackExecution = true)
+    fun onDeclineRequested(event: SkladchinaDeclineRequestedEvent) {
+        val organizerTelegramId = userRepository.findById(event.creatorId)?.telegramId
+        if (organizerTelegramId == null) {
+            log.warn("Skladchina decline-request DM SKIPPED — organizer telegramId missing: id={}", event.skladchinaId)
+            return
+        }
+        val requesterName = userRepository.findById(event.requesterUserId)?.firstName ?: "Участник"
+        val text = buildString {
+            append("🙅 $requesterName просит отказаться от оплаты")
+            append("\nСбор «${event.title}»")
+            if (event.clubName.isNotBlank()) append(" · клуб «${event.clubName}»")
+            append("\n\nПричина: «${event.reason}»")
+            append("\n\nОдобрите отказ или отклоните (с причиной) в приложении.")
+        }
+        notificationService.sendDirectMessageWithDeepLink(
+            telegramId = organizerTelegramId,
+            text = text,
+            webAppPath = "/skladchina/${event.skladchinaId}",
+            buttonText = "💰 Открыть сбор"
+        )
+        log.info("Skladchina decline-request DM sent: id={} organizer={}", event.skladchinaId, organizerTelegramId)
+    }
+
+    /**
+     * #7: the organizer rejected a decline request. DM the participant the organizer's reason with a
+     * button to the skladchina page — they must still pay.
+     */
+    @TransactionalEventListener(fallbackExecution = true)
+    fun onDeclineRejected(event: SkladchinaDeclineRejectedEvent) {
+        val participantTelegramId = userRepository.findById(event.participantUserId)?.telegramId
+        if (participantTelegramId == null) {
+            log.warn("Skladchina decline-rejected DM SKIPPED — participant telegramId missing: id={}", event.skladchinaId)
+            return
+        }
+        val text = buildString {
+            append("❌ Ваш запрос на отказ отклонён")
+            append("\nСбор «${event.title}»")
+            if (event.clubName.isNotBlank()) append(" · клуб «${event.clubName}»")
+            append("\n\nПричина организатора: «${event.reason}»")
+            append("\n\nНужно оплатить счёт.")
+        }
+        notificationService.sendDirectMessageWithDeepLink(
+            telegramId = participantTelegramId,
+            text = text,
+            webAppPath = "/skladchina/${event.skladchinaId}",
+            buttonText = "💰 Открыть сбор"
+        )
+        log.info("Skladchina decline-rejected DM sent: id={} participant={}", event.skladchinaId, participantTelegramId)
     }
 
     @TransactionalEventListener(fallbackExecution = true)

@@ -130,6 +130,28 @@ open class SkladchinaParticipants(
      */
     val CREATED_AT: TableField<SkladchinaParticipantsRecord, OffsetDateTime?> = createField(DSL.name("created_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "")
 
+    /**
+     * The column <code>public.skladchina_participants.decline_note</code>.
+     */
+    val DECLINE_NOTE: TableField<SkladchinaParticipantsRecord, String?> = createField(DSL.name("decline_note"), SQLDataType.CLOB, this, "")
+
+    /**
+     * The column
+     * <code>public.skladchina_participants.decline_requested_at</code>.
+     */
+    val DECLINE_REQUESTED_AT: TableField<SkladchinaParticipantsRecord, OffsetDateTime?> = createField(DSL.name("decline_requested_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "")
+
+    /**
+     * The column <code>public.skladchina_participants.decline_rejected</code>.
+     */
+    val DECLINE_REJECTED: TableField<SkladchinaParticipantsRecord, Boolean?> = createField(DSL.name("decline_rejected"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "")
+
+    /**
+     * The column
+     * <code>public.skladchina_participants.decline_reject_note</code>.
+     */
+    val DECLINE_REJECT_NOTE: TableField<SkladchinaParticipantsRecord, String?> = createField(DSL.name("decline_reject_note"), SQLDataType.CLOB, this, "")
+
     private constructor(alias: Name, aliased: Table<SkladchinaParticipantsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<SkladchinaParticipantsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<SkladchinaParticipantsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

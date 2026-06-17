@@ -5,6 +5,7 @@ import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useClubQuery } from '../queries/clubs';
+import { useEventSplitStateQuery } from '../queries/skladchina';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { Toast } from '../components/Toast';
 import {
@@ -66,6 +67,8 @@ export const EventPage: FC = () => {
   const myVoteQuery = useMyVoteQuery(isAuthenticated ? id : undefined);
   const hostClubQuery = useClubQuery(eventQuery.data?.clubId);
   const respondersQuery = useEventRespondersQuery(isAuthenticated ? id : undefined);
+  // Existing split for this event — the "Разделить счёт" button opens it / blocks re-creation.
+  const eventSplitQuery = useEventSplitStateQuery(isAuthenticated ? id : undefined);
   // F5-04: the caller's own attendance — drives the dispute controls even for a member who left
   // the club (the member-gated responders query 403s for them). Only needed while the dispute
   // window is open; 404 (organizer / non-participant) is expected and handled as "no dispute UI".
@@ -497,6 +500,42 @@ export const EventPage: FC = () => {
               ✓ Посещаемость отмечена{event.attendanceFinalized ? ' и закреплена' : ''}.
             </div>
           </div>
+          {/* split_bill entry. One split per event: an active one is opened, a successfully-closed
+              one is shown (already collected); otherwise the button creates a new split. */}
+          {(() => {
+            const split = eventSplitQuery.data;
+            const openExisting = () => {
+              haptic.impact('medium');
+              navigate(`/skladchina/${split!.skladchinaId}`);
+            };
+            if (split?.skladchinaId && split.status === 'active') {
+              return (
+                <button type="button" className="rd-btn-outline" style={{ marginBottom: 14 }} onClick={openExisting}>
+                  🧾 Открыть сбор по счёту ›
+                </button>
+              );
+            }
+            if (split?.skladchinaId && split.status === 'closed_success') {
+              return (
+                <button type="button" className="rd-btn-outline" style={{ marginBottom: 14 }} onClick={openExisting}>
+                  🧾 Счёт уже собран ›
+                </button>
+              );
+            }
+            return (
+              <button
+                type="button"
+                className="rd-btn-outline"
+                style={{ marginBottom: 14 }}
+                onClick={() => {
+                  haptic.impact('medium');
+                  navigate(`/clubs/${event.clubId}/skladchina/split?eventId=${event.id}`);
+                }}
+              >
+                🧾 Разделить счёт
+              </button>
+            );
+          })()}
           {disputeWindowOpen && disputedCandidates.length > 0 && (
             <>
               <div className="rd-section-sub-h">Оспоренные отметки</div>

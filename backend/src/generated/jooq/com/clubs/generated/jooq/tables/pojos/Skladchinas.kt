@@ -6,6 +6,7 @@ package com.clubs.generated.jooq.tables.pojos
 
 import com.clubs.generated.jooq.enums.SkladchinaMode
 import com.clubs.generated.jooq.enums.SkladchinaStatus
+import com.clubs.generated.jooq.enums.SkladchinaTemplate
 
 import java.io.Serializable
 import java.time.OffsetDateTime
@@ -35,7 +36,9 @@ data class Skladchinas(
     var closedBy: UUID? = null,
     var createdAt: OffsetDateTime? = null,
     var updatedAt: OffsetDateTime? = null,
-    var reminderSentAt: OffsetDateTime? = null
+    var reminderSentAt: OffsetDateTime? = null,
+    var template: SkladchinaTemplate? = null,
+    var eventId: UUID? = null
 ): Serializable {
 
 
@@ -137,6 +140,18 @@ data class Skladchinas(
         }
         else if (this.reminderSentAt != o.reminderSentAt)
             return false
+        if (this.template == null) {
+            if (o.template != null)
+                return false
+        }
+        else if (this.template != o.template)
+            return false
+        if (this.eventId == null) {
+            if (o.eventId != null)
+                return false
+        }
+        else if (this.eventId != o.eventId)
+            return false
         return true
     }
 
@@ -162,6 +177,8 @@ data class Skladchinas(
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
         result = prime * result + (if (this.reminderSentAt == null) 0 else this.reminderSentAt.hashCode())
+        result = prime * result + (if (this.template == null) 0 else this.template.hashCode())
+        result = prime * result + (if (this.eventId == null) 0 else this.eventId.hashCode())
         return result
     }
 
@@ -187,6 +204,8 @@ data class Skladchinas(
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)
         sb.append(", ").append(reminderSentAt)
+        sb.append(", ").append(template)
+        sb.append(", ").append(eventId)
 
         sb.append(")")
         return sb.toString()

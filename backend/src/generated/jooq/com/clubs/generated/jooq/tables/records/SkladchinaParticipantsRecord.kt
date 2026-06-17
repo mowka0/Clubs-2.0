@@ -56,6 +56,22 @@ open class SkladchinaParticipantsRecord private constructor() : UpdatableRecordI
         set(value): Unit = set(8, value)
         get(): OffsetDateTime? = get(8) as OffsetDateTime?
 
+    open var declineNote: String?
+        set(value): Unit = set(9, value)
+        get(): String? = get(9) as String?
+
+    open var declineRequestedAt: OffsetDateTime?
+        set(value): Unit = set(10, value)
+        get(): OffsetDateTime? = get(10) as OffsetDateTime?
+
+    open var declineRejected: Boolean?
+        set(value): Unit = set(11, value)
+        get(): Boolean? = get(11) as Boolean?
+
+    open var declineRejectNote: String?
+        set(value): Unit = set(12, value)
+        get(): String? = get(12) as String?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -65,7 +81,7 @@ open class SkladchinaParticipantsRecord private constructor() : UpdatableRecordI
     /**
      * Create a detached, initialised SkladchinaParticipantsRecord
      */
-    constructor(skladchinaId: UUID, userId: UUID, expectedAmountKopecks: Long? = null, declaredAmountKopecks: Long? = null, status: SkladchinaParticipantStatus? = null, paidAt: OffsetDateTime? = null, declinedAt: OffsetDateTime? = null, reputationApplied: Boolean? = null, createdAt: OffsetDateTime? = null): this() {
+    constructor(skladchinaId: UUID, userId: UUID, expectedAmountKopecks: Long? = null, declaredAmountKopecks: Long? = null, status: SkladchinaParticipantStatus? = null, paidAt: OffsetDateTime? = null, declinedAt: OffsetDateTime? = null, reputationApplied: Boolean? = null, createdAt: OffsetDateTime? = null, declineNote: String? = null, declineRequestedAt: OffsetDateTime? = null, declineRejected: Boolean? = null, declineRejectNote: String? = null): this() {
         this.skladchinaId = skladchinaId
         this.userId = userId
         this.expectedAmountKopecks = expectedAmountKopecks
@@ -75,6 +91,10 @@ open class SkladchinaParticipantsRecord private constructor() : UpdatableRecordI
         this.declinedAt = declinedAt
         this.reputationApplied = reputationApplied
         this.createdAt = createdAt
+        this.declineNote = declineNote
+        this.declineRequestedAt = declineRequestedAt
+        this.declineRejected = declineRejected
+        this.declineRejectNote = declineRejectNote
         resetChangedOnNotNull()
     }
 
@@ -92,6 +112,10 @@ open class SkladchinaParticipantsRecord private constructor() : UpdatableRecordI
             this.declinedAt = value.declinedAt
             this.reputationApplied = value.reputationApplied
             this.createdAt = value.createdAt
+            this.declineNote = value.declineNote
+            this.declineRequestedAt = value.declineRequestedAt
+            this.declineRejected = value.declineRejected
+            this.declineRejectNote = value.declineRejectNote
             resetChangedOnNotNull()
         }
     }

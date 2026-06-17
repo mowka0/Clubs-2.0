@@ -24,7 +24,11 @@ data class SkladchinaParticipants(
     var paidAt: OffsetDateTime? = null,
     var declinedAt: OffsetDateTime? = null,
     var reputationApplied: Boolean? = null,
-    var createdAt: OffsetDateTime? = null
+    var createdAt: OffsetDateTime? = null,
+    var declineNote: String? = null,
+    var declineRequestedAt: OffsetDateTime? = null,
+    var declineRejected: Boolean? = null,
+    var declineRejectNote: String? = null
 ): Serializable {
 
 
@@ -82,6 +86,30 @@ data class SkladchinaParticipants(
         }
         else if (this.createdAt != o.createdAt)
             return false
+        if (this.declineNote == null) {
+            if (o.declineNote != null)
+                return false
+        }
+        else if (this.declineNote != o.declineNote)
+            return false
+        if (this.declineRequestedAt == null) {
+            if (o.declineRequestedAt != null)
+                return false
+        }
+        else if (this.declineRequestedAt != o.declineRequestedAt)
+            return false
+        if (this.declineRejected == null) {
+            if (o.declineRejected != null)
+                return false
+        }
+        else if (this.declineRejected != o.declineRejected)
+            return false
+        if (this.declineRejectNote == null) {
+            if (o.declineRejectNote != null)
+                return false
+        }
+        else if (this.declineRejectNote != o.declineRejectNote)
+            return false
         return true
     }
 
@@ -97,6 +125,10 @@ data class SkladchinaParticipants(
         result = prime * result + (if (this.declinedAt == null) 0 else this.declinedAt.hashCode())
         result = prime * result + (if (this.reputationApplied == null) 0 else this.reputationApplied.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
+        result = prime * result + (if (this.declineNote == null) 0 else this.declineNote.hashCode())
+        result = prime * result + (if (this.declineRequestedAt == null) 0 else this.declineRequestedAt.hashCode())
+        result = prime * result + (if (this.declineRejected == null) 0 else this.declineRejected.hashCode())
+        result = prime * result + (if (this.declineRejectNote == null) 0 else this.declineRejectNote.hashCode())
         return result
     }
 
@@ -112,6 +144,10 @@ data class SkladchinaParticipants(
         sb.append(", ").append(declinedAt)
         sb.append(", ").append(reputationApplied)
         sb.append(", ").append(createdAt)
+        sb.append(", ").append(declineNote)
+        sb.append(", ").append(declineRequestedAt)
+        sb.append(", ").append(declineRejected)
+        sb.append(", ").append(declineRejectNote)
 
         sb.append(")")
         return sb.toString()

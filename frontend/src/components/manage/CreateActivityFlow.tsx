@@ -2,7 +2,11 @@ import { FC, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Modal } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../../hooks/useHaptic';
-import { ActivityTypeOptions } from './CreateActivityPicker';
+import {
+  ActivityTypeOptions,
+  SkladchinaTemplateOptions,
+  type SkladchinaTemplateKey,
+} from './CreateActivityPicker';
 import { ClubPickerList, type ClubPickerOption } from './ClubPickerModal';
 import type { ActivityType } from '../../api/activities';
 
@@ -21,12 +25,13 @@ interface CreateActivityFlowProps {
   onClose: () => void;
 }
 
-type Step = 'type' | 'club';
+type Step = 'type' | 'template' | 'club';
 
-function createRoute(clubId: string, type: ActivityType): string {
-  return type === 'event'
-    ? `/clubs/${clubId}/events/new`
-    : `/clubs/${clubId}/skladchina/new`;
+function createRoute(clubId: string, type: ActivityType, template: SkladchinaTemplateKey | null): string {
+  if (type === 'event') return `/clubs/${clubId}/events/new`;
+  // split_bill has its own entry-agnostic page (picks the event, splits the bill).
+  if (template === 'split_bill') return `/clubs/${clubId}/skladchina/split`;
+  return `/clubs/${clubId}/skladchina/new`;
 }
 
 /**
@@ -51,40 +56,58 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   const haptic = useHaptic();
   const [step, setStep] = useState<Step>('type');
   const [pendingType, setPendingType] = useState<ActivityType | null>(null);
+  const [pendingTemplate, setPendingTemplate] = useState<SkladchinaTemplateKey | null>(null);
 
   const dismiss = () => {
     setStep('type');
     setPendingType(null);
+    setPendingTemplate(null);
     onClose();
   };
 
-  const goToCreate = (clubId: string, type: ActivityType) => {
+  const goToCreate = (clubId: string, type: ActivityType, template: SkladchinaTemplateKey | null) => {
     setStep('type');
     setPendingType(null);
+    setPendingTemplate(null);
     onClose();
-    navigate(createRoute(clubId, type));
+    navigate(createRoute(clubId, type, template));
+  };
+
+  // Resolve the club for a chosen (type, template): skip the picker when there's no ambiguity.
+  const resolveClub = (type: ActivityType, template: SkladchinaTemplateKey | null) => {
+    if (presetClubId) {
+      goToCreate(presetClubId, type, template);
+      return;
+    }
+    if (organizerClubs.length === 1) {
+      goToCreate(organizerClubs[0]!.id, type, template);
+      return;
+    }
+    setPendingType(type);
+    setPendingTemplate(template);
+    setStep('club');
   };
 
   const handlePickType = (type: ActivityType) => {
     haptic.impact('medium');
-    // Current-club context (FAB on a club page) → skip the picker entirely.
-    if (presetClubId) {
-      goToCreate(presetClubId, type);
+    // «Сбор» fans out into the template step first; «Событие» goes straight to the club.
+    if (type === 'skladchina') {
+      setPendingType(type);
+      setStep('template');
       return;
     }
-    if (organizerClubs.length === 1) {
-      goToCreate(organizerClubs[0]!.id, type);
-      return;
-    }
-    // Multiple clubs: stay in the SAME Modal, just swap content to the club step.
-    setPendingType(type);
-    setStep('club');
+    resolveClub(type, null);
+  };
+
+  const handlePickTemplate = (template: SkladchinaTemplateKey) => {
+    haptic.impact('medium');
+    resolveClub('skladchina', template);
   };
 
   const handlePickClub = (clubId: string) => {
     if (!pendingType) return;
     haptic.impact('medium');
-    goToCreate(clubId, pendingType);
+    goToCreate(clubId, pendingType, pendingTemplate);
   };
 
   const handleOpenChange = (next: boolean) => {
@@ -96,11 +119,9 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
 
   return (
     <Modal open={open} onOpenChange={handleOpenChange}>
-      {step === 'type' ? (
-        <ActivityTypeOptions onPick={handlePickType} />
-      ) : (
-        <ClubPickerList clubs={organizerClubs} onPick={handlePickClub} />
-      )}
+      {step === 'type' && <ActivityTypeOptions onPick={handlePickType} />}
+      {step === 'template' && <SkladchinaTemplateOptions onPick={handlePickTemplate} />}
+      {step === 'club' && <ClubPickerList clubs={organizerClubs} onPick={handlePickClub} />}
     </Modal>
   );
 };

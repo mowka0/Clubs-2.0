@@ -2,6 +2,7 @@ import { apiClient } from './apiClient';
 import type {
   ActionRequiredCountDto,
   CreateSkladchinaRequest,
+  EventSplitStateDto,
   MySkladchinaListItemDto,
   PageResponse,
   SkladchinaDetailDto,
@@ -9,6 +10,11 @@ import type {
 
 export function getSkladchina(id: string): Promise<SkladchinaDetailDto> {
   return apiClient.get<SkladchinaDetailDto>(`/api/skladchinas/${id}`);
+}
+
+// EventPage "Разделить счёт" button: existing split for this event (active → open, closed_success → collected).
+export function getEventSplitState(eventId: string): Promise<EventSplitStateDto> {
+  return apiClient.get<EventSplitStateDto>(`/api/events/${eventId}/skladchina`);
 }
 
 export function getMySkladchinas(
@@ -37,17 +43,46 @@ export function createSkladchina(
 
 export function markPaidSkladchina(
   id: string,
-  declaredAmountKopecks: number,
+  declaredAmountKopecks?: number | null,
 ): Promise<SkladchinaDetailDto> {
-  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/mark-paid`, {
-    declaredAmountKopecks,
-  });
+  // A-1: fixed modes send no amount (the server records the assigned share);
+  // voluntary sends the user-declared amount.
+  const body = declaredAmountKopecks != null ? { declaredAmountKopecks } : {};
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/mark-paid`, body);
 }
 
 export function declineSkladchina(id: string): Promise<SkladchinaDetailDto> {
   return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/decline`);
 }
 
+// V28: participant opens a decline request with a reason (REQUIRES_APPROVAL templates).
+export function requestDeclineSkladchina(id: string, reason: string): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/request-decline`, { reason });
+}
+
+// V28/V29: organizer approves/rejects a participant's decline request. Rejecting requires a reason.
+export function resolveDeclineSkladchina(
+  id: string,
+  userId: string,
+  approve: boolean,
+  rejectReason?: string,
+): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(
+    `/api/skladchinas/${id}/participants/${userId}/resolve-decline`,
+    { approve, rejectReason },
+  );
+}
+
 export function closeSkladchina(id: string): Promise<SkladchinaDetailDto> {
   return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/close`);
+}
+
+// A-2: organizer marks a participant paid ("получил наличкой") — fixed modes only.
+export function organizerMarkPaidParticipant(id: string, userId: string): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/participants/${userId}/mark-paid`);
+}
+
+// A-2 (toggle): organizer reverts a participant's payment back to pending.
+export function organizerUnmarkParticipant(id: string, userId: string): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/participants/${userId}/unmark`);
 }

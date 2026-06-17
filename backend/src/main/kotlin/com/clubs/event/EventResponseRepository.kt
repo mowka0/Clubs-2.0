@@ -121,6 +121,12 @@ interface EventResponseRepository {
      * Used to render the "who's coming" list on the event page.
      */
     fun findRespondersWithUsers(eventId: UUID): List<EventResponderInfo>
+
+    /**
+     * User ids whose attendance for [eventId] is `attended` (organizer-marked). The verified
+     * participant set for the split_bill skladchina template.
+     */
+    fun findAttendedUserIds(eventId: UUID): List<UUID>
 }
 
 /**

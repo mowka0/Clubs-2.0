@@ -4,6 +4,7 @@ import com.clubs.common.dto.PageResponse
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
 import com.clubs.generated.jooq.enums.SkladchinaStatus
+import com.clubs.generated.jooq.enums.SkladchinaTemplate
 import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import com.clubs.generated.jooq.tables.references.SKLADCHINAS
@@ -33,10 +34,12 @@ class JooqSkladchinaRepository(
             .set(SKLADCHINAS.DESCRIPTION, skladchina.description)
             .set(SKLADCHINAS.RULES, skladchina.rules)
             .set(SKLADCHINAS.PHOTO_URL, skladchina.photoUrl)
+            .set(SKLADCHINAS.TEMPLATE, skladchina.template)
             .set(SKLADCHINAS.PAYMENT_MODE, skladchina.paymentMode)
             .set(SKLADCHINAS.TOTAL_GOAL_KOPECKS, skladchina.totalGoalKopecks)
             .set(SKLADCHINAS.PAYMENT_LINK, skladchina.paymentLink)
             .set(SKLADCHINAS.PAYMENT_METHOD_NOTE, skladchina.paymentMethodNote)
+            .set(SKLADCHINAS.EVENT_ID, skladchina.eventId)
             .set(SKLADCHINAS.DEADLINE, skladchina.deadline)
             .set(SKLADCHINAS.AFFECTS_REPUTATION, skladchina.affectsReputation)
             .set(SKLADCHINAS.STATUS, skladchina.status)
@@ -62,6 +65,20 @@ class JooqSkladchinaRepository(
 
     override fun findById(id: UUID): Skladchina? =
         dsl.selectFrom(SKLADCHINAS).where(SKLADCHINAS.ID.eq(id)).fetchOne()?.let(mapper::toDomain)
+
+    override fun findBlockingByEventId(eventId: UUID): Skladchina? =
+        dsl.selectFrom(SKLADCHINAS)
+            .where(
+                SKLADCHINAS.EVENT_ID.eq(eventId)
+                    .and(SKLADCHINAS.STATUS.`in`(SkladchinaStatus.active, SkladchinaStatus.closed_success))
+            )
+            // Active first (the button links to it); then the most recent successful one.
+            .orderBy(
+                DSL.case_().`when`(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active), 0).otherwise(1).asc(),
+                SKLADCHINAS.CREATED_AT.desc()
+            )
+            .limit(1)
+            .fetchOne()?.let(mapper::toDomain)
 
     override fun findActiveByClub(clubId: UUID): List<Skladchina> =
         dsl.selectFrom(SKLADCHINAS)
@@ -302,7 +319,11 @@ class JooqSkladchinaRepository(
             SKLADCHINA_PARTICIPANTS.EXPECTED_AMOUNT_KOPECKS,
             SKLADCHINA_PARTICIPANTS.DECLARED_AMOUNT_KOPECKS,
             SKLADCHINA_PARTICIPANTS.STATUS,
-            SKLADCHINA_PARTICIPANTS.PAID_AT
+            SKLADCHINA_PARTICIPANTS.PAID_AT,
+            SKLADCHINA_PARTICIPANTS.DECLINE_NOTE,
+            SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT,
+            SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED,
+            SKLADCHINA_PARTICIPANTS.DECLINE_REJECT_NOTE
         )
             .from(SKLADCHINA_PARTICIPANTS)
             .join(USERS).on(USERS.ID.eq(SKLADCHINA_PARTICIPANTS.USER_ID))
@@ -317,7 +338,11 @@ class JooqSkladchinaRepository(
                     expectedAmountKopecks = r.get(SKLADCHINA_PARTICIPANTS.EXPECTED_AMOUNT_KOPECKS),
                     declaredAmountKopecks = r.get(SKLADCHINA_PARTICIPANTS.DECLARED_AMOUNT_KOPECKS),
                     status = r.get(SKLADCHINA_PARTICIPANTS.STATUS)!!,
-                    paidAt = r.get(SKLADCHINA_PARTICIPANTS.PAID_AT)
+                    paidAt = r.get(SKLADCHINA_PARTICIPANTS.PAID_AT),
+                    declineNote = r.get(SKLADCHINA_PARTICIPANTS.DECLINE_NOTE),
+                    declineRequestedAt = r.get(SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT),
+                    declineRejected = r.get(SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED) ?: false,
+                    declineRejectNote = r.get(SKLADCHINA_PARTICIPANTS.DECLINE_REJECT_NOTE)
                 )
             }
 
@@ -372,6 +397,45 @@ class JooqSkladchinaRepository(
             )
             .execute()
 
+    override fun revertParticipantToPending(skladchinaId: UUID, userId: UUID): Int =
+        dsl.update(SKLADCHINA_PARTICIPANTS)
+            .set(SKLADCHINA_PARTICIPANTS.STATUS, SkladchinaParticipantStatus.pending)
+            .setNull(SKLADCHINA_PARTICIPANTS.DECLARED_AMOUNT_KOPECKS)
+            .setNull(SKLADCHINA_PARTICIPANTS.PAID_AT)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
+                    // A-2: only undo a real payment; never reopen a participant a concurrent
+                    // close already moved to a terminal status.
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid))
+            )
+            .execute()
+
+    override fun requestDecline(skladchinaId: UUID, userId: UUID, note: String, requestedAt: OffsetDateTime): Int =
+        dsl.update(SKLADCHINA_PARTICIPANTS)
+            .set(SKLADCHINA_PARTICIPANTS.DECLINE_NOTE, note)
+            .set(SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT, requestedAt)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
+                    .and(SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED.isFalse)
+            )
+            .execute()
+
+    override fun rejectDeclineRequest(skladchinaId: UUID, userId: UUID, note: String): Int =
+        dsl.update(SKLADCHINA_PARTICIPANTS)
+            .set(SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED, true)
+            .set(SKLADCHINA_PARTICIPANTS.DECLINE_REJECT_NOTE, note)
+            .setNull(SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
+                    .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
+                    .and(SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT.isNotNull)
+            )
+            .execute()
+
     override fun expirePendingParticipants(skladchinaId: UUID): Int =
         dsl.update(SKLADCHINA_PARTICIPANTS)
             .set(SKLADCHINA_PARTICIPANTS.STATUS, SkladchinaParticipantStatus.expired_no_response)
@@ -422,8 +486,23 @@ class JooqSkladchinaRepository(
                 SKLADCHINAS.CLUB_ID.eq(clubId)
                     .and(SKLADCHINAS.AFFECTS_REPUTATION.isTrue)
                     .and(SKLADCHINAS.CREATED_AT.greaterThan(since))
+                    // The rate limit guards the "важный сбор" toggle on organizer-chosen pools.
+                    // split_bill is verified by attendance (not farmable) and always reputation-
+                    // affecting — exclude it so splits don't burn a club's custom-important budget.
+                    .and(SKLADCHINAS.TEMPLATE.ne(SkladchinaTemplate.split_bill))
             )
             .fetchOne(0, Int::class.java) ?: 0
+
+    override fun extendDeadline(skladchinaId: UUID, newDeadline: OffsetDateTime): Int =
+        dsl.update(SKLADCHINAS)
+            .set(SKLADCHINAS.DEADLINE, newDeadline)
+            .where(
+                SKLADCHINAS.ID.eq(skladchinaId)
+                    .and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active))
+                    // Only ever push the deadline OUT, never pull it in.
+                    .and(SKLADCHINAS.DEADLINE.lessThan(newDeadline))
+            )
+            .execute()
 
     override fun findNeedingDeadlineReminder(now: OffsetDateTime, until: OffsetDateTime): List<Skladchina> =
         dsl.selectFrom(SKLADCHINAS)

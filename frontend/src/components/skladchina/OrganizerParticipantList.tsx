@@ -1,10 +1,30 @@
-import { FC } from 'react';
+import { FC, CSSProperties, useState } from 'react';
 import type { SkladchinaParticipantDto } from '../../types/api';
 
 interface OrganizerParticipantListProps {
   participants: SkladchinaParticipantDto[];
   totalGoalKopecks: number | null;
+  // A-2: organizer can mark/unmark payments (fixed modes, active skladchina only).
+  canManagePayments?: boolean;
+  busyUserId?: string | null;
+  onMarkPaid?: (p: SkladchinaParticipantDto) => void;
+  onUnmark?: (p: SkladchinaParticipantDto) => void;
+  // V28/V29: organizer resolves a participant's decline request. Reject (approve=false) carries a
+  // mandatory reason — why the participant must still pay.
+  onResolveDecline?: (p: SkladchinaParticipantDto, approve: boolean, rejectReason?: string) => void;
 }
+
+const rowActionStyle: CSSProperties = {
+  fontSize: 12,
+  padding: '4px 10px',
+  borderRadius: 8,
+  border: '1px solid var(--text-faint)',
+  background: 'transparent',
+  color: 'var(--text)',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  whiteSpace: 'nowrap',
+};
 
 function getInitials(firstName: string, lastName: string | null): string {
   const last = lastName ? lastName.charAt(0).toUpperCase() : '';
@@ -29,7 +49,16 @@ function statusBadge(status: string): { text: string; cls: string } {
 
 export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
   participants,
+  canManagePayments = false,
+  busyUserId = null,
+  onMarkPaid,
+  onUnmark,
+  onResolveDecline,
 }) => {
+  // V29: which row is in "reject with reason" mode, and its draft reason.
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectText, setRejectText] = useState('');
+
   const sorted = [...participants].sort((a, b) => {
     const order: Record<string, number> = { paid: 0, pending: 1, declined: 2, released: 3, expired_no_response: 4 };
     return (order[a.status] ?? 99) - (order[b.status] ?? 99);
@@ -51,24 +80,100 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
             showExpected ? `ожид. ${formatRubles(p.expectedAmountKopecks!)} ₽` : null,
             showDeclared ? `заявл. ${formatRubles(p.declaredAmountKopecks!)} ₽` : null,
           ].filter(Boolean).join(' · ');
+          const busy = busyUserId === p.userId;
+          const showDeclineRequest = !!onResolveDecline && p.declineRequested;
+          // A-2: pending → "Отметить оплату"; paid → "Отменить". A participant with an open decline
+          // request shows the request controls below instead of the mark button.
+          const action = !canManagePayments || showDeclineRequest ? null
+            : p.status === 'pending' ? (
+              <button type="button" style={rowActionStyle} disabled={busy} onClick={() => onMarkPaid?.(p)}>
+                {busy ? '…' : 'Отметить оплату'}
+              </button>
+            ) : p.status === 'paid' ? (
+              <button
+                type="button"
+                style={{ ...rowActionStyle, color: 'var(--text-dim)' }}
+                disabled={busy}
+                onClick={() => onUnmark?.(p)}
+              >
+                {busy ? '…' : 'Отменить'}
+              </button>
+            ) : null;
           return (
-            <div key={p.userId} className="rd-rep-row" style={{ cursor: 'default' }}>
-              <span className="rd-ico">
-                {p.avatarUrl
-                  ? <img src={p.avatarUrl} alt="" />
-                  : getInitials(p.firstName, p.lastName)}
-              </span>
-              <div className="rd-info">
-                <div className="rd-ttl">
-                  {p.firstName}{p.lastName ? ` ${p.lastName}` : ''}
-                </div>
-                {amounts && (
-                  <div className="rd-met" style={mismatch ? { color: 'var(--danger)' } : undefined}>
-                    {amounts}
+            <div key={p.userId}>
+              <div className="rd-rep-row" style={{ cursor: 'default' }}>
+                <span className="rd-ico">
+                  {p.avatarUrl
+                    ? <img src={p.avatarUrl} alt="" />
+                    : getInitials(p.firstName, p.lastName)}
+                </span>
+                <div className="rd-info">
+                  <div className="rd-ttl">
+                    {p.firstName}{p.lastName ? ` ${p.lastName}` : ''}
                   </div>
-                )}
+                  {amounts && (
+                    <div className="rd-met" style={mismatch ? { color: 'var(--danger)' } : undefined}>
+                      {amounts}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                  <span className={`rd-badge ${showDeclineRequest ? 'rd-warn' : badge.cls}`}>
+                    {showDeclineRequest ? 'Просит отказаться' : badge.text}
+                  </span>
+                  {action}
+                </div>
               </div>
-              <span className={`rd-badge ${badge.cls}`}>{badge.text}</span>
+              {showDeclineRequest && (
+                <div style={{ padding: '0 0 10px 46px' }}>
+                  {p.declineNote && (
+                    <div className="rd-met" style={{ marginBottom: 8 }}>«{p.declineNote}»</div>
+                  )}
+                  {rejectingId === p.userId ? (
+                    <div>
+                      <textarea
+                        className="rd-textarea"
+                        rows={2}
+                        placeholder="Почему участник должен оплатить (обязательно)"
+                        value={rejectText}
+                        onChange={(e) => setRejectText(e.target.value)}
+                        maxLength={500}
+                      />
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                        <button
+                          type="button"
+                          style={rowActionStyle}
+                          disabled={busy || !rejectText.trim()}
+                          onClick={() => { onResolveDecline!(p, false, rejectText); setRejectingId(null); setRejectText(''); }}
+                        >
+                          {busy ? '…' : 'Отклонить заявку'}
+                        </button>
+                        <button
+                          type="button"
+                          style={{ ...rowActionStyle, color: 'var(--text-dim)' }}
+                          onClick={() => { setRejectingId(null); setRejectText(''); }}
+                        >
+                          Отмена
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" style={rowActionStyle} disabled={busy} onClick={() => onResolveDecline!(p, true)}>
+                        {busy ? '…' : 'Одобрить отказ'}
+                      </button>
+                      <button
+                        type="button"
+                        style={{ ...rowActionStyle, color: 'var(--text-dim)' }}
+                        disabled={busy}
+                        onClick={() => { setRejectingId(p.userId); setRejectText(''); }}
+                      >
+                        Отклонить
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
