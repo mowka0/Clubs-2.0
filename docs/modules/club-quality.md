@@ -1,13 +1,12 @@
 # Модуль «Качество клуба» (clubquality)
 
-**Статус:** в разработке (feature/club-quality-foundation) · **Создано:** 2026-06-17
+**Статус:** Фундамент в проде (#69) · L2-кольца — `feature/club-quality-rings` · **Создано:** 2026-06-17
 **Дизайн-контракт:** `docs/backlog/club-quality-gamification.md` (§0–11, design locked).
 Память: [[project_club_quality_track]].
 
-> Эта спека покрывает **только первый срез — «Фундамент»**: новый top-level модуль
-> `com.clubs.clubquality` + L1-факты клуба, derive read-only, surface на странице клуба
-> простыми числами. Кольца (L2), owner-«Статистика», скрытый L3-ранг, `membership_history`,
-> фикс `activity_rating` — **вне этого среза**, следующими PR.
+> Спека покрывает срезы **«Фундамент»** (модуль `com.clubs.clubquality` + L1-факты, derive read-only) и
+> **«Кольца L2»** (Сплочённость·Активность·Приходит на странице клуба). Owner-«Статистика», скрытый L3-ранг,
+> `membership_history`, фикс `activity_rating`, возраст-бейдж/майлстоны — **следующими PR**.
 
 ---
 
@@ -121,12 +120,23 @@ backend/src/main/kotlin/com/clubs/clubquality/
 - `api/clubQuality.ts` → `getClubQuality(clubId): Promise<ClubFactsDto>` (паттерн `api/clubs.ts`).
 - `queries/clubQuality.ts` → `useClubQualityQuery(clubId)` (TanStack Query, `enabled: Boolean(clubId)`).
 - Тип `ClubFactsDto` в `types/api.ts`.
-- Новый компонент `components/club/ClubQualityFacts.tsx` — блок «Качество клуба»: 2×2 сетка тайлов
-  `meetingsPerMonth` / `avgAttendance` / `coreSize` / `ageMonths` (возраст — четвёртым тайлом).
-  Нулевые sub-метрики показываем «—». Клуб без событий (`hasActivity=false`) — вместо нулевых тайлов
-  честный empty-state «Пока нет данных о встречах. Клубу N …» (молодой/дремлющий клуб не выглядит «мёртвым»).
+- `components/club/ClubQualityFacts.tsx` — блок «Качество клуба»: **три L2-кольца** (`QualityRing`):
+  **Сплочённость** (центр = `coreSize`, зелёная `--live`) · **Активность** (центр = `meetingsPerMonth`,
+  `--accent`) · **Приходит** (центр = `avgAttendance` «из M», `--accent`). M = `memberCount` (проп из
+  `ClubPage`, знаменатель «N из M»). Возраст здесь **не показываем** (уедет в «Достижения» — следующий
+  срез); в empty-state остаётся строкой. Клуб без событий (`hasActivity=false`) → честный empty-state
+  «Пока нет данных о встречах. Клубу N …».
+- `components/club/QualityRing.tsx` — презентационный донат на **4 равных сектора** (скруглённые края,
+  `rotate(-126.2)`); `level` (0..4) секторов закрашено `color`, центр — distinct-абсолют. Стиль согласован
+  с `DonutRing` (тот же viewBox/радиус/overlay).
+- `components/club/qualityLevels.ts` — чистые пороги `level` (0..4) по осям. **Косметика, не L3-калибровка:**
+  пороги намеренно щедрые и легко настраиваются; уровень лишь красит сектора, центр всегда = абсолют (§3).
+  - Сплочённость: 0 · <4 · <8 · <20 · 20+
+  - Активность (встреч/мес): 0 · <2 · <4 · <8 · 8+
+  - Приходит (доля `avgAttendance / memberCount`): 0 · <20% · <40% · <60% · 60%+
+- `api/clubQuality.ts` → `getClubQuality`; `queries/clubQuality.ts` → `useClubQualityQuery`; тип `ClubFactsDto`.
 - Встраивание в `pages/ClubPage.tsx`: блок **«Качество клуба»** после «О клубе», **до** табов/lock —
-  виден всем зрителям (участник, организатор, гость). Стиль — `rd-glass` / существующие классы.
+  виден всем зрителям (участник, организатор, гость). Fail-soft: при загрузке/ошибке блок не рендерится.
 
 ---
 
@@ -146,7 +156,7 @@ backend/src/main/kotlin/com/clubs/clubquality/
 
 ## 8. Вне среза (следующими PR)
 
-- L2-кольца (Сплочённость/Активность/Приходит) поверх этих же фактов — `DonutRing`.
+- Возраст-бейдж + майлстоны в блоке «Достижения» (возраст ушёл из колец сюда).
 - Карточка Discovery: участники · встреч/мес · вовлечённость% + майлстоны.
 - owner-«Статистика» (рычаги/нуджи/зона внимания) — нужны ownership-проверки.
 - Скрытый L3-ранг (композит 4 осей) — нужна калибровка §8, читает ledger через read-port.
