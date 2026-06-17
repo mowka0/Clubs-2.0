@@ -144,7 +144,8 @@ backend/src/main/kotlin/com/clubs/clubquality/
   Логика в `components/club/clubMilestones.ts` (чистая): `ageBadge` (<12 «Клубу N мес» / 12–23 «Год клубу» /
   24+ «Клубу N лет») + `milestones` (**лестничные пороги** — высшая взятая ступень + ближайшая цель с
   прогрессом: преданные [5/10/25/50] по `coreSize`, встречи [10/50/100/250/500] по `totalMeetings`,
-  «Первый сбор» по `successfulSkladchinas≥1`). Всё fact-backed, **без очков**. Тот же `useClubQualityQuery`.
+  сборы [1/5/10/25] по `successfulSkladchinas` (первый = «Первый сбор», далее «N сборов» с плюрализацией)).
+  Всё fact-backed, **без очков**. Тот же `useClubQualityQuery`.
 - Встраивание в `pages/ClubPage.tsx`: блоки **«Качество клуба»** → **«Достижения»** после «О клубе», **до**
   табов/lock — видны всем зрителям. Fail-soft: при загрузке/ошибке блоки не рендерятся.
 

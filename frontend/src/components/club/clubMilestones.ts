@@ -27,21 +27,26 @@ export function ageBadge(ageMonths: number): { icon: string; label: string } {
 }
 
 /** Highest reached tier (earned) + the next tier (goal, only if already started). */
-function laddered(icon: string, noun: string, tiers: number[], current: number): Milestone[] {
+function laddered(icon: string, tiers: number[], current: number, label: (n: number) => string): Milestone[] {
   const out: Milestone[] = [];
   const reached = [...tiers].reverse().find((t) => current >= t);
-  if (reached !== undefined) out.push({ icon, label: `${reached} ${noun}`, earned: true });
+  if (reached !== undefined) out.push({ icon, label: label(reached), earned: true });
   const next = tiers.find((t) => current < t);
   if (next !== undefined && current > 0) {
-    out.push({ icon, label: `${next} ${noun}`, earned: false, current, target: next });
+    out.push({ icon, label: label(next), earned: false, current, target: next });
   }
   return out;
 }
 
+/** «Первый сбор» for the first, then «N сборов» with plural. */
+function skladchinaLabel(n: number): string {
+  return n === 1 ? 'Первый сбор' : `${n} ${pluralRu(n, ['сбор', 'сбора', 'сборов'])}`;
+}
+
 export function milestones(facts: ClubFactsDto): Milestone[] {
   return [
-    ...laddered('🤝', 'преданных', [5, 10, 25, 50], facts.coreSize),
-    ...laddered('🔥', 'встреч', [10, 50, 100, 250, 500], facts.totalMeetings),
-    ...(facts.successfulSkladchinas >= 1 ? [{ icon: '💸', label: 'Первый сбор', earned: true }] : []),
+    ...laddered('🤝', [5, 10, 25, 50], facts.coreSize, (n) => `${n} преданных`),
+    ...laddered('🔥', [10, 50, 100, 250, 500], facts.totalMeetings, (n) => `${n} встреч`),
+    ...laddered('💸', [1, 5, 10, 25], facts.successfulSkladchinas, skladchinaLabel),
   ];
 }

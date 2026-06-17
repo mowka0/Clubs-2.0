@@ -43,10 +43,16 @@ describe('milestones (laddered)', () => {
     ]);
   });
 
-  it('first successful skladchina adds the «Первый сбор» trophy', () => {
-    expect(milestones(facts({ successfulSkladchinas: 1 }))).toContainEqual({
-      icon: '💸', label: 'Первый сбор', earned: true,
-    });
+  it('skladchina ladder: «Первый сбор» then «N сборов» with a progress goal', () => {
+    const first = milestones(facts({ successfulSkladchinas: 1 }));
+    expect(first).toContainEqual({ icon: '💸', label: 'Первый сбор', earned: true });
+    expect(first).toContainEqual({ icon: '💸', label: '5 сборов', earned: false, current: 1, target: 5 });
+
+    const seven = milestones(facts({ successfulSkladchinas: 7 }));
+    expect(seven).toContainEqual({ icon: '💸', label: '5 сборов', earned: true });
+    expect(seven).toContainEqual({ icon: '💸', label: '10 сборов', earned: false, current: 7, target: 10 });
+
+    expect(milestones(facts({ successfulSkladchinas: 0 })).some((m) => m.icon === '💸')).toBe(false);
   });
 
   it('caps at the top tier with no further goal', () => {
