@@ -48,7 +48,9 @@ owner-статистика и скрытый L3-ранг (§10 дизайн-до
 | `meetingsPerMonth: Double` | Активность | held-события за 90 дней ÷ 3, округление до 1 знака |
 | `avgAttendance: Int` | Приходит (среднее на встречу) | Σ явок ÷ число финализированных встреч за 90 дней, округление |
 | `coreSize: Int` | Сплочённость (ядро) | distinct юзеров с ≥3 явками («attended») по НЕ-cancelled событиям клуба, all-time |
-| `ageMonths: Int` | Возраст | полные месяцы от `clubs.created_at` до now |
+| `ageMonths: Int` | Возраст (бейдж в «Достижениях») | полные месяцы от `clubs.created_at` до now |
+| `totalMeetings: Int` | Достижение «N встреч» | held-события all-time (past, non-cancelled) |
+| `successfulSkladchinas: Int` | Достижение «первый сбор» | складчины со статусом `closed_success` |
 
 **Определения (точные):**
 - **held-событие** = `events.event_datetime < now()` AND `events.status <> 'cancelled'`.
@@ -62,6 +64,8 @@ owner-статистика и скрытый L3-ранг (§10 дизайн-до
   отменить уже отмеченное по явке событие — его строки `attended` не должны раздувать ядро (как и в
   held-фактах cancelled не считается).
 - **ageMonths** = `Period.between(created_at::date, now::date).toTotalMonths()`, не меньше 0.
+- **totalMeetings** = `count(held-событий all-time)` (past, non-cancelled), без окна — майлстон «N встреч».
+- **successfulSkladchinas** = `count(skladchinas WHERE club_id=? AND status='closed_success')` — майлстон «первый сбор».
 
 **Анти-фарм (важно для ревью):** в этом срезе факты — слой **L1/L2** (показываем, считаем щедро,
 owner-усилие допускается). Distinct-account / абсолюты / decay / min-K — защиты слоя **L3** (скрытый
@@ -125,9 +129,9 @@ backend/src/main/kotlin/com/clubs/clubquality/
   - Сплочённость → подпись **«основа клуба»**, центр = `coreSize` «чел.», зелёная `--live`
   - Активность → подпись **«частота встреч»**, центр = `meetingsPerMonth` «/мес», `--accent`
   - Приходит → подпись **«обычно приходит»**, центр = `avgAttendance` «из M», `--accent`
-  - M = `memberCount` (проп из `ClubPage`, знаменатель «N из M»). Возраст здесь **не показываем** (уедет в «Достижения» — следующий
-  срез); в empty-state остаётся строкой. Клуб без событий (`hasActivity=false`) → честный empty-state
-  «Пока нет данных о встречах. Клубу N …».
+  - M = `memberCount` (проп из `ClubPage`, знаменатель «N из M»). Возраст и майлстоны — в отдельном блоке
+  «Достижения» (см. ниже). Клуб без событий (`hasActivity=false`) → честный empty-state
+  «Пока нет данных о встречах — появятся после первых встреч с отметками».
 - `components/club/QualityRing.tsx` — презентационный донат на **4 равных сектора** (скруглённые края,
   `rotate(-126.2)`); `level` (0..4) секторов закрашено `color`, центр — distinct-абсолют. Стиль согласован
   с `DonutRing` (тот же viewBox/радиус/overlay).
@@ -136,15 +140,19 @@ backend/src/main/kotlin/com/clubs/clubquality/
   - Сплочённость: 0 · <4 · <8 · <20 · 20+
   - Активность (встреч/мес): 0 · <2 · <4 · <8 · 8+
   - Приходит (доля `avgAttendance / memberCount`): 0 · <20% · <40% · <60% · 60%+
-- `api/clubQuality.ts` → `getClubQuality`; `queries/clubQuality.ts` → `useClubQualityQuery`; тип `ClubFactsDto`.
-- Встраивание в `pages/ClubPage.tsx`: блок **«Качество клуба»** после «О клубе», **до** табов/lock —
-  виден всем зрителям (участник, организатор, гость). Fail-soft: при загрузке/ошибке блок не рендерится.
+- `components/club/ClubAchievements.tsx` — блок **«Достижения»**: возраст-бейдж (всегда) + майлстоны-чипы.
+  Логика в `components/club/clubMilestones.ts` (чистая): `ageBadge` (<12 «Клубу N мес» / 12–23 «Год клубу» /
+  24+ «Клубу N лет») + `milestones` (**лестничные пороги** — высшая взятая ступень + ближайшая цель с
+  прогрессом: преданные [5/10/25/50] по `coreSize`, встречи [10/50/100/250/500] по `totalMeetings`,
+  «Первый сбор» по `successfulSkladchinas≥1`). Всё fact-backed, **без очков**. Тот же `useClubQualityQuery`.
+- Встраивание в `pages/ClubPage.tsx`: блоки **«Качество клуба»** → **«Достижения»** после «О клубе», **до**
+  табов/lock — видны всем зрителям. Fail-soft: при загрузке/ошибке блоки не рендерятся.
 
 ---
 
 ## 7. Критерии приёмки
 
-1. `GET /api/clubs/{id}/quality` возвращает 200 + 4 факта для существующего клуба.
+1. `GET /api/clubs/{id}/quality` возвращает 200 + 6 фактов для существующего клуба.
 2. Несуществующий клуб → 404 (не 500).
 3. Клуб без событий → `meetingsPerMonth=0.0, avgAttendance=0, coreSize=0`, `ageMonths` корректен.
 4. `meetingsPerMonth` считает только held-события (будущие и `cancelled` — не входят).
@@ -153,12 +161,13 @@ backend/src/main/kotlin/com/clubs/clubquality/
 7. Блок «Качество клуба» виден на странице клуба всем зрителям; молодой/пустой клуб не выглядит сломанным.
 8. Backend: `./gradlew test` зелёный; есть unit-тест на агрегации (позитив + пустой клуб + 404).
 9. Frontend: `npm run build` зелёный; `npm test` зелёный.
+10. `totalMeetings` = held all-time (без окна); `successfulSkladchinas` = только `closed_success`.
+11. Блок «Достижения» всегда показывает возраст-бейдж; майлстоны — лестничные (взятая ступень + цель).
 
 ---
 
 ## 8. Вне среза (следующими PR)
 
-- Возраст-бейдж + майлстоны в блоке «Достижения» (возраст ушёл из колец сюда).
 - Карточка Discovery: участники · встреч/мес · вовлечённость% + майлстоны.
 - owner-«Статистика» (рычаги/нуджи/зона внимания) — нужны ownership-проверки.
 - Скрытый L3-ранг (композит 4 осей) — нужна калибровка §8, читает ledger через read-port.

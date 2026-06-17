@@ -309,12 +309,14 @@ export interface ClubDetailDto {
   isActive: boolean;
 }
 
-/** L1 facts for `GET /api/clubs/{id}/quality` (club-quality «Фундамент» slice). */
+/** Club-quality facts for `GET /api/clubs/{id}/quality` (rings + achievements). */
 export interface ClubFactsDto {
   meetingsPerMonth: number;
   avgAttendance: number;
   coreSize: number;
   ageMonths: number;
+  totalMeetings: number;
+  successfulSkladchinas: number;
 }
 
 export interface MembershipDto {

@@ -2,9 +2,11 @@ package com.clubs.clubquality
 
 import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.generated.jooq.enums.EventStatus
+import com.clubs.generated.jooq.enums.SkladchinaStatus
 import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.generated.jooq.tables.references.EVENTS
 import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
+import com.clubs.generated.jooq.tables.references.SKLADCHINAS
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
@@ -14,7 +16,7 @@ import java.util.UUID
 import kotlin.math.roundToInt
 
 /**
- * Read-only aggregations over existing tables (`clubs`, `events`, `event_responses`).
+ * Read-only aggregations over existing tables (`clubs`, `events`, `event_responses`, `skladchinas`).
  * No own schema. Reading these shared jOOQ tables is consistent with
  * [com.clubs.reputation.JooqReputationRepository], which already aggregates events/responses.
  *
@@ -46,6 +48,8 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
             coreSize = coreSize(clubId),
             ageMonths = Period.between(createdAt.toLocalDate(), now.toLocalDate())
                 .toTotalMonths().toInt().coerceAtLeast(0),
+            totalMeetings = totalMeetings(clubId, now),
+            successfulSkladchinas = successfulSkladchinas(clubId),
         )
     }
 
@@ -101,4 +105,22 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
             .having(DSL.count().ge(CORE_ATTENDANCE_THRESHOLD))
             .fetch()
             .size
+
+    /** All-time held (past, non-cancelled) events for the club. */
+    private fun totalMeetings(clubId: UUID, now: OffsetDateTime): Int =
+        dsl.selectCount()
+            .from(EVENTS)
+            .where(
+                EVENTS.CLUB_ID.eq(clubId)
+                    .and(EVENTS.STATUS.ne(EventStatus.cancelled))
+                    .and(EVENTS.EVENT_DATETIME.lt(now)),
+            )
+            .fetchOne(0, Int::class.java) ?: 0
+
+    /** Skladchinas of the club that closed successfully (milestone «первый сбор»). */
+    private fun successfulSkladchinas(clubId: UUID): Int =
+        dsl.selectCount()
+            .from(SKLADCHINAS)
+            .where(SKLADCHINAS.CLUB_ID.eq(clubId).and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.closed_success)))
+            .fetchOne(0, Int::class.java) ?: 0
 }

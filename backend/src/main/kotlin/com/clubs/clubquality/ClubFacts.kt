@@ -12,4 +12,8 @@ data class ClubFacts(
     val avgAttendance: Int,
     val coreSize: Int,
     val ageMonths: Int,
+    /** All-time held (past, non-cancelled) events — feeds the «N встреч» milestone. */
+    val totalMeetings: Int,
+    /** Skladchinas closed as successful — feeds the «первый сбор» milestone. */
+    val successfulSkladchinas: Int,
 )

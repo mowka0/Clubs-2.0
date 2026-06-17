@@ -9,17 +9,6 @@ function formatMeetings(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-function ageParts(ageMonths: number): { value: string; foot: string } {
-  if (ageMonths >= 12) {
-    const years = Math.floor(ageMonths / 12);
-    return { value: String(years), foot: pluralRu(years, ['год', 'года', 'лет']) };
-  }
-  if (ageMonths >= 1) {
-    return { value: String(ageMonths), foot: pluralRu(ageMonths, ['месяц', 'месяца', 'месяцев']) };
-  }
-  return { value: '<1', foot: 'месяца' };
-}
-
 interface ClubQualityFactsProps {
   clubId: string;
   /** Active members — denominator of the «Приходит» ring («N из M»). */
@@ -29,7 +18,7 @@ interface ClubQualityFactsProps {
 /**
  * «Качество клуба» — публичный соц-пруф (L2-кольца поверх L1-фактов) на странице клуба. Видят все.
  * Три кольца: Сплочённость (ядро, зелёное) · Активность (встреч/мес) · Приходит (среднее из M).
- * Возраст здесь НЕ показываем — он уедет в «Достижения» (следующий срез); в empty-state остаётся строкой.
+ * Возраст и майлстоны — в отдельном блоке «Достижения» (ClubAchievements).
  * Fail-soft: вторичный блок, при загрузке/ошибке просто не рендерится.
  * Дизайн-контракт: docs/modules/club-quality.md, docs/backlog/club-quality-gamification.md §11.2.
  */
@@ -37,18 +26,16 @@ export const ClubQualityFacts: FC<ClubQualityFactsProps> = ({ clubId, memberCoun
   const { data } = useClubQualityQuery(clubId);
   if (!data) return null;
 
-  const { meetingsPerMonth, avgAttendance, coreSize, ageMonths } = data;
+  const { meetingsPerMonth, avgAttendance, coreSize } = data;
   const hasActivity = meetingsPerMonth > 0 || avgAttendance > 0 || coreSize > 0;
 
   if (!hasActivity) {
-    const age = ageParts(ageMonths);
-    const ageLine = age.value === '<1' ? 'Клубу меньше месяца.' : `Клубу ${age.value} ${age.foot}.`;
     return (
       <>
         <div className="rd-section-sub-h">Качество клуба</div>
         <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
           <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
-            Пока нет данных о встречах. {ageLine}
+            Пока нет данных о встречах — появятся после первых встреч с отметками явки.
           </div>
         </div>
       </>
