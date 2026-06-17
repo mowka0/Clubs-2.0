@@ -58,6 +58,7 @@ class SkladchinaMapper {
         val isOrganizerView = skladchina.creatorId == callerUserId
         val myParticipant = participants.firstOrNull { it.userId == callerUserId }
         val paidCount = participants.count { it.status.literal == "paid" }
+        val pendingCount = participants.count { it.status.literal == "pending" }
 
         return SkladchinaDetailDto(
             id = skladchina.id,
@@ -90,7 +91,8 @@ class SkladchinaMapper {
             myDeclineRejectNote = myParticipant?.declineRejectNote,
             participants = if (isOrganizerView) participants.map(::toParticipantDto) else null,
             participantCount = participants.size,
-            paidCount = paidCount
+            paidCount = paidCount,
+            pendingCount = pendingCount
         )
     }
 

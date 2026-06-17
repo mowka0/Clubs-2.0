@@ -63,6 +63,7 @@ function buildDetail(overrides: Partial<SkladchinaDetailDto> = {}): SkladchinaDe
     participants: null,
     participantCount: 5,
     paidCount: 1,
+    pendingCount: 4,
     ...overrides,
   };
 }

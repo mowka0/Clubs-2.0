@@ -115,7 +115,15 @@ data class SkladchinaDetailDto(
 
     val participants: List<SkladchinaParticipantDto>?,   // non-null ONLY for organizer
     val participantCount: Int,
-    val paidCount: Int
+    val paidCount: Int,
+    val pendingCount: Int                          // #3: visible to all, so the last pending sees what's left
+)
+
+// State of the split linked to an event — drives the EventPage "Разделить счёт" button.
+// Both null = no split yet (button creates). status active → open it; closed_success → already collected.
+data class EventSplitStateDto(
+    val skladchinaId: UUID?,
+    val status: String?
 )
 
 data class SkladchinaParticipantDto(

@@ -44,7 +44,7 @@ function paymentModeLabel(mode: string): string {
   switch (mode) {
     case 'fixed_equal': return 'Поровну';
     case 'fixed_individual': return 'Индивидуальные суммы';
-    case 'voluntary': return 'По желанию';
+    case 'voluntary': return 'Ваша сумма';
     default: return mode;
   }
 }
@@ -108,6 +108,10 @@ export const SkladchinaPage: FC = () => {
     ? Math.min(100, Math.round((s.collectedKopecks / s.totalGoalKopecks!) * 100))
     : 0;
   const useMoneyBar = s.paymentMode === 'voluntary' && hasGoal;
+  // #3: the last still-pending participant in a voluntary collection sees exactly what's left to
+  // the goal as a hint in the amount field, so they can close it in one payment.
+  const remainingToGoalKopecks = hasGoal ? Math.max(0, s.totalGoalKopecks! - s.collectedKopecks) : 0;
+  const isLastPending = s.paymentMode === 'voluntary' && hasGoal && s.myStatus === 'pending' && s.pendingCount === 1;
 
   // A-1: fixed modes show a one-tap "Я оплатил {доля} ₽" — the server records the share.
   const expectedRub = s.myExpectedAmountKopecks != null
@@ -395,7 +399,7 @@ export const SkladchinaPage: FC = () => {
                 inputMode="decimal"
                 min="1"
                 step="1"
-                placeholder="Сумма, ₽"
+                placeholder={isLastPending ? `Осталось закрыть ${formatRubles(remainingToGoalKopecks)} ₽` : 'Ваша сумма, ₽'}
                 value={amountInput}
                 onChange={(e) => setAmountInput(e.target.value)}
                 className="rd-input"

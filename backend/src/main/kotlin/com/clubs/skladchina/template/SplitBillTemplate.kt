@@ -5,6 +5,7 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.event.EventRepository
 import com.clubs.event.EventResponseRepository
 import com.clubs.generated.jooq.enums.SkladchinaMode
+import com.clubs.generated.jooq.enums.SkladchinaStatus
 import com.clubs.generated.jooq.enums.SkladchinaTemplate
 import com.clubs.skladchina.CreateSkladchinaRequest
 import com.clubs.skladchina.SkladchinaRepository
@@ -53,6 +54,15 @@ class SplitBillTemplate(
         }
         if (event.eventDatetime.isBefore(OffsetDateTime.now().minusDays(MAX_EVENT_AGE_DAYS))) {
             throw ValidationException("Событие старше $MAX_EVENT_AGE_DAYS дней — счёт уже не разделить")
+        }
+        // One split per event: an active one blocks (open it instead), a successfully-closed one
+        // blocks (already collected). A failed/cancelled split does NOT block — the organizer retries.
+        skladchinaRepository.findBlockingByEventId(eventId)?.let { existing ->
+            throw if (existing.status == SkladchinaStatus.active) {
+                ValidationException("По этому событию уже есть активный сбор — откройте его")
+            } else {
+                ValidationException("По этому событию счёт уже собран")
+            }
         }
 
         // Split offers exactly two modes; fixed_individual (organizer assigns per-head) makes no

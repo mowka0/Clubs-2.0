@@ -61,6 +61,7 @@ export const queryKeys = {
     actionRequiredCount: ['skladchinas', 'action-required-count'] as const,
     detail: (id: string) => ['skladchinas', 'detail', id] as const,
     byClubActive: (clubId: string) => ['skladchinas', 'by-club-active', clubId] as const,
+    eventState: (eventId: string) => ['skladchinas', 'event-state', eventId] as const,
   },
   activities: {
     // Prefix used for invalidation across all filter variants of a club.

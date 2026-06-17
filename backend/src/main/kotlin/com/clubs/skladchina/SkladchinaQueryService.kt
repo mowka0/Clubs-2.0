@@ -69,4 +69,15 @@ class SkladchinaQueryService(
             skladchina, club.name, club.avatarUrl, callerId, participants, collected, declineRequiresApproval
         )
     }
+
+    /**
+     * State of the split linked to [eventId] — for the EventPage "Разделить счёт" button. Returns the
+     * active split (→ open it) or, failing that, a successfully-closed one (→ already collected); both
+     * null when none exists or the only ones are failed/cancelled (→ the button creates a new split).
+     */
+    @Transactional(readOnly = true)
+    fun findEventSplitState(eventId: UUID): EventSplitStateDto {
+        val split = skladchinaRepository.findBlockingByEventId(eventId)
+        return EventSplitStateDto(skladchinaId = split?.id, status = split?.status?.literal)
+    }
 }

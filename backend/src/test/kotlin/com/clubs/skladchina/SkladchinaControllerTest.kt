@@ -990,6 +990,67 @@ class SkladchinaControllerTest {
         assertTrue(deadline.isAfter(OffsetDateTime.now().plusHours(47)), "deadline extended to ~48h")
     }
 
+    @Test
+    fun `split_bill blocks a second collection while one is active`() {
+        val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        createFromBody(splitBody(eventId, 90000))
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(splitBody(eventId, 50000))
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `split_bill blocks a new collection after a successful close`() {
+        val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        val id = createFromBody(splitBody(eventId, 90000))
+        // Both pay → all answered → auto-close as closed_success.
+        mockMvc.perform(post("/api/skladchinas/$id/mark-paid").header("Authorization", "Bearer $memberAToken")
+            .contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isOk)
+        mockMvc.perform(post("/api/skladchinas/$id/mark-paid").header("Authorization", "Bearer $memberBToken")
+            .contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isOk)
+        assertEquals("closed_success", skladchinaStatus(id))
+
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(splitBody(eventId, 90000))
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `split_bill allows a new collection after a cancelled close`() {
+        val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        val id = createFromBody(splitBody(eventId, 90000))
+        // Close with nothing collected → cancelled (not a blocker — the organizer may retry).
+        mockMvc.perform(post("/api/skladchinas/$id/close").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+        assertEquals("cancelled", skladchinaStatus(id))
+
+        mockMvc.perform(
+            post("/api/clubs/$clubId/skladchinas")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(splitBody(eventId, 90000))
+        ).andExpect(status().isCreated)
+    }
+
+    @Test
+    fun `GET event skladchina returns null then the active split`() {
+        val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        mockMvc.perform(get("/api/events/$eventId/skladchina").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.skladchinaId").doesNotExist())
+        val id = createFromBody(splitBody(eventId, 90000))
+        mockMvc.perform(get("/api/events/$eventId/skladchina").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.skladchinaId").value(id.toString()))
+            .andExpect(jsonPath("$.status").value("active"))
+    }
+
     // ---- split_bill decline-with-approval (V28) ----
 
     @Test

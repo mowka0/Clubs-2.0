@@ -451,6 +451,14 @@ export interface SkladchinaDetailDto {
   participants: SkladchinaParticipantDto[] | null;
   participantCount: number;
   paidCount: number;
+  pendingCount: number;                   // #3: lets the last pending participant see what's left
+}
+
+// State of the split linked to an event — drives the EventPage "Разделить счёт" button.
+// skladchinaId null = no split yet (create); status active → open it; closed_success → already collected.
+export interface EventSplitStateDto {
+  skladchinaId: string | null;
+  status: SkladchinaStatus | null;
 }
 
 export interface MySkladchinaListItemDto {

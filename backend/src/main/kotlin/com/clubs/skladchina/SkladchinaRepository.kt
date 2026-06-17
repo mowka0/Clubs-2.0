@@ -15,6 +15,13 @@ interface SkladchinaRepository {
 
     fun findById(id: UUID): Skladchina?
 
+    /**
+     * The split that BLOCKS a new one for [eventId]: an active OR successfully-closed pool. Active
+     * is returned first (the EventPage button links to it); otherwise the latest closed_success.
+     * null → no blocker, a new split may be created. A failed/cancelled split does NOT block (retry).
+     */
+    fun findBlockingByEventId(eventId: UUID): Skladchina?
+
     fun findActiveByClub(clubId: UUID): List<Skladchina>
 
     /**

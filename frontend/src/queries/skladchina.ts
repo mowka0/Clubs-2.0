@@ -4,6 +4,7 @@ import {
   createSkladchina,
   declineSkladchina,
   getClubActiveSkladchinas,
+  getEventSplitState,
   getMySkladchinas,
   getSkladchina,
   getSkladchinaActionRequiredCount,
@@ -54,6 +55,15 @@ export function useClubActiveSkladchinasQuery(clubId: string | undefined) {
     queryKey: queryKeys.skladchinas.byClubActive(clubId ?? ''),
     queryFn: () => getClubActiveSkladchinas(clubId!),
     enabled: Boolean(clubId),
+  });
+}
+
+/** Existing split for an event — drives the EventPage "Разделить счёт" button. */
+export function useEventSplitStateQuery(eventId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.skladchinas.eventState(eventId ?? ''),
+    queryFn: () => getEventSplitState(eventId!),
+    enabled: Boolean(eventId),
   });
 }
 

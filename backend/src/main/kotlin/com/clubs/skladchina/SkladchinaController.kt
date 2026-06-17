@@ -52,6 +52,14 @@ class SkladchinaController(
     ): ResponseEntity<SkladchinaDetailDto> =
         ResponseEntity.ok(queryService.getDetail(id, user.userId))
 
+    // EventPage "Разделить счёт" button: is there already a split for this event (active → open it,
+    // closed_success → already collected)? Both null when a new split may be created.
+    @GetMapping("/api/events/{eventId}/skladchina")
+    fun getEventSkladchina(
+        @PathVariable eventId: UUID
+    ): ResponseEntity<EventSplitStateDto> =
+        ResponseEntity.ok(queryService.findEventSplitState(eventId))
+
     @PostMapping("/api/skladchinas/{id}/mark-paid")
     fun markPaid(
         @PathVariable id: UUID,

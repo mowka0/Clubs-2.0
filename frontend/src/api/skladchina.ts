@@ -2,6 +2,7 @@ import { apiClient } from './apiClient';
 import type {
   ActionRequiredCountDto,
   CreateSkladchinaRequest,
+  EventSplitStateDto,
   MySkladchinaListItemDto,
   PageResponse,
   SkladchinaDetailDto,
@@ -9,6 +10,11 @@ import type {
 
 export function getSkladchina(id: string): Promise<SkladchinaDetailDto> {
   return apiClient.get<SkladchinaDetailDto>(`/api/skladchinas/${id}`);
+}
+
+// EventPage "Разделить счёт" button: existing split for this event (active → open, closed_success → collected).
+export function getEventSplitState(eventId: string): Promise<EventSplitStateDto> {
+  return apiClient.get<EventSplitStateDto>(`/api/events/${eventId}/skladchina`);
 }
 
 export function getMySkladchinas(

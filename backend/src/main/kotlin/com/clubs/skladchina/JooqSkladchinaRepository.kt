@@ -66,6 +66,20 @@ class JooqSkladchinaRepository(
     override fun findById(id: UUID): Skladchina? =
         dsl.selectFrom(SKLADCHINAS).where(SKLADCHINAS.ID.eq(id)).fetchOne()?.let(mapper::toDomain)
 
+    override fun findBlockingByEventId(eventId: UUID): Skladchina? =
+        dsl.selectFrom(SKLADCHINAS)
+            .where(
+                SKLADCHINAS.EVENT_ID.eq(eventId)
+                    .and(SKLADCHINAS.STATUS.`in`(SkladchinaStatus.active, SkladchinaStatus.closed_success))
+            )
+            // Active first (the button links to it); then the most recent successful one.
+            .orderBy(
+                DSL.case_().`when`(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active), 0).otherwise(1).asc(),
+                SKLADCHINAS.CREATED_AT.desc()
+            )
+            .limit(1)
+            .fetchOne()?.let(mapper::toDomain)
+
     override fun findActiveByClub(clubId: UUID): List<Skladchina> =
         dsl.selectFrom(SKLADCHINAS)
             .where(SKLADCHINAS.CLUB_ID.eq(clubId).and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active)))
