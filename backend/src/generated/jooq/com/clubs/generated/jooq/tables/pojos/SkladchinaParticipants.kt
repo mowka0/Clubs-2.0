@@ -27,7 +27,8 @@ data class SkladchinaParticipants(
     var createdAt: OffsetDateTime? = null,
     var declineNote: String? = null,
     var declineRequestedAt: OffsetDateTime? = null,
-    var declineRejected: Boolean? = null
+    var declineRejected: Boolean? = null,
+    var declineRejectNote: String? = null
 ): Serializable {
 
 
@@ -103,6 +104,12 @@ data class SkladchinaParticipants(
         }
         else if (this.declineRejected != o.declineRejected)
             return false
+        if (this.declineRejectNote == null) {
+            if (o.declineRejectNote != null)
+                return false
+        }
+        else if (this.declineRejectNote != o.declineRejectNote)
+            return false
         return true
     }
 
@@ -121,6 +128,7 @@ data class SkladchinaParticipants(
         result = prime * result + (if (this.declineNote == null) 0 else this.declineNote.hashCode())
         result = prime * result + (if (this.declineRequestedAt == null) 0 else this.declineRequestedAt.hashCode())
         result = prime * result + (if (this.declineRejected == null) 0 else this.declineRejected.hashCode())
+        result = prime * result + (if (this.declineRejectNote == null) 0 else this.declineRejectNote.hashCode())
         return result
     }
 
@@ -139,6 +147,7 @@ data class SkladchinaParticipants(
         sb.append(", ").append(declineNote)
         sb.append(", ").append(declineRequestedAt)
         sb.append(", ").append(declineRejected)
+        sb.append(", ").append(declineRejectNote)
 
         sb.append(")")
         return sb.toString()

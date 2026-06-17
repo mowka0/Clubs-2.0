@@ -55,7 +55,12 @@ class SkladchinaCreationService(
         // the engine owns club/owner, deadline bounds, reputation gates, persistence and DM.
         val resolution = strategy.resolveCreation(clubId, creatorId, request)
 
-        if (request.affectsReputation) {
+        // #8: a VERIFIED template (split_bill, both modes) ALWAYS affects reputation — its
+        // attendance anchor IS the anti-farm, so it bypasses the "важный сбор" gates (rate limit /
+        // 24h-window / voluntary-block) that exist only to police the organizer-chosen toggle.
+        // The custom toggle still runs the gates.
+        val affectsReputation = strategy.outcomesVerified || request.affectsReputation
+        if (request.affectsReputation && !strategy.outcomesVerified) {
             validateReputationGates(clubId, resolution.mode, deadlineMinAge, now)
         }
 
@@ -75,7 +80,7 @@ class SkladchinaCreationService(
             paymentMethodNote = request.paymentMethodNote,
             eventId = resolution.eventId,
             deadline = request.deadline,
-            affectsReputation = request.affectsReputation,
+            affectsReputation = affectsReputation,
             status = SkladchinaStatus.active,
             closedAt = null,
             closedBy = null,

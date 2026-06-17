@@ -10,7 +10,6 @@ import {
   markPaidSkladchina,
   organizerMarkPaidParticipant,
   organizerUnmarkParticipant,
-  redistributeSkladchina,
   requestDeclineSkladchina,
   resolveDeclineSkladchina,
 } from '../api/skladchina';
@@ -138,29 +137,16 @@ export function useRequestDeclineMutation() {
   });
 }
 
-/** V28: organizer approves/rejects a participant's decline request. */
+/** V28/V29: organizer approves/rejects a participant's decline request (reject needs a reason). */
 export function useResolveDeclineMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, userId, approve }: { id: string; userId: string; approve: boolean }) =>
-      resolveDeclineSkladchina(id, userId, approve),
+    mutationFn: ({ id, userId, approve, rejectReason }: { id: string; userId: string; approve: boolean; rejectReason?: string }) =>
+      resolveDeclineSkladchina(id, userId, approve, rejectReason),
     onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
-    },
-  });
-}
-
-/** A-3: organizer redistributes the deficit onto pending participants. */
-export function useRedistributeSkladchinaMutation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => redistributeSkladchina(id),
-    onSuccess: (_data, id) => {
-      // Only `expected` shares change — paid/action-required counts are untouched, so the
-      // feed and badge-count queries don't need invalidating (unlike mark/unmark).
-      qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
     },
   });
 }

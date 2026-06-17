@@ -7,6 +7,7 @@ import { ApiError } from '../api/apiClient';
 import { useClubEventsQuery, useEventQuery, useEventRespondersQuery } from '../queries/events';
 import { useCreateSkladchinaMutation } from '../queries/skladchina';
 import { PhotoAttach } from '../components/PhotoAttach';
+import { useAuthStore } from '../store/useAuthStore';
 import type { CreateSkladchinaRequest } from '../types/api';
 
 const DATE_FMT = new Intl.DateTimeFormat('ru-RU', {
@@ -49,8 +50,10 @@ export const CreateSplitBillPage: FC = () => {
   const haptic = useHaptic();
   const createMut = useCreateSkladchinaMutation();
 
+  const myId = useAuthStore((s) => s.user?.id);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(searchParams.get('eventId'));
   const [mode, setMode] = useState<'fixed_equal' | 'voluntary'>('fixed_equal');
+  const [excludeSelf, setExcludeSelf] = useState(false);
   const [title, setTitle] = useState('');
   const [billRub, setBillRub] = useState('');
   const [paymentLink, setPaymentLink] = useState('');
@@ -71,10 +74,14 @@ export const CreateSplitBillPage: FC = () => {
     );
   }
 
-  const attendedCount = (respondersQuery.data ?? []).filter((r) => r.attendance === 'attended').length;
+  const attended = (respondersQuery.data ?? []).filter((r) => r.attendance === 'attended');
+  const attendedCount = attended.length;
+  // "Исключить себя": the organizer drops out of the charged set (only if they actually attended).
+  const organizerAttended = myId != null && attended.some((r) => r.userId === myId);
+  const chargedCount = attendedCount - (excludeSelf && organizerAttended ? 1 : 0);
   const billKopecks = rubToKopecks(billRub);
-  const perPersonRub = billKopecks != null && attendedCount > 0
-    ? Math.round(billKopecks / attendedCount / 100)
+  const perPersonRub = billKopecks != null && chargedCount > 0
+    ? Math.round(billKopecks / chargedCount / 100)
     : null;
   const eventTitle = eventQuery.data?.title ?? '';
   const defaultTitle = eventTitle ? `Счёт: ${eventTitle}` : 'Счёт за событие';
@@ -93,7 +100,7 @@ export const CreateSplitBillPage: FC = () => {
   const handleSubmit = async () => {
     setSubmitError(null);
     if (!selectedEventId) return fail('Выберите событие');
-    if (attendedCount < 2) return fail('Нужно минимум 2 пришедших. Отметьте явку на событии.');
+    if (chargedCount < 2) return fail('Нужно минимум 2 участника к оплате. Отметьте явку на событии.');
     if (!paymentLink.trim()) return fail('Укажите платёжную ссылку');
     const total = rubToKopecks(billRub);
     if (total === null) return fail('Укажите сумму чека (₽)');
@@ -102,12 +109,14 @@ export const CreateSplitBillPage: FC = () => {
       title: (title.trim() || defaultTitle).slice(0, 255),
       template: 'split_bill',
       eventId: selectedEventId,
+      excludeSelf,
       paymentMode: mode,
       totalGoalKopecks: total,
       paymentLink: paymentLink.trim(),
       paymentMethodNote: paymentMethodNote.trim() || null,
       photoUrl,
       deadline: new Date(deadline).toISOString(),
+      // split всегда влияет на репутацию (сервер форсит для verified-шаблона); поле декоративно.
       affectsReputation: false,
       participants: [],
     };
@@ -157,7 +166,7 @@ export const CreateSplitBillPage: FC = () => {
 
   // --- Step 2: the bill form for the chosen event ---
   const attendanceLoading = eventQuery.isPending || respondersQuery.isPending;
-  const notEnoughAttended = !attendanceLoading && attendedCount < 2;
+  const notEnoughAttended = !attendanceLoading && chargedCount < 2;
 
   return (
     <div className="rd-page">
@@ -169,12 +178,30 @@ export const CreateSplitBillPage: FC = () => {
       ) : (
         <div className="rd-form">
           <div className="rd-glass" style={{ padding: '12px 16px', marginBottom: 4 }}>
-            <div className="rd-sklad-stats">Пришли: {attendedCount} {attendedCount === 1 ? 'человек' : 'чел.'}</div>
+            <div className="rd-sklad-stats">
+              Пришли: {attendedCount} {attendedCount === 1 ? 'человек' : 'чел.'}
+              {excludeSelf && organizerAttended && ` · к оплате ${chargedCount}`}
+            </div>
+            {organizerAttended && (
+              <label className="rd-check" style={{ marginTop: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={excludeSelf}
+                  onChange={(e) => { haptic.select(); setExcludeSelf(e.target.checked); }}
+                />
+                <span>Исключить себя из счёта</span>
+              </label>
+            )}
             {notEnoughAttended && (
               <div className="rd-warn-block" style={{ marginTop: 8 }}>
-                Нужно минимум 2 пришедших. Отметьте явку на событии, потом делите счёт.
+                Нужно минимум 2 участника к оплате. Отметьте явку на событии, потом делите счёт.
               </div>
             )}
+          </div>
+
+          <div className="rd-warn-block" style={{ marginBottom: 4 }}>
+            ⚠️ Влияет на репутацию: оплата укрепляет её, молчание до срока — снижает на 40.
+            Участники увидят это в сборе.
           </div>
 
           <div className="rd-field">
@@ -231,8 +258,8 @@ export const CreateSplitBillPage: FC = () => {
               onChange={(e) => setBillRub(e.target.value)}
               placeholder="Например, 4000"
             />
-            {mode === 'fixed_equal' && perPersonRub != null && attendedCount >= 2 && (
-              <span className="rd-hint">≈ по {perPersonRub.toLocaleString('ru-RU')} ₽ с каждого ({attendedCount} чел.)</span>
+            {mode === 'fixed_equal' && perPersonRub != null && chargedCount >= 2 && (
+              <span className="rd-hint">≈ по {perPersonRub.toLocaleString('ru-RU')} ₽ с каждого ({chargedCount} чел.)</span>
             )}
             {mode === 'voluntary' && (
               <span className="rd-hint">Прогресс-бар заполняется до этой суммы; каждый вносит свою часть сам</span>

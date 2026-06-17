@@ -90,18 +90,18 @@ interface SkladchinaRepository {
     fun requestDecline(skladchinaId: UUID, userId: UUID, note: String, requestedAt: OffsetDateTime): Int
 
     /**
-     * V28: organizer rejects the decline request — closes the path (decline_rejected=true) and
-     * clears the open request; participant stays `pending` (must pay). Guarded to a pending
-     * participant with an open request. Returns affected rows.
+     * V28/V29: organizer rejects the decline request — closes the path (decline_rejected=true),
+     * stores the mandatory justification [note], and clears the open request; participant stays
+     * `pending` (must pay). Guarded to a pending participant with an open request. Returns affected rows.
      */
-    fun rejectDeclineRequest(skladchinaId: UUID, userId: UUID): Int
+    fun rejectDeclineRequest(skladchinaId: UUID, userId: UUID, note: String): Int
 
     /**
-     * A-3 (redistribute): overwrites a participant's expected_amount_kopecks. Guarded by
-     * `WHERE status = 'pending'` — never touches a participant who already paid/declined.
-     * Returns affected rows.
+     * Pushes the deadline OUT to [newDeadline] (guarded: active + current deadline earlier than the
+     * new one). Used when a decline request lands with <48h left — the organizer must always get a
+     * 48h window to resolve it. Returns affected rows (0 = no change needed).
      */
-    fun setExpectedAmount(skladchinaId: UUID, userId: UUID, expectedAmountKopecks: Long): Int
+    fun extendDeadline(skladchinaId: UUID, newDeadline: OffsetDateTime): Int
 
     /** Move all `pending` participants to `expired_no_response` (close at/after the deadline). */
     fun expirePendingParticipants(skladchinaId: UUID): Int

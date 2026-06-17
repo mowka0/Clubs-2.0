@@ -10,7 +10,6 @@ import {
   useMarkPaidMutation,
   useOrganizerMarkPaidMutation,
   useOrganizerUnmarkMutation,
-  useRedistributeSkladchinaMutation,
   useRequestDeclineMutation,
   useResolveDeclineMutation,
   useSkladchinaQuery,
@@ -62,14 +61,12 @@ export const SkladchinaPage: FC = () => {
   const closeMut = useCloseSkladchinaMutation();
   const orgMarkMut = useOrganizerMarkPaidMutation();
   const orgUnmarkMut = useOrganizerUnmarkMutation();
-  const redistributeMut = useRedistributeSkladchinaMutation();
   const requestDeclineMut = useRequestDeclineMutation();
   const resolveDeclineMut = useResolveDeclineMutation();
 
   const [amountInput, setAmountInput] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [deficitDismissed, setDeficitDismissed] = useState(false);
   const [showDeclineForm, setShowDeclineForm] = useState(false);
   const [declineReason, setDeclineReason] = useState('');
   const [photoZoomed, setPhotoZoomed] = useState(false);
@@ -117,16 +114,6 @@ export const SkladchinaPage: FC = () => {
     ? Math.floor(s.myExpectedAmountKopecks / 100)
     : null;
 
-  // A-3: organizer-only "не хватает X ₽" panel (fixed modes with a goal).
-  const pendingCount = s.participants?.filter((p) => p.status === 'pending').length ?? 0;
-  const deficitKopecks = isFixed && hasGoal
-    ? Math.max(0, s.totalGoalKopecks! - s.collectedKopecks)
-    : 0;
-  const perPendingRub = pendingCount > 0 ? Math.floor(deficitKopecks / pendingCount / 100) : 0;
-  // Hide the panel for sub-1₽-per-head leftovers: the preview would read "≈ 0 ₽" and there is
-  // nothing meaningful to spread. perPendingRub > 0 ⇒ deficit ≥ 100·pending ⇒ backend accepts.
-  const showDeficitPanel = isActive && isCreator && perPendingRub > 0 && pendingCount > 0 && !deficitDismissed;
-
   // A-2: which participant row is mid-mutation (disable its buttons).
   const busyUserId = (
     orgMarkMut.isPending ? orgMarkMut.variables?.userId
@@ -164,25 +151,6 @@ export const SkladchinaPage: FC = () => {
       console.error('markPaid failed', e);
       haptic.notify('error');
       setActionError('Не удалось отметить оплату. Попробуйте ещё раз.');
-    }
-  };
-
-  const handleRedistribute = async () => {
-    const confirmMsg =
-      `Перераспределить ${formatRubles(deficitKopecks)} ₽ на ${pendingCount} неоплативших? ` +
-      `Каждому ≈ ${perPendingRub.toLocaleString('ru-RU')} ₽. Уже оплативших не трогаем.`;
-    if (!window.confirm(confirmMsg)) return;
-    setActionError(null);
-    try {
-      haptic.impact('medium');
-      await redistributeMut.mutateAsync(s.id);
-      haptic.notify('success');
-      setToastMessage('Суммы пересчитаны.');
-      setDeficitDismissed(false);
-    } catch (e) {
-      console.error('redistribute failed', e);
-      haptic.notify('error');
-      setActionError('Не удалось перераспределить. Попробуйте ещё раз.');
     }
   };
 
@@ -269,16 +237,20 @@ export const SkladchinaPage: FC = () => {
     }
   };
 
-  const handleResolveDecline = async (p: SkladchinaParticipantDto, approve: boolean) => {
-    const who = `${p.firstName}${p.lastName ? ` ${p.lastName}` : ''}`;
-    const msg = approve
-      ? `Одобрить отказ ${who}? Участник будет освобождён от оплаты.`
-      : `Отклонить отказ ${who}? Участнику нужно будет оплатить счёт.`;
-    if (!window.confirm(msg)) return;
+  // Approve: a simple confirm. Reject (#7): the reason is collected by the row's inline form and
+  // passed here — the organizer must justify why the participant still owes.
+  const handleResolveDecline = async (p: SkladchinaParticipantDto, approve: boolean, rejectReason?: string) => {
+    if (approve) {
+      const who = `${p.firstName}${p.lastName ? ` ${p.lastName}` : ''}`;
+      if (!window.confirm(`Одобрить отказ ${who}? Участник будет освобождён от оплаты.`)) return;
+    } else if (!rejectReason || !rejectReason.trim()) {
+      setActionError('Укажите причину, по которой участник должен оплатить');
+      return;
+    }
     setActionError(null);
     try {
       haptic.impact('medium');
-      await resolveDeclineMut.mutateAsync({ id: s.id, userId: p.userId, approve });
+      await resolveDeclineMut.mutateAsync({ id: s.id, userId: p.userId, approve, rejectReason: rejectReason?.trim() });
       haptic.notify('success');
       setToastMessage(approve ? 'Отказ одобрен.' : 'Отказ отклонён.');
     } catch (e) {
@@ -444,6 +416,7 @@ export const SkladchinaPage: FC = () => {
           {s.myDeclineRejected && (
             <div className="rd-warn-block" style={{ marginBottom: 10 }}>
               Запрос на отказ отклонён — нужно оплатить счёт.
+              {s.myDeclineRejectNote && <div style={{ marginTop: 4 }}>Причина: «{s.myDeclineRejectNote}»</div>}
             </div>
           )}
           {s.myDeclineRequested && !s.myDeclineRejected && (
@@ -513,10 +486,17 @@ export const SkladchinaPage: FC = () => {
         <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
           {s.myStatus === 'paid' && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Вы оплатили</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--success, #22a06b)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span aria-hidden>✅</span> Вы оплатили
+              </div>
               {s.myDeclaredAmountKopecks != null && (
                 <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>
                   {formatRubles(s.myDeclaredAmountKopecks)} ₽
+                </div>
+              )}
+              {s.affectsReputation && (
+                <div style={{ fontSize: 12, color: 'var(--success, #22a06b)', marginTop: 4 }}>
+                  + к репутации — засчитается при закрытии сбора
                 </div>
               )}
             </>
@@ -537,37 +517,6 @@ export const SkladchinaPage: FC = () => {
               </div>
             </>
           )}
-        </div>
-      )}
-
-      {showDeficitPanel && (
-        <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
-          <div className="rd-section-sub-h" style={{ marginTop: 0 }}>
-            Не хватает {formatRubles(deficitKopecks)} ₽
-          </div>
-          <div className="rd-hint" style={{ marginBottom: 10 }}>
-            Можно разложить недостачу на {pendingCount}{' '}
-            {pendingCount === 1 ? 'неоплатившего' : 'неоплативших'} — по ≈{' '}
-            {perPendingRub.toLocaleString('ru-RU')} ₽. Уже оплативших не трогаем.
-          </div>
-          {actionError && <div className="rd-error">{actionError}</div>}
-          <div className="rd-form-actions">
-            <button
-              type="button"
-              className="rd-btn-primary"
-              onClick={handleRedistribute}
-              disabled={redistributeMut.isPending}
-            >
-              {redistributeMut.isPending ? 'Пересчитываем…' : 'Перераспределить на неоплативших'}
-            </button>
-            <button
-              type="button"
-              className="rd-btn-outline"
-              onClick={() => setDeficitDismissed(true)}
-            >
-              Оставить как есть
-            </button>
-          </div>
         </div>
       )}
 

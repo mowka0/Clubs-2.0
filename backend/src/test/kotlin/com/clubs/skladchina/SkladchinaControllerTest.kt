@@ -723,64 +723,6 @@ class SkladchinaControllerTest {
     }
 
     @Test
-    fun `redistribute spreads the deficit onto pending only, leaving paid untouched`() {
-        // A 3rd member makes the split meaningful (paid A, declined B, pending C).
-        val memberCId = UUID.randomUUID()
-        dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$memberCId', 3005, 'MemberC')")
-        dsl.execute("INSERT INTO memberships (user_id, club_id, status, role) VALUES ('$memberCId', '$clubId', 'active', 'member')")
-
-        // fixed_equal goal 90000, 3 participants → 30000 each
-        val id = createFromBody(
-            """
-            {
-              "title": "Court",
-              "paymentMode": "fixed_equal",
-              "totalGoalKopecks": 90000,
-              "paymentLink": "https://x.com",
-              "deadline": "${OffsetDateTime.now().plusDays(2)}",
-              "participants": [{"userId":"$memberAId"},{"userId":"$memberBId"},{"userId":"$memberCId"}]
-            }
-            """.trimIndent()
-        )
-        // A pays → collected 30000
-        mockMvc.perform(
-            post("/api/skladchinas/$id/mark-paid")
-                .header("Authorization", "Bearer $memberAToken")
-                .contentType(MediaType.APPLICATION_JSON).content("{}")
-        ).andExpect(status().isOk)
-        // B declines → still goal 90000, collected 30000, pending = {C}
-        mockMvc.perform(
-            post("/api/skladchinas/$id/decline").header("Authorization", "Bearer $memberBToken")
-        ).andExpect(status().isOk)
-
-        // Redistribute: deficit 60000 across pending {C} → C's share becomes 60000
-        mockMvc.perform(
-            post("/api/skladchinas/$id/redistribute").header("Authorization", "Bearer $organizerToken")
-        ).andExpect(status().isOk)
-
-        assertEquals(30000L, participantExpected(id, memberAId), "paid participant's share is untouched")
-        assertEquals(60000L, participantExpected(id, memberCId), "pending participant absorbs the deficit")
-    }
-
-    @Test
-    fun `redistribute is rejected for voluntary mode with 400`() {
-        val id = createVoluntarySkladchina(listOf(memberAId, memberBId))
-        mockMvc.perform(
-            post("/api/skladchinas/$id/redistribute").header("Authorization", "Bearer $organizerToken")
-        )
-            .andExpect(status().isBadRequest)
-    }
-
-    @Test
-    fun `redistribute by a non-creator returns 403`() {
-        val id = createSkladchina(listOf(memberAId, memberBId))
-        mockMvc.perform(
-            post("/api/skladchinas/$id/redistribute").header("Authorization", "Bearer $memberAToken")
-        )
-            .andExpect(status().isForbidden)
-    }
-
-    @Test
     fun `voluntary self mark-paid without an amount returns 400 (A-1 contract)`() {
         // A-1 moved "amount required" from the DTO @NotNull to the service (per-mode). A voluntary
         // self-mark with an empty body must still be rejected — fixed modes are the only ones that
@@ -831,7 +773,7 @@ class SkladchinaControllerTest {
                 .header("Authorization", "Bearer $organizerToken")
         ).andExpect(status().isBadRequest)
         mockMvc.perform(
-            post("/api/skladchinas/$id/redistribute").header("Authorization", "Bearer $organizerToken")
+            post("/api/skladchinas/$id/participants/$memberAId/unmark").header("Authorization", "Bearer $organizerToken")
         ).andExpect(status().isBadRequest)
     }
 
@@ -984,6 +926,70 @@ class SkladchinaControllerTest {
         ).andExpect(status().isBadRequest)
     }
 
+    @Test
+    fun `split_bill excludeSelf drops the organizer and divides across the rest`() {
+        // Organizer also attended; with excludeSelf the bill 80000 splits across A and B only.
+        val eventId = createEventWithAttendance(attended = listOf(organizerId, memberAId, memberBId))
+        val id = createFromBody(
+            """
+            {
+              "title": "Счёт", "template": "split_bill", "eventId": "$eventId", "excludeSelf": true,
+              "paymentMode": "fixed_equal", "totalGoalKopecks": 80000, "paymentLink": "https://pay.me",
+              "deadline": "${OffsetDateTime.now().plusDays(2)}", "participants": []
+            }
+            """.trimIndent()
+        )
+        mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.participantCount").value(2))
+            .andExpect(jsonPath("$.myStatus").doesNotExist()) // organizer is not a participant
+        assertEquals(40000L, participantExpected(id, memberAId))
+        assertEquals(40000L, participantExpected(id, memberBId))
+        assertEquals(null, participantExpected(id, organizerId), "organizer excluded from the split")
+    }
+
+    @Test
+    fun `split_bill always affects reputation, both modes, bypassing the important-sbor gates`() {
+        // No affectsReputation in the body, voluntary mode, deadline only +2h (would fail the 24h
+        // gate for a custom важный сбор) — split's verified anchor bypasses the gates entirely.
+        val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        val id = createFromBody(
+            """
+            {
+              "title": "Счёт", "template": "split_bill", "eventId": "$eventId",
+              "paymentMode": "voluntary", "totalGoalKopecks": 90000, "paymentLink": "https://pay.me",
+              "deadline": "${OffsetDateTime.now().plusHours(2)}", "participants": []
+            }
+            """.trimIndent()
+        )
+        mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.affectsReputation").value(true))
+    }
+
+    @Test
+    fun `request-decline with under-48h-left pushes the deadline out to ~48h`() {
+        val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
+        val id = createFromBody(
+            """
+            {
+              "title": "Счёт", "template": "split_bill", "eventId": "$eventId",
+              "paymentMode": "fixed_equal", "totalGoalKopecks": 90000, "paymentLink": "https://pay.me",
+              "deadline": "${OffsetDateTime.now().plusHours(3)}", "participants": []
+            }
+            """.trimIndent()
+        )
+        mockMvc.perform(
+            post("/api/skladchinas/$id/request-decline")
+                .header("Authorization", "Bearer $memberAToken")
+                .contentType(MediaType.APPLICATION_JSON).content("""{"reason":"мало времени"}""")
+        ).andExpect(status().isOk)
+        // The organizer now has ~48h (>47h) to resolve, regardless of the original 3h deadline.
+        val deadline = dsl.fetchOne("SELECT deadline FROM skladchinas WHERE id = ?", id)!!
+            .get(0, OffsetDateTime::class.java)!!
+        assertTrue(deadline.isAfter(OffsetDateTime.now().plusHours(47)), "deadline extended to ~48h")
+    }
+
     // ---- split_bill decline-with-approval (V28) ----
 
     @Test
@@ -1032,14 +1038,23 @@ class SkladchinaControllerTest {
                 .content("""{"reason":"не хочу"}""")
         ).andExpect(status().isOk)
 
+        // V29: rejecting without a reason is refused.
         mockMvc.perform(
             post("/api/skladchinas/$id/participants/$memberAId/resolve-decline")
                 .header("Authorization", "Bearer $organizerToken")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"approve":false}""")
+        ).andExpect(status().isBadRequest)
+
+        mockMvc.perform(
+            post("/api/skladchinas/$id/participants/$memberAId/resolve-decline")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"approve":false,"rejectReason":"ты был, плати"}""")
         ).andExpect(status().isOk)
         assertEquals("pending", participantStatus(id, memberAId))
         assertTrue(participantDeclineRejected(id, memberAId))
+        assertEquals("ты был, плати", participantDeclineRejectNote(id, memberAId))
 
         // Re-request is blocked — the decline path is closed.
         mockMvc.perform(
@@ -1225,6 +1240,12 @@ class SkladchinaControllerTest {
             "SELECT decline_rejected FROM skladchina_participants WHERE skladchina_id = ? AND user_id = ?",
             skladchinaId, userId
         )?.get(0) as Boolean?) ?: false
+
+    private fun participantDeclineRejectNote(skladchinaId: UUID, userId: UUID): String? =
+        dsl.fetchOne(
+            "SELECT decline_reject_note FROM skladchina_participants WHERE skladchina_id = ? AND user_id = ?",
+            skladchinaId, userId
+        )?.get(0) as String?
 
     private fun skladchinaStatus(skladchinaId: UUID): String =
         dsl.fetchOne("SELECT status::text FROM skladchinas WHERE id = ?", skladchinaId)!!

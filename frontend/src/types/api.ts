@@ -415,6 +415,7 @@ export interface SkladchinaParticipantDto {
   declineRequested: boolean;
   declineNote: string | null;
   declineRejected: boolean;
+  declineRejectNote: string | null;       // V29: organizer's reason if the decline was rejected
 }
 
 export interface SkladchinaDetailDto {
@@ -446,6 +447,7 @@ export interface SkladchinaDetailDto {
   declineRequiresApproval: boolean;
   myDeclineRequested: boolean;
   myDeclineRejected: boolean;
+  myDeclineRejectNote: string | null;     // V29: organizer's reason for rejecting my decline
   participants: SkladchinaParticipantDto[] | null;
   participantCount: number;
   paidCount: number;
@@ -483,6 +485,7 @@ export interface CreateSkladchinaRequest {
   photoUrl?: string | null;
   template?: SkladchinaTemplate;          // default "custom" server-side
   eventId?: string | null;                // split_bill: the source event
+  excludeSelf?: boolean;                  // split_bill: drop the organizer from the charged attendees
   paymentMode: SkladchinaMode;
   totalGoalKopecks?: number | null;
   paymentLink: string;

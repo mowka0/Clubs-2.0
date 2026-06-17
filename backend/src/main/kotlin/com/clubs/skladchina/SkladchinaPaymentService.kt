@@ -1,5 +1,6 @@
 package com.clubs.skladchina
 
+import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
@@ -10,6 +11,7 @@ import com.clubs.generated.jooq.enums.SkladchinaStatus
 import com.clubs.skladchina.template.DeclinePolicy
 import com.clubs.skladchina.template.SkladchinaTemplateRegistry
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
@@ -24,9 +26,11 @@ import java.util.UUID
 @Service
 class SkladchinaPaymentService(
     private val skladchinaRepository: SkladchinaRepository,
+    private val clubRepository: ClubRepository,
     private val templateRegistry: SkladchinaTemplateRegistry,
     private val queryService: SkladchinaQueryService,
-    private val lifecycleService: SkladchinaLifecycleService
+    private val lifecycleService: SkladchinaLifecycleService,
+    private val eventPublisher: ApplicationEventPublisher
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaPaymentService::class.java)
 
@@ -126,22 +130,49 @@ class SkladchinaPaymentService(
             return queryService.getDetail(skladchinaId, callerId) // idempotent — request already open
         }
 
+        val now = OffsetDateTime.now()
         val updated = skladchinaRepository.requestDecline(
-            skladchinaId, callerId, note.take(DECLINE_NOTE_MAX), OffsetDateTime.now()
+            skladchinaId, callerId, note.take(DECLINE_NOTE_MAX), now
         )
         if (updated == 0) throw ConflictException("Сбор уже закрыт — обновите экран")
         log.info("Skladchina decline-request: id={} userId={}", skladchinaId, callerId)
+
+        // #5: the organizer must always have a full window to resolve the request. If the deadline
+        // is closer than that, push it out so there are exactly 48h from now (extendDeadline only
+        // ever moves it OUT). Otherwise the request could expire (→ −40) before anyone can answer.
+        skladchinaRepository.extendDeadline(skladchinaId, now.plusHours(DECLINE_RESOLUTION_WINDOW_HOURS))
+
+        // #6: notify the organizer (DM + button) AFTER commit — they decide approve/reject.
+        val clubName = clubRepository.findById(skladchina.clubId)?.name ?: ""
+        eventPublisher.publishEvent(
+            SkladchinaDeclineRequestedEvent(
+                skladchinaId = skladchinaId,
+                creatorId = skladchina.creatorId,
+                requesterUserId = callerId,
+                clubName = clubName,
+                title = skladchina.title,
+                reason = note.take(DECLINE_NOTE_MAX)
+            )
+        )
         return queryService.getDetail(skladchinaId, callerId)
     }
 
     /**
-     * V28: the organizer resolves a participant's decline request. Approve → `declined` (excused);
-     * reject → decline path closed (`decline_rejected`), participant stays `pending` and must pay.
+     * V28/V29: the organizer resolves a participant's decline request. Approve → `declined`
+     * (excused); reject → decline path closed (`decline_rejected`), participant stays `pending` and
+     * must pay. Rejecting REQUIRES a reason (#7) — the organizer must justify why the participant
+     * still owes; the rejected participant is then DM'd that reason with a button to the pool.
      * Creator-only. Approving the last pending participant can auto-close the skladchina.
      */
     @Transactional
-    fun resolveDecline(skladchinaId: UUID, callerId: UUID, targetUserId: UUID, approve: Boolean): SkladchinaDetailDto {
-        requireActiveAsCreator(skladchinaId, callerId)
+    fun resolveDecline(
+        skladchinaId: UUID,
+        callerId: UUID,
+        targetUserId: UUID,
+        approve: Boolean,
+        rejectReason: String?
+    ): SkladchinaDetailDto {
+        val skladchina = requireActiveAsCreator(skladchinaId, callerId)
         val participant = skladchinaRepository.findParticipant(skladchinaId, targetUserId)
             ?: throw NotFoundException("Participant not found in this skladchina")
         if (participant.status != SkladchinaParticipantStatus.pending || participant.declineRequestedAt == null) {
@@ -154,9 +185,24 @@ class SkladchinaPaymentService(
             log.info("Skladchina decline-approved: id={} target={} by={}", skladchinaId, targetUserId, callerId)
             lifecycleService.maybeAutoCloseAfterStateChange(skladchinaId)
         } else {
-            val updated = skladchinaRepository.rejectDeclineRequest(skladchinaId, targetUserId)
+            // #7: a rejection must be justified — without a reason the organizer can't refuse.
+            val reason = rejectReason?.trim().orEmpty()
+            if (reason.isEmpty()) throw ValidationException("Укажите причину, по которой участник должен оплатить")
+            val updated = skladchinaRepository.rejectDeclineRequest(skladchinaId, targetUserId, reason.take(DECLINE_NOTE_MAX))
             if (updated == 0) throw ConflictException("Сбор уже закрыт — обновите экран")
             log.info("Skladchina decline-rejected: id={} target={} by={}", skladchinaId, targetUserId, callerId)
+
+            // Notify the rejected participant (DM + button) AFTER commit — they must still pay.
+            val clubName = clubRepository.findById(skladchina.clubId)?.name ?: ""
+            eventPublisher.publishEvent(
+                SkladchinaDeclineRejectedEvent(
+                    skladchinaId = skladchinaId,
+                    participantUserId = targetUserId,
+                    clubName = clubName,
+                    title = skladchina.title,
+                    reason = reason.take(DECLINE_NOTE_MAX)
+                )
+            )
         }
         return queryService.getDetail(skladchinaId, callerId)
     }
@@ -225,57 +271,6 @@ class SkladchinaPaymentService(
         return queryService.getDetail(skladchinaId, callerId)
     }
 
-    /**
-     * A-3: the organizer spreads the remaining deficit (goal − collected) across the
-     * still-`pending` participants. Paid participants are NEVER touched; declined / expired /
-     * released are excluded (not pending). Fixed modes only (voluntary has no fixed shares).
-     * Remainder to the last participant (sorted by userId), deterministic like create.
-     * Repeatable. After it, the (paid + pending) expected-sum equals the goal again
-     * (collected + deficit = goal); declined/expired/released keep their stale shares.
-     */
-    @Transactional
-    fun redistributeDeficit(skladchinaId: UUID, callerId: UUID): SkladchinaDetailDto {
-        val skladchina = requireActiveAsCreator(skladchinaId, callerId)
-        if (skladchina.paymentMode == SkladchinaMode.voluntary) {
-            throw ValidationException("Перераспределение доступно только для сборов с фиксированными суммами")
-        }
-        val goal = skladchina.totalGoalKopecks
-            ?: throw ValidationException("У сбора нет цели для перераспределения")
-        val collected = skladchinaRepository.sumCollectedKopecks(skladchinaId)
-        val deficit = goal - collected
-        if (deficit <= 0) {
-            throw ValidationException("Цель уже собрана — перераспределять нечего")
-        }
-        val pending = skladchinaRepository.findParticipants(skladchinaId)
-            .filter { it.status == SkladchinaParticipantStatus.pending }
-            .sortedBy { it.userId }
-        if (pending.isEmpty()) {
-            throw ValidationException("Нет неоплативших участников для перераспределения")
-        }
-        val n = pending.size
-        if (deficit < n) {
-            // Sub-kopeck-per-head leftover: nothing meaningful to spread, and a 0-share
-            // would violate the expected_amount_kopecks > 0 CHECK.
-            throw ValidationException("Остаток слишком мал для перераспределения")
-        }
-        val baseShare = deficit / n
-        val remainder = deficit - baseShare * n
-        pending.forEachIndexed { idx, p ->
-            val amount = if (idx == n - 1) baseShare + remainder else baseShare
-            // setExpectedAmount is guarded by WHERE status='pending'. If a participant was
-            // concurrently paid/closed between our read and this UPDATE, it returns 0 — the
-            // deficit would be under-distributed and the expected-sum=goal invariant broken.
-            // Fail clean (the @Transactional rolls back every prior UPDATE) so the organizer
-            // retries against fresh state rather than silently dropping someone's share.
-            if (skladchinaRepository.setExpectedAmount(skladchinaId, p.userId, amount) == 0) {
-                throw ConflictException("Состав сбора изменился — обновите экран и попробуйте снова")
-            }
-        }
-        log.info("Skladchina redistribute: id={} by={} deficit={} pending={} baseShare={}",
-            skladchinaId, callerId, deficit, n, baseShare)
-        return queryService.getDetail(skladchinaId, callerId)
-    }
-
     /** Loads a skladchina for an organizer-only mutation: must exist, caller must be creator, must be active. */
     private fun requireActiveAsCreator(skladchinaId: UUID, callerId: UUID): Skladchina {
         val skladchina = skladchinaRepository.findById(skladchinaId)
@@ -327,5 +322,7 @@ class SkladchinaPaymentService(
         // Voluntary sanity cap: 100 000 ₽ — statistics hygiene, not an anti-abuse bound.
         private const val DECLARED_AMOUNT_MAX_KOPECKS = 10_000_000L
         private const val DECLINE_NOTE_MAX = 500
+        // #5: guarantee the organizer this many hours to resolve a decline request.
+        private const val DECLINE_RESOLUTION_WINDOW_HOURS = 48L
     }
 }

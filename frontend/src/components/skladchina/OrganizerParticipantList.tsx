@@ -1,4 +1,4 @@
-import { FC, CSSProperties } from 'react';
+import { FC, CSSProperties, useState } from 'react';
 import type { SkladchinaParticipantDto } from '../../types/api';
 
 interface OrganizerParticipantListProps {
@@ -9,8 +9,9 @@ interface OrganizerParticipantListProps {
   busyUserId?: string | null;
   onMarkPaid?: (p: SkladchinaParticipantDto) => void;
   onUnmark?: (p: SkladchinaParticipantDto) => void;
-  // V28: organizer resolves a participant's decline request.
-  onResolveDecline?: (p: SkladchinaParticipantDto, approve: boolean) => void;
+  // V28/V29: organizer resolves a participant's decline request. Reject (approve=false) carries a
+  // mandatory reason — why the participant must still pay.
+  onResolveDecline?: (p: SkladchinaParticipantDto, approve: boolean, rejectReason?: string) => void;
 }
 
 const rowActionStyle: CSSProperties = {
@@ -54,6 +55,10 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
   onUnmark,
   onResolveDecline,
 }) => {
+  // V29: which row is in "reject with reason" mode, and its draft reason.
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectText, setRejectText] = useState('');
+
   const sorted = [...participants].sort((a, b) => {
     const order: Record<string, number> = { paid: 0, pending: 1, declined: 2, released: 3, expired_no_response: 4 };
     return (order[a.status] ?? 99) - (order[b.status] ?? 99);
@@ -124,19 +129,49 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
                   {p.declineNote && (
                     <div className="rd-met" style={{ marginBottom: 8 }}>«{p.declineNote}»</div>
                   )}
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button type="button" style={rowActionStyle} disabled={busy} onClick={() => onResolveDecline!(p, true)}>
-                      {busy ? '…' : 'Одобрить отказ'}
-                    </button>
-                    <button
-                      type="button"
-                      style={{ ...rowActionStyle, color: 'var(--text-dim)' }}
-                      disabled={busy}
-                      onClick={() => onResolveDecline!(p, false)}
-                    >
-                      Отклонить
-                    </button>
-                  </div>
+                  {rejectingId === p.userId ? (
+                    <div>
+                      <textarea
+                        className="rd-textarea"
+                        rows={2}
+                        placeholder="Почему участник должен оплатить (обязательно)"
+                        value={rejectText}
+                        onChange={(e) => setRejectText(e.target.value)}
+                        maxLength={500}
+                      />
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                        <button
+                          type="button"
+                          style={rowActionStyle}
+                          disabled={busy || !rejectText.trim()}
+                          onClick={() => { onResolveDecline!(p, false, rejectText); setRejectingId(null); setRejectText(''); }}
+                        >
+                          {busy ? '…' : 'Отклонить заявку'}
+                        </button>
+                        <button
+                          type="button"
+                          style={{ ...rowActionStyle, color: 'var(--text-dim)' }}
+                          onClick={() => { setRejectingId(null); setRejectText(''); }}
+                        >
+                          Отмена
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" style={rowActionStyle} disabled={busy} onClick={() => onResolveDecline!(p, true)}>
+                        {busy ? '…' : 'Одобрить отказ'}
+                      </button>
+                      <button
+                        type="button"
+                        style={{ ...rowActionStyle, color: 'var(--text-dim)' }}
+                        disabled={busy}
+                        onClick={() => { setRejectingId(p.userId); setRejectText(''); }}
+                      >
+                        Отклонить
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -162,4 +162,15 @@ open class SkladchinaParticipantsDao(configuration: Configuration?) : DAOImpl<Sk
      * Fetch records that have <code>decline_rejected IN (values)</code>
      */
     fun fetchByDeclineRejected(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetch(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>decline_reject_note BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfDeclineRejectNote(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetchRange(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.DECLINE_REJECT_NOTE, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>decline_reject_note IN (values)</code>
+     */
+    fun fetchByDeclineRejectNote(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.SkladchinaParticipants> = fetch(SkladchinaParticipants.SKLADCHINA_PARTICIPANTS.DECLINE_REJECT_NOTE, *values)
 }

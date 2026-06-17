@@ -49,5 +49,6 @@ data class SkladchinaParticipantInfo(
     val paidAt: OffsetDateTime?,
     val declineNote: String?,
     val declineRequestedAt: OffsetDateTime?,
-    val declineRejected: Boolean
+    val declineRejected: Boolean,
+    val declineRejectNote: String?
 )

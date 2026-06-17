@@ -21,6 +21,9 @@ data class CreateSkladchinaRequest(
     val template: String = "custom",               // "custom" | "split_bill" | "gear" | "booking" | "birthday"
     // split_bill: the source event whose bill is being split. Ignored by other templates.
     val eventId: UUID? = null,
+    // split_bill: drop the organizer from the attendees being charged (they don't owe a share).
+    // Equal mode then divides the bill across the remaining attendees. Ignored by other templates.
+    val excludeSelf: Boolean = false,
 
     @field:NotNull
     val paymentMode: String,                       // "fixed_equal" | "fixed_individual" | "voluntary"
@@ -65,10 +68,13 @@ data class RequestDeclineRequest(
     val reason: String
 )
 
-// V28: organizer resolves a decline request.
+// V28/V29: organizer resolves a decline request. Rejecting (approve=false) requires a reason
+// (why the participant must still pay) — validated in the service, since it's conditional on approve.
 data class ResolveDeclineRequest(
     @field:NotNull
-    val approve: Boolean
+    val approve: Boolean,
+    @field:Size(max = 500)
+    val rejectReason: String? = null
 )
 
 data class SkladchinaDetailDto(
@@ -105,6 +111,7 @@ data class SkladchinaDetailDto(
     val declineRequiresApproval: Boolean,          // template policy — frontend uses the request flow
     val myDeclineRequested: Boolean,               // caller has an open decline request awaiting the organizer
     val myDeclineRejected: Boolean,                // caller's decline was rejected — must pay
+    val myDeclineRejectNote: String?,              // V29: organizer's reason for rejecting the caller's decline
 
     val participants: List<SkladchinaParticipantDto>?,   // non-null ONLY for organizer
     val participantCount: Int,
@@ -123,7 +130,8 @@ data class SkladchinaParticipantDto(
     // V28: open decline request (organizer view) — show the note + approve/reject controls.
     val declineRequested: Boolean,
     val declineNote: String?,
-    val declineRejected: Boolean
+    val declineRejected: Boolean,
+    val declineRejectNote: String?                 // V29: organizer's reason if the decline was rejected
 )
 
 data class MySkladchinaListItemDto(

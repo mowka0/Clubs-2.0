@@ -87,6 +87,7 @@ class SkladchinaMapper {
             declineRequiresApproval = declineRequiresApproval,
             myDeclineRequested = myParticipant?.declineRequestedAt != null,
             myDeclineRejected = myParticipant?.declineRejected ?: false,
+            myDeclineRejectNote = myParticipant?.declineRejectNote,
             participants = if (isOrganizerView) participants.map(::toParticipantDto) else null,
             participantCount = participants.size,
             paidCount = paidCount
@@ -131,6 +132,7 @@ class SkladchinaMapper {
             paidAt = info.paidAt,
             declineRequested = info.declineRequestedAt != null,
             declineNote = info.declineNote,
-            declineRejected = info.declineRejected
+            declineRejected = info.declineRejected,
+            declineRejectNote = info.declineRejectNote
         )
 }

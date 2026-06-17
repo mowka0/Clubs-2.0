@@ -91,7 +91,7 @@ class SkladchinaController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<SkladchinaDetailDto> {
         log.info("Skladchina resolve-decline: id={} target={} by={} approve={}", id, userId, user.userId, request.approve)
-        return ResponseEntity.ok(paymentService.resolveDecline(id, user.userId, userId, request.approve))
+        return ResponseEntity.ok(paymentService.resolveDecline(id, user.userId, userId, request.approve, request.rejectReason))
     }
 
     // A-2: organizer marks a participant paid ("получил наличкой"). Creator-only (checked in service).
@@ -114,16 +114,6 @@ class SkladchinaController(
     ): ResponseEntity<SkladchinaDetailDto> {
         log.info("Skladchina organizer-unmark: id={} target={} by={}", id, userId, user.userId)
         return ResponseEntity.ok(paymentService.organizerUnmarkPaid(id, user.userId, userId))
-    }
-
-    // A-3: organizer redistributes the deficit across pending participants.
-    @PostMapping("/api/skladchinas/{id}/redistribute")
-    fun redistribute(
-        @PathVariable id: UUID,
-        @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<SkladchinaDetailDto> {
-        log.info("Skladchina redistribute: id={} by={}", id, user.userId)
-        return ResponseEntity.ok(paymentService.redistributeDeficit(id, user.userId))
     }
 
     @PostMapping("/api/skladchinas/{id}/close")

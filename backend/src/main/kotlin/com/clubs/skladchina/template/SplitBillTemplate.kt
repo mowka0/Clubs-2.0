@@ -71,7 +71,11 @@ class SplitBillTemplate(
         // Only still-active members can be in the skladchina (page access + DM). Someone who
         // attended but has since left the club is silently dropped (their share is uncollectable here).
         val notActive = skladchinaRepository.findNonActiveMembers(clubId, attendedAll)
-        val attended = attendedAll.filter { it !in notActive }
+        val attended = attendedAll
+            .filter { it !in notActive }
+            // "Исключить себя": the organizer attended but isn't being charged — drop them so the
+            // equal share divides across the rest and no payment panel is shown to them (not a participant).
+            .filter { !request.excludeSelf || it != creatorId }
         if (attended.size < MIN_ATTENDED) {
             throw ValidationException("Нужно минимум $MIN_ATTENDED пришедших участника для разделения счёта")
         }

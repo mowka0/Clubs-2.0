@@ -68,6 +68,10 @@ open class SkladchinaParticipantsRecord private constructor() : UpdatableRecordI
         set(value): Unit = set(11, value)
         get(): Boolean? = get(11) as Boolean?
 
+    open var declineRejectNote: String?
+        set(value): Unit = set(12, value)
+        get(): String? = get(12) as String?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -77,7 +81,7 @@ open class SkladchinaParticipantsRecord private constructor() : UpdatableRecordI
     /**
      * Create a detached, initialised SkladchinaParticipantsRecord
      */
-    constructor(skladchinaId: UUID, userId: UUID, expectedAmountKopecks: Long? = null, declaredAmountKopecks: Long? = null, status: SkladchinaParticipantStatus? = null, paidAt: OffsetDateTime? = null, declinedAt: OffsetDateTime? = null, reputationApplied: Boolean? = null, createdAt: OffsetDateTime? = null, declineNote: String? = null, declineRequestedAt: OffsetDateTime? = null, declineRejected: Boolean? = null): this() {
+    constructor(skladchinaId: UUID, userId: UUID, expectedAmountKopecks: Long? = null, declaredAmountKopecks: Long? = null, status: SkladchinaParticipantStatus? = null, paidAt: OffsetDateTime? = null, declinedAt: OffsetDateTime? = null, reputationApplied: Boolean? = null, createdAt: OffsetDateTime? = null, declineNote: String? = null, declineRequestedAt: OffsetDateTime? = null, declineRejected: Boolean? = null, declineRejectNote: String? = null): this() {
         this.skladchinaId = skladchinaId
         this.userId = userId
         this.expectedAmountKopecks = expectedAmountKopecks
@@ -90,6 +94,7 @@ open class SkladchinaParticipantsRecord private constructor() : UpdatableRecordI
         this.declineNote = declineNote
         this.declineRequestedAt = declineRequestedAt
         this.declineRejected = declineRejected
+        this.declineRejectNote = declineRejectNote
         resetChangedOnNotNull()
     }
 
@@ -110,6 +115,7 @@ open class SkladchinaParticipantsRecord private constructor() : UpdatableRecordI
             this.declineNote = value.declineNote
             this.declineRequestedAt = value.declineRequestedAt
             this.declineRejected = value.declineRejected
+            this.declineRejectNote = value.declineRejectNote
             resetChangedOnNotNull()
         }
     }

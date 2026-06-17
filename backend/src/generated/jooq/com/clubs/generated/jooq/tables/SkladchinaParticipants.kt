@@ -146,6 +146,12 @@ open class SkladchinaParticipants(
      */
     val DECLINE_REJECTED: TableField<SkladchinaParticipantsRecord, Boolean?> = createField(DSL.name("decline_rejected"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "")
 
+    /**
+     * The column
+     * <code>public.skladchina_participants.decline_reject_note</code>.
+     */
+    val DECLINE_REJECT_NOTE: TableField<SkladchinaParticipantsRecord, String?> = createField(DSL.name("decline_reject_note"), SQLDataType.CLOB, this, "")
+
     private constructor(alias: Name, aliased: Table<SkladchinaParticipantsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<SkladchinaParticipantsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<SkladchinaParticipantsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

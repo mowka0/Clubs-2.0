@@ -23,6 +23,33 @@ data class SkladchinaCreatedEvent(
 )
 
 /**
+ * Published after a participant opens a decline request (REQUIRES_APPROVAL templates, V28) and the
+ * transaction has committed. Listener DMs the organizer with the requester + reason and a button
+ * to the skladchina page.
+ */
+data class SkladchinaDeclineRequestedEvent(
+    val skladchinaId: UUID,
+    val creatorId: UUID,
+    val requesterUserId: UUID,
+    val clubName: String,
+    val title: String,
+    val reason: String
+)
+
+/**
+ * Published after the organizer REJECTS a decline request (V29) and the transaction has committed.
+ * Listener DMs the rejected participant with the organizer's reason and a button to the skladchina
+ * page (they must still pay).
+ */
+data class SkladchinaDeclineRejectedEvent(
+    val skladchinaId: UUID,
+    val participantUserId: UUID,
+    val clubName: String,
+    val title: String,
+    val reason: String
+)
+
+/**
  * Published after a skladchina is closed (manual, goal-reached, all-answered, or
  * scheduler auto-close) and the transaction has committed. Listener notifies
  * the creator with a summary.

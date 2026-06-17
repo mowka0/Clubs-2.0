@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
@@ -59,6 +59,7 @@ function buildDetail(overrides: Partial<SkladchinaDetailDto> = {}): SkladchinaDe
     declineRequiresApproval: false,
     myDeclineRequested: false,
     myDeclineRejected: false,
+    myDeclineRejectNote: null,
     participants: null,
     participantCount: 5,
     paidCount: 1,
@@ -149,13 +150,13 @@ describe('SkladchinaPage — reputation redesign UI', () => {
         userId: 'u-released', firstName: 'Анна', lastName: null, avatarUrl: null,
         expectedAmountKopecks: 100000, declaredAmountKopecks: null,
         status: 'released', paidAt: null,
-        declineRequested: false, declineNote: null, declineRejected: false,
+        declineRequested: false, declineNote: null, declineRejected: false, declineRejectNote: null,
       },
       {
         userId: 'u-expired', firstName: 'Глеб', lastName: null, avatarUrl: null,
         expectedAmountKopecks: 100000, declaredAmountKopecks: null,
         status: 'expired_no_response', paidAt: null,
-        declineRequested: false, declineNote: null, declineRejected: false,
+        declineRequested: false, declineNote: null, declineRejected: false, declineRejectNote: null,
       },
     ];
     mockDetail(buildDetail({
@@ -197,18 +198,18 @@ describe('SkladchinaPage — Phase A', () => {
     expect(await screen.findByText('Скинулись 1 из 5')).toBeInTheDocument();
   });
 
-  it('A-2/A-3: организатор fixed active — кнопки отметки и панель «Не хватает X ₽»', async () => {
+  it('A-2: организатор fixed active — кнопки «Отметить оплату» / «Отменить» (без перераспределения)', async () => {
     const participants: SkladchinaParticipantDto[] = [
       {
         userId: 'u-pending', firstName: 'Иван', lastName: null, avatarUrl: null,
         expectedAmountKopecks: 100000, declaredAmountKopecks: null, status: 'pending', paidAt: null,
-        declineRequested: false, declineNote: null, declineRejected: false,
+        declineRequested: false, declineNote: null, declineRejected: false, declineRejectNote: null,
       },
       {
         userId: 'u-paid', firstName: 'Пётр', lastName: null, avatarUrl: null,
         expectedAmountKopecks: 100000, declaredAmountKopecks: 100000, status: 'paid',
         paidAt: new Date().toISOString(),
-        declineRequested: false, declineNote: null, declineRejected: false,
+        declineRequested: false, declineNote: null, declineRejected: false, declineRejectNote: null,
       },
     ];
     mockDetail(buildDetail({
@@ -223,8 +224,9 @@ describe('SkladchinaPage — Phase A', () => {
 
     expect(await screen.findByText('Отметить оплату')).toBeInTheDocument(); // pending row
     expect(screen.getByText('Отменить')).toBeInTheDocument();               // paid row
-    expect(screen.getByText('Не хватает 4 000 ₽')).toBeInTheDocument();     // 500000 − 100000
-    expect(screen.getByText('Перераспределить на неоплативших')).toBeInTheDocument();
+    // Redistribution removed — no deficit panel anymore.
+    expect(screen.queryByText(/Не хватает/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Перераспределить на неоплативших')).not.toBeInTheDocument();
   });
 
   it('A-2: для voluntary у организатора нет кнопок отметки оплаты', async () => {
@@ -232,7 +234,7 @@ describe('SkladchinaPage — Phase A', () => {
       {
         userId: 'u-pending', firstName: 'Иван', lastName: null, avatarUrl: null,
         expectedAmountKopecks: null, declaredAmountKopecks: null, status: 'pending', paidAt: null,
-        declineRequested: false, declineNote: null, declineRejected: false,
+        declineRequested: false, declineNote: null, declineRejected: false, declineRejectNote: null,
       },
     ];
     mockDetail(buildDetail({
@@ -283,7 +285,7 @@ describe('SkladchinaPage — decline-with-approval (V28)', () => {
       {
         userId: 'u-1', firstName: 'Иван', lastName: null, avatarUrl: null,
         expectedAmountKopecks: 100000, declaredAmountKopecks: null, status: 'pending', paidAt: null,
-        declineRequested: true, declineNote: 'не ел, только смотрел', declineRejected: false,
+        declineRequested: true, declineNote: 'не ел, только смотрел', declineRejected: false, declineRejectNote: null,
       },
     ];
     mockDetail(buildDetail({
@@ -299,5 +301,29 @@ describe('SkladchinaPage — decline-with-approval (V28)', () => {
     expect(screen.getByText('«не ел, только смотрел»')).toBeInTheDocument();
     expect(screen.getByText('Одобрить отказ')).toBeInTheDocument();
     expect(screen.getByText('Отклонить')).toBeInTheDocument();
+  });
+
+  it('V29: «Отклонить» открывает поле причины, кнопка отказа активна только с текстом', async () => {
+    const participants: SkladchinaParticipantDto[] = [
+      {
+        userId: 'u-1', firstName: 'Иван', lastName: null, avatarUrl: null,
+        expectedAmountKopecks: 100000, declaredAmountKopecks: null, status: 'pending', paidAt: null,
+        declineRequested: true, declineNote: 'не хочу', declineRejected: false, declineRejectNote: null,
+      },
+    ];
+    mockDetail(buildDetail({
+      declineRequiresApproval: true, paymentMode: 'fixed_equal', isOrganizerView: true,
+      myStatus: null, participants,
+    }));
+    renderPage();
+
+    fireEvent.click(await screen.findByText('Отклонить'));
+    const reason = screen.getByPlaceholderText('Почему участник должен оплатить (обязательно)');
+    expect(reason).toBeInTheDocument();
+    // Confirm button disabled until a reason is typed.
+    const confirm = screen.getByText('Отклонить заявку');
+    expect(confirm).toBeDisabled();
+    fireEvent.change(reason, { target: { value: 'ты был на событии' } });
+    expect(confirm).not.toBeDisabled();
   });
 });

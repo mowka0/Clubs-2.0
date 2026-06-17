@@ -54,9 +54,17 @@ export function requestDeclineSkladchina(id: string, reason: string): Promise<Sk
   return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/request-decline`, { reason });
 }
 
-// V28: organizer approves/rejects a participant's decline request.
-export function resolveDeclineSkladchina(id: string, userId: string, approve: boolean): Promise<SkladchinaDetailDto> {
-  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/participants/${userId}/resolve-decline`, { approve });
+// V28/V29: organizer approves/rejects a participant's decline request. Rejecting requires a reason.
+export function resolveDeclineSkladchina(
+  id: string,
+  userId: string,
+  approve: boolean,
+  rejectReason?: string,
+): Promise<SkladchinaDetailDto> {
+  return apiClient.post<SkladchinaDetailDto>(
+    `/api/skladchinas/${id}/participants/${userId}/resolve-decline`,
+    { approve, rejectReason },
+  );
 }
 
 export function closeSkladchina(id: string): Promise<SkladchinaDetailDto> {
@@ -71,9 +79,4 @@ export function organizerMarkPaidParticipant(id: string, userId: string): Promis
 // A-2 (toggle): organizer reverts a participant's payment back to pending.
 export function organizerUnmarkParticipant(id: string, userId: string): Promise<SkladchinaDetailDto> {
   return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/participants/${userId}/unmark`);
-}
-
-// A-3: organizer redistributes the remaining deficit across pending participants.
-export function redistributeSkladchina(id: string): Promise<SkladchinaDetailDto> {
-  return apiClient.post<SkladchinaDetailDto>(`/api/skladchinas/${id}/redistribute`);
 }

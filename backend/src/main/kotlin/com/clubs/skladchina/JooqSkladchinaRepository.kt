@@ -4,6 +4,7 @@ import com.clubs.common.dto.PageResponse
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
 import com.clubs.generated.jooq.enums.SkladchinaStatus
+import com.clubs.generated.jooq.enums.SkladchinaTemplate
 import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import com.clubs.generated.jooq.tables.references.SKLADCHINAS
@@ -307,7 +308,8 @@ class JooqSkladchinaRepository(
             SKLADCHINA_PARTICIPANTS.PAID_AT,
             SKLADCHINA_PARTICIPANTS.DECLINE_NOTE,
             SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT,
-            SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED
+            SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED,
+            SKLADCHINA_PARTICIPANTS.DECLINE_REJECT_NOTE
         )
             .from(SKLADCHINA_PARTICIPANTS)
             .join(USERS).on(USERS.ID.eq(SKLADCHINA_PARTICIPANTS.USER_ID))
@@ -325,7 +327,8 @@ class JooqSkladchinaRepository(
                     paidAt = r.get(SKLADCHINA_PARTICIPANTS.PAID_AT),
                     declineNote = r.get(SKLADCHINA_PARTICIPANTS.DECLINE_NOTE),
                     declineRequestedAt = r.get(SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT),
-                    declineRejected = r.get(SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED) ?: false
+                    declineRejected = r.get(SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED) ?: false,
+                    declineRejectNote = r.get(SKLADCHINA_PARTICIPANTS.DECLINE_REJECT_NOTE)
                 )
             }
 
@@ -406,26 +409,16 @@ class JooqSkladchinaRepository(
             )
             .execute()
 
-    override fun rejectDeclineRequest(skladchinaId: UUID, userId: UUID): Int =
+    override fun rejectDeclineRequest(skladchinaId: UUID, userId: UUID, note: String): Int =
         dsl.update(SKLADCHINA_PARTICIPANTS)
             .set(SKLADCHINA_PARTICIPANTS.DECLINE_REJECTED, true)
+            .set(SKLADCHINA_PARTICIPANTS.DECLINE_REJECT_NOTE, note)
             .setNull(SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT)
             .where(
                 SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
                     .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
                     .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
                     .and(SKLADCHINA_PARTICIPANTS.DECLINE_REQUESTED_AT.isNotNull)
-            )
-            .execute()
-
-    override fun setExpectedAmount(skladchinaId: UUID, userId: UUID, expectedAmountKopecks: Long): Int =
-        dsl.update(SKLADCHINA_PARTICIPANTS)
-            .set(SKLADCHINA_PARTICIPANTS.EXPECTED_AMOUNT_KOPECKS, expectedAmountKopecks)
-            .where(
-                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
-                    .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
-                    // A-3: redistribution only ever changes shares of those who have NOT paid.
-                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
             )
             .execute()
 
@@ -479,8 +472,23 @@ class JooqSkladchinaRepository(
                 SKLADCHINAS.CLUB_ID.eq(clubId)
                     .and(SKLADCHINAS.AFFECTS_REPUTATION.isTrue)
                     .and(SKLADCHINAS.CREATED_AT.greaterThan(since))
+                    // The rate limit guards the "важный сбор" toggle on organizer-chosen pools.
+                    // split_bill is verified by attendance (not farmable) and always reputation-
+                    // affecting — exclude it so splits don't burn a club's custom-important budget.
+                    .and(SKLADCHINAS.TEMPLATE.ne(SkladchinaTemplate.split_bill))
             )
             .fetchOne(0, Int::class.java) ?: 0
+
+    override fun extendDeadline(skladchinaId: UUID, newDeadline: OffsetDateTime): Int =
+        dsl.update(SKLADCHINAS)
+            .set(SKLADCHINAS.DEADLINE, newDeadline)
+            .where(
+                SKLADCHINAS.ID.eq(skladchinaId)
+                    .and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active))
+                    // Only ever push the deadline OUT, never pull it in.
+                    .and(SKLADCHINAS.DEADLINE.lessThan(newDeadline))
+            )
+            .execute()
 
     override fun findNeedingDeadlineReminder(now: OffsetDateTime, until: OffsetDateTime): List<Skladchina> =
         dsl.selectFrom(SKLADCHINAS)
