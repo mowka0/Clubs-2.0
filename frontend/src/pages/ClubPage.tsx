@@ -409,8 +409,8 @@ export const ClubPage: FC = () => {
         <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{club.description}</div>
       </div>
 
-      {/* Club quality — public L1 facts (social proof), visible to every viewer */}
-      {id && <ClubQualityFacts clubId={id} />}
+      {/* Club quality — public L2 rings over L1 facts (social proof), visible to every viewer */}
+      {id && <ClubQualityFacts clubId={id} memberCount={club.memberCount} />}
 
       {/* Rules (optional) */}
       {club.rules && (

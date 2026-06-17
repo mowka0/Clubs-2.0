@@ -1,6 +1,8 @@
 import { FC } from 'react';
 import { useClubQualityQuery } from '../../queries/clubQuality';
 import { pluralRu } from '../../utils/formatters';
+import { QualityRing } from './QualityRing';
+import { activityLevel, attendanceLevel, cohesionLevel } from './qualityLevels';
 
 /** Drops a trailing `.0` so 8.0 → "8" while 1.3 stays "1.3". */
 function formatMeetings(n: number): string {
@@ -20,55 +22,77 @@ function ageParts(ageMonths: number): { value: string; foot: string } {
 
 interface ClubQualityFactsProps {
   clubId: string;
+  /** Active members — denominator of the «Приходит» ring («N из M»). */
+  memberCount: number;
 }
 
 /**
- * «Качество клуба» — публичный соц-пруф (L1-факты) на странице клуба. Видят все зрители.
- * Fail-soft: вторичный блок, при загрузке/ошибке просто не рендерится и не ломает страницу.
- * Дизайн-контракт: docs/modules/club-quality.md, docs/backlog/club-quality-gamification.md §11.4.
+ * «Качество клуба» — публичный соц-пруф (L2-кольца поверх L1-фактов) на странице клуба. Видят все.
+ * Три кольца: Сплочённость (ядро, зелёное) · Активность (встреч/мес) · Приходит (среднее из M).
+ * Возраст здесь НЕ показываем — он уедет в «Достижения» (следующий срез); в empty-state остаётся строкой.
+ * Fail-soft: вторичный блок, при загрузке/ошибке просто не рендерится.
+ * Дизайн-контракт: docs/modules/club-quality.md, docs/backlog/club-quality-gamification.md §11.2.
  */
-export const ClubQualityFacts: FC<ClubQualityFactsProps> = ({ clubId }) => {
+export const ClubQualityFacts: FC<ClubQualityFactsProps> = ({ clubId, memberCount }) => {
   const { data } = useClubQualityQuery(clubId);
   if (!data) return null;
 
   const { meetingsPerMonth, avgAttendance, coreSize, ageMonths } = data;
   const hasActivity = meetingsPerMonth > 0 || avgAttendance > 0 || coreSize > 0;
-  const age = ageParts(ageMonths);
-  const ageLine = age.value === '<1' ? 'Клубу меньше месяца.' : `Клубу ${age.value} ${age.foot}.`;
 
-  return (
-    <>
-      <div className="rd-section-sub-h">Качество клуба</div>
-      {hasActivity ? (
-        <div className="rd-stats">
-          <div className="rd-stat rd-glass">
-            <div className="rd-stat-label">Встреч в месяц</div>
-            <div className="rd-stat-value">{formatMeetings(meetingsPerMonth)}</div>
-            <div className="rd-stat-foot">за 90 дней</div>
-          </div>
-          <div className="rd-stat rd-glass">
-            <div className="rd-stat-label">Обычно приходит</div>
-            <div className="rd-stat-value rd-plain">{avgAttendance > 0 ? avgAttendance : '—'}</div>
-            <div className="rd-stat-foot">на встречу</div>
-          </div>
-          <div className="rd-stat rd-glass">
-            <div className="rd-stat-label">Ядро клуба</div>
-            <div className="rd-stat-value rd-plain">{coreSize > 0 ? coreSize : '—'}</div>
-            <div className="rd-stat-foot">ходят регулярно</div>
-          </div>
-          <div className="rd-stat rd-glass">
-            <div className="rd-stat-label">Возраст</div>
-            <div className="rd-stat-value rd-plain">{age.value}</div>
-            <div className="rd-stat-foot">{age.foot}</div>
-          </div>
-        </div>
-      ) : (
+  if (!hasActivity) {
+    const age = ageParts(ageMonths);
+    const ageLine = age.value === '<1' ? 'Клубу меньше месяца.' : `Клубу ${age.value} ${age.foot}.`;
+    return (
+      <>
+        <div className="rd-section-sub-h">Качество клуба</div>
         <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
           <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
             Пока нет данных о встречах. {ageLine}
           </div>
         </div>
-      )}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="rd-section-sub-h">Качество клуба</div>
+      <div className="qrings">
+        <div className="qring">
+          <QualityRing
+            level={cohesionLevel(coreSize)}
+            color="var(--live)"
+            ariaLabel={`Основа клуба: ${coreSize} ${pluralRu(coreSize, ['человек', 'человека', 'человек'])} ходят постоянно`}
+          >
+            <span className="qr-v">{coreSize}</span>
+            <span className="qr-u">чел.</span>
+          </QualityRing>
+          <span className="qr-l">основа клуба</span>
+        </div>
+        <div className="qring">
+          <QualityRing
+            level={activityLevel(meetingsPerMonth)}
+            color="var(--accent)"
+            ariaLabel={`Частота встреч: ${formatMeetings(meetingsPerMonth)} в месяц`}
+          >
+            <span className="qr-v">{formatMeetings(meetingsPerMonth)}</span>
+            <span className="qr-u">/мес</span>
+          </QualityRing>
+          <span className="qr-l">частота встреч</span>
+        </div>
+        <div className="qring">
+          <QualityRing
+            level={attendanceLevel(avgAttendance, memberCount)}
+            color="var(--accent)"
+            ariaLabel={`Обычно приходит ${avgAttendance} из ${memberCount}`}
+          >
+            <span className="qr-v">{avgAttendance}</span>
+            <span className="qr-u">из {memberCount}</span>
+          </QualityRing>
+          <span className="qr-l">обычно приходит</span>
+        </div>
+      </div>
     </>
   );
 };

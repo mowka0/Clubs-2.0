@@ -111,6 +111,16 @@
   display: flex; align-items: center; gap: 6px;
 }
 
+/* ---------- Quality rings (L2 «качество клуба») ---------- */
+.qrings { display: flex; justify-content: space-around; gap: 8px; margin-bottom: 14px; }
+.qring { display: flex; flex-direction: column; align-items: center; gap: 7px; flex: 1 1 0; min-width: 0; }
+.qr-v { font-size: 17px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); line-height: 1; }
+.qr-u { font-size: 9px; font-weight: 600; color: var(--text-faint); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
+.qr-l {
+  font-size: 10px; color: var(--text-faint); font-weight: 600; text-align: center;
+  line-height: 1.25; text-transform: uppercase; letter-spacing: 0.03em;
+}
+
 /* ---------- Feature card ---------- */
 .rd-feature {
   padding: 16px 18px 18px; margin-bottom: 14px;
