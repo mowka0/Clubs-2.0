@@ -2,21 +2,18 @@ import { pluralRu } from '../../utils/formatters';
 import type { ClubFactsDto } from '../../types/api';
 
 /**
- * Достижения клуба — L1-fact-backed майлстоны, БЕЗ очков (дизайн §11.2/§7). Каждый — либо взят
- * (earned), либо ближайшая цель с прогрессом. Лестничные пороги: показываем высшую взятую ступень
- * + следующую цель, чтобы и зрелый, и растущий клуб видели смысл. Возраст — отдельный бейдж (всегда).
+ * Достижения клуба — простые ЖИВЫЕ счётчики (без очков, без порогов/замков): возраст-бейдж +
+ * накопительные итоги «N встреч» / «N сборов». Показываем фактические числа, что клуб реально набрал,
+ * а не выдуманные ступени. Решение PO (2026-06-17): счётчик честнее и понятнее лестницы с замками.
+ * «Преданные» здесь не дублируем — это кольцо «основа клуба».
  */
 
-export interface Milestone {
+export interface Achievement {
   icon: string;
   label: string;
-  earned: boolean;
-  /** progress towards an unearned milestone (omitted when earned) */
-  current?: number;
-  target?: number;
 }
 
-export function ageBadge(ageMonths: number): { icon: string; label: string } {
+export function ageBadge(ageMonths: number): Achievement {
   if (ageMonths >= 24) {
     const years = Math.floor(ageMonths / 12);
     return { icon: '🎂', label: `Клубу ${years} ${pluralRu(years, ['год', 'года', 'лет'])}` };
@@ -26,27 +23,20 @@ export function ageBadge(ageMonths: number): { icon: string; label: string } {
   return { icon: '🎂', label: 'Клубу меньше месяца' };
 }
 
-/** Highest reached tier (earned) + the next tier (goal, only if already started). */
-function laddered(icon: string, tiers: number[], current: number, label: (n: number) => string): Milestone[] {
-  const out: Milestone[] = [];
-  const reached = [...tiers].reverse().find((t) => current >= t);
-  if (reached !== undefined) out.push({ icon, label: label(reached), earned: true });
-  const next = tiers.find((t) => current < t);
-  if (next !== undefined && current > 0) {
-    out.push({ icon, label: label(next), earned: false, current, target: next });
+/** Lifetime activity counters — each shown only when > 0 (a young club shows just the age badge). */
+export function counters(facts: ClubFactsDto): Achievement[] {
+  const out: Achievement[] = [];
+  if (facts.totalMeetings > 0) {
+    out.push({
+      icon: '🔥',
+      label: `${facts.totalMeetings} ${pluralRu(facts.totalMeetings, ['встреча', 'встречи', 'встреч'])}`,
+    });
+  }
+  if (facts.successfulSkladchinas > 0) {
+    out.push({
+      icon: '💸',
+      label: `${facts.successfulSkladchinas} ${pluralRu(facts.successfulSkladchinas, ['сбор', 'сбора', 'сборов'])}`,
+    });
   }
   return out;
-}
-
-/** «Первый сбор» for the first, then «N сборов» with plural. */
-function skladchinaLabel(n: number): string {
-  return n === 1 ? 'Первый сбор' : `${n} ${pluralRu(n, ['сбор', 'сбора', 'сборов'])}`;
-}
-
-export function milestones(facts: ClubFactsDto): Milestone[] {
-  return [
-    ...laddered('🤝', [5, 10, 25, 50], facts.coreSize, (n) => `${n} преданных`),
-    ...laddered('🔥', [10, 50, 100, 250, 500], facts.totalMeetings, (n) => `${n} встреч`),
-    ...laddered('💸', [1, 5, 10, 25], facts.successfulSkladchinas, skladchinaLabel),
-  ];
 }

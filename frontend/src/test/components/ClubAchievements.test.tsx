@@ -29,20 +29,19 @@ describe('ClubAchievements', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('always shows the age badge, even for a brand-new club with no milestones', () => {
+  it('always shows the age badge, even for a brand-new club with no counters', () => {
     mockData(facts({ ageMonths: 2 }));
     render(<ClubAchievements clubId="c1" />);
     expect(screen.getByText('Достижения')).toBeInTheDocument();
     expect(screen.getByText('Клубу 2 мес')).toBeInTheDocument();
+    expect(screen.queryByText(/встреч/)).not.toBeInTheDocument();
   });
 
-  it('renders earned trophies and an in-progress goal', () => {
-    mockData(facts({ ageMonths: 14, coreSize: 8, totalMeetings: 71, successfulSkladchinas: 1 }));
+  it('renders the age badge + live activity counters (no thresholds/locks)', () => {
+    mockData(facts({ ageMonths: 14, totalMeetings: 71, successfulSkladchinas: 3 }));
     render(<ClubAchievements clubId="c1" />);
     expect(screen.getByText('Год клубу')).toBeInTheDocument();
-    expect(screen.getByText('5 преданных')).toBeInTheDocument();
-    expect(screen.getByText('50 встреч')).toBeInTheDocument();
-    expect(screen.getByText('Первый сбор')).toBeInTheDocument();
-    expect(screen.getByText('100 встреч · 71/100')).toBeInTheDocument(); // locked goal with progress
+    expect(screen.getByText('71 встреча')).toBeInTheDocument();
+    expect(screen.getByText('3 сбора')).toBeInTheDocument();
   });
 });

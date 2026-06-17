@@ -1,14 +1,14 @@
 import { FC } from 'react';
 import { useClubQualityQuery } from '../../queries/clubQuality';
-import { ageBadge, milestones } from './clubMilestones';
+import { ageBadge, counters } from './clubMilestones';
 
 interface ClubAchievementsProps {
   clubId: string;
 }
 
 /**
- * «Достижения» — публичные майлстоны клуба (соц-пруф), всегда с возраст-бейджем + взятыми/растущими
- * трофеями. Всё на фактах, без очков. Fail-soft: при загрузке/ошибке блок не рендерится.
+ * «Достижения» — публичные итоги клуба (соц-пруф): возраст-бейдж (всегда) + живые счётчики
+ * «N встреч» / «N сборов» (без порогов и замков). Fail-soft: при загрузке/ошибке блок не рендерится.
  * Дизайн-контракт: docs/modules/club-quality.md §6, docs/backlog/club-quality-gamification.md §11.2.
  */
 export const ClubAchievements: FC<ClubAchievementsProps> = ({ clubId }) => {
@@ -16,7 +16,7 @@ export const ClubAchievements: FC<ClubAchievementsProps> = ({ clubId }) => {
   if (!data) return null;
 
   const age = ageBadge(data.ageMonths);
-  const miles = milestones(data);
+  const items = counters(data);
 
   return (
     <>
@@ -26,19 +26,12 @@ export const ClubAchievements: FC<ClubAchievementsProps> = ({ clubId }) => {
           <span>{age.icon}</span>
           {age.label}
         </span>
-        {miles.map((m) =>
-          m.earned ? (
-            <span key={m.label} className="mile">
-              <span>{m.icon}</span>
-              {m.label}
-            </span>
-          ) : (
-            <span key={m.label} className="mile lock">
-              <span>🔒</span>
-              {m.label} · {m.current}/{m.target}
-            </span>
-          ),
-        )}
+        {items.map((a) => (
+          <span key={a.label} className="mile">
+            <span>{a.icon}</span>
+            {a.label}
+          </span>
+        ))}
       </div>
     </>
   );

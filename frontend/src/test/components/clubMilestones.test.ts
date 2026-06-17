@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ageBadge, milestones } from '../../components/club/clubMilestones';
+import { ageBadge, counters } from '../../components/club/clubMilestones';
 import type { ClubFactsDto } from '../../types/api';
 
 function facts(o: Partial<ClubFactsDto> = {}): ClubFactsDto {
@@ -24,40 +24,24 @@ describe('ageBadge', () => {
   });
 });
 
-describe('milestones (laddered)', () => {
-  it('brand-new club → no milestones', () => {
-    expect(milestones(facts())).toEqual([]);
+describe('counters (живые итоги, без порогов)', () => {
+  it('empty club → no counters (only the always-on age badge lives outside)', () => {
+    expect(counters(facts())).toEqual([]);
   });
 
-  it('highest reached tier (earned) + next tier (goal with progress)', () => {
-    const m = milestones(facts({ coreSize: 8, totalMeetings: 71 }));
-    expect(m).toContainEqual({ icon: '🤝', label: '5 преданных', earned: true });
-    expect(m).toContainEqual({ icon: '🤝', label: '10 преданных', earned: false, current: 8, target: 10 });
-    expect(m).toContainEqual({ icon: '🔥', label: '50 встреч', earned: true });
-    expect(m).toContainEqual({ icon: '🔥', label: '100 встреч', earned: false, current: 71, target: 100 });
+  it('lifetime meetings with correct plural', () => {
+    expect(counters(facts({ totalMeetings: 71 }))).toContainEqual({ icon: '🔥', label: '71 встреча' });
+    expect(counters(facts({ totalMeetings: 5 }))).toContainEqual({ icon: '🔥', label: '5 встреч' });
+    expect(counters(facts({ totalMeetings: 2 }))).toContainEqual({ icon: '🔥', label: '2 встречи' });
   });
 
-  it('a started-but-sub-first-tier metric shows only the next goal', () => {
-    expect(milestones(facts({ coreSize: 3 }))).toEqual([
-      { icon: '🤝', label: '5 преданных', earned: false, current: 3, target: 5 },
-    ]);
+  it('successful skladchinas with correct plural', () => {
+    expect(counters(facts({ successfulSkladchinas: 1 }))).toContainEqual({ icon: '💸', label: '1 сбор' });
+    expect(counters(facts({ successfulSkladchinas: 3 }))).toContainEqual({ icon: '💸', label: '3 сбора' });
+    expect(counters(facts({ successfulSkladchinas: 8 }))).toContainEqual({ icon: '💸', label: '8 сборов' });
   });
 
-  it('skladchina ladder: «Первый сбор» then «N сборов» with a progress goal', () => {
-    const first = milestones(facts({ successfulSkladchinas: 1 }));
-    expect(first).toContainEqual({ icon: '💸', label: 'Первый сбор', earned: true });
-    expect(first).toContainEqual({ icon: '💸', label: '5 сборов', earned: false, current: 1, target: 5 });
-
-    const seven = milestones(facts({ successfulSkladchinas: 7 }));
-    expect(seven).toContainEqual({ icon: '💸', label: '5 сборов', earned: true });
-    expect(seven).toContainEqual({ icon: '💸', label: '10 сборов', earned: false, current: 7, target: 10 });
-
-    expect(milestones(facts({ successfulSkladchinas: 0 })).some((m) => m.icon === '💸')).toBe(false);
-  });
-
-  it('caps at the top tier with no further goal', () => {
-    const m = milestones(facts({ totalMeetings: 600 }));
-    expect(m).toContainEqual({ icon: '🔥', label: '500 встреч', earned: true });
-    expect(m.some((x) => !x.earned)).toBe(false);
+  it('hides a zero counter', () => {
+    expect(counters(facts({ totalMeetings: 4 })).some((a) => a.icon === '💸')).toBe(false);
   });
 });

@@ -129,7 +129,6 @@
   background: var(--surface); border: 1px solid var(--hairline); color: var(--text);
 }
 .mile.gold { background: rgba(233, 162, 60, 0.12); border-color: rgba(233, 162, 60, 0.4); color: #F2C57C; }
-.mile.lock { color: var(--text-faint); opacity: 0.75; }
 
 /* ---------- Feature card ---------- */
 .rd-feature {

@@ -49,8 +49,8 @@ owner-статистика и скрытый L3-ранг (§10 дизайн-до
 | `avgAttendance: Int` | Приходит (среднее на встречу) | Σ явок ÷ число финализированных встреч за 90 дней, округление |
 | `coreSize: Int` | Сплочённость (ядро) | distinct юзеров с ≥3 явками («attended») по НЕ-cancelled событиям клуба, all-time |
 | `ageMonths: Int` | Возраст (бейдж в «Достижениях») | полные месяцы от `clubs.created_at` до now |
-| `totalMeetings: Int` | Достижение «N встреч» | held-события all-time (past, non-cancelled) |
-| `successfulSkladchinas: Int` | Достижение «первый сбор» | складчины со статусом `closed_success` |
+| `totalMeetings: Int` | Счётчик «N встреч» | held-события all-time (past, non-cancelled) |
+| `successfulSkladchinas: Int` | Счётчик «N сборов» | складчины со статусом `closed_success` |
 
 **Определения (точные):**
 - **held-событие** = `events.event_datetime < now()` AND `events.status <> 'cancelled'`.
@@ -140,12 +140,11 @@ backend/src/main/kotlin/com/clubs/clubquality/
   - Сплочённость: 0 · <4 · <8 · <20 · 20+
   - Активность (встреч/мес): 0 · <2 · <4 · <8 · 8+
   - Приходит (доля `avgAttendance / memberCount`): 0 · <20% · <40% · <60% · 60%+
-- `components/club/ClubAchievements.tsx` — блок **«Достижения»**: возраст-бейдж (всегда) + майлстоны-чипы.
+- `components/club/ClubAchievements.tsx` — блок **«Достижения»**: возраст-бейдж (всегда) + живые счётчики-чипы.
   Логика в `components/club/clubMilestones.ts` (чистая): `ageBadge` (<12 «Клубу N мес» / 12–23 «Год клубу» /
-  24+ «Клубу N лет») + `milestones` (**лестничные пороги** — высшая взятая ступень + ближайшая цель с
-  прогрессом: преданные [5/10/25/50] по `coreSize`, встречи [10/50/100/250/500] по `totalMeetings`,
-  сборы [1/5/10/25] по `successfulSkladchinas` (первый = «Первый сбор», далее «N сборов» с плюрализацией)).
-  Всё fact-backed, **без очков**. Тот же `useClubQualityQuery`.
+  24+ «Клубу N лет») + `counters` — **плоские живые итоги, без порогов/замков**: «N встреч» (`totalMeetings`) +
+  «N сборов» (`successfulSkladchinas`), каждый с плюрализацией, показ только при `>0`. «Преданные» не
+  дублируем — это кольцо «основа клуба». Всё fact-backed, **без очков**. Тот же `useClubQualityQuery`.
 - Встраивание в `pages/ClubPage.tsx`: блоки **«Качество клуба»** → **«Достижения»** после «О клубе», **до**
   табов/lock — видны всем зрителям. Fail-soft: при загрузке/ошибке блоки не рендерятся.
 
@@ -163,7 +162,7 @@ backend/src/main/kotlin/com/clubs/clubquality/
 8. Backend: `./gradlew test` зелёный; есть unit-тест на агрегации (позитив + пустой клуб + 404).
 9. Frontend: `npm run build` зелёный; `npm test` зелёный.
 10. `totalMeetings` = held all-time (без окна); `successfulSkladchinas` = только `closed_success`.
-11. Блок «Достижения» всегда показывает возраст-бейдж; майлстоны — лестничные (взятая ступень + цель).
+11. Блок «Достижения» всегда показывает возраст-бейдж; счётчики «N встреч»/«N сборов» — живые числа, показ при >0.
 
 ---
 
