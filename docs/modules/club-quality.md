@@ -120,10 +120,12 @@ backend/src/main/kotlin/com/clubs/clubquality/
 - `api/clubQuality.ts` → `getClubQuality(clubId): Promise<ClubFactsDto>` (паттерн `api/clubs.ts`).
 - `queries/clubQuality.ts` → `useClubQualityQuery(clubId)` (TanStack Query, `enabled: Boolean(clubId)`).
 - Тип `ClubFactsDto` в `types/api.ts`.
-- `components/club/ClubQualityFacts.tsx` — блок «Качество клуба»: **три L2-кольца** (`QualityRing`):
-  **Сплочённость** (центр = `coreSize`, зелёная `--live`) · **Активность** (центр = `meetingsPerMonth`,
-  `--accent`) · **Приходит** (центр = `avgAttendance` «из M», `--accent`). M = `memberCount` (проп из
-  `ClubPage`, знаменатель «N из M»). Возраст здесь **не показываем** (уедет в «Достижения» — следующий
+- `components/club/ClubQualityFacts.tsx` — блок «Качество клуба»: **три L2-кольца** (`QualityRing`).
+  Оси (дизайн §11.2) и их **видимые подписи / центр**:
+  - Сплочённость → подпись **«основа клуба»**, центр = `coreSize` «чел.», зелёная `--live`
+  - Активность → подпись **«частота встреч»**, центр = `meetingsPerMonth` «/мес», `--accent`
+  - Приходит → подпись **«обычно приходит»**, центр = `avgAttendance` «из M», `--accent`
+  - M = `memberCount` (проп из `ClubPage`, знаменатель «N из M»). Возраст здесь **не показываем** (уедет в «Достижения» — следующий
   срез); в empty-state остаётся строкой. Клуб без событий (`hasActivity=false`) → честный empty-state
   «Пока нет данных о встречах. Клубу N …».
 - `components/club/QualityRing.tsx` — презентационный донат на **4 равных сектора** (скруглённые края,

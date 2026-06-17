@@ -37,9 +37,9 @@ describe('ClubQualityFacts', () => {
     expect(screen.getByText('11')).toBeInTheDocument();  // avgAttendance → Приходит
     expect(screen.getByText('из 42')).toBeInTheDocument(); // denominator = memberCount
     // axis labels
-    expect(screen.getByText('сплочённость')).toBeInTheDocument();
-    expect(screen.getByText('активность')).toBeInTheDocument();
-    expect(screen.getByText('приходит')).toBeInTheDocument();
+    expect(screen.getByText('основа клуба')).toBeInTheDocument();
+    expect(screen.getByText('частота встреч')).toBeInTheDocument();
+    expect(screen.getByText('обычно приходит')).toBeInTheDocument();
   });
 
   it('drops a trailing .0 and shows a 0-centre for a zero sub-metric', () => {
@@ -56,6 +56,6 @@ describe('ClubQualityFacts', () => {
 
     expect(screen.getByText(/Пока нет данных о встречах/)).toBeInTheDocument();
     expect(screen.getByText(/Клубу 1 год/)).toBeInTheDocument();
-    expect(screen.queryByText('сплочённость')).not.toBeInTheDocument();
+    expect(screen.queryByText('основа клуба')).not.toBeInTheDocument();
   });
 });

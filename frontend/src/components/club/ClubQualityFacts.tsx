@@ -60,33 +60,37 @@ export const ClubQualityFacts: FC<ClubQualityFactsProps> = ({ clubId, memberCoun
       <div className="rd-section-sub-h">Качество клуба</div>
       <div className="qrings">
         <div className="qring">
-          <QualityRing level={cohesionLevel(coreSize)} color="var(--live)" ariaLabel={`Сплочённость: ядро ${coreSize}`}>
+          <QualityRing
+            level={cohesionLevel(coreSize)}
+            color="var(--live)"
+            ariaLabel={`Основа клуба: ${coreSize} ${pluralRu(coreSize, ['человек', 'человека', 'человек'])} ходят постоянно`}
+          >
             <span className="qr-v">{coreSize}</span>
-            <span className="qr-u">ядро</span>
+            <span className="qr-u">чел.</span>
           </QualityRing>
-          <span className="qr-l">сплочённость</span>
+          <span className="qr-l">основа клуба</span>
         </div>
         <div className="qring">
           <QualityRing
             level={activityLevel(meetingsPerMonth)}
             color="var(--accent)"
-            ariaLabel={`Активность: ${formatMeetings(meetingsPerMonth)} встреч в месяц`}
+            ariaLabel={`Частота встреч: ${formatMeetings(meetingsPerMonth)} в месяц`}
           >
             <span className="qr-v">{formatMeetings(meetingsPerMonth)}</span>
             <span className="qr-u">/мес</span>
           </QualityRing>
-          <span className="qr-l">активность</span>
+          <span className="qr-l">частота встреч</span>
         </div>
         <div className="qring">
           <QualityRing
             level={attendanceLevel(avgAttendance, memberCount)}
             color="var(--accent)"
-            ariaLabel={`Приходит: ${avgAttendance} из ${memberCount}`}
+            ariaLabel={`Обычно приходит ${avgAttendance} из ${memberCount}`}
           >
             <span className="qr-v">{avgAttendance}</span>
             <span className="qr-u">из {memberCount}</span>
           </QualityRing>
-          <span className="qr-l">приходит</span>
+          <span className="qr-l">обычно приходит</span>
         </div>
       </div>
     </>
