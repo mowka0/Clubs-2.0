@@ -9,6 +9,11 @@ function formatMeetings(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
+/** Two-word ring label → forced two lines (break at the first space) for even, uniform height. */
+function twoLineLabel(text: string): string {
+  return text.replace(' ', '\n');
+}
+
 interface ClubQualityFactsProps {
   clubId: string;
   /** Active members — denominator of the «Приходит» ring («N из M»). */
@@ -42,7 +47,7 @@ export const ClubQualityFacts: FC<ClubQualityFactsProps> = ({ clubId, memberCoun
                 <span className="qr-v">{coreSize}</span>
                 <span className="qr-u">чел.</span>
               </QualityRing>
-              <span className="qr-l">основа клуба</span>
+              <span className="qr-l">{twoLineLabel('основа клуба')}</span>
             </div>
             <div className="qring">
               <QualityRing
@@ -53,7 +58,7 @@ export const ClubQualityFacts: FC<ClubQualityFactsProps> = ({ clubId, memberCoun
                 <span className="qr-v">{formatMeetings(meetingsPerMonth)}</span>
                 <span className="qr-u">/мес</span>
               </QualityRing>
-              <span className="qr-l">частота встреч</span>
+              <span className="qr-l">{twoLineLabel('частота встреч')}</span>
             </div>
             <div className="qring">
               <QualityRing
@@ -64,7 +69,7 @@ export const ClubQualityFacts: FC<ClubQualityFactsProps> = ({ clubId, memberCoun
                 <span className="qr-v">{avgAttendance}</span>
                 <span className="qr-u">из {memberCount}</span>
               </QualityRing>
-              <span className="qr-l">обычно приходит</span>
+              <span className="qr-l">{twoLineLabel('обычно приходит')}</span>
             </div>
           </div>
           <div className="q-divider" />
