@@ -111,15 +111,23 @@
   display: flex; align-items: center; gap: 6px;
 }
 
-/* ---------- Quality rings (L2 «качество клуба») ---------- */
-.qrings { display: flex; justify-content: space-around; gap: 8px; margin-bottom: 14px; }
+/* ---------- Club stats — unified block (кольца + лёгкая строка) ---------- */
+/* .qring = равные flex-колонки → промежутки между кольцами всегда одинаковые независимо от длины подписи */
+.qrings { display: flex; justify-content: space-around; gap: 8px; }
 .qring { display: flex; flex-direction: column; align-items: center; gap: 7px; flex: 1 1 0; min-width: 0; }
 .qr-v { font-size: 17px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); line-height: 1; }
 .qr-u { font-size: 9px; font-weight: 600; color: var(--text-faint); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
 .qr-l {
   font-size: 10px; color: var(--text-faint); font-weight: 600; text-align: center;
   line-height: 1.25; text-transform: uppercase; letter-spacing: 0.03em;
+  white-space: pre-line; /* each label forced to 2 lines (word per line) for uniform height */
 }
+.q-divider { height: 1px; background: var(--hairline); margin: 14px 0; }
+.qstat-line { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); }
+.qstat { display: inline-flex; align-items: center; gap: 5px; }
+.qstat.gold { color: #F2C57C; font-weight: 600; }
+.qstat.muted { color: var(--text-faint); }
+.qstat-line .dot { color: var(--text-faint); }
 
 /* ---------- Feature card ---------- */
 .rd-feature {

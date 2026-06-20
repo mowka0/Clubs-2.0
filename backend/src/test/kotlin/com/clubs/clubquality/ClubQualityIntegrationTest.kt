@@ -61,6 +61,8 @@ class ClubQualityIntegrationTest {
     fun setUp() {
         dsl.execute("DELETE FROM event_responses")
         dsl.execute("DELETE FROM events")
+        dsl.execute("DELETE FROM skladchina_participants")
+        dsl.execute("DELETE FROM skladchinas")
         dsl.execute("DELETE FROM memberships")
         dsl.execute("DELETE FROM clubs")
         dsl.execute("DELETE FROM users")
@@ -78,6 +80,8 @@ class ClubQualityIntegrationTest {
         assertEquals(0, facts.avgAttendance)
         assertEquals(0, facts.coreSize)
         assertEquals(14, facts.ageMonths)
+        assertEquals(0, facts.totalMeetings)
+        assertEquals(0, facts.successfulSkladchinas)
     }
 
     @Test
@@ -154,6 +158,27 @@ class ClubQualityIntegrationTest {
         assertEquals(0, clubQualityService.getClubFacts(clubId).coreSize)
     }
 
+    @Test
+    fun `totalMeetings counts all-time held events, excluding future and cancelled`() {
+        insertEvent(daysFromNow(-200), "completed") // older than the 90-day window, but all-time → counts
+        insertEvent(daysFromNow(-2), "completed")   // held → counts
+        insertEvent(daysFromNow(3), "upcoming")     // future → excluded
+        insertEvent(daysFromNow(-5), "cancelled")   // cancelled → excluded
+
+        assertEquals(2, clubQualityService.getClubFacts(clubId).totalMeetings)
+    }
+
+    @Test
+    fun `successfulSkladchinas counts only closed_success`() {
+        insertSkladchina("closed_success")
+        insertSkladchina("closed_success")
+        insertSkladchina("active")
+        insertSkladchina("closed_failed")
+        insertSkladchina("cancelled")
+
+        assertEquals(2, clubQualityService.getClubFacts(clubId).successfulSkladchinas)
+    }
+
     // ---- helpers ----
 
     private fun newUser(): UUID {
@@ -197,6 +222,18 @@ class ClubQualityIntegrationTest {
                                          stage_2_vote, final_status, attendance)
             VALUES ('$id', '$eventId', '$userId', 'going'::stage_1_vote, NOW(),
                     'confirmed'::stage_2_vote, 'confirmed'::final_status, $att)
+            """.trimIndent()
+        )
+        return id
+    }
+
+    private fun insertSkladchina(status: String): UUID {
+        val id = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO skladchinas (id, club_id, creator_id, title, payment_mode, payment_link, deadline, status)
+            VALUES ('$id', '$clubId', '$ownerId', 'Сбор', 'voluntary'::skladchina_mode, 'http://pay',
+                    NOW() + INTERVAL '7 days', '$status'::skladchina_status)
             """.trimIndent()
         )
         return id

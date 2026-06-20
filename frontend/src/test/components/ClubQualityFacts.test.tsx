@@ -5,57 +5,57 @@ import { ClubQualityFacts } from '../../components/club/ClubQualityFacts';
 import { useClubQualityQuery } from '../../queries/clubQuality';
 import type { ClubFactsDto } from '../../types/api';
 
-vi.mock('../../queries/clubQuality', () => ({
-  useClubQualityQuery: vi.fn(),
-}));
-
+vi.mock('../../queries/clubQuality', () => ({ useClubQualityQuery: vi.fn() }));
 const mockedQuery = vi.mocked(useClubQualityQuery);
 
-function mockFacts(data: ClubFactsDto | undefined) {
-  mockedQuery.mockReturnValue({ data } as ReturnType<typeof useClubQualityQuery>);
+function facts(o: Partial<ClubFactsDto> = {}): ClubFactsDto {
+  return {
+    meetingsPerMonth: 0, avgAttendance: 0, coreSize: 0, ageMonths: 0,
+    totalMeetings: 0, successfulSkladchinas: 0, ...o,
+  };
+}
+function mockData(d: ClubFactsDto | undefined) {
+  mockedQuery.mockReturnValue({ data: d } as ReturnType<typeof useClubQualityQuery>);
 }
 
-describe('ClubQualityFacts', () => {
+describe('ClubQualityFacts (unified block)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('renders nothing while data is unavailable (fail-soft)', () => {
-    mockFacts(undefined);
+    mockData(undefined);
     const { container } = render(<ClubQualityFacts clubId="c1" memberCount={42} />);
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders the three quality rings when the club has activity', () => {
-    mockFacts({ meetingsPerMonth: 1.3, avgAttendance: 11, coreSize: 8, ageMonths: 14 });
+  it('renders rings + a single caption line (age badge + live counters) when active', () => {
+    mockData(facts({ meetingsPerMonth: 1.3, avgAttendance: 11, coreSize: 8, ageMonths: 12, totalMeetings: 71, successfulSkladchinas: 3 }));
     render(<ClubQualityFacts clubId="c1" memberCount={42} />);
 
-    expect(screen.getByText('Качество клуба')).toBeInTheDocument();
-    // ring centres (distinct-absolutes)
-    expect(screen.getByText('8')).toBeInTheDocument();   // coreSize → Сплочённость
-    expect(screen.getByText('1.3')).toBeInTheDocument(); // meetingsPerMonth → Активность
-    expect(screen.getByText('11')).toBeInTheDocument();  // avgAttendance → Приходит
-    expect(screen.getByText('из 42')).toBeInTheDocument(); // denominator = memberCount
-    // axis labels
+    // rings
+    expect(screen.getByText('8')).toBeInTheDocument();
+    expect(screen.getByText('1.3')).toBeInTheDocument();
+    expect(screen.getByText('11')).toBeInTheDocument();
+    expect(screen.getByText('из 42')).toBeInTheDocument();
     expect(screen.getByText('основа клуба')).toBeInTheDocument();
     expect(screen.getByText('частота встреч')).toBeInTheDocument();
     expect(screen.getByText('обычно приходит')).toBeInTheDocument();
+    // caption: age + counters
+    expect(screen.getByText('Год клубу')).toBeInTheDocument();
+    expect(screen.getByText('71 встреча')).toBeInTheDocument();
+    expect(screen.getByText('3 сбора')).toBeInTheDocument();
+    // no section headers anymore
+    expect(screen.queryByText('Качество клуба')).not.toBeInTheDocument();
+    expect(screen.queryByText('Достижения')).not.toBeInTheDocument();
   });
 
-  it('drops a trailing .0 and shows a 0-centre for a zero sub-metric', () => {
-    mockFacts({ meetingsPerMonth: 8, avgAttendance: 0, coreSize: 5, ageMonths: 3 });
-    render(<ClubQualityFacts clubId="c1" memberCount={30} />);
-
-    expect(screen.getByText('8')).toBeInTheDocument(); // 8.0 → "8"
-    expect(screen.getByText('0')).toBeInTheDocument(); // avgAttendance ring centre, empty ring
-  });
-
-  it('shows the empty state (no fake activity) when the club has no event history', () => {
-    mockFacts({ meetingsPerMonth: 0, avgAttendance: 0, coreSize: 0, ageMonths: 14 });
+  it('shows only the caption (age + «пока нет встреч») for a club with no event history', () => {
+    mockData(facts({ ageMonths: 2 }));
     render(<ClubQualityFacts clubId="c1" memberCount={5} />);
 
-    expect(screen.getByText(/Пока нет данных о встречах/)).toBeInTheDocument();
-    expect(screen.getByText(/Клубу 1 год/)).toBeInTheDocument();
+    expect(screen.getByText('Клубу 2 мес')).toBeInTheDocument();
+    expect(screen.getByText('пока нет встреч')).toBeInTheDocument();
     expect(screen.queryByText('основа клуба')).not.toBeInTheDocument();
   });
 });

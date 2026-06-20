@@ -1,23 +1,17 @@
-import { FC } from 'react';
+import { FC, Fragment } from 'react';
 import { useClubQualityQuery } from '../../queries/clubQuality';
-import { pluralRu } from '../../utils/formatters';
 import { QualityRing } from './QualityRing';
 import { activityLevel, attendanceLevel, cohesionLevel } from './qualityLevels';
+import { ageBadge, counters } from './clubMilestones';
 
 /** Drops a trailing `.0` so 8.0 → "8" while 1.3 stays "1.3". */
 function formatMeetings(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-function ageParts(ageMonths: number): { value: string; foot: string } {
-  if (ageMonths >= 12) {
-    const years = Math.floor(ageMonths / 12);
-    return { value: String(years), foot: pluralRu(years, ['год', 'года', 'лет']) };
-  }
-  if (ageMonths >= 1) {
-    return { value: String(ageMonths), foot: pluralRu(ageMonths, ['месяц', 'месяца', 'месяцев']) };
-  }
-  return { value: '<1', foot: 'месяца' };
+/** Two-word ring label → forced two lines (break at the first space) for even, uniform height. */
+function twoLineLabel(text: string): string {
+  return text.replace(' ', '\n');
 }
 
 interface ClubQualityFactsProps {
@@ -27,72 +21,76 @@ interface ClubQualityFactsProps {
 }
 
 /**
- * «Качество клуба» — публичный соц-пруф (L2-кольца поверх L1-фактов) на странице клуба. Видят все.
- * Три кольца: Сплочённость (ядро, зелёное) · Активность (встреч/мес) · Приходит (среднее из M).
- * Возраст здесь НЕ показываем — он уедет в «Достижения» (следующий срез); в empty-state остаётся строкой.
- * Fail-soft: вторичный блок, при загрузке/ошибке просто не рендерится.
- * Дизайн-контракт: docs/modules/club-quality.md, docs/backlog/club-quality-gamification.md §11.2.
+ * Единый публичный блок качества клуба (соц-пруф), виден всем зрителям. Без заголовков-секций:
+ * три кольца (основа клуба · частота встреч · обычно приходит) + лёгкая строка-капшн (возраст-бейдж
+ * + живые счётчики «N встреч»/«N сборов», через точку). Молодой клуб без событий → только строка.
+ * Fail-soft: при загрузке/ошибке блок не рендерится.
+ * Дизайн-контракт: docs/modules/club-quality.md §6, docs/backlog/club-quality-gamification.md §11.2.
  */
 export const ClubQualityFacts: FC<ClubQualityFactsProps> = ({ clubId, memberCount }) => {
   const { data } = useClubQualityQuery(clubId);
   if (!data) return null;
 
-  const { meetingsPerMonth, avgAttendance, coreSize, ageMonths } = data;
+  const { meetingsPerMonth, avgAttendance, coreSize } = data;
   const hasActivity = meetingsPerMonth > 0 || avgAttendance > 0 || coreSize > 0;
-
-  if (!hasActivity) {
-    const age = ageParts(ageMonths);
-    const ageLine = age.value === '<1' ? 'Клубу меньше месяца.' : `Клубу ${age.value} ${age.foot}.`;
-    return (
-      <>
-        <div className="rd-section-sub-h">Качество клуба</div>
-        <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
-          <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
-            Пока нет данных о встречах. {ageLine}
-          </div>
-        </div>
-      </>
-    );
-  }
+  const age = ageBadge(data.ageMonths);
+  const tail = counters(data).map((a) => ({ key: a.label, icon: a.icon, text: a.label, muted: false }));
+  if (!hasActivity) tail.push({ key: 'no-meetings', icon: '', text: 'пока нет встреч', muted: true });
 
   return (
-    <>
-      <div className="rd-section-sub-h">Качество клуба</div>
-      <div className="qrings">
-        <div className="qring">
-          <QualityRing
-            level={cohesionLevel(coreSize)}
-            color="var(--live)"
-            ariaLabel={`Основа клуба: ${coreSize} ${pluralRu(coreSize, ['человек', 'человека', 'человек'])} ходят постоянно`}
-          >
-            <span className="qr-v">{coreSize}</span>
-            <span className="qr-u">чел.</span>
-          </QualityRing>
-          <span className="qr-l">основа клуба</span>
-        </div>
-        <div className="qring">
-          <QualityRing
-            level={activityLevel(meetingsPerMonth)}
-            color="var(--accent)"
-            ariaLabel={`Частота встреч: ${formatMeetings(meetingsPerMonth)} в месяц`}
-          >
-            <span className="qr-v">{formatMeetings(meetingsPerMonth)}</span>
-            <span className="qr-u">/мес</span>
-          </QualityRing>
-          <span className="qr-l">частота встреч</span>
-        </div>
-        <div className="qring">
-          <QualityRing
-            level={attendanceLevel(avgAttendance, memberCount)}
-            color="var(--accent)"
-            ariaLabel={`Обычно приходит ${avgAttendance} из ${memberCount}`}
-          >
-            <span className="qr-v">{avgAttendance}</span>
-            <span className="qr-u">из {memberCount}</span>
-          </QualityRing>
-          <span className="qr-l">обычно приходит</span>
-        </div>
+    <div className="rd-glass" style={{ padding: '18px 16px', marginBottom: 14 }}>
+      {hasActivity && (
+        <>
+          <div className="qrings">
+            <div className="qring">
+              <QualityRing level={cohesionLevel(coreSize)} color="var(--live)" ariaLabel={`Основа клуба: ${coreSize}`}>
+                <span className="qr-v">{coreSize}</span>
+                <span className="qr-u">чел.</span>
+              </QualityRing>
+              <span className="qr-l">{twoLineLabel('основа клуба')}</span>
+            </div>
+            <div className="qring">
+              <QualityRing
+                level={activityLevel(meetingsPerMonth)}
+                color="var(--accent)"
+                ariaLabel={`Частота встреч: ${formatMeetings(meetingsPerMonth)} в месяц`}
+              >
+                <span className="qr-v">{formatMeetings(meetingsPerMonth)}</span>
+                <span className="qr-u">/мес</span>
+              </QualityRing>
+              <span className="qr-l">{twoLineLabel('частота встреч')}</span>
+            </div>
+            <div className="qring">
+              <QualityRing
+                level={attendanceLevel(avgAttendance, memberCount)}
+                color="var(--accent)"
+                ariaLabel={`Обычно приходит ${avgAttendance} из ${memberCount}`}
+              >
+                <span className="qr-v">{avgAttendance}</span>
+                <span className="qr-u">из {memberCount}</span>
+              </QualityRing>
+              <span className="qr-l">{twoLineLabel('обычно приходит')}</span>
+            </div>
+          </div>
+          <div className="q-divider" />
+        </>
+      )}
+
+      <div className="qstat-line">
+        <span className="qstat gold">
+          <span>{age.icon}</span>
+          {age.label}
+        </span>
+        {tail.map((t) => (
+          <Fragment key={t.key}>
+            <span className="dot">·</span>
+            <span className={t.muted ? 'qstat muted' : 'qstat'}>
+              {t.icon && <span>{t.icon}</span>}
+              {t.text}
+            </span>
+          </Fragment>
+        ))}
       </div>
-    </>
+    </div>
   );
 };

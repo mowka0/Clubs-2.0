@@ -10,5 +10,7 @@ class ClubQualityMapper {
         avgAttendance = facts.avgAttendance,
         coreSize = facts.coreSize,
         ageMonths = facts.ageMonths,
+        totalMeetings = facts.totalMeetings,
+        successfulSkladchinas = facts.successfulSkladchinas,
     )
 }
