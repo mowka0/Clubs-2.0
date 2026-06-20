@@ -31,7 +31,5 @@ interface ClubRepository {
 
     fun decrementMemberCountSafely(clubId: UUID, delta: Int)
 
-    fun decreaseActivityRatingSafely(clubId: UUID, delta: Int)
-
     fun linkTelegramGroup(clubId: UUID, telegramGroupId: Long)
 }

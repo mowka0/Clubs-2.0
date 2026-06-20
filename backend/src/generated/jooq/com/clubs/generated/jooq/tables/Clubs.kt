@@ -8,7 +8,6 @@ import com.clubs.generated.jooq.Public
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.indexes.IDX_CLUBS_ACCESS_TYPE
-import com.clubs.generated.jooq.indexes.IDX_CLUBS_ACTIVITY_RATING
 import com.clubs.generated.jooq.indexes.IDX_CLUBS_CATEGORY
 import com.clubs.generated.jooq.indexes.IDX_CLUBS_CITY
 import com.clubs.generated.jooq.indexes.IDX_CLUBS_OWNER_ID
@@ -176,11 +175,6 @@ open class Clubs(
     val TELEGRAM_GROUP_ID: TableField<ClubsRecord, Long?> = createField(DSL.name("telegram_group_id"), SQLDataType.BIGINT, this, "")
 
     /**
-     * The column <code>public.clubs.activity_rating</code>.
-     */
-    val ACTIVITY_RATING: TableField<ClubsRecord, Int?> = createField(DSL.name("activity_rating"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("0"), SQLDataType.INTEGER)), this, "")
-
-    /**
      * The column <code>public.clubs.member_count</code>.
      */
     val MEMBER_COUNT: TableField<ClubsRecord, Int?> = createField(DSL.name("member_count"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("0"), SQLDataType.INTEGER)), this, "")
@@ -232,7 +226,7 @@ open class Clubs(
         override fun `as`(alias: Table<*>): ClubsPath = ClubsPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(IDX_CLUBS_ACCESS_TYPE, IDX_CLUBS_ACTIVITY_RATING, IDX_CLUBS_CATEGORY, IDX_CLUBS_CITY, IDX_CLUBS_OWNER_ID)
+    override fun getIndexes(): List<Index> = listOf(IDX_CLUBS_ACCESS_TYPE, IDX_CLUBS_CATEGORY, IDX_CLUBS_CITY, IDX_CLUBS_OWNER_ID)
     override fun getPrimaryKey(): UniqueKey<ClubsRecord> = CLUBS_PKEY
     override fun getUniqueKeys(): List<UniqueKey<ClubsRecord>> = listOf(CLUBS_INVITE_LINK_KEY)
     override fun getReferences(): List<ForeignKey<ClubsRecord, *>> = listOf(CLUBS__CLUBS_OWNER_ID_FKEY)

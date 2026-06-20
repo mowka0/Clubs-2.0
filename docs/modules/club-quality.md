@@ -6,7 +6,9 @@
 
 > Спека покрывает срезы **«Фундамент»** (модуль `com.clubs.clubquality` + L1-факты, derive read-only) и
 > **«Кольца L2»** (Сплочённость·Активность·Приходит на странице клуба). Owner-«Статистика», скрытый L3-ранг,
-> `membership_history`, фикс `activity_rating`, возраст-бейдж/майлстоны — **следующими PR**.
+> `membership_history`, возраст-бейдж/майлстоны — **следующими PR**.
+> Фикс мёртвого `activity_rating` — **в проде** (V30: колонка ретайрнута, сортировка дискавери и тег
+> «Популярный» пересобраны как derived; см. `docs/modules/clubs.md` § «GET /api/clubs»).
 
 ---
 
@@ -173,6 +175,8 @@ backend/src/main/kotlin/com/clubs/clubquality/
 - owner-«Статистика» (рычаги/нуджи/зона внимания) — нужны ownership-проверки.
 - Скрытый L3-ранг (композит 4 осей) — нужна калибровка §8, читает ledger через read-port.
 - `membership_history` (фундамент retention) — строить чисто, без backfill.
-- Фикс мёртвого `activity_rating` (живой баг дискавери) — отдельным PR.
+
+**Зашиплено после этой спеки:** фикс мёртвого `activity_rating` (V30 — колонка ретайрнута, сортировка
+дискавери + тег «Популярный» пересобраны как derived). См. `docs/modules/clubs.md` § «GET /api/clubs».
 </content>
 </invoke>

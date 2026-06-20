@@ -3,7 +3,7 @@
 Заявки на вступление в закрытые клубы. Соответствует PRD §4.2.2. Источник истины для бизнес-правил — PRD.
 
 ## Цель
-Дать пользователю возможность подать заявку (с ответом на `applicationQuestion`) на вступление в клуб с `access_type = closed`. Организатор клуба принимает решение (approve / reject) вручную в течение 48 часов, иначе scheduler авто-отклоняет заявку и понижает activity_rating клуба.
+Дать пользователю возможность подать заявку (с ответом на `applicationQuestion`) на вступление в клуб с `access_type = closed`. Организатор клуба принимает решение (approve / reject) вручную в течение 48 часов, иначе scheduler авто-отклоняет заявку.
 
 ## Scope
 ### Входит
@@ -12,7 +12,7 @@
 - `POST /api/applications/{id}/approve` — одобрить (organizer-only)
 - `POST /api/applications/{id}/reject` — отклонить (organizer-only)
 - `GET /api/users/me/applications` — свои заявки
-- `ApplicationScheduler` — раз в час: auto-reject заявок старше 48 часов + штраф `activity_rating` клуба
+- `ApplicationScheduler` — раз в час: auto-reject заявок старше 48 часов
 
 ### НЕ входит (из этой итерации)
 - Resubmit после `rejected` (отдельная фича)
@@ -83,8 +83,8 @@ ApplicationRepository (markAutoRejected)
 
 ### US-3: auto-reject устаревших заявок
 **Как** система
-**Я хочу** автоматически отклонять заявки старше 48 часов и штрафовать `activity_rating` неактивного клуба
-**Чтобы** не зависала очередь заявителей и каталог продвигал активных организаторов
+**Я хочу** автоматически отклонять заявки старше 48 часов
+**Чтобы** не зависала очередь заявителей
 
 ## API контракты
 
@@ -399,8 +399,7 @@ THEN 200 OK, 4 элемента, все принадлежат caller
 GIVEN 2 pending-заявки в клубе X старше 48 часов
 WHEN ApplicationScheduler.autoRejectExpiredApplications() прогон
 THEN обе заявки: status = auto_rejected, resolved_at = now()
-AND clubs[X].activity_rating уменьшен ровно на 5 (один штраф на клуб, независимо от числа заявок)
-AND логи INFO с id заявок и фактом штрафа
+AND логи INFO с id заявок
 ```
 
 **AC-20: scheduler — нет expired**

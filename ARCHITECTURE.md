@@ -31,7 +31,7 @@ GET /api/users/me/applications
 GET /api/clubs
   Query: ?category=sport&city=Москва&accessType=open&minPrice=0&maxPrice=1000&search=футбол&page=0&size=20
   Response 200: { content: ClubListItemDto[], totalPages: int, totalElements: long }
-  Notes: Private clubs excluded. Sorted by activity_rating DESC
+  Notes: Private clubs excluded. Sorted by derived recent-activity (non-cancelled events in last 90d + upcoming) DESC, then member_count DESC, then created_at DESC (activity_rating retired in V30)
 
 GET /api/clubs/{id}
   Response 200: ClubDetailDto
@@ -398,7 +398,7 @@ CREATE TYPE transaction_status AS ENUM ('completed', 'failed', 'refunded');
 CREATE INDEX idx_clubs_category ON clubs(category);
 CREATE INDEX idx_clubs_city ON clubs(city);
 CREATE INDEX idx_clubs_access_type ON clubs(access_type);
-CREATE INDEX idx_clubs_activity_rating ON clubs(activity_rating DESC);
+-- idx_clubs_activity_rating dropped in V30 (activity_rating column retired)
 CREATE INDEX idx_clubs_owner_id ON clubs(owner_id);
 
 -- memberships: lookup
@@ -612,7 +612,7 @@ frontend/src/
 | Job | Frequency | Logic |
 |-----|-----------|-------|
 | Stage2TriggerJob | Every 5 min | Find events where `event_datetime - 24h <= now` AND `stage_2_triggered = false`. Trigger stage 2 flow. |
-| ApplicationAutoRejectJob | Every 1 hour | Find applications where `status = pending` AND `created_at + 48h < now`. Set `auto_rejected`, decrease club `activity_rating` by 5. |
+| ApplicationAutoRejectJob | Every 1 hour | Find applications where `status = pending` AND `created_at + 48h < now`. Set `auto_rejected`. |
 | AttendanceFinalizeJob | Every 1 hour | Find events where `attendance_marked = true` AND `updated_at + 48h < now` AND `attendance_finalized = false`. Finalize attendance, trigger reputation calculation. |
 | SubscriptionCheckJob | Daily at 00:00 | Find memberships where `subscription_expires_at <= now + 3d`. Send reminder. If expired: attempt renewal or set `grace_period`. After grace period: set `expired`. |
 

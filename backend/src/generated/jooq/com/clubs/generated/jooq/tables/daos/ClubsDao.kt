@@ -207,17 +207,6 @@ open class ClubsDao(configuration: Configuration?) : DAOImpl<ClubsRecord, com.cl
     fun fetchByTelegramGroupId(vararg values: Long): List<com.clubs.generated.jooq.tables.pojos.Clubs> = fetch(Clubs.CLUBS.TELEGRAM_GROUP_ID, *values.toTypedArray())
 
     /**
-     * Fetch records that have <code>activity_rating BETWEEN lowerInclusive AND
-     * upperInclusive</code>
-     */
-    fun fetchRangeOfActivityRating(lowerInclusive: Int?, upperInclusive: Int?): List<com.clubs.generated.jooq.tables.pojos.Clubs> = fetchRange(Clubs.CLUBS.ACTIVITY_RATING, lowerInclusive, upperInclusive)
-
-    /**
-     * Fetch records that have <code>activity_rating IN (values)</code>
-     */
-    fun fetchByActivityRating(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.Clubs> = fetch(Clubs.CLUBS.ACTIVITY_RATING, *values.toTypedArray())
-
-    /**
      * Fetch records that have <code>member_count BETWEEN lowerInclusive AND
      * upperInclusive</code>
      */

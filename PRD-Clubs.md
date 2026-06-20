@@ -567,7 +567,6 @@
 - application_question: varchar(200)
 - telegram_group_id: bigint
 - invite_link: varchar(255)
-- activity_rating: float (default 0)
 - is_active: boolean (default true)
 - created_at: timestamp
 - updated_at: timestamp

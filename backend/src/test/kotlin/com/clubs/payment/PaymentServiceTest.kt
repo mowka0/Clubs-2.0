@@ -82,7 +82,6 @@ class PaymentServiceTest {
             applicationQuestion = null,
             inviteLink = null,
             memberCount = 0,
-            activityRating = 0,
             isActive = true,
             telegramGroupId = null,
             createdAt = now,

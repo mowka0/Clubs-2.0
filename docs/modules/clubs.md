@@ -91,7 +91,7 @@ DELETE /api/clubs/{id}     → 204 No Content        (soft delete)
 **НЕ редактируемы после создания**:
 - `category` — смена категории сломает discovery/фильтры
 - `accessType` — смена типа доступа у клуба с действующими membership'ами/заявками требует отдельной миграции бизнес-логики (out-of-scope MVP)
-- `ownerId`, `memberCount`, `activityRating`, `inviteLink`, `isActive` — служебные
+- `ownerId`, `memberCount`, `inviteLink`, `isActive` — служебные
 
 Backend явно не принимает category/accessType в `UpdateClubRequest`. Frontend показывает их в Settings-tab как read-only.
 
@@ -247,7 +247,7 @@ GET /api/clubs
 
 ### Бизнес-правила
 - Приватные клубы (`access_type = private`) **не отображаются** в каталоге
-- Сортировка: `activity_rating DESC`
+- Сортировка: derived-сигнал «свежая активность» (число non-cancelled событий за окно 90 дней + предстоящие) DESC → tiebreak `member_count` DESC → `created_at` DESC. Колонка `activity_rating` ретайрнута (V30, всегда была 0); сортировка/тег пересобраны как derived в `JooqClubRepository.findAll`
 - `memberCount` = количество memberships со статусом `active`
 - `nearestEvent` = ближайшее событие клуба с `status = 'upcoming'` и `event_datetime > now()`, limit 1
 - Фильтр `search` ищет по полям `name` и `description` (case-insensitive LIKE)
@@ -270,9 +270,16 @@ GET /api/clubs
     "title": "string",
     "eventDatetime": "ISO datetime",
     "goingCount": 12
-  } | null
+  } | null,
+  "tags": ["Новый", "Популярный", "Свободные места"]
 }
 ```
+
+### Теги (`tags`)
+Производные ярлыки, считаются на лету в `findAll` (порядок в массиве — как ниже):
+- **«Новый»** — `created_at` в пределах последних 14 дней
+- **«Популярный»** — `member_count` в верхней децили текущей выборки (порог = top-10% по member_count) **и порог > 0**. Гард `> 0` не даёт повесить тег на всех, когда у всех клубов 0 участников (регрессия мёртвого `activity_rating`). При `< 10` клубов в выборке тег не вешается
+- **«Свободные места»** — `member_count / member_limit < 0.8`
 
 ### Corner Cases
 - Нет клубов по фильтрам → 200 с пустым `content: []`

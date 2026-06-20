@@ -343,7 +343,6 @@ interface ClubDetailDto {
   applicationQuestion: string | null;   // только для closed
   inviteLink: string | null;
   memberCount: number;
-  activityRating: number;
   isActive: boolean;
 }
 ```

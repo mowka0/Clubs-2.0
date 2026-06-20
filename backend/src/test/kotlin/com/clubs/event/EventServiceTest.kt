@@ -121,7 +121,6 @@ class EventServiceTest {
         applicationQuestion = null,
         inviteLink = null,
         memberCount = 1,
-        activityRating = 0,
         isActive = true,
         telegramGroupId = null,
         createdAt = OffsetDateTime.now(),

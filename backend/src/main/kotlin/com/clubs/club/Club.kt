@@ -21,7 +21,6 @@ data class Club(
     val applicationQuestion: String?,
     val inviteLink: String?,
     val memberCount: Int,
-    val activityRating: Int,
     val isActive: Boolean,
     val telegramGroupId: Long?,
     val createdAt: OffsetDateTime,

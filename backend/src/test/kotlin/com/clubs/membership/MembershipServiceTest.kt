@@ -94,7 +94,6 @@ class MembershipServiceTest {
             applicationQuestion = null,
             inviteLink = null,
             memberCount = memberCount,
-            activityRating = 0,
             isActive = true,
             telegramGroupId = null,
             createdAt = now,

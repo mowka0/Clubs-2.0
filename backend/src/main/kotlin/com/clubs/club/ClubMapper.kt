@@ -23,7 +23,6 @@ class ClubMapper {
         applicationQuestion = record.applicationQuestion,
         inviteLink = record.inviteLink,
         memberCount = record.memberCount ?: 0,
-        activityRating = record.activityRating ?: 0,
         isActive = record.isActive ?: true,
         telegramGroupId = record.telegramGroupId,
         createdAt = record.createdAt!!,
@@ -46,7 +45,6 @@ class ClubMapper {
         applicationQuestion = club.applicationQuestion,
         inviteLink = club.inviteLink,
         memberCount = club.memberCount,
-        activityRating = club.activityRating,
         isActive = club.isActive
     )
 }

@@ -93,7 +93,6 @@ function mockEventEndpoints(opts: { ownerId: string; event?: EventDetailDto } = 
       applicationQuestion: null,
       inviteLink: null,
       memberCount: 3,
-      activityRating: 0,
       isActive: true,
     })),
   );
