@@ -321,11 +321,8 @@ export interface ClubFactsDto {
 /** Discovery-card quality facts for `GET /api/clubs/quality/batch` (one per club). */
 export interface ClubCardFactsDto {
   clubId: string;
-  meetingsPerMonth: number;
+  ageDays: number;
   engagementPercent: number;
-  ageMonths: number;
-  totalMeetings: number;
-  successfulSkladchinas: number;
 }
 
 export interface MembershipDto {

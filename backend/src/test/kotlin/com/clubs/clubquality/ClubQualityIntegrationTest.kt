@@ -16,6 +16,7 @@ import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 /**
  * Integration tests for club-quality L1 facts against a real Postgres. Covers each fact's
@@ -182,29 +183,24 @@ class ClubQualityIntegrationTest {
     // ---- batch (Discovery card) ----
 
     @Test
-    fun `card facts batch returns frequency, engagement, age and milestones`() {
+    fun `card facts batch returns age in days and engagement`() {
         // 4 alive members (denominator); an expired one is excluded.
         val m1 = newUser(); val m2 = newUser()
         listOf(m1, m2, newUser(), newUser()).forEach { insertMembership(it, "active") }
         insertMembership(newUser(), "expired")
 
-        // 3 held events in window → meetingsPerMonth = 3/3 = 1.0; totalMeetings = 3.
+        // 2 distinct members respond to recent events → engagement numerator = 2.
         val e1 = insertEvent(daysFromNow(-3), "completed")
         val e2 = insertEvent(daysFromNow(-10), "completed")
-        insertEvent(daysFromNow(-20), "completed")
         insertResponse(e1, attendance = null, userId = m1)
         insertResponse(e1, attendance = null, userId = m2)
         insertResponse(e2, attendance = null, userId = m1) // m1 again → distinct responders = {m1, m2}
 
-        insertSkladchina("closed_success")
-
         val facts = clubQualityService.getClubCardFacts(listOf(clubId)).single()
         assertEquals(clubId, facts.clubId)
-        assertEquals(1.0, facts.meetingsPerMonth, 0.001)
         assertEquals(50, facts.engagementPercent) // 2 distinct responders ÷ 4 alive members
-        assertEquals(14, facts.ageMonths)
-        assertEquals(3, facts.totalMeetings)
-        assertEquals(1, facts.successfulSkladchinas)
+        // Club was created ~14 months ago in setUp → age in DAYS (not months, not zero).
+        assertTrue(facts.ageDays >= 420, "ageDays should reflect days since creation, was ${facts.ageDays}")
     }
 
     @Test

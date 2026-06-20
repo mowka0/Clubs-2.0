@@ -21,20 +21,18 @@ data class ClubFacts(
 )
 
 /**
- * Lean per-club facts for the Discovery feed card («листать или зайти?», §11.1). A subset tuned for
- * the card's decision trio plus the age-badge / achievement counters — computed in BATCH for a page
- * of clubs to avoid N+1 over the catalogue. «участники» is intentionally absent: the card already
- * has it from `ClubListItemDto.memberCount`.
+ * Lean per-club facts for the Discovery feed card («листать или зайти?», §11.1), computed in BATCH
+ * over a page of clubs (no N+1). The card's decision trio is **возраст · участники · вовлечённость**:
+ * deliberately NOT встреч/мес or ядро — those are the club page's own rings (Активность / Сплочённость),
+ * so the card stays minimal and non-duplicating. «участники» isn't here either — the card already has
+ * `ClubListItemDto.memberCount`.
  *
  * Design contract: docs/backlog/club-quality-gamification.md §11.1, §11.4 ("now" metrics).
  */
 data class ClubCardFacts(
     val clubId: UUID,
-    /** Held events in the last 90 days ÷ 3 (встреч/мес). */
-    val meetingsPerMonth: Double,
+    /** Whole days since the club was created (возраст). */
+    val ageDays: Int,
     /** Distinct members who responded to events in the last 90 days ÷ alive members, 0..100 (вовлечённость). */
     val engagementPercent: Int,
-    val ageMonths: Int,
-    val totalMeetings: Int,
-    val successfulSkladchinas: Int,
 )

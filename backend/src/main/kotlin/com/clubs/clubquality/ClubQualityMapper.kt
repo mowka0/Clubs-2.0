@@ -16,10 +16,7 @@ class ClubQualityMapper {
 
     fun toCardDto(facts: ClubCardFacts): ClubCardFactsDto = ClubCardFactsDto(
         clubId = facts.clubId,
-        meetingsPerMonth = facts.meetingsPerMonth,
+        ageDays = facts.ageDays,
         engagementPercent = facts.engagementPercent,
-        ageMonths = facts.ageMonths,
-        totalMeetings = facts.totalMeetings,
-        successfulSkladchinas = facts.successfulSkladchinas,
     )
 }

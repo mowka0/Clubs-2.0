@@ -21,20 +21,15 @@ data class ClubFactsDto(
 
 /**
  * HTTP shape of [ClubCardFacts] for `GET /api/clubs/quality/batch?ids=...` — the Discovery feed
- * card's quality data, returned one element per requested (and existing) club.
+ * card's decision trio (возраст · участники · вовлечённость), one element per existing club.
+ * «участники» comes from `ClubListItemDto.memberCount`, not here.
  *
  * @property clubId            the club these facts belong to (the caller keys the response by it)
- * @property meetingsPerMonth  held events in the last 90 days ÷ 3 (встреч/мес)
+ * @property ageDays           whole days since the club was created (возраст)
  * @property engagementPercent distinct recent responders ÷ alive members, 0..100 (вовлечённость)
- * @property ageMonths         full months since the club was created (age badge)
- * @property totalMeetings     all-time held events (milestone «N встреч»)
- * @property successfulSkladchinas skladchinas closed as successful (milestone «N сборов»)
  */
 data class ClubCardFactsDto(
     val clubId: java.util.UUID,
-    val meetingsPerMonth: Double,
+    val ageDays: Int,
     val engagementPercent: Int,
-    val ageMonths: Int,
-    val totalMeetings: Int,
-    val successfulSkladchinas: Int,
 )

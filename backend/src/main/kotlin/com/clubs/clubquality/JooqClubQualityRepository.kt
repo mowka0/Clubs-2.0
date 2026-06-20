@@ -14,6 +14,7 @@ import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
 import java.time.OffsetDateTime
 import java.time.Period
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 import kotlin.math.roundToInt
 
@@ -126,7 +127,7 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
             .where(SKLADCHINAS.CLUB_ID.eq(clubId).and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.closed_success)))
             .fetchOne(0, Int::class.java) ?: 0
 
-    // ---- Batch (Discovery card): one grouped query per metric over the whole page of clubs ----
+    // ---- Batch (Discovery card): возраст · вовлечённость, one grouped query per metric (no N+1) ----
 
     override fun findClubCardFacts(clubIds: Collection<UUID>): List<ClubCardFacts> {
         if (clubIds.isEmpty()) return emptyList()
@@ -137,28 +138,21 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
         val createdAt = createdAtByClub(ids)
         if (createdAt.isEmpty()) return emptyList()
 
-        val heldInWindow = heldInWindowCountByClub(ids, now, windowStart)
-        val totalHeld = totalHeldCountByClub(ids, now)
         val responders = recentRespondersByClub(ids, windowStart)
         val aliveMembers = aliveMemberCountByClub(ids)
-        val skladchinas = successfulSkladchinasByClub(ids)
 
         return createdAt.map { (clubId, created) ->
-            val held = heldInWindow[clubId] ?: 0
             val alive = aliveMembers[clubId] ?: 0
             val responded = responders[clubId] ?: 0
             ClubCardFacts(
                 clubId = clubId,
-                meetingsPerMonth = (held / MONTHS_IN_WINDOW * 10.0).roundToInt() / 10.0,
+                ageDays = ChronoUnit.DAYS.between(created.toLocalDate(), now.toLocalDate())
+                    .toInt().coerceAtLeast(0),
                 engagementPercent = if (alive > 0) {
                     (responded.toDouble() / alive * 100).roundToInt().coerceIn(0, 100)
                 } else {
                     0
                 },
-                ageMonths = Period.between(created.toLocalDate(), now.toLocalDate())
-                    .toTotalMonths().toInt().coerceAtLeast(0),
-                totalMeetings = totalHeld[clubId] ?: 0,
-                successfulSkladchinas = skladchinas[clubId] ?: 0,
             )
         }
     }
@@ -170,31 +164,6 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
             .where(CLUBS.ID.`in`(ids))
             .fetch()
             .associate { it.value1()!! to it.value2()!! }
-
-    private fun heldInWindowCountByClub(ids: Set<UUID>, now: OffsetDateTime, windowStart: OffsetDateTime): Map<UUID, Int> =
-        dsl.select(EVENTS.CLUB_ID, DSL.count())
-            .from(EVENTS)
-            .where(
-                EVENTS.CLUB_ID.`in`(ids)
-                    .and(EVENTS.STATUS.ne(EventStatus.cancelled))
-                    .and(EVENTS.EVENT_DATETIME.lt(now))
-                    .and(EVENTS.EVENT_DATETIME.ge(windowStart)),
-            )
-            .groupBy(EVENTS.CLUB_ID)
-            .fetch()
-            .associate { it.value1()!! to it.value2() }
-
-    private fun totalHeldCountByClub(ids: Set<UUID>, now: OffsetDateTime): Map<UUID, Int> =
-        dsl.select(EVENTS.CLUB_ID, DSL.count())
-            .from(EVENTS)
-            .where(
-                EVENTS.CLUB_ID.`in`(ids)
-                    .and(EVENTS.STATUS.ne(EventStatus.cancelled))
-                    .and(EVENTS.EVENT_DATETIME.lt(now)),
-            )
-            .groupBy(EVENTS.CLUB_ID)
-            .fetch()
-            .associate { it.value1()!! to it.value2() }
 
     /**
      * Distinct members who responded to the club's recent (window-or-upcoming) non-cancelled events.
@@ -222,17 +191,6 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
                     .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period)),
             )
             .groupBy(MEMBERSHIPS.CLUB_ID)
-            .fetch()
-            .associate { it.value1()!! to it.value2() }
-
-    private fun successfulSkladchinasByClub(ids: Set<UUID>): Map<UUID, Int> =
-        dsl.select(SKLADCHINAS.CLUB_ID, DSL.count())
-            .from(SKLADCHINAS)
-            .where(
-                SKLADCHINAS.CLUB_ID.`in`(ids)
-                    .and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.closed_success)),
-            )
-            .groupBy(SKLADCHINAS.CLUB_ID)
             .fetch()
             .associate { it.value1()!! to it.value2() }
 }
