@@ -78,7 +78,7 @@ export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
       >
         <span className="rd-price-chip">{formatPrice(club.subscriptionPrice)}</span>
         {featured && club.nearestEvent && (
-          <span className="rd-date-badge" style={{ position: 'absolute', top: 10, left: 12 }}>
+          <span className="rd-date-badge" style={{ position: 'absolute', top: 10, left: 12, zIndex: 2 }}>
             встреча {formatEventTime(club.nearestEvent.eventDatetime)}
           </span>
         )}
