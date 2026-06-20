@@ -1,7 +1,8 @@
 import { FC, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useHaptic } from '../hooks/useHaptic';
-import type { ClubListItemDto } from '../types/api';
+import { ageBadge, counters } from './club/clubMilestones';
+import type { ClubCardFactsDto, ClubListItemDto } from '../types/api';
 
 const CATEGORY_LABELS: Record<string, string> = {
   sport: 'Спорт',
@@ -47,11 +48,18 @@ function formatEventTime(iso: string): string {
   return `${hh}:${mm}`;
 }
 
-interface ClubCardProps {
-  club: ClubListItemDto;
+/** «2.3» → "2,3"; «3.0» → "3" — Russian decimal, drop trailing .0 */
+function formatPerMonth(value: number): string {
+  return (Number.isInteger(value) ? String(value) : value.toFixed(1)).replace('.', ',');
 }
 
-export const ClubCard: FC<ClubCardProps> = ({ club }) => {
+interface ClubCardProps {
+  club: ClubListItemDto;
+  /** Quality facts (встреч/мес · вовлечённость · age/achievements). Absent until the batch loads. */
+  facts?: ClubCardFactsDto;
+}
+
+export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
   const navigate = useNavigate();
   const haptic = useHaptic();
 
@@ -65,6 +73,8 @@ export const ClubCard: FC<ClubCardProps> = ({ club }) => {
   ]
     .filter(Boolean)
     .join(' · ');
+
+  const achievements = facts ? [ageBadge(facts.ageMonths), ...counters(facts)] : [];
 
   return (
     <button
@@ -89,6 +99,23 @@ export const ClubCard: FC<ClubCardProps> = ({ club }) => {
       <div className="rd-body">
         <div className="rd-ttl">{club.name}</div>
         <div className="rd-meta">{meta}</div>
+        {facts && (facts.meetingsPerMonth > 0 || facts.engagementPercent > 0) && (
+          <div className="rd-quality">
+            {facts.meetingsPerMonth > 0 && (
+              <span>📅 <b>{formatPerMonth(facts.meetingsPerMonth)}</b>/мес</span>
+            )}
+            {facts.engagementPercent > 0 && (
+              <span>⚡ <b>{facts.engagementPercent}%</b> вовлечённость</span>
+            )}
+          </div>
+        )}
+        {achievements.length > 0 && (
+          <div className="rd-badges">
+            {achievements.map((a) => (
+              <span key={a.label} className="rd-badge-chip">{a.icon} {a.label}</span>
+            ))}
+          </div>
+        )}
       </div>
     </button>
   );

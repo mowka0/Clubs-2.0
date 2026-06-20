@@ -179,6 +179,60 @@ class ClubQualityIntegrationTest {
         assertEquals(2, clubQualityService.getClubFacts(clubId).successfulSkladchinas)
     }
 
+    // ---- batch (Discovery card) ----
+
+    @Test
+    fun `card facts batch returns frequency, engagement, age and milestones`() {
+        // 4 alive members (denominator); an expired one is excluded.
+        val m1 = newUser(); val m2 = newUser()
+        listOf(m1, m2, newUser(), newUser()).forEach { insertMembership(it, "active") }
+        insertMembership(newUser(), "expired")
+
+        // 3 held events in window → meetingsPerMonth = 3/3 = 1.0; totalMeetings = 3.
+        val e1 = insertEvent(daysFromNow(-3), "completed")
+        val e2 = insertEvent(daysFromNow(-10), "completed")
+        insertEvent(daysFromNow(-20), "completed")
+        insertResponse(e1, attendance = null, userId = m1)
+        insertResponse(e1, attendance = null, userId = m2)
+        insertResponse(e2, attendance = null, userId = m1) // m1 again → distinct responders = {m1, m2}
+
+        insertSkladchina("closed_success")
+
+        val facts = clubQualityService.getClubCardFacts(listOf(clubId)).single()
+        assertEquals(clubId, facts.clubId)
+        assertEquals(1.0, facts.meetingsPerMonth, 0.001)
+        assertEquals(50, facts.engagementPercent) // 2 distinct responders ÷ 4 alive members
+        assertEquals(14, facts.ageMonths)
+        assertEquals(3, facts.totalMeetings)
+        assertEquals(1, facts.successfulSkladchinas)
+    }
+
+    @Test
+    fun `card facts batch skips ids with no club row`() {
+        val facts = clubQualityService.getClubCardFacts(listOf(clubId, UUID.randomUUID()))
+        assertEquals(setOf(clubId), facts.map { it.clubId }.toSet())
+    }
+
+    @Test
+    fun `card facts engagement is zero when club has no alive members`() {
+        val e = insertEvent(daysFromNow(-3), "completed")
+        insertResponse(e, attendance = null) // a responder exists, but zero alive members
+        assertEquals(0, clubQualityService.getClubCardFacts(listOf(clubId)).single().engagementPercent)
+    }
+
+    @Test
+    fun `card facts engagement clamps at 100 percent`() {
+        insertMembership(newUser(), "active") // 1 alive member
+        val e = insertEvent(daysFromNow(-3), "completed")
+        repeat(3) { insertResponse(e, attendance = null) } // 3 distinct responders > 1 member
+        assertEquals(100, clubQualityService.getClubCardFacts(listOf(clubId)).single().engagementPercent)
+    }
+
+    @Test
+    fun `card facts batch returns empty for empty input`() {
+        assertEquals(emptyList<ClubCardFactsDto>(), clubQualityService.getClubCardFacts(emptyList()))
+    }
+
     // ---- helpers ----
 
     private fun newUser(): UUID {
@@ -222,6 +276,17 @@ class ClubQualityIntegrationTest {
                                          stage_2_vote, final_status, attendance)
             VALUES ('$id', '$eventId', '$userId', 'going'::stage_1_vote, NOW(),
                     'confirmed'::stage_2_vote, 'confirmed'::final_status, $att)
+            """.trimIndent()
+        )
+        return id
+    }
+
+    private fun insertMembership(userId: UUID, status: String): UUID {
+        val id = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO memberships (id, user_id, club_id, status, role)
+            VALUES ('$id', '$userId', '$clubId', '$status'::membership_status, 'member'::membership_role)
             """.trimIndent()
         )
         return id

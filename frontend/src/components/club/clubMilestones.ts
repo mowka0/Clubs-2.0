@@ -1,5 +1,7 @@
 import { pluralRu } from '../../utils/formatters';
-import type { ClubFactsDto } from '../../types/api';
+
+/** Lifetime counters need only these two fields — works for both full facts and card facts. */
+type CounterFacts = { totalMeetings: number; successfulSkladchinas: number };
 
 /**
  * Достижения клуба — простые ЖИВЫЕ счётчики (без очков, без порогов/замков): возраст-бейдж +
@@ -24,7 +26,7 @@ export function ageBadge(ageMonths: number): Achievement {
 }
 
 /** Lifetime activity counters — each shown only when > 0 (a young club shows just the age badge). */
-export function counters(facts: ClubFactsDto): Achievement[] {
+export function counters(facts: CounterFacts): Achievement[] {
   const out: Achievement[] = [];
   if (facts.totalMeetings > 0) {
     out.push({

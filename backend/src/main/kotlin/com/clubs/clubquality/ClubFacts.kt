@@ -1,5 +1,7 @@
 package com.clubs.clubquality
 
+import java.util.UUID
+
 /**
  * L1 facts about a club ("place" subject, anchored on club_id) — derived read-only from
  * existing tables, no own schema. These are the honest, publicly-visible signals a chooser
@@ -15,5 +17,24 @@ data class ClubFacts(
     /** All-time held (past, non-cancelled) events — feeds the «N встреч» milestone. */
     val totalMeetings: Int,
     /** Skladchinas closed as successful — feeds the «первый сбор» milestone. */
+    val successfulSkladchinas: Int,
+)
+
+/**
+ * Lean per-club facts for the Discovery feed card («листать или зайти?», §11.1). A subset tuned for
+ * the card's decision trio plus the age-badge / achievement counters — computed in BATCH for a page
+ * of clubs to avoid N+1 over the catalogue. «участники» is intentionally absent: the card already
+ * has it from `ClubListItemDto.memberCount`.
+ *
+ * Design contract: docs/backlog/club-quality-gamification.md §11.1, §11.4 ("now" metrics).
+ */
+data class ClubCardFacts(
+    val clubId: UUID,
+    /** Held events in the last 90 days ÷ 3 (встреч/мес). */
+    val meetingsPerMonth: Double,
+    /** Distinct members who responded to events in the last 90 days ÷ alive members, 0..100 (вовлечённость). */
+    val engagementPercent: Int,
+    val ageMonths: Int,
+    val totalMeetings: Int,
     val successfulSkladchinas: Int,
 )
