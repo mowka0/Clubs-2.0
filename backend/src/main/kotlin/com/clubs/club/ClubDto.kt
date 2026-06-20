@@ -45,7 +45,6 @@ data class ClubDetailDto(
     val applicationQuestion: String?,
     val inviteLink: String?,
     val memberCount: Int,
-    val activityRating: Int,
     val isActive: Boolean
 )
 

@@ -9,6 +9,7 @@ import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.generated.jooq.tables.references.EVENTS
 import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import org.jooq.DSLContext
+import org.jooq.Field
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
 import java.time.OffsetDateTime
@@ -19,6 +20,12 @@ class JooqClubRepository(
     private val dsl: DSLContext,
     private val mapper: ClubMapper
 ) : ClubRepository {
+
+    private companion object {
+        const val ACTIVITY_WINDOW_DAYS = 90L
+        const val NEW_CLUB_DAYS = 14L
+        const val POPULAR_MIN_CLUBS = 10
+    }
 
     override fun create(request: CreateClubRequest, ownerId: UUID, inviteCode: String?): Club {
         val record = dsl.insertInto(CLUBS)
@@ -37,7 +44,6 @@ class JooqClubRepository(
             .set(CLUBS.APPLICATION_QUESTION, request.applicationQuestion)
             .set(CLUBS.INVITE_LINK, inviteCode)
             .set(CLUBS.MEMBER_COUNT, 0)
-            .set(CLUBS.ACTIVITY_RATING, 0)
             .set(CLUBS.IS_ACTIVE, true)
             .returning()
             .fetchOne()!!
@@ -121,9 +127,16 @@ class JooqClubRepository(
         val total = dsl.selectCount().from(CLUBS).where(condition)
             .fetchOne(0, Long::class.java) ?: 0L
 
+        val now = OffsetDateTime.now()
+        val activityWindowStart = now.minusDays(ACTIVITY_WINDOW_DAYS)
+
         val clubs = dsl.selectFrom(CLUBS)
             .where(condition)
-            .orderBy(CLUBS.ACTIVITY_RATING.desc())
+            .orderBy(
+                recentActivity(activityWindowStart).desc(),
+                CLUBS.MEMBER_COUNT.desc(),
+                CLUBS.CREATED_AT.desc()
+            )
             .limit(filters.size)
             .offset(filters.page * filters.size)
             .fetch()
@@ -131,20 +144,23 @@ class JooqClubRepository(
         val clubIds = clubs.map { it.id!! }
         val nearestEvents = fetchNearestEvents(clubIds)
 
-        val now = OffsetDateTime.now()
-        val newThreshold = now.minusDays(14)
+        val newThreshold = now.minusDays(NEW_CLUB_DAYS)
 
-        // Top 10% threshold for "Популярный" tag
-        val topRatingThreshold = if (clubs.size >= 10) {
-            clubs.sortedByDescending { it.activityRating ?: 0 }
+        // "Популярный" = club is in the top member-count decile of this result set. The
+        // threshold > 0 guard stops a page of brand-new (zero-member) clubs from tagging
+        // everyone — the exact regression the retired all-zero activity_rating caused.
+        val topMemberThreshold = if (clubs.size >= POPULAR_MIN_CLUBS) {
+            clubs.sortedByDescending { it.memberCount ?: 0 }
                 .take(maxOf(1, clubs.size / 10))
-                .last().activityRating ?: 0
+                .last().memberCount ?: 0
         } else null
 
         val items = clubs.map { club ->
             val tags = mutableListOf<String>()
             if (club.createdAt?.isAfter(newThreshold) == true) tags += "Новый"
-            if (topRatingThreshold != null && (club.activityRating ?: 0) >= topRatingThreshold) tags += "Популярный"
+            if (topMemberThreshold != null && topMemberThreshold > 0 &&
+                (club.memberCount ?: 0) >= topMemberThreshold
+            ) tags += "Популярный"
             val memberCount = club.memberCount ?: 0
             val memberLimit = club.memberLimit
             if (memberLimit > 0 && memberCount.toDouble() / memberLimit < 0.8) tags += "Свободные места"
@@ -173,6 +189,22 @@ class JooqClubRepository(
             size = filters.size
         )
     }
+
+    /**
+     * Recent-activity ordering signal: count of the club's non-cancelled events dated within the
+     * last [ACTIVITY_WINDOW_DAYS] or scheduled ahead. A correlated subquery so the sort runs in
+     * SQL before pagination. Derived replacement for the retired (permanently-0) `activity_rating`.
+     */
+    private fun recentActivity(windowStart: OffsetDateTime): Field<Int> =
+        DSL.field(
+            DSL.selectCount()
+                .from(EVENTS)
+                .where(
+                    EVENTS.CLUB_ID.eq(CLUBS.ID)
+                        .and(EVENTS.STATUS.ne(EventStatus.cancelled))
+                        .and(EVENTS.EVENT_DATETIME.ge(windowStart))
+                )
+        )
 
     private fun fetchNearestEvents(clubIds: List<UUID>): Map<UUID, NearestEventDto> {
         if (clubIds.isEmpty()) return emptyMap()
@@ -240,14 +272,6 @@ class JooqClubRepository(
         if (delta <= 0) return
         dsl.update(CLUBS)
             .set(CLUBS.MEMBER_COUNT, DSL.greatest(CLUBS.MEMBER_COUNT.minus(delta), DSL.`val`(0)))
-            .where(CLUBS.ID.eq(clubId))
-            .execute()
-    }
-
-    override fun decreaseActivityRatingSafely(clubId: UUID, delta: Int) {
-        if (delta <= 0) return
-        dsl.update(CLUBS)
-            .set(CLUBS.ACTIVITY_RATING, DSL.greatest(CLUBS.ACTIVITY_RATING.minus(delta), DSL.`val`(0)))
             .where(CLUBS.ID.eq(clubId))
             .execute()
     }

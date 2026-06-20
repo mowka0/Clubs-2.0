@@ -51,8 +51,7 @@ class ClubServiceTest {
         city: String = "Moscow",
         memberLimit: Int = 30,
         subscriptionPrice: Int = 0,
-        memberCount: Int = 3,
-        activityRating: Int = 0
+        memberCount: Int = 3
     ): Club {
         val now = OffsetDateTime.now()
         return Club(
@@ -71,7 +70,6 @@ class ClubServiceTest {
             applicationQuestion = null,
             inviteLink = null,
             memberCount = memberCount,
-            activityRating = activityRating,
             isActive = true,
             telegramGroupId = null,
             createdAt = now,
@@ -214,8 +212,7 @@ class ClubServiceTest {
             city = "SPb",
             memberLimit = 20,
             subscriptionPrice = 200,
-            memberCount = 5,
-            activityRating = 10
+            memberCount = 5
         )
 
         every { clubRepository.findById(clubId) } returns club

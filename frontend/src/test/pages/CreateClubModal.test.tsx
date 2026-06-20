@@ -122,7 +122,6 @@ describe('CreateClubModal', () => {
           applicationQuestion: null,
           inviteLink: null,
           memberCount: 0,
-          activityRating: 0,
           isActive: true,
         };
         return HttpResponse.json(club, { status: 201 });

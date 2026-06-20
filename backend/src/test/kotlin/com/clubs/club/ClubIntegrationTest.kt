@@ -246,7 +246,6 @@ class ClubIntegrationTest {
             .andExpect(jsonPath("$.rules").value("Be kind"))
             .andExpect(jsonPath("$.applicationQuestion").value("Why join?"))
             .andExpect(jsonPath("$.memberCount").isNumber)
-            .andExpect(jsonPath("$.activityRating").isNumber)
             .andExpect(jsonPath("$.isActive").value(true))
     }
 
@@ -284,5 +283,81 @@ class ClubIntegrationTest {
             .andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"))
             .andExpect(jsonPath("$.message").exists())
+    }
+
+    @Test
+    fun `GET api clubs orders by recent event activity ahead of member count`() {
+        // No-events club has the MOST members — it must still rank last, proving the discovery
+        // sort is driven by recent activity (the derived replacement for the retired
+        // activity_rating column), not by member_count.
+        val noEvents = UUID.randomUUID()
+        val oneEvent = UUID.randomUUID()
+        val twoEvents = UUID.randomUUID()
+        insertClub(noEvents, "No Events", memberCount = 9)
+        insertClub(oneEvent, "One Event", memberCount = 1)
+        insertClub(twoEvents, "Two Events", memberCount = 1)
+        insertRecentEvent(oneEvent)
+        insertRecentEvent(twoEvents)
+        insertRecentEvent(twoEvents)
+
+        val orderedIds = clubTags().keys.toList()
+
+        assertEquals(
+            listOf(twoEvents.toString(), oneEvent.toString(), noEvents.toString()),
+            orderedIds,
+            "Clubs must order by recent event count desc (2 > 1 > 0), regardless of member_count"
+        )
+    }
+
+    @Test
+    fun `GET api clubs tags Популярный by member count with a zero-threshold guard`() {
+        // Phase 1: ten zero-member clubs → the top-decile member count is 0, so the guard must
+        // tag no one. This is the exact regression the dead, always-0 activity_rating produced.
+        repeat(10) { i -> insertClub(UUID.randomUUID(), "Zero $i", memberCount = 0) }
+
+        assertTrue(
+            clubTags().values.none { it.contains("Популярный") },
+            "No club may be tagged Популярный when the top-decile member count is 0"
+        )
+
+        // Phase 2: add one genuinely-joined club → it alone crosses the top-decile threshold.
+        val popular = UUID.randomUUID()
+        insertClub(popular, "Popular", memberCount = 20)
+
+        assertEquals(
+            setOf(popular.toString()),
+            clubTags().filterValues { it.contains("Популярный") }.keys,
+            "Only the top-member club may be tagged Популярный"
+        )
+    }
+
+    private fun insertClub(id: UUID, name: String, memberCount: Int) {
+        dsl.execute(
+            "INSERT INTO clubs (id, owner_id, name, description, category, access_type, city, " +
+                "member_limit, member_count) VALUES ('$id', '$testUserId', '$name', 'desc', " +
+                "'sport', 'open', 'Moscow', 30, $memberCount)"
+        )
+    }
+
+    /** A recent (yesterday), non-cancelled event — counted by the discovery activity signal. */
+    private fun insertRecentEvent(clubId: UUID) {
+        dsl.execute(
+            "INSERT INTO events (club_id, created_by, title, location_text, event_datetime, " +
+                "participant_limit, status) VALUES ('$clubId', '$testUserId', 'Event', 'Somewhere', " +
+                "NOW() - INTERVAL '1 day', 10, 'completed')"
+        )
+    }
+
+    /** Discovery list as an ordered map of clubId → tags (insertion order = response order). */
+    private fun clubTags(): Map<String, List<String>> {
+        val result = mockMvc.perform(
+            get("/api/clubs").header("Authorization", "Bearer $testToken")
+        )
+            .andExpect(status().isOk)
+            .andReturn()
+        val content = objectMapper.readTree(result.response.contentAsString).get("content")
+        return content.associate { node ->
+            node.get("id").asText() to node.get("tags").map { it.asText() }
+        }
     }
 }

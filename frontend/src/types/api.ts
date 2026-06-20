@@ -305,7 +305,6 @@ export interface ClubDetailDto {
   applicationQuestion: string | null;
   inviteLink: string | null;
   memberCount: number;
-  activityRating: number;
   isActive: boolean;
 }
 

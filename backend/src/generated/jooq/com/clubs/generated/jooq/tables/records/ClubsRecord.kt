@@ -81,27 +81,23 @@ open class ClubsRecord private constructor() : UpdatableRecordImpl<ClubsRecord>(
         set(value): Unit = set(14, value)
         get(): Long? = get(14) as Long?
 
-    open var activityRating: Int?
+    open var memberCount: Int?
         set(value): Unit = set(15, value)
         get(): Int? = get(15) as Int?
-
-    open var memberCount: Int?
-        set(value): Unit = set(16, value)
-        get(): Int? = get(16) as Int?
 
     @Suppress("INAPPLICABLE_JVM_NAME")
     @set:JvmName("setIsActive")
     open var isActive: Boolean?
-        set(value): Unit = set(17, value)
-        get(): Boolean? = get(17) as Boolean?
+        set(value): Unit = set(16, value)
+        get(): Boolean? = get(16) as Boolean?
 
     open var createdAt: OffsetDateTime?
-        set(value): Unit = set(18, value)
-        get(): OffsetDateTime? = get(18) as OffsetDateTime?
+        set(value): Unit = set(17, value)
+        get(): OffsetDateTime? = get(17) as OffsetDateTime?
 
     open var updatedAt: OffsetDateTime?
-        set(value): Unit = set(19, value)
-        get(): OffsetDateTime? = get(19) as OffsetDateTime?
+        set(value): Unit = set(18, value)
+        get(): OffsetDateTime? = get(18) as OffsetDateTime?
 
     // -------------------------------------------------------------------------
     // Primary key information
@@ -112,7 +108,7 @@ open class ClubsRecord private constructor() : UpdatableRecordImpl<ClubsRecord>(
     /**
      * Create a detached, initialised ClubsRecord
      */
-    constructor(id: UUID? = null, ownerId: UUID, name: String, description: String, category: ClubCategory, accessType: AccessType? = null, city: String, district: String? = null, memberLimit: Int, subscriptionPrice: Int? = null, avatarUrl: String? = null, rules: String? = null, applicationQuestion: String? = null, inviteLink: String? = null, telegramGroupId: Long? = null, activityRating: Int? = null, memberCount: Int? = null, isActive: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, ownerId: UUID, name: String, description: String, category: ClubCategory, accessType: AccessType? = null, city: String, district: String? = null, memberLimit: Int, subscriptionPrice: Int? = null, avatarUrl: String? = null, rules: String? = null, applicationQuestion: String? = null, inviteLink: String? = null, telegramGroupId: Long? = null, memberCount: Int? = null, isActive: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null): this() {
         this.id = id
         this.ownerId = ownerId
         this.name = name
@@ -128,7 +124,6 @@ open class ClubsRecord private constructor() : UpdatableRecordImpl<ClubsRecord>(
         this.applicationQuestion = applicationQuestion
         this.inviteLink = inviteLink
         this.telegramGroupId = telegramGroupId
-        this.activityRating = activityRating
         this.memberCount = memberCount
         this.isActive = isActive
         this.createdAt = createdAt
@@ -156,7 +151,6 @@ open class ClubsRecord private constructor() : UpdatableRecordImpl<ClubsRecord>(
             this.applicationQuestion = value.applicationQuestion
             this.inviteLink = value.inviteLink
             this.telegramGroupId = value.telegramGroupId
-            this.activityRating = value.activityRating
             this.memberCount = value.memberCount
             this.isActive = value.isActive
             this.createdAt = value.createdAt

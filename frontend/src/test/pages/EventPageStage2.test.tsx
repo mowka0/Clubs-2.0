@@ -73,7 +73,7 @@ function mockEndpoints(opts: {
       ownerId: opts.ownerId ?? 'someone-else',
       name: 'Клуб', description: 'd', category: 'sport', accessType: 'open', city: 'Москва',
       district: null, memberLimit: 50, subscriptionPrice: 0, avatarUrl: null, rules: null,
-      applicationQuestion: null, inviteLink: null, memberCount: 3, activityRating: 0, isActive: true,
+      applicationQuestion: null, inviteLink: null, memberCount: 3, isActive: true,
     })),
   );
 }
