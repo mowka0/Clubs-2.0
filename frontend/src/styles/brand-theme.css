@@ -65,6 +65,7 @@ html, body {
   --live:          #66D49A;
   --live-soft:     rgba(79, 160, 120, 0.18);
   --danger:        #FF8B8B;
+  --danger-soft:   rgba(255, 139, 139, 0.14);
 
   /* Vote palette — single source of truth for the donut chart, the vote buttons and the
      responder status dots. Brand colours, identical across themes (light does not override). */
@@ -128,6 +129,7 @@ html, body {
 
   --live:          #2E7D5A;
   --live-soft:     rgba(46, 125, 90, 0.12);
+  --danger-soft:   rgba(216, 64, 64, 0.10);
 
   --grain-opacity: 0;
 }

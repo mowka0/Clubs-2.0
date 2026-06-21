@@ -325,6 +325,44 @@ export interface ClubCardFactsDto {
   engagementPercent: number;
 }
 
+/** Window-over-window movement of a percent metric. `delta` is signed, in percentage points. */
+export interface TrendDto {
+  direction: 'up' | 'down' | 'flat';
+  delta: number;
+}
+
+/** A former member to win back — `GET /api/clubs/{clubId}/churned-members` (owner-only, §9.5). */
+export interface ChurnedMemberDto {
+  userId: string;
+  firstName: string;
+  lastName: string | null;
+  avatarUrl: string | null;
+  leftAt: string;
+}
+
+/**
+ * Owner-only club statistics for `GET /api/clubs/{id}/stats` (§9 of docs/modules/club-quality.md).
+ * Nullable fields don't apply to this club: `retention*` is paid-only, `skladchinaPaid*` needs closed
+ * skladchinas, and the application fields are null unless the club is `closed`.
+ */
+export interface ClubStatsDto {
+  clubType: 'paid' | 'free';
+  retentionPercent: number | null;
+  retentionTrend: TrendDto | null;
+  churnedThisPeriod: number;
+  rejoinedThisPeriod: number;
+  engagementPercent: number;
+  engagementTrend: TrendDto | null;
+  skladchinaPaidPercent: number | null;
+  skladchinaPaidTrend: TrendDto | null;
+  pendingApplications: number | null;
+  stalePendingApplications: number | null;
+  attendanceDisputes: number;
+  totalMeetings: number;
+  autoRejectedApplications: number | null;
+  cancelledMeetings: number;
+}
+
 export interface MembershipDto {
   id: string;
   userId: string;
