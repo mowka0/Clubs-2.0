@@ -3,7 +3,6 @@ import {
   closeSkladchina,
   createSkladchina,
   declineSkladchina,
-  getClubActiveSkladchinas,
   getEventSplitState,
   getMySkladchinas,
   getSkladchina,
@@ -47,14 +46,6 @@ export function useSkladchinaQuery(id: string | undefined) {
     queryKey: queryKeys.skladchinas.detail(id ?? ''),
     queryFn: () => getSkladchina(id!),
     enabled: Boolean(id),
-  });
-}
-
-export function useClubActiveSkladchinasQuery(clubId: string | undefined) {
-  return useQuery({
-    queryKey: queryKeys.skladchinas.byClubActive(clubId ?? ''),
-    queryFn: () => getClubActiveSkladchinas(clubId!),
-    enabled: Boolean(clubId),
   });
 }
 

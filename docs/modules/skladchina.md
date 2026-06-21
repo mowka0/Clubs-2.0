@@ -16,7 +16,8 @@
 > `CreateActivityFlow` (тип → клуб) → `/clubs/:id/skladchina/new`
 > (`CreateSkladchinaPage`). Endpoint `POST /api/clubs/:id/skladchinas` не
 > изменился. Итерация 4 также добавила событиям фото (V15); складчина фото имела
-> и раньше — оба теперь видны thumbnail'ом в `ActivityCard` (`ActivityThumb`).
+> и раньше — оба видны в `ActivityCard` (левый thumbnail `ActivityThumb` позже
+> убран в Banco-редизайне).
 > Упоминания «новый 4-й таб `SkladchinaManageTab`» / «segmented control
 > События | Сборы» / «таб Активности в manage» ниже — **исторический контекст**.
 > Актуальная UX-картина — [`unified-activity-creation.md`](./unified-activity-creation.md).

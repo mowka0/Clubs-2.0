@@ -22,8 +22,6 @@ const PRESETS: readonly Preset[] = [
   { id: 'gt3000',  label: 'От 3 000 ₽',      shortLabel: 'от 3 000 ₽',      range: { min: 3000 } },
 ] as const;
 
-export const PRICE_PRESETS = PRESETS;
-
 /** Match a min/max pair back to a preset id; "any" when nothing is set. */
 export function presetIdFromRange(range: PriceRange): string {
   const found = PRESETS.find(

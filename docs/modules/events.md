@@ -48,12 +48,13 @@ photo_url`). Зеркалит `skladchinas.photo_url`: у существующи
 - `CreateEventRequest.photoUrl` (`@Size(max=1024)`, default `null`)
 - `EventDetailDto.photoUrl`, `EventListItemDto.photoUrl`
 - Unified-feed `ActivityItemDto.EventActivity.photoUrl` (см.
-  [`unified-activity-creation.md`](./unified-activity-creation.md) § ActivityThumb).
+  [`unified-activity-creation.md`](./unified-activity-creation.md) § «Карточка ActivityCard (фото-редизайн)»).
   Складчина переиспользует уже существовавшее `skladchinas.photo_url`.
 
 Фронт: `CreateEventPage` получил поле загрузки фото через компонент
-`AvatarUpload` → `CreateEventBody.photoUrl`. В карточке активности фото —
-левый thumbnail (`ActivityThumb`), placeholder при отсутствии.
+`AvatarUpload` → `CreateEventBody.photoUrl`. (Левый thumbnail карточки
+(`ActivityThumb`) убран в Banco-редизайне — карточка перешла на `rd-feature
+rd-glass` без тамбнейла; см. [`redesign-banco-style.md`](./redesign-banco-style.md).)
 
 ### EventDetailDto (TASK-013 scope — без vote counts из EventResponses)
 ```json

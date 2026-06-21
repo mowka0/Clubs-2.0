@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   approveApplication,
   completeFreeMembership,
-  getClubApplications,
   getMyApplications,
   getMyAwaitingPaymentApplications,
   getMyClubsActionCounts,
@@ -14,23 +13,10 @@ import {
 import { useHaptic } from '../hooks/useHaptic';
 import { queryKeys } from './queryKeys';
 
-type ApplicationStatus = 'pending' | 'approved' | 'rejected';
-
 export function useMyApplicationsQuery() {
   return useQuery({
     queryKey: queryKeys.applications.mine(),
     queryFn: getMyApplications,
-  });
-}
-
-export function useClubApplicationsQuery(
-  clubId: string | undefined,
-  status?: ApplicationStatus,
-) {
-  return useQuery({
-    queryKey: queryKeys.clubs.applications(clubId ?? '', status),
-    queryFn: () => getClubApplications(clubId!, status),
-    enabled: Boolean(clubId),
   });
 }
 

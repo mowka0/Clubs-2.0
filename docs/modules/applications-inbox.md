@@ -748,8 +748,11 @@ Frontend: `MyClubsPage` читает `useSearchParams().get('focus')`. Если
 - В `LEGACY_TAB_KEYS` (line 52) добавить `'applications'` — старые
   deep-links `?tab=applications` будут редиректить на `members`.
 
-`useClubApplicationsQuery` сам по себе **оставить** — он публичный хук,
-может пригодиться в будущем (архив, аналитика).
+`useClubApplicationsQuery` + фетчер `getClubApplications` **удалены**
+(2026-06-21, чистка мёртвого кода) — после переезда organizer-inbox на
+`MyClubsPage` consumer'ов не осталось. `queryKeys.clubs.applications` сохранён
+(используется в invalidation мутаций approve/reject + тестах). Backend-эндпоинт
+`GET /api/clubs/{clubId}/applications` пока не трогали.
 
 ## Бэкенд — изменения по файлам
 

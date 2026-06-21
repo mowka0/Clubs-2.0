@@ -21,7 +21,7 @@
 - Пользователь ротировал `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD`, `JWT_SECRET` в Coolify на стейдже и проде (разные значения per environment).
   - Postgres: `ALTER USER clubs PASSWORD '...'` внутри контейнера (env var один раз только при init, дальше pg_authid — источник правды).
   - MinIO: смена `MINIO_ROOT_PASSWORD` + рестарт контейнера, MinIO ротирует root creds сам.
-- `BRAVE_API_KEY` отозван без выписывания нового — Brave MCP в текущем workflow не используется.
+- `BRAVE_API_KEY` отозван без выписывания нового — Brave MCP в текущем workflow не используется (`.mcp.json` позже удалён целиком — 2026-06-21, чистка мёртвого конфига).
 - `.env.example`: реальные значения заменены на placeholder'ы (`<set-strong-password>`, `<generate: openssl rand -hex 32>`).
 - `.mcp.json`: `BRAVE_API_KEY` → `${BRAVE_API_KEY}` env-indirection.
 - Pre-commit hook `.githooks/pre-commit` + CI workflow `.github/workflows/secret-scan.yml` (gitleaks-action, pinned к SHA) ловят будущие commit'ы со секретами.
