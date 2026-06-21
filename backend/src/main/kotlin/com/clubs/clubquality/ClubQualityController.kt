@@ -1,5 +1,6 @@
 package com.clubs.clubquality
 
+import com.clubs.common.auth.RequiresOrganizer
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -12,11 +13,15 @@ import java.util.UUID
  * Club-quality surface (subject = place, anchor = club_id). Separate controller in the
  * `clubquality` module — not in `ClubController` — to keep the module boundary clean (§10).
  *
- * Facts are `others`-visible (public social proof) → JWT only, no ownership check.
+ * Facts are `others`-visible (public social proof) → JWT only, no ownership check. The owner
+ * «Статистика» panel (`/{clubId}/stats`) is the exception — private, `@RequiresOrganizer`.
  */
 @RestController
 @RequestMapping("/api/clubs")
-class ClubQualityController(private val clubQualityService: ClubQualityService) {
+class ClubQualityController(
+    private val clubQualityService: ClubQualityService,
+    private val clubStatsService: ClubStatsService,
+) {
 
     @GetMapping("/{clubId}/quality")
     fun getQuality(@PathVariable clubId: UUID): ResponseEntity<ClubFactsDto> =
@@ -29,4 +34,13 @@ class ClubQualityController(private val clubQualityService: ClubQualityService) 
     @GetMapping("/quality/batch")
     fun getQualityBatch(@RequestParam ids: List<UUID>): ResponseEntity<List<ClubCardFactsDto>> =
         ResponseEntity.ok(clubQualityService.getClubCardFacts(ids))
+
+    /**
+     * Owner-only statistics panel (§9). `@RequiresOrganizer` rejects a missing club (404) and a
+     * non-owner (403) before the body runs. Literal `/{clubId}/stats` doesn't collide with the routes above.
+     */
+    @RequiresOrganizer(clubIdParam = "clubId")
+    @GetMapping("/{clubId}/stats")
+    fun getStats(@PathVariable clubId: UUID): ResponseEntity<ClubStatsDto> =
+        ResponseEntity.ok(clubStatsService.getClubStats(clubId))
 }

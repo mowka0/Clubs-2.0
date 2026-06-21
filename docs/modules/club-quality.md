@@ -211,9 +211,8 @@ backend/src/main/kotlin/com/clubs/clubquality/
 
 ## 8. Вне среза (следующими PR)
 
-- owner-«Статистика» (рычаги/нуджи/зона внимания) — нужны ownership-проверки.
-- Скрытый L3-ранг (композит 4 осей) — нужна калибровка §8, читает ledger через read-port.
-- `membership_history` (фундамент retention) — строить чисто, без backfill.
+- Скрытый L3-ранг (композит 4 осей) + soft-ранг «★ Топ-5 в категории» — нужна калибровка §8, читает ledger через read-port. **Следующий срез после owner-«Статистики»** (xhigh + ultracode).
+- Структурная перестройка карточки/страницы (направления, новости, аватар-от-баннера, постоянное место) — future-слой, свои схемы.
 
 **Зашиплено после этой спеки:**
 - Фикс мёртвого `activity_rating` (V30 — колонка ретайрнута, сортировка дискавери + тег «Популярный»
@@ -221,5 +220,176 @@ backend/src/main/kotlin/com/clubs/clubquality/
 - **Карточка Discovery (§11.1):** batch-эндпоинт `GET /api/clubs/quality/batch` + метрики (встреч/мес ·
   вовлечённость% + возраст/достижения) на карточке клуба в ленте. См. §4, §6 выше. Только данные качества;
   структурная перестройка карточки и L3 soft-ранг — отдельными срезами.
-</content>
-</invoke>
+- **owner-«Статистика»** (рычаги/нуджи/зона внимания, owner-only) — см. §9 ниже.
+
+---
+
+## 9. Owner-«Статистика» — приватная панель организатора
+
+**Статус:** `feature/owner-statistics` · **Создано:** 2026-06-21 · Дизайн: `docs/backlog/club-quality-gamification.md` §11.3, §11.4 + мокап `docs/design/club-quality-redesign/mockups/final.html` блок 3.
+
+### 9.1 Зачем
+Организатору нужен ответ на вопрос «как улучшить клуб и заработать?». Подблок «Статистика» в управлении
+клубом (⚙️) даёт **рычаги роста** (метрики с трендом), **actionable-нуджи** и приватную **«зону внимания»**
+(негативы оси «Надёжность организатора»). Это **единственный срез трека с приватными данными** —
+ownership-проверки обязательны.
+
+### 9.2 Границы и инварианты
+- **Слой L1/L2** (показ, считаем щедро, owner-данные допустимы). Анти-фарм (distinct/абсолюты/decay/min-K) —
+  это L3, которого здесь НЕТ.
+- **Модуль `clubquality`** (пир): читает `transactions`, `membership_history`, `applications`,
+  `event_responses`, `events`, `skladchina_participants`, `skladchinas`, `memberships`, `clubs` —
+  read-only jOOQ-агрегации (charter §10 дизайн-дока: clubquality читает события/транзакции/складчину).
+- **`reputation_ledger` НЕ читаем** (правило §2 спеки). Поэтому «споры по явке» считаем напрямую из
+  `event_responses` (`attendance = 'disputed'`) — это **текущие открытые споры**, не исторические
+  (резолв стирает маркер `disputed`). Полная история споров — позже, через read-port `reputation` (L3).
+- **Выручка НЕ дублируется** — она во вкладке «Финансы».
+- **Надёжность организатора в проблемной зоне — ТОЛЬКО владельцу** (приватный нудж; публично → нельзя,
+  иначе dispute-suppression). Наружу (карточка/страница) ничего из §9 не выводится.
+
+### 9.3 Адаптация панели: paid vs free
+`clubType` = `paid` если `clubs.subscription_price > 0`, иначе `free`. Набор рычагов адаптируется:
+
+| Рычаг | paid | free |
+|---|---|---|
+| Удержание (продлевают), % + тренд | ✅ renewal-rate | — (null) |
+| Не продлили / Ушли за 30д (count) | ✅ «Не продлили» | ✅ «Ушли» |
+| Вернулись за 30д (count) | — | ✅ |
+| Вовлечённость, % + тренд | ✅ | ✅ |
+| Оплата складчин, % + тренд | ✅ если есть складчины | ✅ если есть складчины |
+| Заявки ждут ответа (count) | ✅ если `access_type='closed'` | ✅ если `access_type='closed'` |
+
+Сервер всегда возвращает все поля (nullable там, где неприменимо); фронт собирает список рычагов по
+`clubType` + nullability. Поля без данных (`null`) — не рендерятся.
+
+### 9.4 Окна и пороги (константы)
+- `RETENTION_WINDOW_DAYS = 30` (удержание/отток/возвраты — «в этом месяце»)
+- `ENGAGEMENT_WINDOW_DAYS = 90` (совпадает с вовлечённостью карточки Discovery — один и тот же смысл)
+- `SKLADCHINA_WINDOW_DAYS = 90`, `ATTENTION_WINDOW_DAYS = 90` (авто-отклонения, отменённые встречи)
+- `STALE_APPLICATION_HOURS = 24` (заявка «висит» — близка к 48ч авто-отклонению)
+- `ENGAGEMENT_NUDGE_THRESHOLD = 70` (%) — ниже → нудж «напомните о встрече»
+
+Окна считаются в Kotlin (`OffsetDateTime.now().minusDays(...)`) и биндятся параметрами — детерминированно
+и тестируемо (как в `JooqClubQualityRepository`).
+
+### 9.5 Метрики (точные определения)
+
+**Рычаги:**
+- **retentionPercent** (paid): `renewals / (renewals + churned) × 100`, округление, clamp 0..100; `null` если
+  `(renewals + churned) == 0`.
+  - `renewals` = distinct `transactions.user_id` с `type='renewal' AND status='completed'` за окно 30д.
+  - `churned` = count `membership_history` строк `event ∈ {left, expired}` за окно 30д (у paid-клуба все
+    member-membership'ы платные; организатор в лог не пишется).
+- **churnedThisPeriod** (оба): count `membership_history` `event ∈ {left, expired}` за 30д. Лейбл: paid →
+  «Не продлили», free → «Ушли».
+- **rejoinedThisPeriod** (рендерится для free): count `membership_history` `event='rejoined'` за 30д.
+- **engagementPercent** (оба): distinct откликнувшихся (`event_responses`) на non-cancelled события клуба
+  за 90д ÷ живые участники (`memberships.status ∈ {active, grace_period}`) × 100, clamp 0..100; 0 если живых нет.
+  (То же определение, что `engagementPercent` карточки — консистентно.)
+- **skladchinaPaidPercent** (если есть складчины в окне): `paid / terminal × 100`, где по складчинам клуба,
+  **закрытым** (`closed_at`) в окне 90д: `paid` = участники `status='paid'`, `terminal` = участники в
+  статусах с принятым платёжным решением `{paid, declined, expired_no_response}`. **Исключены:** `pending`
+  (ещё не решили) и `released` (сбор закрыт досрочно, обязательства сняты — не должен занижать %).
+  `null` если закрытых складчин в окне нет.
+- **pendingApplications** (если `access_type='closed'`): count `applications` `status='pending'` клуба.
+  `stalePendingApplications` ⊆ — те же, у кого `created_at < now-24ч`. `null` для open/private.
+
+**Тренд** (для retention, engagement, skladchina) — `TrendDto{direction: up|down|flat, delta}`:
+- current = метрика за `[now-W, now)`, prior = метрика за `[now-2W, now-W)`.
+- `delta = round(current) - round(prior)` (в п.п. для процентов); `direction`: `flat` если `delta==0`,
+  иначе `up`/`down` по знаку.
+- **Suppression (тренд = `null`):** если в prior-окне НЕТ базы сравнения — нельзя отличить «было плохо» от
+  «не было данных». Правила «есть база»:
+  - retention: `(renewals_prior + churned_prior) > 0`;
+  - engagement: ≥1 non-cancelled событие в prior-окне;
+  - skladchina: ≥1 складчина с `closed_at`/`deadline` в prior-окне.
+  - **Следствие:** retention-тренд почти у всех `null` сейчас (`membership_history` без backfill, blind ~1
+    цикл) — это by design, стрелка появится, как накопится история. engagement/skladchina-тренды доступны
+    сразу (их таблицы историчны).
+
+**Зона внимания (owner-only негативы):**
+- **attendanceDisputes**: count `event_responses` `attendance='disputed'` по событиям клуба (текущие открытые).
+- **totalMeetings**: held-события all-time (past, non-cancelled) — знаменатель-контекст «N из M» (как §3).
+- **autoRejectedApplications** (если `access_type='closed'`): count `applications` `status='auto_rejected'`
+  за 90д; `null` для open/private.
+- **cancelledMeetings**: count `events` `status='cancelled'` клуба за 90д.
+
+**Нуджи «Что сделать сейчас»** — whitelist из 3, вычисляются на фронте из вернувшихся рычагов (чистая
+деривация L1/L2 owner-данных, формулу L3 не раскрывают):
+1. `answer_applications` — если `pendingApplications > 0` (severity red если `stalePendingApplications > 0`).
+2. `win_back` — если `churnedThisPeriod > 0`.
+3. `remind_engagement` — если `engagementPercent < 70` и есть живые участники.
+
+### 9.6 API
+
+```
+GET /api/clubs/{clubId}/stats
+  Auth: JWT + @RequiresOrganizer(clubIdParam = "clubId") — только владелец клуба
+  200: ClubStatsDto
+  403: "Only the club organizer can perform this action" (не владелец)
+  404: "Club not found" (нет клуба) — оба из AuthorizationAspect, ДО тела
+```
+
+```jsonc
+// ClubStatsDto
+{
+  "clubType": "paid",                 // "paid" | "free"
+  "retentionPercent": 78,             // null для free / нет данных
+  "retentionTrend": { "direction": "down", "delta": -4 },  // null если нет базы
+  "churnedThisPeriod": 3,
+  "rejoinedThisPeriod": 1,
+  "engagementPercent": 72,
+  "engagementTrend": null,
+  "skladchinaPaidPercent": 85,        // null если складчин нет
+  "skladchinaPaidTrend": { "direction": "up", "delta": 6 },
+  "pendingApplications": 2,           // null если access_type != closed
+  "stalePendingApplications": 2,      // null если access_type != closed
+  "attendanceDisputes": 1,
+  "totalMeetings": 71,
+  "autoRejectedApplications": 3,      // null если access_type != closed
+  "cancelledMeetings": 0
+}
+```
+
+Эндпоинт — метод `getStats` в существующем `ClubQualityController` (`@RequestMapping("/api/clubs")`);
+делегирует в новый `ClubStatsService`. Литерал `/{clubId}/stats` не коллизит с `/{clubId}/quality`,
+`/quality/batch`, `/{id}`.
+
+### 9.7 Структура (рядом с фактами, отдельный набор — не раздуваем ClubQualityRepository)
+```
+clubquality/
+├── ClubStats.kt              # domain: ClubStats, Trend, ClubType
+├── ClubStatsDto.kt           # HTTP DTO + TrendDto
+├── ClubStatsRepository.kt    # findClubStats(clubId): ClubStats?
+├── JooqClubStatsRepository.kt# read-only оконные агрегации + тренды
+├── ClubStatsService.kt       # @Transactional(readOnly); маппинг
+└── ClubStatsMapper.kt        # ClubStats -> ClubStatsDto
+```
+Ownership — через `@RequiresOrganizer` (shared `common.auth`), не дублируем проверку в сервисе. Аспект уже
+кидает 404 (нет клуба) и 403 (не владелец) до тела, поэтому `findClubStats` вызывается для существующего
+клуба владельцем; возвращает `ClubStats` всегда (не `null` на практике, но контракт `?` сохраняем как в
+`findClubFacts`).
+
+### 9.8 Frontend
+- `types/api.ts`: `ClubStatsDto`, `TrendDto`.
+- `api/clubStats.ts` → `getClubStats(clubId)`.
+- `queries/clubStats.ts` → `useClubStatsQuery(clubId)` (`enabled: Boolean(clubId)`).
+- `OrganizerClubManage.tsx`: новый таб **«Статистика»** в полоске табов (рядом с Участники/Финансы/Настройки;
+  мокап «Обзор/Статистика/Финансы» предполагает будущую перестройку управления — «Обзор» пока нет).
+- `components/manage/ClubStatsTab.tsx` (+ под-компоненты): 3 блока — **Рычаги роста** (рычаг = лейбл + значение
+  + стрелка тренда ↑↓ с тоном), **Что сделать сейчас** (нуджи из whitelist), **Зона внимания** (👁 только вам).
+  Маппинг значений → лейблы/нуджи — в `clubStats` mapper-хелпере (не inline в компоненте).
+
+### 9.9 Acceptance Criteria
+1. `GET /api/clubs/{id}/stats` владельцем paid-клуба → 200 с `clubType=paid`, заполненными рычагами + зоной внимания.
+2. Не владелец → 403; несуществующий клуб → 404 (оба до тела, из `AuthorizationAspect`).
+3. Запрос без JWT → 401.
+4. free-клуб: `retentionPercent=null`, `retentionTrend=null`; `churnedThisPeriod`/`rejoinedThisPeriod` заполнены.
+5. Клуб без складчин в окне → `skladchinaPaidPercent=null`, `skladchinaPaidTrend=null`.
+6. Клуб не `closed` → `pendingApplications=null`, `stalePendingApplications=null`, `autoRejectedApplications=null`.
+7. Тренд `null`, если в prior-окне нет базы (retention при пустом `membership_history`; engagement при 0 событий prior-окна).
+8. Тренд считается, когда база есть: engagement/skladchina — сразу (историчные таблицы); retention — по мере накопления `membership_history`.
+9. `attendanceDisputes` = текущие `attendance='disputed'`; `cancelledMeetings`/`autoRejectedApplications` — за 90д.
+10. Выручка/доход в `/stats` НЕ возвращается (только в `/finances`).
+11. Backend `./gradlew test` зелёный (paid+free, тренд с базой и без, ownership 403). Frontend `npm run build` + `npm test` зелёные.
+12. Фронт: таб «Статистика» виден владельцу; нуджи появляются по условиям §9.5; «зона внимания» помечена 👁 только вам.

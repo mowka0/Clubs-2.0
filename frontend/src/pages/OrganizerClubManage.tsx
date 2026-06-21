@@ -14,15 +14,17 @@ import { AvatarUpload } from '../components/AvatarUpload';
 import { Toast } from '../components/Toast';
 import { ManageHeader } from '../components/manage/ManageHeader';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
+import { ClubStatsTab } from '../components/manage/ClubStatsTab';
 import { useClubQuery, useDeleteClubMutation, useUpdateClubMutation } from '../queries/clubs';
 import { useClubFinancesQuery } from '../queries/finances';
 import type { UpdateClubBody } from '../api/clubs';
 import type { ClubDetailDto } from '../types/api';
 
-type TabKey = 'members' | 'finances' | 'settings';
+type TabKey = 'members' | 'stats' | 'finances' | 'settings';
 
 const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
   { key: 'members', label: 'Участники' },
+  { key: 'stats', label: 'Статистика' },
   { key: 'finances', label: 'Финансы' },
   { key: 'settings', label: 'Настройки' },
 ];
@@ -442,6 +444,8 @@ export const OrganizerClubManage: FC = () => {
     switch (activeTab) {
       case 'members':
         return <ClubMembersTab clubId={clubId} isOrganizer />;
+      case 'stats':
+        return <ClubStatsTab clubId={clubId} />;
       case 'finances':
         return <FinancesTab clubId={clubId} />;
       case 'settings':
