@@ -583,6 +583,14 @@
 - updated_at: timestamp
 - UNIQUE(user_id, club_id)
 
+**membership_history** (V31 — append-only лог переходов членства для retention/churn)
+- id: UUID (PK)
+- user_id: UUID (FK → users.id)
+- club_id: UUID (FK → clubs.id)
+- event: enum (joined, left, rejoined, expired)
+- occurred_at: timestamp
+- Append-only (нет update/delete); пишется из JooqMembershipRepository в той же транзакции, что и смена статуса. Без backfill. Детали — docs/modules/membership.md § «membership_history»
+
 **applications** (заявки в закрытые клубы)
 - id: UUID (PK)
 - user_id: UUID (FK → users.id)

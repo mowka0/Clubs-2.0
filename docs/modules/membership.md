@@ -404,3 +404,26 @@ THEN 200 OK с `[]`
 | Запрос без JWT | 401 | стандартный Spring Security |
 | Membership active, клуб is_active=false (soft-deleted) | 200 | membership не попадает в выдачу |
 
+---
+
+## `membership_history` — лог переходов членства (V31)
+
+Append-only аудит жизненного цикла членства. Фундамент под retention/churn (структурно самый Sybil-устойчивый сигнал: кольцо можно бесплатно держать, но оно не уходит и не возвращается органически) + tenure-веса + детект «ушёл сразу после оплаты». Дизайн: `docs/backlog/club-quality-gamification.md` §6.
+
+**Таблица:** `membership_history (id, user_id, club_id, event, occurred_at)`, `event` — enum `membership_event`.
+
+**Где пишется:** из **единственного чокпоинта** `JooqMembershipRepository` (все мутации статуса проходят только через его методы), в **той же транзакции**, что и смена статуса — лог не может молча пропустить переход. Append-only: нет update/delete в коде.
+
+| event | Откуда (метод) | Семантика |
+|---|---|---|
+| `joined` | `create`, `activateSubscription` | новый **member**-membership (free/paid join). Организатор (`createOrganizer`) **НЕ логируется** — владелец всегда в клубе, не churn'ится → лог member-only, без фильтра роли на чтении |
+| `left` | `cancel` | член отменил/вышел (active\|grace → cancelled). Логируется в момент **решения уйти**, не потери доступа: платный после отмены сохраняет доступ до `subscription_expires_at`, и эта потеря отдельным событием НЕ пишется (cancelled-строки не попадают в grace→expired). Читать `left` как churn-intent |
+| `rejoined` | `reactivateFree`; `renewSubscription` если прежний статус был cancelled/expired | мёртвый membership вернулся. Продление активного/grace — **НЕ** rejoined (член не уходил) |
+| `expired` | `moveGracePeriodToExpired` (bulk, `UPDATE…RETURNING`) | подписка истекла после grace (grace → expired) |
+
+**НЕ логируется:** `moveActiveToGracePeriod` (grace ещё имеет доступ — не churn-событие; enum намеренно без `grace_period`).
+
+**Без backfill** из `joined_at` (выдуманная история = мусор; принята слепота на 1 churn-цикл). **Без UI и без чтения** — reads (retention/tenure/L3) в следующих срезах.
+
+**GDPR:** при будущем flow стирания пользователя эту таблицу включить в очистку (FK `user_id → users`, без `ON DELETE`; hard-delete юзера сейчас в проде нет).
+

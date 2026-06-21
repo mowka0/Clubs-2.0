@@ -17,12 +17,14 @@ import com.clubs.generated.jooq.keys.CLUBS_PKEY
 import com.clubs.generated.jooq.keys.CLUBS__CLUBS_OWNER_ID_FKEY
 import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_CLUB_ID_FKEY
+import com.clubs.generated.jooq.keys.MEMBERSHIP_HISTORY__MEMBERSHIP_HISTORY_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.REPUTATION_LEDGER__REPUTATION_LEDGER_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.TRANSACTIONS__TRANSACTIONS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.USER_CLUB_REPUTATION__USER_CLUB_REPUTATION_CLUB_ID_FKEY
 import com.clubs.generated.jooq.tables.Applications.ApplicationsPath
 import com.clubs.generated.jooq.tables.Events.EventsPath
+import com.clubs.generated.jooq.tables.MembershipHistory.MembershipHistoryPath
 import com.clubs.generated.jooq.tables.Memberships.MembershipsPath
 import com.clubs.generated.jooq.tables.ReputationLedger.ReputationLedgerPath
 import com.clubs.generated.jooq.tables.Skladchinas.SkladchinasPath
@@ -277,6 +279,22 @@ open class Clubs(
 
     val events: EventsPath
         get(): EventsPath = events()
+
+    private lateinit var _membershipHistory: MembershipHistoryPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.membership_history</code> table
+     */
+    fun membershipHistory(): MembershipHistoryPath {
+        if (!this::_membershipHistory.isInitialized)
+            _membershipHistory = MembershipHistoryPath(this, null, MEMBERSHIP_HISTORY__MEMBERSHIP_HISTORY_CLUB_ID_FKEY.inverseKey)
+
+        return _membershipHistory;
+    }
+
+    val membershipHistory: MembershipHistoryPath
+        get(): MembershipHistoryPath = membershipHistory()
 
     private lateinit var _memberships: MembershipsPath
 
