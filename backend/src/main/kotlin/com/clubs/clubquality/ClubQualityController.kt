@@ -43,4 +43,14 @@ class ClubQualityController(
     @GetMapping("/{clubId}/stats")
     fun getStats(@PathVariable clubId: UUID): ResponseEntity<ClubStatsDto> =
         ResponseEntity.ok(clubStatsService.getClubStats(clubId))
+
+    /**
+     * Owner-only win-back roster — the members behind the «Верните N ушедших» nudge (§9.5). Same
+     * `@RequiresOrganizer` gate as `/stats`. Literal `/{clubId}/churned-members` doesn't collide with
+     * the routes above or `MemberController`'s `/{id}/members`.
+     */
+    @RequiresOrganizer(clubIdParam = "clubId")
+    @GetMapping("/{clubId}/churned-members")
+    fun getChurnedMembers(@PathVariable clubId: UUID): ResponseEntity<List<ChurnedMemberDto>> =
+        ResponseEntity.ok(clubStatsService.getChurnedMembers(clubId))
 }

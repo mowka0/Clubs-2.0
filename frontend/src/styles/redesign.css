@@ -978,3 +978,10 @@
 .rd-nudge-empty { padding: 14px; font-size: 13px; color: var(--text-dim); text-align: center; }
 
 .rd-owner-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--danger-soft); color: var(--danger); vertical-align: middle; margin-left: 6px; }
+
+/* win-back nudge: clickable, expands into the churned-members roster (§9.5) */
+.rd-nudge-btn { width: 100%; text-align: left; cursor: pointer; align-items: center; font: inherit; }
+.rd-nudge-chev { margin-left: auto; color: var(--text-faint); font-size: 18px; flex-shrink: 0; transition: transform .15s ease; }
+.rd-nudge-chev.rd-open { transform: rotate(90deg); }
+.rd-churned-list { margin-top: 8px; }
+.rd-churned-empty { padding: 12px 2px; font-size: 12.5px; color: var(--text-dim); text-align: center; }

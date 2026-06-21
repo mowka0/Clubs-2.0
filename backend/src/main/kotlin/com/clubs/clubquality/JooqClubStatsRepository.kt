@@ -18,6 +18,8 @@ import com.clubs.generated.jooq.tables.references.MEMBERSHIP_HISTORY
 import com.clubs.generated.jooq.tables.references.SKLADCHINAS
 import com.clubs.generated.jooq.tables.references.SKLADCHINA_PARTICIPANTS
 import com.clubs.generated.jooq.tables.references.TRANSACTIONS
+import com.clubs.generated.jooq.tables.references.USERS
+import org.jooq.Condition
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
@@ -83,7 +85,7 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
             clubType = if (isPaid) ClubType.paid else ClubType.free,
             retentionPercent = if (isPaid && retCur.hasBase) retCur.value else null,
             retentionTrend = if (isPaid && retCur.hasBase) trend(retCur, retPrior) else null,
-            churnedThisPeriod = churnCount(clubId, w30, now),
+            churnedThisPeriod = churnedMemberCount(clubId, w30),
             rejoinedThisPeriod = rejoinCount(clubId, w30, now),
             engagementPercent = engCur.value,
             engagementTrend = trend(engCur, engPrior),
@@ -128,7 +130,11 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
         return WindowValue(value, base > 0)
     }
 
-    /** Churn intents (`left`) + lapses (`expired`) in [start, end). Free clubs never `expired`. */
+    /**
+     * Churn *events* (`left` + `expired`) in [start, end) — the flow count that feeds the renewal-rate
+     * ratio (denominator alongside renewals). Distinct from [churnedMemberCount]/[findChurnedMembers],
+     * which count the win-back *roster* (distinct people still gone now). Free clubs never `expired`.
+     */
     private fun churnCount(clubId: UUID, start: OffsetDateTime, end: OffsetDateTime): Int =
         dsl.selectCount().from(MEMBERSHIP_HISTORY)
             .where(
@@ -138,6 +144,59 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
                     .and(MEMBERSHIP_HISTORY.OCCURRED_AT.lt(end)),
             )
             .fetchOne(0, Int::class.java) ?: 0
+
+    /**
+     * Win-back predicate: a member with a `left`/`expired` event since [since] who is NOT currently an
+     * active/grace member of the club (so left-then-rejoined people are excluded — they're back). Shared
+     * by [churnedMemberCount] (the «Ушли/Не продлили за месяц» lever) and [findChurnedMembers] (the
+     * drill-down roster) so the lever value equals the roster length. Both LEFT JOIN `memberships`.
+     */
+    private fun churnedMemberCondition(clubId: UUID, since: OffsetDateTime): Condition =
+        MEMBERSHIP_HISTORY.CLUB_ID.eq(clubId)
+            .and(MEMBERSHIP_HISTORY.EVENT.`in`(MembershipEvent.left, MembershipEvent.expired))
+            .and(MEMBERSHIP_HISTORY.OCCURRED_AT.ge(since))
+            .and(
+                MEMBERSHIPS.STATUS.isNull
+                    .or(MEMBERSHIPS.STATUS.notIn(MembershipStatus.active, MembershipStatus.grace_period)),
+            )
+
+    /** Distinct members still gone now who left/expired since [since] — the «Ушли за месяц» lever. */
+    private fun churnedMemberCount(clubId: UUID, since: OffsetDateTime): Int =
+        dsl.select(DSL.countDistinct(MEMBERSHIP_HISTORY.USER_ID))
+            .from(MEMBERSHIP_HISTORY)
+            .leftJoin(MEMBERSHIPS)
+            .on(
+                MEMBERSHIPS.USER_ID.eq(MEMBERSHIP_HISTORY.USER_ID)
+                    .and(MEMBERSHIPS.CLUB_ID.eq(MEMBERSHIP_HISTORY.CLUB_ID)),
+            )
+            .where(churnedMemberCondition(clubId, since))
+            .fetchOne(0, Int::class.java) ?: 0
+
+    override fun findChurnedMembers(clubId: UUID): List<ChurnedMember> {
+        val since = OffsetDateTime.now().minusDays(RETENTION_WINDOW_DAYS)
+        val lastLeft = DSL.max(MEMBERSHIP_HISTORY.OCCURRED_AT)
+        return dsl.select(MEMBERSHIP_HISTORY.USER_ID, USERS.FIRST_NAME, USERS.LAST_NAME, USERS.AVATAR_URL, lastLeft)
+            .from(MEMBERSHIP_HISTORY)
+            .join(USERS).on(USERS.ID.eq(MEMBERSHIP_HISTORY.USER_ID))
+            .leftJoin(MEMBERSHIPS)
+            .on(
+                MEMBERSHIPS.USER_ID.eq(MEMBERSHIP_HISTORY.USER_ID)
+                    .and(MEMBERSHIPS.CLUB_ID.eq(MEMBERSHIP_HISTORY.CLUB_ID)),
+            )
+            .where(churnedMemberCondition(clubId, since))
+            .groupBy(MEMBERSHIP_HISTORY.USER_ID, USERS.FIRST_NAME, USERS.LAST_NAME, USERS.AVATAR_URL)
+            .orderBy(lastLeft.desc())
+            .fetch()
+            .map {
+                ChurnedMember(
+                    userId = it.value1()!!,
+                    firstName = it.value2()!!,
+                    lastName = it.value3(),
+                    avatarUrl = it.value4(),
+                    leftAt = it.value5()!!,
+                )
+            }
+    }
 
     private fun rejoinCount(clubId: UUID, start: OffsetDateTime, end: OffsetDateTime): Int =
         dsl.selectCount().from(MEMBERSHIP_HISTORY)

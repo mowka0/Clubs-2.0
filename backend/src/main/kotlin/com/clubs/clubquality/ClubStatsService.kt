@@ -22,4 +22,9 @@ class ClubStatsService(
             ?: throw NotFoundException("Club not found")
         return clubStatsMapper.toDto(stats)
     }
+
+    /** Win-back roster for the «Верните N ушедших» drill-down. Owner-gated at the controller. */
+    @Transactional(readOnly = true)
+    fun getChurnedMembers(clubId: UUID): List<ChurnedMemberDto> =
+        clubStatsRepository.findChurnedMembers(clubId).map(clubStatsMapper::toChurnedDto)
 }

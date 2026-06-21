@@ -234,11 +234,36 @@ class ClubStatsIntegrationTest {
         assertEquals(1, stats.cancelledMeetings)
     }
 
+    @Test
+    fun `churned-members roster lists currently-gone members newest first, excluding rejoined and out-of-window`() {
+        // A: left 5d ago, no membership row (genuinely gone) → in roster.
+        val a = newUser("Anna")
+        insertMembershipHistory(a, "left", daysAgo(5))
+        // B: expired 10d ago with an expired membership row → in roster (older than A).
+        val b = newUser("Boris")
+        insertMembershipHistory(b, "expired", daysAgo(10))
+        insertMembership(b, "expired")
+        // C: left 8d ago but rejoined → currently active → excluded.
+        val c = newUser("Clara")
+        insertMembershipHistory(c, "left", daysAgo(8))
+        insertMembership(c, "active")
+        // D: left 40d ago → outside the 30d window → excluded.
+        val d = newUser("Dmitry")
+        insertMembershipHistory(d, "left", daysAgo(40))
+
+        val roster = clubStatsService.getChurnedMembers(clubId)
+
+        assertEquals(listOf(a, b), roster.map { it.userId }) // newest departure first
+        assertEquals("Anna", roster.first().firstName)
+        // The lever count equals the roster size by construction.
+        assertEquals(roster.size, clubStatsService.getClubStats(clubId).churnedThisPeriod)
+    }
+
     // ---- helpers ----
 
-    private fun newUser(): UUID {
+    private fun newUser(firstName: String = "U"): UUID {
         val id = UUID.randomUUID()
-        dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$id', ${telegramSeq++}, 'U')")
+        dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$id', ${telegramSeq++}, '$firstName')")
         return id
     }
 

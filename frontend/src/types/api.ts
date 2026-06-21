@@ -331,6 +331,15 @@ export interface TrendDto {
   delta: number;
 }
 
+/** A former member to win back — `GET /api/clubs/{clubId}/churned-members` (owner-only, §9.5). */
+export interface ChurnedMemberDto {
+  userId: string;
+  firstName: string;
+  lastName: string | null;
+  avatarUrl: string | null;
+  leftAt: string;
+}
+
 /**
  * Owner-only club statistics for `GET /api/clubs/{id}/stats` (§9 of docs/modules/club-quality.md).
  * Nullable fields don't apply to this club: `retention*` is paid-only, `skladchinaPaid*` needs closed

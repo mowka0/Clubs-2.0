@@ -24,4 +24,12 @@ class ClubStatsMapper {
     )
 
     private fun toTrendDto(trend: Trend): TrendDto = TrendDto(trend.direction.name, trend.delta)
+
+    fun toChurnedDto(member: ChurnedMember): ChurnedMemberDto = ChurnedMemberDto(
+        userId = member.userId,
+        firstName = member.firstName,
+        lastName = member.lastName,
+        avatarUrl = member.avatarUrl,
+        leftAt = member.leftAt,
+    )
 }

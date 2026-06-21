@@ -2,6 +2,7 @@ import { FC } from 'react';
 import { Spinner, Placeholder } from '@telegram-apps/telegram-ui';
 import { useClubStatsQuery } from '../../queries/clubStats';
 import { buildAttention, buildLevers, buildNudges, type LeverVM } from './clubStats';
+import { WinBackNudge } from './WinBackNudge';
 import type { TrendDto } from '../../types/api';
 
 const TrendBadge: FC<{ trend: TrendDto | null }> = ({ trend }) => {
@@ -60,15 +61,19 @@ export const ClubStatsTab: FC<{ clubId: string }> = ({ clubId }) => {
       <div className="rd-section-sub-h">Что сделать сейчас</div>
       {nudges.length > 0 ? (
         <div className="rd-nudges">
-          {nudges.map((nudge) => (
-            <div key={nudge.key} className="rd-nudge">
-              <span className={`rd-nudge-ico${nudge.severity === 'red' ? ' rd-red' : ''}`}>{nudge.icon}</span>
-              <span className="rd-nudge-t">
-                <b>{nudge.lead}</b>
-                {nudge.rest}
-              </span>
-            </div>
-          ))}
+          {nudges.map((nudge) =>
+            nudge.key === 'win_back' ? (
+              <WinBackNudge key={nudge.key} nudge={nudge} clubId={clubId} />
+            ) : (
+              <div key={nudge.key} className="rd-nudge">
+                <span className={`rd-nudge-ico${nudge.severity === 'red' ? ' rd-red' : ''}`}>{nudge.icon}</span>
+                <span className="rd-nudge-t">
+                  <b>{nudge.lead}</b>
+                  {nudge.rest}
+                </span>
+              </div>
+            ),
+          )}
         </div>
       ) : (
         <div className="rd-glass rd-nudge-empty">Сейчас всё под контролем — срочных действий нет.</div>
