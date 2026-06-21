@@ -1,96 +1,110 @@
 # Клуб-трек (качество клуба) — хэндофф для новой сессии
 
-**Создано:** 2026-06-20 · **Статус:** срезы 1–3 в проде, фикс `activity_rating` (§3.4) зашиплен, трек продолжается
-**Спека модуля:** `docs/modules/club-quality.md` · **Дизайн-контракт (locked):** `docs/backlog/club-quality-gamification.md` (§0–11)
+**Обновлено:** 2026-06-21 · **Статус:** L1/L2-показ + карточка Discovery + `membership_history` в проде. Дальше: **owner-«Статистика»** (разблокирована), затем L3.
+**Спека модуля:** `docs/modules/club-quality.md` · **Дизайн-контракт (locked):** `docs/backlog/club-quality-gamification.md` (§0–11) · **Карточка/страница/управление — мокап:** `docs/design/club-quality-redesign/mockups/final.html`
 **Память:** [[project_club_quality_track]], [[project_work_queue]]
+
+> **С чего начать новую сессию:** следующий срез — **owner-«Статистика» (§3.А ниже)**. Он разблокирован (`membership_history` уже есть → честные тренды/retention). Обычный режим. Перед стартом — прочитать §11.3 + §11.4 дизайн-дока и §2 инварианты здесь.
 
 ---
 
-## 1. Что уже в проде (#69 → #70 → #71)
+## 1. Что уже в проде
 
-Новый top-level модуль **`com.clubs.clubquality`** (пир рядом с `reputation`, субъект — МЕСТО, якорь `club_id`).
-Эндпоинт **`GET /api/clubs/{clubId}/quality`** → `ClubFactsDto` (JWT; факты `others`-видимы, без ownership-check; 404 через общий `NotFoundException`).
+### Модуль `com.clubs.clubquality` (пир рядом с `reputation`, субъект — МЕСТО, якорь `club_id`)
+Два эндпоинта (JWT; факты `others`-видимы, без ownership-check; 404 через общий `NotFoundException`):
 
-**6 фактов (derive read-only, НОЛЬ новой схемы):**
-| Поле | Что | Как |
-|---|---|---|
-| `meetingsPerMonth: Double` | частота | held-события за 90д ÷3, round(1) |
-| `avgAttendance: Int` | приходит | Σ явок ÷ финализ. встреч за 90д |
-| `coreSize: Int` | ядро | distinct юзеров с ≥3 «attended», non-cancelled, all-time |
-| `ageMonths: Int` | возраст | месяцы от `clubs.created_at` |
-| `totalMeetings: Int` | счётчик встреч | held-события all-time (без окна) |
-| `successfulSkladchinas: Int` | счётчик сборов | складчины `status='closed_success'` |
+- **`GET /api/clubs/{clubId}/quality`** → `ClubFactsDto` (6 фактов, derive read-only, НОЛЬ новой схемы): `meetingsPerMonth` (held-события 90д ÷3) · `avgAttendance` (Σ явок ÷ финализ. встреч 90д) · `coreSize` (distinct ≥3 «attended», non-cancelled, all-time) · `ageMonths` · `totalMeetings` (held all-time) · `successfulSkladchinas` (`closed_success`).
+- **`GET /api/clubs/quality/batch?ids=...`** → `List<ClubCardFactsDto>` (#73) для ленты Discovery: `{clubId, ageDays, engagementPercent}`. Batch = grouped-queries (no N+1); dedupe + cap 50. Путь не коллизит с `/{clubId}/quality`. «вовлечённость» = distinct откликнувшихся за 90д ÷ живые участники (active+grace), clamp 0..100.
 
-Слои: `ClubQualityController → ClubQualityService(@Transactional readOnly) → ClubQualityRepository / JooqClubQualityRepository → ClubQualityMapper` + domain `ClubFacts` + `ClubFactsDto`.
-Читает таблицы: `clubs`, `events`, `event_responses`, `skladchinas`. **`reputation_ledger` пока НЕ читаем** (нужен L3 для негативов — споры/ghosting; читать через read-port `reputation`, не напрямую).
+Слои: `ClubQualityController → ClubQualityService(@Transactional readOnly) → ClubQualityRepository / JooqClubQualityRepository → ClubQualityMapper` + domain `ClubFacts`/`ClubCardFacts`. Читает `clubs, events, event_responses, skladchinas, memberships`. **`reputation_ledger` пока НЕ читаем** (нужен L3 для негативов — споры/ghosting; через read-port `reputation`, не напрямую).
 
-**Фронт — ОДИН блок** `components/club/ClubQualityFacts.tsx` (на странице клуба, между «О клубе» и табами, виден всем):
-- **без заголовков-секций**, всё по центру (дизайн-вариант «кольца + лёгкая строка», выбран PO из 3 мокапов `docs/design/club-quality-redesign/mockups/stats-block-variants.html`)
-- 3 кольца `QualityRing` (4 равных сектора, центр = distinct-абсолют; равные flex-колонки → ровные промежутки; подписи в **2 строки** через `\n`+`white-space:pre-line`): **основа клуба · частота встреч · обычно приходит**
-- разделитель + **строка-капшн** через точку: 🎂 возраст-бейдж (золотой) + живые счётчики «N встреч»/«N сборов»
-- клуб без событий → только строка «🎂 Клубу N мес · пока нет встреч»
-- хелперы: `qualityLevels.ts` (пороги колец, **щедрая косметика, не L3**), `clubMilestones.ts` (`ageBadge`+`counters`); `api/clubQuality.ts`, `queries/clubQuality.ts`
-- ⚠️ `ClubAchievements.tsx` **удалён** (слит в `ClubQualityFacts`); `.mile`-чипы убраны
+### Фронт
+- **Страница клуба** — `components/club/ClubQualityFacts.tsx`: ОДИН блок (между «О клубе» и табами, виден всем), 3 кольца `QualityRing` (**основа клуба · частота встреч · обычно приходит**, центр = distinct-абсолют) + строка-капшн (🎂 возраст-бейдж + счётчики «N встреч»/«N сборов»). Хелперы: `qualityLevels.ts` (пороги колец — щедрая косметика, не L3), `clubMilestones.ts`.
+- **Карточка Discovery** (#73) — `components/ClubCard.tsx`: сегментированное трио (`.mrow`) **возраст (дни) · участники · вовлечённость%** (зелёная) + ценник-чип на баннере + затемняющий градиент-скрим (книзу темнее — задел под будущую начинку поверх баннера). `useClubCardFacts(pages)` фетчит **один batch на страницу** (`useQueries`, кэш на страницу). Деградирует до имени+мета пока факты грузятся.
+  - ⚠️ **Светлая тема** (#75): цвета ячеек/ценника тему-зависимы (navy для тёмной, override для светлой; текст — токены `--text`/`--live`/`--text-faint`). Не возвращать хардкод тёмных цветов.
 
-**Тесты:** backend `ClubQualityIntegrationTest` (9 кейсов: окна/пороги/пустой/404/cancelled/totalMeetings/skladchinas); фронт `clubMilestones.test`, `qualityLevels.test`, `ClubQualityFacts.test`, `QualityRing` через них. build + 152 фронт-теста + полный backend-прогон зелёные.
+### `membership_history` (V31, #74) — фундамент retention/churn
+Append-only лог `(user_id, club_id, event{joined/left/rejoined/expired}, occurred_at)`. Пишется из **единственного чокпоинта** `JooqMembershipRepository` (та же транзакция). **Без UI и без чтения** — reads строятся в следующих срезах. Семантика событий — `docs/modules/membership.md` § «membership_history». Решения: организатор НЕ логируется (member-only); `left` = churn-intent (момент отмены, не потери доступа); продление активного ≠ rejoined.
+
+### Discovery-сортировка/теги (#72 — `activity_rating` ретайрнут, V30)
+`GET /api/clubs` сортирует по derived recent-activity (non-cancelled события 90д+предстоящие DESC → member_count DESC → created_at DESC). Тег «Популярный» = member_count top-10% выборки + гард `threshold > 0`. Мёртвая колонка `activity_rating` дропнута. Спека: `docs/modules/clubs.md` § «GET /api/clubs».
+
+**Сессия 2026-06-21 — смерджено:** #72 (activity_rating) · #73 (карточка Discovery) · #74 (membership_history) · #75 (светлая тема карточки).
 
 ---
 
 ## 2. Инварианты и решения (НЕ нарушать)
 
-- **3-слойная модель:** L1 факты · L2 кольца-косметика · L3 скрытый ранг. Сейчас в проде **только L1/L2 (показ)**. Анти-фарм-защиты (distinct-account / абсолюты / decay / min-K / co-occurrence) — это **L3**, которого ЕЩЁ НЕТ.
-- **L1/L2 могут использовать owner-данные** (self-marked явка и т.п.) — бан только из L3 (§3).
-- **Счётчики — плоские живые числа, БЕЗ порогов/замков** (PO отверг лестницу 5/10/25: пороги выдуманы, «71/100» вводит в заблуждение).
-- **Кольца центр = distinct-абсолют**, уровень секторов — щедрая косметика.
-- **coreSize исключает cancelled** (club-delete cascade может оставить `attended` на отменённом событии).
-- **clubquality читает чужие таблицы через jOOQ** — допустимо (прецедент: `reputation` тоже), это НЕ импорт чужих Kotlin-классов.
-- **Инвариант границы:** club-L3 ≠ среднее Trust участников (иначе фарм-вектор через накрутку участников).
+- **3-слойная модель:** L1 факты · L2 кольца-косметика · L3 скрытый ранг. В проде **только L1/L2 (показ)**. Анти-фарм-защиты (distinct-account / абсолюты / decay / min-K / co-occurrence) — это **L3**, которого ЕЩЁ НЕТ.
+- **L1/L2 могут использовать owner-данные** — бан только из L3 (§3 дизайн-дока).
+- **Карточка Discovery = только ДАННЫЕ качества** на текущей карточке. Метрики не дублируют страницу (встреч/мес и ядро — кольца страницы, на карточку не выносятся). Структурная перестройка (аватар-от-баннера / направления / постоянное место/гео / роли / новости) = **future-слой со своими схемами**, не сейчас.
+- **Счётчики/майлстоны — плоские живые числа, БЕЗ порогов/замков** (PO отверг лестницу 5/10/25).
+- **coreSize исключает cancelled**; **clubquality читает чужие таблицы через jOOQ** (прецедент — `reputation`); **club-L3 ≠ среднее Trust участников** (иначе фарм через накрутку участников).
+- **`membership_history` — без backfill** (выдуманная история = мусор; слепота на 1 churn-цикл). Append-only, чокпоинт — только `JooqMembershipRepository`. GDPR: при будущем user-erasure включить таблицу в очистку.
 
 ---
 
-## 3. Дальше по треку (визуальные/механические срезы — обычный режим)
+## 3. Дальше по треку
 
-1. ~~**Карточка Discovery (§11.1):**~~ ✅ **ЗАШИПЛЕНО** (`feature/discovery-card-quality`). Сегментированное трио на карточке клуба в ленте: **возраст (дни) · участники · вовлечённость%** (стиль `.mrow` из мокапа). Метрики выбраны минимально-достаточными и **без дублей со страницей** — встреч/мес и ядро остаются кольцами страницы (Активность/Сплочённость), на карточку не выносятся. **N+1 решён batch-эндпоинтом** `GET /api/clubs/quality/batch` (не джойн — держит границу модуля + лёгкий list-запрос); фронт фетчит **один batch на страницу** ленты (`useQueries`, кэш на страницу). Новая метрика «вовлечённость» = distinct откликнувшихся за 90д ÷ живые участники. Структурная перестройка карточки (аватар-от-баннера/направления/гео) и L3 soft-ранг «Топ-5» НЕ входили. Спека: `docs/modules/club-quality.md` §4/§6.
-2. **owner-«Статистика» (§11.3):** подблок в управлении клубом — рычаги роста (удержание/вовлечённость/заявки) + actionable-нуджи + приватная «зона внимания» (споры/авто-отклонения).
-   ⚠️ Нужны **ownership-проверки** (`@RequiresOrganizer`/проверка владельца). Ось «Надёжность организатора» в проблемной зоне видна **ТОЛЬКО владельцу** (публичный позорный индикатор → dispute-suppression).
-3. ~~**`membership_history` (§6, грин-лайт PO):**~~ ✅ **ЗАШИПЛЕНО** (`feature/membership-history`, V31). Append-only лог `(user_id, club_id, event{joined/left/rejoined/expired}, occurred_at)` из единственного чокпоинта `JooqMembershipRepository` (та же транзакция). Без backfill, без UI/чтения. Решения: организатор НЕ логируется (member-only); `left` = решение уйти; продление активного ≠ rejoined. Семантика — `docs/modules/membership.md` § «membership_history». Разблокирует retention/churn + tenure для owner-«Статистики» и L3.
-4. ~~**Фикс мёртвого `activity_rating` (§5):**~~ ✅ **ЗАШИПЛЕНО** (`bugfix/retire-activity-rating`). Колонка ретайрнута миграцией V30 (+ jOOQ регенерён); сортировка дискавери пересобрана как derived (non-cancelled события за 90д + предстоящие DESC → member_count DESC → created_at DESC), тег «Популярный» — по member_count top-10% с гардом `threshold > 0` (пустые клубы не тегаются). `ApplicationScheduler` больше не штрафует (штраф был no-op по мёртвому полю). Спека: `docs/modules/clubs.md` § «GET /api/clubs».
+### А. owner-«Статистика» (§11.3) — ⏭️ СЛЕДУЮЩАЯ, обычный режим, разблокирована
+Подблок «Статистика» в управлении клубом (через ⚙️, рядом с «Обзор»/«Финансы»), **только владельцу**. Мокап — `final.html` блок 3. Три блока:
+1. **Рычаги роста** (с трендом ↑↓): удержание (продлевают), не продлили, вовлечённость, оплата складчин, заявки ждут ответа.
+2. **Что сделать сейчас** — actionable-нуджи, привязанные к рычагам (ответить заявки / вернуть ушедших / напомнить о встрече).
+3. **Зона внимания** 👁 *только владельцу* (ось «Надёжность организатора»): споры по явке, авто-отклонения, отменённые встречи.
+
+**Требования/грабли:**
+- **Ownership-проверки обязательны** (`@RequiresOrganizer` / проверка владельца) — единственный срез трека с приватными данными. «Надёжность организатора» в проблемной зоне — публично НЕЛЬЗЯ (→ dispute-suppression), только владельцу как нудж; наружу — только зелёная зона.
+- **Выручка НЕ дублируется** — она в «Финансах».
+- **Данные сейчас derivable:** удержание **платных** (≥2 оплаты из истёкших, `transactions`), вовлечённость (`event_responses`), оплата складчин, заявки/споры/авто-отклонения, отмены. **Тренды ↑↓ и отток бесплатных** — теперь честные через `membership_history` (joined/left/rejoined/expired по окнам). Каталог метрик — дизайн-док §11.4.
+
+### Б. L3 — скрытый ранг (§4) — **xhigh + ultracode**, СНЯТЬ §8-вопросы до старта
+См. §4 ниже. Разблокирует soft-ранг «★ Топ-5 в категории» на карточке/странице.
+
+### В. Структурная перестройка карточки/страницы — future-слой (свои схемы)
+Направления (осн.+суб) · постоянное место (venue+город) · аватар-отдельно-от-баннера · роли участников · новости клуба · «Атмосфера встреч». Каждая — отдельная фича + схема + продуктовые решения. Затемняющий градиент карточки (#73) — уже задел под наложение текста/аватара на баннер. НЕ начинать без решения по схемам.
 
 ---
 
-## 4. L3 — скрытый ранг (§4): открытые вопросы §8 — СНЯТЬ ДО реализации
+## 4. L3 — скрытый ранг (§4 дизайн-дока): открытые вопросы §8 — СНЯТЬ ДО реализации
 
 L3 = композит 4 осей (`0.35·ParticipantDiversity + 0.30·PayingRetention + 0.20·DemandResponsiveness + 0.15·LiveActivity − штрафы × множители`), internal, двигает выдачу + категорийный рейтинг. **НЕ сумма баров, читает ledger напрямую.**
 
 **Открытые вопросы (блокируют L3):**
 - **Веса w1–w4 и пороги** (K=8/10? K_event=4? период decay? размеры штрафов) — **калибровка на прод-выборке клубов**. Есть ли выборка?
-- **account-credibility scoring** (age/username/avatar/cross-club) — отдельный сервис/таблица или on-the-fly из `users`? Влияет на сложность.
-- **co-occurrence / collusion-collapse** — на запуске НЕ полный граф (min-K + credibility достаточно для v1; граф включить под реальной атакой). Зафиксировать порог включения.
+- **account-credibility scoring** (age/username/avatar/cross-club) — отдельный сервис/таблица или on-the-fly из `users`?
+- **co-occurrence / collusion-collapse** — на запуске НЕ полный граф (min-K + credibility достаточно для v1; граф под реальной атакой). Зафиксировать порог включения.
 - **whitelist owner-нуджей** — какой набор подсказок безопасен (не раскрывает формулу L3).
-- **Инвариант «член-Trust ≠ среднее по клубу»** — явно закрепить в архитектуре (read-port из `reputation`, не агрегат member-Trust).
-- **Гейты ДО ранга:** min-distinct-K (иначе UNRANKED, не «низкий») · absolute-volume floor · recency-decay на каждом сигнале.
-
-Из `Что нужно сделать.md` #6 (входы L3 на будущее): premium-% аккаунтов + число спорщиков в скрытый ранг.
+- **Инвариант «член-Trust ≠ среднее по клубу»** — закрепить (read-port из `reputation`, не агрегат member-Trust).
+- **Гейты ДО ранга:** min-distinct-K (иначе UNRANKED) · absolute-volume floor · recency-decay на каждом сигнале.
+- **`membership_history` теперь даёт** retention/churn/tenure как вход в L3 (PayingRetention + диверсификация) — самый Sybil-устойчивый сигнал.
 
 ---
 
 ## 5. Режимы: где нужен ultracode / xhigh
 
-| Срез | Режим | Почему |
+| Срез | Режим | Статус |
 |---|---|---|
-| Карточка Discovery | **обычный** | UI + batch-эндпоинт, механика |
-| owner-«Статистика» | **обычный** | агрегации + UI + ownership-checks |
-| `membership_history` | **обычный** | миграция + лог из существующих точек |
-| фикс `activity_rating` | **обычный** | точечный bugfix |
-| **L3 скрытый ранг** | **xhigh + ultracode** | анти-фарм-математика, Sybil-устойчивость, калибровка §8, co-occurrence — глубокое рассуждение (**xhigh**) + состязательный дизайн (**ultracode**: агенты-«атакующие» ломают каждый сигнал, design-панель, анализ калибровки) |
-
-**Короткий ответ на вопрос:** да — **в L3**. Это единственный срез трека, где и xhigh (думать), и ultracode (состязательно ломать анти-фарм) реально окупаются. Все остальные — обычный режим.
+| Карточка Discovery | обычный | ✅ #73 |
+| фикс `activity_rating` | обычный | ✅ #72 |
+| `membership_history` | обычный | ✅ #74 |
+| **owner-«Статистика»** | **обычный** | ⏭️ следующая (агрегации + UI + ownership-checks) |
+| **L3 скрытый ранг** | **xhigh + ultracode** | анти-фарм-математика, Sybil-устойчивость, калибровка §8, co-occurrence — единственный срез, где режимы окупаются |
+| структурная перестройка карточки | обычный | future (нужны схемы) |
 
 ---
 
 ## 6. Инфра-заметки (важно для деплоя)
 
-- **Реальный прод-URL:** `https://u342nbeig0rv71urf2n5s7wk.77.42.23.177.sslip.io` (Coolify-сабдомен). Апекс `https://77-42-23-177.sslip.io` — **битый вторичный роут** (503 + дефолтный Traefik-серт), НЕ трогать как индикатор прода.
-- **Бокс CPX22 4 ГБ тесен** (staging+prod+Coolify+PG+Redis): был OOM при деплое #69, уронил прод (чинилось ребутом + redeploy в Coolify). Прод-серт после простоя поднимается как `TRAEFIK DEFAULT`, ACME дорегистрирует сам. **Девопс-задача:** апгрейд CPX31/8ГБ или memory-лимиты / гасить staging вне тестов.
-- Верификация деплоя: смена хеша фронт-бандла (`index-XXXX.js`) на staging/prod = новый билд встал; короткий 503 при свапе контейнера — норма.
-</content>
+- **Реальный прод-URL:** `https://u342nbeig0rv71urf2n5s7wk.77.42.23.177.sslip.io` (Coolify-сабдомен). Апекс `https://77-42-23-177.sslip.io` — **битый вторичный роут** (503 + дефолтный Traefik-серт), НЕ индикатор прода.
+- **Staging:** `https://staging.77-42-23-177.sslip.io` (одно приложение — деплоит ПОСЛЕДНЮЮ запушенную ветку feature/bugfix/devops).
+- **Бокс CPX22 4 ГБ тесен** (staging+prod+Coolify+PG+Redis): был OOM при деплое #69, уронил прод (чинилось ребутом + redeploy в Coolify). **Девопс-задача:** апгрейд CPX31/8ГБ или memory-лимиты / гасить staging вне тестов.
+- Верификация деплоя: смена хеша фронт-бандла (`index-XXXX.js`) = новый билд встал; короткий 503 при свапе контейнера — норма. **Бэкенд-only срезы** (как `membership_history`): хеш бандла НЕ меняется — проверять, что приложение поднялось (не 5xx) + миграция применилась.
+- **Локальная БД для jOOQ-codegen:** `docker compose up -d postgres` (creds `clubs`/`clubs_secret`/5432); миграции на неё накатывать `psql` по нумерации (V*.sql в `sort -V`), затем `./gradlew generateJooq`. Flyway-gradle-таски нет (Flyway гоняется Spring-ом на старте).
+
+---
+
+## 7. Рабочий процесс (напоминание)
+
+- Срезы идут через флоу CLAUDE.md (фича/bugfix): Developer → Reviewer → Security → (Tester) → Analyst docs-alignment → push в ветку → staging → «готово, запушь» → PR + squash-merge (без `--delete-branch`).
+- **Schema change** = миграция V{N} (next = max+1, на 2026-06-21 max = **V31**) + `./gradlew generateJooq` + коммит генеренного `backend/src/generated/jooq/**`.
+- **Docs-alignment — обязательный гейт** перед коммитом: grep по всем `docs/` + PRD + ARCHITECTURE, не только тронутый модуль. PRD правится только с согласия пользователя.
