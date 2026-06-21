@@ -9,6 +9,7 @@ import com.clubs.generated.jooq.tables.Clubs
 import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.Events
 import com.clubs.generated.jooq.tables.Interests
+import com.clubs.generated.jooq.tables.MembershipHistory
 import com.clubs.generated.jooq.tables.Memberships
 import com.clubs.generated.jooq.tables.ReputationLedger
 import com.clubs.generated.jooq.tables.SkladchinaParticipants
@@ -22,6 +23,7 @@ import com.clubs.generated.jooq.tables.records.ClubsRecord
 import com.clubs.generated.jooq.tables.records.EventResponsesRecord
 import com.clubs.generated.jooq.tables.records.EventsRecord
 import com.clubs.generated.jooq.tables.records.InterestsRecord
+import com.clubs.generated.jooq.tables.records.MembershipHistoryRecord
 import com.clubs.generated.jooq.tables.records.MembershipsRecord
 import com.clubs.generated.jooq.tables.records.ReputationLedgerRecord
 import com.clubs.generated.jooq.tables.records.SkladchinaParticipantsRecord
@@ -51,6 +53,7 @@ val EVENT_RESPONSES_PKEY: UniqueKey<EventResponsesRecord> = Internal.createUniqu
 val EVENTS_PKEY: UniqueKey<EventsRecord> = Internal.createUniqueKey(Events.EVENTS, DSL.name("events_pkey"), arrayOf(Events.EVENTS.ID), true)
 val INTERESTS_NAME_KEY: UniqueKey<InterestsRecord> = Internal.createUniqueKey(Interests.INTERESTS, DSL.name("interests_name_key"), arrayOf(Interests.INTERESTS.NAME), true)
 val INTERESTS_PKEY: UniqueKey<InterestsRecord> = Internal.createUniqueKey(Interests.INTERESTS, DSL.name("interests_pkey"), arrayOf(Interests.INTERESTS.ID), true)
+val MEMBERSHIP_HISTORY_PKEY: UniqueKey<MembershipHistoryRecord> = Internal.createUniqueKey(MembershipHistory.MEMBERSHIP_HISTORY, DSL.name("membership_history_pkey"), arrayOf(MembershipHistory.MEMBERSHIP_HISTORY.ID), true)
 val MEMBERSHIPS_PKEY: UniqueKey<MembershipsRecord> = Internal.createUniqueKey(Memberships.MEMBERSHIPS, DSL.name("memberships_pkey"), arrayOf(Memberships.MEMBERSHIPS.ID), true)
 val MEMBERSHIPS_USER_ID_CLUB_ID_KEY: UniqueKey<MembershipsRecord> = Internal.createUniqueKey(Memberships.MEMBERSHIPS, DSL.name("memberships_user_id_club_id_key"), arrayOf(Memberships.MEMBERSHIPS.USER_ID, Memberships.MEMBERSHIPS.CLUB_ID), true)
 val REPUTATION_LEDGER_PKEY: UniqueKey<ReputationLedgerRecord> = Internal.createUniqueKey(ReputationLedger.REPUTATION_LEDGER, DSL.name("reputation_ledger_pkey"), arrayOf(ReputationLedger.REPUTATION_LEDGER.ID), true)
@@ -75,6 +78,8 @@ val EVENT_RESPONSES__EVENT_RESPONSES_EVENT_ID_FKEY: ForeignKey<EventResponsesRec
 val EVENT_RESPONSES__EVENT_RESPONSES_USER_ID_FKEY: ForeignKey<EventResponsesRecord, UsersRecord> = Internal.createForeignKey(EventResponses.EVENT_RESPONSES, DSL.name("event_responses_user_id_fkey"), arrayOf(EventResponses.EVENT_RESPONSES.USER_ID), com.clubs.generated.jooq.keys.USERS_PKEY, arrayOf(Users.USERS.ID), true)
 val EVENTS__EVENTS_CLUB_ID_FKEY: ForeignKey<EventsRecord, ClubsRecord> = Internal.createForeignKey(Events.EVENTS, DSL.name("events_club_id_fkey"), arrayOf(Events.EVENTS.CLUB_ID), com.clubs.generated.jooq.keys.CLUBS_PKEY, arrayOf(Clubs.CLUBS.ID), true)
 val EVENTS__EVENTS_CREATED_BY_FKEY: ForeignKey<EventsRecord, UsersRecord> = Internal.createForeignKey(Events.EVENTS, DSL.name("events_created_by_fkey"), arrayOf(Events.EVENTS.CREATED_BY), com.clubs.generated.jooq.keys.USERS_PKEY, arrayOf(Users.USERS.ID), true)
+val MEMBERSHIP_HISTORY__MEMBERSHIP_HISTORY_CLUB_ID_FKEY: ForeignKey<MembershipHistoryRecord, ClubsRecord> = Internal.createForeignKey(MembershipHistory.MEMBERSHIP_HISTORY, DSL.name("membership_history_club_id_fkey"), arrayOf(MembershipHistory.MEMBERSHIP_HISTORY.CLUB_ID), com.clubs.generated.jooq.keys.CLUBS_PKEY, arrayOf(Clubs.CLUBS.ID), true)
+val MEMBERSHIP_HISTORY__MEMBERSHIP_HISTORY_USER_ID_FKEY: ForeignKey<MembershipHistoryRecord, UsersRecord> = Internal.createForeignKey(MembershipHistory.MEMBERSHIP_HISTORY, DSL.name("membership_history_user_id_fkey"), arrayOf(MembershipHistory.MEMBERSHIP_HISTORY.USER_ID), com.clubs.generated.jooq.keys.USERS_PKEY, arrayOf(Users.USERS.ID), true)
 val MEMBERSHIPS__MEMBERSHIPS_CLUB_ID_FKEY: ForeignKey<MembershipsRecord, ClubsRecord> = Internal.createForeignKey(Memberships.MEMBERSHIPS, DSL.name("memberships_club_id_fkey"), arrayOf(Memberships.MEMBERSHIPS.CLUB_ID), com.clubs.generated.jooq.keys.CLUBS_PKEY, arrayOf(Clubs.CLUBS.ID), true)
 val MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY: ForeignKey<MembershipsRecord, UsersRecord> = Internal.createForeignKey(Memberships.MEMBERSHIPS, DSL.name("memberships_user_id_fkey"), arrayOf(Memberships.MEMBERSHIPS.USER_ID), com.clubs.generated.jooq.keys.USERS_PKEY, arrayOf(Users.USERS.ID), true)
 val REPUTATION_LEDGER__REPUTATION_LEDGER_CLUB_ID_FKEY: ForeignKey<ReputationLedgerRecord, ClubsRecord> = Internal.createForeignKey(ReputationLedger.REPUTATION_LEDGER, DSL.name("reputation_ledger_club_id_fkey"), arrayOf(ReputationLedger.REPUTATION_LEDGER.CLUB_ID), com.clubs.generated.jooq.keys.CLUBS_PKEY, arrayOf(Clubs.CLUBS.ID), true)

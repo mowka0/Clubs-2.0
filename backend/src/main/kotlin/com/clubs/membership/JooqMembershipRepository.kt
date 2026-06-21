@@ -1,5 +1,6 @@
 package com.clubs.membership
 
+import com.clubs.generated.jooq.enums.MembershipEvent
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.tables.records.MembershipsRecord
@@ -16,7 +17,12 @@ import java.util.UUID
 @Repository
 class JooqMembershipRepository(
     private val dsl: DSLContext,
-    private val mapper: MembershipMapper
+    private val mapper: MembershipMapper,
+    // Deliberate: every membership status mutation goes through THIS repository, so writing the
+    // append-only history here (the single chokepoint, same transaction) is how the log can never
+    // silently miss a transition. Mapping status changes → {joined,left,rejoined,expired} lives here
+    // on purpose — do not hoist it to the service layer (that would scatter it and re-open the gap).
+    private val history: MembershipHistoryRepository
 ) : MembershipRepository {
 
     override fun findActiveByUserAndClub(userId: UUID, clubId: UUID): Membership? =
@@ -222,19 +228,24 @@ class JooqMembershipRepository(
         // historical bug) made every free member look like a cancelled-in-period paid subscriber:
         // phantom "доступ до DATE" banner, and a free leaver lingering as a member for 30 days.
         // The paid path is activateSubscription (real Stars-billed expiry); reactivateFree also nulls it.
+        val now = OffsetDateTime.now()
         val record = dsl.insertInto(MEMBERSHIPS)
             .set(MEMBERSHIPS.ID, UUID.randomUUID())
             .set(MEMBERSHIPS.USER_ID, userId)
             .set(MEMBERSHIPS.CLUB_ID, clubId)
             .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
             .set(MEMBERSHIPS.ROLE, MembershipRole.member)
-            .set(MEMBERSHIPS.JOINED_AT, OffsetDateTime.now())
+            .set(MEMBERSHIPS.JOINED_AT, now)
             .returning()
             .fetchOne()!!
+        history.record(userId, clubId, MembershipEvent.joined, now)
         return mapper.toDomain(record)
     }
 
     override fun createOrganizer(userId: UUID, clubId: UUID): Membership {
+        // NOT logged to membership_history: the organizer is the owner — structurally always present,
+        // never joins or churns in the retention sense (owner cannot leave). Keeping the log
+        // member-only means a future retention reader needs no role filter.
         val record = dsl.insertInto(MEMBERSHIPS)
             .set(MEMBERSHIPS.ID, UUID.randomUUID())
             .set(MEMBERSHIPS.USER_ID, userId)
@@ -265,19 +276,26 @@ class JooqMembershipRepository(
             .where(MEMBERSHIPS.ID.eq(membershipId))
             .returning()
             .fetchOne()!!
+        history.record(record.userId, record.clubId, MembershipEvent.rejoined, now)
         return mapper.toDomain(record)
     }
 
     override fun cancel(membershipId: UUID) {
-        dsl.update(MEMBERSHIPS)
+        val now = OffsetDateTime.now()
+        val row = dsl.update(MEMBERSHIPS)
             .set(MEMBERSHIPS.STATUS, MembershipStatus.cancelled)
-            .set(MEMBERSHIPS.UPDATED_AT, OffsetDateTime.now())
+            .set(MEMBERSHIPS.UPDATED_AT, now)
             .where(MEMBERSHIPS.ID.eq(membershipId))
-            .execute()
+            .returningResult(MEMBERSHIPS.USER_ID, MEMBERSHIPS.CLUB_ID)
+            .fetchOne()
+        if (row != null) {
+            history.record(row.get(MEMBERSHIPS.USER_ID)!!, row.get(MEMBERSHIPS.CLUB_ID)!!, MembershipEvent.left, now)
+        }
     }
 
     override fun activateSubscription(userId: UUID, clubId: UUID, expiresAt: OffsetDateTime): UUID {
         val id = UUID.randomUUID()
+        val now = OffsetDateTime.now()
         dsl.insertInto(MEMBERSHIPS)
             .set(MEMBERSHIPS.ID, id)
             .set(MEMBERSHIPS.USER_ID, userId)
@@ -286,15 +304,31 @@ class JooqMembershipRepository(
             .set(MEMBERSHIPS.ROLE, MembershipRole.member)
             .set(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT, expiresAt)
             .execute()
+        history.record(userId, clubId, MembershipEvent.joined, now)
         return id
     }
 
+    /**
+     * Sets active + new expiry. This is BOTH the paid-renewal path (prior status active/grace_period —
+     * the member never lost access → not a churn event, nothing logged) and the paid-rejoin path
+     * (prior status cancelled/expired → the dead membership comes back → `rejoined`). The prior status
+     * is read before the update to tell the two apart.
+     */
     override fun renewSubscription(membershipId: UUID, newExpiresAt: OffsetDateTime) {
+        val now = OffsetDateTime.now()
+        val prior = dsl.select(MEMBERSHIPS.USER_ID, MEMBERSHIPS.CLUB_ID, MEMBERSHIPS.STATUS)
+            .from(MEMBERSHIPS)
+            .where(MEMBERSHIPS.ID.eq(membershipId))
+            .fetchOne()
         dsl.update(MEMBERSHIPS)
             .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
             .set(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT, newExpiresAt)
             .where(MEMBERSHIPS.ID.eq(membershipId))
             .execute()
+        val priorStatus = prior?.get(MEMBERSHIPS.STATUS)
+        if (priorStatus == MembershipStatus.cancelled || priorStatus == MembershipStatus.expired) {
+            history.record(prior.get(MEMBERSHIPS.USER_ID)!!, prior.get(MEMBERSHIPS.CLUB_ID)!!, MembershipEvent.rejoined, now)
+        }
     }
 
     override fun findExpiringWithin(now: OffsetDateTime, threshold: OffsetDateTime): List<ExpiringSubscriptionNotification> =
@@ -354,14 +388,21 @@ class JooqMembershipRepository(
                 )
             }
 
-    override fun moveGracePeriodToExpired(gracePeriodEnd: OffsetDateTime): Int =
-        dsl.update(MEMBERSHIPS)
+    override fun moveGracePeriodToExpired(gracePeriodEnd: OffsetDateTime): Int {
+        val now = OffsetDateTime.now()
+        val expired = dsl.update(MEMBERSHIPS)
             .set(MEMBERSHIPS.STATUS, MembershipStatus.expired)
             .where(
                 MEMBERSHIPS.STATUS.eq(MembershipStatus.grace_period)
                     .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.lessOrEqual(gracePeriodEnd))
             )
-            .execute()
+            .returningResult(MEMBERSHIPS.USER_ID, MEMBERSHIPS.CLUB_ID)
+            .fetch()
+        expired.forEach {
+            history.record(it.get(MEMBERSHIPS.USER_ID)!!, it.get(MEMBERSHIPS.CLUB_ID)!!, MembershipEvent.expired, now)
+        }
+        return expired.size
+    }
 
     // Telegram IDs of members who currently have access to the club — the shared
     // MembershipAccess predicate (active, or cancelled-but-still-paid). Members

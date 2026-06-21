@@ -382,6 +382,7 @@ CREATE TYPE club_category AS ENUM ('sport', 'creative', 'food', 'board_games', '
 CREATE TYPE access_type AS ENUM ('open', 'closed', 'private');
 CREATE TYPE membership_status AS ENUM ('active', 'grace_period', 'cancelled', 'expired');
 CREATE TYPE membership_role AS ENUM ('member', 'organizer');
+CREATE TYPE membership_event AS ENUM ('joined', 'left', 'rejoined', 'expired'); -- V31: membership_history log
 CREATE TYPE application_status AS ENUM ('pending', 'approved', 'rejected', 'auto_rejected');
 CREATE TYPE event_status AS ENUM ('upcoming', 'stage_1', 'stage_2', 'completed', 'cancelled');
 CREATE TYPE stage_1_vote AS ENUM ('going', 'maybe', 'not_going');
@@ -405,6 +406,10 @@ CREATE INDEX idx_clubs_owner_id ON clubs(owner_id);
 CREATE INDEX idx_memberships_user_id ON memberships(user_id);
 CREATE INDEX idx_memberships_club_id ON memberships(club_id);
 CREATE INDEX idx_memberships_status ON memberships(status);
+
+-- membership_history (V31): append-only lifecycle log (joined/left/rejoined/expired) for retention/churn
+CREATE INDEX idx_membership_history_club_occurred ON membership_history(club_id, occurred_at);
+CREATE INDEX idx_membership_history_user_club ON membership_history(user_id, club_id, occurred_at);
 
 -- events: club calendar
 CREATE INDEX idx_events_club_id_datetime ON events(club_id, event_datetime DESC);

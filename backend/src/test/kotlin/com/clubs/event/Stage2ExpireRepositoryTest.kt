@@ -63,6 +63,7 @@ class Stage2ExpireRepositoryTest {
     fun setUp() {
         dsl.execute("DELETE FROM event_responses")
         dsl.execute("DELETE FROM events")
+        dsl.execute("DELETE FROM membership_history")
         dsl.execute("DELETE FROM memberships")
         dsl.execute("DELETE FROM clubs")
         dsl.execute("DELETE FROM users")

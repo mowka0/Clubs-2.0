@@ -90,6 +90,7 @@ class SkladchinaControllerTest {
         dsl.execute("DELETE FROM events")
         dsl.execute("DELETE FROM applications")
         dsl.execute("DELETE FROM transactions")
+        dsl.execute("DELETE FROM membership_history")
         dsl.execute("DELETE FROM memberships")
         dsl.execute("DELETE FROM user_club_reputation")
         dsl.execute("DELETE FROM clubs")

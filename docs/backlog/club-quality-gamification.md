@@ -137,7 +137,12 @@ floor (нигде нет процентов), recency-decay на каждом с
 
 ---
 
-## 6. Фундаментный кирпич: `membership_history` (грин-лайт PO 2026-06-13)
+## 6. Фундаментный кирпич: `membership_history` (грин-лайт PO 2026-06-13) — ✅ ЗАШИПЛЕНО (V31)
+
+> **Реализовано** (`feature/membership-history`): таблица `membership_history` + write-path из единственного
+> чокпоинта `JooqMembershipRepository` (та же транзакция). Решения: организатор НЕ логируется (лог member-only);
+> `left` = момент решения уйти (не потери доступа); продление активного — не rejoined. Без backfill, без UI/чтения.
+> Детали и семантика событий — `docs/modules/membership.md` § «membership_history». Reads (retention/L3) — позже.
 
 Append-only audit на уже существующей membership-машине:
 `(user_id, club_id, event ENUM{joined,left,rejoined,expired}, occurred_at)`. Пишется из тех же точек
