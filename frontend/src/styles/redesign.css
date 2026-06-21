@@ -264,17 +264,23 @@
 .rd-club-card .rd-meta { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 
 /* Discovery-card: price chip on the banner + segmented metric trio (возраст · участники · вовлечённость) */
+/* The chip sits on the darkened banner in BOTH themes → fixed light text (not var(--text), which is
+   dark in light theme and would vanish against the dark scrim). */
 .rd-club-card .rd-price-chip {
   position: absolute; top: 10px; right: 12px; z-index: 2;
-  font-size: 12px; font-weight: 700; color: var(--text);
-  background: rgba(0, 0, 0, 0.46); padding: 4px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 700; color: #fff;
+  background: rgba(0, 0, 0, 0.5); padding: 4px 10px; border-radius: 999px;
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
 }
 .rd-club-card .rd-mrow {
   display: flex; gap: 1px; margin-top: 12px;
   background: var(--hairline); border-radius: 13px; overflow: hidden;
 }
+/* Sunken cell. Dark navy in the dark theme (punchy panels, white text); a light grey in the light
+   theme so the dark text/values stay readable. The text colours are theme tokens (--text/--live/
+   --text-faint), which already carry correct light-theme values — only the cell fill needs the override. */
 .rd-club-card .rd-mstat { flex: 1; background: rgba(18, 20, 28, 0.55); padding: 11px 8px; text-align: center; }
+[data-theme="light"] .rd-club-card .rd-mstat { background: rgba(0, 0, 0, 0.04); }
 .rd-club-card .rd-mv { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; color: var(--text); }
 .rd-club-card .rd-mv.ok { color: var(--live); }
 .rd-club-card .rd-ml { font-size: 9.5px; color: var(--text-faint); margin-top: 4px; line-height: 1.2; }
