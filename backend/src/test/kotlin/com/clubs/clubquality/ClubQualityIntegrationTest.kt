@@ -16,6 +16,7 @@ import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 /**
  * Integration tests for club-quality L1 facts against a real Postgres. Covers each fact's
@@ -179,6 +180,55 @@ class ClubQualityIntegrationTest {
         assertEquals(2, clubQualityService.getClubFacts(clubId).successfulSkladchinas)
     }
 
+    // ---- batch (Discovery card) ----
+
+    @Test
+    fun `card facts batch returns age in days and engagement`() {
+        // 4 alive members (denominator); an expired one is excluded.
+        val m1 = newUser(); val m2 = newUser()
+        listOf(m1, m2, newUser(), newUser()).forEach { insertMembership(it, "active") }
+        insertMembership(newUser(), "expired")
+
+        // 2 distinct members respond to recent events → engagement numerator = 2.
+        val e1 = insertEvent(daysFromNow(-3), "completed")
+        val e2 = insertEvent(daysFromNow(-10), "completed")
+        insertResponse(e1, attendance = null, userId = m1)
+        insertResponse(e1, attendance = null, userId = m2)
+        insertResponse(e2, attendance = null, userId = m1) // m1 again → distinct responders = {m1, m2}
+
+        val facts = clubQualityService.getClubCardFacts(listOf(clubId)).single()
+        assertEquals(clubId, facts.clubId)
+        assertEquals(50, facts.engagementPercent) // 2 distinct responders ÷ 4 alive members
+        // Club was created ~14 months ago in setUp → age in DAYS (not months, not zero).
+        assertTrue(facts.ageDays >= 420, "ageDays should reflect days since creation, was ${facts.ageDays}")
+    }
+
+    @Test
+    fun `card facts batch skips ids with no club row`() {
+        val facts = clubQualityService.getClubCardFacts(listOf(clubId, UUID.randomUUID()))
+        assertEquals(setOf(clubId), facts.map { it.clubId }.toSet())
+    }
+
+    @Test
+    fun `card facts engagement is zero when club has no alive members`() {
+        val e = insertEvent(daysFromNow(-3), "completed")
+        insertResponse(e, attendance = null) // a responder exists, but zero alive members
+        assertEquals(0, clubQualityService.getClubCardFacts(listOf(clubId)).single().engagementPercent)
+    }
+
+    @Test
+    fun `card facts engagement clamps at 100 percent`() {
+        insertMembership(newUser(), "active") // 1 alive member
+        val e = insertEvent(daysFromNow(-3), "completed")
+        repeat(3) { insertResponse(e, attendance = null) } // 3 distinct responders > 1 member
+        assertEquals(100, clubQualityService.getClubCardFacts(listOf(clubId)).single().engagementPercent)
+    }
+
+    @Test
+    fun `card facts batch returns empty for empty input`() {
+        assertEquals(emptyList<ClubCardFactsDto>(), clubQualityService.getClubCardFacts(emptyList()))
+    }
+
     // ---- helpers ----
 
     private fun newUser(): UUID {
@@ -222,6 +272,17 @@ class ClubQualityIntegrationTest {
                                          stage_2_vote, final_status, attendance)
             VALUES ('$id', '$eventId', '$userId', 'going'::stage_1_vote, NOW(),
                     'confirmed'::stage_2_vote, 'confirmed'::final_status, $att)
+            """.trimIndent()
+        )
+        return id
+    }
+
+    private fun insertMembership(userId: UUID, status: String): UUID {
+        val id = UUID.randomUUID()
+        dsl.execute(
+            """
+            INSERT INTO memberships (id, user_id, club_id, status, role)
+            VALUES ('$id', '$userId', '$clubId', '$status'::membership_status, 'member'::membership_role)
             """.trimIndent()
         )
         return id

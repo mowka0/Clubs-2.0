@@ -90,13 +90,35 @@ owner-данные → L1/L2, бан только из L3). `coreSize` уже и
   "meetingsPerMonth": 2.7,
   "avgAttendance": 11,
   "coreSize": 8,
-  "ageMonths": 14
+  "ageMonths": 14,
+  "totalMeetings": 71,
+  "successfulSkladchinas": 3
 }
 ```
 
-Эндпоинт живёт в **новом** `ClubQualityController` (`@RequestMapping("/api/clubs")`,
-метод `@GetMapping("/{clubId}/quality")`) внутри модуля `clubquality` — НЕ в `ClubController`
-(модульная граница).
+### `GET /api/clubs/quality/batch?ids=uuid1,uuid2,...`
+
+Факты для **ленты Discovery** — пачкой по списку клубов (один запрос на страницу карточек, не на каждую → нет N+1).
+
+- **Auth:** JWT. Те же `others`-видимые факты, ownership-проверки нет.
+- **Параметр:** `ids` — список UUID (запятыми). Дубликаты схлопываются, размер кэпится на **50** (анти-абьюз).
+- **Response 200:** `List<ClubCardFactsDto>` — по элементу на каждый **существующий** клуб (id без строки `clubs` молча пропускаются; 404 нет — частичная страница нормальна). Пустой `ids` → `[]`.
+- Путь `/quality/batch` (литерал, 2 сегмента) **не коллизит** с `/{clubId}/quality` и `/{id}`.
+
+```jsonc
+// ClubCardFactsDto — трио карточки: возраст · участники · вовлечённость
+{
+  "clubId": "uuid",
+  "ageDays": 425,            // целых дней с создания (возраст)
+  "engagementPercent": 64   // distinct откликнувшихся за 90д ÷ живые участники (active+grace), 0..100
+}
+```
+> **«участники»** в фактах НЕТ — карточка берёт `memberCount` из `ClubListItemDto`.
+> **Встреч/мес и ядро намеренно НЕ на карточке** — это кольца страницы клуба (Активность / Сплочённость),
+> карточка их не дублирует (минимально-достаточный набор для решения «листать или зайти»).
+
+Оба эндпоинта живут в **новом** `ClubQualityController` (`@RequestMapping("/api/clubs")`)
+внутри модуля `clubquality` — НЕ в `ClubController` (модульная граница).
 
 ---
 
@@ -104,11 +126,11 @@ owner-данные → L1/L2, бан только из L3). `coreSize` уже и
 
 ```
 backend/src/main/kotlin/com/clubs/clubquality/
-├── ClubQualityController.kt   # GET /api/clubs/{clubId}/quality
-├── ClubQualityService.kt      # @Transactional(readOnly=true); проверка существования клуба → 404; маппинг
-├── ClubQualityRepository.kt   # интерфейс: findClubFacts(clubId): ClubFacts?  (null = клуб не найден)
-├── JooqClubQualityRepository.kt # read-only агрегации по events/event_responses/clubs
-├── ClubFacts.kt               # domain: ClubFacts(meetingsPerMonth, avgAttendance, coreSize, ageMonths)
+├── ClubQualityController.kt   # GET /api/clubs/{clubId}/quality + GET /api/clubs/quality/batch
+├── ClubQualityService.kt      # @Transactional(readOnly=true); 404 для single; batch dedupe+cap(50); маппинг
+├── ClubQualityRepository.kt   # findClubFacts(clubId): ClubFacts? + findClubCardFacts(ids): List<ClubCardFacts>
+├── JooqClubQualityRepository.kt # read-only агрегации; batch = одна grouped-query на метрику (no N+1)
+├── ClubFacts.kt               # domain: ClubFacts (страница клуба) + ClubCardFacts (карточка ленты)
 ├── ClubFactsDto.kt            # HTTP DTO
 └── ClubQualityMapper.kt       # ClubFacts -> ClubFactsDto
 ```
@@ -151,6 +173,21 @@ backend/src/main/kotlin/com/clubs/clubquality/
 - Встраивание в `pages/ClubPage.tsx`: единый блок после «О клубе», **до** табов/lock — виден всем зрителям.
   Fail-soft: при загрузке/ошибке блок не рендерится. (Отдельного `ClubAchievements` больше нет — слит сюда.)
 
+### Карточка Discovery (лента, §11.1)
+- `api/clubQuality.ts` → `getClubQualityBatch(ids): Promise<ClubCardFactsDto[]>` (`GET /api/clubs/quality/batch`).
+- `queries/clubQuality.ts` → `useClubCardFacts(pages)` — **один batch на страницу** ленты через `useQueries`
+  (каждая страница ≤20 id, кэш на страницу: нет ни усечения кэпом, ни перефетча прошлых страниц при скролле);
+  возвращает `Map<clubId, ClubCardFactsDto>` для O(1) поиска по карточке.
+- `components/ClubCard.tsx` — принимает опциональный `facts`; рендерит **сегментированное трио** (стиль `.mrow`
+  из мокапа): **возраст (дни) · участники · вовлечённость%** (последняя зелёная). Ценник — чипом на баннере.
+  Без `facts` (ещё грузится) трио не показывается, мета = «город · N участников» — fail-soft, деградация мягкая.
+  - **Метрики выбраны минимально-достаточными и БЕЗ дублей со страницей клуба:** встреч/мес и ядро —
+    это кольца Активность/Сплочённость на странице; на карточке их нет. Возраст/участники/вовлечённость на
+    странице полноценными числами не показаны.
+- `pages/DiscoveryPage.tsx`: `useClubCardFacts(data.pages)` → `facts={factsByClub.get(club.id)}` на каждую карточку.
+- Тип `ClubCardFactsDto` в `types/api.ts`. **Только данные качества** на существующей карточке — структурная
+  перестройка (аватар-от-баннера, направления, постоянное место) и soft-ранг «Топ-5» (L3) — НЕ в этом срезе (§11 MVP).
+
 ---
 
 ## 7. Критерии приёмки
@@ -166,17 +203,23 @@ backend/src/main/kotlin/com/clubs/clubquality/
 9. Frontend: `npm run build` зелёный; `npm test` зелёный.
 10. `totalMeetings` = held all-time (без окна); `successfulSkladchinas` = только `closed_success`.
 11. Единый блок без заголовков-секций: строка-капшн всегда показывает возраст-бейдж; счётчики «N встреч»/«N сборов» — живые числа, показ при >0.
+12. `GET /api/clubs/quality/batch?ids=` возвращает по элементу на существующий клуб; несуществующие id пропускаются (без 404); пустой ввод → `[]`; дубликаты схлопываются; размер кэпится на 50.
+13. `engagementPercent` = distinct откликнувшихся за 90д ÷ живые участники (active+grace), 0..100; деление-на-ноль (0 участников) → 0; >100% клампится к 100. `ageDays` = целых дней с создания (дни, не месяцы).
+14. Карточка Discovery: при наличии `facts` — сегментированное трио **возраст · участники · вовлечённость**; без фактов мета = «город · N участников» (трио скрыто), деградация мягкая. Встреч/мес и ядро на карточке НЕ показываются (не дублируем кольца страницы).
 
 ---
 
 ## 8. Вне среза (следующими PR)
 
-- Карточка Discovery: участники · встреч/мес · вовлечённость% + майлстоны.
 - owner-«Статистика» (рычаги/нуджи/зона внимания) — нужны ownership-проверки.
 - Скрытый L3-ранг (композит 4 осей) — нужна калибровка §8, читает ledger через read-port.
 - `membership_history` (фундамент retention) — строить чисто, без backfill.
 
-**Зашиплено после этой спеки:** фикс мёртвого `activity_rating` (V30 — колонка ретайрнута, сортировка
-дискавери + тег «Популярный» пересобраны как derived). См. `docs/modules/clubs.md` § «GET /api/clubs».
+**Зашиплено после этой спеки:**
+- Фикс мёртвого `activity_rating` (V30 — колонка ретайрнута, сортировка дискавери + тег «Популярный»
+  пересобраны как derived). См. `docs/modules/clubs.md` § «GET /api/clubs».
+- **Карточка Discovery (§11.1):** batch-эндпоинт `GET /api/clubs/quality/batch` + метрики (встреч/мес ·
+  вовлечённость% + возраст/достижения) на карточке клуба в ленте. См. §4, §6 выше. Только данные качества;
+  структурная перестройка карточки и L3 soft-ранг — отдельными срезами.
 </content>
 </invoke>

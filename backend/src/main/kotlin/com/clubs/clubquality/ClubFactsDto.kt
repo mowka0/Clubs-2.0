@@ -18,3 +18,18 @@ data class ClubFactsDto(
     val totalMeetings: Int,
     val successfulSkladchinas: Int,
 )
+
+/**
+ * HTTP shape of [ClubCardFacts] for `GET /api/clubs/quality/batch?ids=...` — the Discovery feed
+ * card's decision trio (возраст · участники · вовлечённость), one element per existing club.
+ * «участники» comes from `ClubListItemDto.memberCount`, not here.
+ *
+ * @property clubId            the club these facts belong to (the caller keys the response by it)
+ * @property ageDays           whole days since the club was created (возраст)
+ * @property engagementPercent distinct recent responders ÷ alive members, 0..100 (вовлечённость)
+ */
+data class ClubCardFactsDto(
+    val clubId: java.util.UUID,
+    val ageDays: Int,
+    val engagementPercent: Int,
+)

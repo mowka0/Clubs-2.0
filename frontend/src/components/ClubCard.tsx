@@ -1,7 +1,8 @@
 import { FC, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useHaptic } from '../hooks/useHaptic';
-import type { ClubListItemDto } from '../types/api';
+import { pluralRu } from '../utils/formatters';
+import type { ClubCardFactsDto, ClubListItemDto } from '../types/api';
 
 const CATEGORY_LABELS: Record<string, string> = {
   sport: 'Спорт',
@@ -49,22 +50,17 @@ function formatEventTime(iso: string): string {
 
 interface ClubCardProps {
   club: ClubListItemDto;
+  /** Quality facts (возраст + вовлечённость) for the metric trio. Absent until the batch loads. */
+  facts?: ClubCardFactsDto;
 }
 
-export const ClubCard: FC<ClubCardProps> = ({ club }) => {
+export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
   const navigate = useNavigate();
   const haptic = useHaptic();
 
   const featured = useMemo(() => isHappeningSoon(club.nearestEvent?.eventDatetime), [club.nearestEvent]);
   const cat = KNOWN_CATEGORIES.has(club.category) ? club.category : 'other';
-
-  const meta = [
-    club.city,
-    `${club.memberCount} ${pluralizeMembers(club.memberCount)}`,
-    formatPrice(club.subscriptionPrice),
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const memberLabel = pluralizeMembers(club.memberCount);
 
   return (
     <button
@@ -80,15 +76,36 @@ export const ClubCard: FC<ClubCardProps> = ({ club }) => {
         data-cat={cat}
         style={club.avatarUrl ? { backgroundImage: `url(${club.avatarUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
       >
+        <span className="rd-price-chip">{formatPrice(club.subscriptionPrice)}</span>
         {featured && club.nearestEvent && (
-          <span className="rd-date-badge" style={{ position: 'absolute', top: 10, right: 10 }}>
+          <span className="rd-date-badge" style={{ position: 'absolute', top: 10, left: 12, zIndex: 2 }}>
             встреча {formatEventTime(club.nearestEvent.eventDatetime)}
           </span>
         )}
       </div>
       <div className="rd-body">
         <div className="rd-ttl">{club.name}</div>
-        <div className="rd-meta">{meta}</div>
+        <div className="rd-meta">
+          {facts ? club.city : `${club.city} · ${club.memberCount} ${memberLabel}`}
+        </div>
+        {/* Trio: возраст · участники · вовлечённость — намеренно НЕ встреч/мес и НЕ ядро
+            (это кольца на странице клуба), чтобы карточка не дублировала страницу. */}
+        {facts && (
+          <div className="rd-mrow">
+            <div className="rd-mstat">
+              <div className="rd-mv">{facts.ageDays}</div>
+              <div className="rd-ml">{pluralRu(facts.ageDays, ['день', 'дня', 'дней'])}</div>
+            </div>
+            <div className="rd-mstat">
+              <div className="rd-mv">{club.memberCount}</div>
+              <div className="rd-ml">{memberLabel}</div>
+            </div>
+            <div className="rd-mstat">
+              <div className="rd-mv ok">{facts.engagementPercent}%</div>
+              <div className="rd-ml">вовлечены</div>
+            </div>
+          </div>
+        )}
       </div>
     </button>
   );

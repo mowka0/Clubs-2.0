@@ -1,6 +1,7 @@
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useClubsQuery } from '../queries/clubs';
+import { useClubCardFacts } from '../queries/clubQuality';
 import { useMyReputationQuery } from '../queries/members';
 import { tierWord, clubsPrepositional } from '../utils/reputationTier';
 import { useAuthStore } from '../store/useAuthStore';
@@ -112,6 +113,9 @@ export const DiscoveryPage: FC = () => {
   } = useClubsQuery(queryFilters);
 
   const clubs = data?.pages.flatMap((p) => p.content) ?? [];
+
+  // Quality facts fetched one batch per loaded page (see useClubCardFacts).
+  const factsByClub = useClubCardFacts(data?.pages ?? []);
 
   const handleObserver = useCallback(
     (entries: IntersectionObserverEntry[]) => {
@@ -244,7 +248,7 @@ export const DiscoveryPage: FC = () => {
         )}
 
         {clubs.map((club) => (
-          <ClubCard key={club.id} club={club} />
+          <ClubCard key={club.id} club={club} facts={factsByClub.get(club.id)} />
         ))}
 
         {isFetchingNextPage && (
