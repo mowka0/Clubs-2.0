@@ -5,6 +5,7 @@ package com.clubs.generated.jooq.indexes
 
 
 import com.clubs.generated.jooq.tables.Applications
+import com.clubs.generated.jooq.tables.ClubRank
 import com.clubs.generated.jooq.tables.Clubs
 import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.Events
@@ -29,6 +30,7 @@ import org.jooq.impl.Internal
 
 val IDX_APPLICATIONS_CLUB_ID_STATUS: Index = Internal.createIndex(DSL.name("idx_applications_club_id_status"), Applications.APPLICATIONS, arrayOf(Applications.APPLICATIONS.CLUB_ID, Applications.APPLICATIONS.STATUS), false)
 val IDX_APPLICATIONS_USER_ID: Index = Internal.createIndex(DSL.name("idx_applications_user_id"), Applications.APPLICATIONS, arrayOf(Applications.APPLICATIONS.USER_ID), false)
+val IDX_CLUB_RANK_CAT_OWNER_SCORE: Index = Internal.createIndex(DSL.name("idx_club_rank_cat_owner_score"), ClubRank.CLUB_RANK, arrayOf(ClubRank.CLUB_RANK.CATEGORY, ClubRank.CLUB_RANK.OWNER_ID, ClubRank.CLUB_RANK.RANK_SCORE.desc()), false)
 val IDX_CLUBS_ACCESS_TYPE: Index = Internal.createIndex(DSL.name("idx_clubs_access_type"), Clubs.CLUBS, arrayOf(Clubs.CLUBS.ACCESS_TYPE), false)
 val IDX_CLUBS_CATEGORY: Index = Internal.createIndex(DSL.name("idx_clubs_category"), Clubs.CLUBS, arrayOf(Clubs.CLUBS.CATEGORY), false)
 val IDX_CLUBS_CITY: Index = Internal.createIndex(DSL.name("idx_clubs_city"), Clubs.CLUBS, arrayOf(Clubs.CLUBS.CITY), false)

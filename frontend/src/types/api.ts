@@ -323,6 +323,9 @@ export interface ClubCardFactsDto {
   clubId: string;
   ageDays: number;
   engagementPercent: number;
+  /** "★ Топ-5 в категории" — the only externally-visible L3 signal (a pure boolean; the rank score
+   *  never leaves the server). False unless the backend badge feature flag is on. */
+  topInCategory: boolean;
 }
 
 /** Window-over-window movement of a percent metric. `delta` is signed, in percentage points. */

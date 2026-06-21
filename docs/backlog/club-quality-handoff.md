@@ -1,10 +1,10 @@
 # Клуб-трек (качество клуба) — хэндофф для новой сессии
 
-**Обновлено:** 2026-06-21 · **Статус:** L1/L2-показ + карточка Discovery + `membership_history` + **owner-«Статистика»** в проде. Дальше: **L3 скрытый ранг + «★ Топ-5 в категории»**.
-**Спека модуля:** `docs/modules/club-quality.md` (§9 — owner-«Статистика») · **Дизайн-контракт (locked):** `docs/backlog/club-quality-gamification.md` (§0–11) · **Карточка/страница/управление — мокап:** `docs/design/club-quality-redesign/mockups/final.html`
+**Обновлено:** 2026-06-21 · **Статус:** L1/L2-показ + карточка Discovery + `membership_history` + **owner-«Статистика»** в проде. **L3 скрытый ранг + «★ Топ-5 в категории» — v1 ПОСТРОЕН** (ветка `feature/club-quality-l3-rank`, за фиче-флагом `club.rank.badge-enabled` default off, ждёт staging→merge).
+**Спека модуля:** `docs/modules/club-quality.md` (§9 — owner-«Статистика», **§10 — L3-ранг as-built**) · **Дизайн-контракт (locked):** `docs/backlog/club-quality-gamification.md` (§0–11, §8 снят) · **Карточка/страница/управление — мокап:** `docs/design/club-quality-redesign/mockups/final.html`
 **Память:** [[project_club_quality_track]], [[project_work_queue]]
 
-> **С чего начать новую сессию:** следующий срез — **L3 скрытый ранг (§Б ниже)** + soft-ранг «★ Топ-5 в категории» на карточке/странице. Режим **xhigh + ultracode**. ПЕРЕД стартом — снять открытые вопросы §8 дизайн-дока (веса/пороги/калибровка). PO явно хочет «Топ-5» как ранний стимул для организаторов (на 10 клубах гейт-based v1 честен).
+> **С чего начать новую сессию:** L3 v1 построен и за флагом (off). Дальше по треку: (1) **включить бейдж** — флипнуть `CLUB_RANK_BADGE_ENABLED=true` в Coolify, когда по проду наберётся ≥8 RANKED-клубов (до того `GLOBAL_RANK_FLOOR` его и так подавляет); (2) **L3 v2** (§8 модульной спеки): co-occurrence-граф под атакой, складчина-финансы при Stars, transfer-probation, калибровка весов на выросшей выборке; (3) структурная перестройка карточки/страницы (свои схемы). Точный as-built — `docs/modules/club-quality.md` §10.
 
 ---
 
@@ -77,19 +77,23 @@ Append-only лог `(user_id, club_id, event{joined/left/rejoined/expired}, occu
 - **Споры по явке — кумулятивно** (`disputed OR dispute_terminal OR dispute_note`). Был баг: `disputed` транзиентен (резолв стирает маркер), счёт только по нему = ~0. Полная история споров (с decay/identity) — позже в L3 через read-port.
 - **Нудж «Верните N ушедших» раскрывается** в ростер ушедших (`GET …/churned-members`) + тап на карточку профиля (переиспользуем `MemberProfileModal`, новый только лёгкий `ChurnedMemberDto`). `churnedThisPeriod` = distinct-currently-gone = длине ростера. Будущие действия — `docs/backlog/win-back-actions.md`.
 
-### Б. L3 — скрытый ранг (§4) — **xhigh + ultracode**, СНЯТЬ §8-вопросы до старта
-См. §4 ниже. Разблокирует soft-ранг «★ Топ-5 в категории» на карточке/странице.
+### Б. L3 — скрытый ранг — ✅ **v1 ПОСТРОЕН** (ветка `feature/club-quality-l3-rank`, за флагом, off)
+As-built контракт — `docs/modules/club-quality.md` §10. §8-вопросы сняты (§4 ниже — историческая постановка). Дальше: включить флаг при росте выборки + L3 v2.
 
 ### В. Структурная перестройка карточки/страницы — future-слой (свои схемы)
 Направления (осн.+суб) · постоянное место (venue+город) · аватар-отдельно-от-баннера · роли участников · новости клуба · «Атмосфера встреч». Каждая — отдельная фича + схема + продуктовые решения. Затемняющий градиент карточки (#73) — уже задел под наложение текста/аватара на баннер. НЕ начинать без решения по схемам.
 
 ---
 
-## 4. L3 — скрытый ранг (§4 дизайн-дока): открытые вопросы §8 — СНЯТЬ ДО реализации
+## 4. L3 — скрытый ранг — историческая постановка (РЕШЕНО в v1, см. club-quality.md §10)
 
-L3 = композит 4 осей (`0.35·ParticipantDiversity + 0.30·PayingRetention + 0.20·DemandResponsiveness + 0.15·LiveActivity − штрафы × множители`), internal, двигает выдачу + категорийный рейтинг. **НЕ сумма баров, читает ledger напрямую.**
+> ✅ Всё ниже снято/реализовано. As-built: `docs/modules/club-quality.md` §10. Уточнение к формуле: негативы
+> читаются НАПРЯМУЮ из `event_responses`/`events`/`applications` (не из ledger), read-port несёт только
+> credibility-footprint. Гейт — credibility-взвешенный (Σcred≥8), не head-count.
 
-**Открытые вопросы (блокируют L3):**
+L3 = композит 4 осей (`0.35·ParticipantDiversity + 0.30·PayingRetention + 0.20·DemandResponsiveness + 0.15·LiveActivity − штрафы × множители`), internal, двигает выдачу + категорийный рейтинг. **НЕ сумма баров.**
+
+**Открытые вопросы (БЫЛИ блокерами — сняты):**
 - **Веса w1–w4 и пороги** (K=8/10? K_event=4? период decay? размеры штрафов) — **калибровка на прод-выборке клубов**. Есть ли выборка?
 - **account-credibility scoring** (age/username/avatar/cross-club) — отдельный сервис/таблица или on-the-fly из `users`?
 - **co-occurrence / collusion-collapse** — на запуске НЕ полный граф (min-K + credibility достаточно для v1; граф под реальной атакой). Зафиксировать порог включения.
@@ -108,7 +112,7 @@ L3 = композит 4 осей (`0.35·ParticipantDiversity + 0.30·PayingRete
 | фикс `activity_rating` | обычный | ✅ #72 |
 | `membership_history` | обычный | ✅ #74 |
 | **owner-«Статистика»** | **обычный** | ✅ PR #78 в проде (агрегации + UI + ownership + список ушедших) |
-| **L3 скрытый ранг** | **xhigh + ultracode** | анти-фарм-математика, Sybil-устойчивость, калибровка §8, co-occurrence — единственный срез, где режимы окупаются |
+| **L3 скрытый ранг** | **xhigh + ultracode** | ✅ **v1 построен** (`feature/club-quality-l3-rank`, за флагом off): credibility-взвешенный гейт, footprint-by-owner, owner-concentration + per-owner cap, skladchina_paid исключён, boolean-only. As-built — club-quality.md §10 |
 | структурная перестройка карточки | обычный | future (нужны схемы) |
 
 ---
@@ -126,5 +130,5 @@ L3 = композит 4 осей (`0.35·ParticipantDiversity + 0.30·PayingRete
 ## 7. Рабочий процесс (напоминание)
 
 - Срезы идут через флоу CLAUDE.md (фича/bugfix): Developer → Reviewer → Security → (Tester) → Analyst docs-alignment → push в ветку → staging → «готово, запушь» → PR + squash-merge (без `--delete-branch`).
-- **Schema change** = миграция V{N} (next = max+1, на 2026-06-21 max = **V31**) + `./gradlew generateJooq` + коммит генеренного `backend/src/generated/jooq/**`.
+- **Schema change** = миграция V{N} (next = max+1, на 2026-06-21 max = **V32** — `club_rank`) + `./gradlew generateJooq` + коммит генеренного `backend/src/generated/jooq/**`.
 - **Docs-alignment — обязательный гейт** перед коммитом: grep по всем `docs/` + PRD + ARCHITECTURE, не только тронутый модуль. PRD правится только с согласия пользователя.

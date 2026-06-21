@@ -70,6 +70,15 @@ s3:
   bucket: ${S3_BUCKET:clubs-uploads}
   base-url: ${S3_BASE_URL:http://localhost:9000/clubs-uploads}
 
+club:
+  rank:
+    # L3 "★ Топ-5 в категории" badge kill-switch. The hidden rank is ALWAYS computed (the machinery
+    # and anti-farm invariants are the deliverable); this flag only controls whether the public badge
+    # renders. Default OFF — on a ~10-club prod the badge would be statistical noise, so it stays
+    # suppressed until categories fill. Flip via CLUB_RANK_BADGE_ENABLED=true in Coolify (no rebuild).
+    # An additional in-code GLOBAL_RANK_FLOOR still gates the badge even when this is true.
+    badge-enabled: ${CLUB_RANK_BADGE_ENABLED:false}
+
 # Event lifecycle timing knobs. Defaults match PRD (48h dispute window, hourly
 # finalize). Externalised so staging can shrink them for an end-to-end reputation
 # test without a rebuild — see docs/modules/events.md § "Конфигурация таймингов".

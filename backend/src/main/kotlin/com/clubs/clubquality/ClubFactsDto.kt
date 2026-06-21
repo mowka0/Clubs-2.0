@@ -27,9 +27,14 @@ data class ClubFactsDto(
  * @property clubId            the club these facts belong to (the caller keys the response by it)
  * @property ageDays           whole days since the club was created (возраст)
  * @property engagementPercent distinct recent responders ÷ alive members, 0..100 (вовлечённость)
+ * @property topInCategory     "★ Топ-5 в категории" — the ONLY externally-visible L3 derivative. A
+ *                             pure boolean: the internal rank score/breakdown NEVER leaves the server
+ *                             (design §4 "L3 невидим и необъясним"). False unless the deploy feature
+ *                             flag is on and the global rank floor is met.
  */
 data class ClubCardFactsDto(
     val clubId: java.util.UUID,
     val ageDays: Int,
     val engagementPercent: Int,
+    val topInCategory: Boolean,
 )

@@ -159,7 +159,8 @@ distinct-абсолют): **основа клуба** (ядро) · **часто
 пока нет встреч». Данные — `GET /api/clubs/{clubId}/quality` (модуль `clubquality`); fail-soft. Полная спека —
 [`club-quality.md`](./club-quality.md). В проде: Фундамент (#69) + Кольца (#70); единый блок + счётчики — текущий
 срез. Owner-«Статистика» (приватная панель управления, `GET /api/clubs/{clubId}/stats`) — реализована
-(см. [`club-quality.md`](./club-quality.md) §9). L3-ранг — следующим PR.
+(см. [`club-quality.md`](./club-quality.md) §9). L3-ранг — построен v1 (за фиче-флагом, default off); soft-ранг
+«★ Топ-5 в категории» показывается **только на карточке Discovery, не на странице клуба** (см. §10).
 
 ### Visitor-specific
 

@@ -285,6 +285,15 @@
 .rd-club-card .rd-mv.ok { color: var(--live); }
 .rd-club-card .rd-ml { font-size: 9.5px; color: var(--text-faint); margin-top: 4px; line-height: 1.2; }
 
+/* Soft-rank "★ Топ-5 в категории" (the only externally-visible L3 derivative). Gold pill, fixed dark
+   text — theme-independent like the price chip (the gold reads in both themes). Ported from the locked
+   mockup final.html. Hidden unless the backend feature flag is on AND the club is badged. */
+.rd-club-card .rd-rankpill {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 6px;
+  font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
+  background: linear-gradient(135deg, #FFD89B 0%, #E9A23C 100%); color: #2A1A04;
+}
+
 /* Category cover gradients (data-cat) */
 .rd-cover[data-cat="sport"]       { background: radial-gradient(circle at 70% 30%, rgba(255,232,200,0.5), transparent 50%), linear-gradient(135deg, #F47B3C 0%, #5a3f1f 60%, #1a1108 100%); }
 .rd-cover[data-cat="creative"]    { background: radial-gradient(circle at 70% 30%, rgba(220,210,255,0.45), transparent 50%), linear-gradient(135deg, #7A5CF4 0%, #2f2a57 60%, #100e22 100%); }
