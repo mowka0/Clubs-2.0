@@ -33,7 +33,7 @@ data class ClubStats(
     /** Subset of [pendingApplications] older than 24h (approaching the 48h auto-reject). Null when not closed. */
     val stalePendingApplications: Int?,
     // ---- Зона внимания (owner-only «Надёжность организатора» negatives) ----
-    /** Currently open attendance disputes (`event_responses.attendance = disputed`). */
+    /** Attendance disputes ever raised against the club's marks (cumulative — open + resolved). */
     val attendanceDisputes: Int,
     /** All-time held meetings — denominator context for disputes («N из M»). */
     val totalMeetings: Int,

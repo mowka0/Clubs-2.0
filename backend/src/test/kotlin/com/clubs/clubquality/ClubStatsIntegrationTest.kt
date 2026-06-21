@@ -210,11 +210,14 @@ class ClubStatsIntegrationTest {
     }
 
     @Test
-    fun `attention zone counts open disputes, recent auto-rejects and cancellations`() {
-        // Open dispute on a held event.
-        val disputed = insertEvent(daysAgo(5), "completed", finalized = true)
-        insertResponse(disputed, attendance = "disputed")
-        // Held meetings (denominator context).
+    fun `attention zone counts disputes cumulatively, plus recent auto-rejects and cancellations`() {
+        // Disputes persist as transient `disputed` OR the markers a resolution leaves behind — count all.
+        val event = insertEvent(daysAgo(5), "completed", finalized = true)
+        insertResponse(event, attendance = "disputed")                                  // open → counts
+        insertResponse(event, attendance = "absent", disputeTerminal = true)            // resolved → counts
+        insertResponse(event, attendance = "attended", disputeNote = "был на месте")    // note remains → counts
+        insertResponse(event, attendance = "absent")                                    // plain mark → NOT a dispute
+        // Held meetings (denominator context for «N из M»).
         insertEvent(daysAgo(7), "completed")
         // Auto-rejects: one recent (counts), one older than 90d (excluded).
         insertApplication(newUser(), "auto_rejected", createdAt = daysAgo(5), resolvedAt = daysAgo(5))
@@ -225,8 +228,8 @@ class ClubStatsIntegrationTest {
 
         val stats = clubStatsService.getClubStats(clubId)
 
-        assertEquals(1, stats.attendanceDisputes)
-        assertEquals(2, stats.totalMeetings) // the disputed held event + the other held event
+        assertEquals(3, stats.attendanceDisputes) // open + terminally-resolved + note, but not the plain mark
+        assertEquals(2, stats.totalMeetings) // two held events; cancelled ones excluded
         assertEquals(1, stats.autoRejectedApplications)
         assertEquals(1, stats.cancelledMeetings)
     }
@@ -267,15 +270,22 @@ class ClubStatsIntegrationTest {
         return id
     }
 
-    private fun insertResponse(eventId: UUID, attendance: String?, userId: UUID = newUser()) {
+    private fun insertResponse(
+        eventId: UUID,
+        attendance: String?,
+        userId: UUID = newUser(),
+        disputeTerminal: Boolean = false,
+        disputeNote: String? = null,
+    ) {
         val id = UUID.randomUUID()
         val att = attendance?.let { "'$it'::attendance_status" } ?: "NULL"
+        val note = disputeNote?.let { "'$it'" } ?: "NULL"
         dsl.execute(
             """
             INSERT INTO event_responses (id, event_id, user_id, stage_1_vote, stage_1_timestamp,
-                                         stage_2_vote, final_status, attendance)
+                                         stage_2_vote, final_status, attendance, dispute_terminal, dispute_note)
             VALUES ('$id', '$eventId', '$userId', 'going'::stage_1_vote, NOW(),
-                    'confirmed'::stage_2_vote, 'confirmed'::final_status, $att)
+                    'confirmed'::stage_2_vote, 'confirmed'::final_status, $att, $disputeTerminal, $note)
             """.trimIndent(),
         )
     }

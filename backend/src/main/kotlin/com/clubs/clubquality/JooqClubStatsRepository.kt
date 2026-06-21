@@ -91,7 +91,7 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
             skladchinaPaidTrend = if (sklCur.hasBase) trend(sklCur, sklPriorValue) else null,
             pendingApplications = pending?.first,
             stalePendingApplications = pending?.second,
-            attendanceDisputes = openDisputes(clubId),
+            attendanceDisputes = disputeCount(clubId),
             totalMeetings = totalMeetings(clubId, now),
             autoRejectedApplications = if (isClosed) autoRejectedCount(clubId, attentionStart) else null,
             cancelledMeetings = cancelledMeetings(clubId, attentionStart),
@@ -235,14 +235,25 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
             )
             .fetchOne(0, Int::class.java) ?: 0
 
-    /** Currently open attendance disputes for the club's non-cancelled events. */
-    private fun openDisputes(clubId: UUID): Int =
+    /**
+     * Attendance disputes ever raised against the club's marks (cumulative, all-time). `attendance =
+     * disputed` is transient — a resolved/expired dispute flips back to attended/absent and persists only
+     * as `dispute_terminal = true` (and the `dispute_note` it stored), so counting `disputed` alone would
+     * read ~0 after every event finalizes. We union the live state with both persistent markers to count
+     * the organizer's actual dispute track record. The signal is "a member raised a dispute", regardless
+     * of who won the resolution (§9.5; design §2 «споры (member-raised)»).
+     */
+    private fun disputeCount(clubId: UUID): Int =
         dsl.selectCount().from(EVENT_RESPONSES)
             .join(EVENTS).on(EVENTS.ID.eq(EVENT_RESPONSES.EVENT_ID))
             .where(
                 EVENTS.CLUB_ID.eq(clubId)
                     .and(EVENTS.STATUS.ne(EventStatus.cancelled))
-                    .and(EVENT_RESPONSES.ATTENDANCE.eq(AttendanceStatus.disputed)),
+                    .and(
+                        EVENT_RESPONSES.ATTENDANCE.eq(AttendanceStatus.disputed)
+                            .or(EVENT_RESPONSES.DISPUTE_TERMINAL.isTrue)
+                            .or(EVENT_RESPONSES.DISPUTE_NOTE.isNotNull),
+                    ),
             )
             .fetchOne(0, Int::class.java) ?: 0
 
