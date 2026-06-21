@@ -24,7 +24,8 @@
 > `'activities'`. Полная спека — [`unified-activity-creation.md`](./unified-activity-creation.md).
 >
 > **Update round 4 (2026-05-24):** карточки активностей (`ActivityCard`) теперь
-> с фото-thumbnail слева (`ActivityThumb`, placeholder при отсутствии) и type-иконкой
+> с фото-thumbnail слева (`ActivityThumb`, placeholder при отсутствии — позже
+> убран в Banco-редизайне) и type-иконкой
 > в правом верхнем углу; событиям добавлено фото (миграция V15). Аккордеон
 > `Прошедшие` теперь анимируется (grid-rows transition). `ClubActivitiesTab`
 > остаётся read-only без `+ Создать` — создание активностей переехало на

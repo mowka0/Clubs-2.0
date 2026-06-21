@@ -113,14 +113,6 @@ export function getMyGamification(): Promise<GamificationDto> {
   return apiClient.get<GamificationDto>('/api/users/me/gamification');
 }
 
-export function getClubApplications(
-  clubId: string,
-  status?: 'pending' | 'approved' | 'rejected'
-): Promise<import('../types/api').ClubApplicationDto[]> {
-  const params = status ? { status } : undefined;
-  return apiClient.get(`/api/clubs/${clubId}/applications`, params);
-}
-
 export function approveApplication(applicationId: string): Promise<void> {
   return apiClient.post(`/api/applications/${applicationId}/approve`);
 }

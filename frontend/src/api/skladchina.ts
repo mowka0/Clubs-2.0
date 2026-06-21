@@ -26,10 +26,6 @@ export function getMySkladchinas(
   return apiClient.get<PageResponse<MySkladchinaListItemDto>>(`/api/users/me/skladchinas`, queryParams);
 }
 
-export function getClubActiveSkladchinas(clubId: string): Promise<MySkladchinaListItemDto[]> {
-  return apiClient.get<MySkladchinaListItemDto[]>(`/api/clubs/${clubId}/skladchinas/active`);
-}
-
 export function getSkladchinaActionRequiredCount(): Promise<ActionRequiredCountDto> {
   return apiClient.get<ActionRequiredCountDto>('/api/users/me/skladchinas/action-required-count');
 }

@@ -770,7 +770,7 @@ Tabs условно (`{activeTab === X && <Tab/>}`) — only active mounts → o
 
 **Footer:** BottomTabBar
 **API:** `getClub()`, `getClubMembers()`, `getMemberProfile()`,
-`getClubApplications()`, `approveApplication()`, `rejectApplication()`,
+`approveApplication()`, `rejectApplication()`,
 `getClubEvents()`, `createEvent()`, `getEvent()`, `markAttendance()`,
 `getFinances()`, `updateClub()`, `deleteClub()`
 
@@ -1409,8 +1409,7 @@ arch-debt'ом (см. §21). После миграции:
   мутации
 - `queries/events.ts` — `useClubEventsQuery`, `useEventQuery`, `useMyVoteQuery`
   + cast/confirm/decline/create/markAttendance мутации
-- `queries/applications.ts` — `useMyApplicationsQuery`,
-  `useClubApplicationsQuery` + approve/reject мутации
+- `queries/applications.ts` — `useMyApplicationsQuery` + approve/reject мутации
 - `queries/members.ts` — `useClubMembersQuery`, `useMemberProfileQuery`
 - `queries/finances.ts` — `useClubFinancesQuery`
 

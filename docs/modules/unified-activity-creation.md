@@ -220,11 +220,11 @@
 | `frontend/src/components/manage/CreateActivityFlow.tsx` | NEW (итерация 4) | Контроллер flow «тип → клуб → форма». Step 1: `CreateActivityPicker` (тип). Step 2: если задан `presetClubId` (FAB в контексте клуба) **или** 1 organizer-клуб — авто-навигация; если ≥2 — `ClubPickerModal`. Затем navigate на `/clubs/:id/events/new` или `/clubs/:id/skladchina/new`. **`presetClubId`** (Banco-редизайн): когда юзер на странице клуба, который организует, FAB пропускает выбор клуба — см. `useClubContextStore` ниже |
 | `frontend/src/store/useClubContextStore.ts` | NEW (Banco-редизайн) | Zustand-стор `{ clubId, setClubId }` + хук `useSetClubContext(id)` (set на mount / null на unmount). Клубо-контекстные страницы (`ClubPage`/`OrganizerClubManage`/`EventPage`/`SkladchinaPage`) проставляют `clubId`; `AppDock` (`Layout`) вычисляет `presetClubId` (контекст + юзер организатор этого клуба) и передаёт в `CreateActivityFlow` |
 | `frontend/src/components/manage/ClubPickerModal.tsx` | NEW (итерация 4) | `Modal`-список organizer-клубов (avatar/initials + name) для выбора клуба, когда у пользователя их ≥2. Экспортирует тип `ClubPickerOption` |
-| `frontend/src/components/manage/ActivityThumb.tsx` | NEW (итерация 4) | Квадратный thumbnail слева в `ActivityCard`: фото (cover) при `photoUrl`, иначе brass-плейсхолдер с type-emoji |
+| `frontend/src/components/manage/ActivityThumb.tsx` | **REMOVED (Banco-редизайн)** | Был квадратный thumbnail слева в `ActivityCard` (фото / brass-плейсхолдер). Banco-редизайн (#49) убрал левый thumbnail → компонент осиротел и удалён при чистке мёртвого кода |
 | `frontend/src/queries/organizerClubs.ts` | NEW (итерация 4) | Хук `useOrganizerClubs()` — клубы пользователя в роли organizer (`useMyClubsQuery` filter `role==='organizer'` + per-club `getClub` для name/avatar), возвращает `{ clubs: ClubPickerOption[], isLoading }` |
 | `frontend/src/pages/ActivitiesPage.tsx` | MODIFY (итерация 4) | Глобальная страница `/events` `/skladchina`: hero-кнопка «+ Создать» (видна только если `useOrganizerClubs().clubs.length > 0`) → `CreateActivityFlow`. Сами сегменты (`EventsTab`/`SkladchinasTab` из `components/activities/`) — из events-feed модуля, не из unified-feed |
 | `frontend/src/components/club/ClubActivitiesTab.tsx` | NEW | Read-only таб для member view (`ClubPage`) — заменяет `ClubEventsTab`. **Единственный** consumer unified-feed (`ActivityFeedList`/`ActivityCard`) после итерации 4 |
-| `frontend/src/components/manage/ActivityCard.tsx` | NEW (фото — итерация 4) | Унифицированная полная карточка (внутри switch по `type`) — рендерит только `upcoming`. Итерация 4: фото-thumbnail слева (`ActivityThumb`), type-иконка (🗓/💰) — badge в правом верхнем углу; `photoUrl` берётся из DTO |
+| `frontend/src/components/manage/ActivityCard.tsx` | NEW (фото — итерация 4) | Унифицированная полная карточка (внутри switch по `type`) — рендерит только `upcoming`. Итерация 4: фото-thumbnail слева (`ActivityThumb`, **убран в Banco-редизайне**), type-иконка (🗓/💰) — badge в правом верхнем углу; `photoUrl` берётся из DTO |
 | `frontend/src/components/manage/ActivityCompactRow.tsx` | NEW (итерация 3) | Компактная приглушённая строка (иконка · title · дата) — рендерит элементы `past` под аккордеоном |
 | `frontend/src/components/manage/ActivityFilterChips.tsx` | NEW | Chips `Все · События · Сборы` |
 | `frontend/src/components/manage/ActivityFeedList.tsx` | NEW (переписан в итерации 3) | Секция `Предстоящие` (полные `ActivityCard`) + сворачиваемый блок `Прошедшие (N)` (компактные `ActivityCompactRow`). Принимает `ClubActivityFeed { upcoming, past }`. Группировки по дню и infinite-scroll sentinel больше нет |
@@ -1474,9 +1474,9 @@ curl -s -H "Authorization: Bearer $JWT_MEMBER" \
 > протянут в `CreateEventRequest` (`@Size(max=1024)`), `EventDetailDto`,
 > `EventListItemDto`, `ActivityItemDto.EventActivity`/`SkladchinaActivity`
 > (маппер: event — `event.photoUrl`, skladchina — `s.photoUrl`). Карточка
-> `ActivityCard` редизайнена: фото/placeholder thumbnail **слева** (`ActivityThumb`),
-> type-иконка (🗓/💰) — badge **в правом верхнем углу** (раньше — иконка в углу
-> без фото). `CreateEventPage` получил поле загрузки фото (`AvatarUpload` →
+> `ActivityCard` редизайнена: фото/placeholder thumbnail **слева** (`ActivityThumb`
+> — позже убран в Banco-редизайне), type-иконка (🗓/💰) — badge **в правом верхнем
+> углу** (раньше — иконка в углу без фото). `CreateEventPage` получил поле загрузки фото (`AvatarUpload` →
 > `CreateEventBody.photoUrl`). Backend photo-спека — [`events.md`](./events.md).
 
 > **Q-19 → RESOLVED (аккордеон «Прошедшие» теперь анимируется):** раскрытие/
@@ -1509,6 +1509,9 @@ curl -s -H "Authorization: Bearer $JWT_MEMBER" \
    (глобальная `ActivitiesPage`), toast «Событие создано» через router state.
 
 ### Карточка `ActivityCard` (фото-редизайн)
+
+> ⚠️ Историческое (итерация 4). Banco-редизайн (#49) позже убрал левый thumbnail —
+> `ActivityThumb` удалён. Актуальная карточка — [`redesign-banco-style.md`](./redesign-banco-style.md).
 
 - **Слева** — `ActivityThumb`: квадрат с фото (`photoUrl`, cover) либо
   brass-плейсхолдер с type-emoji (🗓/💰), если фото нет.

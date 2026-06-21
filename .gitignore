@@ -9,3 +9,6 @@
 
 # Local design mockups — keep on disk, don't ship to git.
 mockups/
+
+# macOS Finder metadata
+.DS_Store
