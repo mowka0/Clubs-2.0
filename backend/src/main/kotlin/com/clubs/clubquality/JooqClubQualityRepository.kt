@@ -94,7 +94,12 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
         }
     }
 
-    /** Distinct users with ≥3 attended events for this club, all-time (the club's stable core). */
+    /**
+     * Distinct NON-OWNER users with ≥3 attended events for this club, all-time (the club's stable
+     * member core). The organizer is excluded: they self-mark their own attendance, so counting them
+     * inflates «основа клуба» (it would never read below 1) and conflates the organizer with the
+     * member core. Owner-exclusion matches the L3 «Сплочённость» rule (gamification §2).
+     */
     private fun coreSize(clubId: UUID): Int =
         dsl.select(EVENT_RESPONSES.USER_ID)
             .from(EVENT_RESPONSES)
@@ -102,7 +107,8 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
             .where(
                 EVENTS.CLUB_ID.eq(clubId)
                     .and(EVENTS.STATUS.ne(EventStatus.cancelled))
-                    .and(EVENT_RESPONSES.ATTENDANCE.eq(AttendanceStatus.attended)),
+                    .and(EVENT_RESPONSES.ATTENDANCE.eq(AttendanceStatus.attended))
+                    .and(EVENT_RESPONSES.USER_ID.ne(DSL.select(CLUBS.OWNER_ID).from(CLUBS).where(CLUBS.ID.eq(clubId)))),
             )
             .groupBy(EVENT_RESPONSES.USER_ID)
             .having(DSL.count().ge(CORE_ATTENDANCE_THRESHOLD))

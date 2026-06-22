@@ -58,7 +58,9 @@ class ClubService(
         // without an organizer membership.
         membershipRepository.createOrganizer(ownerId, club.id)
 
-        return mapper.toDetailDto(club)
+        // Re-read so the response carries the live member count (= 1, the organizer just added) rather
+        // than the bare create() result (0). findById computes the count from `memberships`.
+        return mapper.toDetailDto(clubRepository.findById(club.id) ?: club)
     }
 
     fun getClubByInviteCode(code: String): ClubDetailDto {

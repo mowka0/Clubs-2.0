@@ -4,10 +4,12 @@ import com.clubs.common.dto.PageResponse
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.enums.EventStatus
+import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.tables.references.CLUBS
 import com.clubs.generated.jooq.tables.references.EVENTS
 import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
+import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import org.jooq.DSLContext
 import org.jooq.Field
 import org.jooq.impl.DSL
@@ -26,6 +28,40 @@ class JooqClubRepository(
         const val NEW_CLUB_DAYS = 14L
         const val POPULAR_MIN_CLUBS = 10
     }
+
+    /**
+     * Live member count for display = distinct `memberships` rows that are `active` or `grace_period`
+     * (a grace member still has access, so they occupy a slot), INCLUDING the organizer's membership.
+     * This is computed straight from `memberships` rather than read from the denormalized
+     * `clubs.member_count` column, which a scattered, incomplete set of increment/decrement call sites
+     * let drift out of sync (e.g. a leave→rejoin→leave double-decremented it to 0 for a 2-person club).
+     * "Actual value from the DB" can never drift. The column is now vestigial — its removal is tracked
+     * in docs/backlog/member-count-column-cleanup.md.
+     */
+    private fun aliveMembers(): org.jooq.Condition =
+        MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period)
+
+    private fun countLiveMembers(clubId: UUID): Int =
+        dsl.selectCount().from(MEMBERSHIPS)
+            .where(MEMBERSHIPS.CLUB_ID.eq(clubId).and(aliveMembers()))
+            .fetchOne(0, Int::class.java) ?: 0
+
+    private fun countLiveMembersByClub(ids: Collection<UUID>): Map<UUID, Int> {
+        if (ids.isEmpty()) return emptyMap()
+        return dsl.select(MEMBERSHIPS.CLUB_ID, DSL.count())
+            .from(MEMBERSHIPS)
+            .where(MEMBERSHIPS.CLUB_ID.`in`(ids).and(aliveMembers()))
+            .groupBy(MEMBERSHIPS.CLUB_ID)
+            .fetch()
+            .associate { it.value1()!! to it.value2() }
+    }
+
+    /** Correlated live-count subquery, for ordering the discovery feed by real membership size. */
+    private fun liveMemberCountField(): Field<Int> =
+        DSL.field(
+            DSL.selectCount().from(MEMBERSHIPS)
+                .where(MEMBERSHIPS.CLUB_ID.eq(CLUBS.ID).and(aliveMembers())),
+        )
 
     override fun create(request: CreateClubRequest, ownerId: UUID, inviteCode: String?): Club {
         val record = dsl.insertInto(CLUBS)
@@ -55,6 +91,7 @@ class JooqClubRepository(
             .where(CLUBS.INVITE_LINK.eq(code).and(CLUBS.IS_ACTIVE.eq(true)))
             .fetchOne()
             ?.let(mapper::toDomain)
+            ?.let { it.copy(memberCount = countLiveMembers(it.id)) }
 
     override fun updateInviteCode(id: UUID, code: String): Club? {
         dsl.update(CLUBS)
@@ -69,6 +106,7 @@ class JooqClubRepository(
             .where(CLUBS.ID.eq(id).and(CLUBS.IS_ACTIVE.eq(true)))
             .fetchOne()
             ?.let(mapper::toDomain)
+            ?.copy(memberCount = countLiveMembers(id))
 
     override fun countByOwnerId(ownerId: UUID): Int =
         dsl.selectCount().from(CLUBS)
@@ -84,10 +122,12 @@ class JooqClubRepository(
 
     override fun findByIds(ids: Collection<UUID>): List<Club> {
         if (ids.isEmpty()) return emptyList()
-        return dsl.selectFrom(CLUBS)
+        val clubs = dsl.selectFrom(CLUBS)
             .where(CLUBS.ID.`in`(ids).and(CLUBS.IS_ACTIVE.eq(true)))
             .fetch()
             .map(mapper::toDomain)
+        val counts = countLiveMembersByClub(clubs.map { it.id })
+        return clubs.map { it.copy(memberCount = counts[it.id] ?: 0) }
     }
 
     override fun softDelete(id: UUID) {
@@ -134,7 +174,7 @@ class JooqClubRepository(
             .where(condition)
             .orderBy(
                 recentActivity(activityWindowStart).desc(),
-                CLUBS.MEMBER_COUNT.desc(),
+                liveMemberCountField().desc(),
                 CLUBS.CREATED_AT.desc()
             )
             .limit(filters.size)
@@ -143,6 +183,8 @@ class JooqClubRepository(
 
         val clubIds = clubs.map { it.id!! }
         val nearestEvents = fetchNearestEvents(clubIds)
+        // Live counts from `memberships` (active+grace, incl. organizer) — never the drift-prone column.
+        val liveCounts = countLiveMembersByClub(clubIds)
 
         val newThreshold = now.minusDays(NEW_CLUB_DAYS)
 
@@ -150,18 +192,18 @@ class JooqClubRepository(
         // threshold > 0 guard stops a page of brand-new (zero-member) clubs from tagging
         // everyone — the exact regression the retired all-zero activity_rating caused.
         val topMemberThreshold = if (clubs.size >= POPULAR_MIN_CLUBS) {
-            clubs.sortedByDescending { it.memberCount ?: 0 }
+            clubs.map { liveCounts[it.id] ?: 0 }.sortedDescending()
                 .take(maxOf(1, clubs.size / 10))
-                .last().memberCount ?: 0
+                .last()
         } else null
 
         val items = clubs.map { club ->
+            val memberCount = liveCounts[club.id] ?: 0
             val tags = mutableListOf<String>()
             if (club.createdAt?.isAfter(newThreshold) == true) tags += "Новый"
             if (topMemberThreshold != null && topMemberThreshold > 0 &&
-                (club.memberCount ?: 0) >= topMemberThreshold
+                memberCount >= topMemberThreshold
             ) tags += "Популярный"
-            val memberCount = club.memberCount ?: 0
             val memberLimit = club.memberLimit
             if (memberLimit > 0 && memberCount.toDouble() / memberLimit < 0.8) tags += "Свободные места"
 

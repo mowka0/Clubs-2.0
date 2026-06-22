@@ -161,6 +161,17 @@ class ClubQualityIntegrationTest {
     }
 
     @Test
+    fun `coreSize excludes the organizer even when they attend their own events`() {
+        val events = (1..3).map { insertEvent(daysFromNow(-it.toLong()), "completed", finalized = true) }
+        // Organizer self-marks attendance on all 3 — must NOT count toward «основа клуба».
+        events.forEach { insertResponse(it, attendance = "attended", userId = ownerId) }
+        val member = newUser()
+        events.forEach { insertResponse(it, attendance = "attended", userId = member) } // a real member → core
+
+        assertEquals(1, clubQualityService.getClubFacts(clubId).coreSize)
+    }
+
+    @Test
     fun `totalMeetings counts all-time held events, excluding future and cancelled`() {
         insertEvent(daysFromNow(-200), "completed") // older than the 90-day window, but all-time → counts
         insertEvent(daysFromNow(-2), "completed")   // held → counts
