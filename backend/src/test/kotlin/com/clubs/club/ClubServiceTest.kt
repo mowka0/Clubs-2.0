@@ -106,6 +106,8 @@ class ClubServiceTest {
 
         every { clubRepository.countByOwnerId(ownerId) } returns 0
         every { clubRepository.create(request, ownerId, any()) } returns club
+        // createClub re-reads via findById so the response carries the live member count.
+        every { clubRepository.findById(clubId) } returns club
 
         val result = clubService.createClub(request, ownerId)
 

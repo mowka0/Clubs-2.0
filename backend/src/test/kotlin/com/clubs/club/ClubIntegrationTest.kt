@@ -332,12 +332,48 @@ class ClubIntegrationTest {
         )
     }
 
+    private var memberSeq = 200_000L
+
     private fun insertClub(id: UUID, name: String, memberCount: Int) {
         dsl.execute(
             "INSERT INTO clubs (id, owner_id, name, description, category, access_type, city, " +
                 "member_limit, member_count) VALUES ('$id', '$testUserId', '$name', 'desc', " +
                 "'sport', 'open', 'Moscow', 30, $memberCount)"
         )
+        // Seed `memberCount` real member rows: the discovery sort + «Популярный» tag now read the live
+        // count from `memberships` (active/grace), not the drift-prone `clubs.member_count` column.
+        repeat(memberCount) { insertMembership(newMember(), id, "active", "member") }
+    }
+
+    /** Creates a fresh user and returns its id (for seeding distinct memberships). */
+    private fun newMember(): UUID {
+        val uid = UUID.randomUUID()
+        dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$uid', ${memberSeq++}, 'M')")
+        return uid
+    }
+
+    private fun insertMembership(userId: UUID, clubId: UUID, status: String, role: String) {
+        dsl.execute(
+            "INSERT INTO memberships (id, user_id, club_id, status, role) VALUES " +
+                "('${UUID.randomUUID()}', '$userId', '$clubId', '$status'::membership_status, '$role'::membership_role)"
+        )
+    }
+
+    @Test
+    fun `GET api clubs id returns live member count (active plus grace incl owner, excl cancelled)`() {
+        val clubId = UUID.randomUUID()
+        // Column deliberately left at 0 (the drift the bug produced); the response must ignore it.
+        insertClub(clubId, "Live Count", memberCount = 0)
+        insertMembership(testUserId, clubId, "active", "organizer")   // owner — counted
+        insertMembership(newMember(), clubId, "active", "member")     // active member — counted
+        insertMembership(newMember(), clubId, "grace_period", "member") // grace member — counted
+        insertMembership(newMember(), clubId, "cancelled", "member")  // left — NOT counted
+
+        mockMvc.perform(
+            get("/api/clubs/$clubId").header("Authorization", "Bearer $testToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.memberCount").value(3)) // owner + active + grace; cancelled excluded; column 0 ignored
     }
 
     /** A recent (yesterday), non-cancelled event — counted by the discovery activity signal. */
