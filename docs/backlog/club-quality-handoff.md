@@ -1,10 +1,15 @@
 # Клуб-трек (качество клуба) — хэндофф для новой сессии
 
-**Обновлено:** 2026-06-21 · **Статус:** L1/L2-показ + карточка Discovery + `membership_history` + **owner-«Статистика»** в проде. **L3 скрытый ранг + «★ Топ-5 в категории» — v1 ПОСТРОЕН** (ветка `feature/club-quality-l3-rank`, за фиче-флагом `club.rank.badge-enabled` default off, ждёт staging→merge).
+**Обновлено:** 2026-06-23 · **Статус:** L1/L2-показ + карточка Discovery + `membership_history` + **owner-«Статистика»** + **member_count drift fix** (живой счёт из memberships, #80) + **L3 скрытый ранг «★ Топ-5 в категории» v1 ✅ В ПРОДЕ (#81, за фиче-флагом `club.rank.badge-enabled` default off)** — всё в проде.
 **Спека модуля:** `docs/modules/club-quality.md` (§9 — owner-«Статистика», **§10 — L3-ранг as-built**) · **Дизайн-контракт (locked):** `docs/backlog/club-quality-gamification.md` (§0–11, §8 снят) · **Карточка/страница/управление — мокап:** `docs/design/club-quality-redesign/mockups/final.html`
 **Память:** [[project_club_quality_track]], [[project_work_queue]]
 
-> **С чего начать новую сессию:** L3 v1 построен и за флагом (off). Дальше по треку: (1) **включить бейдж** — флипнуть `CLUB_RANK_BADGE_ENABLED=true` в Coolify, когда по проду наберётся ≥8 RANKED-клубов (до того `GLOBAL_RANK_FLOOR` его и так подавляет); (2) **L3 v2** (§8 модульной спеки): co-occurrence-граф под атакой, складчина-финансы при Stars, transfer-probation, калибровка весов на выросшей выборке; (3) структурная перестройка карточки/страницы (свои схемы). Точный as-built — `docs/modules/club-quality.md` §10.
+> **С чего начать новую сессию:** L3 v1 в проде за флагом (off). Дальше по треку: (1) **member_count column cleanup** — дроп
+> колонки `clubs.member_count` (миграция **V33**, теперь free) + удалить inc/dec-код, план `docs/backlog/member-count-column-cleanup.md`;
+> (2) **наблюдать L3 в проде** (логи `ClubRankScheduler` 6ч — отрабатывает без ошибок) → **включить бейдж** `CLUB_RANK_BADGE_ENABLED=true`
+> в Coolify при ≥8 RANKED-клубов (до того `GLOBAL_RANK_FLOOR` подавляет); (3) **L3 v2** (§8 модульной спеки): co-occurrence-граф под
+> атакой, складчина-финансы при Stars, transfer-probation, калибровка весов; (4) структурная перестройка карточки/страницы (свои схемы).
+> Точный as-built — `docs/modules/club-quality.md` §10. Полный остаток по репутации — память `project_work_queue.md`.
 
 ---
 
