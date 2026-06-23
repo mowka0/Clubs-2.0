@@ -5,6 +5,7 @@ package com.clubs.generated.jooq
 
 
 import com.clubs.generated.jooq.tables.Applications
+import com.clubs.generated.jooq.tables.ClubRank
 import com.clubs.generated.jooq.tables.Clubs
 import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.Events
@@ -44,6 +45,11 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
      * The table <code>public.applications</code>.
      */
     val APPLICATIONS: Applications get() = Applications.APPLICATIONS
+
+    /**
+     * The table <code>public.club_rank</code>.
+     */
+    val CLUB_RANK: ClubRank get() = ClubRank.CLUB_RANK
 
     /**
      * The table <code>public.clubs</code>.
@@ -119,6 +125,7 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
 
     override fun getTables(): List<Table<*>> = listOf(
         Applications.APPLICATIONS,
+        ClubRank.CLUB_RANK,
         Clubs.CLUBS,
         EventResponses.EVENT_RESPONSES,
         Events.EVENTS,

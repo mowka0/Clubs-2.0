@@ -9,6 +9,7 @@ import java.util.UUID
 class ClubQualityService(
     private val clubQualityRepository: ClubQualityRepository,
     private val clubQualityMapper: ClubQualityMapper,
+    private val clubRankService: ClubRankService,
 ) {
 
     private companion object {
@@ -34,6 +35,8 @@ class ClubQualityService(
     fun getClubCardFacts(clubIds: List<UUID>): List<ClubCardFactsDto> {
         val ids = clubIds.distinct().take(MAX_BATCH_SIZE)
         if (ids.isEmpty()) return emptyList()
-        return clubQualityRepository.findClubCardFacts(ids).map(clubQualityMapper::toCardDto)
+        val facts = clubQualityRepository.findClubCardFacts(ids)
+        val badged = clubRankService.badgedAmong(facts.map { it.clubId })
+        return facts.map { clubQualityMapper.toCardDto(it, topInCategory = it.clubId in badged) }
     }
 }

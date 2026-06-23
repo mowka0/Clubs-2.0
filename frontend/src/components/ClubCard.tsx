@@ -85,6 +85,8 @@ export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
       </div>
       <div className="rd-body">
         <div className="rd-ttl">{club.name}</div>
+        {/* Soft-rank L3 badge — the only externally-visible rank signal (boolean; никогда не число). */}
+        {facts?.topInCategory && <div><span className="rd-rankpill">★ Топ-5 в категории</span></div>}
         <div className="rd-meta">
           {facts ? club.city : `${club.city} · ${club.memberCount} ${memberLabel}`}
         </div>

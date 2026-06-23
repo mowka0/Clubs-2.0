@@ -5,6 +5,7 @@ package com.clubs.generated.jooq.tables.references
 
 
 import com.clubs.generated.jooq.tables.Applications
+import com.clubs.generated.jooq.tables.ClubRank
 import com.clubs.generated.jooq.tables.Clubs
 import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.Events
@@ -26,6 +27,11 @@ import com.clubs.generated.jooq.tables.Users
  * The table <code>public.applications</code>.
  */
 val APPLICATIONS: Applications = Applications.APPLICATIONS
+
+/**
+ * The table <code>public.club_rank</code>.
+ */
+val CLUB_RANK: ClubRank = ClubRank.CLUB_RANK
 
 /**
  * The table <code>public.clubs</code>.

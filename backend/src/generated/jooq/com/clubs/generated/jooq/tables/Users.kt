@@ -7,6 +7,7 @@ package com.clubs.generated.jooq.tables
 import com.clubs.generated.jooq.Public
 import com.clubs.generated.jooq.keys.APPLICATIONS__APPLICATIONS_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.CLUBS__CLUBS_OWNER_ID_FKEY
+import com.clubs.generated.jooq.keys.CLUB_RANK__CLUB_RANK_OWNER_ID_FKEY
 import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CREATED_BY_FKEY
 import com.clubs.generated.jooq.keys.EVENT_RESPONSES__EVENT_RESPONSES_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY
@@ -21,6 +22,7 @@ import com.clubs.generated.jooq.keys.USERS_TELEGRAM_ID_KEY
 import com.clubs.generated.jooq.keys.USER_CLUB_REPUTATION__USER_CLUB_REPUTATION_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.USER_INTERESTS__USER_INTERESTS_USER_ID_FKEY
 import com.clubs.generated.jooq.tables.Applications.ApplicationsPath
+import com.clubs.generated.jooq.tables.ClubRank.ClubRankPath
 import com.clubs.generated.jooq.tables.Clubs.ClubsPath
 import com.clubs.generated.jooq.tables.EventResponses.EventResponsesPath
 import com.clubs.generated.jooq.tables.Events.EventsPath
@@ -206,6 +208,22 @@ open class Users(
 
     val applications: ApplicationsPath
         get(): ApplicationsPath = applications()
+
+    private lateinit var _clubRank: ClubRankPath
+
+    /**
+     * Get the implicit to-many join path to the <code>public.club_rank</code>
+     * table
+     */
+    fun clubRank(): ClubRankPath {
+        if (!this::_clubRank.isInitialized)
+            _clubRank = ClubRankPath(this, null, CLUB_RANK__CLUB_RANK_OWNER_ID_FKEY.inverseKey)
+
+        return _clubRank;
+    }
+
+    val clubRank: ClubRankPath
+        get(): ClubRankPath = clubRank()
 
     private lateinit var _clubs: ClubsPath
 

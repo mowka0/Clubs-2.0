@@ -23,7 +23,7 @@ function club(o: Partial<ClubListItemDto> = {}): ClubListItemDto {
 }
 
 function facts(o: Partial<ClubCardFactsDto> = {}): ClubCardFactsDto {
-  return { clubId: 'c1', ageDays: 0, engagementPercent: 0, ...o };
+  return { clubId: 'c1', ageDays: 0, engagementPercent: 0, topInCategory: false, ...o };
 }
 
 function renderCard(props: { club?: ClubListItemDto; facts?: ClubCardFactsDto } = {}) {
@@ -58,5 +58,17 @@ describe('ClubCard — Discovery metric trio', () => {
     expect(screen.getByText('1')).toBeInTheDocument();
     expect(screen.getByText('день')).toBeInTheDocument();
     expect(screen.queryByText('дней')).not.toBeInTheDocument();
+  });
+
+  it('shows the "★ Топ-5 в категории" badge only when topInCategory is true', () => {
+    const { rerender } = renderCard({ facts: facts({ topInCategory: false }) });
+    expect(screen.queryByText('★ Топ-5 в категории')).not.toBeInTheDocument();
+
+    rerender(
+      <MemoryRouter>
+        <ClubCard club={club()} facts={facts({ topInCategory: true })} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('★ Топ-5 в категории')).toBeInTheDocument();
   });
 });
