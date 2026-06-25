@@ -113,6 +113,13 @@ Per-club `trust` и global считаются **on-read** из ledger (`TrustSer
 без N+1), и список сортируется в `MemberService` по **отображаемому Trust** DESC (новички/sub-threshold/
 владельцы = null уходят вниз, а не наверх).
 
+**Подавление attendance-метрик для finance-only участника (F5-08, 2026-06-25).** Участник с
+репутацией только от складчин (`outcome_count ≥ 3`, но `total_confirmations = 0`) имеет `trust ≠ null`,
+но нулевой event-трек. Чтобы не показывать вводящее в заблуждение «Обещания 0%», `MemberListItemDto`
+несёт `totalConfirmations`; строка списка (`ClubMembersTab`) скрывает «Обещания X%» при
+`totalConfirmations === 0`, а `MemberProfileModal` скрывает «Спонтанных визитов» при
+`confirmations === 0`. Это паритет с `ProfilePage` (`hasActivity`-гард), где такие нули уже прятались.
+
 ### Peer-signal в Applications Inbox
 
 Агрегат `ReputationRepository.aggregateByUserIds` (batch): `memberClubCount` =

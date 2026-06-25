@@ -40,6 +40,7 @@ class MembershipMapper {
             joinedAt = info.joinedAt,
             trust = if (show) trust else null,
             promiseFulfillmentPct = if (show) info.promiseFulfillmentPct else null,
+            totalConfirmations = if (show) info.totalConfirmations else null,
             subscriptionCancelled = info.subscriptionCancelled
         )
     }

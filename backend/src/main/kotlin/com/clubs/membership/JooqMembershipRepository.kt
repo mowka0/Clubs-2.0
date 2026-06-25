@@ -93,6 +93,7 @@ class JooqMembershipRepository(
             USERS.LAST_NAME,
             USERS.AVATAR_URL,
             USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT,
+            USER_CLUB_REPUTATION.TOTAL_CONFIRMATIONS,
             outcomeCount.`as`("outcome_count")
         )
             .from(MEMBERSHIPS)
@@ -112,6 +113,7 @@ class JooqMembershipRepository(
                     role = r.get(MEMBERSHIPS.ROLE) ?: MembershipRole.member,
                     joinedAt = r.get(MEMBERSHIPS.JOINED_AT)!!,
                     promiseFulfillmentPct = r.get(USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT),
+                    totalConfirmations = r.get(USER_CLUB_REPUTATION.TOTAL_CONFIRMATIONS),
                     outcomeCount = r.get("outcome_count", Int::class.java) ?: 0,
                     subscriptionCancelled = r.get(MEMBERSHIPS.STATUS) == MembershipStatus.cancelled
                 )

@@ -151,6 +151,21 @@ class ActivityServiceTest {
     }
 
     @Test
+    fun `event activity carries goingCount and confirmedCount through the mapper`() {
+        val event = makeEvent(status = EventStatus.stage_2, eventDatetime = now.plusDays(2), title = "Stage 2")
+        every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
+            EventWithGoingCount(event, goingCount = 7, confirmedCount = 4)
+        )
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
+
+        val result = service.getClubActivities(clubId, userId, ActivityType.EVENT)
+
+        val activity = result.upcoming.single() as ActivityItemDto.EventActivity
+        assertEquals(7, activity.goingCount)
+        assertEquals(4, activity.confirmedCount)
+    }
+
+    @Test
     fun `upcoming tie on relevant date is broken by id ascending`() {
         // Same eventDatetime/deadline → secondary sort by id ASC.
         val sharedDate = now.plusDays(4)

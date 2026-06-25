@@ -15,5 +15,8 @@ data class MemberListItemDto(
     // uses `role` to render the organizer framing). Whole reputation block is suppressed when null.
     val trust: Int?,
     val promiseFulfillmentPct: BigDecimal?,
+    // Stage-2 confirmations to date. The frontend gates the "Обещания X%" line on this being > 0
+    // so a finance-only member (skladchina record, no events) never shows a misleading 0% (F5-08).
+    val totalConfirmations: Int?,
     val subscriptionCancelled: Boolean = false
 )

@@ -102,5 +102,9 @@ interface EventRepository {
 
 data class EventWithGoingCount(
     val event: Event,
-    val goingCount: Int
+    val goingCount: Int,
+    // Stage-2 confirmed roster size. Lets the feed switch from the stage-1 "идёт"
+    // count to the final "подтв." count once voting closes (F5-21). Defaults to 0
+    // so count-agnostic tests construct the projection with goingCount only.
+    val confirmedCount: Int = 0
 )

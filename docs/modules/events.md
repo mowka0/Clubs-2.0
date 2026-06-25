@@ -673,6 +673,13 @@ penalty-флоу), а их страницы упираются в скрытый
   (pending) не смешиваются в одном числе. Дублирующий блок «Участники → Подтверждено» удалён.
 - **AC-PH1:** GIVEN `stage_2`, участник голосовал going и `final_status=declined` WHEN открыт `EventPage`
   THEN он не входит в «Состав · {confirmed}» и не показан в «Кто идёт».
+- **Карточка клубной ленты (`ActivityCard`)** — тот же фазовый показ (F5-21, 2026-06-25): счётчик
+  карточки = `goingCount`/«идёт» при `upcoming`, `confirmedCount`/«подтв.» при `stage_2`/`completed`.
+  `confirmedCount` проброшен в `ActivityItemDto.EventActivity` (`GET /api/clubs/:id/activities`).
+  Раньше карточка всегда показывала stage-1 `goingCount`, противореча «Состав · {confirmed}» внутри
+  события. Глобальная лента (`feed/EventCard`) фазовый счёт уже делала.
+- **AC-PH2:** GIVEN событие в `stage_2` с `goingCount=5`, `confirmedCount=2` WHEN открыта вкладка
+  «Активности» клуба THEN карточка показывает «2/{limit} · подтв.» (не «5/{limit} · идёт»).
 
 **Текст confirm-reminder DM (ATT/Feature A).** `NotificationService.sendConfirmReminder` —
 «Подтвердите участие, иначе место займут другие:» (было «…иначе место освободится:» — слабее побуждало).

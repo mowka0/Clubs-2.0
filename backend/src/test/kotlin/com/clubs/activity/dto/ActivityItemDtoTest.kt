@@ -34,6 +34,7 @@ class ActivityItemDtoTest {
             locationText = "Main square",
             participantLimit = 20,
             goingCount = 5,
+            confirmedCount = 3,
             status = "PUBLISHED",
             descriptionPreview = "Bring your laptop",
             photoUrl = "https://cdn.example.com/event.jpg",
@@ -47,6 +48,7 @@ class ActivityItemDtoTest {
         assertTrue(json.contains("\"locationText\":\"Main square\""))
         assertTrue(json.contains("\"participantLimit\":20"))
         assertTrue(json.contains("\"goingCount\":5"))
+        assertTrue(json.contains("\"confirmedCount\":3"))
         assertTrue(json.contains("\"status\":\"PUBLISHED\""))
         assertTrue(json.contains("\"descriptionPreview\":\"Bring your laptop\""))
         assertTrue(
@@ -67,6 +69,7 @@ class ActivityItemDtoTest {
             locationText = "Main square",
             participantLimit = 20,
             goingCount = 0,
+            confirmedCount = 0,
             status = "PUBLISHED",
             descriptionPreview = null,
             photoUrl = null,

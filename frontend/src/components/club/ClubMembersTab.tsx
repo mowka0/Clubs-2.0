@@ -126,7 +126,18 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
             const fullName = `${member.firstName}${member.lastName ? ` ${member.lastName}` : ''}`;
             const isOwner = member.role === 'organizer';
             const hasScore = member.trust !== null;
+            // Show attendance metrics only when there's an event track; a finance-only member
+            // (skladchina record, 0 confirmations) keeps the score but hides the misleading
+            // "Обещания 0%" — parity with ProfilePage's hasActivity (F5-08).
+            const hasActivity = hasScore && (member.totalConfirmations ?? 0) > 0;
             const tier = reliabilityTier(member.trust);
+            const metaText = hasActivity
+              ? `Обещания ${Math.round(member.promiseFulfillmentPct ?? 0)}%`
+              : isOwner
+                ? 'Репутация за организаторские качества'
+                : hasScore
+                  ? null
+                  : 'Пока нет данных';
             return (
               <button
                 key={member.userId}
@@ -148,13 +159,7 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
                       </span>
                     )}
                   </div>
-                  <div className="rd-met">
-                    {hasScore
-                      ? `Обещания ${Math.round(member.promiseFulfillmentPct ?? 0)}%`
-                      : isOwner
-                        ? 'Репутация за организаторские качества'
-                        : 'Пока нет данных'}
-                  </div>
+                  {metaText && <div className="rd-met">{metaText}</div>}
                 </div>
                 <span className="rd-score">
                   {hasScore ? (

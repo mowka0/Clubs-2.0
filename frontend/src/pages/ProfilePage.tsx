@@ -227,7 +227,25 @@ export const ProfilePage: FC = () => {
         </>
       )}
 
-      {!hasReputation ? (
+      {!rep && reputationQuery.error ? (
+        // A failed reputation fetch must not masquerade as the "no clubs yet" onboarding —
+        // show an explicit error + retry instead (F5-20). Only when there's no data at all;
+        // a background-refetch error over stale data keeps showing the stale list below.
+        <>
+          <div className="rd-section-sub-h">Репутация</div>
+          <div className="rd-glass rd-empty">
+            <div className="rd-title">Не удалось загрузить репутацию</div>
+            <div className="rd-sub">Проверьте соединение и попробуйте ещё раз.</div>
+            <button
+              type="button"
+              className="rd-ghost-btn"
+              onClick={() => { haptic.impact('light'); reputationQuery.refetch(); }}
+            >
+              Повторить
+            </button>
+          </div>
+        </>
+      ) : !hasReputation ? (
         <>
           <div className="rd-section-sub-h">Репутация</div>
           <div className="rd-glass rd-empty">

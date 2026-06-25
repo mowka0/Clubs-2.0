@@ -62,6 +62,9 @@ export interface MemberListItemDto {
   // to render the organizer framing). The whole reputation block is suppressed when null.
   trust: number | null;
   promiseFulfillmentPct: number | null;
+  // Stage-2 confirmations to date. The "Обещания X%" line is gated on this being > 0 so a
+  // finance-only member (skladchina record, no events) never shows a misleading 0% (F5-08).
+  totalConfirmations: number | null;
   /**
    * True iff the member is a paid-club subscriber who has already cancelled
    * autorenew but is still inside the paid period (`subscription_expires_at >

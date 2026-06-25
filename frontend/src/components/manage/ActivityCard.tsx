@@ -33,6 +33,11 @@ function progressPercent(collected: number, goal: number): number {
 const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => {
   // Same wording as the global feed (feed/EventCard): confirm prompt in stage 2, else vote.
   const actionLabel = event.status === 'stage_2' ? 'Подтверди участие' : 'Проголосуй';
+  // Phase-aware count, mirroring EventPage: once voting closes (stage_2/completed) the roster
+  // is the confirmed list, so show `confirmedCount`/"подтв." instead of stage-1 "идёт" (F5-21).
+  const finalComposition = event.status === 'stage_2' || event.status === 'completed';
+  const count = finalComposition ? event.confirmedCount : event.goingCount;
+  const countCaption = finalComposition ? 'подтв.' : 'идёт';
   return (
     <>
       <div className="rd-ft-body">
@@ -50,8 +55,8 @@ const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => {
         )}
       </div>
       <div className="rd-ft-stat">
-        <div className="rd-ft-stat-num">{event.goingCount}/{event.participantLimit}</div>
-        <div className="rd-ft-stat-cap">идёт</div>
+        <div className="rd-ft-stat-num">{count}/{event.participantLimit}</div>
+        <div className="rd-ft-stat-cap">{countCaption}</div>
       </div>
     </>
   );

@@ -25,6 +25,10 @@ data class ClubMemberInfo(
     // Raw cache sibling (nullable when no reputation row); the "Новичок" threshold (outcomeCount)
     // is applied by the mapper. P1b shows Trust (computed in MemberService), not the raw index.
     val promiseFulfillmentPct: BigDecimal?,
+    // Stage-2 confirmations to date. Distinguishes a finance-only member (0 confirmations → no
+    // attendance track) from a no-show (confirmations > 0, 0% fulfillment) so the list hides the
+    // misleading "Обещания 0%" for the former — parity with ProfilePage's hasActivity (F5-08).
+    val totalConfirmations: Int?,
     val outcomeCount: Int,
     val subscriptionCancelled: Boolean = false
 )
