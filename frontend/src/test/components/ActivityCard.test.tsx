@@ -37,6 +37,7 @@ function buildEvent(overrides: Partial<EventActivityDto> = {}): EventActivityDto
     locationText: 'Gorky park',
     participantLimit: 20,
     goingCount: 5,
+    confirmedCount: 0,
     status: 'upcoming',
     descriptionPreview: null,
     photoUrl: null,
@@ -77,6 +78,30 @@ describe('ActivityCard (full)', () => {
     // going count shown as a "going/limit" gradient fraction.
     expect(container.querySelector('.rd-ft-stat-num')?.textContent).toBe('5/20');
     expect(container.querySelector('.rd-ft-stat-cap')?.textContent).toBe('идёт');
+  });
+
+  it('switches to confirmedCount/"подтв." once voting closes (stage_2)', () => {
+    // F5-21: after stage 1 the roster is the confirmed list — the card must match the event
+    // page (confirmedCount), not keep showing the stale stage-1 goingCount.
+    const { container } = render(
+      <ActivityCard
+        activity={buildEvent({ status: 'stage_2', goingCount: 5, confirmedCount: 2 })}
+        onClick={vi.fn()}
+      />,
+    );
+    expect(container.querySelector('.rd-ft-stat-num')?.textContent).toBe('2/20');
+    expect(container.querySelector('.rd-ft-stat-cap')?.textContent).toBe('подтв.');
+  });
+
+  it('uses confirmedCount for a completed event', () => {
+    const { container } = render(
+      <ActivityCard
+        activity={buildEvent({ status: 'completed', isCompleted: true, goingCount: 9, confirmedCount: 6 })}
+        onClick={vi.fn()}
+      />,
+    );
+    expect(container.querySelector('.rd-ft-stat-num')?.textContent).toBe('6/20');
+    expect(container.querySelector('.rd-ft-stat-cap')?.textContent).toBe('подтв.');
   });
 
   it('shows "Проголосуй" badge when action is required (stage-1 vote pending)', () => {

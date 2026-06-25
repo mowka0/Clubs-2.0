@@ -83,8 +83,16 @@ class JooqEventRepository(
 
         if (events.isEmpty()) return emptyList()
 
-        val goingCounts = fetchGoingCounts(events.map { it.id })
-        return events.map { EventWithGoingCount(event = it, goingCount = goingCounts[it.id] ?: 0) }
+        val eventIds = events.map { it.id }
+        val goingCounts = fetchGoingCounts(eventIds)
+        val confirmedCounts = fetchConfirmedCounts(eventIds)
+        return events.map {
+            EventWithGoingCount(
+                event = it,
+                goingCount = goingCounts[it.id] ?: 0,
+                confirmedCount = confirmedCounts[it.id] ?: 0
+            )
+        }
     }
 
     override fun findActionRequiredEventIds(clubId: UUID, userId: UUID, now: OffsetDateTime): Set<UUID> {

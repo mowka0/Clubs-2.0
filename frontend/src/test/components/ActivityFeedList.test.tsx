@@ -26,6 +26,7 @@ function buildEvent(overrides: Partial<EventActivityDto> = {}): EventActivityDto
     locationText: 'Park',
     participantLimit: 20,
     goingCount: 5,
+    confirmedCount: 0,
     status: 'upcoming',
     descriptionPreview: null,
     photoUrl: null,

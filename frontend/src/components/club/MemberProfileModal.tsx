@@ -74,7 +74,12 @@ const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
         )}
       </div>
       <div className="rd-rep-foot">
-        Спонтанных визитов: <b>{profile.spontaneityCount ?? 0}</b> · Роль: {roleLabel}
+        {/* Spontaneity is an attendance metric — hide it for a finance-only member (no event
+            track) so it doesn't read as a meaningless "Спонтанных визитов: 0" (F5-08). */}
+        {confirmations > 0 && (
+          <>Спонтанных визитов: <b>{profile.spontaneityCount ?? 0}</b> · </>
+        )}
+        Роль: {roleLabel}
       </div>
     </>
   );

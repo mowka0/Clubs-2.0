@@ -39,6 +39,10 @@ sealed class ActivityItemDto {
         val locationText: String,
         val participantLimit: Int,
         val goingCount: Int,
+        // Stage-2 confirmed roster size. The feed shows `goingCount` during stage 1 and
+        // switches to `confirmedCount` once voting closes (stage_2/completed), mirroring
+        // the event page so the card and the detail never disagree (F5-21).
+        val confirmedCount: Int,
         val status: String,
         val descriptionPreview: String?,
         val photoUrl: String?,

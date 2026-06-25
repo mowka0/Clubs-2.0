@@ -159,7 +159,12 @@ export const DiscoveryPage: FC = () => {
           <div className="rd-sub">
             {activeCount > 0
               ? `Состоишь в ${activeCount} ${pluralizeClubsIn(activeCount)}`
-              : 'Найди свой первый клуб'}
+              : reputationQuery.error
+                // Don't claim "no clubs" when the reputation fetch failed — that's a false
+                // onboarding (F5-20). Fall back to a neutral greeting; the club list below is
+                // unaffected (it has its own error handling).
+                ? 'Клубы по интересам рядом'
+                : 'Найди свой первый клуб'}
           </div>
         </div>
         <button

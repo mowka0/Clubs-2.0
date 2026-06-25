@@ -86,9 +86,10 @@ export const EventPage: FC = () => {
   const disputeMutation = useDisputeAttendanceMutation();
   const resolveMutation = useResolveDisputeMutation();
 
-  // Two separate error channels: actionError for vote/confirm/decline (rendered in
-  // the recruitment + Stage 2 sections), attendanceError for attendance marking.
-  // Each handler resets its own before firing, so they never collide in one slot.
+  // Two separate error channels: actionError for vote/confirm/decline, attendanceError for
+  // attendance marking. actionError renders in exactly one slot per phase — the Stage-1 voting
+  // block (gated on showVoting) OR the Stage-2 confirmation block — never both at once (F5-23).
+  // Each handler resets its own before firing, so the two channels never collide either.
   const [actionError, setActionError] = useState<string | null>(null);
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
   // Explicit overrides only; an absent entry means "present" (attended[id] ?? true).
@@ -371,7 +372,9 @@ export const EventPage: FC = () => {
           ? `Состав · ${event.confirmedCount} / ${event.participantLimit}`
           : `Набор · ${event.goingCount} / ${event.participantLimit}`}
       </div>
-      {actionError && <div className="rd-error">{actionError}</div>}
+      {/* Stage-1 voting errors only; Stage-2 confirm/decline errors render in their own block
+          below, so actionError never shows twice during stage 2 (F5-23). */}
+      {showVoting && actionError && <div className="rd-error">{actionError}</div>}
       <div className="rd-vote-layout">
         <div className="rd-vote-stack">
           {showVoting ? (
@@ -439,7 +442,27 @@ export const EventPage: FC = () => {
       {showAttendanceMarking && (
         <>
           <div className="rd-section-sub-h">Отметить посещаемость</div>
-          {attendanceCandidates.length === 0 ? (
+          {respondersQuery.isPending ? (
+            // The roster drives attendanceCandidates; until it loads, "no confirmed participants"
+            // is a false empty-state that could make the organizer close the page → EXP-2 (F5-22).
+            <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
+              <div className="rd-spinner-row" style={{ padding: 0 }}><Spinner size="s" /></div>
+            </div>
+          ) : respondersQuery.error ? (
+            <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
+              <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
+                Не удалось загрузить список участников.
+              </div>
+              <button
+                type="button"
+                className="rd-btn-outline"
+                style={{ marginTop: 10 }}
+                onClick={() => { haptic.impact('light'); respondersQuery.refetch(); }}
+              >
+                Повторить
+              </button>
+            </div>
+          ) : attendanceCandidates.length === 0 ? (
             <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
               <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
                 Нет подтверждённых участников для отметки.

@@ -59,7 +59,12 @@ class ActivityService(
         }
 
         val events: List<ActivityItemDto.EventActivity> = rawEvents.map {
-            activityMapper.toEventActivity(it.event, it.goingCount, actionRequired = it.event.id in actionRequiredIds)
+            activityMapper.toEventActivity(
+                it.event,
+                it.goingCount,
+                it.confirmedCount,
+                actionRequired = it.event.id in actionRequiredIds
+            )
         }
 
         val skladchinas: List<ActivityItemDto.SkladchinaActivity> = if (typeFilter == ActivityType.EVENT) {

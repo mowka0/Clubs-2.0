@@ -32,6 +32,7 @@ function toMemberStub(member: ChurnedMemberDto): MemberListItemDto {
     joinedAt: null,
     trust: null,
     promiseFulfillmentPct: null,
+    totalConfirmations: null,
     subscriptionCancelled: false,
   };
 }

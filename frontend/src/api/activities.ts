@@ -25,6 +25,9 @@ export interface EventActivityDto extends ActivityBase {
   locationText: string;
   participantLimit: number;
   goingCount: number;
+  // Stage-2 confirmed roster size. The card shows `goingCount` during stage 1 and switches to
+  // `confirmedCount` once voting closes (stage_2/completed), matching the event page (F5-21).
+  confirmedCount: number;
   status: EventActivityStatus;
   descriptionPreview: string | null;
   photoUrl: string | null;

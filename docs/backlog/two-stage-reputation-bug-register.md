@@ -202,7 +202,7 @@ Severity — консенсус скептиков (местами ниже за
 | ~~**F5-05**~~ ✅ | **Исправлено в `bugfix/attendance-dispute-integrity`** (= ATT-1): колонка `events.attendance_marked_at` (V24); `finalizeAttendanceBefore` гейтит по `COALESCE(attendance_marked_at, event_datetime)` — окно от момента отметки | — | — |
 | ~~**F5-06**~~ ✅ | **Исправлено в `bugfix/attendance-dispute-integrity`**: `disputeNote` в `/responses` нуллится для всех, кроме владельца клуба (`VoteService`, серверный owner-фильтр) | — | — |
 | ~~**F5-07**~~ ✅ | **Исправлено в `bugfix/stage2-dm-and-slot-races` (пакет 2, 2026-06-13)** = S2-01: `lockEventSlots` (`pg_advisory_xact_lock`) в confirm и decline — см. статусную пометку у S2-01 выше | — | — |
-| **F5-08** | «Обещания 0% · 0 подтв.» у участника с finance-only треком (3 складчины, 0 событий, `outcome_count=3` → порог пройден); ProfilePage те же нули прячет (`hasActivity`), ClubMembersTab/MemberProfileModal — нет | `ClubMembersTab.tsx:157-163`, `MemberProfileModal.tsx:76-79` | guard `totalConfirmations > 0` для attendance-метрик на обеих поверхностях (паритет с ProfilePage) |
+| ~~**F5-08**~~ ✅ | **Исправлено в пакете 4 (`bugfix/package4-f5-ui-polish`)**: `MemberListItemDto`/`ClubMemberInfo` несут `totalConfirmations` (новый select в `findClubMembersWithUserInfo`, гейт `show`); `ClubMembersTab` прячет «Обещания X%» при `totalConfirmations === 0`, `MemberProfileModal` прячет «Спонтанных визитов» при `confirmations === 0` — паритет с ProfilePage `hasActivity` | — | — |
 
 ## 🟡 F5 LOW
 
@@ -215,14 +215,14 @@ Severity — консенсус скептиков (местами ниже за
 | ~~**F5-13**~~ ✅ | **Исправлено в PR #58 (пакет 3)**: пары (user,club) сортируются перед захватом локов | — | — |
 | **F5-14** 🧭 | Отмена события недостижима: `EventStatus.cancelled` нигде не присваивается — нет endpoint/UI; сорвавшаяся встреча живёт полный цикл (reminder'ы, выжигание `expired_no_confirm`); ошибочная отметка явки даст −50 за несостоявшееся событие | `EventService.kt` (нет cancel), `EventController.kt` | **фича, не багфикс**: endpoint + UI + правила (что с confirmed/репутацией при отмене). PRD §4.4.2 Сценарий Б шаг 4 |
 | ~~**F5-15**~~ ✅ | **Исправлено в `bugfix/attendance-dispute-integrity`**: `setAttendance` несёт `IS DISTINCT FROM 'disputed'` (спор не перетирается); DM шлётся только `newlyAbsentUserIds` (`AttendanceMarkedEvent` несёт набор) | — | — |
-| **F5-16** 🧭 (бэк ✅) | Резолв «Не пришёл» не терминален: `absent` после резолва снова даёт `canDispute=true` → пинг-понг споров. **Бэкенд исправлен в `bugfix/attendance-dispute-integrity`**: колонка `event_responses.dispute_terminal` (V24), `resolveDispute`/ATT-2 ставят `true`, `disputeAbsentAttendance` гейтит `dispute_terminal=false`, `setAttendance` сбрасывает. **UI-текст «спор отклонён» — отложен в пакет 4** (косметика) | `EventPage.tsx:276,541-576` | пакет 4: UI-текст резолва без повторной кнопки |
+| ~~**F5-16**~~ ✅ | Резолв «Не пришёл» не терминален: `absent` после резолва снова даёт `canDispute=true` → пинг-понг споров. **Бэкенд исправлен в `bugfix/attendance-dispute-integrity`** (V24 `dispute_terminal`). **UI-текст уже реализован в пакете 1** (не отложен): `EventPage` считает `myDisputeRejected` (`absent && disputeTerminal`) и рендерит «Организатор рассмотрел ваш спор — отметка „не пришёл“ осталась.» БЕЗ повторной кнопки (`canDispute=false` после терминала). Пакет 4 только верифицировал | — | — |
 | ~~**F5-17**~~ ✅ | **Исправлено в `bugfix/attendance-dispute-integrity`**: `findEventsNeedingAttendanceReminder` несёт `ATTENDANCE_FINALIZED.isFalse` — reminder не уходит по нейтрально-финализированным | — | — |
 | ~~**F5-18**~~ ✅ | **Исправлено в PR #58 (пакет 3)**: try/catch + log.error вокруг auto-close; KDoc стал правдой (scope-оговорка про общую tx задокументирована) | — | — |
 | **F5-19** | Тиры `>=85 high / >=70 mid` откалиброваны под шкалу 0–100, применяются к неограниченной Σ ledger: пустозвон с +500 (50% no-show) зелёный, плательщик с +30 красный | `ProfilePage.tsx:37-47`, дубль `ClubMembersTab.tsx:28-33` | по-настоящему чинится только Trust 0–100 (**P1b**); до того — рассмотреть нейтральную раскраску |
-| **F5-20** | Ошибка `GET /users/me/reputation` рендерится как «у тебя нет клубов» + CTA «Найти клуб» (ProfilePage); Discovery — «Найди свой первый клуб» | `ProfilePage.tsx:59,68,92,139,170-183`, `DiscoveryPage.tsx:80-81,152-156` | error-ветка (как в `ClubMembersTab:99-101`): сообщение + retry, не onboarding |
-| **F5-21** | Карточки в ленте активностей показывают stage-1 `goingCount` («5/10 идёт») после этапа 2; внутри события «Состав · 2/10» — противоречие. `confirmedCount` в unified-feed DTO не прокинут | `ActivityCard.tsx:44-47`, `ActivityItemDto` | прокинуть `confirmedCount`+`status` в EventActivity, фазовый показ как на EventPage (events.md AC-PH1) |
-| **F5-22** | Ложный empty-state «Нет подтверждённых участников для отметки» пока `/responses` грузится/упал (ошибка проглатывается); орг может закрыть страницу → событие уйдёт в EXP-2 | `EventPage.tsx:421-426` (источник 90,260-262) | учитывать `respondersQuery.isPending/error` до рендера empty-state |
-| **F5-23** | `actionError` рендерится дважды в фазе stage_2 (над «Составом» и в секции подтверждения) | `EventPage.tsx:353,590` | один слот для ошибки confirm/decline |
+| ~~**F5-20**~~ ✅ | **Исправлено в пакете 4**: `ProfilePage` рендерит явный error+retry-блок при `!rep && reputationQuery.error` (вместо онбординга «нет клубов»); `DiscoveryPage` (вторичный виджет) при `reputationQuery.error` показывает нейтральный подзаголовок вместо ложного «Найди свой первый клуб» | — | — |
+| ~~**F5-21**~~ ✅ | **Исправлено в пакете 4**: `confirmedCount` проброшен в `EventWithGoingCount` → `ActivityItemDto.EventActivity` (+`fetchConfirmedCounts` в `findAllByClubWithGoingCount`); `ActivityCard` показывает `confirmedCount`/«подтв.» при `stage_2`/`completed`, иначе `goingCount`/«идёт» — фазовый показ как на EventPage (events.md § Фазовый показ) | — | — |
+| ~~**F5-22**~~ ✅ | **Исправлено в пакете 4**: блок «Отметить посещаемость» учитывает `respondersQuery.isPending` (спиннер) и `.error` (сообщение + retry) ДО ложного empty-state «Нет подтверждённых» | — | — |
+| ~~**F5-23**~~ ✅ | **Исправлено в пакете 4**: верхний слот `actionError` гейтится на `showVoting` — stage-2 confirm/decline-ошибки рендерятся только в секции подтверждения, дубля больше нет | — | — |
 | ~~**F5-24**~~ ✅ | **СНЯТ 2026-06-12** вместе с REP-3: `/мой_рейтинг` и `findLatestByUserId` удалены, поверхности бага больше нет | — | — |
 | **F5-25** | V18 аудит-NOTICE неполный против спеки `reputation-v2.md:189-190`: нет суммы снятых очков, finance owner-пары не учтены (на данные не влияет; восстановимо запросом к `_pre_v18`) | `V18__backfill_reputation_ledger.sql:113-130` | one-off миграция уже применена — зафиксировать как известное ограничение в спеке, не чинить |
 
@@ -243,7 +243,12 @@ Severity — консенсус скептиков (местами ниже за
 3. ~~**PR «skladchina»**~~ ✅ **ВЫПОЛНЕН — PR #58, смержен 2026-06-12**: F5-02/03/12/13/18 +
    полный редизайн репутации складчины (`docs/backlog/skladchina-reputation-redesign.md`),
    протестирован на staging (Ф1–Ф5, машина времени).
-4. **PR «UI полировка»** (фронт): F5-08, F5-16(фронт), F5-20, F5-21, F5-22, F5-23.
+4. ~~**PR «UI полировка»**~~ ✅ **ВЫПОЛНЕН — `bugfix/package4-f5-ui-polish`, 2026-06-25**:
+   F5-08 (finance-only attendance-метрики), F5-20 (error vs onboarding), F5-21 (фазовый показ
+   карточки клубной ленты), F5-22 (loading/error empty-state), F5-23 (один слот actionError).
+   F5-16(фронт) оказался **уже сделан в пакете 1** — пакет 4 только верифицировал. Бэк-добавки
+   (read-only): `confirmedCount` в `ActivityItemDto.EventActivity`, `totalConfirmations` в
+   `MemberListItemDto` — миграций нет.
 5. **Отложить осознанно**: F5-14 (фича «отмена события» — спека), F5-19 (ждёт P1b Trust), F5-25 (не чинить). (~~F5-24~~ и ~~REP-3~~ закрыты удалением `/мой_рейтинг`.)
 
 **🧭 Продуктовые решения до старта пакетов:** (а) ~~F5-02~~ ✅ решено 2026-06-12 (released/нейтрально,
