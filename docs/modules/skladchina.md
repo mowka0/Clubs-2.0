@@ -741,7 +741,7 @@ guard от double-application; структурный backstop — UNIQUE-клю
 - `404` — клуб не существует / soft-deleted
 
 **Валидации:**
-- `participants.length ≥ 1` И `≤ club.member_count`
+- `participants.length ≥ 1` И `≤` живой счёт участников клуба (`memberCount`, считается из `memberships`)
 - Все participant.userId должны быть active members этого клуба (MembershipStatus.active)
 - `fixed_equal`: `totalGoalKopecks > 0` обязателен
 - `fixed_individual`: каждому participant.expectedAmountKopecks > 0; `total = sum(amounts)` вычисляется

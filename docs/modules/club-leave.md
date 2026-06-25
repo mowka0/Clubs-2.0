@@ -12,7 +12,7 @@
 > брони, на которые он ещё может прийти до конца подписки. Free-членство всегда имеет
 > `subscription_expires_at = null` (см. `FreeMembershipActivator`), поэтому условие их не задевает.
 
-- **Без активного платного доступа (genuinely free)** — мгновенный выход: статус → `cancelled`, `member_count -= 1`, штраф за брошенные обязательства (P1b PR-b) + cascade-разрыв связей в активных событиях и сборах.
+- **Без активного платного доступа (genuinely free)** — мгновенный выход: статус → `cancelled` (строка выпадает из live-счёта участников — он считается на лету из `memberships`, отдельной записи счётчика нет), штраф за брошенные обязательства (P1b PR-b) + cascade-разрыв связей в активных событиях и сборах.
 - **С активным платным доступом** — отмена автопродления (soft-cancel): статус → `cancelled`, доступ к клубу сохраняется до `subscription_expires_at`. **Штрафа нет, cascade НЕ применяется.** RSVP и существующие складчины сохраняются. В новые складчины cancelled-участника нельзя добавить *(см. § «Известные ограничения / план» — это поведение пересматривается)*.
 
 ## Scope
@@ -66,9 +66,8 @@ Caller = владелец membership (`principal.userId`). Параметра us
    - DELETE `event_responses` где `user_id=caller AND event_id IN (SELECT id FROM events WHERE club_id=:clubId AND status IN ('upcoming','stage_1','stage_2') AND NOT attendance_finalized)`. **attendance-finalized событие исключено** — его реальный исход (attended/no_show) принадлежит reputation-пайплайну, а не выходу (событие может быть finalized, пока статус ещё `stage_2`).
    - **Промоут листа ожидания:** на каждый освободившийся confirmed-слот первый `waitlisted` (по `stage_1_timestamp`) → `confirmed`. Под `pg_advisory_xact_lock` на событие (как confirm/decline) — без гонок с подтверждением.
    - DELETE `applications` где `user_id=caller AND club_id=:clubId AND status IN ('pending','approved')` — устраняет залипшие approved-but-unpaid состояния и **гарантирует, что повторное вступление в приватный клуб снова требует new заявки**.
-5. UPDATE `memberships`: `status='cancelled'`, `updated_at=now()`. Поля `joined_at` и `subscription_expires_at` НЕ трогаем (история).
-6. UPDATE `clubs.member_count -= 1`.
-7. НЕ трогаем: `user_club_reputation` сырьё прошлых исходов, `transactions`, rejected/auto_rejected applications, прошлые завершённые события/сборы. (Per-club Trust пересчитывается из ledger по факту новых штраф-строк — это и есть «не трогаем кэш напрямую, recompute из ledger».)
+5. UPDATE `memberships`: `status='cancelled'`, `updated_at=now()`. Поля `joined_at` и `subscription_expires_at` НЕ трогаем (история). Этим строка выпадает из live-счёта участников — отдельной записи счётчика нет (колонка `clubs.member_count` дропнута в V33; значение считается на лету из `memberships`).
+6. НЕ трогаем: `user_club_reputation` сырьё прошлых исходов, `transactions`, rejected/auto_rejected applications, прошлые завершённые события/сборы. (Per-club Trust пересчитывается из ledger по факту новых штраф-строк — это и есть «не трогаем кэш напрямую, recompute из ledger».)
 
 ### Бизнес-правила (paid club)
 
@@ -76,7 +75,7 @@ Caller = владелец membership (`principal.userId`). Параметра us
 2. Owner-check → **400** если caller=owner.
 3. UPDATE memberships: `status='cancelled'`, `updated_at=now()`. `subscription_expires_at` сохраняется.
 4. DELETE `applications` где `user_id=caller AND club_id=:clubId AND status IN ('pending','approved')` — убирает зависшую approved-but-unpaid application, иначе при перезагрузке клуб появлялся бы в «Ожидают оплаты» у пользователя и в «approved-but-unpaid applicants» у организатора.
-5. `clubs.member_count` НЕ декрементим — пользователь формально остаётся до expire.
+5. Отдельной записи счётчика участников нет (колонка дропнута в V33; live-счёт считается из `memberships`). Однако `cancelled`-строка выпадает из live-счёта сразу же — счётчик показывает active/grace. Доступ к клубу при этом сохраняется до `subscription_expires_at` (его обеспечивают `isMember`-проверки, а не счётчик; см. § «Видимость cancelled-в-периоде membership»).
 6. Cascade на `event_responses`/`skladchina_participants` НЕ применяется — RSVP и членство в существующих сборах сохраняются до конца оплаченного периода.
 7. В новые сборы cancelled-пользователя нельзя добавить (см. Skladchina-интеграция).
 
@@ -132,7 +131,7 @@ Endpoint используется UI создания складчины. Рас
 **THEN** 200 OK
 **AND** response.status = "cancelled"
 **AND** memberships.status = cancelled для (caller, X)
-**AND** clubs.member_count уменьшилось на 1
+**AND** live-счёт участников клуба уменьшился на 1 (cancelled-строка выпала из счёта; колонка не пишется)
 **AND** skladchina_participants — 2 строки удалены
 **AND** event_responses — удалена только строка upcoming-event (completed остаётся)
 **AND** user_club_reputation — НЕ изменено
@@ -144,7 +143,7 @@ Endpoint используется UI создания складчины. Рас
 **THEN** 200 OK
 **AND** memberships.status = cancelled
 **AND** subscription_expires_at не изменился
-**AND** clubs.member_count НЕ изменено
+**AND** отдельной записи счётчика участников нет (колонка дропнута в V33; live-счёт считается из `memberships` и не включает cancelled). Доступ к клубу сохраняется до expire через `isMember`-проверки, а не через счётчик
 **AND** skladchina_participants НЕ изменено
 **AND** event_responses НЕ изменено
 
@@ -297,4 +296,4 @@ Confirm-modal:
 - **Open**: после `cancel` для paid → наступает natural expire (`subscription_expires_at < now`). Сейчас нет scheduled job, который выполнит cascade при expire. В результате могут остаться «висящие» `event_responses` и `skladchina_participants` для уже-не-member. **Backlog**: scheduled job `MembershipExpireProcessor` выполняет такой же cascade при переходе active/cancelled → expired.
 - **Decision**: `user_club_reputation` сохраняется при leave. Если пользователь повторно вступит в клуб — его прежние метрики возвращаются. Это разумный дефолт; если бизнес захочет «чистый старт» — переключаемся позже.
 - **Decision**: Pending applications при leave не удаляются. У active member pending application не должно быть по бизнес-инвариантам. Защита здесь избыточна.
-- **Side-effect (изменение существующего поведения)**: `FreeMembershipActivator.activate` теперь инкрементит `clubs.member_count` на reactivate (раньше не инкрементил — см. [membership.md](membership.md) § «Free-club reactivate-or-create»). Это вынужденная коррекция для согласованности с новым `/leave`-decrement (без неё цикл leave/rejoin уплывал бы в минус). Поведение легаси `POST /api/clubs/{id}/cancel` без `/leave` пути не изменилось; `decrementMemberCountSafely` гарантирует floor=0.
+- **Resolved (V33)**: ранее `/leave` декрементил денормализованную колонку `clubs.member_count`, а `FreeMembershipActivator.activate` инкрементил её на reactivate — связка существовала, чтобы цикл leave/rejoin не уплывал в минус. Колонка дропнута в V33, вся inc/dec-машинерия удалена: счётчик участников считается на лету из `memberships` (active/grace, включая организатора). Драйф невозможен по построению — нет хранимого счётчика, который мог бы рассинхронизироваться. `/leave` и reactivate теперь только меняют статус membership-строки.

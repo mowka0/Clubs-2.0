@@ -7,7 +7,7 @@ PR `feature/club-leave-member` (см. [docs/modules/club-leave.md](../modules/cl
 - `applicationRepository.deleteActiveByUserAndClub` вызывается
 - `eventResponseRepository.deleteByUserAndClubAndActiveEvents` вызывается
 - `skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub` вызывается
-- `clubRepository.decrementMemberCountSafely(_, 1)` вызывается
+- membership-строка переводится в `status='cancelled'` (отдельной записи счётчика нет — он считается на лету из `memberships`; колонка `member_count` дропнута в V33)
 
 Реальная БД-каскадная семантика (что строки **действительно удаляются** + границы фильтров: `events.status IN (upcoming, stage_1, stage_2)`, `skladchinas.status='active'`, `applications.status IN (pending, approved)`) на staging-инстансе **руками не подтверждалась**. Юзер не проверял этот сценарий перед мержом.
 
@@ -25,7 +25,7 @@ THEN:
 - В БД: `event_responses` для upcoming event — **удалена**, для completed event — **сохранена**
 - В БД: `skladchina_participants` для active sbor — **удалена**, для closed_success — **сохранена**
 - В БД: `applications` для (caller, X) с status='approved' — **удалена**; archived club application — **не затронута**
-- `clubs.member_count` для X уменьшилось на 1
+- live-счёт участников X уменьшился на 1 (membership-строка caller'а теперь `cancelled` и выпала из счёта — он считается из `memberships`, колонки `member_count` больше нет)
 - `user_club_reputation` для (caller, X) — **не изменена**
 - `transactions` — не затронуты
 
@@ -43,7 +43,8 @@ THEN:
      FROM skladchina_participants sp JOIN skladchinas s ON s.id = sp.skladchina_id
     WHERE sp.user_id = '<caller>' AND s.club_id = '<X>';
    SELECT id, status FROM applications WHERE user_id = '<caller>' AND club_id = '<X>';
-   SELECT member_count FROM clubs WHERE id = '<X>';
+   -- live-счёт участников (колонки clubs.member_count больше нет — дропнута в V33):
+   SELECT count(*) FROM memberships WHERE club_id = '<X>' AND status IN ('active', 'grace_period');
    SELECT reliability_index, total_attendances FROM user_club_reputation WHERE user_id = '<caller>' AND club_id = '<X>';
    ```
 4. Сверить с ожиданиями из секции «THEN» выше.

@@ -1,8 +1,6 @@
 package com.clubs.payment
 
 import com.clubs.bot.NotificationService
-import com.clubs.club.ClubRepository
-import com.clubs.membership.ClubMembershipExpiredCount
 import com.clubs.membership.ExpiringSubscriptionNotification
 import com.clubs.membership.MembershipRepository
 import io.mockk.every
@@ -15,7 +13,6 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.OffsetDateTime
-import java.util.UUID
 
 /**
  * Tests the cron entry point and the transactional lifecycle service separately.
@@ -24,7 +21,6 @@ import java.util.UUID
 class SubscriptionSchedulerTest {
 
     private lateinit var membershipRepository: MembershipRepository
-    private lateinit var clubRepository: ClubRepository
     private lateinit var notificationService: NotificationService
     private lateinit var lifecycleService: SubscriptionLifecycleService
     private lateinit var scheduler: SubscriptionScheduler
@@ -32,9 +28,8 @@ class SubscriptionSchedulerTest {
     @BeforeEach
     fun setUp() {
         membershipRepository = mockk(relaxed = true)
-        clubRepository = mockk(relaxed = true)
         notificationService = mockk(relaxed = true)
-        lifecycleService = SubscriptionLifecycleService(membershipRepository, clubRepository)
+        lifecycleService = SubscriptionLifecycleService(membershipRepository)
         scheduler = SubscriptionScheduler(lifecycleService, notificationService)
     }
 
@@ -51,7 +46,6 @@ class SubscriptionSchedulerTest {
             ExpiringSubscriptionNotification(telegramId = tgId, clubName = "Chess Club")
         )
         every { membershipRepository.findActiveExpired(any()) } returns emptyList()
-        every { membershipRepository.findGracePeriodExpiredGroupedByClub(any()) } returns emptyList()
 
         scheduler.checkSubscriptions()
 
@@ -67,7 +61,6 @@ class SubscriptionSchedulerTest {
     fun `scheduler sends no notifications when nothing is expiring`() {
         every { membershipRepository.findExpiringWithin(any(), any()) } returns emptyList()
         every { membershipRepository.findActiveExpired(any()) } returns emptyList()
-        every { membershipRepository.findGracePeriodExpiredGroupedByClub(any()) } returns emptyList()
 
         scheduler.checkSubscriptions()
 
@@ -82,7 +75,6 @@ class SubscriptionSchedulerTest {
         every { membershipRepository.findActiveExpired(any()) } returns listOf(
             ExpiringSubscriptionNotification(telegramId = tgId, clubName = "Poker Club")
         )
-        every { membershipRepository.findGracePeriodExpiredGroupedByClub(any()) } returns emptyList()
 
         scheduler.checkSubscriptions()
 
@@ -100,7 +92,6 @@ class SubscriptionSchedulerTest {
     fun `scheduler reads active-expired before moving them to grace_period`() {
         every { membershipRepository.findExpiringWithin(any(), any()) } returns emptyList()
         every { membershipRepository.findActiveExpired(any()) } returns emptyList()
-        every { membershipRepository.findGracePeriodExpiredGroupedByClub(any()) } returns emptyList()
 
         scheduler.checkSubscriptions()
 
@@ -119,7 +110,6 @@ class SubscriptionSchedulerTest {
             ExpiringSubscriptionNotification(telegramId = tgId, clubName = "A")
         )
         every { membershipRepository.findActiveExpired(any()) } returns emptyList()
-        every { membershipRepository.findGracePeriodExpiredGroupedByClub(any()) } returns emptyList()
 
         scheduler.checkSubscriptions()
 
@@ -129,47 +119,29 @@ class SubscriptionSchedulerTest {
         }
     }
 
-    // AC-10
+    // AC-10/AC-11: processExpiry runs both lifecycle transitions in a single pass.
     @Test
-    fun `processExpiry moves active subscriptions to grace_period without decrementing member_count`() {
+    fun `processExpiry moves active to grace_period and grace_period to expired`() {
         every { membershipRepository.moveActiveToGracePeriod(any()) } returns 3
-        every { membershipRepository.findGracePeriodExpiredGroupedByClub(any()) } returns emptyList()
-
-        lifecycleService.processExpiry(OffsetDateTime.now())
-
-        verify(exactly = 1) { membershipRepository.moveActiveToGracePeriod(any()) }
-        verify(exactly = 0) { clubRepository.decrementMemberCountSafely(any(), any()) }
-        verify(exactly = 0) { membershipRepository.moveGracePeriodToExpired(any()) }
-    }
-
-    // AC-11
-    @Test
-    fun `processExpiry decrements member_count by exact per-club count when moving grace_period to expired`() {
-        val clubA = UUID.randomUUID()
-        val clubB = UUID.randomUUID()
-        every { membershipRepository.moveActiveToGracePeriod(any()) } returns 0
-        every { membershipRepository.findGracePeriodExpiredGroupedByClub(any()) } returns listOf(
-            ClubMembershipExpiredCount(clubA, 2),
-            ClubMembershipExpiredCount(clubB, 5)
-        )
         every { membershipRepository.moveGracePeriodToExpired(any()) } returns 7
 
         lifecycleService.processExpiry(OffsetDateTime.now())
 
-        verify(exactly = 1) { clubRepository.decrementMemberCountSafely(clubA, 2) }
-        verify(exactly = 1) { clubRepository.decrementMemberCountSafely(clubB, 5) }
+        verify(exactly = 1) { membershipRepository.moveActiveToGracePeriod(any()) }
         verify(exactly = 1) { membershipRepository.moveGracePeriodToExpired(any()) }
     }
 
+    // active→grace uses `now`; grace→expired uses the 3-day-back window cutoff.
     @Test
-    fun `processExpiry skips move and decrement when nothing is in grace_period past the window`() {
+    fun `processExpiry applies now to grace move and the 3-day window to expiry`() {
+        val fixedNow = OffsetDateTime.parse("2026-04-24T10:00:00Z")
         every { membershipRepository.moveActiveToGracePeriod(any()) } returns 0
-        every { membershipRepository.findGracePeriodExpiredGroupedByClub(any()) } returns emptyList()
+        every { membershipRepository.moveGracePeriodToExpired(any()) } returns 0
 
-        lifecycleService.processExpiry(OffsetDateTime.now())
+        lifecycleService.processExpiry(fixedNow)
 
-        verify(exactly = 0) { membershipRepository.moveGracePeriodToExpired(any()) }
-        verify(exactly = 0) { clubRepository.decrementMemberCountSafely(any(), any()) }
+        verify(exactly = 1) { membershipRepository.moveActiveToGracePeriod(fixedNow) }
+        verify(exactly = 1) { membershipRepository.moveGracePeriodToExpired(fixedNow.minusDays(3)) }
     }
 
     // AC-9 (threshold): findExpiringWithin gets the right (now, now+3d] window
@@ -180,7 +152,6 @@ class SubscriptionSchedulerTest {
         every { OffsetDateTime.now() } returns fixedNow
         every { membershipRepository.findExpiringWithin(any(), any()) } returns emptyList()
         every { membershipRepository.findActiveExpired(any()) } returns emptyList()
-        every { membershipRepository.findGracePeriodExpiredGroupedByClub(any()) } returns emptyList()
 
         scheduler.checkSubscriptions()
 

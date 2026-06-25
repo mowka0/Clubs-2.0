@@ -89,6 +89,21 @@ Telegram Mini App для создания и управления платным
 - После выполнения: пройди test_steps, обнови status, запиши в progress.md
 - ЗАПРЕЩЕНО удалять или редактировать задачи — только менять status
 
+## Кодовая навигация: Serena (MCP)
+
+В проект подключён **Serena** — MCP-сервер с LSP-навигацией по символам (Kotlin + TypeScript).
+**Используй его по умолчанию для символьных задач**, когда это имеет смысл:
+- `find_symbol` / `get_symbols_overview` — найти определение или обзор файла, не читая его целиком.
+- `find_referencing_symbols` — найти ВСЕ ссылки/call-sites: impact-анализ «кто вызывает», «безопасно ли удалить», rename. Результат структурирован по символам-владельцам (прод/тесты) — точнее и быстрее, чем grep + ручная классификация.
+- Закрывает костыль «не читать `backend/src/generated/jooq/**`»: Record-поля/enum ищи через `find_symbol`, не вываливая 68 generated-файлов в контекст.
+- Перед началом кодинг-задачи вызови `initial_instructions` (мануал Serena). Онбординг (`onboarding`) можно пропускать для точечных задач.
+
+`grep` / `Read` остаются уместны для простого текстового поиска и чтения известных коротких фрагментов — Serena не догма, а инструмент **первого выбора** для символьной навигации и анализа ссылок.
+
+Установка (одноразово на свежем clone): `brew install uv`, затем
+`claude mcp add serena --scope local -- /opt/homebrew/bin/uvx --python 3.11 --from git+https://github.com/oraios/serena serena start-mcp-server --context ide-assistant --project "$(pwd)"`.
+Языки — в `.serena/project.yml` (`kotlin` + `typescript`); после изменения миграций/схемы кэш Serena освежается через `uvx ... serena project index`. Каталог `.serena/` — в `.gitignore` (личный инструмент, в репозиторий не коммитим). MCP-сервер требует перезапуска Claude Code, чтобы появиться в сессии.
+
 ## Мульти-агентная система
 
 Системные правила и workflow: `.claude/agents/00-SYSTEM.md`

@@ -294,14 +294,15 @@ fallback — кнопка «Завершить вступление» на `Club
 
 Делегирует в `FreeMembershipActivator.activate` (см. `docs/modules/membership.md`
 § «Free-club reactivate-or-create»):
-- если для `(user_id, club_id)` строки нет → INSERT membership(active) +
-  `clubs.member_count += 1`;
+- если для `(user_id, club_id)` строки нет → INSERT membership(active);
 - если строка существует со статусом `cancelled` / `expired` → **реактивация**
-  (status=active, joined_at=now, subscription_expires_at=null, updated_at=now;
-  `member_count` НЕ инкрементится — он был зачтён при первичном вступлении и
-  не декрементится при отмене);
+  (status=active, joined_at=now, subscription_expires_at=null, updated_at=now);
 - если строка существует со статусом `active` / `grace_period` → Service
   отдаёт 400 «Already a member» ДО вызова активатора.
+
+Счётчик участников отдельно не пишется: колонка `clubs.member_count` дропнута в
+V33, значение считается на лету из `memberships`. Новая/реактивированная active-строка
+автоматически попадает в live-счёт.
 
 Всё в одной транзакции на уровне Service.
 
@@ -1114,7 +1115,7 @@ AND у applicant НЕТ строки в memberships для этого клуба
 WHEN POST /api/applications/{id}/complete-free-membership от applicant
 THEN 200 OK с MembershipDto (status="active", role="member")
 AND membershipRepository.create(userId, clubId) вызван 1 раз
-AND clubRepository.incrementMemberCount(clubId) вызван 1 раз
+AND отдельного вызова записи счётчика нет (live-счёт растёт на 1 за счёт новой active-membership; колонка дропнута в V33)
 AND INFO-лог "Free membership completed for stuck application: applicationId=... userId=... clubId=..."
 ```
 
@@ -1127,7 +1128,7 @@ WHEN POST /api/applications/{id}/complete-free-membership от applicant
 THEN 200 OK с MembershipDto (status="active", role="member", subscriptionExpiresAt=null)
 AND membershipRepository.reactivateFree(membershipId) вызван 1 раз
 AND membershipRepository.create НЕ вызван
-AND clubRepository.incrementMemberCount НЕ вызван (member_count уже учтён при первичном вступлении)
+AND отдельного вызова записи счётчика нет (его не существует — колонка дропнута в V33; реактивированная active-строка снова входит в live-счёт)
 AND joined_at в БД обновлён на NOW(), subscription_expires_at = NULL, updated_at = NOW()
 AND INFO-лог "Free membership reactivated: id=... previousStatus=cancelled|expired"
 ```
@@ -1138,7 +1139,6 @@ GIVEN заявка approved принадлежит user U
 WHEN POST /api/applications/{id}/complete-free-membership от другого user'а V
 THEN 403 FORBIDDEN
 AND membershipRepository.create НЕ вызван
-AND clubRepository.incrementMemberCount НЕ вызван
 ```
 
 ### AC-25i: complete-free-membership — клуб платный
@@ -1156,7 +1156,6 @@ AND у applicant уже есть active / grace_period membership в клубе
 WHEN POST /api/applications/{id}/complete-free-membership
 THEN 400 VALIDATION_ERROR "Already a member"
 AND membershipRepository.create НЕ вызван
-AND clubRepository.incrementMemberCount НЕ вызван
 ```
 
 ### AC-26a: organizer видит awaiting-payment applicants своего клуба

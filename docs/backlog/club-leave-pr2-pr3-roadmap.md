@@ -206,7 +206,7 @@ ALTER TABLE transactions
 
 - **Cascade-логика leave** (free + paid): `MembershipService.leaveClub` + `JooqEventResponseRepository.deleteByUserAndClubAndActiveEvents` + `JooqSkladchinaRepository.deleteParticipantFromActiveSkladchinasInClub` + `JooqApplicationRepository.deleteActiveByUserAndClub`. PR-3 cascade для free delete и для scheduled paid hard-delete должны переиспользовать эти методы (вынести в `ClubLifecycleService` если будет три call-site'а).
 - **isMember расширенный** (active OR cancelled-в-периоде): уже в master после PR-1. Transfer ownership должен принимать таких users как валидных получателей.
-- **FreeMembershipActivator inc member_count на reactivate**: тоже уже в master. Для PR-3 cascade при scheduled delete для paid — нужно решить, что делать со всеми `memberships` (предложение: hard-delete или mark expired без cascade member_count, так как сам клуб удаляется).
+- **Счётчик участников**: денормализованная колонка `clubs.member_count` дропнута в V33; счёт считается на лету из `memberships`. Для PR-3 cascade при scheduled delete для paid — нужно решить только что делать со строками `memberships` (предложение: hard-delete или mark expired); никакой работы со счётчиком клуба не требуется (его больше нет).
 - **DM через бота**: использовать `NotificationService.sendDm` (уже используется для applications). Шаблоны — в `bot/`.
 
 ---

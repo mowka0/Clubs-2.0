@@ -1,11 +1,11 @@
 # Клуб-трек (качество клуба) — хэндофф для новой сессии
 
-**Обновлено:** 2026-06-23 · **Статус:** L1/L2-показ + карточка Discovery + `membership_history` + **owner-«Статистика»** + **member_count drift fix** (живой счёт из memberships, #80) + **L3 скрытый ранг «★ Топ-5 в категории» v1 ✅ В ПРОДЕ (#81, за фиче-флагом `club.rank.badge-enabled` default off)** — всё в проде.
+**Обновлено:** 2026-06-25 · **Статус:** L1/L2-показ + карточка Discovery + `membership_history` + **owner-«Статистика»** + **member_count drift fix** (живой счёт из memberships, #80) + **L3 скрытый ранг «★ Топ-5 в категории» v1 ✅ В ПРОДЕ (#81, за фиче-флагом `club.rank.badge-enabled` default off)** + **member_count column cleanup ✅ (колонка дропнута V33, inc/dec-код удалён)** — всё в проде.
 **Спека модуля:** `docs/modules/club-quality.md` (§9 — owner-«Статистика», **§10 — L3-ранг as-built**) · **Дизайн-контракт (locked):** `docs/backlog/club-quality-gamification.md` (§0–11, §8 снят) · **Карточка/страница/управление — мокап:** `docs/design/club-quality-redesign/mockups/final.html`
 **Память:** [[project_club_quality_track]], [[project_work_queue]]
 
-> **С чего начать новую сессию:** L3 v1 в проде за флагом (off). Дальше по треку: (1) **member_count column cleanup** — дроп
-> колонки `clubs.member_count` (миграция **V33**, теперь free) + удалить inc/dec-код, план `docs/backlog/member-count-column-cleanup.md`;
+> **С чего начать новую сессию:** L3 v1 в проде за флагом (off). Дальше по треку: (1) ✅ **member_count column cleanup** — DONE:
+> колонка `clubs.member_count` дропнута миграцией **V33**, inc/dec-код удалён (см. `docs/backlog/member-count-column-cleanup.md`);
 > (2) **наблюдать L3 в проде** (логи `ClubRankScheduler` 6ч — отрабатывает без ошибок) → **включить бейдж** `CLUB_RANK_BADGE_ENABLED=true`
 > в Coolify при ≥8 RANKED-клубов (до того `GLOBAL_RANK_FLOOR` подавляет); (3) **L3 v2** (§8 модульной спеки): co-occurrence-граф под
 > атакой, складчина-финансы при Stars, transfer-probation, калибровка весов; (4) структурная перестройка карточки/страницы (свои схемы).
@@ -49,7 +49,7 @@ JooqClubStatsRepository → ClubStatsMapper` + domain `ClubStats`/`ChurnedMember
 Append-only лог `(user_id, club_id, event{joined/left/rejoined/expired}, occurred_at)`. Пишется из **единственного чокпоинта** `JooqMembershipRepository` (та же транзакция). **Без UI и без чтения** — reads строятся в следующих срезах. Семантика событий — `docs/modules/membership.md` § «membership_history». Решения: организатор НЕ логируется (member-only); `left` = churn-intent (момент отмены, не потери доступа); продление активного ≠ rejoined.
 
 ### Discovery-сортировка/теги (#72 — `activity_rating` ретайрнут, V30)
-`GET /api/clubs` сортирует по derived recent-activity (non-cancelled события 90д+предстоящие DESC → member_count DESC → created_at DESC). Тег «Популярный» = member_count top-10% выборки + гард `threshold > 0`. Мёртвая колонка `activity_rating` дропнута. Спека: `docs/modules/clubs.md` § «GET /api/clubs».
+`GET /api/clubs` сортирует по derived recent-activity (non-cancelled события 90д+предстоящие DESC → живой счёт участников DESC → created_at DESC). Тег «Популярный» = живой счёт top-10% выборки + гард `threshold > 0`. Счёт участников считается на лету из `memberships` (колонка `clubs.member_count` дропнута V33); мёртвая колонка `activity_rating` дропнута. Спека: `docs/modules/clubs.md` § «GET /api/clubs».
 
 **Сессия 2026-06-21 — смерджено:** #72 (activity_rating) · #73 (карточка Discovery) · #74 (membership_history) · #75 (светлая тема карточки) · **#78 (owner-«Статистика»: панель + кумулятивные споры по явке + раскрывающийся список ушедших)**.
 

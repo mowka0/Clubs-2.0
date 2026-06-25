@@ -114,7 +114,6 @@ class PaymentService(
 
         if (existing == null) {
             membershipId = membershipRepository.activateSubscription(userId, clubId, now.plusDays(SUBSCRIPTION_DAYS))
-            clubRepository.incrementMemberCount(clubId)
             type = TransactionType.subscription
         } else {
             val newExpiry = existing.subscriptionExpiresAt

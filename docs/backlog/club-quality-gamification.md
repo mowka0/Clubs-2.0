@@ -143,8 +143,9 @@ floor (нигде нет процентов), recency-decay на каждом с
 - ~~**`clubs.activity_rating`** — МЁРТВ~~ ✅ **РЕТАЙРНУТ** (V30, `bugfix/retire-activity-rating`). Был МЁРТВ
   (set 0 at create, decrement-only clamp at 0 — всегда 0), рулил discovery-ordering и тегом «Популярный»
   (порог = топ-10% от нулей = 0 → тег на КАЖДОМ клубе). Колонка дропнута; сортировка пересобрана как derived
-  (non-cancelled события за 90д + предстоящие DESC → member_count DESC → created_at DESC), тег «Популярный» —
-  member_count top-10% с гардом `threshold > 0`. См. `docs/modules/clubs.md` § «GET /api/clubs».
+  (non-cancelled события за 90д + предстоящие DESC → живой счёт участников DESC → created_at DESC), тег «Популярный» —
+  живой счёт top-10% с гардом `threshold > 0`. Счёт считается на лету из `memberships` (колонка `clubs.member_count`
+  дропнута V33). См. `docs/modules/clubs.md` § «GET /api/clubs».
 
 ---
 

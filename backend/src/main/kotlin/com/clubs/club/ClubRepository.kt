@@ -27,9 +27,5 @@ interface ClubRepository {
 
     fun findAll(filters: ClubFilterParams): PageResponse<ClubListItemDto>
 
-    fun incrementMemberCount(clubId: UUID)
-
-    fun decrementMemberCountSafely(clubId: UUID, delta: Int)
-
     fun linkTelegramGroup(clubId: UUID, telegramGroupId: Long)
 }

@@ -68,11 +68,11 @@ class MembershipService(
     /**
      * Leave-club operation. Behaviour branches by club type:
      *  - **Free** (subscriptionPrice <= 0): cascade-clean active obligations
-     *    (event RSVPs + skladchina participation), decrement `member_count`,
-     *    flip membership to `cancelled`. Owner cannot leave.
+     *    (event RSVPs + skladchina participation), flip membership to
+     *    `cancelled`. Owner cannot leave.
      *  - **Paid** (subscriptionPrice > 0): just flip membership to `cancelled`.
-     *    `subscription_expires_at` and `member_count` are preserved — user
-     *    keeps access until expire. Cascade is intentionally skipped: existing
+     *    `subscription_expires_at` is preserved — user keeps access until
+     *    expire. Cascade is intentionally skipped: existing
      *    RSVPs/skladchina participation stay valid until expire.
      *
      * Cascade NEVER touches `user_club_reputation`, `transactions`, or
@@ -190,7 +190,6 @@ class MembershipService(
         val cascadedApplications = applicationRepository.deleteActiveByUserAndClub(userId, clubId)
 
         membershipRepository.cancel(membership.id)
-        clubRepository.decrementMemberCountSafely(clubId, 1)
 
         log.info(
             "User left free club: clubId={} userId={} eventNoShows={} skladchinaExpiries={} promotedWaitlist={} " +

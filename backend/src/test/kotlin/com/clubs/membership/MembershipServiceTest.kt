@@ -174,7 +174,6 @@ class MembershipServiceTest {
         assertEquals("pending_payment", pending.dto.status)
         verify(exactly = 1) { paymentService.createInvoice(userId, clubId) }
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
-        verify(exactly = 0) { clubRepository.incrementMemberCount(any()) }
     }
 
     @Test
@@ -363,7 +362,7 @@ class MembershipServiceTest {
     // ----- leaveClub: AC-1..AC-4 from docs/modules/club-leave.md -----
 
     @Test
-    fun `leaveClub free cascades active obligations and decrements member_count (AC-1)`() {
+    fun `leaveClub free cascades active obligations (AC-1)`() {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
@@ -384,11 +383,10 @@ class MembershipServiceTest {
         verify(exactly = 1) { eventResponseRepository.deleteByUserAndClubAndActiveEvents(userId, clubId) }
         verify(exactly = 1) { applicationRepository.deleteActiveByUserAndClub(userId, clubId) }
         verify(exactly = 1) { membershipRepository.cancel(activeMembership.id) }
-        verify(exactly = 1) { clubRepository.decrementMemberCountSafely(clubId, 1) }
     }
 
     @Test
-    fun `leaveClub paid cancels subscription without cascade and without member_count change (AC-2)`() {
+    fun `leaveClub paid cancels subscription without cascade (AC-2)`() {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
@@ -407,7 +405,6 @@ class MembershipServiceTest {
         verify(exactly = 1) { applicationRepository.deleteActiveByUserAndClub(userId, clubId) }
         verify(exactly = 0) { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(any(), any()) }
         verify(exactly = 0) { eventResponseRepository.deleteByUserAndClubAndActiveEvents(any(), any()) }
-        verify(exactly = 0) { clubRepository.decrementMemberCountSafely(any(), any()) }
     }
 
     @Test
@@ -416,8 +413,8 @@ class MembershipServiceTest {
         val userId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
         // Free-priced club (price 0) but the membership still holds a future paid period (club was
-        // switched paid→free). Must route to the soft cancel: no cascade, no penalty, member_count
-        // untouched — the user can still attend until the subscription expires.
+        // switched paid→free). Must route to the soft cancel: no cascade, no penalty — the user can
+        // still attend until the subscription expires.
         val club = freeClubRecord(clubId, ownerId = ownerId)
         val paidPeriodMembership = membership(userId, clubId, subscriptionExpiresAt = OffsetDateTime.now().plusDays(30))
 
@@ -429,7 +426,6 @@ class MembershipServiceTest {
         verify(exactly = 1) { membershipRepository.cancel(paidPeriodMembership.id) }
         verify(exactly = 0) { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(any(), any()) }
         verify(exactly = 0) { eventResponseRepository.deleteByUserAndClubAndActiveEvents(any(), any()) }
-        verify(exactly = 0) { clubRepository.decrementMemberCountSafely(any(), any()) }
         verify(exactly = 0) { reputationService.penalizeExit(any(), any(), any(), any()) }
     }
 
@@ -451,7 +447,6 @@ class MembershipServiceTest {
         verify(exactly = 0) { membershipRepository.cancel(any()) }
         verify(exactly = 0) { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(any(), any()) }
         verify(exactly = 0) { eventResponseRepository.deleteByUserAndClubAndActiveEvents(any(), any()) }
-        verify(exactly = 0) { clubRepository.decrementMemberCountSafely(any(), any()) }
     }
 
     @Test

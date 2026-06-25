@@ -12,3 +12,6 @@ mockups/
 
 # macOS Finder metadata
 .DS_Store
+
+# Serena MCP (semantic code navigation) — personal dev tooling, not shared
+.serena/

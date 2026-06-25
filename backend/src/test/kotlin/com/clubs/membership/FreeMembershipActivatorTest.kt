@@ -1,6 +1,5 @@
 package com.clubs.membership
 
-import com.clubs.club.ClubRepository
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
 import io.mockk.every
@@ -16,14 +15,12 @@ import kotlin.test.assertEquals
 class FreeMembershipActivatorTest {
 
     private lateinit var membershipRepository: MembershipRepository
-    private lateinit var clubRepository: ClubRepository
     private lateinit var activator: FreeMembershipActivator
 
     @BeforeEach
     fun setUp() {
         membershipRepository = mockk(relaxed = true)
-        clubRepository = mockk(relaxed = true)
-        activator = FreeMembershipActivator(membershipRepository, clubRepository)
+        activator = FreeMembershipActivator(membershipRepository)
     }
 
     private fun makeMembership(
@@ -47,7 +44,7 @@ class FreeMembershipActivatorTest {
     }
 
     @Test
-    fun `activate creates fresh membership and bumps member_count when no row exists`() {
+    fun `activate creates fresh membership when no row exists`() {
         val userId = UUID.randomUUID()
         val clubId = UUID.randomUUID()
         val fresh = makeMembership(UUID.randomUUID(), userId, clubId, MembershipStatus.active)
@@ -59,15 +56,11 @@ class FreeMembershipActivatorTest {
 
         assertEquals(fresh, result)
         verify(exactly = 1) { membershipRepository.create(userId, clubId) }
-        verify(exactly = 1) { clubRepository.incrementMemberCount(clubId) }
         verify(exactly = 0) { membershipRepository.reactivateFree(any()) }
     }
 
     @Test
-    fun `activate reactivates cancelled membership and re-bumps member_count`() {
-        // After PR-1 (club-leave) the free-leave flow decrements member_count.
-        // Rejoin therefore must increment again to keep member_count in lock-step
-        // with the count of active rows.
+    fun `activate reactivates cancelled membership`() {
         val userId = UUID.randomUUID()
         val clubId = UUID.randomUUID()
         val membershipId = UUID.randomUUID()
@@ -82,11 +75,10 @@ class FreeMembershipActivatorTest {
         assertEquals(reactivated, result)
         verify(exactly = 1) { membershipRepository.reactivateFree(membershipId) }
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
-        verify(exactly = 1) { clubRepository.incrementMemberCount(clubId) }
     }
 
     @Test
-    fun `activate reactivates expired membership and re-bumps member_count`() {
+    fun `activate reactivates expired membership`() {
         val userId = UUID.randomUUID()
         val clubId = UUID.randomUUID()
         val membershipId = UUID.randomUUID()
@@ -101,7 +93,6 @@ class FreeMembershipActivatorTest {
         assertEquals(reactivated, result)
         verify(exactly = 1) { membershipRepository.reactivateFree(membershipId) }
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
-        verify(exactly = 1) { clubRepository.incrementMemberCount(clubId) }
     }
 
     @Test
@@ -118,7 +109,6 @@ class FreeMembershipActivatorTest {
 
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
         verify(exactly = 0) { membershipRepository.reactivateFree(any()) }
-        verify(exactly = 0) { clubRepository.incrementMemberCount(any()) }
     }
 
     @Test
