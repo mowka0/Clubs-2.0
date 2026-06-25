@@ -157,7 +157,6 @@ class PaymentServiceTest {
         )
 
         verify(exactly = 1) { membershipRepository.activateSubscription(userId, clubId, any()) }
-        verify(exactly = 1) { clubRepository.incrementMemberCount(clubId) }
         verify(exactly = 0) { membershipRepository.renewSubscription(any(), any()) }
 
         val tx = savedTx.captured
@@ -187,7 +186,6 @@ class PaymentServiceTest {
 
         service.handleSuccessfulPayment(telegramId, chargeId, "club_subscription:$clubId:$userId", 500)
 
-        verify(exactly = 0) { clubRepository.incrementMemberCount(any()) }
         verify(exactly = 0) { membershipRepository.activateSubscription(any(), any(), any()) }
         assertEquals(currentExpiry.plusDays(30), newExpiry.captured)
         assertEquals(TransactionType.renewal, savedTx.captured.type)
@@ -210,7 +208,6 @@ class PaymentServiceTest {
         service.handleSuccessfulPayment(telegramId, chargeId, "club_subscription:$clubId:$userId", 500)
         val after = OffsetDateTime.now()
 
-        verify(exactly = 0) { clubRepository.incrementMemberCount(any()) }
         val expected = newExpiry.captured
         assertTrue(expected.isAfter(before.plusDays(30).minusSeconds(1)))
         assertTrue(expected.isBefore(after.plusDays(30).plusSeconds(1)))
@@ -225,7 +222,6 @@ class PaymentServiceTest {
 
         verify(exactly = 0) { membershipRepository.activateSubscription(any(), any(), any()) }
         verify(exactly = 0) { membershipRepository.renewSubscription(any(), any()) }
-        verify(exactly = 0) { clubRepository.incrementMemberCount(any()) }
         verify(exactly = 0) { transactionRepository.save(any()) }
     }
 

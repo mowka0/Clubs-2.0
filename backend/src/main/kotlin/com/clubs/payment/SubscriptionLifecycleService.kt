@@ -1,6 +1,5 @@
 package com.clubs.payment
 
-import com.clubs.club.ClubRepository
 import com.clubs.membership.ExpiringSubscriptionNotification
 import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
@@ -10,8 +9,7 @@ import java.time.OffsetDateTime
 
 @Service
 class SubscriptionLifecycleService(
-    private val membershipRepository: MembershipRepository,
-    private val clubRepository: ClubRepository
+    private val membershipRepository: MembershipRepository
 ) {
 
     private val log = LoggerFactory.getLogger(SubscriptionLifecycleService::class.java)
@@ -25,11 +23,12 @@ class SubscriptionLifecycleService(
         membershipRepository.findActiveExpired(now)
 
     /**
-     * Runs the three DB-mutating lifecycle steps in a single short transaction.
-     * External IO (notifications) must be performed outside this method.
+     * Runs the two DB-mutating lifecycle steps in a single short transaction:
+     * active→grace_period, then grace_period→expired. External IO (notifications)
+     * must be performed outside this method.
      *
-     * SELECT-then-UPDATE in step 3 is safe because the scheduler is the single writer
-     * of grace_period→expired transitions.
+     * The grace_period→expired UPDATE is safe to run unconditionally because the
+     * scheduler is the single writer of that transition.
      */
     @Transactional
     fun processExpiry(now: OffsetDateTime) {
@@ -38,13 +37,7 @@ class SubscriptionLifecycleService(
         val moved = membershipRepository.moveActiveToGracePeriod(now)
         if (moved > 0) log.info("Moved {} memberships to grace_period", moved)
 
-        val perClubCounts = membershipRepository.findGracePeriodExpiredGroupedByClub(gracePeriodEnd)
-        if (perClubCounts.isNotEmpty()) {
-            val fullyExpired = membershipRepository.moveGracePeriodToExpired(gracePeriodEnd)
-            perClubCounts.forEach { entry ->
-                clubRepository.decrementMemberCountSafely(entry.clubId, entry.count)
-            }
-            log.info("Expired {} memberships after grace period across {} clubs", fullyExpired, perClubCounts.size)
-        }
+        val fullyExpired = membershipRepository.moveGracePeriodToExpired(gracePeriodEnd)
+        if (fullyExpired > 0) log.info("Expired {} memberships after grace period", fullyExpired)
     }
 }

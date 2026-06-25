@@ -32,11 +32,10 @@ class JooqClubRepository(
     /**
      * Live member count for display = distinct `memberships` rows that are `active` or `grace_period`
      * (a grace member still has access, so they occupy a slot), INCLUDING the organizer's membership.
-     * This is computed straight from `memberships` rather than read from the denormalized
-     * `clubs.member_count` column, which a scattered, incomplete set of increment/decrement call sites
-     * let drift out of sync (e.g. a leave→rejoin→leave double-decremented it to 0 for a 2-person club).
-     * "Actual value from the DB" can never drift. The column is now vestigial — its removal is tracked
-     * in docs/backlog/member-count-column-cleanup.md.
+     * This is computed straight from `memberships`. The old denormalized `clubs.member_count`
+     * column was dropped (V33) after a scattered, incomplete set of increment/decrement call sites
+     * let it drift out of sync (e.g. a leave→rejoin→leave double-decremented it to 0 for a 2-person
+     * club). "Actual value from the DB" can never drift.
      */
     private fun aliveMembers(): org.jooq.Condition =
         MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period)
@@ -79,7 +78,6 @@ class JooqClubRepository(
             .set(CLUBS.RULES, request.rules)
             .set(CLUBS.APPLICATION_QUESTION, request.applicationQuestion)
             .set(CLUBS.INVITE_LINK, inviteCode)
-            .set(CLUBS.MEMBER_COUNT, 0)
             .set(CLUBS.IS_ACTIVE, true)
             .returning()
             .fetchOne()!!
@@ -301,21 +299,6 @@ class JooqClubRepository(
 
         step.where(CLUBS.ID.eq(id)).execute()
         return findById(id)
-    }
-
-    override fun incrementMemberCount(clubId: UUID) {
-        dsl.update(CLUBS)
-            .set(CLUBS.MEMBER_COUNT, CLUBS.MEMBER_COUNT.plus(1))
-            .where(CLUBS.ID.eq(clubId))
-            .execute()
-    }
-
-    override fun decrementMemberCountSafely(clubId: UUID, delta: Int) {
-        if (delta <= 0) return
-        dsl.update(CLUBS)
-            .set(CLUBS.MEMBER_COUNT, DSL.greatest(CLUBS.MEMBER_COUNT.minus(delta), DSL.`val`(0)))
-            .where(CLUBS.ID.eq(clubId))
-            .execute()
     }
 
     override fun linkTelegramGroup(clubId: UUID, telegramGroupId: Long) {

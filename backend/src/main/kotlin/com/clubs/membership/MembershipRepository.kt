@@ -31,7 +31,6 @@ interface MembershipRepository {
     fun findExpiringWithin(now: OffsetDateTime, threshold: OffsetDateTime): List<ExpiringSubscriptionNotification>
     fun findActiveExpired(now: OffsetDateTime): List<ExpiringSubscriptionNotification>
     fun moveActiveToGracePeriod(now: OffsetDateTime): Int
-    fun findGracePeriodExpiredGroupedByClub(gracePeriodEnd: OffsetDateTime): List<ClubMembershipExpiredCount>
     fun moveGracePeriodToExpired(gracePeriodEnd: OffsetDateTime): Int
 
     // Bot/notification

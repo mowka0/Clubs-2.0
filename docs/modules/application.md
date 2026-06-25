@@ -213,10 +213,9 @@ Response 200: `ApplicationDto[]`
 5. `count(active memberships) < club.member_limit` → иначе `400 Club is full`
 6. **Платный клуб** (`subscription_price > 0`):
    - вызвать `paymentService.createInvoice(application.userId, club.id)` — Stars-инвойс уйдёт в DM
-   - **не создавать** membership и **не инкрементировать** `member_count` — это произойдёт в `handleSuccessfulPayment` после оплаты
+   - **не создавать** membership — это произойдёт в `handleSuccessfulPayment` после оплаты
 7. **Бесплатный клуб** (`subscription_price = 0` или `null`):
-   - `membershipRepository.create(userId, clubId)` — membership active
-   - `clubs.member_count += 1`
+   - `membershipRepository.create(userId, clubId)` — membership active (этого достаточно: счётчик участников считается на лету из `memberships`, колонки `member_count` больше нет — дропнута в V33)
 8. `applications.status = approved`, `resolved_at = now()`
 9. Логируется INFO
 
@@ -303,7 +302,7 @@ GIVEN заявка pending, клуб subscription_price = 0
 WHEN organizer POST /api/applications/{id}/approve
 THEN 200 OK, application.status = approved
 AND memberships: новая запись status=active, role=member
-AND clubs.member_count += 1
+AND live-счёт участников клуба растёт на 1 (новая active-membership; колонка не пишется)
 ```
 
 **AC-8: approve платного клуба**
@@ -313,7 +312,7 @@ WHEN organizer POST /api/applications/{id}/approve
 THEN 200 OK, application.status = approved
 AND paymentService.createInvoice вызван с (application.userId, clubId)
 AND memberships: запись НЕ создана
-AND clubs.member_count НЕ изменён
+AND live-счёт участников клуба НЕ меняется (нет новой membership до оплаты)
 ```
 
 **AC-9: approve неpending-заявки**
@@ -453,7 +452,7 @@ THEN ни UPDATE, ни decreaseActivityRatingSafely не вызваны
 
 ## Интеграции
 
-- **`club` модуль** — `ClubRepository.findById` (для access_type / owner_id / member_limit / subscription_price), `incrementMemberCount` (free approve), `decreaseActivityRatingSafely` (scheduler штраф)
+- **`club` модуль** — `ClubRepository.findById` (для access_type / owner_id / member_limit / subscription_price), `decreaseActivityRatingSafely` (scheduler штраф). Счётчик участников при free approve не пишется (колонка дропнута в V33; значение считается на лету из `memberships`)
 - **`membership` модуль** — `findActiveByUserAndClub` (проверка дубля), `countActiveByClubId` (проверка лимита), `create` (free approve)
 - **`payment` модуль** — `PaymentService.createInvoice` при approve платного клуба. Membership создаётся в `PaymentService.handleSuccessfulPayment`, не в `ApplicationService`.
 - **`telegram-bot` модуль** — DM **организатору** на submit реализован (`NotificationService.sendApplicationCreatedDM`, см. `docs/modules/telegram-bot.md` § «sendApplicationCreatedDM» и `docs/modules/applications-inbox.md`). DM **заявителю** об approve/reject **остаётся не реализованным** (GAP-007 в `docs/backlog/telegram-bot-prd-gaps.md` — частично закрыт).

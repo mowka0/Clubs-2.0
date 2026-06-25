@@ -1,6 +1,7 @@
-# Cleanup: удалить вестигиальную колонку `clubs.member_count`
+# Cleanup: удалить вестигиальную колонку `clubs.member_count` — ✅ DONE (V33)
 
 **Создано:** 2026-06-22 (после bugfix `bugfix/member-count`)
+**Закрыто:** 2026-06-25 (bugfix `bugfix/member-count-column-cleanup`). Колонка дропнута миграцией `V33__drop_clubs_member_count.sql`, вся inc/dec-машинерия удалена, тесты зелёные. Файл оставлен как запись.
 
 ## Контекст
 `clubs.member_count` была денормализованным счётчиком участников, который **дрейфовал** (правился в
@@ -10,13 +11,15 @@
 `JooqClubRepository` (display + сортировка дискавери + теги «Популярный»/«Свободные места»). Колонка
 больше **нигде не читается**.
 
-## Что доделать (отдельным PR)
-1. Удалить вызовы `ClubRepository.incrementMemberCount` / `decrementMemberCountSafely` и сами методы
-   (call-sites: `FreeMembershipActivator`, `PaymentService`, `MembershipService.leaveFreeClub`,
-   `SubscriptionLifecycleService`) — они поддерживают write-only колонку.
-2. Дропнуть колонку `clubs.member_count` миграцией + `generateJooq`.
-3. Убрать `member_count` из `JooqClubRepository.create` и из тестов, где он сидится.
+## Что было сделано (✅ выполнено)
+1. ✅ Удалены вызовы `ClubRepository.incrementMemberCount` / `decrementMemberCountSafely` и сами методы
+   (call-sites: `FreeMembershipActivator.activate`, `PaymentService.handleSuccessfulPayment`,
+   `MembershipService.leaveFreeClub`, `SubscriptionLifecycleService.processExpiry`). Заодно убрана
+   вестигиальная цепочка `findGracePeriodExpiredGroupedByClub` / `ClubMembershipExpiredCount`, которая
+   питала только scheduler-декремент. `processExpiry` теперь делает только `moveActiveToGracePeriod` +
+   `moveGracePeriodToExpired`.
+2. ✅ Колонка `clubs.member_count` дропнута миграцией `V33__drop_clubs_member_count.sql` + `generateJooq`.
+3. ✅ Убран `member_count` из `JooqClubRepository.create` и из тестов, где он сидился.
 
-## Готово к работе (L3 смержён 2026-06-23, PR #81)
-L3 с миграцией `V32` уже в master, поэтому коллизии номера больше нет: **дроп-миграция = `V33`**. Можно
-делать в любой момент следующей сессии (max существующих миграций теперь V32).
+Счётчик участников полностью derived из `memberships` (см. `JooqClubRepository.countLiveMembers` /
+`countLiveMembersByClub`), драйф невозможен по построению. Миграция `V33` (max был `V32` после L3 PR #81).

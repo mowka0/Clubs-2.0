@@ -1,6 +1,5 @@
 package com.clubs.membership
 
-import com.clubs.club.ClubRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.util.UUID
@@ -21,19 +20,15 @@ import java.util.UUID
  *
  * The contract is: caller guarantees the club is free and has been validated
  * (member-limit, ownership, etc.). The helper picks the correct branch:
- *  - no row at all → INSERT + increment `clubs.member_count`.
+ *  - no row at all → INSERT a fresh membership.
  *  - row exists with status active / grace_period → caller's bug; throw IllegalState
  *    (caller must check this BEFORE invoking — different call sites surface
  *    different HTTP errors here, e.g. 409 vs 400).
- *  - row exists with status cancelled / expired → reactivate + increment
- *    `clubs.member_count`. Increment mirrors the decrement performed by
- *    `MembershipService.leaveClub` for free clubs — keeping `member_count`
- *    in lock-step with the count of active rows for the club.
+ *  - row exists with status cancelled / expired → reactivate.
  */
 @Component
 class FreeMembershipActivator(
-    private val membershipRepository: MembershipRepository,
-    private val clubRepository: ClubRepository
+    private val membershipRepository: MembershipRepository
 ) {
 
     private val log = LoggerFactory.getLogger(FreeMembershipActivator::class.java)
@@ -48,7 +43,6 @@ class FreeMembershipActivator(
         return when {
             existing == null -> {
                 val created = membershipRepository.create(userId, clubId)
-                clubRepository.incrementMemberCount(clubId)
                 log.info("Free membership created: userId={} clubId={}", userId, clubId)
                 created
             }
@@ -58,7 +52,6 @@ class FreeMembershipActivator(
             }
             else -> {
                 val reactivated = membershipRepository.reactivateFree(existing.id)
-                clubRepository.incrementMemberCount(clubId)
                 log.info(
                     "Free membership reactivated: id={} userId={} clubId={} previousStatus={}",
                     existing.id, userId, clubId, existing.status.literal

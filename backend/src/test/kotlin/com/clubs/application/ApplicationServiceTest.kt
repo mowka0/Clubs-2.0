@@ -287,7 +287,6 @@ class ApplicationServiceTest {
         verify(exactly = 1) { paymentService.createInvoice(userId, clubId) }
         verify(exactly = 0) { freeMembershipActivator.activate(any(), any()) }
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
-        verify(exactly = 0) { clubRepository.incrementMemberCount(any()) }
     }
 
     @Test
@@ -793,7 +792,6 @@ class ApplicationServiceTest {
         }
         verify(exactly = 0) { freeMembershipActivator.activate(any(), any()) }
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
-        verify(exactly = 0) { clubRepository.incrementMemberCount(any()) }
     }
 
     @Test
@@ -865,7 +863,6 @@ class ApplicationServiceTest {
         assertEquals("Already a member", ex.message)
         verify(exactly = 0) { freeMembershipActivator.activate(any(), any()) }
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
-        verify(exactly = 0) { clubRepository.incrementMemberCount(any()) }
     }
 
     @Test

@@ -263,8 +263,7 @@ class JooqMembershipRepository(
      * row when one already exists — reactivation is the only path. Resets
      * lifecycle fields so the join is indistinguishable from a brand-new one:
      * status=active, joined_at=now, subscription_expires_at=null (free club —
-     * no Stars billing), updated_at=now. `member_count` bookkeeping stays
-     * with the caller; see ApplicationService / MembershipService.
+     * no Stars billing), updated_at=now.
      */
     override fun reactivateFree(membershipId: UUID): Membership {
         val now = OffsetDateTime.now()
@@ -372,21 +371,6 @@ class JooqMembershipRepository(
                     .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.lessOrEqual(now))
             )
             .execute()
-
-    override fun findGracePeriodExpiredGroupedByClub(gracePeriodEnd: OffsetDateTime): List<ClubMembershipExpiredCount> =
-        dsl.select(MEMBERSHIPS.CLUB_ID, DSL.count())
-            .from(MEMBERSHIPS)
-            .where(
-                MEMBERSHIPS.STATUS.eq(MembershipStatus.grace_period)
-                    .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.lessOrEqual(gracePeriodEnd))
-            )
-            .groupBy(MEMBERSHIPS.CLUB_ID)
-            .fetch { record ->
-                ClubMembershipExpiredCount(
-                    clubId = record.value1()!!,
-                    count = record.value2()
-                )
-            }
 
     override fun moveGracePeriodToExpired(gracePeriodEnd: OffsetDateTime): Int {
         val now = OffsetDateTime.now()

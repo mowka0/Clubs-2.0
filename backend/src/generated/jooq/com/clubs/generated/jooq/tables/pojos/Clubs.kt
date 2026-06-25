@@ -32,7 +32,6 @@ data class Clubs(
     var applicationQuestion: String? = null,
     var inviteLink: String? = null,
     var telegramGroupId: Long? = null,
-    var memberCount: Int? = null,
     @Suppress("INAPPLICABLE_JVM_NAME")
     @set:JvmName("setIsActive")
     var isActive: Boolean? = null,
@@ -115,12 +114,6 @@ data class Clubs(
         }
         else if (this.telegramGroupId != o.telegramGroupId)
             return false
-        if (this.memberCount == null) {
-            if (o.memberCount != null)
-                return false
-        }
-        else if (this.memberCount != o.memberCount)
-            return false
         if (this.isActive == null) {
             if (o.isActive != null)
                 return false
@@ -160,7 +153,6 @@ data class Clubs(
         result = prime * result + (if (this.applicationQuestion == null) 0 else this.applicationQuestion.hashCode())
         result = prime * result + (if (this.inviteLink == null) 0 else this.inviteLink.hashCode())
         result = prime * result + (if (this.telegramGroupId == null) 0 else this.telegramGroupId.hashCode())
-        result = prime * result + (if (this.memberCount == null) 0 else this.memberCount.hashCode())
         result = prime * result + (if (this.isActive == null) 0 else this.isActive.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
@@ -185,7 +177,6 @@ data class Clubs(
         sb.append(", ").append(applicationQuestion)
         sb.append(", ").append(inviteLink)
         sb.append(", ").append(telegramGroupId)
-        sb.append(", ").append(memberCount)
         sb.append(", ").append(isActive)
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)

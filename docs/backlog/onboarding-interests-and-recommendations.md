@@ -41,7 +41,7 @@
 
 ### Часть 3: recommendations по интересам
 - Backend: `GET /api/users/me/recommended-clubs` (уже спроектирован в `myclubs-recommended-clubs.md` V2)
-- Сортировка: по overlap между `user_interests` и `club.tags`, потом по member_count
+- Сортировка: по overlap между `user_interests` и `club.tags`, потом по живому счёту участников (`memberCount`, считается из `memberships`)
 - Используется:
   - В EventsPage empty state — «Эти клубы по твоим интересам уже планируют события»
   - В MyClubsPage (см. `myclubs-recommended-clubs.md` — мерж V1 geo-match → V2 interests)
@@ -58,7 +58,7 @@
 - Flyway миграция: `user_interests` / `interests text[]`
 - Каталог категорий: `categories` таблица или enum (решить на спеке)
 - `UserController` / `ProfileController`: `PATCH /api/users/me { interests: [...] }`
-- `GET /api/users/me/recommended-clubs?context=events_feed` (опц. параметр уточняет сортировку — больше weight на upcoming events для EventsPage, на member_count для MyClubsPage)
+- `GET /api/users/me/recommended-clubs?context=events_feed` (опц. параметр уточняет сортировку — больше weight на upcoming events для EventsPage, на живой счёт участников для MyClubsPage)
 - Тесты: ownership, валидация набора категорий, ratio recommendations при разных user-профилях
 
 ### Frontend
@@ -71,7 +71,7 @@
 ## Acceptance Criteria (укрупнённо)
 
 - **AC-1:** User с `interests == null` при логине попадает на `/onboarding`, выбирает ≥3 категорий, попадает на главную
-- **AC-2:** User может «Пропустить» онбординг — попадает на главную, при этом recommendations работают в degraded-режиме (по geo / member_count)
+- **AC-2:** User может «Пропустить» онбординг — попадает на главную, при этом recommendations работают в degraded-режиме (по geo / живому счёту участников)
 - **AC-3:** В Профиле есть редактирование интересов
 - **AC-4:** EventsPage empty state с recommendations: 3-5 клубов с upcoming events, отсортированных по interests-overlap
 - **AC-5:** MyClubs recommendations используют те же интересы (consistent recommendations across pages)

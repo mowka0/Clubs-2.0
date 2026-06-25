@@ -22,7 +22,9 @@ class ClubMapper {
         rules = record.rules,
         applicationQuestion = record.applicationQuestion,
         inviteLink = record.inviteLink,
-        memberCount = record.memberCount ?: 0,
+        // Live count is filled in by the repository read paths (findById/findByInviteCode/findByIds)
+        // via copy(memberCount = countLiveMembers(...)). A freshly created club has 0 live members.
+        memberCount = 0,
         isActive = record.isActive ?: true,
         telegramGroupId = record.telegramGroupId,
         createdAt = record.createdAt!!,

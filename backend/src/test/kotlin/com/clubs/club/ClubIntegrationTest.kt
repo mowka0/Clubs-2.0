@@ -337,11 +337,11 @@ class ClubIntegrationTest {
     private fun insertClub(id: UUID, name: String, memberCount: Int) {
         dsl.execute(
             "INSERT INTO clubs (id, owner_id, name, description, category, access_type, city, " +
-                "member_limit, member_count) VALUES ('$id', '$testUserId', '$name', 'desc', " +
-                "'sport', 'open', 'Moscow', 30, $memberCount)"
+                "member_limit) VALUES ('$id', '$testUserId', '$name', 'desc', " +
+                "'sport', 'open', 'Moscow', 30)"
         )
-        // Seed `memberCount` real member rows: the discovery sort + «Популярный» tag now read the live
-        // count from `memberships` (active/grace), not the drift-prone `clubs.member_count` column.
+        // Seed `memberCount` real member rows: the discovery sort + «Популярный» tag read the live
+        // count from `memberships` (active/grace); the old `clubs.member_count` column was dropped (V33).
         repeat(memberCount) { insertMembership(newMember(), id, "active", "member") }
     }
 
@@ -373,7 +373,7 @@ class ClubIntegrationTest {
             get("/api/clubs/$clubId").header("Authorization", "Bearer $testToken")
         )
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.memberCount").value(3)) // owner + active + grace; cancelled excluded; column 0 ignored
+            .andExpect(jsonPath("$.memberCount").value(3)) // owner + active + grace; cancelled excluded (live count from memberships)
     }
 
     /** A recent (yesterday), non-cancelled event — counted by the discovery activity signal. */

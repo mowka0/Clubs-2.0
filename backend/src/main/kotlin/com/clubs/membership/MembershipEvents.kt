@@ -8,11 +8,6 @@ data class ExpiringSubscriptionNotification(
     val clubName: String
 )
 
-data class ClubMembershipExpiredCount(
-    val clubId: UUID,
-    val count: Int
-)
-
 /**
  * Minimal projection of a membership row — just enough for payment/scheduler
  * flows to decide between "new" and "renewal" without pulling a full jOOQ Record.

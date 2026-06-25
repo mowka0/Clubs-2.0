@@ -179,11 +179,6 @@ open class Clubs(
     val TELEGRAM_GROUP_ID: TableField<ClubsRecord, Long?> = createField(DSL.name("telegram_group_id"), SQLDataType.BIGINT, this, "")
 
     /**
-     * The column <code>public.clubs.member_count</code>.
-     */
-    val MEMBER_COUNT: TableField<ClubsRecord, Int?> = createField(DSL.name("member_count"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("0"), SQLDataType.INTEGER)), this, "")
-
-    /**
      * The column <code>public.clubs.is_active</code>.
      */
     val IS_ACTIVE: TableField<ClubsRecord, Boolean?> = createField(DSL.name("is_active"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("true"), SQLDataType.BOOLEAN)), this, "")

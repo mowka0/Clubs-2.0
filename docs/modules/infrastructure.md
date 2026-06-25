@@ -153,7 +153,7 @@ backend/src/main/resources/db/migration/
 | Таблица | Описание |
 |---------|----------|
 | `users` | id (uuid), telegram_id (bigint unique), username, first_name, last_name, avatar_url, created_at, updated_at |
-| `clubs` | id (uuid), organizer_id (uuid FK), name, description, category, access_type (enum: open/closed/private), member_limit, member_count, created_at |
+| `clubs` | id (uuid), organizer_id (uuid FK), name, description, category, access_type (enum: open/closed/private), member_limit, created_at — счётчик участников НЕ хранится (колонка `member_count` дропнута в V33; считается на лету из `memberships`) |
 | `memberships` | id (uuid), user_id, club_id, role (enum: member/organizer), status (enum: active/left/kicked), joined_at |
 | `applications` | id (uuid), user_id, club_id, status (enum: pending/approved/rejected), answer_text, created_at |
 | `events` | id (uuid), club_id, title, description, venue_address, datetime, stage, member_limit, confirmed_count, stage_2_triggered, created_at |

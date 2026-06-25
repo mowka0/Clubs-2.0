@@ -57,7 +57,7 @@ POST /api/clubs/{id}/join
 - Повторное вступление (уже active/grace_period) → 409 CONFLICT "Already a member"
 - Повторное нажатие «Вступить» в платный клуб, пока оплата не прошла → идемпотентно: `createInvoice` вызывается снова (Telegram сам управляет дубликатами invoice), ответ 202
 - Вступление без токена → 401
-- Expired/cancelled membership существует для **бесплатного** клуба → автоматическая реактивация через `FreeMembershipActivator` (status=active, joined_at=now, subscription_expires_at=null, updated_at=now; `member_count` НЕ инкрементится). Ответ 201 с MembershipDto, как для нового вступления. См. § «Free-club reactivate-or-create».
+- Expired/cancelled membership существует для **бесплатного** клуба → автоматическая реактивация через `FreeMembershipActivator` (status=active, joined_at=now, subscription_expires_at=null, updated_at=now). Ответ 201 с MembershipDto, как для нового вступления. Счётчик участников отдельно не пишется — он считается на лету из `memberships`, и реактивированная строка автоматически снова попадает в live-счёт. См. § «Free-club reactivate-or-create».
 - Expired/cancelled membership существует для **платного** клуба → ветка payment-инвойса; повторное вступление через оплату Stars инициирует новый webhook-cycle. (Поведение для платных клубов в reactivate-flow остаётся как было — см. GAP-7.)
 
 ## TASK-010b — Вступление по invite-коду (приватный клуб)
@@ -108,20 +108,17 @@ POST /api/invite/{code}/join
 
 ### Контракт `activate(userId, clubId)`
 
-| Состояние строки в `memberships` | Действие | `clubs.member_count` |
+| Состояние строки в `memberships` | Действие | Эффект на live-счёт участников |
 |---|---|---|
-| Нет строки | INSERT (`status=active`, `joined_at=now`, `subscription_expires_at=null`*) | `+= 1` |
-| `status ∈ {cancelled, expired}` | UPDATE: `status=active`, `joined_at=now`, `subscription_expires_at=null`, `updated_at=now` | `+= 1` (см. note ниже) |
+| Нет строки | INSERT (`status=active`, `joined_at=now`, `subscription_expires_at=null`*) | `+1` (новая active-строка попадает в счёт) |
+| `status ∈ {cancelled, expired}` | UPDATE: `status=active`, `joined_at=now`, `subscription_expires_at=null`, `updated_at=now` | `+1` (строка возвращается в счёт) |
 | `status ∈ {active, grace_period}` | `IllegalStateException` | — |
 
-> **Note (изменено в [club-leave](club-leave.md))**: До PR-1 «Club Leave» reactivate
-> НЕ инкрементил `member_count` — счётчик считался учтённым при первичном INSERT.
-> С введением `MembershipService.leaveClub` (free leave декрементит счётчик)
-> reactivate теперь обязан инкрементить — иначе при leave/rejoin цикле счётчик
-> уплывёт в минус. `decrementMemberCountSafely` гарантирует floor=0, поэтому
-> legacy `/cancel` → `/join` цикл (cancel НЕ декрементил) безопасен, но
-> `member_count` фактически сместится на +1 относительно state до PR. Это
-> сознательная цена за корректность нового /leave-цикла.
+> **Note**: Счётчик участников нигде не пишется — колонка `clubs.member_count`
+> дропнута в V33. Значение считается на лету из `memberships` (статусы active/grace,
+> включая организатора). Реактивация только меняет статус строки на `active`, и она
+> автоматически снова входит в live-счёт. Цикл leave/rejoin больше не может «уплыть»:
+> нет денормализованного счётчика, который мог бы рассинхронизироваться.
 
 (*) `subscription_expires_at = null` — бесплатное членство НЕ имеет подписки/срока
 (Stars-биллинга нет). Платный путь — отдельный (`PaymentService` → `activateSubscription`,
@@ -138,8 +135,9 @@ POST /api/invite/{code}/join
 ### Транзакционность
 
 Активатор НЕ имеет `@Transactional` — он вызывается из уже-`@Transactional`-методов
-Service-слоя. INSERT + `incrementMemberCount` (или UPDATE) выполняются в одной
-внешней транзакции; rollback при падении любой операции.
+Service-слоя. INSERT либо UPDATE membership-строки выполняется в одной
+внешней транзакции; rollback при падении операции. Отдельной записи счётчика нет —
+он считается на лету из `memberships`.
 
 ### Логи
 
@@ -169,7 +167,7 @@ Caller (JWT principal) = владелец membership. Отдельный userId 
 - При успехе:
   - `memberships.status = cancelled` (через `MEMBERSHIPS.STATUS`)
   - `subscription_expires_at` **не трогаем** — доступ сохраняется до этой даты
-  - `clubs.member_count` **не декрементируем** — пользователь формально остаётся участником до истечения периода
+  - Отдельной записи счётчика участников нет (колонка `member_count` дропнута в V33; значение считается на лету из `memberships`)
 - Операция оборачивается в одну транзакцию: atomic между чтением и update.
 
 ### MembershipDto
@@ -187,7 +185,7 @@ THEN 200 OK
 AND response.status = "cancelled"
 AND в БД memberships.status = cancelled
 AND subscription_expires_at не изменился
-AND member_count клуба не изменился
+AND отдельной записи счётчика участников нет (он считается на лету из `memberships`; cancelled-строка в live-счёт не входит)
 
 **AC-2: отмена в grace_period**
 GIVEN caller — member клуба X со status=grace_period
