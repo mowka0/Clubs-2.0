@@ -259,9 +259,11 @@
     rgba(11, 11, 14, 0.78) 100%
   );
 }
-.rd-club-card .rd-body { padding: 10px 14px 14px; }
+/* Flex column with a single uniform gap so the spacing between badge, name and city is identical —
+   and equal to the top padding, i.e. the same distance down from the cover (обои). */
+.rd-club-card .rd-body { padding: 5px 14px 14px; display: flex; flex-direction: column; gap: 5px; }
 .rd-club-card .rd-ttl { font-size: 14px; font-weight: 700; color: var(--text); }
-.rd-club-card .rd-meta { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.rd-club-card .rd-meta { font-size: 11px; color: var(--text-dim); }
 
 /* Discovery-card: price chip on the banner + segmented metric trio (возраст · участники · вовлечённость) */
 /* The chip sits on the darkened banner in BOTH themes → fixed light text (not var(--text), which is
@@ -273,7 +275,7 @@
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
 }
 .rd-club-card .rd-mrow {
-  display: flex; gap: 1px; margin-top: 12px;
+  display: flex; gap: 1px;
   background: var(--hairline); border-radius: 13px; overflow: hidden;
 }
 /* Sunken cell. Dark navy in the dark theme (punchy panels, white text); a light grey in the light
@@ -289,7 +291,7 @@
    text — theme-independent like the price chip (the gold reads in both themes). Ported from the locked
    mockup final.html. Hidden unless the backend feature flag is on AND the club is badged. */
 .rd-club-card .rd-rankpill {
-  display: inline-flex; align-items: center; gap: 4px; margin-top: 6px;
+  display: inline-flex; align-items: center; gap: 4px;
   font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
   background: linear-gradient(135deg, #FFD89B 0%, #E9A23C 100%); color: #2A1A04;
 }
