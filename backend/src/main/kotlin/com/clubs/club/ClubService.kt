@@ -106,6 +106,13 @@ class ClubService(
     fun updateClub(id: UUID, request: UpdateClubRequest, userId: UUID): ClubDetailDto {
         val club = clubRepository.findById(id) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club owner can update it")
+
+        // Turning a FREE club into a PAID one consumes plan capacity — same paywall as creation,
+        // otherwise editing would bypass the ceiling (payment-v2.md §3.6).
+        if (request.subscriptionPrice != null && request.subscriptionPrice > 0 && club.subscriptionPrice == 0) {
+            subscriptionService.requirePaidClubCapacity(userId, clubRepository.countPaidByOwnerId(userId))
+        }
+
         val updated = clubRepository.update(id, request) ?: throw NotFoundException("Club not found after update")
         log.info("Club updated: id={} userId={}", id, userId)
         return mapper.toDetailDto(updated)

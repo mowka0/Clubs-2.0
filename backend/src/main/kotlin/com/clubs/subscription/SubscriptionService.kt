@@ -5,6 +5,7 @@ import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.PaymentRequiredException
 import com.clubs.common.exception.ValidationException
+import com.clubs.club.ClubRepository
 import com.clubs.generated.jooq.enums.SubscriptionPayerRole
 import com.clubs.generated.jooq.enums.SubscriptionPlan
 import com.clubs.generated.jooq.enums.SubscriptionStatus
@@ -22,6 +23,7 @@ class SubscriptionService(
     private val repository: SubscriptionRepository,
     private val paymentProvider: PaymentProvider,
     private val mapper: SubscriptionMapper,
+    private val clubRepository: ClubRepository,
     @Value("\${features.member-pays-enabled:false}") private val memberPaysEnabled: Boolean,
 ) {
 
@@ -80,6 +82,15 @@ class SubscriptionService(
         // Organizer plan is platform-wide: an existing live one is a plan-swap, not a new row
         // (the partial-unique index forbids two). Proration is deferred (payment-v2.md §3.5).
         if (role == SubscriptionPayerRole.ORGANIZER) {
+            // Block a downgrade that would leave the organizer over the target plan's capacity
+            // (payment-v2.md §4.3, decision A). They must free/delete clubs first.
+            val paidClubs = clubRepository.countPaidByOwnerId(userId)
+            if (SubscriptionPlanPolicy.maxPaidClubs(plan) < paidClubs) {
+                throw ConflictException(
+                    "На этом тарифе помещается меньше клубов, чем у вас сейчас платных ($paidClubs). " +
+                        "Сделайте лишние клубы бесплатными или удалите их, затем меняйте тариф.",
+                )
+            }
             val existing = repository.findActiveOrganizerSubscription(userId)
             if (existing != null) {
                 repository.updatePlan(existing.id, plan)
@@ -108,6 +119,16 @@ class SubscriptionService(
     fun cancel(userId: UUID): SubscriptionStatusDto {
         val subscription = repository.findActiveOrganizerSubscription(userId)
             ?: throw NotFoundException("No active subscription to cancel")
+        // Cancelling reverts to FREE at period end. Block while over FREE capacity so the organizer
+        // can never end up running more paid clubs than their plan allows (payment-v2.md §4.3, decision A).
+        val paidClubs = clubRepository.countPaidByOwnerId(userId)
+        val freeCapacity = SubscriptionPlanPolicy.maxPaidClubs(SubscriptionPlan.FREE)
+        if (paidClubs > freeCapacity) {
+            throw ConflictException(
+                "Сейчас у вас $paidClubs платных клубов, а на бесплатном плане можно $freeCapacity. " +
+                    "Сделайте лишние клубы бесплатными или удалите их, затем отменяйте подписку.",
+            )
+        }
         paymentProvider.cancelSubscription(subscription.providerToken)
         val rows = repository.transitionStatus(
             subscription.id,

@@ -1,6 +1,7 @@
 import { FC } from 'react';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useMyClubsQuery } from '../../queries/clubs';
 import {
   useCancelSubscriptionMutation,
   useSubscribeMutation,
@@ -18,11 +19,21 @@ export const SubscriptionCard: FC = () => {
   const haptic = useHaptic();
   const statusQuery = useSubscriptionStatusQuery();
   const plansQuery = useSubscriptionPlansQuery();
+  const myClubsQuery = useMyClubsQuery();
   const subscribeMutation = useSubscribeMutation();
   const cancelMutation = useCancelSubscriptionMutation();
 
   const status = statusQuery.data;
-  if (!status) return null;
+  // Organizer-only surface: shown when the user owns at least one club.
+  const isOrganizer = (myClubsQuery.data ?? []).some((m) => m.role === 'organizer');
+  if (!status || !isOrganizer) return null;
+
+  const actionError =
+    cancelMutation.error instanceof Error
+      ? cancelMutation.error.message
+      : subscribeMutation.error instanceof Error
+        ? subscribeMutation.error.message
+        : null;
 
   const plans = [...(plansQuery.data ?? [])].sort((a, b) => planRank(a.plan) - planRank(b.plan));
   const currentRank = planRank(status.plan);
@@ -78,6 +89,10 @@ export const SubscriptionCard: FC = () => {
         >
           {cancelMutation.isPending ? <Spinner size="s" /> : 'Отменить подписку'}
         </button>
+      )}
+
+      {actionError && (
+        <div className="rd-error" style={{ textAlign: 'left', marginTop: 8 }}>{actionError}</div>
       )}
     </>
   );

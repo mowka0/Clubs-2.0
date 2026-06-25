@@ -1,5 +1,7 @@
 package com.clubs.subscription
 
+import com.clubs.club.ClubRepository
+import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.PaymentRequiredException
@@ -24,10 +26,11 @@ class SubscriptionServiceTest {
     private val repository = mockk<SubscriptionRepository>(relaxed = true)
     private val provider = mockk<PaymentProvider>(relaxed = true)
     private val mapper = SubscriptionMapper()
+    private val clubRepository = mockk<ClubRepository>(relaxed = true)
     private val userId: UUID = UUID.randomUUID()
 
     private fun service(memberPaysEnabled: Boolean = false) =
-        SubscriptionService(repository, provider, mapper, memberPaysEnabled)
+        SubscriptionService(repository, provider, mapper, clubRepository, memberPaysEnabled)
 
     private fun sub(
         plan: SubscriptionPlan,
@@ -52,6 +55,7 @@ class SubscriptionServiceTest {
         every { repository.currentPriceKopecks(SubscriptionPlan.FREE) } returns 0
         every { repository.currentPriceKopecks(SubscriptionPlan.TRIO) } returns 20000
         every { repository.currentPriceKopecks(SubscriptionPlan.UNLIMITED) } returns 40000
+        every { clubRepository.countPaidByOwnerId(any()) } returns 0
     }
 
     @Test
@@ -110,6 +114,29 @@ class SubscriptionServiceTest {
                 SubscriptionStatus.CANCELLED_PENDING_END,
             )
         }
+    }
+
+    @Test
+    fun `cancel is blocked while over FREE capacity`() {
+        val existing = sub(SubscriptionPlan.TRIO, SubscriptionStatus.ACTIVE)
+        every { repository.findActiveOrganizerSubscription(userId) } returns existing
+        every { clubRepository.countPaidByOwnerId(userId) } returns 3 // FREE allows 1
+
+        assertThrows<ConflictException> { service().cancel(userId) }
+
+        verify(exactly = 0) { provider.cancelSubscription(any()) }
+        verify(exactly = 0) { repository.transitionStatus(any(), any(), SubscriptionStatus.CANCELLED_PENDING_END) }
+    }
+
+    @Test
+    fun `subscribe downgrade is blocked when paid clubs exceed the target plan`() {
+        every { clubRepository.countPaidByOwnerId(userId) } returns 5 // TRIO holds only 3
+
+        assertThrows<ConflictException> {
+            service().subscribe(userId, CreateSubscriptionRequest(plan = "TRIO"))
+        }
+
+        verify(exactly = 0) { provider.createSubscription(any()) }
     }
 
     @Test
