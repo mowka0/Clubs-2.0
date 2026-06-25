@@ -887,3 +887,48 @@ EventController ──┬─► EventService ────► EventRepository ─
 - Сервисы получают domain `Event` / `EventResponse` от Repository, передают DTO в Controller.
 - `NotificationService.sendEventCreated/sendStage2Started/sendConfirmReminder/sendAttendanceReminder(event: Event)` и `ClubsBot.handleWhoIsGoing` принимают domain, не Record.
 - `EventReminderScheduler` (bot) → `EventRepository` + `NotificationService` (bot зависит от event, как `EventBotNotifier`).
+
+---
+
+## Отмена события (F5-14)
+
+### Цель
+Дать организатору явно отменить ещё не начавшуюся встречу, которая не состоится. До этого `EventStatus.cancelled` присваивался только каскадом удаления клуба — отдельной отмены одного события не было, поэтому сорвавшаяся встреча проживала полный цикл (reminder'ы, авто-EXP-2), а ошибочная отметка явки могла начислить штрафы за несостоявшееся событие.
+
+### US-1
+**Как** организатор клуба, **я хочу** отменить предстоящее событие (с необязательным пояснением), **чтобы** участники узнали об отмене, и встреча не выжигала ничью репутацию.
+
+### Правила (продуктовые решения 2026-06-25)
+- **Кто:** только владелец клуба-хоста (`club.ownerId == userId`), иначе 403.
+- **Когда (окно):** только **до начала события** — `status ∈ {upcoming, stage_1, stage_2}` И `event_datetime > now`. После наступления времени события отмена недоступна (организатор либо отмечает явку, либо событие авто-закрывается нейтрально через EXP-2). Невыполнение → **409 Conflict** «Событие нельзя отменить».
+- **Терминально:** отменённое событие не возвращается (как удаление клуба).
+- **Репутация — нейтральна для всех:** отмена идёт **через репозитории напрямую** (не через сервисы репутации), поэтому никто не получает `no_show`/`expired_no_confirm`/штраф и никто не получает явку. Все sweep'ы (`findEventsNeedingAttendanceReminder`, `finalizeAttendanceBefore`, `markPastEventsCompleted`, EXP-2-expirer) уже исключают `cancelled`.
+- **Причина:** необязательна (`cancellation_reason TEXT NULL`, миграция **V34**). Пустая/пробельная → `null`. Показывается участникам в DM и на странице отменённого события.
+
+### Каскад при отмене
+- Само событие: `status → cancelled`, `cancellation_reason`, `updated_at` (предикат гарда выше).
+- **Привязанный split-сбор** (`skladchinas.event_id = eventId AND status = active`): `pending`-участники → `released` (без ledger-строк), сам сбор → `cancelled`. **Успешно закрытый** сбор (`closed_success`) НЕ трогаем — деньги уже собраны (honor-system). Зеркало `cancelActiveByClub`, но по `event_id`.
+- **DM** заинтересованным (`stage_1_vote ∈ {going, maybe}` = аудитория `findStage2TargetTelegramIds`): «Событие отменено» (+ причина, если есть). `EventCancelledEvent` → `EventCancelledListener` (AFTER_COMMIT, @Async, best-effort) — паттерн `Stage2StartedListener`.
+
+### API контракт
+```
+POST /api/events/{id}/cancel        (JWT; организатор клуба)
+Body (optional): { "reason"?: string }      // CancelEventRequest, @Size(max=500), blank→null
+200 → EventDetailDto (status="cancelled", cancellationReason)
+403 → не владелец клуба
+404 → событие не найдено
+409 → событие нельзя отменить (уже началось/завершено/отменено)
+```
+`EventDetailDto` дополнен `cancellationReason: String?` (домен `Event` + `EventMapper` несут поле из колонки).
+
+### Frontend
+- `EventPage`: кнопка «Отменить событие» — только организатору, пока `!eventHappened` и `status ∉ {cancelled, completed}`. Тап → подтверждающая модалка с необязательным полем причины → `POST …/cancel`.
+- Отменённое состояние: баннер «Событие отменено» (+ «: причина»); блоки голосования/подтверждения/явки/«Кто идёт» скрыты.
+- `ActivityCard`/лента: отменённое (`isCompleted=true`, как `completed`) уже затемнено и уходит в «прошедшие»; добавляется метка «Отменено».
+
+### Acceptance Criteria
+- **AC-CXL1:** GIVEN организатор, событие `upcoming`, `event_datetime` в будущем WHEN `POST …/cancel` THEN `status=cancelled`, репутация участников не изменилась, привязанный активный сбор `cancelled` + его pending → released.
+- **AC-CXL2:** GIVEN не-владелец WHEN `POST …/cancel` THEN 403, событие не изменено.
+- **AC-CXL3:** GIVEN событие уже наступило (`event_datetime ≤ now`) ИЛИ `completed`/`cancelled` WHEN `POST …/cancel` THEN 409, никаких изменений.
+- **AC-CXL4:** GIVEN событие отменено с причиной WHEN заинтересованный участник открывает `EventPage` THEN видит «Событие отменено: <причина>» и не видит кнопок голоса/подтверждения; DM с причиной доставлен (best-effort).
+- **AC-CXL5:** GIVEN отменённое событие WHEN отрабатывают шедулеры (reminder/finalize/complete) THEN событие пропускается, в `completed` не переводится.

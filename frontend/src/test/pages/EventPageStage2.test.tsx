@@ -53,6 +53,7 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     confirmedCount: 1,
     attendanceMarked: false,
     attendanceFinalized: false,
+    cancellationReason: null,
     createdAt: null,
     ...overrides,
   };
@@ -171,5 +172,45 @@ describe('EventPage — Stage 2 window (Bug B) + expired status', () => {
     expect(screen.getByText(/Кто идёт/)).toBeInTheDocument();
     expect(screen.queryByText('Борис')).not.toBeInTheDocument();
     expect(screen.getByText('Анна К.')).toBeInTheDocument();
+  });
+});
+
+describe('EventPage — отмена события (F5-14)', () => {
+  it('отменённое событие показывает баннер с причиной и скрывает набор/голосование', async () => {
+    mockEndpoints({
+      event: stage2Event({ status: 'cancelled', cancellationReason: 'Площадка закрылась' }),
+      myVote: 'going',
+    });
+    renderEventPage();
+
+    const banner = await screen.findByText(/Событие отменено/);
+    expect(banner.parentElement?.textContent).toContain('Площадка закрылась');
+    // Набор/состав и голосование скрыты для отменённого события.
+    expect(screen.queryByText(/Набор ·/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Состав ·/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Пойду/ })).not.toBeInTheDocument();
+  });
+
+  it('организатор видит кнопку «Отменить событие» на предстоящем событии', async () => {
+    mockEndpoints({
+      event: stage2Event({ status: 'upcoming', eventDatetime: FUTURE }),
+      myVote: 'going',
+      ownerId: VIEWER_ID,
+    });
+    renderEventPage();
+
+    expect(await screen.findByRole('button', { name: 'Отменить событие' })).toBeInTheDocument();
+  });
+
+  it('не-организатор не видит кнопку отмены', async () => {
+    mockEndpoints({
+      event: stage2Event({ status: 'upcoming', eventDatetime: FUTURE }),
+      myVote: 'going',
+      ownerId: 'someone-else',
+    });
+    renderEventPage();
+
+    expect(await screen.findByText('Событие')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Отменить событие' })).not.toBeInTheDocument();
   });
 });

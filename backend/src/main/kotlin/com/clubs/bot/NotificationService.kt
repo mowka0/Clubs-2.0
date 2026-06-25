@@ -71,6 +71,27 @@ class NotificationService(
         }
     }
 
+
+    /**
+     * F5-14: DM interested voters (going/maybe — same audience as Stage 2) that the event is
+     * cancelled, with the optional organizer reason. Best-effort, like every other DM.
+     */
+    @Async
+    fun sendEventCancelled(event: Event, reason: String?) {
+        val voterTelegramIds = eventResponseRepository.findStage2TargetTelegramIds(event.id)
+        if (voterTelegramIds.isEmpty()) {
+            log.info("Event-cancelled DM SKIPPED — no interested voters for eventId={}", event.id)
+            return
+        }
+        log.info("Event-cancelled DM: eventId={} recipients={}", event.id, voterTelegramIds.size)
+        val reasonLine = reason?.let { "\n\nПричина: $it" } ?: ""
+        val text = "❌ Событие отменено\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}$reasonLine"
+        val webAppPath = "/events/${event.id}"
+        voterTelegramIds.forEach { telegramId ->
+            sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
+        }
+    }
+
     /**
      * Feature A reminder (~2h before the event): nudge going/maybe voters who have NOT
      * confirmed yet to confirm before the window closes at event start.

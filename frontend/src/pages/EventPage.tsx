@@ -1,4 +1,5 @@
 import { FC, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Spinner, Placeholder } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
@@ -18,6 +19,7 @@ import {
   useMarkAttendanceMutation,
   useMyAttendanceQuery,
   useMyVoteQuery,
+  useCancelEventMutation,
   useResolveDisputeMutation,
 } from '../queries/events';
 
@@ -85,6 +87,7 @@ export const EventPage: FC = () => {
   const markAttendanceMutation = useMarkAttendanceMutation();
   const disputeMutation = useDisputeAttendanceMutation();
   const resolveMutation = useResolveDisputeMutation();
+  const cancelMutation = useCancelEventMutation();
 
   // Two separate error channels: actionError for vote/confirm/decline, attendanceError for
   // attendance marking. actionError renders in exactly one slot per phase — the Stage-1 voting
@@ -97,6 +100,10 @@ export const EventPage: FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   // Optional free-text note the participant attaches when disputing being marked absent.
   const [disputeNote, setDisputeNote] = useState('');
+  // F5-14 cancel-event sheet: open flag, optional reason, and its own error slot.
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   const event = eventQuery.data;
   const myVote = myVoteQuery.data?.vote ?? null;
@@ -219,6 +226,28 @@ export const EventPage: FC = () => {
     );
   };
 
+  // F5-14: organizer cancels the event (optional reason). Closes the sheet + toasts on success.
+  const handleCancelEvent = () => {
+    if (!id || !event || cancelMutation.isPending) return;
+    haptic.impact('medium');
+    setCancelError(null);
+    cancelMutation.mutate(
+      { eventId: id, clubId: event.clubId, reason: cancelReason.trim() || undefined },
+      {
+        onSuccess: () => {
+          haptic.notify('success');
+          setCancelOpen(false);
+          setCancelReason('');
+          setToastMessage('Событие отменено');
+        },
+        onError: (e) => {
+          setCancelError(e.message);
+          haptic.notify('error');
+        },
+      },
+    );
+  };
+
   if (loading) {
     return (
       <div className="rd-page" style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
@@ -239,6 +268,8 @@ export const EventPage: FC = () => {
   // the roster is the confirmed list, so the headline/donut/counts switch to confirmations.
   // Resolves the "decliner still counted as going" bug — declined/expired drop out of "идут".
   const finalComposition = event.status === 'stage_2' || event.status === 'completed';
+  // F5-14: a cancelled event shows only a banner — recruitment/roster/attendance are suppressed.
+  const isCancelled = event.status === 'cancelled';
 
   // Donut chart: Stage 1 = vote split (going / maybe / not going); Stage 2+ = confirmed vs free.
   const donutStyle: { background: string } = (() => {
@@ -280,7 +311,7 @@ export const EventPage: FC = () => {
   // EXP-2: a neutrally auto-finalized event is finalized but never marked. The marking UI must
   // hide in that state (backend rejects a late mark with "Attendance has been finalized").
   const showAttendanceMarking =
-    isOrganizer && eventHappened && !event.attendanceMarked && !event.attendanceFinalized;
+    isOrganizer && eventHappened && !event.attendanceMarked && !event.attendanceFinalized && !isCancelled;
   const showAttendanceDone = isOrganizer && eventHappened && event.attendanceMarked;
   const showAttendanceExpired =
     isOrganizer && eventHappened && !event.attendanceMarked && event.attendanceFinalized;
@@ -366,6 +397,17 @@ export const EventPage: FC = () => {
         </>
       )}
 
+      {/* Cancelled (F5-14): a banner replaces the recruitment/roster + action blocks. */}
+      {isCancelled && (
+        <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14, borderLeft: '3px solid var(--danger)' }}>
+          <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
+            ❌ <b>Событие отменено</b>{event.cancellationReason ? `: ${event.cancellationReason}` : '.'}
+          </div>
+        </div>
+      )}
+
+      {!isCancelled && (
+      <>
       {/* Recruitment (Stage 1) / roster (Stage 2+) — donut + voting or read-only counts */}
       <div className="rd-section-sub-h">
         {finalComposition
@@ -416,9 +458,11 @@ export const EventPage: FC = () => {
           <span className="rd-badge rd-going">Ваш голос: {VOTE_LABELS[myVote] ?? myVote}</span>
         </div>
       )}
+      </>
+      )}
 
       {/* Who's coming. Stage 1: all responders (interest). Stage 2+: confirmed roster only. */}
-      {comingList.length > 0 && (
+      {!isCancelled && comingList.length > 0 && (
         <>
           <div className="rd-section-sub-h">Кто идёт <span className="rd-count">· {comingList.length}</span></div>
           <div className="rd-voters">
@@ -684,6 +728,62 @@ export const EventPage: FC = () => {
             </div>
           )}
         </>
+      )}
+
+      {/* Cancel event (F5-14) — organizer only, before the event starts. */}
+      {isOrganizer && !isCancelled && !eventHappened && (
+        <div className="rd-cta-wrap" style={{ marginTop: 8 }}>
+          <button
+            type="button"
+            className="rd-btn-outline"
+            style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
+            onClick={() => { haptic.impact('medium'); setCancelError(null); setCancelOpen(true); }}
+          >
+            Отменить событие
+          </button>
+        </div>
+      )}
+
+      {cancelOpen && createPortal(
+        <>
+          <div className="rd-sheet-overlay" onClick={() => setCancelOpen(false)} aria-hidden="true" />
+          <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Отмена события">
+            <div className="rd-sheet-grabber" aria-hidden="true" />
+            <div className="rd-sheet-head">
+              <h2>Отменить событие?</h2>
+              <button type="button" className="rd-sheet-close" onClick={() => setCancelOpen(false)}>Закрыть</button>
+            </div>
+            <div className="rd-sheet-body">
+              <div className="rd-body-text" style={{ marginTop: 0 }}>
+                Участники получат уведомление об отмене. Действие необратимо.
+              </div>
+              <textarea
+                className="rd-textarea"
+                style={{ width: '100%', marginBottom: 10, boxSizing: 'border-box' }}
+                placeholder="Причина отмены (необязательно)"
+                maxLength={500}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              />
+              {cancelError && <div className="rd-error">{cancelError}</div>}
+              <div className="rd-cta-wrap">
+                <button
+                  type="button"
+                  className="rd-btn-primary"
+                  style={{ background: 'var(--danger)' }}
+                  onClick={handleCancelEvent}
+                  disabled={cancelMutation.isPending}
+                >
+                  {cancelMutation.isPending ? <Spinner size="s" /> : 'Отменить событие'}
+                </button>
+                <button type="button" className="rd-btn-outline" style={{ marginTop: 8 }} onClick={() => setCancelOpen(false)}>
+                  Назад
+                </button>
+              </div>
+            </div>
+          </div>
+        </>,
+        document.body,
       )}
 
       {/* Confirmed participants */}

@@ -254,4 +254,15 @@ open class EventsDao(configuration: Configuration?) : DAOImpl<EventsRecord, com.
      * Fetch records that have <code>attendance_marked_at IN (values)</code>
      */
     fun fetchByAttendanceMarkedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.ATTENDANCE_MARKED_AT, *values)
+
+    /**
+     * Fetch records that have <code>cancellation_reason BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfCancellationReason(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.CANCELLATION_REASON, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>cancellation_reason IN (values)</code>
+     */
+    fun fetchByCancellationReason(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.CANCELLATION_REASON, *values)
 }

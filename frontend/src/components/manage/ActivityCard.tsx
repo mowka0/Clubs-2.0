@@ -48,11 +48,15 @@ const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => {
         {event.descriptionPreview !== null && (
           <div className="rd-ft-sub">{event.descriptionPreview}</div>
         )}
-        {event.actionRequired && (
+        {event.status === 'cancelled' ? (
+          <div className="rd-badges-row">
+            <span className="rd-badge rd-decline">Отменено</span>
+          </div>
+        ) : event.actionRequired ? (
           <div className="rd-badges-row">
             <span className="rd-badge rd-warn">{actionLabel}</span>
           </div>
-        )}
+        ) : null}
       </div>
       <div className="rd-ft-stat">
         <div className="rd-ft-stat-num">{count}/{event.participantLimit}</div>

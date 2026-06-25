@@ -53,6 +53,7 @@ function pastCompletedEvent(overrides: Partial<EventDetailDto> = {}): EventDetai
     confirmedCount: 1,
     attendanceMarked: false,
     attendanceFinalized: false,
+    cancellationReason: null,
     createdAt: null,
     ...overrides,
   };

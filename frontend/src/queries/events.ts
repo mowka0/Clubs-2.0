@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  cancelEvent,
   castVote,
   confirmParticipation,
   createEvent,
@@ -185,6 +186,26 @@ export function useResolveDisputeMutation() {
       resolveDispute(eventId, userId, attended),
     onSuccess: (_data, { eventId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
+    },
+  });
+}
+
+
+interface CancelEventArgs {
+  eventId: string;
+  clubId: string;
+  reason?: string;
+}
+
+export function useCancelEventMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ eventId, reason }: CancelEventArgs) => cancelEvent(eventId, reason),
+    onSuccess: (_data, { eventId, clubId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
+      qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });
+      // The club activity feed renders the cancelled state too.
+      qc.invalidateQueries({ queryKey: queryKeys.activities.byClubAll(clubId) });
     },
   });
 }
