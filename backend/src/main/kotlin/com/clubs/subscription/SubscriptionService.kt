@@ -14,6 +14,7 @@ import com.clubs.payment.PaymentProvider
 import com.clubs.payment.WebhookResult
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -103,14 +104,20 @@ class SubscriptionService(
         val providerSub = paymentProvider.createSubscription(
             CreateSubscriptionCommand(userId, role, plan, price, request.subjectClubId),
         )
-        val created = repository.create(
-            payerUserId = userId,
-            payerRole = role,
-            plan = plan,
-            subjectClubId = request.subjectClubId,
-            currentPeriodEnd = providerSub.currentPeriodEnd,
-            providerToken = providerSub.providerToken,
-        )
+        val created = try {
+            repository.create(
+                payerUserId = userId,
+                payerRole = role,
+                plan = plan,
+                subjectClubId = request.subjectClubId,
+                currentPeriodEnd = providerSub.currentPeriodEnd,
+                providerToken = providerSub.providerToken,
+            )
+        } catch (e: DataIntegrityViolationException) {
+            // Concurrent double-submit: the partial-unique index already kept the DB consistent;
+            // surface a clean 409 instead of a 500. (payment-v2.md §5.1 active-subscription uniqueness.)
+            throw ConflictException("Подписка уже оформляется — обновите страницу.")
+        }
         log.info("Subscription created: id={} userId={} role={} plan={}", created.id, userId, role, plan)
         return mapper.toStatusDto(created, price)
     }
@@ -151,14 +158,22 @@ class SubscriptionService(
     fun handleWebhook(rawBody: String, signature: String?) {
         when (val result = paymentProvider.parseWebhook(rawBody, signature)) {
             is WebhookResult.RenewalSucceeded -> {
-                val sub = repository.findByProviderToken(result.providerToken) ?: return
+                val sub = repository.findByProviderToken(result.providerToken)
+                if (sub == null) {
+                    log.warn("Webhook renewal for unknown provider token (event {})", result.providerEventId)
+                    return
+                }
                 if (!repository.recordEventIfNew(sub.id, result.providerEventId, "RENEWAL_SUCCEEDED")) return
                 repository.extendPeriod(sub.id, result.newPeriodEnd)
                 repository.transitionStatus(sub.id, listOf(SubscriptionStatus.PAST_DUE), SubscriptionStatus.ACTIVE)
                 log.info("Subscription renewed: id={} newPeriodEnd={}", sub.id, result.newPeriodEnd)
             }
             is WebhookResult.RenewalFailed -> {
-                val sub = repository.findByProviderToken(result.providerToken) ?: return
+                val sub = repository.findByProviderToken(result.providerToken)
+                if (sub == null) {
+                    log.warn("Webhook renewal-failure for unknown provider token (event {})", result.providerEventId)
+                    return
+                }
                 if (!repository.recordEventIfNew(sub.id, result.providerEventId, "RENEWAL_FAILED")) return
                 repository.transitionStatus(sub.id, listOf(SubscriptionStatus.ACTIVE), SubscriptionStatus.PAST_DUE)
                 log.warn("Subscription renewal failed → PAST_DUE: id={}", sub.id)

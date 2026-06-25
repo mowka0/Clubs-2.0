@@ -37,6 +37,4 @@ interface SubscriptionRepository {
 
     /** Current price for [plan] = newest row with effective_from <= now. */
     fun currentPriceKopecks(plan: SubscriptionPlan): Int
-
-    fun currentPrices(): Map<SubscriptionPlan, Int>
 }

@@ -110,7 +110,4 @@ class JooqSubscriptionRepository(
             .limit(1)
             .fetchOne(SUBSCRIPTION_PRICING.PRICE_KOPECKS)
             ?: throw IllegalStateException("No pricing configured for plan $plan")
-
-    override fun currentPrices(): Map<SubscriptionPlan, Int> =
-        SubscriptionPlan.values().associateWith { currentPriceKopecks(it) }
 }

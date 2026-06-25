@@ -140,6 +140,17 @@ class SubscriptionServiceTest {
     }
 
     @Test
+    fun `organizer upgrade swaps the plan without a new charge`() {
+        val existing = sub(SubscriptionPlan.TRIO, SubscriptionStatus.ACTIVE)
+        every { repository.findActiveOrganizerSubscription(userId) } returns existing
+
+        service().subscribe(userId, CreateSubscriptionRequest(plan = "UNLIMITED"))
+
+        verify { repository.updatePlan(existing.id, SubscriptionPlan.UNLIMITED) }
+        verify(exactly = 0) { provider.createSubscription(any()) }
+    }
+
+    @Test
     fun `webhook renewal is idempotent - a duplicate event extends nothing`() {
         val existing = sub(SubscriptionPlan.TRIO, SubscriptionStatus.ACTIVE, token = "tok")
         every { provider.parseWebhook(any(), any()) } returns
