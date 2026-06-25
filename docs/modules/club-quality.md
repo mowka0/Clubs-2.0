@@ -499,7 +499,8 @@ Footprint берётся через `LedgerReadPort.footprintByUser` (модул
 ### 10.7 Хранение и пересчёт
 - Таблица `club_rank` (V32): `club_id, owner_id, category, rank_score, is_ranked, effective_k, computed_at`. **INTERNAL** —
   `rank_score`/`effective_k` НИКОГДА не сериализуются (enforce: `ClubRankContractTest`).
-- `ClubRankScheduler` `@Scheduled(fixedDelay=6ч, initialDelay=6ч)` → `ClubRankService.recomputeAll()`: грузит сигналы →
+- `ClubRankScheduler` `@Scheduled(fixedDelay=6ч, initialDelay=5мин)` (первый прогон вскоре после старта — каждый деплой
+  перезапускает app и сбрасывает таймер, поэтому короткий initial гарантирует пересчёт после каждого boot; 6ч между прогонами) → `ClubRankService.recomputeAll()`: грузит сигналы →
   `ClubRankPolicy.computeRank` → upsert `ON CONFLICT (club_id) DO UPDATE` + `pg_advisory_xact_lock`. Лог — только counts.
 - Бейдж едет существующим `GET /api/clubs/quality/batch` → `ClubCardFactsDto.topInCategory: Boolean` (0 нового фетча).
 
