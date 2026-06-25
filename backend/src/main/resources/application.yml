@@ -70,6 +70,19 @@ s3:
   bucket: ${S3_BUCKET:clubs-uploads}
   base-url: ${S3_BASE_URL:http://localhost:9000/clubs-uploads}
 
+features:
+  # Member-pays kill-switch (monetization v2). The subscription engine supports both payer roles, but
+  # the member-pays path (member premium "Clubs+") is gated OFF until the audience grows and the HQ
+  # premium exists to unlock (payment-v2.md §2.2, §10). Organizer-pays is always live, not gated here.
+  # Flip via MEMBER_PAYS_ENABLED=true in Coolify (no rebuild).
+  member-pays-enabled: ${MEMBER_PAYS_ENABLED:false}
+
+subscription:
+  # Paid period granted per charge (stub provider). Days so staging can shrink it to test period-end.
+  period-days: ${SUBSCRIPTION_PERIOD_DAYS:30}
+  # SubscriptionScheduler.endElapsedSubscriptions cron. Default daily 09:30 UTC.
+  lifecycle-cron: ${SUBSCRIPTION_LIFECYCLE_CRON:0 30 9 * * *}
+
 club:
   rank:
     # L3 "★ Топ-5 в категории" badge kill-switch. The hidden rank is ALWAYS computed (the machinery

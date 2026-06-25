@@ -111,6 +111,15 @@ class JooqClubRepository(
             .where(CLUBS.OWNER_ID.eq(ownerId).and(CLUBS.IS_ACTIVE.eq(true)))
             .fetchOne(0, Int::class.java) ?: 0
 
+    override fun countPaidByOwnerId(ownerId: UUID): Int =
+        dsl.selectCount().from(CLUBS)
+            .where(
+                CLUBS.OWNER_ID.eq(ownerId)
+                    .and(CLUBS.IS_ACTIVE.eq(true))
+                    .and(CLUBS.SUBSCRIPTION_PRICE.gt(0)),
+            )
+            .fetchOne(0, Int::class.java) ?: 0
+
     override fun findIdsByOwnerId(ownerId: UUID): List<UUID> =
         dsl.select(CLUBS.ID)
             .from(CLUBS)

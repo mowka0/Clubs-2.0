@@ -40,6 +40,8 @@ class SecurityConfig(
                 auth
                     .requestMatchers("/actuator/**").permitAll()
                     .requestMatchers("/api/auth/**").permitAll()
+                    // Provider webhook is authenticated by signature, not JWT. Must precede /api/**.
+                    .requestMatchers("/api/subscriptions/webhook").permitAll()
                     .requestMatchers("/api/**").authenticated()
                     .anyRequest().permitAll()
             }

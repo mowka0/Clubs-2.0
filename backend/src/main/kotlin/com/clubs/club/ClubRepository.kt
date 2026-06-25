@@ -17,6 +17,10 @@ interface ClubRepository {
 
     fun countByOwnerId(ownerId: UUID): Int
 
+    /** Count of the user's active PAID clubs (subscription_price > 0). Free clubs are excluded — they
+     *  don't consume capacity (docs/modules/payment-v2.md §3.1). */
+    fun countPaidByOwnerId(ownerId: UUID): Int
+
     /** Active-club IDs owned by [ownerId]. Empty list when the user owns no clubs. */
     fun findIdsByOwnerId(ownerId: UUID): List<UUID>
 

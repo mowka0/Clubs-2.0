@@ -10,6 +10,7 @@ import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.membership.MembershipRepository
 import com.clubs.skladchina.SkladchinaRepository
+import com.clubs.subscription.SubscriptionService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -27,6 +28,7 @@ class ClubServiceTest {
     private lateinit var eventRepository: EventRepository
     private lateinit var skladchinaRepository: SkladchinaRepository
     private lateinit var applicationRepository: ApplicationRepository
+    private lateinit var subscriptionService: SubscriptionService
     private lateinit var mapper: ClubMapper
     private lateinit var clubService: ClubService
 
@@ -37,8 +39,9 @@ class ClubServiceTest {
         eventRepository = mockk(relaxed = true)
         skladchinaRepository = mockk(relaxed = true)
         applicationRepository = mockk(relaxed = true)
+        subscriptionService = mockk(relaxed = true)
         mapper = ClubMapper()
-        clubService = ClubService(clubRepository, membershipRepository, eventRepository, skladchinaRepository, applicationRepository, mapper)
+        clubService = ClubService(clubRepository, membershipRepository, eventRepository, skladchinaRepository, applicationRepository, subscriptionService, mapper)
     }
 
     private fun makeClub(
