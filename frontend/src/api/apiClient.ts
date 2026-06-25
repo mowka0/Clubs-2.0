@@ -2,10 +2,13 @@ import { getInitDataRaw } from '../telegram/sdk';
 
 export class ApiError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  /** Parsed error body — carries structured payloads like the 402 paywall (currentPlan/requiredPlan/priceKopecks). */
+  readonly body: unknown;
+  constructor(status: number, message: string, body?: unknown) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.body = body;
   }
 }
 
@@ -70,7 +73,7 @@ class ApiClient {
       const err = (await res.json().catch(() => ({ message: 'Unknown error' }))) as {
         message?: string;
       };
-      throw new ApiError(res.status, err.message ?? `HTTP ${res.status}`);
+      throw new ApiError(res.status, err.message ?? `HTTP ${res.status}`, err);
     }
 
     // 204 No Content has an empty body — don't call res.json() or it throws.

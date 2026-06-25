@@ -9,6 +9,7 @@ import { useMyInterestsQuery } from '../queries/profile';
 import { countryNameByCode } from '../components/CityPicker';
 import { ProfileEditModal } from '../components/profile/ProfileEditModal';
 import { GamificationPanel } from '../components/profile/GamificationPanel';
+import { SubscriptionCard } from '../components/subscription/SubscriptionCard';
 import { reliabilityTier, tierWord, clubsPrepositional } from '../utils/reputationTier';
 import type { UserClubReputationDto } from '../types/api';
 
@@ -215,6 +216,8 @@ export const ProfilePage: FC = () => {
           <GamificationPanel data={gam} />
         </>
       )}
+
+      <SubscriptionCard />
 
       {interests.length > 0 && (
         <>

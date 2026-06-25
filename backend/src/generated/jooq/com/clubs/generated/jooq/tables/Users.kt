@@ -13,6 +13,7 @@ import com.clubs.generated.jooq.keys.EVENT_RESPONSES__EVENT_RESPONSES_USER_ID_FK
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIP_HISTORY__MEMBERSHIP_HISTORY_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.REPUTATION_LEDGER__REPUTATION_LEDGER_USER_ID_FKEY
+import com.clubs.generated.jooq.keys.SERVICE_SUBSCRIPTION__SERVICE_SUBSCRIPTION_PAYER_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CLOSED_BY_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CREATOR_ID_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINA_PARTICIPANTS__SKLADCHINA_PARTICIPANTS_USER_ID_FKEY
@@ -30,6 +31,7 @@ import com.clubs.generated.jooq.tables.Interests.InterestsPath
 import com.clubs.generated.jooq.tables.MembershipHistory.MembershipHistoryPath
 import com.clubs.generated.jooq.tables.Memberships.MembershipsPath
 import com.clubs.generated.jooq.tables.ReputationLedger.ReputationLedgerPath
+import com.clubs.generated.jooq.tables.ServiceSubscription.ServiceSubscriptionPath
 import com.clubs.generated.jooq.tables.SkladchinaParticipants.SkladchinaParticipantsPath
 import com.clubs.generated.jooq.tables.Skladchinas.SkladchinasPath
 import com.clubs.generated.jooq.tables.Transactions.TransactionsPath
@@ -319,6 +321,22 @@ open class Users(
 
     val reputationLedger: ReputationLedgerPath
         get(): ReputationLedgerPath = reputationLedger()
+
+    private lateinit var _serviceSubscription: ServiceSubscriptionPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.service_subscription</code> table
+     */
+    fun serviceSubscription(): ServiceSubscriptionPath {
+        if (!this::_serviceSubscription.isInitialized)
+            _serviceSubscription = ServiceSubscriptionPath(this, null, SERVICE_SUBSCRIPTION__SERVICE_SUBSCRIPTION_PAYER_USER_ID_FKEY.inverseKey)
+
+        return _serviceSubscription;
+    }
+
+    val serviceSubscription: ServiceSubscriptionPath
+        get(): ServiceSubscriptionPath = serviceSubscription()
 
     private lateinit var _skladchinaParticipants: SkladchinaParticipantsPath
 

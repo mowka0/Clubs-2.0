@@ -12,10 +12,33 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 
 data class ErrorResponse(val error: String, val message: String)
 
+/** 402 payload: enough for the frontend to render the upgrade modal. */
+data class PaywallResponse(
+    val error: String,
+    val message: String,
+    val currentPlan: String,
+    val requiredPlan: String,
+    val priceKopecks: Int,
+)
+
 @RestControllerAdvice
 class GlobalExceptionHandler {
 
     private val logger = LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
+
+    @ExceptionHandler(PaymentRequiredException::class)
+    fun handlePaymentRequired(ex: PaymentRequiredException): ResponseEntity<PaywallResponse> {
+        logger.info("Payment required: current={} required={} price={}", ex.currentPlan, ex.requiredPlan, ex.priceKopecks)
+        return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body(
+            PaywallResponse(
+                error = "PAYMENT_REQUIRED",
+                message = ex.message ?: "Subscription required",
+                currentPlan = ex.currentPlan,
+                requiredPlan = ex.requiredPlan,
+                priceKopecks = ex.priceKopecks,
+            ),
+        )
+    }
 
     @ExceptionHandler(NotFoundException::class)
     fun handleNotFound(ex: NotFoundException): ResponseEntity<ErrorResponse> {

@@ -74,4 +74,8 @@ export const queryKeys = {
     byClub: (clubId: string, filters?: ClubActivitiesFilters) =>
       ['activities', 'by-club', clubId, filters ?? {}] as const,
   },
+  subscription: {
+    status: ['subscription', 'status'] as const,
+    plans: ['subscription', 'plans'] as const,
+  },
 } as const;

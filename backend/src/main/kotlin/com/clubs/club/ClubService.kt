@@ -11,6 +11,7 @@ import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.membership.MembershipRepository
 import com.clubs.skladchina.SkladchinaRepository
+import com.clubs.subscription.SubscriptionService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -26,6 +27,7 @@ class ClubService(
     private val eventRepository: EventRepository,
     private val skladchinaRepository: SkladchinaRepository,
     private val applicationRepository: ApplicationRepository,
+    private val subscriptionService: SubscriptionService,
     private val mapper: ClubMapper
 ) {
 
@@ -47,6 +49,13 @@ class ClubService(
 
         val count = clubRepository.countByOwnerId(ownerId)
         if (count >= MAX_CLUBS_PER_ORGANIZER) throw ConflictException("Maximum $MAX_CLUBS_PER_ORGANIZER clubs per organizer")
+
+        // Capacity-plan paywall: creating a PAID club beyond the organizer's plan ceiling needs a
+        // subscription. Throws 402 (PaymentRequiredException) with the upgrade target. Free clubs
+        // (subscription_price == 0) never trigger it — they don't consume capacity (payment-v2.md §3).
+        if (request.subscriptionPrice > 0) {
+            subscriptionService.requirePaidClubCapacity(ownerId, clubRepository.countPaidByOwnerId(ownerId))
+        }
 
         val inviteCode = if (request.accessType == "private") generateInviteCode() else null
         val club = clubRepository.create(request, ownerId, inviteCode)
@@ -97,6 +106,13 @@ class ClubService(
     fun updateClub(id: UUID, request: UpdateClubRequest, userId: UUID): ClubDetailDto {
         val club = clubRepository.findById(id) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club owner can update it")
+
+        // Turning a FREE club into a PAID one consumes plan capacity — same paywall as creation,
+        // otherwise editing would bypass the ceiling (payment-v2.md §3.6).
+        if (request.subscriptionPrice != null && request.subscriptionPrice > 0 && club.subscriptionPrice == 0) {
+            subscriptionService.requirePaidClubCapacity(userId, clubRepository.countPaidByOwnerId(userId))
+        }
+
         val updated = clubRepository.update(id, request) ?: throw NotFoundException("Club not found after update")
         log.info("Club updated: id={} userId={}", id, userId)
         return mapper.toDetailDto(updated)

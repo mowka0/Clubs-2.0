@@ -3,6 +3,9 @@ import { useForm } from 'react-hook-form';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { useCreateClubMutation } from '../queries/clubs';
+import { useSubscribeMutation } from '../queries/subscription';
+import { paywallFromError, type PaywallInfo } from '../api/subscription';
+import { PaywallModal } from './subscription/PaywallModal';
 import { AvatarUpload } from './AvatarUpload';
 import type { CreateClubBody } from '../api/clubs';
 
@@ -50,9 +53,16 @@ const FieldError: FC<{ message?: string }> = ({ message }) =>
 export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) => void }> = ({ onClose, onCreated }) => {
   const haptic = useHaptic();
   const createClubMutation = useCreateClubMutation();
+  const subscribeMutation = useSubscribeMutation();
   const [step, setStep] = useState(0);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Paywall state: the backend returns 402 when a paid club exceeds the plan ceiling. We stash the
+  // pending club body, show the plan ladder, and on a successful subscribe retry the create.
+  const [paywall, setPaywall] = useState<PaywallInfo | null>(null);
+  const [pendingBody, setPendingBody] = useState<CreateClubBody | null>(null);
+  const [paywallError, setPaywallError] = useState<string | null>(null);
+  const [submittingPlan, setSubmittingPlan] = useState<string | null>(null);
 
   const {
     register,
@@ -125,11 +135,61 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
         onCreated(club.id);
       },
       onError: (e) => {
-        setError(e.message);
+        const pw = paywallFromError(e);
+        if (pw) {
+          setPendingBody(body);
+          setPaywall(pw);
+          setPaywallError(null);
+          haptic.notify('warning');
+          return;
+        }
+        setError(e instanceof Error ? e.message : 'Не удалось создать клуб');
         haptic.notify('error');
       },
     });
   };
+
+  // Paywall: subscribe to the chosen plan, then retry the stashed create.
+  const handleSelectPlan = (plan: string) => {
+    if (!pendingBody) return;
+    setPaywallError(null);
+    setSubmittingPlan(plan);
+    subscribeMutation.mutate(plan, {
+      onSuccess: () => {
+        createClubMutation.mutate(pendingBody, {
+          onSuccess: (club) => {
+            haptic.notify('success');
+            onCreated(club.id);
+          },
+          onError: (e) => {
+            setSubmittingPlan(null);
+            setPaywallError(e instanceof Error ? e.message : 'Не удалось создать клуб');
+          },
+        });
+      },
+      onError: (e) => {
+        setSubmittingPlan(null);
+        setPaywallError(e instanceof Error ? e.message : 'Не удалось оформить подписку');
+      },
+    });
+  };
+
+  if (paywall) {
+    return (
+      <PaywallModal
+        info={paywall}
+        submittingPlan={submittingPlan}
+        error={paywallError}
+        onSelectPlan={handleSelectPlan}
+        onClose={() => {
+          setPaywall(null);
+          setPendingBody(null);
+          setSubmittingPlan(null);
+          setPaywallError(null);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="rd-modal-form" style={{ padding: 16 }}>

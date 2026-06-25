@@ -13,8 +13,11 @@ import com.clubs.generated.jooq.tables.Interests
 import com.clubs.generated.jooq.tables.MembershipHistory
 import com.clubs.generated.jooq.tables.Memberships
 import com.clubs.generated.jooq.tables.ReputationLedger
+import com.clubs.generated.jooq.tables.ServiceSubscription
 import com.clubs.generated.jooq.tables.SkladchinaParticipants
 import com.clubs.generated.jooq.tables.Skladchinas
+import com.clubs.generated.jooq.tables.SubscriptionEvent
+import com.clubs.generated.jooq.tables.SubscriptionPricing
 import com.clubs.generated.jooq.tables.Transactions
 import com.clubs.generated.jooq.tables.UserClubReputation
 import com.clubs.generated.jooq.tables.UserClubReputationPreV18
@@ -69,6 +72,11 @@ val MEMBERSHIPS: Memberships = Memberships.MEMBERSHIPS
 val REPUTATION_LEDGER: ReputationLedger = ReputationLedger.REPUTATION_LEDGER
 
 /**
+ * The table <code>public.service_subscription</code>.
+ */
+val SERVICE_SUBSCRIPTION: ServiceSubscription = ServiceSubscription.SERVICE_SUBSCRIPTION
+
+/**
  * The table <code>public.skladchina_participants</code>.
  */
 val SKLADCHINA_PARTICIPANTS: SkladchinaParticipants = SkladchinaParticipants.SKLADCHINA_PARTICIPANTS
@@ -77,6 +85,16 @@ val SKLADCHINA_PARTICIPANTS: SkladchinaParticipants = SkladchinaParticipants.SKL
  * The table <code>public.skladchinas</code>.
  */
 val SKLADCHINAS: Skladchinas = Skladchinas.SKLADCHINAS
+
+/**
+ * The table <code>public.subscription_event</code>.
+ */
+val SUBSCRIPTION_EVENT: SubscriptionEvent = SubscriptionEvent.SUBSCRIPTION_EVENT
+
+/**
+ * The table <code>public.subscription_pricing</code>.
+ */
+val SUBSCRIPTION_PRICING: SubscriptionPricing = SubscriptionPricing.SUBSCRIPTION_PRICING
 
 /**
  * The table <code>public.transactions</code>.

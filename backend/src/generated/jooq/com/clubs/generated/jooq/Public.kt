@@ -13,8 +13,11 @@ import com.clubs.generated.jooq.tables.Interests
 import com.clubs.generated.jooq.tables.MembershipHistory
 import com.clubs.generated.jooq.tables.Memberships
 import com.clubs.generated.jooq.tables.ReputationLedger
+import com.clubs.generated.jooq.tables.ServiceSubscription
 import com.clubs.generated.jooq.tables.SkladchinaParticipants
 import com.clubs.generated.jooq.tables.Skladchinas
+import com.clubs.generated.jooq.tables.SubscriptionEvent
+import com.clubs.generated.jooq.tables.SubscriptionPricing
 import com.clubs.generated.jooq.tables.Transactions
 import com.clubs.generated.jooq.tables.UserClubReputation
 import com.clubs.generated.jooq.tables.UserClubReputationPreV18
@@ -87,6 +90,11 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val REPUTATION_LEDGER: ReputationLedger get() = ReputationLedger.REPUTATION_LEDGER
 
     /**
+     * The table <code>public.service_subscription</code>.
+     */
+    val SERVICE_SUBSCRIPTION: ServiceSubscription get() = ServiceSubscription.SERVICE_SUBSCRIPTION
+
+    /**
      * The table <code>public.skladchina_participants</code>.
      */
     val SKLADCHINA_PARTICIPANTS: SkladchinaParticipants get() = SkladchinaParticipants.SKLADCHINA_PARTICIPANTS
@@ -95,6 +103,16 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
      * The table <code>public.skladchinas</code>.
      */
     val SKLADCHINAS: Skladchinas get() = Skladchinas.SKLADCHINAS
+
+    /**
+     * The table <code>public.subscription_event</code>.
+     */
+    val SUBSCRIPTION_EVENT: SubscriptionEvent get() = SubscriptionEvent.SUBSCRIPTION_EVENT
+
+    /**
+     * The table <code>public.subscription_pricing</code>.
+     */
+    val SUBSCRIPTION_PRICING: SubscriptionPricing get() = SubscriptionPricing.SUBSCRIPTION_PRICING
 
     /**
      * The table <code>public.transactions</code>.
@@ -133,8 +151,11 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         MembershipHistory.MEMBERSHIP_HISTORY,
         Memberships.MEMBERSHIPS,
         ReputationLedger.REPUTATION_LEDGER,
+        ServiceSubscription.SERVICE_SUBSCRIPTION,
         SkladchinaParticipants.SKLADCHINA_PARTICIPANTS,
         Skladchinas.SKLADCHINAS,
+        SubscriptionEvent.SUBSCRIPTION_EVENT,
+        SubscriptionPricing.SUBSCRIPTION_PRICING,
         Transactions.TRANSACTIONS,
         UserClubReputation.USER_CLUB_REPUTATION,
         UserClubReputationPreV18.USER_CLUB_REPUTATION_PRE_V18,

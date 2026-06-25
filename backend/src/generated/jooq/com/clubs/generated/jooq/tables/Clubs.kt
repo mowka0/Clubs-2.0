@@ -20,6 +20,7 @@ import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIP_HISTORY__MEMBERSHIP_HISTORY_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.REPUTATION_LEDGER__REPUTATION_LEDGER_CLUB_ID_FKEY
+import com.clubs.generated.jooq.keys.SERVICE_SUBSCRIPTION__SERVICE_SUBSCRIPTION_SUBJECT_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.TRANSACTIONS__TRANSACTIONS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.USER_CLUB_REPUTATION__USER_CLUB_REPUTATION_CLUB_ID_FKEY
@@ -29,6 +30,7 @@ import com.clubs.generated.jooq.tables.Events.EventsPath
 import com.clubs.generated.jooq.tables.MembershipHistory.MembershipHistoryPath
 import com.clubs.generated.jooq.tables.Memberships.MembershipsPath
 import com.clubs.generated.jooq.tables.ReputationLedger.ReputationLedgerPath
+import com.clubs.generated.jooq.tables.ServiceSubscription.ServiceSubscriptionPath
 import com.clubs.generated.jooq.tables.Skladchinas.SkladchinasPath
 import com.clubs.generated.jooq.tables.Transactions.TransactionsPath
 import com.clubs.generated.jooq.tables.UserClubReputation.UserClubReputationPath
@@ -340,6 +342,22 @@ open class Clubs(
 
     val reputationLedger: ReputationLedgerPath
         get(): ReputationLedgerPath = reputationLedger()
+
+    private lateinit var _serviceSubscription: ServiceSubscriptionPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.service_subscription</code> table
+     */
+    fun serviceSubscription(): ServiceSubscriptionPath {
+        if (!this::_serviceSubscription.isInitialized)
+            _serviceSubscription = ServiceSubscriptionPath(this, null, SERVICE_SUBSCRIPTION__SERVICE_SUBSCRIPTION_SUBJECT_CLUB_ID_FKEY.inverseKey)
+
+        return _serviceSubscription;
+    }
+
+    val serviceSubscription: ServiceSubscriptionPath
+        get(): ServiceSubscriptionPath = serviceSubscription()
 
     private lateinit var _skladchinas: SkladchinasPath
 
