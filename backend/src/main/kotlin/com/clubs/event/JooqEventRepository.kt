@@ -306,6 +306,20 @@ class JooqEventRepository(
             )
             .execute()
 
+    override fun cancelEvent(eventId: UUID, reason: String?): Int =
+        dsl.update(EVENTS)
+            .set(EVENTS.STATUS, EventStatus.cancelled)
+            .set(EVENTS.CANCELLATION_REASON, reason)
+            .set(EVENTS.UPDATED_AT, OffsetDateTime.now())
+            .where(
+                EVENTS.ID.eq(eventId)
+                    .and(EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_1, EventStatus.stage_2))
+                    // Only before the event starts: event_datetime > now ⇒ attendance can't be marked
+                    // or finalized yet, so cancelling never erases legitimate attendance/reputation.
+                    .and(EVENTS.EVENT_DATETIME.greaterThan(OffsetDateTime.now()))
+            )
+            .execute()
+
     override fun markAttendanceMarked(id: UUID): Int =
         dsl.update(EVENTS)
             .set(EVENTS.ATTENDANCE_MARKED, true)

@@ -2,8 +2,10 @@ package com.clubs.event
 
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
+import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
+import com.clubs.skladchina.SkladchinaRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.enums.EventStatus
@@ -28,6 +30,7 @@ class EventServiceTest {
     private lateinit var clubRepository: ClubRepository
     private lateinit var eventMapper: EventMapper
     private lateinit var eventPublisher: ApplicationEventPublisher
+    private lateinit var skladchinaRepository: SkladchinaRepository
     private lateinit var eventService: EventService
 
     @BeforeEach
@@ -36,7 +39,8 @@ class EventServiceTest {
         clubRepository = mockk(relaxed = true)
         eventMapper = mockk(relaxed = true)
         eventPublisher = mockk(relaxed = true)
-        eventService = EventService(eventRepository, clubRepository, eventMapper, eventPublisher)
+        skladchinaRepository = mockk(relaxed = true)
+        eventService = EventService(eventRepository, clubRepository, eventMapper, eventPublisher, skladchinaRepository)
     }
 
     @Test
@@ -74,6 +78,77 @@ class EventServiceTest {
         assertThrows<NotFoundException> {
             eventService.createEvent(clubId, request(), UUID.randomUUID())
         }
+        verify(exactly = 0) { eventPublisher.publishEvent(any()) }
+    }
+
+    @Test
+    fun `cancelEvent cancels event, releases linked split and publishes EventCancelledEvent`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { eventRepository.findById(event.id) } returns event
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        every { eventRepository.cancelEvent(event.id, "Заболел") } returns 1
+
+        eventService.cancelEvent(event.id, ownerId, "Заболел")
+
+        verify(exactly = 1) { eventRepository.cancelEvent(event.id, "Заболел") }
+        verify(exactly = 1) { skladchinaRepository.cancelActiveByEventId(event.id) }
+        verify(exactly = 1) { eventPublisher.publishEvent(EventCancelledEvent(event, "Заболел")) }
+    }
+
+    @Test
+    fun `cancelEvent normalizes a blank reason to null`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { eventRepository.findById(event.id) } returns event
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        every { eventRepository.cancelEvent(event.id, null) } returns 1
+
+        eventService.cancelEvent(event.id, ownerId, "   ")
+
+        verify(exactly = 1) { eventRepository.cancelEvent(event.id, null) }
+        verify(exactly = 1) { eventPublisher.publishEvent(EventCancelledEvent(event, null)) }
+    }
+
+    @Test
+    fun `cancelEvent throws Forbidden when caller is not the organizer`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { eventRepository.findById(event.id) } returns event
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+
+        assertThrows<ForbiddenException> { eventService.cancelEvent(event.id, UUID.randomUUID(), null) }
+
+        verify(exactly = 0) { eventRepository.cancelEvent(any(), any()) }
+        verify(exactly = 0) { skladchinaRepository.cancelActiveByEventId(any()) }
+        verify(exactly = 0) { eventPublisher.publishEvent(any()) }
+    }
+
+    @Test
+    fun `cancelEvent throws Conflict when the event is not cancellable (guard yields 0 rows)`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { eventRepository.findById(event.id) } returns event
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        every { eventRepository.cancelEvent(event.id, null) } returns 0
+
+        assertThrows<ConflictException> { eventService.cancelEvent(event.id, ownerId, null) }
+
+        verify(exactly = 0) { skladchinaRepository.cancelActiveByEventId(any()) }
+        verify(exactly = 0) { eventPublisher.publishEvent(any()) }
+    }
+
+    @Test
+    fun `cancelEvent throws NotFound when the event is missing`() {
+        val eventId = UUID.randomUUID()
+        every { eventRepository.findById(eventId) } returns null
+
+        assertThrows<NotFoundException> { eventService.cancelEvent(eventId, UUID.randomUUID(), null) }
+
         verify(exactly = 0) { eventPublisher.publishEvent(any()) }
     }
 

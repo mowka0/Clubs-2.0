@@ -188,6 +188,11 @@ open class Events(
      */
     val ATTENDANCE_MARKED_AT: TableField<EventsRecord, OffsetDateTime?> = createField(DSL.name("attendance_marked_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "")
 
+    /**
+     * The column <code>public.events.cancellation_reason</code>.
+     */
+    val CANCELLATION_REASON: TableField<EventsRecord, String?> = createField(DSL.name("cancellation_reason"), SQLDataType.CLOB, this, "")
+
     private constructor(alias: Name, aliased: Table<EventsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<EventsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<EventsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

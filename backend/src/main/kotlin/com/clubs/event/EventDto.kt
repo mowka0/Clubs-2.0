@@ -26,6 +26,8 @@ data class EventDetailDto(
     val confirmedCount: Int,
     val attendanceMarked: Boolean,
     val attendanceFinalized: Boolean,
+    // F5-14: organizer's optional cancellation reason; null unless cancelled with a reason given.
+    val cancellationReason: String?,
     val photoUrl: String?,
     val createdAt: OffsetDateTime?
 )
@@ -83,4 +85,11 @@ data class CreateEventRequest(
 
     @field:Size(max = 1024, message = "Photo URL must be at most 1024 characters")
     val photoUrl: String? = null
+)
+
+
+/** F5-14: optional organizer-provided reason for cancelling an event (≤500 chars; blank → null). */
+data class CancelEventRequest(
+    @field:Size(max = 500)
+    val reason: String? = null
 )

@@ -53,6 +53,14 @@ interface EventRepository {
     fun cancelActiveEventsByClub(clubId: UUID): Int
 
     /**
+     * Cancels a single not-yet-started event (F5-14): status → cancelled + optional reason, but ONLY
+     * while still active and `event_datetime > now`, so a started/finalized meetup is never
+     * retro-cancelled (which would erase legitimate attendance). Returns rows affected
+     * (0 ⇒ not cancellable → caller raises 409).
+     */
+    fun cancelEvent(eventId: UUID, reason: String?): Int
+
+    /**
      * Flags the event attendance-marked and stamps attendance_marked_at = now() (решение (б):
      * the dispute window runs from mark time). Guarded on attendance_finalized=false (F5-09):
      * returns 0 if the finalizer already finalized the event, so the caller can reject the mark.

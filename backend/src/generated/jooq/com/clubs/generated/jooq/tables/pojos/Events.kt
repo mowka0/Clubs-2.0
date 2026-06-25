@@ -35,7 +35,8 @@ data class Events(
     var reputationProcessed: Boolean? = null,
     var confirmReminderSent: Boolean? = null,
     var attendanceReminderSent: Boolean? = null,
-    var attendanceMarkedAt: OffsetDateTime? = null
+    var attendanceMarkedAt: OffsetDateTime? = null,
+    var cancellationReason: String? = null
 ): Serializable {
 
 
@@ -143,6 +144,12 @@ data class Events(
         }
         else if (this.attendanceMarkedAt != o.attendanceMarkedAt)
             return false
+        if (this.cancellationReason == null) {
+            if (o.cancellationReason != null)
+                return false
+        }
+        else if (this.cancellationReason != o.cancellationReason)
+            return false
         return true
     }
 
@@ -169,6 +176,7 @@ data class Events(
         result = prime * result + (if (this.confirmReminderSent == null) 0 else this.confirmReminderSent.hashCode())
         result = prime * result + (if (this.attendanceReminderSent == null) 0 else this.attendanceReminderSent.hashCode())
         result = prime * result + (if (this.attendanceMarkedAt == null) 0 else this.attendanceMarkedAt.hashCode())
+        result = prime * result + (if (this.cancellationReason == null) 0 else this.cancellationReason.hashCode())
         return result
     }
 
@@ -195,6 +203,7 @@ data class Events(
         sb.append(", ").append(confirmReminderSent)
         sb.append(", ").append(attendanceReminderSent)
         sb.append(", ").append(attendanceMarkedAt)
+        sb.append(", ").append(cancellationReason)
 
         sb.append(")")
         return sb.toString()

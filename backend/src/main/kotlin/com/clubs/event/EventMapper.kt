@@ -23,6 +23,7 @@ class EventMapper {
         stage2Triggered = record.stage_2Triggered ?: false,
         attendanceMarked = record.attendanceMarked ?: false,
         attendanceFinalized = record.attendanceFinalized ?: false,
+        cancellationReason = record.cancellationReason,
         photoUrl = record.photoUrl,
         createdAt = record.createdAt,
         updatedAt = record.updatedAt
@@ -50,6 +51,7 @@ class EventMapper {
         confirmedCount = confirmedCount,
         attendanceMarked = event.attendanceMarked,
         attendanceFinalized = event.attendanceFinalized,
+        cancellationReason = event.cancellationReason,
         photoUrl = event.photoUrl,
         createdAt = event.createdAt
     )

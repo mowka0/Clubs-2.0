@@ -39,6 +39,11 @@ export function createEvent(clubId: string, body: CreateEventBody): Promise<Even
   return apiClient.post<EventDetailDto>(`/api/clubs/${clubId}/events`, body);
 }
 
+/** F5-14: organizer cancels a not-yet-started event, with an optional reason (≤500 chars). */
+export function cancelEvent(eventId: string, reason?: string): Promise<EventDetailDto> {
+  return apiClient.post<EventDetailDto>(`/api/events/${eventId}/cancel`, reason ? { reason } : undefined);
+}
+
 export function castVote(eventId: string, vote: string): Promise<{ eventId: string; vote: string; goingCount: number; maybeCount: number; notGoingCount: number }> {
   return apiClient.post(`/api/events/${eventId}/vote`, { vote });
 }

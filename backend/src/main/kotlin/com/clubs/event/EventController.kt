@@ -55,6 +55,17 @@ class EventController(
     fun getEvent(@PathVariable id: UUID): ResponseEntity<EventDetailDto> =
         ResponseEntity.ok(eventService.getEvent(id))
 
+
+    @PostMapping("/api/events/{id}/cancel")
+    fun cancelEvent(
+        @PathVariable id: UUID,
+        @RequestBody(required = false) @Valid request: CancelEventRequest?,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<EventDetailDto> {
+        log.info("Cancel event: eventId={} userId={}", id, user.userId)
+        return ResponseEntity.ok(eventService.cancelEvent(id, user.userId, request?.reason))
+    }
+
     @PostMapping("/api/events/{id}/vote")
     fun castVote(
         @PathVariable id: UUID,

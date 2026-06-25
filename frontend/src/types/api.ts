@@ -408,6 +408,8 @@ export interface EventDetailDto {
   confirmedCount: number;
   attendanceMarked: boolean;
   attendanceFinalized: boolean;
+  // F5-14: organizer's optional cancellation reason; null unless cancelled with a reason given.
+  cancellationReason: string | null;
   createdAt: string | null;
 }
 

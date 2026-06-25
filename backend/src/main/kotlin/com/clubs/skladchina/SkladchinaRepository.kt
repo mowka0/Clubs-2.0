@@ -175,6 +175,13 @@ interface SkladchinaRepository {
      * untouched. Returns the number of skladchinas cancelled.
      */
     fun cancelActiveByClub(clubId: UUID): Int
+
+    /**
+     * Cancels the active split linked to [eventId] (F5-14 event cancellation): pending participants
+     * are released (no reputation), the split → cancelled. A closed_success split is left intact
+     * (money already collected). Returns rows affected on the skladchina.
+     */
+    fun cancelActiveByEventId(eventId: UUID): Int
 }
 
 /**

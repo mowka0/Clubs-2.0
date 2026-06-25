@@ -606,4 +606,31 @@ class JooqSkladchinaRepository(
             )
             .execute()
     }
+
+    override fun cancelActiveByEventId(eventId: UUID): Int {
+        val activeSkladchinaIds = dsl.select(SKLADCHINAS.ID)
+            .from(SKLADCHINAS)
+            .where(
+                SKLADCHINAS.EVENT_ID.eq(eventId)
+                    .and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active))
+            )
+        // Release pending participants first (pending → released, no reputation) while their
+        // split is still active and selectable — mirrors cancelActiveByClub.
+        dsl.update(SKLADCHINA_PARTICIPANTS)
+            .set(SKLADCHINA_PARTICIPANTS.STATUS, SkladchinaParticipantStatus.released)
+            .where(
+                SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.`in`(activeSkladchinaIds)
+                    .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
+            )
+            .execute()
+
+        return dsl.update(SKLADCHINAS)
+            .set(SKLADCHINAS.STATUS, SkladchinaStatus.cancelled)
+            .set(SKLADCHINAS.UPDATED_AT, OffsetDateTime.now())
+            .where(
+                SKLADCHINAS.EVENT_ID.eq(eventId)
+                    .and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active))
+            )
+            .execute()
+    }
 }
