@@ -261,7 +261,7 @@
 }
 /* Flex column with a single uniform gap so the spacing between badge, name and city is identical —
    and equal to the top padding, i.e. the same distance down from the cover (обои). */
-.rd-club-card .rd-body { padding: 7px 14px 14px; display: flex; flex-direction: column; gap: 7px; }
+.rd-club-card .rd-body { padding: 5px 14px 14px; display: flex; flex-direction: column; gap: 5px; }
 .rd-club-card .rd-ttl { font-size: 14px; font-weight: 700; color: var(--text); }
 .rd-club-card .rd-meta { font-size: 11px; color: var(--text-dim); }
 
