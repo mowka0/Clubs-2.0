@@ -16,6 +16,7 @@ import { ManageHeader } from '../components/manage/ManageHeader';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubStatsTab } from '../components/manage/ClubStatsTab';
 import { useClubQuery, useDeleteClubMutation, useUpdateClubMutation } from '../queries/clubs';
+import { useMemberAttentionQuery } from '../queries/members';
 import { useClubFinancesQuery } from '../queries/finances';
 import type { UpdateClubBody } from '../api/clubs';
 import type { ClubDetailDto } from '../types/api';
@@ -68,21 +69,12 @@ const FinancesTab: FC<{ clubId: string }> = ({ clubId }) => {
           <div className="rd-stat-label">Активных участников</div>
           <div className="rd-stat-value rd-plain">{finances.activeMembers}</div>
         </div>
-        <div className="rd-glass rd-stat">
-          <div className="rd-stat-label">Выручка за месяц</div>
-          <div className="rd-stat-value">{finances.monthlyRevenue}</div>
-          <div className="rd-stat-foot">Stars</div>
-        </div>
-        <div className="rd-glass rd-stat">
-          <div className="rd-stat-label">Доля организатора · {finances.organizerSharePct}%</div>
-          <div className="rd-stat-value rd-plain">{finances.organizerShare}</div>
-          <div className="rd-stat-foot">Stars</div>
-        </div>
-        <div className="rd-glass rd-stat">
-          <div className="rd-stat-label">Комиссия платформы · {finances.platformFeePct}%</div>
-          <div className="rd-stat-value rd-plain">{finances.platformFee}</div>
-          <div className="rd-stat-foot">Stars</div>
-        </div>
+      </div>
+      {/* De-Stars: dues flow member→organizer directly, off-platform — the platform doesn't take a
+          cut and doesn't track the amounts. Confirm received dues on the «Участники» tab. */}
+      <div className="rd-cta-hint" style={{ textAlign: 'left', marginTop: 8 }}>
+        Оплата подписок идёт напрямую вам, мимо платформы — поэтому суммы здесь не считаются.
+        Подтверждайте полученные взносы во вкладке «Участники» кнопкой «Взнос получен».
       </div>
     </>
   );
@@ -263,7 +255,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
           />
         </label>
         <label className="rd-field">
-          <span className="rd-label">Цена подписки (Stars/мес, 0 = бесплатно)</span>
+          <span className="rd-label">Цена подписки (₽/мес, 0 = бесплатно)</span>
           <input
             className={`rd-input${errorField === 'subscriptionPrice' ? ' rd-invalid' : ''}`}
             type="number"
@@ -415,6 +407,9 @@ export const OrganizerClubManage: FC = () => {
   const clubId = id ?? '';
   const clubQuery = useClubQuery(clubId || undefined);
   const club = clubQuery.data;
+  // Red-dot on «Участники»: members whose paid access ends within the week need a dues confirm.
+  const memberAttentionQuery = useMemberAttentionQuery(clubId || undefined);
+  const showMembersDot = (memberAttentionQuery.data?.expiringSoon ?? 0) > 0;
 
   const handleTabChange = (key: TabKey) => {
     if (key === activeTab) return;
@@ -481,6 +476,9 @@ export const OrganizerClubManage: FC = () => {
             onClick={() => handleTabChange(tab.key)}
           >
             {tab.label}
+            {tab.key === 'members' && showMembersDot && (
+              <span className="rd-tab-dot" aria-hidden="true" />
+            )}
           </button>
         ))}
       </div>

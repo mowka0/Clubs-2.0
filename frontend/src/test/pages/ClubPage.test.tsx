@@ -235,7 +235,7 @@ describe('ClubPage', () => {
     expect(screen.queryByRole('button', { name: /^хочу вступить$/i })).not.toBeInTheDocument();
   });
 
-  it('closed club with approved application: shows "Ожидаем оплату" with club price', async () => {
+  it('closed paid club with approved application (no membership yet): shows organizer-will-open note', async () => {
     server.use(
       http.get('*/api/clubs/:id', () => {
         return HttpResponse.json({
@@ -262,13 +262,15 @@ describe('ClubPage', () => {
 
     renderClubPage();
 
+    // De-Stars: no Stars invoice anymore. Approval admits the member (frozen); the fallback CTA for a
+    // legacy approved-without-membership row just says the organizer will open access.
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /ожидаем оплату/i })).toBeInTheDocument();
-      expect(screen.getByText(/заявка одобрена/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /организатор откроет доступ/i })).toBeInTheDocument();
     });
+    expect(screen.queryByText(/stars/i)).not.toBeInTheDocument();
   });
 
-  it('paid club: pending_payment response shows "Ожидаем оплату" and does not mark user as member', async () => {
+  it('paid club: joining lands frozen — shows pending-access note, not full member', async () => {
     server.use(
       http.get('*/api/clubs/:id', () => {
         return HttpResponse.json({
@@ -282,14 +284,18 @@ describe('ClubPage', () => {
         return HttpResponse.json([] as MembershipDto[]);
       }),
       http.post('*/api/clubs/:id/join', () => {
+        // De-Stars: join always returns 201 + MembershipDto; a paid club lands it `frozen`.
         return HttpResponse.json(
           {
-            status: 'pending_payment',
+            id: 'm-1',
+            userId: 'user-1',
             clubId: 'club-123',
-            priceStars: 500,
-            message: 'Оплатите подписку через бота. Счёт отправлен в Telegram.',
-          },
-          { status: 202 },
+            status: 'frozen',
+            role: 'member',
+            joinedAt: '2025-01-01T00:00:00Z',
+            subscriptionExpiresAt: null,
+          } as MembershipDto,
+          { status: 201 },
         );
       }),
     );
@@ -303,8 +309,7 @@ describe('ClubPage', () => {
     await user.click(joinButton);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /ожидаем оплату/i })).toBeInTheDocument();
-      expect(screen.getByText(/счёт отправлен в telegram/i)).toBeInTheDocument();
+      expect(screen.getByText(/вы вступили в клуб/i)).toBeInTheDocument();
     });
 
     expect(screen.queryByText(/вы участник/i)).not.toBeInTheDocument();
@@ -552,7 +557,7 @@ describe('ClubPage', () => {
     expect(screen.getByText('Клуб для любителей чтения')).toBeInTheDocument();
     // Redesign: price is part of the single hero-eyebrow meta line
     // («доступ · город · N/limit · цена»), so match it as a substring.
-    expect(screen.getByText(/200 Stars \/ мес/)).toBeInTheDocument();
+    expect(screen.getByText(/200 ₽ \/ мес/)).toBeInTheDocument();
   });
 
   it('displays error placeholder when API returns an error', async () => {

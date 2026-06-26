@@ -1,55 +1,88 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import {
-  getClubAwaitingPaymentApplicants,
+  freezeMember,
   getClubMembers,
+  getMemberAttention,
   getMemberProfile,
   getMyGamification,
   getMyReputation,
+  markMemberDuesPaid,
+  unfreezeMember,
+  unmarkMemberDues,
 } from '../api/membership';
-import type { GetClubMembersOptions } from '../api/membership';
 import { queryKeys } from './queryKeys';
 
-/**
- * Members of [clubId]. When `options.includeCancelled` is true, the server
- * also returns paid members who cancelled autorenew but are still inside the
- * paid period (`subscriptionCancelled=true` on the DTO). The two variants
- * cache under different keys so the legacy active-only callers don't pick
- * up disabled rows. See docs/modules/club-leave.md.
- */
-export function useClubMembersQuery(
-  clubId: string | undefined,
-  options: GetClubMembersOptions = {},
-) {
-  const includeCancelled = Boolean(options.includeCancelled);
+/** Members of [clubId]. The organizer additionally receives frozen members + each member's
+ *  access state and paid-through date (de-Stars dashboard); regular members get the active-only
+ *  list with those fields null. */
+export function useClubMembersQuery(clubId: string | undefined) {
   return useQuery({
-    queryKey: includeCancelled
-      ? queryKeys.clubs.membersWith(clubId ?? '', { includeCancelled: true })
-      : queryKeys.clubs.members(clubId ?? ''),
-    queryFn: () => getClubMembers(clubId!, { includeCancelled }),
+    queryKey: queryKeys.clubs.members(clubId ?? ''),
+    queryFn: () => getClubMembers(clubId!),
     enabled: Boolean(clubId),
   });
 }
 
-/**
- * Organizer-only: list of applicants for [clubId] whose application is
- * approved but Stars invoice unpaid (no active membership). Returns 403 from
- * backend if caller is not the club owner — pair with `enabled: isOrganizer`
- * to avoid a guaranteed-fail request from member/visitor contexts.
- *
- * `staleTime: 60_000` mirrors other low-churn organizer views — payment state
- * changes via webhook are eventually consistent here and refetch on focus
- * picks them up.
- */
-export function useClubAwaitingPaymentApplicantsQuery(
+/** Red-dot feed: how many members' paid access ends within the week. Owner-only — gate with
+ *  `enabled: isOrganizer` to skip a guaranteed-403 from member/visitor contexts. */
+export function useMemberAttentionQuery(
   clubId: string | undefined,
   options: { enabled?: boolean } = {},
 ) {
   const enabled = Boolean(clubId) && (options.enabled ?? true);
   return useQuery({
-    queryKey: queryKeys.clubs.awaitingPaymentApplicants(clubId ?? ''),
-    queryFn: () => getClubAwaitingPaymentApplicants(clubId!),
+    queryKey: queryKeys.clubs.memberAttention(clubId ?? ''),
+    queryFn: () => getMemberAttention(clubId!),
     enabled,
     staleTime: 60_000,
+  });
+}
+
+/** After any access-gate action the member list (badges/buckets) and the red-dot count both change. */
+function invalidateAfterMemberGateAction(qc: QueryClient, clubId: string) {
+  qc.invalidateQueries({ queryKey: queryKeys.clubs.members(clubId) });
+  qc.invalidateQueries({ queryKey: queryKeys.clubs.memberAttention(clubId) });
+}
+
+interface MemberGateArgs {
+  clubId: string;
+  userId: string;
+}
+
+/** «Взнос получен» — open access + extend the paid window. The primary dashboard action. */
+export function useMarkMemberDuesPaidMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId }: MemberGateArgs) => markMemberDuesPaid(clubId, userId),
+    onSuccess: (_data, { clubId }) => invalidateAfterMemberGateAction(qc, clubId),
+  });
+}
+
+/** «Закрыть доступ» — active → frozen. */
+export function useFreezeMemberMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId }: MemberGateArgs) => freezeMember(clubId, userId),
+    onSuccess: (_data, { clubId }) => invalidateAfterMemberGateAction(qc, clubId),
+  });
+}
+
+/** Reopen access without extending the paid window (frozen → active). */
+export function useUnfreezeMemberMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId }: MemberGateArgs) => unfreezeMember(clubId, userId),
+    onSuccess: (_data, { clubId }) => invalidateAfterMemberGateAction(qc, clubId),
+  });
+}
+
+/** Clear the dues mark without touching access/window. */
+export function useUnmarkMemberDuesMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId }: MemberGateArgs) => unmarkMemberDues(clubId, userId),
+    onSuccess: (_data, { clubId }) => invalidateAfterMemberGateAction(qc, clubId),
   });
 }
 

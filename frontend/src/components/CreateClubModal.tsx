@@ -92,7 +92,8 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
   const subscriptionPrice = watch('subscriptionPrice');
   const accessType = watch('accessType');
 
-  const monthlyIncome = Math.round(Number(memberLimit) * Number(subscriptionPrice) * 0.8);
+  // De-Stars: dues go member→organizer directly (off-platform), the platform takes no cut — full amount.
+  const monthlyIncome = Math.round(Number(memberLimit) * Number(subscriptionPrice));
 
   const handleNext = async () => {
     const fields = STEP_FIELDS[step];
@@ -291,7 +292,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
             <FieldError message={errors.memberLimit?.message} />
           </label>
           <label className="rd-field">
-            <span className="rd-label">Цена подписки (Stars/мес)</span>
+            <span className="rd-label">Цена подписки (₽/мес)</span>
             <input
               className={`rd-input${errors.subscriptionPrice ? ' rd-invalid' : ''}`}
               type="number"
@@ -309,7 +310,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
           </label>
           {Number(subscriptionPrice) > 0 && Number(memberLimit) > 0 && (
             <div className="rd-hint">
-              При {memberLimit} участниках вы будете зарабатывать {monthlyIncome} Stars в месяц (80% от дохода)
+              При {memberLimit} участниках это до {monthlyIncome} ₽ в месяц. Участники платят вам напрямую — платформа комиссию не берёт.
             </div>
           )}
         </div>

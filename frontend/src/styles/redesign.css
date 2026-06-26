@@ -338,6 +338,53 @@
 /* Newcomer / own-club organizer — neutral chip, no number yet (see reputation-v2). */
 .rd-rep-row .rd-v.rd-new  { color: var(--text-faint); font-size: 13px; font-weight: 600; }
 
+/* ---------- De-Stars members dashboard (attention buckets + gate) ---------- */
+/* Action-row layout: a tappable info area (opens the profile) + a trailing «Взнос получен» button.
+   The row is a div so the two tap targets don't nest. */
+.rd-rep-row .rd-rep-row-main {
+  display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;
+  background: transparent; border: 0; padding: 0; cursor: pointer; font-family: inherit; text-align: left;
+}
+.rd-row-act-pri {
+  flex-shrink: 0; border: 0; border-radius: 10px; cursor: pointer; font-family: inherit;
+  font-size: 12px; font-weight: 700; padding: 9px 13px; white-space: nowrap;
+  color: var(--on-accent); background: var(--accent-grad);
+  box-shadow: 0 4px 12px -4px var(--accent-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.rd-row-act-pri:disabled { opacity: 0.6; cursor: default; }
+
+.rd-section-sub-h.rd-attn-exp { color: #E08A7A; }
+.rd-section-sub-h.rd-attn-pay { color: var(--accent); }
+.rd-attn-hint { font-size: 11px; color: var(--text-faint); padding: 0 2px 8px; line-height: 1.4; }
+.rd-attn-block { margin-bottom: 16px; }
+.rd-attn-block-exp { border-color: rgba(255, 139, 139, 0.26); }
+.rd-attn-block-pay { border-color: var(--accent-soft); }
+/* Access-OK meta line in the calm list (organizer's «Активен · до …»). */
+.rd-met.rd-met-ok { color: var(--live); }
+
+/* Organizer gate inside the profile card */
+.rd-org-gate { margin-top: 16px; }
+.rd-sub-strip {
+  display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 14px; margin-bottom: 12px;
+  background: var(--live-soft); border: 1px solid rgba(102, 212, 154, 0.28);
+}
+.rd-sub-strip.rd-soon { background: var(--danger-soft); border-color: rgba(255, 139, 139, 0.3); }
+.rd-sub-strip-k { font-size: 11px; color: var(--text-dim); }
+.rd-sub-strip-v { font-size: 14px; font-weight: 700; color: var(--text); }
+.rd-sub-strip.rd-soon .rd-sub-strip-v { color: var(--danger); }
+.rd-org-tag {
+  margin-left: auto; flex-shrink: 0; font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--accent); background: var(--accent-soft);
+  padding: 3px 8px; border-radius: 6px;
+}
+.rd-org-gate-acts { display: flex; flex-direction: column; gap: 9px; }
+
+/* Red-dot on a section tab («Участники» / «Управление») — de-Stars attention badge. */
+.rd-tab-link .rd-tab-dot {
+  position: absolute; top: 4px; right: -10px; width: 7px; height: 7px; border-radius: 50%;
+  background: linear-gradient(135deg, #ff4d6a, #c4304a); box-shadow: 0 0 6px rgba(255, 77, 106, 0.6);
+}
+
 /* ---------- Reputation rings (member card + application card) ---------- */
 /* Single row, no wrap — up to 3 rings share the width equally (flex:1 + min-width:0). */
 .rd-rings { display: flex; flex-wrap: nowrap; justify-content: space-around; gap: 8px; padding: 16px 4px; }

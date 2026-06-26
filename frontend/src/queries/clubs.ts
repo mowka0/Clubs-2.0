@@ -120,7 +120,7 @@ export function useJoinClubMutation() {
  * subscription itself flip — RSVPs/skladchinas stay valid until expire.
  * We invalidate aggressively so MyClubsPage, ClubPage, the feeds and per-
  * skladchina/event detail caches all refetch instead of showing the user
- * still in a sbor / awaiting-payment list.
+ * still in a sbor.
  */
 export function useLeaveClubMutation() {
   const qc = useQueryClient();
@@ -131,8 +131,6 @@ export function useLeaveClubMutation() {
       qc.invalidateQueries({ queryKey: queryKeys.clubs.detail(clubId) });
       qc.invalidateQueries({ queryKey: queryKeys.clubs.members(clubId) });
       qc.invalidateQueries({ queryKey: queryKeys.applications.mine() });
-      qc.invalidateQueries({ queryKey: queryKeys.applications.myAwaitingPayment });
-      qc.invalidateQueries({ queryKey: queryKeys.applications.organizerAwaitingPayment });
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingActionCounts });
       qc.invalidateQueries({ queryKey: queryKeys.events.all });
       qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });

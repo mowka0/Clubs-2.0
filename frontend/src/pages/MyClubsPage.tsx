@@ -9,10 +9,7 @@ import { useMyReputationQuery } from '../queries/members';
 import {
   useCompleteFreeMembershipMutation,
   useMyApplicationsQuery,
-  useMyAwaitingPaymentQuery,
   useMyPendingApplicationsQuery,
-  useOrganizerAwaitingPaymentQuery,
-  useResendInvoiceMutation,
 } from '../queries/applications';
 import { queryKeys } from '../queries/queryKeys';
 import { Toast } from '../components/Toast';
@@ -21,13 +18,10 @@ import { ApplicationReviewModal } from '../components/applications/ApplicationRe
 import { formatPeerSignal } from '../features/applications-inbox/lib/peer-signal-format';
 import { LevelPill } from '../components/reputation/LevelPill';
 import { getClub } from '../api/clubs';
-import { ApiError } from '../api/apiClient';
 import { reliabilityTier } from '../utils/reputationTier';
 import type {
-  AwaitingPaymentApplicationDto,
   ClubDetailDto,
   MembershipDto,
-  OrganizerAwaitingPaymentApplicantDto,
   PendingApplicationDto,
   UserClubReputationDto,
 } from '../types/api';
@@ -44,8 +38,6 @@ const STATUS_LABELS: Record<string, string> = {
   auto_rejected: 'Отклонено',
 };
 
-const AWAITING_PAYMENT_LABEL = 'Ожидает оплаты';
-
 function getInitials(name: string): string {
   return name
     .replace(/[«»"']/g, '')
@@ -58,21 +50,6 @@ function getInitials(name: string): string {
 
 function formatApplicationDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
-}
-
-/**
- * Russian relative date — "сегодня" / "вчера" / "N дней назад" / absolute date.
- * Used on the «Ожидают оплаты» card to soft-cue urgency without a hard deadline.
- */
-function formatRelativeApprovedAt(iso: string): string {
-  const approvedAt = new Date(iso);
-  const now = new Date();
-  const ms = now.getTime() - approvedAt.getTime();
-  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
-  if (days <= 0) return 'одобрено сегодня';
-  if (days === 1) return 'одобрено вчера';
-  if (days < 7) return `одобрено ${days} ${pluralRu(days, ['день', 'дня', 'дней'])} назад`;
-  return `одобрено ${formatApplicationDate(iso)}`;
 }
 
 /** Russian plural form picker: forms = [one, few, many] */
@@ -168,19 +145,16 @@ const HistoryClubCard: FC<HistoryClubCardProps> = ({ club, onClick }) => {
 interface AppCardProps {
   application: ApplicationDto;
   club: ClubDetailDto | undefined;
-  awaitingPayment: boolean;
   onClick: () => void;
 }
 
-const AppCard: FC<AppCardProps> = ({ application, club, awaitingPayment, onClick }) => {
+const AppCard: FC<AppCardProps> = ({ application, club, onClick }) => {
   const name = club?.name ?? `Клуб ${application.clubId.slice(0, 8)}…`;
   const initials = club ? getInitials(club.name) : '·';
   const status = application.status;
-  // approved + still in awaiting-payment list = invoice unpaid. Surface the
-  // lifecycle state ("Ожидает оплаты") rather than the misleading "Одобрено".
-  const statusLabel = awaitingPayment ? AWAITING_PAYMENT_LABEL : (STATUS_LABELS[status] ?? status);
+  const statusLabel = STATUS_LABELS[status] ?? status;
   const isRejected = status === 'rejected' || status === 'auto_rejected';
-  const badgeTone = awaitingPayment ? 'rd-warn' : isRejected ? 'rd-decline' : status === 'approved' ? 'rd-going' : 'rd-neutral';
+  const badgeTone = isRejected ? 'rd-decline' : status === 'approved' ? 'rd-going' : 'rd-neutral';
   const showReason = isRejected && Boolean(application.rejectedReason && application.rejectedReason.trim());
 
   return (
@@ -239,120 +213,6 @@ const PendingAppCard: FC<PendingAppCardProps> = ({ pending, onClick }) => {
   );
 };
 
-interface AwaitingPaymentCardProps {
-  item: AwaitingPaymentApplicationDto;
-}
-
-/**
- * Applicant-side card for an approved application without an active membership.
- * The WHOLE card is tappable — same visual shape as `.club-card` so it sits
- * at the same height as active-club cards stacked below in «Активные». Tap
- * re-triggers the Stars invoice via DM. Backend rate-limits 1 call per 60s
- * per application → 429 maps to a specific "wait a minute" message; other
- * errors surface a generic Russian fallback.
- */
-const AwaitingPaymentCard: FC<AwaitingPaymentCardProps> = ({ item }) => {
-  const resendMutation = useResendInvoiceMutation();
-  const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(
-    null,
-  );
-
-  const initials = getInitials(item.club.name) || '·';
-
-  const handleResend = () => {
-    if (resendMutation.isPending) return;
-    setFeedback(null);
-    resendMutation.mutate(item.applicationId, {
-      onSuccess: () => {
-        setFeedback({
-          kind: 'success',
-          text: 'Счёт отправлен. Откройте чат с ботом @clubs_admin_bot',
-        });
-      },
-      onError: (e) => {
-        if (e instanceof ApiError && e.status === 429) {
-          setFeedback({
-            kind: 'error',
-            text: 'Счёт уже отправлен. Подождите минуту.',
-          });
-          return;
-        }
-        const message = e instanceof Error && e.message ? e.message : 'Не удалось отправить счёт. Попробуйте позже.';
-        setFeedback({ kind: 'error', text: message });
-      },
-    });
-  };
-
-  const inlineLabel = resendMutation.isPending
-    ? 'Отправляем счёт…'
-    : `Цена: ${item.subscriptionPrice}⭐ · Нажмите чтобы оплатить`;
-
-  return (
-    <>
-      <button
-        type="button"
-        className="rd-rep-row"
-        onClick={handleResend}
-        disabled={resendMutation.isPending}
-      >
-        <span className="rd-ico">
-          {item.club.avatarUrl ? <img src={item.club.avatarUrl} alt="" /> : initials}
-        </span>
-        <div className="rd-info">
-          <div className="rd-ttl">{item.club.name}</div>
-          <div className="rd-met">{formatRelativeApprovedAt(item.approvedAt)}</div>
-          <div className="rd-met" style={{ color: 'var(--accent)' }}>{inlineLabel}</div>
-        </div>
-      </button>
-      {feedback && (
-        <div className="rd-cta-hint" style={{ color: feedback.kind === 'error' ? 'var(--danger)' : 'var(--live)', textAlign: 'left' }}>
-          {feedback.text}
-        </div>
-      )}
-    </>
-  );
-};
-
-interface OrganizerAwaitingPaymentRowProps {
-  item: OrganizerAwaitingPaymentApplicantDto;
-}
-
-/**
- * Cross-club organizer-side row: shows an applicant who's been approved for
- * one of the caller's clubs but hasn't paid the Stars invoice yet. Non-
- * interactive (no modal opens from here) — purely informational so the
- * organizer doesn't have to enter each club to see who's pending payment.
- *
- * Kept lightweight (44px avatar, 12px padding) — sits in its own section
- * without club-card neighbours, so applicant-card visual weight would be
- * out of place here.
- */
-const OrganizerAwaitingPaymentRow: FC<OrganizerAwaitingPaymentRowProps> = ({ item }) => {
-  const fullName = `${item.firstName}${item.lastName ? ` ${item.lastName}` : ''}`;
-  const initials = getInitials(fullName) || '·';
-  const relative = formatRelativeApprovedAt(item.approvedAt);
-
-  return (
-    <div className="rd-rep-row">
-      <span className="rd-ico">
-        {item.avatarUrl ? <img src={item.avatarUrl} alt="" /> : initials}
-      </span>
-      <div className="rd-info">
-        <div className="rd-ttl">
-          {fullName}
-          {item.telegramUsername && (
-            <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}> · @{item.telegramUsername}</span>
-          )}
-        </div>
-        <div className="rd-met">{item.club.name} · {relative}</div>
-      </div>
-      <div className="rd-score">
-        <span className="rd-badge rd-warn">{AWAITING_PAYMENT_LABEL}</span>
-      </div>
-    </div>
-  );
-};
-
 export const MyClubsPage: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -363,8 +223,6 @@ export const MyClubsPage: FC = () => {
   const myClubsQuery = useMyClubsQuery();
   const applicationsQuery = useMyApplicationsQuery();
   const pendingInboxQuery = useMyPendingApplicationsQuery();
-  const awaitingPaymentQuery = useMyAwaitingPaymentQuery();
-  const organizerAwaitingPaymentQuery = useOrganizerAwaitingPaymentQuery();
   const reputationQuery = useMyReputationQuery();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [reviewing, setReviewing] = useState<PendingApplicationDto | null>(null);
@@ -372,13 +230,7 @@ export const MyClubsPage: FC = () => {
   const myClubs = myClubsQuery.data ?? [];
   const applications = applicationsQuery.data ?? [];
   const pendingInbox = pendingInboxQuery.data ?? [];
-  const awaitingPayment = awaitingPaymentQuery.data ?? [];
-  const organizerAwaitingPayment = organizerAwaitingPaymentQuery.data ?? [];
   const historyClubs = reputationQuery.data?.historyClubs ?? [];
-  const awaitingPaymentIds = useMemo(
-    () => new Set(awaitingPayment.map((item) => item.applicationId)),
-    [awaitingPayment],
-  );
 
   const inboxSectionRef = useRef<HTMLDivElement | null>(null);
   // Idempotent scroll: focus=inbox deep-link must scroll exactly once per
@@ -447,10 +299,10 @@ export const MyClubsPage: FC = () => {
    * (approved + free club + caller not in active membership) and call
    * completeFreeMembership(applicationId) once each. The mutation is idempotent
    * server-side (400 «Already a member» if race lands a real membership first),
-   * silent (no toast, no haptic), and refetches myClubs so the КПСС appears.
+   * silent (no toast, no haptic), and refetches myClubs so the club appears.
    *
-   * Paid clubs are explicitly excluded — they correctly remain in «Ожидают
-   * оплаты» until the Stars invoice is paid.
+   * Paid clubs are excluded — de-Stars approval creates a `frozen` membership directly, so a paid
+   * member already shows under «Где я состою» (no free self-heal needed).
    */
   const completeFreeMutation = useCompleteFreeMembershipMutation();
   const autoHealedRef = useRef(false);
@@ -489,19 +341,17 @@ export const MyClubsPage: FC = () => {
   ]);
 
   // Inbox grouped by addressee (see docs/modules/my-clubs-unified.md):
-  //  - «Мои заявки» (outgoing): only LIVE applications — pending (awaiting the
-  //    organizer's decision) + approved-awaiting-payment (needs my payment).
-  //    Finished-lifecycle apps (rejected / auto_rejected / approved→member) are
-  //    excluded — they're history, not actionable. Awaiting-payment apps render
-  //    as rich AwaitingPaymentCard, so they're not in the pending AppCard list.
-  //  - «Заявки в мои клубы» (organizer inbox): pending review + applicants
-  //    who were approved but haven't paid yet.
+  //  - «Мои заявки» (outgoing): only LIVE applications — pending, awaiting the organizer's decision.
+  //    Finished-lifecycle apps (rejected / auto_rejected / approved→member) are excluded — they're
+  //    history, not actionable. (De-Stars: approval now creates the membership directly, so there's
+  //    no "approved-awaiting-payment" limbo anymore.)
+  //  - «Заявки в мои клубы» (organizer inbox): pending review.
   const myActiveApps = useMemo(
-    () => applications.filter((a) => a.status === 'pending' && !awaitingPaymentIds.has(a.id)),
-    [applications, awaitingPaymentIds],
+    () => applications.filter((a) => a.status === 'pending'),
+    [applications],
   );
-  const myApplicationsCount = awaitingPayment.length + myActiveApps.length;
-  const organizerInboxCount = pendingInbox.length + organizerAwaitingPayment.length;
+  const myApplicationsCount = myActiveApps.length;
+  const organizerInboxCount = pendingInbox.length;
 
   const loading = myClubsQuery.isPending || applicationsQuery.isPending;
   const empty =
@@ -579,27 +429,23 @@ export const MyClubsPage: FC = () => {
 
       {/*
         Sections grouped by addressee (see docs/modules/my-clubs-unified.md):
-        1. «Мои заявки» — applicant-side: awaiting-payment + pending/rejected.
-        2. «Заявки в мои клубы» — organizer-side: pending review + applicants awaiting payment.
+        1. «Мои заявки» — applicant-side: pending applications awaiting the organizer's decision.
+        2. «Заявки в мои клубы» — organizer-side: pending review.
         3. «Где я состою» — current memberships.
       */}
 
-      {/* 1. My applications (outgoing) — payment CTA + pending/rejected */}
+      {/* 1. My applications (outgoing) — pending review */}
       {!loading && myApplicationsCount > 0 && (
         <>
           <div className="rd-section-sub-h">
             Мои заявки <span className="rd-count">· {myApplicationsCount}</span>
           </div>
           <div className="rd-glass rd-rep-panel">
-            {awaitingPayment.map((item) => (
-              <AwaitingPaymentCard key={item.applicationId} item={item} />
-            ))}
             {myActiveApps.map((app) => (
               <AppCard
                 key={app.id}
                 application={app}
                 club={clubDetails[app.clubId]}
-                awaitingPayment={false}
                 onClick={() => handleClubClick(app.clubId)}
               />
             ))}
@@ -607,7 +453,7 @@ export const MyClubsPage: FC = () => {
         </>
       )}
 
-      {/* 2. Applications to my clubs (organizer inbox) — review + awaiting payment */}
+      {/* 2. Applications to my clubs (organizer inbox) — pending review */}
       {!loading && organizerInboxCount > 0 && (
         <>
           <div className="rd-section-sub-h">
@@ -623,9 +469,6 @@ export const MyClubsPage: FC = () => {
                   setReviewing(p);
                 }}
               />
-            ))}
-            {organizerAwaitingPayment.map((item) => (
-              <OrganizerAwaitingPaymentRow key={item.applicationId} item={item} />
             ))}
           </div>
         </>

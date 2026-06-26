@@ -1747,8 +1747,8 @@ body::after {
   cursor: pointer;
   /* width:100% + padding + border without border-box overflows the .mc-list
      gutter (20px each side), so the card visually touches the screen edge.
-     Forcing border-box keeps every mc-app variant (pending inbox row +
-     OrganizerAwaitingPaymentRow) flush with the club cards above/below. */
+     Forcing border-box keeps every mc-app variant (pending inbox row)
+     flush with the club cards above/below. */
   box-sizing: border-box;
 }
 .mc-app .avt {
@@ -3432,44 +3432,3 @@ select {
   margin-bottom: 12px;
 }
 
-/* «Ожидают оплаты» — applicant-side awaiting-payment cards on MyClubsPage.
-   Built on `.club-card` (NOT `.mc-app`) for exact visual parity with active
-   club cards stacked below in the «Активные» section — same padding, avatar,
-   background, body shape, body row structure (top → meta → capacity).
-   The WHOLE card is the button (taps re-trigger the Stars invoice), so the
-   inline pay CTA lives in the `.capacity` slot — same vertical height as
-   the capacity bar on active cards. Feedback toast renders BELOW as a sibling
-   so the row layout stays stable when feedback appears. */
-.awaiting-payment-card-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.club-card.awaiting-payment-card {
-  cursor: pointer;
-  width: 100%;
-  /* button defaults to content-box → width:100% + padding + border overflow
-     the parent column. Force border-box so the card stays inside .mc-list. */
-  box-sizing: border-box;
-}
-.club-card.awaiting-payment-card:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
-.awaiting-pay-inline {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--brand-brass-deep);
-  letter-spacing: 0.01em;
-}
-.awaiting-pay-toast {
-  font-size: 12px;
-  color: var(--brand-ink-3);
-  margin: 4px 4px 0;
-  padding: 6px 10px;
-  background: var(--brand-navy-soft);
-  border: 1px solid var(--brand-hairline);
-  border-radius: 8px;
-}
-.awaiting-pay-toast.error { color: #FF8B8B; }
-.awaiting-pay-toast.success { color: var(--brand-ink-2); }

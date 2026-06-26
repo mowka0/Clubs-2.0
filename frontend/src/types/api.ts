@@ -65,15 +65,11 @@ export interface MemberListItemDto {
   // Stage-2 confirmations to date. The "Обещания X%" line is gated on this being > 0 so a
   // finance-only member (skladchina record, no events) never shows a misleading 0% (F5-08).
   totalConfirmations: number | null;
-  /**
-   * True iff the member is a paid-club subscriber who has already cancelled
-   * autorenew but is still inside the paid period (`subscription_expires_at >
-   * now`). Backend only returns such rows when the caller passed
-   * `includeCancelled=true`; otherwise this is always false. Skladchina-create
-   * UI uses it to disable the participant row and tag it «Отменил подписку».
-   * See docs/modules/club-leave.md § Frontend → CreateSkladchinaPage.
-   */
-  subscriptionCancelled?: boolean;
+  // De-Stars Slice 2 — organizer dashboard only (null for regular members): access state and the
+  // paid-through date. Drive the «Скоро закончится» / «Ждут оплаты» / «Активные» buckets.
+  // `subscriptionExpiresAt` is also null for free memberships (no expiry).
+  accessStatus?: 'active' | 'frozen' | null;
+  subscriptionExpiresAt?: string | null;
 }
 
 export interface MemberProfileDto {
@@ -98,6 +94,17 @@ export interface MemberProfileDto {
   // null when suppressed; the "Сборы" ring is hidden when skladchinaTotal === 0.
   skladchinaPaid: number | null;
   skladchinaTotal: number | null;
+  // De-Stars Slice 2 — ORGANIZER ONLY (null for regular members): when this member's paid access
+  // window ends. null also for free memberships. Shown as «Подписка активна до …» on the org card.
+  subscriptionExpiresAt: string | null;
+}
+
+/**
+ * Count of members whose paid access ends within the «Скоро закончится» window (≤7 days).
+ * Feeds the red-dot badge on «Управление» + the «Участники» tab. Organizer-only.
+ */
+export interface MemberAttentionDto {
+  expiringSoon: number;
 }
 
 export interface UserClubReputationDto {
@@ -232,64 +239,12 @@ export interface PendingApplicationDto {
 }
 
 /**
- * Combined counter feeding the «Мои клубы» tab-dot. All three numbers signal
- * "the user has something to act on" on this tab:
- *  - inboxCount                    — organizer-side pending applications.
- *  - awaitingPaymentCount          — applicant-side approved-but-unpaid applications.
- *  - organizerAwaitingPaymentCount — organizer-side approved applicants who haven't paid yet.
- * Single endpoint, single cache slot. See docs/modules/applications-inbox.md.
+ * Counter feeding the «Мои клубы» tab-dot: organizer-side pending applications
+ * in the cross-club inbox. Single endpoint, single cache slot.
+ * See docs/modules/applications-inbox.md.
  */
 export interface PendingApplicationsCountDto {
   inboxCount: number;
-  awaitingPaymentCount: number;
-  organizerAwaitingPaymentCount: number;
-}
-
-/**
- * Caller's own approved application without active membership — Stars invoice
- * was sent but payment hasn't arrived yet. Surfaced in the MyClubsPage so the
- * user can re-trigger invoice delivery from the Mini App.
- */
-export interface AwaitingPaymentApplicationDto {
-  applicationId: string;
-  approvedAt: string;
-  club: ClubBriefDto;
-  subscriptionPrice: number;
-}
-
-/**
- * Mirror of {@link AwaitingPaymentApplicationDto} from the organizer's side:
- * an applicant whose application is approved for the organizer's club but
- * whose Stars invoice hasn't been paid yet (no active membership). Surfaces
- * in `ClubMembersTab` (organizer view) so the full applicant → member
- * lifecycle is visible in one place.
- */
-export interface AwaitingPaymentApplicantDto {
-  applicationId: string;
-  userId: string;
-  firstName: string;
-  lastName: string | null;
-  telegramUsername: string | null;
-  avatarUrl: string | null;
-  approvedAt: string;
-}
-
-/**
- * Cross-club organizer view of approved-but-unpaid applicants — surfaces on
- * MyClubsPage so an organizer with multiple clubs sees pending payments in
- * one place without entering each club. Lean shape (row-only rendering, no
- * modal opens from here): applicant identity + club brief + price.
- */
-export interface OrganizerAwaitingPaymentApplicantDto {
-  applicationId: string;
-  approvedAt: string;
-  userId: string;
-  firstName: string;
-  lastName: string | null;
-  telegramUsername: string | null;
-  avatarUrl: string | null;
-  club: ClubBriefDto;
-  subscriptionPrice: number;
 }
 
 export interface ClubDetailDto {
@@ -377,19 +332,6 @@ export interface MembershipDto {
   role: string;
   joinedAt: string | null;
   subscriptionExpiresAt: string | null;
-}
-
-export interface PendingPaymentDto {
-  status: 'pending_payment';
-  clubId: string;
-  priceStars: number;
-  message: string;
-}
-
-export type JoinClubResult = MembershipDto | PendingPaymentDto;
-
-export function isPendingPayment(result: JoinClubResult): result is PendingPaymentDto {
-  return result.status === 'pending_payment';
 }
 
 export interface EventDetailDto {

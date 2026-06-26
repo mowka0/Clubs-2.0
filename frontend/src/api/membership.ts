@@ -1,15 +1,12 @@
 import { apiClient } from './apiClient';
 import type {
-  AwaitingPaymentApplicantDto,
-  AwaitingPaymentApplicationDto,
   GamificationDto,
-  JoinClubResult,
   LeavePreviewDto,
+  MemberAttentionDto,
   MemberListItemDto,
   MembershipDto,
   MemberProfileDto,
   MyReputationDto,
-  OrganizerAwaitingPaymentApplicantDto,
   PendingApplicationDto,
   PendingApplicationsCountDto,
 } from '../types/api';
@@ -24,8 +21,13 @@ export interface ApplicationDto {
   createdAt: string | null;
 }
 
-export function joinClub(clubId: string): Promise<JoinClubResult> {
-  return apiClient.post<JoinClubResult>(`/api/clubs/${clubId}/join`);
+/**
+ * Join an open club. De-Stars Slice 2: always 201 + MembershipDto. A paid club lands the
+ * membership in `frozen` (no content access until the organizer confirms the dues offline);
+ * a free club lands it `active`. No Stars invoice is created anymore.
+ */
+export function joinClub(clubId: string): Promise<MembershipDto> {
+  return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/join`);
 }
 
 /**
@@ -62,42 +64,43 @@ export function getMyApplications(): Promise<ApplicationDto[]> {
   return apiClient.get<ApplicationDto[]>('/api/users/me/applications');
 }
 
-export function joinByInviteCode(code: string): Promise<JoinClubResult> {
-  return apiClient.post<JoinClubResult>(`/api/invite/${code}/join`);
+/** Join via an invite code. Same de-Stars contract as {@link joinClub}: 201 + MembershipDto,
+ *  paid clubs land `frozen`. */
+export function joinByInviteCode(code: string): Promise<MembershipDto> {
+  return apiClient.post<MembershipDto>(`/api/invite/${code}/join`);
 }
 
-export interface GetClubMembersOptions {
-  /**
-   * If true, include paid members who already cancelled their subscription but
-   * are still inside the paid period (`subscription_expires_at > now`). Used
-   * by the skladchina-create flow to render them as disabled with a
-   * «Отменил подписку» tag. Defaults to false — every other caller gets the
-   * legacy active-only list.
-   */
-  includeCancelled?: boolean;
-}
-
-export function getClubMembers(
-  clubId: string,
-  options: GetClubMembersOptions = {},
-): Promise<MemberListItemDto[]> {
-  const params: Record<string, string> = {};
-  if (options.includeCancelled) params.includeCancelled = 'true';
-  return apiClient.get<MemberListItemDto[]>(`/api/clubs/${clubId}/members`, params);
+export function getClubMembers(clubId: string): Promise<MemberListItemDto[]> {
+  return apiClient.get<MemberListItemDto[]>(`/api/clubs/${clubId}/members`);
 }
 
 /**
- * Organizer-only view: applicants for [clubId] whose application is approved
- * but the Stars invoice hasn't been paid yet. Backend returns 403 if caller
- * is not the club owner — frontend additionally gates the call behind the
- * `isOrganizer` flag, but the backend authz is the source of truth.
+ * Organizer access gate (de-Stars Slice 2). All four are owner-only (`@RequiresOrganizer`),
+ * return the updated `MembershipDto`, and 409 on a lost status-transition race.
+ *  - dues-paid : «Взнос получен» — open access + extend the paid window +30d from max(now, current end).
+ *  - freeze    : «Закрыть доступ» — active → frozen.
+ *  - unfreeze  : frozen → active without extending the window.
+ *  - dues-unpaid: clear the dues mark (does not touch access/window).
  */
-export function getClubAwaitingPaymentApplicants(
-  clubId: string,
-): Promise<AwaitingPaymentApplicantDto[]> {
-  return apiClient.get<AwaitingPaymentApplicantDto[]>(
-    `/api/clubs/${clubId}/awaiting-payment-applicants`,
-  );
+export function markMemberDuesPaid(clubId: string, userId: string): Promise<MembershipDto> {
+  return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/dues-paid`);
+}
+
+export function freezeMember(clubId: string, userId: string): Promise<MembershipDto> {
+  return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/freeze`);
+}
+
+export function unfreezeMember(clubId: string, userId: string): Promise<MembershipDto> {
+  return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/unfreeze`);
+}
+
+export function unmarkMemberDues(clubId: string, userId: string): Promise<MembershipDto> {
+  return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/dues-unpaid`);
+}
+
+/** Red-dot feed: how many members' paid access ends within the next week. Owner-only. */
+export function getMemberAttention(clubId: string): Promise<MemberAttentionDto> {
+  return apiClient.get<MemberAttentionDto>(`/api/clubs/${clubId}/member-attention`);
 }
 
 export function getMemberProfile(clubId: string, userId: string): Promise<MemberProfileDto> {
@@ -130,47 +133,12 @@ export function getMyPendingApplications(): Promise<PendingApplicationDto[]> {
 }
 
 /**
- * Combined counter that drives the «Мои клубы» tab-dot. Returns both inbox
- * (organizer) and awaiting-payment (applicant) counts in one shape.
+ * Counter that drives the «Мои клубы» tab-dot: organizer-side pending applications (`inboxCount`).
  */
 export function getMyClubsActionCounts(): Promise<PendingApplicationsCountDto> {
   return apiClient.get<PendingApplicationsCountDto>(
     '/api/users/me/applications-pending-count',
   );
-}
-
-/**
- * Caller's own approved-but-unpaid applications — surfaced on MyClubsPage
- * so the applicant can re-trigger the Stars invoice when the original DM
- * was missed.
- */
-export function getMyAwaitingPaymentApplications(): Promise<AwaitingPaymentApplicationDto[]> {
-  return apiClient.get<AwaitingPaymentApplicationDto[]>(
-    '/api/users/me/applications-awaiting-payment',
-  );
-}
-
-/**
- * Cross-club organizer view: approved-but-unpaid applicants across all clubs
- * the caller owns. Surfaces on MyClubsPage so the organizer doesn't have to
- * enter each club to see who hasn't paid yet. Non-organizers get empty list
- * (server-side filter via `clubs.owner_id`), no 403.
- */
-export function getOrganizerAwaitingPaymentApplicants(): Promise<
-  OrganizerAwaitingPaymentApplicantDto[]
-> {
-  return apiClient.get<OrganizerAwaitingPaymentApplicantDto[]>(
-    '/api/users/me/organizer/awaiting-payment-applicants',
-  );
-}
-
-/**
- * Re-send the Stars invoice for an approved-but-unpaid application. Backend
- * rate-limits at 1 call per 60s per application (HTTP 429 «Please wait
- * before resending the invoice»). 204 No Content on success.
- */
-export function resendApplicationInvoice(applicationId: string): Promise<void> {
-  return apiClient.post<void>(`/api/applications/${applicationId}/resend-invoice`);
 }
 
 /**

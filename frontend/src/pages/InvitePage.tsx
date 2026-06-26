@@ -4,6 +4,7 @@ import { Spinner } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useClubByInviteQuery, useJoinByInviteMutation } from '../queries/clubs';
+import { formatPrice } from '../utils/formatters';
 
 const CATEGORY_LABELS: Record<string, string> = {
   sport: 'Спорт', creative: 'Творчество', food: 'Еда',
@@ -77,11 +78,15 @@ export const InvitePage: FC = () => {
   if (!club) return null;
 
   if (joined) {
+    const isPaid = club.subscriptionPrice > 0;
     return (
       <div className="rd-page">
         <div className="rd-glass rd-empty" style={{ marginTop: 40 }}>
           <div className="rd-title">Добро пожаловать!</div>
-          <div className="rd-sub">Вы вступили в клуб «{club.name}»</div>
+          <div className="rd-sub">
+            Вы вступили в клуб «{club.name}»
+            {isPaid && '. Доступ к активностям откроет организатор после того, как вы передадите ему взнос.'}
+          </div>
           <button
             type="button"
             className="rd-btn-primary"
@@ -115,7 +120,7 @@ export const InvitePage: FC = () => {
         <div className="rd-kv"><span>Город</span><span className="rd-v">{club.city}</span></div>
         <div className="rd-kv"><span>Участники</span><span className="rd-v">{club.memberCount} / {club.memberLimit}</span></div>
         {club.subscriptionPrice > 0 && (
-          <div className="rd-kv"><span>Подписка</span><span className="rd-v">{club.subscriptionPrice} Stars / мес</span></div>
+          <div className="rd-kv"><span>Подписка</span><span className="rd-v">{formatPrice(club.subscriptionPrice)}</span></div>
         )}
       </div>
 

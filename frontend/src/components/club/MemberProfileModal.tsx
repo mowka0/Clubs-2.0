@@ -1,7 +1,14 @@
-import { FC, useEffect } from 'react';
+import { FC, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
-import { useMemberProfileQuery } from '../../queries/members';
+import {
+  useFreezeMemberMutation,
+  useMarkMemberDuesPaidMutation,
+  useMemberProfileQuery,
+} from '../../queries/members';
+import { useHaptic } from '../../hooks/useHaptic';
+import { ApiError } from '../../api/apiClient';
+import { pluralRu } from '../../utils/formatters';
 import { DonutRing } from '../reputation/DonutRing';
 import { TRUST_TIER_COLOR, trustTier } from '../reputation/trust-tier';
 import type { MemberListItemDto, MemberProfileDto } from '../../types/api';
@@ -9,8 +16,121 @@ import type { MemberListItemDto, MemberProfileDto } from '../../types/api';
 interface MemberProfileModalProps {
   member: MemberListItemDto;
   clubId: string;
+  /** Organizer view — unlocks the «Подписка активна до …» strip + dues/freeze actions (de-Stars). */
+  isOrganizer?: boolean;
   onClose: () => void;
+  /** Surface a toast at the page level after a gate action succeeds. */
+  onActionToast?: (message: string) => void;
 }
+
+const MS_PER_DAY = 86_400_000;
+// Mirrors the backend honor-system period (membership.access-period-days) for the «продлить до …» preview.
+const ACCESS_PERIOD_DAYS = 30;
+
+function formatDateFull(iso: string): string {
+  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+}
+
+function daysUntil(iso: string): number {
+  return Math.ceil((new Date(iso).getTime() - Date.now()) / MS_PER_DAY);
+}
+
+function relativeUntil(iso: string): string {
+  const days = daysUntil(iso);
+  if (days <= 0) return 'истекла';
+  if (days === 1) return 'завтра';
+  return `через ${days} ${pluralRu(days, ['день', 'дня', 'дней'])}`;
+}
+
+/** End date after «Взнос получен» — backend extends +30d from max(now, current expiry). */
+function extendedEndLabel(iso: string | null): string {
+  const base = iso ? Math.max(Date.now(), new Date(iso).getTime()) : Date.now();
+  return formatDateFull(new Date(base + ACCESS_PERIOD_DAYS * MS_PER_DAY).toISOString());
+}
+
+interface OrganizerGateProps {
+  clubId: string;
+  member: MemberListItemDto;
+  onDone: (message: string) => void;
+}
+
+/**
+ * Organizer-only strip + actions: «Подписка активна до …» / «Доступ закрыт», plus «Взнос получен»
+ * (dues-paid → open + extend) and «Закрыть доступ» (freeze). 409 (lost race) closes the card with a
+ * note — the list cache is already refreshed.
+ */
+const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, onDone }) => {
+  const haptic = useHaptic();
+  const markPaid = useMarkMemberDuesPaidMutation();
+  const freeze = useFreezeMemberMutation();
+  const [error, setError] = useState<string | null>(null);
+
+  const busy = markPaid.isPending || freeze.isPending;
+  const frozen = member.accessStatus === 'frozen';
+  const expiresAt = member.subscriptionExpiresAt ?? null;
+  const soon = !frozen && !!expiresAt && daysUntil(expiresAt) <= 7;
+
+  const run = (
+    mutation: ReturnType<typeof useMarkMemberDuesPaidMutation> | ReturnType<typeof useFreezeMemberMutation>,
+    successMessage: string,
+  ) => {
+    if (busy) return;
+    setError(null);
+    haptic.impact('medium');
+    mutation.mutate(
+      { clubId, userId: member.userId },
+      {
+        onSuccess: () => { haptic.notify('success'); onDone(successMessage); },
+        onError: (e) => {
+          if (e instanceof ApiError && e.status === 409) { onDone('Статус участника изменился'); return; }
+          haptic.notify('error');
+          setError(e instanceof Error ? e.message : 'Не удалось выполнить действие');
+        },
+      },
+    );
+  };
+
+  const duesLabel = frozen
+    ? 'Взнос получен · открыть доступ'
+    : `Взнос получен · продлить до ${extendedEndLabel(expiresAt)}`;
+
+  return (
+    <div className="rd-org-gate">
+      <div className={`rd-sub-strip${frozen || soon ? ' rd-soon' : ''}`}>
+        <div style={{ minWidth: 0 }}>
+          <div className="rd-sub-strip-k">{frozen ? 'Доступ закрыт' : 'Подписка активна до'}</div>
+          <div className="rd-sub-strip-v">
+            {frozen
+              ? 'участник ждёт оплаты'
+              : expiresAt
+                ? `${formatDateFull(expiresAt)} · ${relativeUntil(expiresAt)}`
+                : '—'}
+          </div>
+        </div>
+        <span className="rd-org-tag">Только орг</span>
+      </div>
+
+      {error && <div className="rd-error" style={{ textAlign: 'left' }}>{error}</div>}
+
+      <div className="rd-org-gate-acts">
+        <button type="button" className="rd-btn-primary" disabled={busy} onClick={() => run(markPaid, duesLabel.includes('открыть') ? `Доступ ${member.firstName} открыт` : `Доступ ${member.firstName} продлён на 30 дней`)}>
+          {markPaid.isPending ? <Spinner size="s" /> : duesLabel}
+        </button>
+        {!frozen && (
+          <button
+            type="button"
+            className="rd-btn-outline"
+            style={{ color: 'var(--danger)' }}
+            disabled={busy}
+            onClick={() => run(freeze, `Доступ ${member.firstName} закрыт`)}
+          >
+            {freeze.isPending ? <Spinner size="s" /> : 'Закрыть доступ'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
 
 /**
  * Per-club reputation rings + spontaneity/role footer. Надёжность (smart composite) always shows;
@@ -85,10 +205,28 @@ const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
   );
 };
 
-export const MemberProfileModal: FC<MemberProfileModalProps> = ({ member, clubId, onClose }) => {
+export const MemberProfileModal: FC<MemberProfileModalProps> = ({
+  member,
+  clubId,
+  isOrganizer = false,
+  onClose,
+  onActionToast,
+}) => {
   const profileQuery = useMemberProfileQuery(clubId, member.userId);
   const profile = profileQuery.data;
   const loading = profileQuery.isPending;
+
+  // Organizer gate (de-Stars): shown for a paid member (has an expiry window) or a frozen member.
+  // Never for the organizer's own row — the backend rejects managing the organizer.
+  const showGate =
+    isOrganizer
+    && member.role !== 'organizer'
+    && (member.accessStatus === 'frozen' || !!member.subscriptionExpiresAt);
+
+  const handleGateDone = (message: string) => {
+    onActionToast?.(message);
+    onClose();
+  };
 
   // Lock background scroll while the sheet is open (same as the other rd-sheets).
   useEffect(() => {
@@ -171,6 +309,11 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({ member, clubId
               </div>
             )}
           </div>
+
+          {/* Organizer-only access gate (de-Stars Slice 2) */}
+          {showGate && (
+            <OrganizerGate clubId={clubId} member={member} onDone={handleGateDone} />
+          )}
         </div>
       </div>
     </>,
