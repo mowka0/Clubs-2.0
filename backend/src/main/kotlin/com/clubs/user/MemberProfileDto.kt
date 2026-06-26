@@ -1,6 +1,7 @@
 package com.clubs.user
 
 import java.math.BigDecimal
+import java.time.OffsetDateTime
 import java.util.UUID
 
 data class MemberProfileDto(
@@ -26,5 +27,8 @@ data class MemberProfileDto(
     // Reputation-affecting skladchina record in THIS club: paid / (paid + expired). null when the
     // reputation block is suppressed; the frontend hides the "Сборы" ring when total == 0.
     val skladchinaPaid: Int?,
-    val skladchinaTotal: Int?
+    val skladchinaTotal: Int?,
+    // De-Stars Slice 2 — ORGANIZER ONLY (null for regular members): when this member's paid access
+    // window ends. null also for free memberships (no expiry). Shown as «Подписка активна до …».
+    val subscriptionExpiresAt: OffsetDateTime? = null
 )

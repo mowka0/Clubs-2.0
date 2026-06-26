@@ -13,6 +13,7 @@ import com.clubs.generated.jooq.indexes.IDX_MEMBERSHIPS_USER_ID
 import com.clubs.generated.jooq.keys.MEMBERSHIPS_PKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS_USER_ID_CLUB_ID_KEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_CLUB_ID_FKEY
+import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_DUES_MARKED_BY_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.TRANSACTIONS__TRANSACTIONS_MEMBERSHIP_ID_FKEY
 import com.clubs.generated.jooq.tables.Clubs.ClubsPath
@@ -132,6 +133,21 @@ open class Memberships(
      */
     val UPDATED_AT: TableField<MembershipsRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "")
 
+    /**
+     * The column <code>public.memberships.access_frozen_at</code>.
+     */
+    val ACCESS_FROZEN_AT: TableField<MembershipsRecord, OffsetDateTime?> = createField(DSL.name("access_frozen_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "")
+
+    /**
+     * The column <code>public.memberships.dues_marked_paid_at</code>.
+     */
+    val DUES_MARKED_PAID_AT: TableField<MembershipsRecord, OffsetDateTime?> = createField(DSL.name("dues_marked_paid_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "")
+
+    /**
+     * The column <code>public.memberships.dues_marked_by</code>.
+     */
+    val DUES_MARKED_BY: TableField<MembershipsRecord, UUID?> = createField(DSL.name("dues_marked_by"), SQLDataType.UUID, this, "")
+
     private constructor(alias: Name, aliased: Table<MembershipsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<MembershipsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<MembershipsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -167,7 +183,7 @@ open class Memberships(
     override fun getIndexes(): List<Index> = listOf(IDX_MEMBERSHIPS_CLUB_ID, IDX_MEMBERSHIPS_STATUS, IDX_MEMBERSHIPS_USER_ID)
     override fun getPrimaryKey(): UniqueKey<MembershipsRecord> = MEMBERSHIPS_PKEY
     override fun getUniqueKeys(): List<UniqueKey<MembershipsRecord>> = listOf(MEMBERSHIPS_USER_ID_CLUB_ID_KEY)
-    override fun getReferences(): List<ForeignKey<MembershipsRecord, *>> = listOf(MEMBERSHIPS__MEMBERSHIPS_CLUB_ID_FKEY, MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY)
+    override fun getReferences(): List<ForeignKey<MembershipsRecord, *>> = listOf(MEMBERSHIPS__MEMBERSHIPS_CLUB_ID_FKEY, MEMBERSHIPS__MEMBERSHIPS_DUES_MARKED_BY_FKEY, MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY)
 
     private lateinit var _clubs: ClubsPath
 
@@ -184,20 +200,37 @@ open class Memberships(
     val clubs: ClubsPath
         get(): ClubsPath = clubs()
 
-    private lateinit var _users: UsersPath
+    private lateinit var _membershipsDuesMarkedByFkey: UsersPath
 
     /**
-     * Get the implicit join path to the <code>public.users</code> table.
+     * Get the implicit join path to the <code>public.users</code> table, via
+     * the <code>memberships_dues_marked_by_fkey</code> key.
      */
-    fun users(): UsersPath {
-        if (!this::_users.isInitialized)
-            _users = UsersPath(this, MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY, null)
+    fun membershipsDuesMarkedByFkey(): UsersPath {
+        if (!this::_membershipsDuesMarkedByFkey.isInitialized)
+            _membershipsDuesMarkedByFkey = UsersPath(this, MEMBERSHIPS__MEMBERSHIPS_DUES_MARKED_BY_FKEY, null)
 
-        return _users;
+        return _membershipsDuesMarkedByFkey;
     }
 
-    val users: UsersPath
-        get(): UsersPath = users()
+    val membershipsDuesMarkedByFkey: UsersPath
+        get(): UsersPath = membershipsDuesMarkedByFkey()
+
+    private lateinit var _membershipsUserIdFkey: UsersPath
+
+    /**
+     * Get the implicit join path to the <code>public.users</code> table, via
+     * the <code>memberships_user_id_fkey</code> key.
+     */
+    fun membershipsUserIdFkey(): UsersPath {
+        if (!this::_membershipsUserIdFkey.isInitialized)
+            _membershipsUserIdFkey = UsersPath(this, MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY, null)
+
+        return _membershipsUserIdFkey;
+    }
+
+    val membershipsUserIdFkey: UsersPath
+        get(): UsersPath = membershipsUserIdFkey()
 
     private lateinit var _transactions: TransactionsPath
 

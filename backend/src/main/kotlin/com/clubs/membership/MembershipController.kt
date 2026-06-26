@@ -22,9 +22,9 @@ class MembershipController(private val membershipService: MembershipService) {
     fun joinClub(
         @PathVariable id: UUID,
         @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<Any> {
+    ): ResponseEntity<MembershipDto> {
         log.info("Join club {}: userId={}", id, user.userId)
-        return toHttpResponse(membershipService.joinOpenClub(id, user.userId))
+        return ResponseEntity.status(HttpStatus.CREATED).body(membershipService.joinOpenClub(id, user.userId))
     }
 
     @PostMapping("/{id}/cancel")
@@ -51,9 +51,4 @@ class MembershipController(private val membershipService: MembershipService) {
         log.info("Leave club {}: userId={}", id, user.userId)
         return ResponseEntity.ok(membershipService.leaveClub(id, user.userId))
     }
-}
-
-internal fun toHttpResponse(result: JoinResult): ResponseEntity<Any> = when (result) {
-    is JoinResult.Joined -> ResponseEntity.status(HttpStatus.CREATED).body(result.membership)
-    is JoinResult.PendingPayment -> ResponseEntity.status(HttpStatus.ACCEPTED).body(result.dto)
 }

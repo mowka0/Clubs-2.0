@@ -63,72 +63,12 @@ data class ClubBriefDto(
 )
 
 /**
- * Combined counter feeding the `/my-clubs` tab-dot indicator. All three numbers
- * mean "the user has work to do on this tab":
- *  - [inboxCount]                    — pending applications across the caller's owned clubs (organizer action).
- *  - [awaitingPaymentCount]          — caller's own approved applications without active membership (applicant action).
- *  - [organizerAwaitingPaymentCount] — approved applicants of the caller's owned clubs who haven't paid yet (organizer visibility).
+ * Counter feeding the `/my-clubs` tab-dot indicator: pending applications across the caller's owned
+ * clubs (organizer action). De-Stars Slice 2 removed the Stars "awaiting payment" counters — approve
+ * creates the membership immediately, so that state no longer exists.
  *
- * Single endpoint = single source of truth, one cache slot. See
- * docs/modules/applications-inbox.md § "GET /api/users/me/applications-pending-count".
+ * See docs/modules/applications-inbox.md § "GET /api/users/me/applications-pending-count".
  */
 data class PendingApplicationsCountDto(
-    val inboxCount: Int,
-    val awaitingPaymentCount: Int,
-    val organizerAwaitingPaymentCount: Int
-)
-
-/**
- * Caller's own application that was approved but the Stars invoice hasn't been
- * paid yet (no active membership exists). Surfaces in MyClubsPage so the user
- * can re-trigger invoice delivery from the Mini App.
- *
- * See docs/modules/applications-inbox.md § "GET /api/users/me/applications-awaiting-payment".
- */
-data class AwaitingPaymentApplicationDto(
-    val applicationId: UUID,
-    val approvedAt: OffsetDateTime,
-    val club: ClubBriefDto,
-    val subscriptionPrice: Int
-)
-
-/**
- * Mirror of [AwaitingPaymentApplicationDto] but from the organizer's perspective:
- * an applicant whose application is approved for the organizer's club, but who
- * has not paid the Stars invoice yet (no active/grace_period membership).
- *
- * Surfaces on `ClubMembersTab` (organizer view) so the full lifecycle —
- * applicant → member — is visible in one place.
- *
- * See docs/modules/applications-inbox.md § "GET /api/clubs/{clubId}/awaiting-payment-applicants".
- */
-data class AwaitingPaymentApplicantDto(
-    val applicationId: UUID,
-    val userId: UUID,
-    val firstName: String,
-    val lastName: String?,
-    val telegramUsername: String?,
-    val avatarUrl: String?,
-    val approvedAt: OffsetDateTime
-)
-
-/**
- * Cross-club organizer view of approved-but-unpaid applicants — surfaces on
- * MyClubsPage so an organizer with multiple clubs sees pending payments in one
- * place without entering each club. Fields are intentionally minimal (row-only
- * rendering, no modal opens from here): applicant identity for the row text,
- * club brief for the meta line, subscription price for context.
- *
- * See docs/modules/applications-inbox.md § "GET /api/users/me/organizer/awaiting-payment-applicants".
- */
-data class OrganizerAwaitingPaymentApplicantDto(
-    val applicationId: UUID,
-    val approvedAt: OffsetDateTime,
-    val userId: UUID,
-    val firstName: String,
-    val lastName: String?,
-    val telegramUsername: String?,
-    val avatarUrl: String?,
-    val club: ClubBriefDto,
-    val subscriptionPrice: Int
+    val inboxCount: Int
 )

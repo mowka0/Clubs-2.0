@@ -124,13 +124,13 @@ class MembershipHistoryIntegrationTest {
     }
 
     @Test
-    fun `moveGracePeriodToExpired records expired for each lapsed member`() {
+    fun `expireOverdueAccess flips overdue active to frozen without a churn event`() {
         val now = OffsetDateTime.now()
         membershipRepository.activateSubscription(memberId, clubId, now.minusDays(1)) // joined, already past expiry
-        membershipRepository.moveActiveToGracePeriod(now) // active → grace (not a logged event)
-        val count = membershipRepository.moveGracePeriodToExpired(now) // grace → expired (logged)
+        val count = membershipRepository.expireOverdueAccess(now) // active → frozen (access suspension)
         assertEquals(1, count)
-        assertEvents(memberId, MembershipEvent.joined, MembershipEvent.expired)
+        // De-Stars: a freeze (access suspension) is NOT churn, so only the original join is logged.
+        assertEvents(memberId, MembershipEvent.joined)
     }
 
     // ---- helpers ----

@@ -19,7 +19,8 @@ enum class MembershipStatus(@get:JvmName("literal") public val literal: String) 
     active("active"),
     grace_period("grace_period"),
     cancelled("cancelled"),
-    expired("expired");
+    expired("expired"),
+    frozen("frozen");
     override fun getCatalog(): Catalog? = schema.catalog
     override fun getSchema(): Schema = Public.PUBLIC
     override fun getName(): String = "membership_status"

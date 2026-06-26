@@ -57,6 +57,18 @@ open class MembershipsRecord private constructor() : UpdatableRecordImpl<Members
         set(value): Unit = set(8, value)
         get(): OffsetDateTime? = get(8) as OffsetDateTime?
 
+    open var accessFrozenAt: OffsetDateTime?
+        set(value): Unit = set(9, value)
+        get(): OffsetDateTime? = get(9) as OffsetDateTime?
+
+    open var duesMarkedPaidAt: OffsetDateTime?
+        set(value): Unit = set(10, value)
+        get(): OffsetDateTime? = get(10) as OffsetDateTime?
+
+    open var duesMarkedBy: UUID?
+        set(value): Unit = set(11, value)
+        get(): UUID? = get(11) as UUID?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -66,7 +78,7 @@ open class MembershipsRecord private constructor() : UpdatableRecordImpl<Members
     /**
      * Create a detached, initialised MembershipsRecord
      */
-    constructor(id: UUID? = null, userId: UUID, clubId: UUID, status: MembershipStatus? = null, role: MembershipRole? = null, joinedAt: OffsetDateTime? = null, subscriptionExpiresAt: OffsetDateTime? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, userId: UUID, clubId: UUID, status: MembershipStatus? = null, role: MembershipRole? = null, joinedAt: OffsetDateTime? = null, subscriptionExpiresAt: OffsetDateTime? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, accessFrozenAt: OffsetDateTime? = null, duesMarkedPaidAt: OffsetDateTime? = null, duesMarkedBy: UUID? = null): this() {
         this.id = id
         this.userId = userId
         this.clubId = clubId
@@ -76,6 +88,9 @@ open class MembershipsRecord private constructor() : UpdatableRecordImpl<Members
         this.subscriptionExpiresAt = subscriptionExpiresAt
         this.createdAt = createdAt
         this.updatedAt = updatedAt
+        this.accessFrozenAt = accessFrozenAt
+        this.duesMarkedPaidAt = duesMarkedPaidAt
+        this.duesMarkedBy = duesMarkedBy
         resetChangedOnNotNull()
     }
 
@@ -93,6 +108,9 @@ open class MembershipsRecord private constructor() : UpdatableRecordImpl<Members
             this.subscriptionExpiresAt = value.subscriptionExpiresAt
             this.createdAt = value.createdAt
             this.updatedAt = value.updatedAt
+            this.accessFrozenAt = value.accessFrozenAt
+            this.duesMarkedPaidAt = value.duesMarkedPaidAt
+            this.duesMarkedBy = value.duesMarkedBy
             resetChangedOnNotNull()
         }
     }

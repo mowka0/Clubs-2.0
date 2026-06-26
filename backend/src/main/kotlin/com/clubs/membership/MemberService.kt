@@ -3,6 +3,7 @@ package com.clubs.membership
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.generated.jooq.enums.MembershipRole
+import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.interest.InterestRepository
 import com.clubs.reputation.ReputationPolicy
 import com.clubs.reputation.ReputationRepository
@@ -10,7 +11,11 @@ import com.clubs.reputation.TrustService
 import com.clubs.user.MemberProfileDto
 import com.clubs.user.UserRepository
 import org.springframework.stereotype.Service
+import java.time.OffsetDateTime
 import java.util.UUID
+
+// Access expiring within this window surfaces in «Скоро закончится» + triggers the red-dot badge.
+private const val EXPIRING_SOON_DAYS = 7L
 
 @Service
 class MemberService(
@@ -22,30 +27,42 @@ class MemberService(
     private val mapper: MembershipMapper
 ) {
 
-    fun getClubMembers(
-        clubId: UUID,
-        callerId: UUID,
-        includeCancelled: Boolean = false
-    ): List<MemberListItemDto> {
-        if (!membershipRepository.isMember(callerId, clubId)) {
+    fun getClubMembers(clubId: UUID, callerId: UUID): List<MemberListItemDto> {
+        // One lookup gives both the access gate and the viewer's role. status==active mirrors
+        // MembershipAccess.hasAccess (a frozen viewer has no access). The organizer additionally sees
+        // each member's access state + paid-through date (de-Stars dashboard); regular members don't.
+        val caller = membershipRepository.findByUserAndClub(callerId, clubId)
+        if (caller == null || caller.status != MembershipStatus.active) {
             throw ForbiddenException("Not a member of this club")
         }
+        val forOrganizer = caller.role == MembershipRole.organizer
         // Per-member Trust comes from one batch ledger read. Order: organizer first (they do not
         // accrue Trust in their own club — anti-farm rule 1 — so by Trust alone they'd sort last),
         // then everyone else by the DISPLAYED Trust, newcomers / suppressed rows at the bottom.
         val trustByUser = trustService.trustForClubMembers(clubId)
-        return membershipRepository.findClubMembersWithUserInfo(clubId, includeCancelled)
-            .map { mapper.toMemberListItemDto(it, trustByUser[it.userId]) }
+        return membershipRepository.findClubMembersWithUserInfo(clubId, includeFrozen = forOrganizer)
+            .map { mapper.toMemberListItemDto(it, trustByUser[it.userId], forOrganizer) }
             .sortedWith(
                 compareByDescending<MemberListItemDto> { it.role == "organizer" }
                     .thenByDescending { it.trust ?: Int.MIN_VALUE }
             )
     }
 
+    /**
+     * Count of members of [clubId] whose paid access ends within the next week — the red-dot badge on
+     * «Управление»/«Участники». Organizer-only (gated by @RequiresOrganizer on the controller).
+     */
+    fun countExpiringSoon(clubId: UUID): Int {
+        val now = OffsetDateTime.now()
+        return membershipRepository.countExpiringSoonByClubs(listOf(clubId), now, now.plusDays(EXPIRING_SOON_DAYS))
+    }
+
     fun getMemberProfile(clubId: UUID, userId: UUID, callerId: UUID): MemberProfileDto {
-        if (!membershipRepository.isMember(callerId, clubId)) {
+        val caller = membershipRepository.findByUserAndClub(callerId, clubId)
+        if (caller == null || caller.status != MembershipStatus.active) {
             throw ForbiddenException("Not a member of this club")
         }
+        val callerIsOrganizer = caller.role == MembershipRole.organizer
         val user = userRepository.findById(userId) ?: throw NotFoundException("User not found")
         val membership = membershipRepository.findByUserAndClub(userId, clubId)
         val reputation = reputationRepository.findByUserAndClub(userId, clubId)
@@ -70,7 +87,10 @@ class MemberService(
             totalAttendances = if (show) reputation!!.totalAttendances else null,
             spontaneityCount = if (show) reputation!!.spontaneityCount else null,
             skladchinaPaid = summary?.skladchinaPaid,
-            skladchinaTotal = summary?.skladchinaTotal
+            skladchinaTotal = summary?.skladchinaTotal,
+            // Organizer-only: the member's paid access window end. null for regular viewers and for
+            // free memberships (no expiry). Drives «Подписка активна до …» on the organizer card.
+            subscriptionExpiresAt = if (callerIsOrganizer) membership?.subscriptionExpiresAt else null
         )
     }
 }

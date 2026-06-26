@@ -29,7 +29,9 @@ class MembershipMapper {
         subscriptionExpiresAt = membership.subscriptionExpiresAt
     )
 
-    fun toMemberListItemDto(info: ClubMemberInfo, trust: Int?): MemberListItemDto {
+    // forOrganizer gates the access/dues fields: only the organizer dashboard sees a member's access
+    // state and paid-through date; regular members get null (the roster never leaks who hasn't paid).
+    fun toMemberListItemDto(info: ClubMemberInfo, trust: Int?, forOrganizer: Boolean): MemberListItemDto {
         val show = ReputationPolicy.isShown(info.outcomeCount)
         return MemberListItemDto(
             userId = info.userId,
@@ -41,7 +43,8 @@ class MembershipMapper {
             trust = if (show) trust else null,
             promiseFulfillmentPct = if (show) info.promiseFulfillmentPct else null,
             totalConfirmations = if (show) info.totalConfirmations else null,
-            subscriptionCancelled = info.subscriptionCancelled
+            accessStatus = if (forOrganizer) info.status.literal else null,
+            subscriptionExpiresAt = if (forOrganizer) info.subscriptionExpiresAt else null
         )
     }
 

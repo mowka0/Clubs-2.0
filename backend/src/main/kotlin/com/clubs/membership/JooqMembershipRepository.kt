@@ -25,12 +25,22 @@ class JooqMembershipRepository(
     private val history: MembershipHistoryRepository
 ) : MembershipRepository {
 
+    // "Currently-belongs" lookup for management/leave/join-idempotency: a `frozen` member
+    // (organizer gated them pending off-platform dues) still belongs and must be findable so
+    // they can be unfrozen, leave, or be told "already a member" on a re-join attempt. This is
+    // wider than MembershipAccess.hasAccess (content access) on purpose.
     override fun findActiveByUserAndClub(userId: UUID, clubId: UUID): Membership? =
         dsl.selectFrom(MEMBERSHIPS)
             .where(
                 MEMBERSHIPS.USER_ID.eq(userId)
                     .and(MEMBERSHIPS.CLUB_ID.eq(clubId))
-                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period))
+                    .and(
+                        MEMBERSHIPS.STATUS.`in`(
+                            MembershipStatus.active,
+                            MembershipStatus.frozen,
+                            MembershipStatus.grace_period
+                        )
+                    )
             )
             .fetchOne()
             ?.let(mapper::toDomain)
@@ -50,8 +60,10 @@ class JooqMembershipRepository(
             .fetchOne()
             ?.let(mapper::toDomain)
 
+    // "My clubs" list: clubs the user currently belongs to. `frozen` is included — a gated
+    // member must still see the club (to learn they're frozen / pay dues). Drops the old
+    // cancelled-but-still-paid branch (de-Stars: subscription_expires_at is no longer a driver).
     override fun findByUserId(userId: UUID): List<Membership> {
-        val now = OffsetDateTime.now()
         return dsl.select(*MEMBERSHIPS.fields())
             .from(MEMBERSHIPS)
             .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))
@@ -59,25 +71,23 @@ class JooqMembershipRepository(
                 MEMBERSHIPS.USER_ID.eq(userId)
                     .and(CLUBS.IS_ACTIVE.eq(true))
                     .and(
-                        MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period)
-                            .or(
-                                MEMBERSHIPS.STATUS.eq(MembershipStatus.cancelled)
-                                    .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.greaterThan(now))
-                            )
+                        MEMBERSHIPS.STATUS.`in`(
+                            MembershipStatus.active,
+                            MembershipStatus.frozen,
+                            MembershipStatus.grace_period
+                        )
                     )
             )
             .fetchInto(MembershipsRecord::class.java)
             .map(mapper::toDomain)
     }
 
-    override fun findClubMembersWithUserInfo(clubId: UUID, includeCancelledInPeriod: Boolean): List<ClubMemberInfo> {
-        val now = OffsetDateTime.now()
-        val statusCondition = if (includeCancelledInPeriod) {
-            MEMBERSHIPS.STATUS.eq(MembershipStatus.active)
-                .or(
-                    MEMBERSHIPS.STATUS.eq(MembershipStatus.cancelled)
-                        .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.greaterThan(now))
-                )
+    override fun findClubMembersWithUserInfo(clubId: UUID, includeFrozen: Boolean): List<ClubMemberInfo> {
+        // The organizer dashboard needs `frozen` members too (they show in «Ждут оплаты»); the member-
+        // facing roster on ClubPage sees `active` only. includeFrozen is set by the caller (MemberService)
+        // from whether the viewer is the organizer.
+        val statusCondition = if (includeFrozen) {
+            MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.frozen)
         } else {
             MEMBERSHIPS.STATUS.eq(MembershipStatus.active)
         }
@@ -89,6 +99,7 @@ class JooqMembershipRepository(
             MEMBERSHIPS.ROLE,
             MEMBERSHIPS.STATUS,
             MEMBERSHIPS.JOINED_AT,
+            MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT,
             USERS.FIRST_NAME,
             USERS.LAST_NAME,
             USERS.AVATAR_URL,
@@ -115,24 +126,25 @@ class JooqMembershipRepository(
                     promiseFulfillmentPct = r.get(USER_CLUB_REPUTATION.PROMISE_FULFILLMENT_PCT),
                     totalConfirmations = r.get(USER_CLUB_REPUTATION.TOTAL_CONFIRMATIONS),
                     outcomeCount = r.get("outcome_count", Int::class.java) ?: 0,
-                    subscriptionCancelled = r.get(MEMBERSHIPS.STATUS) == MembershipStatus.cancelled
+                    status = r.get(MEMBERSHIPS.STATUS) ?: MembershipStatus.active,
+                    subscriptionExpiresAt = r.get(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT)
                 )
             }
     }
 
     override fun findUserClubsWithReputation(userId: UUID): List<UserClubReputationInfo> {
-        val now = OffsetDateTime.now()
         val outcomeCount = DSL.coalesce(USER_CLUB_REPUTATION.OUTCOME_COUNT, DSL.`val`(0))
-        // "Active" in the profile = member still has access AND the club is alive. Everything else
-        // that survives below (a left/expired membership) is "История" — it appears only because a
-        // reputation track record (outcome_count > 0) lives on. P1b: the global aggregate is
-        // all-history, so this query no longer drops left clubs (closes the active-only hole A).
-        val activeCondition = MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period)
-            .or(
-                MEMBERSHIPS.STATUS.eq(MembershipStatus.cancelled)
-                    .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.greaterThan(now))
-            )
-            .and(CLUBS.IS_ACTIVE.eq(true))
+        // "Active" in the profile = member still belongs AND the club is alive. `frozen` counts as
+        // belonging (gated pending dues, still the user's club). Everything else that survives below
+        // (a left/expired membership) is "История" — it appears only because a reputation track
+        // record (outcome_count > 0) lives on. P1b: the global aggregate is all-history, so this query
+        // no longer drops left clubs (closes the active-only hole A). De-Stars: dropped the old
+        // cancelled-but-still-paid branch (subscription_expires_at is no longer an access driver).
+        val activeCondition = MEMBERSHIPS.STATUS.`in`(
+            MembershipStatus.active,
+            MembershipStatus.frozen,
+            MembershipStatus.grace_period
+        ).and(CLUBS.IS_ACTIVE.eq(true))
         val activeField = DSL.field(activeCondition).`as`("active")
         return dsl.select(
             CLUBS.ID,
@@ -189,20 +201,18 @@ class JooqMembershipRepository(
             }
 
     override fun isMember(userId: UUID, clubId: UUID): Boolean {
-        val now = OffsetDateTime.now()
         return dsl.fetchExists(
             dsl.selectOne()
                 .from(MEMBERSHIPS)
                 .where(
                     MEMBERSHIPS.USER_ID.eq(userId)
                         .and(MEMBERSHIPS.CLUB_ID.eq(clubId))
-                        .and(MembershipAccess.hasAccess(now))
+                        .and(MembershipAccess.hasAccess())
                 )
         )
     }
 
     override fun isActiveMemberInActiveClub(userId: UUID, clubId: UUID): Boolean {
-        val now = OffsetDateTime.now()
         return dsl.fetchExists(
             dsl.selectOne()
                 .from(MEMBERSHIPS)
@@ -210,34 +220,44 @@ class JooqMembershipRepository(
                 .where(
                     MEMBERSHIPS.USER_ID.eq(userId)
                         .and(MEMBERSHIPS.CLUB_ID.eq(clubId))
-                        .and(MembershipAccess.hasAccess(now))
+                        .and(MembershipAccess.hasAccess())
                         .and(CLUBS.IS_ACTIVE.eq(true))
                 )
         )
     }
 
+    // Occupied-slot count for the member-limit check. `frozen` counts: a paid-club join lands a
+    // member straight into `frozen` (gated pending dues), and that still holds a slot — otherwise N
+    // people could pile into a 1-slot club while all frozen and bypass the limit.
     override fun countActiveByClubId(clubId: UUID): Int =
         dsl.selectCount().from(MEMBERSHIPS)
             .where(
                 MEMBERSHIPS.CLUB_ID.eq(clubId)
-                    .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active))
+                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.frozen))
             )
             .fetchOne(0, Int::class.java) ?: 0
 
-    override fun create(userId: UUID, clubId: UUID): Membership {
-        // Free-club membership (the only caller is FreeMembershipActivator). A free membership has
-        // NO subscription → subscription_expires_at stays NULL. Setting a 30-day expiry here (the
-        // historical bug) made every free member look like a cancelled-in-period paid subscriber:
-        // phantom "доступ до DATE" banner, and a free leaver lingering as a member for 30 days.
-        // The paid path is activateSubscription (real Stars-billed expiry); reactivateFree also nulls it.
+    // Free-club join → `active`. A free membership has NO subscription → subscription_expires_at stays
+    // NULL. (Setting a 30-day expiry here was the historical bug that made every free member look like
+    // a cancelled-in-period paid subscriber.) The paid join is createFrozen below.
+    override fun create(userId: UUID, clubId: UUID): Membership =
+        insertMembership(userId, clubId, MembershipStatus.active)
+
+    // Paid-club join → `frozen` (de-Stars Slice 2): the member belongs and occupies a slot, but has no
+    // content access until the organizer confirms the off-platform dues (AccessGateService.markDuesPaid).
+    override fun createFrozen(userId: UUID, clubId: UUID): Membership =
+        insertMembership(userId, clubId, MembershipStatus.frozen)
+
+    private fun insertMembership(userId: UUID, clubId: UUID, status: MembershipStatus): Membership {
         val now = OffsetDateTime.now()
         val record = dsl.insertInto(MEMBERSHIPS)
             .set(MEMBERSHIPS.ID, UUID.randomUUID())
             .set(MEMBERSHIPS.USER_ID, userId)
             .set(MEMBERSHIPS.CLUB_ID, clubId)
-            .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
+            .set(MEMBERSHIPS.STATUS, status)
             .set(MEMBERSHIPS.ROLE, MembershipRole.member)
             .set(MEMBERSHIPS.JOINED_AT, now)
+            .set(MEMBERSHIPS.ACCESS_FROZEN_AT, if (status == MembershipStatus.frozen) now else null)
             .returning()
             .fetchOne()!!
         history.record(userId, clubId, MembershipEvent.joined, now)
@@ -260,19 +280,27 @@ class JooqMembershipRepository(
     }
 
     /**
-     * Revives a previously dead (cancelled / expired) membership row for a
-     * **free** club. UNIQUE(user_id, club_id) means we cannot INSERT a fresh
-     * row when one already exists — reactivation is the only path. Resets
-     * lifecycle fields so the join is indistinguishable from a brand-new one:
-     * status=active, joined_at=now, subscription_expires_at=null (free club —
-     * no Stars billing), updated_at=now.
+     * Revives a previously dead (cancelled / expired) membership row. UNIQUE(user_id, club_id) means we
+     * cannot INSERT a fresh row when one already exists — reactivation is the only path. Resets lifecycle
+     * fields so the join is indistinguishable from a brand-new one. [reactivateFree] → `active` (free
+     * club, no billing); [reactivateFrozen] → `frozen` (paid club, gated pending organizer dues).
      */
-    override fun reactivateFree(membershipId: UUID): Membership {
+    override fun reactivateFree(membershipId: UUID): Membership =
+        reactivate(membershipId, MembershipStatus.active)
+
+    override fun reactivateFrozen(membershipId: UUID): Membership =
+        reactivate(membershipId, MembershipStatus.frozen)
+
+    private fun reactivate(membershipId: UUID, status: MembershipStatus): Membership {
         val now = OffsetDateTime.now()
         val record = dsl.update(MEMBERSHIPS)
-            .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
+            .set(MEMBERSHIPS.STATUS, status)
             .set(MEMBERSHIPS.JOINED_AT, now)
             .setNull(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT)
+            // Fresh join: clear any stale dues markers from the prior lifecycle; set frozen-since when frozen.
+            .setNull(MEMBERSHIPS.DUES_MARKED_PAID_AT)
+            .setNull(MEMBERSHIPS.DUES_MARKED_BY)
+            .set(MEMBERSHIPS.ACCESS_FROZEN_AT, if (status == MembershipStatus.frozen) now else null)
             .set(MEMBERSHIPS.UPDATED_AT, now)
             .where(MEMBERSHIPS.ID.eq(membershipId))
             .returning()
@@ -332,6 +360,61 @@ class JooqMembershipRepository(
         }
     }
 
+    // Access-gate mutations (de-Stars, Slice 2). Deliberately NOT written to membership_history:
+    // a freeze/unfreeze is temporary access suspension, not a join/leave/expire churn event (there is
+    // no MembershipEvent for it). A frozen member still belongs; when they actually leave, cancel()
+    // logs `left` as usual — so the retention/churn log stays accurate without these.
+    override fun freezeAccess(membershipId: UUID): Int {
+        val now = OffsetDateTime.now()
+        return dsl.update(MEMBERSHIPS)
+            .set(MEMBERSHIPS.STATUS, MembershipStatus.frozen)
+            .set(MEMBERSHIPS.ACCESS_FROZEN_AT, now)
+            .set(MEMBERSHIPS.UPDATED_AT, now)
+            .where(MEMBERSHIPS.ID.eq(membershipId).and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active)))
+            .execute()
+    }
+
+    override fun unfreezeAccess(membershipId: UUID): Int {
+        val now = OffsetDateTime.now()
+        return dsl.update(MEMBERSHIPS)
+            .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
+            .setNull(MEMBERSHIPS.ACCESS_FROZEN_AT)
+            .set(MEMBERSHIPS.UPDATED_AT, now)
+            .where(MEMBERSHIPS.ID.eq(membershipId).and(MEMBERSHIPS.STATUS.eq(MembershipStatus.frozen)))
+            .execute()
+    }
+
+    // "Взнос получен": records the off-platform dues payment, grants access (status→active, clears frozen)
+    // AND sets the access window end (subscription_expires_at = accessUntil) in one atomic step. The
+    // scheduler later auto-expires overdue access back to frozen — see expireOverdueAccess.
+    override fun markDuesPaid(membershipId: UUID, markedBy: UUID, accessUntil: OffsetDateTime): Int {
+        val now = OffsetDateTime.now()
+        return dsl.update(MEMBERSHIPS)
+            .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
+            .setNull(MEMBERSHIPS.ACCESS_FROZEN_AT)
+            .set(MEMBERSHIPS.DUES_MARKED_PAID_AT, now)
+            .set(MEMBERSHIPS.DUES_MARKED_BY, markedBy)
+            .set(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT, accessUntil)
+            .set(MEMBERSHIPS.UPDATED_AT, now)
+            .where(
+                MEMBERSHIPS.ID.eq(membershipId)
+                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.frozen))
+            )
+            .execute()
+    }
+
+    // Clears the dues record only; does NOT re-freeze (symmetric with skladchina un-mark not
+    // auto-closing). Guard on dues_marked_paid_at makes a repeat un-mark a no-op (service → idempotent).
+    override fun unmarkDues(membershipId: UUID): Int {
+        val now = OffsetDateTime.now()
+        return dsl.update(MEMBERSHIPS)
+            .setNull(MEMBERSHIPS.DUES_MARKED_PAID_AT)
+            .setNull(MEMBERSHIPS.DUES_MARKED_BY)
+            .set(MEMBERSHIPS.UPDATED_AT, now)
+            .where(MEMBERSHIPS.ID.eq(membershipId).and(MEMBERSHIPS.DUES_MARKED_PAID_AT.isNotNull))
+            .execute()
+    }
+
     override fun findExpiringWithin(now: OffsetDateTime, threshold: OffsetDateTime): List<ExpiringSubscriptionNotification> =
         dsl.select(USERS.TELEGRAM_ID, CLUBS.NAME)
             .from(MEMBERSHIPS)
@@ -365,43 +448,43 @@ class JooqMembershipRepository(
                 )
             }
 
-    override fun moveActiveToGracePeriod(now: OffsetDateTime): Int =
+    // Honor-system auto-expiry: an `active` paid membership whose access window has passed drops to
+    // `frozen` ("ждёт оплаты") — keeps belonging, loses content access until the next confirmed dues.
+    // Free memberships (subscription_expires_at IS NULL) are excluded. Not logged to membership_history:
+    // a freeze is access suspension, not a churn event (same rule as the manual freeze/unfreeze above).
+    override fun expireOverdueAccess(now: OffsetDateTime): Int =
         dsl.update(MEMBERSHIPS)
-            .set(MEMBERSHIPS.STATUS, MembershipStatus.grace_period)
+            .set(MEMBERSHIPS.STATUS, MembershipStatus.frozen)
+            .set(MEMBERSHIPS.ACCESS_FROZEN_AT, now)
             .where(
                 MEMBERSHIPS.STATUS.eq(MembershipStatus.active)
+                    .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.isNotNull)
                     .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.lessOrEqual(now))
             )
             .execute()
 
-    override fun moveGracePeriodToExpired(gracePeriodEnd: OffsetDateTime): Int {
-        val now = OffsetDateTime.now()
-        val expired = dsl.update(MEMBERSHIPS)
-            .set(MEMBERSHIPS.STATUS, MembershipStatus.expired)
+    override fun countExpiringSoonByClubs(clubIds: Collection<UUID>, now: OffsetDateTime, threshold: OffsetDateTime): Int {
+        if (clubIds.isEmpty()) return 0
+        return dsl.selectCount().from(MEMBERSHIPS)
             .where(
-                MEMBERSHIPS.STATUS.eq(MembershipStatus.grace_period)
-                    .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.lessOrEqual(gracePeriodEnd))
+                MEMBERSHIPS.CLUB_ID.`in`(clubIds)
+                    .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active))
+                    .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.greaterThan(now))
+                    .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.lessOrEqual(threshold))
             )
-            .returningResult(MEMBERSHIPS.USER_ID, MEMBERSHIPS.CLUB_ID)
-            .fetch()
-        expired.forEach {
-            history.record(it.get(MEMBERSHIPS.USER_ID)!!, it.get(MEMBERSHIPS.CLUB_ID)!!, MembershipEvent.expired, now)
-        }
-        return expired.size
+            .fetchOne(0, Int::class.java) ?: 0
     }
 
     // Telegram IDs of members who currently have access to the club — the shared
-    // MembershipAccess predicate (active, or cancelled-but-still-paid). Members
-    // without access (expired/grace_period) must not be DM'd about an event they
-    // can't open. (GAP-010)
+    // MembershipAccess predicate (status `active`). Members without access
+    // (frozen/expired/grace_period) must not be DM'd about an event they can't open. (GAP-010)
     override fun findMemberTelegramIds(clubId: UUID): List<Long> {
-        val now = OffsetDateTime.now()
         return dsl.select(USERS.TELEGRAM_ID)
             .from(MEMBERSHIPS)
             .join(USERS).on(USERS.ID.eq(MEMBERSHIPS.USER_ID))
             .where(
                 MEMBERSHIPS.CLUB_ID.eq(clubId)
-                    .and(MembershipAccess.hasAccess(now))
+                    .and(MembershipAccess.hasAccess())
             )
             .fetch(USERS.TELEGRAM_ID)
             .filterNotNull()

@@ -6,7 +6,7 @@ import java.util.UUID
 /**
  * Published after a skladchina is created and the transaction has committed.
  * Listener (SkladchinaBotNotifier) sends DMs to participants.
- * See PaymentNotificationHandler for the canonical TransactionalEventListener pattern.
+ * See SkladchinaBotNotifier for the canonical TransactionalEventListener pattern.
  */
 data class SkladchinaCreatedEvent(
     val skladchinaId: UUID,

@@ -1,6 +1,7 @@
 package com.clubs.membership
 
 import com.clubs.generated.jooq.enums.MembershipRole
+import com.clubs.generated.jooq.enums.MembershipStatus
 import java.math.BigDecimal
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -10,10 +11,10 @@ import java.util.UUID
  * members list. Lives in the membership module because it is built around a
  * membership row plus joined user/reputation fields.
  *
- * [subscriptionCancelled] is true when membership row has status=cancelled
- * with `subscription_expires_at > now()` — paid member who cancelled but
- * still in the paid period. Used by skladchina-create UI to surface
- * the "user opted out" hint while keeping them visible until expire.
+ * [status] + [subscriptionExpiresAt] drive the organizer dashboard buckets
+ * (de-Stars Slice 2): `frozen` → «Ждут оплаты», `active` with expiry within a
+ * week → «Скоро закончится», otherwise «Активные». They are raw here; the mapper
+ * only exposes them to the organizer.
  */
 data class ClubMemberInfo(
     val userId: UUID,
@@ -30,5 +31,6 @@ data class ClubMemberInfo(
     // misleading "Обещания 0%" for the former — parity with ProfilePage's hasActivity (F5-08).
     val totalConfirmations: Int?,
     val outcomeCount: Int,
-    val subscriptionCancelled: Boolean = false
+    val status: MembershipStatus,
+    val subscriptionExpiresAt: OffsetDateTime?
 )

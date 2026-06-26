@@ -18,5 +18,18 @@ data class MemberListItemDto(
     // Stage-2 confirmations to date. The frontend gates the "Обещания X%" line on this being > 0
     // so a finance-only member (skladchina record, no events) never shows a misleading 0% (F5-08).
     val totalConfirmations: Int?,
-    val subscriptionCancelled: Boolean = false
+    // De-Stars Slice 2 — organizer dashboard only (null for regular members): access state
+    // ("active"/"frozen") + when the paid access window ends. Drives the «Скоро закончится» /
+    // «Ждут оплаты» / «Активные» buckets. `subscriptionExpiresAt` is null for free memberships.
+    val accessStatus: String? = null,
+    val subscriptionExpiresAt: OffsetDateTime? = null
+)
+
+/**
+ * Count of members whose paid access ends within the «Скоро закончится» window (de-Stars Slice 2).
+ * Feeds the red-dot badge on the «Управление» entry + «Участники» tab so the organizer notices
+ * upcoming expirations before access is cut. Organizer-only.
+ */
+data class MemberAttentionDto(
+    val expiringSoon: Int
 )

@@ -134,4 +134,37 @@ open class MembershipsDao(configuration: Configuration?) : DAOImpl<MembershipsRe
      * Fetch records that have <code>updated_at IN (values)</code>
      */
     fun fetchByUpdatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.UPDATED_AT, *values)
+
+    /**
+     * Fetch records that have <code>access_frozen_at BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfAccessFrozenAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetchRange(Memberships.MEMBERSHIPS.ACCESS_FROZEN_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>access_frozen_at IN (values)</code>
+     */
+    fun fetchByAccessFrozenAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.ACCESS_FROZEN_AT, *values)
+
+    /**
+     * Fetch records that have <code>dues_marked_paid_at BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfDuesMarkedPaidAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetchRange(Memberships.MEMBERSHIPS.DUES_MARKED_PAID_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>dues_marked_paid_at IN (values)</code>
+     */
+    fun fetchByDuesMarkedPaidAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.DUES_MARKED_PAID_AT, *values)
+
+    /**
+     * Fetch records that have <code>dues_marked_by BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfDuesMarkedBy(lowerInclusive: UUID?, upperInclusive: UUID?): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetchRange(Memberships.MEMBERSHIPS.DUES_MARKED_BY, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>dues_marked_by IN (values)</code>
+     */
+    fun fetchByDuesMarkedBy(vararg values: UUID): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.DUES_MARKED_BY, *values)
 }

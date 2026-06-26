@@ -412,7 +412,7 @@ open class Clubs(
      * table, via the <code>memberships_user_id_fkey</code> key
      */
     val membershipsUserIdFkey: UsersPath
-        get(): UsersPath = memberships().users()
+        get(): UsersPath = memberships().membershipsUserIdFkey()
 
     /**
      * Get the implicit many-to-many join path to the <code>public.users</code>

@@ -25,7 +25,10 @@ data class Memberships(
     var joinedAt: OffsetDateTime? = null,
     var subscriptionExpiresAt: OffsetDateTime? = null,
     var createdAt: OffsetDateTime? = null,
-    var updatedAt: OffsetDateTime? = null
+    var updatedAt: OffsetDateTime? = null,
+    var accessFrozenAt: OffsetDateTime? = null,
+    var duesMarkedPaidAt: OffsetDateTime? = null,
+    var duesMarkedBy: UUID? = null
 ): Serializable {
 
 
@@ -83,6 +86,24 @@ data class Memberships(
         }
         else if (this.updatedAt != o.updatedAt)
             return false
+        if (this.accessFrozenAt == null) {
+            if (o.accessFrozenAt != null)
+                return false
+        }
+        else if (this.accessFrozenAt != o.accessFrozenAt)
+            return false
+        if (this.duesMarkedPaidAt == null) {
+            if (o.duesMarkedPaidAt != null)
+                return false
+        }
+        else if (this.duesMarkedPaidAt != o.duesMarkedPaidAt)
+            return false
+        if (this.duesMarkedBy == null) {
+            if (o.duesMarkedBy != null)
+                return false
+        }
+        else if (this.duesMarkedBy != o.duesMarkedBy)
+            return false
         return true
     }
 
@@ -98,6 +119,9 @@ data class Memberships(
         result = prime * result + (if (this.subscriptionExpiresAt == null) 0 else this.subscriptionExpiresAt.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
+        result = prime * result + (if (this.accessFrozenAt == null) 0 else this.accessFrozenAt.hashCode())
+        result = prime * result + (if (this.duesMarkedPaidAt == null) 0 else this.duesMarkedPaidAt.hashCode())
+        result = prime * result + (if (this.duesMarkedBy == null) 0 else this.duesMarkedBy.hashCode())
         return result
     }
 
@@ -113,6 +137,9 @@ data class Memberships(
         sb.append(", ").append(subscriptionExpiresAt)
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)
+        sb.append(", ").append(accessFrozenAt)
+        sb.append(", ").append(duesMarkedPaidAt)
+        sb.append(", ").append(duesMarkedBy)
 
         sb.append(")")
         return sb.toString()

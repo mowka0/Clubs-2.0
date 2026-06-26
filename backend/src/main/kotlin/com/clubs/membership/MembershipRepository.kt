@@ -10,7 +10,7 @@ interface MembershipRepository {
     fun findByUserAndClub(userId: UUID, clubId: UUID): Membership?
     fun findById(id: UUID): Membership?
     fun findByUserId(userId: UUID): List<Membership>
-    fun findClubMembersWithUserInfo(clubId: UUID, includeCancelledInPeriod: Boolean = false): List<ClubMemberInfo>
+    fun findClubMembersWithUserInfo(clubId: UUID, includeFrozen: Boolean = false): List<ClubMemberInfo>
     fun findUserClubsWithReputation(userId: UUID): List<UserClubReputationInfo>
     fun findExpiryRefByUserAndClub(userId: UUID, clubId: UUID): MembershipExpiryRef?
 
@@ -21,17 +21,28 @@ interface MembershipRepository {
 
     // Mutations
     fun create(userId: UUID, clubId: UUID): Membership
+    fun createFrozen(userId: UUID, clubId: UUID): Membership
     fun createOrganizer(userId: UUID, clubId: UUID): Membership
     fun reactivateFree(membershipId: UUID): Membership
+    fun reactivateFrozen(membershipId: UUID): Membership
     fun cancel(membershipId: UUID)
     fun activateSubscription(userId: UUID, clubId: UUID, expiresAt: OffsetDateTime): UUID
     fun renewSubscription(membershipId: UUID, newExpiresAt: OffsetDateTime)
 
-    // Lifecycle / scheduler
+    // Access gate (de-Stars, Slice 2) — organizer-controlled freeze + dues tracking. Each returns
+    // rows-affected so the service can guard the optimistic status transition (0 = lost the race → 409).
+    fun freezeAccess(membershipId: UUID): Int
+    fun unfreezeAccess(membershipId: UUID): Int
+    fun markDuesPaid(membershipId: UUID, markedBy: UUID, accessUntil: OffsetDateTime): Int
+    fun unmarkDues(membershipId: UUID): Int
+
+    // Lifecycle / scheduler (honor-system access window)
     fun findExpiringWithin(now: OffsetDateTime, threshold: OffsetDateTime): List<ExpiringSubscriptionNotification>
     fun findActiveExpired(now: OffsetDateTime): List<ExpiringSubscriptionNotification>
-    fun moveActiveToGracePeriod(now: OffsetDateTime): Int
-    fun moveGracePeriodToExpired(gracePeriodEnd: OffsetDateTime): Int
+    /** Drops every `active` membership whose access window (subscription_expires_at) has passed to `frozen`. */
+    fun expireOverdueAccess(now: OffsetDateTime): Int
+    /** Count of soon-expiring members across [clubIds] — feeds the «Управление» red-dot badge. */
+    fun countExpiringSoonByClubs(clubIds: Collection<UUID>, now: OffsetDateTime, threshold: OffsetDateTime): Int
 
     // Bot/notification
     fun findMemberTelegramIds(clubId: UUID): List<Long>

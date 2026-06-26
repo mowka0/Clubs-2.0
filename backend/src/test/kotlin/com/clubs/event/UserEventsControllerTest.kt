@@ -147,22 +147,21 @@ class UserEventsControllerTest {
     }
 
     @Test
-    fun `GET me-events shows events to cancelled-but-still-paid members and hides grace_period`() {
-        // Feed access must match the voting/DM predicate (MembershipAccess): a
-        // cancelled membership with a future subscription_expires_at still has
-        // access; grace_period does not. Regression: feed used status=active only,
-        // so a cancelled-but-paid member could vote on an event missing from feed.
+    fun `GET me-events shows events to active members and hides frozen`() {
+        // De-Stars (Slice 2): feed access = MembershipAccess (status `active`). A `frozen` member
+        // (organizer gated them pending the off-platform dues) has no content access, so the club's
+        // events must NOT appear in their feed — staying in lockstep with the voting/DM predicate.
         val ownerId = UUID.randomUUID()
         dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$ownerId', 2099, 'Owner')")
-        val cancelledPaidClub = UUID.randomUUID()
-        val gracePeriodClub = UUID.randomUUID()
-        insertClub(cancelledPaidClub, ownerId, "Echo", isActive = true)
-        insertClub(gracePeriodClub, ownerId, "Zeta", isActive = true)
-        insertMembership(memberUserId, cancelledPaidClub, status = "cancelled", subscriptionExpiresAt = future(10))
-        insertMembership(memberUserId, gracePeriodClub, status = "grace_period")
+        val activeClub = UUID.randomUUID()
+        val frozenClub = UUID.randomUUID()
+        insertClub(activeClub, ownerId, "Echo", isActive = true)
+        insertClub(frozenClub, ownerId, "Zeta", isActive = true)
+        insertMembership(memberUserId, activeClub, status = "active")
+        insertMembership(memberUserId, frozenClub, status = "frozen")
 
-        insertEvent(UUID.randomUUID(), cancelledPaidClub, "Echo Visible", future(2), status = "upcoming")
-        insertEvent(UUID.randomUUID(), gracePeriodClub, "Zeta Hidden", future(3), status = "upcoming")
+        insertEvent(UUID.randomUUID(), activeClub, "Echo Visible", future(2), status = "upcoming")
+        insertEvent(UUID.randomUUID(), frozenClub, "Zeta Hidden", future(3), status = "upcoming")
 
         mockMvc.perform(
             get("/api/users/me/events")

@@ -2,7 +2,6 @@ package com.clubs.bot
 
 import com.clubs.event.EventRepository
 import com.clubs.event.EventResponseRepository
-import com.clubs.payment.PaymentService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
@@ -24,7 +23,6 @@ import java.time.format.DateTimeFormatter
 class ClubsBot(
     @Value("\${telegram.bot-token}") private val botToken: String,
     private val telegramClient: TelegramClient,
-    private val paymentService: PaymentService,
     private val eventRepository: EventRepository,
     private val eventResponseRepository: EventResponseRepository,
 ) : SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
@@ -38,8 +36,8 @@ class ClubsBot(
     override fun getUpdatesConsumer(): LongPollingSingleThreadUpdateConsumer = this
 
     override fun consume(update: Update) {
-        // Telegram Stars: pre_checkout_query MUST be answered within 10s or
-        // the payment is cancelled. It arrives as its own update type, not a message.
+        // De-Stars (Slice 2): the Stars pay-to-join flow is retired. We still answer pre_checkout
+        // within Telegram's 10s window, but only to REJECT it (handlePreCheckoutQuery → ok=false).
         if (update.hasPreCheckoutQuery()) {
             handlePreCheckoutQuery(update.preCheckoutQuery)
             return
@@ -47,16 +45,14 @@ class ClubsBot(
 
         if (!update.hasMessage()) return
 
-        // successful_payment is delivered as a message without `text`, so it
-        // must be dispatched BEFORE the hasText() early-return below.
+        // A successful_payment here is a stray event (e.g. an in-flight old invoice). Do NOT activate
+        // access — access is organizer-controlled now. Log it with the charge id for a manual refund.
+        // Delivered as a message without `text`, so it must be handled BEFORE the hasText() return.
         if (update.message.hasSuccessfulPayment()) {
-            val telegramId = update.message.from?.id ?: return
             val payment = update.message.successfulPayment
-            paymentService.handleSuccessfulPayment(
-                telegramId = telegramId,
-                telegramChargeId = payment.telegramPaymentChargeId,
-                payload = payment.invoicePayload,
-                amount = payment.totalAmount
+            log.warn(
+                "Ignoring stray Telegram Stars payment (pay-to-join retired): telegramId={} chargeId={} amount={} payload={} — refund manually",
+                update.message.from?.id, payment.telegramPaymentChargeId, payment.totalAmount, payment.invoicePayload
             )
             return
         }
@@ -77,26 +73,20 @@ class ClubsBot(
     }
 
     /**
-     * Answers a Stars `pre_checkout_query` within Telegram's 10-second window.
-     * Only validates payload format (full business validation already happened
-     * at invoice creation). Any unexpected exception still answers with ok=false
-     * to avoid leaving the payment in an indeterminate "waiting" state.
+     * De-Stars (Slice 2): the Stars pay-to-join flow is retired, so every `pre_checkout_query` is
+     * REJECTED — no member is ever charged through the bot. Access is organizer-controlled now
+     * (AccessGateService). Answered within Telegram's 10s window with ok=false + an explanation.
      */
     internal fun handlePreCheckoutQuery(query: PreCheckoutQuery) {
-        val parts = query.invoicePayload.split(":")
-        val valid = parts.size == 3 && parts[0] == "club_subscription"
-
         val answer = AnswerPreCheckoutQuery.builder()
             .preCheckoutQueryId(query.id)
-            .ok(valid)
-            .apply {
-                if (!valid) errorMessage("Некорректный формат заказа. Попробуйте вступить снова из приложения.")
-            }
+            .ok(false)
+            .errorMessage("Оплата через бота больше не используется. Доступ к клубу открывает организатор.")
             .build()
 
         try {
             telegramClient.execute(answer)
-            log.info("pre_checkout_query answered: id={} ok={} payload={}", query.id, valid, query.invoicePayload)
+            log.info("pre_checkout_query rejected (Stars retired): id={}", query.id)
         } catch (e: Exception) {
             log.error("Failed to answer pre_checkout_query {}: {}", query.id, e.message, e)
         }

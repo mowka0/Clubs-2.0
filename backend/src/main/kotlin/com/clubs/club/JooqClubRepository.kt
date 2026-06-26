@@ -30,15 +30,16 @@ class JooqClubRepository(
     }
 
     /**
-     * Live member count for display = distinct `memberships` rows that are `active` or `grace_period`
-     * (a grace member still has access, so they occupy a slot), INCLUDING the organizer's membership.
+     * Live member count for display = distinct `memberships` rows that currently belong to the club —
+     * `active`, `frozen` (gated pending off-platform dues, still occupies a slot), or `grace_period` —
+     * INCLUDING the organizer's membership. Matches countActiveByClubId's slot-occupancy semantics.
      * This is computed straight from `memberships`. The old denormalized `clubs.member_count`
      * column was dropped (V33) after a scattered, incomplete set of increment/decrement call sites
      * let it drift out of sync (e.g. a leave→rejoin→leave double-decremented it to 0 for a 2-person
      * club). "Actual value from the DB" can never drift.
      */
     private fun aliveMembers(): org.jooq.Condition =
-        MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period)
+        MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.frozen, MembershipStatus.grace_period)
 
     private fun countLiveMembers(clubId: UUID): Int =
         dsl.selectCount().from(MEMBERSHIPS)

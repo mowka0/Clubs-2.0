@@ -10,6 +10,7 @@ import com.clubs.generated.jooq.keys.CLUBS__CLUBS_OWNER_ID_FKEY
 import com.clubs.generated.jooq.keys.CLUB_RANK__CLUB_RANK_OWNER_ID_FKEY
 import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CREATED_BY_FKEY
 import com.clubs.generated.jooq.keys.EVENT_RESPONSES__EVENT_RESPONSES_USER_ID_FKEY
+import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_DUES_MARKED_BY_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIP_HISTORY__MEMBERSHIP_HISTORY_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.REPUTATION_LEDGER__REPUTATION_LEDGER_USER_ID_FKEY
@@ -290,21 +291,37 @@ open class Users(
     val membershipHistory: MembershipHistoryPath
         get(): MembershipHistoryPath = membershipHistory()
 
-    private lateinit var _memberships: MembershipsPath
+    private lateinit var _membershipsDuesMarkedByFkey: MembershipsPath
 
     /**
      * Get the implicit to-many join path to the <code>public.memberships</code>
-     * table
+     * table, via the <code>memberships_dues_marked_by_fkey</code> key
      */
-    fun memberships(): MembershipsPath {
-        if (!this::_memberships.isInitialized)
-            _memberships = MembershipsPath(this, null, MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY.inverseKey)
+    fun membershipsDuesMarkedByFkey(): MembershipsPath {
+        if (!this::_membershipsDuesMarkedByFkey.isInitialized)
+            _membershipsDuesMarkedByFkey = MembershipsPath(this, null, MEMBERSHIPS__MEMBERSHIPS_DUES_MARKED_BY_FKEY.inverseKey)
 
-        return _memberships;
+        return _membershipsDuesMarkedByFkey;
     }
 
-    val memberships: MembershipsPath
-        get(): MembershipsPath = memberships()
+    val membershipsDuesMarkedByFkey: MembershipsPath
+        get(): MembershipsPath = membershipsDuesMarkedByFkey()
+
+    private lateinit var _membershipsUserIdFkey: MembershipsPath
+
+    /**
+     * Get the implicit to-many join path to the <code>public.memberships</code>
+     * table, via the <code>memberships_user_id_fkey</code> key
+     */
+    fun membershipsUserIdFkey(): MembershipsPath {
+        if (!this::_membershipsUserIdFkey.isInitialized)
+            _membershipsUserIdFkey = MembershipsPath(this, null, MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY.inverseKey)
+
+        return _membershipsUserIdFkey;
+    }
+
+    val membershipsUserIdFkey: MembershipsPath
+        get(): MembershipsPath = membershipsUserIdFkey()
 
     private lateinit var _reputationLedger: ReputationLedgerPath
 
@@ -439,7 +456,7 @@ open class Users(
      * table, via the <code>memberships_club_id_fkey</code> key
      */
     val membershipsClubIdFkey: ClubsPath
-        get(): ClubsPath = memberships().clubs()
+        get(): ClubsPath = membershipsUserIdFkey().clubs()
 
     /**
      * Get the implicit many-to-many join path to the
