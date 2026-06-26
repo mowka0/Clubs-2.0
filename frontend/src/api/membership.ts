@@ -7,6 +7,7 @@ import type {
   MembershipDto,
   MemberProfileDto,
   MyReputationDto,
+  OrganizerDuesMemberDto,
   PendingApplicationDto,
   PendingApplicationsCountDto,
 } from '../types/api';
@@ -98,9 +99,14 @@ export function unmarkMemberDues(clubId: string, userId: string): Promise<Member
   return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/dues-unpaid`);
 }
 
-/** Red-dot feed: how many members' paid access ends within the next week. Owner-only. */
+/** Red-dot feed for [clubId]: soon-expiring + frozen-awaiting-dues counts. Owner-only. */
 export function getMemberAttention(clubId: string): Promise<MemberAttentionDto> {
   return apiClient.get<MemberAttentionDto>(`/api/clubs/${clubId}/member-attention`);
+}
+
+/** Cross-club «Ждут оплаты»: frozen members across all clubs the caller owns. Empty for non-owners. */
+export function getOrganizerAwaitingDues(): Promise<OrganizerDuesMemberDto[]> {
+  return apiClient.get<OrganizerDuesMemberDto[]>('/api/users/me/organizer/awaiting-dues');
 }
 
 export function getMemberProfile(clubId: string, userId: string): Promise<MemberProfileDto> {

@@ -49,13 +49,26 @@ class MemberService(
     }
 
     /**
-     * Count of members of [clubId] whose paid access ends within the next week — the red-dot badge on
-     * «Управление»/«Участники». Organizer-only (gated by @RequiresOrganizer on the controller).
+     * Red-dot feed for [clubId] (organizer-only, gated by @RequiresOrganizer on the controller):
+     * members whose paid access ends within the next week + members frozen pending a first dues
+     * confirmation. The dot lights when either count is > 0.
      */
-    fun countExpiringSoon(clubId: UUID): Int {
+    fun getAttention(clubId: UUID): MemberAttentionDto {
         val now = OffsetDateTime.now()
-        return membershipRepository.countExpiringSoonByClubs(listOf(clubId), now, now.plusDays(EXPIRING_SOON_DAYS))
+        val clubs = listOf(clubId)
+        return MemberAttentionDto(
+            expiringSoon = membershipRepository.countExpiringSoonByClubs(clubs, now, now.plusDays(EXPIRING_SOON_DAYS)),
+            awaitingDues = membershipRepository.countFrozenByClubs(clubs)
+        )
     }
+
+    /**
+     * Cross-club «Ждут оплаты» for [callerId]: every `frozen` member across the clubs they own, so the
+     * organizer confirms dues from «Мои клубы» without entering each club. Non-owners get an empty list
+     * (the query filters by `clubs.owner_id`), so no authz gate is needed on the endpoint.
+     */
+    fun getOrganizerAwaitingDues(callerId: UUID): List<OrganizerDuesMemberDto> =
+        membershipRepository.findFrozenMembersByOwner(callerId).map(mapper::toOrganizerDuesDto)
 
     fun getMemberProfile(clubId: UUID, userId: UUID, callerId: UUID): MemberProfileDto {
         val caller = membershipRepository.findByUserAndClub(callerId, clubId)

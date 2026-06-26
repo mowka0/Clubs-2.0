@@ -50,6 +50,10 @@ export const queryKeys = {
     /** Cross-club organizer pending-inbox count (single endpoint). */
     myPendingActionCounts: ['applications', 'my-pending-action-counts'] as const,
   },
+  organizer: {
+    /** Cross-club «Ждут оплаты»: frozen members across the caller's owned clubs. */
+    awaitingDues: ['organizer', 'awaiting-dues'] as const,
+  },
   skladchinas: {
     all: ['skladchinas'] as const,
     myFeed: ['skladchinas', 'my-feed'] as const,

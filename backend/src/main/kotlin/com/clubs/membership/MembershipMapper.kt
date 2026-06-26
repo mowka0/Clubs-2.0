@@ -48,6 +48,19 @@ class MembershipMapper {
         )
     }
 
+    fun toOrganizerDuesDto(member: OrganizerDuesMember): OrganizerDuesMemberDto = OrganizerDuesMemberDto(
+        userId = member.userId,
+        firstName = member.firstName ?: "",
+        lastName = member.lastName,
+        avatarUrl = member.avatarUrl,
+        telegramUsername = member.telegramUsername,
+        clubId = member.clubId,
+        clubName = member.clubName,
+        clubAvatarUrl = member.clubAvatarUrl,
+        joinedAt = member.joinedAt,
+        subscriptionExpiresAt = member.subscriptionExpiresAt
+    )
+
     fun toUserClubReputationDto(info: UserClubReputationInfo, trust: Int?): UserClubReputationDto {
         val show = ReputationPolicy.isShown(info.outcomeCount)
         return UserClubReputationDto(

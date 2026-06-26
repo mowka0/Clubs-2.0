@@ -407,9 +407,11 @@ export const OrganizerClubManage: FC = () => {
   const clubId = id ?? '';
   const clubQuery = useClubQuery(clubId || undefined);
   const club = clubQuery.data;
-  // Red-dot on «Участники»: members whose paid access ends within the week need a dues confirm.
+  // Red-dot on «Участники»: members about to expire OR frozen-awaiting-dues need a confirm.
   const memberAttentionQuery = useMemberAttentionQuery(clubId || undefined);
-  const showMembersDot = (memberAttentionQuery.data?.expiringSoon ?? 0) > 0;
+  const showMembersDot =
+    (memberAttentionQuery.data?.expiringSoon ?? 0) > 0
+    || (memberAttentionQuery.data?.awaitingDues ?? 0) > 0;
 
   const handleTabChange = (key: TabKey) => {
     if (key === activeTab) return;

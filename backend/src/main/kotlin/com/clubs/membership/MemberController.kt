@@ -39,7 +39,7 @@ class MemberController(
     @RequiresOrganizer(clubIdParam = "clubId")
     @GetMapping("/{clubId}/member-attention")
     fun memberAttention(@PathVariable clubId: UUID): ResponseEntity<MemberAttentionDto> =
-        ResponseEntity.ok(MemberAttentionDto(expiringSoon = memberService.countExpiringSoon(clubId)))
+        ResponseEntity.ok(memberService.getAttention(clubId))
 
     // Organizer access gate (de-Stars, Slice 2). Owner-only via @RequiresOrganizer; the service
     // guards the status transition (409 on a lost race) and rejects managing the organizer.

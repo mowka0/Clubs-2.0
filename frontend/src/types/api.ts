@@ -100,11 +100,31 @@ export interface MemberProfileDto {
 }
 
 /**
- * Count of members whose paid access ends within the «Скоро закончится» window (≤7 days).
- * Feeds the red-dot badge on «Управление» + the «Участники» tab. Organizer-only.
+ * Red-dot feed (organizer-only): the dot lights when either count is > 0.
+ *  - expiringSoon — active members whose paid window ends within the week.
+ *  - awaitingDues — frozen members who joined but haven't been admitted (first dues unconfirmed).
  */
 export interface MemberAttentionDto {
   expiringSoon: number;
+  awaitingDues: number;
+}
+
+/**
+ * A frozen member across one of the caller's owned clubs (joined, dues unconfirmed). Powers the
+ * cross-club «Ждут оплаты» section on «Мои клубы». `subscriptionExpiresAt` is the lapsed window
+ * (null for a never-paid first join); `joinedAt` drives the «вступил(а) N назад» line.
+ */
+export interface OrganizerDuesMemberDto {
+  userId: string;
+  firstName: string;
+  lastName: string | null;
+  avatarUrl: string | null;
+  telegramUsername: string | null;
+  clubId: string;
+  clubName: string;
+  clubAvatarUrl: string | null;
+  joinedAt: string | null;
+  subscriptionExpiresAt: string | null;
 }
 
 export interface UserClubReputationDto {

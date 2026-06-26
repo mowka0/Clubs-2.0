@@ -5,7 +5,7 @@ import { Modal, Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useMyClubsQuery } from '../queries/clubs';
-import { useMyReputationQuery } from '../queries/members';
+import { useMyReputationQuery, useOrganizerAwaitingDuesQuery } from '../queries/members';
 import {
   useCompleteFreeMembershipMutation,
   useMyApplicationsQuery,
@@ -15,13 +15,16 @@ import { queryKeys } from '../queries/queryKeys';
 import { Toast } from '../components/Toast';
 import { CreateClubModal } from '../components/CreateClubModal';
 import { ApplicationReviewModal } from '../components/applications/ApplicationReviewModal';
+import { MemberProfileModal } from '../components/club/MemberProfileModal';
 import { formatPeerSignal } from '../features/applications-inbox/lib/peer-signal-format';
 import { LevelPill } from '../components/reputation/LevelPill';
 import { getClub } from '../api/clubs';
 import { reliabilityTier } from '../utils/reputationTier';
 import type {
   ClubDetailDto,
+  MemberListItemDto,
   MembershipDto,
+  OrganizerDuesMemberDto,
   PendingApplicationDto,
   UserClubReputationDto,
 } from '../types/api';
@@ -213,6 +216,64 @@ const PendingAppCard: FC<PendingAppCardProps> = ({ pending, onClick }) => {
   );
 };
 
+/** «вступил(а) N назад» for a frozen member awaiting their first dues confirmation. */
+function formatJoinedRelative(iso: string | null): string {
+  if (!iso) return 'ждёт первой оплаты';
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
+  if (days <= 0) return 'вступил(а) сегодня';
+  if (days === 1) return 'вступил(а) вчера';
+  if (days < 7) return `вступил(а) ${days} ${pluralRu(days, ['день', 'дня', 'дней'])} назад`;
+  return `вступил(а) ${formatApplicationDate(iso)}`;
+}
+
+/** Open the existing organizer profile card (with the dues gate) for a cross-club frozen member. */
+function toFrozenMemberStub(dues: OrganizerDuesMemberDto): MemberListItemDto {
+  return {
+    userId: dues.userId,
+    firstName: dues.firstName,
+    lastName: dues.lastName,
+    avatarUrl: dues.avatarUrl,
+    role: 'member',
+    joinedAt: dues.joinedAt,
+    trust: null,
+    promiseFulfillmentPct: null,
+    totalConfirmations: null,
+    accessStatus: 'frozen',
+    subscriptionExpiresAt: dues.subscriptionExpiresAt,
+  };
+}
+
+interface AwaitingDuesRowProps {
+  item: OrganizerDuesMemberDto;
+  onClick: () => void;
+}
+
+/** Cross-club «Ждут оплаты» row: a frozen member of one of the caller's clubs. Tap → profile card
+ *  where the organizer confirms the dues («Взнос получен»). */
+const AwaitingDuesRow: FC<AwaitingDuesRowProps> = ({ item, onClick }) => {
+  const fullName = `${item.firstName}${item.lastName ? ` ${item.lastName}` : ''}`;
+  const initials = getInitials(fullName) || '·';
+  return (
+    <button type="button" className="rd-rep-row" onClick={onClick}>
+      <span className="rd-ico">
+        {item.avatarUrl ? <img src={item.avatarUrl} alt="" /> : initials}
+      </span>
+      <div className="rd-info">
+        <div className="rd-ttl">
+          {fullName}
+          {item.telegramUsername && (
+            <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}> · @{item.telegramUsername}</span>
+          )}
+        </div>
+        <div className="rd-met">{item.clubName} · {formatJoinedRelative(item.joinedAt)}</div>
+      </div>
+      <div className="rd-score">
+        <span className="rd-badge rd-warn">Ждёт оплаты</span>
+      </div>
+    </button>
+  );
+};
+
 export const MyClubsPage: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -226,11 +287,16 @@ export const MyClubsPage: FC = () => {
   const reputationQuery = useMyReputationQuery();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [reviewing, setReviewing] = useState<PendingApplicationDto | null>(null);
+  const [duesMember, setDuesMember] = useState<OrganizerDuesMemberDto | null>(null);
 
   const myClubs = myClubsQuery.data ?? [];
   const applications = applicationsQuery.data ?? [];
   const pendingInbox = pendingInboxQuery.data ?? [];
   const historyClubs = reputationQuery.data?.historyClubs ?? [];
+  // Cross-club «Ждут оплаты»: only fetch for users who actually own a club (server returns [] otherwise).
+  const isAnyOrganizer = myClubs.some((m) => m.role === 'organizer');
+  const awaitingDuesQuery = useOrganizerAwaitingDuesQuery({ enabled: isAnyOrganizer });
+  const awaitingDues = awaitingDuesQuery.data ?? [];
 
   const inboxSectionRef = useRef<HTMLDivElement | null>(null);
   // Idempotent scroll: focus=inbox deep-link must scroll exactly once per
@@ -474,6 +540,26 @@ export const MyClubsPage: FC = () => {
         </>
       )}
 
+      {/* 2b. Awaiting dues (organizer, cross-club) — frozen members the organizer must admit by
+             confirming their off-platform dues. Mirrors «Ждут оплаты» inside Управление → Участники. */}
+      {!loading && awaitingDues.length > 0 && (
+        <>
+          <div className="rd-section-sub-h rd-attn-pay">
+            💸 Ждут оплаты <span className="rd-count">· {awaitingDues.length}</span>
+          </div>
+          <div className="rd-attn-hint">Вступили в ваши клубы, но ещё не платили — подтвердите взнос, чтобы открыть доступ.</div>
+          <div className="rd-glass rd-rep-panel rd-attn-block rd-attn-block-pay">
+            {awaitingDues.map((item) => (
+              <AwaitingDuesRow
+                key={`${item.clubId}:${item.userId}`}
+                item={item}
+                onClick={() => { haptic.impact('light'); setDuesMember(item); }}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
       {/* 3. Active clubs */}
       {!loading && myClubs.length > 0 && (
         <>
@@ -524,6 +610,16 @@ export const MyClubsPage: FC = () => {
           application={reviewing}
           open
           onClose={() => setReviewing(null)}
+        />
+      )}
+
+      {duesMember && (
+        <MemberProfileModal
+          member={toFrozenMemberStub(duesMember)}
+          clubId={duesMember.clubId}
+          isOrganizer
+          onClose={() => setDuesMember(null)}
+          onActionToast={setToastMessage}
         />
       )}
 

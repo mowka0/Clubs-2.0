@@ -26,10 +26,44 @@ data class MemberListItemDto(
 )
 
 /**
- * Count of members whose paid access ends within the «Скоро закончится» window (de-Stars Slice 2).
- * Feeds the red-dot badge on the «Управление» entry + «Участники» tab so the organizer notices
- * upcoming expirations before access is cut. Organizer-only.
+ * Counts that feed the red-dot badge on «Управление» + the «Участники» tab (de-Stars Slice 2),
+ * organizer-only. The dot lights when EITHER is > 0:
+ *  - expiringSoon — `active` members whose paid window ends within the week (renew & confirm).
+ *  - awaitingDues — `frozen` members who joined but haven't been admitted yet (confirm first dues).
  */
 data class MemberAttentionDto(
-    val expiringSoon: Int
+    val expiringSoon: Int,
+    val awaitingDues: Int
+)
+
+/**
+ * A `frozen` member across one of the caller's owned clubs — they joined but haven't been admitted
+ * (dues not yet confirmed). Powers the cross-club «Ждут оплаты» section on «Мои клубы» so the
+ * organizer confirms dues without entering each club. `subscriptionExpiresAt` is the lapsed window
+ * (null for a never-paid first join); `joinedAt` drives the «вступил(а) N назад» line.
+ */
+data class OrganizerDuesMember(
+    val userId: UUID,
+    val firstName: String?,
+    val lastName: String?,
+    val avatarUrl: String?,
+    val telegramUsername: String?,
+    val clubId: UUID,
+    val clubName: String,
+    val clubAvatarUrl: String?,
+    val joinedAt: OffsetDateTime,
+    val subscriptionExpiresAt: OffsetDateTime?
+)
+
+data class OrganizerDuesMemberDto(
+    val userId: UUID,
+    val firstName: String,
+    val lastName: String?,
+    val avatarUrl: String?,
+    val telegramUsername: String?,
+    val clubId: UUID,
+    val clubName: String,
+    val clubAvatarUrl: String?,
+    val joinedAt: OffsetDateTime?,
+    val subscriptionExpiresAt: OffsetDateTime?
 )

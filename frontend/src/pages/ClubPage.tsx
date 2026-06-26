@@ -116,9 +116,11 @@ export const ClubPage: FC = () => {
 
   const isOwner = !!club && club.ownerId === user?.id;
   const isOrganizer = isOwner || membership?.role === 'organizer';
-  // Red-dot on «Управление»: members whose paid access ends within the week need a dues confirm.
+  // Red-dot on «Управление»: members about to expire OR frozen-awaiting-dues need a confirm.
   const memberAttentionQuery = useMemberAttentionQuery(id, { enabled: isOrganizer });
-  const showManageDot = (memberAttentionQuery.data?.expiringSoon ?? 0) > 0;
+  const showManageDot =
+    (memberAttentionQuery.data?.expiringSoon ?? 0) > 0
+    || (memberAttentionQuery.data?.awaitingDues ?? 0) > 0;
   // Active membership = full member; cancelled paid membership inside its
   // paid period = "still inside the club" — tabs stay visible, but instead
   // of «Выйти из клуба» the footer shows a read-only «Подписка отменена» note.

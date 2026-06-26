@@ -475,6 +475,54 @@ class JooqMembershipRepository(
             .fetchOne(0, Int::class.java) ?: 0
     }
 
+    override fun countFrozenByClubs(clubIds: Collection<UUID>): Int {
+        if (clubIds.isEmpty()) return 0
+        return dsl.selectCount().from(MEMBERSHIPS)
+            .where(
+                MEMBERSHIPS.CLUB_ID.`in`(clubIds)
+                    .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.frozen))
+            )
+            .fetchOne(0, Int::class.java) ?: 0
+    }
+
+    override fun findFrozenMembersByOwner(ownerId: UUID): List<OrganizerDuesMember> {
+        return dsl.select(
+            MEMBERSHIPS.USER_ID,
+            USERS.FIRST_NAME,
+            USERS.LAST_NAME,
+            USERS.AVATAR_URL,
+            USERS.TELEGRAM_USERNAME,
+            CLUBS.ID,
+            CLUBS.NAME,
+            CLUBS.AVATAR_URL,
+            MEMBERSHIPS.JOINED_AT,
+            MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT
+        )
+            .from(MEMBERSHIPS)
+            .join(USERS).on(USERS.ID.eq(MEMBERSHIPS.USER_ID))
+            .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))
+            .where(
+                CLUBS.OWNER_ID.eq(ownerId)
+                    .and(CLUBS.IS_ACTIVE.eq(true))
+                    .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.frozen))
+            )
+            .orderBy(MEMBERSHIPS.JOINED_AT.desc())
+            .fetch { r ->
+                OrganizerDuesMember(
+                    userId = r.get(MEMBERSHIPS.USER_ID)!!,
+                    firstName = r.get(USERS.FIRST_NAME),
+                    lastName = r.get(USERS.LAST_NAME),
+                    avatarUrl = r.get(USERS.AVATAR_URL),
+                    telegramUsername = r.get(USERS.TELEGRAM_USERNAME),
+                    clubId = r.get(CLUBS.ID)!!,
+                    clubName = r.get(CLUBS.NAME)!!,
+                    clubAvatarUrl = r.get(CLUBS.AVATAR_URL),
+                    joinedAt = r.get(MEMBERSHIPS.JOINED_AT)!!,
+                    subscriptionExpiresAt = r.get(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT)
+                )
+            }
+    }
+
     // Telegram IDs of members who currently have access to the club — the shared
     // MembershipAccess predicate (status `active`). Members without access
     // (frozen/expired/grace_period) must not be DM'd about an event they can't open. (GAP-010)

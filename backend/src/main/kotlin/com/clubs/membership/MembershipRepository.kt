@@ -12,6 +12,8 @@ interface MembershipRepository {
     fun findByUserId(userId: UUID): List<Membership>
     fun findClubMembersWithUserInfo(clubId: UUID, includeFrozen: Boolean = false): List<ClubMemberInfo>
     fun findUserClubsWithReputation(userId: UUID): List<UserClubReputationInfo>
+    /** `frozen` members across every active club owned by [ownerId] — the cross-club «Ждут оплаты» feed. */
+    fun findFrozenMembersByOwner(ownerId: UUID): List<OrganizerDuesMember>
     fun findExpiryRefByUserAndClub(userId: UUID, clubId: UUID): MembershipExpiryRef?
 
     // Predicates / counts
@@ -43,6 +45,8 @@ interface MembershipRepository {
     fun expireOverdueAccess(now: OffsetDateTime): Int
     /** Count of soon-expiring members across [clubIds] — feeds the «Управление» red-dot badge. */
     fun countExpiringSoonByClubs(clubIds: Collection<UUID>, now: OffsetDateTime, threshold: OffsetDateTime): Int
+    /** Count of `frozen` members (awaiting dues confirmation) across [clubIds] — also lights the red-dot. */
+    fun countFrozenByClubs(clubIds: Collection<UUID>): Int
 
     // Bot/notification
     fun findMemberTelegramIds(clubId: UUID): List<Long>

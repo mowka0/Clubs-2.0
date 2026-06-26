@@ -7,6 +7,7 @@ import {
   getMemberProfile,
   getMyGamification,
   getMyReputation,
+  getOrganizerAwaitingDues,
   markMemberDuesPaid,
   unfreezeMember,
   unmarkMemberDues,
@@ -24,7 +25,7 @@ export function useClubMembersQuery(clubId: string | undefined) {
   });
 }
 
-/** Red-dot feed: how many members' paid access ends within the week. Owner-only — gate with
+/** Red-dot feed: soon-expiring + frozen-awaiting-dues counts. Owner-only — gate with
  *  `enabled: isOrganizer` to skip a guaranteed-403 from member/visitor contexts. */
 export function useMemberAttentionQuery(
   clubId: string | undefined,
@@ -39,10 +40,23 @@ export function useMemberAttentionQuery(
   });
 }
 
-/** After any access-gate action the member list (badges/buckets) and the red-dot count both change. */
+/** Cross-club «Ждут оплаты»: frozen members across the caller's owned clubs. Returns [] for
+ *  non-owners (server filters by ownership) — gate `enabled` on owning ≥1 club to skip the round-trip. */
+export function useOrganizerAwaitingDuesQuery(options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: queryKeys.organizer.awaitingDues,
+    queryFn: getOrganizerAwaitingDues,
+    enabled: options.enabled ?? true,
+    staleTime: 60_000,
+  });
+}
+
+/** After any access-gate action the member list (badges/buckets), the per-club red-dot count, and
+ *  the cross-club «Ждут оплаты» feed all change. */
 function invalidateAfterMemberGateAction(qc: QueryClient, clubId: string) {
   qc.invalidateQueries({ queryKey: queryKeys.clubs.members(clubId) });
   qc.invalidateQueries({ queryKey: queryKeys.clubs.memberAttention(clubId) });
+  qc.invalidateQueries({ queryKey: queryKeys.organizer.awaitingDues });
 }
 
 interface MemberGateArgs {
