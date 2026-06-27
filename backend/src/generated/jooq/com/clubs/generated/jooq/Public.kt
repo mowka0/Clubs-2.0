@@ -5,6 +5,7 @@ package com.clubs.generated.jooq
 
 
 import com.clubs.generated.jooq.tables.Applications
+import com.clubs.generated.jooq.tables.ClubAwards
 import com.clubs.generated.jooq.tables.ClubRank
 import com.clubs.generated.jooq.tables.Clubs
 import com.clubs.generated.jooq.tables.EventResponses
@@ -48,6 +49,13 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
      * The table <code>public.applications</code>.
      */
     val APPLICATIONS: Applications get() = Applications.APPLICATIONS
+
+    /**
+     * Награды уровня клуба, которые организатор вручает участнику (club-local,
+     * НЕ глобальные earned-бейджи репутации). Чистая косметика: на
+     * репутацию/XP/ранг не влияют (R4). Видны всем участникам клуба (R3).
+     */
+    val CLUB_AWARDS: ClubAwards get() = ClubAwards.CLUB_AWARDS
 
     /**
      * The table <code>public.club_rank</code>.
@@ -143,6 +151,7 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
 
     override fun getTables(): List<Table<*>> = listOf(
         Applications.APPLICATIONS,
+        ClubAwards.CLUB_AWARDS,
         ClubRank.CLUB_RANK,
         Clubs.CLUBS,
         EventResponses.EVENT_RESPONSES,

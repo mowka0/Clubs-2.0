@@ -5,9 +5,9 @@
 
 ## 0. TL;DR
 
-В этой ветке накопилось **4 связанных куска** про управление участниками + деньги-мимо-платформы.
-Всё собрано, зелёное (компиляция/тесты/build), задеплоено на staging и **ждёт ручного теста PO**.
-После теста: доделать S2/S3 (новая сессия) → гейты фича-флоу → один PR в master.
+В этой ветке накопилось **5 связанных кусков** про управление участниками + деньги-мимо-платформы.
+Всё собрано, зелёное (компиляция/тесты/build), и **ждёт ручного теста PO на staging**.
+> 🟢 **2026-06-27:** добавлен **S2 — награды клуба (V40)**, собран и зелёный (Reviewer+Security: SHIP, 0 блокеров). **S3 (роли) — ОТЛОЖЕН** решением PO (YAGNI; см. `member-admin-roles-S3-deferred.md`). Дальше: PO тестит staging (блок L тест-кейсов) → один PR в master.
 
 ## 1. Что на ветке (6 коммитов, снизу вверх)
 
@@ -28,10 +28,10 @@
 
 ## 3. Что дальше — ПОРЯДОК
 
-1. **🔴 PO тестит на staging** по `docs/backlog/de-stars-member-admin-test-cases.md` (блоки A–K + регрессия). Баги → фиксить на этой же ветке (передеплой авто по пушу).
-2. **S2 — награды клуба (V40)** + **S3 — роли (V41)**, новая сессия. Полный план: `docs/backlog/member-admin-profile-handoff.md`. Решения R1-R4 залочены (см. ниже). ⚠️ awards=V40, roles=V41 (V39 заняла СБП).
-3. **Гейты фича-флоу** (CLAUDE.md): Reviewer → Security → Tester → Analyst docs-alignment (`payment-v2.md` + матрица status×surface, `member-admin-profile.md`, `applications-inbox.md`/`payment.md` устарели после de-Stars).
-4. **Merge** — всё одним PR в master (де-Stars + items + S1 + СБП + S2/S3). `--squash`, без `--delete-branch` (память [[feedback_git_squash]], [[feedback_git_workflow]]).
+1. **🔴 PO тестит на staging** по `docs/backlog/de-stars-member-admin-test-cases.md` (блоки A–K + **L = награды S2** + регрессия). Баги → фиксить на этой же ветке (передеплой авто по пушу).
+2. ~~S2 награды~~ ✅ **СОБРАН** (V40, Reviewer+Security SHIP). **S3 роли (V41) — ⏸️ ОТЛОЖЕН** (PO 2026-06-27): impact-анализ + матрица + открытые вопросы в `docs/backlog/member-admin-roles-S3-deferred.md`. Вернёмся при реальном спросе на делегирование.
+3. **Остаток гейтов фича-флоу** (CLAUDE.md): Analyst docs-alignment по смежным модулям, устаревшим после de-Stars (`payment-v2.md` + матрица status×surface, `applications-inbox.md`/`payment.md`). Reviewer/Security по S2 — пройдены.
+4. **Merge** — всё одним PR в master (де-Stars + items + S1 + СБП + S2). `--squash`, без `--delete-branch` (память [[feedback_git_squash]], [[feedback_git_workflow]]).
 
 ## 4. Залоченные продуктовые решения
 

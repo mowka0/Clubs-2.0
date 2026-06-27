@@ -1,5 +1,6 @@
 package com.clubs.user
 
+import com.clubs.award.AwardDto
 import java.math.BigDecimal
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -14,6 +15,9 @@ data class MemberProfileDto(
     // per-club reputation rings. Already public on the profile and the application card.
     val bio: String?,
     val interests: List<String>,
+    // Member admin S2 — club-local awards (R3: visible to ALL members, not organizer-gated like the note).
+    // Cosmetic only (R4): never derived from / affecting reputation.
+    val awards: List<AwardDto>,
     // Membership role ("organizer" = club owner). The frontend uses it to render the
     // organizer framing when trust is null in the user's own club.
     val role: String,

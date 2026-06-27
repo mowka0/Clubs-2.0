@@ -1,11 +1,16 @@
 package com.clubs.membership
 
+import com.clubs.award.AwardDto
+import com.clubs.award.AwardService
+import com.clubs.award.AwardSuggestionDto
+import com.clubs.award.GrantAwardRequest
 import com.clubs.common.auth.RequiresOrganizer
 import com.clubs.common.security.AuthenticatedUser
 import com.clubs.user.MemberProfileDto
 import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -19,7 +24,8 @@ import java.util.UUID
 @RequestMapping("/api/clubs")
 class MemberController(
     private val memberService: MemberService,
-    private val accessGateService: AccessGateService
+    private val accessGateService: AccessGateService,
+    private val awardService: AwardService
 ) {
 
     @GetMapping("/{clubId}/members")
@@ -102,4 +108,35 @@ class MemberController(
         @AuthenticationPrincipal caller: AuthenticatedUser
     ): ResponseEntity<MembershipDto> =
         ResponseEntity.ok(accessGateService.updateNote(clubId, userId, request.note, caller.userId))
+
+    // Member admin profile (Variant B, S2) — club-local awards. Grant/revoke is organizer-only;
+    // the awards themselves are public on the member card (served via MemberProfileDto, see MemberService).
+    @RequiresOrganizer(clubIdParam = "clubId")
+    @PostMapping("/{clubId}/members/{userId}/awards")
+    fun grantAward(
+        @PathVariable clubId: UUID,
+        @PathVariable userId: UUID,
+        @Valid @RequestBody request: GrantAwardRequest,
+        @AuthenticationPrincipal caller: AuthenticatedUser
+    ): ResponseEntity<AwardDto> =
+        ResponseEntity.ok(awardService.grant(clubId, userId, request.emoji, request.label, caller.userId))
+
+    @RequiresOrganizer(clubIdParam = "clubId")
+    @DeleteMapping("/{clubId}/members/{userId}/awards/{awardId}")
+    fun revokeAward(
+        @PathVariable clubId: UUID,
+        @PathVariable userId: UUID,
+        @PathVariable awardId: UUID,
+        @AuthenticationPrincipal caller: AuthenticatedUser
+    ): ResponseEntity<Void> {
+        awardService.revoke(clubId, userId, awardId, caller.userId)
+        return ResponseEntity.noContent().build()
+    }
+
+    // Autocomplete for the grant form («как интересы»): distinct past awards in this club. Organizer-only,
+    // since only the organizer reaches the grant form (@RequiresMembership would leak the club's award set).
+    @RequiresOrganizer(clubIdParam = "clubId")
+    @GetMapping("/{clubId}/award-suggestions")
+    fun awardSuggestions(@PathVariable clubId: UUID): ResponseEntity<List<AwardSuggestionDto>> =
+        ResponseEntity.ok(awardService.getSuggestions(clubId))
 }

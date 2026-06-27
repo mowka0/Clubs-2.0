@@ -15,6 +15,7 @@ import com.clubs.generated.jooq.keys.APPLICATIONS__APPLICATIONS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.CLUBS_INVITE_LINK_KEY
 import com.clubs.generated.jooq.keys.CLUBS_PKEY
 import com.clubs.generated.jooq.keys.CLUBS__CLUBS_OWNER_ID_FKEY
+import com.clubs.generated.jooq.keys.CLUB_AWARDS__CLUB_AWARDS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.CLUB_RANK__CLUB_RANK_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_CLUB_ID_FKEY
@@ -25,6 +26,7 @@ import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.TRANSACTIONS__TRANSACTIONS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.USER_CLUB_REPUTATION__USER_CLUB_REPUTATION_CLUB_ID_FKEY
 import com.clubs.generated.jooq.tables.Applications.ApplicationsPath
+import com.clubs.generated.jooq.tables.ClubAwards.ClubAwardsPath
 import com.clubs.generated.jooq.tables.ClubRank.ClubRankPath
 import com.clubs.generated.jooq.tables.Events.EventsPath
 import com.clubs.generated.jooq.tables.MembershipHistory.MembershipHistoryPath
@@ -276,6 +278,22 @@ open class Clubs(
 
     val applications: ApplicationsPath
         get(): ApplicationsPath = applications()
+
+    private lateinit var _clubAwards: ClubAwardsPath
+
+    /**
+     * Get the implicit to-many join path to the <code>public.club_awards</code>
+     * table
+     */
+    fun clubAwards(): ClubAwardsPath {
+        if (!this::_clubAwards.isInitialized)
+            _clubAwards = ClubAwardsPath(this, null, CLUB_AWARDS__CLUB_AWARDS_CLUB_ID_FKEY.inverseKey)
+
+        return _clubAwards;
+    }
+
+    val clubAwards: ClubAwardsPath
+        get(): ClubAwardsPath = clubAwards()
 
     private lateinit var _clubRank: ClubRankPath
 

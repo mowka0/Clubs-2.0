@@ -396,6 +396,52 @@
   color: var(--text-faint); margin-bottom: 4px;
 }
 
+/* Member admin S2 (Variant B): club awards — chips + «как интересы» grant form. */
+.rd-award-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.rd-award-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 999px;
+  background: var(--accent-soft); border: 1px solid var(--accent-soft);
+  font-size: 11.5px; font-weight: 600; color: var(--text);
+}
+.rd-award-chip .rd-award-emoji { font-size: 13px; line-height: 1; }
+.rd-award-chip .x {
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-left: 2px; width: 16px; height: 16px; border-radius: 50%; cursor: pointer;
+  border: none; background: transparent; color: var(--text-dim); font-size: 14px; line-height: 1;
+}
+.rd-award-chip .x:disabled { opacity: 0.5; cursor: default; }
+.rd-award-chip-ro { background: var(--surface); border-color: var(--hairline); }
+.rd-award-add {
+  padding: 5px 11px; border-radius: 999px; cursor: pointer; font-family: inherit;
+  font-size: 11.5px; font-weight: 600; color: var(--text-dim);
+  background: transparent; border: 1px dashed var(--hairline);
+}
+.rd-award-form { margin-top: 10px; }
+.rd-award-emoji-pick { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 9px; }
+.rd-award-emoji-opt {
+  width: 34px; height: 34px; border-radius: 9px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 17px;
+  background: var(--surface); border: 1px solid var(--hairline);
+}
+.rd-award-emoji-opt.sel { border-color: var(--accent); background: var(--accent-soft); }
+.rd-award-input-row { display: flex; gap: 8px; align-items: stretch; }
+.rd-award-input-row .rd-input { flex: 1; min-width: 0; }
+.rd-award-submit {
+  flex-shrink: 0; width: 42px; border-radius: 10px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700;
+  color: #fff; background: var(--accent); border: none;
+}
+.rd-award-submit:disabled { opacity: 0.45; cursor: default; }
+.rd-award-suggest { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.rd-award-suggest-item {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 999px; cursor: pointer; font-family: inherit;
+  font-size: 11.5px; font-weight: 500; color: var(--text);
+  background: var(--surface); border: 1px solid var(--hairline);
+}
+.rd-award-hint { margin-top: 8px; font-size: 11px; color: var(--text-faint); }
+
 /* Red-dot on a section tab («Участники» / «Управление») — de-Stars attention badge. */
 .rd-tab-link .rd-tab-dot {
   position: absolute; top: 4px; right: -10px; width: 7px; height: 7px; border-radius: 50%;

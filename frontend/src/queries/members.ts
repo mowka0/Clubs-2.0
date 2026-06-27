@@ -2,13 +2,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import {
   freezeMember,
+  getAwardSuggestions,
   getClubMembers,
   getMemberAttention,
   getMemberProfile,
   getMyGamification,
   getMyReputation,
   getOrganizerAwaitingDues,
+  grantMemberAward,
   markMemberDuesPaid,
+  revokeMemberAward,
   setMemberAccessUntil,
   unfreezeMember,
   unmarkMemberDues,
@@ -125,6 +128,47 @@ export function useUpdateMemberNoteMutation() {
     onSuccess: (_data, { clubId, userId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.clubs.memberProfile(clubId, userId) });
     },
+  });
+}
+
+/** Member admin S2: grant a club-local award. Refreshes the member card (its chips) + the club's
+ *  award-suggestion pool (a fresh label becomes a future autocomplete option). */
+export function useGrantMemberAwardMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId, emoji, label }: MemberGateArgs & { emoji: string; label: string }) =>
+      grantMemberAward(clubId, userId, emoji, label),
+    onSuccess: (_data, { clubId, userId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.memberProfile(clubId, userId) });
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.awardSuggestions(clubId) });
+    },
+  });
+}
+
+/** Member admin S2: remove a club-local award. Only the member card carries it. */
+export function useRevokeMemberAwardMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId, awardId }: MemberGateArgs & { awardId: string }) =>
+      revokeMemberAward(clubId, userId, awardId),
+    onSuccess: (_data, { clubId, userId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.memberProfile(clubId, userId) });
+    },
+  });
+}
+
+/** Autocomplete pool for the grant form. Organizer-only — gate `enabled` on the edit form being open
+ *  so member/visitor contexts never hit a guaranteed-403. */
+export function useAwardSuggestionsQuery(
+  clubId: string | undefined,
+  options: { enabled?: boolean } = {},
+) {
+  const enabled = Boolean(clubId) && (options.enabled ?? true);
+  return useQuery({
+    queryKey: queryKeys.clubs.awardSuggestions(clubId ?? ''),
+    queryFn: () => getAwardSuggestions(clubId!),
+    enabled,
+    staleTime: 60_000,
   });
 }
 

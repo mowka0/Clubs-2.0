@@ -1,5 +1,6 @@
 package com.clubs.membership
 
+import com.clubs.award.AwardService
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.generated.jooq.enums.MembershipRole
@@ -24,6 +25,7 @@ class MemberService(
     private val reputationRepository: ReputationRepository,
     private val trustService: TrustService,
     private val interestRepository: InterestRepository,
+    private val awardService: AwardService,
     private val mapper: MembershipMapper
 ) {
 
@@ -93,6 +95,8 @@ class MemberService(
             avatarUrl = user.avatarUrl,
             bio = user.bio,
             interests = interestRepository.findUserInterestNames(userId),
+            // Club-local awards (S2) — public to every member (R3), so no organizer gate here.
+            awards = awardService.getMemberAwards(clubId, userId),
             role = (membership?.role ?: MembershipRole.member).literal,
             trust = summary?.trust,
             promiseFulfillmentPct = if (show) reputation!!.promiseFulfillmentPct else null,

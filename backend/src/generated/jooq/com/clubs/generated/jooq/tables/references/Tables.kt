@@ -5,6 +5,7 @@ package com.clubs.generated.jooq.tables.references
 
 
 import com.clubs.generated.jooq.tables.Applications
+import com.clubs.generated.jooq.tables.ClubAwards
 import com.clubs.generated.jooq.tables.ClubRank
 import com.clubs.generated.jooq.tables.Clubs
 import com.clubs.generated.jooq.tables.EventResponses
@@ -30,6 +31,13 @@ import com.clubs.generated.jooq.tables.Users
  * The table <code>public.applications</code>.
  */
 val APPLICATIONS: Applications = Applications.APPLICATIONS
+
+/**
+ * Награды уровня клуба, которые организатор вручает участнику (club-local, НЕ
+ * глобальные earned-бейджи репутации). Чистая косметика: на репутацию/XP/ранг
+ * не влияют (R4). Видны всем участникам клуба (R3).
+ */
+val CLUB_AWARDS: ClubAwards = ClubAwards.CLUB_AWARDS
 
 /**
  * The table <code>public.club_rank</code>.

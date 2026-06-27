@@ -72,6 +72,19 @@ export interface MemberListItemDto {
   subscriptionExpiresAt?: string | null;
 }
 
+/** A club-local award chip (member admin S2). Cosmetic; never reflects reputation (R4). */
+export interface AwardDto {
+  id: string;
+  emoji: string;
+  label: string;
+}
+
+/** Autocomplete option in the grant form — a previously-used (emoji, label) in the club. No id. */
+export interface AwardSuggestionDto {
+  emoji: string;
+  label: string;
+}
+
 export interface MemberProfileDto {
   userId: string;
   clubId: string;
@@ -81,6 +94,8 @@ export interface MemberProfileDto {
   // Public profile fields, shown to every club member on the member card.
   bio: string | null;
   interests: string[];
+  // Member admin S2 — club-local awards, visible to ALL members (R3); cosmetic only (R4).
+  awards: AwardDto[];
   // "organizer" = club owner. Drives the organizer framing when trust is null.
   role: string;
   // P1b Trust 0-100. null = "Новичок"/suppressed (no track record yet, or owner in own club).

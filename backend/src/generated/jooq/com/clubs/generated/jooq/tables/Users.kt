@@ -7,6 +7,8 @@ package com.clubs.generated.jooq.tables
 import com.clubs.generated.jooq.Public
 import com.clubs.generated.jooq.keys.APPLICATIONS__APPLICATIONS_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.CLUBS__CLUBS_OWNER_ID_FKEY
+import com.clubs.generated.jooq.keys.CLUB_AWARDS__CLUB_AWARDS_AWARDED_BY_FKEY
+import com.clubs.generated.jooq.keys.CLUB_AWARDS__CLUB_AWARDS_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.CLUB_RANK__CLUB_RANK_OWNER_ID_FKEY
 import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CREATED_BY_FKEY
 import com.clubs.generated.jooq.keys.EVENT_RESPONSES__EVENT_RESPONSES_USER_ID_FKEY
@@ -24,6 +26,7 @@ import com.clubs.generated.jooq.keys.USERS_TELEGRAM_ID_KEY
 import com.clubs.generated.jooq.keys.USER_CLUB_REPUTATION__USER_CLUB_REPUTATION_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.USER_INTERESTS__USER_INTERESTS_USER_ID_FKEY
 import com.clubs.generated.jooq.tables.Applications.ApplicationsPath
+import com.clubs.generated.jooq.tables.ClubAwards.ClubAwardsPath
 import com.clubs.generated.jooq.tables.ClubRank.ClubRankPath
 import com.clubs.generated.jooq.tables.Clubs.ClubsPath
 import com.clubs.generated.jooq.tables.EventResponses.EventResponsesPath
@@ -211,6 +214,38 @@ open class Users(
 
     val applications: ApplicationsPath
         get(): ApplicationsPath = applications()
+
+    private lateinit var _clubAwardsAwardedByFkey: ClubAwardsPath
+
+    /**
+     * Get the implicit to-many join path to the <code>public.club_awards</code>
+     * table, via the <code>club_awards_awarded_by_fkey</code> key
+     */
+    fun clubAwardsAwardedByFkey(): ClubAwardsPath {
+        if (!this::_clubAwardsAwardedByFkey.isInitialized)
+            _clubAwardsAwardedByFkey = ClubAwardsPath(this, null, CLUB_AWARDS__CLUB_AWARDS_AWARDED_BY_FKEY.inverseKey)
+
+        return _clubAwardsAwardedByFkey;
+    }
+
+    val clubAwardsAwardedByFkey: ClubAwardsPath
+        get(): ClubAwardsPath = clubAwardsAwardedByFkey()
+
+    private lateinit var _clubAwardsUserIdFkey: ClubAwardsPath
+
+    /**
+     * Get the implicit to-many join path to the <code>public.club_awards</code>
+     * table, via the <code>club_awards_user_id_fkey</code> key
+     */
+    fun clubAwardsUserIdFkey(): ClubAwardsPath {
+        if (!this::_clubAwardsUserIdFkey.isInitialized)
+            _clubAwardsUserIdFkey = ClubAwardsPath(this, null, CLUB_AWARDS__CLUB_AWARDS_USER_ID_FKEY.inverseKey)
+
+        return _clubAwardsUserIdFkey;
+    }
+
+    val clubAwardsUserIdFkey: ClubAwardsPath
+        get(): ClubAwardsPath = clubAwardsUserIdFkey()
 
     private lateinit var _clubRank: ClubRankPath
 

@@ -22,6 +22,9 @@ export const queryKeys = {
       ['clubs', 'detail', clubId, 'member-attention'] as const,
     memberProfile: (clubId: string, userId: string) =>
       ['clubs', 'detail', clubId, 'members', userId] as const,
+    // Member admin S2 — distinct past awards in a club, autocomplete source for the grant form.
+    awardSuggestions: (clubId: string) =>
+      ['clubs', 'detail', clubId, 'award-suggestions'] as const,
     leavePreview: (clubId: string) => ['clubs', 'detail', clubId, 'leave-preview'] as const,
     myReputation: () => ['clubs', 'my', 'reputation'] as const,
     myGamification: () => ['users', 'me', 'gamification'] as const,

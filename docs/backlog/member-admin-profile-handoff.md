@@ -1,5 +1,7 @@
 # Member admin profile — хэндофф в новую сессию (S2 + S3)
 
+> 🟢 **СТАТУС-АПДЕЙТ 2026-06-27:** **S2 (награды) — ✅ СОБРАН** (V40 `club_awards`, на `feature/de-stars-decoupling`, ждёт staging-теста PO). **S3 (роли) — ⏸️ ОТЛОЖЕН** решением PO (YAGNI; OWASP A01-рефактор преждевременен). Всё ниже про S2 — историческое (план, уже выполнен); раздел S3 — см. отдельный актуальный док `docs/backlog/member-admin-roles-S3-deferred.md` (impact-анализ готов). Прогресс — в `docs/modules/member-admin-profile.md` §9.
+
 > **Назначение:** self-contained точка входа для НОВОЙ сессии, которая доделывает админ-карточку участника (вариант B).
 > **Дата:** 2026-06-27. **Ветка:** `feature/de-stars-decoupling` (S1 закоммичен + на staging, НЕ смёржен в master).
 > **Спека (source of truth):** `docs/modules/member-admin-profile.md`. **Макет:** `docs/design/member-admin-profile/mockups/variants.html` (вариант B; mockups/ в .gitignore — на диске).

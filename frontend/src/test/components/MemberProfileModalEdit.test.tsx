@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { renderWithProviders } from '../utils/renderWithProviders';
-import type { MemberListItemDto, MemberProfileDto } from '../../types/api';
+import type { AwardDto, MemberListItemDto, MemberProfileDto } from '../../types/api';
 
 vi.mock('@telegram-apps/sdk-react', () => ({
   retrieveLaunchParams: () => ({ initDataRaw: 'test' }),
@@ -31,10 +31,10 @@ const MEMBER: MemberListItemDto = {
   accessStatus: 'active', subscriptionExpiresAt: inDays(20),
 };
 
-function mockProfile(note: string | null) {
+function mockProfile(note: string | null, awards: AwardDto[] = []) {
   const profile: MemberProfileDto = {
     userId: 'u-1', clubId: CLUB, firstName: 'Игорь', username: 'igor_s', avatarUrl: null,
-    bio: null, interests: [], role: 'member', trust: 70, promiseFulfillmentPct: 90,
+    bio: null, interests: [], awards, role: 'member', trust: 70, promiseFulfillmentPct: 90,
     totalConfirmations: 4, totalAttendances: 3, spontaneityCount: 0, skladchinaPaid: null,
     skladchinaTotal: null, subscriptionExpiresAt: inDays(20), organizerNote: note,
   };
@@ -82,5 +82,61 @@ describe('MemberProfileModal — admin edit (S1)', () => {
     await user.click(screen.getByRole('button', { name: /^Сохранить$/ }));
 
     await waitFor(() => expect(patchedNote).toBe('Завсегдатай'));
+  });
+});
+
+describe('MemberProfileModal — club awards (S2)', () => {
+  const AWARD: AwardDto = { id: 'a-1', emoji: '🔥', label: 'Активист' };
+
+  it('shows award chips to a regular member (public, R3)', async () => {
+    mockProfile(null, [AWARD]);
+    renderWithProviders(
+      <MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer={false} onClose={() => {}} />,
+    );
+    expect(await screen.findByText('Активист')).toBeInTheDocument();
+    // ...but no edit affordance for a non-organizer.
+    expect(screen.queryByRole('button', { name: /Редактировать/ })).not.toBeInTheDocument();
+  });
+
+  it('organizer ✎ → adds an award via POST /awards', async () => {
+    mockProfile(null, []);
+    let posted: { emoji: string; label: string } | undefined;
+    server.use(
+      http.get(`*/api/clubs/${CLUB}/award-suggestions`, () => HttpResponse.json([])),
+      http.post(`*/api/clubs/${CLUB}/members/u-1/awards`, async ({ request }) => {
+        posted = (await request.json()) as { emoji: string; label: string };
+        return HttpResponse.json({ id: 'a-9', emoji: posted.emoji, label: posted.label });
+      }),
+    );
+
+    const user = userEvent.setup();
+    renderWithProviders(<MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer onClose={() => {}} />);
+
+    await user.click(await screen.findByRole('button', { name: /Редактировать/ }));
+    await user.click(screen.getByRole('button', { name: /Добавить награду/ }));
+    await user.type(screen.getByPlaceholderText(/Название награды/i), 'Душа клуба');
+    await user.click(screen.getByRole('button', { name: /Создать награду/ }));
+
+    await waitFor(() => expect(posted?.label).toBe('Душа клуба'));
+    expect(posted?.emoji).toBeTruthy();
+  });
+
+  it('organizer can revoke an award via DELETE', async () => {
+    mockProfile(null, [AWARD]);
+    let deleted = false;
+    server.use(
+      http.delete(`*/api/clubs/${CLUB}/members/u-1/awards/a-1`, () => {
+        deleted = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    const user = userEvent.setup();
+    renderWithProviders(<MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer onClose={() => {}} />);
+
+    await user.click(await screen.findByRole('button', { name: /Редактировать/ }));
+    await user.click(await screen.findByRole('button', { name: /Снять награду Активист/ }));
+
+    await waitFor(() => expect(deleted).toBe(true));
   });
 });

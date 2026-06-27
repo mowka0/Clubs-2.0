@@ -1,5 +1,7 @@
 import { apiClient } from './apiClient';
 import type {
+  AwardDto,
+  AwardSuggestionDto,
   GamificationDto,
   LeavePreviewDto,
   MemberAttentionDto,
@@ -111,6 +113,30 @@ export function setMemberAccessUntil(clubId: string, userId: string, until: stri
 
 export function updateMemberNote(clubId: string, userId: string, note: string | null): Promise<MembershipDto> {
   return apiClient.patch<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/note`, { note });
+}
+
+/**
+ * Member admin profile (S2), owner-only club-local awards «как интересы»:
+ *  - grantMemberAward — give an award (emoji + label, ≤40 chars); 400 on dup label / cap (6) reached.
+ *  - revokeMemberAward — remove an award by id.
+ *  - getAwardSuggestions — distinct past awards in the club, drives the grant-form autocomplete.
+ * The awards themselves are public on the member card (returned in MemberProfileDto.awards, R3).
+ */
+export function grantMemberAward(
+  clubId: string,
+  userId: string,
+  emoji: string,
+  label: string,
+): Promise<AwardDto> {
+  return apiClient.post<AwardDto>(`/api/clubs/${clubId}/members/${userId}/awards`, { emoji, label });
+}
+
+export function revokeMemberAward(clubId: string, userId: string, awardId: string): Promise<void> {
+  return apiClient.delete(`/api/clubs/${clubId}/members/${userId}/awards/${awardId}`);
+}
+
+export function getAwardSuggestions(clubId: string): Promise<AwardSuggestionDto[]> {
+  return apiClient.get<AwardSuggestionDto[]>(`/api/clubs/${clubId}/award-suggestions`);
 }
 
 /** Red-dot feed for [clubId]: soon-expiring + frozen-awaiting-dues counts. Owner-only. */

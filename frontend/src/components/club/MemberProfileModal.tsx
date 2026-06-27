@@ -2,9 +2,12 @@ import { FC, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import {
+  useAwardSuggestionsQuery,
   useFreezeMemberMutation,
+  useGrantMemberAwardMutation,
   useMarkMemberDuesPaidMutation,
   useMemberProfileQuery,
+  useRevokeMemberAwardMutation,
   useSetMemberAccessUntilMutation,
   useUpdateMemberNoteMutation,
 } from '../../queries/members';
@@ -13,7 +16,13 @@ import { ApiError } from '../../api/apiClient';
 import { pluralRu } from '../../utils/formatters';
 import { DonutRing } from '../reputation/DonutRing';
 import { TRUST_TIER_COLOR, trustTier } from '../reputation/trust-tier';
-import type { MemberListItemDto, MemberProfileDto } from '../../types/api';
+import type { AwardDto, MemberListItemDto, MemberProfileDto } from '../../types/api';
+
+// Curated emoji set for the award picker — broad enough to label most kinds of recognition.
+const AWARD_EMOJIS = ['🏆', '🥇', '⭐', '🔥', '💎', '👑', '🚀', '❤️', '🌟', '🎯', '💪', '🙌'];
+// Mirrors the backend cap (AwardService.MAX_AWARDS_PER_MEMBER) + label length (GrantAwardRequest).
+const MAX_AWARDS = 6;
+const MAX_AWARD_LABEL = 40;
 
 interface MemberProfileModalProps {
   member: MemberListItemDto;
@@ -50,11 +59,162 @@ function extendedEndLabel(iso: string | null): string {
   return formatDateFull(new Date(base + ACCESS_PERIOD_DAYS * MS_PER_DAY).toISOString());
 }
 
+interface AwardEditorProps {
+  clubId: string;
+  userId: string;
+  awards: AwardDto[];
+  /** Surface grant/revoke failures on the shared error line of the admin section. */
+  onError: (message: string | null) => void;
+}
+
+/**
+ * Award management «как интересы» (member admin S2): existing award chips with × (revoke) plus a
+ * «＋ Добавить награду» control — emoji picker + label input with autocomplete from past club awards.
+ * Each grant/revoke is an immediate API call (not batched under the form's «Сохранить»), so the
+ * organizer can award several in a row without closing the card. Cosmetic only — no reputation effect.
+ */
+const AwardEditor: FC<AwardEditorProps> = ({ clubId, userId, awards, onError }) => {
+  const haptic = useHaptic();
+  const grant = useGrantMemberAwardMutation();
+  const revoke = useRevokeMemberAwardMutation();
+  const [adding, setAdding] = useState(false);
+  const [emoji, setEmoji] = useState(AWARD_EMOJIS[0]);
+  const [label, setLabel] = useState('');
+  const suggestQuery = useAwardSuggestionsQuery(clubId, { enabled: adding });
+
+  const atMax = awards.length >= MAX_AWARDS;
+  const busy = grant.isPending || revoke.isPending;
+
+  const existingLabels = new Set(awards.map((a) => a.label.toLowerCase()));
+  const query = label.trim().toLowerCase();
+  const suggestions = (suggestQuery.data ?? [])
+    .filter((s) => !existingLabels.has(s.label.toLowerCase()))
+    .filter((s) => !query || s.label.toLowerCase().includes(query))
+    .slice(0, 6);
+
+  const doGrant = (em: string, raw: string) => {
+    const cleanLabel = raw.trim();
+    if (!cleanLabel || busy) return;
+    onError(null);
+    haptic.impact('light');
+    grant.mutate(
+      { clubId, userId, emoji: em, label: cleanLabel },
+      {
+        onSuccess: () => { haptic.notify('success'); setLabel(''); setAdding(false); },
+        onError: (e) => {
+          haptic.notify('error');
+          onError(e instanceof Error ? e.message : 'Не удалось выдать награду');
+        },
+      },
+    );
+  };
+
+  const doRevoke = (awardId: string) => {
+    if (busy) return;
+    onError(null);
+    haptic.impact('light');
+    revoke.mutate(
+      { clubId, userId, awardId },
+      {
+        onError: (e) => {
+          haptic.notify('error');
+          onError(e instanceof Error ? e.message : 'Не удалось снять награду');
+        },
+      },
+    );
+  };
+
+  return (
+    <div className="rd-field">
+      <span className="rd-label">Награды клуба</span>
+      <div className="rd-award-chips">
+        {awards.map((a) => (
+          <span key={a.id} className="rd-award-chip">
+            <span className="rd-award-emoji" aria-hidden="true">{a.emoji}</span>
+            {a.label}
+            <button
+              type="button"
+              className="x"
+              disabled={busy}
+              onClick={() => doRevoke(a.id)}
+              aria-label={`Снять награду ${a.label}`}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        {!atMax && !adding && (
+          <button type="button" className="rd-award-add" onClick={() => { onError(null); setAdding(true); }}>
+            ＋ Добавить награду
+          </button>
+        )}
+      </div>
+
+      {adding && !atMax && (
+        <div className="rd-award-form">
+          <div className="rd-award-emoji-pick" role="group" aria-label="Эмодзи награды">
+            {AWARD_EMOJIS.map((em) => (
+              <button
+                key={em}
+                type="button"
+                className={`rd-award-emoji-opt${em === emoji ? ' sel' : ''}`}
+                aria-pressed={em === emoji}
+                onClick={() => setEmoji(em)}
+              >
+                {em}
+              </button>
+            ))}
+          </div>
+          <div className="rd-award-input-row">
+            <input
+              className="rd-input"
+              value={label}
+              maxLength={MAX_AWARD_LABEL}
+              placeholder="Название награды"
+              aria-label="Название награды"
+              onChange={(e) => setLabel(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); doGrant(emoji, label); } }}
+            />
+            <button
+              type="button"
+              className="rd-award-submit"
+              disabled={!label.trim() || busy}
+              onClick={() => doGrant(emoji, label)}
+              aria-label="Создать награду"
+            >
+              {grant.isPending ? <Spinner size="s" /> : '→'}
+            </button>
+          </div>
+          {suggestions.length > 0 && (
+            <div className="rd-award-suggest" role="listbox">
+              {suggestions.map((s) => (
+                <button
+                  key={`${s.emoji}-${s.label}`}
+                  type="button"
+                  className="rd-award-suggest-item"
+                  onClick={() => doGrant(s.emoji, s.label)}
+                >
+                  <span className="rd-award-emoji" aria-hidden="true">{s.emoji}</span>{s.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {atMax && <div className="rd-award-hint">Максимум {MAX_AWARDS} наград</div>}
+    </div>
+  );
+};
+
 interface OrganizerGateProps {
   clubId: string;
   member: MemberListItemDto;
   /** Current private note from the loaded profile (null until loaded / when empty). */
   organizerNote: string | null;
+  /** Awards on the loaded profile (managed inline; public on the card, R3). */
+  awards: AwardDto[];
+  /** Whether the member has a paid access window — gates the subscription strip + dues/freeze + custom date. */
+  isPaidMember: boolean;
   onDone: (message: string) => void;
 }
 
@@ -64,12 +224,14 @@ function toDateInput(iso: string | null): string {
 }
 
 /**
- * Organizer-only access controls (de-Stars) + edit mode (member admin S1, Variant B):
- *  - Immediate actions: «Взнос получен» (dues-paid → open + extend), «Закрыть доступ» (freeze).
- *  - ✎ Редактировать → form: «Своя дата» (custom access-window end) + «Заметка» (private note), saved together.
- * 409 (lost race) closes the card — the list cache is already refreshed.
+ * Organizer admin section for a member (member admin Variant B). Two layers, decoupled:
+ *  - Paid-only (isPaidMember): de-Stars access controls — subscription strip + «Взнос получен» /
+ *    «Закрыть доступ», and «Своя дата» in the edit form. A free member has no access window, so none show.
+ *  - Always (any club): ✎ Редактировать → «Награды клуба» (S2, immediate add/remove) + «Заметка» (S1,
+ *    private, saved on «Сохранить»).
+ * 409 (lost race) on a dues/freeze action closes the card — the list cache is already refreshed.
  */
-const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, onDone }) => {
+const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, awards, isPaidMember, onDone }) => {
   const haptic = useHaptic();
   const markPaid = useMarkMemberDuesPaidMutation();
   const freeze = useFreezeMemberMutation();
@@ -146,40 +308,44 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
 
   return (
     <div className="rd-org-gate">
-      <div className={`rd-sub-strip${frozen || soon ? ' rd-soon' : ''}`}>
-        <div style={{ minWidth: 0 }}>
-          <div className="rd-sub-strip-k">{frozen ? 'Доступ закрыт' : 'Подписка активна до'}</div>
-          <div className="rd-sub-strip-v">
-            {frozen
-              ? 'участник ждёт оплаты'
-              : expiresAt
-                ? `${formatDateFull(expiresAt)} · ${relativeUntil(expiresAt)}`
-                : '—'}
+      {isPaidMember && (
+        <>
+          <div className={`rd-sub-strip${frozen || soon ? ' rd-soon' : ''}`}>
+            <div style={{ minWidth: 0 }}>
+              <div className="rd-sub-strip-k">{frozen ? 'Доступ закрыт' : 'Подписка активна до'}</div>
+              <div className="rd-sub-strip-v">
+                {frozen
+                  ? 'участник ждёт оплаты'
+                  : expiresAt
+                    ? `${formatDateFull(expiresAt)} · ${relativeUntil(expiresAt)}`
+                    : '—'}
+              </div>
+            </div>
+            <span className="rd-org-tag">Только орг</span>
           </div>
-        </div>
-        <span className="rd-org-tag">Только орг</span>
-      </div>
+
+          <div className="rd-org-gate-acts">
+            <button type="button" className="rd-btn-primary" disabled={busy} onClick={() => run(markPaid, duesLabel.includes('открыть') ? `Доступ ${member.firstName} открыт` : `Доступ ${member.firstName} продлён на 30 дней`)}>
+              {markPaid.isPending ? <Spinner size="s" /> : duesLabel}
+            </button>
+            {!frozen && (
+              <button
+                type="button"
+                className="rd-btn-outline"
+                style={{ color: 'var(--danger)' }}
+                disabled={busy}
+                onClick={() => run(freeze, `Доступ ${member.firstName} закрыт`)}
+              >
+                {freeze.isPending ? <Spinner size="s" /> : 'Закрыть доступ'}
+              </button>
+            )}
+          </div>
+        </>
+      )}
 
       {error && <div className="rd-error" style={{ textAlign: 'left' }}>{error}</div>}
 
-      <div className="rd-org-gate-acts">
-        <button type="button" className="rd-btn-primary" disabled={busy} onClick={() => run(markPaid, duesLabel.includes('открыть') ? `Доступ ${member.firstName} открыт` : `Доступ ${member.firstName} продлён на 30 дней`)}>
-          {markPaid.isPending ? <Spinner size="s" /> : duesLabel}
-        </button>
-        {!frozen && (
-          <button
-            type="button"
-            className="rd-btn-outline"
-            style={{ color: 'var(--danger)' }}
-            disabled={busy}
-            onClick={() => run(freeze, `Доступ ${member.firstName} закрыт`)}
-          >
-            {freeze.isPending ? <Spinner size="s" /> : 'Закрыть доступ'}
-          </button>
-        )}
-      </div>
-
-      {/* Member admin S1 (Variant B): ✎ reveals editable fields — custom access date + private note. */}
+      {/* Member admin (Variant B): ✎ reveals editable fields — awards + note (+ custom date for paid). */}
       {!editing && organizerNote && (
         <div className="rd-org-note-read">
           <span className="rd-org-note-k">Заметка</span>{organizerNote}
@@ -191,16 +357,19 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
         </button>
       ) : (
         <div className="rd-org-edit">
-          <label className="rd-field">
-            <span className="rd-label">Своя дата окончания доступа</span>
-            <input
-              type="date"
-              className="rd-input"
-              value={dateDraft}
-              min={today}
-              onChange={(e) => setDateDraft(e.target.value)}
-            />
-          </label>
+          {isPaidMember && (
+            <label className="rd-field">
+              <span className="rd-label">Своя дата окончания доступа</span>
+              <input
+                type="date"
+                className="rd-input"
+                value={dateDraft}
+                min={today}
+                onChange={(e) => setDateDraft(e.target.value)}
+              />
+            </label>
+          )}
+          <AwardEditor clubId={clubId} userId={member.userId} awards={awards} onError={setError} />
           <label className="rd-field">
             <span className="rd-label">Заметка (видите только вы)</span>
             <textarea
@@ -310,12 +479,12 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
   const profile = profileQuery.data;
   const loading = profileQuery.isPending;
 
-  // Organizer gate (de-Stars): shown for a paid member (has an expiry window) or a frozen member.
-  // Never for the organizer's own row — the backend rejects managing the organizer.
-  const showGate =
-    isOrganizer
-    && member.role !== 'organizer'
-    && (member.accessStatus === 'frozen' || !!member.subscriptionExpiresAt);
+  // Admin section: the organizer can manage any non-organizer member (note + awards work in free
+  // clubs too, S2). Never the organizer's own row — the backend rejects managing the organizer.
+  const isManageable = isOrganizer && member.role !== 'organizer';
+  // Paid member = has an access window (or is frozen pending dues). Gates the de-Stars layer
+  // (subscription strip + dues/freeze + custom date); a free member only gets note + awards.
+  const isPaidMember = member.accessStatus === 'frozen' || !!member.subscriptionExpiresAt;
 
   const handleGateDone = (message: string) => {
     onActionToast?.(message);
@@ -335,6 +504,7 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
   const initials = `${member.firstName.charAt(0)}${member.lastName?.charAt(0) ?? ''}`;
   const bio = profile?.bio?.trim();
   const hasInterests = (profile?.interests.length ?? 0) > 0;
+  const awards = profile?.awards ?? [];
 
   return createPortal(
     <>
@@ -384,6 +554,21 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
             </div>
           )}
 
+          {/* Club awards (S2) — public recognition, shown to every viewer (R3). Read-only here; the
+              organizer manages them in the ✎ edit form below. */}
+          {awards.length > 0 && (
+            <div className="rd-field">
+              <span className="rd-label">Награды клуба</span>
+              <div className="rd-award-chips" style={{ margin: 0 }}>
+                {awards.map((a) => (
+                  <span key={a.id} className="rd-award-chip rd-award-chip-ro">
+                    <span className="rd-award-emoji" aria-hidden="true">{a.emoji}</span>{a.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Reputation in this club */}
           <div>
             <div className="rd-section-sub-h" style={{ margin: '0 0 8px' }}>Репутация в этом клубе</div>
@@ -404,12 +589,14 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
             )}
           </div>
 
-          {/* Organizer-only access gate (de-Stars Slice 2) + admin edit (S1) */}
-          {showGate && (
+          {/* Organizer admin section: de-Stars access gate (paid-only) + admin edit (note S1 / awards S2). */}
+          {isManageable && (
             <OrganizerGate
               clubId={clubId}
               member={member}
               organizerNote={profile?.organizerNote ?? null}
+              awards={awards}
+              isPaidMember={isPaidMember}
               onDone={handleGateDone}
             />
           )}
