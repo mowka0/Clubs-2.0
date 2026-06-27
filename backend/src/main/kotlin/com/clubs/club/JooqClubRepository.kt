@@ -78,6 +78,8 @@ class JooqClubRepository(
             .set(CLUBS.AVATAR_URL, request.avatarUrl)
             .set(CLUBS.RULES, request.rules)
             .set(CLUBS.APPLICATION_QUESTION, request.applicationQuestion)
+            .set(CLUBS.PAYMENT_LINK, request.paymentLink?.ifBlank { null })
+            .set(CLUBS.PAYMENT_METHOD_NOTE, request.paymentMethodNote?.ifBlank { null })
             .set(CLUBS.INVITE_LINK, inviteCode)
             .set(CLUBS.IS_ACTIVE, true)
             .returning()

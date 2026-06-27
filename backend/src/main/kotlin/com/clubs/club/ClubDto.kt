@@ -82,7 +82,14 @@ data class CreateClubRequest(
 
     val avatarUrl: String? = null,
     val rules: String? = null,
-    val applicationQuestion: String? = null
+    val applicationQuestion: String? = null,
+
+    // SBP dues requisites. Mandatory when subscriptionPrice > 0 (enforced in ClubService.createClub):
+    // a paid club must tell members how to pay. paymentLink = the СБП link/phone; note = optional hint.
+    @field:Size(max = 500, message = "Реквизиты: максимум 500 символов")
+    val paymentLink: String? = null,
+    @field:Size(max = 200, message = "Подсказка: максимум 200 символов")
+    val paymentMethodNote: String? = null
 )
 
 data class UpdateClubRequest(

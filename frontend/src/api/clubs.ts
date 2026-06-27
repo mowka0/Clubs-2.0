@@ -24,6 +24,9 @@ export interface CreateClubBody {
   avatarUrl?: string;
   rules?: string;
   applicationQuestion?: string;
+  // SBP dues requisites — required by the backend when subscriptionPrice > 0.
+  paymentLink?: string;
+  paymentMethodNote?: string;
 }
 
 export function getClubs(filters?: ClubFilters): Promise<PageResponse<ClubListItemDto>> {

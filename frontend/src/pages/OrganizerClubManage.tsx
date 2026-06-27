@@ -117,7 +117,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
   // Tracks which Input should render in the error state. Same pattern as RHF
   // `formState.errors.<field>` in CreateClubModal — gives a red outline on the
   // offending field, not just an inline message.
-  type SettingsField = 'name' | 'city' | 'memberLimit' | 'subscriptionPrice' | 'description';
+  type SettingsField = 'name' | 'city' | 'memberLimit' | 'subscriptionPrice' | 'description' | 'paymentLink';
   const [errorField, setErrorField] = useState<SettingsField | null>(null);
   const [savedToast, setSavedToast] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -167,6 +167,12 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
     const price = Number(subscriptionPrice);
     if (!Number.isInteger(price) || price < 0) {
       fail('subscriptionPrice', 'Цена: целое число >= 0');
+      return;
+    }
+    // A paid club must keep SBP requisites (mirrors the backend invariant). Blocks saving a paid club
+    // with an empty link — including a free→paid switch and a legacy paid club that never had one.
+    if (price > 0 && !paymentLink.trim()) {
+      fail('paymentLink', 'Для платного клуба укажите реквизиты для взноса');
       return;
     }
     if (description.trim().length < 1 || description.trim().length > 500) {
@@ -303,14 +309,14 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
         )}
       </div>
 
-      {club.subscriptionPrice > 0 && (
+      {Number(subscriptionPrice) > 0 && (
         <>
           <div className="rd-section-sub-h">Реквизиты для взноса (СБП)</div>
           <div className="rd-form" style={{ marginBottom: 14 }}>
             <label className="rd-field">
-              <span className="rd-label">Ссылка / номер для оплаты (опционально)</span>
+              <span className="rd-label">Ссылка / номер для оплаты <span className="rd-req">*</span></span>
               <input
-                className="rd-input"
+                className={`rd-input${errorField === 'paymentLink' ? ' rd-invalid' : ''}`}
                 value={paymentLink}
                 onChange={(e) => setPaymentLink(e.target.value)}
                 placeholder="Ссылка СБП / банка или номер телефона"

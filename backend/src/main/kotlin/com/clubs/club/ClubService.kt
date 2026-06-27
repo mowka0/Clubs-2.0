@@ -52,6 +52,10 @@ class ClubService(
     fun createClub(request: CreateClubRequest, ownerId: UUID): ClubDetailDto {
         validateCategory(request.category)
         validateAccessType(request.accessType)
+        // A paid club must carry SBP requisites so members know how to pay (de-Stars honor-system).
+        if (request.subscriptionPrice > 0 && request.paymentLink.isNullOrBlank()) {
+            throw ValidationException("Для платного клуба укажите реквизиты для взноса (СБП)")
+        }
 
         val count = clubRepository.countByOwnerId(ownerId)
         if (count >= MAX_CLUBS_PER_ORGANIZER) throw ConflictException("Maximum $MAX_CLUBS_PER_ORGANIZER clubs per organizer")
@@ -121,6 +125,16 @@ class ClubService(
         // otherwise editing would bypass the ceiling (payment-v2.md §3.6).
         if (request.subscriptionPrice != null && request.subscriptionPrice > 0 && club.subscriptionPrice == 0) {
             subscriptionService.requirePaidClubCapacity(userId, clubRepository.countPaidByOwnerId(userId))
+        }
+
+        // Invariant: a paid club must keep SBP requisites. Resolve the post-update state — price from the
+        // request or the current value; link kept when the key is absent (null), cleared on a blank string
+        // (same convention the repository uses). Blocks 0→paid without a link, clearing a paid club's link,
+        // and editing a legacy paid club that never had one.
+        val resultingPrice = request.subscriptionPrice ?: club.subscriptionPrice
+        val resultingLink = if (request.paymentLink == null) club.paymentLink else request.paymentLink.ifBlank { null }
+        if (resultingPrice > 0 && resultingLink.isNullOrBlank()) {
+            throw ValidationException("Для платного клуба укажите реквизиты для взноса (СБП)")
         }
 
         val updated = clubRepository.update(id, request) ?: throw NotFoundException("Club not found after update")
