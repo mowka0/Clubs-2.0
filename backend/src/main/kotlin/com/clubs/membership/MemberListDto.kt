@@ -1,5 +1,7 @@
 package com.clubs.membership
 
+import jakarta.validation.constraints.NotNull
+import jakarta.validation.constraints.Size
 import java.math.BigDecimal
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -66,4 +68,16 @@ data class OrganizerDuesMemberDto(
     val clubAvatarUrl: String?,
     val joinedAt: OffsetDateTime?,
     val subscriptionExpiresAt: OffsetDateTime?
+)
+
+/** Member admin S1 — set the private organizer note (null/blank clears it). */
+data class UpdateNoteRequest(
+    @field:Size(max = 500, message = "Заметка: максимум 500 символов")
+    val note: String?
+)
+
+/** Member admin S1 — set a custom access-window end date («своя дата»). Must be in the future. */
+data class SetAccessUntilRequest(
+    @field:NotNull(message = "Укажите дату")
+    val until: OffsetDateTime
 )

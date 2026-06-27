@@ -30,5 +30,7 @@ data class MemberProfileDto(
     val skladchinaTotal: Int?,
     // De-Stars Slice 2 — ORGANIZER ONLY (null for regular members): when this member's paid access
     // window ends. null also for free memberships (no expiry). Shown as «Подписка активна до …».
-    val subscriptionExpiresAt: OffsetDateTime? = null
+    val subscriptionExpiresAt: OffsetDateTime? = null,
+    // Member admin S1 — ORGANIZER ONLY (null for regular members): the private organizer note.
+    val organizerNote: String? = null
 )

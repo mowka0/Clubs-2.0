@@ -167,4 +167,15 @@ open class MembershipsDao(configuration: Configuration?) : DAOImpl<MembershipsRe
      * Fetch records that have <code>dues_marked_by IN (values)</code>
      */
     fun fetchByDuesMarkedBy(vararg values: UUID): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.DUES_MARKED_BY, *values)
+
+    /**
+     * Fetch records that have <code>organizer_note BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfOrganizerNote(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetchRange(Memberships.MEMBERSHIPS.ORGANIZER_NOTE, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>organizer_note IN (values)</code>
+     */
+    fun fetchByOrganizerNote(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.ORGANIZER_NOTE, *values)
 }

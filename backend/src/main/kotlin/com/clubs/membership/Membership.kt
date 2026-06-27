@@ -13,6 +13,8 @@ data class Membership(
     val role: MembershipRole,
     val joinedAt: OffsetDateTime,
     val subscriptionExpiresAt: OffsetDateTime?,
+    // Private organizer note (member admin profile S1). Null = none. Organizer-only on read.
+    val organizerNote: String?,
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime
 )

@@ -9,8 +9,10 @@ import {
   getMyReputation,
   getOrganizerAwaitingDues,
   markMemberDuesPaid,
+  setMemberAccessUntil,
   unfreezeMember,
   unmarkMemberDues,
+  updateMemberNote,
 } from '../api/membership';
 import { queryKeys } from './queryKeys';
 
@@ -97,6 +99,32 @@ export function useUnmarkMemberDuesMutation() {
   return useMutation({
     mutationFn: ({ clubId, userId }: MemberGateArgs) => unmarkMemberDues(clubId, userId),
     onSuccess: (_data, { clubId }) => invalidateAfterMemberGateAction(qc, clubId),
+  });
+}
+
+/** Member admin S1: set a custom access-window end («своя дата»). Touches access → invalidate buckets +
+ *  the member profile card (its «Подписка до …» line). */
+export function useSetMemberAccessUntilMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId, until }: MemberGateArgs & { until: string }) =>
+      setMemberAccessUntil(clubId, userId, until),
+    onSuccess: (_data, { clubId, userId }) => {
+      invalidateAfterMemberGateAction(qc, clubId);
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.memberProfile(clubId, userId) });
+    },
+  });
+}
+
+/** Member admin S1: set/clear the private organizer note. Only the profile card carries it. */
+export function useUpdateMemberNoteMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId, note }: MemberGateArgs & { note: string | null }) =>
+      updateMemberNote(clubId, userId, note),
+    onSuccess: (_data, { clubId, userId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.memberProfile(clubId, userId) });
+    },
   });
 }
 

@@ -415,6 +415,28 @@ class JooqMembershipRepository(
             .execute()
     }
 
+    // "Своя дата": organizer manually sets the access window end. Grants access (active, clears frozen)
+    // without recording a dues payment — it's an admin override, not a «взнос получен» event.
+    override fun setAccessUntil(membershipId: UUID, accessUntil: OffsetDateTime): Int {
+        val now = OffsetDateTime.now()
+        return dsl.update(MEMBERSHIPS)
+            .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
+            .setNull(MEMBERSHIPS.ACCESS_FROZEN_AT)
+            .set(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT, accessUntil)
+            .set(MEMBERSHIPS.UPDATED_AT, now)
+            .where(MEMBERSHIPS.ID.eq(membershipId))
+            .execute()
+    }
+
+    override fun updateOrganizerNote(membershipId: UUID, note: String?): Int {
+        val now = OffsetDateTime.now()
+        return dsl.update(MEMBERSHIPS)
+            .set(MEMBERSHIPS.ORGANIZER_NOTE, note)
+            .set(MEMBERSHIPS.UPDATED_AT, now)
+            .where(MEMBERSHIPS.ID.eq(membershipId))
+            .execute()
+    }
+
     override fun findExpiringWithin(now: OffsetDateTime, threshold: OffsetDateTime): List<ExpiringSubscriptionNotification> =
         dsl.select(USERS.TELEGRAM_ID, CLUBS.NAME)
             .from(MEMBERSHIPS)

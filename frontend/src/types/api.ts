@@ -97,6 +97,8 @@ export interface MemberProfileDto {
   // De-Stars Slice 2 — ORGANIZER ONLY (null for regular members): when this member's paid access
   // window ends. null also for free memberships. Shown as «Подписка активна до …» on the org card.
   subscriptionExpiresAt: string | null;
+  // Member admin S1 — ORGANIZER ONLY (null for regular members): the private organizer note.
+  organizerNote: string | null;
 }
 
 /**

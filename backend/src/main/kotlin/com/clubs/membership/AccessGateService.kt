@@ -84,6 +84,28 @@ class AccessGateService(
         return mapper.toDto(membership)
     }
 
+    // Member admin profile (S1): organizer manually sets the access window end («своя дата»).
+    @Transactional
+    fun setAccessUntil(clubId: UUID, targetUserId: UUID, until: OffsetDateTime, callerId: UUID): MembershipDto {
+        val membership = loadManageableMember(clubId, targetUserId)
+        if (!until.isAfter(OffsetDateTime.now())) {
+            throw ValidationException("Дата окончания доступа должна быть в будущем")
+        }
+        guardApplied(membershipRepository.setAccessUntil(membership.id, until))
+        log.info("Access window set: clubId={} targetUserId={} by={} until={}", clubId, targetUserId, callerId, until)
+        return mapper.toDto(membership.copy(status = MembershipStatus.active, subscriptionExpiresAt = until))
+    }
+
+    // Member admin profile (S1): organizer sets/clears the private note. Blank → null.
+    @Transactional
+    fun updateNote(clubId: UUID, targetUserId: UUID, note: String?, callerId: UUID): MembershipDto {
+        val membership = loadManageableMember(clubId, targetUserId)
+        val clean = note?.trim()?.takeIf { it.isNotEmpty() }
+        membershipRepository.updateOrganizerNote(membership.id, clean)
+        log.info("Organizer note updated: clubId={} targetUserId={} by={} present={}", clubId, targetUserId, callerId, clean != null)
+        return mapper.toDto(membership.copy(organizerNote = clean))
+    }
+
     private fun loadManageableMember(clubId: UUID, targetUserId: UUID): Membership {
         val membership = membershipRepository.findByUserAndClub(targetUserId, clubId)
             ?: throw NotFoundException("Участник не найден в этом клубе")

@@ -5,6 +5,8 @@ import {
   useFreezeMemberMutation,
   useMarkMemberDuesPaidMutation,
   useMemberProfileQuery,
+  useSetMemberAccessUntilMutation,
+  useUpdateMemberNoteMutation,
 } from '../../queries/members';
 import { useHaptic } from '../../hooks/useHaptic';
 import { ApiError } from '../../api/apiClient';
@@ -51,24 +53,41 @@ function extendedEndLabel(iso: string | null): string {
 interface OrganizerGateProps {
   clubId: string;
   member: MemberListItemDto;
+  /** Current private note from the loaded profile (null until loaded / when empty). */
+  organizerNote: string | null;
   onDone: (message: string) => void;
 }
 
+/** ISO datetime → yyyy-mm-dd for a `<input type="date">`. */
+function toDateInput(iso: string | null): string {
+  return iso ? new Date(iso).toISOString().slice(0, 10) : '';
+}
+
 /**
- * Organizer-only strip + actions: «Подписка активна до …» / «Доступ закрыт», plus «Взнос получен»
- * (dues-paid → open + extend) and «Закрыть доступ» (freeze). 409 (lost race) closes the card with a
- * note — the list cache is already refreshed.
+ * Organizer-only access controls (de-Stars) + edit mode (member admin S1, Variant B):
+ *  - Immediate actions: «Взнос получен» (dues-paid → open + extend), «Закрыть доступ» (freeze).
+ *  - ✎ Редактировать → form: «Своя дата» (custom access-window end) + «Заметка» (private note), saved together.
+ * 409 (lost race) closes the card — the list cache is already refreshed.
  */
-const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, onDone }) => {
+const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, onDone }) => {
   const haptic = useHaptic();
   const markPaid = useMarkMemberDuesPaidMutation();
   const freeze = useFreezeMemberMutation();
+  const setAccess = useSetMemberAccessUntilMutation();
+  const updateNote = useUpdateMemberNoteMutation();
   const [error, setError] = useState<string | null>(null);
 
+  const [editing, setEditing] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [dateDraft, setDateDraft] = useState('');
+
   const busy = markPaid.isPending || freeze.isPending;
+  const savingEdit = setAccess.isPending || updateNote.isPending;
   const frozen = member.accessStatus === 'frozen';
   const expiresAt = member.subscriptionExpiresAt ?? null;
   const soon = !frozen && !!expiresAt && daysUntil(expiresAt) <= 7;
+  const today = new Date().toISOString().slice(0, 10);
+  const originalDate = toDateInput(expiresAt);
 
   const run = (
     mutation: ReturnType<typeof useMarkMemberDuesPaidMutation> | ReturnType<typeof useFreezeMemberMutation>,
@@ -88,6 +107,37 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, onDone }) => {
         },
       },
     );
+  };
+
+  const openEdit = () => {
+    setError(null);
+    setNoteDraft(organizerNote ?? '');
+    setDateDraft(originalDate);
+    setEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    setError(null);
+    const tasks: Promise<unknown>[] = [];
+    if (dateDraft && dateDraft !== originalDate) {
+      // End-of-day local so «до 28 июля» grants access through the 28th.
+      const untilIso = new Date(`${dateDraft}T23:59:59`).toISOString();
+      tasks.push(setAccess.mutateAsync({ clubId, userId: member.userId, until: untilIso }));
+    }
+    const cleanNote = noteDraft.trim();
+    if (cleanNote !== (organizerNote ?? '')) {
+      tasks.push(updateNote.mutateAsync({ clubId, userId: member.userId, note: cleanNote || null }));
+    }
+    if (tasks.length === 0) { setEditing(false); return; }
+    try {
+      haptic.impact('medium');
+      await Promise.all(tasks);
+      haptic.notify('success');
+      onDone('Изменения сохранены');
+    } catch (e) {
+      haptic.notify('error');
+      setError(e instanceof Error ? e.message : 'Не удалось сохранить');
+    }
   };
 
   const duesLabel = frozen
@@ -128,6 +178,50 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, onDone }) => {
           </button>
         )}
       </div>
+
+      {/* Member admin S1 (Variant B): ✎ reveals editable fields — custom access date + private note. */}
+      {!editing && organizerNote && (
+        <div className="rd-org-note-read">
+          <span className="rd-org-note-k">Заметка</span>{organizerNote}
+        </div>
+      )}
+      {!editing ? (
+        <button type="button" className="rd-org-edit-toggle" onClick={openEdit}>
+          ✎ Редактировать
+        </button>
+      ) : (
+        <div className="rd-org-edit">
+          <label className="rd-field">
+            <span className="rd-label">Своя дата окончания доступа</span>
+            <input
+              type="date"
+              className="rd-input"
+              value={dateDraft}
+              min={today}
+              onChange={(e) => setDateDraft(e.target.value)}
+            />
+          </label>
+          <label className="rd-field">
+            <span className="rd-label">Заметка (видите только вы)</span>
+            <textarea
+              className="rd-textarea"
+              rows={3}
+              maxLength={500}
+              placeholder="Например: помогает с площадкой для встреч"
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+            />
+          </label>
+          <div className="rd-org-gate-acts">
+            <button type="button" className="rd-btn-primary" disabled={savingEdit} onClick={handleSaveEdit}>
+              {savingEdit ? <Spinner size="s" /> : 'Сохранить'}
+            </button>
+            <button type="button" className="rd-btn-outline" disabled={savingEdit} onClick={() => setEditing(false)}>
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -310,9 +404,14 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
             )}
           </div>
 
-          {/* Organizer-only access gate (de-Stars Slice 2) */}
+          {/* Organizer-only access gate (de-Stars Slice 2) + admin edit (S1) */}
           {showGate && (
-            <OrganizerGate clubId={clubId} member={member} onDone={handleGateDone} />
+            <OrganizerGate
+              clubId={clubId}
+              member={member}
+              organizerNote={profile?.organizerNote ?? null}
+              onDone={handleGateDone}
+            />
           )}
         </div>
       </div>

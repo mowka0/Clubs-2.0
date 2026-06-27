@@ -38,6 +38,12 @@ interface MembershipRepository {
     fun markDuesPaid(membershipId: UUID, markedBy: UUID, accessUntil: OffsetDateTime): Int
     fun unmarkDues(membershipId: UUID): Int
 
+    // Member admin profile (S1) — organizer manually sets the access window end / a private note.
+    /** Grants access until a custom date (status→active, clears frozen). Manual override, not a dues confirm. */
+    fun setAccessUntil(membershipId: UUID, accessUntil: OffsetDateTime): Int
+    /** Sets the private organizer note (null = clears it). */
+    fun updateOrganizerNote(membershipId: UUID, note: String?): Int
+
     // Lifecycle / scheduler (honor-system access window)
     fun findExpiringWithin(now: OffsetDateTime, threshold: OffsetDateTime): List<ExpiringSubscriptionNotification>
     fun findActiveExpired(now: OffsetDateTime): List<ExpiringSubscriptionNotification>

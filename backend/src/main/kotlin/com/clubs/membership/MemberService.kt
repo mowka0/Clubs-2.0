@@ -103,7 +103,9 @@ class MemberService(
             skladchinaTotal = summary?.skladchinaTotal,
             // Organizer-only: the member's paid access window end. null for regular viewers and for
             // free memberships (no expiry). Drives «Подписка активна до …» on the organizer card.
-            subscriptionExpiresAt = if (callerIsOrganizer) membership?.subscriptionExpiresAt else null
+            subscriptionExpiresAt = if (callerIsOrganizer) membership?.subscriptionExpiresAt else null,
+            // Organizer-only: the private note (member admin S1). null for regular viewers.
+            organizerNote = if (callerIsOrganizer) membership?.organizerNote else null
         )
     }
 }

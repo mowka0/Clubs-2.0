@@ -104,9 +104,13 @@ open class Memberships(
     val CLUB_ID: TableField<MembershipsRecord, UUID?> = createField(DSL.name("club_id"), SQLDataType.UUID.nullable(false), this, "")
 
     /**
-     * The column <code>public.memberships.status</code>.
+     * The column <code>public.memberships.status</code>. Жизненный цикл
+     * членства: active = состоит и есть доступ к контенту | frozen = состоит,
+     * но доступ закрыт до подтверждения внеплатформенного взноса (de-Stars
+     * Slice 2) | grace_period/expired = легаси Stars-истечение, сейчас не
+     * используется (dormant) | cancelled = вышел из клуба.
      */
-    val STATUS: TableField<MembershipsRecord, MembershipStatus?> = createField(DSL.name("status"), SQLDataType.VARCHAR.nullable(false).defaultValue(DSL.field(DSL.raw("'active'::membership_status"), SQLDataType.VARCHAR)).asEnumDataType(MembershipStatus::class.java), this, "")
+    val STATUS: TableField<MembershipsRecord, MembershipStatus?> = createField(DSL.name("status"), SQLDataType.VARCHAR.nullable(false).defaultValue(DSL.field(DSL.raw("'active'::membership_status"), SQLDataType.VARCHAR)).asEnumDataType(MembershipStatus::class.java), this, "Жизненный цикл членства: active = состоит и есть доступ к контенту | frozen = состоит, но доступ закрыт до подтверждения внеплатформенного взноса (de-Stars Slice 2) | grace_period/expired = легаси Stars-истечение, сейчас не используется (dormant) | cancelled = вышел из клуба.")
 
     /**
      * The column <code>public.memberships.role</code>.
@@ -134,19 +138,35 @@ open class Memberships(
     val UPDATED_AT: TableField<MembershipsRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "")
 
     /**
-     * The column <code>public.memberships.access_frozen_at</code>.
+     * The column <code>public.memberships.access_frozen_at</code>. Когда
+     * организатор заморозил доступ участника (NULL = не заморожен).
+     * Проставляется вместе со status=frozen; очищается при разморозке или
+     * отметке взноса.
      */
-    val ACCESS_FROZEN_AT: TableField<MembershipsRecord, OffsetDateTime?> = createField(DSL.name("access_frozen_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "")
+    val ACCESS_FROZEN_AT: TableField<MembershipsRecord, OffsetDateTime?> = createField(DSL.name("access_frozen_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда организатор заморозил доступ участника (NULL = не заморожен). Проставляется вместе со status=frozen; очищается при разморозке или отметке взноса.")
 
     /**
-     * The column <code>public.memberships.dues_marked_paid_at</code>.
+     * The column <code>public.memberships.dues_marked_paid_at</code>. Когда
+     * организатор последний раз подтвердил получение внеплатформенного взноса
+     * (NULL = не отмечено). Honor-system: деньги идут участник-&gt;организатор
+     * мимо платформы, приложение лишь хранит отметку.
      */
-    val DUES_MARKED_PAID_AT: TableField<MembershipsRecord, OffsetDateTime?> = createField(DSL.name("dues_marked_paid_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "")
+    val DUES_MARKED_PAID_AT: TableField<MembershipsRecord, OffsetDateTime?> = createField(DSL.name("dues_marked_paid_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда организатор последний раз подтвердил получение внеплатформенного взноса (NULL = не отмечено). Honor-system: деньги идут участник->организатор мимо платформы, приложение лишь хранит отметку.")
 
     /**
-     * The column <code>public.memberships.dues_marked_by</code>.
+     * The column <code>public.memberships.dues_marked_by</code>. Организатор
+     * (user), отметивший взнос полученным; FK users(id). NULL, если взнос не
+     * отмечен.
      */
-    val DUES_MARKED_BY: TableField<MembershipsRecord, UUID?> = createField(DSL.name("dues_marked_by"), SQLDataType.UUID, this, "")
+    val DUES_MARKED_BY: TableField<MembershipsRecord, UUID?> = createField(DSL.name("dues_marked_by"), SQLDataType.UUID, this, "Организатор (user), отметивший взнос полученным; FK users(id). NULL, если взнос не отмечен.")
+
+    /**
+     * The column <code>public.memberships.organizer_note</code>. Приватная
+     * заметка организатора об участнике (NULL = нет). Видна только
+     * организаторам клуба (owner/co-org), не самому участнику. Косметика — на
+     * доступ/репутацию не влияет.
+     */
+    val ORGANIZER_NOTE: TableField<MembershipsRecord, String?> = createField(DSL.name("organizer_note"), SQLDataType.CLOB, this, "Приватная заметка организатора об участнике (NULL = нет). Видна только организаторам клуба (owner/co-org), не самому участнику. Косметика — на доступ/репутацию не влияет.")
 
     private constructor(alias: Name, aliased: Table<MembershipsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<MembershipsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)

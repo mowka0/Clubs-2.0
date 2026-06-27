@@ -15,6 +15,7 @@ class MembershipMapper {
         role = record.role!!,
         joinedAt = record.joinedAt!!,
         subscriptionExpiresAt = record.subscriptionExpiresAt,
+        organizerNote = record.organizerNote,
         createdAt = record.createdAt!!,
         updatedAt = record.updatedAt!!
     )

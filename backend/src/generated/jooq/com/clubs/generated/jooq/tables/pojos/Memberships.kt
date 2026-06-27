@@ -28,7 +28,8 @@ data class Memberships(
     var updatedAt: OffsetDateTime? = null,
     var accessFrozenAt: OffsetDateTime? = null,
     var duesMarkedPaidAt: OffsetDateTime? = null,
-    var duesMarkedBy: UUID? = null
+    var duesMarkedBy: UUID? = null,
+    var organizerNote: String? = null
 ): Serializable {
 
 
@@ -104,6 +105,12 @@ data class Memberships(
         }
         else if (this.duesMarkedBy != o.duesMarkedBy)
             return false
+        if (this.organizerNote == null) {
+            if (o.organizerNote != null)
+                return false
+        }
+        else if (this.organizerNote != o.organizerNote)
+            return false
         return true
     }
 
@@ -122,6 +129,7 @@ data class Memberships(
         result = prime * result + (if (this.accessFrozenAt == null) 0 else this.accessFrozenAt.hashCode())
         result = prime * result + (if (this.duesMarkedPaidAt == null) 0 else this.duesMarkedPaidAt.hashCode())
         result = prime * result + (if (this.duesMarkedBy == null) 0 else this.duesMarkedBy.hashCode())
+        result = prime * result + (if (this.organizerNote == null) 0 else this.organizerNote.hashCode())
         return result
     }
 
@@ -140,6 +148,7 @@ data class Memberships(
         sb.append(", ").append(accessFrozenAt)
         sb.append(", ").append(duesMarkedPaidAt)
         sb.append(", ").append(duesMarkedBy)
+        sb.append(", ").append(organizerNote)
 
         sb.append(")")
         return sb.toString()

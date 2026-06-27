@@ -69,6 +69,10 @@ open class MembershipsRecord private constructor() : UpdatableRecordImpl<Members
         set(value): Unit = set(11, value)
         get(): UUID? = get(11) as UUID?
 
+    open var organizerNote: String?
+        set(value): Unit = set(12, value)
+        get(): String? = get(12) as String?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -78,7 +82,7 @@ open class MembershipsRecord private constructor() : UpdatableRecordImpl<Members
     /**
      * Create a detached, initialised MembershipsRecord
      */
-    constructor(id: UUID? = null, userId: UUID, clubId: UUID, status: MembershipStatus? = null, role: MembershipRole? = null, joinedAt: OffsetDateTime? = null, subscriptionExpiresAt: OffsetDateTime? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, accessFrozenAt: OffsetDateTime? = null, duesMarkedPaidAt: OffsetDateTime? = null, duesMarkedBy: UUID? = null): this() {
+    constructor(id: UUID? = null, userId: UUID, clubId: UUID, status: MembershipStatus? = null, role: MembershipRole? = null, joinedAt: OffsetDateTime? = null, subscriptionExpiresAt: OffsetDateTime? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, accessFrozenAt: OffsetDateTime? = null, duesMarkedPaidAt: OffsetDateTime? = null, duesMarkedBy: UUID? = null, organizerNote: String? = null): this() {
         this.id = id
         this.userId = userId
         this.clubId = clubId
@@ -91,6 +95,7 @@ open class MembershipsRecord private constructor() : UpdatableRecordImpl<Members
         this.accessFrozenAt = accessFrozenAt
         this.duesMarkedPaidAt = duesMarkedPaidAt
         this.duesMarkedBy = duesMarkedBy
+        this.organizerNote = organizerNote
         resetChangedOnNotNull()
     }
 
@@ -111,6 +116,7 @@ open class MembershipsRecord private constructor() : UpdatableRecordImpl<Members
             this.accessFrozenAt = value.accessFrozenAt
             this.duesMarkedPaidAt = value.duesMarkedPaidAt
             this.duesMarkedBy = value.duesMarkedBy
+            this.organizerNote = value.organizerNote
             resetChangedOnNotNull()
         }
     }

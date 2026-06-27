@@ -99,6 +99,20 @@ export function unmarkMemberDues(clubId: string, userId: string): Promise<Member
   return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/dues-unpaid`);
 }
 
+/**
+ * Member admin profile (S1), owner-only:
+ *  - setMemberAccessUntil — set a custom access-window end («своя дата»); `until` is an ISO datetime,
+ *    must be in the future (backend rejects past dates).
+ *  - updateMemberNote — set/clear the private organizer note (null/blank clears it).
+ */
+export function setMemberAccessUntil(clubId: string, userId: string, until: string): Promise<MembershipDto> {
+  return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/access-until`, { until });
+}
+
+export function updateMemberNote(clubId: string, userId: string, note: string | null): Promise<MembershipDto> {
+  return apiClient.patch<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/note`, { note });
+}
+
 /** Red-dot feed for [clubId]: soon-expiring + frozen-awaiting-dues counts. Owner-only. */
 export function getMemberAttention(clubId: string): Promise<MemberAttentionDto> {
   return apiClient.get<MemberAttentionDto>(`/api/clubs/${clubId}/member-attention`);
