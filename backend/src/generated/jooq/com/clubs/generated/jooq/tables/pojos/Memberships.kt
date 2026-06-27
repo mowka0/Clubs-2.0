@@ -29,7 +29,10 @@ data class Memberships(
     var accessFrozenAt: OffsetDateTime? = null,
     var duesMarkedPaidAt: OffsetDateTime? = null,
     var duesMarkedBy: UUID? = null,
-    var organizerNote: String? = null
+    var organizerNote: String? = null,
+    var duesClaimedAt: OffsetDateTime? = null,
+    var duesClaimMethod: String? = null,
+    var duesProofUrl: String? = null
 ): Serializable {
 
 
@@ -111,6 +114,24 @@ data class Memberships(
         }
         else if (this.organizerNote != o.organizerNote)
             return false
+        if (this.duesClaimedAt == null) {
+            if (o.duesClaimedAt != null)
+                return false
+        }
+        else if (this.duesClaimedAt != o.duesClaimedAt)
+            return false
+        if (this.duesClaimMethod == null) {
+            if (o.duesClaimMethod != null)
+                return false
+        }
+        else if (this.duesClaimMethod != o.duesClaimMethod)
+            return false
+        if (this.duesProofUrl == null) {
+            if (o.duesProofUrl != null)
+                return false
+        }
+        else if (this.duesProofUrl != o.duesProofUrl)
+            return false
         return true
     }
 
@@ -130,6 +151,9 @@ data class Memberships(
         result = prime * result + (if (this.duesMarkedPaidAt == null) 0 else this.duesMarkedPaidAt.hashCode())
         result = prime * result + (if (this.duesMarkedBy == null) 0 else this.duesMarkedBy.hashCode())
         result = prime * result + (if (this.organizerNote == null) 0 else this.organizerNote.hashCode())
+        result = prime * result + (if (this.duesClaimedAt == null) 0 else this.duesClaimedAt.hashCode())
+        result = prime * result + (if (this.duesClaimMethod == null) 0 else this.duesClaimMethod.hashCode())
+        result = prime * result + (if (this.duesProofUrl == null) 0 else this.duesProofUrl.hashCode())
         return result
     }
 
@@ -149,6 +173,9 @@ data class Memberships(
         sb.append(", ").append(duesMarkedPaidAt)
         sb.append(", ").append(duesMarkedBy)
         sb.append(", ").append(organizerNote)
+        sb.append(", ").append(duesClaimedAt)
+        sb.append(", ").append(duesClaimMethod)
+        sb.append(", ").append(duesProofUrl)
 
         sb.append(")")
         return sb.toString()

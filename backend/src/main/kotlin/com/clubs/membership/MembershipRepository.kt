@@ -38,6 +38,10 @@ interface MembershipRepository {
     fun markDuesPaid(membershipId: UUID, markedBy: UUID, accessUntil: OffsetDateTime): Int
     fun unmarkDues(membershipId: UUID): Int
 
+    // Member-initiated dues claim (de-Stars): the frozen member declares they paid (method "sbp"/"cash";
+    // proofUrl = screenshot for sbp, null for cash). Guarded on status=frozen (0 rows → no longer frozen).
+    fun claimDues(membershipId: UUID, method: String, proofUrl: String?): Int
+
     // Member admin profile (S1) — organizer manually sets the access window end / a private note.
     /** Grants access until a custom date (status→active, clears frozen). Manual override, not a dues confirm. */
     fun setAccessUntil(membershipId: UUID, accessUntil: OffsetDateTime): Int

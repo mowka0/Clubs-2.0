@@ -168,6 +168,28 @@ open class Memberships(
      */
     val ORGANIZER_NOTE: TableField<MembershipsRecord, String?> = createField(DSL.name("organizer_note"), SQLDataType.CLOB, this, "Приватная заметка организатора об участнике (NULL = нет). Видна только организаторам клуба (owner/co-org), не самому участнику. Косметика — на доступ/репутацию не влияет.")
 
+    /**
+     * The column <code>public.memberships.dues_claimed_at</code>. Когда
+     * участник заявил об оплате взноса (NULL = заявки нет). Сбрасывается, когда
+     * организатор подтверждает доступ («Взнос получен») или замораживает
+     * участника.
+     */
+    val DUES_CLAIMED_AT: TableField<MembershipsRecord, OffsetDateTime?> = createField(DSL.name("dues_claimed_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда участник заявил об оплате взноса (NULL = заявки нет). Сбрасывается, когда организатор подтверждает доступ («Взнос получен») или замораживает участника.")
+
+    /**
+     * The column <code>public.memberships.dues_claim_method</code>. Способ
+     * оплаты, заявленный участником: 'sbp' (перевод по СБП со скриншотом) или
+     * 'cash' (наличные, без скриншота). NULL = заявки нет.
+     */
+    val DUES_CLAIM_METHOD: TableField<MembershipsRecord, String?> = createField(DSL.name("dues_claim_method"), SQLDataType.CLOB, this, "Способ оплаты, заявленный участником: 'sbp' (перевод по СБП со скриншотом) или 'cash' (наличные, без скриншота). NULL = заявки нет.")
+
+    /**
+     * The column <code>public.memberships.dues_proof_url</code>. URL скриншота
+     * оплаты для заявки по СБП (NULL для наличных или когда заявки нет). Виден
+     * только организаторам клуба.
+     */
+    val DUES_PROOF_URL: TableField<MembershipsRecord, String?> = createField(DSL.name("dues_proof_url"), SQLDataType.CLOB, this, "URL скриншота оплаты для заявки по СБП (NULL для наличных или когда заявки нет). Виден только организаторам клуба.")
+
     private constructor(alias: Name, aliased: Table<MembershipsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<MembershipsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<MembershipsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

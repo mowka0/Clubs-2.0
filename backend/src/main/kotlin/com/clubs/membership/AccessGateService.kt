@@ -27,7 +27,10 @@ class AccessGateService(
     private val membershipRepository: MembershipRepository,
     private val mapper: MembershipMapper,
     // How long one confirmed dues payment grants access (honor-system monthly membership, default 30 days).
-    @Value("\${membership.access-period-days:30}") private val accessPeriodDays: Long
+    @Value("\${membership.access-period-days:30}") private val accessPeriodDays: Long,
+    // Storage origin our uploader prefixes to screenshots ("{base}/uploads/..."); empty in prod → URLs
+    // come back root-relative ("/uploads/..."). Used to validate a dues-claim proof is OUR upload.
+    @Value("\${s3.base-url:}") private val storageBaseUrl: String
 ) {
     private val log = LoggerFactory.getLogger(AccessGateService::class.java)
 
@@ -106,6 +109,38 @@ class AccessGateService(
         return mapper.toDto(membership.copy(organizerNote = clean))
     }
 
+    // De-Stars: the MEMBER (callerId) declares they paid the off-platform dues. Not organizer-gated —
+    // the caller acts on their own membership. Creates a claim the organizer reviews; access still opens
+    // only when the organizer presses «Взнос получен» (honor-system preserved). sbp requires a screenshot;
+    // cash is a plain attestation (no proof).
+    @Transactional
+    fun claimDues(clubId: UUID, callerId: UUID, method: String, proofUrl: String?): MembershipDto {
+        val membership = membershipRepository.findByUserAndClub(callerId, clubId)
+            ?: throw NotFoundException("Вы не состоите в этом клубе")
+        if (membership.status != MembershipStatus.frozen) {
+            throw ValidationException("Заявить об оплате можно только пока доступ закрыт")
+        }
+        val normalizedMethod = when (method.trim().lowercase()) {
+            CLAIM_SBP -> CLAIM_SBP
+            CLAIM_CASH -> CLAIM_CASH
+            else -> throw ValidationException("Неизвестный способ оплаты")
+        }
+        val cleanProof = proofUrl?.trim()?.takeIf { it.isNotEmpty() }
+        if (normalizedMethod == CLAIM_SBP) {
+            if (cleanProof == null) throw ValidationException("Прикрепите скриншот оплаты")
+            // The proof must be an image from our own uploader — a client could otherwise submit an
+            // arbitrary/external/`javascript:` URL that the organizer's review renders as a clickable link.
+            if (!isUploadedImageUrl(cleanProof)) throw ValidationException("Некорректная ссылка на скриншот")
+        }
+        // Cash never carries a screenshot, even if the client sent one.
+        val proof = if (normalizedMethod == CLAIM_SBP) cleanProof else null
+        guardApplied(membershipRepository.claimDues(membership.id, normalizedMethod, proof))
+        log.info("Dues claim submitted: clubId={} userId={} method={} hasProof={}", clubId, callerId, normalizedMethod, proof != null)
+        return mapper.toDto(
+            membership.copy(duesClaimedAt = OffsetDateTime.now(), duesClaimMethod = normalizedMethod, duesProofUrl = proof)
+        )
+    }
+
     private fun loadManageableMember(clubId: UUID, targetUserId: UUID): Membership {
         val membership = membershipRepository.findByUserAndClub(targetUserId, clubId)
             ?: throw NotFoundException("Участник не найден в этом клубе")
@@ -119,5 +154,29 @@ class AccessGateService(
     // (concurrent leave / another manage action) — refuse instead of reporting a change that didn't happen.
     private fun guardApplied(rowsAffected: Int) {
         if (rowsAffected == 0) throw ConflictException("Статус участника изменился — обновите экран")
+    }
+
+    /**
+     * True only for a screenshot URL OUR uploader produced: "{s3.base-url}/uploads/{uuid}.{ext}" — where
+     * base-url is empty in prod, so the URL is root-relative "/uploads/...". Strips exactly the configured
+     * origin, then checks the remainder is an "uploads/<name>.<imgext>" path. This blocks javascript:/data:
+     * URLs AND arbitrary external hosts (e.g. evil.com/uploads/x.png) from reaching the organizer's
+     * clickable review link — the proof must come from our own storage.
+     */
+    private fun isUploadedImageUrl(url: String): Boolean {
+        val prefix = storageBaseUrl.trimEnd('/')
+        val relative = when {
+            prefix.isNotEmpty() && url.startsWith("$prefix/") -> url.removePrefix("$prefix/")
+            prefix.isEmpty() && url.startsWith("/") -> url.removePrefix("/")
+            else -> return false
+        }
+        return UPLOADS_PATH.matches(relative)
+    }
+
+    companion object {
+        const val CLAIM_SBP = "sbp"
+        const val CLAIM_CASH = "cash"
+        // The storage-relative path our uploader writes: "uploads/{uuid}.{ext}" (StorageController).
+        private val UPLOADS_PATH = Regex("^uploads/[\\w.-]+\\.(jpg|jpeg|png)$", RegexOption.IGNORE_CASE)
     }
 }

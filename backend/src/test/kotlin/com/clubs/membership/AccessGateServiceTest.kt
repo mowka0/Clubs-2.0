@@ -28,7 +28,8 @@ class AccessGateServiceTest {
     @BeforeEach
     fun setUp() {
         membershipRepository = mockk(relaxed = true)
-        service = AccessGateService(membershipRepository, MembershipMapper(), accessPeriodDays = 30)
+        // Empty base-url mirrors production (uploader returns root-relative "/uploads/...").
+        service = AccessGateService(membershipRepository, MembershipMapper(), accessPeriodDays = 30, storageBaseUrl = "")
     }
 
     private fun membership(status: MembershipStatus, role: MembershipRole = MembershipRole.member): Membership {
@@ -188,6 +189,90 @@ class AccessGateServiceTest {
         // ~30 days from now (no future expiry to extend from).
         assert(captured.captured.isAfter(before.plusDays(29)))
         assert(captured.captured.isBefore(before.plusDays(31)))
+    }
+
+    // --- claimDues (member-initiated) ---
+
+    private fun callerMembership(status: MembershipStatus) = membership(status).copy(userId = callerId)
+
+    // Production-shape (root-relative) upload URL — exactly what StorageService returns with an empty base-url.
+    private val proofUrl = "/uploads/abc-123.jpg"
+
+    @Test
+    fun `claimDues records an sbp claim with a screenshot for a frozen member`() {
+        val m = callerMembership(MembershipStatus.frozen)
+        every { membershipRepository.findByUserAndClub(callerId, clubId) } returns m
+        every { membershipRepository.claimDues(m.id, "sbp", proofUrl) } returns 1
+
+        val result = service.claimDues(clubId, callerId, "sbp", proofUrl)
+
+        assertEquals("sbp", result.duesClaimMethod)
+        verify(exactly = 1) { membershipRepository.claimDues(m.id, "sbp", proofUrl) }
+    }
+
+    @Test
+    fun `claimDues rejects an sbp claim without a screenshot`() {
+        every { membershipRepository.findByUserAndClub(callerId, clubId) } returns callerMembership(MembershipStatus.frozen)
+
+        assertThrows<ValidationException> { service.claimDues(clubId, callerId, "sbp", null) }
+        verify(exactly = 0) { membershipRepository.claimDues(any(), any(), any()) }
+    }
+
+    @Test
+    fun `claimDues rejects an sbp claim whose proof is not an uploaded image URL`() {
+        every { membershipRepository.findByUserAndClub(callerId, clubId) } returns callerMembership(MembershipStatus.frozen)
+
+        // javascript:, an external host, and even an external host with an /uploads/ path must all be
+        // rejected — the proof must be OUR own upload (root-relative in prod).
+        assertThrows<ValidationException> { service.claimDues(clubId, callerId, "sbp", "javascript:alert(1)") }
+        assertThrows<ValidationException> { service.claimDues(clubId, callerId, "sbp", "https://evil.example.com/x.png") }
+        assertThrows<ValidationException> { service.claimDues(clubId, callerId, "sbp", "https://evil.example.com/uploads/x.png") }
+        verify(exactly = 0) { membershipRepository.claimDues(any(), any(), any()) }
+    }
+
+    @Test
+    fun `claimDues records a cash claim without a screenshot (proof ignored)`() {
+        val m = callerMembership(MembershipStatus.frozen)
+        every { membershipRepository.findByUserAndClub(callerId, clubId) } returns m
+        every { membershipRepository.claimDues(m.id, "cash", null) } returns 1
+
+        // Even if a client sends a URL for cash, the service stores null.
+        val result = service.claimDues(clubId, callerId, "cash", "https://cdn/ignored.jpg")
+
+        assertEquals("cash", result.duesClaimMethod)
+        verify(exactly = 1) { membershipRepository.claimDues(m.id, "cash", null) }
+    }
+
+    @Test
+    fun `claimDues rejects an unknown method`() {
+        every { membershipRepository.findByUserAndClub(callerId, clubId) } returns callerMembership(MembershipStatus.frozen)
+
+        assertThrows<ValidationException> { service.claimDues(clubId, callerId, "crypto", null) }
+        verify(exactly = 0) { membershipRepository.claimDues(any(), any(), any()) }
+    }
+
+    @Test
+    fun `claimDues rejects a non-frozen member`() {
+        every { membershipRepository.findByUserAndClub(callerId, clubId) } returns callerMembership(MembershipStatus.active)
+
+        assertThrows<ValidationException> { service.claimDues(clubId, callerId, "cash", null) }
+        verify(exactly = 0) { membershipRepository.claimDues(any(), any(), any()) }
+    }
+
+    @Test
+    fun `claimDues throws NotFound when the caller is not a member`() {
+        every { membershipRepository.findByUserAndClub(callerId, clubId) } returns null
+
+        assertThrows<NotFoundException> { service.claimDues(clubId, callerId, "cash", null) }
+    }
+
+    @Test
+    fun `claimDues throws Conflict when the guarded update affects 0 rows`() {
+        val m = callerMembership(MembershipStatus.frozen)
+        every { membershipRepository.findByUserAndClub(callerId, clubId) } returns m
+        every { membershipRepository.claimDues(m.id, "cash", null) } returns 0
+
+        assertThrows<ConflictException> { service.claimDues(clubId, callerId, "cash", null) }
     }
 
     // --- unmarkDues ---

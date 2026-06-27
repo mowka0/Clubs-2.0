@@ -37,6 +37,7 @@ function mockProfile(note: string | null, awards: AwardDto[] = []) {
     bio: null, interests: [], awards, role: 'member', trust: 70, promiseFulfillmentPct: 90,
     totalConfirmations: 4, totalAttendances: 3, spontaneityCount: 0, skladchinaPaid: null,
     skladchinaTotal: null, subscriptionExpiresAt: inDays(20), organizerNote: note,
+    duesClaimedAt: null, duesClaimMethod: null, duesProofUrl: null,
   };
   server.use(http.get(`*/api/clubs/${CLUB}/members/u-1`, () => HttpResponse.json(profile)));
 }

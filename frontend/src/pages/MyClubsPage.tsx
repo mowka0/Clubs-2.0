@@ -268,7 +268,11 @@ const AwaitingDuesRow: FC<AwaitingDuesRowProps> = ({ item, onClick }) => {
         <div className="rd-met">{item.clubName} · {formatJoinedRelative(item.joinedAt)}</div>
       </div>
       <div className="rd-score">
-        <span className="rd-badge rd-warn">Ждёт оплаты</span>
+        {item.duesClaimedAt ? (
+          <span className="rd-badge rd-going">Оплата заявлена</span>
+        ) : (
+          <span className="rd-badge rd-warn">Ждёт оплаты</span>
+        )}
       </div>
     </button>
   );

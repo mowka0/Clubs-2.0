@@ -1,5 +1,6 @@
 package com.clubs.membership
 
+import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import java.math.BigDecimal
@@ -24,7 +25,11 @@ data class MemberListItemDto(
     // ("active"/"frozen") + when the paid access window ends. Drives the «Скоро закончится» /
     // «Ждут оплаты» / «Активные» buckets. `subscriptionExpiresAt` is null for free memberships.
     val accessStatus: String? = null,
-    val subscriptionExpiresAt: OffsetDateTime? = null
+    val subscriptionExpiresAt: OffsetDateTime? = null,
+    // Member's dues claim (organizer dashboard only): when they declared payment (null = no claim) +
+    // the method ("sbp"|"cash"). Lets the «Ждут оплаты» list flag «оплата заявлена» before opening.
+    val duesClaimedAt: OffsetDateTime? = null,
+    val duesClaimMethod: String? = null
 )
 
 /**
@@ -54,7 +59,9 @@ data class OrganizerDuesMember(
     val clubName: String,
     val clubAvatarUrl: String?,
     val joinedAt: OffsetDateTime,
-    val subscriptionExpiresAt: OffsetDateTime?
+    val subscriptionExpiresAt: OffsetDateTime?,
+    val duesClaimedAt: OffsetDateTime?,
+    val duesClaimMethod: String?
 )
 
 data class OrganizerDuesMemberDto(
@@ -67,7 +74,20 @@ data class OrganizerDuesMemberDto(
     val clubName: String,
     val clubAvatarUrl: String?,
     val joinedAt: OffsetDateTime?,
-    val subscriptionExpiresAt: OffsetDateTime?
+    val subscriptionExpiresAt: OffsetDateTime?,
+    // Cross-club «Ждут оплаты»: the member's dues claim (null = none) + method, so the row can flag
+    // «оплата заявлена» and the organizer prioritises confirming it.
+    val duesClaimedAt: OffsetDateTime?,
+    val duesClaimMethod: String?
+)
+
+/** Member-initiated dues claim (de-Stars): a frozen member declares they paid. method = "sbp"|"cash";
+ *  proofUrl is the uploaded screenshot URL, required for "sbp", ignored for "cash". */
+data class ClaimDuesRequest(
+    @field:NotBlank(message = "Укажите способ оплаты")
+    val method: String,
+    @field:Size(max = 1000, message = "Некорректная ссылка на скриншот")
+    val proofUrl: String? = null
 )
 
 /** Member admin S1 — set the private organizer note (null/blank clears it). */

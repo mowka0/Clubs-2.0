@@ -109,6 +109,17 @@ class MemberController(
     ): ResponseEntity<MembershipDto> =
         ResponseEntity.ok(accessGateService.updateNote(clubId, userId, request.note, caller.userId))
 
+    // De-Stars: the member declares they paid their off-platform dues (sbp + screenshot, or cash).
+    // Member self-service — NO organizer gate; the service acts on the caller's own frozen membership and
+    // creates a claim the organizer reviews. Access still opens only via «Взнос получен» (markDuesPaid).
+    @PostMapping("/{clubId}/dues-claim")
+    fun claimDues(
+        @PathVariable clubId: UUID,
+        @Valid @RequestBody request: ClaimDuesRequest,
+        @AuthenticationPrincipal caller: AuthenticatedUser
+    ): ResponseEntity<MembershipDto> =
+        ResponseEntity.ok(accessGateService.claimDues(clubId, caller.userId, request.method, request.proofUrl))
+
     // Member admin profile (Variant B, S2) — club-local awards. Grant/revoke is organizer-only;
     // the awards themselves are public on the member card (served via MemberProfileDto, see MemberService).
     @RequiresOrganizer(clubIdParam = "clubId")

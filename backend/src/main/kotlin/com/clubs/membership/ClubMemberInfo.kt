@@ -32,5 +32,9 @@ data class ClubMemberInfo(
     val totalConfirmations: Int?,
     val outcomeCount: Int,
     val status: MembershipStatus,
-    val subscriptionExpiresAt: OffsetDateTime?
+    val subscriptionExpiresAt: OffsetDateTime?,
+    // Member's dues claim (de-Stars): when they declared payment (null = none) + method ("sbp"|"cash").
+    // Exposed to the organizer only (mapper-gated) so the «Ждут оплаты» bucket can flag «оплата заявлена».
+    val duesClaimedAt: OffsetDateTime? = null,
+    val duesClaimMethod: String? = null
 )

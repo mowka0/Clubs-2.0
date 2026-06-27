@@ -178,4 +178,37 @@ open class MembershipsDao(configuration: Configuration?) : DAOImpl<MembershipsRe
      * Fetch records that have <code>organizer_note IN (values)</code>
      */
     fun fetchByOrganizerNote(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.ORGANIZER_NOTE, *values)
+
+    /**
+     * Fetch records that have <code>dues_claimed_at BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfDuesClaimedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetchRange(Memberships.MEMBERSHIPS.DUES_CLAIMED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>dues_claimed_at IN (values)</code>
+     */
+    fun fetchByDuesClaimedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.DUES_CLAIMED_AT, *values)
+
+    /**
+     * Fetch records that have <code>dues_claim_method BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfDuesClaimMethod(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetchRange(Memberships.MEMBERSHIPS.DUES_CLAIM_METHOD, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>dues_claim_method IN (values)</code>
+     */
+    fun fetchByDuesClaimMethod(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.DUES_CLAIM_METHOD, *values)
+
+    /**
+     * Fetch records that have <code>dues_proof_url BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfDuesProofUrl(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetchRange(Memberships.MEMBERSHIPS.DUES_PROOF_URL, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>dues_proof_url IN (values)</code>
+     */
+    fun fetchByDuesProofUrl(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.DUES_PROOF_URL, *values)
 }

@@ -36,5 +36,11 @@ data class MemberProfileDto(
     // window ends. null also for free memberships (no expiry). Shown as «Подписка активна до …».
     val subscriptionExpiresAt: OffsetDateTime? = null,
     // Member admin S1 — ORGANIZER ONLY (null for regular members): the private organizer note.
-    val organizerNote: String? = null
+    val organizerNote: String? = null,
+    // De-Stars dues claim — ORGANIZER ONLY (null for regular members): when the member declared payment,
+    // the method ("sbp"|"cash"), and the screenshot URL (sbp only). Lets the organizer review the proof
+    // before pressing «Взнос получен».
+    val duesClaimedAt: OffsetDateTime? = null,
+    val duesClaimMethod: String? = null,
+    val duesProofUrl: String? = null
 )

@@ -215,6 +215,8 @@ interface OrganizerGateProps {
   awards: AwardDto[];
   /** Whether the member has a paid access window — gates the subscription strip + dues/freeze + custom date. */
   isPaidMember: boolean;
+  /** Member's dues claim to review (de-Stars), organizer-only. null when no claim pending. */
+  claim: { claimedAt: string; method: string | null; proofUrl: string | null } | null;
   onDone: (message: string) => void;
 }
 
@@ -231,7 +233,7 @@ function toDateInput(iso: string | null): string {
  *    private, saved on «Сохранить»).
  * 409 (lost race) on a dues/freeze action closes the card — the list cache is already refreshed.
  */
-const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, awards, isPaidMember, onDone }) => {
+const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, awards, isPaidMember, claim, onDone }) => {
   const haptic = useHaptic();
   const markPaid = useMarkMemberDuesPaidMutation();
   const freeze = useFreezeMemberMutation();
@@ -323,6 +325,23 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
             </div>
             <span className="rd-org-tag">Только орг</span>
           </div>
+
+          {/* Dues claim review (de-Stars): the member declared payment — show method + screenshot so the
+              organizer verifies before «Взнос получен». */}
+          {claim && (
+            <div className="rd-claim">
+              <div className="rd-claim-h">
+                ⏳ Оплата заявлена · {claim.method === 'cash' ? 'наличные' : 'СБП'}
+              </div>
+              {claim.proofUrl ? (
+                <a href={claim.proofUrl} target="_blank" rel="noopener noreferrer" className="rd-claim-proof">
+                  <img src={claim.proofUrl} alt="Скриншот оплаты" />
+                </a>
+              ) : (
+                <div className="rd-claim-note">Скриншота нет (наличные) — подтвердите после получения.</div>
+              )}
+            </div>
+          )}
 
           <div className="rd-org-gate-acts">
             <button type="button" className="rd-btn-primary" disabled={busy} onClick={() => run(markPaid, duesLabel.includes('открыть') ? `Доступ ${member.firstName} открыт` : `Доступ ${member.firstName} продлён на 30 дней`)}>
@@ -597,6 +616,9 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
               organizerNote={profile?.organizerNote ?? null}
               awards={awards}
               isPaidMember={isPaidMember}
+              claim={profile?.duesClaimedAt
+                ? { claimedAt: profile.duesClaimedAt, method: profile.duesClaimMethod, proofUrl: profile.duesProofUrl }
+                : null}
               onDone={handleGateDone}
             />
           )}

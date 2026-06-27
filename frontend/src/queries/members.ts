@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import {
+  claimDues,
   freezeMember,
   getAwardSuggestions,
   getClubMembers,
@@ -169,6 +170,19 @@ export function useAwardSuggestionsQuery(
     queryFn: () => getAwardSuggestions(clubId!),
     enabled,
     staleTime: 60_000,
+  });
+}
+
+/** Member declares they paid the dues (sbp + screenshot URL, or cash). Refreshes «Мои клубы» so the
+ *  frozen club screen flips to «оплата на проверке». */
+export function useClaimDuesMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, method, proofUrl }: { clubId: string; method: 'sbp' | 'cash'; proofUrl?: string | null }) =>
+      claimDues(clubId, method, proofUrl),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.my() });
+    },
   });
 }
 

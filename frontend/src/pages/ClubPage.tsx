@@ -31,6 +31,7 @@ import { formatPrice } from '../utils/formatters';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
+import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
 import { LeaveClubModal } from '../components/club/LeaveClubModal';
 
 const ACCESS_LABELS: Record<string, string> = {
@@ -93,6 +94,7 @@ export const ClubPage: FC = () => {
   // until the organizer confirms the off-platform dues); a free club lands it `active`. We remember
   // the status from the mutation result so the CTA reacts before the membership refetch lands.
   const [joinedStatus, setJoinedStatus] = useState<string | null>(null);
+  const [showDuesSheet, setShowDuesSheet] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('activities');
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
@@ -434,26 +436,37 @@ export const ClubPage: FC = () => {
             </div>
           </div>
 
-          {club.paymentLink && (
-            <div className="rd-cta-wrap">
-              <button
-                type="button"
-                className="rd-btn-primary"
-                onClick={() => {
-                  haptic.impact('medium');
-                  window.open(club.paymentLink!, '_blank', 'noopener,noreferrer');
-                }}
-              >
-                Оплатить по СБП
-              </button>
-              <div className="rd-cta-hint">
-                {club.paymentMethodNote
-                  ? `${club.paymentMethodNote}. После оплаты доступ откроет организатор.`
-                  : 'Оплата идёт напрямую организатору. После оплаты он откроет доступ.'}
+          {membership?.duesClaimedAt ? (
+            <div className="rd-glass rd-dues-pending">
+              <span aria-hidden="true">⏳</span>
+              <div>
+                <strong>Оплата на проверке</strong>
+                <span>
+                  Вы заявили об оплате{membership.duesClaimMethod === 'cash' ? ' наличными' : ' по СБП'}.
+                  Организатор проверит и откроет доступ.
+                </span>
               </div>
+            </div>
+          ) : (
+            <div className="rd-cta-wrap">
+              <button type="button" className="rd-btn-primary" onClick={() => { haptic.impact('medium'); setShowDuesSheet(true); }}>
+                Оплатить взнос
+              </button>
+              <div className="rd-cta-hint">Оплата идёт напрямую организатору. После оплаты он откроет доступ.</div>
             </div>
           )}
         </>
+      )}
+
+      {showDuesSheet && (
+        <DuesPaymentSheet
+          clubId={club.id}
+          price={club.subscriptionPrice}
+          paymentLink={club.paymentLink}
+          paymentMethodNote={club.paymentMethodNote}
+          onClose={() => setShowDuesSheet(false)}
+          onClaimed={() => setShowDuesSheet(false)}
+        />
       )}
 
       {/* Visitor: lock placeholder + CTA */}

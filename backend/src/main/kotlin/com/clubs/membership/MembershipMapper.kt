@@ -16,6 +16,9 @@ class MembershipMapper {
         joinedAt = record.joinedAt!!,
         subscriptionExpiresAt = record.subscriptionExpiresAt,
         organizerNote = record.organizerNote,
+        duesClaimedAt = record.duesClaimedAt,
+        duesClaimMethod = record.duesClaimMethod,
+        duesProofUrl = record.duesProofUrl,
         createdAt = record.createdAt!!,
         updatedAt = record.updatedAt!!
     )
@@ -27,7 +30,9 @@ class MembershipMapper {
         status = membership.status.literal,
         role = membership.role.literal,
         joinedAt = membership.joinedAt,
-        subscriptionExpiresAt = membership.subscriptionExpiresAt
+        subscriptionExpiresAt = membership.subscriptionExpiresAt,
+        duesClaimedAt = membership.duesClaimedAt,
+        duesClaimMethod = membership.duesClaimMethod
     )
 
     // forOrganizer gates the access/dues fields: only the organizer dashboard sees a member's access
@@ -45,7 +50,9 @@ class MembershipMapper {
             promiseFulfillmentPct = if (show) info.promiseFulfillmentPct else null,
             totalConfirmations = if (show) info.totalConfirmations else null,
             accessStatus = if (forOrganizer) info.status.literal else null,
-            subscriptionExpiresAt = if (forOrganizer) info.subscriptionExpiresAt else null
+            subscriptionExpiresAt = if (forOrganizer) info.subscriptionExpiresAt else null,
+            duesClaimedAt = if (forOrganizer) info.duesClaimedAt else null,
+            duesClaimMethod = if (forOrganizer) info.duesClaimMethod else null
         )
     }
 
@@ -59,7 +66,9 @@ class MembershipMapper {
         clubName = member.clubName,
         clubAvatarUrl = member.clubAvatarUrl,
         joinedAt = member.joinedAt,
-        subscriptionExpiresAt = member.subscriptionExpiresAt
+        subscriptionExpiresAt = member.subscriptionExpiresAt,
+        duesClaimedAt = member.duesClaimedAt,
+        duesClaimMethod = member.duesClaimMethod
     )
 
     fun toUserClubReputationDto(info: UserClubReputationInfo, trust: Int?): UserClubReputationDto {

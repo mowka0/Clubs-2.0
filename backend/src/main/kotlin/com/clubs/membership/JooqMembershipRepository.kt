@@ -100,6 +100,8 @@ class JooqMembershipRepository(
             MEMBERSHIPS.STATUS,
             MEMBERSHIPS.JOINED_AT,
             MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT,
+            MEMBERSHIPS.DUES_CLAIMED_AT,
+            MEMBERSHIPS.DUES_CLAIM_METHOD,
             USERS.FIRST_NAME,
             USERS.LAST_NAME,
             USERS.AVATAR_URL,
@@ -127,7 +129,9 @@ class JooqMembershipRepository(
                     totalConfirmations = r.get(USER_CLUB_REPUTATION.TOTAL_CONFIRMATIONS),
                     outcomeCount = r.get("outcome_count", Int::class.java) ?: 0,
                     status = r.get(MEMBERSHIPS.STATUS) ?: MembershipStatus.active,
-                    subscriptionExpiresAt = r.get(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT)
+                    subscriptionExpiresAt = r.get(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT),
+                    duesClaimedAt = r.get(MEMBERSHIPS.DUES_CLAIMED_AT),
+                    duesClaimMethod = r.get(MEMBERSHIPS.DUES_CLAIM_METHOD)
                 )
             }
     }
@@ -379,7 +383,23 @@ class JooqMembershipRepository(
         return dsl.update(MEMBERSHIPS)
             .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
             .setNull(MEMBERSHIPS.ACCESS_FROZEN_AT)
+            // Reopening access also resolves any pending dues claim.
+            .setNull(MEMBERSHIPS.DUES_CLAIMED_AT)
+            .setNull(MEMBERSHIPS.DUES_CLAIM_METHOD)
+            .setNull(MEMBERSHIPS.DUES_PROOF_URL)
             .set(MEMBERSHIPS.UPDATED_AT, now)
+            .where(MEMBERSHIPS.ID.eq(membershipId).and(MEMBERSHIPS.STATUS.eq(MembershipStatus.frozen)))
+            .execute()
+    }
+
+    override fun claimDues(membershipId: UUID, method: String, proofUrl: String?): Int {
+        val now = OffsetDateTime.now()
+        return dsl.update(MEMBERSHIPS)
+            .set(MEMBERSHIPS.DUES_CLAIMED_AT, now)
+            .set(MEMBERSHIPS.DUES_CLAIM_METHOD, method)
+            .set(MEMBERSHIPS.DUES_PROOF_URL, proofUrl)
+            .set(MEMBERSHIPS.UPDATED_AT, now)
+            // Only a frozen (gated) member claims; 0 rows = no longer frozen (e.g. organizer just admitted).
             .where(MEMBERSHIPS.ID.eq(membershipId).and(MEMBERSHIPS.STATUS.eq(MembershipStatus.frozen)))
             .execute()
     }
@@ -395,6 +415,10 @@ class JooqMembershipRepository(
             .set(MEMBERSHIPS.DUES_MARKED_PAID_AT, now)
             .set(MEMBERSHIPS.DUES_MARKED_BY, markedBy)
             .set(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT, accessUntil)
+            // Granting access resolves any pending dues claim — clear it so it leaves «Ждут оплаты».
+            .setNull(MEMBERSHIPS.DUES_CLAIMED_AT)
+            .setNull(MEMBERSHIPS.DUES_CLAIM_METHOD)
+            .setNull(MEMBERSHIPS.DUES_PROOF_URL)
             .set(MEMBERSHIPS.UPDATED_AT, now)
             .where(
                 MEMBERSHIPS.ID.eq(membershipId)
@@ -423,6 +447,10 @@ class JooqMembershipRepository(
             .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
             .setNull(MEMBERSHIPS.ACCESS_FROZEN_AT)
             .set(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT, accessUntil)
+            // Granting access resolves any pending dues claim.
+            .setNull(MEMBERSHIPS.DUES_CLAIMED_AT)
+            .setNull(MEMBERSHIPS.DUES_CLAIM_METHOD)
+            .setNull(MEMBERSHIPS.DUES_PROOF_URL)
             .set(MEMBERSHIPS.UPDATED_AT, now)
             .where(MEMBERSHIPS.ID.eq(membershipId))
             .execute()
@@ -518,7 +546,9 @@ class JooqMembershipRepository(
             CLUBS.NAME,
             CLUBS.AVATAR_URL,
             MEMBERSHIPS.JOINED_AT,
-            MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT
+            MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT,
+            MEMBERSHIPS.DUES_CLAIMED_AT,
+            MEMBERSHIPS.DUES_CLAIM_METHOD
         )
             .from(MEMBERSHIPS)
             .join(USERS).on(USERS.ID.eq(MEMBERSHIPS.USER_ID))
@@ -540,7 +570,9 @@ class JooqMembershipRepository(
                     clubName = r.get(CLUBS.NAME)!!,
                     clubAvatarUrl = r.get(CLUBS.AVATAR_URL),
                     joinedAt = r.get(MEMBERSHIPS.JOINED_AT)!!,
-                    subscriptionExpiresAt = r.get(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT)
+                    subscriptionExpiresAt = r.get(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT),
+                    duesClaimedAt = r.get(MEMBERSHIPS.DUES_CLAIMED_AT),
+                    duesClaimMethod = r.get(MEMBERSHIPS.DUES_CLAIM_METHOD)
                 )
             }
     }

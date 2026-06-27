@@ -139,6 +139,19 @@ export function getAwardSuggestions(clubId: string): Promise<AwardSuggestionDto[
   return apiClient.get<AwardSuggestionDto[]>(`/api/clubs/${clubId}/award-suggestions`);
 }
 
+/**
+ * De-Stars: the member declares they paid the off-platform dues (member self-service, not owner-gated).
+ * method = 'sbp' (proofUrl = uploaded screenshot URL, required) or 'cash' (no proof). Creates a claim
+ * the organizer reviews; access still opens only when the organizer presses «Взнос получен».
+ */
+export function claimDues(
+  clubId: string,
+  method: 'sbp' | 'cash',
+  proofUrl?: string | null,
+): Promise<MembershipDto> {
+  return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/dues-claim`, { method, proofUrl: proofUrl ?? null });
+}
+
 /** Red-dot feed for [clubId]: soon-expiring + frozen-awaiting-dues counts. Owner-only. */
 export function getMemberAttention(clubId: string): Promise<MemberAttentionDto> {
   return apiClient.get<MemberAttentionDto>(`/api/clubs/${clubId}/member-attention`);

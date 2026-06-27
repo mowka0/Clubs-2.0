@@ -70,6 +70,10 @@ export interface MemberListItemDto {
   // `subscriptionExpiresAt` is also null for free memberships (no expiry).
   accessStatus?: 'active' | 'frozen' | null;
   subscriptionExpiresAt?: string | null;
+  // Organizer dashboard only: the member's dues claim (null = none) + method ("sbp"|"cash"), so the
+  // «Ждут оплаты» bucket can flag «оплата заявлена».
+  duesClaimedAt?: string | null;
+  duesClaimMethod?: string | null;
 }
 
 /** A club-local award chip (member admin S2). Cosmetic; never reflects reputation (R4). */
@@ -114,6 +118,11 @@ export interface MemberProfileDto {
   subscriptionExpiresAt: string | null;
   // Member admin S1 — ORGANIZER ONLY (null for regular members): the private organizer note.
   organizerNote: string | null;
+  // De-Stars dues claim — ORGANIZER ONLY (null for regular members): when the member declared payment,
+  // the method ("sbp"|"cash"), and the screenshot URL (sbp only). Reviewed before «Взнос получен».
+  duesClaimedAt: string | null;
+  duesClaimMethod: string | null;
+  duesProofUrl: string | null;
 }
 
 /**
@@ -142,6 +151,9 @@ export interface OrganizerDuesMemberDto {
   clubAvatarUrl: string | null;
   joinedAt: string | null;
   subscriptionExpiresAt: string | null;
+  // Dues claim flag for the cross-club «Ждут оплаты» list: «оплата заявлена» + method ("sbp"|"cash").
+  duesClaimedAt: string | null;
+  duesClaimMethod: string | null;
 }
 
 export interface UserClubReputationDto {
@@ -373,6 +385,10 @@ export interface MembershipDto {
   role: string;
   joinedAt: string | null;
   subscriptionExpiresAt: string | null;
+  // Member's own dues claim (de-Stars): when they declared payment (null = none) + method ("sbp"|"cash").
+  // Drives «оплата на проверке» on the frozen club screen.
+  duesClaimedAt?: string | null;
+  duesClaimMethod?: string | null;
 }
 
 export interface EventDetailDto {
