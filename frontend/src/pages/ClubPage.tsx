@@ -425,13 +425,35 @@ export const ClubPage: FC = () => {
 
       {/* Frozen member: joined a paid club but not yet admitted — awaiting the organizer's dues confirm. */}
       {!showTabs && isFrozenMember && (
-        <div className="rd-glass rd-locked">
-          <div className="rd-lock-ico"><LockIcon /></div>
-          <div className="rd-text">
-            <strong>Вы вступили в клуб</strong>
-            Доступ к активностям откроет организатор после того, как вы передадите ему взнос.
+        <>
+          <div className="rd-glass rd-locked">
+            <div className="rd-lock-ico"><LockIcon /></div>
+            <div className="rd-text">
+              <strong>Вы вступили в клуб</strong>
+              Доступ к активностям откроет организатор после того, как вы передадите ему взнос.
+            </div>
           </div>
-        </div>
+
+          {club.paymentLink && (
+            <div className="rd-cta-wrap">
+              <button
+                type="button"
+                className="rd-btn-primary"
+                onClick={() => {
+                  haptic.impact('medium');
+                  window.open(club.paymentLink!, '_blank', 'noopener,noreferrer');
+                }}
+              >
+                Оплатить по СБП
+              </button>
+              <div className="rd-cta-hint">
+                {club.paymentMethodNote
+                  ? `${club.paymentMethodNote}. После оплаты доступ откроет организатор.`
+                  : 'Оплата идёт напрямую организатору. После оплаты он откроет доступ.'}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Visitor: lock placeholder + CTA */}

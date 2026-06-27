@@ -109,6 +109,8 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
   const [description, setDescription] = useState(club.description);
   const [rules, setRules] = useState(club.rules ?? '');
   const [applicationQuestion, setApplicationQuestion] = useState(club.applicationQuestion ?? '');
+  const [paymentLink, setPaymentLink] = useState(club.paymentLink ?? '');
+  const [paymentMethodNote, setPaymentMethodNote] = useState(club.paymentMethodNote ?? '');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(club.avatarUrl ?? null);
 
   const [error, setError] = useState<string | null>(null);
@@ -132,6 +134,8 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
     description !== club.description ||
     rules !== (club.rules ?? '') ||
     applicationQuestion !== (club.applicationQuestion ?? '') ||
+    paymentLink !== (club.paymentLink ?? '') ||
+    paymentMethodNote !== (club.paymentMethodNote ?? '') ||
     avatarUrl !== (club.avatarUrl ?? null);
 
   const handleSave = () => {
@@ -184,6 +188,8 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
     if (applicationQuestion !== (club.applicationQuestion ?? '')) {
       payload.applicationQuestion = applicationQuestion.trim();
     }
+    if (paymentLink !== (club.paymentLink ?? '')) payload.paymentLink = paymentLink.trim();
+    if (paymentMethodNote !== (club.paymentMethodNote ?? '')) payload.paymentMethodNote = paymentMethodNote.trim();
     if (avatarUrl !== (club.avatarUrl ?? null)) payload.avatarUrl = avatarUrl ?? '';
 
     haptic.impact('medium');
@@ -296,6 +302,33 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
           </label>
         )}
       </div>
+
+      {club.subscriptionPrice > 0 && (
+        <>
+          <div className="rd-section-sub-h">Реквизиты для взноса (СБП)</div>
+          <div className="rd-form" style={{ marginBottom: 14 }}>
+            <label className="rd-field">
+              <span className="rd-label">Ссылка / номер для оплаты (опционально)</span>
+              <input
+                className="rd-input"
+                value={paymentLink}
+                onChange={(e) => setPaymentLink(e.target.value)}
+                placeholder="Ссылка СБП / банка или номер телефона"
+              />
+              <span className="rd-hint">Видят только участники, кому нужно оплатить взнос. Деньги идут напрямую вам — доступ открываете вы кнопкой «Взнос получен».</span>
+            </label>
+            <label className="rd-field">
+              <span className="rd-label">Подсказка к оплате (опционально)</span>
+              <input
+                className="rd-input"
+                value={paymentMethodNote}
+                onChange={(e) => setPaymentMethodNote(e.target.value)}
+                placeholder="Например: Тинькофф, СБП по номеру…"
+              />
+            </label>
+          </div>
+        </>
+      )}
 
       <div className="rd-section-sub-h">Нельзя изменить</div>
       <div className="rd-glass rd-rep-panel">

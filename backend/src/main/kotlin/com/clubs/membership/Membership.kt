@@ -14,7 +14,8 @@ data class Membership(
     val joinedAt: OffsetDateTime,
     val subscriptionExpiresAt: OffsetDateTime?,
     // Private organizer note (member admin profile S1). Null = none. Organizer-only on read.
-    val organizerNote: String?,
+    // Default null so existing Membership(...) test builders don't all need updating; prod sets it via the mapper.
+    val organizerNote: String? = null,
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime
 )

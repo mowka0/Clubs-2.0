@@ -19,6 +19,8 @@ export const mockClubDetail: ClubDetailDto = {
   inviteLink: null,
   memberCount: 10,
   isActive: true,
+  paymentLink: null,
+  paymentMethodNote: null,
 };
 
 export const mockMembership: MembershipDto = {

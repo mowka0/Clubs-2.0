@@ -36,7 +36,9 @@ data class Clubs(
     @set:JvmName("setIsActive")
     var isActive: Boolean? = null,
     var createdAt: OffsetDateTime? = null,
-    var updatedAt: OffsetDateTime? = null
+    var updatedAt: OffsetDateTime? = null,
+    var paymentLink: String? = null,
+    var paymentMethodNote: String? = null
 ): Serializable {
 
 
@@ -132,6 +134,18 @@ data class Clubs(
         }
         else if (this.updatedAt != o.updatedAt)
             return false
+        if (this.paymentLink == null) {
+            if (o.paymentLink != null)
+                return false
+        }
+        else if (this.paymentLink != o.paymentLink)
+            return false
+        if (this.paymentMethodNote == null) {
+            if (o.paymentMethodNote != null)
+                return false
+        }
+        else if (this.paymentMethodNote != o.paymentMethodNote)
+            return false
         return true
     }
 
@@ -156,6 +170,8 @@ data class Clubs(
         result = prime * result + (if (this.isActive == null) 0 else this.isActive.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
+        result = prime * result + (if (this.paymentLink == null) 0 else this.paymentLink.hashCode())
+        result = prime * result + (if (this.paymentMethodNote == null) 0 else this.paymentMethodNote.hashCode())
         return result
     }
 
@@ -180,6 +196,8 @@ data class Clubs(
         sb.append(", ").append(isActive)
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)
+        sb.append(", ").append(paymentLink)
+        sb.append(", ").append(paymentMethodNote)
 
         sb.append(")")
         return sb.toString()

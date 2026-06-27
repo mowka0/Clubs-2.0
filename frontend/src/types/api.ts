@@ -286,6 +286,10 @@ export interface ClubDetailDto {
   inviteLink: string | null;
   memberCount: number;
   isActive: boolean;
+  // SBP dues requisites — populated only for club members (active/frozen) + owner; null otherwise.
+  // The organizer's off-platform payment details, surfaced as «Оплатить по СБП» to members who owe dues.
+  paymentLink: string | null;
+  paymentMethodNote: string | null;
 }
 
 /** Club-quality facts for `GET /api/clubs/{id}/quality` (rings + achievements). */

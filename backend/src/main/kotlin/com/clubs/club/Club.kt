@@ -23,6 +23,10 @@ data class Club(
     val memberCount: Int,
     val isActive: Boolean,
     val telegramGroupId: Long?,
+    // SBP dues requisites (organizer's off-platform payment details). Surfaced only to members.
+    // Default null so existing Club(...) test builders don't all need updating; prod sets them via the mapper.
+    val paymentLink: String? = null,
+    val paymentMethodNote: String? = null,
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime
 )

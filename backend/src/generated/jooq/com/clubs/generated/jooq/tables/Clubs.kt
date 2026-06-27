@@ -195,6 +195,20 @@ open class Clubs(
      */
     val UPDATED_AT: TableField<ClubsRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "")
 
+    /**
+     * The column <code>public.clubs.payment_link</code>. Реквизиты организатора
+     * для членского взноса (СБП-ссылка / номер / ссылка банка). NULL = не
+     * задано (кнопки «Оплатить» нет). Виден только участникам клуба
+     * (active/frozen), не гостям/заявителям на рассмотрении.
+     */
+    val PAYMENT_LINK: TableField<ClubsRecord, String?> = createField(DSL.name("payment_link"), SQLDataType.CLOB, this, "Реквизиты организатора для членского взноса (СБП-ссылка / номер / ссылка банка). NULL = не задано (кнопки «Оплатить» нет). Виден только участникам клуба (active/frozen), не гостям/заявителям на рассмотрении.")
+
+    /**
+     * The column <code>public.clubs.payment_method_note</code>. Подсказка к
+     * реквизитам (например «Тинькофф, СБП по номеру…»). NULL = нет.
+     */
+    val PAYMENT_METHOD_NOTE: TableField<ClubsRecord, String?> = createField(DSL.name("payment_method_note"), SQLDataType.CLOB, this, "Подсказка к реквизитам (например «Тинькофф, СБП по номеру…»). NULL = нет.")
+
     private constructor(alias: Name, aliased: Table<ClubsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<ClubsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<ClubsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

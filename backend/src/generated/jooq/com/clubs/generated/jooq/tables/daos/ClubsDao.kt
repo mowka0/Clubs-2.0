@@ -238,4 +238,26 @@ open class ClubsDao(configuration: Configuration?) : DAOImpl<ClubsRecord, com.cl
      * Fetch records that have <code>updated_at IN (values)</code>
      */
     fun fetchByUpdatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Clubs> = fetch(Clubs.CLUBS.UPDATED_AT, *values)
+
+    /**
+     * Fetch records that have <code>payment_link BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfPaymentLink(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.Clubs> = fetchRange(Clubs.CLUBS.PAYMENT_LINK, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>payment_link IN (values)</code>
+     */
+    fun fetchByPaymentLink(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Clubs> = fetch(Clubs.CLUBS.PAYMENT_LINK, *values)
+
+    /**
+     * Fetch records that have <code>payment_method_note BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfPaymentMethodNote(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.Clubs> = fetchRange(Clubs.CLUBS.PAYMENT_METHOD_NOTE, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>payment_method_note IN (values)</code>
+     */
+    fun fetchByPaymentMethodNote(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Clubs> = fetch(Clubs.CLUBS.PAYMENT_METHOD_NOTE, *values)
 }

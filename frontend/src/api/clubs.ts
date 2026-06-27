@@ -60,6 +60,9 @@ export interface UpdateClubBody {
   avatarUrl?: string | null;
   rules?: string | null;
   applicationQuestion?: string | null;
+  // SBP dues requisites (blank string clears, same as rules/district).
+  paymentLink?: string | null;
+  paymentMethodNote?: string | null;
 }
 
 export function updateClub(id: string, body: UpdateClubBody): Promise<ClubDetailDto> {

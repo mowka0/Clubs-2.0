@@ -123,6 +123,8 @@ describe('CreateClubModal', () => {
           inviteLink: null,
           memberCount: 0,
           isActive: true,
+          paymentLink: null,
+          paymentMethodNote: null,
         };
         return HttpResponse.json(club, { status: 201 });
       }),

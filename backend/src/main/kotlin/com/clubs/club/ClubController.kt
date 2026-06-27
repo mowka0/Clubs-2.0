@@ -57,8 +57,11 @@ class ClubController(
     }
 
     @GetMapping("/{id}")
-    fun getClub(@PathVariable id: UUID): ResponseEntity<ClubDetailDto> =
-        ResponseEntity.ok(clubService.getClub(id))
+    fun getClub(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<ClubDetailDto> =
+        ResponseEntity.ok(clubService.getClub(id, user.userId))
 
     @PutMapping("/{id}")
     fun updateClub(

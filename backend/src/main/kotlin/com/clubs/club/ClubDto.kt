@@ -45,7 +45,10 @@ data class ClubDetailDto(
     val applicationQuestion: String?,
     val inviteLink: String?,
     val memberCount: Int,
-    val isActive: Boolean
+    val isActive: Boolean,
+    // SBP dues requisites — only populated for club members (active/frozen) + owner; null otherwise.
+    val paymentLink: String?,
+    val paymentMethodNote: String?
 )
 
 data class CreateClubRequest(
@@ -101,7 +104,13 @@ data class UpdateClubRequest(
 
     val avatarUrl: String? = null,
     val rules: String? = null,
-    val applicationQuestion: String? = null
+    val applicationQuestion: String? = null,
+
+    // SBP dues requisites (settings). null = leave as is; blank = clear to NULL (same as rules/district).
+    @field:Size(max = 500, message = "Реквизиты: максимум 500 символов")
+    val paymentLink: String? = null,
+    @field:Size(max = 200, message = "Подсказка: максимум 200 символов")
+    val paymentMethodNote: String? = null
 )
 
 data class ClubFilterParams(

@@ -306,6 +306,8 @@ class JooqClubRepository(
         request.avatarUrl?.let { step.set(CLUBS.AVATAR_URL, it.ifBlank { null }) }
         request.rules?.let { step.set(CLUBS.RULES, it.ifBlank { null }) }
         request.applicationQuestion?.let { step.set(CLUBS.APPLICATION_QUESTION, it.ifBlank { null }) }
+        request.paymentLink?.let { step.set(CLUBS.PAYMENT_LINK, it.ifBlank { null }) }
+        request.paymentMethodNote?.let { step.set(CLUBS.PAYMENT_METHOD_NOTE, it.ifBlank { null }) }
 
         step.where(CLUBS.ID.eq(id)).execute()
         return findById(id)

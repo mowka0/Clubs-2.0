@@ -4,6 +4,8 @@
 > **Дата:** 2026-06-27. **Ветка:** `feature/de-stars-decoupling` (S1 закоммичен + на staging, НЕ смёржен в master).
 > **Спека (source of truth):** `docs/modules/member-admin-profile.md`. **Макет:** `docs/design/member-admin-profile/mockups/variants.html` (вариант B; mockups/ в .gitignore — на диске).
 
+> ⚠️ **ОБНОВЛЕНИЕ 2026-06-27:** **V39 занята** отдельным слайсом «СБП-реквизиты клуба» (`clubs.payment_link`/`payment_method_note`, кнопка «Оплатить по СБП» на экране frozen-участника — honor-system, платформа вне денег). Поэтому **S2 awards = V40, S3 roles = V41** (везде ниже где «V39/V40» — читать как V40/V41).
+
 ## 0. TL;DR — где мы
 
 Вариант B залочен (форма правки ✎ на карточке участника, owner-only). Решения R1–R4 зафиксированы (спека §8).

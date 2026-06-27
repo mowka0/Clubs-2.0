@@ -75,6 +75,8 @@ class ClubServiceTest {
             memberCount = memberCount,
             isActive = true,
             telegramGroupId = null,
+            paymentLink = null,
+            paymentMethodNote = null,
             createdAt = now,
             updatedAt = now
         )
@@ -196,7 +198,7 @@ class ClubServiceTest {
         every { clubRepository.findById(clubId) } returns null
 
         val exception = assertThrows<NotFoundException> {
-            clubService.getClub(clubId)
+            clubService.getClub(clubId, UUID.randomUUID())
         }
 
         assertEquals("Club not found", exception.message)
@@ -222,7 +224,7 @@ class ClubServiceTest {
 
         every { clubRepository.findById(clubId) } returns club
 
-        val result = clubService.getClub(clubId)
+        val result = clubService.getClub(clubId, ownerId)
 
         assertEquals(clubId, result.id)
         assertEquals("Existing Club", result.name)
