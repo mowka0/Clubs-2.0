@@ -28,8 +28,22 @@ const membershipStub = {
   joinedAt: null, subscriptionExpiresAt: null,
 };
 
+const yearAgo = new Date(Date.now() - 400 * 86_400_000).toISOString();
+
+/** Default organizer-card mock (established organizer) so the trust card renders deterministically. */
+function mockOrganizer(over: Partial<{ clubsCount: number; trustedMembers: number; onPlatformSince: string; username: string | null }> = {}) {
+  server.use(
+    http.get(`*/api/clubs/${CLUB}/organizer-card`, () => HttpResponse.json({
+      firstName: 'Иван', lastName: 'Петров', username: over.username === undefined ? 'ivan_p' : over.username,
+      avatarUrl: null, onPlatformSince: over.onPlatformSince ?? yearAgo,
+      clubsCount: over.clubsCount ?? 3, trustedMembers: over.trustedMembers ?? 40,
+    })),
+  );
+}
+
 describe('DuesPaymentSheet', () => {
   it('offers cash only when the club has no SBP link, and confirms a cash claim', async () => {
+    mockOrganizer();
     let posted: { method: string; proofUrl: string | null } | undefined;
     server.use(
       http.post(`*/api/clubs/${CLUB}/dues-claim`, async ({ request }) => {
@@ -59,6 +73,7 @@ describe('DuesPaymentSheet', () => {
   });
 
   it('offers SBP when the club has a link; confirm is blocked until a screenshot is attached', async () => {
+    mockOrganizer();
     renderWithProviders(
       <DuesPaymentSheet clubId={CLUB} price={100} paymentLink="https://sbp.example/pay" paymentMethodNote="Сбербанк" onClose={() => {}} onClaimed={() => {}} />,
     );
@@ -66,5 +81,30 @@ describe('DuesPaymentSheet', () => {
     expect(screen.getByRole('button', { name: /Оплатить по СБП/ })).toBeInTheDocument();
     // Mandatory screenshot — confirm stays disabled with no proof attached.
     expect(screen.getByRole('button', { name: /Подтвердить оплату/ })).toBeDisabled();
+  });
+
+  it('shows the organizer trust card (established): identity + facts, no zeros', async () => {
+    mockOrganizer({ clubsCount: 3, trustedMembers: 40 });
+    renderWithProviders(
+      <DuesPaymentSheet clubId={CLUB} price={100} paymentLink={null} paymentMethodNote={null} onClose={() => {}} onClaimed={() => {}} />,
+    );
+
+    expect(await screen.findByText('Иван Петров')).toBeInTheDocument();
+    expect(screen.getByText(/@ivan_p/)).toBeInTheDocument();
+    expect(screen.getByText(/Ведёт/)).toBeInTheDocument();
+    expect(screen.getByText(/доверяют/)).toBeInTheDocument();
+  });
+
+  it('fresh organizer: collapses to «недавно» + contact-first nudge, no fabricated metrics', async () => {
+    mockOrganizer({ clubsCount: 1, trustedMembers: 0, onPlatformSince: new Date().toISOString() });
+    renderWithProviders(
+      <DuesPaymentSheet clubId={CLUB} price={100} paymentLink={null} paymentMethodNote={null} onClose={() => {}} onClaimed={() => {}} />,
+    );
+
+    expect(await screen.findByText(/На платформе недавно/)).toBeInTheDocument();
+    expect(screen.getByText(/напишите ему перед первым переводом/i)).toBeInTheDocument();
+    // No fabricated zeros for a fresh account.
+    expect(screen.queryByText(/Ведёт/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/доверяют/)).not.toBeInTheDocument();
   });
 });

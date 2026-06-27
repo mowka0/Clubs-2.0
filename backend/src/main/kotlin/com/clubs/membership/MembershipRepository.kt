@@ -20,6 +20,8 @@ interface MembershipRepository {
     fun isMember(userId: UUID, clubId: UUID): Boolean
     fun isActiveMemberInActiveClub(userId: UUID, clubId: UUID): Boolean
     fun countActiveByClubId(clubId: UUID): Int
+    /** Active members excluding the organizer, across [clubIds] — organizer trust card «доверяют N участников». */
+    fun countActiveNonOrganizerMembersInClubs(clubIds: Collection<UUID>): Int
 
     // Mutations
     fun create(userId: UUID, clubId: UUID): Membership

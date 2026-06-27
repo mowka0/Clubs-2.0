@@ -467,6 +467,24 @@
 .rd-claim-proof img { max-width: 100%; max-height: 240px; border-radius: 10px; border: 1px solid var(--hairline); object-fit: contain; }
 .rd-claim-note { font-size: 12px; color: var(--text-dim); }
 
+/* Organizer trust card on the dues-payment sheet («кому вы переводите»). Account-focused, graceful. */
+.rd-ot { background: var(--surface); border: 1px solid var(--hairline); border-radius: 16px; padding: 14px; margin-bottom: 14px; }
+.rd-ot-cap { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 10px; }
+.rd-ot-top { display: flex; gap: 11px; align-items: center; }
+.rd-ot-av { width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; color: #fff; background: var(--accent-grad, linear-gradient(135deg, var(--accent), var(--accent))); overflow: hidden; }
+.rd-ot-av img { width: 100%; height: 100%; object-fit: cover; }
+.rd-ot-who { min-width: 0; flex: 1; }
+.rd-ot-nm { font-size: 15.5px; font-weight: 700; color: var(--text); }
+.rd-ot-uh { display: inline-flex; align-items: center; gap: 3px; margin-top: 2px; padding: 0; border: 0; background: transparent; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--accent); }
+.rd-ot-write { flex-shrink: 0; white-space: nowrap; cursor: pointer; font-family: inherit; font-size: 12.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); border: 0; border-radius: 11px; padding: 8px 13px; }
+.rd-ot-div { height: 1px; background: var(--hairline); margin: 13px 0 12px; }
+.rd-ot-facts { display: flex; flex-direction: column; gap: 8px; }
+.rd-ot-f { display: flex; gap: 9px; align-items: center; font-size: 13px; color: var(--text); }
+.rd-ot-f.muted { color: var(--text-dim); }
+.rd-ot-f .rd-ot-ic { width: 16px; text-align: center; flex-shrink: 0; }
+.rd-ot-f b { font-weight: 700; }
+.rd-ot-nudge { margin-top: 12px; background: var(--accent-soft); border: 1px solid rgba(224, 122, 62, 0.22); border-radius: 12px; padding: 10px 12px; font-size: 12.5px; color: var(--text-dim); line-height: 1.45; }
+
 /* Red-dot on a section tab («Участники» / «Управление») — de-Stars attention badge. */
 .rd-tab-link .rd-tab-dot {
   position: absolute; top: 4px; right: -10px; width: 7px; height: 7px; border-radius: 50%;

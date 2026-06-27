@@ -11,6 +11,7 @@ import {
   getClubByInvite,
   getClubs,
   getMyClubs,
+  getOrganizerCard,
   updateClub,
 } from '../api/clubs';
 import type { ClubFilters, CreateClubBody, UpdateClubBody } from '../api/clubs';
@@ -45,6 +46,17 @@ export function useMyClubsQuery() {
   return useQuery({
     queryKey: queryKeys.clubs.my(),
     queryFn: getMyClubs,
+  });
+}
+
+/** Organizer trust card for the dues-payment sheet. Gate `enabled` on the sheet being open. */
+export function useOrganizerCardQuery(clubId: string | undefined, options: { enabled?: boolean } = {}) {
+  const enabled = Boolean(clubId) && (options.enabled ?? true);
+  return useQuery({
+    queryKey: queryKeys.clubs.organizerCard(clubId ?? ''),
+    queryFn: () => getOrganizerCard(clubId!),
+    enabled,
+    staleTime: 60_000,
   });
 }
 

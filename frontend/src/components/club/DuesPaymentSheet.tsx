@@ -2,8 +2,78 @@ import { ChangeEvent, FC, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useClaimDuesMutation } from '../../queries/members';
+import { useOrganizerCardQuery } from '../../queries/clubs';
 import { uploadImage } from '../../api/clubs';
 import { useHaptic } from '../../hooks/useHaptic';
+import { pluralRu } from '../../utils/formatters';
+
+// «Доверяют N участников» shows only at/above this; below it reads as weak, so we hide it.
+const TRUST_MIN = 5;
+// An account younger than this with nothing else to show is treated as «новый» (nudge instead of facts).
+const FRESH_DAYS = 60;
+
+function monthYear(iso: string): string {
+  return new Date(iso).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+}
+
+/**
+ * Trust card «кому вы переводите» (de-Stars: money goes organizer-direct). Account-focused, graceful:
+ * identity (avatar + name + @username + «Написать») is always shown; tenure/clubs/trusted-members appear
+ * only when meaningful (never zeros); a fresh account collapses to «недавно» + a contact-first nudge.
+ */
+const OrganizerTrustCard: FC<{ clubId: string }> = ({ clubId }) => {
+  const haptic = useHaptic();
+  const { data: org } = useOrganizerCardQuery(clubId, { enabled: true });
+  if (!org) return null;
+
+  const initials = `${org.firstName.charAt(0)}${org.lastName?.charAt(0) ?? ''}`;
+  const hasClubs = org.clubsCount >= 2;
+  const hasTrust = org.trustedMembers >= TRUST_MIN;
+  const tenureDays = (Date.now() - new Date(org.onPlatformSince).getTime()) / 86_400_000;
+  const isFresh = !hasClubs && !hasTrust && tenureDays < FRESH_DAYS;
+
+  const openTg = () => {
+    if (!org.username) return;
+    haptic.impact('light');
+    window.open(`https://t.me/${org.username}`, '_blank', 'noopener,noreferrer');
+  };
+
+  return (
+    <div className="rd-ot">
+      <div className="rd-ot-cap">Кому вы переводите</div>
+      <div className="rd-ot-top">
+        <span className="rd-ot-av">{org.avatarUrl ? <img src={org.avatarUrl} alt="" /> : initials}</span>
+        <div className="rd-ot-who">
+          <div className="rd-ot-nm">{org.firstName} {org.lastName ?? ''}</div>
+          {org.username && (
+            <button type="button" className="rd-ot-uh" onClick={openTg}>@{org.username} ↗</button>
+          )}
+        </div>
+        {org.username && (
+          <button type="button" className="rd-ot-write" onClick={openTg}>Написать</button>
+        )}
+      </div>
+
+      <div className="rd-ot-div" />
+      <div className="rd-ot-facts">
+        {isFresh ? (
+          <div className="rd-ot-f muted"><span className="rd-ot-ic">🗓</span> На платформе недавно</div>
+        ) : (
+          <div className="rd-ot-f"><span className="rd-ot-ic">🗓</span> На платформе с <b>{monthYear(org.onPlatformSince)}</b></div>
+        )}
+        {hasClubs && (
+          <div className="rd-ot-f"><span className="rd-ot-ic">👥</span> Ведёт <b>{org.clubsCount} {pluralRu(org.clubsCount, ['клуб', 'клуба', 'клубов'])}</b></div>
+        )}
+        {hasTrust && (
+          <div className="rd-ot-f"><span className="rd-ot-ic">🤝</span> Его клубам доверяют <b>{org.trustedMembers} {pluralRu(org.trustedMembers, ['участник', 'участника', 'участников'])}</b></div>
+        )}
+      </div>
+      {isFresh && (
+        <div className="rd-ot-nudge">Организатор новый на платформе. Не уверены — напишите ему перед первым переводом.</div>
+      )}
+    </div>
+  );
+};
 
 interface DuesPaymentSheetProps {
   clubId: string;
@@ -112,6 +182,9 @@ export const DuesPaymentSheet: FC<DuesPaymentSheetProps> = ({
             <span className="rd-dues-sum">{price} ₽</span>
             <span className="rd-dues-per">/ мес</span>
           </div>
+
+          {/* Trust card — who the money goes to (de-Stars: organizer-direct, off-platform). */}
+          <OrganizerTrustCard clubId={clubId} />
 
           {/* Method switch — only when both are available (requisites set). */}
           {paymentLink && (

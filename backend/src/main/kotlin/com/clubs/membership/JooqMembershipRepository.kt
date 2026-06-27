@@ -241,6 +241,18 @@ class JooqMembershipRepository(
             )
             .fetchOne(0, Int::class.java) ?: 0
 
+    override fun countActiveNonOrganizerMembersInClubs(clubIds: Collection<UUID>): Int {
+        if (clubIds.isEmpty()) return 0
+        // active (= currently have access, real social proof) + role != organizer (don't count the owner).
+        return dsl.selectCount().from(MEMBERSHIPS)
+            .where(
+                MEMBERSHIPS.CLUB_ID.`in`(clubIds)
+                    .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active))
+                    .and(MEMBERSHIPS.ROLE.ne(MembershipRole.organizer))
+            )
+            .fetchOne(0, Int::class.java) ?: 0
+    }
+
     // Free-club join → `active`. A free membership has NO subscription → subscription_expires_at stays
     // NULL. (Setting a 30-day expiry here was the historical bug that made every free member look like
     // a cancelled-in-period paid subscriber.) The paid join is createFrozen below.

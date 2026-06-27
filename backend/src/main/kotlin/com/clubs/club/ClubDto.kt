@@ -120,6 +120,25 @@ data class UpdateClubRequest(
     val paymentMethodNote: String? = null
 )
 
+/**
+ * Trust card for the dues-payment sheet — who the member is about to transfer money to (de-Stars: money
+ * goes organizer-direct, off-platform). Account-focused; the frontend hides facts that aren't meaningful
+ * yet (clubsCount < 2, trustedMembers below threshold) so a fresh account never shows zeros.
+ */
+data class OrganizerCardDto(
+    val firstName: String,
+    val lastName: String?,
+    val username: String?,
+    val avatarUrl: String?,
+    // Organizer's account age on OUR platform (users.created_at). Always shown ("с {дата}" / "недавно").
+    val onPlatformSince: OffsetDateTime,
+    // Active clubs the organizer owns (shown only when ≥ 2).
+    val clubsCount: Int,
+    // Active non-organizer members across all the organizer's active clubs — «доверяют N участников»
+    // (shown only above a threshold). Frozen (not-yet-paid) members are excluded — they aren't proof.
+    val trustedMembers: Int
+)
+
 data class ClubFilterParams(
     val category: String? = null,
     val city: String? = null,

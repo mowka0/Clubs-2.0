@@ -35,6 +35,7 @@ export const queryKeys = {
     stats: (clubId: string) => ['clubs', 'detail', clubId, 'stats'] as const,
     churnedMembers: (clubId: string) => ['clubs', 'detail', clubId, 'churned-members'] as const,
     quality: (clubId: string) => ['clubs', 'detail', clubId, 'quality'] as const,
+    organizerCard: (clubId: string) => ['clubs', 'detail', clubId, 'organizer-card'] as const,
     /** Batched Discovery-card facts, keyed by the (sorted) set of club ids on screen. */
     cardFacts: (sortedIds: string[]) => ['clubs', 'card-facts', sortedIds] as const,
   },

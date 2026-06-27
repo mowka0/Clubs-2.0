@@ -76,6 +76,18 @@ export interface MemberListItemDto {
   duesClaimMethod?: string | null;
 }
 
+/** Organizer trust card for the dues-payment sheet (de-Stars). Account-focused; the UI hides facts
+ *  that aren't meaningful yet (clubsCount < 2, trustedMembers below threshold) → no zeros for new accounts. */
+export interface OrganizerCardDto {
+  firstName: string;
+  lastName: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+  onPlatformSince: string;
+  clubsCount: number;
+  trustedMembers: number;
+}
+
 /** A club-local award chip (member admin S2). Cosmetic; never reflects reputation (R4). */
 export interface AwardDto {
   id: string;

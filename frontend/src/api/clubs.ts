@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import type { ClubDetailDto, ClubListItemDto, MembershipDto, PageResponse } from '../types/api';
+import type { ClubDetailDto, ClubListItemDto, MembershipDto, OrganizerCardDto, PageResponse } from '../types/api';
 
 export interface ClubFilters {
   category?: string;
@@ -79,4 +79,9 @@ export function deleteClub(id: string): Promise<void> {
 export async function uploadImage(file: File): Promise<string> {
   const { url } = await apiClient.uploadFile('/api/upload', file);
   return url;
+}
+
+/** Organizer trust card for the dues-payment sheet (de-Stars). JWT-only / others-visible. */
+export function getOrganizerCard(clubId: string): Promise<OrganizerCardDto> {
+  return apiClient.get<OrganizerCardDto>(`/api/clubs/${clubId}/organizer-card`);
 }
