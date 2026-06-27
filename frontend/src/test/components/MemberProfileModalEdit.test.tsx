@@ -31,13 +31,13 @@ const MEMBER: MemberListItemDto = {
   accessStatus: 'active', subscriptionExpiresAt: inDays(20),
 };
 
-function mockProfile(note: string | null, awards: AwardDto[] = []) {
+function mockProfile(note: string | null, awards: AwardDto[] = [], applicationAnswer: string | null = null) {
   const profile: MemberProfileDto = {
     userId: 'u-1', clubId: CLUB, firstName: 'Игорь', username: 'igor_s', avatarUrl: null,
     bio: null, interests: [], awards, role: 'member', trust: 70, promiseFulfillmentPct: 90,
     totalConfirmations: 4, totalAttendances: 3, spontaneityCount: 0, skladchinaPaid: null,
     skladchinaTotal: null, subscriptionExpiresAt: inDays(20), organizerNote: note,
-    duesClaimedAt: null, duesClaimMethod: null, duesProofUrl: null,
+    duesClaimedAt: null, duesClaimMethod: null, duesProofUrl: null, applicationAnswer,
   };
   server.use(http.get(`*/api/clubs/${CLUB}/members/u-1`, () => HttpResponse.json(profile)));
 }
@@ -49,6 +49,24 @@ describe('MemberProfileModal — admin edit (S1)', () => {
       <MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer onClose={() => {}} />,
     );
     expect(await screen.findByText('Помогает с площадкой')).toBeInTheDocument();
+  });
+
+  it('shows the join-application answer to the organizer', async () => {
+    mockProfile(null, [], 'Хочу заниматься бегом по утрам');
+    renderWithProviders(
+      <MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer onClose={() => {}} />,
+    );
+    expect(await screen.findByText('Хочу заниматься бегом по утрам')).toBeInTheDocument();
+    expect(screen.getByText('Ответ на заявку')).toBeInTheDocument();
+  });
+
+  it('does not show the application answer to a regular member', async () => {
+    mockProfile(null, [], 'Секретный ответ');
+    renderWithProviders(
+      <MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer={false} onClose={() => {}} />,
+    );
+    await screen.findByText(/Репутация в этом клубе/i);
+    expect(screen.queryByText('Секретный ответ')).not.toBeInTheDocument();
   });
 
   it('does not show the note (or gate) to a regular member', async () => {

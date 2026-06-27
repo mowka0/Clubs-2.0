@@ -217,6 +217,8 @@ interface OrganizerGateProps {
   isPaidMember: boolean;
   /** Member's dues claim to review (de-Stars), organizer-only. null when no claim pending. */
   claim: { claimedAt: string; method: string | null; proofUrl: string | null } | null;
+  /** The member's join-application answer (closed clubs), organizer-only. null = open club / no question. */
+  applicationAnswer: string | null;
   onDone: (message: string) => void;
 }
 
@@ -233,7 +235,7 @@ function toDateInput(iso: string | null): string {
  *    private, saved on «Сохранить»).
  * 409 (lost race) on a dues/freeze action closes the card — the list cache is already refreshed.
  */
-const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, awards, isPaidMember, claim, onDone }) => {
+const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, awards, isPaidMember, claim, applicationAnswer, onDone }) => {
   const haptic = useHaptic();
   const markPaid = useMarkMemberDuesPaidMutation();
   const freeze = useFreezeMemberMutation();
@@ -310,6 +312,13 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
 
   return (
     <div className="rd-org-gate">
+      {/* Join-application answer (closed clubs) — review «why they joined» alongside the payment proof. */}
+      {applicationAnswer && (
+        <div className="rd-org-note-read" style={{ marginTop: 0, marginBottom: 12 }}>
+          <span className="rd-org-note-k">Ответ на заявку</span>{applicationAnswer}
+        </div>
+      )}
+
       {isPaidMember && (
         <>
           <div className={`rd-sub-strip${frozen || soon ? ' rd-soon' : ''}`}>
@@ -323,7 +332,6 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
                     : '—'}
               </div>
             </div>
-            <span className="rd-org-tag">Только орг</span>
           </div>
 
           {/* Dues claim review (de-Stars): the member declared payment — show method + screenshot so the
@@ -619,6 +627,7 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
               claim={profile?.duesClaimedAt
                 ? { claimedAt: profile.duesClaimedAt, method: profile.duesClaimMethod, proofUrl: profile.duesProofUrl }
                 : null}
+              applicationAnswer={profile?.applicationAnswer ?? null}
               onDone={handleGateDone}
             />
           )}

@@ -42,5 +42,8 @@ data class MemberProfileDto(
     // before pressing «Взнос получен».
     val duesClaimedAt: OffsetDateTime? = null,
     val duesClaimMethod: String? = null,
-    val duesProofUrl: String? = null
+    val duesProofUrl: String? = null,
+    // The member's join-application answer (closed clubs) — ORGANIZER ONLY. Null for open clubs / no
+    // question. Lets the organizer review «why they joined» alongside the payment proof on one card.
+    val applicationAnswer: String? = null
 )

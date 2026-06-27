@@ -135,6 +135,8 @@ export interface MemberProfileDto {
   duesClaimedAt: string | null;
   duesClaimMethod: string | null;
   duesProofUrl: string | null;
+  // The member's join-application answer (closed clubs) — ORGANIZER ONLY. null for open clubs / no question.
+  applicationAnswer: string | null;
 }
 
 /**

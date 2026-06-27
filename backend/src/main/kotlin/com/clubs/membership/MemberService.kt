@@ -1,5 +1,6 @@
 package com.clubs.membership
 
+import com.clubs.application.ApplicationRepository
 import com.clubs.award.AwardService
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
@@ -26,6 +27,7 @@ class MemberService(
     private val trustService: TrustService,
     private val interestRepository: InterestRepository,
     private val awardService: AwardService,
+    private val applicationRepository: ApplicationRepository,
     private val mapper: MembershipMapper
 ) {
 
@@ -113,7 +115,11 @@ class MemberService(
             // Organizer-only: the member's dues claim + payment screenshot (de-Stars). null for regular viewers.
             duesClaimedAt = if (callerIsOrganizer) membership?.duesClaimedAt else null,
             duesClaimMethod = if (callerIsOrganizer) membership?.duesClaimMethod else null,
-            duesProofUrl = if (callerIsOrganizer) membership?.duesProofUrl else null
+            duesProofUrl = if (callerIsOrganizer) membership?.duesProofUrl else null,
+            // Organizer-only: the member's join-application answer (closed clubs). null for open clubs / no question.
+            applicationAnswer = if (callerIsOrganizer) {
+                applicationRepository.findActiveByUserAndClub(userId, clubId)?.answerText
+            } else null
         )
     }
 }
