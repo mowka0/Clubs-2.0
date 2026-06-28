@@ -195,6 +195,26 @@ class NotificationService(
     }
 
     /**
+     * Notify an applicant that the organizer approved their join application. For a PAID club the
+     * approval lands them in `frozen` — the DM nudges them to pay the dues to unlock access; for a FREE
+     * club they're already in, so it's a plain welcome. Best-effort fire-and-forget; deep-links to the
+     * club page (where a frozen member taps «Оплатить взнос»).
+     */
+    @Async
+    fun sendApplicationApprovedDM(applicantTelegramId: Long, clubName: String, clubId: UUID, paid: Boolean) {
+        val text: String
+        val button: String
+        if (paid) {
+            text = "✅ Вашу заявку в клуб «$clubName» одобрили — оплатите вступление, чтобы получить доступ."
+            button = "Оплатить взнос"
+        } else {
+            text = "✅ Вашу заявку в клуб «$clubName» одобрили. Добро пожаловать!"
+            button = "Открыть клуб"
+        }
+        sendDm(applicantTelegramId.toString(), text, webAppPath = "/clubs/$clubId", buttonText = button)
+    }
+
+    /**
      * DM with a deep-link inline button that opens the Mini App on a specific
      * route. [webAppPath] is path-prefixed-with-slash, e.g. "/skladchina/<id>"
      * or "/events/<id>". Frontend's React Router renders the matching page

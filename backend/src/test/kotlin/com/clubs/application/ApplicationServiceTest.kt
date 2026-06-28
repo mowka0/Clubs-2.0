@@ -10,6 +10,7 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ApplicationStatus
 import com.clubs.generated.jooq.enums.ClubCategory
+import com.clubs.generated.jooq.tables.records.UsersRecord
 import com.clubs.interest.InterestRepository
 import com.clubs.membership.Membership
 import com.clubs.membership.MembershipActivator
@@ -284,6 +285,46 @@ class ApplicationServiceTest {
         // De-Stars: paid approve creates the membership straight to `frozen` — no Stars invoice.
         verify(exactly = 1) { membershipActivator.activateFrozen(userId, clubId) }
         verify(exactly = 0) { membershipActivator.activateFree(any(), any()) }
+    }
+
+    @Test
+    fun `approveApplication notifies a paid-club applicant to pay`() {
+        val applicationId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val organizerId = UUID.randomUUID()
+        val application = Application(applicationId, userId, clubId, null, ApplicationStatus.pending, null, OffsetDateTime.now(), null)
+        val club = createClosedClub(clubId, organizerId, subscriptionPrice = 500)
+        every { applicationRepository.findById(applicationId) } returns application
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.countActiveByClubId(clubId) } returns 5
+        every { applicationRepository.updateStatus(applicationId, ApplicationStatus.approved) } returns application.copy(status = ApplicationStatus.approved, resolvedAt = OffsetDateTime.now())
+        val applicant = mockk<UsersRecord>(relaxed = true) { every { telegramId } returns 77L }
+        every { userRepository.findById(userId) } returns applicant
+
+        applicationService.approveApplication(applicationId, organizerId)
+
+        verify(exactly = 1) { notificationService.sendApplicationApprovedDM(77L, "Closed Club", clubId, paid = true) }
+    }
+
+    @Test
+    fun `approveApplication notifies a free-club applicant (welcome, not paid)`() {
+        val applicationId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val organizerId = UUID.randomUUID()
+        val application = Application(applicationId, userId, clubId, null, ApplicationStatus.pending, null, OffsetDateTime.now(), null)
+        val club = createClosedClub(clubId, organizerId, subscriptionPrice = 0)
+        every { applicationRepository.findById(applicationId) } returns application
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.countActiveByClubId(clubId) } returns 5
+        every { applicationRepository.updateStatus(applicationId, ApplicationStatus.approved) } returns application.copy(status = ApplicationStatus.approved, resolvedAt = OffsetDateTime.now())
+        val applicant = mockk<UsersRecord>(relaxed = true) { every { telegramId } returns 88L }
+        every { userRepository.findById(userId) } returns applicant
+
+        applicationService.approveApplication(applicationId, organizerId)
+
+        verify(exactly = 1) { notificationService.sendApplicationApprovedDM(88L, "Closed Club", clubId, paid = false) }
     }
 
     @Test

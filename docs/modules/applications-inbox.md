@@ -40,6 +40,14 @@
   - DM-уведомление организатору в `ApplicationService.submitApplication`
     после INSERT (через `NotificationService` + `@Async`, fail-isolated от
     основной транзакции).
+  - **DM-уведомление ЗАЯВИТЕЛЮ при одобрении** (de-Stars, 2026-06-28) в
+    `ApplicationService.approveApplication` → `NotificationService.sendApplicationApprovedDM`
+    (best-effort, fail-isolated). Платный клуб (`subscriptionPrice>0`, участник стал
+    `frozen`): «✅ Вашу заявку … одобрили — оплатите вступление» + кнопка «Оплатить взнос»
+    (deep-link `/clubs/{id}` → frozen-экран). Бесплатный (`active` сразу): «… одобрили.
+    Добро пожаловать!». Закрывает разрыв: раньше участник не знал, что одобрен, и не
+    возвращался платить. Только закрытые клубы (заявки есть лишь у них); платный+открытый
+    платит сразу при вступлении — без заявки/одобрения.
 - **Frontend**
   - Новая секция «Заявки на рассмотрении» на `MyClubsPage` (organizer-side).
   - `ApplicationReviewModal` — полный профиль заявителя + ответ + клуб +

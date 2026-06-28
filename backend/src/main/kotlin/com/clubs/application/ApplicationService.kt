@@ -145,7 +145,33 @@ class ApplicationService(
 
         val updated = applicationRepository.updateStatus(applicationId, ApplicationStatus.approved)
         log.info("Application approved: id={} clubId={} userId={} organizerId={}", applicationId, application.clubId, application.userId, organizerId)
+
+        dispatchApplicationApprovedDm(club, application.userId)
+
         return mapper.toDto(updated)
+    }
+
+    /**
+     * Best-effort DM to the applicant that their join application was approved. For a paid club this is
+     * the «оплатите вступление» nudge (they're now `frozen`); for a free club a plain welcome. Mirrors
+     * [dispatchApplicationCreatedDm]: failures must NOT abort the approve transaction.
+     */
+    private fun dispatchApplicationApprovedDm(club: Club, applicantId: UUID) {
+        try {
+            val applicant = userRepository.findById(applicantId)
+            if (applicant == null) {
+                log.warn("Skipping application-approved DM: applicant not found applicantId={} clubId={}", applicantId, club.id)
+                return
+            }
+            notificationService.sendApplicationApprovedDM(
+                applicantTelegramId = applicant.telegramId,
+                clubName = club.name,
+                clubId = club.id,
+                paid = club.subscriptionPrice > 0
+            )
+        } catch (e: Exception) {
+            log.warn("Failed to dispatch application-approved DM (non-fatal): clubId={} applicantId={} error={}", club.id, applicantId, e.message)
+        }
     }
 
     @Transactional
