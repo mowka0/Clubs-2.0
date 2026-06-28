@@ -146,23 +146,24 @@ Errors:
 
 ### `GET /api/users/me/applications-pending-count` (CHANGED, breaking)
 
-Combined counter feeding tab-dot on `/my-clubs`. Все три числа сигнализируют
-«есть действие на этой вкладке» — organizer (inbox), applicant (pending
-payment) и organizer-visibility (approved applicants who haven't paid).
-Один endpoint = один cache slot на фронте.
+Combined counter feeding the `/my-clubs` nav-dot. Оба числа сигнализируют
+«есть действие организатора на этой вкладке». Один endpoint = один cache slot
+на фронте. **UPDATED (de-Stars 2026-06-28):** Stars-эпоховые `awaitingPaymentCount` /
+`organizerAwaitingPaymentCount` удалены (инвойсов больше нет); вместо них
+`awaitingDuesCount` (paid-and-waiting members).
 
 Response 200:
 ```json
-{ "inboxCount": 7, "awaitingPaymentCount": 1, "organizerAwaitingPaymentCount": 2 }
+{ "inboxCount": 7, "awaitingDuesCount": 2 }
 ```
 
 Поля:
 - `inboxCount` — pending-заявки по клубам, где caller — owner (organizer-action).
-- `awaitingPaymentCount` — собственные approved-заявки caller'а без active
-  membership (applicant action: «Оплатите подписку»).
-- `organizerAwaitingPaymentCount` — approved заявки по клубам caller'а
-  (owner), у которых нет active/grace_period membership (organizer
-  visibility: «кому отправлен инвойс, но ещё не оплачен»).
+- `awaitingDuesCount` — frozen-участники, заявившие оплату (claim) по клубам
+  caller'а (owner): оплатили off-platform и ждут решения «Взнос получен» /
+  «Отказать». De-Stars: `membershipRepository.countClaimedFrozenByOwner`.
+
+Оба зажигают точку на «Мои клубы» (sum > 0).
 
 Errors: `401` — нет JWT.
 
@@ -417,7 +418,8 @@ data class ClubBriefDto(
 ```kotlin
 data class PendingApplicationsCountDto(
     val inboxCount: Int,
-    val awaitingPaymentCount: Int
+    // De-Stars: frozen members who declared a dues payment, across the caller's clubs (awaiting decision).
+    val awaitingDuesCount: Int = 0
 )
 ```
 

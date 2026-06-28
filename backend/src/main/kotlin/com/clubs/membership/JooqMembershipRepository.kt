@@ -547,6 +547,17 @@ class JooqMembershipRepository(
             .fetchOne(0, Int::class.java) ?: 0
     }
 
+    override fun countClaimedFrozenByOwner(ownerId: UUID): Int =
+        dsl.selectCount().from(MEMBERSHIPS)
+            .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))
+            .where(
+                CLUBS.OWNER_ID.eq(ownerId)
+                    .and(CLUBS.IS_ACTIVE.eq(true))
+                    .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.frozen))
+                    .and(MEMBERSHIPS.DUES_CLAIMED_AT.isNotNull)
+            )
+            .fetchOne(0, Int::class.java) ?: 0
+
     override fun findFrozenMembersByOwner(ownerId: UUID): List<OrganizerDuesMember> {
         return dsl.select(
             MEMBERSHIPS.USER_ID,

@@ -79,9 +79,11 @@ export const BottomTabBar: FC<BottomTabBarProps> = ({ onCreate, scoped = false }
   const haptic = useHaptic();
 
   const { data: unpaidCount = 0 } = useSkladchinaActionRequiredCountQuery();
-  // Organizer-side pending applications in the cross-club inbox lights up the «Клубы» dot.
+  // Organizer action needed on «Мои клубы»: pending applications (inbox) + paid members awaiting a
+  // dues decision (de-Stars). Either lights the «Клубы» dot.
   const { data: myClubsActionCounts } = useMyClubsActionCountsQuery();
-  const myClubsActionTotal = myClubsActionCounts?.inboxCount ?? 0;
+  const myClubsActionTotal =
+    (myClubsActionCounts?.inboxCount ?? 0) + (myClubsActionCounts?.awaitingDuesCount ?? 0);
 
   const handleTabClick = useCallback(
     (path: string) => {

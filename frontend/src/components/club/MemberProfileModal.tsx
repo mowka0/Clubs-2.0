@@ -16,6 +16,7 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { ApiError } from '../../api/apiClient';
 import { pluralRu } from '../../utils/formatters';
 import { DonutRing } from '../reputation/DonutRing';
+import { ImageLightbox } from '../ImageLightbox';
 import { TRUST_TIER_COLOR, trustTier } from '../reputation/trust-tier';
 import type { AwardDto, MemberListItemDto, MemberProfileDto } from '../../types/api';
 
@@ -258,6 +259,7 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
   const [noteDraft, setNoteDraft] = useState('');
   const [dateDraft, setDateDraft] = useState('');
   const [confirmingReject, setConfirmingReject] = useState(false);
+  const [zoomedProof, setZoomedProof] = useState<string | null>(null);
 
   const busy = markPaid.isPending || freeze.isPending || reject.isPending;
   const savingEdit = setAccess.isPending || updateNote.isPending;
@@ -352,33 +354,36 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
 
       {isPaidMember && (
         <>
-          <div className={`rd-sub-strip${frozen || soon ? ' rd-soon' : ''}`}>
-            <div style={{ minWidth: 0 }}>
-              <div className="rd-sub-strip-k">{frozen ? 'Доступ закрыт' : 'Подписка активна до'}</div>
-              <div className="rd-sub-strip-v">
-                {frozen
-                  ? 'участник ждёт оплаты'
-                  : expiresAt
-                    ? `${formatDateFull(expiresAt)} · ${relativeUntil(expiresAt)}`
-                    : '—'}
+          {/* Active paid member: subscription-until strip. Frozen members get the compact claim card below
+              instead (no separate «Доступ закрыт» strip — it would just repeat «ждёт оплаты»). */}
+          {!frozen && (
+            <div className={`rd-sub-strip${soon ? ' rd-soon' : ''}`}>
+              <div style={{ minWidth: 0 }}>
+                <div className="rd-sub-strip-k">Подписка активна до</div>
+                <div className="rd-sub-strip-v">
+                  {expiresAt ? `${formatDateFull(expiresAt)} · ${relativeUntil(expiresAt)}` : '—'}
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Dues claim review (de-Stars): the member declared payment — show method + screenshot so the
-              organizer verifies before «Взнос получен». */}
-          {claim && (
-            <div className="rd-claim">
+          {/* Frozen member: one compact card — status line + (if claimed) the payment proof as a tappable
+              thumbnail that zooms in ImageLightbox (same viewer as the skladchina receipt). */}
+          {frozen && (
+            <div className="rd-claim rd-claim-compact">
               <div className="rd-claim-h">
-                ⏳ Оплата заявлена · {claim.method === 'cash' ? 'наличные' : 'СБП'}
+                {claim
+                  ? `⏳ Оплата заявлена · ${claim.method === 'cash' ? 'наличные' : 'СБП'}`
+                  : '🔒 Доступ закрыт · участник ещё не оплатил'}
               </div>
-              {claim.proofUrl ? (
-                <a href={claim.proofUrl} target="_blank" rel="noopener noreferrer" className="rd-claim-proof">
+              {claim?.proofUrl ? (
+                <button type="button" className="rd-claim-thumb" onClick={() => setZoomedProof(claim.proofUrl)}>
                   <img src={claim.proofUrl} alt="Скриншот оплаты" />
-                </a>
-              ) : (
-                <div className="rd-claim-note">Скриншота нет (наличные) — подтвердите после получения.</div>
-              )}
+                  <span className="rd-claim-thumb-hint">нажмите, чтобы увеличить</span>
+                </button>
+              ) : claim ? (
+                <div className="rd-claim-note">Наличные — скриншота нет, подтвердите после получения.</div>
+              ) : null}
             </div>
           )}
 
@@ -464,6 +469,8 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
           </div>
         </div>
       )}
+
+      <ImageLightbox src={zoomedProof} alt="Скриншот оплаты" onClose={() => setZoomedProof(null)} />
     </div>
   );
 };

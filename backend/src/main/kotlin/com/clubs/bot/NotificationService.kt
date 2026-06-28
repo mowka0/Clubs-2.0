@@ -157,6 +157,23 @@ class NotificationService(
     }
 
     /**
+     * Notify a paid club's organizer that a member declared their off-platform dues (de-Stars) and is
+     * waiting to be admitted. Best-effort fire-and-forget like the other DMs; deep-links to «Мои клубы»
+     * where the «Ждут оплаты» list lets the organizer confirm or reject.
+     */
+    @Async
+    fun sendDuesClaimedDM(organizerTelegramId: Long, memberDisplayName: String, clubName: String, method: String) {
+        val methodLabel = if (method == "cash") "наличными" else "по СБП"
+        val text = "💸 $memberDisplayName оплатил(а) вступление $methodLabel в клуб «$clubName» и ждёт вашего решения."
+        sendDm(
+            chatId = organizerTelegramId.toString(),
+            text = text,
+            webAppPath = "/my-clubs",
+            buttonText = "Проверить оплату"
+        )
+    }
+
+    /**
      * Notify a club organizer that a new application has been submitted.
      * Fire-and-forget: any Telegram error is logged in [sendDm] but does NOT
      * propagate to the caller (so the originating DB transaction is never

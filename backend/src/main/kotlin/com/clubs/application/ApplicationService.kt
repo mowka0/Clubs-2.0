@@ -245,7 +245,10 @@ class ApplicationService(
     fun getMyClubsActionCounts(userId: UUID): PendingApplicationsCountDto {
         val ownedClubIds = clubRepository.findIdsByOwnerId(userId)
         val inboxCount = applicationRepository.countPendingByClubIds(ownedClubIds)
-        return PendingApplicationsCountDto(inboxCount = inboxCount)
+        // De-Stars: paid-and-waiting members (frozen + dues claimed) also need an organizer decision,
+        // so they light the «Мои клубы» dot alongside the application inbox.
+        val awaitingDuesCount = membershipRepository.countClaimedFrozenByOwner(userId)
+        return PendingApplicationsCountDto(inboxCount = inboxCount, awaitingDuesCount = awaitingDuesCount)
     }
 
     /**

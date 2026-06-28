@@ -70,5 +70,8 @@ data class ClubBriefDto(
  * See docs/modules/applications-inbox.md § "GET /api/users/me/applications-pending-count".
  */
 data class PendingApplicationsCountDto(
-    val inboxCount: Int
+    val inboxCount: Int,
+    // De-Stars: frozen members who declared a dues payment across the caller's clubs — they're paid and
+    // awaiting the organizer's decision («Взнос получен» / «Отказать»). Lights the «Мои клубы» dot too.
+    val awaitingDuesCount: Int = 0
 )

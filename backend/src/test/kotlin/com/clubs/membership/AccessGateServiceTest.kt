@@ -3,6 +3,7 @@ package com.clubs.membership
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
+import com.clubs.generated.jooq.tables.records.UsersRecord
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
 import io.mockk.every
@@ -20,6 +21,7 @@ class AccessGateServiceTest {
 
     private lateinit var membershipRepository: MembershipRepository
     private lateinit var userRepository: com.clubs.user.UserRepository
+    private lateinit var clubRepository: com.clubs.club.ClubRepository
     private lateinit var notificationService: com.clubs.bot.NotificationService
     private lateinit var service: AccessGateService
 
@@ -31,11 +33,12 @@ class AccessGateServiceTest {
     fun setUp() {
         membershipRepository = mockk(relaxed = true)
         userRepository = mockk(relaxed = true)
+        clubRepository = mockk(relaxed = true)
         notificationService = mockk(relaxed = true)
         // Empty base-url mirrors production (uploader returns root-relative "/uploads/...").
         service = AccessGateService(
             membershipRepository, MembershipMapper(), accessPeriodDays = 30, storageBaseUrl = "",
-            userRepository = userRepository, notificationService = notificationService
+            userRepository = userRepository, clubRepository = clubRepository, notificationService = notificationService
         )
     }
 
@@ -215,6 +218,42 @@ class AccessGateServiceTest {
 
         assertEquals("sbp", result.duesClaimMethod)
         verify(exactly = 1) { membershipRepository.claimDues(m.id, "sbp", proofUrl) }
+    }
+
+    @Test
+    fun `claimDues notifies the club organizer with the member name`() {
+        val m = callerMembership(MembershipStatus.frozen)
+        val clubOwnerId = UUID.randomUUID()
+        every { membershipRepository.findByUserAndClub(callerId, clubId) } returns m
+        every { membershipRepository.claimDues(m.id, "cash", null) } returns 1
+        val club = mockk<com.clubs.club.Club>(relaxed = true)
+        every { club.ownerId } returns clubOwnerId
+        every { club.name } returns "Бег по утрам"
+        every { clubRepository.findById(clubId) } returns club
+        val organizer = mockk<UsersRecord>(relaxed = true) { every { telegramId } returns 99L }
+        every { userRepository.findById(clubOwnerId) } returns organizer
+        val member = mockk<UsersRecord>(relaxed = true) {
+            every { firstName } returns "Иван"
+            every { lastName } returns null
+        }
+        every { userRepository.findById(callerId) } returns member
+
+        service.claimDues(clubId, callerId, "cash", null)
+
+        verify(exactly = 1) { notificationService.sendDuesClaimedDM(99L, "Иван", "Бег по утрам", "cash") }
+    }
+
+    @Test
+    fun `claimDues survives a notification failure (best-effort)`() {
+        val m = callerMembership(MembershipStatus.frozen)
+        every { membershipRepository.findByUserAndClub(callerId, clubId) } returns m
+        every { membershipRepository.claimDues(m.id, "cash", null) } returns 1
+        every { clubRepository.findById(clubId) } throws RuntimeException("db down")
+
+        // The claim is already committed; a DM lookup failure must not abort it.
+        val result = service.claimDues(clubId, callerId, "cash", null)
+
+        assertEquals("cash", result.duesClaimMethod)
     }
 
     @Test

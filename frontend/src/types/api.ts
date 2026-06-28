@@ -311,6 +311,9 @@ export interface PendingApplicationDto {
  */
 export interface PendingApplicationsCountDto {
   inboxCount: number;
+  // De-Stars: frozen members who declared a dues payment (paid, awaiting the organizer's decision)
+  // across the caller's clubs. Lights the «Мои клубы» nav dot alongside the application inbox.
+  awaitingDuesCount: number;
 }
 
 export interface ClubDetailDto {

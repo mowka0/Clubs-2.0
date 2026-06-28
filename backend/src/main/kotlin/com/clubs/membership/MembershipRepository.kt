@@ -14,6 +14,9 @@ interface MembershipRepository {
     fun findUserClubsWithReputation(userId: UUID): List<UserClubReputationInfo>
     /** `frozen` members across every active club owned by [ownerId] — the cross-club «Ждут оплаты» feed. */
     fun findFrozenMembersByOwner(ownerId: UUID): List<OrganizerDuesMember>
+    /** `frozen` members who declared a dues payment (claim pending) across [ownerId]'s clubs — drives the
+     *  «Мои клубы» dot so a paid-and-waiting member is noticed without opening the tab. */
+    fun countClaimedFrozenByOwner(ownerId: UUID): Int
     fun findExpiryRefByUserAndClub(userId: UUID, clubId: UUID): MembershipExpiryRef?
 
     // Predicates / counts

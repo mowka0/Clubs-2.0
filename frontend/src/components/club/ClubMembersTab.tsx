@@ -187,8 +187,7 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
             <span className="rd-badge rd-rep" style={{ marginLeft: 8, fontSize: 10, padding: '2px 8px' }}>Орг</span>
           )}
         </div>
-        {accessMeta && <div className="rd-met rd-met-ok">{accessMeta}</div>}
-        {repMeta && <div className="rd-met">{repMeta}</div>}
+        {/* Award chips sit right under the name (above the reliability score). */}
         {awards.length > 0 && (
           <div className="rd-member-awards">
             {awards.map((a) => (
@@ -198,6 +197,8 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
             ))}
           </div>
         )}
+        {accessMeta && <div className="rd-met rd-met-ok">{accessMeta}</div>}
+        {repMeta && <div className="rd-met">{repMeta}</div>}
       </div>
       <span className="rd-score">
         {hasScore ? (

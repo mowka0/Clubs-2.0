@@ -1,6 +1,7 @@
 package com.clubs.membership
 
 import com.clubs.bot.NotificationService
+import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
@@ -34,6 +35,7 @@ class AccessGateService(
     // come back root-relative ("/uploads/..."). Used to validate a dues-claim proof is OUR upload.
     @Value("\${s3.base-url:}") private val storageBaseUrl: String,
     private val userRepository: UserRepository,
+    private val clubRepository: ClubRepository,
     private val notificationService: NotificationService
 ) {
     private val log = LoggerFactory.getLogger(AccessGateService::class.java)
@@ -140,9 +142,26 @@ class AccessGateService(
         val proof = if (normalizedMethod == CLAIM_SBP) cleanProof else null
         guardApplied(membershipRepository.claimDues(membership.id, normalizedMethod, proof))
         log.info("Dues claim submitted: clubId={} userId={} method={} hasProof={}", clubId, callerId, normalizedMethod, proof != null)
+        notifyOrganizerOfClaim(clubId, callerId, normalizedMethod)
         return mapper.toDto(
             membership.copy(duesClaimedAt = OffsetDateTime.now(), duesClaimMethod = normalizedMethod, duesProofUrl = proof)
         )
+    }
+
+    // Best-effort DM to the club's organizer that a member paid off-platform and awaits admission.
+    // Never aborts the claim — the claim is already committed and surfaced in «Ждут оплаты» regardless.
+    private fun notifyOrganizerOfClaim(clubId: UUID, memberUserId: UUID, method: String) {
+        try {
+            val club = clubRepository.findById(clubId) ?: return
+            val organizer = userRepository.findById(club.ownerId) ?: return
+            val member = userRepository.findById(memberUserId)
+            val memberName = member?.let {
+                if (it.lastName.isNullOrBlank()) it.firstName else "${it.firstName} ${it.lastName}"
+            } ?: "Участник"
+            notificationService.sendDuesClaimedDM(organizer.telegramId, memberName, club.name, method)
+        } catch (e: Exception) {
+            log.warn("Failed to DM organizer of dues claim (non-fatal): clubId={} memberUserId={} error={}", clubId, memberUserId, e.message)
+        }
     }
 
     // De-Stars B+C: the organizer rejects a paid join (instead of «Взнос получен») — the member paid but
