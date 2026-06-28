@@ -37,7 +37,7 @@ clubId есть в пути → можно завести `@RequiresClubRole(min
 
 ## Что строить (когда вернёмся)
 
-1. **V42** `ALTER TYPE membership_role ADD VALUE IF NOT EXISTS 'moderator'; ADD VALUE 'co_organizer';` — изолированно, без UPDATE в той же миграции (урок V37). Затем codegen (temp PG :5433, рецепт в `branch-handoff-de-stars-member-admin.md` §6). *(V41 занята claim-флоу оплаты, см. de-stars.)*
+1. **V43** `ALTER TYPE membership_role ADD VALUE IF NOT EXISTS 'moderator'; ADD VALUE 'co_organizer';` — изолированно, без UPDATE в той же миграции (урок V37). Затем codegen (temp PG :5433, рецепт в `branch-handoff-de-stars-member-admin.md` §6). *(V41 = claim-флоу оплаты, V42 = ослабление UNIQUE заявок.)*
 2. **`@RequiresClubRole(min, clubIdParam)`** + ветка в `AuthorizationAspect.checkClubRole` (owner проходит всегда; иначе сверять роль membership ≥ min по иерархии organizer > co_organizer > moderator > member).
 3. **`clubRole(userId, clubId)` / `requireClubRole(...)`** хелпер для слоя 2 — заменить разбросанные `ownerId != userId`.
 4. **`PUT /api/clubs/{clubId}/members/{userId}/role`** `{role}` — owner меняет любой; co-org только член↔модератор (§4 сноска ¹). Нельзя разжаловать владельца.
