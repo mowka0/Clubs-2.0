@@ -40,6 +40,10 @@
   - DM-уведомление организатору в `ApplicationService.submitApplication`
     после INSERT (через `NotificationService` + `@Async`, fail-isolated от
     основной транзакции).
+  - **Чистка orphan-заявки при отмене membership** (2026-06-28): reject-dues / кик / `/cancel` теперь
+    вызывают `deleteActiveByUserAndClub` (как `/leave`), иначе остаётся orphan `approved`-заявка и
+    участник застревает на «Заявка одобрена». `submitApplication` дополнительно self-heal'ит orphan
+    (`approved` + cancelled-membership) на переподаче. См. `docs/modules/member-admin-profile.md` § Сессия 3.
   - **DM-уведомление ЗАЯВИТЕЛЮ при одобрении** (de-Stars, 2026-06-28) в
     `ApplicationService.approveApplication` → `NotificationService.sendApplicationApprovedDM`
     (best-effort, fail-isolated). Платный клуб (`subscriptionPrice>0`, участник стал

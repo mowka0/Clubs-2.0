@@ -128,6 +128,32 @@ describe('MemberProfileModal — reject paid join (B+C)', () => {
   });
 });
 
+describe('MemberProfileModal — remove member (kick)', () => {
+  it('organizer kicks an active member via POST /remove with a mandatory reason', async () => {
+    mockProfile(null);
+    let removeBody: { reason: string } | undefined;
+    server.use(
+      http.post(`*/api/clubs/${CLUB}/members/u-1/remove`, async ({ request }) => {
+        removeBody = (await request.json()) as { reason: string };
+        return HttpResponse.json({
+          id: 'm-1', userId: 'u-1', clubId: CLUB, status: 'cancelled', role: 'member',
+          joinedAt: null, subscriptionExpiresAt: null,
+        });
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer onClose={() => {}} />);
+
+    // Open the kick confirm (active member → «Удалить из клуба» in the panel footer).
+    await user.click(await screen.findByRole('button', { name: /Удалить из клуба/ }));
+    // The confirm button stays disabled until the reason is long enough.
+    await user.type(screen.getByPlaceholderText(/Причина/i), 'нарушает правила клуба');
+    await user.click(screen.getByRole('button', { name: /Удалить из клуба/ }));
+
+    await waitFor(() => expect(removeBody?.reason).toBe('нарушает правила клуба'));
+  });
+});
+
 describe('MemberProfileModal — club awards (S2)', () => {
   const AWARD: AwardDto = { id: 'a-1', emoji: '🔥', label: 'Активист' };
 

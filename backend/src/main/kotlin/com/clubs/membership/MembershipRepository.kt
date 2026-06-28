@@ -33,6 +33,9 @@ interface MembershipRepository {
     fun reactivateFree(membershipId: UUID): Membership
     fun reactivateFrozen(membershipId: UUID): Membership
     fun cancel(membershipId: UUID)
+    /** Organizer kick: cancel the membership AND clear the paid window so the member loses access
+     *  immediately (no leave-style grace until expiry). Returns rows affected (0 = already gone / race). */
+    fun remove(membershipId: UUID): Int
     fun activateSubscription(userId: UUID, clubId: UUID, expiresAt: OffsetDateTime): UUID
     fun renewSubscription(membershipId: UUID, newExpiresAt: OffsetDateTime)
 

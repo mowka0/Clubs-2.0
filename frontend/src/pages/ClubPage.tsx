@@ -268,14 +268,26 @@ export const ClubPage: FC = () => {
   };
 
   const renderCta = () => {
-    if (myApplication?.status === 'pending') {
+    // A fresh join in this session always wins (membership query may still be refetching).
+    if (joinedStatus === 'active') {
+      return (
+        <button type="button" className="rd-btn-outline" disabled>
+          Вы вступили
+        </button>
+      );
+    }
+    // A cancelled-out member (removed / rejected / left, no paid grace) should get the fresh join/apply
+    // CTA — ignore any stale/orphaned application lingering from a prior membership cycle, otherwise they
+    // get stuck on «Заявка одобрена» (backend now also clears the application on cancel; this is the UI guard).
+    const wasMemberNowOut = membership?.status === 'cancelled' && !isCancelledInPeriod;
+    if (!wasMemberNowOut && myApplication?.status === 'pending') {
       return (
         <button type="button" className="rd-btn-outline" disabled>
           Заявка на рассмотрении
         </button>
       );
     }
-    if (myApplication?.status === 'approved') {
+    if (!wasMemberNowOut && myApplication?.status === 'approved') {
       const price = club.subscriptionPrice ?? 0;
       if (price <= 0) {
         // Legacy stuck state: free club, approved, but membership row missing.
@@ -301,13 +313,6 @@ export const ClubPage: FC = () => {
       return (
         <button type="button" className="rd-btn-outline" disabled>
           Заявка одобрена — организатор откроет доступ
-        </button>
-      );
-    }
-    if (joinedStatus === 'active') {
-      return (
-        <button type="button" className="rd-btn-outline" disabled>
-          Вы вступили
         </button>
       );
     }

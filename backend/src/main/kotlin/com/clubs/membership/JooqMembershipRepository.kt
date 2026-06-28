@@ -338,6 +338,24 @@ class JooqMembershipRepository(
         }
     }
 
+    override fun remove(membershipId: UUID): Int {
+        val now = OffsetDateTime.now()
+        // Kick: cancel + null the paid window so the frontend grace («cancelled but paid until X») never
+        // applies — a removed member is fully out, unlike a voluntary leaver who keeps access until expiry.
+        val row = dsl.update(MEMBERSHIPS)
+            .set(MEMBERSHIPS.STATUS, MembershipStatus.cancelled)
+            .set(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT, null as OffsetDateTime?)
+            .set(MEMBERSHIPS.UPDATED_AT, now)
+            .where(MEMBERSHIPS.ID.eq(membershipId).and(MEMBERSHIPS.STATUS.ne(MembershipStatus.cancelled)))
+            .returningResult(MEMBERSHIPS.USER_ID, MEMBERSHIPS.CLUB_ID)
+            .fetchOne()
+        if (row != null) {
+            history.record(row.get(MEMBERSHIPS.USER_ID)!!, row.get(MEMBERSHIPS.CLUB_ID)!!, MembershipEvent.left, now)
+            return 1
+        }
+        return 0
+    }
+
     override fun activateSubscription(userId: UUID, clubId: UUID, expiresAt: OffsetDateTime): UUID {
         val id = UUID.randomUUID()
         val now = OffsetDateTime.now()

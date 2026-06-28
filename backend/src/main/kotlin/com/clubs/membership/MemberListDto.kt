@@ -100,6 +100,13 @@ data class RejectDuesRequest(
     val reason: String? = null
 )
 
+/** Organizer kicks a member from the club. Reason is mandatory (shown to the removed member in a DM). */
+data class RemoveMemberRequest(
+    @field:NotBlank(message = "Укажите причину удаления")
+    @field:Size(min = 5, max = 500, message = "Причина: от 5 до 500 символов")
+    val reason: String
+)
+
 /** Member admin S1 — set the private organizer note (null/blank clears it). */
 data class UpdateNoteRequest(
     @field:Size(max = 500, message = "Заметка: максимум 500 символов")

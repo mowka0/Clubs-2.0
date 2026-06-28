@@ -8,6 +8,7 @@ import {
   useMarkMemberDuesPaidMutation,
   useMemberProfileQuery,
   useRejectMemberMutation,
+  useRemoveMemberMutation,
   useRevokeMemberAwardMutation,
   useSetMemberAccessUntilMutation,
   useUpdateMemberNoteMutation,
@@ -252,6 +253,7 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
   const markPaid = useMarkMemberDuesPaidMutation();
   const freeze = useFreezeMemberMutation();
   const reject = useRejectMemberMutation();
+  const remove = useRemoveMemberMutation();
   const setAccess = useSetMemberAccessUntilMutation();
   const updateNote = useUpdateMemberNoteMutation();
   const [error, setError] = useState<string | null>(null);
@@ -259,9 +261,12 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
   const [noteDraft, setNoteDraft] = useState('');
   const [dateDraft, setDateDraft] = useState('');
   const [confirmingReject, setConfirmingReject] = useState(false);
+  const [confirmingKick, setConfirmingKick] = useState(false);
+  const [kickReason, setKickReason] = useState('');
   const [zoomedProof, setZoomedProof] = useState<string | null>(null);
 
-  const busy = markPaid.isPending || freeze.isPending || reject.isPending;
+  const busy = markPaid.isPending || freeze.isPending || reject.isPending || remove.isPending;
+  const KICK_REASON_MIN = 5;
   const savingEdit = setAccess.isPending || updateNote.isPending;
   const frozen = member.accessStatus === 'frozen';
   const expiresAt = member.subscriptionExpiresAt ?? null;
@@ -315,6 +320,24 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
     );
   };
 
+  const handleKick = () => {
+    const reason = kickReason.trim();
+    if (busy || reason.length < KICK_REASON_MIN) return;
+    setError(null);
+    haptic.impact('medium');
+    remove.mutate(
+      { clubId, userId: member.userId, reason },
+      {
+        onSuccess: () => { haptic.notify('success'); onDone(`${member.firstName} удалён(а) из клуба`); },
+        onError: (e) => {
+          if (e instanceof ApiError && e.status === 409) { onDone('Статус участника изменился'); return; }
+          haptic.notify('error');
+          setError(e instanceof Error ? e.message : 'Не удалось удалить');
+        },
+      },
+    );
+  };
+
   const handleSaveEdit = async () => {
     setError(null);
     const tasks: Promise<unknown>[] = [];
@@ -339,10 +362,6 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
     }
   };
 
-  const duesLabel = frozen
-    ? 'Взнос получен · открыть доступ'
-    : `Взнос получен · продлить до ${extendedEndLabel(expiresAt)}`;
-
   return (
     <div className="rd-org-gate">
       {/* Join-application answer (closed clubs) — review «why they joined» alongside the payment proof. */}
@@ -352,24 +371,14 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
         </div>
       )}
 
-      {isPaidMember && (
-        <>
-          {/* Active paid member: subscription-until strip. Frozen members get the compact claim card below
-              instead (no separate «Доступ закрыт» strip — it would just repeat «ждёт оплаты»). */}
-          {!frozen && (
-            <div className={`rd-sub-strip${soon ? ' rd-soon' : ''}`}>
-              <div style={{ minWidth: 0 }}>
-                <div className="rd-sub-strip-k">Подписка активна до</div>
-                <div className="rd-sub-strip-v">
-                  {expiresAt ? `${formatDateFull(expiresAt)} · ${relativeUntil(expiresAt)}` : '—'}
-                </div>
-              </div>
-            </div>
-          )}
+      {/* «Управление участником» panel (R1): subscription summary + paired actions, private note, and the
+          destructive «Удалить из клуба» in the footer — distinct from «Закрыть доступ» (a reversible pause). */}
+      <div className="rd-mgmt">
+        <div className="rd-mgmt-h">⚙ Управление участником</div>
 
-          {/* Frozen member: one compact card — status line + (if claimed) the payment proof as a tappable
-              thumbnail that zooms in ImageLightbox (same viewer as the skladchina receipt). */}
-          {frozen && (
+        {/* FROZEN paid member: review the dues claim, then open access or reject+refund the paid join. */}
+        {isPaidMember && frozen && (
+          <div className="rd-mgmt-body">
             <div className="rd-claim rd-claim-compact">
               <div className="rd-claim-h">
                 {claim
@@ -385,90 +394,106 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
                 <div className="rd-claim-note">Наличные — скриншота нет, подтвердите после получения.</div>
               ) : null}
             </div>
-          )}
-
-          <div className="rd-org-gate-acts">
-            <button type="button" className="rd-btn-primary" disabled={busy} onClick={() => run(markPaid, duesLabel.includes('открыть') ? `Доступ ${member.firstName} открыт` : `Доступ ${member.firstName} продлён на 30 дней`)}>
-              {markPaid.isPending ? <Spinner size="s" /> : duesLabel}
+            <button type="button" className="rd-btn-primary" disabled={busy} onClick={() => run(markPaid, `Доступ ${member.firstName} открыт`)}>
+              {markPaid.isPending ? <Spinner size="s" /> : 'Взнос получен · открыть доступ'}
             </button>
-            {!frozen && (
-              <button
-                type="button"
-                className="rd-btn-outline"
-                style={{ color: 'var(--danger)' }}
-                disabled={busy}
-                onClick={() => run(freeze, `Доступ ${member.firstName} закрыт`)}
-              >
-                {freeze.isPending ? <Spinner size="s" /> : 'Закрыть доступ'}
-              </button>
-            )}
-            {/* B+C: reject a paid join (refund offline). Frozen-only; two-tap confirm — it removes the member. */}
-            {frozen && !confirmingReject && (
-              <button type="button" className="rd-btn-outline" style={{ color: 'var(--danger)' }} disabled={busy} onClick={() => { setError(null); setConfirmingReject(true); }}>
+            {!confirmingReject ? (
+              <button type="button" className="rd-mgmt-kill" disabled={busy} onClick={() => { setError(null); setConfirmingReject(true); }}>
                 Отказать · вернуть перевод
               </button>
-            )}
-            {frozen && confirmingReject && (
+            ) : (
               <div className="rd-reject-confirm">
                 <div className="rd-reject-q">Убрать {member.firstName} из клуба? Перевод вернёте сами — платформа деньги не держит.</div>
                 <div className="rd-org-gate-acts">
-                  <button type="button" className="rd-btn-outline" style={{ color: 'var(--danger)' }} disabled={busy} onClick={handleReject}>
+                  <button type="button" className="rd-btn-outline" disabled={busy} onClick={() => setConfirmingReject(false)}>Отмена</button>
+                  <button type="button" className="rd-btn-primary rd-btn-danger" disabled={busy} onClick={handleReject}>
                     {reject.isPending ? <Spinner size="s" /> : 'Отказать и вернуть'}
-                  </button>
-                  <button type="button" className="rd-btn-outline" disabled={busy} onClick={() => setConfirmingReject(false)}>
-                    Отмена
                   </button>
                 </div>
               </div>
             )}
           </div>
-        </>
-      )}
+        )}
 
-      {error && <div className="rd-error" style={{ textAlign: 'left' }}>{error}</div>}
-
-      {/* Edit mode (toggled by the header ✎): note + custom date. Awards live above (under interests),
-          managed inline. The private note shows read-only when not editing. */}
-      {!editing && organizerNote && (
-        <div className="rd-org-note-read">
-          <span className="rd-org-note-k">Заметка</span>{organizerNote}
-        </div>
-      )}
-      {editing && (
-        <div className="rd-org-edit">
-          {isPaidMember && (
-            <label className="rd-field">
-              <span className="rd-label">Своя дата окончания доступа</span>
-              <input
-                type="date"
-                className="rd-input"
-                value={dateDraft}
-                min={today}
-                onChange={(e) => setDateDraft(e.target.value)}
-              />
-            </label>
-          )}
-          <label className="rd-field">
-            <span className="rd-label">Заметка (видите только вы)</span>
-            <textarea
-              className="rd-textarea"
-              rows={3}
-              maxLength={500}
-              placeholder="Например: помогает с площадкой для встреч"
-              value={noteDraft}
-              onChange={(e) => setNoteDraft(e.target.value)}
-            />
-          </label>
-          <div className="rd-org-gate-acts">
-            <button type="button" className="rd-btn-primary" disabled={savingEdit} onClick={handleSaveEdit}>
-              {savingEdit ? <Spinner size="s" /> : 'Сохранить'}
-            </button>
-            <button type="button" className="rd-btn-outline" disabled={savingEdit} onClick={() => onEditingChange(false)}>
-              Отмена
-            </button>
+        {/* ACTIVE paid member (R1): status summary + paired «Взнос получен» / «Закрыть доступ». */}
+        {isPaidMember && !frozen && (
+          <div className="rd-mgmt-body">
+            <div className={`rd-mgmt-sum${soon ? ' rd-soon' : ''}`}>
+              <span className="rd-mgmt-dot" aria-hidden="true" />
+              <div>
+                <div className="rd-mgmt-sum-v">Подписка активна</div>
+                <div className="rd-mgmt-sum-k">{expiresAt ? `до ${formatDateFull(expiresAt)} · ${relativeUntil(expiresAt)}` : '—'}</div>
+              </div>
+            </div>
+            <div className="rd-mgmt-pair">
+              <button type="button" className="rd-mgmt-pb primary" disabled={busy} onClick={() => run(markPaid, `Доступ ${member.firstName} продлён на 30 дней`)}>
+                {markPaid.isPending ? <Spinner size="s" /> : <>Взнос получен<small>+30 дн · до {extendedEndLabel(expiresAt)}</small></>}
+              </button>
+              <button type="button" className="rd-mgmt-pb" disabled={busy} onClick={() => run(freeze, `Доступ ${member.firstName} закрыт`)}>
+                {freeze.isPending ? <Spinner size="s" /> : 'Закрыть доступ'}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {error && <div className="rd-error" style={{ textAlign: 'left', padding: '0 14px 4px' }}>{error}</div>}
+
+        {/* Edit mode (header ✎): «своя дата» + note. Otherwise the read-only note + the kick footer. */}
+        {editing ? (
+          <div className="rd-mgmt-body rd-org-edit">
+            {isPaidMember && (
+              <label className="rd-field">
+                <span className="rd-label">Своя дата окончания доступа</span>
+                <input type="date" className="rd-input" value={dateDraft} min={today} onChange={(e) => setDateDraft(e.target.value)} />
+              </label>
+            )}
+            <label className="rd-field">
+              <span className="rd-label">Заметка (видите только вы)</span>
+              <textarea className="rd-textarea" rows={3} maxLength={500} placeholder="Например: помогает с площадкой для встреч" value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} />
+            </label>
+            <div className="rd-org-gate-acts">
+              <button type="button" className="rd-btn-primary" disabled={savingEdit} onClick={handleSaveEdit}>{savingEdit ? <Spinner size="s" /> : 'Сохранить'}</button>
+              <button type="button" className="rd-btn-outline" disabled={savingEdit} onClick={() => onEditingChange(false)}>Отмена</button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {organizerNote && (
+              <div className="rd-mgmt-note">
+                <span className="rd-mgmt-note-k">Заметка</span><span className="rd-mgmt-note-t">{organizerNote}</span>
+              </div>
+            )}
+            {/* «Удалить из клуба» — active/free members only (frozen paid joins use «Отказать·вернуть» above). */}
+            {!frozen && (
+              !confirmingKick ? (
+                <div className="rd-mgmt-killzone">
+                  <button type="button" className="rd-mgmt-kill" disabled={busy} onClick={() => { setError(null); setKickReason(''); setConfirmingKick(true); }}>
+                    Удалить из клуба
+                  </button>
+                </div>
+              ) : (
+                <div className="rd-mgmt-killconfirm">
+                  <div className="rd-reject-q">Удалить {member.firstName} из клуба? Доступ закроется сразу. Если оплатил — возврат на ваше усмотрение (деньги вне платформы).</div>
+                  <textarea
+                    className="rd-textarea"
+                    rows={2}
+                    maxLength={500}
+                    placeholder={`Причина (увидит участник) — минимум ${KICK_REASON_MIN} символов`}
+                    value={kickReason}
+                    onChange={(e) => setKickReason(e.target.value)}
+                  />
+                  <div className="rd-org-gate-acts">
+                    <button type="button" className="rd-btn-outline" disabled={busy} onClick={() => setConfirmingKick(false)}>Отмена</button>
+                    <button type="button" className="rd-btn-primary rd-btn-danger" disabled={busy || kickReason.trim().length < KICK_REASON_MIN} onClick={handleKick}>
+                      {remove.isPending ? <Spinner size="s" /> : 'Удалить из клуба'}
+                    </button>
+                  </div>
+                </div>
+              )
+            )}
+          </>
+        )}
+      </div>
 
       <ImageLightbox src={zoomedProof} alt="Скриншот оплаты" onClose={() => setZoomedProof(null)} />
     </div>

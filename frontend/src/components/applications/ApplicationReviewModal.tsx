@@ -1,4 +1,4 @@
-import { FC, useEffect, useState } from 'react';
+import { FC, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -55,6 +55,15 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
   const [rejectMode, setRejectMode] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const rejectFieldRef = useRef<HTMLDivElement>(null);
+
+  // Reveal-then-reach: when reject mode opens, the reason field is appended at the end of the scrollable
+  // body — below the fold. Scroll it into view + focus so the organizer isn't left wondering where to type.
+  useEffect(() => {
+    if (!rejectMode) return;
+    rejectFieldRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('reject-reason')?.focus({ preventScroll: true });
+  }, [rejectMode]);
 
   // Lock body scroll while modal is open and reset internal state every time
   // it opens — otherwise reopening with the same modal instance leaks stale
@@ -254,7 +263,7 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
 
           {/* Reject-mode textarea inline so users see context above */}
           {rejectMode && (
-            <div className="rd-field">
+            <div className="rd-field" ref={rejectFieldRef}>
               <span className="rd-label">Причина отказа</span>
               <textarea
                 id="reject-reason"

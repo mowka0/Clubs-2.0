@@ -91,6 +91,18 @@ class MemberController(
     ): ResponseEntity<MembershipDto> =
         ResponseEntity.ok(accessGateService.rejectMember(clubId, userId, caller.userId, request?.reason))
 
+    // Organizer kick: remove a member from the club for cause (reason mandatory, DM'd to the member).
+    // Owner-only; distinct from «Закрыть доступ» (freeze) — this cancels the membership and revokes access.
+    @RequiresOrganizer(clubIdParam = "clubId")
+    @PostMapping("/{clubId}/members/{userId}/remove")
+    fun removeMember(
+        @PathVariable clubId: UUID,
+        @PathVariable userId: UUID,
+        @Valid @RequestBody request: RemoveMemberRequest,
+        @AuthenticationPrincipal caller: AuthenticatedUser
+    ): ResponseEntity<MembershipDto> =
+        ResponseEntity.ok(accessGateService.removeMember(clubId, userId, caller.userId, request.reason))
+
     @RequiresOrganizer(clubIdParam = "clubId")
     @PostMapping("/{clubId}/members/{userId}/dues-unpaid")
     fun unmarkDues(

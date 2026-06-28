@@ -364,6 +364,36 @@
 
 /* Organizer gate inside the profile card */
 .rd-org-gate { margin-top: 16px; }
+
+/* «Управление участником» panel (R1): grouped, compact management controls. */
+.rd-mgmt { border: 1px solid var(--hairline-2); border-radius: 18px; background: rgba(255, 255, 255, 0.022); overflow: hidden; }
+[data-theme="light"] .rd-mgmt { background: rgba(0, 0, 0, 0.018); }
+.rd-mgmt-h { font-size: 11px; letter-spacing: 0.06em; color: var(--accent); font-weight: 700; text-transform: uppercase; padding: 13px 15px 0; }
+.rd-mgmt-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.rd-mgmt-body .rd-claim-compact { margin-bottom: 0; }
+.rd-mgmt-sum { display: flex; align-items: flex-start; gap: 10px; }
+.rd-mgmt-dot { width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 4px var(--live-soft); flex-shrink: 0; }
+.rd-mgmt-sum.rd-soon .rd-mgmt-dot { background: var(--danger); box-shadow: 0 0 0 4px var(--danger-soft); }
+.rd-mgmt-sum-v { font-size: 14.5px; font-weight: 800; color: var(--text); }
+.rd-mgmt-sum-k { font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
+.rd-mgmt-sum.rd-soon .rd-mgmt-sum-k { color: var(--danger); }
+.rd-mgmt-pair { display: flex; gap: 9px; }
+.rd-mgmt-pb {
+  flex: 1; border-radius: 11px; padding: 11px 8px; font-family: inherit; cursor: pointer; min-width: 0;
+  font-size: 13px; font-weight: 700; text-align: center;
+  border: 1px solid var(--hairline-2); background: var(--surface-2); color: var(--text);
+}
+.rd-mgmt-pb.primary { border: 0; background: var(--accent-grad); color: #fff; box-shadow: 0 5px 14px var(--accent-shadow-soft); }
+.rd-mgmt-pb.primary small { display: block; font-size: 10.5px; font-weight: 600; opacity: 0.92; margin-top: 1px; }
+.rd-mgmt-pb:disabled { opacity: 0.5; cursor: default; }
+.rd-mgmt-note { border-top: 1px solid var(--hairline); padding: 11px 15px; display: flex; gap: 9px; font-size: 12.5px; color: var(--text-dim); line-height: 1.45; }
+.rd-mgmt-note-k { color: var(--text-faint); font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; padding-top: 2px; flex-shrink: 0; }
+.rd-mgmt-killzone { border-top: 1px solid var(--hairline); padding: 10px 15px; display: flex; justify-content: center; }
+.rd-mgmt-kill { background: none; border: 0; color: var(--danger); font-size: 12.5px; font-weight: 600; font-family: inherit; cursor: pointer; padding: 6px 4px; }
+.rd-mgmt-kill:disabled { opacity: 0.5; cursor: default; }
+.rd-mgmt-killconfirm { border-top: 1px solid var(--hairline); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.rd-btn-primary.rd-btn-danger { background: #E0574F; box-shadow: none; }
+
 .rd-sub-strip {
   display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 14px; margin-bottom: 12px;
   background: var(--live-soft); border: 1px solid rgba(102, 212, 154, 0.28);
@@ -1108,8 +1138,19 @@
 }
 .rd-sheet-edit.on { border-color: var(--accent); }
 .rd-sheet-body { overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
-.rd-sheet-actions { display: flex; gap: 10px; margin-top: 16px; flex-shrink: 0; }
+.rd-sheet-actions { display: flex; gap: 10px; margin-top: 16px; flex-shrink: 0; position: relative; }
 .rd-sheet-actions > .rd-btn-primary, .rd-sheet-actions > .rd-btn-outline { flex: 1; width: auto; }
+/* Scroll affordance: a soft fade above the sticky action bar so it's clear the body keeps going
+   (e.g. the «Причина отказа» field appears below the fold). Spans the full sheet width (negative
+   inset cancels the 16px sheet padding); invisible when the body fits (gradient over the sheet bg). */
+.rd-sheet-actions::before {
+  content: ''; position: absolute; left: -16px; right: -16px; top: -30px; height: 30px;
+  pointer-events: none; z-index: 1;
+  background: linear-gradient(to top, rgba(11, 11, 14, 0.7), rgba(11, 11, 14, 0));
+}
+[data-theme="light"] .rd-sheet-actions::before {
+  background: linear-gradient(to top, rgba(247, 246, 243, 0.92), rgba(247, 246, 243, 0));
+}
 
 /* horizontal country-tab chips inside a sheet */
 .rd-sheet-tabs { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 14px; padding-bottom: 2px; flex-shrink: 0; }

@@ -141,6 +141,38 @@ class ApplicationServiceTest {
     }
 
     @Test
+    fun `submitApplication self-heals an orphaned approved application after removal`() {
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val club = createClosedClub(clubId, ownerId, subscriptionPrice = 0)
+        val request = SubmitApplicationRequest(answerText = "again")
+        val orphanApp = createPendingApplication(userId, clubId, null)
+            .copy(status = ApplicationStatus.approved)
+        val cancelledMembership = com.clubs.membership.Membership(
+            id = UUID.randomUUID(), userId = userId, clubId = clubId,
+            status = com.clubs.generated.jooq.enums.MembershipStatus.cancelled,
+            role = com.clubs.generated.jooq.enums.MembershipRole.member,
+            joinedAt = OffsetDateTime.now(), subscriptionExpiresAt = null,
+            createdAt = OffsetDateTime.now(), updatedAt = OffsetDateTime.now()
+        )
+
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
+        every { applicationRepository.findActiveByUserAndClub(userId, clubId) } returns orphanApp
+        every { membershipRepository.findByUserAndClub(userId, clubId) } returns cancelledMembership
+        every { applicationRepository.countTodayByUser(userId) } returns 0
+        every { applicationRepository.create(userId, clubId, "again") } returns createPendingApplication(userId, clubId, "again")
+
+        val result = applicationService.submitApplication(clubId, userId, request)
+
+        assertEquals("pending", result.status)
+        // The stale approved row is cleared, then a fresh application is created — no «уже существует».
+        verify(exactly = 1) { applicationRepository.deleteActiveByUserAndClub(userId, clubId) }
+        verify(exactly = 1) { applicationRepository.create(userId, clubId, "again") }
+    }
+
+    @Test
     fun `submitApplication should throw ValidationException when club is not closed`() {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()

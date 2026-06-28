@@ -10,6 +10,7 @@ import com.clubs.common.exception.RateLimitException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ApplicationStatus
+import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.interest.InterestRepository
 import com.clubs.membership.MembershipActivator
 import com.clubs.membership.MembershipDto
@@ -60,10 +61,22 @@ class ApplicationService(
         val existingMembership = membershipRepository.findActiveByUserAndClub(userId, clubId)
         if (existingMembership != null) throw ConflictException("Already a member")
 
-        // De-Stars: an approved application now means a membership already exists (approve creates it),
-        // so the membership check above catches that case first as "Already a member".
+        // De-Stars: an approved application normally pairs with a frozen/active membership (approve
+        // creates it). If the membership was later cancelled (removed / rejected / left), the approved
+        // application is orphaned — self-heal it so the user can re-apply instead of being stuck on
+        // «Заявка одобрена». A genuinely pending application still blocks a duplicate.
         val activeApp = applicationRepository.findActiveByUserAndClub(userId, clubId)
-        if (activeApp != null) throw ConflictException("Application already exists")
+        if (activeApp != null) {
+            val priorMembership = membershipRepository.findByUserAndClub(userId, clubId)
+            val orphanedApproval = activeApp.status == ApplicationStatus.approved &&
+                priorMembership?.status == MembershipStatus.cancelled
+            if (orphanedApproval) {
+                applicationRepository.deleteActiveByUserAndClub(userId, clubId)
+                log.info("Cleared orphaned approved application on re-apply: clubId={} userId={}", clubId, userId)
+            } else {
+                throw ConflictException("Application already exists")
+            }
+        }
 
         val todayCount = applicationRepository.countTodayByUser(userId)
         if (todayCount >= MAX_APPLICATIONS_PER_DAY) throw RateLimitException("Too many applications today")

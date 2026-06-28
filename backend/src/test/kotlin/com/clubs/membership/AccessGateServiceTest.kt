@@ -22,6 +22,7 @@ class AccessGateServiceTest {
     private lateinit var membershipRepository: MembershipRepository
     private lateinit var userRepository: com.clubs.user.UserRepository
     private lateinit var clubRepository: com.clubs.club.ClubRepository
+    private lateinit var applicationRepository: com.clubs.application.ApplicationRepository
     private lateinit var notificationService: com.clubs.bot.NotificationService
     private lateinit var service: AccessGateService
 
@@ -34,11 +35,13 @@ class AccessGateServiceTest {
         membershipRepository = mockk(relaxed = true)
         userRepository = mockk(relaxed = true)
         clubRepository = mockk(relaxed = true)
+        applicationRepository = mockk(relaxed = true)
         notificationService = mockk(relaxed = true)
         // Empty base-url mirrors production (uploader returns root-relative "/uploads/...").
         service = AccessGateService(
             membershipRepository, MembershipMapper(), accessPeriodDays = 30, storageBaseUrl = "",
-            userRepository = userRepository, clubRepository = clubRepository, notificationService = notificationService
+            userRepository = userRepository, clubRepository = clubRepository,
+            applicationRepository = applicationRepository, notificationService = notificationService
         )
     }
 
@@ -254,6 +257,48 @@ class AccessGateServiceTest {
         val result = service.claimDues(clubId, callerId, "cash", null)
 
         assertEquals("cash", result.duesClaimMethod)
+    }
+
+    // --- removeMember (organizer kick) ---
+
+    @Test
+    fun `removeMember cancels an active member and DMs the reason`() {
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns membership(MembershipStatus.active)
+        every { membershipRepository.remove(any()) } returns 1
+        val club = mockk<com.clubs.club.Club>(relaxed = true)
+        every { club.name } returns "Бег по утрам"
+        every { clubRepository.findById(clubId) } returns club
+        val member = mockk<UsersRecord>(relaxed = true) { every { telegramId } returns 55L }
+        every { userRepository.findById(targetUserId) } returns member
+
+        val result = service.removeMember(clubId, targetUserId, callerId, "нарушение правил клуба")
+
+        assertEquals("cancelled", result.status)
+        verify(exactly = 1) { membershipRepository.remove(any()) }
+        // Orphan-application cleanup so the removed member can re-apply cleanly.
+        verify(exactly = 1) { applicationRepository.deleteActiveByUserAndClub(targetUserId, clubId) }
+        verify(exactly = 1) { notificationService.sendDirectMessage(55L, match { it.contains("нарушение правил клуба") }) }
+    }
+
+    @Test
+    fun `removeMember rejects a reason shorter than 5 chars`() {
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns membership(MembershipStatus.active)
+        assertThrows<ValidationException> { service.removeMember(clubId, targetUserId, callerId, " ок ") }
+        verify(exactly = 0) { membershipRepository.remove(any()) }
+    }
+
+    @Test
+    fun `removeMember rejects an already-cancelled member`() {
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns membership(MembershipStatus.cancelled)
+        assertThrows<ValidationException> { service.removeMember(clubId, targetUserId, callerId, "нарушение правил") }
+        verify(exactly = 0) { membershipRepository.remove(any()) }
+    }
+
+    @Test
+    fun `removeMember refuses to remove the organizer`() {
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns membership(MembershipStatus.active, MembershipRole.organizer)
+        assertThrows<ValidationException> { service.removeMember(clubId, targetUserId, callerId, "нарушение правил") }
+        verify(exactly = 0) { membershipRepository.remove(any()) }
     }
 
     @Test

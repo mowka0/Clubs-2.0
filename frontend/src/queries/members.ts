@@ -13,6 +13,7 @@ import {
   grantMemberAward,
   markMemberDuesPaid,
   rejectMember,
+  removeMember,
   revokeMemberAward,
   setMemberAccessUntil,
   unfreezeMember,
@@ -105,6 +106,17 @@ export function useRejectMemberMutation() {
   return useMutation({
     mutationFn: ({ clubId, userId, reason }: MemberGateArgs & { reason?: string | null }) =>
       rejectMember(clubId, userId, reason),
+    onSuccess: (_data, { clubId }) => invalidateAfterMemberGateAction(qc, clubId),
+  });
+}
+
+/** Organizer kick: remove a member from the club (reason mandatory). Same invalidations as the other
+ *  gate actions (roster buckets + red-dot + cross-club «Ждут оплаты»). */
+export function useRemoveMemberMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId, reason }: MemberGateArgs & { reason: string }) =>
+      removeMember(clubId, userId, reason),
     onSuccess: (_data, { clubId }) => invalidateAfterMemberGateAction(qc, clubId),
   });
 }

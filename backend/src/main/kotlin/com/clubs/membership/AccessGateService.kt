@@ -1,5 +1,6 @@
 package com.clubs.membership
 
+import com.clubs.application.ApplicationRepository
 import com.clubs.bot.NotificationService
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
@@ -36,6 +37,7 @@ class AccessGateService(
     @Value("\${s3.base-url:}") private val storageBaseUrl: String,
     private val userRepository: UserRepository,
     private val clubRepository: ClubRepository,
+    private val applicationRepository: ApplicationRepository,
     private val notificationService: NotificationService
 ) {
     private val log = LoggerFactory.getLogger(AccessGateService::class.java)
@@ -175,9 +177,50 @@ class AccessGateService(
             throw ValidationException("Отклонить вступление можно только пока доступ не открыт")
         }
         membershipRepository.cancel(membership.id)
-        log.info("Join rejected (refund): clubId={} targetUserId={} by={} hasReason={}", clubId, targetUserId, callerId, reason != null)
+        // Clear the approved/pending application too (mirrors /leave) — otherwise an orphaned `approved`
+        // application leaves the user stuck on «Заявка одобрена» and unable to re-apply.
+        val cascaded = applicationRepository.deleteActiveByUserAndClub(targetUserId, clubId)
+        log.info("Join rejected (refund): clubId={} targetUserId={} by={} hasReason={} cascadedApplications={}", clubId, targetUserId, callerId, reason != null, cascaded)
         notifyRejected(targetUserId, reason)
         return mapper.toDto(membership.copy(status = MembershipStatus.cancelled))
+    }
+
+    // Organizer kick (member admin): remove any member (active or frozen) from the club for cause. Unlike
+    // «Закрыть доступ» (freeze = reversible pause, still a member) this cancels the membership and clears the
+    // paid window so access is lost immediately. Reason is mandatory and DM'd to the member. Owner-only
+    // (controller gate); the organizer can't be removed. Refund (if a paid member) is the organizer's offline
+    // call — like reject, the platform is outside the money flow.
+    @Transactional
+    fun removeMember(clubId: UUID, targetUserId: UUID, callerId: UUID, reason: String): MembershipDto {
+        val membership = loadManageableMember(clubId, targetUserId)
+        if (membership.status == MembershipStatus.cancelled) {
+            throw ValidationException("Участник уже не в клубе")
+        }
+        val cleanReason = reason.trim()
+        if (cleanReason.length < MIN_REASON_LENGTH) {
+            throw ValidationException("Причина должна быть не короче $MIN_REASON_LENGTH символов")
+        }
+        guardApplied(membershipRepository.remove(membership.id))
+        // Clear any approved/pending application so the removed member can re-apply cleanly (no orphan
+        // «Заявка одобрена»). Mirrors /leave + reject.
+        val cascaded = applicationRepository.deleteActiveByUserAndClub(targetUserId, clubId)
+        log.info("Member removed (kick): clubId={} targetUserId={} by={} cascadedApplications={}", clubId, targetUserId, callerId, cascaded)
+        notifyRemoved(targetUserId, clubId, cleanReason)
+        return mapper.toDto(membership.copy(status = MembershipStatus.cancelled, subscriptionExpiresAt = null))
+    }
+
+    // Best-effort DM to the removed member with the organizer's reason. Never aborts the removal.
+    private fun notifyRemoved(targetUserId: UUID, clubId: UUID, reason: String) {
+        try {
+            val telegramId = userRepository.findById(targetUserId)?.telegramId ?: return
+            val clubName = clubRepository.findById(clubId)?.name ?: "клуб"
+            notificationService.sendDirectMessage(
+                telegramId,
+                "Организатор удалил вас из клуба «$clubName».\nПричина: $reason"
+            )
+        } catch (e: Exception) {
+            log.warn("Failed to DM removed member (non-fatal): targetUserId={} error={}", targetUserId, e.message)
+        }
     }
 
     // Best-effort DM — the member paid off-platform, so tell them to expect a refund. Never aborts the reject.
@@ -227,6 +270,8 @@ class AccessGateService(
     companion object {
         const val CLAIM_SBP = "sbp"
         const val CLAIM_CASH = "cash"
+        // Mirrors RemoveMemberRequest @Size(min=5); re-checked after trim in removeMember.
+        private const val MIN_REASON_LENGTH = 5
         // The storage-relative path our uploader writes: "uploads/{uuid}.{ext}" (StorageController).
         private val UPLOADS_PATH = Regex("^uploads/[\\w.-]+\\.(jpg|jpeg|png)$", RegexOption.IGNORE_CASE)
     }

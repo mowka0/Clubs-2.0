@@ -58,8 +58,11 @@ class MembershipService(
         if (membership.status == MembershipStatus.cancelled) throw ValidationException("Membership already cancelled")
 
         membershipRepository.cancel(membership.id)
+        // Mirror /leave: clear the active application so a cancelled member isn't stuck on an orphan
+        // «Заявка одобрена» and can re-apply.
+        val cascadedApplications = applicationRepository.deleteActiveByUserAndClub(userId, clubId)
 
-        log.info("Membership cancelled: clubId={} userId={}", clubId, userId)
+        log.info("Membership cancelled: clubId={} userId={} cascadedApplications={}", clubId, userId, cascadedApplications)
         return mapper.toDto(membership.copy(status = MembershipStatus.cancelled))
     }
 

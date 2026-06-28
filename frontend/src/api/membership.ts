@@ -110,6 +110,11 @@ export function rejectMember(clubId: string, userId: string, reason?: string | n
   return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/reject-dues`, { reason: reason ?? null });
 }
 
+/** Organizer kick: remove a member from the club (reason mandatory ≥5 chars, DM'd to the member). */
+export function removeMember(clubId: string, userId: string, reason: string): Promise<MembershipDto> {
+  return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/remove`, { reason });
+}
+
 /**
  * Member admin profile (S1), owner-only:
  *  - setMemberAccessUntil — set a custom access-window end («своя дата»); `until` is an ISO datetime,
