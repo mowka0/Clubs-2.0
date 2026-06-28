@@ -238,6 +238,7 @@ function toFrozenMemberStub(dues: OrganizerDuesMemberDto): MemberListItemDto {
     trust: null,
     promiseFulfillmentPct: null,
     totalConfirmations: null,
+    awards: [],
     accessStatus: 'frozen',
     subscriptionExpiresAt: dues.subscriptionExpiresAt,
   };
