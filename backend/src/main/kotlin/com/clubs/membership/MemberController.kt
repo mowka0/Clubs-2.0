@@ -79,6 +79,18 @@ class MemberController(
     ): ResponseEntity<MembershipDto> =
         ResponseEntity.ok(accessGateService.markDuesPaid(clubId, userId, caller.userId))
 
+    // De-Stars B+C: reject a paid join (instead of «Взнос получен»). Owner-only; removes the frozen
+    // member, refund is the organizer's offline responsibility. Reason optional.
+    @RequiresOrganizer(clubIdParam = "clubId")
+    @PostMapping("/{clubId}/members/{userId}/reject-dues")
+    fun rejectMember(
+        @PathVariable clubId: UUID,
+        @PathVariable userId: UUID,
+        @Valid @RequestBody(required = false) request: RejectDuesRequest?,
+        @AuthenticationPrincipal caller: AuthenticatedUser
+    ): ResponseEntity<MembershipDto> =
+        ResponseEntity.ok(accessGateService.rejectMember(clubId, userId, caller.userId, request?.reason))
+
     @RequiresOrganizer(clubIdParam = "clubId")
     @PostMapping("/{clubId}/members/{userId}/dues-unpaid")
     fun unmarkDues(

@@ -12,6 +12,7 @@ import {
   getOrganizerAwaitingDues,
   grantMemberAward,
   markMemberDuesPaid,
+  rejectMember,
   revokeMemberAward,
   setMemberAccessUntil,
   unfreezeMember,
@@ -93,6 +94,17 @@ export function useUnfreezeMemberMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ clubId, userId }: MemberGateArgs) => unfreezeMember(clubId, userId),
+    onSuccess: (_data, { clubId }) => invalidateAfterMemberGateAction(qc, clubId),
+  });
+}
+
+/** B+C: reject a paid join (refund offline) — removes the frozen member. Same invalidations as the
+ *  other gate actions (buckets + red-dot + cross-club «Ждут оплаты»). */
+export function useRejectMemberMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId, reason }: MemberGateArgs & { reason?: string | null }) =>
+      rejectMember(clubId, userId, reason),
     onSuccess: (_data, { clubId }) => invalidateAfterMemberGateAction(qc, clubId),
   });
 }

@@ -7,6 +7,7 @@ import {
   useGrantMemberAwardMutation,
   useMarkMemberDuesPaidMutation,
   useMemberProfileQuery,
+  useRejectMemberMutation,
   useRevokeMemberAwardMutation,
   useSetMemberAccessUntilMutation,
   useUpdateMemberNoteMutation,
@@ -239,6 +240,7 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
   const haptic = useHaptic();
   const markPaid = useMarkMemberDuesPaidMutation();
   const freeze = useFreezeMemberMutation();
+  const reject = useRejectMemberMutation();
   const setAccess = useSetMemberAccessUntilMutation();
   const updateNote = useUpdateMemberNoteMutation();
   const [error, setError] = useState<string | null>(null);
@@ -246,8 +248,9 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
   const [editing, setEditing] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
   const [dateDraft, setDateDraft] = useState('');
+  const [confirmingReject, setConfirmingReject] = useState(false);
 
-  const busy = markPaid.isPending || freeze.isPending;
+  const busy = markPaid.isPending || freeze.isPending || reject.isPending;
   const savingEdit = setAccess.isPending || updateNote.isPending;
   const frozen = member.accessStatus === 'frozen';
   const expiresAt = member.subscriptionExpiresAt ?? null;
@@ -270,6 +273,23 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
           if (e instanceof ApiError && e.status === 409) { onDone('Статус участника изменился'); return; }
           haptic.notify('error');
           setError(e instanceof Error ? e.message : 'Не удалось выполнить действие');
+        },
+      },
+    );
+  };
+
+  const handleReject = () => {
+    if (busy) return;
+    setError(null);
+    haptic.impact('medium');
+    reject.mutate(
+      { clubId, userId: member.userId },
+      {
+        onSuccess: () => { haptic.notify('success'); onDone(`Вступление ${member.firstName} отклонено`); },
+        onError: (e) => {
+          if (e instanceof ApiError && e.status === 409) { onDone('Статус участника изменился'); return; }
+          haptic.notify('error');
+          setError(e instanceof Error ? e.message : 'Не удалось отклонить');
         },
       },
     );
@@ -365,6 +385,25 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
               >
                 {freeze.isPending ? <Spinner size="s" /> : 'Закрыть доступ'}
               </button>
+            )}
+            {/* B+C: reject a paid join (refund offline). Frozen-only; two-tap confirm — it removes the member. */}
+            {frozen && !confirmingReject && (
+              <button type="button" className="rd-btn-outline" style={{ color: 'var(--danger)' }} disabled={busy} onClick={() => { setError(null); setConfirmingReject(true); }}>
+                Отказать · вернуть перевод
+              </button>
+            )}
+            {frozen && confirmingReject && (
+              <div className="rd-reject-confirm">
+                <div className="rd-reject-q">Убрать {member.firstName} из клуба? Перевод вернёте сами — платформа деньги не держит.</div>
+                <div className="rd-org-gate-acts">
+                  <button type="button" className="rd-btn-outline" style={{ color: 'var(--danger)' }} disabled={busy} onClick={handleReject}>
+                    {reject.isPending ? <Spinner size="s" /> : 'Отказать и вернуть'}
+                  </button>
+                  <button type="button" className="rd-btn-outline" disabled={busy} onClick={() => setConfirmingReject(false)}>
+                    Отмена
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </>

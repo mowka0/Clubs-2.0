@@ -1,10 +1,12 @@
 package com.clubs.membership
 
+import com.clubs.bot.NotificationService
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
+import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -30,7 +32,9 @@ class AccessGateService(
     @Value("\${membership.access-period-days:30}") private val accessPeriodDays: Long,
     // Storage origin our uploader prefixes to screenshots ("{base}/uploads/..."); empty in prod → URLs
     // come back root-relative ("/uploads/..."). Used to validate a dues-claim proof is OUR upload.
-    @Value("\${s3.base-url:}") private val storageBaseUrl: String
+    @Value("\${s3.base-url:}") private val storageBaseUrl: String,
+    private val userRepository: UserRepository,
+    private val notificationService: NotificationService
 ) {
     private val log = LoggerFactory.getLogger(AccessGateService::class.java)
 
@@ -139,6 +143,34 @@ class AccessGateService(
         return mapper.toDto(
             membership.copy(duesClaimedAt = OffsetDateTime.now(), duesClaimMethod = normalizedMethod, duesProofUrl = proof)
         )
+    }
+
+    // De-Stars B+C: the organizer rejects a paid join (instead of «Взнос получен») — the member paid but
+    // the organizer doesn't admit them. Removes them from the club; the refund is the organizer's offline
+    // responsibility (platform is outside the money flow). Frozen-only — an already-admitted member is
+    // managed via freeze, not reject.
+    @Transactional
+    fun rejectMember(clubId: UUID, targetUserId: UUID, callerId: UUID, reason: String?): MembershipDto {
+        val membership = loadManageableMember(clubId, targetUserId)
+        if (membership.status != MembershipStatus.frozen) {
+            throw ValidationException("Отклонить вступление можно только пока доступ не открыт")
+        }
+        membershipRepository.cancel(membership.id)
+        log.info("Join rejected (refund): clubId={} targetUserId={} by={} hasReason={}", clubId, targetUserId, callerId, reason != null)
+        notifyRejected(targetUserId, reason)
+        return mapper.toDto(membership.copy(status = MembershipStatus.cancelled))
+    }
+
+    // Best-effort DM — the member paid off-platform, so tell them to expect a refund. Never aborts the reject.
+    private fun notifyRejected(targetUserId: UUID, reason: String?) {
+        try {
+            val telegramId = userRepository.findById(targetUserId)?.telegramId ?: return
+            val base = "Организатор отклонил ваше вступление в платный клуб и вернёт перевод."
+            val text = reason?.trim()?.takeIf { it.isNotEmpty() }?.let { "$base\nПричина: $it" } ?: base
+            notificationService.sendDirectMessage(telegramId, text)
+        } catch (e: Exception) {
+            log.warn("Failed to DM rejected member (non-fatal): targetUserId={} error={}", targetUserId, e.message)
+        }
     }
 
     private fun loadManageableMember(clubId: UUID, targetUserId: UUID): Membership {

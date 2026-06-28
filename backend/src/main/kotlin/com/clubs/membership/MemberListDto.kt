@@ -90,6 +90,12 @@ data class ClaimDuesRequest(
     val proofUrl: String? = null
 )
 
+/** De-Stars B+C — organizer rejects a paid join (refund offline). Reason optional, shown to the member. */
+data class RejectDuesRequest(
+    @field:Size(max = 500, message = "Причина: максимум 500 символов")
+    val reason: String? = null
+)
+
 /** Member admin S1 — set the private organizer note (null/blank clears it). */
 data class UpdateNoteRequest(
     @field:Size(max = 500, message = "Заметка: максимум 500 символов")

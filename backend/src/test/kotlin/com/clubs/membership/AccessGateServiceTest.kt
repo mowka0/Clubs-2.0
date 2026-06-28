@@ -19,6 +19,8 @@ import kotlin.test.assertEquals
 class AccessGateServiceTest {
 
     private lateinit var membershipRepository: MembershipRepository
+    private lateinit var userRepository: com.clubs.user.UserRepository
+    private lateinit var notificationService: com.clubs.bot.NotificationService
     private lateinit var service: AccessGateService
 
     private val clubId = UUID.randomUUID()
@@ -28,8 +30,13 @@ class AccessGateServiceTest {
     @BeforeEach
     fun setUp() {
         membershipRepository = mockk(relaxed = true)
+        userRepository = mockk(relaxed = true)
+        notificationService = mockk(relaxed = true)
         // Empty base-url mirrors production (uploader returns root-relative "/uploads/...").
-        service = AccessGateService(membershipRepository, MembershipMapper(), accessPeriodDays = 30, storageBaseUrl = "")
+        service = AccessGateService(
+            membershipRepository, MembershipMapper(), accessPeriodDays = 30, storageBaseUrl = "",
+            userRepository = userRepository, notificationService = notificationService
+        )
     }
 
     private fun membership(status: MembershipStatus, role: MembershipRole = MembershipRole.member): Membership {
@@ -273,6 +280,43 @@ class AccessGateServiceTest {
         every { membershipRepository.claimDues(m.id, "cash", null) } returns 0
 
         assertThrows<ConflictException> { service.claimDues(clubId, callerId, "cash", null) }
+    }
+
+    // --- rejectMember (B+C: reject paid join + refund offline) ---
+
+    @Test
+    fun `rejectMember cancels a frozen member`() {
+        val m = membership(MembershipStatus.frozen)
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns m
+
+        val result = service.rejectMember(clubId, targetUserId, callerId, reason = "не профиль клуба")
+
+        assertEquals("cancelled", result.status)
+        verify(exactly = 1) { membershipRepository.cancel(m.id) }
+    }
+
+    @Test
+    fun `rejectMember rejects an already-admitted (active) member`() {
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns membership(MembershipStatus.active)
+
+        assertThrows<ValidationException> { service.rejectMember(clubId, targetUserId, callerId, null) }
+        verify(exactly = 0) { membershipRepository.cancel(any()) }
+    }
+
+    @Test
+    fun `rejectMember rejects managing the organizer`() {
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns
+            membership(MembershipStatus.frozen, role = MembershipRole.organizer)
+
+        assertThrows<ValidationException> { service.rejectMember(clubId, targetUserId, callerId, null) }
+        verify(exactly = 0) { membershipRepository.cancel(any()) }
+    }
+
+    @Test
+    fun `rejectMember throws NotFound when the member does not exist`() {
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns null
+
+        assertThrows<NotFoundException> { service.rejectMember(clubId, targetUserId, callerId, null) }
     }
 
     // --- unmarkDues ---

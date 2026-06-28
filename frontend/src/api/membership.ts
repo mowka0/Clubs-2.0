@@ -102,6 +102,15 @@ export function unmarkMemberDues(clubId: string, userId: string): Promise<Member
 }
 
 /**
+ * De-Stars B+C: reject a paid join (instead of «Взнос получен»). Owner-only; removes the frozen member.
+ * The refund is the organizer's offline responsibility — the platform is outside the money flow. The
+ * member is notified (best-effort DM). Reason optional.
+ */
+export function rejectMember(clubId: string, userId: string, reason?: string | null): Promise<MembershipDto> {
+  return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/reject-dues`, { reason: reason ?? null });
+}
+
+/**
  * Member admin profile (S1), owner-only:
  *  - setMemberAccessUntil — set a custom access-window end («своя дата»); `until` is an ISO datetime,
  *    must be in the future (backend rejects past dates).

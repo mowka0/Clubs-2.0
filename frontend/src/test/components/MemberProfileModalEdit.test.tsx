@@ -104,6 +104,30 @@ describe('MemberProfileModal — admin edit (S1)', () => {
   });
 });
 
+describe('MemberProfileModal — reject paid join (B+C)', () => {
+  it('organizer rejects a frozen join via reject-dues (two-tap confirm)', async () => {
+    mockProfile(null);
+    let rejected = false;
+    server.use(
+      http.post(`*/api/clubs/${CLUB}/members/u-1/reject-dues`, () => {
+        rejected = true;
+        return HttpResponse.json({
+          id: 'm-1', userId: 'u-1', clubId: CLUB, status: 'cancelled', role: 'member',
+          joinedAt: null, subscriptionExpiresAt: null,
+        });
+      }),
+    );
+    const frozen: MemberListItemDto = { ...MEMBER, accessStatus: 'frozen', subscriptionExpiresAt: null };
+    const user = userEvent.setup();
+    renderWithProviders(<MemberProfileModal member={frozen} clubId={CLUB} isOrganizer onClose={() => {}} />);
+
+    await user.click(await screen.findByRole('button', { name: /вернуть перевод/ }));
+    await user.click(screen.getByRole('button', { name: /Отказать и вернуть/ }));
+
+    await waitFor(() => expect(rejected).toBe(true));
+  });
+});
+
 describe('MemberProfileModal — club awards (S2)', () => {
   const AWARD: AwardDto = { id: 'a-1', emoji: '🔥', label: 'Активист' };
 
