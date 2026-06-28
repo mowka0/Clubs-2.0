@@ -51,7 +51,20 @@ class AccessGateService(
         }
         guardApplied(membershipRepository.freezeAccess(membership.id))
         log.info("Access frozen: clubId={} targetUserId={} by={}", clubId, targetUserId, callerId)
+        notifyFrozen(clubId, targetUserId)
         return mapper.toDto(membership.copy(status = MembershipStatus.frozen))
+    }
+
+    // Best-effort DM to the member whose access the organizer just closed: «доступ закрыт — оплатите взнос»
+    // with an inline button deep-linking to the club page (where «Оплатить взнос» lives). Never aborts the freeze.
+    private fun notifyFrozen(clubId: UUID, targetUserId: UUID) {
+        try {
+            val member = userRepository.findById(targetUserId) ?: return
+            val clubName = clubRepository.findById(clubId)?.name ?: "клуб"
+            notificationService.sendAccessFrozenDM(member.telegramId, clubName, clubId)
+        } catch (e: Exception) {
+            log.warn("Failed to DM frozen member (non-fatal): clubId={} targetUserId={} error={}", clubId, targetUserId, e.message)
+        }
     }
 
     @Transactional

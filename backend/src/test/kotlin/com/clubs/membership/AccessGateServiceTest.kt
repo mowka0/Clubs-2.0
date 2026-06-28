@@ -117,6 +117,22 @@ class AccessGateServiceTest {
         assertThrows<NotFoundException> { service.freezeAccess(clubId, targetUserId, callerId) }
     }
 
+    @Test
+    fun `freezeAccess DMs the frozen member a deep-link to pay`() {
+        val m = membership(MembershipStatus.active)
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns m
+        every { membershipRepository.freezeAccess(m.id) } returns 1
+        val club = mockk<com.clubs.club.Club>(relaxed = true)
+        every { club.name } returns "Бег по утрам"
+        every { clubRepository.findById(clubId) } returns club
+        val member = mockk<UsersRecord>(relaxed = true) { every { telegramId } returns 77L }
+        every { userRepository.findById(targetUserId) } returns member
+
+        service.freezeAccess(clubId, targetUserId, callerId)
+
+        verify(exactly = 1) { notificationService.sendAccessFrozenDM(77L, "Бег по утрам", clubId) }
+    }
+
     // --- unfreezeAccess ---
 
     @Test

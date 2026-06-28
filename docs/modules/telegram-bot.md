@@ -24,6 +24,9 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
   - `sendDirectMessage(telegramId, text)` — generic DM (используется `PaymentNotificationHandler`, `SubscriptionScheduler`)
   - `sendDirectMessageWithDeepLink(telegramId, text, webAppPath, buttonText)` — DM с inline web_app button на конкретный путь Mini App (используется Skladchina, Applications Inbox)
   - `sendApplicationCreatedDM(organizerTelegramId, applicantDisplayName, clubName)` — organizer-DM при подаче новой заявки в закрытый клуб `[подключено к ApplicationService.submitApplication]`
+  - `sendApplicationApprovedDM(applicantTelegramId, clubName, clubId, paid)` — applicant-DM при одобрении заявки, deep-link на клуб (платный → «Оплатить взнос», бесплатный → «Открыть клуб») `[подключено: ApplicationService.approveApplication, сессия 2]`
+  - `sendDuesClaimedDM(organizerTelegramId, memberName, clubName, method)` — organizer-DM, когда участник заявил об оплате взноса (de-Stars) `[подключено: AccessGateService.claimDues]`
+  - `sendAccessFrozenDM(memberTelegramId, clubName, clubId)` — member-DM, когда организатор закрыл доступ («Закрыть доступ» → frozen): deep-link на клуб, кнопка «Оплатить взнос» `[подключено: AccessGateService.freezeAccess, сессия 4]`
   - `sendEventCreated(event)` — анонс нового события участникам клуба `[подключено: EventBotNotifier @TransactionalEventListener ← EventService.createEvent, GAP-003 ✅ / GAP-010 ✅]`
   - `sendStage2Started(event)` — DM «Этап 2 начался — подтвердите участие» going/maybe-воутерам `[подключено: Stage2StartedListener @TransactionalEventListener ← Stage2Service.triggerStage2, GAP-004 ✅ / GAP-009 ✅ / S2T-2 ✅, 2026-06-13]`
   - `sendAttendanceMarked(eventId, newlyAbsentUserIds)` — DM участникам, **впервые** отмеченным `absent` в этой отметке (F5-15.2; раньше — всем `attendance=absent`) `[подключено: AttendanceMarkedListener @TransactionalEventListener ← AttendanceService.markAttendance, GAP-005 ✅ / ATT-3 ✅, Блок 1 2026-06-07]`
@@ -40,7 +43,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 - Уведомления waitlist / освобождения места (PRD §4.6.3 буллет 3) `[GAP-006]`.
 - Уведомления **заявителю** об approve/reject заявок в закрытые клубы (PRD §4.6.3 буллет 5) `[GAP-007]` — заявитель не получает DM. **Частично закрыт:** DM **организатору** при создании заявки реализован (`sendApplicationCreatedDM`, см. § Нотификации ниже).
 - Webhook-режим (PRD не уточняет, но `.claude/rules/backend.md` § Telegram Bot API требует в production). Сейчас — long-polling, см. `docs/backlog/bot-event-dm-not-delivering.md`.
-- Deep-link на конкретный клуб из DM — кнопка ведёт в корень Mini App.
+- ~~Deep-link на конкретный клуб из DM — кнопка ведёт в корень Mini App.~~ **Закрыто:** `sendApplicationApprovedDM` и `sendAccessFrozenDM` ведут кнопкой на `/clubs/{id}` (где «Оплатить взнос»).
 
 ## User Stories
 

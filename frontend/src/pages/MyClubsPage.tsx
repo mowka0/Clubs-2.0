@@ -279,6 +279,40 @@ const AwaitingDuesRow: FC<AwaitingDuesRowProps> = ({ item, onClick }) => {
   );
 };
 
+interface FrozenMembershipRowProps {
+  membership: MembershipDto;
+  club: ClubDetailDto | undefined;
+  onClick: () => void;
+}
+
+/** Member-side «Доступ закрыт — оплатите»: one of the CALLER's OWN frozen memberships (the organizer
+ *  closed access, or the monthly dues window lapsed). Tap → the club page, where «Оплатить взнос» lets
+ *  them declare payment. Mirrors the organizer's «Оплата вступления», but from the member's side. */
+const FrozenMembershipRow: FC<FrozenMembershipRowProps> = ({ membership, club, onClick }) => {
+  const name = club?.name ?? `Клуб ${membership.clubId.slice(0, 8)}…`;
+  const initials = club ? getInitials(club.name) : '·';
+  const claimed = Boolean(membership.duesClaimedAt);
+  const priceLine = club && club.subscriptionPrice > 0 ? `Взнос ${club.subscriptionPrice} ₽ / мес` : 'Доступ закрыт';
+  return (
+    <button type="button" className="rd-rep-row" onClick={onClick}>
+      <span className="rd-ico">
+        {club?.avatarUrl ? <img src={club.avatarUrl} alt="" /> : initials}
+      </span>
+      <div className="rd-info">
+        <div className="rd-ttl">{name}</div>
+        <div className="rd-met">{priceLine}</div>
+      </div>
+      <div className="rd-score">
+        {claimed ? (
+          <span className="rd-badge rd-going">Оплата на проверке</span>
+        ) : (
+          <span className="rd-badge rd-warn">Нужно оплатить</span>
+        )}
+      </div>
+    </button>
+  );
+};
+
 export const MyClubsPage: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -295,6 +329,11 @@ export const MyClubsPage: FC = () => {
   const [duesMember, setDuesMember] = useState<OrganizerDuesMemberDto | null>(null);
 
   const myClubs = myClubsQuery.data ?? [];
+  // Split the caller's own frozen memberships into a dedicated «Доступ закрыт — оплатите» block so a
+  // frozen member sees they've lost access and must pay, instead of the club sitting silently among the
+  // active ones. The rest render normally under «Где я состою».
+  const frozenMyClubs = useMemo(() => myClubs.filter((m) => m.status === 'frozen'), [myClubs]);
+  const activeMyClubs = useMemo(() => myClubs.filter((m) => m.status !== 'frozen'), [myClubs]);
   const applications = applicationsQuery.data ?? [];
   const pendingInbox = pendingInboxQuery.data ?? [];
   const historyClubs = reputationQuery.data?.historyClubs ?? [];
@@ -505,6 +544,27 @@ export const MyClubsPage: FC = () => {
         3. «Где я состою» — current memberships.
       */}
 
+      {/* 0. My frozen memberships — «Доступ закрыт, оплатите взнос». Highest personal urgency, so it
+            leads. Tap → club page, where «Оплатить взнос» declares payment. */}
+      {!loading && frozenMyClubs.length > 0 && (
+        <>
+          <div className="rd-section-sub-h rd-attn-pay">
+            🔒 Доступ закрыт — оплатите <span className="rd-count">· {frozenMyClubs.length}</span>
+          </div>
+          <div className="rd-attn-hint">Здесь доступ закрыт. Оплатите взнос организатору, чтобы вернуть его.</div>
+          <div className="rd-glass rd-rep-panel rd-attn-block rd-attn-block-pay">
+            {frozenMyClubs.map((m) => (
+              <FrozenMembershipRow
+                key={m.id}
+                membership={m}
+                club={clubDetails[m.clubId]}
+                onClick={() => handleClubClick(m.clubId)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
       {/* 1. My applications (outgoing) — pending review */}
       {!loading && myApplicationsCount > 0 && (
         <>
@@ -567,14 +627,14 @@ export const MyClubsPage: FC = () => {
         </>
       )}
 
-      {/* 3. Active clubs */}
-      {!loading && myClubs.length > 0 && (
+      {/* 3. Active clubs (frozen ones are surfaced in the «Доступ закрыт» block above) */}
+      {!loading && activeMyClubs.length > 0 && (
         <>
           <div className="rd-section-sub-h">
-            Где я состою <span className="rd-count">· {myClubs.length}</span>
+            Где я состою <span className="rd-count">· {activeMyClubs.length}</span>
           </div>
           <div className="rd-glass rd-rep-panel">
-            {myClubs.map((m) => {
+            {activeMyClubs.map((m) => {
               const club = clubDetails[m.clubId];
               const isOrganizer = m.role === 'organizer' || club?.ownerId === user?.id;
               return (

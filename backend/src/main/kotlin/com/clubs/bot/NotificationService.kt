@@ -215,6 +215,17 @@ class NotificationService(
     }
 
     /**
+     * Best-effort DM to a paid member whose access the organizer just closed («Закрыть доступ» → frozen).
+     * Deep-links to the club page, where the frozen member taps «Оплатить взнос» to declare payment and
+     * regain access. Fire-and-forget — never blocks the freeze action.
+     */
+    @Async
+    fun sendAccessFrozenDM(memberTelegramId: Long, clubName: String, clubId: UUID) {
+        val text = "🔒 Организатор клуба «$clubName» закрыл вам доступ. Чтобы вернуть его, оплатите взнос."
+        sendDm(memberTelegramId.toString(), text, webAppPath = "/clubs/$clubId", buttonText = "Оплатить взнос")
+    }
+
+    /**
      * DM with a deep-link inline button that opens the Mini App on a specific
      * route. [webAppPath] is path-prefixed-with-slash, e.g. "/skladchina/<id>"
      * or "/events/<id>". Frontend's React Router renders the matching page

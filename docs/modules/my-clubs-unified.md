@@ -88,6 +88,19 @@
 > `rd-section-sub-h` + `rd-glass rd-rep-panel` (единообразие со всеми блоками). Карточки
 > (содержимое) — без изменений, поменялись только группировка и заголовки.
 >
+> **[ОБНОВЛЕНО de-Stars + сессия 4 — фактический порядок секций as-built]** (top → bottom):
+> 0. **«🔒 Доступ закрыт — оплатите · N»** (member-side, NEW сессия 4) — собственные **frozen**-членства
+>    каллера (`frozenMyClubs = myClubs.filter(m => m.status === 'frozen')`, компонент `FrozenMembershipRow`).
+>    Бейдж «Нужно оплатить» / «Оплата на проверке» (по `membership.duesClaimedAt`). Тап → страница клуба
+>    (там «Оплатить взнос»). Самое срочное личное действие → ведёт список. Эти клубы **исключены** из
+>    «Где я состою» (`activeMyClubs`), чтобы frozen не висел молча среди активных.
+> 1. **«Мои заявки»** — только `pending` (de-Stars: approved сразу = членство, лимба нет).
+> 2. **«Заявки в мои клубы»** — organizer inbox (`PendingApplicationDto`).
+> 2b. **«💸 Оплата вступления»** (organizer-side) — frozen-участники в клубах каллера (`useOrganizerAwaitingDuesQuery`).
+> 3. **«Где я состою»** — активные членства (`activeMyClubs`, без frozen).
+> 4. **«История»** — покинутые клубы с остаточной репутацией.
+> (Stars-эра `AwaitingPaymentCard` / `OrganizerAwaitingPaymentRow` из блока выше удалены de-Stars.)
+>
 > Класс корня — `.brand-page` (общий канвас для Discovery/ClubPage/MyClubsPage). Inter font вынесен на `html, body` для единого шрифта во всём app.
 >
 > Старая структура (Section + Cell + tgui Button) сохранена ниже для истории.
