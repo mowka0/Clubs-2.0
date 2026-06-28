@@ -40,6 +40,7 @@ const MEMBER: MemberListItemDto = {
   trust: null,
   promiseFulfillmentPct: null,
   totalConfirmations: null,
+  awards: [],
   accessStatus: 'active',
   subscriptionExpiresAt: null,
 };

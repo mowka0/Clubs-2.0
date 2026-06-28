@@ -7,6 +7,9 @@ interface AwardRepository {
     /** All awards granted to [userId] in [clubId], newest first. Visible to all members (R3). */
     fun findByMember(clubId: UUID, userId: UUID): List<Award>
 
+    /** Every award in [clubId] (newest first), for the roster — the service groups them per member. */
+    fun findByClub(clubId: UUID): List<Award>
+
     /** Distinct (emoji, label) ever granted in [clubId], most-used first — the grant-form autocomplete. */
     fun findSuggestions(clubId: UUID, limit: Int): List<AwardSuggestion>
 

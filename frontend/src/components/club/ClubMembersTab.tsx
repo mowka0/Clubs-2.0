@@ -168,6 +168,8 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
   const accessMeta = forOrganizer && !isOwner && member.subscriptionExpiresAt
     ? `Активен · до ${formatDate(member.subscriptionExpiresAt)}`
     : null;
+  // Public club awards (R3) — defend against a payload without the field (boundary isn't schema-checked).
+  const awards = member.awards ?? [];
 
   return (
     <button
@@ -187,6 +189,15 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
         </div>
         {accessMeta && <div className="rd-met rd-met-ok">{accessMeta}</div>}
         {repMeta && <div className="rd-met">{repMeta}</div>}
+        {awards.length > 0 && (
+          <div className="rd-member-awards">
+            {awards.map((a) => (
+              <span key={a.id} className="rd-award-chip rd-award-chip-ro rd-award-chip-sm">
+                <span className="rd-award-emoji" aria-hidden="true">{a.emoji}</span>{a.label}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       <span className="rd-score">
         {hasScore ? (

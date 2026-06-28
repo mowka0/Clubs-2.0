@@ -27,7 +27,7 @@ const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString(
 
 const MEMBER: MemberListItemDto = {
   userId: 'u-1', firstName: 'Игорь', lastName: 'Соколов', avatarUrl: null, role: 'member',
-  joinedAt: inDays(-30), trust: 70, promiseFulfillmentPct: 90, totalConfirmations: 4,
+  joinedAt: inDays(-30), trust: 70, promiseFulfillmentPct: 90, totalConfirmations: 4, awards: [],
   accessStatus: 'active', subscriptionExpiresAt: inDays(20),
 };
 

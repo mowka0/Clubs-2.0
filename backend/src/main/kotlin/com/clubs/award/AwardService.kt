@@ -33,6 +33,14 @@ class AwardService(
     fun getSuggestions(clubId: UUID): List<AwardSuggestionDto> =
         awardRepository.findSuggestions(clubId, MAX_SUGGESTIONS).map(mapper::toDto)
 
+    /**
+     * Awards of every member in [clubId], keyed by user id — one query for the roster so each card can
+     * show its chips (R3) without an N+1. Members without awards are simply absent from the map.
+     */
+    @Transactional(readOnly = true)
+    fun getClubAwardsByMember(clubId: UUID): Map<UUID, List<AwardDto>> =
+        awardRepository.findByClub(clubId).groupBy({ it.userId }, { mapper.toDto(it) })
+
     @Transactional
     fun grant(clubId: UUID, targetUserId: UUID, emoji: String, label: String, callerId: UUID): AwardDto {
         // The award is meaningless for a non-member — require an existing membership in this club.

@@ -380,11 +380,6 @@
 .rd-org-gate-acts { display: flex; flex-direction: column; gap: 9px; }
 
 /* Member admin S1 (Variant B): edit toggle + form */
-.rd-org-edit-toggle {
-  margin-top: 10px; width: 100%; padding: 9px; border-radius: 10px; cursor: pointer; font-family: inherit;
-  font-size: 12.5px; font-weight: 600; color: var(--text-dim);
-  background: transparent; border: 1px dashed var(--hairline);
-}
 .rd-org-edit { margin-top: 12px; }
 .rd-org-edit .rd-field { margin-bottom: 12px; }
 .rd-org-note-read {
@@ -433,14 +428,20 @@
   color: #fff; background: var(--accent); border: none;
 }
 .rd-award-submit:disabled { opacity: 0.45; cursor: default; }
-.rd-award-suggest { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.rd-award-suggest { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .rd-award-suggest-item {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 5px 10px; border-radius: 999px; cursor: pointer; font-family: inherit;
   font-size: 11.5px; font-weight: 500; color: var(--text);
   background: var(--surface); border: 1px solid var(--hairline);
 }
+.rd-award-suggest-h, .rd-award-new-h { font-size: 11px; font-weight: 600; color: var(--text-dim); }
+.rd-award-new-h { margin-top: 12px; margin-bottom: 7px; }
 .rd-award-hint { margin-top: 8px; font-size: 11px; color: var(--text-faint); }
+/* Compact award chips on the roster card (member list, R3) — emoji + label, smaller than the profile. */
+.rd-member-awards { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.rd-award-chip-sm { padding: 3px 8px; font-size: 10.5px; }
+.rd-award-chip-sm .rd-award-emoji { font-size: 12px; }
 
 /* De-Stars dues payment flow (member 2-step sheet + organizer claim review). */
 .rd-dues-amount { display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px; }
@@ -1086,6 +1087,15 @@
 .rd-sheet-head h2 { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); margin: 0; }
 .rd-sheet-close { background: none; border: 0; color: var(--accent); font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; padding: 4px 2px; }
 .rd-sheet-close:disabled { opacity: 0.5; }
+.rd-sheet-head-acts { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+/* Member admin: orange ✎ in the sheet header toggles edit mode (awards + note). */
+.rd-sheet-edit {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 9px; cursor: pointer; font-family: inherit;
+  font-size: 17px; line-height: 1; color: var(--accent);
+  background: var(--accent-soft); border: 1px solid transparent;
+}
+.rd-sheet-edit.on { border-color: var(--accent); }
 .rd-sheet-body { overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
 .rd-sheet-actions { display: flex; gap: 10px; margin-top: 16px; flex-shrink: 0; }
 .rd-sheet-actions > .rd-btn-primary, .rd-sheet-actions > .rd-btn-outline { flex: 1; width: auto; }

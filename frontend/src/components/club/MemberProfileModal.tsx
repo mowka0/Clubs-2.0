@@ -64,39 +64,41 @@ interface AwardEditorProps {
   clubId: string;
   userId: string;
   awards: AwardDto[];
-  /** Surface grant/revoke failures on the shared error line of the admin section. */
-  onError: (message: string | null) => void;
 }
 
 /**
  * Award management «как интересы» (member admin S2): existing award chips with × (revoke) plus a
- * «＋ Добавить награду» control — emoji picker + label input with autocomplete from past club awards.
+ * «＋ Добавить награду» control. The add form leads with the club's existing awards (tap to reuse,
+ * keeping the same emoji + label — R2), then a «создать свою» path with an emoji picker + label input.
  * Each grant/revoke is an immediate API call (not batched under the form's «Сохранить»), so the
  * organizer can award several in a row without closing the card. Cosmetic only — no reputation effect.
  */
-const AwardEditor: FC<AwardEditorProps> = ({ clubId, userId, awards, onError }) => {
+const AwardEditor: FC<AwardEditorProps> = ({ clubId, userId, awards }) => {
   const haptic = useHaptic();
   const grant = useGrantMemberAwardMutation();
   const revoke = useRevokeMemberAwardMutation();
   const [adding, setAdding] = useState(false);
   const [emoji, setEmoji] = useState(AWARD_EMOJIS[0]);
   const [label, setLabel] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const suggestQuery = useAwardSuggestionsQuery(clubId, { enabled: adding });
 
   const atMax = awards.length >= MAX_AWARDS;
   const busy = grant.isPending || revoke.isPending;
 
+  // Reuse pool: past awards of this club minus the ones already on this member, prefix/substring-filtered
+  // by what's typed — so the organizer reuses «Активист» instead of re-creating it (R2, «как интересы»).
   const existingLabels = new Set(awards.map((a) => a.label.toLowerCase()));
   const query = label.trim().toLowerCase();
   const suggestions = (suggestQuery.data ?? [])
     .filter((s) => !existingLabels.has(s.label.toLowerCase()))
     .filter((s) => !query || s.label.toLowerCase().includes(query))
-    .slice(0, 6);
+    .slice(0, 8);
 
   const doGrant = (em: string, raw: string) => {
     const cleanLabel = raw.trim();
     if (!cleanLabel || busy) return;
-    onError(null);
+    setError(null);
     haptic.impact('light');
     grant.mutate(
       { clubId, userId, emoji: em, label: cleanLabel },
@@ -104,7 +106,7 @@ const AwardEditor: FC<AwardEditorProps> = ({ clubId, userId, awards, onError }) 
         onSuccess: () => { haptic.notify('success'); setLabel(''); setAdding(false); },
         onError: (e) => {
           haptic.notify('error');
-          onError(e instanceof Error ? e.message : 'Не удалось выдать награду');
+          setError(e instanceof Error ? e.message : 'Не удалось выдать награду');
         },
       },
     );
@@ -112,14 +114,14 @@ const AwardEditor: FC<AwardEditorProps> = ({ clubId, userId, awards, onError }) 
 
   const doRevoke = (awardId: string) => {
     if (busy) return;
-    onError(null);
+    setError(null);
     haptic.impact('light');
     revoke.mutate(
       { clubId, userId, awardId },
       {
         onError: (e) => {
           haptic.notify('error');
-          onError(e instanceof Error ? e.message : 'Не удалось снять награду');
+          setError(e instanceof Error ? e.message : 'Не удалось снять награду');
         },
       },
     );
@@ -145,7 +147,7 @@ const AwardEditor: FC<AwardEditorProps> = ({ clubId, userId, awards, onError }) 
           </span>
         ))}
         {!atMax && !adding && (
-          <button type="button" className="rd-award-add" onClick={() => { onError(null); setAdding(true); }}>
+          <button type="button" className="rd-award-add" onClick={() => { setError(null); setAdding(true); }}>
             ＋ Добавить награду
           </button>
         )}
@@ -153,6 +155,25 @@ const AwardEditor: FC<AwardEditorProps> = ({ clubId, userId, awards, onError }) 
 
       {adding && !atMax && (
         <div className="rd-award-form">
+          {/* Reuse an existing club award first («как интересы») — tap grants it with its own emoji. */}
+          {suggestions.length > 0 && (
+            <>
+              <div className="rd-award-suggest-h">Уже в клубе — нажмите, чтобы выдать</div>
+              <div className="rd-award-suggest" role="listbox">
+                {suggestions.map((s) => (
+                  <button
+                    key={`${s.emoji}-${s.label}`}
+                    type="button"
+                    className="rd-award-suggest-item"
+                    onClick={() => doGrant(s.emoji, s.label)}
+                  >
+                    <span className="rd-award-emoji" aria-hidden="true">{s.emoji}</span>{s.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          <div className="rd-award-new-h">{suggestions.length > 0 ? 'Или создайте свою' : 'Создать награду'}</div>
           <div className="rd-award-emoji-pick" role="group" aria-label="Эмодзи награды">
             {AWARD_EMOJIS.map((em) => (
               <button
@@ -186,23 +207,10 @@ const AwardEditor: FC<AwardEditorProps> = ({ clubId, userId, awards, onError }) 
               {grant.isPending ? <Spinner size="s" /> : '→'}
             </button>
           </div>
-          {suggestions.length > 0 && (
-            <div className="rd-award-suggest" role="listbox">
-              {suggestions.map((s) => (
-                <button
-                  key={`${s.emoji}-${s.label}`}
-                  type="button"
-                  className="rd-award-suggest-item"
-                  onClick={() => doGrant(s.emoji, s.label)}
-                >
-                  <span className="rd-award-emoji" aria-hidden="true">{s.emoji}</span>{s.label}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       )}
       {atMax && <div className="rd-award-hint">Максимум {MAX_AWARDS} наград</div>}
+      {error && <div className="rd-error" style={{ textAlign: 'left' }}>{error}</div>}
     </div>
   );
 };
@@ -212,14 +220,15 @@ interface OrganizerGateProps {
   member: MemberListItemDto;
   /** Current private note from the loaded profile (null until loaded / when empty). */
   organizerNote: string | null;
-  /** Awards on the loaded profile (managed inline; public on the card, R3). */
-  awards: AwardDto[];
   /** Whether the member has a paid access window — gates the subscription strip + dues/freeze + custom date. */
   isPaidMember: boolean;
   /** Member's dues claim to review (de-Stars), organizer-only. null when no claim pending. */
   claim: { claimedAt: string; method: string | null; proofUrl: string | null } | null;
   /** The member's join-application answer (closed clubs), organizer-only. null = open club / no question. */
   applicationAnswer: string | null;
+  /** Edit mode is owned by the modal (toggled by the header ✎) so awards + note reveal together. */
+  editing: boolean;
+  onEditingChange: (editing: boolean) => void;
   onDone: (message: string) => void;
 }
 
@@ -232,11 +241,12 @@ function toDateInput(iso: string | null): string {
  * Organizer admin section for a member (member admin Variant B). Two layers, decoupled:
  *  - Paid-only (isPaidMember): de-Stars access controls — subscription strip + «Взнос получен» /
  *    «Закрыть доступ», and «Своя дата» in the edit form. A free member has no access window, so none show.
- *  - Always (any club): ✎ Редактировать → «Награды клуба» (S2, immediate add/remove) + «Заметка» (S1,
- *    private, saved on «Сохранить»).
+ *  - Always (any club): the header ✎ reveals the «Заметка» (S1, private, saved on «Сохранить»). Awards
+ *    (S2) live above, under interests, edited inline — they are NOT in this section anymore.
+ * Edit mode (`editing`) is owned by the modal so the header ✎ toggles awards + note together.
  * 409 (lost race) on a dues/freeze action closes the card — the list cache is already refreshed.
  */
-const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, awards, isPaidMember, claim, applicationAnswer, onDone }) => {
+const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, isPaidMember, claim, applicationAnswer, editing, onEditingChange, onDone }) => {
   const haptic = useHaptic();
   const markPaid = useMarkMemberDuesPaidMutation();
   const freeze = useFreezeMemberMutation();
@@ -245,7 +255,6 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
   const updateNote = useUpdateMemberNoteMutation();
   const [error, setError] = useState<string | null>(null);
 
-  const [editing, setEditing] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
   const [dateDraft, setDateDraft] = useState('');
   const [confirmingReject, setConfirmingReject] = useState(false);
@@ -257,6 +266,15 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
   const soon = !frozen && !!expiresAt && daysUntil(expiresAt) <= 7;
   const today = new Date().toISOString().slice(0, 10);
   const originalDate = toDateInput(expiresAt);
+
+  // Edit mode is driven by the modal's header ✎; seed the drafts each time it opens.
+  useEffect(() => {
+    if (editing) {
+      setError(null);
+      setNoteDraft(organizerNote ?? '');
+      setDateDraft(originalDate);
+    }
+  }, [editing, organizerNote, originalDate]);
 
   const run = (
     mutation: ReturnType<typeof useMarkMemberDuesPaidMutation> | ReturnType<typeof useFreezeMemberMutation>,
@@ -295,13 +313,6 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
     );
   };
 
-  const openEdit = () => {
-    setError(null);
-    setNoteDraft(organizerNote ?? '');
-    setDateDraft(originalDate);
-    setEditing(true);
-  };
-
   const handleSaveEdit = async () => {
     setError(null);
     const tasks: Promise<unknown>[] = [];
@@ -314,7 +325,7 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
     if (cleanNote !== (organizerNote ?? '')) {
       tasks.push(updateNote.mutateAsync({ clubId, userId: member.userId, note: cleanNote || null }));
     }
-    if (tasks.length === 0) { setEditing(false); return; }
+    if (tasks.length === 0) { onEditingChange(false); return; }
     try {
       haptic.impact('medium');
       await Promise.all(tasks);
@@ -411,17 +422,14 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
 
       {error && <div className="rd-error" style={{ textAlign: 'left' }}>{error}</div>}
 
-      {/* Member admin (Variant B): ✎ reveals editable fields — awards + note (+ custom date for paid). */}
+      {/* Edit mode (toggled by the header ✎): note + custom date. Awards live above (under interests),
+          managed inline. The private note shows read-only when not editing. */}
       {!editing && organizerNote && (
         <div className="rd-org-note-read">
           <span className="rd-org-note-k">Заметка</span>{organizerNote}
         </div>
       )}
-      {!editing ? (
-        <button type="button" className="rd-org-edit-toggle" onClick={openEdit}>
-          ✎ Редактировать
-        </button>
-      ) : (
+      {editing && (
         <div className="rd-org-edit">
           {isPaidMember && (
             <label className="rd-field">
@@ -435,7 +443,6 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
               />
             </label>
           )}
-          <AwardEditor clubId={clubId} userId={member.userId} awards={awards} onError={setError} />
           <label className="rd-field">
             <span className="rd-label">Заметка (видите только вы)</span>
             <textarea
@@ -451,7 +458,7 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
             <button type="button" className="rd-btn-primary" disabled={savingEdit} onClick={handleSaveEdit}>
               {savingEdit ? <Spinner size="s" /> : 'Сохранить'}
             </button>
-            <button type="button" className="rd-btn-outline" disabled={savingEdit} onClick={() => setEditing(false)}>
+            <button type="button" className="rd-btn-outline" disabled={savingEdit} onClick={() => onEditingChange(false)}>
               Отмена
             </button>
           </div>
@@ -552,6 +559,10 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
   // (subscription strip + dues/freeze + custom date); a free member only gets note + awards.
   const isPaidMember = member.accessStatus === 'frozen' || !!member.subscriptionExpiresAt;
 
+  // Edit mode lives here (not in OrganizerGate) so the header ✎ toggles the awards editor (under
+  // interests) and the note/date form (below the rings) together. Only the organizer ever edits.
+  const [editing, setEditing] = useState(false);
+
   const handleGateDone = (message: string) => {
     onActionToast?.(message);
     onClose();
@@ -579,7 +590,20 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
         <div className="rd-sheet-grabber" aria-hidden="true" />
         <div className="rd-sheet-head">
           <h2>Профиль участника</h2>
-          <button type="button" className="rd-sheet-close" onClick={onClose}>Закрыть</button>
+          <div className="rd-sheet-head-acts">
+            {isManageable && (
+              <button
+                type="button"
+                className={`rd-sheet-edit${editing ? ' on' : ''}`}
+                aria-label={editing ? 'Закончить редактирование' : 'Редактировать'}
+                aria-pressed={editing}
+                onClick={() => setEditing((e) => !e)}
+              >
+                ✎
+              </button>
+            )}
+            <button type="button" className="rd-sheet-close" onClick={onClose}>Закрыть</button>
+          </div>
         </div>
 
         <div className="rd-sheet-body">
@@ -620,9 +644,11 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
             </div>
           )}
 
-          {/* Club awards (S2) — public recognition, shown to every viewer (R3). Read-only here; the
-              organizer manages them in the ✎ edit form below. */}
-          {awards.length > 0 && (
+          {/* Club awards (S2) — ONE place: the editor when the organizer is in edit mode, otherwise the
+              public read-only chips (R3, shown to every viewer). No duplicate «Награды клуба» section. */}
+          {isManageable && editing ? (
+            <AwardEditor clubId={clubId} userId={member.userId} awards={awards} />
+          ) : awards.length > 0 ? (
             <div className="rd-field">
               <span className="rd-label">Награды клуба</span>
               <div className="rd-award-chips" style={{ margin: 0 }}>
@@ -633,7 +659,7 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
                 ))}
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* Reputation in this club */}
           <div>
@@ -655,18 +681,20 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
             )}
           </div>
 
-          {/* Organizer admin section: de-Stars access gate (paid-only) + admin edit (note S1 / awards S2). */}
+          {/* Organizer admin section: de-Stars access gate (paid-only) + admin edit (note S1). Awards
+              (S2) are handled above, under interests. Edit mode is driven by the header ✎ (editing state). */}
           {isManageable && (
             <OrganizerGate
               clubId={clubId}
               member={member}
               organizerNote={profile?.organizerNote ?? null}
-              awards={awards}
               isPaidMember={isPaidMember}
               claim={profile?.duesClaimedAt
                 ? { claimedAt: profile.duesClaimedAt, method: profile.duesClaimMethod, proofUrl: profile.duesProofUrl }
                 : null}
               applicationAnswer={profile?.applicationAnswer ?? null}
+              editing={editing}
+              onEditingChange={setEditing}
               onDone={handleGateDone}
             />
           )}

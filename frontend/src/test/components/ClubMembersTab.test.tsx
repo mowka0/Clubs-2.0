@@ -40,6 +40,7 @@ function member(over: Partial<MemberListItemDto> & { userId: string; firstName: 
     trust: 70,
     promiseFulfillmentPct: 90,
     totalConfirmations: 4,
+    awards: [],
     accessStatus: 'active',
     subscriptionExpiresAt: null,
     ...over,
@@ -81,6 +82,18 @@ describe('ClubMembersTab — de-Stars dashboard', () => {
     expect(screen.queryByText(/Скоро закончится/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Ждут оплаты/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Взнос получен/ })).not.toBeInTheDocument();
+  });
+
+  it('shows club-award chips on a member roster card (public, R3)', async () => {
+    const decorated = member({
+      userId: 'dec', firstName: 'Олег',
+      awards: [{ id: 'a-1', emoji: '🔥', label: 'Активист' }],
+    });
+    mockMembers([decorated]);
+    renderWithProviders(<ClubMembersTab clubId={CLUB_ID} isOrganizer={false} />);
+
+    expect(await screen.findByText('Олег')).toBeInTheDocument();
+    expect(screen.getByText('Активист')).toBeInTheDocument();
   });
 
   it('«Взнос получен» calls the dues-paid endpoint and confirms with a toast', async () => {

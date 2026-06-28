@@ -44,8 +44,10 @@ class MemberService(
         // accrue Trust in their own club — anti-farm rule 1 — so by Trust alone they'd sort last),
         // then everyone else by the DISPLAYED Trust, newcomers / suppressed rows at the bottom.
         val trustByUser = trustService.trustForClubMembers(clubId)
+        // Club-local awards for the roster chips (R3), one query grouped per member — no N+1.
+        val awardsByUser = awardService.getClubAwardsByMember(clubId)
         return membershipRepository.findClubMembersWithUserInfo(clubId, includeFrozen = forOrganizer)
-            .map { mapper.toMemberListItemDto(it, trustByUser[it.userId], forOrganizer) }
+            .map { mapper.toMemberListItemDto(it, trustByUser[it.userId], awardsByUser[it.userId] ?: emptyList(), forOrganizer) }
             .sortedWith(
                 compareByDescending<MemberListItemDto> { it.role == "organizer" }
                     .thenByDescending { it.trust ?: Int.MIN_VALUE }

@@ -65,6 +65,9 @@ export interface MemberListItemDto {
   // Stage-2 confirmations to date. The "Обещания X%" line is gated on this being > 0 so a
   // finance-only member (skladchina record, no events) never shows a misleading 0% (F5-08).
   totalConfirmations: number | null;
+  // Club-local awards (member admin S2) — public to all members (R3), shown as chips on the roster
+  // card and the profile. Cosmetic; never reflects reputation (R4). Empty array when none.
+  awards: AwardDto[];
   // De-Stars Slice 2 — organizer dashboard only (null for regular members): access state and the
   // paid-through date. Drive the «Скоро закончится» / «Ждут оплаты» / «Активные» buckets.
   // `subscriptionExpiresAt` is also null for free memberships (no expiry).

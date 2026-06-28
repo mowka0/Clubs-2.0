@@ -167,4 +167,20 @@ class AwardServiceTest {
         assertEquals("🏆", result[0].emoji)
         assertEquals("Душа клуба", result[0].label)
     }
+
+    @Test
+    fun `getClubAwardsByMember groups awards per user for the roster`() {
+        val otherUserId = UUID.randomUUID()
+        every { awardRepository.findByClub(clubId) } returns listOf(
+            Award(UUID.randomUUID(), clubId, targetUserId, "🔥", "Активист", callerId, OffsetDateTime.now()),
+            Award(UUID.randomUUID(), clubId, targetUserId, "🏆", "Душа клуба", callerId, OffsetDateTime.now()),
+            Award(UUID.randomUUID(), clubId, otherUserId, "⭐", "Новичок года", callerId, OffsetDateTime.now())
+        )
+
+        val result = service.getClubAwardsByMember(clubId)
+
+        assertEquals(2, result.size)
+        assertEquals(listOf("Активист", "Душа клуба"), result[targetUserId]?.map { it.label })
+        assertEquals(listOf("Новичок года"), result[otherUserId]?.map { it.label })
+    }
 }

@@ -1,5 +1,6 @@
 package com.clubs.membership
 
+import com.clubs.award.AwardDto
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
@@ -21,6 +22,9 @@ data class MemberListItemDto(
     // Stage-2 confirmations to date. The frontend gates the "Обещания X%" line on this being > 0
     // so a finance-only member (skladchina record, no events) never shows a misleading 0% (F5-08).
     val totalConfirmations: Int?,
+    // Club-local awards (member admin S2) — public to all members (R3), shown as chips on the roster
+    // card (and the profile). Cosmetic; never reflects reputation (R4). Empty when the member has none.
+    val awards: List<AwardDto> = emptyList(),
     // De-Stars Slice 2 — organizer dashboard only (null for regular members): access state
     // ("active"/"frozen") + when the paid access window ends. Drives the «Скоро закончится» /
     // «Ждут оплаты» / «Активные» buckets. `subscriptionExpiresAt` is null for free memberships.
