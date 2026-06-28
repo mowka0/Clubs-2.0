@@ -40,6 +40,13 @@
   - DM-уведомление организатору в `ApplicationService.submitApplication`
     после INSERT (через `NotificationService` + `@Async`, fail-isolated от
     основной транзакции).
+  - **Уникальность заявок ослаблена** (V42, 2026-06-28): старое `UNIQUE(user_id, club_id, status)` (V4)
+    ошибочно запрещало две заявки с одинаковым **терминальным** статусом → нельзя было отклонить заявку
+    одного юзера в один клуб **дважды** (`duplicate key … _status_key` на повторном `rejected`). Заменено
+    на частичный уникальный индекс `applications_one_active_per_user_club` на `(user_id, club_id)
+    WHERE status IN ('pending','approved')` — ровно «≤1 активной заявки на пару», как и предполагают
+    `submitApplication` / `findActiveByUserAndClub.fetchOne`. rejected/auto_rejected теперь могут
+    повторяться (циклы подал→отклонили). Codegen не нужен (колонки не менялись).
   - **Чистка orphan-заявки при отмене membership** (2026-06-28): reject-dues / кик / `/cancel` теперь
     вызывают `deleteActiveByUserAndClub` (как `/leave`), иначе остаётся orphan `approved`-заявка и
     участник застревает на «Заявка одобрена». `submitApplication` дополнительно self-heal'ит orphan
