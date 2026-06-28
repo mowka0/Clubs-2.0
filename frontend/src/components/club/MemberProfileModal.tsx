@@ -228,7 +228,8 @@ interface OrganizerGateProps {
   claim: { claimedAt: string; method: string | null; proofUrl: string | null } | null;
   /** The member's join-application answer (closed clubs), organizer-only. null = open club / no question. */
   applicationAnswer: string | null;
-  /** Edit mode is owned by the modal (toggled by the header ✎) so awards + note reveal together. */
+  /** Edit mode is owned by the modal (toggled by the header ✎): reveals the awards editor (above, under
+   *  interests) and the «Своя дата» form (paid). The note is always-open and NOT gated by this. */
   editing: boolean;
   onEditingChange: (editing: boolean) => void;
   onDone: (message: string) => void;
@@ -240,12 +241,14 @@ function toDateInput(iso: string | null): string {
 }
 
 /**
- * Organizer admin section for a member (member admin Variant B). Two layers, decoupled:
+ * Organizer admin section for a member (member admin Variant B). Three layers, decoupled:
  *  - Paid-only (isPaidMember): de-Stars access controls — subscription strip + «Взнос получен» /
- *    «Закрыть доступ», and «Своя дата» in the edit form. A free member has no access window, so none show.
- *  - Always (any club): the header ✎ reveals the «Заметка» (S1, private, saved on «Сохранить»). Awards
- *    (S2) live above, under interests, edited inline — they are NOT in this section anymore.
- * Edit mode (`editing`) is owned by the modal so the header ✎ toggles awards + note together.
+ *    «Закрыть доступ», and «Своя дата» behind the ✎. A free member has no access window, so none show.
+ *  - Always (any club): the private «Заметка» (S1) is an always-open field with its own «Сохранить» —
+ *    so the panel has a home for it even in a free club (where it would otherwise be just «Удалить из
+ *    клуба»). Saving the note does NOT close the card.
+ *  - Awards (S2) live above, under interests, revealed by the same header ✎.
+ * Edit mode (`editing`) is owned by the modal: the ✎ toggles the awards editor + the «Своя дата» form.
  * 409 (lost race) on a dues/freeze action closes the card — the list cache is already refreshed.
  */
 const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, isPaidMember, claim, applicationAnswer, editing, onEditingChange, onDone }) => {
@@ -267,21 +270,20 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
 
   const busy = markPaid.isPending || freeze.isPending || reject.isPending || remove.isPending;
   const KICK_REASON_MIN = 5;
-  const savingEdit = setAccess.isPending || updateNote.isPending;
+  const savingDate = setAccess.isPending;
+  const savingNote = updateNote.isPending;
   const frozen = member.accessStatus === 'frozen';
   const expiresAt = member.subscriptionExpiresAt ?? null;
   const soon = !frozen && !!expiresAt && daysUntil(expiresAt) <= 7;
   const today = new Date().toISOString().slice(0, 10);
   const originalDate = toDateInput(expiresAt);
+  const noteDirty = noteDraft.trim() !== (organizerNote ?? '');
 
-  // Edit mode is driven by the modal's header ✎; seed the drafts each time it opens.
-  useEffect(() => {
-    if (editing) {
-      setError(null);
-      setNoteDraft(organizerNote ?? '');
-      setDateDraft(originalDate);
-    }
-  }, [editing, organizerNote, originalDate]);
+  // Note is an always-open field — keep its draft synced to the saved value (incl. after a save refetch,
+  // which makes the «Сохранить» button disappear once persisted).
+  useEffect(() => { setNoteDraft(organizerNote ?? ''); }, [organizerNote]);
+  // «Своя дата» form opens with the header ✎; seed it from the current window each time it opens.
+  useEffect(() => { if (editing) { setError(null); setDateDraft(originalDate); } }, [editing, originalDate]);
 
   const run = (
     mutation: ReturnType<typeof useMarkMemberDuesPaidMutation> | ReturnType<typeof useFreezeMemberMutation>,
@@ -338,22 +340,30 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
     );
   };
 
-  const handleSaveEdit = async () => {
+  // Save the private note in place — does NOT close the card, so the organizer can keep awarding/managing.
+  // The profile refetch (mutation invalidates it) re-seeds noteDraft and hides «Сохранить».
+  const handleSaveNote = () => {
+    if (!noteDirty || savingNote) return;
     setError(null);
-    const tasks: Promise<unknown>[] = [];
-    if (dateDraft && dateDraft !== originalDate) {
-      // End-of-day local so «до 28 июля» grants access through the 28th.
-      const untilIso = new Date(`${dateDraft}T23:59:59`).toISOString();
-      tasks.push(setAccess.mutateAsync({ clubId, userId: member.userId, until: untilIso }));
-    }
-    const cleanNote = noteDraft.trim();
-    if (cleanNote !== (organizerNote ?? '')) {
-      tasks.push(updateNote.mutateAsync({ clubId, userId: member.userId, note: cleanNote || null }));
-    }
-    if (tasks.length === 0) { onEditingChange(false); return; }
+    haptic.impact('medium');
+    updateNote.mutate(
+      { clubId, userId: member.userId, note: noteDraft.trim() || null },
+      {
+        onSuccess: () => haptic.notify('success'),
+        onError: (e) => { haptic.notify('error'); setError(e instanceof Error ? e.message : 'Не удалось сохранить заметку'); },
+      },
+    );
+  };
+
+  // «Своя дата» (paid only, behind the ✎) — closes the card on success like the other gate actions.
+  const handleSaveDate = async () => {
+    if (!dateDraft || dateDraft === originalDate) { onEditingChange(false); return; }
+    setError(null);
+    // End-of-day local so «до 28 июля» grants access through the 28th.
+    const untilIso = new Date(`${dateDraft}T23:59:59`).toISOString();
     try {
       haptic.impact('medium');
-      await Promise.all(tasks);
+      await setAccess.mutateAsync({ clubId, userId: member.userId, until: untilIso });
       haptic.notify('success');
       onDone('Изменения сохранены');
     } catch (e) {
@@ -438,60 +448,62 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
 
         {error && <div className="rd-error" style={{ textAlign: 'left', padding: '0 14px 4px' }}>{error}</div>}
 
-        {/* Edit mode (header ✎): «своя дата» + note. Otherwise the read-only note + the kick footer. */}
-        {editing ? (
+        {/* Private note (S1) — an always-open field so the panel has a home for it even in a free club
+            (where it would otherwise be just «Удалить из клуба»). Saved on its own «Сохранить», which
+            appears only when the text changed; saving does NOT close the card. */}
+        <div className="rd-mgmt-body rd-org-edit">
+          <label className="rd-field">
+            <span className="rd-label">Заметка (видите только вы)</span>
+            <textarea className="rd-textarea" rows={3} maxLength={500} placeholder="Например: помогает с площадкой для встреч" value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} />
+          </label>
+          {noteDirty && (
+            <div className="rd-org-gate-acts">
+              <button type="button" className="rd-btn-primary" disabled={savingNote} onClick={handleSaveNote}>{savingNote ? <Spinner size="s" /> : 'Сохранить заметку'}</button>
+            </div>
+          )}
+        </div>
+
+        {/* «Своя дата окончания доступа» (paid only) — revealed by the header ✎. */}
+        {editing && isPaidMember && (
           <div className="rd-mgmt-body rd-org-edit">
-            {isPaidMember && (
-              <label className="rd-field">
-                <span className="rd-label">Своя дата окончания доступа</span>
-                <input type="date" className="rd-input" value={dateDraft} min={today} onChange={(e) => setDateDraft(e.target.value)} />
-              </label>
-            )}
             <label className="rd-field">
-              <span className="rd-label">Заметка (видите только вы)</span>
-              <textarea className="rd-textarea" rows={3} maxLength={500} placeholder="Например: помогает с площадкой для встреч" value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} />
+              <span className="rd-label">Своя дата окончания доступа</span>
+              <input type="date" className="rd-input" value={dateDraft} min={today} onChange={(e) => setDateDraft(e.target.value)} />
             </label>
             <div className="rd-org-gate-acts">
-              <button type="button" className="rd-btn-primary" disabled={savingEdit} onClick={handleSaveEdit}>{savingEdit ? <Spinner size="s" /> : 'Сохранить'}</button>
-              <button type="button" className="rd-btn-outline" disabled={savingEdit} onClick={() => onEditingChange(false)}>Отмена</button>
+              <button type="button" className="rd-btn-primary" disabled={savingDate} onClick={handleSaveDate}>{savingDate ? <Spinner size="s" /> : 'Сохранить'}</button>
+              <button type="button" className="rd-btn-outline" disabled={savingDate} onClick={() => onEditingChange(false)}>Отмена</button>
             </div>
           </div>
-        ) : (
-          <>
-            {organizerNote && (
-              <div className="rd-mgmt-note">
-                <span className="rd-mgmt-note-k">Заметка</span><span className="rd-mgmt-note-t">{organizerNote}</span>
+        )}
+
+        {/* «Удалить из клуба» — active/free members only (frozen paid joins use «Отказать·вернуть» above). */}
+        {!frozen && (
+          !confirmingKick ? (
+            <div className="rd-mgmt-killzone">
+              <button type="button" className="rd-mgmt-kill" disabled={busy} onClick={() => { setError(null); setKickReason(''); setConfirmingKick(true); }}>
+                Удалить из клуба
+              </button>
+            </div>
+          ) : (
+            <div className="rd-mgmt-killconfirm">
+              <div className="rd-reject-q">Удалить {member.firstName} из клуба? Доступ закроется сразу. Если оплатил — возврат на ваше усмотрение (деньги вне платформы).</div>
+              <textarea
+                className="rd-textarea"
+                rows={2}
+                maxLength={500}
+                placeholder={`Причина (увидит участник) — минимум ${KICK_REASON_MIN} символов`}
+                value={kickReason}
+                onChange={(e) => setKickReason(e.target.value)}
+              />
+              <div className="rd-org-gate-acts">
+                <button type="button" className="rd-btn-outline" disabled={busy} onClick={() => setConfirmingKick(false)}>Отмена</button>
+                <button type="button" className="rd-btn-primary rd-btn-danger" disabled={busy || kickReason.trim().length < KICK_REASON_MIN} onClick={handleKick}>
+                  {remove.isPending ? <Spinner size="s" /> : 'Удалить из клуба'}
+                </button>
               </div>
-            )}
-            {/* «Удалить из клуба» — active/free members only (frozen paid joins use «Отказать·вернуть» above). */}
-            {!frozen && (
-              !confirmingKick ? (
-                <div className="rd-mgmt-killzone">
-                  <button type="button" className="rd-mgmt-kill" disabled={busy} onClick={() => { setError(null); setKickReason(''); setConfirmingKick(true); }}>
-                    Удалить из клуба
-                  </button>
-                </div>
-              ) : (
-                <div className="rd-mgmt-killconfirm">
-                  <div className="rd-reject-q">Удалить {member.firstName} из клуба? Доступ закроется сразу. Если оплатил — возврат на ваше усмотрение (деньги вне платформы).</div>
-                  <textarea
-                    className="rd-textarea"
-                    rows={2}
-                    maxLength={500}
-                    placeholder={`Причина (увидит участник) — минимум ${KICK_REASON_MIN} символов`}
-                    value={kickReason}
-                    onChange={(e) => setKickReason(e.target.value)}
-                  />
-                  <div className="rd-org-gate-acts">
-                    <button type="button" className="rd-btn-outline" disabled={busy} onClick={() => setConfirmingKick(false)}>Отмена</button>
-                    <button type="button" className="rd-btn-primary rd-btn-danger" disabled={busy || kickReason.trim().length < KICK_REASON_MIN} onClick={handleKick}>
-                      {remove.isPending ? <Spinner size="s" /> : 'Удалить из клуба'}
-                    </button>
-                  </div>
-                </div>
-              )
-            )}
-          </>
+            </div>
+          )
         )}
       </div>
 
@@ -592,7 +604,8 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
   const isPaidMember = member.accessStatus === 'frozen' || !!member.subscriptionExpiresAt;
 
   // Edit mode lives here (not in OrganizerGate) so the header ✎ toggles the awards editor (under
-  // interests) and the note/date form (below the rings) together. Only the organizer ever edits.
+  // interests) and the «Своя дата» form together. The note is always-open (not gated by ✎). Only
+  // the organizer ever edits.
   const [editing, setEditing] = useState(false);
 
   const handleGateDone = (message: string) => {
@@ -713,8 +726,8 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
             )}
           </div>
 
-          {/* Organizer admin section: de-Stars access gate (paid-only) + admin edit (note S1). Awards
-              (S2) are handled above, under interests. Edit mode is driven by the header ✎ (editing state). */}
+          {/* Organizer admin section: de-Stars access gate (paid-only) + always-open private note (S1) +
+              «Своя дата» behind the ✎. Awards (S2) are handled above, under interests. */}
           {isManageable && (
             <OrganizerGate
               clubId={clubId}

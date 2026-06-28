@@ -83,6 +83,21 @@ describe('DuesPaymentSheet', () => {
     expect(screen.getByRole('button', { name: /Подтвердить оплату/ })).toBeDisabled();
   });
 
+  it('forces cash-only + a safety note when the organizer has no Telegram username (item 2)', async () => {
+    // Established organizer (has clubs/trust) but no Telegram → can't be messaged → СБП hidden, cash-only.
+    mockOrganizer({ username: null });
+    renderWithProviders(
+      <DuesPaymentSheet clubId={CLUB} price={100} paymentLink="https://sbp.example/pay" paymentMethodNote="Сбербанк" onClose={() => {}} onClaimed={() => {}} />,
+    );
+
+    // Once the organizer card loads with no username, the safety note appears and СБП is removed.
+    expect(await screen.findByText(/Оплата только наличными/)).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /По СБП/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Оплатить по СБП/ })).not.toBeInTheDocument();
+    // Cash attestation is the only path forward.
+    expect(screen.getByRole('checkbox')).toBeInTheDocument();
+  });
+
   it('shows the organizer trust card (established): identity + facts, no zeros', async () => {
     mockOrganizer({ clubsCount: 3, trustedMembers: 40 });
     renderWithProviders(

@@ -62,6 +62,9 @@ export function useApproveApplicationMutation() {
       // Approving a paid-club application now creates the membership directly (in `frozen`),
       // so the per-club member list (organizer dashboard) refreshes to show the new row.
       qc.invalidateQueries({ queryKey: queryKeys.clubs.members(clubId) });
+      // …and the cross-club «Оплата вступления» block on «Мои клубы» — the new frozen member must
+      // appear there too, not only inside Управление → Участники (it has a 60s staleTime otherwise).
+      qc.invalidateQueries({ queryKey: queryKeys.organizer.awaitingDues });
     },
   });
 }

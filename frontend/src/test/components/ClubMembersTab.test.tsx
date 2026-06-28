@@ -58,12 +58,12 @@ function mockMembers(rows: MemberListItemDto[]) {
 }
 
 describe('ClubMembersTab — de-Stars dashboard', () => {
-  it('organizer view splits members into «Скоро закончится» / «Ждут оплаты» / «Участники»', async () => {
+  it('organizer view splits members into «Скоро закончится» / «Оплата вступления» / «Участники»', async () => {
     mockMembers([ORGANIZER, FAR, EXPIRING, FROZEN]);
     renderWithProviders(<ClubMembersTab clubId={CLUB_ID} isOrganizer />);
 
     expect(await screen.findByText(/Скоро закончится/)).toBeInTheDocument();
-    expect(screen.getByText(/Ждут оплаты/)).toBeInTheDocument();
+    expect(screen.getByText(/Оплата вступления/)).toBeInTheDocument();
     expect(screen.getByText(/^Участники/)).toBeInTheDocument();
 
     // Frozen + expiring each expose a «Взнос получен» action; the calm members do not.
@@ -80,7 +80,7 @@ describe('ClubMembersTab — de-Stars dashboard', () => {
 
     expect(await screen.findByText(/^Участники/)).toBeInTheDocument();
     expect(screen.queryByText(/Скоро закончится/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Ждут оплаты/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Оплата вступления/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Взнос получен/ })).not.toBeInTheDocument();
   });
 

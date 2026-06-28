@@ -263,9 +263,9 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
       {awaiting.length > 0 && (
         <>
           <div className="rd-section-sub-h rd-attn-pay">
-            💸 Ждут оплаты <span className="rd-count">· {awaiting.length}</span>
+            💸 Оплата вступления <span className="rd-count">· {awaiting.length}</span>
           </div>
-          <div className="rd-attn-hint">Вступили, но ещё ни разу не платили — доступа нет.</div>
+          <div className="rd-attn-hint">Вступили — подтвердите взнос, чтобы открыть доступ.</div>
           <div className="rd-glass rd-rep-panel rd-attn-block rd-attn-block-pay">
             {awaiting.map((member) => (
               <DuesActionRow

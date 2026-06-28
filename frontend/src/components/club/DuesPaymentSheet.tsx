@@ -69,7 +69,11 @@ const OrganizerTrustCard: FC<{ clubId: string }> = ({ clubId }) => {
         )}
       </div>
       {isFresh && (
-        <div className="rd-ot-nudge">Организатор новый на платформе. Не уверены — напишите ему перед первым переводом.</div>
+        <div className="rd-ot-nudge">
+          {org.username
+            ? 'Организатор новый на платформе. Не уверены — напишите ему перед первым переводом.'
+            : 'Организатор новый на платформе и не указал Telegram — оплачивайте только при личной встрече.'}
+        </div>
       )}
     </div>
   );
@@ -109,8 +113,17 @@ export const DuesPaymentSheet: FC<DuesPaymentSheetProps> = ({
   const claim = useClaimDuesMutation();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // No СБП requisites → cash is the only option.
+  // Безопасность: если у организатора не указан Telegram (написать перед переводом нельзя), СБП-перевод
+  // на «вслепую» рискован — оставляем только наличные (передаются лично). `org` undefined пока грузится.
+  const { data: org } = useOrganizerCardQuery(clubId, { enabled: true });
+  const noContact = !!org && !org.username;
+  // СБП доступен только когда есть реквизиты И организатору можно написать.
+  const sbpAllowed = !!paymentLink && !noContact;
+
+  // No СБП requisites (or no organizer contact) → cash is the only option.
   const [method, setMethod] = useState<Method>(paymentLink ? 'sbp' : 'cash');
+  // Effective method clamps to cash when СБП isn't allowed (handles async org load without a state race).
+  const effectiveMethod: Method = sbpAllowed ? method : 'cash';
   const [proofUrl, setProofUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [cashConfirmed, setCashConfirmed] = useState(false);
@@ -147,14 +160,14 @@ export const DuesPaymentSheet: FC<DuesPaymentSheetProps> = ({
     }
   };
 
-  const canConfirm = method === 'sbp' ? !!proofUrl : cashConfirmed;
+  const canConfirm = effectiveMethod === 'sbp' ? !!proofUrl : cashConfirmed;
 
   const handleConfirm = () => {
     if (!canConfirm || claim.isPending) return;
     setError(null);
     haptic.impact('medium');
     claim.mutate(
-      { clubId, method, proofUrl: method === 'sbp' ? proofUrl : null },
+      { clubId, method: effectiveMethod, proofUrl: effectiveMethod === 'sbp' ? proofUrl : null },
       {
         onSuccess: () => { haptic.notify('success'); onClaimed(); },
         onError: (e) => {
@@ -186,8 +199,16 @@ export const DuesPaymentSheet: FC<DuesPaymentSheetProps> = ({
           {/* Trust card — who the money goes to (de-Stars: organizer-direct, off-platform). */}
           <OrganizerTrustCard clubId={clubId} />
 
-          {/* Method switch — only when both are available (requisites set). */}
-          {paymentLink && (
+          {/* Safety: organizer has no Telegram → can't be messaged → СБП is hidden, cash-only. */}
+          {noContact && (
+            <div className="rd-ot-nudge">
+              Оплата только наличными: организатор не указал Telegram, написать ему перед переводом нельзя.
+              Передавайте взнос лично — так безопаснее.
+            </div>
+          )}
+
+          {/* Method switch — only when both are available (requisites set + organizer is contactable). */}
+          {sbpAllowed && (
             <div className="rd-seg-control" role="tablist">
               <button
                 type="button"
@@ -212,7 +233,7 @@ export const DuesPaymentSheet: FC<DuesPaymentSheetProps> = ({
 
           {error && <div className="rd-error" style={{ textAlign: 'left' }}>{error}</div>}
 
-          {method === 'sbp' ? (
+          {effectiveMethod === 'sbp' ? (
             <>
               {/* Step 1 — pay */}
               <div className="rd-step">

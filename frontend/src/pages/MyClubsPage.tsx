@@ -546,13 +546,15 @@ export const MyClubsPage: FC = () => {
       )}
 
       {/* 2b. Awaiting dues (organizer, cross-club) — frozen members the organizer must admit by
-             confirming their off-platform dues. Mirrors «Ждут оплаты» inside Управление → Участники. */}
+             confirming their off-platform dues: join-by-«Вступить», approved applications, and members
+             who already declared payment («Оплата заявлена»). Mirrors «Оплата вступления» inside
+             Управление → Участники. */}
       {!loading && awaitingDues.length > 0 && (
         <>
           <div className="rd-section-sub-h rd-attn-pay">
-            💸 Ждут оплаты <span className="rd-count">· {awaitingDues.length}</span>
+            💸 Оплата вступления <span className="rd-count">· {awaitingDues.length}</span>
           </div>
-          <div className="rd-attn-hint">Вступили в ваши клубы, но ещё не платили — подтвердите взнос, чтобы открыть доступ.</div>
+          <div className="rd-attn-hint">Вступили в ваши клубы — подтвердите взнос, чтобы открыть доступ.</div>
           <div className="rd-glass rd-rep-panel rd-attn-block rd-attn-block-pay">
             {awaitingDues.map((item) => (
               <AwaitingDuesRow

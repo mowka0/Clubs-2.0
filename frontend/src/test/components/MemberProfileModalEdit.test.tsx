@@ -43,12 +43,26 @@ function mockProfile(note: string | null, awards: AwardDto[] = [], applicationAn
 }
 
 describe('MemberProfileModal — admin edit (S1)', () => {
-  it('shows the organizer note read-only to the organizer', async () => {
+  it('shows the saved note in the always-open field to the organizer', async () => {
     mockProfile('Помогает с площадкой');
     renderWithProviders(
       <MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer onClose={() => {}} />,
     );
-    expect(await screen.findByText('Помогает с площадкой')).toBeInTheDocument();
+    // The note is an always-open textarea (item 4), so it surfaces as the field's value.
+    expect(await screen.findByDisplayValue('Помогает с площадкой')).toBeInTheDocument();
+  });
+
+  it('note field is always-open in a free club, alongside «Удалить из клуба» (item 4)', async () => {
+    mockProfile(null);
+    // Free member: no access window → de-Stars subscription strip is hidden, but the note must still
+    // have a home in the management panel (the bug: panel was just «Удалить из клуба»).
+    const free: MemberListItemDto = { ...MEMBER, subscriptionExpiresAt: null, accessStatus: 'active' };
+    renderWithProviders(
+      <MemberProfileModal member={free} clubId={CLUB} isOrganizer onClose={() => {}} />,
+    );
+    // The note textarea is present without tapping ✎.
+    expect(await screen.findByPlaceholderText(/помогает с площадкой/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Удалить из клуба/ })).toBeInTheDocument();
   });
 
   it('shows the join-application answer to the organizer', async () => {
@@ -80,7 +94,7 @@ describe('MemberProfileModal — admin edit (S1)', () => {
     expect(screen.queryByRole('button', { name: /Редактировать/ })).not.toBeInTheDocument();
   });
 
-  it('✎ → editing the note saves via PATCH /note', async () => {
+  it('editing the always-open note saves via PATCH /note (its own «Сохранить заметку»)', async () => {
     mockProfile(null);
     let patchedNote: string | null | undefined;
     server.use(
@@ -96,9 +110,9 @@ describe('MemberProfileModal — admin edit (S1)', () => {
     const user = userEvent.setup();
     renderWithProviders(<MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer onClose={() => {}} />);
 
-    await user.click(await screen.findByRole('button', { name: /Редактировать/ }));
-    await user.type(screen.getByPlaceholderText(/помогает с площадкой/i), 'Завсегдатай');
-    await user.click(screen.getByRole('button', { name: /^Сохранить$/ }));
+    // No ✎ — the note field is always open; «Сохранить заметку» appears once the text changes.
+    await user.type(await screen.findByPlaceholderText(/помогает с площадкой/i), 'Завсегдатай');
+    await user.click(screen.getByRole('button', { name: /Сохранить заметку/ }));
 
     await waitFor(() => expect(patchedNote).toBe('Завсегдатай'));
   });
