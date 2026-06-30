@@ -369,8 +369,8 @@ const FrozenMembershipRow: FC<FrozenMembershipRowProps> = ({ membership, club, o
       <div className="rd-info">
         <div className="rd-ttl">{name}</div>
         <div className="rd-met">{priceLine}</div>
-        <div className={`rd-met ${claimed ? 'rd-met-ok' : 'rd-met-warn'}`}>
-          {claimed ? 'Оплата на проверке' : 'Нужно оплатить'}
+        <div className={`rd-met ${claimed ? 'rd-met-ok' : 'rd-met-soft'}`}>
+          {claimed ? 'Оплата на проверке' : 'Не забудьте оплатить взнос'}
         </div>
       </div>
       <button

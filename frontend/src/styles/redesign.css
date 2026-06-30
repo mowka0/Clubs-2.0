@@ -344,8 +344,8 @@
 .rd-app-confirm-no { background: var(--surface-2); color: var(--text); }
 .rd-app-confirm-yes { background: var(--danger); color: #fff; }
 /* Status meta lines (frozen «Доступ закрыт» card) — colour replaces the old right-side badge so the
-   top-right corner is free for the «×». */
-.rd-rep-row .rd-met.rd-met-warn { color: var(--danger); }
+   top-right corner is free for the «×». A soft accent (not alarming red) reads as a gentle reminder. */
+.rd-rep-row .rd-met.rd-met-soft { color: var(--accent); }
 .rd-rep-row .rd-met.rd-met-ok { color: var(--live); }
 .rd-rep-row .rd-ico {
   width: 36px; height: 36px; border-radius: 10px;
@@ -417,7 +417,10 @@
 }
 .rd-mgmt-pb.primary { border: 0; background: var(--accent-grad); color: #fff; box-shadow: 0 5px 14px var(--accent-shadow-soft); }
 .rd-mgmt-pb.primary small { display: block; font-size: 10.5px; font-weight: 600; opacity: 0.92; margin-top: 1px; }
+.rd-mgmt-pb.danger { border: 0; background: var(--danger-soft); color: var(--danger); }
 .rd-mgmt-pb:disabled { opacity: 0.5; cursor: default; }
+/* Frozen status line — plain text (not the boxed «rd-claim» card). */
+.rd-mgmt-claim-line { font-size: 13px; font-weight: 700; color: var(--text); }
 .rd-mgmt-note { border-top: 1px solid var(--hairline); padding: 11px 15px; display: flex; gap: 9px; font-size: 12.5px; color: var(--text-dim); line-height: 1.45; }
 .rd-mgmt-note-k { color: var(--text-faint); font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; padding-top: 2px; flex-shrink: 0; }
 .rd-mgmt-killzone { border-top: 1px solid var(--hairline); padding: 10px 15px; display: flex; justify-content: center; }

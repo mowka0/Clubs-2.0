@@ -389,28 +389,29 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
         {/* FROZEN paid member: review the dues claim, then open access or reject+refund the paid join. */}
         {isPaidMember && frozen && (
           <div className="rd-mgmt-body">
-            <div className="rd-claim rd-claim-compact">
-              <div className="rd-claim-h">
-                {claim
-                  ? `⏳ Оплата заявлена · ${claim.method === 'cash' ? 'наличные' : 'СБП'}`
-                  : '🔒 Доступ закрыт · участник ещё не оплатил'}
-              </div>
-              {claim?.proofUrl ? (
-                <button type="button" className="rd-claim-thumb" onClick={() => setZoomedProof(claim.proofUrl)}>
-                  <img src={claim.proofUrl} alt="Скриншот оплаты" />
-                  <span className="rd-claim-thumb-hint">нажмите, чтобы увеличить</span>
-                </button>
-              ) : claim ? (
-                <div className="rd-claim-note">Наличные — скриншота нет, подтвердите после получения.</div>
-              ) : null}
+            {/* Status as plain text (no boxed «rd-claim» card) — the screenshot looked heavy. */}
+            <div className="rd-mgmt-claim-line">
+              {claim
+                ? `⏳ Оплата заявлена · ${claim.method === 'cash' ? 'наличные' : 'СБП'}`
+                : '🔒 Доступ закрыт · участник ещё не оплатил'}
             </div>
-            <button type="button" className="rd-btn-primary" disabled={busy} onClick={() => run(markPaid, `Доступ ${member.firstName} открыт`)}>
-              {markPaid.isPending ? <Spinner size="s" /> : 'Взнос получен · открыть доступ'}
-            </button>
-            {!confirmingReject ? (
-              <button type="button" className="rd-mgmt-kill" disabled={busy} onClick={() => { setError(null); setConfirmingReject(true); }}>
-                Отказать · вернуть перевод
+            {claim?.proofUrl ? (
+              <button type="button" className="rd-claim-thumb" onClick={() => setZoomedProof(claim.proofUrl)}>
+                <img src={claim.proofUrl} alt="Скриншот оплаты" />
+                <span className="rd-claim-thumb-hint">нажмите, чтобы увеличить</span>
               </button>
+            ) : claim ? (
+              <div className="rd-claim-note">Наличные — скриншота нет, подтвердите после получения.</div>
+            ) : null}
+            {!confirmingReject ? (
+              <div className="rd-mgmt-pair">
+                <button type="button" className="rd-mgmt-pb primary" disabled={busy} onClick={() => run(markPaid, `Доступ ${member.firstName} открыт`)}>
+                  {markPaid.isPending ? <Spinner size="s" /> : 'Взнос получен · открыть доступ'}
+                </button>
+                <button type="button" className="rd-mgmt-pb danger" disabled={busy} onClick={() => { setError(null); setConfirmingReject(true); }}>
+                  Отказать · вернуть перевод
+                </button>
+              </div>
             ) : (
               <div className="rd-reject-confirm">
                 <div className="rd-reject-q">Убрать {member.firstName} из клуба? Перевод вернёте сами — платформа деньги не держит.</div>
