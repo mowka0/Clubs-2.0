@@ -4,7 +4,7 @@ import { useQueries } from '@tanstack/react-query';
 import { Modal, Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
-import { useMyClubsQuery } from '../queries/clubs';
+import { useLeaveClubMutation, useMyClubsQuery } from '../queries/clubs';
 import { useMyReputationQuery, useOrganizerAwaitingDuesQuery } from '../queries/members';
 import {
   useCancelApplicationMutation,
@@ -319,33 +319,69 @@ interface FrozenMembershipRowProps {
   membership: MembershipDto;
   club: ClubDetailDto | undefined;
   onClick: () => void;
+  /** Leave the club (called after the inline «точно?» confirm) — undoes an accidental paid join. */
+  onLeave: () => void;
+  /** This row's leave request is in flight. */
+  leaving: boolean;
 }
 
 /** Member-side «Доступ закрыт — оплатите»: one of the CALLER's OWN frozen memberships (the organizer
  *  closed access, or the monthly dues window lapsed). Tap → the club page, where «Оплатить взнос» lets
- *  them declare payment. Mirrors the organizer's «Оплата вступления», but from the member's side. */
-const FrozenMembershipRow: FC<FrozenMembershipRowProps> = ({ membership, club, onClick }) => {
+ *  them declare payment. The «×» (with an inline confirm) leaves the club — undo an accidental paid join.
+ *  Mirrors the organizer's «Оплата вступления», but from the member's side. */
+const FrozenMembershipRow: FC<FrozenMembershipRowProps> = ({ membership, club, onClick, onLeave, leaving }) => {
+  const [confirming, setConfirming] = useState(false);
   const name = club?.name ?? `Клуб ${membership.clubId.slice(0, 8)}…`;
   const initials = club ? getInitials(club.name) : '·';
   const claimed = Boolean(membership.duesClaimedAt);
   const priceLine = club && club.subscriptionPrice > 0 ? `Взнос ${club.subscriptionPrice} ₽ / мес` : 'Доступ закрыт';
+
+  if (confirming) {
+    return (
+      <div className="rd-rep-row rd-app-confirm">
+        <div className="rd-info">
+          <div className="rd-ttl">Отменить вступление?</div>
+          <div className="rd-met">«{name}» — выйдете из клуба.</div>
+        </div>
+        <div className="rd-app-confirm-acts">
+          <button type="button" className="rd-app-confirm-no" disabled={leaving} onClick={() => setConfirming(false)}>
+            Нет
+          </button>
+          <button type="button" className="rd-app-confirm-yes" disabled={leaving} onClick={onLeave}>
+            {leaving ? '…' : 'Выйти'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <button type="button" className="rd-rep-row" onClick={onClick}>
+    <div
+      className="rd-rep-row rd-app-row"
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+    >
       <span className="rd-ico">
         {club?.avatarUrl ? <img src={club.avatarUrl} alt="" /> : initials}
       </span>
       <div className="rd-info">
         <div className="rd-ttl">{name}</div>
         <div className="rd-met">{priceLine}</div>
+        <div className={`rd-met ${claimed ? 'rd-met-ok' : 'rd-met-warn'}`}>
+          {claimed ? 'Оплата на проверке' : 'Нужно оплатить'}
+        </div>
       </div>
-      <div className="rd-score">
-        {claimed ? (
-          <span className="rd-badge rd-going">Оплата на проверке</span>
-        ) : (
-          <span className="rd-badge rd-warn">Нужно оплатить</span>
-        )}
-      </div>
-    </button>
+      <button
+        type="button"
+        className="rd-app-cancel"
+        aria-label="Отменить вступление"
+        onClick={(e) => { e.stopPropagation(); setConfirming(true); }}
+      >
+        <span aria-hidden="true">✕</span>
+      </button>
+    </div>
   );
 };
 
@@ -364,6 +400,7 @@ export const MyClubsPage: FC = () => {
   const [reviewing, setReviewing] = useState<PendingApplicationDto | null>(null);
   const [duesMember, setDuesMember] = useState<OrganizerDuesMemberDto | null>(null);
   const cancelMutation = useCancelApplicationMutation();
+  const leaveMutation = useLeaveClubMutation();
 
   const myClubs = myClubsQuery.data ?? [];
   // Split the caller's own frozen memberships into a dedicated «Доступ закрыт — оплатите» block so a
@@ -596,6 +633,14 @@ export const MyClubsPage: FC = () => {
                 membership={m}
                 club={clubDetails[m.clubId]}
                 onClick={() => handleClubClick(m.clubId)}
+                leaving={leaveMutation.isPending && leaveMutation.variables === m.clubId}
+                onLeave={() => {
+                  haptic.impact('medium');
+                  leaveMutation.mutate(m.clubId, {
+                    onSuccess: () => { haptic.notify('success'); setToastMessage('Вы вышли из клуба'); },
+                    onError: (e) => { haptic.notify('error'); setToastMessage(e instanceof Error ? e.message : 'Не удалось выйти из клуба'); },
+                  });
+                }}
               />
             ))}
           </div>

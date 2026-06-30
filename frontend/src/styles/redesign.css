@@ -343,6 +343,10 @@
 .rd-app-confirm-acts > button:disabled { opacity: 0.5; cursor: default; }
 .rd-app-confirm-no { background: var(--surface-2); color: var(--text); }
 .rd-app-confirm-yes { background: var(--danger); color: #fff; }
+/* Status meta lines (frozen «Доступ закрыт» card) — colour replaces the old right-side badge so the
+   top-right corner is free for the «×». */
+.rd-rep-row .rd-met.rd-met-warn { color: var(--danger); }
+.rd-rep-row .rd-met.rd-met-ok { color: var(--live); }
 .rd-rep-row .rd-ico {
   width: 36px; height: 36px; border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
