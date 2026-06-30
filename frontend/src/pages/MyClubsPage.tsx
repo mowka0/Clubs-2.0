@@ -14,7 +14,6 @@ import {
 } from '../queries/applications';
 import { queryKeys } from '../queries/queryKeys';
 import { Toast } from '../components/Toast';
-import { ConfirmDialog } from '../components/ConfirmDialog';
 import { CreateClubModal } from '../components/CreateClubModal';
 import { ApplicationReviewModal } from '../components/applications/ApplicationReviewModal';
 import { MemberProfileModal } from '../components/club/MemberProfileModal';
@@ -152,14 +151,39 @@ interface AppCardProps {
   application: ApplicationDto;
   club: ClubDetailDto | undefined;
   onClick: () => void;
-  /** Open the withdraw-confirmation popup (× corner button). */
+  /** Withdraw the application (called after the inline «точно?» confirm). */
   onCancel: () => void;
+  /** This card's withdraw request is in flight. */
+  cancelling: boolean;
 }
 
-const AppCard: FC<AppCardProps> = ({ application, club, onClick, onCancel }) => {
+const AppCard: FC<AppCardProps> = ({ application, club, onClick, onCancel, cancelling }) => {
+  // Lightweight inline confirm (no modal): the «×» flips the row into a «Отменить заявку?» two-button
+  // state. Simpler than a popup and consistent with the app's other destructive two-tap confirms.
+  const [confirming, setConfirming] = useState(false);
   const name = club?.name ?? `Клуб ${application.clubId.slice(0, 8)}…`;
   const initials = club ? getInitials(club.name) : '·';
-  // A div (not a <button>) so the «×» withdraw can nest as a real button without invalid button-in-button,
+
+  if (confirming) {
+    return (
+      <div className="rd-rep-row rd-app-confirm">
+        <div className="rd-info">
+          <div className="rd-ttl">Отменить заявку?</div>
+          <div className="rd-met">«{name}» — можно будет подать заново.</div>
+        </div>
+        <div className="rd-app-confirm-acts">
+          <button type="button" className="rd-app-confirm-no" disabled={cancelling} onClick={() => setConfirming(false)}>
+            Нет
+          </button>
+          <button type="button" className="rd-app-confirm-yes" disabled={cancelling} onClick={onCancel}>
+            {cancelling ? '…' : 'Отменить'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // A div (not a <button>) so the «×» can nest as a real button without invalid button-in-button,
   // while the row keeps its `.rd-rep-row + .rd-rep-row` divider. Only live (pending) apps reach here.
   return (
     <div
@@ -181,7 +205,7 @@ const AppCard: FC<AppCardProps> = ({ application, club, onClick, onCancel }) => 
         type="button"
         className="rd-app-cancel"
         aria-label="Отменить заявку"
-        onClick={(e) => { e.stopPropagation(); onCancel(); }}
+        onClick={(e) => { e.stopPropagation(); setConfirming(true); }}
       >
         <span aria-hidden="true">✕</span>
       </button>
@@ -339,7 +363,6 @@ export const MyClubsPage: FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [reviewing, setReviewing] = useState<PendingApplicationDto | null>(null);
   const [duesMember, setDuesMember] = useState<OrganizerDuesMemberDto | null>(null);
-  const [cancelTarget, setCancelTarget] = useState<ApplicationDto | null>(null);
   const cancelMutation = useCancelApplicationMutation();
 
   const myClubs = myClubsQuery.data ?? [];
@@ -592,7 +615,17 @@ export const MyClubsPage: FC = () => {
                 application={app}
                 club={clubDetails[app.clubId]}
                 onClick={() => handleClubClick(app.clubId)}
-                onCancel={() => { haptic.impact('light'); setCancelTarget(app); }}
+                cancelling={cancelMutation.isPending && cancelMutation.variables?.applicationId === app.id}
+                onCancel={() => {
+                  haptic.impact('medium');
+                  cancelMutation.mutate(
+                    { applicationId: app.id },
+                    {
+                      onSuccess: () => { haptic.notify('success'); setToastMessage('Заявка отменена'); },
+                      onError: (e) => { haptic.notify('error'); setToastMessage(e instanceof Error ? e.message : 'Не удалось отменить заявку'); },
+                    },
+                  );
+                }}
               />
             ))}
           </div>
@@ -702,29 +735,6 @@ export const MyClubsPage: FC = () => {
           isOrganizer
           onClose={() => setDuesMember(null)}
           onActionToast={setToastMessage}
-        />
-      )}
-
-      {cancelTarget && (
-        <ConfirmDialog
-          title="Отменить заявку?"
-          message={
-            <>Заявка в «{clubDetails[cancelTarget.clubId]?.name ?? 'клуб'}» будет отменена. Если передумаете — сможете подать её заново.</>
-          }
-          confirmLabel="Отменить заявку"
-          cancelLabel="Назад"
-          danger
-          busy={cancelMutation.isPending}
-          onConfirm={() =>
-            cancelMutation.mutate(
-              { applicationId: cancelTarget.id },
-              {
-                onSuccess: () => { haptic.notify('success'); setCancelTarget(null); setToastMessage('Заявка отменена'); },
-                onError: (e) => { haptic.notify('error'); setToastMessage(e instanceof Error ? e.message : 'Не удалось отменить заявку'); },
-              },
-            )
-          }
-          onCancel={() => { if (!cancelMutation.isPending) setCancelTarget(null); }}
         />
       )}
 
