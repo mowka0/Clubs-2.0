@@ -402,6 +402,11 @@
 .rd-rep-row.rd-frozen .rd-ttl,
 .rd-rep-row.rd-frozen .rd-score { opacity: 0.6; }
 .rd-met.rd-met-frozen { color: var(--ice); }
+/* Round the iced tint + rail at the panel edges so the blue strip follows the block's corner radius
+   instead of poking out square. Frozen rows sink to the bottom → :last-child is the common case;
+   :first-child covers an all-frozen list. Inner radius = panel 22px − 4px panel padding. */
+.rd-rep-row.rd-frozen:first-child { border-top-left-radius: 18px; border-top-right-radius: 18px; }
+.rd-rep-row.rd-frozen:last-child { border-bottom-left-radius: 18px; border-bottom-right-radius: 18px; }
 /* Keep the ice tint + «Доступ закрыт» legible — override the 0.45 disabled dim on the picker. */
 .rd-pick-toggle.rd-frozen:disabled { opacity: 0.8; }
 .rd-pick-toggle.rd-frozen .rd-pick-note { color: var(--ice); }
