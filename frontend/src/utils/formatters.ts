@@ -1,5 +1,5 @@
 export function formatPrice(price: number): string {
-  return price === 0 ? 'Бесплатно' : `${price} Stars / мес`;
+  return price === 0 ? 'Бесплатно' : `${price} ₽ / мес`;
 }
 
 /**

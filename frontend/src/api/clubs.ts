@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import type { ClubDetailDto, ClubListItemDto, MembershipDto, PageResponse } from '../types/api';
+import type { ClubDetailDto, ClubListItemDto, MembershipDto, OrganizerCardDto, PageResponse } from '../types/api';
 
 export interface ClubFilters {
   category?: string;
@@ -24,6 +24,9 @@ export interface CreateClubBody {
   avatarUrl?: string;
   rules?: string;
   applicationQuestion?: string;
+  // SBP dues requisites — required by the backend when subscriptionPrice > 0.
+  paymentLink?: string;
+  paymentMethodNote?: string;
 }
 
 export function getClubs(filters?: ClubFilters): Promise<PageResponse<ClubListItemDto>> {
@@ -60,6 +63,9 @@ export interface UpdateClubBody {
   avatarUrl?: string | null;
   rules?: string | null;
   applicationQuestion?: string | null;
+  // SBP dues requisites (blank string clears, same as rules/district).
+  paymentLink?: string | null;
+  paymentMethodNote?: string | null;
 }
 
 export function updateClub(id: string, body: UpdateClubBody): Promise<ClubDetailDto> {
@@ -73,4 +79,9 @@ export function deleteClub(id: string): Promise<void> {
 export async function uploadImage(file: File): Promise<string> {
   const { url } = await apiClient.uploadFile('/api/upload', file);
   return url;
+}
+
+/** Organizer trust card for the dues-payment sheet (de-Stars). JWT-only / others-visible. */
+export function getOrganizerCard(clubId: string): Promise<OrganizerCardDto> {
+  return apiClient.get<OrganizerCardDto>(`/api/clubs/${clubId}/organizer-card`);
 }

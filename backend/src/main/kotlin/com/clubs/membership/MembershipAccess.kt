@@ -3,28 +3,25 @@ package com.clubs.membership
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import org.jooq.Condition
-import java.time.OffsetDateTime
 
 /**
- * Canonical "this membership currently grants club access" predicate: `active`,
- * OR `cancelled` but still within the paid period. `expired`/`grace_period` have
- * no access.
+ * Canonical "this membership currently grants club CONTENT access" predicate:
+ * status is `active`. Access is organizer-controlled (de-Stars, Slice 2): the
+ * organizer admits a member (`active`) or gates them pending an off-platform dues
+ * payment (`frozen`, no access). `frozen` / `grace_period` / `expired` /
+ * `cancelled` all have no access.
  *
  * Single source of truth so the predicate can't drift between call sites — that
- * drift is exactly what let a cancelled-but-still-paid member vote on an event
- * (and receive its DM) while the same event never appeared in their activities
- * feed. Used by JooqMembershipRepository (isMember / isActiveMemberInActiveClub /
+ * drift is exactly what let a member vote on an event (and receive its DM) while
+ * the same event never appeared in their activities feed. Used by
+ * JooqMembershipRepository (isMember / isActiveMemberInActiveClub /
  * findMemberTelegramIds) and JooqEventRepository (findMyFeed).
  *
- * NOTE: grace_period is intentionally excluded, matching the enforced access
- * model. If the product decides grace_period retains access (PRD §4.7.3.3),
- * change it here once and every call site follows.
+ * NOTE: this predicate is CONTENT access only. "Belongs to the club" (member
+ * rosters, my-clubs list, find-for-management, slot occupancy) is a WIDER set that
+ * also includes `frozen` — those predicates live inline in JooqMembershipRepository
+ * and are NOT this one. See the status×surface matrix in docs/modules/payment-v2.md.
  */
 object MembershipAccess {
-    fun hasAccess(now: OffsetDateTime): Condition =
-        MEMBERSHIPS.STATUS.eq(MembershipStatus.active)
-            .or(
-                MEMBERSHIPS.STATUS.eq(MembershipStatus.cancelled)
-                    .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.greaterThan(now))
-            )
+    fun hasAccess(): Condition = MEMBERSHIPS.STATUS.eq(MembershipStatus.active)
 }

@@ -129,14 +129,14 @@ class JooqEventRepository(
     override fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MyFeedItem> {
         val now = OffsetDateTime.now()
 
-        // Membership access must match the voting/DM access predicate, else a
-        // cancelled-but-still-paid member can vote on (and is DM'd about) an event
-        // that never shows up in their feed. Shared MembershipAccess predicate.
+        // Membership access must match the voting/DM access predicate, else a member could vote on
+        // (and is DM'd about) an event that never shows up in their feed. Shared MembershipAccess
+        // predicate: content access = status `active` (a `frozen` member is gated out of all three).
         val baseCondition = EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_2)
             .and(EVENTS.EVENT_DATETIME.gt(now))
             .and(CLUBS.IS_ACTIVE.eq(true))
             .and(MEMBERSHIPS.USER_ID.eq(userId))
-            .and(MembershipAccess.hasAccess(now))
+            .and(MembershipAccess.hasAccess())
 
         val total = dsl.select(DSL.countDistinct(EVENTS.ID))
             .from(EVENTS)

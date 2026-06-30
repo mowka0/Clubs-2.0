@@ -67,19 +67,19 @@ export const CreateSkladchinaPage: FC = () => {
   const { id: clubId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const haptic = useHaptic();
-  const membersQuery = useClubMembersQuery(clubId, { includeCancelled: true });
+  const membersQuery = useClubMembersQuery(clubId);
   const createMut = useCreateSkladchinaMutation();
 
-  // Cancelled-but-in-period members must remain visible (so organizer sees
-  // why they can't pick that person) but cannot be added to a new skladchina.
-  // Sort them to the end so the active roster reads first.
+  // De-Stars: a frozen member (paid access not yet confirmed) has no club access, so they can't be
+  // charged into a new skladchina. They stay visible (so the organizer sees why) but disabled,
+  // sorted to the end so the active roster reads first.
   const eligibleMembers = useMemo(
     () => {
       const rows = membersQuery.data ?? [];
       return [...rows].sort((a, b) => {
-        const aCanc = a.subscriptionCancelled ? 1 : 0;
-        const bCanc = b.subscriptionCancelled ? 1 : 0;
-        return aCanc - bCanc;
+        const aFrozen = a.accessStatus === 'frozen' ? 1 : 0;
+        const bFrozen = b.accessStatus === 'frozen' ? 1 : 0;
+        return aFrozen - bFrozen;
       });
     },
     [membersQuery.data],
@@ -111,7 +111,7 @@ export const CreateSkladchinaPage: FC = () => {
 
   const toggleParticipant = (userId: string) => {
     const member = eligibleMembers.find((m) => m.userId === userId);
-    if (member?.subscriptionCancelled) return;
+    if (member?.accessStatus === 'frozen') return;
     haptic.select();
     const next = new Set(selectedIds);
     if (next.has(userId)) next.delete(userId);
@@ -329,25 +329,25 @@ export const CreateSkladchinaPage: FC = () => {
             <div className="rd-pick-list">
               {eligibleMembers.map((m) => {
                 const isSelected = selectedIds.has(m.userId);
-                const isCancelled = m.subscriptionCancelled === true;
+                const isFrozen = m.accessStatus === 'frozen';
                 return (
                   <div key={m.userId} className="rd-pick-row">
                     <button
                       type="button"
-                      className={`rd-pick-toggle${isSelected ? ' rd-selected' : ''}`}
+                      className={`rd-pick-toggle${isSelected ? ' rd-selected' : ''}${isFrozen ? ' rd-frozen' : ''}`}
                       onClick={() => toggleParticipant(m.userId)}
-                      disabled={isCancelled}
-                      aria-disabled={isCancelled}
+                      disabled={isFrozen}
+                      aria-disabled={isFrozen}
                     >
                       <span className="rd-check-box">{isSelected ? '✓' : ''}</span>
                       <span className="rd-pick-name">
                         {m.firstName}{m.lastName ? ` ${m.lastName}` : ''}
                       </span>
-                      {isCancelled && (
-                        <span className="rd-pick-note">Отменил подписку</span>
+                      {isFrozen && (
+                        <span className="rd-pick-note">❄️ Доступ закрыт</span>
                       )}
                     </button>
-                    {!isCancelled && mode === 'fixed_individual' && isSelected && (
+                    {!isFrozen && mode === 'fixed_individual' && isSelected && (
                       <input
                         type="number"
                         inputMode="decimal"

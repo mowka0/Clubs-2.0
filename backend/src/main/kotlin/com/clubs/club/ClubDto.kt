@@ -45,7 +45,10 @@ data class ClubDetailDto(
     val applicationQuestion: String?,
     val inviteLink: String?,
     val memberCount: Int,
-    val isActive: Boolean
+    val isActive: Boolean,
+    // SBP dues requisites — only populated for club members (active/frozen) + owner; null otherwise.
+    val paymentLink: String?,
+    val paymentMethodNote: String?
 )
 
 data class CreateClubRequest(
@@ -79,7 +82,14 @@ data class CreateClubRequest(
 
     val avatarUrl: String? = null,
     val rules: String? = null,
-    val applicationQuestion: String? = null
+    val applicationQuestion: String? = null,
+
+    // SBP dues requisites. Mandatory when subscriptionPrice > 0 (enforced in ClubService.createClub):
+    // a paid club must tell members how to pay. paymentLink = the СБП link/phone; note = optional hint.
+    @field:Size(max = 500, message = "Реквизиты: максимум 500 символов")
+    val paymentLink: String? = null,
+    @field:Size(max = 200, message = "Подсказка: максимум 200 символов")
+    val paymentMethodNote: String? = null
 )
 
 data class UpdateClubRequest(
@@ -101,7 +111,32 @@ data class UpdateClubRequest(
 
     val avatarUrl: String? = null,
     val rules: String? = null,
-    val applicationQuestion: String? = null
+    val applicationQuestion: String? = null,
+
+    // SBP dues requisites (settings). null = leave as is; blank = clear to NULL (same as rules/district).
+    @field:Size(max = 500, message = "Реквизиты: максимум 500 символов")
+    val paymentLink: String? = null,
+    @field:Size(max = 200, message = "Подсказка: максимум 200 символов")
+    val paymentMethodNote: String? = null
+)
+
+/**
+ * Trust card for the dues-payment sheet — who the member is about to transfer money to (de-Stars: money
+ * goes organizer-direct, off-platform). Account-focused; the frontend hides facts that aren't meaningful
+ * yet (clubsCount < 2, trustedMembers below threshold) so a fresh account never shows zeros.
+ */
+data class OrganizerCardDto(
+    val firstName: String,
+    val lastName: String?,
+    val username: String?,
+    val avatarUrl: String?,
+    // Organizer's account age on OUR platform (users.created_at). Always shown ("с {дата}" / "недавно").
+    val onPlatformSince: OffsetDateTime,
+    // Active clubs the organizer owns (shown only when ≥ 2).
+    val clubsCount: Int,
+    // Active non-organizer members across all the organizer's active clubs — «доверяют N участников»
+    // (shown only above a threshold). Frozen (not-yet-paid) members are excluded — they aren't proof.
+    val trustedMembers: Int
 )
 
 data class ClubFilterParams(

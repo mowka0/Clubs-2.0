@@ -33,7 +33,7 @@ function toMemberStub(member: ChurnedMemberDto): MemberListItemDto {
     trust: null,
     promiseFulfillmentPct: null,
     totalConfirmations: null,
-    subscriptionCancelled: false,
+    awards: [],
   };
 }
 

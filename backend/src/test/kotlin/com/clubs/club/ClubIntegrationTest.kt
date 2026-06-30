@@ -104,7 +104,8 @@ class ClubIntegrationTest {
             accessType = "open",
             city = "Moscow",
             memberLimit = 30,
-            subscriptionPrice = 100
+            subscriptionPrice = 100,
+            paymentLink = "https://sbp.example/pay" // paid club requires SBP requisites
         )
 
         val response = mockMvc.perform(
@@ -176,7 +177,8 @@ class ClubIntegrationTest {
             accessType = "open",
             city = "SPb",
             memberLimit = 20,
-            subscriptionPrice = 50
+            subscriptionPrice = 50,
+            paymentLink = "https://sbp.example/pay" // paid club requires SBP requisites
         )
 
         mockMvc.perform(
@@ -213,7 +215,8 @@ class ClubIntegrationTest {
             memberLimit = 40,
             subscriptionPrice = 200,
             rules = "Be kind",
-            applicationQuestion = "Why join?"
+            applicationQuestion = "Why join?",
+            paymentLink = "https://sbp.example/pay" // paid club requires SBP requisites
         )
 
         val createResult = mockMvc.perform(

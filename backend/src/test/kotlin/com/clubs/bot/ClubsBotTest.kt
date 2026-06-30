@@ -2,7 +2,6 @@ package com.clubs.bot
 
 import com.clubs.event.EventRepository
 import com.clubs.event.EventResponseRepository
-import com.clubs.payment.PaymentService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -14,12 +13,10 @@ import org.telegram.telegrambots.meta.api.objects.payments.PreCheckoutQuery
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.util.UUID
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 
 class ClubsBotTest {
 
     private lateinit var telegramClient: TelegramClient
-    private lateinit var paymentService: PaymentService
     private lateinit var eventRepository: EventRepository
     private lateinit var eventResponseRepository: EventResponseRepository
     private lateinit var bot: ClubsBot
@@ -27,13 +24,11 @@ class ClubsBotTest {
     @BeforeEach
     fun setUp() {
         telegramClient = mockk(relaxed = true)
-        paymentService = mockk(relaxed = true)
         eventRepository = mockk(relaxed = true)
         eventResponseRepository = mockk(relaxed = true)
         bot = ClubsBot(
             botToken = "dummy-token",
             telegramClient = telegramClient,
-            paymentService = paymentService,
             eventRepository = eventRepository,
             eventResponseRepository = eventResponseRepository
         )
@@ -46,7 +41,9 @@ class ClubsBotTest {
         }
 
     @Test
-    fun `handlePreCheckoutQuery answers ok=true for valid club_subscription payload`() {
+    fun `handlePreCheckoutQuery always rejects (ok=false) — Stars pay-to-join retired`() {
+        // De-Stars: every pre_checkout is rejected so no member is ever charged through the bot —
+        // even a once-valid club_subscription payload.
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val query = buildQuery("Q-1", "club_subscription:$clubId:$userId")
@@ -58,26 +55,13 @@ class ClubsBotTest {
 
         verify(exactly = 1) { telegramClient.execute(any<AnswerPreCheckoutQuery>()) }
         assertEquals("Q-1", sent.captured.preCheckoutQueryId)
-        assertEquals(true, sent.captured.ok)
-        assertNull(sent.captured.errorMessage)
-    }
-
-    @Test
-    fun `handlePreCheckoutQuery answers ok=false with error message for malformed payload`() {
-        val query = buildQuery("Q-2", "not_a_valid_format")
-
-        val sent = slot<AnswerPreCheckoutQuery>()
-        every { telegramClient.execute(capture(sent)) } returns mockk(relaxed = true)
-
-        bot.handlePreCheckoutQuery(query)
-
         assertEquals(false, sent.captured.ok)
-        assertEquals("Некорректный формат заказа. Попробуйте вступить снова из приложения.", sent.captured.errorMessage)
+        assertEquals("Оплата через бота больше не используется. Доступ к клубу открывает организатор.", sent.captured.errorMessage)
     }
 
     @Test
-    fun `handlePreCheckoutQuery answers ok=false for wrong prefix`() {
-        val query = buildQuery("Q-3", "event_ticket:foo:bar")
+    fun `handlePreCheckoutQuery rejects any payload shape`() {
+        val query = buildQuery("Q-2", "not_a_valid_format")
 
         val sent = slot<AnswerPreCheckoutQuery>()
         every { telegramClient.execute(capture(sent)) } returns mockk(relaxed = true)

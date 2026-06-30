@@ -13,7 +13,6 @@ import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
-import com.clubs.payment.PaymentService
 import com.clubs.skladchina.SkladchinaRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -31,9 +30,8 @@ class MembershipServiceTest {
 
     private lateinit var membershipRepository: MembershipRepository
     private lateinit var clubRepository: ClubRepository
-    private lateinit var paymentService: PaymentService
     private lateinit var mapper: MembershipMapper
-    private lateinit var freeMembershipActivator: FreeMembershipActivator
+    private lateinit var membershipActivator: MembershipActivator
     private lateinit var eventResponseRepository: EventResponseRepository
     private lateinit var skladchinaRepository: SkladchinaRepository
     private lateinit var applicationRepository: ApplicationRepository
@@ -45,9 +43,8 @@ class MembershipServiceTest {
     fun setUp() {
         membershipRepository = mockk(relaxed = true)
         clubRepository = mockk(relaxed = true)
-        paymentService = mockk(relaxed = true)
         mapper = MembershipMapper()
-        freeMembershipActivator = mockk(relaxed = true)
+        membershipActivator = mockk(relaxed = true)
         eventResponseRepository = mockk(relaxed = true)
         skladchinaRepository = mockk(relaxed = true)
         applicationRepository = mockk(relaxed = true)
@@ -56,9 +53,8 @@ class MembershipServiceTest {
         membershipService = MembershipService(
             membershipRepository,
             clubRepository,
-            paymentService,
             mapper,
-            freeMembershipActivator,
+            membershipActivator,
             eventResponseRepository,
             skladchinaRepository,
             applicationRepository,
@@ -132,7 +128,7 @@ class MembershipServiceTest {
     }
 
     @Test
-    fun `joinOpenClub free delegates to FreeMembershipActivator`() {
+    fun `joinOpenClub free joins active via activateFree`() {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val club = freeClubRecord(clubId)
@@ -141,39 +137,39 @@ class MembershipServiceTest {
         every { clubRepository.findById(clubId) } returns club
         every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
         every { membershipRepository.countActiveByClubId(clubId) } returns 5
-        every { freeMembershipActivator.activate(userId, clubId) } returns createdMembership
+        every { membershipActivator.activateFree(userId, clubId) } returns createdMembership
 
         val result = membershipService.joinOpenClub(clubId, userId)
 
-        val joined = assertIs<JoinResult.Joined>(result)
-        assertEquals(userId, joined.membership.userId)
-        assertEquals(clubId, joined.membership.clubId)
-        assertEquals("active", joined.membership.status)
-        assertEquals("member", joined.membership.role)
-        assertNotNull(joined.membership.joinedAt)
-        verify(exactly = 1) { freeMembershipActivator.activate(userId, clubId) }
-        verify(exactly = 0) { membershipRepository.create(any(), any()) }
-        verify(exactly = 0) { paymentService.createInvoice(any(), any()) }
+        assertEquals(userId, result.userId)
+        assertEquals(clubId, result.clubId)
+        assertEquals("active", result.status)
+        assertEquals("member", result.role)
+        assertNotNull(result.joinedAt)
+        verify(exactly = 1) { membershipActivator.activateFree(userId, clubId) }
+        verify(exactly = 0) { membershipActivator.activateFrozen(any(), any()) }
     }
 
     @Test
-    fun `joinOpenClub paid sends invoice and does not create membership`() {
+    fun `joinOpenClub paid joins frozen via activateFrozen (no invoice)`() {
+        // De-Stars: a paid join lands the member in `frozen` — they belong but have no access until
+        // the organizer confirms the off-platform dues. No Stars invoice, membership created at once.
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val club = paidClubRecord(clubId, price = 500)
+        val frozenMembership = membership(userId, clubId, status = MembershipStatus.frozen)
 
         every { clubRepository.findById(clubId) } returns club
         every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
         every { membershipRepository.countActiveByClubId(clubId) } returns 5
+        every { membershipActivator.activateFrozen(userId, clubId) } returns frozenMembership
 
         val result = membershipService.joinOpenClub(clubId, userId)
 
-        val pending = assertIs<JoinResult.PendingPayment>(result)
-        assertEquals(clubId, pending.dto.clubId)
-        assertEquals(500, pending.dto.priceStars)
-        assertEquals("pending_payment", pending.dto.status)
-        verify(exactly = 1) { paymentService.createInvoice(userId, clubId) }
-        verify(exactly = 0) { membershipRepository.create(any(), any()) }
+        assertEquals("frozen", result.status)
+        assertEquals(userId, result.userId)
+        verify(exactly = 1) { membershipActivator.activateFrozen(userId, clubId) }
+        verify(exactly = 0) { membershipActivator.activateFree(any(), any()) }
     }
 
     @Test
@@ -220,8 +216,8 @@ class MembershipServiceTest {
         }
 
         assertEquals("Already a member", exception.message)
-        verify(exactly = 0) { membershipRepository.create(any(), any()) }
-        verify(exactly = 0) { paymentService.createInvoice(any(), any()) }
+        verify(exactly = 0) { membershipActivator.activateFree(any(), any()) }
+        verify(exactly = 0) { membershipActivator.activateFrozen(any(), any()) }
     }
 
     @Test
@@ -239,50 +235,50 @@ class MembershipServiceTest {
         }
 
         assertEquals("Club is full", exception.message)
-        verify(exactly = 0) { membershipRepository.create(any(), any()) }
-        verify(exactly = 0) { paymentService.createInvoice(any(), any()) }
+        verify(exactly = 0) { membershipActivator.activateFree(any(), any()) }
+        verify(exactly = 0) { membershipActivator.activateFrozen(any(), any()) }
     }
 
     @Test
-    fun `joinOpenClub paid repeated click sends invoice again (idempotent 202)`() {
+    fun `joinOpenClub when already a frozen member throws Conflict`() {
+        // De-Stars: findActiveByUserAndClub now includes `frozen`, so a gated member who tries to
+        // re-join is correctly rejected as already a member (no duplicate membership).
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val club = paidClubRecord(clubId, price = 500)
+        val frozenMembership = membership(userId, clubId, status = MembershipStatus.frozen)
 
         every { clubRepository.findById(clubId) } returns club
-        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
-        every { membershipRepository.countActiveByClubId(clubId) } returns 5
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns frozenMembership
 
-        val first = membershipService.joinOpenClub(clubId, userId)
-        val second = membershipService.joinOpenClub(clubId, userId)
+        val exception = assertThrows<ConflictException> { membershipService.joinOpenClub(clubId, userId) }
 
-        assertIs<JoinResult.PendingPayment>(first)
-        assertIs<JoinResult.PendingPayment>(second)
-        verify(exactly = 2) { paymentService.createInvoice(userId, clubId) }
-        verify(exactly = 0) { membershipRepository.create(any(), any()) }
+        assertEquals("Already a member", exception.message)
+        verify(exactly = 0) { membershipActivator.activateFrozen(any(), any()) }
     }
 
     @Test
-    fun `joinByInviteCode paid sends invoice`() {
+    fun `joinByInviteCode paid joins frozen`() {
         val code = "INV-XYZ"
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val club = paidClubRecord(clubId, price = 300)
+        val frozenMembership = membership(userId, clubId, status = MembershipStatus.frozen)
 
         every { clubRepository.findByInviteCode(code) } returns club
         every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
         every { membershipRepository.countActiveByClubId(clubId) } returns 0
+        every { membershipActivator.activateFrozen(userId, clubId) } returns frozenMembership
 
         val result = membershipService.joinByInviteCode(code, userId)
 
-        val pending = assertIs<JoinResult.PendingPayment>(result)
-        assertEquals(300, pending.dto.priceStars)
-        verify(exactly = 1) { paymentService.createInvoice(userId, clubId) }
-        verify(exactly = 0) { membershipRepository.create(any(), any()) }
+        assertEquals("frozen", result.status)
+        verify(exactly = 1) { membershipActivator.activateFrozen(userId, clubId) }
+        verify(exactly = 0) { membershipActivator.activateFree(any(), any()) }
     }
 
     @Test
-    fun `joinByInviteCode free delegates to FreeMembershipActivator`() {
+    fun `joinByInviteCode free joins active via activateFree`() {
         val code = "INV-FREE"
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
@@ -292,14 +288,13 @@ class MembershipServiceTest {
         every { clubRepository.findByInviteCode(code) } returns club
         every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
         every { membershipRepository.countActiveByClubId(clubId) } returns 0
-        every { freeMembershipActivator.activate(userId, clubId) } returns createdMembership
+        every { membershipActivator.activateFree(userId, clubId) } returns createdMembership
 
         val result = membershipService.joinByInviteCode(code, userId)
 
-        assertIs<JoinResult.Joined>(result)
-        verify(exactly = 1) { freeMembershipActivator.activate(userId, clubId) }
-        verify(exactly = 0) { membershipRepository.create(any(), any()) }
-        verify(exactly = 0) { paymentService.createInvoice(any(), any()) }
+        assertEquals("active", result.status)
+        verify(exactly = 1) { membershipActivator.activateFree(userId, clubId) }
+        verify(exactly = 0) { membershipActivator.activateFrozen(any(), any()) }
     }
 
     @Test

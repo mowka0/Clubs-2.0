@@ -134,4 +134,81 @@ open class MembershipsDao(configuration: Configuration?) : DAOImpl<MembershipsRe
      * Fetch records that have <code>updated_at IN (values)</code>
      */
     fun fetchByUpdatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.UPDATED_AT, *values)
+
+    /**
+     * Fetch records that have <code>access_frozen_at BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfAccessFrozenAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetchRange(Memberships.MEMBERSHIPS.ACCESS_FROZEN_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>access_frozen_at IN (values)</code>
+     */
+    fun fetchByAccessFrozenAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.ACCESS_FROZEN_AT, *values)
+
+    /**
+     * Fetch records that have <code>dues_marked_paid_at BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfDuesMarkedPaidAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetchRange(Memberships.MEMBERSHIPS.DUES_MARKED_PAID_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>dues_marked_paid_at IN (values)</code>
+     */
+    fun fetchByDuesMarkedPaidAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.DUES_MARKED_PAID_AT, *values)
+
+    /**
+     * Fetch records that have <code>dues_marked_by BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfDuesMarkedBy(lowerInclusive: UUID?, upperInclusive: UUID?): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetchRange(Memberships.MEMBERSHIPS.DUES_MARKED_BY, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>dues_marked_by IN (values)</code>
+     */
+    fun fetchByDuesMarkedBy(vararg values: UUID): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.DUES_MARKED_BY, *values)
+
+    /**
+     * Fetch records that have <code>organizer_note BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfOrganizerNote(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetchRange(Memberships.MEMBERSHIPS.ORGANIZER_NOTE, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>organizer_note IN (values)</code>
+     */
+    fun fetchByOrganizerNote(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.ORGANIZER_NOTE, *values)
+
+    /**
+     * Fetch records that have <code>dues_claimed_at BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfDuesClaimedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetchRange(Memberships.MEMBERSHIPS.DUES_CLAIMED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>dues_claimed_at IN (values)</code>
+     */
+    fun fetchByDuesClaimedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.DUES_CLAIMED_AT, *values)
+
+    /**
+     * Fetch records that have <code>dues_claim_method BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfDuesClaimMethod(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetchRange(Memberships.MEMBERSHIPS.DUES_CLAIM_METHOD, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>dues_claim_method IN (values)</code>
+     */
+    fun fetchByDuesClaimMethod(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.DUES_CLAIM_METHOD, *values)
+
+    /**
+     * Fetch records that have <code>dues_proof_url BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfDuesProofUrl(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetchRange(Memberships.MEMBERSHIPS.DUES_PROOF_URL, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>dues_proof_url IN (values)</code>
+     */
+    fun fetchByDuesProofUrl(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.DUES_PROOF_URL, *values)
 }

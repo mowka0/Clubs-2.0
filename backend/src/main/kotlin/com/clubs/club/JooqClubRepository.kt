@@ -30,15 +30,16 @@ class JooqClubRepository(
     }
 
     /**
-     * Live member count for display = distinct `memberships` rows that are `active` or `grace_period`
-     * (a grace member still has access, so they occupy a slot), INCLUDING the organizer's membership.
+     * Live member count for display = distinct `memberships` rows that currently belong to the club —
+     * `active`, `frozen` (gated pending off-platform dues, still occupies a slot), or `grace_period` —
+     * INCLUDING the organizer's membership. Matches countActiveByClubId's slot-occupancy semantics.
      * This is computed straight from `memberships`. The old denormalized `clubs.member_count`
      * column was dropped (V33) after a scattered, incomplete set of increment/decrement call sites
      * let it drift out of sync (e.g. a leave→rejoin→leave double-decremented it to 0 for a 2-person
      * club). "Actual value from the DB" can never drift.
      */
     private fun aliveMembers(): org.jooq.Condition =
-        MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period)
+        MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.frozen, MembershipStatus.grace_period)
 
     private fun countLiveMembers(clubId: UUID): Int =
         dsl.selectCount().from(MEMBERSHIPS)
@@ -77,6 +78,8 @@ class JooqClubRepository(
             .set(CLUBS.AVATAR_URL, request.avatarUrl)
             .set(CLUBS.RULES, request.rules)
             .set(CLUBS.APPLICATION_QUESTION, request.applicationQuestion)
+            .set(CLUBS.PAYMENT_LINK, request.paymentLink?.ifBlank { null })
+            .set(CLUBS.PAYMENT_METHOD_NOTE, request.paymentMethodNote?.ifBlank { null })
             .set(CLUBS.INVITE_LINK, inviteCode)
             .set(CLUBS.IS_ACTIVE, true)
             .returning()
@@ -305,6 +308,8 @@ class JooqClubRepository(
         request.avatarUrl?.let { step.set(CLUBS.AVATAR_URL, it.ifBlank { null }) }
         request.rules?.let { step.set(CLUBS.RULES, it.ifBlank { null }) }
         request.applicationQuestion?.let { step.set(CLUBS.APPLICATION_QUESTION, it.ifBlank { null }) }
+        request.paymentLink?.let { step.set(CLUBS.PAYMENT_LINK, it.ifBlank { null }) }
+        request.paymentMethodNote?.let { step.set(CLUBS.PAYMENT_METHOD_NOTE, it.ifBlank { null }) }
 
         step.where(CLUBS.ID.eq(id)).execute()
         return findById(id)

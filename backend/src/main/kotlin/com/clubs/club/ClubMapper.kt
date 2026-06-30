@@ -27,11 +27,15 @@ class ClubMapper {
         memberCount = 0,
         isActive = record.isActive ?: true,
         telegramGroupId = record.telegramGroupId,
+        paymentLink = record.paymentLink,
+        paymentMethodNote = record.paymentMethodNote,
         createdAt = record.createdAt!!,
         updatedAt = record.updatedAt!!
     )
 
-    fun toDetailDto(club: Club): ClubDetailDto = ClubDetailDto(
+    // includeRequisites gates the SBP payment details: only club members (active/frozen) and the owner
+    // see how to pay — a pending applicant / visitor must not (de-Stars: dues = member→organizer).
+    fun toDetailDto(club: Club, includeRequisites: Boolean = false): ClubDetailDto = ClubDetailDto(
         id = club.id,
         ownerId = club.ownerId,
         name = club.name,
@@ -47,6 +51,8 @@ class ClubMapper {
         applicationQuestion = club.applicationQuestion,
         inviteLink = club.inviteLink,
         memberCount = club.memberCount,
-        isActive = club.isActive
+        isActive = club.isActive,
+        paymentLink = if (includeRequisites) club.paymentLink else null,
+        paymentMethodNote = if (includeRequisites) club.paymentMethodNote else null
     )
 }

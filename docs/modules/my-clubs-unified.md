@@ -88,6 +88,23 @@
 > `rd-section-sub-h` + `rd-glass rd-rep-panel` (единообразие со всеми блоками). Карточки
 > (содержимое) — без изменений, поменялись только группировка и заголовки.
 >
+> **[ОБНОВЛЕНО de-Stars + сессия 4 — фактический порядок секций as-built]** (top → bottom):
+> 0. **«🔒 Доступ закрыт — оплатите · N»** (member-side, NEW сессия 4) — собственные **frozen**-членства
+>    каллера (`frozenMyClubs = myClubs.filter(m => m.status === 'frozen')`, компонент `FrozenMembershipRow`).
+>    Статус-строка «Не забудьте оплатить взнос» (мягкий accent — не алармно-красный) / «Оплата на проверке»
+>    (зелёная, по `membership.duesClaimedAt`).
+>    Тап по телу → страница клуба (там «Оплатить взнос»). Самое срочное личное действие → ведёт список.
+>    Эти клубы **исключены** из «Где я состою» (`activeMyClubs`), чтобы frozen не висел молча среди активных.
+>    **Крестик «×» (сессия 5)** в углу карточки → инлайн-подтверждение «Отменить вступление?» → `leaveClub`
+>    (membership → `cancelled`) — отмена случайного платного вступления прямо отсюда (frozen платного =
+>    `leavePaidClub`, чистый cancel без обязательств).
+> 1. **«Мои заявки»** — только `pending` (de-Stars: approved сразу = членство, лимба нет).
+> 2. **«Заявки в мои клубы»** — organizer inbox (`PendingApplicationDto`).
+> 2b. **«💸 Оплата вступления»** (organizer-side) — frozen-участники в клубах каллера (`useOrganizerAwaitingDuesQuery`).
+> 3. **«Где я состою»** — активные членства (`activeMyClubs`, без frozen).
+> 4. **«История»** — покинутые клубы с остаточной репутацией.
+> (Stars-эра `AwaitingPaymentCard` / `OrganizerAwaitingPaymentRow` из блока выше удалены de-Stars.)
+>
 > Класс корня — `.brand-page` (общий канвас для Discovery/ClubPage/MyClubsPage). Inter font вынесен на `html, body` для единого шрифта во всём app.
 >
 > Старая структура (Section + Cell + tgui Button) сохранена ниже для истории.

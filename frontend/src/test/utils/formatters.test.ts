@@ -28,20 +28,20 @@ describe('formatPrice', () => {
     expect(formatPrice(0)).toBe('Бесплатно');
   });
 
-  it('returns formatted string with Stars for price 100', () => {
-    expect(formatPrice(100)).toBe('100 Stars / мес');
+  it('returns formatted string with ₽ for price 100', () => {
+    expect(formatPrice(100)).toBe('100 ₽ / мес');
   });
 
-  it('returns formatted string with Stars for price 250', () => {
-    expect(formatPrice(250)).toBe('250 Stars / мес');
+  it('returns formatted string with ₽ for price 250', () => {
+    expect(formatPrice(250)).toBe('250 ₽ / мес');
   });
 
-  it('returns formatted string with Stars for price 1', () => {
-    expect(formatPrice(1)).toBe('1 Stars / мес');
+  it('returns formatted string with ₽ for price 1', () => {
+    expect(formatPrice(1)).toBe('1 ₽ / мес');
   });
 
-  it('returns formatted string with Stars for large price', () => {
-    expect(formatPrice(10000)).toBe('10000 Stars / мес');
+  it('returns formatted string with ₽ for large price', () => {
+    expect(formatPrice(10000)).toBe('10000 ₽ / мес');
   });
 });
 

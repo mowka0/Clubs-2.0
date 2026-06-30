@@ -75,6 +75,8 @@ class ClubServiceTest {
             memberCount = memberCount,
             isActive = true,
             telegramGroupId = null,
+            paymentLink = null,
+            paymentMethodNote = null,
             createdAt = now,
             updatedAt = now
         )
@@ -91,7 +93,8 @@ class ClubServiceTest {
             accessType = "open",
             city = "Moscow",
             memberLimit = 50,
-            subscriptionPrice = 100
+            subscriptionPrice = 100,
+            paymentLink = "https://sbp.example/pay"
         )
 
         val club = makeClub(
@@ -182,11 +185,93 @@ class ClubServiceTest {
         every { clubRepository.countByOwnerId(ownerId) } returns 10
 
         val exception = assertThrows<ConflictException> {
-            clubService.createClub(request, ownerId)
+            clubService.createClub(request.copy(paymentLink = "https://sbp.example/pay"), ownerId)
         }
 
         assertEquals("Maximum 10 clubs per organizer", exception.message)
         verify(exactly = 0) { clubRepository.create(any(), any(), any()) }
+    }
+
+    @Test
+    fun `createClub rejects a paid club without payment requisites`() {
+        val ownerId = UUID.randomUUID()
+        val request = CreateClubRequest(
+            name = "Paid Club", description = "Desc", category = "sport", accessType = "open",
+            city = "Moscow", memberLimit = 30, subscriptionPrice = 100 // no paymentLink
+        )
+
+        val exception = assertThrows<ValidationException> { clubService.createClub(request, ownerId) }
+
+        assertEquals("Для платного клуба укажите реквизиты для взноса (СБП)", exception.message)
+        verify(exactly = 0) { clubRepository.create(any(), any(), any()) }
+    }
+
+    @Test
+    fun `createClub allows a free club without requisites`() {
+        val ownerId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val request = CreateClubRequest(
+            name = "Free Club", description = "Desc", category = "sport", accessType = "open",
+            city = "Moscow", memberLimit = 30, subscriptionPrice = 0 // free → no link needed
+        )
+        val club = makeClub(clubId = clubId, ownerId = ownerId, subscriptionPrice = 0)
+        every { clubRepository.countByOwnerId(ownerId) } returns 0
+        every { clubRepository.create(request, ownerId, any()) } returns club
+        every { clubRepository.findById(clubId) } returns club
+
+        val result = clubService.createClub(request, ownerId)
+
+        assertEquals(clubId, result.id)
+        verify(exactly = 1) { clubRepository.create(request, ownerId, any()) }
+    }
+
+    @Test
+    fun `updateClub rejects clearing the link on a paid club`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val club = makeClub(clubId = clubId, ownerId = ownerId, subscriptionPrice = 100)
+            .copy(paymentLink = "https://sbp.example/pay")
+        every { clubRepository.findById(clubId) } returns club
+
+        // Blank string = "clear to NULL" — not allowed while the club stays paid.
+        val exception = assertThrows<ValidationException> {
+            clubService.updateClub(clubId, UpdateClubRequest(paymentLink = ""), ownerId)
+        }
+
+        assertEquals("Для платного клуба укажите реквизиты для взноса (СБП)", exception.message)
+        verify(exactly = 0) { clubRepository.update(any(), any()) }
+    }
+
+    @Test
+    fun `updateClub rejects switching free to paid without a link`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val club = makeClub(clubId = clubId, ownerId = ownerId, subscriptionPrice = 0) // free, no link
+        every { clubRepository.findById(clubId) } returns club
+
+        val exception = assertThrows<ValidationException> {
+            clubService.updateClub(clubId, UpdateClubRequest(subscriptionPrice = 100), ownerId)
+        }
+
+        assertEquals("Для платного клуба укажите реквизиты для взноса (СБП)", exception.message)
+        verify(exactly = 0) { clubRepository.update(any(), any()) }
+    }
+
+    @Test
+    fun `updateClub allows a paid club edit that keeps the existing link`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val club = makeClub(clubId = clubId, ownerId = ownerId, subscriptionPrice = 100)
+            .copy(paymentLink = "https://sbp.example/pay")
+        val updated = club.copy(name = "Renamed")
+        every { clubRepository.findById(clubId) } returns club
+        every { clubRepository.update(clubId, any()) } returns updated
+
+        // Editing the name (link key absent → kept) must not trip the requisites invariant.
+        val result = clubService.updateClub(clubId, UpdateClubRequest(name = "Renamed"), ownerId)
+
+        assertEquals("Renamed", result.name)
+        verify(exactly = 1) { clubRepository.update(clubId, any()) }
     }
 
     @Test
@@ -196,7 +281,7 @@ class ClubServiceTest {
         every { clubRepository.findById(clubId) } returns null
 
         val exception = assertThrows<NotFoundException> {
-            clubService.getClub(clubId)
+            clubService.getClub(clubId, UUID.randomUUID())
         }
 
         assertEquals("Club not found", exception.message)
@@ -222,7 +307,7 @@ class ClubServiceTest {
 
         every { clubRepository.findById(clubId) } returns club
 
-        val result = clubService.getClub(clubId)
+        val result = clubService.getClub(clubId, ownerId)
 
         assertEquals(clubId, result.id)
         assertEquals("Existing Club", result.name)

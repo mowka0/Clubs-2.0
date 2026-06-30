@@ -30,6 +30,8 @@ interface ClubFormValues {
   accessType: 'open' | 'closed';
   memberLimit: string;
   subscriptionPrice: string;
+  paymentLink: string;
+  paymentMethodNote: string;
   description: string;
   rules: string;
   applicationQuestion: string;
@@ -38,7 +40,7 @@ interface ClubFormValues {
 const STEP_FIELDS: Array<Array<keyof ClubFormValues>> = [
   ['name', 'city'],
   ['category', 'accessType'],
-  ['memberLimit', 'subscriptionPrice'],
+  ['memberLimit', 'subscriptionPrice', 'paymentLink'],
   ['description'],
   [],
 ];
@@ -80,6 +82,8 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
       accessType: 'open',
       memberLimit: '30',
       subscriptionPrice: '0',
+      paymentLink: '',
+      paymentMethodNote: '',
       description: '',
       rules: '',
       applicationQuestion: '',
@@ -92,7 +96,8 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
   const subscriptionPrice = watch('subscriptionPrice');
   const accessType = watch('accessType');
 
-  const monthlyIncome = Math.round(Number(memberLimit) * Number(subscriptionPrice) * 0.8);
+  // De-Stars: dues go member→organizer directly (off-platform), the platform takes no cut — full amount.
+  const monthlyIncome = Math.round(Number(memberLimit) * Number(subscriptionPrice));
 
   const handleNext = async () => {
     const fields = STEP_FIELDS[step];
@@ -127,6 +132,11 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
       rules: data.rules.trim() || undefined,
       applicationQuestion: (data.accessType === 'closed' && data.applicationQuestion.trim())
         ? data.applicationQuestion.trim()
+        : undefined,
+      // SBP requisites only matter for a paid club (backend requires paymentLink when price > 0).
+      paymentLink: Number(data.subscriptionPrice) > 0 ? data.paymentLink.trim() : undefined,
+      paymentMethodNote: Number(data.subscriptionPrice) > 0 && data.paymentMethodNote.trim()
+        ? data.paymentMethodNote.trim()
         : undefined,
     };
     createClubMutation.mutate(body, {
@@ -291,7 +301,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
             <FieldError message={errors.memberLimit?.message} />
           </label>
           <label className="rd-field">
-            <span className="rd-label">Цена подписки (Stars/мес)</span>
+            <span className="rd-label">Цена подписки (₽/мес)</span>
             <input
               className={`rd-input${errors.subscriptionPrice ? ' rd-invalid' : ''}`}
               type="number"
@@ -309,8 +319,40 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
           </label>
           {Number(subscriptionPrice) > 0 && Number(memberLimit) > 0 && (
             <div className="rd-hint">
-              При {memberLimit} участниках вы будете зарабатывать {monthlyIncome} Stars в месяц (80% от дохода)
+              При {memberLimit} участниках это до {monthlyIncome} ₽ в месяц. Участники платят вам напрямую — платформа комиссию не берёт.
             </div>
+          )}
+
+          {/* Paid club → SBP requisites are mandatory: members must know how to pay (de-Stars honor-system). */}
+          {Number(subscriptionPrice) > 0 && (
+            <>
+              <label className="rd-field">
+                <span className="rd-label">Реквизиты для взноса (СБП) <span className="rd-req">*</span></span>
+                <input
+                  className={`rd-input${errors.paymentLink ? ' rd-invalid' : ''}`}
+                  placeholder="Ссылка СБП / банка или номер телефона"
+                  {...register('paymentLink', {
+                    validate: (v) =>
+                      // Required only for a paid club; mirrors the backend invariant (price > 0 ⇒ link).
+                      Number(subscriptionPrice) > 0 && !v.trim()
+                        ? 'Для платного клуба укажите реквизиты для взноса'
+                        : true,
+                  })}
+                />
+                <FieldError message={errors.paymentLink?.message} />
+              </label>
+              <label className="rd-field">
+                <span className="rd-label">Подсказка к оплате (необязательно)</span>
+                <input
+                  className="rd-input"
+                  placeholder="Например: Тинькофф, СБП по номеру…"
+                  {...register('paymentMethodNote')}
+                />
+              </label>
+              <div className="rd-hint">
+                Участник увидит кнопку «Оплатить по СБП» на экране вступления. Оплата идёт напрямую вам, доступ откроете вы.
+              </div>
+            </>
           )}
         </div>
       )}

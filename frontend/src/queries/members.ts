@@ -1,55 +1,212 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import {
-  getClubAwaitingPaymentApplicants,
+  claimDues,
+  freezeMember,
+  getAwardSuggestions,
   getClubMembers,
+  getMemberAttention,
   getMemberProfile,
   getMyGamification,
   getMyReputation,
+  getOrganizerAwaitingDues,
+  grantMemberAward,
+  markMemberDuesPaid,
+  rejectMember,
+  removeMember,
+  revokeMemberAward,
+  setMemberAccessUntil,
+  unfreezeMember,
+  unmarkMemberDues,
+  updateMemberNote,
 } from '../api/membership';
-import type { GetClubMembersOptions } from '../api/membership';
 import { queryKeys } from './queryKeys';
 
-/**
- * Members of [clubId]. When `options.includeCancelled` is true, the server
- * also returns paid members who cancelled autorenew but are still inside the
- * paid period (`subscriptionCancelled=true` on the DTO). The two variants
- * cache under different keys so the legacy active-only callers don't pick
- * up disabled rows. See docs/modules/club-leave.md.
- */
-export function useClubMembersQuery(
-  clubId: string | undefined,
-  options: GetClubMembersOptions = {},
-) {
-  const includeCancelled = Boolean(options.includeCancelled);
+/** Members of [clubId]. The organizer additionally receives frozen members + each member's
+ *  access state and paid-through date (de-Stars dashboard); regular members get the active-only
+ *  list with those fields null. */
+export function useClubMembersQuery(clubId: string | undefined) {
   return useQuery({
-    queryKey: includeCancelled
-      ? queryKeys.clubs.membersWith(clubId ?? '', { includeCancelled: true })
-      : queryKeys.clubs.members(clubId ?? ''),
-    queryFn: () => getClubMembers(clubId!, { includeCancelled }),
+    queryKey: queryKeys.clubs.members(clubId ?? ''),
+    queryFn: () => getClubMembers(clubId!),
     enabled: Boolean(clubId),
   });
 }
 
-/**
- * Organizer-only: list of applicants for [clubId] whose application is
- * approved but Stars invoice unpaid (no active membership). Returns 403 from
- * backend if caller is not the club owner — pair with `enabled: isOrganizer`
- * to avoid a guaranteed-fail request from member/visitor contexts.
- *
- * `staleTime: 60_000` mirrors other low-churn organizer views — payment state
- * changes via webhook are eventually consistent here and refetch on focus
- * picks them up.
- */
-export function useClubAwaitingPaymentApplicantsQuery(
+/** Red-dot feed: soon-expiring + frozen-awaiting-dues counts. Owner-only — gate with
+ *  `enabled: isOrganizer` to skip a guaranteed-403 from member/visitor contexts. */
+export function useMemberAttentionQuery(
   clubId: string | undefined,
   options: { enabled?: boolean } = {},
 ) {
   const enabled = Boolean(clubId) && (options.enabled ?? true);
   return useQuery({
-    queryKey: queryKeys.clubs.awaitingPaymentApplicants(clubId ?? ''),
-    queryFn: () => getClubAwaitingPaymentApplicants(clubId!),
+    queryKey: queryKeys.clubs.memberAttention(clubId ?? ''),
+    queryFn: () => getMemberAttention(clubId!),
     enabled,
     staleTime: 60_000,
+  });
+}
+
+/** Cross-club «Ждут оплаты»: frozen members across the caller's owned clubs. Returns [] for
+ *  non-owners (server filters by ownership) — gate `enabled` on owning ≥1 club to skip the round-trip. */
+export function useOrganizerAwaitingDuesQuery(options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: queryKeys.organizer.awaitingDues,
+    queryFn: getOrganizerAwaitingDues,
+    enabled: options.enabled ?? true,
+    staleTime: 60_000,
+  });
+}
+
+/** After any access-gate action the member list (badges/buckets), the per-club red-dot count, and
+ *  the cross-club «Ждут оплаты» feed all change. */
+function invalidateAfterMemberGateAction(qc: QueryClient, clubId: string) {
+  qc.invalidateQueries({ queryKey: queryKeys.clubs.members(clubId) });
+  qc.invalidateQueries({ queryKey: queryKeys.clubs.memberAttention(clubId) });
+  qc.invalidateQueries({ queryKey: queryKeys.organizer.awaitingDues });
+}
+
+interface MemberGateArgs {
+  clubId: string;
+  userId: string;
+}
+
+/** «Взнос получен» — open access + extend the paid window. The primary dashboard action. */
+export function useMarkMemberDuesPaidMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId }: MemberGateArgs) => markMemberDuesPaid(clubId, userId),
+    onSuccess: (_data, { clubId }) => invalidateAfterMemberGateAction(qc, clubId),
+  });
+}
+
+/** «Закрыть доступ» — active → frozen. */
+export function useFreezeMemberMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId }: MemberGateArgs) => freezeMember(clubId, userId),
+    onSuccess: (_data, { clubId }) => invalidateAfterMemberGateAction(qc, clubId),
+  });
+}
+
+/** Reopen access without extending the paid window (frozen → active). */
+export function useUnfreezeMemberMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId }: MemberGateArgs) => unfreezeMember(clubId, userId),
+    onSuccess: (_data, { clubId }) => invalidateAfterMemberGateAction(qc, clubId),
+  });
+}
+
+/** B+C: reject a paid join (refund offline) — removes the frozen member. Same invalidations as the
+ *  other gate actions (buckets + red-dot + cross-club «Ждут оплаты»). */
+export function useRejectMemberMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId, reason }: MemberGateArgs & { reason?: string | null }) =>
+      rejectMember(clubId, userId, reason),
+    onSuccess: (_data, { clubId }) => invalidateAfterMemberGateAction(qc, clubId),
+  });
+}
+
+/** Organizer kick: remove a member from the club (reason mandatory). Same invalidations as the other
+ *  gate actions (roster buckets + red-dot + cross-club «Ждут оплаты»). */
+export function useRemoveMemberMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId, reason }: MemberGateArgs & { reason: string }) =>
+      removeMember(clubId, userId, reason),
+    onSuccess: (_data, { clubId }) => invalidateAfterMemberGateAction(qc, clubId),
+  });
+}
+
+/** Clear the dues mark without touching access/window. */
+export function useUnmarkMemberDuesMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId }: MemberGateArgs) => unmarkMemberDues(clubId, userId),
+    onSuccess: (_data, { clubId }) => invalidateAfterMemberGateAction(qc, clubId),
+  });
+}
+
+/** Member admin S1: set a custom access-window end («своя дата»). Touches access → invalidate buckets +
+ *  the member profile card (its «Подписка до …» line). */
+export function useSetMemberAccessUntilMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId, until }: MemberGateArgs & { until: string }) =>
+      setMemberAccessUntil(clubId, userId, until),
+    onSuccess: (_data, { clubId, userId }) => {
+      invalidateAfterMemberGateAction(qc, clubId);
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.memberProfile(clubId, userId) });
+    },
+  });
+}
+
+/** Member admin S1: set/clear the private organizer note. Only the profile card carries it. */
+export function useUpdateMemberNoteMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId, note }: MemberGateArgs & { note: string | null }) =>
+      updateMemberNote(clubId, userId, note),
+    onSuccess: (_data, { clubId, userId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.memberProfile(clubId, userId) });
+    },
+  });
+}
+
+/** Member admin S2: grant a club-local award. Refreshes the member card (its chips) + the club's
+ *  award-suggestion pool (a fresh label becomes a future autocomplete option). */
+export function useGrantMemberAwardMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId, emoji, label }: MemberGateArgs & { emoji: string; label: string }) =>
+      grantMemberAward(clubId, userId, emoji, label),
+    onSuccess: (_data, { clubId, userId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.memberProfile(clubId, userId) });
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.awardSuggestions(clubId) });
+    },
+  });
+}
+
+/** Member admin S2: remove a club-local award. Only the member card carries it. */
+export function useRevokeMemberAwardMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId, awardId }: MemberGateArgs & { awardId: string }) =>
+      revokeMemberAward(clubId, userId, awardId),
+    onSuccess: (_data, { clubId, userId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.memberProfile(clubId, userId) });
+    },
+  });
+}
+
+/** Autocomplete pool for the grant form. Organizer-only — gate `enabled` on the edit form being open
+ *  so member/visitor contexts never hit a guaranteed-403. */
+export function useAwardSuggestionsQuery(
+  clubId: string | undefined,
+  options: { enabled?: boolean } = {},
+) {
+  const enabled = Boolean(clubId) && (options.enabled ?? true);
+  return useQuery({
+    queryKey: queryKeys.clubs.awardSuggestions(clubId ?? ''),
+    queryFn: () => getAwardSuggestions(clubId!),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+/** Member declares they paid the dues (sbp + screenshot URL, or cash). Refreshes «Мои клубы» so the
+ *  frozen club screen flips to «оплата на проверке». */
+export function useClaimDuesMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, method, proofUrl }: { clubId: string; method: 'sbp' | 'cash'; proofUrl?: string | null }) =>
+      claimDues(clubId, method, proofUrl),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.my() });
+    },
   });
 }
 

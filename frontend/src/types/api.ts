@@ -65,15 +65,43 @@ export interface MemberListItemDto {
   // Stage-2 confirmations to date. The "Обещания X%" line is gated on this being > 0 so a
   // finance-only member (skladchina record, no events) never shows a misleading 0% (F5-08).
   totalConfirmations: number | null;
-  /**
-   * True iff the member is a paid-club subscriber who has already cancelled
-   * autorenew but is still inside the paid period (`subscription_expires_at >
-   * now`). Backend only returns such rows when the caller passed
-   * `includeCancelled=true`; otherwise this is always false. Skladchina-create
-   * UI uses it to disable the participant row and tag it «Отменил подписку».
-   * See docs/modules/club-leave.md § Frontend → CreateSkladchinaPage.
-   */
-  subscriptionCancelled?: boolean;
+  // Club-local awards (member admin S2) — public to all members (R3), shown as chips on the roster
+  // card and the profile. Cosmetic; never reflects reputation (R4). Empty array when none.
+  awards: AwardDto[];
+  // De-Stars Slice 2 — organizer dashboard only (null for regular members): access state and the
+  // paid-through date. Drive the «Скоро закончится» / «Ждут оплаты» / «Активные» buckets.
+  // `subscriptionExpiresAt` is also null for free memberships (no expiry).
+  accessStatus?: 'active' | 'frozen' | null;
+  subscriptionExpiresAt?: string | null;
+  // Organizer dashboard only: the member's dues claim (null = none) + method ("sbp"|"cash"), so the
+  // «Ждут оплаты» bucket can flag «оплата заявлена».
+  duesClaimedAt?: string | null;
+  duesClaimMethod?: string | null;
+}
+
+/** Organizer trust card for the dues-payment sheet (de-Stars). Account-focused; the UI hides facts
+ *  that aren't meaningful yet (clubsCount < 2, trustedMembers below threshold) → no zeros for new accounts. */
+export interface OrganizerCardDto {
+  firstName: string;
+  lastName: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+  onPlatformSince: string;
+  clubsCount: number;
+  trustedMembers: number;
+}
+
+/** A club-local award chip (member admin S2). Cosmetic; never reflects reputation (R4). */
+export interface AwardDto {
+  id: string;
+  emoji: string;
+  label: string;
+}
+
+/** Autocomplete option in the grant form — a previously-used (emoji, label) in the club. No id. */
+export interface AwardSuggestionDto {
+  emoji: string;
+  label: string;
 }
 
 export interface MemberProfileDto {
@@ -85,6 +113,8 @@ export interface MemberProfileDto {
   // Public profile fields, shown to every club member on the member card.
   bio: string | null;
   interests: string[];
+  // Member admin S2 — club-local awards, visible to ALL members (R3); cosmetic only (R4).
+  awards: AwardDto[];
   // "organizer" = club owner. Drives the organizer framing when trust is null.
   role: string;
   // P1b Trust 0-100. null = "Новичок"/suppressed (no track record yet, or owner in own club).
@@ -98,6 +128,49 @@ export interface MemberProfileDto {
   // null when suppressed; the "Сборы" ring is hidden when skladchinaTotal === 0.
   skladchinaPaid: number | null;
   skladchinaTotal: number | null;
+  // De-Stars Slice 2 — ORGANIZER ONLY (null for regular members): when this member's paid access
+  // window ends. null also for free memberships. Shown as «Подписка активна до …» on the org card.
+  subscriptionExpiresAt: string | null;
+  // Member admin S1 — ORGANIZER ONLY (null for regular members): the private organizer note.
+  organizerNote: string | null;
+  // De-Stars dues claim — ORGANIZER ONLY (null for regular members): when the member declared payment,
+  // the method ("sbp"|"cash"), and the screenshot URL (sbp only). Reviewed before «Взнос получен».
+  duesClaimedAt: string | null;
+  duesClaimMethod: string | null;
+  duesProofUrl: string | null;
+  // The member's join-application answer (closed clubs) — ORGANIZER ONLY. null for open clubs / no question.
+  applicationAnswer: string | null;
+}
+
+/**
+ * Red-dot feed (organizer-only): the dot lights when either count is > 0.
+ *  - expiringSoon — active members whose paid window ends within the week.
+ *  - awaitingDues — frozen members who joined but haven't been admitted (first dues unconfirmed).
+ */
+export interface MemberAttentionDto {
+  expiringSoon: number;
+  awaitingDues: number;
+}
+
+/**
+ * A frozen member across one of the caller's owned clubs (joined, dues unconfirmed). Powers the
+ * cross-club «Ждут оплаты» section on «Мои клубы». `subscriptionExpiresAt` is the lapsed window
+ * (null for a never-paid first join); `joinedAt` drives the «вступил(а) N назад» line.
+ */
+export interface OrganizerDuesMemberDto {
+  userId: string;
+  firstName: string;
+  lastName: string | null;
+  avatarUrl: string | null;
+  telegramUsername: string | null;
+  clubId: string;
+  clubName: string;
+  clubAvatarUrl: string | null;
+  joinedAt: string | null;
+  subscriptionExpiresAt: string | null;
+  // Dues claim flag for the cross-club «Ждут оплаты» list: «оплата заявлена» + method ("sbp"|"cash").
+  duesClaimedAt: string | null;
+  duesClaimMethod: string | null;
 }
 
 export interface UserClubReputationDto {
@@ -232,64 +305,15 @@ export interface PendingApplicationDto {
 }
 
 /**
- * Combined counter feeding the «Мои клубы» tab-dot. All three numbers signal
- * "the user has something to act on" on this tab:
- *  - inboxCount                    — organizer-side pending applications.
- *  - awaitingPaymentCount          — applicant-side approved-but-unpaid applications.
- *  - organizerAwaitingPaymentCount — organizer-side approved applicants who haven't paid yet.
- * Single endpoint, single cache slot. See docs/modules/applications-inbox.md.
+ * Counter feeding the «Мои клубы» tab-dot: organizer-side pending applications
+ * in the cross-club inbox. Single endpoint, single cache slot.
+ * See docs/modules/applications-inbox.md.
  */
 export interface PendingApplicationsCountDto {
   inboxCount: number;
-  awaitingPaymentCount: number;
-  organizerAwaitingPaymentCount: number;
-}
-
-/**
- * Caller's own approved application without active membership — Stars invoice
- * was sent but payment hasn't arrived yet. Surfaced in the MyClubsPage so the
- * user can re-trigger invoice delivery from the Mini App.
- */
-export interface AwaitingPaymentApplicationDto {
-  applicationId: string;
-  approvedAt: string;
-  club: ClubBriefDto;
-  subscriptionPrice: number;
-}
-
-/**
- * Mirror of {@link AwaitingPaymentApplicationDto} from the organizer's side:
- * an applicant whose application is approved for the organizer's club but
- * whose Stars invoice hasn't been paid yet (no active membership). Surfaces
- * in `ClubMembersTab` (organizer view) so the full applicant → member
- * lifecycle is visible in one place.
- */
-export interface AwaitingPaymentApplicantDto {
-  applicationId: string;
-  userId: string;
-  firstName: string;
-  lastName: string | null;
-  telegramUsername: string | null;
-  avatarUrl: string | null;
-  approvedAt: string;
-}
-
-/**
- * Cross-club organizer view of approved-but-unpaid applicants — surfaces on
- * MyClubsPage so an organizer with multiple clubs sees pending payments in
- * one place without entering each club. Lean shape (row-only rendering, no
- * modal opens from here): applicant identity + club brief + price.
- */
-export interface OrganizerAwaitingPaymentApplicantDto {
-  applicationId: string;
-  approvedAt: string;
-  userId: string;
-  firstName: string;
-  lastName: string | null;
-  telegramUsername: string | null;
-  avatarUrl: string | null;
-  club: ClubBriefDto;
-  subscriptionPrice: number;
+  // De-Stars: frozen members who declared a dues payment (paid, awaiting the organizer's decision)
+  // across the caller's clubs. Lights the «Мои клубы» nav dot alongside the application inbox.
+  awaitingDuesCount: number;
 }
 
 export interface ClubDetailDto {
@@ -309,6 +333,10 @@ export interface ClubDetailDto {
   inviteLink: string | null;
   memberCount: number;
   isActive: boolean;
+  // SBP dues requisites — populated only for club members (active/frozen) + owner; null otherwise.
+  // The organizer's off-platform payment details, surfaced as «Оплатить по СБП» to members who owe dues.
+  paymentLink: string | null;
+  paymentMethodNote: string | null;
 }
 
 /** Club-quality facts for `GET /api/clubs/{id}/quality` (rings + achievements). */
@@ -377,19 +405,10 @@ export interface MembershipDto {
   role: string;
   joinedAt: string | null;
   subscriptionExpiresAt: string | null;
-}
-
-export interface PendingPaymentDto {
-  status: 'pending_payment';
-  clubId: string;
-  priceStars: number;
-  message: string;
-}
-
-export type JoinClubResult = MembershipDto | PendingPaymentDto;
-
-export function isPendingPayment(result: JoinClubResult): result is PendingPaymentDto {
-  return result.status === 'pending_payment';
+  // Member's own dues claim (de-Stars): when they declared payment (null = none) + method ("sbp"|"cash").
+  // Drives «оплата на проверке» on the frozen club screen.
+  duesClaimedAt?: string | null;
+  duesClaimMethod?: string | null;
 }
 
 export interface EventDetailDto {

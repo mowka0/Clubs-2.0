@@ -157,6 +157,23 @@ class NotificationService(
     }
 
     /**
+     * Notify a paid club's organizer that a member declared their off-platform dues (de-Stars) and is
+     * waiting to be admitted. Best-effort fire-and-forget like the other DMs; deep-links to «Мои клубы»
+     * where the «Ждут оплаты» list lets the organizer confirm or reject.
+     */
+    @Async
+    fun sendDuesClaimedDM(organizerTelegramId: Long, memberDisplayName: String, clubName: String, method: String) {
+        val methodLabel = if (method == "cash") "наличными" else "по СБП"
+        val text = "💸 $memberDisplayName оплатил(а) вступление $methodLabel в клуб «$clubName» и ждёт вашего решения."
+        sendDm(
+            chatId = organizerTelegramId.toString(),
+            text = text,
+            webAppPath = "/my-clubs",
+            buttonText = "Проверить оплату"
+        )
+    }
+
+    /**
      * Notify a club organizer that a new application has been submitted.
      * Fire-and-forget: any Telegram error is logged in [sendDm] but does NOT
      * propagate to the caller (so the originating DB transaction is never
@@ -175,6 +192,37 @@ class NotificationService(
             webAppPath = "/my-clubs?focus=inbox",
             buttonText = "Открыть заявки"
         )
+    }
+
+    /**
+     * Notify an applicant that the organizer approved their join application. For a PAID club the
+     * approval lands them in `frozen` — the DM nudges them to pay the dues to unlock access; for a FREE
+     * club they're already in, so it's a plain welcome. Best-effort fire-and-forget; deep-links to the
+     * club page (where a frozen member taps «Оплатить взнос»).
+     */
+    @Async
+    fun sendApplicationApprovedDM(applicantTelegramId: Long, clubName: String, clubId: UUID, paid: Boolean) {
+        val text: String
+        val button: String
+        if (paid) {
+            text = "✅ Вашу заявку в клуб «$clubName» одобрили — оплатите вступление, чтобы получить доступ."
+            button = "Оплатить взнос"
+        } else {
+            text = "✅ Вашу заявку в клуб «$clubName» одобрили. Добро пожаловать!"
+            button = "Открыть клуб"
+        }
+        sendDm(applicantTelegramId.toString(), text, webAppPath = "/clubs/$clubId", buttonText = button)
+    }
+
+    /**
+     * Best-effort DM to a paid member whose access the organizer just closed («Закрыть доступ» → frozen).
+     * Deep-links to the club page, where the frozen member taps «Оплатить взнос» to declare payment and
+     * regain access. Fire-and-forget — never blocks the freeze action.
+     */
+    @Async
+    fun sendAccessFrozenDM(memberTelegramId: Long, clubName: String, clubId: UUID) {
+        val text = "🔒 Организатор клуба «$clubName» закрыл вам доступ. Чтобы вернуть его, оплатите взнос."
+        sendDm(memberTelegramId.toString(), text, webAppPath = "/clubs/$clubId", buttonText = "Оплатить взнос")
     }
 
     /**

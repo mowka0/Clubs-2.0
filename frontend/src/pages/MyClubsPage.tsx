@@ -4,30 +4,28 @@ import { useQueries } from '@tanstack/react-query';
 import { Modal, Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
-import { useMyClubsQuery } from '../queries/clubs';
-import { useMyReputationQuery } from '../queries/members';
+import { useLeaveClubMutation, useMyClubsQuery } from '../queries/clubs';
+import { useMyReputationQuery, useOrganizerAwaitingDuesQuery } from '../queries/members';
 import {
+  useCancelApplicationMutation,
   useCompleteFreeMembershipMutation,
   useMyApplicationsQuery,
-  useMyAwaitingPaymentQuery,
   useMyPendingApplicationsQuery,
-  useOrganizerAwaitingPaymentQuery,
-  useResendInvoiceMutation,
 } from '../queries/applications';
 import { queryKeys } from '../queries/queryKeys';
 import { Toast } from '../components/Toast';
 import { CreateClubModal } from '../components/CreateClubModal';
 import { ApplicationReviewModal } from '../components/applications/ApplicationReviewModal';
+import { MemberProfileModal } from '../components/club/MemberProfileModal';
 import { formatPeerSignal } from '../features/applications-inbox/lib/peer-signal-format';
 import { LevelPill } from '../components/reputation/LevelPill';
 import { getClub } from '../api/clubs';
-import { ApiError } from '../api/apiClient';
 import { reliabilityTier } from '../utils/reputationTier';
 import type {
-  AwaitingPaymentApplicationDto,
   ClubDetailDto,
+  MemberListItemDto,
   MembershipDto,
-  OrganizerAwaitingPaymentApplicantDto,
+  OrganizerDuesMemberDto,
   PendingApplicationDto,
   UserClubReputationDto,
 } from '../types/api';
@@ -42,9 +40,8 @@ const STATUS_LABELS: Record<string, string> = {
   approved: 'Одобрено',
   rejected: 'Отклонено',
   auto_rejected: 'Отклонено',
+  cancelled: 'Отменено',
 };
-
-const AWAITING_PAYMENT_LABEL = 'Ожидает оплаты';
 
 function getInitials(name: string): string {
   return name
@@ -58,21 +55,6 @@ function getInitials(name: string): string {
 
 function formatApplicationDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
-}
-
-/**
- * Russian relative date — "сегодня" / "вчера" / "N дней назад" / absolute date.
- * Used on the «Ожидают оплаты» card to soft-cue urgency without a hard deadline.
- */
-function formatRelativeApprovedAt(iso: string): string {
-  const approvedAt = new Date(iso);
-  const now = new Date();
-  const ms = now.getTime() - approvedAt.getTime();
-  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
-  if (days <= 0) return 'одобрено сегодня';
-  if (days === 1) return 'одобрено вчера';
-  if (days < 7) return `одобрено ${days} ${pluralRu(days, ['день', 'дня', 'дней'])} назад`;
-  return `одобрено ${formatApplicationDate(iso)}`;
 }
 
 /** Russian plural form picker: forms = [one, few, many] */
@@ -168,35 +150,66 @@ const HistoryClubCard: FC<HistoryClubCardProps> = ({ club, onClick }) => {
 interface AppCardProps {
   application: ApplicationDto;
   club: ClubDetailDto | undefined;
-  awaitingPayment: boolean;
   onClick: () => void;
+  /** Withdraw the application (called after the inline «точно?» confirm). */
+  onCancel: () => void;
+  /** This card's withdraw request is in flight. */
+  cancelling: boolean;
 }
 
-const AppCard: FC<AppCardProps> = ({ application, club, awaitingPayment, onClick }) => {
+const AppCard: FC<AppCardProps> = ({ application, club, onClick, onCancel, cancelling }) => {
+  // Lightweight inline confirm (no modal): the «×» flips the row into a «Отменить заявку?» two-button
+  // state. Simpler than a popup and consistent with the app's other destructive two-tap confirms.
+  const [confirming, setConfirming] = useState(false);
   const name = club?.name ?? `Клуб ${application.clubId.slice(0, 8)}…`;
   const initials = club ? getInitials(club.name) : '·';
-  const status = application.status;
-  // approved + still in awaiting-payment list = invoice unpaid. Surface the
-  // lifecycle state ("Ожидает оплаты") rather than the misleading "Одобрено".
-  const statusLabel = awaitingPayment ? AWAITING_PAYMENT_LABEL : (STATUS_LABELS[status] ?? status);
-  const isRejected = status === 'rejected' || status === 'auto_rejected';
-  const badgeTone = awaitingPayment ? 'rd-warn' : isRejected ? 'rd-decline' : status === 'approved' ? 'rd-going' : 'rd-neutral';
-  const showReason = isRejected && Boolean(application.rejectedReason && application.rejectedReason.trim());
 
+  if (confirming) {
+    return (
+      <div className="rd-rep-row rd-app-confirm">
+        <div className="rd-info">
+          <div className="rd-ttl">Отменить заявку?</div>
+          <div className="rd-met">«{name}» — можно будет подать заново.</div>
+        </div>
+        <div className="rd-app-confirm-acts">
+          <button type="button" className="rd-app-confirm-no" disabled={cancelling} onClick={() => setConfirming(false)}>
+            Нет
+          </button>
+          <button type="button" className="rd-app-confirm-yes" disabled={cancelling} onClick={onCancel}>
+            {cancelling ? '…' : 'Отменить'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // A div (not a <button>) so the «×» can nest as a real button without invalid button-in-button,
+  // while the row keeps its `.rd-rep-row + .rd-rep-row` divider. Only live (pending) apps reach here.
   return (
-    <button type="button" className="rd-rep-row" onClick={onClick}>
+    <div
+      className="rd-rep-row rd-app-row"
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+    >
       <span className="rd-ico">{initials}</span>
       <div className="rd-info">
         <div className="rd-ttl">{name}</div>
         {application.createdAt && (
           <div className="rd-met">Подана {formatApplicationDate(application.createdAt)}</div>
         )}
-        {showReason && <div className="rd-met">Причина: {application.rejectedReason}</div>}
+        <div className="rd-met">{STATUS_LABELS[application.status] ?? application.status}</div>
       </div>
-      <div className="rd-score">
-        <span className={`rd-badge ${badgeTone}`}>{statusLabel}</span>
-      </div>
-    </button>
+      <button
+        type="button"
+        className="rd-app-cancel"
+        aria-label="Отменить заявку"
+        onClick={(e) => { e.stopPropagation(); setConfirming(true); }}
+      >
+        <span aria-hidden="true">✕</span>
+      </button>
+    </div>
   );
 };
 
@@ -239,101 +252,46 @@ const PendingAppCard: FC<PendingAppCardProps> = ({ pending, onClick }) => {
   );
 };
 
-interface AwaitingPaymentCardProps {
-  item: AwaitingPaymentApplicationDto;
+/** «вступил(а) N назад» for a frozen member awaiting their first dues confirmation. */
+function formatJoinedRelative(iso: string | null): string {
+  if (!iso) return 'ждёт первой оплаты';
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
+  if (days <= 0) return 'вступил(а) сегодня';
+  if (days === 1) return 'вступил(а) вчера';
+  if (days < 7) return `вступил(а) ${days} ${pluralRu(days, ['день', 'дня', 'дней'])} назад`;
+  return `вступил(а) ${formatApplicationDate(iso)}`;
 }
 
-/**
- * Applicant-side card for an approved application without an active membership.
- * The WHOLE card is tappable — same visual shape as `.club-card` so it sits
- * at the same height as active-club cards stacked below in «Активные». Tap
- * re-triggers the Stars invoice via DM. Backend rate-limits 1 call per 60s
- * per application → 429 maps to a specific "wait a minute" message; other
- * errors surface a generic Russian fallback.
- */
-const AwaitingPaymentCard: FC<AwaitingPaymentCardProps> = ({ item }) => {
-  const resendMutation = useResendInvoiceMutation();
-  const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(
-    null,
-  );
-
-  const initials = getInitials(item.club.name) || '·';
-
-  const handleResend = () => {
-    if (resendMutation.isPending) return;
-    setFeedback(null);
-    resendMutation.mutate(item.applicationId, {
-      onSuccess: () => {
-        setFeedback({
-          kind: 'success',
-          text: 'Счёт отправлен. Откройте чат с ботом @clubs_admin_bot',
-        });
-      },
-      onError: (e) => {
-        if (e instanceof ApiError && e.status === 429) {
-          setFeedback({
-            kind: 'error',
-            text: 'Счёт уже отправлен. Подождите минуту.',
-          });
-          return;
-        }
-        const message = e instanceof Error && e.message ? e.message : 'Не удалось отправить счёт. Попробуйте позже.';
-        setFeedback({ kind: 'error', text: message });
-      },
-    });
+/** Open the existing organizer profile card (with the dues gate) for a cross-club frozen member. */
+function toFrozenMemberStub(dues: OrganizerDuesMemberDto): MemberListItemDto {
+  return {
+    userId: dues.userId,
+    firstName: dues.firstName,
+    lastName: dues.lastName,
+    avatarUrl: dues.avatarUrl,
+    role: 'member',
+    joinedAt: dues.joinedAt,
+    trust: null,
+    promiseFulfillmentPct: null,
+    totalConfirmations: null,
+    awards: [],
+    accessStatus: 'frozen',
+    subscriptionExpiresAt: dues.subscriptionExpiresAt,
   };
-
-  const inlineLabel = resendMutation.isPending
-    ? 'Отправляем счёт…'
-    : `Цена: ${item.subscriptionPrice}⭐ · Нажмите чтобы оплатить`;
-
-  return (
-    <>
-      <button
-        type="button"
-        className="rd-rep-row"
-        onClick={handleResend}
-        disabled={resendMutation.isPending}
-      >
-        <span className="rd-ico">
-          {item.club.avatarUrl ? <img src={item.club.avatarUrl} alt="" /> : initials}
-        </span>
-        <div className="rd-info">
-          <div className="rd-ttl">{item.club.name}</div>
-          <div className="rd-met">{formatRelativeApprovedAt(item.approvedAt)}</div>
-          <div className="rd-met" style={{ color: 'var(--accent)' }}>{inlineLabel}</div>
-        </div>
-      </button>
-      {feedback && (
-        <div className="rd-cta-hint" style={{ color: feedback.kind === 'error' ? 'var(--danger)' : 'var(--live)', textAlign: 'left' }}>
-          {feedback.text}
-        </div>
-      )}
-    </>
-  );
-};
-
-interface OrganizerAwaitingPaymentRowProps {
-  item: OrganizerAwaitingPaymentApplicantDto;
 }
 
-/**
- * Cross-club organizer-side row: shows an applicant who's been approved for
- * one of the caller's clubs but hasn't paid the Stars invoice yet. Non-
- * interactive (no modal opens from here) — purely informational so the
- * organizer doesn't have to enter each club to see who's pending payment.
- *
- * Kept lightweight (44px avatar, 12px padding) — sits in its own section
- * without club-card neighbours, so applicant-card visual weight would be
- * out of place here.
- */
-const OrganizerAwaitingPaymentRow: FC<OrganizerAwaitingPaymentRowProps> = ({ item }) => {
+interface AwaitingDuesRowProps {
+  item: OrganizerDuesMemberDto;
+  onClick: () => void;
+}
+
+/** Cross-club «Ждут оплаты» row: a frozen member of one of the caller's clubs. Tap → profile card
+ *  where the organizer confirms the dues («Взнос получен»). */
+const AwaitingDuesRow: FC<AwaitingDuesRowProps> = ({ item, onClick }) => {
   const fullName = `${item.firstName}${item.lastName ? ` ${item.lastName}` : ''}`;
   const initials = getInitials(fullName) || '·';
-  const relative = formatRelativeApprovedAt(item.approvedAt);
-
   return (
-    <div className="rd-rep-row">
+    <button type="button" className="rd-rep-row" onClick={onClick}>
       <span className="rd-ico">
         {item.avatarUrl ? <img src={item.avatarUrl} alt="" /> : initials}
       </span>
@@ -344,11 +302,85 @@ const OrganizerAwaitingPaymentRow: FC<OrganizerAwaitingPaymentRowProps> = ({ ite
             <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}> · @{item.telegramUsername}</span>
           )}
         </div>
-        <div className="rd-met">{item.club.name} · {relative}</div>
+        <div className="rd-met">{item.clubName} · {formatJoinedRelative(item.joinedAt)}</div>
       </div>
       <div className="rd-score">
-        <span className="rd-badge rd-warn">{AWAITING_PAYMENT_LABEL}</span>
+        {item.duesClaimedAt ? (
+          <span className="rd-badge rd-going">Оплата заявлена</span>
+        ) : (
+          <span className="rd-badge rd-warn">Ждёт оплаты</span>
+        )}
       </div>
+    </button>
+  );
+};
+
+interface FrozenMembershipRowProps {
+  membership: MembershipDto;
+  club: ClubDetailDto | undefined;
+  onClick: () => void;
+  /** Leave the club (called after the inline «точно?» confirm) — undoes an accidental paid join. */
+  onLeave: () => void;
+  /** This row's leave request is in flight. */
+  leaving: boolean;
+}
+
+/** Member-side «Доступ закрыт — оплатите»: one of the CALLER's OWN frozen memberships (the organizer
+ *  closed access, or the monthly dues window lapsed). Tap → the club page, where «Оплатить взнос» lets
+ *  them declare payment. The «×» (with an inline confirm) leaves the club — undo an accidental paid join.
+ *  Mirrors the organizer's «Оплата вступления», but from the member's side. */
+const FrozenMembershipRow: FC<FrozenMembershipRowProps> = ({ membership, club, onClick, onLeave, leaving }) => {
+  const [confirming, setConfirming] = useState(false);
+  const name = club?.name ?? `Клуб ${membership.clubId.slice(0, 8)}…`;
+  const initials = club ? getInitials(club.name) : '·';
+  const claimed = Boolean(membership.duesClaimedAt);
+  const priceLine = club && club.subscriptionPrice > 0 ? `Взнос ${club.subscriptionPrice} ₽ / мес` : 'Доступ закрыт';
+
+  if (confirming) {
+    return (
+      <div className="rd-rep-row rd-app-confirm">
+        <div className="rd-info">
+          <div className="rd-ttl">Отменить вступление?</div>
+          <div className="rd-met">«{name}» — выйдете из клуба.</div>
+        </div>
+        <div className="rd-app-confirm-acts">
+          <button type="button" className="rd-app-confirm-no" disabled={leaving} onClick={() => setConfirming(false)}>
+            Нет
+          </button>
+          <button type="button" className="rd-app-confirm-yes" disabled={leaving} onClick={onLeave}>
+            {leaving ? '…' : 'Выйти'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="rd-rep-row rd-app-row"
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+    >
+      <span className="rd-ico">
+        {club?.avatarUrl ? <img src={club.avatarUrl} alt="" /> : initials}
+      </span>
+      <div className="rd-info">
+        <div className="rd-ttl">{name}</div>
+        <div className="rd-met">{priceLine}</div>
+        <div className={`rd-met ${claimed ? 'rd-met-ok' : 'rd-met-soft'}`}>
+          {claimed ? 'Оплата на проверке' : 'Не забудьте оплатить взнос'}
+        </div>
+      </div>
+      <button
+        type="button"
+        className="rd-app-cancel"
+        aria-label="Отменить вступление"
+        onClick={(e) => { e.stopPropagation(); setConfirming(true); }}
+      >
+        <span aria-hidden="true">✕</span>
+      </button>
     </div>
   );
 };
@@ -363,22 +395,26 @@ export const MyClubsPage: FC = () => {
   const myClubsQuery = useMyClubsQuery();
   const applicationsQuery = useMyApplicationsQuery();
   const pendingInboxQuery = useMyPendingApplicationsQuery();
-  const awaitingPaymentQuery = useMyAwaitingPaymentQuery();
-  const organizerAwaitingPaymentQuery = useOrganizerAwaitingPaymentQuery();
   const reputationQuery = useMyReputationQuery();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [reviewing, setReviewing] = useState<PendingApplicationDto | null>(null);
+  const [duesMember, setDuesMember] = useState<OrganizerDuesMemberDto | null>(null);
+  const cancelMutation = useCancelApplicationMutation();
+  const leaveMutation = useLeaveClubMutation();
 
   const myClubs = myClubsQuery.data ?? [];
+  // Split the caller's own frozen memberships into a dedicated «Доступ закрыт — оплатите» block so a
+  // frozen member sees they've lost access and must pay, instead of the club sitting silently among the
+  // active ones. The rest render normally under «Где я состою».
+  const frozenMyClubs = useMemo(() => myClubs.filter((m) => m.status === 'frozen'), [myClubs]);
+  const activeMyClubs = useMemo(() => myClubs.filter((m) => m.status !== 'frozen'), [myClubs]);
   const applications = applicationsQuery.data ?? [];
   const pendingInbox = pendingInboxQuery.data ?? [];
-  const awaitingPayment = awaitingPaymentQuery.data ?? [];
-  const organizerAwaitingPayment = organizerAwaitingPaymentQuery.data ?? [];
   const historyClubs = reputationQuery.data?.historyClubs ?? [];
-  const awaitingPaymentIds = useMemo(
-    () => new Set(awaitingPayment.map((item) => item.applicationId)),
-    [awaitingPayment],
-  );
+  // Cross-club «Ждут оплаты»: only fetch for users who actually own a club (server returns [] otherwise).
+  const isAnyOrganizer = myClubs.some((m) => m.role === 'organizer');
+  const awaitingDuesQuery = useOrganizerAwaitingDuesQuery({ enabled: isAnyOrganizer });
+  const awaitingDues = awaitingDuesQuery.data ?? [];
 
   const inboxSectionRef = useRef<HTMLDivElement | null>(null);
   // Idempotent scroll: focus=inbox deep-link must scroll exactly once per
@@ -447,10 +483,10 @@ export const MyClubsPage: FC = () => {
    * (approved + free club + caller not in active membership) and call
    * completeFreeMembership(applicationId) once each. The mutation is idempotent
    * server-side (400 «Already a member» if race lands a real membership first),
-   * silent (no toast, no haptic), and refetches myClubs so the КПСС appears.
+   * silent (no toast, no haptic), and refetches myClubs so the club appears.
    *
-   * Paid clubs are explicitly excluded — they correctly remain in «Ожидают
-   * оплаты» until the Stars invoice is paid.
+   * Paid clubs are excluded — de-Stars approval creates a `frozen` membership directly, so a paid
+   * member already shows under «Где я состою» (no free self-heal needed).
    */
   const completeFreeMutation = useCompleteFreeMembershipMutation();
   const autoHealedRef = useRef(false);
@@ -489,19 +525,17 @@ export const MyClubsPage: FC = () => {
   ]);
 
   // Inbox grouped by addressee (see docs/modules/my-clubs-unified.md):
-  //  - «Мои заявки» (outgoing): only LIVE applications — pending (awaiting the
-  //    organizer's decision) + approved-awaiting-payment (needs my payment).
-  //    Finished-lifecycle apps (rejected / auto_rejected / approved→member) are
-  //    excluded — they're history, not actionable. Awaiting-payment apps render
-  //    as rich AwaitingPaymentCard, so they're not in the pending AppCard list.
-  //  - «Заявки в мои клубы» (organizer inbox): pending review + applicants
-  //    who were approved but haven't paid yet.
+  //  - «Мои заявки» (outgoing): only LIVE applications — pending, awaiting the organizer's decision.
+  //    Finished-lifecycle apps (rejected / auto_rejected / approved→member) are excluded — they're
+  //    history, not actionable. (De-Stars: approval now creates the membership directly, so there's
+  //    no "approved-awaiting-payment" limbo anymore.)
+  //  - «Заявки в мои клубы» (organizer inbox): pending review.
   const myActiveApps = useMemo(
-    () => applications.filter((a) => a.status === 'pending' && !awaitingPaymentIds.has(a.id)),
-    [applications, awaitingPaymentIds],
+    () => applications.filter((a) => a.status === 'pending'),
+    [applications],
   );
-  const myApplicationsCount = awaitingPayment.length + myActiveApps.length;
-  const organizerInboxCount = pendingInbox.length + organizerAwaitingPayment.length;
+  const myApplicationsCount = myActiveApps.length;
+  const organizerInboxCount = pendingInbox.length;
 
   const loading = myClubsQuery.isPending || applicationsQuery.isPending;
   const empty =
@@ -579,35 +613,71 @@ export const MyClubsPage: FC = () => {
 
       {/*
         Sections grouped by addressee (see docs/modules/my-clubs-unified.md):
-        1. «Мои заявки» — applicant-side: awaiting-payment + pending/rejected.
-        2. «Заявки в мои клубы» — organizer-side: pending review + applicants awaiting payment.
+        1. «Мои заявки» — applicant-side: pending applications awaiting the organizer's decision.
+        2. «Заявки в мои клубы» — organizer-side: pending review.
         3. «Где я состою» — current memberships.
       */}
 
-      {/* 1. My applications (outgoing) — payment CTA + pending/rejected */}
-      {!loading && myApplicationsCount > 0 && (
+      {/* 0. My frozen memberships — «Доступ закрыт, оплатите взнос». Highest personal urgency, so it
+            leads. Tap → club page, where «Оплатить взнос» declares payment. */}
+      {!loading && frozenMyClubs.length > 0 && (
         <>
-          <div className="rd-section-sub-h">
-            Мои заявки <span className="rd-count">· {myApplicationsCount}</span>
+          <div className="rd-section-sub-h rd-attn-pay">
+            🔒 Доступ закрыт — оплатите <span className="rd-count">· {frozenMyClubs.length}</span>
           </div>
-          <div className="rd-glass rd-rep-panel">
-            {awaitingPayment.map((item) => (
-              <AwaitingPaymentCard key={item.applicationId} item={item} />
-            ))}
-            {myActiveApps.map((app) => (
-              <AppCard
-                key={app.id}
-                application={app}
-                club={clubDetails[app.clubId]}
-                awaitingPayment={false}
-                onClick={() => handleClubClick(app.clubId)}
+          <div className="rd-attn-hint">Здесь доступ закрыт. Оплатите взнос организатору, чтобы вернуть его.</div>
+          <div className="rd-glass rd-rep-panel rd-attn-block rd-attn-block-pay">
+            {frozenMyClubs.map((m) => (
+              <FrozenMembershipRow
+                key={m.id}
+                membership={m}
+                club={clubDetails[m.clubId]}
+                onClick={() => handleClubClick(m.clubId)}
+                leaving={leaveMutation.isPending && leaveMutation.variables === m.clubId}
+                onLeave={() => {
+                  haptic.impact('medium');
+                  leaveMutation.mutate(m.clubId, {
+                    onSuccess: () => { haptic.notify('success'); setToastMessage('Вы вышли из клуба'); },
+                    onError: (e) => { haptic.notify('error'); setToastMessage(e instanceof Error ? e.message : 'Не удалось выйти из клуба'); },
+                  });
+                }}
               />
             ))}
           </div>
         </>
       )}
 
-      {/* 2. Applications to my clubs (organizer inbox) — review + awaiting payment */}
+      {/* 1. My applications (outgoing) — pending review */}
+      {!loading && myApplicationsCount > 0 && (
+        <>
+          <div className="rd-section-sub-h">
+            Мои заявки <span className="rd-count">· {myApplicationsCount}</span>
+          </div>
+          <div className="rd-glass rd-rep-panel">
+            {myActiveApps.map((app) => (
+              <AppCard
+                key={app.id}
+                application={app}
+                club={clubDetails[app.clubId]}
+                onClick={() => handleClubClick(app.clubId)}
+                cancelling={cancelMutation.isPending && cancelMutation.variables?.applicationId === app.id}
+                onCancel={() => {
+                  haptic.impact('medium');
+                  cancelMutation.mutate(
+                    { applicationId: app.id },
+                    {
+                      onSuccess: () => { haptic.notify('success'); setToastMessage('Заявка отменена'); },
+                      onError: (e) => { haptic.notify('error'); setToastMessage(e instanceof Error ? e.message : 'Не удалось отменить заявку'); },
+                    },
+                  );
+                }}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* 2. Applications to my clubs (organizer inbox) — pending review */}
       {!loading && organizerInboxCount > 0 && (
         <>
           <div className="rd-section-sub-h">
@@ -624,21 +694,40 @@ export const MyClubsPage: FC = () => {
                 }}
               />
             ))}
-            {organizerAwaitingPayment.map((item) => (
-              <OrganizerAwaitingPaymentRow key={item.applicationId} item={item} />
+          </div>
+        </>
+      )}
+
+      {/* 2b. Awaiting dues (organizer, cross-club) — frozen members the organizer must admit by
+             confirming their off-platform dues: join-by-«Вступить», approved applications, and members
+             who already declared payment («Оплата заявлена»). Mirrors «Оплата вступления» inside
+             Управление → Участники. */}
+      {!loading && awaitingDues.length > 0 && (
+        <>
+          <div className="rd-section-sub-h rd-attn-pay">
+            💸 Оплата вступления <span className="rd-count">· {awaitingDues.length}</span>
+          </div>
+          <div className="rd-attn-hint">Вступили в ваши клубы — подтвердите взнос, чтобы открыть доступ.</div>
+          <div className="rd-glass rd-rep-panel rd-attn-block rd-attn-block-pay">
+            {awaitingDues.map((item) => (
+              <AwaitingDuesRow
+                key={`${item.clubId}:${item.userId}`}
+                item={item}
+                onClick={() => { haptic.impact('light'); setDuesMember(item); }}
+              />
             ))}
           </div>
         </>
       )}
 
-      {/* 3. Active clubs */}
-      {!loading && myClubs.length > 0 && (
+      {/* 3. Active clubs (frozen ones are surfaced in the «Доступ закрыт» block above) */}
+      {!loading && activeMyClubs.length > 0 && (
         <>
           <div className="rd-section-sub-h">
-            Где я состою <span className="rd-count">· {myClubs.length}</span>
+            Где я состою <span className="rd-count">· {activeMyClubs.length}</span>
           </div>
           <div className="rd-glass rd-rep-panel">
-            {myClubs.map((m) => {
+            {activeMyClubs.map((m) => {
               const club = clubDetails[m.clubId];
               const isOrganizer = m.role === 'organizer' || club?.ownerId === user?.id;
               return (
@@ -681,6 +770,16 @@ export const MyClubsPage: FC = () => {
           application={reviewing}
           open
           onClose={() => setReviewing(null)}
+        />
+      )}
+
+      {duesMember && (
+        <MemberProfileModal
+          member={toFrozenMemberStub(duesMember)}
+          clubId={duesMember.clubId}
+          isOrganizer
+          onClose={() => setDuesMember(null)}
+          onActionToast={setToastMessage}
         />
       )}
 

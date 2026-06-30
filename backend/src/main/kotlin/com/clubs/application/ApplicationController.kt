@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.bind.annotation.ResponseStatus
 import java.util.UUID
 
 @RestController
@@ -65,6 +64,16 @@ class ApplicationController(private val applicationService: ApplicationService) 
         return ResponseEntity.ok(application)
     }
 
+    @PostMapping("/api/applications/{id}/cancel")
+    fun cancel(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<ApplicationDto> {
+        log.info("Cancel application {}: userId={}", id, user.userId)
+        val application = applicationService.cancelApplication(id, user.userId)
+        return ResponseEntity.ok(application)
+    }
+
     @GetMapping("/api/users/me/applications-pending")
     fun getMyPendingApplications(
         @AuthenticationPrincipal user: AuthenticatedUser
@@ -76,36 +85,6 @@ class ApplicationController(private val applicationService: ApplicationService) 
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<PendingApplicationsCountDto> =
         ResponseEntity.ok(applicationService.getMyClubsActionCounts(user.userId))
-
-    @GetMapping("/api/users/me/applications-awaiting-payment")
-    fun getMyAwaitingPaymentApplications(
-        @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<List<AwaitingPaymentApplicationDto>> =
-        ResponseEntity.ok(applicationService.getMyAwaitingPaymentApplications(user.userId))
-
-    @GetMapping("/api/users/me/organizer/awaiting-payment-applicants")
-    fun getOrganizerAwaitingPaymentApplicants(
-        @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<List<OrganizerAwaitingPaymentApplicantDto>> =
-        ResponseEntity.ok(applicationService.getOrganizerAwaitingPaymentApplicants(user.userId))
-
-    @GetMapping("/api/clubs/{clubId}/awaiting-payment-applicants")
-    fun getClubAwaitingPaymentApplicants(
-        @PathVariable clubId: UUID,
-        @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<List<AwaitingPaymentApplicantDto>> =
-        ResponseEntity.ok(applicationService.getAwaitingPaymentApplicantsByClub(clubId, user.userId))
-
-    @PostMapping("/api/applications/{id}/resend-invoice")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun resendInvoice(
-        @PathVariable id: UUID,
-        @AuthenticationPrincipal user: AuthenticatedUser
-    ) {
-        // Intentionally NOT logging applicationId at INFO before delegating — Service
-        // emits the structured log on success; failures go through GlobalExceptionHandler.
-        applicationService.resendInvoice(id, user.userId)
-    }
 
     @PostMapping("/api/applications/{id}/complete-free-membership")
     fun completeFreeMembership(

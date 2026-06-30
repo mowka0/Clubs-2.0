@@ -9,6 +9,7 @@ import com.clubs.application.ApplicationRepository
 import com.clubs.event.EventRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
+import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.membership.MembershipRepository
 import com.clubs.skladchina.SkladchinaRepository
 import com.clubs.subscription.SubscriptionService
@@ -19,6 +20,11 @@ import java.util.UUID
 
 private const val MAX_CLUBS_PER_ORGANIZER = 10
 private const val INVITE_CODE_LENGTH = 16
+
+// "Belongs to the club" for SBP-requisite visibility — members who may need to pay + the active owner.
+private val MEMBER_REQUISITE_STATUSES = setOf(
+    MembershipStatus.active, MembershipStatus.frozen, MembershipStatus.grace_period
+)
 
 @Service
 class ClubService(
@@ -46,6 +52,10 @@ class ClubService(
     fun createClub(request: CreateClubRequest, ownerId: UUID): ClubDetailDto {
         validateCategory(request.category)
         validateAccessType(request.accessType)
+        // A paid club must carry SBP requisites so members know how to pay (de-Stars honor-system).
+        if (request.subscriptionPrice > 0 && request.paymentLink.isNullOrBlank()) {
+            throw ValidationException("Для платного клуба укажите реквизиты для взноса (СБП)")
+        }
 
         val count = clubRepository.countByOwnerId(ownerId)
         if (count >= MAX_CLUBS_PER_ORGANIZER) throw ConflictException("Maximum $MAX_CLUBS_PER_ORGANIZER clubs per organizer")
@@ -69,7 +79,7 @@ class ClubService(
 
         // Re-read so the response carries the live member count (= 1, the organizer just added) rather
         // than the bare create() result (0). findById computes the count from `memberships`.
-        return mapper.toDetailDto(clubRepository.findById(club.id) ?: club)
+        return mapper.toDetailDto(clubRepository.findById(club.id) ?: club, includeRequisites = true)
     }
 
     fun getClubByInviteCode(code: String): ClubDetailDto {
@@ -84,12 +94,16 @@ class ClubService(
         val newCode = generateInviteCode()
         val updated = clubRepository.updateInviteCode(clubId, newCode) ?: throw NotFoundException("Club not found")
         log.info("Invite link regenerated: clubId={} userId={}", clubId, userId)
-        return mapper.toDetailDto(updated)
+        return mapper.toDetailDto(updated, includeRequisites = true)
     }
 
-    fun getClub(id: UUID): ClubDetailDto {
+    fun getClub(id: UUID, callerId: UUID): ClubDetailDto {
         val club = clubRepository.findById(id) ?: throw NotFoundException("Club not found")
-        return mapper.toDetailDto(club)
+        // SBP requisites are visible only to club members (active/frozen) + the owner — a pending
+        // applicant / visitor must not see how to pay (de-Stars: dues = member→organizer, honor-system).
+        val membership = membershipRepository.findByUserAndClub(callerId, id)
+        val isMember = membership != null && membership.status in MEMBER_REQUISITE_STATUSES
+        return mapper.toDetailDto(club, includeRequisites = isMember)
     }
 
     @Transactional
@@ -99,7 +113,7 @@ class ClubService(
         clubRepository.linkTelegramGroup(clubId, telegramGroupId)
         log.info("Telegram group {} linked to club {}: userId={}", telegramGroupId, clubId, userId)
         val updated = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found after update")
-        return mapper.toDetailDto(updated)
+        return mapper.toDetailDto(updated, includeRequisites = true)
     }
 
     @Transactional
@@ -113,9 +127,19 @@ class ClubService(
             subscriptionService.requirePaidClubCapacity(userId, clubRepository.countPaidByOwnerId(userId))
         }
 
+        // Invariant: a paid club must keep SBP requisites. Resolve the post-update state — price from the
+        // request or the current value; link kept when the key is absent (null), cleared on a blank string
+        // (same convention the repository uses). Blocks 0→paid without a link, clearing a paid club's link,
+        // and editing a legacy paid club that never had one.
+        val resultingPrice = request.subscriptionPrice ?: club.subscriptionPrice
+        val resultingLink = if (request.paymentLink == null) club.paymentLink else request.paymentLink.ifBlank { null }
+        if (resultingPrice > 0 && resultingLink.isNullOrBlank()) {
+            throw ValidationException("Для платного клуба укажите реквизиты для взноса (СБП)")
+        }
+
         val updated = clubRepository.update(id, request) ?: throw NotFoundException("Club not found after update")
         log.info("Club updated: id={} userId={}", id, userId)
-        return mapper.toDetailDto(updated)
+        return mapper.toDetailDto(updated, includeRequisites = true)
     }
 
     @Transactional

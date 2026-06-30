@@ -124,13 +124,34 @@ class MembershipHistoryIntegrationTest {
     }
 
     @Test
-    fun `moveGracePeriodToExpired records expired for each lapsed member`() {
+    fun `cancel clears a pending dues claim`() {
+        val m = membershipRepository.createFrozen(memberId, clubId)
+        membershipRepository.claimDues(m.id, "cash", null)
+        assertClaimPresent(m.id) // sanity: the claim was recorded
+        membershipRepository.cancel(m.id)
+        assertClaimCleared(m.id)
+    }
+
+    @Test
+    fun `reactivateFrozen drops a stale dues claim from the prior lifecycle`() {
+        // Bug scenario: member claims cash → organizer rejects (cancel) → member re-joins. The fresh
+        // frozen membership must NOT carry the old claim, else they reappear on «Оплата на проверке».
+        val m = membershipRepository.createFrozen(memberId, clubId)
+        membershipRepository.claimDues(m.id, "cash", null)
+        membershipRepository.cancel(m.id)
+        val revived = membershipRepository.reactivateFrozen(m.id)
+        assertEquals(MembershipStatus.frozen, revived.status)
+        assertClaimCleared(m.id)
+    }
+
+    @Test
+    fun `expireOverdueAccess flips overdue active to frozen without a churn event`() {
         val now = OffsetDateTime.now()
         membershipRepository.activateSubscription(memberId, clubId, now.minusDays(1)) // joined, already past expiry
-        membershipRepository.moveActiveToGracePeriod(now) // active → grace (not a logged event)
-        val count = membershipRepository.moveGracePeriodToExpired(now) // grace → expired (logged)
+        val count = membershipRepository.expireOverdueAccess(now) // active → frozen (access suspension)
         assertEquals(1, count)
-        assertEvents(memberId, MembershipEvent.joined, MembershipEvent.expired)
+        // De-Stars: a freeze (access suspension) is NOT churn, so only the original join is logged.
+        assertEvents(memberId, MembershipEvent.joined)
     }
 
     // ---- helpers ----
@@ -147,6 +168,23 @@ class MembershipHistoryIntegrationTest {
             actual.sortedBy { it.ordinal },
             "membership_history events for the user"
         )
+    }
+
+    /** Asserts the member-side dues claim columns are all set (a claim is on record). */
+    private fun assertClaimPresent(membershipId: UUID) {
+        val r = dsl.select(MEMBERSHIPS.DUES_CLAIMED_AT, MEMBERSHIPS.DUES_CLAIM_METHOD)
+            .from(MEMBERSHIPS).where(MEMBERSHIPS.ID.eq(membershipId)).fetchOne()!!
+        assertEquals("cash", r.get(MEMBERSHIPS.DUES_CLAIM_METHOD), "dues_claim_method should be set")
+        assert(r.get(MEMBERSHIPS.DUES_CLAIMED_AT) != null) { "dues_claimed_at should be set" }
+    }
+
+    /** Asserts the member-side dues claim columns are all NULL (no live claim). */
+    private fun assertClaimCleared(membershipId: UUID) {
+        val r = dsl.select(MEMBERSHIPS.DUES_CLAIMED_AT, MEMBERSHIPS.DUES_CLAIM_METHOD, MEMBERSHIPS.DUES_PROOF_URL)
+            .from(MEMBERSHIPS).where(MEMBERSHIPS.ID.eq(membershipId)).fetchOne()!!
+        assertEquals(null, r.get(MEMBERSHIPS.DUES_CLAIMED_AT), "dues_claimed_at must be cleared")
+        assertEquals(null, r.get(MEMBERSHIPS.DUES_CLAIM_METHOD), "dues_claim_method must be cleared")
+        assertEquals(null, r.get(MEMBERSHIPS.DUES_PROOF_URL), "dues_proof_url must be cleared")
     }
 
     private fun newUser(): UUID {

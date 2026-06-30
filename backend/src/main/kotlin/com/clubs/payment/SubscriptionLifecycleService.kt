@@ -23,21 +23,15 @@ class SubscriptionLifecycleService(
         membershipRepository.findActiveExpired(now)
 
     /**
-     * Runs the two DB-mutating lifecycle steps in a single short transaction:
-     * active→grace_period, then grace_period→expired. External IO (notifications)
-     * must be performed outside this method.
-     *
-     * The grace_period→expired UPDATE is safe to run unconditionally because the
-     * scheduler is the single writer of that transition.
+     * Honor-system auto-expiry (de-Stars Slice 2): in a single short transaction, every `active` paid
+     * membership whose access window (subscription_expires_at) has passed drops to `frozen` ("ждёт
+     * оплаты") — the member keeps belonging but loses content access until the organizer confirms the
+     * next dues payment. Free memberships (no expiry) are untouched. External IO (notifications) must be
+     * performed outside this method. Hard cut, no grace period — by PO decision (de-Stars).
      */
     @Transactional
     fun processExpiry(now: OffsetDateTime) {
-        val gracePeriodEnd = now.minusDays(3)
-
-        val moved = membershipRepository.moveActiveToGracePeriod(now)
-        if (moved > 0) log.info("Moved {} memberships to grace_period", moved)
-
-        val fullyExpired = membershipRepository.moveGracePeriodToExpired(gracePeriodEnd)
-        if (fullyExpired > 0) log.info("Expired {} memberships after grace period", fullyExpired)
+        val expired = membershipRepository.expireOverdueAccess(now)
+        if (expired > 0) log.info("Auto-expired {} overdue memberships to frozen (awaiting dues)", expired)
     }
 }

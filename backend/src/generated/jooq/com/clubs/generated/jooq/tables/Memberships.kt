@@ -13,6 +13,7 @@ import com.clubs.generated.jooq.indexes.IDX_MEMBERSHIPS_USER_ID
 import com.clubs.generated.jooq.keys.MEMBERSHIPS_PKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS_USER_ID_CLUB_ID_KEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_CLUB_ID_FKEY
+import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_DUES_MARKED_BY_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.TRANSACTIONS__TRANSACTIONS_MEMBERSHIP_ID_FKEY
 import com.clubs.generated.jooq.tables.Clubs.ClubsPath
@@ -103,9 +104,13 @@ open class Memberships(
     val CLUB_ID: TableField<MembershipsRecord, UUID?> = createField(DSL.name("club_id"), SQLDataType.UUID.nullable(false), this, "")
 
     /**
-     * The column <code>public.memberships.status</code>.
+     * The column <code>public.memberships.status</code>. Жизненный цикл
+     * членства: active = состоит и есть доступ к контенту | frozen = состоит,
+     * но доступ закрыт до подтверждения внеплатформенного взноса (de-Stars
+     * Slice 2) | grace_period/expired = легаси Stars-истечение, сейчас не
+     * используется (dormant) | cancelled = вышел из клуба.
      */
-    val STATUS: TableField<MembershipsRecord, MembershipStatus?> = createField(DSL.name("status"), SQLDataType.VARCHAR.nullable(false).defaultValue(DSL.field(DSL.raw("'active'::membership_status"), SQLDataType.VARCHAR)).asEnumDataType(MembershipStatus::class.java), this, "")
+    val STATUS: TableField<MembershipsRecord, MembershipStatus?> = createField(DSL.name("status"), SQLDataType.VARCHAR.nullable(false).defaultValue(DSL.field(DSL.raw("'active'::membership_status"), SQLDataType.VARCHAR)).asEnumDataType(MembershipStatus::class.java), this, "Жизненный цикл членства: active = состоит и есть доступ к контенту | frozen = состоит, но доступ закрыт до подтверждения внеплатформенного взноса (de-Stars Slice 2) | grace_period/expired = легаси Stars-истечение, сейчас не используется (dormant) | cancelled = вышел из клуба.")
 
     /**
      * The column <code>public.memberships.role</code>.
@@ -131,6 +136,59 @@ open class Memberships(
      * The column <code>public.memberships.updated_at</code>.
      */
     val UPDATED_AT: TableField<MembershipsRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "")
+
+    /**
+     * The column <code>public.memberships.access_frozen_at</code>. Когда
+     * организатор заморозил доступ участника (NULL = не заморожен).
+     * Проставляется вместе со status=frozen; очищается при разморозке или
+     * отметке взноса.
+     */
+    val ACCESS_FROZEN_AT: TableField<MembershipsRecord, OffsetDateTime?> = createField(DSL.name("access_frozen_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда организатор заморозил доступ участника (NULL = не заморожен). Проставляется вместе со status=frozen; очищается при разморозке или отметке взноса.")
+
+    /**
+     * The column <code>public.memberships.dues_marked_paid_at</code>. Когда
+     * организатор последний раз подтвердил получение внеплатформенного взноса
+     * (NULL = не отмечено). Honor-system: деньги идут участник-&gt;организатор
+     * мимо платформы, приложение лишь хранит отметку.
+     */
+    val DUES_MARKED_PAID_AT: TableField<MembershipsRecord, OffsetDateTime?> = createField(DSL.name("dues_marked_paid_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда организатор последний раз подтвердил получение внеплатформенного взноса (NULL = не отмечено). Honor-system: деньги идут участник->организатор мимо платформы, приложение лишь хранит отметку.")
+
+    /**
+     * The column <code>public.memberships.dues_marked_by</code>. Организатор
+     * (user), отметивший взнос полученным; FK users(id). NULL, если взнос не
+     * отмечен.
+     */
+    val DUES_MARKED_BY: TableField<MembershipsRecord, UUID?> = createField(DSL.name("dues_marked_by"), SQLDataType.UUID, this, "Организатор (user), отметивший взнос полученным; FK users(id). NULL, если взнос не отмечен.")
+
+    /**
+     * The column <code>public.memberships.organizer_note</code>. Приватная
+     * заметка организатора об участнике (NULL = нет). Видна только
+     * организаторам клуба (owner/co-org), не самому участнику. Косметика — на
+     * доступ/репутацию не влияет.
+     */
+    val ORGANIZER_NOTE: TableField<MembershipsRecord, String?> = createField(DSL.name("organizer_note"), SQLDataType.CLOB, this, "Приватная заметка организатора об участнике (NULL = нет). Видна только организаторам клуба (owner/co-org), не самому участнику. Косметика — на доступ/репутацию не влияет.")
+
+    /**
+     * The column <code>public.memberships.dues_claimed_at</code>. Когда
+     * участник заявил об оплате взноса (NULL = заявки нет). Сбрасывается, когда
+     * организатор подтверждает доступ («Взнос получен») или замораживает
+     * участника.
+     */
+    val DUES_CLAIMED_AT: TableField<MembershipsRecord, OffsetDateTime?> = createField(DSL.name("dues_claimed_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда участник заявил об оплате взноса (NULL = заявки нет). Сбрасывается, когда организатор подтверждает доступ («Взнос получен») или замораживает участника.")
+
+    /**
+     * The column <code>public.memberships.dues_claim_method</code>. Способ
+     * оплаты, заявленный участником: 'sbp' (перевод по СБП со скриншотом) или
+     * 'cash' (наличные, без скриншота). NULL = заявки нет.
+     */
+    val DUES_CLAIM_METHOD: TableField<MembershipsRecord, String?> = createField(DSL.name("dues_claim_method"), SQLDataType.CLOB, this, "Способ оплаты, заявленный участником: 'sbp' (перевод по СБП со скриншотом) или 'cash' (наличные, без скриншота). NULL = заявки нет.")
+
+    /**
+     * The column <code>public.memberships.dues_proof_url</code>. URL скриншота
+     * оплаты для заявки по СБП (NULL для наличных или когда заявки нет). Виден
+     * только организаторам клуба.
+     */
+    val DUES_PROOF_URL: TableField<MembershipsRecord, String?> = createField(DSL.name("dues_proof_url"), SQLDataType.CLOB, this, "URL скриншота оплаты для заявки по СБП (NULL для наличных или когда заявки нет). Виден только организаторам клуба.")
 
     private constructor(alias: Name, aliased: Table<MembershipsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<MembershipsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
@@ -167,7 +225,7 @@ open class Memberships(
     override fun getIndexes(): List<Index> = listOf(IDX_MEMBERSHIPS_CLUB_ID, IDX_MEMBERSHIPS_STATUS, IDX_MEMBERSHIPS_USER_ID)
     override fun getPrimaryKey(): UniqueKey<MembershipsRecord> = MEMBERSHIPS_PKEY
     override fun getUniqueKeys(): List<UniqueKey<MembershipsRecord>> = listOf(MEMBERSHIPS_USER_ID_CLUB_ID_KEY)
-    override fun getReferences(): List<ForeignKey<MembershipsRecord, *>> = listOf(MEMBERSHIPS__MEMBERSHIPS_CLUB_ID_FKEY, MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY)
+    override fun getReferences(): List<ForeignKey<MembershipsRecord, *>> = listOf(MEMBERSHIPS__MEMBERSHIPS_CLUB_ID_FKEY, MEMBERSHIPS__MEMBERSHIPS_DUES_MARKED_BY_FKEY, MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY)
 
     private lateinit var _clubs: ClubsPath
 
@@ -184,20 +242,37 @@ open class Memberships(
     val clubs: ClubsPath
         get(): ClubsPath = clubs()
 
-    private lateinit var _users: UsersPath
+    private lateinit var _membershipsDuesMarkedByFkey: UsersPath
 
     /**
-     * Get the implicit join path to the <code>public.users</code> table.
+     * Get the implicit join path to the <code>public.users</code> table, via
+     * the <code>memberships_dues_marked_by_fkey</code> key.
      */
-    fun users(): UsersPath {
-        if (!this::_users.isInitialized)
-            _users = UsersPath(this, MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY, null)
+    fun membershipsDuesMarkedByFkey(): UsersPath {
+        if (!this::_membershipsDuesMarkedByFkey.isInitialized)
+            _membershipsDuesMarkedByFkey = UsersPath(this, MEMBERSHIPS__MEMBERSHIPS_DUES_MARKED_BY_FKEY, null)
 
-        return _users;
+        return _membershipsDuesMarkedByFkey;
     }
 
-    val users: UsersPath
-        get(): UsersPath = users()
+    val membershipsDuesMarkedByFkey: UsersPath
+        get(): UsersPath = membershipsDuesMarkedByFkey()
+
+    private lateinit var _membershipsUserIdFkey: UsersPath
+
+    /**
+     * Get the implicit join path to the <code>public.users</code> table, via
+     * the <code>memberships_user_id_fkey</code> key.
+     */
+    fun membershipsUserIdFkey(): UsersPath {
+        if (!this::_membershipsUserIdFkey.isInitialized)
+            _membershipsUserIdFkey = UsersPath(this, MEMBERSHIPS__MEMBERSHIPS_USER_ID_FKEY, null)
+
+        return _membershipsUserIdFkey;
+    }
+
+    val membershipsUserIdFkey: UsersPath
+        get(): UsersPath = membershipsUserIdFkey()
 
     private lateinit var _transactions: TransactionsPath
 

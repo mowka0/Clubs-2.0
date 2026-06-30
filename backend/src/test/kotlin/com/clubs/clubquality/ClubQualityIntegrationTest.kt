@@ -141,6 +141,7 @@ class ClubQualityIntegrationTest {
         val core1 = newUser()
         val core2 = newUser()
         val casual = newUser()
+        listOf(core1, core2, casual).forEach { insertMembership(it, "active") } // current members
 
         events.take(3).forEach { insertResponse(it, attendance = "attended", userId = core1) } // 3 → core
         events.forEach { insertResponse(it, attendance = "attended", userId = core2) }          // 4 → core
@@ -155,6 +156,7 @@ class ClubQualityIntegrationTest {
         // attendance-marked stage_2 event) — those must not inflate the core.
         val cancelled = (1..3).map { insertEvent(daysFromNow(-it.toLong()), "cancelled") }
         val ghost = newUser()
+        insertMembership(ghost, "active") // current member, isolates the cancelled-event rule
         cancelled.forEach { insertResponse(it, attendance = "attended", userId = ghost) } // 3 attended, all cancelled
 
         assertEquals(0, clubQualityService.getClubFacts(clubId).coreSize)
@@ -166,7 +168,35 @@ class ClubQualityIntegrationTest {
         // Organizer self-marks attendance on all 3 — must NOT count toward «основа клуба».
         events.forEach { insertResponse(it, attendance = "attended", userId = ownerId) }
         val member = newUser()
+        insertMembership(member, "active")
         events.forEach { insertResponse(it, attendance = "attended", userId = member) } // a real member → core
+
+        assertEquals(1, clubQualityService.getClubFacts(clubId).coreSize)
+    }
+
+    @Test
+    fun `coreSize drops a member who left or was removed (membership cancelled)`() {
+        // Item 5: «основа клуба» must reflect CURRENT members — a regular who leaves/is kicked
+        // (status cancelled) stops counting, even though their attended events stay on record.
+        val events = (1..3).map { insertEvent(daysFromNow(-it.toLong()), "completed", finalized = true) }
+        val stayer = newUser()
+        val leaver = newUser()
+        insertMembership(stayer, "active")
+        insertMembership(leaver, "cancelled")
+        events.forEach { insertResponse(it, attendance = "attended", userId = stayer) } // 3 → core
+        events.forEach { insertResponse(it, attendance = "attended", userId = leaver) } // 3 attended but left
+
+        assertEquals(1, clubQualityService.getClubFacts(clubId).coreSize)
+    }
+
+    @Test
+    fun `coreSize still counts a frozen member (de-Stars dues pause is not a departure)`() {
+        // A frozen member is mid-dues-cycle, not gone — the core must not flicker each time a paying
+        // member's window briefly lapses.
+        val events = (1..3).map { insertEvent(daysFromNow(-it.toLong()), "completed", finalized = true) }
+        val frozen = newUser()
+        insertMembership(frozen, "frozen")
+        events.forEach { insertResponse(it, attendance = "attended", userId = frozen) }
 
         assertEquals(1, clubQualityService.getClubFacts(clubId).coreSize)
     }

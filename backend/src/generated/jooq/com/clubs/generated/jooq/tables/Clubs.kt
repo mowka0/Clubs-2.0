@@ -15,6 +15,7 @@ import com.clubs.generated.jooq.keys.APPLICATIONS__APPLICATIONS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.CLUBS_INVITE_LINK_KEY
 import com.clubs.generated.jooq.keys.CLUBS_PKEY
 import com.clubs.generated.jooq.keys.CLUBS__CLUBS_OWNER_ID_FKEY
+import com.clubs.generated.jooq.keys.CLUB_AWARDS__CLUB_AWARDS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.CLUB_RANK__CLUB_RANK_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_CLUB_ID_FKEY
@@ -25,6 +26,7 @@ import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.TRANSACTIONS__TRANSACTIONS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.USER_CLUB_REPUTATION__USER_CLUB_REPUTATION_CLUB_ID_FKEY
 import com.clubs.generated.jooq.tables.Applications.ApplicationsPath
+import com.clubs.generated.jooq.tables.ClubAwards.ClubAwardsPath
 import com.clubs.generated.jooq.tables.ClubRank.ClubRankPath
 import com.clubs.generated.jooq.tables.Events.EventsPath
 import com.clubs.generated.jooq.tables.MembershipHistory.MembershipHistoryPath
@@ -195,6 +197,20 @@ open class Clubs(
      */
     val UPDATED_AT: TableField<ClubsRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "")
 
+    /**
+     * The column <code>public.clubs.payment_link</code>. Реквизиты организатора
+     * для членского взноса (СБП-ссылка / номер / ссылка банка). NULL = не
+     * задано (кнопки «Оплатить» нет). Виден только участникам клуба
+     * (active/frozen), не гостям/заявителям на рассмотрении.
+     */
+    val PAYMENT_LINK: TableField<ClubsRecord, String?> = createField(DSL.name("payment_link"), SQLDataType.CLOB, this, "Реквизиты организатора для членского взноса (СБП-ссылка / номер / ссылка банка). NULL = не задано (кнопки «Оплатить» нет). Виден только участникам клуба (active/frozen), не гостям/заявителям на рассмотрении.")
+
+    /**
+     * The column <code>public.clubs.payment_method_note</code>. Подсказка к
+     * реквизитам (например «Тинькофф, СБП по номеру…»). NULL = нет.
+     */
+    val PAYMENT_METHOD_NOTE: TableField<ClubsRecord, String?> = createField(DSL.name("payment_method_note"), SQLDataType.CLOB, this, "Подсказка к реквизитам (например «Тинькофф, СБП по номеру…»). NULL = нет.")
+
     private constructor(alias: Name, aliased: Table<ClubsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<ClubsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<ClubsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -262,6 +278,22 @@ open class Clubs(
 
     val applications: ApplicationsPath
         get(): ApplicationsPath = applications()
+
+    private lateinit var _clubAwards: ClubAwardsPath
+
+    /**
+     * Get the implicit to-many join path to the <code>public.club_awards</code>
+     * table
+     */
+    fun clubAwards(): ClubAwardsPath {
+        if (!this::_clubAwards.isInitialized)
+            _clubAwards = ClubAwardsPath(this, null, CLUB_AWARDS__CLUB_AWARDS_CLUB_ID_FKEY.inverseKey)
+
+        return _clubAwards;
+    }
+
+    val clubAwards: ClubAwardsPath
+        get(): ClubAwardsPath = clubAwards()
 
     private lateinit var _clubRank: ClubRankPath
 
@@ -412,7 +444,7 @@ open class Clubs(
      * table, via the <code>memberships_user_id_fkey</code> key
      */
     val membershipsUserIdFkey: UsersPath
-        get(): UsersPath = memberships().users()
+        get(): UsersPath = memberships().membershipsUserIdFkey()
 
     /**
      * Get the implicit many-to-many join path to the <code>public.users</code>

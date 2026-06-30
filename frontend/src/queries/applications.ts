@@ -1,16 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   approveApplication,
+  cancelApplication,
   completeFreeMembership,
   getMyApplications,
-  getMyAwaitingPaymentApplications,
   getMyClubsActionCounts,
   getMyPendingApplications,
-  getOrganizerAwaitingPaymentApplicants,
   rejectApplication,
-  resendApplicationInvoice,
 } from '../api/membership';
-import { useHaptic } from '../hooks/useHaptic';
 import { queryKeys } from './queryKeys';
 
 export function useMyApplicationsQuery() {
@@ -34,39 +31,9 @@ export function useMyPendingApplicationsQuery() {
 }
 
 /**
- * Caller's own approved-but-unpaid applications — drives the «Ожидают оплаты»
- * section on MyClubsPage. Mirrors the staleTime/cache pattern of
- * useMyPendingApplicationsQuery so both sections refresh together.
- */
-export function useMyAwaitingPaymentQuery() {
-  return useQuery({
-    queryKey: queryKeys.applications.myAwaitingPayment,
-    queryFn: getMyAwaitingPaymentApplications,
-    staleTime: 60_000,
-  });
-}
-
-/**
- * Cross-club organizer view: approved-but-unpaid applicants across all clubs
- * the caller owns. Drives the «Ожидают оплаты от заявителей» section on
- * MyClubsPage. Backend filters by ownership; non-organizers receive an empty
- * list (no 403). Same `staleTime: 60_000` as sibling sections.
- */
-export function useOrganizerAwaitingPaymentQuery() {
-  return useQuery({
-    queryKey: queryKeys.applications.organizerAwaitingPayment,
-    queryFn: getOrganizerAwaitingPaymentApplicants,
-    staleTime: 60_000,
-  });
-}
-
-/**
- * Combined counter feeding the «Мои клубы» tab-dot. Returns the full
- * `{ inboxCount, awaitingPaymentCount }` shape so call-sites can show
- * either count independently; consumers that only need the union can
- * compute `inboxCount + awaitingPaymentCount` themselves.
- *
- * One backend call, one cache slot, mirrors useSkladchinaActionRequiredCountQuery.
+ * Counter feeding the «Мои клубы» tab-dot: organizer-side pending applications
+ * (`{ inboxCount }`). One backend call, one cache slot, mirrors
+ * useSkladchinaActionRequiredCountQuery.
  */
 export function useMyClubsActionCountsQuery() {
   return useQuery({
@@ -93,11 +60,12 @@ export function useApproveApplicationMutation() {
       qc.invalidateQueries({ queryKey: queryKeys.applications.mine() });
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPending });
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingActionCounts });
+      // Approving a paid-club application now creates the membership directly (in `frozen`),
+      // so the per-club member list (organizer dashboard) refreshes to show the new row.
       qc.invalidateQueries({ queryKey: queryKeys.clubs.members(clubId) });
-      // Approving a paid-club application creates a new awaiting-payment entry
-      // for the organizer cross-club view and bumps the per-club section too.
-      qc.invalidateQueries({ queryKey: queryKeys.applications.organizerAwaitingPayment });
-      qc.invalidateQueries({ queryKey: queryKeys.clubs.awaitingPaymentApplicants(clubId) });
+      // …and the cross-club «Оплата вступления» block on «Мои клубы» — the new frozen member must
+      // appear there too, not only inside Управление → Участники (it has a 60s staleTime otherwise).
+      qc.invalidateQueries({ queryKey: queryKeys.organizer.awaitingDues });
     },
   });
 }
@@ -121,31 +89,23 @@ export function useRejectApplicationMutation() {
       qc.invalidateQueries({ queryKey: queryKeys.applications.mine() });
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPending });
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingActionCounts });
-      // Reject doesn't add an awaiting-payment entry, but keep the cross-club
-      // organizer view in lockstep with the per-club one for consistency.
-      qc.invalidateQueries({ queryKey: queryKeys.applications.organizerAwaitingPayment });
     },
   });
 }
 
-/**
- * Re-send the Stars invoice for an approved-but-unpaid application. Success
- * triggers a positive haptic and refreshes the awaiting-payment list + tab-dot
- * counts (the application may have become "paid" between the user pressing
- * the button and the backend processing the invoice).
- */
-export function useResendInvoiceMutation() {
+interface CancelApplicationArgs {
+  applicationId: string;
+}
+
+/** Applicant withdraws their own pending application (→ status `cancelled`). Refresh the applicant's
+ *  own caches so the card disappears from «Мои заявки» and the tab-dot count updates. */
+export function useCancelApplicationMutation() {
   const qc = useQueryClient();
-  const haptic = useHaptic();
   return useMutation({
-    mutationFn: (applicationId: string) => resendApplicationInvoice(applicationId),
+    mutationFn: ({ applicationId }: CancelApplicationArgs) => cancelApplication(applicationId),
     onSuccess: () => {
-      haptic.notify('success');
-      qc.invalidateQueries({ queryKey: queryKeys.applications.myAwaitingPayment });
+      qc.invalidateQueries({ queryKey: queryKeys.applications.mine() });
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingActionCounts });
-      // Resend by applicant doesn't move the entry but webhook-driven payment
-      // can land between request and refetch; refresh the organizer view too.
-      qc.invalidateQueries({ queryKey: queryKeys.applications.organizerAwaitingPayment });
     },
   });
 }
@@ -168,7 +128,6 @@ export function useCompleteFreeMembershipMutation() {
       completeFreeMembership(applicationId),
     onSuccess: (_data, { clubId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.applications.mine() });
-      qc.invalidateQueries({ queryKey: queryKeys.applications.myAwaitingPayment });
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingActionCounts });
       qc.invalidateQueries({ queryKey: queryKeys.clubs.my() });
       qc.invalidateQueries({ queryKey: queryKeys.clubs.detail(clubId) });

@@ -9,7 +9,6 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.event.EventResponseRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.MembershipStatus
-import com.clubs.payment.PaymentService
 import com.clubs.reputation.ExitObligation
 import com.clubs.reputation.ReputationService
 import com.clubs.reputation.TrustService
@@ -24,9 +23,8 @@ import java.util.UUID
 class MembershipService(
     private val membershipRepository: MembershipRepository,
     private val clubRepository: ClubRepository,
-    private val paymentService: PaymentService,
     private val mapper: MembershipMapper,
-    private val freeMembershipActivator: FreeMembershipActivator,
+    private val membershipActivator: MembershipActivator,
     private val eventResponseRepository: EventResponseRepository,
     private val skladchinaRepository: SkladchinaRepository,
     private val applicationRepository: ApplicationRepository,
@@ -37,7 +35,7 @@ class MembershipService(
     private val log = LoggerFactory.getLogger(MembershipService::class.java)
 
     @Transactional
-    fun joinOpenClub(clubId: UUID, userId: UUID): JoinResult {
+    fun joinOpenClub(clubId: UUID, userId: UUID): MembershipDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
 
         if (club.accessType != AccessType.`open`) {
@@ -50,7 +48,7 @@ class MembershipService(
         val activeCount = membershipRepository.countActiveByClubId(clubId)
         if (activeCount >= club.memberLimit) throw ValidationException("Club is full")
 
-        return joinOrRequestPayment(club, userId, "open")
+        return joinClubMembership(club, userId, "open")
     }
 
     @Transactional
@@ -60,8 +58,11 @@ class MembershipService(
         if (membership.status == MembershipStatus.cancelled) throw ValidationException("Membership already cancelled")
 
         membershipRepository.cancel(membership.id)
+        // Mirror /leave: clear the active application so a cancelled member isn't stuck on an orphan
+        // «Заявка одобрена» and can re-apply.
+        val cascadedApplications = applicationRepository.deleteActiveByUserAndClub(userId, clubId)
 
-        log.info("Membership cancelled: clubId={} userId={}", clubId, userId)
+        log.info("Membership cancelled: clubId={} userId={} cascadedApplications={}", clubId, userId, cascadedApplications)
         return mapper.toDto(membership.copy(status = MembershipStatus.cancelled))
     }
 
@@ -110,7 +111,7 @@ class MembershipService(
         club.subscriptionPrice > 0 || (membership.subscriptionExpiresAt?.isAfter(OffsetDateTime.now()) == true)
 
     @Transactional
-    fun joinByInviteCode(code: String, userId: UUID): JoinResult {
+    fun joinByInviteCode(code: String, userId: UUID): MembershipDto {
         val club = clubRepository.findByInviteCode(code) ?: throw NotFoundException("Invite link not found")
         val clubId = club.id
 
@@ -120,7 +121,7 @@ class MembershipService(
         val activeCount = membershipRepository.countActiveByClubId(clubId)
         if (activeCount >= club.memberLimit) throw ValidationException("Club is full")
 
-        return joinOrRequestPayment(club, userId, "invite")
+        return joinClubMembership(club, userId, "invite")
     }
 
     fun getUserMemberships(userId: UUID): List<MembershipDto> =
@@ -225,18 +226,22 @@ class MembershipService(
         )
     }
 
-    private fun joinOrRequestPayment(club: Club, userId: UUID, source: String): JoinResult {
+    /**
+     * Joins the validated club (de-Stars, Slice 2). A paid club lands the member in `frozen` — they
+     * belong and hold a slot, but have no content access until the organizer confirms the off-platform
+     * dues (AccessGateService.markDuesPaid). A free club joins straight to `active`. No Stars invoice.
+     */
+    private fun joinClubMembership(club: Club, userId: UUID, source: String): MembershipDto {
         val clubId = club.id
-        val price = club.subscriptionPrice
-
-        return if (price > 0) {
-            paymentService.createInvoice(userId, clubId)
-            log.info("Invoice requested on {} join: clubId={} userId={} price={}", source, clubId, userId, price)
-            JoinResult.PendingPayment(PendingPaymentDto(clubId = clubId, priceStars = price))
+        val membership = if (club.subscriptionPrice > 0) {
+            membershipActivator.activateFrozen(userId, clubId)
         } else {
-            val membership = freeMembershipActivator.activate(userId, clubId)
-            log.info("Joined free club via {}: clubId={} userId={}", source, clubId, userId)
-            JoinResult.Joined(mapper.toDto(membership))
+            membershipActivator.activateFree(userId, clubId)
         }
+        log.info(
+            "Joined {} club via {}: clubId={} userId={} status={}",
+            if (club.subscriptionPrice > 0) "paid" else "free", source, clubId, userId, membership.status.literal
+        )
+        return mapper.toDto(membership)
     }
 }

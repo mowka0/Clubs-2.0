@@ -1,5 +1,6 @@
 package com.clubs.membership
 
+import com.clubs.award.AwardDto
 import com.clubs.generated.jooq.tables.records.MembershipsRecord
 import com.clubs.reputation.ReputationPolicy
 import org.springframework.stereotype.Component
@@ -15,6 +16,10 @@ class MembershipMapper {
         role = record.role!!,
         joinedAt = record.joinedAt!!,
         subscriptionExpiresAt = record.subscriptionExpiresAt,
+        organizerNote = record.organizerNote,
+        duesClaimedAt = record.duesClaimedAt,
+        duesClaimMethod = record.duesClaimMethod,
+        duesProofUrl = record.duesProofUrl,
         createdAt = record.createdAt!!,
         updatedAt = record.updatedAt!!
     )
@@ -26,10 +31,15 @@ class MembershipMapper {
         status = membership.status.literal,
         role = membership.role.literal,
         joinedAt = membership.joinedAt,
-        subscriptionExpiresAt = membership.subscriptionExpiresAt
+        subscriptionExpiresAt = membership.subscriptionExpiresAt,
+        duesClaimedAt = membership.duesClaimedAt,
+        duesClaimMethod = membership.duesClaimMethod
     )
 
-    fun toMemberListItemDto(info: ClubMemberInfo, trust: Int?): MemberListItemDto {
+    // forOrganizer gates the access/dues fields: only the organizer dashboard sees a member's access
+    // state and paid-through date; regular members get null (the roster never leaks who hasn't paid).
+    // awards are public (R3) — passed to every viewer.
+    fun toMemberListItemDto(info: ClubMemberInfo, trust: Int?, awards: List<AwardDto>, forOrganizer: Boolean): MemberListItemDto {
         val show = ReputationPolicy.isShown(info.outcomeCount)
         return MemberListItemDto(
             userId = info.userId,
@@ -41,9 +51,28 @@ class MembershipMapper {
             trust = if (show) trust else null,
             promiseFulfillmentPct = if (show) info.promiseFulfillmentPct else null,
             totalConfirmations = if (show) info.totalConfirmations else null,
-            subscriptionCancelled = info.subscriptionCancelled
+            awards = awards,
+            accessStatus = if (forOrganizer) info.status.literal else null,
+            subscriptionExpiresAt = if (forOrganizer) info.subscriptionExpiresAt else null,
+            duesClaimedAt = if (forOrganizer) info.duesClaimedAt else null,
+            duesClaimMethod = if (forOrganizer) info.duesClaimMethod else null
         )
     }
+
+    fun toOrganizerDuesDto(member: OrganizerDuesMember): OrganizerDuesMemberDto = OrganizerDuesMemberDto(
+        userId = member.userId,
+        firstName = member.firstName ?: "",
+        lastName = member.lastName,
+        avatarUrl = member.avatarUrl,
+        telegramUsername = member.telegramUsername,
+        clubId = member.clubId,
+        clubName = member.clubName,
+        clubAvatarUrl = member.clubAvatarUrl,
+        joinedAt = member.joinedAt,
+        subscriptionExpiresAt = member.subscriptionExpiresAt,
+        duesClaimedAt = member.duesClaimedAt,
+        duesClaimMethod = member.duesClaimMethod
+    )
 
     fun toUserClubReputationDto(info: UserClubReputationInfo, trust: Int?): UserClubReputationDto {
         val show = ReputationPolicy.isShown(info.outcomeCount)

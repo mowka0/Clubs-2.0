@@ -123,6 +123,8 @@ describe('CreateClubModal', () => {
           inviteLink: null,
           memberCount: 0,
           isActive: true,
+          paymentLink: null,
+          paymentMethodNote: null,
         };
         return HttpResponse.json(club, { status: 201 });
       }),
@@ -159,6 +161,30 @@ describe('CreateClubModal', () => {
     expect(capturedBody!.accessType).toBe('open');
     expect(capturedBody!.memberLimit).toBe(30);
     expect(capturedBody!.subscriptionPrice).toBe(0);
+  });
+
+  it('paid club requires SBP requisites before advancing past the price step', async () => {
+    const { user } = renderModal();
+
+    await user.type(screen.getByLabelText(/название клуба/i), 'Платный клуб');
+    await user.type(screen.getByLabelText(/город/i), 'Москва');
+    await user.click(screen.getByRole('button', { name: /далее/i })); // → step 1
+    await user.click(screen.getByRole('button', { name: /далее/i })); // → step 2 (price)
+
+    const priceInput = screen.getByLabelText(/цена подписки/i);
+    await user.clear(priceInput);
+    await user.type(priceInput, '100');
+
+    // Requisites field appears once the club is paid, and advancing without a link is blocked.
+    const linkInput = screen.getByLabelText(/реквизиты для взноса/i);
+    await user.click(screen.getByRole('button', { name: /далее/i }));
+    expect(screen.getByText('Для платного клуба укажите реквизиты для взноса')).toBeInTheDocument();
+    expect(screen.queryByText(/шаг 4/i)).not.toBeInTheDocument();
+
+    // With a link, the step advances.
+    await user.type(linkInput, 'https://sbp.example/pay');
+    await user.click(screen.getByRole('button', { name: /далее/i }));
+    expect(screen.getByText(/шаг 4/i)).toBeInTheDocument();
   });
 
   it('shows error from API on submission failure', async () => {

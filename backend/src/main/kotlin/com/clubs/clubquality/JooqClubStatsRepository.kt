@@ -146,8 +146,9 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
             .fetchOne(0, Int::class.java) ?: 0
 
     /**
-     * Win-back predicate: a member with a `left`/`expired` event since [since] who is NOT currently an
-     * active/grace member of the club (so left-then-rejoined people are excluded — they're back). Shared
+     * Win-back predicate: a member with a `left`/`expired` event since [since] who does NOT currently
+     * belong to the club (so left-then-rejoined people are excluded — they're back). "Belongs" includes
+     * `frozen` (gated pending dues, still a member) so a frozen member is NOT counted as churned. Shared
      * by [churnedMemberCount] (the «Ушли/Не продлили за месяц» lever) and [findChurnedMembers] (the
      * drill-down roster) so the lever value equals the roster length. Both LEFT JOIN `memberships`.
      */
@@ -157,7 +158,13 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
             .and(MEMBERSHIP_HISTORY.OCCURRED_AT.ge(since))
             .and(
                 MEMBERSHIPS.STATUS.isNull
-                    .or(MEMBERSHIPS.STATUS.notIn(MembershipStatus.active, MembershipStatus.grace_period)),
+                    .or(
+                        MEMBERSHIPS.STATUS.notIn(
+                            MembershipStatus.active,
+                            MembershipStatus.frozen,
+                            MembershipStatus.grace_period,
+                        ),
+                    ),
             )
 
     /** Distinct members still gone now who left/expired since [since] — the «Ушли за месяц» lever. */

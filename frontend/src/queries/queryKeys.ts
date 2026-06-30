@@ -7,10 +7,6 @@ export interface ClubActivitiesFilters {
   type?: ActivityType;
 }
 
-export interface ClubMembersFilters {
-  includeCancelled?: boolean;
-}
-
 export const queryKeys = {
   clubs: {
     all: ['clubs'] as const,
@@ -18,17 +14,17 @@ export const queryKeys = {
     my: () => ['clubs', 'my'] as const,
     detail: (id: string) => ['clubs', 'detail', id] as const,
     byInvite: (code: string) => ['clubs', 'invite', code] as const,
-    // Prefix shared by every members-list variant. TanStack invalidates by
-    // prefix, so leave / join / member-profile mutations can keep using this
-    // and still hit the `includeCancelled` variant cached under
-    // `membersWith(clubId, filters)`.
+    // Prefix shared by the members list. TanStack invalidates by prefix, so
+    // leave / join / member-profile / access-gate mutations all use this.
     members: (clubId: string) => ['clubs', 'detail', clubId, 'members'] as const,
-    membersWith: (clubId: string, filters: ClubMembersFilters) =>
-      ['clubs', 'detail', clubId, 'members', filters] as const,
-    awaitingPaymentApplicants: (clubId: string) =>
-      ['clubs', 'detail', clubId, 'awaiting-payment-applicants'] as const,
+    // De-Stars red-dot feed: count of members whose paid access ends within the week.
+    memberAttention: (clubId: string) =>
+      ['clubs', 'detail', clubId, 'member-attention'] as const,
     memberProfile: (clubId: string, userId: string) =>
       ['clubs', 'detail', clubId, 'members', userId] as const,
+    // Member admin S2 — distinct past awards in a club, autocomplete source for the grant form.
+    awardSuggestions: (clubId: string) =>
+      ['clubs', 'detail', clubId, 'award-suggestions'] as const,
     leavePreview: (clubId: string) => ['clubs', 'detail', clubId, 'leave-preview'] as const,
     myReputation: () => ['clubs', 'my', 'reputation'] as const,
     myGamification: () => ['users', 'me', 'gamification'] as const,
@@ -39,6 +35,7 @@ export const queryKeys = {
     stats: (clubId: string) => ['clubs', 'detail', clubId, 'stats'] as const,
     churnedMembers: (clubId: string) => ['clubs', 'detail', clubId, 'churned-members'] as const,
     quality: (clubId: string) => ['clubs', 'detail', clubId, 'quality'] as const,
+    organizerCard: (clubId: string) => ['clubs', 'detail', clubId, 'organizer-card'] as const,
     /** Batched Discovery-card facts, keyed by the (sorted) set of club ids on screen. */
     cardFacts: (sortedIds: string[]) => ['clubs', 'card-facts', sortedIds] as const,
   },
@@ -54,11 +51,12 @@ export const queryKeys = {
   applications: {
     mine: () => ['applications', 'mine'] as const,
     myPending: ['applications', 'my-pending'] as const,
-    myAwaitingPayment: ['applications', 'my-awaiting-payment'] as const,
-    /** Cross-club organizer view: approved-but-unpaid applicants of caller's owned clubs. */
-    organizerAwaitingPayment: ['applications', 'organizer-awaiting-payment'] as const,
-    /** Combined inbox + awaiting-payment counts (single endpoint). */
+    /** Cross-club organizer pending-inbox count (single endpoint). */
     myPendingActionCounts: ['applications', 'my-pending-action-counts'] as const,
+  },
+  organizer: {
+    /** Cross-club «Ждут оплаты»: frozen members across the caller's owned clubs. */
+    awaitingDues: ['organizer', 'awaiting-dues'] as const,
   },
   skladchinas: {
     all: ['skladchinas'] as const,

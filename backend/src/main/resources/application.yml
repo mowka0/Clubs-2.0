@@ -83,6 +83,11 @@ subscription:
   # SubscriptionScheduler.endElapsedSubscriptions cron. Default daily 09:30 UTC.
   lifecycle-cron: ${SUBSCRIPTION_LIFECYCLE_CRON:0 30 9 * * *}
 
+membership:
+  # De-Stars Slice 2: how long one confirmed member dues payment («Взнос получен») grants club access.
+  # Days so staging can shrink it to test auto-expiry → frozen.
+  access-period-days: ${MEMBERSHIP_ACCESS_PERIOD_DAYS:30}
+
 club:
   rank:
     # L3 "★ Топ-5 в категории" badge kill-switch. The hidden rank is ALWAYS computed (the machinery

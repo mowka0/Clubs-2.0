@@ -10,12 +10,12 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ApplicationStatus
 import com.clubs.generated.jooq.enums.ClubCategory
+import com.clubs.generated.jooq.tables.records.UsersRecord
 import com.clubs.interest.InterestRepository
-import com.clubs.membership.FreeMembershipActivator
 import com.clubs.membership.Membership
+import com.clubs.membership.MembershipActivator
 import com.clubs.membership.MembershipMapper
 import com.clubs.membership.MembershipRepository
-import com.clubs.payment.PaymentService
 import com.clubs.reputation.ApplicantSignalService
 import com.clubs.reputation.ReputationRepository
 import com.clubs.user.UserRepository
@@ -35,7 +35,6 @@ class ApplicationServiceTest {
     private lateinit var applicationRepository: ApplicationRepository
     private lateinit var clubRepository: ClubRepository
     private lateinit var membershipRepository: MembershipRepository
-    private lateinit var paymentService: PaymentService
     private lateinit var mapper: ApplicationMapper
     private lateinit var notificationService: NotificationService
     private lateinit var userRepository: UserRepository
@@ -43,7 +42,7 @@ class ApplicationServiceTest {
     private lateinit var applicantSignalService: ApplicantSignalService
     private lateinit var interestRepository: InterestRepository
     private lateinit var membershipMapper: MembershipMapper
-    private lateinit var freeMembershipActivator: FreeMembershipActivator
+    private lateinit var membershipActivator: MembershipActivator
     private lateinit var applicationService: ApplicationService
 
     @BeforeEach
@@ -51,7 +50,6 @@ class ApplicationServiceTest {
         applicationRepository = mockk(relaxed = true)
         clubRepository = mockk(relaxed = true)
         membershipRepository = mockk(relaxed = true)
-        paymentService = mockk(relaxed = true)
         mapper = ApplicationMapper()
         notificationService = mockk(relaxed = true)
         userRepository = mockk(relaxed = true)
@@ -59,12 +57,11 @@ class ApplicationServiceTest {
         applicantSignalService = mockk(relaxed = true)
         interestRepository = mockk(relaxed = true)
         membershipMapper = MembershipMapper()
-        freeMembershipActivator = mockk(relaxed = true)
+        membershipActivator = mockk(relaxed = true)
         applicationService = ApplicationService(
             applicationRepository,
             clubRepository,
             membershipRepository,
-            paymentService,
             mapper,
             notificationService,
             userRepository,
@@ -72,7 +69,7 @@ class ApplicationServiceTest {
             applicantSignalService,
             interestRepository,
             membershipMapper,
-            freeMembershipActivator
+            membershipActivator
         )
     }
 
@@ -141,6 +138,38 @@ class ApplicationServiceTest {
         assertEquals(clubId, result.clubId)
         assertEquals("pending", result.status)
         verify(exactly = 1) { applicationRepository.create(userId, clubId, "I want to join") }
+    }
+
+    @Test
+    fun `submitApplication self-heals an orphaned approved application after removal`() {
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val club = createClosedClub(clubId, ownerId, subscriptionPrice = 0)
+        val request = SubmitApplicationRequest(answerText = "again")
+        val orphanApp = createPendingApplication(userId, clubId, null)
+            .copy(status = ApplicationStatus.approved)
+        val cancelledMembership = com.clubs.membership.Membership(
+            id = UUID.randomUUID(), userId = userId, clubId = clubId,
+            status = com.clubs.generated.jooq.enums.MembershipStatus.cancelled,
+            role = com.clubs.generated.jooq.enums.MembershipRole.member,
+            joinedAt = OffsetDateTime.now(), subscriptionExpiresAt = null,
+            createdAt = OffsetDateTime.now(), updatedAt = OffsetDateTime.now()
+        )
+
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
+        every { applicationRepository.findActiveByUserAndClub(userId, clubId) } returns orphanApp
+        every { membershipRepository.findByUserAndClub(userId, clubId) } returns cancelledMembership
+        every { applicationRepository.countTodayByUser(userId) } returns 0
+        every { applicationRepository.create(userId, clubId, "again") } returns createPendingApplication(userId, clubId, "again")
+
+        val result = applicationService.submitApplication(clubId, userId, request)
+
+        assertEquals("pending", result.status)
+        // The stale approved row is cleared, then a fresh application is created — no «уже существует».
+        verify(exactly = 1) { applicationRepository.deleteActiveByUserAndClub(userId, clubId) }
+        verify(exactly = 1) { applicationRepository.create(userId, clubId, "again") }
     }
 
     @Test
@@ -238,12 +267,13 @@ class ApplicationServiceTest {
             applicationService.submitApplication(clubId, userId, SubmitApplicationRequest(answerText = "test"))
         }
 
-        assertEquals("Application already approved — waiting for payment", exception.message)
+        // De-Stars: the Stars "waiting for payment" wording is gone — an existing active application blocks re-apply.
+        assertEquals("Application already exists", exception.message)
         verify(exactly = 0) { applicationRepository.create(any(), any(), any()) }
     }
 
     @Test
-    fun `approveApplication for paid club sends invoice and does NOT create membership`() {
+    fun `approveApplication for paid club creates frozen membership (no invoice)`() {
         val applicationId = UUID.randomUUID()
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
@@ -284,13 +314,53 @@ class ApplicationServiceTest {
         assertEquals(userId, result.userId)
         assertEquals(clubId, result.clubId)
         assertNotNull(result.resolvedAt)
-        verify(exactly = 1) { paymentService.createInvoice(userId, clubId) }
-        verify(exactly = 0) { freeMembershipActivator.activate(any(), any()) }
-        verify(exactly = 0) { membershipRepository.create(any(), any()) }
+        // De-Stars: paid approve creates the membership straight to `frozen` — no Stars invoice.
+        verify(exactly = 1) { membershipActivator.activateFrozen(userId, clubId) }
+        verify(exactly = 0) { membershipActivator.activateFree(any(), any()) }
     }
 
     @Test
-    fun `approveApplication for free club delegates to FreeMembershipActivator`() {
+    fun `approveApplication notifies a paid-club applicant to pay`() {
+        val applicationId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val organizerId = UUID.randomUUID()
+        val application = Application(applicationId, userId, clubId, null, ApplicationStatus.pending, null, OffsetDateTime.now(), null)
+        val club = createClosedClub(clubId, organizerId, subscriptionPrice = 500)
+        every { applicationRepository.findById(applicationId) } returns application
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.countActiveByClubId(clubId) } returns 5
+        every { applicationRepository.updateStatus(applicationId, ApplicationStatus.approved) } returns application.copy(status = ApplicationStatus.approved, resolvedAt = OffsetDateTime.now())
+        val applicant = mockk<UsersRecord>(relaxed = true) { every { telegramId } returns 77L }
+        every { userRepository.findById(userId) } returns applicant
+
+        applicationService.approveApplication(applicationId, organizerId)
+
+        verify(exactly = 1) { notificationService.sendApplicationApprovedDM(77L, "Closed Club", clubId, paid = true) }
+    }
+
+    @Test
+    fun `approveApplication notifies a free-club applicant (welcome, not paid)`() {
+        val applicationId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val organizerId = UUID.randomUUID()
+        val application = Application(applicationId, userId, clubId, null, ApplicationStatus.pending, null, OffsetDateTime.now(), null)
+        val club = createClosedClub(clubId, organizerId, subscriptionPrice = 0)
+        every { applicationRepository.findById(applicationId) } returns application
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.countActiveByClubId(clubId) } returns 5
+        every { applicationRepository.updateStatus(applicationId, ApplicationStatus.approved) } returns application.copy(status = ApplicationStatus.approved, resolvedAt = OffsetDateTime.now())
+        val applicant = mockk<UsersRecord>(relaxed = true) { every { telegramId } returns 88L }
+        every { userRepository.findById(userId) } returns applicant
+
+        applicationService.approveApplication(applicationId, organizerId)
+
+        verify(exactly = 1) { notificationService.sendApplicationApprovedDM(88L, "Closed Club", clubId, paid = false) }
+    }
+
+    @Test
+    fun `approveApplication for free club creates active membership via activateFree`() {
         val applicationId = UUID.randomUUID()
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
@@ -328,9 +398,8 @@ class ApplicationServiceTest {
         val result = applicationService.approveApplication(applicationId, organizerId)
 
         assertEquals("approved", result.status)
-        verify(exactly = 1) { freeMembershipActivator.activate(userId, clubId) }
-        verify(exactly = 0) { membershipRepository.create(any(), any()) }
-        verify(exactly = 0) { paymentService.createInvoice(any(), any()) }
+        verify(exactly = 1) { membershipActivator.activateFree(userId, clubId) }
+        verify(exactly = 0) { membershipActivator.activateFrozen(any(), any()) }
     }
 
     @Test
@@ -362,8 +431,8 @@ class ApplicationServiceTest {
         }
 
         assertEquals("Forbidden", exception.message)
-        verify(exactly = 0) { freeMembershipActivator.activate(any(), any()) }
-        verify(exactly = 0) { membershipRepository.create(any(), any()) }
+        verify(exactly = 0) { membershipActivator.activateFree(any(), any()) }
+        verify(exactly = 0) { membershipActivator.activateFrozen(any(), any()) }
     }
 
     @Test
@@ -440,245 +509,21 @@ class ApplicationServiceTest {
     }
 
     @Test
-    fun `resendInvoice succeeds when application is approved and no active membership exists`() {
-        val applicationId = UUID.randomUUID()
-        val clubId = UUID.randomUUID()
+    fun `getMyClubsActionCounts returns pending inbox count`() {
+        // De-Stars: the Stars "awaiting payment" counters are gone; only the pending-inbox count remains.
         val userId = UUID.randomUUID()
-        val approved = Application(
-            id = applicationId,
-            userId = userId,
-            clubId = clubId,
-            answerText = null,
-            status = ApplicationStatus.approved,
-            rejectedReason = null,
-            createdAt = OffsetDateTime.now(),
-            resolvedAt = OffsetDateTime.now()
-        )
-
-        every { applicationRepository.findById(applicationId) } returns approved
-        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
-        every { clubRepository.findById(clubId) } returns createClosedClub(clubId, UUID.randomUUID())
-
-        applicationService.resendInvoice(applicationId, userId)
-
-        verify(exactly = 1) { paymentService.createInvoice(userId, clubId) }
-    }
-
-    @Test
-    fun `resendInvoice throws ForbiddenException when caller is not the applicant`() {
-        val applicationId = UUID.randomUUID()
-        val clubId = UUID.randomUUID()
-        val userId = UUID.randomUUID()
-        val otherUserId = UUID.randomUUID()
-        val approved = Application(
-            id = applicationId,
-            userId = userId,
-            clubId = clubId,
-            answerText = null,
-            status = ApplicationStatus.approved,
-            rejectedReason = null,
-            createdAt = OffsetDateTime.now(),
-            resolvedAt = OffsetDateTime.now()
-        )
-
-        every { applicationRepository.findById(applicationId) } returns approved
-
-        assertThrows<ForbiddenException> {
-            applicationService.resendInvoice(applicationId, otherUserId)
-        }
-        verify(exactly = 0) { paymentService.createInvoice(any(), any()) }
-    }
-
-    @Test
-    fun `resendInvoice throws ValidationException when application is not approved`() {
-        val applicationId = UUID.randomUUID()
-        val clubId = UUID.randomUUID()
-        val userId = UUID.randomUUID()
-        val pending = createPendingApplication(userId, clubId).copy(id = applicationId)
-
-        every { applicationRepository.findById(applicationId) } returns pending
-
-        val ex = assertThrows<ValidationException> {
-            applicationService.resendInvoice(applicationId, userId)
-        }
-        assertEquals("No payment pending", ex.message)
-        verify(exactly = 0) { paymentService.createInvoice(any(), any()) }
-    }
-
-    @Test
-    fun `resendInvoice throws ValidationException when active membership already exists`() {
-        val applicationId = UUID.randomUUID()
-        val clubId = UUID.randomUUID()
-        val userId = UUID.randomUUID()
-        val approved = Application(
-            id = applicationId,
-            userId = userId,
-            clubId = clubId,
-            answerText = null,
-            status = ApplicationStatus.approved,
-            rejectedReason = null,
-            createdAt = OffsetDateTime.now(),
-            resolvedAt = OffsetDateTime.now()
-        )
-        val now = OffsetDateTime.now()
-        val membership = com.clubs.membership.Membership(
-            id = UUID.randomUUID(),
-            userId = userId,
-            clubId = clubId,
-            status = com.clubs.generated.jooq.enums.MembershipStatus.active,
-            role = com.clubs.generated.jooq.enums.MembershipRole.member,
-            joinedAt = now,
-            subscriptionExpiresAt = now.plusDays(30),
-            createdAt = now,
-            updatedAt = now
-        )
-
-        every { applicationRepository.findById(applicationId) } returns approved
-        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns membership
-
-        val ex = assertThrows<ValidationException> {
-            applicationService.resendInvoice(applicationId, userId)
-        }
-        assertEquals("No payment pending", ex.message)
-        verify(exactly = 0) { paymentService.createInvoice(any(), any()) }
-    }
-
-    @Test
-    fun `getMyClubsActionCounts returns combined inbox awaiting payment and organizer awaiting payment counts`() {
-        val userId = UUID.randomUUID()
-        val clubId = UUID.randomUUID()
         val ownedClubIds = listOf(UUID.randomUUID(), UUID.randomUUID())
-        val approved = Application(
-            id = UUID.randomUUID(),
-            userId = userId,
-            clubId = clubId,
-            answerText = null,
-            status = ApplicationStatus.approved,
-            rejectedReason = null,
-            createdAt = OffsetDateTime.now(),
-            resolvedAt = OffsetDateTime.now()
-        )
-        val organizerAwaitingApp1 = Application(
-            id = UUID.randomUUID(),
-            userId = UUID.randomUUID(),
-            clubId = ownedClubIds[0],
-            answerText = null,
-            status = ApplicationStatus.approved,
-            rejectedReason = null,
-            createdAt = OffsetDateTime.now(),
-            resolvedAt = OffsetDateTime.now()
-        )
-        val organizerAwaitingApp2 = organizerAwaitingApp1.copy(
-            id = UUID.randomUUID(),
-            userId = UUID.randomUUID()
-        )
 
         every { clubRepository.findIdsByOwnerId(userId) } returns ownedClubIds
         every { applicationRepository.countPendingByClubIds(ownedClubIds) } returns 3
-        every { applicationRepository.findApprovedWithoutMembershipByUserId(userId) } returns listOf(approved)
-        every { applicationRepository.findApprovedWithoutMembershipByClubIds(ownedClubIds) } returns
-            listOf(organizerAwaitingApp1, organizerAwaitingApp2)
 
         val result = applicationService.getMyClubsActionCounts(userId)
 
         assertEquals(3, result.inboxCount)
-        assertEquals(1, result.awaitingPaymentCount)
-        assertEquals(2, result.organizerAwaitingPaymentCount)
     }
 
     @Test
-    fun `getOrganizerAwaitingPaymentApplicants returns applicants from all owned clubs`() {
-        val organizerId = UUID.randomUUID()
-        val clubAId = UUID.randomUUID()
-        val clubBId = UUID.randomUUID()
-        val ownedClubIds = listOf(clubAId, clubBId)
-        val applicantA = UUID.randomUUID()
-        val applicantB = UUID.randomUUID()
-        val appA = Application(
-            id = UUID.randomUUID(),
-            userId = applicantA,
-            clubId = clubAId,
-            answerText = null,
-            status = ApplicationStatus.approved,
-            rejectedReason = null,
-            createdAt = OffsetDateTime.now().minusHours(2),
-            resolvedAt = OffsetDateTime.now().minusHours(1)
-        )
-        val appB = Application(
-            id = UUID.randomUUID(),
-            userId = applicantB,
-            clubId = clubBId,
-            answerText = null,
-            status = ApplicationStatus.approved,
-            rejectedReason = null,
-            createdAt = OffsetDateTime.now().minusHours(3),
-            resolvedAt = OffsetDateTime.now().minusHours(2)
-        )
-        val clubA = createClosedClub(clubAId, organizerId, subscriptionPrice = 250)
-        val clubB = createClosedClub(clubBId, organizerId, subscriptionPrice = 400)
-        val applicantARecord = mockk<com.clubs.generated.jooq.tables.records.UsersRecord>(relaxed = true).also {
-            every { it.id } returns applicantA
-            every { it.firstName } returns "Alice"
-            every { it.lastName } returns null
-            every { it.telegramUsername } returns "alice_a"
-            every { it.avatarUrl } returns null
-        }
-        val applicantBRecord = mockk<com.clubs.generated.jooq.tables.records.UsersRecord>(relaxed = true).also {
-            every { it.id } returns applicantB
-            every { it.firstName } returns "Bob"
-            every { it.lastName } returns "Brown"
-            every { it.telegramUsername } returns null
-            every { it.avatarUrl } returns null
-        }
-
-        every { clubRepository.findIdsByOwnerId(organizerId) } returns ownedClubIds
-        every { applicationRepository.findApprovedWithoutMembershipByClubIds(ownedClubIds) } returns listOf(appA, appB)
-        every { userRepository.findByIds(setOf(applicantA, applicantB)) } returns listOf(applicantARecord, applicantBRecord)
-        every { clubRepository.findByIds(setOf(clubAId, clubBId)) } returns listOf(clubA, clubB)
-
-        val result = applicationService.getOrganizerAwaitingPaymentApplicants(organizerId)
-
-        assertEquals(2, result.size)
-        val clubIds = result.map { it.club.id }.toSet()
-        assertEquals(setOf(clubAId, clubBId), clubIds)
-        val byApplication = result.associateBy { it.applicationId }
-        assertEquals("Alice", byApplication[appA.id]?.firstName)
-        assertEquals(250, byApplication[appA.id]?.subscriptionPrice)
-        assertEquals("Bob", byApplication[appB.id]?.firstName)
-        assertEquals(400, byApplication[appB.id]?.subscriptionPrice)
-    }
-
-    @Test
-    fun `getOrganizerAwaitingPaymentApplicants returns empty list for non-organizer`() {
-        val callerId = UUID.randomUUID()
-        every { clubRepository.findIdsByOwnerId(callerId) } returns emptyList()
-
-        val result = applicationService.getOrganizerAwaitingPaymentApplicants(callerId)
-
-        assertEquals(0, result.size)
-        verify(exactly = 0) { applicationRepository.findApprovedWithoutMembershipByClubIds(any()) }
-        verify(exactly = 0) { userRepository.findByIds(any()) }
-    }
-
-    @Test
-    fun `getOrganizerAwaitingPaymentApplicants returns empty list when only free clubs are owned`() {
-        // Repository guarantees free clubs (subscription_price = 0) never appear
-        // in findApprovedWithoutMembershipByClubIds — verify Service trusts that
-        // contract and surfaces an empty list when the repo returns nothing.
-        val organizerId = UUID.randomUUID()
-        val freeClubId = UUID.randomUUID()
-        every { clubRepository.findIdsByOwnerId(organizerId) } returns listOf(freeClubId)
-        every { applicationRepository.findApprovedWithoutMembershipByClubIds(listOf(freeClubId)) } returns emptyList()
-
-        val result = applicationService.getOrganizerAwaitingPaymentApplicants(organizerId)
-
-        assertEquals(0, result.size)
-        verify(exactly = 0) { userRepository.findByIds(any()) }
-        verify(exactly = 0) { clubRepository.findByIds(any()) }
-    }
-
-    @Test
-    fun `completeFreeMembership delegates to FreeMembershipActivator for fresh insert`() {
+    fun `completeFreeMembership delegates to MembershipActivator for fresh insert`() {
         val applicationId = UUID.randomUUID()
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
@@ -711,14 +556,14 @@ class ApplicationServiceTest {
         every { applicationRepository.findById(applicationId) } returns approved
         every { clubRepository.findById(clubId) } returns club
         every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
-        every { freeMembershipActivator.activate(userId, clubId) } returns createdMembership
+        every { membershipActivator.activateFree(userId, clubId) } returns createdMembership
 
         val result = applicationService.completeFreeMembership(applicationId, userId)
 
         assertEquals(userId, result.userId)
         assertEquals(clubId, result.clubId)
         assertEquals("active", result.status)
-        verify(exactly = 1) { freeMembershipActivator.activate(userId, clubId) }
+        verify(exactly = 1) { membershipActivator.activateFree(userId, clubId) }
     }
 
     @Test
@@ -759,13 +604,13 @@ class ApplicationServiceTest {
         every { applicationRepository.findById(applicationId) } returns approved
         every { clubRepository.findById(clubId) } returns club
         every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
-        every { freeMembershipActivator.activate(userId, clubId) } returns reactivated
+        every { membershipActivator.activateFree(userId, clubId) } returns reactivated
 
         val result = applicationService.completeFreeMembership(applicationId, userId)
 
         assertEquals("active", result.status)
         assertEquals(userId, result.userId)
-        verify(exactly = 1) { freeMembershipActivator.activate(userId, clubId) }
+        verify(exactly = 1) { membershipActivator.activateFree(userId, clubId) }
     }
 
     @Test
@@ -790,7 +635,7 @@ class ApplicationServiceTest {
         assertThrows<ForbiddenException> {
             applicationService.completeFreeMembership(applicationId, otherUserId)
         }
-        verify(exactly = 0) { freeMembershipActivator.activate(any(), any()) }
+        verify(exactly = 0) { membershipActivator.activateFree(any(), any()) }
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
     }
 
@@ -818,8 +663,8 @@ class ApplicationServiceTest {
         val ex = assertThrows<ValidationException> {
             applicationService.completeFreeMembership(applicationId, userId)
         }
-        assertEquals("Club is not free — pay the invoice instead", ex.message)
-        verify(exactly = 0) { freeMembershipActivator.activate(any(), any()) }
+        assertEquals("Club is not free — the organizer opens access after the dues", ex.message)
+        verify(exactly = 0) { membershipActivator.activateFree(any(), any()) }
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
     }
 
@@ -861,7 +706,7 @@ class ApplicationServiceTest {
             applicationService.completeFreeMembership(applicationId, userId)
         }
         assertEquals("Already a member", ex.message)
-        verify(exactly = 0) { freeMembershipActivator.activate(any(), any()) }
+        verify(exactly = 0) { membershipActivator.activateFree(any(), any()) }
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
     }
 
@@ -893,5 +738,44 @@ class ApplicationServiceTest {
         }
 
         assertEquals("Application is not pending", exception.message)
+    }
+
+    @Test
+    fun `cancelApplication lets the applicant withdraw their own pending application`() {
+        val applicationId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val application = createPendingApplication(userId, clubId, "I want to join").copy(id = applicationId)
+        val cancelled = application.copy(status = ApplicationStatus.cancelled, resolvedAt = OffsetDateTime.now())
+
+        every { applicationRepository.findById(applicationId) } returns application
+        every { applicationRepository.updateStatus(applicationId, ApplicationStatus.cancelled) } returns cancelled
+
+        val result = applicationService.cancelApplication(applicationId, userId)
+
+        assertEquals("cancelled", result.status)
+        verify(exactly = 1) { applicationRepository.updateStatus(applicationId, ApplicationStatus.cancelled) }
+    }
+
+    @Test
+    fun `cancelApplication rejects a caller who is not the applicant`() {
+        val applicationId = UUID.randomUUID()
+        val application = createPendingApplication(UUID.randomUUID(), UUID.randomUUID(), null).copy(id = applicationId)
+        every { applicationRepository.findById(applicationId) } returns application
+
+        assertThrows<ForbiddenException> { applicationService.cancelApplication(applicationId, UUID.randomUUID()) }
+        verify(exactly = 0) { applicationRepository.updateStatus(any(), ApplicationStatus.cancelled) }
+    }
+
+    @Test
+    fun `cancelApplication rejects a non-pending application`() {
+        val applicationId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val approved = createPendingApplication(userId, UUID.randomUUID(), null)
+            .copy(id = applicationId, status = ApplicationStatus.approved)
+        every { applicationRepository.findById(applicationId) } returns approved
+
+        assertThrows<ValidationException> { applicationService.cancelApplication(applicationId, userId) }
+        verify(exactly = 0) { applicationRepository.updateStatus(any(), ApplicationStatus.cancelled) }
     }
 }

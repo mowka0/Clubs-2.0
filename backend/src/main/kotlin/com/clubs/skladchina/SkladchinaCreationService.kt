@@ -93,7 +93,7 @@ class SkladchinaCreationService(
             created.id, clubId, creatorId, templateType, resolution.mode, resolution.participants.size)
 
         // DM-рассылка идёт через @TransactionalEventListener в SkladchinaBotNotifier —
-        // гарантия отправки ПОСЛЕ commit'а транзакции (тот же паттерн что PaymentNotificationHandler).
+        // гарантия отправки ПОСЛЕ commit'а транзакции (тот же паттерн что SkladchinaBotNotifier).
         eventPublisher.publishEvent(
             SkladchinaCreatedEvent(
                 skladchinaId = created.id,

@@ -40,7 +40,9 @@ const MEMBER: MemberListItemDto = {
   trust: null,
   promiseFulfillmentPct: null,
   totalConfirmations: null,
-  subscriptionCancelled: false,
+  awards: [],
+  accessStatus: 'active',
+  subscriptionExpiresAt: null,
 };
 
 function mockMembers() {

@@ -11,6 +11,7 @@
 - `GET /api/clubs/{id}/applications` — список заявок клуба (organizer-only)
 - `POST /api/applications/{id}/approve` — одобрить (organizer-only)
 - `POST /api/applications/{id}/reject` — отклонить (organizer-only)
+- `POST /api/applications/{id}/cancel` — **отозвать свою заявку (applicant-only, → `cancelled`)**
 - `GET /api/users/me/applications` — свои заявки
 - `ApplicationScheduler` — раз в час: auto-reject заявок старше 48 часов
 
@@ -64,7 +65,7 @@ ApplicationRepository (markAutoRejected)
 - `id` UUID PK
 - `user_id`, `club_id` UUID — FK
 - `answer_text` TEXT, nullable
-- `status` enum `application_status` (`pending`, `approved`, `rejected`, `auto_rejected`)
+- `status` enum `application_status` (`pending`, `approved`, `rejected`, `auto_rejected`, `cancelled`). `cancelled` = заявитель сам отозвал свою pending-заявку (V43); не активный статус → можно подать заново.
 - `rejected_reason` TEXT, nullable
 - `created_at`, `resolved_at` TIMESTAMPTZ
 - Индексы: `(club_id, status)`, `(user_id)` — см. ARCHITECTURE.md §5
@@ -155,6 +156,18 @@ Errors:
 - `400 VALIDATION_ERROR` — `reason` отсутствует / пустой / `<5` символов после trim / `>500` символов; либо заявка не в статусе `pending`
 - `403 FORBIDDEN` — caller не организатор клуба
 - `404 NOT_FOUND` — заявка или клуб не найдены
+
+### POST /api/applications/{id}/cancel
+Заявитель отзывает **свою** заявку (передумал / подал по ошибке). Тело не требуется.
+
+Response 200: `ApplicationDto` (status = `cancelled`, `resolvedAt` заполнен)
+
+Errors:
+- `400 VALIDATION_ERROR` — заявка не в статусе `pending` (`Можно отменить только заявку на рассмотрении`)
+- `403 FORBIDDEN` — caller не автор заявки (`application.userId != callerId`)
+- `404 NOT_FOUND` — заявка не найдена
+
+UI: на карточке pending-заявки в «Мои заявки» — крестик «×» (corner-notch, повторяет скругление) → **инлайн-подтверждение** на самой карточке («Отменить заявку? Нет / Отменить», как двухтаповые destructive-подтверждения в остальном приложении) → отзыв. `cancelled` не активный статус → можно подать заявку заново (V42-индекс гейтит только `pending`/`approved`).
 
 ### GET /api/users/me/applications
 Свои заявки (любые статусы).

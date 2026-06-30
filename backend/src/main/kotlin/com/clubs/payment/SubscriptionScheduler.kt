@@ -5,6 +5,14 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.time.OffsetDateTime
 
+/**
+ * De-Stars (Slice 2): this scheduler is DORMANT. `subscription_expires_at` is no longer written (the
+ * Stars pay-to-join flow is retired), so `processExpiry` / `find*` operate on zero rows. It is kept
+ * (not deleted) to (1) let any legacy Stars-paid row still carrying an expiry drain naturally, and
+ * (2) preserve the forward-only time-transition machinery the future §7 billing state-machine reuses.
+ * NOTE: not to be confused with com.clubs.subscription.ServiceSubscriptionScheduler (the live
+ * organizer service-fee subscription from Slice 1).
+ */
 @Component
 class SubscriptionScheduler(
     private val lifecycleService: SubscriptionLifecycleService,
@@ -24,13 +32,13 @@ class SubscriptionScheduler(
         expiringSoon.forEach { entry ->
             notificationService.sendDirectMessage(
                 entry.telegramId,
-                "⚠️ Ваша подписка на клуб «${entry.clubName}» истекает через 3 дня. Продлите доступ в приложении."
+                "⚠️ Ваш доступ к клубу «${entry.clubName}» истекает через 3 дня. Свяжитесь с организатором, чтобы продлить участие."
             )
         }
         enteringGrace.forEach { entry ->
             notificationService.sendDirectMessage(
                 entry.telegramId,
-                "❗ Ваша подписка на клуб «${entry.clubName}» истекла. У вас есть 3 дня на пополнение баланса Stars, иначе доступ будет прекращён."
+                "❗ Ваш доступ к клубу «${entry.clubName}» истёк. Свяжитесь с организатором, чтобы продлить участие."
             )
         }
 

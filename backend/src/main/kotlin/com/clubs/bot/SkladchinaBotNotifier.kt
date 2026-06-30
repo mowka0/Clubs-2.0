@@ -16,7 +16,7 @@ import java.time.format.DateTimeFormatter
  * by SkladchinaService and sends DMs AFTER the originating transaction has
  * committed (`@TransactionalEventListener` default phase = AFTER_COMMIT).
  *
- * Same pattern as PaymentNotificationHandler — proven path for "send DM after
+ * Same pattern as EventBotNotifier — proven path for "send DM after
  * DB mutation succeeded". Avoids the @Async + @Transactional caveats that
  * previously left DMs un-sent.
  */

@@ -81,15 +81,15 @@ class SubscriptionSchedulerTest {
         verify(exactly = 1) {
             notificationService.sendDirectMessage(
                 tgId,
-                match { it.contains("Poker Club") && it.contains("3 дня") && it.contains("истекла") }
+                match { it.contains("Poker Club") && it.contains("истёк") && it.contains("организатор") }
             )
         }
     }
 
-    // findActiveExpired must run BEFORE processExpiry — otherwise the rows
-    // we want to notify about are already in grace_period status.
+    // findActiveExpired (the DM snapshot) must run BEFORE processExpiry — otherwise the rows we want to
+    // notify about have already flipped to frozen.
     @Test
-    fun `scheduler reads active-expired before moving them to grace_period`() {
+    fun `scheduler reads active-expired before expiring access`() {
         every { membershipRepository.findExpiringWithin(any(), any()) } returns emptyList()
         every { membershipRepository.findActiveExpired(any()) } returns emptyList()
 
@@ -97,14 +97,13 @@ class SubscriptionSchedulerTest {
 
         verifyOrder {
             membershipRepository.findActiveExpired(any())
-            membershipRepository.moveActiveToGracePeriod(any())
+            membershipRepository.expireOverdueAccess(any())
         }
     }
 
-    // AC-9 (continued) — notifications happen BEFORE DB mutations so they stay
-    // outside the transaction boundary of processExpiry.
+    // Notifications happen BEFORE the DB mutation so they stay outside processExpiry's transaction.
     @Test
-    fun `scheduler sends notifications before moving anything to grace period`() {
+    fun `scheduler sends notifications before expiring access`() {
         val tgId = 123L
         every { membershipRepository.findExpiringWithin(any(), any()) } returns listOf(
             ExpiringSubscriptionNotification(telegramId = tgId, clubName = "A")
@@ -115,33 +114,28 @@ class SubscriptionSchedulerTest {
 
         verifyOrder {
             notificationService.sendDirectMessage(tgId, any())
-            membershipRepository.moveActiveToGracePeriod(any())
+            membershipRepository.expireOverdueAccess(any())
         }
     }
 
-    // AC-10/AC-11: processExpiry runs both lifecycle transitions in a single pass.
+    // De-Stars: processExpiry drops overdue active memberships straight to frozen (no grace).
     @Test
-    fun `processExpiry moves active to grace_period and grace_period to expired`() {
-        every { membershipRepository.moveActiveToGracePeriod(any()) } returns 3
-        every { membershipRepository.moveGracePeriodToExpired(any()) } returns 7
+    fun `processExpiry expires overdue access to frozen`() {
+        every { membershipRepository.expireOverdueAccess(any()) } returns 3
 
         lifecycleService.processExpiry(OffsetDateTime.now())
 
-        verify(exactly = 1) { membershipRepository.moveActiveToGracePeriod(any()) }
-        verify(exactly = 1) { membershipRepository.moveGracePeriodToExpired(any()) }
+        verify(exactly = 1) { membershipRepository.expireOverdueAccess(any()) }
     }
 
-    // active→grace uses `now`; grace→expired uses the 3-day-back window cutoff.
     @Test
-    fun `processExpiry applies now to grace move and the 3-day window to expiry`() {
+    fun `processExpiry passes now to expireOverdueAccess`() {
         val fixedNow = OffsetDateTime.parse("2026-04-24T10:00:00Z")
-        every { membershipRepository.moveActiveToGracePeriod(any()) } returns 0
-        every { membershipRepository.moveGracePeriodToExpired(any()) } returns 0
+        every { membershipRepository.expireOverdueAccess(any()) } returns 0
 
         lifecycleService.processExpiry(fixedNow)
 
-        verify(exactly = 1) { membershipRepository.moveActiveToGracePeriod(fixedNow) }
-        verify(exactly = 1) { membershipRepository.moveGracePeriodToExpired(fixedNow.minusDays(3)) }
+        verify(exactly = 1) { membershipRepository.expireOverdueAccess(fixedNow) }
     }
 
     // AC-9 (threshold): findExpiringWithin gets the right (now, now+3d] window

@@ -9,7 +9,7 @@ import org.springframework.transaction.event.TransactionalEventListener
  * Bot DM notifier for event creation. Listens to [EventCreatedEvent] published by
  * EventService and notifies club members AFTER the originating transaction has
  * committed (`@TransactionalEventListener`, default phase = AFTER_COMMIT). Like
- * PaymentNotificationHandler / SkladchinaBotNotifier, firing AFTER_COMMIT is the
+ * SkladchinaBotNotifier / SkladchinaBotNotifier, firing AFTER_COMMIT is the
  * proven path for "send DM after DB mutation succeeded" — the listener is skipped
  * if the createEvent transaction rolls back.
  *

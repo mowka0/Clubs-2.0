@@ -16,6 +16,7 @@ import { ManageHeader } from '../components/manage/ManageHeader';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubStatsTab } from '../components/manage/ClubStatsTab';
 import { useClubQuery, useDeleteClubMutation, useUpdateClubMutation } from '../queries/clubs';
+import { useMemberAttentionQuery } from '../queries/members';
 import { useClubFinancesQuery } from '../queries/finances';
 import type { UpdateClubBody } from '../api/clubs';
 import type { ClubDetailDto } from '../types/api';
@@ -68,21 +69,12 @@ const FinancesTab: FC<{ clubId: string }> = ({ clubId }) => {
           <div className="rd-stat-label">Активных участников</div>
           <div className="rd-stat-value rd-plain">{finances.activeMembers}</div>
         </div>
-        <div className="rd-glass rd-stat">
-          <div className="rd-stat-label">Выручка за месяц</div>
-          <div className="rd-stat-value">{finances.monthlyRevenue}</div>
-          <div className="rd-stat-foot">Stars</div>
-        </div>
-        <div className="rd-glass rd-stat">
-          <div className="rd-stat-label">Доля организатора · {finances.organizerSharePct}%</div>
-          <div className="rd-stat-value rd-plain">{finances.organizerShare}</div>
-          <div className="rd-stat-foot">Stars</div>
-        </div>
-        <div className="rd-glass rd-stat">
-          <div className="rd-stat-label">Комиссия платформы · {finances.platformFeePct}%</div>
-          <div className="rd-stat-value rd-plain">{finances.platformFee}</div>
-          <div className="rd-stat-foot">Stars</div>
-        </div>
+      </div>
+      {/* De-Stars: dues flow member→organizer directly, off-platform — the platform doesn't take a
+          cut and doesn't track the amounts. Confirm received dues on the «Участники» tab. */}
+      <div className="rd-cta-hint" style={{ textAlign: 'left', marginTop: 8 }}>
+        Оплата подписок идёт напрямую вам, мимо платформы — поэтому суммы здесь не считаются.
+        Подтверждайте полученные взносы во вкладке «Участники» кнопкой «Взнос получен».
       </div>
     </>
   );
@@ -117,13 +109,15 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
   const [description, setDescription] = useState(club.description);
   const [rules, setRules] = useState(club.rules ?? '');
   const [applicationQuestion, setApplicationQuestion] = useState(club.applicationQuestion ?? '');
+  const [paymentLink, setPaymentLink] = useState(club.paymentLink ?? '');
+  const [paymentMethodNote, setPaymentMethodNote] = useState(club.paymentMethodNote ?? '');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(club.avatarUrl ?? null);
 
   const [error, setError] = useState<string | null>(null);
   // Tracks which Input should render in the error state. Same pattern as RHF
   // `formState.errors.<field>` in CreateClubModal — gives a red outline on the
   // offending field, not just an inline message.
-  type SettingsField = 'name' | 'city' | 'memberLimit' | 'subscriptionPrice' | 'description';
+  type SettingsField = 'name' | 'city' | 'memberLimit' | 'subscriptionPrice' | 'description' | 'paymentLink';
   const [errorField, setErrorField] = useState<SettingsField | null>(null);
   const [savedToast, setSavedToast] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -140,6 +134,8 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
     description !== club.description ||
     rules !== (club.rules ?? '') ||
     applicationQuestion !== (club.applicationQuestion ?? '') ||
+    paymentLink !== (club.paymentLink ?? '') ||
+    paymentMethodNote !== (club.paymentMethodNote ?? '') ||
     avatarUrl !== (club.avatarUrl ?? null);
 
   const handleSave = () => {
@@ -173,6 +169,12 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
       fail('subscriptionPrice', 'Цена: целое число >= 0');
       return;
     }
+    // A paid club must keep SBP requisites (mirrors the backend invariant). Blocks saving a paid club
+    // with an empty link — including a free→paid switch and a legacy paid club that never had one.
+    if (price > 0 && !paymentLink.trim()) {
+      fail('paymentLink', 'Для платного клуба укажите реквизиты для взноса');
+      return;
+    }
     if (description.trim().length < 1 || description.trim().length > 500) {
       fail('description', 'Описание: 1–500 символов');
       return;
@@ -192,6 +194,8 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
     if (applicationQuestion !== (club.applicationQuestion ?? '')) {
       payload.applicationQuestion = applicationQuestion.trim();
     }
+    if (paymentLink !== (club.paymentLink ?? '')) payload.paymentLink = paymentLink.trim();
+    if (paymentMethodNote !== (club.paymentMethodNote ?? '')) payload.paymentMethodNote = paymentMethodNote.trim();
     if (avatarUrl !== (club.avatarUrl ?? null)) payload.avatarUrl = avatarUrl ?? '';
 
     haptic.impact('medium');
@@ -263,7 +267,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
           />
         </label>
         <label className="rd-field">
-          <span className="rd-label">Цена подписки (Stars/мес, 0 = бесплатно)</span>
+          <span className="rd-label">Цена подписки (₽/мес, 0 = бесплатно)</span>
           <input
             className={`rd-input${errorField === 'subscriptionPrice' ? ' rd-invalid' : ''}`}
             type="number"
@@ -304,6 +308,33 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
           </label>
         )}
       </div>
+
+      {Number(subscriptionPrice) > 0 && (
+        <>
+          <div className="rd-section-sub-h">Реквизиты для взноса (СБП)</div>
+          <div className="rd-form" style={{ marginBottom: 14 }}>
+            <label className="rd-field">
+              <span className="rd-label">Ссылка / номер для оплаты <span className="rd-req">*</span></span>
+              <input
+                className={`rd-input${errorField === 'paymentLink' ? ' rd-invalid' : ''}`}
+                value={paymentLink}
+                onChange={(e) => setPaymentLink(e.target.value)}
+                placeholder="Ссылка СБП / банка или номер телефона"
+              />
+              <span className="rd-hint">Видят только участники, кому нужно оплатить взнос. Деньги идут напрямую вам — доступ открываете вы кнопкой «Взнос получен».</span>
+            </label>
+            <label className="rd-field">
+              <span className="rd-label">Подсказка к оплате (опционально)</span>
+              <input
+                className="rd-input"
+                value={paymentMethodNote}
+                onChange={(e) => setPaymentMethodNote(e.target.value)}
+                placeholder="Например: Тинькофф, СБП по номеру…"
+              />
+            </label>
+          </div>
+        </>
+      )}
 
       <div className="rd-section-sub-h">Нельзя изменить</div>
       <div className="rd-glass rd-rep-panel">
@@ -415,6 +446,11 @@ export const OrganizerClubManage: FC = () => {
   const clubId = id ?? '';
   const clubQuery = useClubQuery(clubId || undefined);
   const club = clubQuery.data;
+  // Red-dot on «Участники»: members about to expire OR frozen-awaiting-dues need a confirm.
+  const memberAttentionQuery = useMemberAttentionQuery(clubId || undefined);
+  const showMembersDot =
+    (memberAttentionQuery.data?.expiringSoon ?? 0) > 0
+    || (memberAttentionQuery.data?.awaitingDues ?? 0) > 0;
 
   const handleTabChange = (key: TabKey) => {
     if (key === activeTab) return;
@@ -443,7 +479,7 @@ export const OrganizerClubManage: FC = () => {
   const renderTab = () => {
     switch (activeTab) {
       case 'members':
-        return <ClubMembersTab clubId={clubId} isOrganizer />;
+        return <ClubMembersTab clubId={clubId} isOrganizer managementView />;
       case 'stats':
         return <ClubStatsTab clubId={clubId} />;
       case 'finances':
@@ -481,6 +517,9 @@ export const OrganizerClubManage: FC = () => {
             onClick={() => handleTabChange(tab.key)}
           >
             {tab.label}
+            {tab.key === 'members' && showMembersDot && (
+              <span className="rd-tab-dot" aria-hidden="true" />
+            )}
           </button>
         ))}
       </div>

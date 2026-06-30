@@ -95,15 +95,25 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
     }
 
     /**
-     * Distinct NON-OWNER users with ≥3 attended events for this club, all-time (the club's stable
-     * member core). The organizer is excluded: they self-mark their own attendance, so counting them
-     * inflates «основа клуба» (it would never read below 1) and conflates the organizer with the
-     * member core. Owner-exclusion matches the L3 «Сплочённость» rule (gamification §2).
+     * Distinct NON-OWNER users with ≥3 attended events for this club who are STILL members (the club's
+     * stable member core / «основа клуба»). The organizer is excluded: they self-mark their own
+     * attendance, so counting them inflates the core (it would never read below 1) and conflates the
+     * organizer with the member core. Owner-exclusion matches the L3 «Сплочённость» rule (gamification §2).
+     *
+     * Current-membership join: a user who left or was removed (status `cancelled`) — or whose access
+     * `expired` — is no longer part of the core, so «основа клуба» drops when they leave/are kicked.
+     * `frozen` still counts: that's the de-Stars monthly dues pause, not a departure, so the core must
+     * not flicker each time a paying member's window briefly lapses.
      */
     private fun coreSize(clubId: UUID): Int =
         dsl.select(EVENT_RESPONSES.USER_ID)
             .from(EVENT_RESPONSES)
             .join(EVENTS).on(EVENTS.ID.eq(EVENT_RESPONSES.EVENT_ID))
+            .join(MEMBERSHIPS).on(
+                MEMBERSHIPS.USER_ID.eq(EVENT_RESPONSES.USER_ID)
+                    .and(MEMBERSHIPS.CLUB_ID.eq(clubId))
+                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period, MembershipStatus.frozen)),
+            )
             .where(
                 EVENTS.CLUB_ID.eq(clubId)
                     .and(EVENTS.STATUS.ne(EventStatus.cancelled))

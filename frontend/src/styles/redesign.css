@@ -318,6 +318,35 @@
   cursor: pointer; font-family: inherit;
 }
 .rd-rep-row + .rd-rep-row { border-top: 1px solid var(--hairline); }
+/* Application card with a corner «×» (withdraw). Content clears the notch on the right; the notch mirrors
+   the panel's corner radius (top-right rounded like the card, bottom-left rounded as its reflection). */
+.rd-app-row { position: relative; padding-right: 36px; }
+.rd-app-cancel {
+  position: absolute; top: 0; right: 0; width: 32px; height: 32px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 0; cursor: pointer; font-family: inherit; font-size: 17px; line-height: 1; font-weight: 500;
+  color: var(--text-dim); background: var(--danger-soft);
+  border-radius: 0 14px 0 14px;
+  transition: color 0.15s, background 0.15s;
+}
+.rd-app-cancel:hover, .rd-app-cancel:active { color: #fff; background: var(--danger); }
+.rd-app-cancel:disabled { opacity: 0.5; cursor: default; }
+
+/* Inline withdraw confirmation (replaces the row content on «×» tap — simpler than a modal). */
+.rd-app-confirm { justify-content: space-between; }
+.rd-app-confirm .rd-info { flex: 1; min-width: 0; }
+.rd-app-confirm-acts { display: flex; gap: 8px; flex-shrink: 0; }
+.rd-app-confirm-acts > button {
+  border: 0; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600;
+  padding: 8px 12px; border-radius: 10px;
+}
+.rd-app-confirm-acts > button:disabled { opacity: 0.5; cursor: default; }
+.rd-app-confirm-no { background: var(--surface-2); color: var(--text); }
+.rd-app-confirm-yes { background: var(--danger); color: #fff; }
+/* Status meta lines (frozen «Доступ закрыт» card) — colour replaces the old right-side badge so the
+   top-right corner is free for the «×». A soft accent (not alarming red) reads as a gentle reminder. */
+.rd-rep-row .rd-met.rd-met-soft { color: var(--accent); }
+.rd-rep-row .rd-met.rd-met-ok { color: var(--live); }
 .rd-rep-row .rd-ico {
   width: 36px; height: 36px; border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
@@ -337,6 +366,231 @@
 .rd-rep-row .rd-v.rd-low  { color: #E08A7A; }
 /* Newcomer / own-club organizer — neutral chip, no number yet (see reputation-v2). */
 .rd-rep-row .rd-v.rd-new  { color: var(--text-faint); font-size: 13px; font-weight: 600; }
+
+/* ---------- De-Stars members dashboard (attention buckets + gate) ---------- */
+/* Action-row layout: a tappable info area (opens the profile) + a trailing «Взнос получен» button.
+   The row is a div so the two tap targets don't nest. */
+.rd-rep-row .rd-rep-row-main {
+  display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;
+  background: transparent; border: 0; padding: 0; cursor: pointer; font-family: inherit; text-align: left;
+}
+.rd-row-act-pri {
+  flex-shrink: 0; border: 0; border-radius: 10px; cursor: pointer; font-family: inherit;
+  font-size: 12px; font-weight: 700; padding: 9px 13px; white-space: nowrap;
+  color: var(--on-accent); background: var(--accent-grad);
+  box-shadow: 0 4px 12px -4px var(--accent-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.rd-row-act-pri:disabled { opacity: 0.6; cursor: default; }
+
+.rd-section-sub-h.rd-attn-exp { color: #E08A7A; }
+.rd-section-sub-h.rd-attn-pay { color: var(--accent); }
+.rd-attn-hint { font-size: 11px; color: var(--text-faint); padding: 0 2px 8px; line-height: 1.4; }
+.rd-attn-block { margin-bottom: 16px; }
+.rd-attn-block-exp { border-color: rgba(255, 139, 139, 0.26); }
+.rd-attn-block-pay { border-color: var(--accent-soft); }
+/* Access-OK meta line in the calm list (organizer's «Активен · до …»). */
+.rd-met.rd-met-ok { color: var(--live); }
+
+/* ── Frozen / no-access member (de-Stars) ──────────────────────────────────────────────
+   One shared «iced» treatment for the club roster row (ClubMembersTab — frozen members sink
+   to the bottom of the flat list) and the skladchina participant picker (CreateSkladchinaPage —
+   frozen members are unselectable). Cool tint + a left ice-rail + muted content, so a member with
+   no club access reads at a glance and never blends into the active list. */
+.rd-rep-row.rd-frozen,
+.rd-pick-toggle.rd-frozen { background: var(--ice-soft); box-shadow: inset 3px 0 0 var(--ice); }
+.rd-rep-row.rd-frozen .rd-ico,
+.rd-rep-row.rd-frozen .rd-ttl,
+.rd-rep-row.rd-frozen .rd-score { opacity: 0.6; }
+.rd-met.rd-met-frozen { color: var(--ice); }
+/* Round the iced tint + rail at the panel edges so the blue strip follows the block's corner radius
+   instead of poking out square. Frozen rows sink to the bottom → :last-child is the common case;
+   :first-child covers an all-frozen list. Inner radius = panel 22px − 4px panel padding. */
+.rd-rep-row.rd-frozen:first-child { border-top-left-radius: 18px; border-top-right-radius: 18px; }
+.rd-rep-row.rd-frozen:last-child { border-bottom-left-radius: 18px; border-bottom-right-radius: 18px; }
+/* Keep the ice tint + «Доступ закрыт» legible — override the 0.45 disabled dim on the picker. */
+.rd-pick-toggle.rd-frozen:disabled { opacity: 0.8; }
+.rd-pick-toggle.rd-frozen .rd-pick-note { color: var(--ice); }
+
+/* Organizer gate inside the profile card */
+.rd-org-gate { margin-top: 16px; }
+
+/* «Управление участником» panel (R1): grouped, compact management controls. */
+.rd-mgmt { border: 1px solid var(--hairline-2); border-radius: 18px; background: rgba(255, 255, 255, 0.022); overflow: hidden; }
+[data-theme="light"] .rd-mgmt { background: rgba(0, 0, 0, 0.018); }
+.rd-mgmt-h { font-size: 11px; letter-spacing: 0.06em; color: var(--accent); font-weight: 700; text-transform: uppercase; padding: 13px 14px 0; }
+.rd-mgmt-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+/* Stacked bodies (subscription strip → note → «своя дата») otherwise add 12+12px between them. Drop the
+   2nd+ body's top padding so consecutive blocks sit at the panel's normal ~12px field rhythm. */
+.rd-mgmt-body + .rd-mgmt-body { padding-top: 0; }
+.rd-mgmt-body .rd-claim-compact { margin-bottom: 0; }
+.rd-mgmt-sum { display: flex; align-items: flex-start; gap: 10px; }
+.rd-mgmt-dot { width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 4px var(--live-soft); flex-shrink: 0; }
+.rd-mgmt-sum.rd-soon .rd-mgmt-dot { background: var(--danger); box-shadow: 0 0 0 4px var(--danger-soft); }
+.rd-mgmt-sum-v { font-size: 14.5px; font-weight: 800; color: var(--text); }
+.rd-mgmt-sum-k { font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
+.rd-mgmt-sum.rd-soon .rd-mgmt-sum-k { color: var(--danger); }
+.rd-mgmt-pair { display: flex; gap: 9px; }
+.rd-mgmt-pb {
+  flex: 1; border-radius: 11px; padding: 11px 8px; font-family: inherit; cursor: pointer; min-width: 0;
+  font-size: 13px; font-weight: 700; text-align: center;
+  border: 1px solid var(--hairline-2); background: var(--surface-2); color: var(--text);
+}
+.rd-mgmt-pb.primary { border: 0; background: var(--accent-grad); color: #fff; box-shadow: 0 5px 14px var(--accent-shadow-soft); }
+.rd-mgmt-pb.primary small { display: block; font-size: 10.5px; font-weight: 600; opacity: 0.92; margin-top: 1px; }
+.rd-mgmt-pb.danger { border: 0; background: var(--danger-soft); color: var(--danger); }
+.rd-mgmt-pb:disabled { opacity: 0.5; cursor: default; }
+/* Frozen status line — plain text (not the boxed «rd-claim» card). */
+.rd-mgmt-claim-line { font-size: 13px; font-weight: 700; color: var(--text); }
+.rd-mgmt-note { border-top: 1px solid var(--hairline); padding: 11px 15px; display: flex; gap: 9px; font-size: 12.5px; color: var(--text-dim); line-height: 1.45; }
+.rd-mgmt-note-k { color: var(--text-faint); font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; padding-top: 2px; flex-shrink: 0; }
+.rd-mgmt-killzone { border-top: 1px solid var(--hairline); padding: 10px 15px; display: flex; justify-content: center; }
+.rd-mgmt-kill { background: none; border: 0; color: var(--danger); font-size: 12.5px; font-weight: 600; font-family: inherit; cursor: pointer; padding: 6px 4px; }
+.rd-mgmt-kill:disabled { opacity: 0.5; cursor: default; }
+.rd-mgmt-killconfirm { border-top: 1px solid var(--hairline); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.rd-btn-primary.rd-btn-danger { background: #E0574F; box-shadow: none; }
+
+.rd-sub-strip {
+  display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 14px; margin-bottom: 12px;
+  background: var(--live-soft); border: 1px solid rgba(102, 212, 154, 0.28);
+}
+.rd-sub-strip.rd-soon { background: var(--danger-soft); border-color: rgba(255, 139, 139, 0.3); }
+.rd-sub-strip-k { font-size: 11px; color: var(--text-dim); }
+.rd-sub-strip-v { font-size: 14px; font-weight: 700; color: var(--text); }
+.rd-sub-strip.rd-soon .rd-sub-strip-v { color: var(--danger); }
+.rd-org-tag {
+  margin-left: auto; flex-shrink: 0; font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--accent); background: var(--accent-soft);
+  padding: 3px 8px; border-radius: 6px;
+}
+.rd-org-gate-acts { display: flex; flex-direction: column; gap: 9px; }
+
+/* Member admin S1 (Variant B): always-open note + «своя дата» blocks inside the management panel.
+   No extra top margin / field bottom margin — the panel's block padding already provides the standard
+   between-fields rhythm (excess spacing looked off vs. the rest of the form). */
+.rd-org-edit { margin-top: 0; }
+.rd-org-edit .rd-field { margin-bottom: 0; }
+.rd-org-note-read {
+  margin-top: 10px; font-size: 12.5px; color: var(--text-dim); line-height: 1.45;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px; padding: 10px 12px;
+}
+.rd-org-note-read .rd-org-note-k {
+  display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-faint); margin-bottom: 4px;
+}
+
+/* Member admin S2 (Variant B): club awards — chips + «как интересы» grant form. */
+.rd-award-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.rd-award-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 999px;
+  background: var(--accent-soft); border: 1px solid var(--accent-soft);
+  font-size: 11.5px; font-weight: 600; color: var(--text);
+}
+.rd-award-chip .rd-award-emoji { font-size: 13px; line-height: 1; }
+.rd-award-chip .x {
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-left: 2px; width: 16px; height: 16px; border-radius: 50%; cursor: pointer;
+  border: none; background: transparent; color: var(--text-dim); font-size: 14px; line-height: 1;
+}
+.rd-award-chip .x:disabled { opacity: 0.5; cursor: default; }
+.rd-award-chip-ro { background: var(--surface); border-color: var(--hairline); }
+.rd-award-add {
+  padding: 5px 11px; border-radius: 999px; cursor: pointer; font-family: inherit;
+  font-size: 11.5px; font-weight: 600; color: var(--text-dim);
+  background: transparent; border: 1px dashed var(--hairline);
+}
+.rd-award-form { margin-top: 10px; }
+.rd-award-emoji-pick { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 9px; }
+.rd-award-emoji-opt {
+  width: 34px; height: 34px; border-radius: 9px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 17px;
+  background: var(--surface); border: 1px solid var(--hairline);
+}
+.rd-award-emoji-opt.sel { border-color: var(--accent); background: var(--accent-soft); }
+.rd-award-input-row { display: flex; gap: 8px; align-items: stretch; }
+.rd-award-input-row .rd-input { flex: 1; min-width: 0; }
+.rd-award-submit {
+  flex-shrink: 0; width: 42px; border-radius: 10px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700;
+  color: #fff; background: var(--accent); border: none;
+}
+.rd-award-submit:disabled { opacity: 0.45; cursor: default; }
+.rd-award-suggest { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.rd-award-suggest-item {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 999px; cursor: pointer; font-family: inherit;
+  font-size: 11.5px; font-weight: 500; color: var(--text);
+  background: var(--surface); border: 1px solid var(--hairline);
+}
+.rd-award-suggest-h, .rd-award-new-h { font-size: 11px; font-weight: 600; color: var(--text-dim); }
+.rd-award-new-h { margin-top: 12px; margin-bottom: 7px; }
+.rd-award-hint { margin-top: 8px; font-size: 11px; color: var(--text-faint); }
+/* Compact award chips on the roster card (member list, R3) — emoji + label, smaller than the profile. */
+.rd-member-awards { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.rd-award-chip-sm { padding: 3px 8px; font-size: 10.5px; }
+.rd-award-chip-sm .rd-award-emoji { font-size: 12px; }
+
+/* De-Stars dues payment flow (member 2-step sheet + organizer claim review). */
+.rd-dues-amount { display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px; }
+.rd-dues-emoji { font-size: 22px; line-height: 1; }
+.rd-dues-sum { font-size: 28px; font-weight: 800; color: var(--text); }
+.rd-dues-per { font-size: 13px; color: var(--text-dim); }
+.rd-step { margin-bottom: 16px; }
+.rd-step-h { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 9px; }
+.rd-step-n {
+  display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
+  border-radius: 50%; font-size: 12px; font-weight: 700; color: #fff; background: var(--accent);
+}
+.rd-proof { display: flex; flex-direction: column; gap: 8px; }
+.rd-proof-img { max-width: 100%; max-height: 220px; border-radius: 12px; border: 1px solid var(--hairline); object-fit: contain; }
+.rd-dues-pending { display: flex; gap: 12px; align-items: center; padding: 14px 16px; margin-bottom: 14px; }
+.rd-dues-pending strong { display: block; font-size: 14px; color: var(--text); margin-bottom: 3px; }
+.rd-dues-pending span { font-size: 12px; color: var(--text-dim); line-height: 1.45; }
+.rd-claim {
+  margin-bottom: 12px; padding: 11px 13px; border-radius: 14px;
+  background: var(--live-soft); border: 1px solid rgba(102, 212, 154, 0.28);
+}
+.rd-claim-h { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+.rd-claim-note { font-size: 12px; color: var(--text-dim); }
+/* De-Stars: compact frozen/claim card — neutral surface; tappable screenshot thumbnail (opens ImageLightbox). */
+.rd-claim-compact { padding: 10px 12px; margin-bottom: 10px; background: var(--surface); border-color: var(--hairline); }
+.rd-claim-compact .rd-claim-h { margin-bottom: 0; }
+.rd-claim-compact .rd-claim-note { margin-top: 6px; }
+.rd-claim-thumb {
+  display: inline-flex; flex-direction: column; gap: 4px; align-items: flex-start;
+  margin-top: 9px; padding: 0; border: none; background: none; cursor: pointer; font-family: inherit;
+}
+.rd-claim-thumb img {
+  max-height: 92px; max-width: 100%; border-radius: 9px; border: 1px solid var(--hairline);
+  object-fit: cover; display: block;
+}
+.rd-claim-thumb-hint { font-size: 10.5px; color: var(--text-dim); }
+.rd-reject-confirm { margin-top: 4px; }
+.rd-reject-q { font-size: 12.5px; color: var(--text-dim); line-height: 1.45; margin-bottom: 9px; }
+
+/* Organizer trust card on the dues-payment sheet («кому вы переводите»). Account-focused, graceful. */
+.rd-ot { background: var(--surface); border: 1px solid var(--hairline); border-radius: 16px; padding: 14px; margin-bottom: 14px; }
+.rd-ot-cap { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 10px; }
+.rd-ot-top { display: flex; gap: 11px; align-items: center; }
+.rd-ot-av { width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; color: #fff; background: var(--accent-grad, linear-gradient(135deg, var(--accent), var(--accent))); overflow: hidden; }
+.rd-ot-av img { width: 100%; height: 100%; object-fit: cover; }
+.rd-ot-who { min-width: 0; flex: 1; }
+.rd-ot-nm { font-size: 15.5px; font-weight: 700; color: var(--text); }
+.rd-ot-uh { display: inline-flex; align-items: center; gap: 3px; margin-top: 2px; padding: 0; border: 0; background: transparent; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--accent); }
+.rd-ot-write { flex-shrink: 0; white-space: nowrap; cursor: pointer; font-family: inherit; font-size: 12.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); border: 0; border-radius: 11px; padding: 8px 13px; }
+.rd-ot-div { height: 1px; background: var(--hairline); margin: 13px 0 12px; }
+.rd-ot-facts { display: flex; flex-direction: column; gap: 8px; }
+.rd-ot-f { display: flex; gap: 9px; align-items: center; font-size: 13px; color: var(--text); }
+.rd-ot-f.muted { color: var(--text-dim); }
+.rd-ot-f .rd-ot-ic { width: 16px; text-align: center; flex-shrink: 0; }
+.rd-ot-f b { font-weight: 700; }
+.rd-ot-nudge { margin-top: 12px; background: var(--accent-soft); border: 1px solid rgba(224, 122, 62, 0.22); border-radius: 12px; padding: 10px 12px; font-size: 12.5px; color: var(--text-dim); line-height: 1.45; }
+
+/* Red-dot on a section tab («Участники» / «Управление») — de-Stars attention badge. */
+.rd-tab-link .rd-tab-dot {
+  position: absolute; top: 4px; right: -10px; width: 7px; height: 7px; border-radius: 50%;
+  background: linear-gradient(135deg, #ff4d6a, #c4304a); box-shadow: 0 0 6px rgba(255, 77, 106, 0.6);
+}
 
 /* ---------- Reputation rings (member card + application card) ---------- */
 /* Single row, no wrap — up to 3 rings share the width equally (flex:1 + min-width:0). */
@@ -931,9 +1185,29 @@
 .rd-sheet-head h2 { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); margin: 0; }
 .rd-sheet-close { background: none; border: 0; color: var(--accent); font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; padding: 4px 2px; }
 .rd-sheet-close:disabled { opacity: 0.5; }
+.rd-sheet-head-acts { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+/* Member admin: orange ✎ in the sheet header toggles edit mode (awards + note). */
+.rd-sheet-edit {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 9px; cursor: pointer; font-family: inherit;
+  font-size: 17px; line-height: 1; color: var(--accent);
+  background: var(--accent-soft); border: 1px solid transparent;
+}
+.rd-sheet-edit.on { border-color: var(--accent); }
 .rd-sheet-body { overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
-.rd-sheet-actions { display: flex; gap: 10px; margin-top: 16px; flex-shrink: 0; }
+.rd-sheet-actions { display: flex; gap: 10px; margin-top: 16px; flex-shrink: 0; position: relative; }
 .rd-sheet-actions > .rd-btn-primary, .rd-sheet-actions > .rd-btn-outline { flex: 1; width: auto; }
+/* Scroll affordance: a soft fade above the sticky action bar so it's clear the body keeps going
+   (e.g. the «Причина отказа» field appears below the fold). Spans the full sheet width (negative
+   inset cancels the 16px sheet padding); invisible when the body fits (gradient over the sheet bg). */
+.rd-sheet-actions::before {
+  content: ''; position: absolute; left: -16px; right: -16px; top: -30px; height: 30px;
+  pointer-events: none; z-index: 1;
+  background: linear-gradient(to top, rgba(11, 11, 14, 0.7), rgba(11, 11, 14, 0));
+}
+[data-theme="light"] .rd-sheet-actions::before {
+  background: linear-gradient(to top, rgba(247, 246, 243, 0.92), rgba(247, 246, 243, 0));
+}
 
 /* horizontal country-tab chips inside a sheet */
 .rd-sheet-tabs { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 14px; padding-bottom: 2px; flex-shrink: 0; }

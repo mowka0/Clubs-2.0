@@ -1,6 +1,8 @@
 package com.clubs.user
 
+import com.clubs.award.AwardDto
 import java.math.BigDecimal
+import java.time.OffsetDateTime
 import java.util.UUID
 
 data class MemberProfileDto(
@@ -13,6 +15,9 @@ data class MemberProfileDto(
     // per-club reputation rings. Already public on the profile and the application card.
     val bio: String?,
     val interests: List<String>,
+    // Member admin S2 — club-local awards (R3: visible to ALL members, not organizer-gated like the note).
+    // Cosmetic only (R4): never derived from / affecting reputation.
+    val awards: List<AwardDto>,
     // Membership role ("organizer" = club owner). The frontend uses it to render the
     // organizer framing when trust is null in the user's own club.
     val role: String,
@@ -26,5 +31,19 @@ data class MemberProfileDto(
     // Reputation-affecting skladchina record in THIS club: paid / (paid + expired). null when the
     // reputation block is suppressed; the frontend hides the "Сборы" ring when total == 0.
     val skladchinaPaid: Int?,
-    val skladchinaTotal: Int?
+    val skladchinaTotal: Int?,
+    // De-Stars Slice 2 — ORGANIZER ONLY (null for regular members): when this member's paid access
+    // window ends. null also for free memberships (no expiry). Shown as «Подписка активна до …».
+    val subscriptionExpiresAt: OffsetDateTime? = null,
+    // Member admin S1 — ORGANIZER ONLY (null for regular members): the private organizer note.
+    val organizerNote: String? = null,
+    // De-Stars dues claim — ORGANIZER ONLY (null for regular members): when the member declared payment,
+    // the method ("sbp"|"cash"), and the screenshot URL (sbp only). Lets the organizer review the proof
+    // before pressing «Взнос получен».
+    val duesClaimedAt: OffsetDateTime? = null,
+    val duesClaimMethod: String? = null,
+    val duesProofUrl: String? = null,
+    // The member's join-application answer (closed clubs) — ORGANIZER ONLY. Null for open clubs / no
+    // question. Lets the organizer review «why they joined» alongside the payment proof on one card.
+    val applicationAnswer: String? = null
 )

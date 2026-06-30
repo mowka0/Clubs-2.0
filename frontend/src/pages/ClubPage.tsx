@@ -25,12 +25,13 @@ import {
   useCompleteFreeMembershipMutation,
   useMyApplicationsQuery,
 } from '../queries/applications';
+import { useMemberAttentionQuery } from '../queries/members';
 import { ApiError } from '../api/apiClient';
-import { isPendingPayment } from '../types/api';
 import { formatPrice } from '../utils/formatters';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
+import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
 import { LeaveClubModal } from '../components/club/LeaveClubModal';
 
 const ACCESS_LABELS: Record<string, string> = {
@@ -89,8 +90,11 @@ export const ClubPage: FC = () => {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [answerText, setAnswerText] = useState('');
-  const [joinSuccess, setJoinSuccess] = useState(false);
-  const [pendingPayment, setPendingPayment] = useState<{ priceStars: number; message: string } | null>(null);
+  // De-Stars: join returns a MembershipDto. A paid club lands the membership in `frozen` (no access
+  // until the organizer confirms the off-platform dues); a free club lands it `active`. We remember
+  // the status from the mutation result so the CTA reacts before the membership refetch lands.
+  const [joinedStatus, setJoinedStatus] = useState<string | null>(null);
+  const [showDuesSheet, setShowDuesSheet] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('activities');
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
@@ -114,6 +118,11 @@ export const ClubPage: FC = () => {
 
   const isOwner = !!club && club.ownerId === user?.id;
   const isOrganizer = isOwner || membership?.role === 'organizer';
+  // Red-dot on «Управление»: members about to expire OR frozen-awaiting-dues need a confirm.
+  const memberAttentionQuery = useMemberAttentionQuery(id, { enabled: isOrganizer });
+  const showManageDot =
+    (memberAttentionQuery.data?.expiringSoon ?? 0) > 0
+    || (memberAttentionQuery.data?.awaitingDues ?? 0) > 0;
   // Active membership = full member; cancelled paid membership inside its
   // paid period = "still inside the club" — tabs stay visible, but instead
   // of «Выйти из клуба» the footer shows a read-only «Подписка отменена» note.
@@ -123,6 +132,9 @@ export const ClubPage: FC = () => {
     && membership.status === 'cancelled'
     && !!membership.subscriptionExpiresAt
     && new Date(membership.subscriptionExpiresAt).getTime() > Date.now();
+  // De-Stars: a paid member who joined but hasn't been admitted yet (organizer hasn't confirmed the
+  // off-platform dues). They're inside the club but have no content access — no tabs, a pending note.
+  const isFrozenMember = membership?.status === 'frozen' || joinedStatus === 'frozen';
   const isMember = isActiveMember || isCancelledInPeriod;
   const myApplication = applications.find((a) => a.clubId === id) ?? null;
 
@@ -149,12 +161,8 @@ export const ClubPage: FC = () => {
     haptic.impact('medium');
     setJoinError(null);
     joinMutation.mutate(id, {
-      onSuccess: (result) => {
-        if (isPendingPayment(result)) {
-          setPendingPayment({ priceStars: result.priceStars, message: result.message });
-        } else {
-          setJoinSuccess(true);
-        }
+      onSuccess: (membership) => {
+        setJoinedStatus(membership.status);
         haptic.notify('success');
       },
       onError: (e) => {
@@ -260,28 +268,30 @@ export const ClubPage: FC = () => {
   };
 
   const renderCta = () => {
-    if (pendingPayment) {
+    // A fresh join in this session always wins (membership query may still be refetching).
+    if (joinedStatus === 'active') {
       return (
-        <>
-          <button type="button" className="rd-btn-outline" disabled>
-            Ожидаем оплату — {pendingPayment.priceStars} Stars
-          </button>
-          <div className="rd-cta-hint">{pendingPayment.message}</div>
-        </>
+        <button type="button" className="rd-btn-outline" disabled>
+          Вы вступили
+        </button>
       );
     }
-    if (myApplication?.status === 'pending') {
+    // A cancelled-out member (removed / rejected / left, no paid grace) should get the fresh join/apply
+    // CTA — ignore any stale/orphaned application lingering from a prior membership cycle, otherwise they
+    // get stuck on «Заявка одобрена» (backend now also clears the application on cancel; this is the UI guard).
+    const wasMemberNowOut = membership?.status === 'cancelled' && !isCancelledInPeriod;
+    if (!wasMemberNowOut && myApplication?.status === 'pending') {
       return (
         <button type="button" className="rd-btn-outline" disabled>
           Заявка на рассмотрении
         </button>
       );
     }
-    if (myApplication?.status === 'approved') {
+    if (!wasMemberNowOut && myApplication?.status === 'approved') {
       const price = club.subscriptionPrice ?? 0;
       if (price <= 0) {
         // Legacy stuck state: free club, approved, but membership row missing.
-        // Surface a recovery CTA instead of the misleading «Ожидаем оплату».
+        // Surface a recovery CTA so the user can finish joining.
         return (
           <>
             <button
@@ -298,29 +308,27 @@ export const ClubPage: FC = () => {
           </>
         );
       }
-      return (
-        <>
-          <button type="button" className="rd-btn-outline" disabled>
-            Ожидаем оплату — {price} Stars
-          </button>
-          <div className="rd-cta-hint">
-            Заявка одобрена. Счёт отправлен в Telegram — оплатите его, чтобы вступить.
-          </div>
-        </>
-      );
-    }
-    if (joinSuccess) {
+      // Paid club: approval now creates a frozen membership directly (de-Stars), so this normally
+      // renders the frozen-pending note above instead. Fallback copy for any legacy approved row.
       return (
         <button type="button" className="rd-btn-outline" disabled>
-          Заявка отправлена
+          Заявка одобрена — организатор откроет доступ
         </button>
       );
     }
     if (club.accessType === 'open') {
+      const isPaid = (club.subscriptionPrice ?? 0) > 0;
       return (
-        <button type="button" className="rd-btn-primary" onClick={handleJoin} disabled={joining}>
-          {joining ? <Spinner size="s" /> : 'Вступить'}
-        </button>
+        <>
+          <button type="button" className="rd-btn-primary" onClick={handleJoin} disabled={joining}>
+            {joining ? <Spinner size="s" /> : 'Вступить'}
+          </button>
+          {isPaid && (
+            <div className="rd-cta-hint">
+              После вступления передайте взнос организатору — он откроет доступ.
+            </div>
+          )}
+        </>
       );
     }
     if (club.accessType === 'closed') {
@@ -422,8 +430,52 @@ export const ClubPage: FC = () => {
         </>
       )}
 
+      {/* Frozen member: joined a paid club but not yet admitted — awaiting the organizer's dues confirm. */}
+      {!showTabs && isFrozenMember && (
+        <>
+          <div className="rd-glass rd-locked">
+            <div className="rd-lock-ico"><LockIcon /></div>
+            <div className="rd-text">
+              <strong>Вы вступили в клуб</strong>
+              Доступ к активностям откроет организатор после того, как вы передадите ему взнос.
+            </div>
+          </div>
+
+          {membership?.duesClaimedAt ? (
+            <div className="rd-glass rd-dues-pending">
+              <span aria-hidden="true">⏳</span>
+              <div>
+                <strong>Оплата на проверке</strong>
+                <span>
+                  Вы заявили об оплате{membership.duesClaimMethod === 'cash' ? ' наличными' : ' по СБП'}.
+                  Организатор проверит и откроет доступ.
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="rd-cta-wrap">
+              <button type="button" className="rd-btn-primary" onClick={() => { haptic.impact('medium'); setShowDuesSheet(true); }}>
+                Оплатить взнос
+              </button>
+              <div className="rd-cta-hint">Оплата идёт напрямую организатору. После оплаты он откроет доступ.</div>
+            </div>
+          )}
+        </>
+      )}
+
+      {showDuesSheet && (
+        <DuesPaymentSheet
+          clubId={club.id}
+          price={club.subscriptionPrice}
+          paymentLink={club.paymentLink}
+          paymentMethodNote={club.paymentMethodNote}
+          onClose={() => setShowDuesSheet(false)}
+          onClaimed={() => setShowDuesSheet(false)}
+        />
+      )}
+
       {/* Visitor: lock placeholder + CTA */}
-      {!showTabs && (
+      {!showTabs && !isFrozenMember && (
         <>
           <div className="rd-glass rd-locked">
             <div className="rd-lock-ico"><LockIcon /></div>
@@ -453,6 +505,9 @@ export const ClubPage: FC = () => {
                 onClick={() => handleTabClick(item.key)}
               >
                 {item.label}
+                {item.key === 'manage' && showManageDot && (
+                  <span className="rd-tab-dot" aria-hidden="true" />
+                )}
               </button>
             ))}
           </div>

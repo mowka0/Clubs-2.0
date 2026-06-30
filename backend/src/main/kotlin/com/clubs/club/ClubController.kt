@@ -25,10 +25,17 @@ data class LinkGroupRequest(val telegramGroupId: Long)
 @RequestMapping("/api/clubs")
 class ClubController(
     private val clubService: ClubService,
-    private val financesService: FinancesService
+    private val financesService: FinancesService,
+    private val organizerCardService: OrganizerCardService
 ) {
 
     private val log = LoggerFactory.getLogger(ClubController::class.java)
+
+    // Organizer trust card for the dues-payment sheet (de-Stars). JWT-only / others-visible (no ownership
+    // gate) — the organizer is the public host; the member needs to see who they pay before transferring.
+    @GetMapping("/{id}/organizer-card")
+    fun organizerCard(@PathVariable id: UUID): ResponseEntity<OrganizerCardDto> =
+        ResponseEntity.ok(organizerCardService.getOrganizerCard(id))
 
     @GetMapping
     fun getClubs(
@@ -57,8 +64,11 @@ class ClubController(
     }
 
     @GetMapping("/{id}")
-    fun getClub(@PathVariable id: UUID): ResponseEntity<ClubDetailDto> =
-        ResponseEntity.ok(clubService.getClub(id))
+    fun getClub(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<ClubDetailDto> =
+        ResponseEntity.ok(clubService.getClub(id, user.userId))
 
     @PutMapping("/{id}")
     fun updateClub(
