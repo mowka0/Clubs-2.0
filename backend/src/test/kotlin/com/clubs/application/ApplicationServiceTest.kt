@@ -739,4 +739,43 @@ class ApplicationServiceTest {
 
         assertEquals("Application is not pending", exception.message)
     }
+
+    @Test
+    fun `cancelApplication lets the applicant withdraw their own pending application`() {
+        val applicationId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val application = createPendingApplication(userId, clubId, "I want to join").copy(id = applicationId)
+        val cancelled = application.copy(status = ApplicationStatus.cancelled, resolvedAt = OffsetDateTime.now())
+
+        every { applicationRepository.findById(applicationId) } returns application
+        every { applicationRepository.updateStatus(applicationId, ApplicationStatus.cancelled) } returns cancelled
+
+        val result = applicationService.cancelApplication(applicationId, userId)
+
+        assertEquals("cancelled", result.status)
+        verify(exactly = 1) { applicationRepository.updateStatus(applicationId, ApplicationStatus.cancelled) }
+    }
+
+    @Test
+    fun `cancelApplication rejects a caller who is not the applicant`() {
+        val applicationId = UUID.randomUUID()
+        val application = createPendingApplication(UUID.randomUUID(), UUID.randomUUID(), null).copy(id = applicationId)
+        every { applicationRepository.findById(applicationId) } returns application
+
+        assertThrows<ForbiddenException> { applicationService.cancelApplication(applicationId, UUID.randomUUID()) }
+        verify(exactly = 0) { applicationRepository.updateStatus(any(), ApplicationStatus.cancelled) }
+    }
+
+    @Test
+    fun `cancelApplication rejects a non-pending application`() {
+        val applicationId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val approved = createPendingApplication(userId, UUID.randomUUID(), null)
+            .copy(id = applicationId, status = ApplicationStatus.approved)
+        every { applicationRepository.findById(applicationId) } returns approved
+
+        assertThrows<ValidationException> { applicationService.cancelApplication(applicationId, userId) }
+        verify(exactly = 0) { applicationRepository.updateStatus(any(), ApplicationStatus.cancelled) }
+    }
 }

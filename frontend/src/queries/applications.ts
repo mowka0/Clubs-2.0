@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   approveApplication,
+  cancelApplication,
   completeFreeMembership,
   getMyApplications,
   getMyClubsActionCounts,
@@ -87,6 +88,23 @@ export function useRejectApplicationMutation() {
       });
       qc.invalidateQueries({ queryKey: queryKeys.applications.mine() });
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPending });
+      qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingActionCounts });
+    },
+  });
+}
+
+interface CancelApplicationArgs {
+  applicationId: string;
+}
+
+/** Applicant withdraws their own pending application (→ status `cancelled`). Refresh the applicant's
+ *  own caches so the card disappears from «Мои заявки» and the tab-dot count updates. */
+export function useCancelApplicationMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ applicationId }: CancelApplicationArgs) => cancelApplication(applicationId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.applications.mine() });
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingActionCounts });
     },
   });

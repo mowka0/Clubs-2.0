@@ -218,6 +218,26 @@ class ApplicationService(
         return mapper.toDto(updated)
     }
 
+    /**
+     * Applicant self-withdrawal: the user closes their OWN pending application — applied by mistake, or
+     * changed their mind before the organizer decided. Only the applicant may cancel, and only while it's
+     * still `pending` (an approved application already created a membership → that's «выход из клуба»; a
+     * terminal status is immutable). Moves it to `cancelled`, which is not an active status, so the user
+     * can re-apply later (V42 partial index gates on pending/approved only).
+     */
+    @Transactional
+    fun cancelApplication(applicationId: UUID, callerId: UUID): ApplicationDto {
+        val application = applicationRepository.findById(applicationId)
+            ?: throw NotFoundException("Application not found")
+        if (application.userId != callerId) throw ForbiddenException("Forbidden")
+        if (application.status != ApplicationStatus.pending) {
+            throw ValidationException("Можно отменить только заявку на рассмотрении")
+        }
+        val updated = applicationRepository.updateStatus(applicationId, ApplicationStatus.cancelled)
+        log.info("Application cancelled by applicant: id={} clubId={} userId={}", applicationId, application.clubId, callerId)
+        return mapper.toDto(updated)
+    }
+
     fun getClubApplications(clubId: UUID, organizerId: UUID, status: String?): List<ApplicationDto> {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != organizerId) throw ForbiddenException("Forbidden")

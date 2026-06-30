@@ -64,6 +64,16 @@ class ApplicationController(private val applicationService: ApplicationService) 
         return ResponseEntity.ok(application)
     }
 
+    @PostMapping("/api/applications/{id}/cancel")
+    fun cancel(
+        @PathVariable id: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<ApplicationDto> {
+        log.info("Cancel application {}: userId={}", id, user.userId)
+        val application = applicationService.cancelApplication(id, user.userId)
+        return ResponseEntity.ok(application)
+    }
+
     @GetMapping("/api/users/me/applications-pending")
     fun getMyPendingApplications(
         @AuthenticationPrincipal user: AuthenticatedUser

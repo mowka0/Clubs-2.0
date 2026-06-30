@@ -318,6 +318,19 @@
   cursor: pointer; font-family: inherit;
 }
 .rd-rep-row + .rd-rep-row { border-top: 1px solid var(--hairline); }
+/* Application card with a corner «×» (withdraw). Content clears the notch on the right; the notch mirrors
+   the panel's corner radius (top-right rounded like the card, bottom-left rounded as its reflection). */
+.rd-app-row { position: relative; padding-right: 34px; }
+.rd-app-cancel {
+  position: absolute; top: 0; right: 0; width: 30px; height: 30px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 0; cursor: pointer; font-family: inherit; font-size: 15px; line-height: 1;
+  color: var(--text-faint); background: var(--surface-2);
+  border-radius: 0 14px 0 14px;
+  transition: color 0.15s, background 0.15s;
+}
+.rd-app-cancel:hover, .rd-app-cancel:active { color: var(--danger); background: var(--danger-soft); }
+.rd-app-cancel:disabled { opacity: 0.5; cursor: default; }
 .rd-rep-row .rd-ico {
   width: 36px; height: 36px; border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
@@ -409,9 +422,11 @@
 }
 .rd-org-gate-acts { display: flex; flex-direction: column; gap: 9px; }
 
-/* Member admin S1 (Variant B): edit toggle + form */
-.rd-org-edit { margin-top: 12px; }
-.rd-org-edit .rd-field { margin-bottom: 12px; }
+/* Member admin S1 (Variant B): always-open note + «своя дата» blocks inside the management panel.
+   No extra top margin / field bottom margin — the panel's block padding already provides the standard
+   between-fields rhythm (excess spacing looked off vs. the rest of the form). */
+.rd-org-edit { margin-top: 0; }
+.rd-org-edit .rd-field { margin-bottom: 0; }
 .rd-org-note-read {
   margin-top: 10px; font-size: 12.5px; color: var(--text-dim); line-height: 1.45;
   background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px; padding: 10px 12px;
@@ -1112,6 +1127,21 @@
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
 }
+
+/* Centered confirmation popup (ConfirmDialog). Sits above the sheet overlay (z 150). */
+.rd-dialog {
+  position: fixed; z-index: 152; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: calc(100% - 56px); max-width: 340px;
+  background: var(--glass-strong-bg);
+  backdrop-filter: blur(40px) saturate(180%); -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid var(--glass-strong-border); border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  padding: 20px 18px 16px;
+}
+.rd-dialog-title { font-size: 16px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+.rd-dialog-msg { font-size: 13.5px; color: var(--text-dim); line-height: 1.5; margin-bottom: 18px; }
+.rd-dialog-acts { display: flex; gap: 9px; }
+.rd-dialog-acts > button { flex: 1; }
 .rd-sheet, .rd-sheet * { box-sizing: border-box; }
 .rd-sheet {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 151;

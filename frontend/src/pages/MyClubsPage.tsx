@@ -7,12 +7,14 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useMyClubsQuery } from '../queries/clubs';
 import { useMyReputationQuery, useOrganizerAwaitingDuesQuery } from '../queries/members';
 import {
+  useCancelApplicationMutation,
   useCompleteFreeMembershipMutation,
   useMyApplicationsQuery,
   useMyPendingApplicationsQuery,
 } from '../queries/applications';
 import { queryKeys } from '../queries/queryKeys';
 import { Toast } from '../components/Toast';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { CreateClubModal } from '../components/CreateClubModal';
 import { ApplicationReviewModal } from '../components/applications/ApplicationReviewModal';
 import { MemberProfileModal } from '../components/club/MemberProfileModal';
@@ -39,6 +41,7 @@ const STATUS_LABELS: Record<string, string> = {
   approved: 'Одобрено',
   rejected: 'Отклонено',
   auto_rejected: 'Отклонено',
+  cancelled: 'Отменено',
 };
 
 function getInitials(name: string): string {
@@ -149,31 +152,40 @@ interface AppCardProps {
   application: ApplicationDto;
   club: ClubDetailDto | undefined;
   onClick: () => void;
+  /** Open the withdraw-confirmation popup (× corner button). */
+  onCancel: () => void;
 }
 
-const AppCard: FC<AppCardProps> = ({ application, club, onClick }) => {
+const AppCard: FC<AppCardProps> = ({ application, club, onClick, onCancel }) => {
   const name = club?.name ?? `Клуб ${application.clubId.slice(0, 8)}…`;
   const initials = club ? getInitials(club.name) : '·';
-  const status = application.status;
-  const statusLabel = STATUS_LABELS[status] ?? status;
-  const isRejected = status === 'rejected' || status === 'auto_rejected';
-  const badgeTone = isRejected ? 'rd-decline' : status === 'approved' ? 'rd-going' : 'rd-neutral';
-  const showReason = isRejected && Boolean(application.rejectedReason && application.rejectedReason.trim());
-
+  // A div (not a <button>) so the «×» withdraw can nest as a real button without invalid button-in-button,
+  // while the row keeps its `.rd-rep-row + .rd-rep-row` divider. Only live (pending) apps reach here.
   return (
-    <button type="button" className="rd-rep-row" onClick={onClick}>
+    <div
+      className="rd-rep-row rd-app-row"
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+    >
       <span className="rd-ico">{initials}</span>
       <div className="rd-info">
         <div className="rd-ttl">{name}</div>
         {application.createdAt && (
           <div className="rd-met">Подана {formatApplicationDate(application.createdAt)}</div>
         )}
-        {showReason && <div className="rd-met">Причина: {application.rejectedReason}</div>}
+        <div className="rd-met">{STATUS_LABELS[application.status] ?? application.status}</div>
       </div>
-      <div className="rd-score">
-        <span className={`rd-badge ${badgeTone}`}>{statusLabel}</span>
-      </div>
-    </button>
+      <button
+        type="button"
+        className="rd-app-cancel"
+        aria-label="Отменить заявку"
+        onClick={(e) => { e.stopPropagation(); onCancel(); }}
+      >
+        <span aria-hidden="true">✕</span>
+      </button>
+    </div>
   );
 };
 
@@ -327,6 +339,8 @@ export const MyClubsPage: FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [reviewing, setReviewing] = useState<PendingApplicationDto | null>(null);
   const [duesMember, setDuesMember] = useState<OrganizerDuesMemberDto | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<ApplicationDto | null>(null);
+  const cancelMutation = useCancelApplicationMutation();
 
   const myClubs = myClubsQuery.data ?? [];
   // Split the caller's own frozen memberships into a dedicated «Доступ закрыт — оплатите» block so a
@@ -578,6 +592,7 @@ export const MyClubsPage: FC = () => {
                 application={app}
                 club={clubDetails[app.clubId]}
                 onClick={() => handleClubClick(app.clubId)}
+                onCancel={() => { haptic.impact('light'); setCancelTarget(app); }}
               />
             ))}
           </div>
@@ -687,6 +702,29 @@ export const MyClubsPage: FC = () => {
           isOrganizer
           onClose={() => setDuesMember(null)}
           onActionToast={setToastMessage}
+        />
+      )}
+
+      {cancelTarget && (
+        <ConfirmDialog
+          title="Отменить заявку?"
+          message={
+            <>Заявка в «{clubDetails[cancelTarget.clubId]?.name ?? 'клуб'}» будет отменена. Если передумаете — сможете подать её заново.</>
+          }
+          confirmLabel="Отменить заявку"
+          cancelLabel="Назад"
+          danger
+          busy={cancelMutation.isPending}
+          onConfirm={() =>
+            cancelMutation.mutate(
+              { applicationId: cancelTarget.id },
+              {
+                onSuccess: () => { haptic.notify('success'); setCancelTarget(null); setToastMessage('Заявка отменена'); },
+                onError: (e) => { haptic.notify('error'); setToastMessage(e instanceof Error ? e.message : 'Не удалось отменить заявку'); },
+              },
+            )
+          }
+          onCancel={() => { if (!cancelMutation.isPending) setCancelTarget(null); }}
         />
       )}
 

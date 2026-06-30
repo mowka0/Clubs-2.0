@@ -58,9 +58,9 @@ function mockMembers(rows: MemberListItemDto[]) {
 }
 
 describe('ClubMembersTab — de-Stars dashboard', () => {
-  it('organizer view splits members into «Скоро закончится» / «Оплата вступления» / «Участники»', async () => {
+  it('management view splits members into «Скоро закончится» / «Оплата вступления» / «Участники»', async () => {
     mockMembers([ORGANIZER, FAR, EXPIRING, FROZEN]);
-    renderWithProviders(<ClubMembersTab clubId={CLUB_ID} isOrganizer />);
+    renderWithProviders(<ClubMembersTab clubId={CLUB_ID} isOrganizer managementView />);
 
     expect(await screen.findByText(/Скоро закончится/)).toBeInTheDocument();
     expect(screen.getByText(/Оплата вступления/)).toBeInTheDocument();
@@ -82,6 +82,17 @@ describe('ClubMembersTab — de-Stars dashboard', () => {
     expect(screen.queryByText(/Скоро закончится/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Оплата вступления/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Взнос получен/ })).not.toBeInTheDocument();
+  });
+
+  it('organizer on the club page (no managementView) sees a plain roster — no management buckets', async () => {
+    // Same data as the management view, but without managementView the attention blocks are suppressed
+    // (they live only in Управление → Участники, not duplicated on the club page).
+    mockMembers([ORGANIZER, FAR, EXPIRING, FROZEN]);
+    renderWithProviders(<ClubMembersTab clubId={CLUB_ID} isOrganizer />);
+
+    expect(await screen.findByText(/^Участники/)).toBeInTheDocument();
+    expect(screen.queryByText(/Скоро закончится/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Оплата вступления/)).not.toBeInTheDocument();
   });
 
   it('shows club-award chips on a member roster card (public, R3)', async () => {
@@ -110,7 +121,7 @@ describe('ClubMembersTab — de-Stars dashboard', () => {
     );
 
     const user = userEvent.setup();
-    renderWithProviders(<ClubMembersTab clubId={CLUB_ID} isOrganizer />);
+    renderWithProviders(<ClubMembersTab clubId={CLUB_ID} isOrganizer managementView />);
 
     await user.click(await screen.findByRole('button', { name: /Взнос получен/ }));
 

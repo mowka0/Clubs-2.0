@@ -24,6 +24,13 @@
 
 > Ретест: `de-stars-member-admin-test-cases.md` §S4 (S4-1…S4-7). Тесты зелёные (фронт 191 + build, backend ClubQuality + coreSize + AccessGate freeze-DM).
 
+**Сделано в сессии 5 (2026-06-30) — 3 UI-правки PO + новый эндпоинт:**
+1. **Отступы панели «Управление участником»** — убраны лишние `margin-top/bottom: 12px` у `.rd-org-edit` (заметка + «своя дата»): теперь стандартный ритм панели.
+2. **Management-бакеты только в Управлении** — `ClubMembersTab` получил проп `managementView`; «Скоро закончится» / «Оплата вступления» больше НЕ дублируются на табе «Участники» страницы клуба (там плоский ростер). Бакеты — только в Управление → Участники.
+3. **Отзыв заявки участником** — `POST /api/applications/{id}/cancel` (applicant-only, pending→`cancelled`). **V43** (`application_status` ADD VALUE `cancelled`). UI: крестик «×» (corner-notch) на карточке pending-заявки в «Мои заявки» → **попап `ConfirmDialog`** → отзыв; `cancelled` не активен → можно подать заново. Новый компонент `ConfirmDialog` (переиспользуемый).
+
+> Тесты сессии 5: фронт 192 + build; backend ApplicationServiceTest (+3 cancel) + ClubQuality (полная Flyway-цепочка с V43) зелёные. ⚠️ jOOQ-enum дописан вручную (локальная codegen-БД отстала на V18; codegen против актуальной БД воспроизведёт `cancelled`). Доки: `application.md` (эндпоинт+статус), реестр миграций (V43 занят, S3→V44).
+
 ## 1. Что на ветке (коммиты, новые сверху)
 
 | Коммит | Что |
@@ -45,7 +52,7 @@
 | `36774f4` | кросс-клубовый «Ждут оплаты» + red-dot. |
 | `09926fd`/`5b7099e` | **de-Stars Slice 2** (frontend/backend): орг-гейт доступа, дашборд, P2P-join, ₽ вместо Stars. **V37**. |
 
-**Миграции:** V37–V42 заняты (V37 access-gate, V38 note, V39 СБП-реквизиты, V40 награды, V41 claim, V42 ослабление UNIQUE заявок). **Следующая свободная = V43.**
+**Миграции:** V37–V43 заняты (V37 access-gate, V38 note, V39 СБП-реквизиты, V40 награды, V41 claim, V42 ослабление UNIQUE заявок, **V43 = `application_status` ADD VALUE `cancelled`** — отзыв заявки). **Следующая свободная = V44.** *(Отложенный S3 roles, если вернёмся, теперь = V44.)*
 
 ## 2. Состояние staging
 
@@ -71,7 +78,7 @@
 
 ## 5. Отложено (беклог, НЕ в этой ветке)
 
-- **S3 роли+права** ⏸️ (PO, YAGNI; OWASP A01). Impact-анализ + матрица готовы → `member-admin-roles-S3-deferred.md`. Миграция была бы **V43** (V42 занята фиксом заявок).
+- **S3 роли+права** ⏸️ (PO, YAGNI; OWASP A01). Impact-анализ + матрица готовы → `member-admin-roles-S3-deferred.md`. Миграция была бы **V44** (V43 занята отзывом заявки `cancelled`).
 - **Анти-скам: петля жалоб/не-доставки** (репутация доставки орга + выпуск из cold-start) — keystone, отдельная фича → `payment-trust-and-antiscam.md`.
 - **TG Premium-бейдж** в карточке доверия — нужно начать сохранять `is_premium` из initData.
 

@@ -11,11 +11,16 @@ import type { MemberListItemDto } from '../../types/api';
 interface ClubMembersTabProps {
   clubId: string;
   /**
-   * Whether the caller is the organizer of [clubId]. The organizer-only view splits paid members
-   * into the «Скоро закончится» / «Ждут оплаты» / «Активные» buckets and exposes the «Взнос получен»
-   * action. Regular members get the active-only calm list (the access fields come back null).
+   * Whether the caller is the organizer of [clubId]. Drives the organizer-flavoured member rows
+   * (access info + tap-to-manage). Regular members get the active-only calm list (access fields null).
    */
   isOrganizer?: boolean;
+  /**
+   * Management dashboard context (Управление → Участники). Only here do the «Скоро закончится» /
+   * «Оплата вступления» attention buckets render. On the club page's Участники tab this is false, so
+   * the organizer sees a plain roster — those management blocks live ONLY in Управление, not duplicated.
+   */
+  managementView?: boolean;
 }
 
 // Paid access ending within this window surfaces in «Скоро закончится» (mirrors the backend red-dot).
@@ -214,7 +219,7 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
   );
 };
 
-export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = false }) => {
+export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = false, managementView = false }) => {
   const [selectedMember, setSelectedMember] = useState<MemberListItemDto | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const membersQuery = useClubMembersQuery(clubId);
@@ -232,10 +237,12 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
   }
 
   const members = membersQuery.data ?? [];
-  // Buckets are only meaningful for the organizer; a regular viewer gets active-only rows (calm).
-  const expiring = isOrganizer ? members.filter((m) => bucketOf(m) === 'expiring') : [];
-  const awaiting = isOrganizer ? members.filter((m) => bucketOf(m) === 'awaiting') : [];
-  const calm = isOrganizer ? members.filter((m) => bucketOf(m) === 'calm') : members;
+  // Attention buckets are organizer-management info → only in the Управление dashboard (managementView).
+  // On the club page (and for regular viewers) everyone falls into one plain roster (no duplicated blocks).
+  const showBuckets = isOrganizer && managementView;
+  const expiring = showBuckets ? members.filter((m) => bucketOf(m) === 'expiring') : [];
+  const awaiting = showBuckets ? members.filter((m) => bucketOf(m) === 'awaiting') : [];
+  const calm = showBuckets ? members.filter((m) => bucketOf(m) === 'calm') : members;
 
   return (
     <>

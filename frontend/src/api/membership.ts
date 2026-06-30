@@ -201,6 +201,11 @@ export function rejectApplication(applicationId: string, reason: string): Promis
   return apiClient.post(`/api/applications/${applicationId}/reject`, { reason });
 }
 
+/** Applicant self-withdrawal of their own pending application → status `cancelled`. */
+export function cancelApplication(applicationId: string): Promise<ApplicationDto> {
+  return apiClient.post<ApplicationDto>(`/api/applications/${applicationId}/cancel`);
+}
+
 export function getMyPendingApplications(): Promise<PendingApplicationDto[]> {
   return apiClient.get<PendingApplicationDto[]>('/api/users/me/applications-pending');
 }

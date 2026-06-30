@@ -479,7 +479,7 @@ export const OrganizerClubManage: FC = () => {
   const renderTab = () => {
     switch (activeTab) {
       case 'members':
-        return <ClubMembersTab clubId={clubId} isOrganizer />;
+        return <ClubMembersTab clubId={clubId} isOrganizer managementView />;
       case 'stats':
         return <ClubStatsTab clubId={clubId} />;
       case 'finances':
