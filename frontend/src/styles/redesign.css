@@ -391,6 +391,21 @@
 /* Access-OK meta line in the calm list (organizer's «Активен · до …»). */
 .rd-met.rd-met-ok { color: var(--live); }
 
+/* ── Frozen / no-access member (de-Stars) ──────────────────────────────────────────────
+   One shared «iced» treatment for the club roster row (ClubMembersTab — frozen members sink
+   to the bottom of the flat list) and the skladchina participant picker (CreateSkladchinaPage —
+   frozen members are unselectable). Cool tint + a left ice-rail + muted content, so a member with
+   no club access reads at a glance and never blends into the active list. */
+.rd-rep-row.rd-frozen,
+.rd-pick-toggle.rd-frozen { background: var(--ice-soft); box-shadow: inset 3px 0 0 var(--ice); }
+.rd-rep-row.rd-frozen .rd-ico,
+.rd-rep-row.rd-frozen .rd-ttl,
+.rd-rep-row.rd-frozen .rd-score { opacity: 0.6; }
+.rd-met.rd-met-frozen { color: var(--ice); }
+/* Keep the ice tint + «Доступ закрыт» legible — override the 0.45 disabled dim on the picker. */
+.rd-pick-toggle.rd-frozen:disabled { opacity: 0.8; }
+.rd-pick-toggle.rd-frozen .rd-pick-note { color: var(--ice); }
+
 /* Organizer gate inside the profile card */
 .rd-org-gate { margin-top: 16px; }
 

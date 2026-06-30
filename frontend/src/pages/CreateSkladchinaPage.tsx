@@ -334,7 +334,7 @@ export const CreateSkladchinaPage: FC = () => {
                   <div key={m.userId} className="rd-pick-row">
                     <button
                       type="button"
-                      className={`rd-pick-toggle${isSelected ? ' rd-selected' : ''}`}
+                      className={`rd-pick-toggle${isSelected ? ' rd-selected' : ''}${isFrozen ? ' rd-frozen' : ''}`}
                       onClick={() => toggleParticipant(m.userId)}
                       disabled={isFrozen}
                       aria-disabled={isFrozen}
@@ -344,7 +344,7 @@ export const CreateSkladchinaPage: FC = () => {
                         {m.firstName}{m.lastName ? ` ${m.lastName}` : ''}
                       </span>
                       {isFrozen && (
-                        <span className="rd-pick-note">Ждёт оплаты</span>
+                        <span className="rd-pick-note">❄️ Доступ закрыт</span>
                       )}
                     </button>
                     {!isFrozen && mode === 'fixed_individual' && isSelected && (

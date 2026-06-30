@@ -66,6 +66,9 @@ html, body {
   --live-soft:     rgba(79, 160, 120, 0.18);
   --danger:        #FF8B8B;
   --danger-soft:   rgba(255, 139, 139, 0.14);
+  /* Frozen / no-access (de-Stars): cool «iced» blue, distinct from the warm brand + green/red states. */
+  --ice:           #8FC7E8;
+  --ice-soft:      rgba(143, 199, 232, 0.10);
 
   /* Vote palette — single source of truth for the donut chart, the vote buttons and the
      responder status dots. Brand colours, identical across themes (light does not override). */
@@ -130,6 +133,9 @@ html, body {
   --live:          #2E7D5A;
   --live-soft:     rgba(46, 125, 90, 0.12);
   --danger-soft:   rgba(216, 64, 64, 0.10);
+  /* Frozen / no-access — darker ice for contrast on the light surface. */
+  --ice:           #3B82A6;
+  --ice-soft:      rgba(59, 130, 166, 0.08);
 
   --grain-opacity: 0;
 }

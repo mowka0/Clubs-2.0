@@ -95,6 +95,17 @@ describe('ClubMembersTab — de-Stars dashboard', () => {
     expect(screen.queryByText(/Оплата вступления/)).not.toBeInTheDocument();
   });
 
+  it('on the club page a frozen member is marked «Доступ закрыт» and sinks to the bottom of the list', async () => {
+    // Frozen is placed second in the payload — the component must still float it to the end of the flat
+    // roster (and ice-mark it) so the organizer spots the no-access member without a management bucket.
+    mockMembers([ORGANIZER, FROZEN, FAR, EXPIRING]);
+    const { container } = renderWithProviders(<ClubMembersTab clubId={CLUB_ID} isOrganizer />);
+
+    expect(await screen.findByText(/Доступ закрыт/)).toBeInTheDocument();
+    const titles = Array.from(container.querySelectorAll('.rd-rep-row .rd-ttl')).map((e) => e.textContent ?? '');
+    expect(titles[titles.length - 1]).toContain('Мария'); // frozen member last
+  });
+
   it('shows club-award chips on a member roster card (public, R3)', async () => {
     const decorated = member({
       userId: 'dec', firstName: 'Олег',

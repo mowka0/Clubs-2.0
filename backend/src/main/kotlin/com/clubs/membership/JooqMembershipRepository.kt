@@ -316,6 +316,11 @@ class JooqMembershipRepository(
             // Fresh join: clear any stale dues markers from the prior lifecycle; set frozen-since when frozen.
             .setNull(MEMBERSHIPS.DUES_MARKED_PAID_AT)
             .setNull(MEMBERSHIPS.DUES_MARKED_BY)
+            // Also drop a prior member-side dues claim — otherwise a re-joiner who claimed before being
+            // rejected reappears already on «Оплата на проверке» instead of the fresh «Оплатить взнос».
+            .setNull(MEMBERSHIPS.DUES_CLAIMED_AT)
+            .setNull(MEMBERSHIPS.DUES_CLAIM_METHOD)
+            .setNull(MEMBERSHIPS.DUES_PROOF_URL)
             .set(MEMBERSHIPS.ACCESS_FROZEN_AT, if (status == MembershipStatus.frozen) now else null)
             .set(MEMBERSHIPS.UPDATED_AT, now)
             .where(MEMBERSHIPS.ID.eq(membershipId))
@@ -329,6 +334,11 @@ class JooqMembershipRepository(
         val now = OffsetDateTime.now()
         val row = dsl.update(MEMBERSHIPS)
             .set(MEMBERSHIPS.STATUS, MembershipStatus.cancelled)
+            // A dead membership carries no live dues claim — clearing here resolves «Отказать и вернуть»
+            // (and any leave) immediately, so a stale claim can't linger or follow a re-join.
+            .setNull(MEMBERSHIPS.DUES_CLAIMED_AT)
+            .setNull(MEMBERSHIPS.DUES_CLAIM_METHOD)
+            .setNull(MEMBERSHIPS.DUES_PROOF_URL)
             .set(MEMBERSHIPS.UPDATED_AT, now)
             .where(MEMBERSHIPS.ID.eq(membershipId))
             .returningResult(MEMBERSHIPS.USER_ID, MEMBERSHIPS.CLUB_ID)

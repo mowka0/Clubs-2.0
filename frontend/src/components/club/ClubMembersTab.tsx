@@ -157,6 +157,9 @@ interface CalmMemberRowProps {
 const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenProfile }) => {
   const haptic = useHaptic();
   const isOwner = member.role === 'organizer';
+  // Frozen = organizer closed access / dues not yet confirmed. Only the organizer ever sees these rows
+  // (the backend withholds frozen members from regular viewers), so the iced treatment is organizer-only.
+  const isFrozen = member.accessStatus === 'frozen';
   const hasScore = member.trust !== null;
   // Show the promise line only when there's an event track; a finance-only member (skladchina
   // record, 0 confirmations) keeps the score but hides the misleading "Обещания 0%" (F5-08).
@@ -179,7 +182,7 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
   return (
     <button
       type="button"
-      className="rd-rep-row"
+      className={`rd-rep-row${isFrozen ? ' rd-frozen' : ''}`}
       onClick={() => { haptic.impact('light'); onOpenProfile(member); }}
     >
       <span className="rd-ico">
@@ -202,7 +205,9 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
             ))}
           </div>
         )}
-        {accessMeta && <div className="rd-met rd-met-ok">{accessMeta}</div>}
+        {isFrozen
+          ? <div className="rd-met rd-met-frozen">❄️ Доступ закрыт</div>
+          : accessMeta && <div className="rd-met rd-met-ok">{accessMeta}</div>}
         {repMeta && <div className="rd-met">{repMeta}</div>}
       </div>
       <span className="rd-score">
@@ -242,7 +247,12 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
   const showBuckets = isOrganizer && managementView;
   const expiring = showBuckets ? members.filter((m) => bucketOf(m) === 'expiring') : [];
   const awaiting = showBuckets ? members.filter((m) => bucketOf(m) === 'awaiting') : [];
-  const calm = showBuckets ? members.filter((m) => bucketOf(m) === 'calm') : members;
+  // On the management dashboard frozen members live in their own «Оплата вступления» bucket. On the
+  // flat club-page roster they stay in the list but sink to the bottom, iced — so the organizer sees
+  // at a glance who has no access without losing them in the crowd. (sort is stable → keeps backend order.)
+  const calm = showBuckets
+    ? members.filter((m) => bucketOf(m) === 'calm')
+    : [...members].sort((a, b) => Number(a.accessStatus === 'frozen') - Number(b.accessStatus === 'frozen'));
 
   return (
     <>
