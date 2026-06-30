@@ -395,6 +395,9 @@
 [data-theme="light"] .rd-mgmt { background: rgba(0, 0, 0, 0.018); }
 .rd-mgmt-h { font-size: 11px; letter-spacing: 0.06em; color: var(--accent); font-weight: 700; text-transform: uppercase; padding: 13px 15px 0; }
 .rd-mgmt-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+/* Stacked bodies (subscription strip → note → «своя дата») otherwise add 12+12px between them. Drop the
+   2nd+ body's top padding so consecutive blocks sit at the panel's normal ~12px field rhythm. */
+.rd-mgmt-body + .rd-mgmt-body { padding-top: 0; }
 .rd-mgmt-body .rd-claim-compact { margin-bottom: 0; }
 .rd-mgmt-sum { display: flex; align-items: flex-start; gap: 10px; }
 .rd-mgmt-dot { width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 4px var(--live-soft); flex-shrink: 0; }
