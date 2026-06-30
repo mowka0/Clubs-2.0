@@ -662,11 +662,12 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
               <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)' }}>
                 {member.firstName} {member.lastName ?? ''}
               </div>
-              <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>
-                {[profile?.username ? `@${profile.username}` : null, joinedAt ? `в клубе с ${joinedAt}` : null]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </div>
+              {profile?.username && (
+                <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>@{profile.username}</div>
+              )}
+              {joinedAt && (
+                <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>в клубе с {joinedAt}</div>
+              )}
             </div>
           </div>
 

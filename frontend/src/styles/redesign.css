@@ -397,7 +397,7 @@
 /* «Управление участником» panel (R1): grouped, compact management controls. */
 .rd-mgmt { border: 1px solid var(--hairline-2); border-radius: 18px; background: rgba(255, 255, 255, 0.022); overflow: hidden; }
 [data-theme="light"] .rd-mgmt { background: rgba(0, 0, 0, 0.018); }
-.rd-mgmt-h { font-size: 11px; letter-spacing: 0.06em; color: var(--accent); font-weight: 700; text-transform: uppercase; padding: 13px 15px 0; }
+.rd-mgmt-h { font-size: 11px; letter-spacing: 0.06em; color: var(--accent); font-weight: 700; text-transform: uppercase; padding: 13px 14px 0; }
 .rd-mgmt-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
 /* Stacked bodies (subscription strip → note → «своя дата») otherwise add 12+12px between them. Drop the
    2nd+ body's top padding so consecutive blocks sit at the panel's normal ~12px field rhythm. */
