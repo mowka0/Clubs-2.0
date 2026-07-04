@@ -13,6 +13,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow
 import org.telegram.telegrambots.meta.api.objects.webapp.WebAppInfo
 import org.telegram.telegrambots.meta.generics.TelegramClient
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
@@ -26,7 +27,11 @@ class NotificationService(
 ) {
 
     private val log = LoggerFactory.getLogger(NotificationService::class.java)
-    private val fmt = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
+    // Event datetimes are stored UTC; a DM can't know the reader's device TZ, so render in
+    // Moscow time with an explicit label (raw UTC read 3h off for the core RU audience —
+    // the app shows device-local time, and the mismatch looked like a wrong event time).
+    private val fmt = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm 'МСК'")
+        .withZone(ZoneId.of("Europe/Moscow"))
 
     /**
      * Notify club members when a new event is created.
