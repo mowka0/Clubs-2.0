@@ -181,9 +181,13 @@ fun countByVote(eventId: UUID): Map<String, Int>   // going/maybe/not_going
 2. Получить всех going-участников (stage_1_vote = going), отсортированных по stage_1_timestamp ASC
 3. Первые N (где N = participant_limit) → они могут подтвердить первыми
 4. Если going < participant_limit → добавить maybe-участников в очередь
-5. Опубликовать `Stage2StartedEvent` → после коммита транзакции going/maybe-воутерам уходит
-   DM «Этап 2 начался — подтвердите участие» (S2T-2 ✅, 2026-06-13; см.
-   § «DM при старте Этапа 2 + сериализация слотов» ниже и `telegram-bot.md` § `sendStage2Started`).
+5. Опубликовать `Stage2StartedEvent` → после коммита транзакции уходит DM «Этап 2 начался —
+   подтвердите участие» (S2T-2 ✅, 2026-06-13; см. § «DM при старте Этапа 2 + сериализация
+   слотов» ниже и `telegram-bot.md` § `sendStage2Started`).
+   **Аудитория DM (UPDATED 2026-07-04):** участники клуба с доступом, которые НЕ голосовали
+   `not_going` — т.е. `going` / `maybe` / **вообще не ответившие** (`findStage2InviteTelegramIds`,
+   строится от memberships). Проголосовавшим `not_going` DM не шлём, но подтвердить участие они
+   всё равно смогут (Этап 2 открыт всем — см. § «Логика confirm»).
    **Гейт (2026-07-04):** если флип случился уже ПОСЛЕ старта события (поздний тик / событие
    создано внутри lead-окна) — статус всё равно переводится (на переходе завязаны sweep
    авто-истечения и completion), но DM НЕ публикуется: окно подтверждения закрывается в момент
@@ -214,9 +218,16 @@ POST /api/events/{id}/decline
 2. Пользователь должен быть участником клуба → 403
 3. Взять per-event advisory-lock `lockEventSlots(eventId)` — **до любого чтения**
    `event_responses` (S2-01/F5-07 ✅, см. § «DM при старте Этапа 2 + сериализация слотов»)
-4. У пользователя должен быть going/maybe голос → 400 "You didn't vote going or maybe"
+4. **Этап 2 открыт ВСЕМ участникам клуба (UPDATED 2026-07-04).** Прежний гард «нужен going/maybe
+   голос» СНЯТ. Кто голосовал `not_going` — просто подтверждается (передумал → может). Кто вообще
+   не голосовал — строки ещё нет, `createLateStage2Entry` создаёт её (`stage_1_vote=NULL`,
+   `stage_1_timestamp=now` → в конец FIFO), дальше тот же путь. Это закрывает дыру «в короткое
+   событие, проскочившее Этап 1, никто не мог вступить».
 5. Текущий confirmed count < participant_limit → stage_2_vote = confirmed, final_status = confirmed
 6. Иначе → stage_2_vote = waitlisted, final_status = waitlisted
+   > FIFO-нюанс: `not_going`-передумавший сохраняет свою метку Этапа 1 (не сбрасывается на now),
+   > поэтому в переполненном waitlist может оказаться выше `maybe`-голосовавшего. Пограничный
+   > кейс (оверсабскрайб + флип), в v1 принят осознанно; не-голосовавший встаёт в конец корректно.
 
 ### Логика decline
 1. Проверки события/членства (симметрично confirm), затем тот же advisory-lock
@@ -503,9 +514,13 @@ penalty-флоу), а их страницы упираются в скрытый
   `NotificationService.sendStage2Started` (`@Async`, best-effort: сбой Telegram не валит
   триггер). AFTER_COMMIT обязателен — `@Async`-DM читает строки воутеров на отдельном
   соединении, видящем переход только после коммита.
-- Получатели — `EventResponseRepository.findStage2TargetTelegramIds(eventId)`:
-  **только** `stage_1_vote IN (going, maybe)` (PRD §4.4.2 шаг 1; `not_going` исключены —
-  GAP-009). Метод переименован из `findResponderTelegramIdsByEventId` (старый — без фильтра).
+- Получатели (UPDATED 2026-07-04) — `EventResponseRepository.findStage2InviteTelegramIds(eventId)`:
+  участники клуба **с доступом** (`MembershipAccess.hasAccess`), у которых `stage_1_vote IS DISTINCT
+  FROM 'not_going'` — т.е. `going` / `maybe` / **не ответившие** (строится от memberships LEFT JOIN
+  event_responses, иначе не ответившие бы выпали). `not_going` исключены из DM (GAP-009), но подтвердить
+  участие могут (Этап 2 открыт всем — § «Логика confirm»). Прежний `findStage2TargetTelegramIds`
+  (только going/maybe) остался — им пользуется DM об **отмене** события (F5-14): о ней сообщаем
+  только выразившим интерес, не всему клубу.
 - DM с deep-link кнопкой «✅ Подтвердить участие» на `/events/{id}`. Текст и контракт —
   `telegram-bot.md` § `sendStage2Started`.
 
@@ -529,8 +544,11 @@ penalty-флоу), а их страницы упираются в скрытый
 
 ### Acceptance Criteria
 - **AC-S2T2-1:** GIVEN событие переходит в `stage_2` WHEN транзакция триггера закоммичена
-  THEN going/maybe-воутерам уходит DM с кнопкой «✅ Подтвердить участие» (`/events/{id}`);
-  `not_going`-воутерам — нет; при rollback DM не уходит.
+  THEN DM «✅ Подтвердить участие» (`/events/{id}`) уходит участникам с доступом, кроме
+  `not_going` (т.е. going / maybe / не ответившим); `not_going` — нет; при rollback DM не уходит.
+- **AC-OPEN-1 (2026-07-04):** GIVEN событие в `stage_2` до старта WHEN участник клуба с любым
+  Этапом-1 (`not_going` / без голоса) жмёт confirm THEN он `confirmed` (или `waitlisted` при
+  переполнении); строки не было — создаётся. Не-участник клуба → 403.
 - **AC-S2T2-2:** отказ Telegram API логируется `WARN` и не влияет на переход в `stage_2`.
 - **AC-LOCK-1:** GIVEN 1 свободный слот WHEN два параллельных confirm THEN ровно один
   `confirmed`, второй `waitlisted` (никогда `confirmed > participant_limit`).

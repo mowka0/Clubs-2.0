@@ -58,15 +58,16 @@ class NotificationService(
     }
 
     /**
-     * Уведомляет проголосовавших "иду"/"возможно" о начале Этапа 2, с просьбой подтвердить
-     * участие (PRD §4.4.2 шаг 1). Проголосовавшие "не иду" исключены — им нечего подтверждать
-     * (GAP-009).
+     * Приглашает подтвердить участие при старте Этапа 2. Этап 2 открыт всем участникам клуба,
+     * поэтому DM идёт going / maybe / НЕ ответившим на Этапе 1 (findStage2InviteTelegramIds).
+     * Проголосовавшим "не иду" DM НЕ шлём — но подтвердить участие они всё равно смогут, если
+     * передумают (Stage2Service.confirmParticipation открыт всем).
      */
     @Async
     fun sendStage2Started(event: Event) {
-        val voterTelegramIds = eventResponseRepository.findStage2TargetTelegramIds(event.id)
+        val voterTelegramIds = eventResponseRepository.findStage2InviteTelegramIds(event.id)
         if (voterTelegramIds.isEmpty()) {
-            log.info("Stage 2 DM SKIPPED — no going/maybe voters for eventId={}", event.id)
+            log.info("Stage 2 DM SKIPPED — no eligible members for eventId={}", event.id)
             return
         }
         log.info("Stage 2 DM: eventId={} recipients={}", event.id, voterTelegramIds.size)

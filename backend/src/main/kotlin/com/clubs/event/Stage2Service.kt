@@ -5,7 +5,6 @@ import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
-import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
 import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
@@ -104,12 +103,11 @@ class Stage2Service(
         // состояние, как только получит лок.
         eventResponseRepository.lockEventSlots(eventId)
 
+        // Этап 2 открыт ВСЕМ участникам клуба (проверка isMember выше). Кто не голосовал на
+        // Этапе 1 — строки ещё нет, создаём её сейчас (stage_1_vote=NULL, ts=now → в конец FIFO).
+        // Кто голосовал not_going — строка есть, гард «нельзя подтверждать» снят: передумал → может.
         val response = eventResponseRepository.findByEventAndUser(eventId, userId)
-            ?: throw ValidationException("You didn't vote in this event")
-
-        if (response.stage1Vote != Stage_1Vote.going && response.stage1Vote != Stage_1Vote.maybe) {
-            throw ValidationException("You voted not_going for this event")
-        }
+            ?: eventResponseRepository.createLateStage2Entry(eventId, userId)
 
         if (response.stage2Vote == Stage_2Vote.confirmed) {
             val count = eventResponseRepository.countConfirmed(eventId)

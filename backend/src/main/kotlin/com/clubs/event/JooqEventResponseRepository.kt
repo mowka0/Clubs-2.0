@@ -7,7 +7,9 @@ import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
 import com.clubs.generated.jooq.tables.references.EVENTS
 import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
+import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import com.clubs.generated.jooq.tables.references.USERS
+import com.clubs.membership.MembershipAccess
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
@@ -45,6 +47,19 @@ class JooqEventResponseRepository(
                 .returning()
                 .fetchOne()!!
         }
+        return mapper.toDomain(record)
+    }
+
+    override fun createLateStage2Entry(eventId: UUID, userId: UUID): EventResponse {
+        val now = OffsetDateTime.now()
+        val record = dsl.insertInto(EVENT_RESPONSES)
+            .set(EVENT_RESPONSES.EVENT_ID, eventId)
+            .set(EVENT_RESPONSES.USER_ID, userId)
+            // stage_1_vote остаётся NULL — участник не голосовал на Этапе 1. stage_1_timestamp = now:
+            // ключ FIFO ставит его в КОНЕЦ waitlist (метки голосовавших на Этапе 1 — из прошлого).
+            .set(EVENT_RESPONSES.STAGE_1_TIMESTAMP, now)
+            .returning()
+            .fetchOne()!!
         return mapper.toDomain(record)
     }
 
@@ -196,6 +211,25 @@ class JooqEventResponseRepository(
             .where(
                 EVENT_RESPONSES.EVENT_ID.eq(eventId)
                     .and(EVENT_RESPONSES.STAGE_1_VOTE.`in`(Stage_1Vote.going, Stage_1Vote.maybe))
+            )
+            .fetch(USERS.TELEGRAM_ID)
+            .filterNotNull()
+
+    override fun findStage2InviteTelegramIds(eventId: UUID): List<Long> =
+        // Аудитория приглашения на Этап 2 строится от УЧАСТНИКОВ КЛУБА с доступом (не от голосов),
+        // чтобы включить не ответивших на Этапе 1. LEFT JOIN на ответы: у не ответившего строки нет
+        // (stage_1_vote читается как NULL). IS DISTINCT FROM 'not_going' истинно для NULL и для
+        // going/maybe → включаем всех, КРОМЕ проголосовавших not_going.
+        dsl.selectDistinct(USERS.TELEGRAM_ID)
+            .from(EVENTS)
+            .join(MEMBERSHIPS).on(MEMBERSHIPS.CLUB_ID.eq(EVENTS.CLUB_ID).and(MembershipAccess.hasAccess()))
+            .join(USERS).on(USERS.ID.eq(MEMBERSHIPS.USER_ID))
+            .leftJoin(EVENT_RESPONSES).on(
+                EVENT_RESPONSES.EVENT_ID.eq(EVENTS.ID).and(EVENT_RESPONSES.USER_ID.eq(MEMBERSHIPS.USER_ID))
+            )
+            .where(
+                EVENTS.ID.eq(eventId)
+                    .and(EVENT_RESPONSES.STAGE_1_VOTE.isDistinctFrom(Stage_1Vote.not_going))
             )
             .fetch(USERS.TELEGRAM_ID)
             .filterNotNull()

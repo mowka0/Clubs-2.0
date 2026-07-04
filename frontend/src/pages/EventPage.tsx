@@ -718,14 +718,20 @@ export const EventPage: FC = () => {
             )}
           </div>
           {actionError && <div className="rd-error">{actionError}</div>}
-          {(myVote === 'going' || myVote === 'maybe') && (
+          {/* Этап 2 открыт всем участникам клуба: «Подтвердить» показываем всем, кроме тех, кто уже
+              в терминальном статусе Этапа 2 (подтверждён / лист ожидания / отказался). «Отказаться» —
+              только голосовавшим going/maybe (им есть от чего отказываться); not_going и не
+              голосовавшим показываем лишь путь внутрь. */}
+          {myVote !== 'confirmed' && myVote !== 'waitlisted' && myVote !== 'declined' && (
             <div className="rd-cta-wrap">
               <button type="button" className="rd-btn-primary" onClick={handleConfirm} disabled={voting}>
                 {voting ? <Spinner size="s" /> : 'Подтвердить участие'}
               </button>
-              <button type="button" className="rd-btn-outline" style={{ marginTop: 8 }} onClick={handleDecline} disabled={voting}>
-                Отказаться
-              </button>
+              {(myVote === 'going' || myVote === 'maybe') && (
+                <button type="button" className="rd-btn-outline" style={{ marginTop: 8 }} onClick={handleDecline} disabled={voting}>
+                  Отказаться
+                </button>
+              )}
             </div>
           )}
         </>

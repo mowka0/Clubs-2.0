@@ -61,7 +61,7 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
 
 function mockEndpoints(opts: {
   event: EventDetailDto;
-  myVote: string;
+  myVote: string | null;
   responders?: EventResponderDto[];
   ownerId?: string;
 }) {
@@ -123,6 +123,22 @@ describe('EventPage — Stage 2 window (Bug B) + expired status', () => {
     // Окно подтверждения закрыто — секции с кнопками нет
     expect(screen.queryByText('Подтверждение участия')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Подтвердить участие/ })).not.toBeInTheDocument();
+  });
+
+  it('Этап 2 открыт всем: not_going видит «Подтвердить участие», но без «Отказаться»', async () => {
+    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'not_going' });
+    renderEventPage();
+
+    expect(await screen.findByRole('button', { name: /Подтвердить участие/ })).toBeInTheDocument();
+    // «Отказаться» — только для going/maybe (им есть от чего отказываться); not_going его не видит
+    expect(screen.queryByRole('button', { name: 'Отказаться' })).not.toBeInTheDocument();
+  });
+
+  it('Этап 2 открыт всем: не голосовавший (myVote null) тоже видит «Подтвердить участие»', async () => {
+    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: null });
+    renderEventPage();
+
+    expect(await screen.findByRole('button', { name: /Подтвердить участие/ })).toBeInTheDocument();
   });
 
   it('на прошедшем событии «Кто идёт» = только confirmed; expired выпадает из состава и из отметки явки', async () => {

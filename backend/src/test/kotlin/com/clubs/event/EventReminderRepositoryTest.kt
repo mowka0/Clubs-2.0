@@ -172,7 +172,63 @@ class EventReminderRepositoryTest {
         assertEquals(ownerTelegramId, eventRepository.findOrganizerTelegramId(event))
     }
 
+    // --- Этап 2 открыт всем: приглашение (все кроме not_going) + поздняя строка ---
+
+    @Test
+    fun `stage2 invite = active members minus not_going, including non-voters`() {
+        val event = insertEvent(OffsetDateTime.now().plusHours(1), "stage_2")
+        val (goingU, goingTg) = insertMember()
+        insertResponse(event, goingU, "going")
+        val (maybeU, maybeTg) = insertMember()
+        insertResponse(event, maybeU, "maybe")
+        val (notGoingU, _) = insertMember()
+        insertResponse(event, notGoingU, "not_going")        // не иду → DM не шлём
+        val (_, silentTg) = insertMember()                   // не ответил → включён
+        val (frozenU, _) = insertMember("frozen")            // нет доступа → исключён, даже если голосовал
+        insertResponse(event, frozenU, "going")
+
+        val ids = eventResponseRepository.findStage2InviteTelegramIds(event).toSet()
+
+        assertEquals(setOf(goingTg, maybeTg, silentTg), ids)
+    }
+
+    @Test
+    fun `createLateStage2Entry inserts a row with null stage_1_vote and a fifo timestamp`() {
+        val event = insertEvent(OffsetDateTime.now().plusHours(1), "stage_2")
+        val (userId, _) = insertMember()
+
+        val entry = eventResponseRepository.createLateStage2Entry(event, userId)
+
+        assertEquals(userId, entry.userId)
+        assertEquals(null, entry.stage1Vote)         // не голосовал на Этапе 1
+        assertEquals(null, entry.stage2Vote)         // подтверждение проставит confirmParticipation отдельным шагом
+        assertTrue(entry.stage1Timestamp != null)    // метка есть → корректная (последняя) позиция в FIFO
+    }
+
     // --- хелперы ---
+
+    /** Пользователь + членство в клубе с заданным статусом; возвращает (userId, telegramId). */
+    private fun insertMember(status: String = "active"): Pair<UUID, Long> {
+        val tgId = telegramSeq
+        val userId = newUser()
+        dsl.execute(
+            "INSERT INTO memberships (user_id, club_id, status) VALUES ('$userId', '$clubId', '$status'::membership_status)"
+        )
+        return userId to tgId
+    }
+
+    /** Ответ на событие для уже существующего пользователя (stage1/stage2 опциональны). */
+    private fun insertResponse(eventId: UUID, userId: UUID, stage1: String?, stage2: String? = null) {
+        val s1 = stage1?.let { "'$it'::stage_1_vote" } ?: "NULL"
+        val s2 = stage2?.let { "'$it'::stage_2_vote" } ?: "NULL"
+        val fs = stage2?.let { "'$it'::final_status" } ?: "NULL"
+        dsl.execute(
+            """
+            INSERT INTO event_responses (id, event_id, user_id, stage_1_vote, stage_1_timestamp, stage_2_vote, final_status)
+            VALUES ('${UUID.randomUUID()}', '$eventId', '$userId', $s1, NOW(), $s2, $fs)
+            """.trimIndent()
+        )
+    }
 
     private fun newUser(): UUID {
         val id = UUID.randomUUID()

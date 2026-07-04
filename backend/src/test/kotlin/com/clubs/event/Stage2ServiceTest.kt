@@ -94,6 +94,46 @@ class Stage2ServiceTest {
     }
 
     @Test
+    fun `confirm by a not_going voter works — Stage 2 is open to all`() {
+        // Этап 2 открыт всем участникам клуба: передумавший not_going-голосующий подтверждается.
+        every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.not_going, stage2 = null)
+        every { eventResponseRepository.countConfirmed(eventId) } returnsMany listOf(0, 1)
+        every { eventResponseRepository.updateStage2Vote(any(), any(), any()) } returns
+            response(stage1 = Stage_1Vote.not_going, stage2 = Stage_2Vote.confirmed)
+
+        val result = service.confirmParticipation(eventId, userId)
+
+        assertEquals("confirmed", result.status)
+        verify { eventResponseRepository.updateStage2Vote(any(), Stage_2Vote.confirmed, FinalStatus.confirmed) }
+        // строка уже есть (голосовал на Этапе 1) — новую не создаём
+        verify(exactly = 0) { eventResponseRepository.createLateStage2Entry(any(), any()) }
+    }
+
+    @Test
+    fun `confirm by a member who never voted creates a late entry then confirms`() {
+        // «Ничего не ответил» на Этапе 1 → строки нет → создаём её и подтверждаем в том же вызове.
+        every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns null
+        every { eventResponseRepository.createLateStage2Entry(eventId, userId) } returns
+            response(stage1 = null, stage2 = null)
+        every { eventResponseRepository.countConfirmed(eventId) } returnsMany listOf(0, 1)
+        every { eventResponseRepository.updateStage2Vote(any(), any(), any()) } returns
+            response(stage1 = null, stage2 = Stage_2Vote.confirmed)
+
+        val result = service.confirmParticipation(eventId, userId)
+
+        assertEquals("confirmed", result.status)
+        verifyOrder {
+            eventResponseRepository.createLateStage2Entry(eventId, userId)
+            eventResponseRepository.updateStage2Vote(any(), Stage_2Vote.confirmed, FinalStatus.confirmed)
+        }
+    }
+
+    @Test
     fun `confirm rejects a non-member`() {
         every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
         every { membershipRepository.isMember(userId, clubId) } returns false
