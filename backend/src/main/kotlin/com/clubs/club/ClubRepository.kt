@@ -17,14 +17,14 @@ interface ClubRepository {
 
     fun countByOwnerId(ownerId: UUID): Int
 
-    /** Count of the user's active PAID clubs (subscription_price > 0). Free clubs are excluded — they
-     *  don't consume capacity (docs/modules/payment-v2.md §3.1). */
+    /** Число активных ПЛАТНЫХ клубов пользователя (subscription_price > 0). Бесплатные исключены —
+     *  они не расходуют ёмкость плана (docs/modules/payment-v2.md §3.1). */
     fun countPaidByOwnerId(ownerId: UUID): Int
 
-    /** Active-club IDs owned by [ownerId]. Empty list when the user owns no clubs. */
+    /** ID активных клубов, которыми владеет [ownerId]. Пустой список, если клубов нет. */
     fun findIdsByOwnerId(ownerId: UUID): List<UUID>
 
-    /** Batch lookup of active clubs by IDs. Empty input → empty output (no SQL hit). */
+    /** Батч-поиск активных клубов по ID. Пустой вход → пустой выход (без SQL-запроса). */
     fun findByIds(ids: Collection<UUID>): List<Club>
 
     fun softDelete(id: UUID)

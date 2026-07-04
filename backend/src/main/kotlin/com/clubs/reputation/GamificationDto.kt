@@ -1,20 +1,21 @@
 package com.clubs.reputation
 
 /**
- * The authenticated user's gamification panel (`self` view, H8): exact XP, current level + progress
- * to the next, and earned badges. Derived on-read from the ledger by [XpService]. The `others`
- * projection (level name only) is a separate, narrower view applied where member cards are built.
+ * Панель геймификации авторизованного пользователя (вид `self`, H8): точный XP, текущий уровень +
+ * прогресс до следующего, и полученные бейджи. Вычисляется при чтении из леджера [XpService].
+ * Проекция `others` (только название уровня) — отдельный, более узкий вид, применяемый там, где
+ * строятся карточки участников.
  */
 data class GamificationDto(
     val xp: Int,
-    /** 1-based level number (1..10). */
+    /** Номер уровня, отсчёт с 1 (1..10). */
     val level: Int,
     val levelName: String,
-    /** null when the user is at the max level. */
+    /** null, если пользователь на максимальном уровне. */
     val nextLevelName: String?,
-    /** XP accumulated within the current level (xp − current-level threshold). */
+    /** XP, накопленный внутри текущего уровня (xp − порог текущего уровня). */
     val xpIntoLevel: Int,
-    /** XP span of the current level (next threshold − current threshold); null at max level. */
+    /** Диапазон XP текущего уровня (следующий порог − текущий порог); null на максимальном уровне. */
     val xpSpanToNext: Int?,
     val badges: List<BadgeDto>
 )

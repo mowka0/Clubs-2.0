@@ -7,12 +7,11 @@ import org.springframework.transaction.event.TransactionPhase
 import org.springframework.transaction.event.TransactionalEventListener
 
 /**
- * S2T-2: when an event transitions to Stage 2, DM going/maybe voters asking them to confirm
- * participation. Reacts AFTER_COMMIT because [NotificationService.sendStage2Started] is
- * @Async — it queries voter rows on a separate connection, which only sees the transition
- * and waitlist assignments once the scheduler transaction has committed. Best-effort:
- * delivery errors are swallowed inside sendDm, like every other DM. Mirrors
- * AttendanceMarkedListener.
+ * S2T-2: когда событие переходит на Этап 2, отправляем DM голосовавшим «идёт»/«может быть» с
+ * просьбой подтвердить участие. Реагирует AFTER_COMMIT, потому что [NotificationService.sendStage2Started]
+ * помечен @Async — он читает строки голосов на отдельном соединении, которое увидит переход и
+ * назначения waitlist только после коммита транзакции планировщика. Best-effort: ошибки доставки
+ * глотаются внутри sendDm, как и для любого другого DM. Зеркалит AttendanceMarkedListener.
  */
 @Component
 class Stage2StartedListener(

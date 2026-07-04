@@ -9,21 +9,23 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * L3 hidden-rank service. Gathers raw signals + credibility inputs, delegates ALL scoring to
- * [ClubRankPolicy], and stores the result. Reads the reputation ledger only through [LedgerReadPort]
- * (never a Trust type) — so the structural invariant *club-L3 ≠ average member-Trust* holds by
- * construction. Logs only counts, never scores (a score in logs is a breakdown leak, security.md).
+ * Сервис скрытого ранга L3. Собирает сырые сигналы + входы credibility, ВЕСЬ скоринг делегирует
+ * [ClubRankPolicy] и сохраняет результат. Леджер репутации читает только через [LedgerReadPort]
+ * (никогда через Trust-тип) — так структурный инвариант *L3 клуба ≠ средний Trust участников*
+ * выполняется по построению. Логирует только количества, никогда не очки (очко в логах —
+ * утечка расклада, см. security.md).
  */
 @Service
 class ClubRankService(
     private val clubRankRepository: ClubRankRepository,
     private val ledgerReadPort: LedgerReadPort,
+    // Deploy-флаг бейджа «★ Топ-5 в категории»: пока выключен — badgedAmong всегда пуст.
     @Value("\${club.rank.badge-enabled:false}") private val badgeEnabled: Boolean,
 ) {
 
     private val log = LoggerFactory.getLogger(ClubRankService::class.java)
 
-    /** Full recompute of every active club's rank (the scheduler's unit of work). */
+    /** Полный пересчёт ранга всех активных клубов (единица работы шедулера). */
     @Transactional
     fun recomputeAll() {
         val now = OffsetDateTime.now()
@@ -44,14 +46,15 @@ class ClubRankService(
     }
 
     /**
-     * Of the given clubs, which earn "★ Топ-5 в категории". Empty unless the deploy feature flag is on
-     * AND the global rank floor is met (both enforced in [ClubRankPolicy.topInCategory]). This is the
-     * ONLY thing the rank ever exposes — a boolean set, never a score.
+     * Какие из переданных клубов заслуживают «★ Топ-5 в категории». Пусто, пока не включён
+     * deploy-флаг И не пройден глобальный порог ранга (оба проверяются в
+     * [ClubRankPolicy.topInCategory]). Это ЕДИНСТВЕННОЕ, что ранг вообще наружу отдаёт —
+     * булево множество, никогда не очки.
      */
     @Transactional(readOnly = true)
     fun badgedAmong(clubIds: Collection<UUID>): Set<UUID> {
-        // Early-out avoids the ranked-clubs read on the common (flag-off / empty) path. The flag is the
-        // authority inside topInCategory too — the double-check is intentional defence-in-depth.
+        // Ранний выход экономит чтение ranked-клубов на частом пути (флаг выключен / пустой список).
+        // Флаг авторитетен и внутри topInCategory — двойная проверка намеренная, defence-in-depth.
         if (!badgeEnabled || clubIds.isEmpty()) return emptySet()
         val badged = ClubRankPolicy.topInCategory(clubRankRepository.findRankedClubs(), badgeEnabled)
         return badged.intersect(clubIds.toSet())

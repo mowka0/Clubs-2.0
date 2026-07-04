@@ -19,6 +19,7 @@ import { ImageLightbox } from '../components/ImageLightbox';
 import { OrganizerParticipantList } from '../components/skladchina/OrganizerParticipantList';
 import type { SkladchinaDetailDto, SkladchinaParticipantDto } from '../types/api';
 
+// Формат отображения дедлайна сбора: «5 июля, 18:30» (день + месяц + время, ru-RU).
 const DEADLINE_FMT = new Intl.DateTimeFormat('ru-RU', {
   day: 'numeric',
   month: 'long',
@@ -98,27 +99,27 @@ export const SkladchinaPage: FC = () => {
   const isFixed = s.paymentMode !== 'voluntary';
   const hasGoal = s.totalGoalKopecks != null && s.totalGoalKopecks > 0;
 
-  // A-5: people-progress is the headline metric; money is decoration below it.
+  // A-5: заглавная метрика — прогресс по людям; деньги — декоративная строка под ней.
   const peoplePercent = s.participantCount > 0
     ? Math.round((s.paidCount / s.participantCount) * 100)
     : 0;
-  // "Каждый сам" split (voluntary + goal): shares are uneven, so money toward the goal IS the
-  // meaningful signal — the bar fills by rubles and the headline leads with money instead of people.
+  // Сплит «Каждый сам» (voluntary + цель): доли неравные, поэтому осмысленный сигнал — именно деньги
+  // к цели: бар заполняется рублями, и в заголовке первыми идут деньги, а не люди.
   const moneyPercent = hasGoal
     ? Math.min(100, Math.round((s.collectedKopecks / s.totalGoalKopecks!) * 100))
     : 0;
   const useMoneyBar = s.paymentMode === 'voluntary' && hasGoal;
-  // #3: the last still-pending participant in a voluntary collection sees exactly what's left to
-  // the goal as a hint in the amount field, so they can close it in one payment.
+  // #3: последний ещё-pending участник voluntary-сбора видит в подсказке поля суммы ровно остаток
+  // до цели — и может закрыть сбор одним платежом.
   const remainingToGoalKopecks = hasGoal ? Math.max(0, s.totalGoalKopecks! - s.collectedKopecks) : 0;
   const isLastPending = s.paymentMode === 'voluntary' && hasGoal && s.myStatus === 'pending' && s.pendingCount === 1;
 
-  // A-1: fixed modes show a one-tap "Я оплатил {доля} ₽" — the server records the share.
+  // A-1: fixed-режимы показывают кнопку в один тап «Я оплатил {доля} ₽» — сервер записывает долю сам.
   const expectedRub = s.myExpectedAmountKopecks != null
     ? Math.floor(s.myExpectedAmountKopecks / 100)
     : null;
 
-  // A-2: which participant row is mid-mutation (disable its buttons).
+  // A-2: строка какого участника сейчас в процессе мутации (её кнопки дизейблим).
   const busyUserId = (
     orgMarkMut.isPending ? orgMarkMut.variables?.userId
     : orgUnmarkMut.isPending ? orgUnmarkMut.variables?.userId
@@ -134,7 +135,7 @@ export const SkladchinaPage: FC = () => {
 
   const handleMarkPaid = async () => {
     setActionError(null);
-    // A-1: fixed modes send no amount (server records the assigned share); voluntary parses input.
+    // A-1: fixed-режимы сумму не шлют (сервер записывает назначенную долю); voluntary парсит ввод.
     let declaredAmountKopecks: number | null = null;
     if (!isFixed) {
       const rub = Number(amountInput.trim());
@@ -194,7 +195,7 @@ export const SkladchinaPage: FC = () => {
     }
   };
 
-  // V28: approval templates (split_bill) open a reason form instead of an instant decline.
+  // V28: шаблоны с одобрением отказа (split_bill) открывают форму причины вместо мгновенного отказа.
   const handleDeclineClick = () => {
     setActionError(null);
     if (s.declineRequiresApproval) {
@@ -241,8 +242,8 @@ export const SkladchinaPage: FC = () => {
     }
   };
 
-  // Approve: a simple confirm. Reject (#7): the reason is collected by the row's inline form and
-  // passed here — the organizer must justify why the participant still owes.
+  // Approve: простой confirm. Reject (#7): причину собирает inline-форма в строке участника и передаёт
+  // сюда — организатор обязан обосновать, почему участник всё-таки должен оплатить.
   const handleResolveDecline = async (p: SkladchinaParticipantDto, approve: boolean, rejectReason?: string) => {
     if (approve) {
       const who = `${p.firstName}${p.lastName ? ` ${p.lastName}` : ''}`;
@@ -391,7 +392,7 @@ export const SkladchinaPage: FC = () => {
         <div className="rd-glass" style={{ padding: 16, marginBottom: 14 }}>
           <div className="rd-section-sub-h" style={{ marginTop: 0 }}>Подтвердите оплату</div>
 
-          {/* A-1: fixed modes — no amount field; voluntary keeps the input. */}
+          {/* A-1: в fixed-режимах поля суммы нет; voluntary сохраняет ввод. */}
           {!isFixed && (
             <div style={{ position: 'relative', marginBottom: 10 }}>
               <input
@@ -416,7 +417,7 @@ export const SkladchinaPage: FC = () => {
             </div>
           )}
 
-          {/* V28: decline-with-approval states */}
+          {/* V28: состояния отказа-с-одобрением */}
           {s.myDeclineRejected && (
             <div className="rd-warn-block" style={{ marginBottom: 10 }}>
               Запрос на отказ отклонён — нужно оплатить счёт.

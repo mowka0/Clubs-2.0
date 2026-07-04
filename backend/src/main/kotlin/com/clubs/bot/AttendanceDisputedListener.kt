@@ -9,11 +9,11 @@ import org.springframework.transaction.event.TransactionPhase
 import org.springframework.transaction.event.TransactionalEventListener
 
 /**
- * ATT-3 follow-up: when a participant disputes an "absent" mark, DM the organizer. Without this
- * nudge an organizer who never reopens the event page misses the dispute entirely, and the
- * window expiry converts it back to absent (no_show penalty) unreviewed. AFTER_COMMIT for the
- * same reason as AttendanceMarkedListener — the @Async DM reads committed rows. Best-effort:
- * delivery errors are swallowed inside sendDm, like every other DM.
+ * Продолжение ATT-3: когда участник оспаривает отметку «absent», шлём DM организатору. Без этого
+ * пинга организатор, который больше не открывает страницу события, вовсе пропустит спор, а
+ * истечение окна вернёт отметку в absent (штраф no_show) без разбора. AFTER_COMMIT по той же
+ * причине, что и в AttendanceMarkedListener — @Async-DM читает уже закоммиченные строки.
+ * Best-effort: ошибки доставки глотаются внутри sendDm, как и у всех остальных DM.
  */
 @Component
 class AttendanceDisputedListener(

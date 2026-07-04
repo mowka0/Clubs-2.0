@@ -20,10 +20,10 @@ data class EventResponse(
     val attendanceFinalized: Boolean,
     val createdAt: OffsetDateTime?,
     val updatedAt: OffsetDateTime?,
-    // F5-16: once the organizer resolves a dispute (or ATT-2 auto-resolves it on window
-    // expiry), the mark is terminal — disputeAttendance refuses to re-open it (ping-pong).
-    // Reset to false only when setAttendance writes a genuinely new mark.
+    // F5-16: как только организатор разрешил спор (или ATT-2 авторазрешил его по истечении
+    // окна), отметка становится терминальной — disputeAttendance отказывается снова её
+    // открыть (пинг-понг). Сброс в false — только когда setAttendance пишет реально новую отметку.
     val disputeTerminal: Boolean = false,
-    // F5-04: the participant's own free-text dispute note, surfaced via GET /my-attendance.
+    // F5-04: собственная свободная заметка участника к спору, отдаётся через GET /my-attendance.
     val disputeNote: String? = null
 )

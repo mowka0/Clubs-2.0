@@ -24,19 +24,22 @@ class JooqClubRepository(
 ) : ClubRepository {
 
     private companion object {
+        // Окно (дней) для сигнала «недавняя активность» при сортировке discovery-ленты
         const val ACTIVITY_WINDOW_DAYS = 90L
+        // Клуб моложе этого числа дней получает тег «Новый»
         const val NEW_CLUB_DAYS = 14L
+        // Минимальный размер выборки, при котором вообще считается порог тега «Популярный»
         const val POPULAR_MIN_CLUBS = 10
     }
 
     /**
-     * Live member count for display = distinct `memberships` rows that currently belong to the club —
-     * `active`, `frozen` (gated pending off-platform dues, still occupies a slot), or `grace_period` —
-     * INCLUDING the organizer's membership. Matches countActiveByClubId's slot-occupancy semantics.
-     * This is computed straight from `memberships`. The old denormalized `clubs.member_count`
-     * column was dropped (V33) after a scattered, incomplete set of increment/decrement call sites
-     * let it drift out of sync (e.g. a leave→rejoin→leave double-decremented it to 0 for a 2-person
-     * club). "Actual value from the DB" can never drift.
+     * Живой счётчик участников для отображения = distinct-строки `memberships`, сейчас принадлежащие
+     * клубу — `active`, `frozen` (доступ закрыт до оплаты офф-платформенных dues, но слот занят) или
+     * `grace_period` — ВКЛЮЧАЯ membership организатора. Совпадает с семантикой занятости слотов
+     * в countActiveByClubId. Считается напрямую из `memberships`. Старая денормализованная колонка
+     * `clubs.member_count` удалена (V33): разбросанный и неполный набор мест инкремента/декремента
+     * позволял ей рассинхронизироваться (например, leave→rejoin→leave дважды декрементировал её
+     * до 0 у клуба из 2 человек). «Фактическое значение из БД» дрейфовать не может.
      */
     private fun aliveMembers(): org.jooq.Condition =
         MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.frozen, MembershipStatus.grace_period)
@@ -56,7 +59,7 @@ class JooqClubRepository(
             .associate { it.value1()!! to it.value2() }
     }
 
-    /** Correlated live-count subquery, for ordering the discovery feed by real membership size. */
+    /** Коррелированный подзапрос живого счётчика — для сортировки discovery-ленты по реальному размеру клуба. */
     private fun liveMemberCountField(): Field<Int> =
         DSL.field(
             DSL.selectCount().from(MEMBERSHIPS)
@@ -193,14 +196,14 @@ class JooqClubRepository(
 
         val clubIds = clubs.map { it.id!! }
         val nearestEvents = fetchNearestEvents(clubIds)
-        // Live counts from `memberships` (active+grace, incl. organizer) — never the drift-prone column.
+        // Живые счётчики из `memberships` (active+grace, включая организатора) — не дрейфующая колонка.
         val liveCounts = countLiveMembersByClub(clubIds)
 
         val newThreshold = now.minusDays(NEW_CLUB_DAYS)
 
-        // "Популярный" = club is in the top member-count decile of this result set. The
-        // threshold > 0 guard stops a page of brand-new (zero-member) clubs from tagging
-        // everyone — the exact regression the retired all-zero activity_rating caused.
+        // «Популярный» = клуб попадает в верхний дециль этой выборки по числу участников.
+        // Guard threshold > 0 не даёт странице совсем новых (нулевых) клубов пометить всех подряд —
+        // ровно та регрессия, которую вызывал выведенный из строя всегда-нулевой activity_rating.
         val topMemberThreshold = if (clubs.size >= POPULAR_MIN_CLUBS) {
             clubs.map { liveCounts[it.id] ?: 0 }.sortedDescending()
                 .take(maxOf(1, clubs.size / 10))
@@ -243,9 +246,10 @@ class JooqClubRepository(
     }
 
     /**
-     * Recent-activity ordering signal: count of the club's non-cancelled events dated within the
-     * last [ACTIVITY_WINDOW_DAYS] or scheduled ahead. A correlated subquery so the sort runs in
-     * SQL before pagination. Derived replacement for the retired (permanently-0) `activity_rating`.
+     * Сигнал сортировки по недавней активности: число неотменённых событий клуба с датой в пределах
+     * последних [ACTIVITY_WINDOW_DAYS] или запланированных на будущее. Коррелированный подзапрос,
+     * чтобы сортировка выполнялась в SQL до пагинации. Производная замена выведенного из строя
+     * (вечно нулевого) `activity_rating`.
      */
     private fun recentActivity(windowStart: OffsetDateTime): Field<Int> =
         DSL.field(
@@ -262,7 +266,7 @@ class JooqClubRepository(
         if (clubIds.isEmpty()) return emptyMap()
         val now = OffsetDateTime.now()
 
-        // For each club get nearest upcoming event
+        // Для каждого клуба берём ближайшее предстоящее событие
         return clubIds.mapNotNull { clubId ->
             val event = dsl.selectFrom(EVENTS)
                 .where(
@@ -293,17 +297,17 @@ class JooqClubRepository(
     override fun update(id: UUID, request: UpdateClubRequest): Club? {
         val step = dsl.update(CLUBS).set(CLUBS.UPDATED_AT, OffsetDateTime.now())
 
-        // Required-in-DB fields: only touched when non-null (null = "leave as is"),
-        // empty string never makes sense for them — validation layer rejects.
+        // Обязательные в БД поля: трогаем только при non-null (null = «оставить как есть»),
+        // пустая строка для них не имеет смысла — слой валидации её отклоняет.
         request.name?.let { step.set(CLUBS.NAME, it) }
         request.description?.let { step.set(CLUBS.DESCRIPTION, it) }
         request.city?.let { step.set(CLUBS.CITY, it) }
         request.memberLimit?.let { step.set(CLUBS.MEMBER_LIMIT, it) }
         request.subscriptionPrice?.let { step.set(CLUBS.SUBSCRIPTION_PRICE, it) }
 
-        // Nullable-in-DB fields: null = "leave as is", blank string = "clear to NULL".
-        // This lets the frontend explicitly erase a field (delete avatar, clear rules, etc.)
-        // while the absent key in the JSON body still means "don't touch".
+        // Nullable в БД поля: null = «оставить как есть», пустая строка = «очистить в NULL».
+        // Так фронтенд может явно стереть поле (удалить аватар, очистить правила и т.д.),
+        // а отсутствующий ключ в JSON-теле по-прежнему означает «не трогать».
         request.district?.let { step.set(CLUBS.DISTRICT, it.ifBlank { null }) }
         request.avatarUrl?.let { step.set(CLUBS.AVATAR_URL, it.ifBlank { null }) }
         request.rules?.let { step.set(CLUBS.RULES, it.ifBlank { null }) }

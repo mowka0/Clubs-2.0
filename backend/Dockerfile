@@ -1,4 +1,4 @@
-# Stage 1: Build
+# Этап 1: сборка
 FROM gradle:8.12-jdk21 AS build
 WORKDIR /app
 COPY build.gradle.kts settings.gradle.kts ./
@@ -7,7 +7,7 @@ RUN gradle dependencies --no-daemon || true
 COPY src ./src
 RUN gradle bootJar --no-daemon -x generateJooq
 
-# Stage 2: Runtime
+# Этап 2: рантайм
 FROM eclipse-temurin:21-jre-alpine
 RUN apk add --no-cache curl
 WORKDIR /app

@@ -5,21 +5,21 @@ import { router } from './router';
 import { useThemeStore } from './store/useThemeStore';
 
 /**
- * App shell — owns theme application so dark/light stays in sync across both
- * our own CSS (via [data-theme] on <html>) and telegram-ui components
- * (via AppRoot `appearance`).
+ * Оболочка приложения — владеет применением темы, чтобы dark/light были синхронны
+ * и в нашем CSS (через [data-theme] на <html>), и в компонентах telegram-ui
+ * (через `appearance` у AppRoot).
  */
 export const App: FC = () => {
   const theme = useThemeStore((s) => s.theme);
   const mode = useThemeStore((s) => s.mode);
   const syncSystem = useThemeStore((s) => s.syncSystem);
 
-  // Reflect the active theme on the document root for our token system.
+  // Отражаем активную тему на корне документа — для нашей системы CSS-токенов.
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
-  // When following the host theme, react to OS/Telegram color-scheme changes.
+  // В режиме следования теме хоста реагируем на смену color-scheme ОС/Telegram.
   useEffect(() => {
     if (mode !== 'system' || typeof window.matchMedia !== 'function') return;
     const mq = window.matchMedia('(prefers-color-scheme: dark)');

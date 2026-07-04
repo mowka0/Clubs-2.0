@@ -12,27 +12,27 @@ export function initTelegramSdk(): void {
   if (initialized) return;
   try {
     init({ acceptCustomStyles: true });
-    initData.restore(); // Required in v3 to populate initDataRaw
+    initData.restore(); // Обязательно в v3, чтобы заполнить initDataRaw
     setupViewport();
     setupSwipeBehavior();
     initialized = true;
   } catch (_e) {
-    // Not running in Telegram environment — mock mode
+    // Не в среде Telegram — mock-режим
     initialized = true;
   }
 }
 
 /**
- * Mounts the viewport and expands the Mini App to full available height.
+ * Монтирует viewport и разворачивает Mini App на всю доступную высоту.
  *
- * `viewport.mount()` is async (resolves once the host reports its geometry);
- * expand runs after the mount promise to ensure the host accepts it. Each call
- * is guarded by `.isAvailable()` and isolated in its own catch so a failure here
- * never aborts SDK init or breaks the non-Telegram (local dev) fallback.
+ * `viewport.mount()` асинхронен (резолвится, когда хост сообщит свою геометрию);
+ * expand выполняется после промиса mount, чтобы гарантировать, что хост его принял.
+ * Каждый вызов защищён `.isAvailable()` и изолирован в своём catch, чтобы сбой здесь
+ * никогда не прерывал инициализацию SDK и не ломал fallback вне Telegram (локальная разработка).
  *
- * Note: `requestFullscreen()` exists for a more aggressive mode that covers the
- * Telegram header — intentionally not used here; we only want full height plus
- * swipe-to-minimize disabled.
+ * Примечание: есть `requestFullscreen()` для более агрессивного режима, перекрывающего
+ * шапку Telegram — намеренно не используется здесь; нужна только полная высота плюс
+ * отключённое сворачивание свайпом.
  */
 function setupViewport(): void {
   try {
@@ -43,23 +43,23 @@ function setupViewport(): void {
           if (viewport.expand.isAvailable()) viewport.expand();
         })
         .catch(() => {
-          // Mount rejected (host without viewport support) — leave default height
+          // Mount отклонён (хост без поддержки viewport) — оставляем высоту по умолчанию
         });
     } else if (viewport.expand.isAvailable()) {
       viewport.expand();
     }
   } catch (_e) {
-    // Viewport API unavailable — skip
+    // Viewport API недоступен — пропускаем
   }
 }
 
 /**
- * Mounts the swipe-behavior component and disables vertical swipes so that
- * scrolling page content no longer collapses/minimizes the Mini App. The app
- * can still be minimized by dragging the Telegram header.
+ * Монтирует компонент swipe-behavior и отключает вертикальные свайпы, чтобы прокрутка
+ * содержимого страницы больше не сворачивала/минимизировала Mini App. Приложение всё ещё
+ * можно свернуть, потянув за шапку Telegram.
  *
- * `swipeBehavior.mount()` is synchronous in v3; `disableVertical` requires the
- * component mounted, so it runs right after. Guarded and isolated like viewport.
+ * `swipeBehavior.mount()` синхронен в v3; `disableVertical` требует, чтобы компонент был
+ * смонтирован, поэтому выполняется сразу после. Защищён и изолирован так же, как viewport.
  */
 function setupSwipeBehavior(): void {
   try {
@@ -70,14 +70,14 @@ function setupSwipeBehavior(): void {
       swipeBehavior.disableVertical();
     }
   } catch (_e) {
-    // Swipe behavior unsupported (Mini Apps < 7.7) — scrolling stays default
+    // Swipe behavior не поддерживается (Mini Apps < 7.7) — прокрутка остаётся стандартной
   }
 }
 
 /**
- * Returns deep-link startapp parameter (Telegram's tgWebAppStartParam) if user
- * opened the Mini App through a t.me/bot/app?startapp=<value> link.
- * Used by DeepLinkHandler to navigate to e.g. /skladchina/<id>.
+ * Возвращает deep-link параметр startapp (tgWebAppStartParam из Telegram), если юзер
+ * открыл Mini App по ссылке t.me/bot/app?startapp=<value>.
+ * Используется DeepLinkHandler для перехода, например, на /skladchina/<id>.
  */
 export function getStartParam(): string | null {
   try {
@@ -86,7 +86,7 @@ export function getStartParam(): string | null {
       ?? (params as unknown as { tgWebAppStartParam?: string }).tgWebAppStartParam;
     if (raw && typeof raw === 'string' && raw.length > 0) return raw;
   } catch (_e) {
-    // Not in Telegram environment
+    // Не в среде Telegram
   }
   const fromNative = (window as unknown as { Telegram?: { WebApp?: { initDataUnsafe?: { start_param?: string } } } })
     ?.Telegram?.WebApp?.initDataUnsafe?.start_param;
@@ -95,24 +95,24 @@ export function getStartParam(): string | null {
 }
 
 export function getInitDataRaw(): string {
-  // v3: initData.raw() is a signal, call as function to get current value
+  // v3: initData.raw() — это signal, вызывать как функцию, чтобы получить текущее значение
   try {
     const raw = initData.raw();
     if (raw) return raw;
   } catch (_e) {
-    // Not in Telegram environment
+    // Не в среде Telegram
   }
 
-  // Fallback: retrieveLaunchParams
+  // Фолбэк: retrieveLaunchParams
   try {
     const params = retrieveLaunchParams();
     const raw = params.initDataRaw as string | undefined;
     if (raw) return raw;
   } catch (_e) {
-    // Not in Telegram environment
+    // Не в среде Telegram
   }
 
-  // Fallback to native Telegram WebApp API
+  // Фолбэк на нативный Telegram WebApp API
   const tgInitData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })
     ?.Telegram?.WebApp?.initData;
   if (tgInitData) return tgInitData;

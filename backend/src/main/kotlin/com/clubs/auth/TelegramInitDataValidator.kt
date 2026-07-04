@@ -36,9 +36,9 @@ class TelegramInitDataValidator(
             return false
         }
 
-        // Reject stale initData before spending CPU on HMAC — Telegram requires auth_date
-        // within AUTH_DATA_MAX_AGE_SECONDS of current time to prevent replay attacks
-        // (intercepted initData could otherwise be reused indefinitely).
+        // Отклоняем устаревший initData до траты CPU на HMAC — Telegram требует, чтобы auth_date
+        // был в пределах AUTH_DATA_MAX_AGE_SECONDS от текущего времени для защиты от replay-атак
+        // (иначе перехваченный initData можно было бы использовать повторно бесконечно).
         val authDate = params["auth_date"]?.toLongOrNull() ?: run {
             logger.warn("HMAC validation: 'auth_date' field missing or not a number, keys={}", params.keys)
             return false
@@ -95,10 +95,10 @@ class TelegramInitDataValidator(
         joinToString("") { "%02x".format(it) }
 
     companion object {
-        // Telegram Mini Apps security guideline: reject initData older than 5 minutes
-        // to prevent replay attacks with intercepted/logged initData payloads.
+        // Рекомендация безопасности Telegram Mini Apps: отклонять initData старше 5 минут,
+        // чтобы предотвратить replay-атаки с перехваченными/залогированными initData-пейлоадами.
         private const val AUTH_DATA_MAX_AGE_SECONDS = 300L
-        // Small tolerance for client/server clock skew (e.g. client ~30s fast).
+        // Небольшой допуск на рассинхронизацию часов клиента и сервера (например, клиент спешит на ~30с).
         private const val CLOCK_SKEW_TOLERANCE_SECONDS = 60L
     }
 }

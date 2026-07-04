@@ -11,10 +11,10 @@ import org.junit.jupiter.api.Test
 import java.time.OffsetDateTime
 
 /**
- * Unit test for the scheduler entry point. Verifies the cutoff is computed as
- * `now - COMPLETION_GRACE_HOURS` and delegated to the repository. The actual jOOQ
- * query semantics (which statuses/datetimes get updated) are covered by
- * [EventCompletionRepositoryTest] against a real Postgres.
+ * Unit-тест точки входа шедулера. Проверяет, что cutoff считается как
+ * `now - COMPLETION_GRACE_HOURS` и делегируется в репозиторий. Фактическая семантика
+ * jOOQ-запроса (какие статусы/даты обновляются) покрыта в
+ * [EventCompletionRepositoryTest] на реальном Postgres.
  */
 class EventCompletionServiceTest {
 

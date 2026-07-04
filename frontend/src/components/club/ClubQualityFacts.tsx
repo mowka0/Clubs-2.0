@@ -4,19 +4,19 @@ import { QualityRing } from './QualityRing';
 import { activityLevel, attendanceLevel, cohesionLevel } from './qualityLevels';
 import { ageBadge, counters } from './clubMilestones';
 
-/** Drops a trailing `.0` so 8.0 → "8" while 1.3 stays "1.3". */
+/** Убирает хвостовой `.0`: 8.0 → "8", а 1.3 остаётся "1.3". */
 function formatMeetings(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-/** Two-word ring label → forced two lines (break at the first space) for even, uniform height. */
+/** Двухсловная подпись кольца → принудительно две строки (перенос по первому пробелу) для ровной высоты. */
 function twoLineLabel(text: string): string {
   return text.replace(' ', '\n');
 }
 
 interface ClubQualityFactsProps {
   clubId: string;
-  /** Active members — denominator of the «Приходит» ring («N из M»). */
+  /** Активные участники — знаменатель кольца «Приходит» («N из M»). */
   memberCount: number;
 }
 

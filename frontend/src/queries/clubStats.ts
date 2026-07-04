@@ -10,7 +10,7 @@ export function useClubStatsQuery(clubId: string | undefined) {
   });
 }
 
-/** Win-back roster — fetched lazily (only when the nudge is expanded) via [enabled]. */
+/** Win-back ростер — грузится лениво (только когда nudge развёрнут) через [enabled]. */
 export function useChurnedMembersQuery(clubId: string | undefined, enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.clubs.churnedMembers(clubId ?? ''),

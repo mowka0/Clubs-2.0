@@ -3,8 +3,9 @@ export function formatPrice(price: number): string {
 }
 
 /**
- * Russian plural picker: `forms = [one, few, many]`, e.g. ['месяц','месяца','месяцев'].
- * (The same shape is inlined in a couple of older components — consolidate them here later.)
+ * Выбор русской формы множественного числа: `forms = [one, few, many]`, например
+ * ['месяц','месяца','месяцев']. (Такая же логика инлайнится в паре старых компонентов —
+ * позже стоит консолидировать их сюда.)
  */
 export function pluralRu(n: number, forms: [string, string, string]): string {
   const mod10 = n % 10;

@@ -14,15 +14,15 @@ export const queryKeys = {
     my: () => ['clubs', 'my'] as const,
     detail: (id: string) => ['clubs', 'detail', id] as const,
     byInvite: (code: string) => ['clubs', 'invite', code] as const,
-    // Prefix shared by the members list. TanStack invalidates by prefix, so
-    // leave / join / member-profile / access-gate mutations all use this.
+    // Общий префикс списка участников. TanStack инвалидирует по префиксу, поэтому
+    // мутации leave / join / member-profile / access-gate используют именно его.
     members: (clubId: string) => ['clubs', 'detail', clubId, 'members'] as const,
-    // De-Stars red-dot feed: count of members whose paid access ends within the week.
+    // De-Stars red-dot фид: число участников, чей платный доступ заканчивается в течение недели.
     memberAttention: (clubId: string) =>
       ['clubs', 'detail', clubId, 'member-attention'] as const,
     memberProfile: (clubId: string, userId: string) =>
       ['clubs', 'detail', clubId, 'members', userId] as const,
-    // Member admin S2 — distinct past awards in a club, autocomplete source for the grant form.
+    // Member admin S2 — distinct прошлых наград в клубе, источник автодополнения формы выдачи.
     awardSuggestions: (clubId: string) =>
       ['clubs', 'detail', clubId, 'award-suggestions'] as const,
     leavePreview: (clubId: string) => ['clubs', 'detail', clubId, 'leave-preview'] as const,
@@ -36,7 +36,7 @@ export const queryKeys = {
     churnedMembers: (clubId: string) => ['clubs', 'detail', clubId, 'churned-members'] as const,
     quality: (clubId: string) => ['clubs', 'detail', clubId, 'quality'] as const,
     organizerCard: (clubId: string) => ['clubs', 'detail', clubId, 'organizer-card'] as const,
-    /** Batched Discovery-card facts, keyed by the (sorted) set of club ids on screen. */
+    /** Батч фактов для Discovery-карточек, ключ — (отсортированный) набор id клубов на экране. */
     cardFacts: (sortedIds: string[]) => ['clubs', 'card-facts', sortedIds] as const,
   },
   events: {
@@ -51,11 +51,11 @@ export const queryKeys = {
   applications: {
     mine: () => ['applications', 'mine'] as const,
     myPending: ['applications', 'my-pending'] as const,
-    /** Cross-club organizer pending-inbox count (single endpoint). */
+    /** Кросс-клубовый счётчик pending-инбокса организатора (один эндпоинт). */
     myPendingActionCounts: ['applications', 'my-pending-action-counts'] as const,
   },
   organizer: {
-    /** Cross-club «Ждут оплаты»: frozen members across the caller's owned clubs. */
+    /** Кросс-клубовое «Ждут оплаты»: frozen-участники по всем клубам, которыми владеет вызывающий. */
     awaitingDues: ['organizer', 'awaiting-dues'] as const,
   },
   skladchinas: {
@@ -67,7 +67,7 @@ export const queryKeys = {
     eventState: (eventId: string) => ['skladchinas', 'event-state', eventId] as const,
   },
   activities: {
-    // Prefix used for invalidation across all filter variants of a club.
+    // Префикс для инвалидации всех фильтр-вариантов ленты клуба разом.
     byClubAll: (clubId: string) => ['activities', 'by-club', clubId] as const,
     byClub: (clubId: string, filters?: ClubActivitiesFilters) =>
       ['activities', 'by-club', clubId, filters ?? {}] as const,

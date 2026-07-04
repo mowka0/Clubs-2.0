@@ -1,6 +1,6 @@
 import { apiClient, ApiError } from './apiClient';
 
-/** Mirrors backend SubscriptionStatusDto. `status` is null on the implicit FREE plan; maxPaidClubs null = unlimited. */
+/** Зеркалит backend SubscriptionStatusDto. `status` равен null на неявном плане FREE; maxPaidClubs null = без ограничений. */
 export interface SubscriptionStatusDto {
   plan: string;
   status: string | null;
@@ -15,7 +15,7 @@ export interface PlanOptionDto {
   priceKopecks: number;
 }
 
-/** The 402 payload the backend returns when a paid club exceeds the plan ceiling. */
+/** Payload с кодом 402, который возвращает бэкенд, когда платный клуб превышает потолок плана. */
 export interface PaywallInfo {
   currentPlan: string;
   requiredPlan: string;
@@ -39,7 +39,7 @@ export function cancelSubscription(): Promise<SubscriptionStatusDto> {
   return apiClient.post<SubscriptionStatusDto>('/api/subscriptions/cancel');
 }
 
-/** Extracts the paywall payload from a 402 ApiError, or null if the error isn't a paywall. */
+/** Извлекает payload paywall из ApiError с кодом 402, либо null, если ошибка не про paywall. */
 export function paywallFromError(error: unknown): PaywallInfo | null {
   if (!(error instanceof ApiError) || error.status !== 402) return null;
   const body = error.body;

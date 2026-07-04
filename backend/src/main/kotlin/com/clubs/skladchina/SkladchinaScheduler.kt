@@ -13,9 +13,9 @@ class SkladchinaScheduler(
     private val log = LoggerFactory.getLogger(SkladchinaScheduler::class.java)
 
     /**
-     * Auto-close skladchinas whose deadline has passed. Runs every 10 minutes.
-     * Each closure goes through `closeInternal` so reputation hooks + DM are applied.
-     * Errors per-skladchina are logged but don't abort the batch.
+     * Автоматически закрывает складчины, у которых прошёл дедлайн. Запускается каждые 10 минут.
+     * Каждое закрытие проходит через `closeInternal`, чтобы применились хуки репутации + DM.
+     * Ошибки по отдельной складчине логируются, но не прерывают весь батч.
      */
     @Scheduled(fixedDelay = SCHEDULER_PERIOD_MS)
     fun autoCloseExpired() {
@@ -32,6 +32,6 @@ class SkladchinaScheduler(
     }
 
     companion object {
-        private const val SCHEDULER_PERIOD_MS = 600_000L  // 10 minutes
+        private const val SCHEDULER_PERIOD_MS = 600_000L  // 10 минут
     }
 }

@@ -1,27 +1,32 @@
 import { FC, ReactNode } from 'react';
 
+// Фиксированный размер viewBox SVG (масштабируется до реального размера через size).
 const VIEWBOX = 64;
+// Радиус дуги в координатах viewBox.
 const RADIUS = 26;
+// Толщина обводки по умолчанию, если strokeWidth не передан.
 const DEFAULT_STROKE = 6;
+// Длина окружности дуги — основа для strokeDasharray.
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 interface DonutRingProps {
-  /** Rendered diameter in px (the SVG scales from a fixed 64 viewBox). */
+  /** Отображаемый диаметр в px (SVG масштабируется от фиксированного viewBox 64). */
   size: number;
-  /** Arc fill as a fraction 0..1 (clamped). */
+  /** Заполнение дуги как доля 0..1 (обрезается по границам). */
   fraction: number;
-  /** Arc stroke color — pass a CSS variable, e.g. `var(--accent)`. */
+  /** Цвет обводки дуги — передавайте CSS-переменную, например `var(--accent)`. */
   color: string;
-  /** Center content: number, fraction, sub-label. */
+  /** Контент по центру: число, доля, подпись. */
   children: ReactNode;
   strokeWidth?: number;
   ariaLabel?: string;
 }
 
 /**
- * A presentational SVG donut ring with arbitrary centered content. Shared by the per-club
- * member card (Надёжность + Посещаемость) and the application card (надёжен в N из M клубов).
- * Pure: no data fetching, no domain knowledge — the caller decides fraction, color and label.
+ * Презентационное SVG-кольцо-donut с произвольным контентом по центру. Используется совместно
+ * карточкой участника клуба (Надёжность + Посещаемость) и карточкой заявки (надёжен в N из M клубов).
+ * Чистый компонент: без загрузки данных, без доменного знания — вызывающий сам решает fraction,
+ * цвет и подпись.
  */
 export const DonutRing: FC<DonutRingProps> = ({
   size,

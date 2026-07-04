@@ -27,15 +27,16 @@ class NotificationService(
 ) {
 
     private val log = LoggerFactory.getLogger(NotificationService::class.java)
-    // Event datetimes are stored UTC; a DM can't know the reader's device TZ, so render in
-    // Moscow time with an explicit label (raw UTC read 3h off for the core RU audience —
-    // the app shows device-local time, and the mismatch looked like a wrong event time).
+    // Дата-время события хранится в UTC; DM не знает часовой пояс устройства читателя,
+    // поэтому рендерим в московском времени с явной пометкой (сырой UTC для основной
+    // русскоязычной аудитории расходится на 3 часа — в приложении время локальное для
+    // устройства, и расхождение выглядело как неверное время события).
     private val fmt = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm 'МСК'")
         .withZone(ZoneId.of("Europe/Moscow"))
 
     /**
-     * Notify club members when a new event is created.
-     * Sends a message to each active member's DM with a link to the Mini App.
+     * Уведомляет участников клуба о создании нового события.
+     * Отправляет сообщение в личку каждому активному участнику со ссылкой на Mini App.
      */
     @Async
     fun sendEventCreated(event: Event) {
@@ -47,8 +48,8 @@ class NotificationService(
         log.info("Event-created DM: eventId={} clubId={} recipients={}", event.id, event.clubId, memberTelegramIds.size)
         val dateStr = event.eventDatetime.format(fmt)
         val text = "🆕 Новое событие в клубе!\n\n📌 ${event.title}\n📍 ${event.locationText}\n🗓 $dateStr\n👥 Лимит: ${event.participantLimit}\n\nГолосуйте в приложении:"
-        // Deep-link straight to the event page so the button opens voting, not the
-        // generic app home. React Router renders EventPage at /events/:id.
+        // Диплинк сразу на страницу события, чтобы кнопка открывала голосование, а не
+        // общую домашнюю страницу приложения. React Router рендерит EventPage на /events/:id.
         val webAppPath = "/events/${event.id}"
 
         memberTelegramIds.forEach { telegramId ->
@@ -57,8 +58,9 @@ class NotificationService(
     }
 
     /**
-     * Notify going/maybe voters when Stage 2 starts, asking them to confirm (PRD §4.4.2 step 1).
-     * not_going voters are excluded — they have nothing to confirm (GAP-009).
+     * Уведомляет проголосовавших "иду"/"возможно" о начале Этапа 2, с просьбой подтвердить
+     * участие (PRD §4.4.2 шаг 1). Проголосовавшие "не иду" исключены — им нечего подтверждать
+     * (GAP-009).
      */
     @Async
     fun sendStage2Started(event: Event) {
@@ -78,8 +80,9 @@ class NotificationService(
 
 
     /**
-     * F5-14: DM interested voters (going/maybe — same audience as Stage 2) that the event is
-     * cancelled, with the optional organizer reason. Best-effort, like every other DM.
+     * F5-14: уведомляет заинтересованных проголосовавших (иду/возможно — та же аудитория,
+     * что и для Этапа 2) об отмене события, с опциональной причиной от организатора.
+     * Best-effort, как и все остальные DM.
      */
     @Async
     fun sendEventCancelled(event: Event, reason: String?) {
@@ -98,8 +101,8 @@ class NotificationService(
     }
 
     /**
-     * Feature A reminder (~2h before the event): nudge going/maybe voters who have NOT
-     * confirmed yet to confirm before the window closes at event start.
+     * Напоминание Feature A (~за 2ч до события): подталкивает проголосовавших "иду"/"возможно",
+     * кто ещё не подтвердил участие, сделать это до закрытия окна в момент начала события.
      */
     @Async
     fun sendConfirmReminder(event: Event) {
@@ -116,8 +119,8 @@ class NotificationService(
     }
 
     /**
-     * Feature B reminder (~24h after the event): nudge the organizer to mark attendance.
-     * Until they mark it, reputation is never finalized for the event (see events.md, EXP-2).
+     * Напоминание Feature B (~через 24ч после события): подталкивает организатора отметить явку.
+     * Пока он это не сделает, репутация по событию не финализируется (см. events.md, EXP-2).
      */
     @Async
     fun sendAttendanceReminder(event: Event, organizerTelegramId: Long) {
@@ -128,16 +131,17 @@ class NotificationService(
     }
 
     /**
-     * Notify the participants who NEWLY became absent in this mark, offering the dispute option.
-     * Recipients are passed in (F5-15.2) rather than re-queried by attendance=absent, so a re-mark
-     * does not re-DM participants already marked absent on a previous mark.
+     * Уведомляет участников, которые ТОЛЬКО ЧТО стали "отсутствовал" в этой отметке, предлагая
+     * оспорить. Получатели передаются явно (F5-15.2), а не выбираются повторным запросом по
+     * attendance=absent, чтобы повторная отметка не рассылала DM участникам, уже отмеченным
+     * отсутствующими в предыдущий раз.
      */
     @Async
     fun sendAttendanceMarked(eventId: UUID, newlyAbsentUserIds: List<UUID>) {
         if (newlyAbsentUserIds.isEmpty()) return
         val absentTelegramIds = eventResponseRepository.findTelegramIdsByEventAndUserIds(eventId, newlyAbsentUserIds)
         val text = "📋 Организатор отметил присутствие на событии.\n\nВас отметили как отсутствующего. Если это ошибка — оспорьте на странице события:"
-        // Deep-link straight to the event page so the dispute button is one tap away (ATT-3).
+        // Диплинк сразу на страницу события, чтобы кнопка оспаривания была в один тап (ATT-3).
         val webAppPath = "/events/$eventId"
 
         absentTelegramIds.forEach { telegramId ->
@@ -146,8 +150,8 @@ class NotificationService(
     }
 
     /**
-     * ATT-3: a participant disputed their "absent" mark — the organizer must resolve it before
-     * the dispute window closes, otherwise the original mark stands and the penalty lands.
+     * ATT-3: участник оспорил отметку "не пришёл" — организатор должен разрешить спор до
+     * закрытия окна оспаривания, иначе исходная отметка останется в силе и штраф применится.
      */
     @Async
     fun sendAttendanceDisputed(event: Event, organizerTelegramId: Long, disputerName: String) {
@@ -162,9 +166,10 @@ class NotificationService(
     }
 
     /**
-     * Notify a paid club's organizer that a member declared their off-platform dues (de-Stars) and is
-     * waiting to be admitted. Best-effort fire-and-forget like the other DMs; deep-links to «Мои клубы»
-     * where the «Ждут оплаты» list lets the organizer confirm or reject.
+     * Уведомляет организатора платного клуба о том, что участник заявил об оплате взноса
+     * вне платформы (de-Stars) и ждёт подтверждения. Best-effort fire-and-forget как и другие
+     * DM; диплинк на «Мои клубы», где список «Ждут оплаты» даёт организатору подтвердить
+     * или отклонить.
      */
     @Async
     fun sendDuesClaimedDM(organizerTelegramId: Long, memberDisplayName: String, clubName: String, method: String) {
@@ -179,10 +184,10 @@ class NotificationService(
     }
 
     /**
-     * Notify a club organizer that a new application has been submitted.
-     * Fire-and-forget: any Telegram error is logged in [sendDm] but does NOT
-     * propagate to the caller (so the originating DB transaction is never
-     * rolled back). Spring proxies @Async, so the call returns immediately.
+     * Уведомляет организатора клуба о том, что подана новая заявка.
+     * Fire-and-forget: любая ошибка Telegram логируется в [sendDm], но НЕ
+     * пробрасывается вызывающему коду (поэтому исходная транзакция БД никогда
+     * не откатывается). Spring проксирует @Async, поэтому вызов возвращается сразу.
      */
     @Async
     fun sendApplicationCreatedDM(
@@ -200,10 +205,10 @@ class NotificationService(
     }
 
     /**
-     * Notify an applicant that the organizer approved their join application. For a PAID club the
-     * approval lands them in `frozen` — the DM nudges them to pay the dues to unlock access; for a FREE
-     * club they're already in, so it's a plain welcome. Best-effort fire-and-forget; deep-links to the
-     * club page (where a frozen member taps «Оплатить взнос»).
+     * Уведомляет заявителя о том, что организатор одобрил его заявку на вступление. Для ПЛАТНОГО
+     * клуба одобрение переводит его в `frozen` — DM подталкивает оплатить взнос, чтобы открыть
+     * доступ; для БЕСПЛАТНОГО клуба он уже внутри, поэтому это просто приветствие. Best-effort
+     * fire-and-forget; диплинк на страницу клуба (где frozen-участник нажимает «Оплатить взнос»).
      */
     @Async
     fun sendApplicationApprovedDM(applicantTelegramId: Long, clubName: String, clubId: UUID, paid: Boolean) {
@@ -220,9 +225,10 @@ class NotificationService(
     }
 
     /**
-     * Best-effort DM to a paid member whose access the organizer just closed («Закрыть доступ» → frozen).
-     * Deep-links to the club page, where the frozen member taps «Оплатить взнос» to declare payment and
-     * regain access. Fire-and-forget — never blocks the freeze action.
+     * Best-effort DM платному участнику, которому организатор только что закрыл доступ
+     * («Закрыть доступ» → frozen). Диплинк на страницу клуба, где frozen-участник нажимает
+     * «Оплатить взнос», чтобы заявить об оплате и вернуть доступ. Fire-and-forget — никогда
+     * не блокирует действие заморозки.
      */
     @Async
     fun sendAccessFrozenDM(memberTelegramId: Long, clubName: String, clubId: UUID) {
@@ -231,14 +237,14 @@ class NotificationService(
     }
 
     /**
-     * DM with a deep-link inline button that opens the Mini App on a specific
-     * route. [webAppPath] is path-prefixed-with-slash, e.g. "/skladchina/<id>"
-     * or "/events/<id>". Frontend's React Router renders the matching page
-     * directly — no DeepLinkHandler hop needed.
+     * DM с инлайн-кнопкой-диплинком, открывающей Mini App на конкретном
+     * route. [webAppPath] — путь с префиксом-слэшем, например "/skladchina/<id>"
+     * или "/events/<id>". React Router фронтенда рендерит нужную страницу
+     * напрямую — переход через DeepLinkHandler не нужен.
      *
-     * Implementation note: button uses WebAppInfo (not t.me URL) because
-     * Telegram blocks self-bot t.me links inside DMs with that same bot
-     * (cyclic interaction). WebAppInfo opens the Mini App reliably.
+     * Замечание по реализации: кнопка использует WebAppInfo (не t.me URL), потому что
+     * Telegram блокирует self-bot t.me-ссылки внутри DM с тем же самым ботом
+     * (циклическое взаимодействие). WebAppInfo надёжно открывает Mini App.
      */
     fun sendDirectMessageWithDeepLink(
         telegramId: Long,
@@ -269,7 +275,7 @@ class NotificationService(
         } catch (e: Exception) {
             log.error("Failed to send DM with inline button to chat {}: {} ({})", chatId, e.message, e.javaClass.simpleName, e)
         }
-        // Fallback — plain text без inline button.
+        // Fallback — обычный текст без inline-кнопки.
         try {
             val msg = SendMessage.builder().chatId(chatId).text(text).build()
             telegramClient.execute(msg)
@@ -280,8 +286,8 @@ class NotificationService(
     }
 
     private fun buildKeyboard(buttonText: String, webAppPath: String?): InlineKeyboardMarkup {
-        // WebApp button with frontend URL — открывает Mini App напрямую на нужном
-        // route (через React Router). t.me/<bot>/... URL button НЕ используется,
+        // WebApp-кнопка с URL фронтенда — открывает Mini App напрямую на нужном
+        // route (через React Router). URL-кнопка вида t.me/<bot>/... НЕ используется,
         // потому что Telegram блокирует self-bot ссылки внутри DM с этим же ботом.
         val url = if (webAppPath != null) "$webAppBaseUrl$webAppPath" else webAppBaseUrl
         val button = InlineKeyboardButton.builder()
@@ -292,6 +298,7 @@ class NotificationService(
     }
 
     companion object {
+        // Текст кнопки по умолчанию для DM без явно заданного текста кнопки
         private const val DEFAULT_BUTTON_TEXT = "📱 Открыть Clubs"
     }
 }

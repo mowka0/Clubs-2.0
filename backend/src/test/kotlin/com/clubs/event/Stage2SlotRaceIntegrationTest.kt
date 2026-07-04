@@ -21,14 +21,14 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * S2-01/F5-07 + F5-11 against a real Postgres: the per-event advisory lock
- * ([EventResponseRepository.lockEventSlots]) must serialize Stage 2 slot mutations.
- * Without it, concurrent confirms on the last slot both pass the capacity check
- * (overbooking), and concurrent declines both promote the same waitlisted user
- * (a freed slot is lost forever). Threads call the @Transactional service through
- * the Spring proxy, so every call runs in its own transaction — the real race.
+ * S2-01/F5-07 + F5-11 на реальном Postgres: advisory lock на событие
+ * ([EventResponseRepository.lockEventSlots]) обязан сериализовать мутации слотов Этапа 2.
+ * Без него конкурирующие confirm'ы на последний слот оба проходят проверку вместимости
+ * (овербукинг), а конкурирующие decline'ы оба продвигают одного и того же waitlist-юзера
+ * (освободившийся слот теряется навсегда). Потоки зовут @Transactional-сервис через
+ * Spring-прокси, поэтому каждый вызов идёт в своей транзакции — гонка настоящая.
  *
- * Also covers GAP-009: the Stage-2-started DM targets only going/maybe voters.
+ * Также покрывает GAP-009: DM о старте Этапа 2 адресуется только голосовавшим going/maybe.
  */
 @SpringBootTest(
     properties = [
@@ -125,8 +125,8 @@ class Stage2SlotRaceIntegrationTest {
             )
         )
 
-        // Two freed slots → BOTH waitlisted users get promoted. The unserialized race
-        // promotes C twice and strands D, losing a slot.
+        // Два освободившихся слота → продвигаются ОБА waitlist-юзера. Несериализованная гонка
+        // продвигает C дважды и бросает D в очереди — слот теряется.
         assertEquals(2, eventResponseRepository.countConfirmed(eventId))
         assertEquals("confirmed", stage2VoteOf(eventId, waitlistedC))
         assertEquals("confirmed", stage2VoteOf(eventId, waitlistedD))
@@ -148,9 +148,9 @@ class Stage2SlotRaceIntegrationTest {
         assertEquals(setOf(telegramIdOf(going), telegramIdOf(maybe)), targets.toSet())
     }
 
-    // ---- helpers ----
+    // ---- хелперы ----
 
-    /** Runs all actions as simultaneously as the scheduler allows and rethrows any failure. */
+    /** Запускает все действия максимально одновременно (насколько позволит планировщик) и пробрасывает падения. */
     private fun runConcurrently(actions: List<() -> Unit>) {
         val startGate = CountDownLatch(1)
         val futures = actions.map { action ->
@@ -162,7 +162,7 @@ class Stage2SlotRaceIntegrationTest {
         startGate.countDown()
         executor.shutdown()
         assertTrue(executor.awaitTermination(30, TimeUnit.SECONDS), "Concurrent calls timed out")
-        futures.forEach { it.get() } // surfaces exceptions from the racing threads
+        futures.forEach { it.get() } // поднимает исключения из гоняющихся потоков
     }
 
     private fun newUser(): UUID {
@@ -189,7 +189,7 @@ class Stage2SlotRaceIntegrationTest {
         return id
     }
 
-    /** stage_1_timestamp is staggered via [minutesAgo] so the waitlist FIFO order is deterministic. */
+    /** stage_1_timestamp разносится через [minutesAgo], чтобы FIFO-порядок waitlist был детерминированным. */
     private fun insertGoingResponse(eventId: UUID, userId: UUID, minutesAgo: Long, stage2: String? = null) {
         if (stage2 == null) {
             dsl.execute(

@@ -7,14 +7,14 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * Projection of MEMBERSHIPS x USERS x USER_CLUB_REPUTATION used by the club
- * members list. Lives in the membership module because it is built around a
- * membership row plus joined user/reputation fields.
+ * Проекция MEMBERSHIPS x USERS x USER_CLUB_REPUTATION, используемая списком участников
+ * клуба. Живёт в модуле membership, потому что строится вокруг строки membership с
+ * присоединёнными полями user/reputation.
  *
- * [status] + [subscriptionExpiresAt] drive the organizer dashboard buckets
- * (de-Stars Slice 2): `frozen` → «Ждут оплаты», `active` with expiry within a
- * week → «Скоро закончится», otherwise «Активные». They are raw here; the mapper
- * only exposes them to the organizer.
+ * [status] + [subscriptionExpiresAt] управляют бакетами дашборда организатора
+ * (de-Stars Slice 2): `frozen` → «Ждут оплаты», `active` с истечением в пределах
+ * недели → «Скоро закончится», иначе «Активные». Здесь они сырые; наружу организатору
+ * их отдаёт только mapper.
  */
 data class ClubMemberInfo(
     val userId: UUID,
@@ -23,18 +23,20 @@ data class ClubMemberInfo(
     val avatarUrl: String?,
     val role: MembershipRole,
     val joinedAt: OffsetDateTime,
-    // Raw cache sibling (nullable when no reputation row); the "Новичок" threshold (outcomeCount)
-    // is applied by the mapper. P1b shows Trust (computed in MemberService), not the raw index.
+    // Сырой сосед из кэша (nullable, если нет строки репутации); порог «Новичок» (outcomeCount)
+    // применяет mapper. P1b показывает Trust (считается в MemberService), а не сырой индекс.
     val promiseFulfillmentPct: BigDecimal?,
-    // Stage-2 confirmations to date. Distinguishes a finance-only member (0 confirmations → no
-    // attendance track) from a no-show (confirmations > 0, 0% fulfillment) so the list hides the
-    // misleading "Обещания 0%" for the former — parity with ProfilePage's hasActivity (F5-08).
+    // Подтверждения Stage-2 на текущий момент. Отличает участника только-по-финансам (0
+    // подтверждений → нет трека посещаемости) от no-show (подтверждений > 0, 0% выполнения),
+    // чтобы список скрывал вводящее в заблуждение «Обещания 0%» для первого — паритет с
+    // hasActivity на ProfilePage (F5-08).
     val totalConfirmations: Int?,
     val outcomeCount: Int,
     val status: MembershipStatus,
     val subscriptionExpiresAt: OffsetDateTime?,
-    // Member's dues claim (de-Stars): when they declared payment (null = none) + method ("sbp"|"cash").
-    // Exposed to the organizer only (mapper-gated) so the «Ждут оплаты» bucket can flag «оплата заявлена».
+    // Заявка участника об оплате взноса (de-Stars): когда он задекларировал оплату (null = не было)
+    // + способ ("sbp"|"cash"). Открывается только организатору (фильтруется в mapper), чтобы бакет
+    // «Ждут оплаты» мог пометить «оплата заявлена».
     val duesClaimedAt: OffsetDateTime? = null,
     val duesClaimMethod: String? = null
 )

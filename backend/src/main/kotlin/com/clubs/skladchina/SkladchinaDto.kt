@@ -17,19 +17,19 @@ data class CreateSkladchinaRequest(
     val rules: String? = null,
     val photoUrl: String? = null,
 
-    // Selects the template strategy. Default "custom" = the Phase A behaviour.
+    // Выбирает стратегию шаблона. По умолчанию "custom" = поведение Фазы A.
     val template: String = "custom",               // "custom" | "split_bill" | "gear" | "booking" | "birthday"
-    // split_bill: the source event whose bill is being split. Ignored by other templates.
+    // split_bill: исходное событие, чей счёт делится. Игнорируется другими шаблонами.
     val eventId: UUID? = null,
-    // split_bill: drop the organizer from the attendees being charged (they don't owe a share).
-    // Equal mode then divides the bill across the remaining attendees. Ignored by other templates.
+    // split_bill: исключить организатора из числа участников, с которых берут деньги (он не должен долю).
+    // Режим "поровну" затем делит счёт между оставшимися участниками. Игнорируется другими шаблонами.
     val excludeSelf: Boolean = false,
 
     @field:NotNull
     val paymentMode: String,                       // "fixed_equal" | "fixed_individual" | "voluntary"
 
     @field:Positive
-    val totalGoalKopecks: Long? = null,            // fixed_equal goal; split_bill: the bill total
+    val totalGoalKopecks: Long? = null,            // цель для fixed_equal; для split_bill: сумма счёта
 
     @field:NotBlank @field:Size(max = 1000)
     val paymentLink: String,
@@ -41,8 +41,8 @@ data class CreateSkladchinaRequest(
 
     val affectsReputation: Boolean = false,
 
-    // Required for custom/fixed modes; ignored by split_bill (participants come from attendance).
-    // Per-template validation lives in the strategy, not the DTO.
+    // Обязательно для режимов custom/fixed; игнорируется в split_bill (участники берутся из посещаемости).
+    // Валидация по конкретному шаблону живёт в стратегии, а не в DTO.
     @field:Valid
     val participants: List<CreateSkladchinaParticipantRequest> = emptyList()
 )
@@ -51,25 +51,25 @@ data class CreateSkladchinaParticipantRequest(
     @field:NotNull
     val userId: UUID,
     @field:Positive
-    val expectedAmountKopecks: Long? = null        // required for fixed_individual
+    val expectedAmountKopecks: Long? = null        // обязателен для fixed_individual
 )
 
 data class MarkPaidRequest(
-    // Nullable since Phase A (A-1): in fixed modes the server records the assigned
-    // share and the client sends nothing. Required only for voluntary (validated in
-    // the service, per-mode). @Positive applies only when present.
+    // Nullable начиная с Фазы A (A-1): в fixed-режимах сервер сам записывает назначенную
+    // долю, и клиент ничего не присылает. Обязателен только для voluntary (валидируется
+    // в сервисе, по режиму). @Positive применяется только когда значение присутствует.
     @field:Positive
     val declaredAmountKopecks: Long? = null
 )
 
-// V28: a participant's decline request (REQUIRES_APPROVAL templates) — reason is mandatory.
+// V28: запрос участника на отказ (шаблоны REQUIRES_APPROVAL) — причина обязательна.
 data class RequestDeclineRequest(
     @field:NotBlank @field:Size(max = 500)
     val reason: String
 )
 
-// V28/V29: organizer resolves a decline request. Rejecting (approve=false) requires a reason
-// (why the participant must still pay) — validated in the service, since it's conditional on approve.
+// V28/V29: организатор разрешает запрос на отказ. Отклонение (approve=false) требует причины
+// (почему участник всё же должен заплатить) — валидируется в сервисе, т.к. условно от approve.
 data class ResolveDeclineRequest(
     @field:NotNull
     val approve: Boolean,
@@ -90,7 +90,7 @@ data class SkladchinaDetailDto(
     val photoUrl: String?,
 
     val template: String,                          // custom | split_bill | gear | booking | birthday
-    val eventId: UUID?,                            // split_bill: source event (else null)
+    val eventId: UUID?,                            // split_bill: исходное событие (иначе null)
     val paymentMode: String,
     val totalGoalKopecks: Long?,
     val collectedKopecks: Long,
@@ -102,25 +102,25 @@ data class SkladchinaDetailDto(
     val status: String,
     val closedAt: OffsetDateTime?,
 
-    val isOrganizerView: Boolean,                  // caller == creator
-    val myStatus: String?,                         // pending|paid|declined|expired_no_response|released or null
+    val isOrganizerView: Boolean,                  // вызывающий == создатель
+    val myStatus: String?,                         // pending|paid|declined|expired_no_response|released или null
     val myExpectedAmountKopecks: Long?,
     val myDeclaredAmountKopecks: Long?,
 
-    // V28 decline-with-approval
-    val declineRequiresApproval: Boolean,          // template policy — frontend uses the request flow
-    val myDeclineRequested: Boolean,               // caller has an open decline request awaiting the organizer
-    val myDeclineRejected: Boolean,                // caller's decline was rejected — must pay
-    val myDeclineRejectNote: String?,              // V29: organizer's reason for rejecting the caller's decline
+    // V28 отказ-с-подтверждением
+    val declineRequiresApproval: Boolean,          // политика шаблона — фронтенд использует флоу запроса
+    val myDeclineRequested: Boolean,               // у вызывающего открытый запрос на отказ, ждёт организатора
+    val myDeclineRejected: Boolean,                // отказ вызывающего отклонён — должен заплатить
+    val myDeclineRejectNote: String?,              // V29: причина организатора для отклонения отказа
 
-    val participants: List<SkladchinaParticipantDto>?,   // non-null ONLY for organizer
+    val participants: List<SkladchinaParticipantDto>?,   // не-null ТОЛЬКО для организатора
     val participantCount: Int,
     val paidCount: Int,
-    val pendingCount: Int                          // #3: visible to all, so the last pending sees what's left
+    val pendingCount: Int                          // #3: видно всем, чтобы последний pending видел, что осталось
 )
 
-// State of the split linked to an event — drives the EventPage "Разделить счёт" button.
-// Both null = no split yet (button creates). status active → open it; closed_success → already collected.
+// Состояние сплита, привязанного к событию — управляет кнопкой "Разделить счёт" на EventPage.
+// Оба null = сплита ещё нет (кнопка создаёт). status active → открыть его; closed_success → уже собрано.
 data class EventSplitStateDto(
     val skladchinaId: UUID?,
     val status: String?
@@ -135,11 +135,11 @@ data class SkladchinaParticipantDto(
     val declaredAmountKopecks: Long?,
     val status: String,
     val paidAt: OffsetDateTime?,
-    // V28: open decline request (organizer view) — show the note + approve/reject controls.
+    // V28: открытый запрос на отказ (вид организатора) — показать заметку + кнопки approve/reject.
     val declineRequested: Boolean,
     val declineNote: String?,
     val declineRejected: Boolean,
-    val declineRejectNote: String?                 // V29: organizer's reason if the decline was rejected
+    val declineRejectNote: String?                 // V29: причина организатора, если отказ отклонён
 )
 
 data class MySkladchinaListItemDto(

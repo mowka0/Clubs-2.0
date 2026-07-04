@@ -20,7 +20,7 @@ class UserRepository(private val dsl: DSLContext) {
             .where(USERS.ID.eq(id))
             .fetchOne()
 
-    /** Updates only the user-editable profile scalars; TG-synced fields untouched. */
+    /** Обновляет только редактируемые пользователем скаляры профиля; синхронизируемые из TG поля не трогает. */
     fun updateProfileFields(userId: UUID, country: String?, city: String?, bio: String?) {
         dsl.update(USERS)
             .set(USERS.COUNTRY, country)
@@ -31,7 +31,7 @@ class UserRepository(private val dsl: DSLContext) {
             .execute()
     }
 
-    /** Batch lookup of users by IDs (active or not — caller decides). Empty input → empty output (no SQL hit). */
+    /** Батч-поиск пользователей по ID (активность решает вызывающий). Пустой вход → пустой выход (без SQL). */
     fun findByIds(ids: Collection<UUID>): List<UsersRecord> {
         if (ids.isEmpty()) return emptyList()
         return dsl.selectFrom(USERS)
@@ -39,7 +39,7 @@ class UserRepository(private val dsl: DSLContext) {
             .fetch()
     }
 
-    /** Returns Telegram chat IDs for given user IDs, in arbitrary order. Used by NotificationService for batch DMs. */
+    /** Telegram chat ID для заданных user ID, в произвольном порядке. Нужен NotificationService для батч-DM. */
     fun findTelegramIds(userIds: Collection<UUID>): List<Long> {
         if (userIds.isEmpty()) return emptyList()
         return dsl.select(USERS.TELEGRAM_ID)

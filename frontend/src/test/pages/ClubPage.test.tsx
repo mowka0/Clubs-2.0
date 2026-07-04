@@ -8,7 +8,7 @@ import { mockClubDetail } from '../mocks/handlers';
 import { renderWithProviders } from '../utils/renderWithProviders';
 import type { ClubDetailDto, MembershipDto } from '../../types/api';
 
-// Mock Telegram SDK
+// Мок Telegram SDK
 vi.mock('@telegram-apps/sdk-react', () => ({
   retrieveLaunchParams: () => ({ initDataRaw: 'test' }),
   init: vi.fn(),
@@ -23,16 +23,16 @@ vi.mock('@telegram-apps/sdk-react', () => ({
   hapticFeedbackSelectionChanged: Object.assign(vi.fn(), { isAvailable: () => false }),
 }));
 
-// Mock Telegram UI
+// Мок Telegram UI
 vi.mock('@telegram-apps/telegram-ui', () => import('../mocks/telegramUi'));
 
-// Mock the telegram sdk module
+// Мок нашего модуля telegram/sdk
 vi.mock('../../telegram/sdk', () => ({
   initTelegramSdk: vi.fn(),
   getInitDataRaw: () => 'test-init-data',
 }));
 
-// Import after mocks
+// Импорт после моков
 import { ClubPage } from '../../pages/ClubPage';
 import { useAuthStore } from '../../store/useAuthStore';
 
@@ -52,7 +52,7 @@ function renderClubPage(clubId: string = 'club-123') {
   return { ...result, user };
 }
 
-// Helpers for member/organizer scenarios — keep tab data endpoints empty by default.
+// Хелперы для сценариев участника/организатора — по умолчанию эндпоинты данных табов отдают пусто.
 function mockEmptyTabData(clubId: string = 'club-123') {
   server.use(
     http.get(`*/api/clubs/${clubId}/activities`, () => HttpResponse.json({
@@ -262,8 +262,8 @@ describe('ClubPage', () => {
 
     renderClubPage();
 
-    // De-Stars: no Stars invoice anymore. Approval admits the member (frozen); the fallback CTA for a
-    // legacy approved-without-membership row just says the organizer will open access.
+    // De-Stars: Stars-инвойса больше нет. Одобрение сразу впускает участника (frozen); fallback-CTA для
+    // legacy-строки approved-без-membership лишь сообщает, что доступ откроет организатор.
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /организатор откроет доступ/i })).toBeInTheDocument();
     });
@@ -284,7 +284,7 @@ describe('ClubPage', () => {
         return HttpResponse.json([] as MembershipDto[]);
       }),
       http.post('*/api/clubs/:id/join', () => {
-        // De-Stars: join always returns 201 + MembershipDto; a paid club lands it `frozen`.
+        // De-Stars: join всегда возвращает 201 + MembershipDto; в платном клубе membership попадает в `frozen`.
         return HttpResponse.json(
           {
             id: 'm-1',
@@ -378,7 +378,7 @@ describe('ClubPage', () => {
       expect(screen.getByRole('button', { name: /^активности$/i })).toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: /^участники$/i })).toBeInTheDocument();
-    // "Мой профиль" tab removed — per-club reputation now lives in the global Profile.
+    // Таб «Мой профиль» убран — per-club репутация теперь живёт в глобальном Профиле.
     expect(screen.queryByRole('button', { name: /^мой профиль$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^управление$/i })).not.toBeInTheDocument();
     expect(screen.getByText(/вы участник/i)).toBeInTheDocument();
@@ -411,7 +411,7 @@ describe('ClubPage', () => {
     });
     await user.click(screen.getByRole('button', { name: /^участники$/i }));
 
-    // Veteran: real number + tier. Newcomer: "Новичок", no number. Owner: organizer framing.
+    // Ветеран: реальное число + тир. Новичок: «Новичок» без числа. Владелец: организаторская подача.
     await waitFor(() => {
       expect(screen.getByText('90')).toBeInTheDocument();
     });
@@ -555,8 +555,8 @@ describe('ClubPage', () => {
     });
 
     expect(screen.getByText('Клуб для любителей чтения')).toBeInTheDocument();
-    // Redesign: price is part of the single hero-eyebrow meta line
-    // («доступ · город · N/limit · цена»), so match it as a substring.
+    // Редизайн: цена — часть единой мета-строки hero-eyebrow
+    // («доступ · город · N/limit · цена»), поэтому матчим её как подстроку.
     expect(screen.getByText(/200 ₽ \/ мес/)).toBeInTheDocument();
   });
 

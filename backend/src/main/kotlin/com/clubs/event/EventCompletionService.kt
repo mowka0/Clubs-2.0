@@ -7,19 +7,19 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 
 /**
- * Auto-completes events whose datetime has passed.
+ * Автоматически завершает события, чьё время уже прошло.
  *
- * Lifecycle gap fixed here: `Stage2Service` moves events `upcoming -> stage_2`, but nothing
- * ever set [com.clubs.generated.jooq.enums.EventStatus.completed]. Past events therefore
- * stayed `upcoming`/`stage_2` forever, so the unified activity feed never dimmed them
- * (dimming = status in completed/cancelled), unlike skladchinas which are closed by
- * [com.clubs.skladchina.SkladchinaScheduler].
+ * Здесь чинится пробел в жизненном цикле: `Stage2Service` переводит события
+ * `upcoming -> stage_2`, но ничто не выставляло [com.clubs.generated.jooq.enums.EventStatus.completed].
+ * Из-за этого прошедшие события навсегда оставались `upcoming`/`stage_2`, и единая лента активности
+ * никогда их не приглушала (приглушение = статус в completed/cancelled) — в отличие от складчин,
+ * которые закрывает [com.clubs.skladchina.SkladchinaScheduler].
  *
- * The post-event attendance flow ([AttendanceService.markAttendance], dispute, resolve,
- * [AttendanceService.finalizeAttendance]) gates only on the `attendance_marked` /
- * `attendance_finalized` booleans and `event_datetime` — never on status — so flipping
- * status to `completed` does not interfere with it. A small [COMPLETION_GRACE_HOURS] grace
- * keeps an in-progress event from being dimmed mid-event (timezone / duration buffer).
+ * Флоу посещаемости после события ([AttendanceService.markAttendance], спор, разрешение,
+ * [AttendanceService.finalizeAttendance]) опирается только на булевы `attendance_marked` /
+ * `attendance_finalized` и `event_datetime` — никогда на статус — поэтому переключение
+ * статуса на `completed` этому не мешает. Небольшой запас [COMPLETION_GRACE_HOURS] не даёт
+ * приглушить событие, которое ещё идёт (буфер на часовой пояс / длительность).
  */
 @Service
 class EventCompletionService(
@@ -36,7 +36,9 @@ class EventCompletionService(
     }
 
     companion object {
-        private const val COMPLETION_SCHEDULER_PERIOD_MS = 3_600_000L // hourly, matches AttendanceService
+        // Период планировщика: раз в час, совпадает с AttendanceService
+        private const val COMPLETION_SCHEDULER_PERIOD_MS = 3_600_000L
+        // Запас в часах перед завершением события — не даёт приглушить ещё идущее событие
         private const val COMPLETION_GRACE_HOURS = 6L
     }
 }

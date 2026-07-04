@@ -21,7 +21,7 @@ data class Skladchina(
     val totalGoalKopecks: Long?,
     val paymentLink: String,
     val paymentMethodNote: String?,
-    val eventId: UUID?,                 // split_bill: the source event whose bill is split
+    val eventId: UUID?,                 // split_bill: исходное событие, счёт которого делится
 
     val deadline: OffsetDateTime,
     val affectsReputation: Boolean,

@@ -167,7 +167,7 @@ class ApplicationServiceTest {
         val result = applicationService.submitApplication(clubId, userId, request)
 
         assertEquals("pending", result.status)
-        // The stale approved row is cleared, then a fresh application is created — no «уже существует».
+        // Протухшая approved-строка чистится, затем создаётся свежая заявка — без «уже существует».
         verify(exactly = 1) { applicationRepository.deleteActiveByUserAndClub(userId, clubId) }
         verify(exactly = 1) { applicationRepository.create(userId, clubId, "again") }
     }
@@ -267,7 +267,7 @@ class ApplicationServiceTest {
             applicationService.submitApplication(clubId, userId, SubmitApplicationRequest(answerText = "test"))
         }
 
-        // De-Stars: the Stars "waiting for payment" wording is gone — an existing active application blocks re-apply.
+        // De-Stars: формулировка Stars «ожидает оплаты» ушла — повторную подачу блокирует сама существующая активная заявка.
         assertEquals("Application already exists", exception.message)
         verify(exactly = 0) { applicationRepository.create(any(), any(), any()) }
     }
@@ -314,7 +314,7 @@ class ApplicationServiceTest {
         assertEquals(userId, result.userId)
         assertEquals(clubId, result.clubId)
         assertNotNull(result.resolvedAt)
-        // De-Stars: paid approve creates the membership straight to `frozen` — no Stars invoice.
+        // De-Stars: approve в платном клубе создаёт membership сразу в `frozen` — без Stars-инвойса.
         verify(exactly = 1) { membershipActivator.activateFrozen(userId, clubId) }
         verify(exactly = 0) { membershipActivator.activateFree(any(), any()) }
     }
@@ -510,7 +510,7 @@ class ApplicationServiceTest {
 
     @Test
     fun `getMyClubsActionCounts returns pending inbox count`() {
-        // De-Stars: the Stars "awaiting payment" counters are gone; only the pending-inbox count remains.
+        // De-Stars: счётчики Stars «ожидают оплаты» удалены; остался только счётчик pending-инбокса.
         val userId = UUID.randomUUID()
         val ownedClubIds = listOf(UUID.randomUUID(), UUID.randomUUID())
 
@@ -568,10 +568,10 @@ class ApplicationServiceTest {
 
     @Test
     fun `completeFreeMembership reactivates cancelled membership via activator`() {
-        // Repro for staging DuplicateKeyException: a cancelled membership exists
-        // (status NOT in active/grace_period). `findActiveByUserAndClub` returns
-        // null, so we don't 400. The activator must reactivate the dead row
-        // instead of INSERTing (which would explode the UNIQUE constraint).
+        // Репро DuplicateKeyException со staging: существует cancelled-membership
+        // (статус НЕ из active/grace_period). `findActiveByUserAndClub` возвращает
+        // null, поэтому 400 не отдаём. Активатор обязан реактивировать мёртвую
+        // строку, а не делать INSERT (который взорвёт UNIQUE-констрейнт).
         val applicationId = UUID.randomUUID()
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()

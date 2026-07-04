@@ -14,8 +14,8 @@ class ClubQualityService(
 
     private companion object {
         /**
-         * Hard cap on one batch call. The Discovery frontend requests one batch per page (≤20 ids),
-         * so 50 is generous headroom; the cap exists to bound a raw caller passing thousands of ids.
+         * Жёсткий потолок одного батч-вызова. Фронтенд Discovery запрашивает один батч на страницу
+         * (≤20 id), так что 50 — щедрый запас; лимит нужен, чтобы ограничить сырой вызов с тысячами id.
          */
         const val MAX_BATCH_SIZE = 50
     }
@@ -28,8 +28,8 @@ class ClubQualityService(
     }
 
     /**
-     * Discovery-card facts for a page of clubs. Deduped and capped at [MAX_BATCH_SIZE]; ids without a
-     * club row are simply absent from the result (no 404 — partial pages are normal).
+     * Факты discovery-карточек для страницы клубов. Дедуплицируются и режутся по [MAX_BATCH_SIZE];
+     * id без строки клуба просто отсутствуют в результате (без 404 — частичные страницы нормальны).
      */
     @Transactional(readOnly = true)
     fun getClubCardFacts(clubIds: List<UUID>): List<ClubCardFactsDto> {

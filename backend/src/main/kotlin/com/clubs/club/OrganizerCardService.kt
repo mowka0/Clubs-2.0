@@ -8,12 +8,13 @@ import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
 /**
- * Builds the organizer trust card shown on the dues-payment sheet (de-Stars: money goes organizer-direct,
- * so the member needs to know who they're paying). Account-focused signals only; the frontend applies the
- * display thresholds so a fresh account shows just identity + «недавно» (never zeros).
+ * Строит карточку доверия организатора, показываемую в форме оплаты взноса (de-Stars: деньги идут
+ * напрямую организатору, поэтому участнику нужно знать, кому он платит). Только сигналы про аккаунт;
+ * пороги отображения применяет фронтенд, чтобы у свежего аккаунта показывались только имя и
+ * «недавно» (никогда не нули).
  *
- * Read-only and JWT-only at the controller (others-visible, like the club-quality facts) — the organizer
- * is the public host of the club; no ownership gate.
+ * На уровне контроллера — только чтение и JWT (видно всем, как факты качества клуба) —
+ * организатор является публичным хостом клуба, гейта на владение нет.
  */
 @Service
 class OrganizerCardService(

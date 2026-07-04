@@ -6,19 +6,20 @@ import org.springframework.stereotype.Component
 import java.util.UUID
 
 /**
- * Encapsulates the "create-or-reactivate" lifecycle for a membership. Two target states:
+ * Инкапсулирует жизненный цикл "создать-или-реактивировать" для membership. Два целевых состояния:
  *
- *  - [activateFree]  → `active`  (free club: instant access).
- *  - [activateFrozen] → `frozen` (paid club, de-Stars Slice 2: the member belongs but access is
- *    gated until the organizer confirms the off-platform dues — see [AccessGateService]).
+ *  - [activateFree]  → `active`  (бесплатный клуб: мгновенный доступ).
+ *  - [activateFrozen] → `frozen` (платный клуб, de-Stars Slice 2: участник принадлежит клубу, но доступ
+ *    закрыт, пока организатор не подтвердит офлайн-взнос — см. [AccessGateService]).
  *
- * Both share the same branch logic so the create/reactivate decision lives in one place:
- *   - no row at all → INSERT a fresh membership in the target status.
- *   - row exists and is alive (active / frozen / grace_period) → caller's bug; throw IllegalState
- *     (caller must check `findActiveByUserAndClub` BEFORE invoking and surface the right HTTP error).
- *   - row exists and is dead (cancelled / expired) → reactivate into the target status.
+ * Обе ветки используют одну и ту же логику, чтобы решение create/reactivate жило в одном месте:
+ *   - строки нет вообще → INSERT новой membership в целевом статусе.
+ *   - строка есть и она "жива" (active / frozen / grace_period) → баг вызывающего кода; бросаем
+ *     IllegalState (вызывающий код обязан проверить `findActiveByUserAndClub` ДО вызова и вернуть
+ *     правильную HTTP-ошибку).
+ *   - строка есть и она "мертва" (cancelled / expired) → реактивируем в целевой статус.
  *
- * Contract: the caller guarantees the club has been validated (type, member-limit, ownership).
+ * Контракт: вызывающий код гарантирует, что клуб уже провалидирован (тип, лимит участников, ownership).
  */
 @Component
 class MembershipActivator(
@@ -27,10 +28,10 @@ class MembershipActivator(
 
     private val log = LoggerFactory.getLogger(MembershipActivator::class.java)
 
-    /** @throws IllegalStateException if an alive membership already exists (caller must pre-check). */
+    /** @throws IllegalStateException если живая membership уже существует (вызывающий код обязан проверить заранее). */
     fun activateFree(userId: UUID, clubId: UUID): Membership = activate(userId, clubId, frozen = false)
 
-    /** @throws IllegalStateException if an alive membership already exists (caller must pre-check). */
+    /** @throws IllegalStateException если живая membership уже существует (вызывающий код обязан проверить заранее). */
     fun activateFrozen(userId: UUID, clubId: UUID): Membership = activate(userId, clubId, frozen = true)
 
     private fun activate(userId: UUID, clubId: UUID, frozen: Boolean): Membership {
@@ -40,7 +41,7 @@ class MembershipActivator(
                 if (frozen) membershipRepository.createFrozen(userId, clubId)
                 else membershipRepository.create(userId, clubId)
             existing.status.isAlive() ->
-                // Defence in depth — callers should have rejected this case already.
+                // Эшелонированная защита — вызывающий код уже должен был отклонить этот случай.
                 throw IllegalStateException("Active membership already exists: id=${existing.id}")
             else ->
                 if (frozen) membershipRepository.reactivateFrozen(existing.id)
@@ -54,8 +55,8 @@ class MembershipActivator(
         return membership
     }
 
-    // "Alive" = the membership still belongs to the club, so it must NOT be silently reactivated as a
-    // fresh join. `frozen` (organizer-gated, pending off-platform dues) belongs too.
+    // "Жива" = membership всё ещё принадлежит клубу, поэтому её НЕЛЬЗЯ молча реактивировать как
+    // свежее вступление. `frozen` (закрыта организатором, ожидает офлайн-взнос) тоже считается принадлежащей.
     private fun MembershipStatus.isAlive(): Boolean =
         this == MembershipStatus.active ||
             this == MembershipStatus.frozen ||

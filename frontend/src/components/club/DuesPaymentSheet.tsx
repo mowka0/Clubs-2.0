@@ -7,9 +7,10 @@ import { uploadImage } from '../../api/clubs';
 import { useHaptic } from '../../hooks/useHaptic';
 import { pluralRu } from '../../utils/formatters';
 
-// «Доверяют N участников» shows only at/above this; below it reads as weak, so we hide it.
+// Порог показа «Доверяют N участников»: ниже него цифра выглядит слабой, поэтому скрываем.
 const TRUST_MIN = 5;
-// An account younger than this with nothing else to show is treated as «новый» (nudge instead of facts).
+// Аккаунт моложе этого срока (в днях), которому больше нечего показать, считается «новым»
+// (вместо фактов — предупреждающий nudge).
 const FRESH_DAYS = 60;
 
 function monthYear(iso: string): string {
@@ -17,9 +18,10 @@ function monthYear(iso: string): string {
 }
 
 /**
- * Trust card «кому вы переводите» (de-Stars: money goes organizer-direct). Account-focused, graceful:
- * identity (avatar + name + @username + «Написать») is always shown; tenure/clubs/trusted-members appear
- * only when meaningful (never zeros); a fresh account collapses to «недавно» + a contact-first nudge.
+ * Trust-карточка «кому вы переводите» (de-Stars: деньги идут напрямую организатору). Фокус на аккаунте,
+ * деградирует мягко: identity (аватар + имя + @username + «Написать») показывается всегда; стаж/клубы/
+ * доверяющие участники — только когда осмысленны (никаких нулей); свежий аккаунт схлопывается до
+ * «недавно» + nudge «сначала напишите».
  */
 const OrganizerTrustCard: FC<{ clubId: string }> = ({ clubId }) => {
   const haptic = useHaptic();
@@ -81,25 +83,25 @@ const OrganizerTrustCard: FC<{ clubId: string }> = ({ clubId }) => {
 
 interface DuesPaymentSheetProps {
   clubId: string;
-  /** Monthly dues amount in ₽ (club.subscriptionPrice). */
+  /** Ежемесячный взнос в ₽ (club.subscriptionPrice). */
   price: number;
-  /** Organizer's СБП link/phone — null if not set (then only cash is offered). */
+  /** СБП-ссылка/телефон организатора — null, если не заданы (тогда предлагаем только наличные). */
   paymentLink: string | null;
   paymentMethodNote: string | null;
   onClose: () => void;
-  /** Called after a claim is submitted, so the page can show «оплата на проверке». */
+  /** Вызывается после отправки claim, чтобы страница показала «оплата на проверке». */
   onClaimed: () => void;
 }
 
 type Method = 'sbp' | 'cash';
 
 /**
- * Member dues-payment flow (de-Stars). The frozen member declares they paid:
- *  - СБП: pay via the organizer's link (amount + emoji + button), then attach a payment screenshot
- *    (mandatory) and confirm.
- *  - Наличные: a plain attestation checkbox, no screenshot.
- * Either way it submits a claim the organizer reviews — access still opens only when the organizer
- * presses «Взнос получен» (honor-system preserved).
+ * Флоу оплаты взноса участником (de-Stars). Frozen-участник декларирует, что оплатил:
+ *  - СБП: оплата по ссылке организатора (сумма + эмодзи + кнопка), затем прикрепляет скриншот
+ *    оплаты (обязательно) и подтверждает.
+ *  - Наличные: простой чекбокс-заверение, без скриншота.
+ * В обоих случаях отправляется claim на проверку организатору — доступ открывается только когда
+ * организатор нажмёт «Взнос получен» (honor-system сохранён).
  */
 export const DuesPaymentSheet: FC<DuesPaymentSheetProps> = ({
   clubId,
@@ -120,9 +122,10 @@ export const DuesPaymentSheet: FC<DuesPaymentSheetProps> = ({
   // СБП доступен только когда есть реквизиты И организатору можно написать.
   const sbpAllowed = !!paymentLink && !noContact;
 
-  // No СБП requisites (or no organizer contact) → cash is the only option.
+  // Нет СБП-реквизитов (или контакта организатора) → наличные — единственный вариант.
   const [method, setMethod] = useState<Method>(paymentLink ? 'sbp' : 'cash');
-  // Effective method clamps to cash when СБП isn't allowed (handles async org load without a state race).
+  // Эффективный метод принудительно = cash, когда СБП недоступен (закрывает асинхронную загрузку org
+  // без гонки состояний).
   const effectiveMethod: Method = sbpAllowed ? method : 'cash';
   const [proofUrl, setProofUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -137,7 +140,7 @@ export const DuesPaymentSheet: FC<DuesPaymentSheetProps> = ({
 
   const handlePickFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    e.target.value = ''; // allow re-picking the same file
+    e.target.value = ''; // позволяет выбрать тот же файл повторно
     if (!file) return;
     if (!['image/jpeg', 'image/png'].includes(file.type)) {
       setError('Только JPEG или PNG');
@@ -189,17 +192,17 @@ export const DuesPaymentSheet: FC<DuesPaymentSheetProps> = ({
         </div>
 
         <div className="rd-sheet-body">
-          {/* Amount */}
+          {/* Сумма */}
           <div className="rd-dues-amount">
             <span className="rd-dues-emoji" aria-hidden="true">💳</span>
             <span className="rd-dues-sum">{price} ₽</span>
             <span className="rd-dues-per">/ мес</span>
           </div>
 
-          {/* Trust card — who the money goes to (de-Stars: organizer-direct, off-platform). */}
+          {/* Trust-карточка — кому уходят деньги (de-Stars: напрямую организатору, вне платформы). */}
           <OrganizerTrustCard clubId={clubId} />
 
-          {/* Safety: organizer has no Telegram → can't be messaged → СБП is hidden, cash-only. */}
+          {/* Безопасность: у организатора нет Telegram → написать нельзя → СБП скрыт, только наличные. */}
           {noContact && (
             <div className="rd-ot-nudge">
               Оплата только наличными: организатор не указал Telegram, написать ему перед переводом нельзя.
@@ -207,7 +210,8 @@ export const DuesPaymentSheet: FC<DuesPaymentSheetProps> = ({
             </div>
           )}
 
-          {/* Method switch — only when both are available (requisites set + organizer is contactable). */}
+          {/* Переключатель метода — только когда доступны оба (реквизиты заданы + организатору можно
+              написать). */}
           {sbpAllowed && (
             <div className="rd-seg-control" role="tablist">
               <button
@@ -235,7 +239,7 @@ export const DuesPaymentSheet: FC<DuesPaymentSheetProps> = ({
 
           {effectiveMethod === 'sbp' ? (
             <>
-              {/* Step 1 — pay */}
+              {/* Шаг 1 — оплата */}
               <div className="rd-step">
                 <div className="rd-step-h"><span className="rd-step-n">1</span> Оплатите по СБП</div>
                 <button
@@ -252,7 +256,7 @@ export const DuesPaymentSheet: FC<DuesPaymentSheetProps> = ({
                 </div>
               </div>
 
-              {/* Step 2 — proof */}
+              {/* Шаг 2 — подтверждение */}
               <div className="rd-step">
                 <div className="rd-step-h"><span className="rd-step-n">2</span> Прикрепите скриншот оплаты</div>
                 <input

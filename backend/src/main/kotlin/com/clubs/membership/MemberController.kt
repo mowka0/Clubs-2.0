@@ -43,15 +43,15 @@ class MemberController(
     ): ResponseEntity<MemberProfileDto> =
         ResponseEntity.ok(memberService.getMemberProfile(clubId, userId, caller.userId))
 
-    // Red-dot badge feed (de-Stars): how many members' access ends within the week. Separate path
-    // (not under /members/{userId}) to avoid the path-variable colliding with a member id.
+    // Фид для red-dot бейджа (de-Stars): сколько у скольких участников доступ заканчивается в течение недели.
+    // Отдельный путь (не под /members/{userId}), чтобы path-variable не конфликтовал с id участника.
     @RequiresOrganizer(clubIdParam = "clubId")
     @GetMapping("/{clubId}/member-attention")
     fun memberAttention(@PathVariable clubId: UUID): ResponseEntity<MemberAttentionDto> =
         ResponseEntity.ok(memberService.getAttention(clubId))
 
-    // Organizer access gate (de-Stars, Slice 2). Owner-only via @RequiresOrganizer; the service
-    // guards the status transition (409 on a lost race) and rejects managing the organizer.
+    // Шлюз доступа от организатора (de-Stars, Slice 2). Только владелец через @RequiresOrganizer; сервис
+    // защищает переход статуса (409 при проигранной гонке) и запрещает управлять организатором.
     @RequiresOrganizer(clubIdParam = "clubId")
     @PostMapping("/{clubId}/members/{userId}/freeze")
     fun freezeMember(
@@ -79,8 +79,8 @@ class MemberController(
     ): ResponseEntity<MembershipDto> =
         ResponseEntity.ok(accessGateService.markDuesPaid(clubId, userId, caller.userId))
 
-    // De-Stars B+C: reject a paid join (instead of «Взнос получен»). Owner-only; removes the frozen
-    // member, refund is the organizer's offline responsibility. Reason optional.
+    // De-Stars B+C: отклонить платное вступление (вместо «Взнос получен»). Только владелец; удаляет frozen-
+    // участника, возврат денег — офлайн-обязанность организатора. Причина опциональна.
     @RequiresOrganizer(clubIdParam = "clubId")
     @PostMapping("/{clubId}/members/{userId}/reject-dues")
     fun rejectMember(
@@ -91,8 +91,8 @@ class MemberController(
     ): ResponseEntity<MembershipDto> =
         ResponseEntity.ok(accessGateService.rejectMember(clubId, userId, caller.userId, request?.reason))
 
-    // Organizer kick: remove a member from the club for cause (reason mandatory, DM'd to the member).
-    // Owner-only; distinct from «Закрыть доступ» (freeze) — this cancels the membership and revokes access.
+    // Кик организатором: удалить участника из клуба за проступок (причина обязательна, уходит в DM участнику).
+    // Только владелец; отличается от «Закрыть доступ» (freeze) — здесь membership отменяется и доступ отзывается.
     @RequiresOrganizer(clubIdParam = "clubId")
     @PostMapping("/{clubId}/members/{userId}/remove")
     fun removeMember(
@@ -112,7 +112,7 @@ class MemberController(
     ): ResponseEntity<MembershipDto> =
         ResponseEntity.ok(accessGateService.unmarkDues(clubId, userId, caller.userId))
 
-    // Member admin profile (Variant B, S1) — owner-only edits beyond the dues gate.
+    // Member admin profile (Variant B, S1) — правки, доступные только владельцу, сверх шлюза оплаты взносов.
     @RequiresOrganizer(clubIdParam = "clubId")
     @PostMapping("/{clubId}/members/{userId}/access-until")
     fun setAccessUntil(
@@ -133,9 +133,10 @@ class MemberController(
     ): ResponseEntity<MembershipDto> =
         ResponseEntity.ok(accessGateService.updateNote(clubId, userId, request.note, caller.userId))
 
-    // De-Stars: the member declares they paid their off-platform dues (sbp + screenshot, or cash).
-    // Member self-service — NO organizer gate; the service acts on the caller's own frozen membership and
-    // creates a claim the organizer reviews. Access still opens only via «Взнос получен» (markDuesPaid).
+    // De-Stars: участник заявляет, что оплатил офлайн-взнос (sbp + скриншот, либо cash).
+    // Самообслуживание участника — БЕЗ гейта организатора; сервис действует над собственным frozen-membership
+    // вызывающего и создаёт заявку, которую проверяет организатор. Доступ всё равно открывается только через
+    // «Взнос получен» (markDuesPaid).
     @PostMapping("/{clubId}/dues-claim")
     fun claimDues(
         @PathVariable clubId: UUID,
@@ -144,8 +145,8 @@ class MemberController(
     ): ResponseEntity<MembershipDto> =
         ResponseEntity.ok(accessGateService.claimDues(clubId, caller.userId, request.method, request.proofUrl))
 
-    // Member admin profile (Variant B, S2) — club-local awards. Grant/revoke is organizer-only;
-    // the awards themselves are public on the member card (served via MemberProfileDto, see MemberService).
+    // Member admin profile (Variant B, S2) — награды локальные для клуба. Выдача/отзыв — только организатор;
+    // сами награды публичны на карточке участника (отдаются через MemberProfileDto, см. MemberService).
     @RequiresOrganizer(clubIdParam = "clubId")
     @PostMapping("/{clubId}/members/{userId}/awards")
     fun grantAward(
@@ -168,8 +169,9 @@ class MemberController(
         return ResponseEntity.noContent().build()
     }
 
-    // Autocomplete for the grant form («как интересы»): distinct past awards in this club. Organizer-only,
-    // since only the organizer reaches the grant form (@RequiresMembership would leak the club's award set).
+    // Автодополнение для формы выдачи награды («как интересы»): уникальные прошлые награды в этом клубе.
+    // Только организатор, поскольку до формы выдачи доходит только он (@RequiresMembership раскрыл бы
+    // набор наград клуба всем участникам).
     @RequiresOrganizer(clubIdParam = "clubId")
     @GetMapping("/{clubId}/award-suggestions")
     fun awardSuggestions(@PathVariable clubId: UUID): ResponseEntity<List<AwardSuggestionDto>> =

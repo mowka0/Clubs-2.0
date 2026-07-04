@@ -7,15 +7,15 @@ import {
 import type { PeerStatsDto } from '../../types/api';
 
 /**
- * "Активность на платформе" block for the application review card: the cross-club
- * «надёжен в N из M клубов» donut + a participation line. The heading (rendered by the
- * caller) frames this as PARTICIPANT activity — the global signal is owner-blind by design.
+ * Блок «Активность на платформе» для карточки рассмотрения заявки: кросс-клубовый донат
+ * «надёжен в N из M клубов» + строка участия. Заголовок (рендерит вызывающий) подаёт это
+ * как активность УЧАСТНИКА — глобальный сигнал по дизайну не видит клубы, где юзер владелец.
  */
 export const PlatformActivity: FC<{ stats: PeerStatsDto }> = ({ stats }) => {
   const { memberClubCount, reliableClubs, trackRecordClubs } = stats;
   const detail = formatPeerSignal(stats);
 
-  // No clubs, or no club with a shown track record yet → can't chart "N из M"; show the line only.
+  // Нет клубов или ни одного клуба с видимым трек-рекордом → «N из M» не построить; показываем только строку.
   if (memberClubCount === 0 || trackRecordClubs === 0) {
     return <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{detail}</div>;
   }

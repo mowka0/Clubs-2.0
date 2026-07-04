@@ -5,15 +5,16 @@ import java.util.UUID
 interface ClubQualityRepository {
 
     /**
-     * Computes the club's L1 facts via read-only aggregations.
-     * Returns `null` when no club row exists for [clubId] (caller maps to 404).
+     * Считает L1-факты клуба read-only-агрегациями.
+     * Возвращает `null`, если строки клуба для [clubId] нет (вызывающий мапит в 404).
      */
     fun findClubFacts(clubId: UUID): ClubFacts?
 
     /**
-     * Batch-computes Discovery-card facts for the given clubs (one BATCHED query per metric, no N+1).
-     * Skips ids with no club row. Empty input → empty output (no SQL hit). Order is unspecified;
-     * the caller keys the result by [ClubCardFacts.clubId].
+     * Батчево считает факты Discovery-карточек для указанных клубов (один БАТЧЕВЫЙ запрос
+     * на метрику, без N+1). Id без строки клуба пропускаются. Пустой вход → пустой выход
+     * (без похода в SQL). Порядок не определён; вызывающий ключует результат по
+     * [ClubCardFacts.clubId].
      */
     fun findClubCardFacts(clubIds: Collection<UUID>): List<ClubCardFacts>
 }

@@ -7,13 +7,14 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * Read-side P1b XP / level / badges derivation. Computes the account-level gamification panel ON
- * READ from the ledger (one [ReputationRepository.findTrustOutcomesByUser] query, the same source
- * as [TrustService]). Pure logic — weights, level thresholds, badge predicates — lives in
- * [XpPolicy]; this class only aggregates the ledger into [XpPolicy.XpStats] and assembles the DTO.
+ * Read-side вывод XP / уровня / бейджей (P1b). Считает панель геймификации на уровне аккаунта
+ * ПРИ ЧТЕНИИ из ledger'а (один запрос [ReputationRepository.findTrustOutcomesByUser], тот же
+ * источник, что и у [TrustService]). Чистая логика — веса, пороги уровней, предикаты бейджей —
+ * живёт в [XpPolicy]; этот класс только агрегирует ledger в [XpPolicy.XpStats] и собирает DTO.
  *
- * XP rewards participation only and never decreases; the owner-in-own-club anti-farm is inherited
- * (no ledger rows there → no XP there). Trust per club is recomputed here only for the trust badges.
+ * XP вознаграждает только участие и никогда не уменьшается; анти-фарм «владелец в своём клубе»
+ * наследуется (там нет ledger-строк → нет и XP). Trust по клубу пересчитывается здесь только
+ * ради trust-бейджей.
  */
 @Service
 class XpService(
@@ -38,9 +39,10 @@ class XpService(
     }
 
     /**
-     * Global level (name + 0-based index) from a pre-fetched outcome list — the projection shown to
-     * OTHERS (e.g. the applicant pill on the review card), without XP/progress/badges. Outcome-based
-     * so the batch applicant path ([ApplicantSignalService]) fetches once for many users.
+     * Глобальный уровень (имя + индекс с 0) из заранее полученного списка outcome — проекция,
+     * показываемая ДРУГИМ (например пилл заявителя на карточке рассмотрения), без XP/прогресса/
+     * бейджей. Построена на outcome, чтобы batch-путь заявителей ([ApplicantSignalService]) делал
+     * один запрос сразу для многих юзеров.
      */
     fun levelForOutcomes(outcomes: List<ClubLedgerOutcome>, now: OffsetDateTime = OffsetDateTime.now()): LevelInfo {
         val idx = XpPolicy.levelIndexFor(XpPolicy.totalXp(statsForOutcomes(outcomes, now)))
@@ -68,7 +70,7 @@ class XpService(
                     }
                 }
                 if (clubHasKept) distinctKeptClubs++
-                // Trust badges only consider clubs with a shown track record (same gate as the UI).
+                // Trust-бейджи учитывают только клубы с показанной историей (тот же гейт, что и в UI).
                 if (rows.size >= ReputationPolicy.MIN_OUTCOMES_FOR_DISPLAY) {
                     val trust = TrustPolicy.perClubTrust(rows.map { TrustPolicy.Outcome(it.kind, it.occurredAt) }, now)
                     if (XpPolicy.isReliable(trust)) reliableClubs++
@@ -87,5 +89,5 @@ class XpService(
     }
 }
 
-/** The `others` level projection: 1-based level, its name, and the 0-based index (for tiering). */
+/** Проекция уровня для «других»: уровень с 1, его имя и индекс с 0 (для тиринга). */
 data class LevelInfo(val level: Int, val name: String, val index: Int)

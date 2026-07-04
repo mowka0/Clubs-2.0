@@ -23,17 +23,18 @@ class Stage2Service(
     private val eventResponseRepository: EventResponseRepository,
     private val membershipRepository: MembershipRepository,
     private val eventPublisher: ApplicationEventPublisher,
-    // Lead time (minutes before event start) at which an upcoming event transitions to Stage 2.
-    // Default 24h. Minutes unit lets staging shorten it for an end-to-end two-stage test:
-    // a short value keeps a brief Stage-1 voting window before the event flips to confirmation.
+    // Упреждение (минут до старта события), при котором предстоящее событие переходит в Stage 2.
+    // По умолчанию 24 ч. Единица «минуты» позволяет staging'у укоротить его для сквозного теста
+    // двухэтапки: малое значение оставляет короткое окно голосования Этапа 1 до перехода
+    // события в подтверждение.
     @Value("\${events.stage2-trigger-minutes-before:1440}") private val stage2TriggerMinutesBefore: Long
 ) {
     private val log = LoggerFactory.getLogger(Stage2Service::class.java)
 
-    // The confirmation window is [flip .. event start], and the flip lands anywhere within one
-    // poll period after the trigger boundary — so the tick must be much finer than the trigger
-    // lead. The old hardcoded 5min tick ate a short staging lead (3min) whole: the flip often
-    // landed after event start, leaving a zero-length window.
+    // Окно подтверждения — [flip .. старт события], а сам flip случается где угодно внутри одного
+    // периода опроса после границы триггера — поэтому тик должен быть сильно мельче упреждения
+    // триггера. Старый захардкоженный тик 5 мин съедал короткое staging-упреждение (3 мин) целиком:
+    // flip часто приходился уже после старта события, оставляя окно нулевой длины.
     @Scheduled(fixedDelayString = "\${events.stage2-poll-ms:60000}")
     @Transactional
     fun triggerStage2ForReadyEvents() {
@@ -52,8 +53,8 @@ class Stage2Service(
     private fun triggerStage2(event: Event) {
         eventRepository.transitionToStage2(event.id)
 
-        // First N going voters (by stage_1_timestamp) keep stage_2_vote = null — they confirm explicitly.
-        // Extras start as waitlisted.
+        // Первые N проголосовавших going (по stage_1_timestamp) сохраняют stage_2_vote = null —
+        // они подтверждают явно. Остальные сразу становятся waitlisted.
         val goingVoters = eventResponseRepository.findGoingByEventOrderByTimestamp(event.id)
         goingVoters.forEachIndexed { index, response ->
             if (index >= event.participantLimit) {
@@ -61,12 +62,13 @@ class Stage2Service(
             }
         }
 
-        // S2T-2: ask going/maybe voters to confirm. Without this DM nobody learns Stage 2
-        // started, nobody confirms, and everyone auto-expires at event start. AFTER_COMMIT
-        // hop (Stage2StartedListener) — the @Async DM must read committed rows.
-        // A late flip (event already started) still transitions — the expiry sweep and the
-        // completion lifecycle depend on it — but the confirm window is already closed
-        // (confirmParticipation rejects at event start), so the DM would be a dead end.
+        // S2T-2: просим проголосовавших going/maybe подтвердить участие. Без этого DM никто не
+        // узнает, что начался Stage 2, никто не подтвердит, и все автоматически истекут к старту
+        // события. Переход через AFTER_COMMIT (Stage2StartedListener) — @Async DM должен читать
+        // уже закоммиченные строки.
+        // Поздний flip (событие уже началось) всё равно происходит — от него зависят цикл
+        // истечения и жизненный цикл завершения — но окно подтверждения уже закрыто
+        // (confirmParticipation отклоняет после старта события), так что DM был бы бесполезен.
         if (event.eventDatetime.isAfter(OffsetDateTime.now())) {
             eventPublisher.publishEvent(Stage2StartedEvent(event))
         } else {
@@ -82,9 +84,9 @@ class Stage2Service(
             throw ValidationException("Event is not in confirmation stage")
         }
 
-        // Bug B: the confirmation window closes at event start. Otherwise a past event
-        // stays stage_2 until the hourly EventCompletionService sweep, leaving a window
-        // where one could confirm an event that already happened. See events.md.
+        // Bug B: окно подтверждения закрывается в момент старта события. Иначе прошедшее
+        // событие остаётся в stage_2 до часового прохода EventCompletionService, оставляя
+        // окно, в котором можно подтвердить уже случившееся событие. См. events.md.
         if (!event.eventDatetime.isAfter(OffsetDateTime.now())) {
             throw ValidationException("Confirmation window has closed")
         }
@@ -93,12 +95,13 @@ class Stage2Service(
             throw ForbiddenException("Not a member of this club")
         }
 
-        // S2-01/F5-07: the slot decision below is a non-atomic read-modify-write
-        // (countConfirmed < limit → updateStage2Vote). Two concurrent confirms on the last
-        // slot would both pass the check and overbook. The per-event advisory lock serializes
-        // every slot mutation (shared with declineParticipation, which covers F5-11 — double
-        // promotion of the same waitlisted user). Taken before ANY event_responses read so a
-        // blocked transaction re-reads committed state once it acquires the lock.
+        // S2-01/F5-07: решение по слоту ниже — неатомарный read-modify-write
+        // (countConfirmed < limit → updateStage2Vote). Два одновременных подтверждения на
+        // последний слот оба пройдут проверку и переполнят ростер. Advisory lock на событие
+        // сериализует любую мутацию слотов (общий с declineParticipation, который закрывает
+        // F5-11 — двойное повышение одного и того же waitlisted-пользователя). Берётся до ЛЮБОГО
+        // чтения event_responses, чтобы заблокированная транзакция перечитала закоммиченное
+        // состояние, как только получит лок.
         eventResponseRepository.lockEventSlots(eventId)
 
         val response = eventResponseRepository.findByEventAndUser(eventId, userId)
@@ -118,10 +121,12 @@ class Stage2Service(
         }
 
         if (response.stage2Vote == Stage_2Vote.waitlisted) {
-            // FIFO (S2-02/S2T-3): promotion off the waitlist is system-driven — it happens
-            // only when a confirmed member declines (declineParticipation → findFirstWaitlisted),
-            // strictly by stage_1_timestamp. A waitlisted user re-confirming must NOT race into a
-            // freed slot ahead of an earlier-queued member, so we keep them waitlisted (idempotent).
+            // FIFO (S2-02/S2T-3): повышение из waitlist управляется системой — происходит
+            // только когда подтверждённый участник отказывается (declineParticipation →
+            // findFirstWaitlisted), строго по stage_1_timestamp. Waitlisted-пользователь,
+            // повторно подтверждающий участие, НЕ должен обгонять в гонке ранее вставшего в
+            // очередь участника за освободившийся слот, поэтому оставляем его в waitlisted
+            // (идемпотентно).
             val count = eventResponseRepository.countConfirmed(eventId)
             return ConfirmResponseDto(eventId, "waitlisted", count, event.participantLimit)
         }
@@ -152,20 +157,21 @@ class Stage2Service(
             throw ValidationException("Event is not in confirmation stage")
         }
 
-        // Bug B: mirrors confirmParticipation — no decline after the event has started.
+        // Bug B: зеркалит confirmParticipation — нельзя отказаться после старта события.
         if (!event.eventDatetime.isAfter(OffsetDateTime.now())) {
             throw ValidationException("Confirmation window has closed")
         }
 
-        // S2-05 (OWASP A01): decline is a state change that frees a slot and promotes the
-        // first waitlisted member — it must require active membership, symmetric with confirm.
+        // S2-05 (OWASP A01): отказ — это изменение состояния, которое освобождает слот и
+        // повышает первого в очереди waitlisted-участника — должен требовать активное
+        // членство, симметрично с подтверждением.
         if (!membershipRepository.isMember(userId, event.clubId)) {
             throw ForbiddenException("Not a member of this club")
         }
 
-        // F5-11: same advisory lock as confirmParticipation — two concurrent declines would
-        // both read the same findFirstWaitlisted row and promote one user for two freed slots,
-        // permanently losing a slot.
+        // F5-11: тот же advisory lock, что и в confirmParticipation — два одновременных отказа
+        // оба прочитают одну и ту же строку findFirstWaitlisted и повысят одного пользователя
+        // за два освободившихся слота, безвозвратно потеряв слот.
         eventResponseRepository.lockEventSlots(eventId)
 
         val response = eventResponseRepository.findByEventAndUser(eventId, userId)
@@ -191,13 +197,13 @@ class Stage2Service(
     }
 
     /**
-     * Feature A (PRD §4.4.2 / §623 "авто-отклонение"): once an event has started, any
-     * going/maybe voter who never confirmed (stage_2_vote IS NULL) is moved to the explicit
-     * terminal state [Stage_2Vote.expired_no_confirm] so the roster is honest instead of
-     * carrying ambiguous NULL holes. A single idempotent bulk update — the
-     * `stage_2_vote IS NULL` predicate makes re-runs no-ops and never touches
-     * confirmed/waitlisted/declined rows. Reputation is unaffected (it reads only
-     * final_status = confirmed). See events.md § "Закрытие окна подтверждения".
+     * Feature A (PRD §4.4.2 / §623 "авто-отклонение"): как только событие началось, любой
+     * проголосовавший going/maybe, кто так и не подтвердил (stage_2_vote IS NULL), переводится
+     * в явное терминальное состояние [Stage_2Vote.expired_no_confirm], чтобы ростер был честным,
+     * а не содержал неоднозначные NULL-дыры. Единое идемпотентное массовое обновление — предикат
+     * `stage_2_vote IS NULL` делает повторные запуски no-op'ами и никогда не трогает строки
+     * confirmed/waitlisted/declined. На репутацию это не влияет (она читает только
+     * final_status = confirmed). См. events.md § "Закрытие окна подтверждения".
      */
     @Scheduled(fixedDelayString = "\${events.stage2-expire-poll-ms:300000}")
     @Transactional

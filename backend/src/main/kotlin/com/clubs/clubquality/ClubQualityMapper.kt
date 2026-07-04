@@ -14,8 +14,8 @@ class ClubQualityMapper {
         successfulSkladchinas = facts.successfulSkladchinas,
     )
 
-    /** [topInCategory] is supplied by the service (from the L3 rank), not derived from [facts] — the
-     *  card facts and the hidden rank are separate sources merged at the boolean boundary. */
+    /** [topInCategory] приходит из сервиса (из ранга L3), а не выводится из [facts] — факты карточки
+     *  и скрытый ранг это отдельные источники, объединяемые на границе boolean-значения. */
     fun toCardDto(facts: ClubCardFacts, topInCategory: Boolean): ClubCardFactsDto = ClubCardFactsDto(
         clubId = facts.clubId,
         ageDays = facts.ageDays,

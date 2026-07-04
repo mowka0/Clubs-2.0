@@ -13,8 +13,8 @@ const BackIcon: FC = () => (
 );
 
 /**
- * Full-bleed `rd-hero` for the organizer Manage screen. Display-only — a
- * top-left back button returns to the public ClubPage.
+ * Full-bleed `rd-hero` для экрана «Управление» организатора. Только отображение — кнопка
+ * «назад» в левом верхнем углу возвращает на публичную ClubPage.
  */
 export const ManageHeader: FC<ManageHeaderProps> = ({ club, onBack }) => (
   <div

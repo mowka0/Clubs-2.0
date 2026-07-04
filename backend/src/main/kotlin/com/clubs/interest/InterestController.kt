@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/interests")
 class InterestController(private val interestService: InterestService) {
 
-    /** Prefix autocomplete for the interest chip-input. JWT-protected + rate-limited globally. */
+    /** Автодополнение по префиксу для chip-инпута интересов. Глобально под JWT и rate-limit. */
     @GetMapping("/suggest")
     fun suggest(
         @RequestParam q: String,

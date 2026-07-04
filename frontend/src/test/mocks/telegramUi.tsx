@@ -1,13 +1,13 @@
 /**
- * Minimal mock implementations of @telegram-apps/telegram-ui components
- * used in tests. These render simple HTML elements so we can query
- * them with Testing Library.
+ * Минимальные mock-реализации компонентов @telegram-apps/telegram-ui,
+ * используемых в тестах. Рендерят простые HTML-элементы, чтобы их можно
+ * было находить через Testing Library.
  *
- * Form components (Input/Textarea/Select) use forwardRef and spread
- * remaining props onto the underlying native element. This is required
- * for compatibility with react-hook-form's `register`, which passes
- * `{ onChange, onBlur, name, ref }` and expects them to land on the
- * native control.
+ * Компоненты форм (Input/Textarea/Select) используют forwardRef и
+ * прокидывают остальные пропсы на нативный элемент. Это обязательно для
+ * совместимости с `register` из react-hook-form: он передаёт
+ * `{ onChange, onBlur, name, ref }` и ожидает, что они попадут на
+ * нативный контрол.
  */
 import React from 'react';
 

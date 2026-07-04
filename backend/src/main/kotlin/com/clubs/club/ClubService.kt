@@ -18,10 +18,13 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
+// Максимум клубов на одного организатора
 private const val MAX_CLUBS_PER_ORGANIZER = 10
+// Длина генерируемого инвайт-кода (символов)
 private const val INVITE_CODE_LENGTH = 16
 
-// "Belongs to the club" for SBP-requisite visibility — members who may need to pay + the active owner.
+// "Принадлежит клубу" для видимости реквизитов СБП — участники, которым может понадобиться
+// платить, + действующий владелец.
 private val MEMBER_REQUISITE_STATUSES = setOf(
     MembershipStatus.active, MembershipStatus.frozen, MembershipStatus.grace_period
 )
@@ -52,7 +55,8 @@ class ClubService(
     fun createClub(request: CreateClubRequest, ownerId: UUID): ClubDetailDto {
         validateCategory(request.category)
         validateAccessType(request.accessType)
-        // A paid club must carry SBP requisites so members know how to pay (de-Stars honor-system).
+        // Платный клуб обязан иметь реквизиты СБП, чтобы участники знали, как платить
+        // (de-Stars honor-system).
         if (request.subscriptionPrice > 0 && request.paymentLink.isNullOrBlank()) {
             throw ValidationException("Для платного клуба укажите реквизиты для взноса (СБП)")
         }
@@ -60,9 +64,10 @@ class ClubService(
         val count = clubRepository.countByOwnerId(ownerId)
         if (count >= MAX_CLUBS_PER_ORGANIZER) throw ConflictException("Maximum $MAX_CLUBS_PER_ORGANIZER clubs per organizer")
 
-        // Capacity-plan paywall: creating a PAID club beyond the organizer's plan ceiling needs a
-        // subscription. Throws 402 (PaymentRequiredException) with the upgrade target. Free clubs
-        // (subscription_price == 0) never trigger it — they don't consume capacity (payment-v2.md §3).
+        // Пейволл по ёмкости плана: создание ПЛАТНОГО клуба сверх потолка плана организатора
+        // требует подписки. Бросает 402 (PaymentRequiredException) с целью для апгрейда.
+        // Бесплатные клубы (subscription_price == 0) никогда его не триггерят — они не
+        // расходуют ёмкость (payment-v2.md §3).
         if (request.subscriptionPrice > 0) {
             subscriptionService.requirePaidClubCapacity(ownerId, clubRepository.countPaidByOwnerId(ownerId))
         }
@@ -71,14 +76,14 @@ class ClubService(
         val club = clubRepository.create(request, ownerId, inviteCode)
         log.info("Club created: id={} name='{}' category={} accessType={} ownerId={}", club.id, club.name, request.category, request.accessType, ownerId)
 
-        // Auto-create organizer membership for the owner.
-        // Wrapped in the same @Transactional scope as clubRepository.create() above —
-        // if this INSERT fails the club row rolls back, preventing orphaned clubs
-        // without an organizer membership.
+        // Автосоздание organizer-членства для владельца.
+        // Обёрнуто в тот же @Transactional scope, что и clubRepository.create() выше —
+        // если этот INSERT упадёт, строка клуба откатится, что предотвращает появление
+        // осиротевших клубов без organizer-членства.
         membershipRepository.createOrganizer(ownerId, club.id)
 
-        // Re-read so the response carries the live member count (= 1, the organizer just added) rather
-        // than the bare create() result (0). findById computes the count from `memberships`.
+        // Перечитываем, чтобы ответ нёс актуальный счётчик участников (= 1, организатор только
+        // что добавлен), а не голый результат create() (0). findById считает счётчик из `memberships`.
         return mapper.toDetailDto(clubRepository.findById(club.id) ?: club, includeRequisites = true)
     }
 
@@ -99,8 +104,9 @@ class ClubService(
 
     fun getClub(id: UUID, callerId: UUID): ClubDetailDto {
         val club = clubRepository.findById(id) ?: throw NotFoundException("Club not found")
-        // SBP requisites are visible only to club members (active/frozen) + the owner — a pending
-        // applicant / visitor must not see how to pay (de-Stars: dues = member→organizer, honor-system).
+        // Реквизиты СБП видны только участникам клуба (active/frozen) + владельцу — заявитель
+        // в ожидании / посетитель не должен видеть, как платить (de-Stars: взнос = участник→
+        // организатор, honor-system).
         val membership = membershipRepository.findByUserAndClub(callerId, id)
         val isMember = membership != null && membership.status in MEMBER_REQUISITE_STATUSES
         return mapper.toDetailDto(club, includeRequisites = isMember)
@@ -121,16 +127,17 @@ class ClubService(
         val club = clubRepository.findById(id) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club owner can update it")
 
-        // Turning a FREE club into a PAID one consumes plan capacity — same paywall as creation,
-        // otherwise editing would bypass the ceiling (payment-v2.md §3.6).
+        // Превращение БЕСПЛАТНОГО клуба в ПЛАТНЫЙ расходует ёмкость плана — тот же пейволл,
+        // что и при создании, иначе редактирование обходило бы потолок (payment-v2.md §3.6).
         if (request.subscriptionPrice != null && request.subscriptionPrice > 0 && club.subscriptionPrice == 0) {
             subscriptionService.requirePaidClubCapacity(userId, clubRepository.countPaidByOwnerId(userId))
         }
 
-        // Invariant: a paid club must keep SBP requisites. Resolve the post-update state — price from the
-        // request or the current value; link kept when the key is absent (null), cleared on a blank string
-        // (same convention the repository uses). Blocks 0→paid without a link, clearing a paid club's link,
-        // and editing a legacy paid club that never had one.
+        // Инвариант: платный клуб обязан сохранять реквизиты СБП. Вычисляем итоговое состояние
+        // после апдейта — цена из запроса или текущее значение; ссылка сохраняется, если ключ
+        // отсутствует (null), очищается на пустой строке (та же конвенция, что использует
+        // репозиторий). Блокирует переход 0→платный без ссылки, очистку ссылки у платного
+        // клуба, и редактирование легаси платного клуба, у которого её никогда не было.
         val resultingPrice = request.subscriptionPrice ?: club.subscriptionPrice
         val resultingLink = if (request.paymentLink == null) club.paymentLink else request.paymentLink.ifBlank { null }
         if (resultingPrice > 0 && resultingLink.isNullOrBlank()) {
@@ -147,13 +154,15 @@ class ClubService(
         val club = clubRepository.findById(id) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club owner can delete it")
 
-        // Cascade: a soft-deleted club must not leave live activity behind. Otherwise schedulers
-        // keep processing it (phantom "mark attendance" DMs, late expiry penalties) and its detail
-        // pages 404 on the now-hidden club. We cancel non-finalized events and active skladchinas,
-        // and delete pending/approved applications, via the repositories directly — NOT through
-        // their Services — so the cascade never touches reputation (finalized events keep their
-        // ledger; pending skladchina participants are released, not penalized). Memberships need no
-        // action: "my clubs" already filter clubs.is_active. See orphan-memberships-cleanup.md.
+        // Каскад: мягко удалённый клуб не должен оставлять после себя живую активность. Иначе
+        // планировщики продолжают её обрабатывать (фантомные DM "отметьте явку", запоздалые
+        // штрафы за просрочку), а его страницы деталей отдают 404 на теперь-скрытом клубе.
+        // Отменяем нефинализированные события и активные складчины, удаляем заявки в
+        // ожидании/одобренные — напрямую через репозитории, а НЕ через их Services, чтобы
+        // каскад никогда не затрагивал репутацию (финализированные события сохраняют свой
+        // леджер; участники складчины в ожидании освобождаются, а не штрафуются). Членства
+        // не требуют действий: "мои клубы" уже фильтруют по clubs.is_active.
+        // См. orphan-memberships-cleanup.md.
         val cancelledEvents = eventRepository.cancelActiveEventsByClub(id)
         val cancelledSkladchinas = skladchinaRepository.cancelActiveByClub(id)
         val deletedApplications = applicationRepository.deleteActiveByClub(id)

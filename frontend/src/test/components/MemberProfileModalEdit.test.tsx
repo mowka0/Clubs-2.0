@@ -22,9 +22,11 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
+// Тестовый id клуба, общий для всех сценариев файла.
 const CLUB = 'club-1';
 const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString();
 
+// Базовая фикстура активного платного участника (u-1) — сценарии переопределяют нужные поля.
 const MEMBER: MemberListItemDto = {
   userId: 'u-1', firstName: 'Игорь', lastName: 'Соколов', avatarUrl: null, role: 'member',
   joinedAt: inDays(-30), trust: 70, promiseFulfillmentPct: 90, totalConfirmations: 4, awards: [],
@@ -48,19 +50,19 @@ describe('MemberProfileModal — admin edit (S1)', () => {
     renderWithProviders(
       <MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer onClose={() => {}} />,
     );
-    // The note is an always-open textarea (item 4), so it surfaces as the field's value.
+    // Заметка — всегда открытая textarea (пункт 4), поэтому она видна как значение поля.
     expect(await screen.findByDisplayValue('Помогает с площадкой')).toBeInTheDocument();
   });
 
   it('note field is always-open in a free club, alongside «Удалить из клуба» (item 4)', async () => {
     mockProfile(null);
-    // Free member: no access window → de-Stars subscription strip is hidden, but the note must still
-    // have a home in the management panel (the bug: panel was just «Удалить из клуба»).
+    // Бесплатный участник: нет окна доступа → de-Stars-полоска подписки скрыта, но у заметки всё равно
+    // должно быть место в панели управления (баг: панель состояла из одной «Удалить из клуба»).
     const free: MemberListItemDto = { ...MEMBER, subscriptionExpiresAt: null, accessStatus: 'active' };
     renderWithProviders(
       <MemberProfileModal member={free} clubId={CLUB} isOrganizer onClose={() => {}} />,
     );
-    // The note textarea is present without tapping ✎.
+    // Textarea заметки присутствует без тапа по ✎.
     expect(await screen.findByPlaceholderText(/помогает с площадкой/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Удалить из клуба/ })).toBeInTheDocument();
   });
@@ -88,7 +90,7 @@ describe('MemberProfileModal — admin edit (S1)', () => {
     renderWithProviders(
       <MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer={false} onClose={() => {}} />,
     );
-    // Wait for the profile to load (the reputation block renders), then assert no note/edit.
+    // Ждём загрузки профиля (рендерится блок репутации), затем проверяем отсутствие заметки/редактирования.
     await screen.findByText(/Репутация в этом клубе/i);
     expect(screen.queryByText('Помогает с площадкой')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Редактировать/ })).not.toBeInTheDocument();
@@ -110,7 +112,7 @@ describe('MemberProfileModal — admin edit (S1)', () => {
     const user = userEvent.setup();
     renderWithProviders(<MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer onClose={() => {}} />);
 
-    // No ✎ — the note field is always open; «Сохранить заметку» appears once the text changes.
+    // Без ✎ — поле заметки всегда открыто; «Сохранить заметку» появляется при изменении текста.
     await user.type(await screen.findByPlaceholderText(/помогает с площадкой/i), 'Завсегдатай');
     await user.click(screen.getByRole('button', { name: /Сохранить заметку/ }));
 
@@ -158,9 +160,9 @@ describe('MemberProfileModal — remove member (kick)', () => {
     const user = userEvent.setup();
     renderWithProviders(<MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer onClose={() => {}} />);
 
-    // Open the kick confirm (active member → «Удалить из клуба» in the panel footer).
+    // Открываем подтверждение кика (активный участник → «Удалить из клуба» в подвале панели).
     await user.click(await screen.findByRole('button', { name: /Удалить из клуба/ }));
-    // The confirm button stays disabled until the reason is long enough.
+    // Кнопка подтверждения остаётся disabled, пока причина недостаточно длинная.
     await user.type(screen.getByPlaceholderText(/Причина/i), 'нарушает правила клуба');
     await user.click(screen.getByRole('button', { name: /Удалить из клуба/ }));
 
@@ -177,7 +179,7 @@ describe('MemberProfileModal — club awards (S2)', () => {
       <MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer={false} onClose={() => {}} />,
     );
     expect(await screen.findByText('Активист')).toBeInTheDocument();
-    // ...but no edit affordance for a non-organizer.
+    // ...но без возможности редактирования для не-организатора.
     expect(screen.queryByRole('button', { name: /Редактировать/ })).not.toBeInTheDocument();
   });
 

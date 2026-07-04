@@ -90,9 +90,9 @@ export const ClubPage: FC = () => {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [answerText, setAnswerText] = useState('');
-  // De-Stars: join returns a MembershipDto. A paid club lands the membership in `frozen` (no access
-  // until the organizer confirms the off-platform dues); a free club lands it `active`. We remember
-  // the status from the mutation result so the CTA reacts before the membership refetch lands.
+  // De-Stars: вступление возвращает MembershipDto. В платном клубе membership попадает в `frozen`
+  // (нет доступа, пока организатор не подтвердит офлайн-взнос); в бесплатном — сразу `active`.
+  // Запоминаем статус из результата мутации, чтобы CTA среагировал раньше, чем придёт рефетч membership.
   const [joinedStatus, setJoinedStatus] = useState<string | null>(null);
   const [showDuesSheet, setShowDuesSheet] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('activities');
@@ -104,36 +104,38 @@ export const ClubPage: FC = () => {
   const applications = applicationsQuery.data ?? [];
 
   const membership = myClubs.find((m) => m.clubId === id);
-  // "Leave" is a soft subscription-cancel for anyone who still holds a paid period — including a
-  // club switched paid→free (price 0 but the membership has a future subscription_expires_at).
-  // Only a genuinely free membership takes the hard exit-with-obligations path. Mirrors the
-  // backend routing (MembershipService.hasActivePaidAccess) so the UI matches the actual penalty.
+  // «Выйти» — это мягкая отмена подписки для всех, у кого ещё идёт оплаченный период, включая
+  // клуб, ставший из платного бесплатным (price 0, но у membership есть будущий subscription_expires_at).
+  // Только по-настоящему бесплатное членство идёт по жёсткому пути «выход с обязательствами». Повторяет
+  // backend-роутинг (MembershipService.hasActivePaidAccess), чтобы UI соответствовал реальному штрафу.
   const hasActivePaidAccess =
     (!!club && club.subscriptionPrice > 0)
     || (!!membership?.subscriptionExpiresAt
       && new Date(membership.subscriptionExpiresAt).getTime() > Date.now());
-  // Obligation count for the leave dialog — only fetched for a genuinely free leave while the
-  // modal is open (a paid/paid-period leave breaks nothing). Penalty magnitudes stay server-internal.
+  // Число обязательств для диалога выхода — запрашивается только для по-настоящему бесплатного
+  // выхода, пока модалка открыта (платный/в-периоде выход ничего не ломает). Размеры штрафов
+  // остаются внутренними для сервера.
   const leavePreviewQuery = useLeavePreviewQuery(id, showLeaveModal && !hasActivePaidAccess);
 
   const isOwner = !!club && club.ownerId === user?.id;
   const isOrganizer = isOwner || membership?.role === 'organizer';
-  // Red-dot on «Управление»: members about to expire OR frozen-awaiting-dues need a confirm.
+  // Красная точка на «Управление»: есть участники, у которых скоро истекает срок, ИЛИ frozen-участники,
+  // ожидающие подтверждения взноса.
   const memberAttentionQuery = useMemberAttentionQuery(id, { enabled: isOrganizer });
   const showManageDot =
     (memberAttentionQuery.data?.expiringSoon ?? 0) > 0
     || (memberAttentionQuery.data?.awaitingDues ?? 0) > 0;
-  // Active membership = full member; cancelled paid membership inside its
-  // paid period = "still inside the club" — tabs stay visible, but instead
-  // of «Выйти из клуба» the footer shows a read-only «Подписка отменена» note.
+  // Active membership = полноценный участник; отменённое платное membership внутри своего
+  // оплаченного периода = «всё ещё в клубе» — табы остаются видимыми, но вместо
+  // «Выйти из клуба» в футере показывается read-only заметка «Подписка отменена».
   const isActiveMember = !!membership && membership.status === 'active';
   const isCancelledInPeriod =
     !!membership
     && membership.status === 'cancelled'
     && !!membership.subscriptionExpiresAt
     && new Date(membership.subscriptionExpiresAt).getTime() > Date.now();
-  // De-Stars: a paid member who joined but hasn't been admitted yet (organizer hasn't confirmed the
-  // off-platform dues). They're inside the club but have no content access — no tabs, a pending note.
+  // De-Stars: платный участник, который вступил, но ещё не допущен (организатор не подтвердил
+  // офлайн-взнос). Он уже внутри клуба, но без доступа к контенту — без табов, с заметкой «в ожидании».
   const isFrozenMember = membership?.status === 'frozen' || joinedStatus === 'frozen';
   const isMember = isActiveMember || isCancelledInPeriod;
   const myApplication = applications.find((a) => a.clubId === id) ?? null;
@@ -166,7 +168,7 @@ export const ClubPage: FC = () => {
         haptic.notify('success');
       },
       onError: (e) => {
-        // 409 — silent recovery: cache already invalidated, UI was stale.
+        // 409 — тихое восстановление: кэш уже инвалидирован, UI был просто устаревшим.
         if (e instanceof ApiError && e.status === 409) return;
         setJoinError(e.message);
         haptic.notify('error');
@@ -201,10 +203,10 @@ export const ClubPage: FC = () => {
     );
   };
 
-  // Recovery handler for the legacy stuck state: a free-club application was
-  // approved but the auto-create membership branch never ran (earlier bug /
-  // pre-existing data). Backend `complete-free-membership` re-creates the
-  // membership idempotently; on success the page re-renders with member tabs.
+  // Обработчик восстановления для устаревшего «застрявшего» состояния: заявка в бесплатный клуб
+  // была одобрена, но ветка автосоздания membership так и не отработала (старый баг / уже
+  // существующие данные). Backend `complete-free-membership` идемпотентно пересоздаёт membership;
+  // при успехе страница перерисовывается с табами участника.
   const handleCompleteFreeMembership = () => {
     if (!id || !myApplication) return;
     haptic.impact('medium');
@@ -238,9 +240,9 @@ export const ClubPage: FC = () => {
         haptic.notify('success');
         setShowLeaveModal(false);
         if (hasActivePaidAccess) {
-          // Soft cancel keeps the membership row (status=cancelled,
-          // subscription_expires_at in the future) — stay on the club so the
-          // cancelled-banner takes over from the leave icon.
+          // Мягкая отмена сохраняет строку membership (status=cancelled,
+          // subscription_expires_at в будущем) — остаёмся на странице клуба, чтобы
+          // баннер «отменено» сменил иконку выхода.
           return;
         }
         navigate('/my-clubs', {
@@ -255,8 +257,8 @@ export const ClubPage: FC = () => {
     });
   };
 
-  // Tab «Управление» is a navigate-link, not a state-toggle: tap fires haptic
-  // impact (not select) and routes to /manage. activeTab never holds 'manage'.
+  // Таб «Управление» — это ссылка-переход, а не переключатель состояния: тап вызывает haptic
+  // impact (не select) и ведёт на /manage. activeTab никогда не содержит 'manage'.
   const handleTabClick = (tab: TabKey) => {
     if (tab === 'manage') {
       haptic.impact('light');
@@ -268,7 +270,7 @@ export const ClubPage: FC = () => {
   };
 
   const renderCta = () => {
-    // A fresh join in this session always wins (membership query may still be refetching).
+    // Свежее вступление в этой сессии всегда побеждает (membership-запрос может ещё рефетчиться).
     if (joinedStatus === 'active') {
       return (
         <button type="button" className="rd-btn-outline" disabled>
@@ -276,9 +278,10 @@ export const ClubPage: FC = () => {
         </button>
       );
     }
-    // A cancelled-out member (removed / rejected / left, no paid grace) should get the fresh join/apply
-    // CTA — ignore any stale/orphaned application lingering from a prior membership cycle, otherwise they
-    // get stuck on «Заявка одобрена» (backend now also clears the application on cancel; this is the UI guard).
+    // Участник, вышедший «в отмену» (исключён / отклонён / вышел, без платной отсрочки), должен получить
+    // свежий CTA вступления/заявки — игнорируем устаревшую/осиротевшую заявку, оставшуюся от прошлого
+    // цикла membership, иначе он застрянет на «Заявка одобрена» (backend теперь тоже чистит заявку
+    // при отмене; это — защита на стороне UI).
     const wasMemberNowOut = membership?.status === 'cancelled' && !isCancelledInPeriod;
     if (!wasMemberNowOut && myApplication?.status === 'pending') {
       return (
@@ -290,8 +293,8 @@ export const ClubPage: FC = () => {
     if (!wasMemberNowOut && myApplication?.status === 'approved') {
       const price = club.subscriptionPrice ?? 0;
       if (price <= 0) {
-        // Legacy stuck state: free club, approved, but membership row missing.
-        // Surface a recovery CTA so the user can finish joining.
+        // Устаревшее «застрявшее» состояние: бесплатный клуб, заявка одобрена, но строки membership нет.
+        // Показываем CTA восстановления, чтобы пользователь мог завершить вступление.
         return (
           <>
             <button
@@ -308,8 +311,9 @@ export const ClubPage: FC = () => {
           </>
         );
       }
-      // Paid club: approval now creates a frozen membership directly (de-Stars), so this normally
-      // renders the frozen-pending note above instead. Fallback copy for any legacy approved row.
+      // Платный клуб: одобрение теперь сразу создаёт frozen-membership (de-Stars), поэтому обычно
+      // вместо этого рендерится заметка «frozen-pending» выше. Здесь — запасной текст для старых
+      // одобренных строк.
       return (
         <button type="button" className="rd-btn-outline" disabled>
           Заявка одобрена — организатор откроет доступ
@@ -378,7 +382,7 @@ export const ClubPage: FC = () => {
 
   return (
     <div className="rd-page">
-      {/* Hero cover */}
+      {/* Обложка (hero) */}
       <div className="rd-hero rd-compact">
         <div
           className="rd-hero-bg"
@@ -411,16 +415,16 @@ export const ClubPage: FC = () => {
         </div>
       )}
 
-      {/* About */}
+      {/* О клубе */}
       <div className="rd-section-sub-h">О клубе</div>
       <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
         <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{club.description}</div>
       </div>
 
-      {/* Club quality — unified public block (rings + age/activity caption), visible to every viewer */}
+      {/* Качество клуба — единый публичный блок (кольца + подпись возраст/активность), виден всем */}
       {id && <ClubQualityFacts clubId={id} memberCount={club.memberCount} />}
 
-      {/* Rules (optional) */}
+      {/* Правила (опционально) */}
       {club.rules && (
         <>
           <div className="rd-section-sub-h">Правила</div>
@@ -430,7 +434,7 @@ export const ClubPage: FC = () => {
         </>
       )}
 
-      {/* Frozen member: joined a paid club but not yet admitted — awaiting the organizer's dues confirm. */}
+      {/* Frozen-участник: вступил в платный клуб, но ещё не допущен — ждёт подтверждения взноса организатором. */}
       {!showTabs && isFrozenMember && (
         <>
           <div className="rd-glass rd-locked">
@@ -474,7 +478,7 @@ export const ClubPage: FC = () => {
         />
       )}
 
-      {/* Visitor: lock placeholder + CTA */}
+      {/* Гость: заглушка с замком + CTA */}
       {!showTabs && !isFrozenMember && (
         <>
           <div className="rd-glass rd-locked">
@@ -493,7 +497,7 @@ export const ClubPage: FC = () => {
         </>
       )}
 
-      {/* Member / Organizer: role-aware tabs */}
+      {/* Участник / Организатор: табы с учётом роли */}
       {showTabs && id && (
         <>
           <div className="rd-tabs" role="tablist">
@@ -517,7 +521,7 @@ export const ClubPage: FC = () => {
         </>
       )}
 
-      {/* Apply modal (visitor closed-club flow) */}
+      {/* Модалка заявки (флоу гостя для закрытого клуба) */}
       {showApplyModal && (
         <Modal open onOpenChange={(open) => !open && setShowApplyModal(false)}>
           <div style={{ padding: 16 }}>

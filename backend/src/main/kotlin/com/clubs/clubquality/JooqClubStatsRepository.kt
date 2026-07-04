@@ -28,28 +28,33 @@ import java.util.UUID
 import kotlin.math.roundToInt
 
 /**
- * Read-only windowed aggregations for the owner «Статистика» panel. Time windows are computed in
- * Kotlin and bound as parameters (no SQL `interval`) — deterministic and testable, consistent with
- * [JooqClubQualityRepository]. Trends compare a current window against the equal-length prior window
- * and are suppressed (null) when the prior window has no baseline to compare against (§9.4–§9.5).
+ * Read-only оконные агрегации для owner-панели «Статистика». Временные окна считаются в Kotlin
+ * и биндятся параметрами (без SQL `interval`) — детерминированно и тестируемо, консистентно с
+ * [JooqClubQualityRepository]. Тренды сравнивают текущее окно с предыдущим окном той же длины
+ * и подавляются (null), когда у предыдущего окна нет базы для сравнения (§9.4–§9.5).
  */
 @Repository
 class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository {
 
     private companion object {
+        // Окно удержания/оттока (продления, ушедшие, вернувшиеся), в днях.
         const val RETENTION_WINDOW_DAYS = 30L
+        // Окно вовлечённости (доля откликнувшихся на события), в днях.
         const val ENGAGEMENT_WINDOW_DAYS = 90L
+        // Окно метрики оплаты складчин, в днях.
         const val SKLADCHINA_WINDOW_DAYS = 90L
+        // Окно блока «внимание» (авто-отклонения заявок, отменённые встречи), в днях.
         const val ATTENTION_WINDOW_DAYS = 90L
+        // Заявка считается «зависшей», если ждёт ответа дольше этого числа часов.
         const val STALE_APPLICATION_HOURS = 24L
     }
 
-    /** A percent metric over a window plus whether that window had a comparison baseline. */
+    /** Процентная метрика по окну плюс признак, была ли у окна база для сравнения. */
     private data class WindowValue(val value: Int, val hasBase: Boolean)
 
     override fun findClubStats(clubId: UUID): ClubStats? {
-        // IS_ACTIVE filter mirrors the @RequiresOrganizer aspect (which rejects an inactive club with
-        // 404 before this runs) — keeps the repository self-consistent if ever called outside that gate.
+        // Фильтр IS_ACTIVE зеркалит аспект @RequiresOrganizer (он отбивает неактивный клуб 404 ещё до
+        // этого кода) — репозиторий остаётся самосогласованным, если его вызовут в обход того гейта.
         val meta = dsl.select(CLUBS.SUBSCRIPTION_PRICE, CLUBS.ACCESS_TYPE)
             .from(CLUBS).where(CLUBS.ID.eq(clubId).and(CLUBS.IS_ACTIVE.isTrue)).fetchOne()
             ?: return null
@@ -69,9 +74,10 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
         val retCur = retentionWindow(clubId, w30, now)
         val retPrior = retentionWindow(clubId, w60, w30)
 
-        // The prior window reuses the current alive-member count as its denominator — no historical
-        // membership snapshot exists (no membership_history backfill, §9.4), so the trend reads the
-        // movement in distinct responders against today's roster. Intended; don't "fix" to a snapshot.
+        // Предыдущее окно переиспользует текущее число живых участников как знаменатель — исторического
+        // снапшота membership нет (бэкфилл membership_history не делался, §9.4), так что тренд читает
+        // движение уникальных откликнувшихся относительно сегодняшнего ростера. Так задумано; не
+        // «чинить» на снапшот.
         val alive = aliveMembers(clubId)
         val engCur = engagementWindow(clubId, alive, w90, null)
         val engPrior = engagementWindow(clubId, alive, w180, w90)
@@ -100,7 +106,7 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
         )
     }
 
-    /** Trend of [current] vs [prior]; null when [prior] has no baseline (can't tell "low" from "no data"). */
+    /** Тренд [current] против [prior]; null, если у [prior] нет базы («мало» неотличимо от «нет данных»). */
     private fun trend(current: WindowValue, prior: WindowValue): Trend? {
         if (!prior.hasBase) return null
         val delta = current.value - prior.value
@@ -112,7 +118,7 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
         return Trend(direction, delta)
     }
 
-    /** Paid renewal rate: distinct renewers ÷ (renewers + churned), over [start, end). */
+    /** Доля продлений в платном клубе: уникальные продлившие ÷ (продлившие + ушедшие) за [start, end). */
     private fun retentionWindow(clubId: UUID, start: OffsetDateTime, end: OffsetDateTime): WindowValue {
         val renewers = dsl.select(DSL.countDistinct(TRANSACTIONS.USER_ID))
             .from(TRANSACTIONS)
@@ -131,9 +137,10 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
     }
 
     /**
-     * Churn *events* (`left` + `expired`) in [start, end) — the flow count that feeds the renewal-rate
-     * ratio (denominator alongside renewals). Distinct from [churnedMemberCount]/[findChurnedMembers],
-     * which count the win-back *roster* (distinct people still gone now). Free clubs never `expired`.
+     * *События* оттока (`left` + `expired`) за [start, end) — счётчик потока, питающий долю продлений
+     * (знаменатель рядом с продлениями). Не путать с [churnedMemberCount]/[findChurnedMembers],
+     * которые считают win-back-*ростер* (уникальных людей, всё ещё отсутствующих сейчас).
+     * В бесплатных клубах `expired` не бывает.
      */
     private fun churnCount(clubId: UUID, start: OffsetDateTime, end: OffsetDateTime): Int =
         dsl.selectCount().from(MEMBERSHIP_HISTORY)
@@ -146,11 +153,12 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
             .fetchOne(0, Int::class.java) ?: 0
 
     /**
-     * Win-back predicate: a member with a `left`/`expired` event since [since] who does NOT currently
-     * belong to the club (so left-then-rejoined people are excluded — they're back). "Belongs" includes
-     * `frozen` (gated pending dues, still a member) so a frozen member is NOT counted as churned. Shared
-     * by [churnedMemberCount] (the «Ушли/Не продлили за месяц» lever) and [findChurnedMembers] (the
-     * drill-down roster) so the lever value equals the roster length. Both LEFT JOIN `memberships`.
+     * Win-back-предикат: участник с событием `left`/`expired` начиная с [since], который сейчас
+     * НЕ состоит в клубе (ушедшие-и-вернувшиеся исключаются — они уже здесь). «Состоит» включает
+     * `frozen` (доступ закрыт до подтверждения dues, но это всё ещё участник), поэтому frozen НЕ
+     * считается ушедшим. Общий для [churnedMemberCount] (рычаг «Ушли/Не продлили за месяц») и
+     * [findChurnedMembers] (drill-down-ростер), чтобы значение рычага совпадало с длиной ростера.
+     * Оба делают LEFT JOIN `memberships`.
      */
     private fun churnedMemberCondition(clubId: UUID, since: OffsetDateTime): Condition =
         MEMBERSHIP_HISTORY.CLUB_ID.eq(clubId)
@@ -167,7 +175,7 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
                     ),
             )
 
-    /** Distinct members still gone now who left/expired since [since] — the «Ушли за месяц» lever. */
+    /** Уникальные участники, ушедшие (left/expired) с [since] и не вернувшиеся — рычаг «Ушли за месяц». */
     private fun churnedMemberCount(clubId: UUID, since: OffsetDateTime): Int =
         dsl.select(DSL.countDistinct(MEMBERSHIP_HISTORY.USER_ID))
             .from(MEMBERSHIP_HISTORY)
@@ -215,7 +223,7 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
             )
             .fetchOne(0, Int::class.java) ?: 0
 
-    /** Alive (active + grace_period) memberships — the engagement denominator. */
+    /** «Живые» membership'ы (active + grace_period) — знаменатель вовлечённости. */
     private fun aliveMembers(clubId: UUID): Int =
         dsl.selectCount().from(MEMBERSHIPS)
             .where(
@@ -225,9 +233,10 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
             .fetchOne(0, Int::class.java) ?: 0
 
     /**
-     * Distinct responders ÷ [alive], over non-cancelled events with `event_datetime >= start` (and
-     * `< end` when [end] is given). The current window passes `end = null` to include upcoming events —
-     * matching the Discovery card's engagement; the prior window bounds both ends. hasBase = events in window.
+     * Уникальные откликнувшиеся ÷ [alive] по неотменённым событиям с `event_datetime >= start`
+     * (и `< end`, если [end] задан). Текущее окно передаёт `end = null`, чтобы включить будущие
+     * события — так же считается вовлечённость на карточке Discovery; предыдущее окно ограничено
+     * с обеих сторон. hasBase = в окне были события.
      */
     private fun engagementWindow(
         clubId: UUID,
@@ -252,9 +261,9 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
     }
 
     /**
-     * Paid share among settled participants of skladchinas closed in [start, end). Settled =
-     * {paid, declined, expired_no_response}; `pending` (undecided) and `released` (let off the hook)
-     * are excluded. hasBase = at least one settled participant.
+     * Доля оплативших среди «решённых» участников складчин, закрытых в [start, end). Решённые =
+     * {paid, declined, expired_no_response}; `pending` (не определился) и `released` (отпущен
+     * организатором) исключаются. hasBase = есть хотя бы один решённый участник.
      */
     private fun skladchinaWindow(clubId: UUID, start: OffsetDateTime, end: OffsetDateTime): WindowValue {
         val settled = listOf(
@@ -280,7 +289,7 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
         return WindowValue(value, total > 0)
     }
 
-    /** Returns (pending count, stale subset older than 24h). */
+    /** Возвращает пару (число pending-заявок, из них «зависшие» старше 24 часов). */
     private fun pendingApplications(clubId: UUID, staleBefore: OffsetDateTime): Pair<Int, Int> {
         val record = dsl.select(
             DSL.count(),
@@ -302,12 +311,13 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
             .fetchOne(0, Int::class.java) ?: 0
 
     /**
-     * Attendance disputes ever raised against the club's marks (cumulative, all-time). `attendance =
-     * disputed` is transient — a resolved/expired dispute flips back to attended/absent and persists only
-     * as `dispute_terminal = true` (and the `dispute_note` it stored), so counting `disputed` alone would
-     * read ~0 after every event finalizes. We union the live state with both persistent markers to count
-     * the organizer's actual dispute track record. The signal is "a member raised a dispute", regardless
-     * of who won the resolution (§9.5; design §2 «споры (member-raised)»).
+     * Споры по явке, когда-либо поданные против отметок клуба (накопительно, за всё время).
+     * `attendance = disputed` — состояние временное: решённый/протухший спор возвращается в
+     * attended/absent и сохраняется только как `dispute_terminal = true` (плюс записанный
+     * `dispute_note`), поэтому счёт по одному `disputed` показывал бы ~0 после финализации каждого
+     * события. Объединяем живое состояние с обоими постоянными маркерами, чтобы посчитать реальный
+     * track record споров организатора. Сигнал — «участник поднял спор», независимо от того, кто
+     * выиграл разбор (§9.5; дизайн §2 «споры (member-raised)»).
      */
     private fun disputeCount(clubId: UUID): Int =
         dsl.selectCount().from(EVENT_RESPONSES)
@@ -323,7 +333,7 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
             )
             .fetchOne(0, Int::class.java) ?: 0
 
-    /** All-time held (past, non-cancelled) events — the «N из M» denominator for disputes. */
+    /** Проведённые (прошедшие, неотменённые) события за всё время — знаменатель «N из M» для споров. */
     private fun totalMeetings(clubId: UUID, now: OffsetDateTime): Int =
         dsl.selectCount().from(EVENTS)
             .where(

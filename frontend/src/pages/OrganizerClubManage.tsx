@@ -23,6 +23,7 @@ import type { ClubDetailDto } from '../types/api';
 
 type TabKey = 'members' | 'stats' | 'finances' | 'settings';
 
+// Вкладки страницы управления клубом (порядок массива = порядок отображения).
 const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
   { key: 'members', label: 'Участники' },
   { key: 'stats', label: 'Статистика' },
@@ -30,12 +31,13 @@ const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
   { key: 'settings', label: 'Настройки' },
 ];
 
+// Допустимые значения `?tab=` в URL — для валидации deep-link'ов.
 const VALID_TABS = new Set<string>(TABS.map((t) => t.key));
 
-// Activity creation/browsing moved out of Manage (now on the global "Активности"
-// tab). Applications moved to the cross-club inbox on MyClubsPage — see
-// docs/modules/applications-inbox.md. Legacy deep-links to removed tabs fall
-// back to "Участники" so old shares/refreshes don't 404.
+// Создание/просмотр активностей переехали из «Управления» (теперь на глобальном табе
+// «Активности»). Заявки переехали в кросс-клубовый инбокс на MyClubsPage — см.
+// docs/modules/applications-inbox.md. Legacy deep-link'и на удалённые вкладки
+// откатываются на «Участники», чтобы старые шары/рефреши не отдавали 404.
 const LEGACY_TAB_KEYS = new Set<string>(['activities', 'applications', 'events', 'skladchina']);
 
 function resolveInitialTab(raw: string | null): TabKey {
@@ -43,7 +45,7 @@ function resolveInitialTab(raw: string | null): TabKey {
   return 'members';
 }
 
-// ---- Finances Tab ----
+// ---- Вкладка «Финансы» ----
 
 const FinancesTab: FC<{ clubId: string }> = ({ clubId }) => {
   const financesQuery = useClubFinancesQuery(clubId);
@@ -70,8 +72,8 @@ const FinancesTab: FC<{ clubId: string }> = ({ clubId }) => {
           <div className="rd-stat-value rd-plain">{finances.activeMembers}</div>
         </div>
       </div>
-      {/* De-Stars: dues flow member→organizer directly, off-platform — the platform doesn't take a
-          cut and doesn't track the amounts. Confirm received dues on the «Участники» tab. */}
+      {/* De-Stars: взносы идут напрямую участник→организатор, мимо платформы — платформа не берёт
+          комиссию и не отслеживает суммы. Полученные взносы подтверждаются во вкладке «Участники». */}
       <div className="rd-cta-hint" style={{ textAlign: 'left', marginTop: 8 }}>
         Оплата подписок идёт напрямую вам, мимо платформы — поэтому суммы здесь не считаются.
         Подтверждайте полученные взносы во вкладке «Участники» кнопкой «Взнос получен».
@@ -80,13 +82,15 @@ const FinancesTab: FC<{ clubId: string }> = ({ clubId }) => {
   );
 };
 
-// ---- Settings Tab ----
+// ---- Вкладка «Настройки» ----
 
+// Русские подписи категорий клуба для read-only блока «Нельзя изменить».
 const CATEGORY_LABELS_RU: Record<string, string> = {
   sport: 'Спорт', creative: 'Творчество', food: 'Еда',
   board_games: 'Настолки', cinema: 'Кино', education: 'Образование',
   travel: 'Путешествия', other: 'Другое',
 };
+// Русские подписи типов доступа клуба (open / closed / private).
 const ACCESS_LABELS_RU: Record<string, string> = {
   open: 'Открытый', closed: 'По заявке', private: 'Приватный',
 };
@@ -114,9 +118,9 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(club.avatarUrl ?? null);
 
   const [error, setError] = useState<string | null>(null);
-  // Tracks which Input should render in the error state. Same pattern as RHF
-  // `formState.errors.<field>` in CreateClubModal — gives a red outline on the
-  // offending field, not just an inline message.
+  // Хранит, какой Input рендерить в состоянии ошибки. Тот же паттерн, что RHF
+  // `formState.errors.<field>` в CreateClubModal — красная обводка именно на
+  // проблемном поле, а не только inline-сообщение.
   type SettingsField = 'name' | 'city' | 'memberLimit' | 'subscriptionPrice' | 'description' | 'paymentLink';
   const [errorField, setErrorField] = useState<SettingsField | null>(null);
   const [savedToast, setSavedToast] = useState<string | null>(null);
@@ -142,15 +146,15 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
     setError(null);
     setErrorField(null);
 
-    // Validation failures share the same UX: red outline on the field +
-    // inline error message + error haptic.
+    // Все провалы валидации выглядят одинаково: красная обводка поля +
+    // inline-сообщение об ошибке + error-хаптик.
     const fail = (field: SettingsField, msg: string) => {
       setError(msg);
       setErrorField(field);
       haptic.notify('error');
     };
 
-    // Basic validation (server does full Bean Validation)
+    // Базовая валидация (сервер делает полную Bean Validation)
     if (name.trim().length < 1 || name.trim().length > 60) {
       fail('name', 'Название: 1–60 символов');
       return;
@@ -169,8 +173,9 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
       fail('subscriptionPrice', 'Цена: целое число >= 0');
       return;
     }
-    // A paid club must keep SBP requisites (mirrors the backend invariant). Blocks saving a paid club
-    // with an empty link — including a free→paid switch and a legacy paid club that never had one.
+    // У платного клуба обязательно должны быть реквизиты СБП (зеркалит backend-инвариант). Блокирует
+    // сохранение платного клуба с пустой ссылкой — включая переключение бесплатный→платный и
+    // legacy-клуб, у которого реквизитов никогда не было.
     if (price > 0 && !paymentLink.trim()) {
       fail('paymentLink', 'Для платного клуба укажите реквизиты для взноса');
       return;
@@ -180,9 +185,9 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
       return;
     }
 
-    // Backend contract: for nullable-in-DB fields (district, avatarUrl, rules, applicationQuestion)
-    // an omitted key means "leave as is", a blank string means "clear to NULL".
-    // That's why we send '' (not null/undefined) when the user clears the field.
+    // Контракт бэкенда: для nullable-в-БД полей (district, avatarUrl, rules, applicationQuestion)
+    // отсутствие ключа означает «оставить как есть», пустая строка — «очистить в NULL».
+    // Поэтому когда пользователь очищает поле, мы отправляем '' (а не null/undefined).
     const payload: UpdateClubBody = {};
     if (name !== club.name) payload.name = name.trim();
     if (city !== club.city) payload.city = city.trim();
@@ -399,7 +404,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
   );
 };
 
-// ---- Main Page ----
+// ---- Основная страница ----
 
 export const OrganizerClubManage: FC = () => {
   useBackButton(true);
@@ -413,7 +418,7 @@ export const OrganizerClubManage: FC = () => {
   const initialTab = resolveInitialTab(searchParams.get('tab'));
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
 
-  // Read flash toast from navigation state (e.g. set by CreateEventPage on success).
+  // Читаем flash-тост из navigation state (например, его выставляет CreateEventPage при успехе).
   const flashToast =
     typeof location.state === 'object' &&
     location.state !== null &&
@@ -423,7 +428,7 @@ export const OrganizerClubManage: FC = () => {
       : null;
   const [toast, setToast] = useState<string | null>(flashToast);
 
-  // Clear navigation state once consumed so back-nav doesn't re-trigger the toast.
+  // Очищаем navigation state после использования, чтобы возврат назад не показал тост повторно.
   useEffect(() => {
     if (flashToast) {
       window.history.replaceState({}, document.title);
@@ -431,8 +436,8 @@ export const OrganizerClubManage: FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Drop legacy `?tab=activities|events|skladchina` deep-links to the default
-  // tab so refresh / share doesn't keep a dead value in the URL.
+  // Сбрасываем legacy deep-link'и `?tab=activities|events|skladchina` на дефолтную
+  // вкладку, чтобы refresh / шаринг не сохраняли мёртвое значение в URL.
   useEffect(() => {
     const raw = searchParams.get('tab');
     if (raw && LEGACY_TAB_KEYS.has(raw)) {
@@ -446,7 +451,8 @@ export const OrganizerClubManage: FC = () => {
   const clubId = id ?? '';
   const clubQuery = useClubQuery(clubId || undefined);
   const club = clubQuery.data;
-  // Red-dot on «Участники»: members about to expire OR frozen-awaiting-dues need a confirm.
+  // Красная точка на «Участники»: у участников скоро истекает доступ ИЛИ есть frozen-участники,
+  // ожидающие подтверждения взноса.
   const memberAttentionQuery = useMemberAttentionQuery(clubId || undefined);
   const showMembersDot =
     (memberAttentionQuery.data?.expiringSoon ?? 0) > 0

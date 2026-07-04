@@ -3,11 +3,12 @@ package com.clubs.subscription
 import com.clubs.generated.jooq.enums.SubscriptionPlan
 
 /**
- * Free-floor + no-cliff volume-discount invariant (docs/modules/payment-v2.md §3.2/§3.4).
+ * Инвариант «бесплатный пол + скидка за объём без обрыва» (docs/modules/payment-v2.md §3.2/§3.4).
  *
- * Guards the LOCKED product rule independent of the launch numbers, so a future price tweak can never
- * silently reintroduce the rejected "punish the next club" ladder. Pure → unit-tested directly; also
- * suitable for a fail-fast startup check against the seeded `subscription_pricing` rows.
+ * Защищает ЗАФИКСИРОВАННОЕ продуктовое правило независимо от чисел на старте, чтобы будущая правка
+ * цены никогда молча не вернула отвергнутую лестницу «наказать следующий клуб». Чистая функция →
+ * напрямую юнит-тестируется; также годится для fail-fast проверки при старте против seed-строк
+ * `subscription_pricing`.
  */
 object PricingInvariant {
 
@@ -19,12 +20,12 @@ object PricingInvariant {
             return listOf("pricing missing for one or more plans: $priceKopecksByPlan")
         }
         val errors = mutableListOf<String>()
-        // FREE is the giveaway floor — protects the single-club hobbyist / discovery engine.
+        // FREE — это раздаточный пол, защищает хоббийного владельца одного клуба / discovery-движок.
         if (free != 0) errors += "FREE must be 0 (giveaway floor), was $free"
-        // Total price is non-decreasing for more capacity.
+        // Общая цена не убывает с ростом ёмкости.
         if (trio < free) errors += "TRIO ($trio) must be >= FREE ($free)"
         if (unlimited < trio) errors += "UNLIMITED ($unlimited) must be >= TRIO ($trio)"
-        // No-cliff: UNLIMITED opens cheaply, at most 2× the entry paid tier.
+        // No-cliff: UNLIMITED открывается дёшево, не более чем в 2× входного платного тарифа.
         if (unlimited > 2 * trio) errors += "UNLIMITED ($unlimited) must be <= 2×TRIO (${2 * trio}) [no-cliff]"
         return errors
     }

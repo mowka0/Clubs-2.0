@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 
-// Mock the SDK module before importing the hook so the hook captures the mocks.
-// Each function carries an `isAvailable()` method we can flip per-test.
+// Мокаем модуль SDK до импорта хука, чтобы хук захватил именно моки.
+// У каждой функции есть метод `isAvailable()`, который можно переключать в каждом тесте.
 vi.mock('@telegram-apps/sdk-react', () => {
   const impactFn = vi.fn();
   const notifyFn = vi.fn();
@@ -21,6 +21,7 @@ import {
 } from '@telegram-apps/sdk-react';
 import { useHaptic } from '../../hooks/useHaptic';
 
+// Типизированные обёртки над моками SDK-функций — дают доступ к их isAvailable()
 const mockImpact = vi.mocked(hapticFeedbackImpactOccurred);
 const mockNotify = vi.mocked(hapticFeedbackNotificationOccurred);
 const mockSelect = vi.mocked(hapticFeedbackSelectionChanged);
@@ -28,7 +29,7 @@ const mockSelect = vi.mocked(hapticFeedbackSelectionChanged);
 describe('useHaptic', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // default: SDK available
+    // по умолчанию: SDK доступен
     vi.mocked(mockImpact.isAvailable).mockReturnValue(true);
     vi.mocked(mockNotify.isAvailable).mockReturnValue(true);
     vi.mocked(mockSelect.isAvailable).mockReturnValue(true);

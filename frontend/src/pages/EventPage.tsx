@@ -28,7 +28,7 @@ function getInitials(name: string): string {
     .map((w) => w.charAt(0).toUpperCase()).join('');
 }
 
-/** Maps a responder status to its dot color class (go / maybe / expired / no). */
+/** Маппит статус откликнувшегося в класс цвета точки (go / maybe / expired / no). */
 function statusDotClass(status: string): string {
   if (status === 'going' || status === 'confirmed') return 'rd-d-go';
   if (status === 'maybe' || status === 'waitlisted') return 'rd-d-maybe';
@@ -36,6 +36,7 @@ function statusDotClass(status: string): string {
   return 'rd-d-no';
 }
 
+// Русские подписи статусов голоса/участия — для бейджей и строки «Ваш голос».
 const VOTE_LABELS: Record<string, string> = {
   going: 'Пойду',
   maybe: 'Возможно',
@@ -69,11 +70,11 @@ export const EventPage: FC = () => {
   const myVoteQuery = useMyVoteQuery(isAuthenticated ? id : undefined);
   const hostClubQuery = useClubQuery(eventQuery.data?.clubId);
   const respondersQuery = useEventRespondersQuery(isAuthenticated ? id : undefined);
-  // Existing split for this event — the "Разделить счёт" button opens it / blocks re-creation.
+  // Существующий сплит этого события — кнопка «Разделить счёт» открывает его / блокирует пересоздание.
   const eventSplitQuery = useEventSplitStateQuery(isAuthenticated ? id : undefined);
-  // F5-04: the caller's own attendance — drives the dispute controls even for a member who left
-  // the club (the member-gated responders query 403s for them). Only needed while the dispute
-  // window is open; 404 (organizer / non-participant) is expected and handled as "no dispute UI".
+  // F5-04: собственная явка вызывающего — управляет контролами спора даже у участника, вышедшего
+  // из клуба (member-gated запрос responders отдаёт ему 403). Нужна только пока открыто окно спора;
+  // 404 (организатор / не-участник) ожидаем и трактуется как «UI спора не показываем».
   const myAttendanceQuery = useMyAttendanceQuery(
     isAuthenticated && eventQuery.data?.attendanceMarked && !eventQuery.data?.attendanceFinalized
       ? id
@@ -89,18 +90,18 @@ export const EventPage: FC = () => {
   const resolveMutation = useResolveDisputeMutation();
   const cancelMutation = useCancelEventMutation();
 
-  // Two separate error channels: actionError for vote/confirm/decline, attendanceError for
-  // attendance marking. actionError renders in exactly one slot per phase — the Stage-1 voting
-  // block (gated on showVoting) OR the Stage-2 confirmation block — never both at once (F5-23).
-  // Each handler resets its own before firing, so the two channels never collide either.
+  // Два отдельных канала ошибок: actionError — для голоса/подтверждения/отказа, attendanceError —
+  // для отметки явки. actionError рендерится ровно в одном слоте на фазу — блок голосования Этапа 1
+  // (за гейтом showVoting) ЛИБО блок подтверждения Этапа 2 — никогда оба сразу (F5-23).
+  // Каждый обработчик сбрасывает свой канал перед запуском, так что каналы тоже не сталкиваются.
   const [actionError, setActionError] = useState<string | null>(null);
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
-  // Explicit overrides only; an absent entry means "present" (attended[id] ?? true).
+  // Только явные переопределения; отсутствие записи означает «пришёл» (attended[id] ?? true).
   const [attended, setAttended] = useState<Record<string, boolean>>({});
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  // Optional free-text note the participant attaches when disputing being marked absent.
+  // Необязательный комментарий, который участник прикладывает, оспаривая отметку «не пришёл».
   const [disputeNote, setDisputeNote] = useState('');
-  // F5-14 cancel-event sheet: open flag, optional reason, and its own error slot.
+  // F5-14 шторка отмены события: флаг открытия, необязательная причина и собственный слот ошибки.
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelError, setCancelError] = useState<string | null>(null);
@@ -156,8 +157,8 @@ export const EventPage: FC = () => {
 
   const toggleAttended = (uid: string) => {
     haptic.select();
-    // Default is "пришёл": absentees are the minority, so the organizer unticks only those
-    // who did not show up (decision 2026-06-11, rev. 2).
+    // По умолчанию «пришёл»: отсутствующие — меньшинство, поэтому организатор снимает галочку
+    // только с тех, кто не явился (решение 2026-06-11, ред. 2).
     setAttended((prev) => ({ ...prev, [uid]: !(prev[uid] ?? true) }));
   };
 
@@ -184,8 +185,8 @@ export const EventPage: FC = () => {
     );
   };
 
-  // ATT-3: a participant marked absent contests the mark (absent → disputed). Reachable only
-  // while the dispute window is open (marked && !finalized) — see the gating below.
+  // ATT-3: участник, отмеченный отсутствующим, оспаривает отметку (absent → disputed). Доступно
+  // только пока открыто окно спора (marked && !finalized) — см. гейтинг ниже.
   const handleDispute = () => {
     if (!id || disputeMutation.isPending) return;
     haptic.impact('medium');
@@ -206,7 +207,7 @@ export const EventPage: FC = () => {
     );
   };
 
-  // Organizer resolves a disputed mark into attended/absent before the window closes.
+  // Организатор разрешает оспоренную отметку в «пришёл»/«не пришёл» до закрытия окна.
   const handleResolve = (targetUserId: string, attendedResult: boolean) => {
     if (!id || resolveMutation.isPending) return;
     haptic.impact('medium');
@@ -226,7 +227,7 @@ export const EventPage: FC = () => {
     );
   };
 
-  // F5-14: organizer cancels the event (optional reason). Closes the sheet + toasts on success.
+  // F5-14: организатор отменяет событие (причина опциональна). При успехе закрывает шторку и тостит.
   const handleCancelEvent = () => {
     if (!id || !event || cancelMutation.isPending) return;
     haptic.impact('medium');
@@ -264,14 +265,14 @@ export const EventPage: FC = () => {
     );
   }
 
-  // Phase split: Stage 1 (upcoming) gauges interest (going/maybe vote split); from Stage 2 on
-  // the roster is the confirmed list, so the headline/donut/counts switch to confirmations.
-  // Resolves the "decliner still counted as going" bug — declined/expired drop out of "идут".
+  // Разделение фаз: Этап 1 (upcoming) замеряет интерес (раскладка голосов going/maybe); с Этапа 2
+  // состав — это список подтвердивших, поэтому заголовок/пончик/счётчики переключаются на подтверждения.
+  // Закрывает баг «отказавшийся всё ещё числится идущим» — declined/expired выпадают из «идут».
   const finalComposition = event.status === 'stage_2' || event.status === 'completed';
-  // F5-14: a cancelled event shows only a banner — recruitment/roster/attendance are suppressed.
+  // F5-14: у отменённого события показывается только баннер — набор/состав/явка скрываются.
   const isCancelled = event.status === 'cancelled';
 
-  // Donut chart: Stage 1 = vote split (going / maybe / not going); Stage 2+ = confirmed vs free.
+  // Пончик-диаграмма: Этап 1 = раскладка голосов (going / maybe / not going); Этап 2+ = занято vs свободно.
   const donutStyle: { background: string } = (() => {
     if (finalComposition) {
       const limit = event.participantLimit || 1;
@@ -290,48 +291,48 @@ export const EventPage: FC = () => {
 
   // Backend (`VoteService.castVote`) принимает голос ТОЛЬКО при status='upcoming'.
   const showVoting = event.status === 'upcoming';
-  // Bug B: confirm/decline close at event start. Status stays 'stage_2' until the
-  // hourly completion sweep, so gate on !eventHappened too — mirrors the backend
-  // `event_datetime > now` guard in Stage2Service. See events.md.
+  // Баг B: confirm/decline закрываются в момент старта события. Статус остаётся 'stage_2'
+  // до часового completion-прохода, поэтому гейтим ещё и по !eventHappened — зеркалит
+  // бэкенд-гард `event_datetime > now` в Stage2Service. См. events.md.
   const showStage2 = event.status === 'stage_2' && !eventHappened;
 
-  // Attendance marking — organizer only, once the event has taken place. Backend
-  // (AttendanceService) gates on event_datetime <= now + the attendance_marked
-  // flag, never on status (see events.md § attendance flow). Candidates = the FINAL
-  // roster: only Stage-2-confirmed members (PRD §4.4.3 "список финальных участников,
-  // кто подтвердил на Этапе 2"). Going/maybe voters who never confirmed ("забыли
-  // подтвердить" → expired_no_confirm) are NOT on the roster — they're excluded here
-  // and reputation ignores them (it reads only final_status=confirmed).
+  // Отметка явки — только организатор и только после того, как событие состоялось. Бэкенд
+  // (AttendanceService) гейтит по event_datetime <= now + флагу attendance_marked,
+  // никогда по status (см. events.md § attendance flow). Кандидаты = ФИНАЛЬНЫЙ состав:
+  // только подтвердившие на Этапе 2 (PRD §4.4.3 «список финальных участников,
+  // кто подтвердил на Этапе 2»). Голосовавшие going/maybe, но не подтвердившие («забыли
+  // подтвердить» → expired_no_confirm) в составе НЕ значатся — здесь они исключены,
+  // и репутация их игнорирует (она читает только final_status=confirmed).
   const isOrganizer = !!hostClubQuery.data && hostClubQuery.data.ownerId === userId;
   const attendanceCandidates = (respondersQuery.data ?? []).filter(
     (r) => r.status === 'confirmed',
   );
-  // Dispute window = attendance marked but not yet finalized (the 48h before reputation locks).
+  // Окно спора = явка отмечена, но ещё не закреплена (48 часов до фиксации репутации).
   const disputeWindowOpen = event.attendanceMarked && !event.attendanceFinalized;
-  // EXP-2: a neutrally auto-finalized event is finalized but never marked. The marking UI must
-  // hide in that state (backend rejects a late mark with "Attendance has been finalized").
+  // EXP-2: нейтрально авто-закрытое событие finalized, но так и не marked. UI отметки в этом
+  // состоянии обязан скрыться (бэкенд отклонит позднюю отметку с "Attendance has been finalized").
   const showAttendanceMarking =
     isOrganizer && eventHappened && !event.attendanceMarked && !event.attendanceFinalized && !isCancelled;
   const showAttendanceDone = isOrganizer && eventHappened && event.attendanceMarked;
   const showAttendanceExpired =
     isOrganizer && eventHappened && !event.attendanceMarked && event.attendanceFinalized;
-  // Organizer's resolve list: confirmed participants whose mark is currently disputed.
+  // Список на разрешение у организатора: подтверждённые участники с оспоренной сейчас отметкой.
   const disputedCandidates = attendanceCandidates.filter((r) => r.attendance === 'disputed');
-  // F5-04: the participant's own attendance comes from /my-attendance (reachable without
-  // membership), not the member-gated responders list. canDispute is computed server-side
-  // (window open AND absent AND not yet terminal — F5-16), so the button can't ping-pong.
+  // F5-04: собственная явка участника берётся из /my-attendance (доступен и без членства),
+  // а не из member-gated списка responders. canDispute считается на сервере
+  // (окно открыто И absent И ещё не terminal — F5-16), так что кнопка не «пинг-понгует».
   const myAttendance = myAttendanceQuery.data;
-  // AND with the live disputeWindowOpen too: the query is disabled once the event finalizes, so
-  // its cached canDispute could otherwise stay true against fresh event data showing finalized.
+  // Дополнительно AND с живым disputeWindowOpen: query отключается после финализации события,
+  // и его закешированный canDispute иначе мог бы остаться true при свежих данных о финализации.
   const canDispute = disputeWindowOpen && !!myAttendance?.canDispute;
   const myDisputePending = disputeWindowOpen && myAttendance?.attendance === 'disputed';
-  // F5-16: the organizer rejected the dispute (resolve='не пришёл') — terminal, no re-dispute.
+  // F5-16: организатор отклонил спор (resolve='не пришёл') — терминально, повторный спор невозможен.
   const myDisputeRejected =
     disputeWindowOpen && myAttendance?.attendance === 'absent' && !!myAttendance?.disputeTerminal;
 
-  // Phase-aware "who's coming". Stage 1: every responder (interest list, unchanged). Stage 2+:
-  // only the confirmed roster — pending (still going/maybe, not confirmed), waitlisted, declined
-  // and expired are summarized as counts, not shown as "идут".
+  // «Кто идёт» с учётом фазы. Этап 1: все откликнувшиеся (список интереса, как раньше). Этап 2+:
+  // только подтверждённый состав — pending (всё ещё going/maybe, без подтверждения), waitlisted,
+  // declined и expired сводятся в счётчики и не показываются как «идут».
   const responders = respondersQuery.data ?? [];
   const pendingCount = responders.filter((r) => r.status === 'going' || r.status === 'maybe').length;
   const waitlistedCount = responders.filter((r) => r.status === 'waitlisted').length;
@@ -339,7 +340,7 @@ export const EventPage: FC = () => {
 
   return (
     <div className="rd-page">
-      {/* Hero — club avatar as backdrop (same as club page) */}
+      {/* Хиро — аватар клуба как фон (так же, как на странице клуба) */}
       <div className="rd-hero rd-compact">
         <div
           className="rd-hero-bg"
@@ -355,7 +356,7 @@ export const EventPage: FC = () => {
         </div>
       </div>
 
-      {/* Host club */}
+      {/* Клуб-организатор */}
       {hostClubQuery.data && (
         <button
           type="button"
@@ -377,7 +378,7 @@ export const EventPage: FC = () => {
         </button>
       )}
 
-      {/* Location */}
+      {/* Место проведения */}
       {event.locationText && (
         <div className="rd-glass" style={{ marginBottom: 14, overflow: 'hidden' }}>
           <div className="rd-mini-map" />
@@ -387,7 +388,7 @@ export const EventPage: FC = () => {
         </div>
       )}
 
-      {/* Description */}
+      {/* Описание */}
       {event.description && (
         <>
           <div className="rd-section-sub-h">Описание</div>
@@ -397,7 +398,7 @@ export const EventPage: FC = () => {
         </>
       )}
 
-      {/* Cancelled (F5-14): a banner replaces the recruitment/roster + action blocks. */}
+      {/* Отменено (F5-14): баннер заменяет блоки набора/состава и действий. */}
       {isCancelled && (
         <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14, borderLeft: '3px solid var(--danger)' }}>
           <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
@@ -408,14 +409,14 @@ export const EventPage: FC = () => {
 
       {!isCancelled && (
       <>
-      {/* Recruitment (Stage 1) / roster (Stage 2+) — donut + voting or read-only counts */}
+      {/* Набор (Этап 1) / состав (Этап 2+) — пончик + голосование либо счётчики без действий */}
       <div className="rd-section-sub-h">
         {finalComposition
           ? `Состав · ${event.confirmedCount} / ${event.participantLimit}`
           : `Набор · ${event.goingCount} / ${event.participantLimit}`}
       </div>
-      {/* Stage-1 voting errors only; Stage-2 confirm/decline errors render in their own block
-          below, so actionError never shows twice during stage 2 (F5-23). */}
+      {/* Только ошибки голосования Этапа 1; ошибки confirm/decline Этапа 2 рендерятся в своём
+          блоке ниже, так что actionError никогда не показывается дважды на этапе 2 (F5-23). */}
       {showVoting && actionError && <div className="rd-error">{actionError}</div>}
       <div className="rd-vote-layout">
         <div className="rd-vote-stack">
@@ -461,7 +462,7 @@ export const EventPage: FC = () => {
       </>
       )}
 
-      {/* Who's coming. Stage 1: all responders (interest). Stage 2+: confirmed roster only. */}
+      {/* Кто идёт. Этап 1: все откликнувшиеся (интерес). Этап 2+: только подтверждённый состав. */}
       {!isCancelled && comingList.length > 0 && (
         <>
           <div className="rd-section-sub-h">Кто идёт <span className="rd-count">· {comingList.length}</span></div>
@@ -482,13 +483,13 @@ export const EventPage: FC = () => {
         </>
       )}
 
-      {/* Attendance — organizer marks who showed up, after the event */}
+      {/* Явка — организатор отмечает пришедших после события */}
       {showAttendanceMarking && (
         <>
           <div className="rd-section-sub-h">Отметить посещаемость</div>
           {respondersQuery.isPending ? (
-            // The roster drives attendanceCandidates; until it loads, "no confirmed participants"
-            // is a false empty-state that could make the organizer close the page → EXP-2 (F5-22).
+            // Состав питает attendanceCandidates; пока он грузится, «нет подтверждённых участников» —
+            // ложный empty-state, из-за которого организатор может закрыть страницу → EXP-2 (F5-22).
             <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
               <div className="rd-spinner-row" style={{ padding: 0 }}><Spinner size="s" /></div>
             </div>
@@ -554,8 +555,8 @@ export const EventPage: FC = () => {
         </>
       )}
 
-      {/* Attendance — recorded. Read-only summary + (while the dispute window is open) the
-          organizer's resolve controls for any contested marks (ATT-2/ATT-3). */}
+      {/* Явка — зафиксирована. Read-only сводка + (пока открыто окно спора) контролы
+          организатора для разрешения оспоренных отметок (ATT-2/ATT-3). */}
       {showAttendanceDone && (
         <>
           <div className="rd-section-sub-h">Посещаемость</div>
@@ -567,8 +568,8 @@ export const EventPage: FC = () => {
               ✓ Посещаемость отмечена{event.attendanceFinalized ? ' и закреплена' : ''}.
             </div>
           </div>
-          {/* split_bill entry. One split per event: an active one is opened, a successfully-closed
-              one is shown (already collected); otherwise the button creates a new split. */}
+          {/* Вход в split_bill. Один сплит на событие: активный — открываем, успешно закрытый —
+              показываем («счёт уже собран»); иначе кнопка создаёт новый сплит. */}
           {(() => {
             const split = eventSplitQuery.data;
             const openExisting = () => {
@@ -652,7 +653,7 @@ export const EventPage: FC = () => {
         </>
       )}
 
-      {/* EXP-2: organizer never marked, deadline passed → event closed neutrally (no reputation). */}
+      {/* EXP-2: организатор так и не отметил, дедлайн прошёл → событие закрыто нейтрально (без репутации). */}
       {showAttendanceExpired && (
         <>
           <div className="rd-section-sub-h">Посещаемость</div>
@@ -665,7 +666,7 @@ export const EventPage: FC = () => {
         </>
       )}
 
-      {/* Participant-facing dispute (ATT-3): shown to whoever was marked absent, while the window is open. */}
+      {/* Спор со стороны участника (ATT-3): виден отмеченному отсутствующим, пока окно открыто. */}
       {(canDispute || myDisputePending || myDisputeRejected) && (
         <>
           <div className="rd-section-sub-h">Ваша явка</div>
@@ -704,7 +705,7 @@ export const EventPage: FC = () => {
         </>
       )}
 
-      {/* Stage 2 — confirmation */}
+      {/* Этап 2 — подтверждение участия */}
       {showStage2 && (
         <>
           <div className="rd-section-sub-h">Подтверждение участия</div>
@@ -730,7 +731,7 @@ export const EventPage: FC = () => {
         </>
       )}
 
-      {/* Cancel event (F5-14) — organizer only, before the event starts. */}
+      {/* Отмена события (F5-14) — только организатор, до начала события. */}
       {isOrganizer && !isCancelled && !eventHappened && (
         <div className="rd-cta-wrap" style={{ marginTop: 8 }}>
           <button
@@ -786,7 +787,7 @@ export const EventPage: FC = () => {
         document.body,
       )}
 
-      {/* Confirmed participants */}
+      {/* Подтверждённые участники */}
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
     </div>
   );

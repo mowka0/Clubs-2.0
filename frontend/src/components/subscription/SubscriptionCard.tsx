@@ -12,8 +12,9 @@ import { PlanCard } from './PlanCard';
 import { formatPeriodEnd, planRank } from './planDisplay';
 
 /**
- * Profile management card (Вариант A): the tier ladder with the current plan marked, upgrade buttons
- * on higher tiers, and cancel for an active paid plan. Organizer-centric; renders for any account.
+ * Карточка управления подпиской в профиле (Вариант A): лестница тарифов с отметкой текущего плана,
+ * кнопки апгрейда на старших тарифах и отмена для активного платного плана. Ориентирована на
+ * организатора; рендерится для любого аккаунта.
  */
 export const SubscriptionCard: FC = () => {
   const haptic = useHaptic();
@@ -24,7 +25,7 @@ export const SubscriptionCard: FC = () => {
   const cancelMutation = useCancelSubscriptionMutation();
 
   const status = statusQuery.data;
-  // Organizer-only surface: shown when the user owns at least one club.
+  // Поверхность только для организатора: показывается, когда пользователь владеет хотя бы одним клубом.
   const isOrganizer = (myClubsQuery.data ?? []).some((m) => m.role === 'organizer');
   if (!status || !isOrganizer) return null;
 

@@ -6,12 +6,13 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 
 /**
- * Time-driven transitions for the platform service-fee subscription. Slice 1 handles the period-end
- * of cancelled subscriptions (CANCELLED_PENDING_END → ENDED). PAST_DUE dunning timeout is deferred
- * until a real acquirer drives failed renewals (the stub never fails one) — see payment-v2.md §4.6.
+ * Переходы по времени для платформенной подписки на сервисный сбор. Slice 1 закрывает окончание
+ * периода у отменённых подписок (CANCELLED_PENDING_END → ENDED). Таймаут dunning для PAST_DUE
+ * отложен, пока реальный эквайер не начнёт давать неудачные продления (стаб их никогда не фейлит) —
+ * см. payment-v2.md §4.6.
  *
- * Named `ServiceSubscription*` to stay distinct from the legacy Stars-membership
- * `com.clubs.payment.SubscriptionLifecycleService` (avoids a Spring bean-name clash).
+ * Названо `ServiceSubscription*`, чтобы отличаться от legacy Stars-membership
+ * `com.clubs.payment.SubscriptionLifecycleService` (исключает конфликт имён Spring-бинов).
  */
 @Service
 class ServiceSubscriptionLifecycleService(

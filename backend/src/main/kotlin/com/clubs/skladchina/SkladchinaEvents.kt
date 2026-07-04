@@ -4,9 +4,9 @@ import com.clubs.generated.jooq.enums.SkladchinaStatus
 import java.util.UUID
 
 /**
- * Published after a skladchina is created and the transaction has committed.
- * Listener (SkladchinaBotNotifier) sends DMs to participants.
- * See SkladchinaBotNotifier for the canonical TransactionalEventListener pattern.
+ * Публикуется после создания складчины и коммита транзакции.
+ * Слушатель (SkladchinaBotNotifier) отправляет участникам личные сообщения.
+ * Канонический паттерн TransactionalEventListener см. в SkladchinaBotNotifier.
  */
 data class SkladchinaCreatedEvent(
     val skladchinaId: UUID,
@@ -23,9 +23,9 @@ data class SkladchinaCreatedEvent(
 )
 
 /**
- * Published after a participant opens a decline request (REQUIRES_APPROVAL templates, V28) and the
- * transaction has committed. Listener DMs the organizer with the requester + reason and a button
- * to the skladchina page.
+ * Публикуется после того, как участник открывает запрос на отказ (шаблоны REQUIRES_APPROVAL, V28) и
+ * транзакция закоммичена. Слушатель отправляет организатору личное сообщение с заявителем + причиной и
+ * кнопкой на страницу складчины.
  */
 data class SkladchinaDeclineRequestedEvent(
     val skladchinaId: UUID,
@@ -37,9 +37,9 @@ data class SkladchinaDeclineRequestedEvent(
 )
 
 /**
- * Published after the organizer REJECTS a decline request (V29) and the transaction has committed.
- * Listener DMs the rejected participant with the organizer's reason and a button to the skladchina
- * page (they must still pay).
+ * Публикуется после того, как организатор ОТКЛОНЯЕТ запрос на отказ (V29) и транзакция закоммичена.
+ * Слушатель отправляет отклонённому участнику личное сообщение с причиной организатора и кнопкой на
+ * страницу складчины (участник всё равно должен заплатить).
  */
 data class SkladchinaDeclineRejectedEvent(
     val skladchinaId: UUID,
@@ -50,9 +50,9 @@ data class SkladchinaDeclineRejectedEvent(
 )
 
 /**
- * Published after a skladchina is closed (manual, goal-reached, all-answered, or
- * scheduler auto-close) and the transaction has committed. Listener notifies
- * the creator with a summary.
+ * Публикуется после закрытия складчины (вручную, цель достигнута, все ответили или
+ * авто-закрытие шедулером) и коммита транзакции. Слушатель уведомляет
+ * создателя итоговой сводкой.
  */
 data class SkladchinaClosedEvent(
     val skladchinaId: UUID,
@@ -66,10 +66,10 @@ data class SkladchinaClosedEvent(
     val participantCount: Int,
     val affectsReputation: Boolean,
     /**
-     * Participants who stayed silent until the deadline and just received the -40
-     * ledger entry. Non-empty ONLY for a reputation-affecting close at/after the
-     * deadline — the notifier DMs each of them about the penalty (launch-blocker
-     * notification #3 of the redesign).
+     * Участники, промолчавшие до дедлайна и только что получившие запись -40
+     * в леджере. Непусто ТОЛЬКО для влияющего на репутацию закрытия в момент дедлайна
+     * или после — уведомитель шлёт каждому из них личное сообщение о штрафе (блокер запуска,
+     * уведомление #3 редизайна).
      */
     val expiredParticipantUserIds: List<UUID> = emptyList()
 )

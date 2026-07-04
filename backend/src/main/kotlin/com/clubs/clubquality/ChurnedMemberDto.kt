@@ -4,8 +4,8 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * HTTP DTO for the win-back roster — `GET /api/clubs/{clubId}/churned-members` (owner-only).
- * Enough to render a member row and open the existing profile card by [userId].
+ * HTTP DTO для ростера win-back — `GET /api/clubs/{clubId}/churned-members` (только владелец).
+ * Достаточно, чтобы отрендерить строку участника и открыть существующую карточку профиля по [userId].
  */
 data class ChurnedMemberDto(
     val userId: UUID,

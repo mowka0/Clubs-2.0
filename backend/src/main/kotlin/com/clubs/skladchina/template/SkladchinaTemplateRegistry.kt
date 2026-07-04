@@ -5,8 +5,8 @@ import com.clubs.generated.jooq.enums.SkladchinaTemplate
 import org.springframework.stereotype.Component
 
 /**
- * Resolves a [SkladchinaTemplate] to its strategy. Spring injects every strategy bean, so adding a
- * template is just adding a @Component — no edit here.
+ * Разрешает [SkladchinaTemplate] в соответствующую стратегию. Spring инжектирует каждый bean
+ * стратегии, так что добавление шаблона — это просто новый @Component, без правок здесь.
  */
 @Component
 class SkladchinaTemplateRegistry(strategies: List<SkladchinaTemplateStrategy>) {

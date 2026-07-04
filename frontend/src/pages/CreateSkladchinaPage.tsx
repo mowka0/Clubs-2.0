@@ -41,8 +41,8 @@ function defaultDeadlineLocal(): string {
   return d.toISOString().slice(0, 16);
 }
 
-// Anti-ambush rule from the reputation redesign: an important skladchina
-// must give participants at least 24h to react before the -40 penalty.
+// Правило anti-ambush из редизайна репутации: важный сбор обязан давать участникам
+// не менее 24 часов на реакцию, прежде чем сработает штраф −40.
 const IMPORTANT_MIN_DEADLINE_HOURS = 24;
 
 const REPUTATION_HELPER_TEXT =
@@ -50,8 +50,8 @@ const REPUTATION_HELPER_TEXT =
 
 function createErrorMessage(e: unknown): string {
   if (e instanceof ApiError) {
-    // Skladchina business gates (24h deadline, ≤3 important per 7 days, etc.)
-    // come back as 400/409 with a user-facing Russian message — surface it.
+    // Бизнес-гейты складчины (дедлайн 24ч, ≤3 важных за 7 дней и т.п.)
+    // возвращаются как 400/409 с готовым русским сообщением для пользователя — показываем его как есть.
     if ((e.status === 400 || e.status === 409) && e.message) {
       return e.message;
     }
@@ -70,9 +70,9 @@ export const CreateSkladchinaPage: FC = () => {
   const membersQuery = useClubMembersQuery(clubId);
   const createMut = useCreateSkladchinaMutation();
 
-  // De-Stars: a frozen member (paid access not yet confirmed) has no club access, so they can't be
-  // charged into a new skladchina. They stay visible (so the organizer sees why) but disabled,
-  // sorted to the end so the active roster reads first.
+  // De-Stars: у frozen-участника (платный доступ ещё не подтверждён) нет доступа к клубу, поэтому
+  // включить его в новую складчину нельзя. Он остаётся видимым (чтобы организатор понимал почему),
+  // но неактивным, и сортируется в конец списка — чтобы активный состав читался первым.
   const eligibleMembers = useMemo(
     () => {
       const rows = membersQuery.data ?? [];
@@ -124,8 +124,8 @@ export const CreateSkladchinaPage: FC = () => {
     setSubmitError(msg);
   };
 
-  // A voluntary skladchina never affects reputation ("voluntary with a silence
-  // penalty" is a contradiction) — drop the flag when switching to that mode.
+  // Добровольная складчина никогда не влияет на репутацию («добровольно, но со штрафом
+  // за молчание» — противоречие) — сбрасываем флаг при переключении в этот режим.
   const handleModeChange = (next: SkladchinaMode) => {
     setMode(next);
     if (next === 'voluntary') setAffectsReputation(false);
@@ -142,7 +142,7 @@ export const CreateSkladchinaPage: FC = () => {
       totalKopecks = rubToKopecks(totalRub);
       if (totalKopecks === null) return fail('Укажите общую сумму (₽)');
     } else if (mode === 'voluntary' && totalRub.trim() !== '') {
-      // Optional indicative goal for voluntary pools (e.g. a gift target).
+      // Опциональная ориентировочная цель для добровольных сборов (например, цель на подарок).
       totalKopecks = rubToKopecks(totalRub);
       if (totalKopecks === null) return fail('Целевая сумма должна быть числом больше нуля');
     }
@@ -163,7 +163,7 @@ export const CreateSkladchinaPage: FC = () => {
     if (affectsReputation) {
       const minDeadline = Date.now() + IMPORTANT_MIN_DEADLINE_HOURS * 60 * 60 * 1000;
       if (new Date(deadline).getTime() < minDeadline) {
-        // Same wording as the backend gate (SkladchinaService.validateReputationGates).
+        // Та же формулировка, что и в бэкенд-гейте (SkladchinaService.validateReputationGates).
         return fail('Для важного сбора дедлайн должен быть не раньше чем через 24 часа');
       }
     }

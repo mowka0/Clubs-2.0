@@ -59,8 +59,8 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
   const [step, setStep] = useState(0);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Paywall state: the backend returns 402 when a paid club exceeds the plan ceiling. We stash the
-  // pending club body, show the plan ladder, and on a successful subscribe retry the create.
+  // Состояние пейвола: бэкенд возвращает 402, когда платный клуб превышает потолок плана. Сохраняем
+  // тело клуба в ожидании, показываем лестницу планов и после успешной подписки повторяем создание.
   const [paywall, setPaywall] = useState<PaywallInfo | null>(null);
   const [pendingBody, setPendingBody] = useState<CreateClubBody | null>(null);
   const [paywallError, setPaywallError] = useState<string | null>(null);
@@ -96,7 +96,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
   const subscriptionPrice = watch('subscriptionPrice');
   const accessType = watch('accessType');
 
-  // De-Stars: dues go member→organizer directly (off-platform), the platform takes no cut — full amount.
+  // De-Stars: взносы идут напрямую участник→организатор (вне платформы), платформа не берёт комиссию — вся сумма.
   const monthlyIncome = Math.round(Number(memberLimit) * Number(subscriptionPrice));
 
   const handleNext = async () => {
@@ -110,8 +110,8 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
     setStep((s) => s + 1);
   };
 
-  // RHF invokes this when handleSubmit() detects validation errors.
-  // Mirrors handleNext fail-path so users feel the same haptic on the final step.
+  // RHF вызывает это, когда handleSubmit() обнаруживает ошибки валидации.
+  // Повторяет fail-путь handleNext, чтобы на последнем шаге была та же тактильная отдача.
   const onInvalid = () => {
     haptic.notify('error');
   };
@@ -133,7 +133,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
       applicationQuestion: (data.accessType === 'closed' && data.applicationQuestion.trim())
         ? data.applicationQuestion.trim()
         : undefined,
-      // SBP requisites only matter for a paid club (backend requires paymentLink when price > 0).
+      // Реквизиты СБП важны только для платного клуба (бэкенд требует paymentLink при price > 0).
       paymentLink: Number(data.subscriptionPrice) > 0 ? data.paymentLink.trim() : undefined,
       paymentMethodNote: Number(data.subscriptionPrice) > 0 && data.paymentMethodNote.trim()
         ? data.paymentMethodNote.trim()
@@ -159,7 +159,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
     });
   };
 
-  // Paywall: subscribe to the chosen plan, then retry the stashed create.
+  // Пейвол: подписаться на выбранный план, затем повторить отложенное создание.
   const handleSelectPlan = (plan: string) => {
     if (!pendingBody) return;
     setPaywallError(null);
@@ -291,7 +291,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
               {...register('memberLimit', {
                 validate: (v) => {
                   const n = Number(v);
-                  // Aligned with backend Bean Validation in CreateClubRequest.kt (10-80).
+                  // Согласовано с Bean Validation на бэкенде в CreateClubRequest.kt (10-80).
                   if (!v || !Number.isFinite(n) || n < 10 || n > 80) return 'Лимит участников: 10–80';
                   if (!Number.isInteger(n)) return 'Лимит участников: 10–80';
                   return true;
@@ -323,7 +323,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
             </div>
           )}
 
-          {/* Paid club → SBP requisites are mandatory: members must know how to pay (de-Stars honor-system). */}
+          {/* Платный клуб → реквизиты СБП обязательны: участники должны знать, как платить (de-Stars honor-system). */}
           {Number(subscriptionPrice) > 0 && (
             <>
               <label className="rd-field">
@@ -333,7 +333,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
                   placeholder="Ссылка СБП / банка или номер телефона"
                   {...register('paymentLink', {
                     validate: (v) =>
-                      // Required only for a paid club; mirrors the backend invariant (price > 0 ⇒ link).
+                      // Обязательно только для платного клуба; повторяет инвариант бэкенда (price > 0 ⇒ link).
                       Number(subscriptionPrice) > 0 && !v.trim()
                         ? 'Для платного клуба укажите реквизиты для взноса'
                         : true,

@@ -32,10 +32,10 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Integration test for the reputation v2 ledger pipeline against a real Postgres.
- * Covers the 5-kind attendance mapping, recompute parity, idempotency (bug B is dead),
- * anti-farm rule 1 (owner does not accrue in own club), confirmed_unresolved, the
- * finance axis, and the ownership-transfer characterization (PR-2 landmine).
+ * Интеграционный тест ledger-конвейера репутации v2 на реальном Postgres.
+ * Покрывает маппинг посещаемости на 5 kind'ов, паритет recompute, идемпотентность (баг B мёртв),
+ * анти-фарм правило 1 (владелец не копит репутацию в своём клубе), confirmed_unresolved,
+ * ось finance и характеризацию передачи владения (мина PR-2).
  */
 @SpringBootTest(
     properties = [
@@ -130,7 +130,7 @@ class ReputationLedgerIntegrationTest {
 
         reputationService.processFinalizedEvent(eventId)
 
-        // conf counts, attendance does not, reliability 0 — exact parity with legacy code.
+        // conf засчитывается, посещение — нет, reliability 0 — точный паритет с легаси-кодом.
         assertReputation(unmarked, reliability = 0, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
         assertReputation(disputed, reliability = 0, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
         assertEquals(ReputationKind.confirmed_unresolved, soleKind(unmarked, eventId))
@@ -141,8 +141,8 @@ class ReputationLedgerIntegrationTest {
         val eventId = insertFinalizedEvent()
         val declined = insertUser("Declined")
         val noFinal = insertUser("NoFinal")
-        // expired_no_confirm (Feature A) must score 0 exactly like declined / null — the
-        // pipeline reads only final_status=confirmed, so "бронь сгорела" never reaches it.
+        // expired_no_confirm (Feature A) должен давать 0 ровно как declined / null — конвейер
+        // читает только final_status=confirmed, так что «бронь сгорела» до него не доходит.
         val expired = insertUser("Expired")
         insertResponse(eventId, declined, "going", "declined", "absent")
         insertResponse(eventId, noFinal, "maybe", null, null)
@@ -164,7 +164,7 @@ class ReputationLedgerIntegrationTest {
         insertConfirmed(eventId, member, "going", "attended")
 
         reputationService.processFinalizedEvent(eventId)
-        reputationService.processFinalizedEvent(eventId) // bug B would inflate to 200 / count 2
+        reputationService.processFinalizedEvent(eventId) // баг B раздул бы до 200 / count 2
 
         assertReputation(member, reliability = 100, conf = 1, att = 1, spont = 0, pct = "100.00", outcome = 1)
         assertEquals(1, ledgerRows(member, eventId))
@@ -174,7 +174,7 @@ class ReputationLedgerIntegrationTest {
     @Test
     fun `anti-farm rule 1 - owner does not accrue in own club`() {
         val eventId = insertFinalizedEvent()
-        insertConfirmed(eventId, ownerId, "going", "attended") // owner self-deals on own event
+        insertConfirmed(eventId, ownerId, "going", "attended") // владелец «сам себе» отмечается на своём событии
 
         reputationService.processFinalizedEvent(eventId)
 
@@ -195,9 +195,9 @@ class ReputationLedgerIntegrationTest {
 
     @Test
     fun `neutrally finalized unmarked event yields no reputation (EXP-2)`() {
-        // EXP-2 closes an unmarked past event with finalized=true / marked=false. The pipeline
-        // claims only marked+finalized events, so such an event is invisible to the poll and a
-        // direct claim no-ops — a confirmed-but-never-marked participant accrues nothing.
+        // EXP-2 закрывает неотмеченное прошедшее событие с finalized=true / marked=false. Конвейер
+        // клеймит только marked+finalized события, поэтому такое событие невидимо для поллинга, а
+        // прямой claim — no-op: подтверждённый, но так и не отмеченный участник ничего не копит.
         val eventId = insertNeutrallyFinalizedEvent()
         val member = insertUser("Unscored")
         insertConfirmed(eventId, member, "going", null)
@@ -251,7 +251,7 @@ class ReputationLedgerIntegrationTest {
 
     @Test
     fun `recompute fills kept-broke-neutral counts by kind, invariant outcome = kept + broke + neutral (AC-P1b-1)`() {
-        // P1b PR-0: Trust 0-100 is a Bayesian fraction over KEPT promises, classified BY KIND.
+        // P1b PR-0: Trust 0-100 — байесовская доля СДЕРЖАННЫХ обещаний, классификация ПО KIND.
         // kept = {ironclad, spontaneous, skladchina_paid}; broke = {no_show, spectator,
         // skladchina_expired}; neutral = {confirmed_unresolved, skladchina_declined}.
         val member = insertUser("Counted")
@@ -280,10 +280,10 @@ class ReputationLedgerIntegrationTest {
     fun `getMyReputation splits active vs История and aggregates global over ALL clubs (closes hole A)`() {
         val member = insertUser("Member")
         val seedTime = OffsetDateTime.now()
-        // club1 (fixture clubId): ACTIVE membership + 3 kept → Trust high, reliable
+        // club1 (фикстурный clubId): ACTIVE membership + 3 kept → высокий Trust, reliable
         insertMembership(member, "member")
         reputationService.appendAndRecompute((1..3).map { financeEntry(member, ReputationKind.skladchina_paid, seedTime) })
-        // club2: a LEFT club (cancelled membership, no remaining subscription) + 3 broke → Trust low
+        // club2: ПОКИНУТЫЙ клуб (cancelled membership, без остатка подписки) + 3 broke → низкий Trust
         val club2 = insertExtraClub("Left Club")
         dsl.execute(
             "INSERT INTO memberships (id, user_id, club_id, status, role, joined_at) " +
@@ -299,11 +299,11 @@ class ReputationLedgerIntegrationTest {
 
         val result = membershipService.getMyReputation(member)
 
-        // Global is all-history: BOTH clubs have a track record, only the active one is reliable.
+        // Глобальная — по всей истории: track record есть у ОБОИХ клубов, reliable только активный.
         assertEquals(2, result.global.trackRecordClubs, "left club still counts toward M")
         assertEquals(1, result.global.reliableClubs)
         assertTrue(result.global.score != null && result.global.score!! in 55..65, "score between the two clubs")
-        // The left club lives in История, not the active list — but it is NOT dropped (hole A).
+        // Покинутый клуб живёт в «Истории», не в активном списке — но НЕ выброшен (дыра A).
         assertEquals(listOf(clubId), result.activeClubs.map { it.clubId })
         assertEquals(listOf(club2), result.historyClubs.map { it.clubId })
         assertTrue(result.activeClubs.single().trust!! >= 90, "3 kept → high Trust")
@@ -314,7 +314,7 @@ class ReputationLedgerIntegrationTest {
     fun `TrustService computeForUser derives per-club Trust and an all-history global from the ledger`() {
         val member = insertUser("Trusted")
         val seedTime = OffsetDateTime.now()
-        // 3 kept finance outcomes at age 0 (decay = 1) → keptW = 3.0
+        // 3 kept finance-исхода возрастом 0 (decay = 1) → keptW = 3.0
         // Trust = round(100 * (3 + 3*0.85) / (3 + 2*0 + 3)) = round(92.5) = 93
         reputationService.appendAndRecompute((1..3).map { financeEntry(member, ReputationKind.skladchina_paid, seedTime) })
 
@@ -331,10 +331,10 @@ class ReputationLedgerIntegrationTest {
 
     @Test
     fun `recompute is owner-agnostic on existing ledger rows (PR-2 transfer landmine)`() {
-        // Earned reputation survives an ownership transfer: recompute only sums existing
-        // ledger rows, it does NOT re-apply rule 1 from the current owner. The real risk
-        // is re-running the V18 backfill after a transfer (it re-reads owner_id) — PR-2
-        // must freeze owner attribution at write time. See reputation-v2.md § Риски.
+        // Заработанная репутация переживает передачу владения: recompute лишь суммирует уже
+        // существующие строки ledger и НЕ переприменяет правило 1 от текущего владельца. Реальный
+        // риск — повторный прогон бэкфилла V18 после передачи (он заново читает owner_id) — PR-2
+        // должен замораживать атрибуцию владельца в момент записи. См. reputation-v2.md § Риски.
         val eventId = insertFinalizedEvent()
         val member = insertUser("FutureOwner")
         insertConfirmed(eventId, member, "going", "attended")
@@ -344,7 +344,7 @@ class ReputationLedgerIntegrationTest {
         dsl.execute("UPDATE clubs SET owner_id = '$member' WHERE id = '$clubId'")
         reputationRepository.recompute(member, clubId)
 
-        // Still 100 — the member's earned row is not retroactively suppressed by recompute.
+        // По-прежнему 100 — заработанная участником строка не подавляется recompute задним числом.
         assertReputation(member, reliability = 100, conf = 1, att = 1, spont = 0, pct = "100.00", outcome = 1)
     }
 
@@ -354,13 +354,13 @@ class ReputationLedgerIntegrationTest {
         val veteran = insertUser("Veteran"); insertMembership(veteran, "member")
         val newcomer = insertUser("Newcomer"); insertMembership(newcomer, "member")
 
-        // veteran: 3 ironclad events -> 3 kept, no broke -> Trust in [85, 93], outcome_count 3 (shown)
+        // ветеран: 3 ironclad-события -> 3 kept, без broke -> Trust в [85, 93], outcome_count 3 (показывается)
         repeat(3) {
             val e = insertFinalizedEvent()
             insertConfirmed(e, veteran, "going", "attended")
             reputationService.processFinalizedEvent(e)
         }
-        // newcomer: a single no_show -> Trust low, but outcome_count 1 (< threshold, suppressed)
+        // новичок: единственный no_show -> низкий Trust, но outcome_count 1 (< порога, подавляется)
         val e = insertFinalizedEvent()
         insertConfirmed(e, newcomer, "going", "absent")
         reputationService.processFinalizedEvent(e)
@@ -372,32 +372,32 @@ class ReputationLedgerIntegrationTest {
         assertNull(newb.trust, "sub-threshold Trust is suppressed to null (Новичок)")
         assertNull(newb.promiseFulfillmentPct, "sub-threshold siblings are suppressed too")
 
-        // Sorted by displayed Trust: the scored veteran sorts before the suppressed newcomer.
+        // Сортировка по отображаемому Trust: ветеран с оценкой идёт раньше подавленного новичка.
         val vetIdx = members.indexOfFirst { it.userId == veteran }
         val newbIdx = members.indexOfFirst { it.userId == newcomer }
         assertTrue(vetIdx < newbIdx, "newcomer (null Trust) sorts after the scored veteran")
 
-        // Member profile read path applies the same suppression.
+        // Read-путь профиля участника применяет то же подавление.
         assertNull(memberService.getMemberProfile(clubId, newcomer, ownerId).trust)
         assertTrue(memberService.getMemberProfile(clubId, veteran, ownerId).trust!! >= 70)
     }
 
-    // --- PR-b: exit-with-obligations (AC-P1b-5) ---
+    // --- PR-b: выход с обязательствами (AC-P1b-5) ---
 
     @Test
     fun `leaving a free club penalizes a confirmed booking before the cascade deletes it (AC-P1b-5)`() {
         val member = insertUser("Leaver"); insertMembership(member, "member")
         val eventId = insertActiveEvent()
-        insertConfirmed(eventId, member, "going", null) // active confirmed booking, not yet happened
+        insertConfirmed(eventId, member, "going", null) // активная подтверждённая бронь, событие ещё не прошло
 
         membershipService.leaveClub(clubId, member)
 
-        // −200 no_show written for the abandoned booking; counters match a natural no_show.
+        // за брошенную бронь записан no_show −200; счётчики совпадают с естественным no_show.
         assertReputation(member, reliability = -200, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
         assertEquals(ReputationKind.no_show, soleKind(member, eventId))
-        // occurred_at is the behaviour time (event datetime), not leave time — the decay anchor.
+        // occurred_at — время поведения (дата события), а не время выхода: якорь для decay.
         assertEquals(eventDatetime(eventId).toInstant(), ledgerOccurredAt(member, eventId).toInstant())
-        // the source booking is cascaded away AFTER the penalty landed.
+        // исходная бронь каскадно удаляется ПОСЛЕ того, как штраф записан.
         assertFalse(eventResponseExists(eventId, member), "confirmed booking cascaded away")
     }
 
@@ -411,8 +411,8 @@ class ReputationLedgerIntegrationTest {
         assertReputation(member, reliability = -200, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
         assertEquals(1, ledgerRows(member, eventId))
 
-        // A later natural finalize tries to write a no_show for the same (user, event) → UNIQUE
-        // collision, ON CONFLICT DO NOTHING. No second row, reliability stays −200 (not −400).
+        // Поздний естественный finalize пытается записать no_show по той же паре (user, event) →
+        // коллизия UNIQUE, ON CONFLICT DO NOTHING. Второй строки нет, reliability остаётся −200 (не −400).
         reputationService.appendAndRecompute(
             listOf(
                 LedgerEntry(
@@ -444,9 +444,9 @@ class ReputationLedgerIntegrationTest {
     @Test
     fun `leaving penalizes a pending reputation skladchina even with a passed deadline (cascade would erase it)`() {
         val member = insertUser("Leaver"); insertMembership(member, "member")
-        // Deadline already passed but the skladchina is still active (the expiry sweep hasn't fired).
-        // The cascade deletes the pending row, so the exit path must own the −40 — otherwise it
-        // escapes both the exit penalty and natural expiry (the reopened symmetric hole B).
+        // Дедлайн уже прошёл, но складчина всё ещё active (sweep протухания ещё не сработал).
+        // Каскад удаляет pending-строку, поэтому путь выхода обязан сам записать −40 — иначе участник
+        // ускользает и от штрафа за выход, и от естественного протухания (вновь открытая симметричная дыра B).
         val skladchinaId = insertActiveSkladchina(affectsReputation = true, deadline = OffsetDateTime.now().minusHours(1))
         insertPendingParticipant(skladchinaId, member)
 
@@ -460,18 +460,18 @@ class ReputationLedgerIntegrationTest {
     @Test
     fun `leaving preserves a finalized-but-unprocessed event so the pipeline still writes the real outcome`() {
         val member = insertUser("Leaver"); insertMembership(member, "member")
-        // attendance_finalized=true but status still stage_2 (completion is a separate later sweep);
-        // reputation not yet processed. A real no_show the pipeline still owns.
+        // attendance_finalized=true, но статус всё ещё stage_2 (completion — отдельный поздний sweep);
+        // репутация ещё не обработана. Реальный no_show, за который по-прежнему отвечает конвейер.
         val eventId = insertFinalizedStage2Event()
         insertConfirmed(eventId, member, "going", "absent")
 
         membershipService.leaveClub(clubId, member)
 
-        // No exit penalty for a finalized event, and the booking survives the cascade.
+        // Нет штрафа за выход по финализированному событию, и бронь переживает каскад.
         assertEquals(0, ledgerRows(member, eventId), "no exit penalty for a finalized event")
         assertTrue(eventResponseExists(eventId, member), "finalized event's booking preserved for the pipeline")
 
-        // The pipeline still produces the real outcome (−200 no_show) — not erased by leaving.
+        // Конвейер всё равно выдаёт реальный исход (−200 no_show) — выход его не стирает.
         reputationService.processFinalizedEvent(eventId)
         assertReputation(member, reliability = -200, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
     }
@@ -497,7 +497,7 @@ class ReputationLedgerIntegrationTest {
 
         membershipService.leaveClub(paidClub, member)
 
-        // Paid leave keeps access until expire → no obligation broken, no cascade.
+        // Платный выход сохраняет доступ до expire → обязательства не нарушены, каскада нет.
         assertNull(reputationRepository.findByUserAndClub(member, paidClub), "paid leave does not penalize")
         assertEquals(0, ledgerRows(member, eventId))
         assertTrue(eventResponseExists(eventId, member), "paid leave keeps the booking until expire")
@@ -506,16 +506,16 @@ class ReputationLedgerIntegrationTest {
     @Test
     fun `free-club membership is created without a subscription expiry (no phantom paid period)`() {
         val member = insertUser("FreeJoiner")
-        val created = membershipRepository.create(member, clubId) // fixture club is free (price 0)
+        val created = membershipRepository.create(member, clubId) // фикстурный клуб бесплатный (price 0)
         assertNull(created.subscriptionExpiresAt, "a free membership carries no subscription expiry")
     }
 
     @Test
     fun `leaving a free-priced club with an active paid period is a soft cancel (no penalty, no cascade)`() {
         val member = insertUser("PaidPeriodLeaver")
-        // Free-priced club (fixture clubId, subscription_price=0) but the membership still holds a
-        // future paid period (club was switched paid→free). Leave must route to the soft cancel —
-        // no obligations-penalty, no cascade — because the user can still attend until expire.
+        // Клуб с нулевой ценой (фикстурный clubId, subscription_price=0), но у membership ещё остался
+        // будущий оплаченный период (клуб переключили paid→free). Выход должен уйти в мягкий cancel —
+        // без штрафа за обязательства и без каскада — потому что юзер может посещать до expire.
         insertMembershipWithPaidPeriod(member, clubId, OffsetDateTime.now().plusMonths(1))
         val eventId = insertActiveEvent()
         insertConfirmed(eventId, member, "going", null)
@@ -541,7 +541,7 @@ class ReputationLedgerIntegrationTest {
 
         assertFalse(eventResponseExists(eventId, leaver), "leaver's booking removed")
         assertEquals(FinalStatus.confirmed, finalStatusOf(eventId, waiter), "waitlisted member promoted into the freed slot")
-        // The leaver still eats the −200 — the slot refill mitigates the org's plan, it doesn't absolve the broken promise.
+        // Ушедший всё равно получает −200 — дозаполнение слота спасает план организатора, но не прощает нарушенное обещание.
         assertReputation(leaver, reliability = -200, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
     }
 
@@ -557,7 +557,7 @@ class ReputationLedgerIntegrationTest {
         assertEquals(1, preview.skladchinaObligations)
         assertEquals(2, preview.totalObligations)
 
-        // Paid club: obligations stay valid until expire → preview is all zeros.
+        // Платный клуб: обязательства действуют до expire → в превью одни нули.
         val paidClub = insertPaidClub()
         val paidMember = insertUser("PaidPreviewer"); insertMembershipInClub(paidMember, paidClub)
         val paidEvent = insertActiveEvent(club = paidClub); insertConfirmed(paidEvent, paidMember, "going", null)
@@ -570,14 +570,14 @@ class ReputationLedgerIntegrationTest {
     fun `gamification sums participation XP plus diversity, derives level and badges from the ledger`() {
         val member = insertUser("Gamer")
         val seed = OffsetDateTime.now()
-        // club1 (fixture): 7 ironclad attendances → 70 XP, trust ~96 (track record, reliable + rock-solid;
-        // rock-solid needs trust ≥95 since the 2026-06-14 calibration → ≥6 fresh kept outcomes).
+        // club1 (фикстура): 7 ironclad-посещений → 70 XP, trust ~96 (track record, reliable + rock-solid;
+        // rock-solid требует trust ≥95 после калибровки 2026-06-14 → ≥6 свежих kept-исходов).
         repeat(7) {
             val e = insertFinalizedEvent()
             insertConfirmed(e, member, "going", "attended")
             reputationService.processFinalizedEvent(e)
         }
-        // club2: 1 skladchina_paid → 3 XP. Two distinct kept clubs → 2×20 diversity.
+        // club2: 1 skladchina_paid → 3 XP. Два разных kept-клуба → 2×20 за diversity.
         val club2 = insertExtraClub("Club2")
         reputationService.appendAndRecompute(
             listOf(
@@ -592,7 +592,7 @@ class ReputationLedgerIntegrationTest {
         val g = xpService.getGamification(member, seed)
 
         assertEquals(7 * 10 + 1 * 3 + 2 * 20, g.xp, "70 (ironclad) + 3 (paid) + 40 (diversity) = 113")
-        assertEquals(2, g.level)        // 113 ∈ [50,200) → level index 1 → "Свой"
+        assertEquals(2, g.level)        // 113 ∈ [50,200) → индекс уровня 1 → "Свой"
         assertEquals("Свой", g.levelName)
         assertEquals("Участник", g.nextLevelName)
         val badgeIds = g.badges.map { it.id }.toSet()
@@ -616,7 +616,7 @@ class ReputationLedgerIntegrationTest {
         assertTrue(g.badges.isEmpty())
     }
 
-    // --- helpers ---
+    // --- хелперы ---
 
     private fun insertMembership(userId: UUID, role: String) {
         dsl.execute(
@@ -656,7 +656,7 @@ class ReputationLedgerIntegrationTest {
         return id
     }
 
-    /** EXP-2: a past event closed neutrally — finalized but never marked. */
+    /** EXP-2: прошедшее событие, закрытое нейтрально — финализировано, но так и не отмечено. */
     private fun insertNeutrallyFinalizedEvent(): UUID {
         val id = UUID.randomUUID()
         val past = OffsetDateTime.now().minusDays(3)
@@ -674,7 +674,7 @@ class ReputationLedgerIntegrationTest {
     private fun insertConfirmed(eventId: UUID, userId: UUID, stage1: String, attendance: String?) =
         insertResponse(eventId, userId, stage1, "confirmed", attendance)
 
-    /** An active (not-yet-finalized) event a member can hold a live confirmed booking on. */
+    /** Активное (ещё не финализированное) событие, на котором участник может держать живую подтверждённую бронь. */
     private fun insertActiveEvent(
         limit: Int = 10,
         datetime: OffsetDateTime = OffsetDateTime.now().plusDays(3),
@@ -692,7 +692,7 @@ class ReputationLedgerIntegrationTest {
         return id
     }
 
-    /** A past event already attendance-finalized but still `stage_2` (completion is a later sweep). */
+    /** Прошедшее событие с уже финализированной явкой, но всё ещё в `stage_2` (completion — более поздний sweep). */
     private fun insertFinalizedStage2Event(): UUID {
         val id = UUID.randomUUID()
         val past = OffsetDateTime.now().minusHours(2)
@@ -820,8 +820,8 @@ class ReputationLedgerIntegrationTest {
         occurredAt, ReputationSource.skladchina, UUID.randomUUID()
     )
 
-    /** Reads the P1b kept/broke/neutral cache columns directly — PR-0 writes them; the read
-     *  path (TrustService) lands in PR-a, so the test queries the table straight through dsl. */
+    /** Читает кэш-колонки P1b kept/broke/neutral напрямую — их пишет PR-0; read-путь
+     *  (TrustService) появляется в PR-a, поэтому тест запрашивает таблицу прямо через dsl. */
     private fun counts(userId: UUID): Triple<Int, Int, Int> {
         val r = dsl.select(USER_CLUB_REPUTATION.KEPT_COUNT, USER_CLUB_REPUTATION.BROKE_COUNT, USER_CLUB_REPUTATION.NEUTRAL_COUNT)
             .from(USER_CLUB_REPUTATION)

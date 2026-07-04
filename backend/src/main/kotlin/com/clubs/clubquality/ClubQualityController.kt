@@ -10,11 +10,11 @@ import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
 /**
- * Club-quality surface (subject = place, anchor = club_id). Separate controller in the
- * `clubquality` module — not in `ClubController` — to keep the module boundary clean (§10).
+ * Поверхность качества клуба (subject = место, anchor = club_id). Отдельный контроллер в модуле
+ * `clubquality` — не в `ClubController` — чтобы сохранить чистоту границы модуля (§10).
  *
- * Facts are `others`-visible (public social proof) → JWT only, no ownership check. The owner
- * «Статистика» panel (`/{clubId}/stats`) is the exception — private, `@RequiresOrganizer`.
+ * Факты видны `others` (публичное social proof) → достаточно JWT, без проверки владения. Панель
+ * владельца «Статистика» (`/{clubId}/stats`) — исключение: приватна, `@RequiresOrganizer`.
  */
 @RestController
 @RequestMapping("/api/clubs")
@@ -28,16 +28,17 @@ class ClubQualityController(
         ResponseEntity.ok(clubQualityService.getClubFacts(clubId))
 
     /**
-     * Batch facts for the Discovery feed (one request per page of clubs, not per card → no N+1).
-     * `?ids=uuid1,uuid2,...`. Literal `/quality/batch` doesn't collide with `/{clubId}/quality`.
+     * Пакетные факты для ленты Discovery (один запрос на страницу клубов, не на карточку → без N+1).
+     * `?ids=uuid1,uuid2,...`. Литерал `/quality/batch` не конфликтует с `/{clubId}/quality`.
      */
     @GetMapping("/quality/batch")
     fun getQualityBatch(@RequestParam ids: List<UUID>): ResponseEntity<List<ClubCardFactsDto>> =
         ResponseEntity.ok(clubQualityService.getClubCardFacts(ids))
 
     /**
-     * Owner-only statistics panel (§9). `@RequiresOrganizer` rejects a missing club (404) and a
-     * non-owner (403) before the body runs. Literal `/{clubId}/stats` doesn't collide with the routes above.
+     * Панель статистики только для владельца (§9). `@RequiresOrganizer` отклоняет отсутствующий
+     * клуб (404) и не-владельца (403) до выполнения тела метода. Литерал `/{clubId}/stats` не
+     * конфликтует с маршрутами выше.
      */
     @RequiresOrganizer(clubIdParam = "clubId")
     @GetMapping("/{clubId}/stats")
@@ -45,9 +46,9 @@ class ClubQualityController(
         ResponseEntity.ok(clubStatsService.getClubStats(clubId))
 
     /**
-     * Owner-only win-back roster — the members behind the «Верните N ушедших» nudge (§9.5). Same
-     * `@RequiresOrganizer` gate as `/stats`. Literal `/{clubId}/churned-members` doesn't collide with
-     * the routes above or `MemberController`'s `/{id}/members`.
+     * Ростер для возврата участников только для владельца — участники за напоминанием
+     * «Верните N ушедших» (§9.5). Та же защита `@RequiresOrganizer`, что и у `/stats`. Литерал
+     * `/{clubId}/churned-members` не конфликтует с маршрутами выше или `/{id}/members` из `MemberController`.
      */
     @RequiresOrganizer(clubIdParam = "clubId")
     @GetMapping("/{clubId}/churned-members")

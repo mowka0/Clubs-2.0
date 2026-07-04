@@ -6,19 +6,20 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * Seam over the recurring service-fee acquirer — the platform's OWN fee (docs/modules/payment-v2.md §5.4).
- * Stub now (no real money: needs ИП + ЮKassa/Т-Банк, a legal block). A real acquirer drops in later as
- * a second @Component without touching the subscription engine. The amount is always computed server-side.
+ * Шов над эквайером рекуррентного сервисного сбора — СОБСТВЕННОЙ комиссии платформы
+ * (docs/modules/payment-v2.md §5.4). Сейчас стаб (реальных денег нет: нужны ИП + ЮKassa/Т-Банк,
+ * юридический блок). Реальный эквайер подключится позже вторым @Component, не трогая движок
+ * подписок. Сумма всегда считается на сервере.
  */
 interface PaymentProvider {
 
-    /** Open a recurring charge for the platform's service fee. Returns the provider-side handle + first period end. */
+    /** Открывает рекуррентное списание сервисного сбора платформы. Возвращает хендл провайдера + конец первого периода. */
     fun createSubscription(command: CreateSubscriptionCommand): ProviderSubscription
 
-    /** Stop auto-renewal at the provider. Idempotent — safe to call on an already-cancelled token. */
+    /** Останавливает авто-продление у провайдера. Идемпотентно — безопасно вызывать на уже отменённом токене. */
     fun cancelSubscription(providerToken: String?)
 
-    /** Parse + verify an inbound provider webhook (signature check lives in the impl). */
+    /** Парсит + верифицирует входящий webhook провайдера (проверка подписи — в реализации). */
     fun parseWebhook(rawBody: String, signature: String?): WebhookResult
 }
 
@@ -35,21 +36,21 @@ data class ProviderSubscription(
     val currentPeriodEnd: OffsetDateTime,
 )
 
-/** Outcome of an inbound webhook. The engine maps it to a forward-only state transition. */
+/** Результат входящего webhook. Движок маппит его на переход состояния только вперёд (forward-only). */
 sealed interface WebhookResult {
-    /** A recurring charge succeeded → extend the paid period and recover from any dunning. */
+    /** Рекуррентное списание прошло успешно → продлить оплаченный период и выйти из dunning, если был. */
     data class RenewalSucceeded(
         val providerEventId: String,
         val providerToken: String,
         val newPeriodEnd: OffsetDateTime,
     ) : WebhookResult
 
-    /** A recurring charge failed → enter dunning (PAST_DUE). */
+    /** Рекуррентное списание не прошло → войти в dunning (PAST_DUE). */
     data class RenewalFailed(
         val providerEventId: String,
         val providerToken: String,
     ) : WebhookResult
 
-    /** Not actionable (unknown event, stub provider, etc.). */
+    /** Не требует действия (неизвестное событие, стаб-провайдер и т.п.). */
     data class Ignored(val reason: String) : WebhookResult
 }

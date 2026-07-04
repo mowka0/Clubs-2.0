@@ -1,9 +1,9 @@
 package com.clubs.clubquality
 
 /**
- * HTTP DTO for the owner-only club statistics panel — `GET /api/clubs/{clubId}/stats`.
- * Fields are nullable where the metric doesn't apply to this club (free clubs, no skladchinas,
- * non-`closed` access) so the frontend renders only the relevant levers (§9.3).
+ * HTTP DTO для панели статистики клуба только для владельца — `GET /api/clubs/{clubId}/stats`.
+ * Поля nullable там, где метрика не применима к этому клубу (бесплатные клубы, нет складчин,
+ * доступ не `closed`), чтобы фронтенд рендерил только релевантные рычаги (§9.3).
  */
 data class ClubStatsDto(
     val clubType: String,
@@ -26,6 +26,6 @@ data class ClubStatsDto(
 data class TrendDto(
     /** "up" | "down" | "flat". */
     val direction: String,
-    /** Signed delta in percentage points (current window − prior window). */
+    /** Дельта со знаком в процентных пунктах (текущее окно − предыдущее окно). */
     val delta: Int,
 )

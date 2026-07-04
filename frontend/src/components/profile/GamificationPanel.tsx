@@ -6,12 +6,13 @@ interface GamificationPanelProps {
 }
 
 /**
- * Self-view gamification panel: level + XP progress bar + earned badges. XP is participation-only
- * and never decreases (see reputation-v2.md §H3). Presentational — the parent owns the query.
+ * Панель геймификации для собственного просмотра: уровень + прогресс-бар XP + полученные бейджи.
+ * XP начисляется только за участие и никогда не уменьшается (см. reputation-v2.md §H3).
+ * Presentational-компонент — запрос данных владеет родитель.
  */
 export const GamificationPanel: FC<GamificationPanelProps> = ({ data }) => {
   const isMax = data.xpSpanToNext === null || data.nextLevelName === null;
-  // Clamp to [0,1]; xpSpanToNext is the span of the current level, xpIntoLevel the progress into it.
+  // Ограничиваем до [0,1]; xpSpanToNext — размах текущего уровня, xpIntoLevel — прогресс внутри него.
   const ratio = isMax || !data.xpSpanToNext
     ? 1
     : Math.max(0, Math.min(1, data.xpIntoLevel / data.xpSpanToNext));

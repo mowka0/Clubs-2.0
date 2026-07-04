@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 import java.util.UUID
 
+// Лимит заявок от одного пользователя в сутки — защита от спама заявками
 private const val MAX_APPLICATIONS_PER_DAY = 5
 
 @Service
@@ -61,10 +62,11 @@ class ApplicationService(
         val existingMembership = membershipRepository.findActiveByUserAndClub(userId, clubId)
         if (existingMembership != null) throw ConflictException("Already a member")
 
-        // De-Stars: an approved application normally pairs with a frozen/active membership (approve
-        // creates it). If the membership was later cancelled (removed / rejected / left), the approved
-        // application is orphaned — self-heal it so the user can re-apply instead of being stuck on
-        // «Заявка одобрена». A genuinely pending application still blocks a duplicate.
+        // De-Stars: одобренная заявка обычно идёт в паре с frozen/active membership (approve
+        // его создаёт). Если membership потом отменили (removed / rejected / left), одобренная
+        // заявка становится осиротевшей — самовосстанавливаемся, чтобы пользователь мог подать
+        // заявку заново, а не застрял на «Заявка одобрена». По-настоящему pending-заявка
+        // по-прежнему блокирует дубликат.
         val activeApp = applicationRepository.findActiveByUserAndClub(userId, clubId)
         if (activeApp != null) {
             val priorMembership = membershipRepository.findByUserAndClub(userId, clubId)
@@ -90,11 +92,11 @@ class ApplicationService(
     }
 
     /**
-     * Best-effort organizer notification on new application. Failures here must
-     * NOT abort the submitApplication transaction — sendApplicationCreatedDM is
-     * @Async (fire-and-forget) and the per-message try/catch lives in
-     * NotificationService.sendDm. We additionally guard the lookups so a DB
-     * miss / NPE never poisons the happy path.
+     * Уведомление организатора о новой заявке — best-effort. Ошибки здесь НЕ должны
+     * прерывать транзакцию submitApplication — sendApplicationCreatedDM работает
+     * @Async (fire-and-forget), а try/catch на отдельное сообщение живёт в
+     * NotificationService.sendDm. Дополнительно оборачиваем lookup'ы защитой, чтобы
+     * промах в БД / NPE никогда не испортил основной happy path.
      */
     private fun dispatchApplicationCreatedDm(club: Club, applicantId: UUID) {
         try {
@@ -143,9 +145,9 @@ class ApplicationService(
         val activeCount = membershipRepository.countActiveByClubId(application.clubId)
         if (activeCount >= club.memberLimit) throw ValidationException("Club is full")
 
-        // De-Stars (Slice 2): approve creates the membership immediately — no Stars invoice. A paid club
-        // lands the applicant in `frozen` (access gated until the organizer confirms the off-platform
-        // dues via AccessGateService.markDuesPaid); a free club joins straight to `active`.
+        // De-Stars (Slice 2): approve сразу создаёт membership — без инвойса Stars. В платном клубе
+        // заявитель попадает в `frozen` (доступ закрыт, пока организатор не подтвердит офф-платформенный
+        // взнос через AccessGateService.markDuesPaid); в бесплатном клубе — сразу в `active`.
         if (club.subscriptionPrice > 0) {
             membershipActivator.activateFrozen(application.userId, application.clubId)
         } else {
@@ -165,9 +167,9 @@ class ApplicationService(
     }
 
     /**
-     * Best-effort DM to the applicant that their join application was approved. For a paid club this is
-     * the «оплатите вступление» nudge (they're now `frozen`); for a free club a plain welcome. Mirrors
-     * [dispatchApplicationCreatedDm]: failures must NOT abort the approve transaction.
+     * DM заявителю об одобрении заявки — best-effort. Для платного клуба это напоминание
+     * «оплатите вступление» (теперь он в `frozen`); для бесплатного — обычное приветствие.
+     * Зеркалит [dispatchApplicationCreatedDm]: ошибки НЕ должны прерывать транзакцию approve.
      */
     private fun dispatchApplicationApprovedDm(club: Club, applicantId: UUID) {
         try {
@@ -201,11 +203,11 @@ class ApplicationService(
             throw ValidationException("Application is not pending")
         }
 
-        // DTO @NotBlank/@Size catches empty/short reasons before we get here for
-        // human-driven rejects. The nullable parameter keeps the door open for
-        // future system-driven rejects (e.g. scheduler) without contract changes.
-        // Defense in depth: re-check length AFTER trim. "  ab " passes @Size(min=5)
-        // but trims to 2 chars; we treat it as invalid for human-driven rejects.
+        // DTO @NotBlank/@Size отсеивает пустые/короткие причины ещё до этого места для
+        // отказов, инициированных человеком. Nullable-параметр оставляет возможность
+        // для будущих системных отказов (например, от scheduler'а) без изменения контракта.
+        // Defense in depth: перепроверяем длину ПОСЛЕ trim. "  ab " проходит @Size(min=5),
+        // но после trim остаётся 2 символа — для человеческих отказов считаем это невалидным.
         val storedReason = reason?.trim()?.ifEmpty { null }
         if (reason != null && (storedReason == null || storedReason.length < 5)) {
             throw ValidationException("Reason must be at least 5 characters after trim")
@@ -219,11 +221,12 @@ class ApplicationService(
     }
 
     /**
-     * Applicant self-withdrawal: the user closes their OWN pending application — applied by mistake, or
-     * changed their mind before the organizer decided. Only the applicant may cancel, and only while it's
-     * still `pending` (an approved application already created a membership → that's «выход из клуба»; a
-     * terminal status is immutable). Moves it to `cancelled`, which is not an active status, so the user
-     * can re-apply later (V42 partial index gates on pending/approved only).
+     * Самостоятельный отзыв заявки: пользователь закрывает СВОЮ pending-заявку — подал по ошибке
+     * или передумал до решения организатора. Отменить может только сам заявитель, и только пока
+     * статус ещё `pending` (одобренная заявка уже создала membership → это «выход из клуба»;
+     * терминальный статус неизменяем). Переводит заявку в `cancelled` — это не активный статус,
+     * так что пользователь сможет подать заявку заново (частичный индекс V42 работает только
+     * по pending/approved).
      */
     @Transactional
     fun cancelApplication(applicationId: UUID, callerId: UUID): ApplicationDto {
@@ -254,11 +257,11 @@ class ApplicationService(
         applicationRepository.findByUserId(userId).map(mapper::toDto)
 
     /**
-     * Cross-club organizer inbox: all pending applications across the caller's
-     * owned clubs, enriched with applicant + peer-stats + club brief.
+     * Кросс-клубовый инбокс организатора: все pending-заявки по всем клубам, которыми
+     * владеет вызывающий, обогащённые данными заявителя + peer-stats + краткой инфой о клубе.
      *
-     * Performance contract (docs/modules/applications-inbox.md § Non-functional):
-     * ≤5 SQL queries regardless of N applications.
+     * Контракт по производительности (docs/modules/applications-inbox.md § Non-functional):
+     * ≤5 SQL-запросов независимо от числа заявок N.
      */
     @Transactional(readOnly = true)
     fun getMyPendingApplications(organizerId: UUID): List<PendingApplicationDto> {
@@ -296,30 +299,32 @@ class ApplicationService(
     }
 
     /**
-     * Pending-applications count for the «Мои клубы» tab-dot: pending applications across the caller's
-     * owned clubs. (De-Stars Slice 2: the Stars "awaiting payment" counters are gone — approve creates
-     * the membership immediately, so that state no longer exists.) Scoped to the caller; no IDOR risk.
+     * Счётчик pending-заявок для точки на табе «Мои клубы»: pending-заявки по всем клубам
+     * вызывающего. (De-Stars Slice 2: счётчики «ожидает оплаты Stars» убраны — approve сразу
+     * создаёт membership, так что такого состояния больше не существует.) Скоуп ограничен
+     * вызывающим пользователем — риска IDOR нет.
      */
     @Transactional(readOnly = true)
     fun getMyClubsActionCounts(userId: UUID): PendingApplicationsCountDto {
         val ownedClubIds = clubRepository.findIdsByOwnerId(userId)
         val inboxCount = applicationRepository.countPendingByClubIds(ownedClubIds)
-        // De-Stars: paid-and-waiting members (frozen + dues claimed) also need an organizer decision,
-        // so they light the «Мои клубы» dot alongside the application inbox.
+        // De-Stars: участники «оплатил и ждёт» (frozen + взнос заявлен) тоже требуют решения
+        // организатора, поэтому они тоже зажигают точку «Мои клубы» вместе с инбоксом заявок.
         val awaitingDuesCount = membershipRepository.countClaimedFrozenByOwner(userId)
         return PendingApplicationsCountDto(inboxCount = inboxCount, awaitingDuesCount = awaitingDuesCount)
     }
 
     /**
-     * Finalises a free-club membership for an approved application that was left in a stuck
-     * "approved-without-membership" state (legacy data from before approve always created the
-     * membership). Only the applicant can call it; only valid for free clubs (`subscription_price <= 0`)
-     * — paid clubs are joined as `frozen` on approve and opened by the organizer (AccessGateService).
+     * Завершает membership для бесплатного клуба по одобренной заявке, застрявшей в состоянии
+     * «approved-без-membership» (legacy-данные с тех времён, когда approve не всегда создавал
+     * membership). Вызвать может только сам заявитель; применимо только к бесплатным клубам
+     * (`subscription_price <= 0`) — платные клубы вступают как `frozen` при approve и открываются
+     * организатором (AccessGateService).
      *
-     * Delegates to [MembershipActivator.activateFree] which handles both fresh INSERT (no row at all)
-     * and reactivation (cancelled / expired row from a prior lifecycle — UNIQUE(user_id, club_id)
-     * prevents a second INSERT). Idempotent at the application-level — second call after success
-     * returns 400 ("Already a member").
+     * Делегирует в [MembershipActivator.activateFree], который обрабатывает и свежий INSERT
+     * (строки вообще нет), и реактивацию (cancelled / expired строка из прошлого жизненного
+     * цикла — UNIQUE(user_id, club_id) не даёт сделать второй INSERT). Идемпотентно на уровне
+     * заявки — повторный вызов после успеха вернёт 400 ("Already a member").
      */
     @Transactional
     fun completeFreeMembership(applicationId: UUID, callerUserId: UUID): MembershipDto {

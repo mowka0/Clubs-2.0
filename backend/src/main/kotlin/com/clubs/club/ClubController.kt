@@ -31,8 +31,9 @@ class ClubController(
 
     private val log = LoggerFactory.getLogger(ClubController::class.java)
 
-    // Organizer trust card for the dues-payment sheet (de-Stars). JWT-only / others-visible (no ownership
-    // gate) — the organizer is the public host; the member needs to see who they pay before transferring.
+    // Карточка доверия организатора для шита оплаты взносов (de-Stars). Только JWT / видна другим
+    // (без гейта на владение) — организатор публичный хост; участник должен видеть, кому платит,
+    // прежде чем сделать перевод.
     @GetMapping("/{id}/organizer-card")
     fun organizerCard(@PathVariable id: UUID): ResponseEntity<OrganizerCardDto> =
         ResponseEntity.ok(organizerCardService.getOrganizerCard(id))

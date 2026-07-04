@@ -17,7 +17,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const KNOWN_CATEGORIES = new Set(Object.keys(CATEGORY_LABELS));
 
-/** Russian ₽ — brand uses real currency, not Telegram Stars symbol */
+/** Российский ₽ — бренд использует настоящую валюту, а не символ Telegram Stars */
 function formatPrice(price: number): string {
   if (price === 0) return 'бесплатно';
   const formatted = new Intl.NumberFormat('ru-RU').format(price).replace(/\s/g, ' ');
@@ -32,7 +32,7 @@ function pluralizeMembers(n: number): string {
   return 'участников';
 }
 
-/** Detects whether nearestEvent is "today" (< 24h ahead) — featured-card trigger */
+/** Определяет, наступит ли nearestEvent «сегодня» (< 24ч) — триггер выделенной карточки */
 function isHappeningSoon(iso: string | undefined | null): boolean {
   if (!iso) return false;
   const eventTime = new Date(iso).getTime();
@@ -50,7 +50,7 @@ function formatEventTime(iso: string): string {
 
 interface ClubCardProps {
   club: ClubListItemDto;
-  /** Quality facts (возраст + вовлечённость) for the metric trio. Absent until the batch loads. */
+  /** Факты о качестве (возраст + вовлечённость) для тройки метрик. Отсутствуют, пока не загрузится пакет. */
   facts?: ClubCardFactsDto;
 }
 
@@ -84,7 +84,7 @@ export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
         )}
       </div>
       <div className="rd-body">
-        {/* Soft-rank L3 badge — the only externally-visible rank signal (boolean; никогда не число).
+        {/* Soft-rank L3 бейдж — единственный внешне видимый сигнал ранга (boolean; никогда не число).
             Над названием клуба. */}
         {facts?.topInCategory && <div><span className="rd-rankpill">★ Топ-5 в категории</span></div>}
         <div className="rd-ttl">{club.name}</div>

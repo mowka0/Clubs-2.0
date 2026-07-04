@@ -28,9 +28,10 @@ export function useMySkladchinasQuery() {
 }
 
 /**
- * Count of active skladchinas the user must still pay. Powers the "Сборы" tab
- * badge + the bottom-nav "Активности" dot so unpaid obligations stay visible
- * from anywhere. Kept lightweight (one COUNT) and runs wherever the nav lives.
+ * Число активных складчин, которые пользователю ещё нужно оплатить. Питает бейдж
+ * таба «Сборы» + точку на нижней навигации «Активности», чтобы неоплаченные
+ * обязательства были видны отовсюду. Лёгкий запрос (один COUNT), выполняется
+ * везде, где живёт навигация.
  */
 export function useSkladchinaActionRequiredCountQuery() {
   return useQuery({
@@ -49,7 +50,7 @@ export function useSkladchinaQuery(id: string | undefined) {
   });
 }
 
-/** Existing split for an event — drives the EventPage "Разделить счёт" button. */
+/** Существующий сплит для события — управляет кнопкой EventPage «Разделить счёт». */
 export function useEventSplitStateQuery(eventId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.skladchinas.eventState(eventId ?? ''),
@@ -71,8 +72,8 @@ export function useCreateSkladchinaMutation() {
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.byClubActive(clubId) });
       qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
-      // Unified activity feed must refresh too — newly created skladchina
-      // must appear at the top across all filter variants of the manage tab.
+      // Единый фид активностей тоже должен обновиться — новая складчина
+      // должна появиться сверху во всех вариантах фильтра таба управления.
       qc.invalidateQueries({ queryKey: queryKeys.activities.byClubAll(clubId) });
     },
   });
@@ -80,7 +81,7 @@ export function useCreateSkladchinaMutation() {
 
 interface MarkPaidArgs {
   id: string;
-  // A-1: omitted for fixed modes (server records the share); the declared amount for voluntary.
+  // A-1: не передаётся для фиксированных режимов (сервер сам записывает долю); для voluntary — заявленная сумма.
   declaredAmountKopecks?: number | null;
 }
 
@@ -102,11 +103,11 @@ interface OrganizerParticipantArgs {
   userId: string;
 }
 
-/** A-2: organizer marks a participant paid / reverts it. Shared invalidation for both. */
+/** A-2: организатор отмечает участника оплатившим / отменяет отметку. Общая инвалидация для обоих случаев. */
 function invalidateAfterOrganizerAction(qc: ReturnType<typeof useQueryClient>, id: string) {
   qc.invalidateQueries({ queryKey: queryKeys.skladchinas.detail(id) });
   qc.invalidateQueries({ queryKey: queryKeys.skladchinas.myFeed });
-  // The marked participant's "action required" obligation changed — refresh the badge count.
+  // Обязательство «требуется действие» у отмеченного участника изменилось — обновляем счётчик бейджа.
   qc.invalidateQueries({ queryKey: queryKeys.skladchinas.actionRequiredCount });
 }
 
@@ -126,7 +127,7 @@ export function useOrganizerUnmarkMutation() {
   });
 }
 
-/** V28: participant requests to decline a bill with a reason (split_bill). */
+/** V28: участник запрашивает отказ от счёта с указанием причины (split_bill). */
 export function useRequestDeclineMutation() {
   const qc = useQueryClient();
   return useMutation({
@@ -138,7 +139,7 @@ export function useRequestDeclineMutation() {
   });
 }
 
-/** V28/V29: organizer approves/rejects a participant's decline request (reject needs a reason). */
+/** V28/V29: организатор одобряет/отклоняет запрос участника на отказ (отклонение требует причины). */
 export function useResolveDeclineMutation() {
   const qc = useQueryClient();
   return useMutation({

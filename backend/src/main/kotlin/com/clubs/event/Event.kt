@@ -18,7 +18,7 @@ data class Event(
     val stage2Triggered: Boolean,
     val attendanceMarked: Boolean,
     val attendanceFinalized: Boolean,
-    // Optional organizer-provided reason set on cancellation (F5-14); null otherwise.
+    // Опциональная причина от организатора, задаваемая при отмене (F5-14); иначе null.
     val cancellationReason: String? = null,
     val photoUrl: String?,
     val createdAt: OffsetDateTime?,

@@ -9,7 +9,7 @@ export interface ClubPickerOption {
 
 interface ClubPickerListProps {
   clubs: ClubPickerOption[];
-  /** Called with the chosen club id. No side effects here — the parent flow owns step/haptics. */
+  /** Вызывается с id выбранного клуба. Без побочных эффектов здесь — шаг/haptics владеет родительский flow. */
   onPick: (clubId: string) => void;
 }
 
@@ -24,8 +24,8 @@ function getInitials(name: string): string {
 }
 
 /**
- * Content-only club list (no Modal wrapper). Rendered inside the single Modal
- * owned by CreateActivityFlow, which controls step transitions and haptics.
+ * Список клубов — только контент (без обёртки Modal). Рендерится внутри единственного Modal,
+ * которым владеет CreateActivityFlow — он управляет переходами шагов и haptics.
  */
 export const ClubPickerList: FC<ClubPickerListProps> = ({ clubs, onPick }) => (
   <div className="club-picker">

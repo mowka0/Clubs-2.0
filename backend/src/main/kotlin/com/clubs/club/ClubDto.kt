@@ -46,7 +46,7 @@ data class ClubDetailDto(
     val inviteLink: String?,
     val memberCount: Int,
     val isActive: Boolean,
-    // SBP dues requisites — only populated for club members (active/frozen) + owner; null otherwise.
+    // Реквизиты для взносов по СБП — заполняются только для участников клуба (active/frozen) + владельца; иначе null.
     val paymentLink: String?,
     val paymentMethodNote: String?
 )
@@ -84,8 +84,8 @@ data class CreateClubRequest(
     val rules: String? = null,
     val applicationQuestion: String? = null,
 
-    // SBP dues requisites. Mandatory when subscriptionPrice > 0 (enforced in ClubService.createClub):
-    // a paid club must tell members how to pay. paymentLink = the СБП link/phone; note = optional hint.
+    // Реквизиты для взносов по СБП. Обязательны при subscriptionPrice > 0 (проверяется в ClubService.createClub):
+    // платный клуб обязан сообщить участникам, как платить. paymentLink = ссылка СБП/телефон; note = опциональная подсказка.
     @field:Size(max = 500, message = "Реквизиты: максимум 500 символов")
     val paymentLink: String? = null,
     @field:Size(max = 200, message = "Подсказка: максимум 200 символов")
@@ -113,7 +113,7 @@ data class UpdateClubRequest(
     val rules: String? = null,
     val applicationQuestion: String? = null,
 
-    // SBP dues requisites (settings). null = leave as is; blank = clear to NULL (same as rules/district).
+    // Реквизиты для взносов по СБП (настройки). null = оставить как есть; пустая строка = очистить в NULL (как rules/district).
     @field:Size(max = 500, message = "Реквизиты: максимум 500 символов")
     val paymentLink: String? = null,
     @field:Size(max = 200, message = "Подсказка: максимум 200 символов")
@@ -121,21 +121,21 @@ data class UpdateClubRequest(
 )
 
 /**
- * Trust card for the dues-payment sheet — who the member is about to transfer money to (de-Stars: money
- * goes organizer-direct, off-platform). Account-focused; the frontend hides facts that aren't meaningful
- * yet (clubsCount < 2, trustedMembers below threshold) so a fresh account never shows zeros.
+ * Карточка доверия для экрана оплаты взноса — кому участник собирается перевести деньги (de-Stars: деньги
+ * идут напрямую организатору, вне платформы). Фокус на аккаунте; фронтенд скрывает факты, которые ещё не
+ * значимы (clubsCount < 2, trustedMembers ниже порога), чтобы у свежего аккаунта никогда не показывались нули.
  */
 data class OrganizerCardDto(
     val firstName: String,
     val lastName: String?,
     val username: String?,
     val avatarUrl: String?,
-    // Organizer's account age on OUR platform (users.created_at). Always shown ("с {дата}" / "недавно").
+    // Возраст аккаунта организатора на НАШЕЙ платформе (users.created_at). Показывается всегда ("с {дата}" / "недавно").
     val onPlatformSince: OffsetDateTime,
-    // Active clubs the organizer owns (shown only when ≥ 2).
+    // Активные клубы, которыми владеет организатор (показывается только при ≥ 2).
     val clubsCount: Int,
-    // Active non-organizer members across all the organizer's active clubs — «доверяют N участников»
-    // (shown only above a threshold). Frozen (not-yet-paid) members are excluded — they aren't proof.
+    // Активные участники (не организаторы) во всех активных клубах организатора — «доверяют N участников»
+    // (показывается только выше порога). Frozen (ещё не оплатившие) участники исключены — они не доказательство.
     val trustedMembers: Int
 )
 

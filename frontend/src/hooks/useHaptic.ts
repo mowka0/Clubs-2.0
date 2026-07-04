@@ -15,14 +15,15 @@ export interface Haptic {
 }
 
 /**
- * Single entry point for Telegram Haptic Feedback inside the app.
+ * Единая точка входа для Telegram Haptic Feedback внутри приложения.
  *
- * Each method silently no-ops when the underlying SDK function is unavailable
- * (Desktop client below Bot API 6.1, browser outside Telegram, vitest without
- * mocks). The hook never throws — call sites do not need try/catch.
+ * Каждый метод молча ничего не делает, если базовая функция SDK недоступна
+ * (Desktop-клиент ниже Bot API 6.1, браузер вне Telegram, vitest без моков).
+ * Хук никогда не бросает исключений — вызывающему коду не нужен try/catch.
  *
- * The returned object identity is stable across renders, so it is safe to use
- * as a dependency in `useEffect` / `useCallback` without triggering reruns.
+ * Идентичность возвращаемого объекта стабильна между рендерами, поэтому его
+ * безопасно использовать как зависимость в `useEffect` / `useCallback` без
+ * лишних перезапусков.
  */
 export function useHaptic(): Haptic {
   return useMemo<Haptic>(

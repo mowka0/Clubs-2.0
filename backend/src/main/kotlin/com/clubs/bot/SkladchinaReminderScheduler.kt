@@ -13,18 +13,18 @@ import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 
 /**
- * Poll-based deadline reminder for reputation-affecting skladchinas (bot module =
- * notification layer; depends on `skladchina`). Pattern: EventReminderScheduler.
+ * Поллинг-напоминание о дедлайне для складчин, влияющих на репутацию (модуль bot =
+ * слой уведомлений; зависит от `skladchina`). Паттерн: EventReminderScheduler.
  *
- * ~`deadline-reminder-minutes-before` (default 24h) before the deadline, DM every
- * still-pending participant: pay or decline, silence costs -40. This is notification
- * #2 of the redesign's launch-blocker trio (creation price DM → this reminder →
- * penalty report) — without it the -40 penalty is not legitimate.
+ * Примерно за `deadline-reminder-minutes-before` (по умолчанию 24ч) до дедлайна шлём DM
+ * каждому ещё не ответившему участнику: оплатить или отказаться, молчание стоит -40.
+ * Это уведомление #2 из троицы launch-blocker'ов редизайна (DM с ценой при создании →
+ * это напоминание → отчёт о штрафе) — без него штраф -40 нелегитимен.
  *
- * Deliberately NO @Transactional on the loop: `markReminderSent` is an independent
- * auto-committed UPDATE set BEFORE the DMs, so a recurring poll never double-sends;
- * a DM that then fails is logged and dropped (delivery is best-effort, like every
- * other DM in NotificationService).
+ * Намеренно НЕТ @Transactional на цикле: `markReminderSent` — независимый автокоммитящийся
+ * UPDATE, выполняемый ДО отправки DM, поэтому повторяющийся поллинг никогда не отправит дважды;
+ * DM, который затем падает, логируется и отбрасывается (доставка best-effort, как и любой
+ * другой DM в NotificationService).
  */
 @Component
 class SkladchinaReminderScheduler(

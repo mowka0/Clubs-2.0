@@ -22,9 +22,10 @@ class InterestService(private val interestRepository: InterestRepository) {
         interestRepository.findUserInterestNames(userId)
 
     /**
-     * Replaces the user's interests with [rawNames] (normalized + deduped).
-     * Diffs against current links so popularity counters only move for genuine
-     * adds/removes. Runs in the caller's transaction (profile update).
+     * Заменяет интересы пользователя на [rawNames] (нормализованные + без дублей).
+     * Сравнивает с текущими связями, чтобы счётчики популярности менялись только
+     * для настоящих добавлений/удалений. Выполняется в транзакции вызывающего
+     * (обновление профиля).
      */
     @Transactional
     fun replaceUserInterests(userId: UUID, rawNames: List<String>) {
@@ -48,6 +49,7 @@ class InterestService(private val interestRepository: InterestRepository) {
     }
 
     companion object {
+        // Верхний предел количества подсказок интересов, отдаваемых за один запрос.
         private const val MAX_SUGGEST = 10
     }
 }

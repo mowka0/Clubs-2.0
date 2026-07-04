@@ -11,39 +11,42 @@ data class MemberProfileDto(
     val firstName: String,
     val username: String?,
     val avatarUrl: String?,
-    // Public profile fields, shown to every club member on the member card alongside the
-    // per-club reputation rings. Already public on the profile and the application card.
+    // Публичные поля профиля, показываются каждому участнику клуба на карточке участника рядом
+    // с кольцами репутации по клубу. Уже публичны в профиле и на карточке заявки.
     val bio: String?,
     val interests: List<String>,
-    // Member admin S2 — club-local awards (R3: visible to ALL members, not organizer-gated like the note).
-    // Cosmetic only (R4): never derived from / affecting reputation.
+    // Member admin S2 — локальные для клуба награды (R3: видны ВСЕМ участникам, в отличие от заметки,
+    // доступной только организатору). Только косметика (R4): никогда не выводятся из репутации
+    // и не влияют на неё.
     val awards: List<AwardDto>,
-    // Membership role ("organizer" = club owner). The frontend uses it to render the
-    // organizer framing when trust is null in the user's own club.
+    // Роль в membership ("organizer" = владелец клуба). Фронтенд использует это, чтобы отрисовать
+    // рамку организатора, когда trust равен null в собственном клубе пользователя.
     val role: String,
-    // P1b Trust 0-100. null = "Новичок"/suppressed (no track record yet, or owner in own club).
+    // P1b Trust 0-100. null = "Новичок"/скрыто (ещё нет истории, либо владелец в своём клубе).
     val trust: Int?,
     val promiseFulfillmentPct: BigDecimal?,
     val totalConfirmations: Int?,
     val totalAttendances: Int?,
     // "Возможно → Подтвердил → Пришёл": пришёл, хотя обещал только «возможно». Позитивный сигнал.
     val spontaneityCount: Int?,
-    // Reputation-affecting skladchina record in THIS club: paid / (paid + expired). null when the
-    // reputation block is suppressed; the frontend hides the "Сборы" ring when total == 0.
+    // Влияющая на репутацию история складчин В ЭТОМ клубе: оплачено / (оплачено + просрочено). null,
+    // когда блок репутации скрыт; фронтенд прячет кольцо "Сборы" при total == 0.
     val skladchinaPaid: Int?,
     val skladchinaTotal: Int?,
-    // De-Stars Slice 2 — ORGANIZER ONLY (null for regular members): when this member's paid access
-    // window ends. null also for free memberships (no expiry). Shown as «Подписка активна до …».
+    // De-Stars, слой 2 — ТОЛЬКО ДЛЯ ОРГАНИЗАТОРА (null для обычных участников): когда заканчивается
+    // платное окно доступа этого участника. null также для бесплатных membership (нет истечения).
+    // Отображается как «Подписка активна до …».
     val subscriptionExpiresAt: OffsetDateTime? = null,
-    // Member admin S1 — ORGANIZER ONLY (null for regular members): the private organizer note.
+    // Member admin S1 — ТОЛЬКО ДЛЯ ОРГАНИЗАТОРА (null для обычных участников): приватная заметка организатора.
     val organizerNote: String? = null,
-    // De-Stars dues claim — ORGANIZER ONLY (null for regular members): when the member declared payment,
-    // the method ("sbp"|"cash"), and the screenshot URL (sbp only). Lets the organizer review the proof
-    // before pressing «Взнос получен».
+    // De-Stars заявление об оплате взноса — ТОЛЬКО ДЛЯ ОРГАНИЗАТОРА (null для обычных участников):
+    // когда участник заявил об оплате, способ ("sbp"|"cash") и URL скриншота (только для sbp).
+    // Позволяет организатору проверить подтверждение перед нажатием «Взнос получен».
     val duesClaimedAt: OffsetDateTime? = null,
     val duesClaimMethod: String? = null,
     val duesProofUrl: String? = null,
-    // The member's join-application answer (closed clubs) — ORGANIZER ONLY. Null for open clubs / no
-    // question. Lets the organizer review «why they joined» alongside the payment proof on one card.
+    // Ответ участника в заявке на вступление (закрытые клубы) — ТОЛЬКО ДЛЯ ОРГАНИЗАТОРА. Null для
+    // открытых клубов / без вопроса. Позволяет организатору увидеть «зачем вступил» рядом
+    // с подтверждением оплаты на одной карточке.
     val applicationAnswer: String? = null
 )

@@ -96,8 +96,8 @@ class JooqEventRepository(
     }
 
     override fun findActionRequiredEventIds(clubId: UUID, userId: UUID, now: OffsetDateTime): Set<UUID> {
-        // Stage-1 vote pending: voting window open (event_datetime - voting_opens_days_before <= now),
-        // status still upcoming, this user has not voted.
+        // Голос Stage-1 ещё не отдан: окно голосования открыто (event_datetime - voting_opens_days_before <= now),
+        // статус всё ещё upcoming, этот пользователь ещё не голосовал.
         val stage1Pending = EVENTS.STATUS.eq(EventStatus.upcoming)
             .and(EVENT_RESPONSES.STAGE_1_VOTE.isNull)
             .and(
@@ -108,7 +108,7 @@ class JooqEventRepository(
                     DSL.value(now)
                 )
             )
-        // Stage-2 confirmation pending: voted going/maybe in stage 1, not yet confirmed/declined.
+        // Подтверждение Stage-2 ещё не отдано: проголосовал going/maybe на stage 1, но ещё не подтвердил/отказался.
         val stage2Pending = EVENTS.STATUS.eq(EventStatus.stage_2)
             .and(EVENT_RESPONSES.STAGE_1_VOTE.`in`(Stage_1Vote.going, Stage_1Vote.maybe))
             .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull)
@@ -129,9 +129,10 @@ class JooqEventRepository(
     override fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MyFeedItem> {
         val now = OffsetDateTime.now()
 
-        // Membership access must match the voting/DM access predicate, else a member could vote on
-        // (and is DM'd about) an event that never shows up in their feed. Shared MembershipAccess
-        // predicate: content access = status `active` (a `frozen` member is gated out of all three).
+        // Доступ по membership должен совпадать с предикатом доступа к голосованию/DM, иначе участник
+        // сможет голосовать (и получать DM) по событию, которое никогда не появится в его ленте.
+        // Общий предикат MembershipAccess: доступ к контенту = статус `active` (участник `frozen`
+        // отсечён от всех трёх).
         val baseCondition = EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_2)
             .and(EVENTS.EVENT_DATETIME.gt(now))
             .and(CLUBS.IS_ACTIVE.eq(true))
@@ -145,8 +146,8 @@ class JooqEventRepository(
             .where(baseCondition)
             .fetchOne(0, Long::class.java) ?: 0L
 
-        // ORDER BY: action-required events first (computed inline via CASE),
-        // then chronological. Voting window opens at
+        // ORDER BY: сначала события, требующие действия (вычисляется inline через CASE),
+        // затем хронологически. Окно голосования открывается в момент
         // event_datetime - voting_opens_days_before * 1 day.
         val actionRequiredOrder = DSL.case_()
             .`when`(
@@ -248,8 +249,8 @@ class JooqEventRepository(
         val going = countVotes(eventId, Stage_1Vote.going)
         val maybe = countVotes(eventId, Stage_1Vote.maybe)
         val notGoing = countVotes(eventId, Stage_1Vote.not_going)
-        // Stage-2 confirmed roster size. Mirrors fetchConfirmedCounts / countConfirmed
-        // (stage_2_vote = confirmed) — getEvent previously hardcoded this to 0.
+        // Размер подтверждённого ростера Stage-2. Зеркалит fetchConfirmedCounts / countConfirmed
+        // (stage_2_vote = confirmed) — раньше getEvent тут был захардкожен в 0.
         val confirmed = dsl.selectCount().from(EVENT_RESPONSES)
             .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.STAGE_2_VOTE.eq(Stage_2Vote.confirmed)))
             .fetchOne(0, Int::class.java) ?: 0
@@ -267,9 +268,9 @@ class JooqEventRepository(
             .map(mapper::toDomain)
 
     /**
-     * Returns the nearest upcoming event across all clubs.
-     * Used by ClubsBot.handleWhoIsGoing (/кто_идет command).
-     * Status must be upcoming, stage_1, or stage_2 and event_datetime > now.
+     * Возвращает ближайшее предстоящее событие среди всех клубов.
+     * Используется в ClubsBot.handleWhoIsGoing (команда /кто_идет).
+     * Статус должен быть upcoming, stage_1 или stage_2, и event_datetime > now.
      */
     override fun findNextUpcomingEvent(now: OffsetDateTime): Event? =
         dsl.selectFrom(EVENTS)
@@ -297,11 +298,11 @@ class JooqEventRepository(
             .where(
                 EVENTS.CLUB_ID.eq(clubId)
                     .and(EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_1, EventStatus.stage_2))
-                    // Load-bearing: a stage_2 event can already be attendance-marked (marking is
-                    // allowed in the ~6h before the completion sweep). We must NOT cancel an event
-                    // whose reputation is already locked. The matching finalize guard
-                    // (finalizeAttendanceBefore + claimEvent exclude `cancelled`) then stops a
-                    // still-unfinalized but marked event from accruing reputation after cancel.
+                    // Важно: у события в stage_2 посещаемость может быть уже отмечена (отметка
+                    // разрешена в ~6ч до финального sweep-прохода). Нельзя отменять событие, чья
+                    // репутация уже зафиксирована. Парный guard в finalize (finalizeAttendanceBefore
+                    // + claimEvent исключают `cancelled`) не даёт ещё-не-финализированному, но уже
+                    // отмеченному событию начислить репутацию после отмены.
                     .and(EVENTS.ATTENDANCE_FINALIZED.eq(false))
             )
             .execute()
@@ -314,8 +315,9 @@ class JooqEventRepository(
             .where(
                 EVENTS.ID.eq(eventId)
                     .and(EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_1, EventStatus.stage_2))
-                    // Only before the event starts: event_datetime > now ⇒ attendance can't be marked
-                    // or finalized yet, so cancelling never erases legitimate attendance/reputation.
+                    // Только до начала события: event_datetime > now ⇒ посещаемость ещё не может быть
+                    // отмечена или финализирована, поэтому отмена никогда не стирает легитимную
+                    // посещаемость/репутацию.
                     .and(EVENTS.EVENT_DATETIME.greaterThan(OffsetDateTime.now()))
             )
             .execute()
@@ -323,15 +325,15 @@ class JooqEventRepository(
     override fun markAttendanceMarked(id: UUID): Int =
         dsl.update(EVENTS)
             .set(EVENTS.ATTENDANCE_MARKED, true)
-            // решение (б)=A: the dispute window is measured from this moment, not event_datetime
-            // (a late mark must still give the participant a full window). finalizeAttendanceBefore
-            // gates on COALESCE(attendance_marked_at, event_datetime).
+            // решение (б)=A: окно на оспаривание отсчитывается от этого момента, а не от event_datetime
+            // (даже поздняя отметка должна давать участнику полное окно). finalizeAttendanceBefore
+            // проверяет условие через COALESCE(attendance_marked_at, event_datetime).
             .set(EVENTS.ATTENDANCE_MARKED_AT, OffsetDateTime.now())
             .where(
                 EVENTS.ID.eq(id)
-                    // F5-09: lose the TOCTOU against the finalizer. Under READ COMMITTED the
-                    // finalizer's committed attendance_finalized=true makes this match 0 rows;
-                    // markAttendance throws and rolls back the setAttendance writes in the same txn.
+                    // F5-09: закрывает TOCTOU против финализатора. При READ COMMITTED уже
+                    // закоммиченный финализатором attendance_finalized=true даёт здесь 0 строк;
+                    // markAttendance бросает исключение и откатывает записи setAttendance в той же транзакции.
                     .and(EVENTS.ATTENDANCE_FINALIZED.eq(false))
             )
             .execute()
@@ -341,8 +343,8 @@ class JooqEventRepository(
             .where(
                 EVENTS.STATUS.eq(EventStatus.stage_2)
                     .and(EVENTS.CONFIRM_REMINDER_SENT.isFalse)
-                    .and(EVENTS.EVENT_DATETIME.greaterThan(now))      // not started yet
-                    .and(EVENTS.EVENT_DATETIME.lessOrEqual(until))    // within the "hours before" window
+                    .and(EVENTS.EVENT_DATETIME.greaterThan(now))      // ещё не началось
+                    .and(EVENTS.EVENT_DATETIME.lessOrEqual(until))    // в пределах окна «часов до»
             )
             .fetch()
             .map(mapper::toDomain)
@@ -359,15 +361,15 @@ class JooqEventRepository(
             .where(
                 EVENTS.ATTENDANCE_MARKED.isFalse
                     .and(EVENTS.ATTENDANCE_REMINDER_SENT.isFalse)
-                    // F5-17: EXP-2 neutrally-finalizes unmarked past events (marked=false,
-                    // finalized=true). Without this, the reminder still fires on them → the
-                    // organizer taps "mark" → markAttendance throws finalized → guaranteed 400.
+                    // F5-17: EXP-2 нейтрально финализирует неотмеченные прошедшие события (marked=false,
+                    // finalized=true). Без этого условия напоминание всё равно сработает на них → организатор
+                    // жмёт «отметить» → markAttendance бросает finalized → гарантированный 400.
                     .and(EVENTS.ATTENDANCE_FINALIZED.isFalse)
-                    .and(EVENTS.EVENT_DATETIME.lessOrEqual(cutoff))   // event was >= "hours after" ago
+                    .and(EVENTS.EVENT_DATETIME.lessOrEqual(cutoff))   // событие прошло >= «часов после» назад
                     .and(EVENTS.STATUS.ne(EventStatus.cancelled))
-                    // CC-2: only nag the organizer when there is actually a roster to mark — a
-                    // past event with zero confirmed participants has nothing to attend (and
-                    // setAttendance only touches final_status=confirmed rows anyway).
+                    // CC-2: напоминать организатору только когда реально есть ростер для отметки — у
+                    // прошедшего события с нулём подтверждённых участников нечего отмечать (да и
+                    // setAttendance трогает только строки с final_status=confirmed).
                     .andExists(
                         DSL.selectOne().from(EVENT_RESPONSES).where(
                             EVENT_RESPONSES.EVENT_ID.eq(EVENTS.ID)
@@ -399,14 +401,15 @@ class JooqEventRepository(
             .where(
                 EVENTS.ATTENDANCE_MARKED.eq(true)
                     .and(EVENTS.ATTENDANCE_FINALIZED.eq(false))
-                    // решение (б)=A: window measured from mark time. COALESCE falls back to
-                    // event_datetime for rows marked before V24 (attendance_marked_at IS NULL),
-                    // so legacy marked-but-not-finalized events finalize on the old basis — no backfill.
+                    // решение (б)=A: окно отсчитывается от момента отметки. COALESCE откатывается к
+                    // event_datetime для строк, отмеченных до V24 (attendance_marked_at IS NULL),
+                    // поэтому старые отмеченные-но-не-финализированные события финализируются по старой
+                    // базе — без backfill.
                     .and(DSL.coalesce(EVENTS.ATTENDANCE_MARKED_AT, EVENTS.EVENT_DATETIME).lessOrEqual(eventDatetimeCutoff))
-                    // A cancelled event must never finalize and accrue reputation. Reachable since
-                    // the club-delete cascade can cancel an already-attendance-marked stage_2 event
-                    // (marking is allowed in the ~6h before completion). Mirrors the sibling
-                    // neutrallyFinalizeUnmarkedBefore, which already excludes cancelled.
+                    // Отменённое событие никогда не должно финализироваться и начислять репутацию.
+                    // Достижимо, поскольку каскад удаления клуба может отменить уже-отмеченное stage_2
+                    // событие (отметка разрешена в ~6ч до завершения). Зеркалит соседний метод
+                    // neutrallyFinalizeUnmarkedBefore, который уже исключает cancelled.
                     .and(EVENTS.STATUS.ne(EventStatus.cancelled))
             )
             .returningResult(EVENTS.ID)

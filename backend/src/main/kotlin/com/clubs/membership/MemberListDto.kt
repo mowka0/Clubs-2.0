@@ -15,32 +15,38 @@ data class MemberListItemDto(
     val avatarUrl: String?,
     val role: String,
     val joinedAt: OffsetDateTime?,
-    // P1b Trust 0-100. null = "Новичок" (no track record yet, or owner in own club — frontend
-    // uses `role` to render the organizer framing). Whole reputation block is suppressed when null.
+    // P1b Trust 0-100. null = «Новичок» (ещё нет истории, либо владелец в своём же клубе — фронтенд
+    // использует `role`, чтобы показать организаторскую подачу). Весь блок репутации скрывается при null.
     val trust: Int?,
     val promiseFulfillmentPct: BigDecimal?,
-    // Stage-2 confirmations to date. The frontend gates the "Обещания X%" line on this being > 0
-    // so a finance-only member (skladchina record, no events) never shows a misleading 0% (F5-08).
+    // Число подтверждений Этапа 2 на текущий момент. Фронтенд показывает строку «Обещания X%» только
+    // если это > 0, чтобы участник только-по-финансам (запись складчины, без событий) никогда не
+    // показывал вводящий в заблуждение 0% (F5-08).
     val totalConfirmations: Int?,
-    // Club-local awards (member admin S2) — public to all members (R3), shown as chips on the roster
-    // card (and the profile). Cosmetic; never reflects reputation (R4). Empty when the member has none.
+    // Награды клубного уровня (member admin S2) — публичны для всех участников (R3), показываются
+    // чипами на карточке ростера (и в профиле). Косметика; никогда не влияет на репутацию (R4).
+    // Пусто, если у участника наград нет.
     val awards: List<AwardDto> = emptyList(),
-    // De-Stars Slice 2 — organizer dashboard only (null for regular members): access state
-    // ("active"/"frozen") + when the paid access window ends. Drives the «Скоро закончится» /
-    // «Ждут оплаты» / «Активные» buckets. `subscriptionExpiresAt` is null for free memberships.
+    // De-Stars Slice 2 — только для дашборда организатора (null для обычных участников): статус
+    // доступа ("active"/"frozen") + когда заканчивается оплаченное окно доступа. Управляет
+    // корзинами «Скоро закончится» / «Ждут оплаты» / «Активные». `subscriptionExpiresAt` равно null
+    // для бесплатных членств.
     val accessStatus: String? = null,
     val subscriptionExpiresAt: OffsetDateTime? = null,
-    // Member's dues claim (organizer dashboard only): when they declared payment (null = no claim) +
-    // the method ("sbp"|"cash"). Lets the «Ждут оплаты» list flag «оплата заявлена» before opening.
+    // Заявка участника об оплате взноса (только для дашборда организатора): когда он заявил об
+    // оплате (null = заявки нет) + способ ("sbp"|"cash"). Позволяет списку «Ждут оплаты» пометить
+    // «оплата заявлена» ещё до открытия карточки.
     val duesClaimedAt: OffsetDateTime? = null,
     val duesClaimMethod: String? = null
 )
 
 /**
- * Counts that feed the red-dot badge on «Управление» + the «Участники» tab (de-Stars Slice 2),
- * organizer-only. The dot lights when EITHER is > 0:
- *  - expiringSoon — `active` members whose paid window ends within the week (renew & confirm).
- *  - awaitingDues — `frozen` members who joined but haven't been admitted yet (confirm first dues).
+ * Счётчики, питающие красную точку на «Управление» + вкладке «Участники» (de-Stars Slice 2),
+ * только для организатора. Точка загорается, если хотя бы одно из значений > 0:
+ *  - expiringSoon — `active`-участники, у которых оплаченное окно заканчивается в течение недели
+ *    (нужно продлить и подтвердить).
+ *  - awaitingDues — `frozen`-участники, которые вступили, но ещё не были допущены (нужно
+ *    подтвердить первый взнос).
  */
 data class MemberAttentionDto(
     val expiringSoon: Int,
@@ -48,10 +54,10 @@ data class MemberAttentionDto(
 )
 
 /**
- * A `frozen` member across one of the caller's owned clubs — they joined but haven't been admitted
- * (dues not yet confirmed). Powers the cross-club «Ждут оплаты» section on «Мои клубы» so the
- * organizer confirms dues without entering each club. `subscriptionExpiresAt` is the lapsed window
- * (null for a never-paid first join); `joinedAt` drives the «вступил(а) N назад» line.
+ * `frozen`-участник в одном из клубов вызывающего — вступил, но ещё не был допущен (взнос ещё не
+ * подтверждён). Питает кросс-клубовую секцию «Ждут оплаты» на «Мои клубы», чтобы организатор мог
+ * подтверждать взносы, не заходя в каждый клуб. `subscriptionExpiresAt` — истёкшее окно
+ * (null при первом вступлении без оплаты); `joinedAt` формирует строку «вступил(а) N назад».
  */
 data class OrganizerDuesMember(
     val userId: UUID,
@@ -79,14 +85,15 @@ data class OrganizerDuesMemberDto(
     val clubAvatarUrl: String?,
     val joinedAt: OffsetDateTime?,
     val subscriptionExpiresAt: OffsetDateTime?,
-    // Cross-club «Ждут оплаты»: the member's dues claim (null = none) + method, so the row can flag
-    // «оплата заявлена» and the organizer prioritises confirming it.
+    // Кросс-клубовая «Ждут оплаты»: заявка участника об оплате (null = нет заявки) + способ, чтобы
+    // строка могла пометить «оплата заявлена» и организатор приоритизировал подтверждение.
     val duesClaimedAt: OffsetDateTime?,
     val duesClaimMethod: String?
 )
 
-/** Member-initiated dues claim (de-Stars): a frozen member declares they paid. method = "sbp"|"cash";
- *  proofUrl is the uploaded screenshot URL, required for "sbp", ignored for "cash". */
+/** Заявка об оплате взноса по инициативе участника (de-Stars): frozen-участник заявляет, что оплатил.
+ *  method = "sbp"|"cash"; proofUrl — ссылка на загруженный скриншот, обязательна для "sbp", игнорируется
+ *  для "cash". */
 data class ClaimDuesRequest(
     @field:NotBlank(message = "Укажите способ оплаты")
     val method: String,
@@ -94,26 +101,27 @@ data class ClaimDuesRequest(
     val proofUrl: String? = null
 )
 
-/** De-Stars B+C — organizer rejects a paid join (refund offline). Reason optional, shown to the member. */
+/** De-Stars B+C — организатор отказывает в оплаченном вступлении (возврат оффлайн). Причина
+ *  опциональна, показывается участнику. */
 data class RejectDuesRequest(
     @field:Size(max = 500, message = "Причина: максимум 500 символов")
     val reason: String? = null
 )
 
-/** Organizer kicks a member from the club. Reason is mandatory (shown to the removed member in a DM). */
+/** Организатор исключает участника из клуба. Причина обязательна (показывается исключённому в DM). */
 data class RemoveMemberRequest(
     @field:NotBlank(message = "Укажите причину удаления")
     @field:Size(min = 5, max = 500, message = "Причина: от 5 до 500 символов")
     val reason: String
 )
 
-/** Member admin S1 — set the private organizer note (null/blank clears it). */
+/** Member admin S1 — установить приватную заметку организатора (null/пусто очищает её). */
 data class UpdateNoteRequest(
     @field:Size(max = 500, message = "Заметка: максимум 500 символов")
     val note: String?
 )
 
-/** Member admin S1 — set a custom access-window end date («своя дата»). Must be in the future. */
+/** Member admin S1 — установить кастомную дату окончания окна доступа («своя дата»). Должна быть в будущем. */
 data class SetAccessUntilRequest(
     @field:NotNull(message = "Укажите дату")
     val until: OffsetDateTime

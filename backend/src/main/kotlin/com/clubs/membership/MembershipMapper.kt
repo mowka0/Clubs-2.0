@@ -36,9 +36,9 @@ class MembershipMapper {
         duesClaimMethod = membership.duesClaimMethod
     )
 
-    // forOrganizer gates the access/dues fields: only the organizer dashboard sees a member's access
-    // state and paid-through date; regular members get null (the roster never leaks who hasn't paid).
-    // awards are public (R3) — passed to every viewer.
+    // forOrganizer закрывает поля доступа/взносов: только дашборд организатора видит статус доступа
+    // участника и дату оплаты до; обычные участники получают null (ростер никогда не палит, кто не заплатил).
+    // Награды публичны (R3) — передаются любому зрителю.
     fun toMemberListItemDto(info: ClubMemberInfo, trust: Int?, awards: List<AwardDto>, forOrganizer: Boolean): MemberListItemDto {
         val show = ReputationPolicy.isShown(info.outcomeCount)
         return MemberListItemDto(

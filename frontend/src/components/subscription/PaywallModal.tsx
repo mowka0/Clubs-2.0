@@ -7,7 +7,7 @@ import { planRank } from './planDisplay';
 
 interface PaywallModalProps {
   info: PaywallInfo;
-  /** Plan whose subscribe is in flight (spinner on its button; all buttons disabled while set). */
+  /** План, подписка на который в процессе (спиннер на его кнопке; все кнопки заблокированы, пока это значение задано). */
   submittingPlan: string | null;
   error: string | null;
   onSelectPlan: (plan: string) => void;
@@ -15,8 +15,8 @@ interface PaywallModalProps {
 }
 
 /**
- * Variant A paywall: shown inside CreateClubModal when the backend returns 402. Renders the full
- * tier ladder with the current plan dimmed and the required tier highlighted/recommended.
+ * Пейволл варианта A: показывается внутри CreateClubModal, когда backend возвращает 402.
+ * Рендерит полную лестницу тарифов: текущий план затемнён, требуемый — подсвечен/рекомендован.
  */
 export const PaywallModal: FC<PaywallModalProps> = ({ info, submittingPlan, error, onSelectPlan, onClose }) => {
   const plansQuery = useSubscriptionPlansQuery();

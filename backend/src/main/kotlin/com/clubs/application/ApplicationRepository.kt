@@ -6,47 +6,48 @@ import java.util.UUID
 
 interface ApplicationRepository {
 
-    // Mutations
+    // Мутации
     fun create(userId: UUID, clubId: UUID, answerText: String?): Application
     fun updateStatus(id: UUID, status: ApplicationStatus, reason: String? = null): Application
 
     /**
-     * Hard-deletes any pending or approved application row for the (user, club)
-     * pair. Used by `MembershipService.leaveClub` so a returning user has to
-     * re-apply from scratch (free private club) and is no longer surfaced in
-     * the «Ожидают оплаты» list with a stale approval (paid club). Rejected /
-     * auto_rejected rows are preserved — they remain as audit history for the
-     * organizer's inbox decisions.
+     * Полностью удаляет любую pending- или approved-заявку для пары (user, club).
+     * Используется `MembershipService.leaveClub`, чтобы вернувшийся пользователь
+     * подавал заявку заново с нуля (бесплатный закрытый клуб) и не всплывал
+     * в списке «Ожидают оплаты» с устаревшим одобрением (платный клуб). Строки
+     * rejected / auto_rejected сохраняются — они остаются как аудиторская история
+     * решений организатора в инбоксе.
      */
     fun deleteActiveByUserAndClub(userId: UUID, clubId: UUID): Int
 
     /**
-     * Club soft-delete cascade: hard-deletes every pending/approved application to [clubId]
-     * (for all users) so they stop appearing as orphan rows in applicants' «Мои заявки» — the
-     * club is gone, the request is moot. Rejected / auto_rejected rows are preserved as audit
-     * history, mirroring [deleteActiveByUserAndClub]. Returns rows deleted.
+     * Каскад soft-delete клуба: полностью удаляет каждую pending/approved заявку в [clubId]
+     * (для всех пользователей), чтобы они не оставались осиротевшими строками в «Мои заявки»
+     * заявителей — клуба больше нет, запрос теряет смысл. Строки rejected / auto_rejected
+     * сохраняются как аудиторская история, зеркалит [deleteActiveByUserAndClub]. Возвращает
+     * число удалённых строк.
      */
     fun deleteActiveByClub(clubId: UUID): Int
 
-    // Lookups
+    // Поиск
     fun findById(id: UUID): Application?
     fun findByClubId(clubId: UUID, status: ApplicationStatus?): List<Application>
     fun findActiveByUserAndClub(userId: UUID, clubId: UUID): Application?
     fun findByUserId(userId: UUID): List<Application>
 
     /**
-     * Pending applications across multiple clubs, oldest-first.
-     * Used by the cross-club organizer inbox. Empty input → empty output (no SQL hit).
+     * Pending-заявки по нескольким клубам, от старых к новым.
+     * Используется кросс-клубовым инбоксом организатора. Пустой вход → пустой выход (без запроса к БД).
      */
     fun findPendingByClubIds(clubIds: Collection<UUID>): List<Application>
 
-    /** Count of pending applications across multiple clubs. Empty input → 0 (no SQL hit). */
+    /** Число pending-заявок по нескольким клубам. Пустой вход → 0 (без запроса к БД). */
     fun countPendingByClubIds(clubIds: Collection<UUID>): Int
 
-    // Counts / rate limit
+    // Счётчики / rate limit
     fun countTodayByUser(userId: UUID): Int
 
-    // Scheduler
+    // Планировщик
     fun findPendingOlderThan(cutoff: OffsetDateTime): List<Application>
     fun markAutoRejected(cutoff: OffsetDateTime): Int
 }

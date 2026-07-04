@@ -5,16 +5,16 @@ import java.util.UUID
 interface ClubStatsRepository {
 
     /**
-     * Computes the owner-only club statistics via read-only windowed aggregations.
-     * Returns `null` when no club row exists for [clubId] (caller maps to 404). In practice the
-     * `@RequiresOrganizer` aspect already rejects a missing club before the service runs.
+     * Считает статистику клуба, видную только владельцу, через read-only оконные агрегации.
+     * Возвращает `null`, если строки клуба для [clubId] не существует (вызывающий код мапит в 404).
+     * На практике aspect `@RequiresOrganizer` уже отклоняет отсутствующий клуб до запуска сервиса.
      */
     fun findClubStats(clubId: UUID): ClubStats?
 
     /**
-     * The win-back roster: distinct members who left/expired within the retention window and are
-     * currently not active/grace, ordered most-recently-gone first. Backs the «Верните N ушедших»
-     * drill-down — its size equals [ClubStats.churnedThisPeriod] by construction (same predicate).
+     * Ростер для win-back: уникальные участники, ушедшие/истёкшие в пределах окна удержания и
+     * сейчас не active/grace, отсортированные от самого недавно ушедшего. Питает drill-down
+     * «Верните N ушедших» — его размер по построению равен [ClubStats.churnedThisPeriod] (тот же предикат).
      */
     fun findChurnedMembers(clubId: UUID): List<ChurnedMember>
 }

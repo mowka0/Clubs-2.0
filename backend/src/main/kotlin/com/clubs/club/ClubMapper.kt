@@ -22,8 +22,8 @@ class ClubMapper {
         rules = record.rules,
         applicationQuestion = record.applicationQuestion,
         inviteLink = record.inviteLink,
-        // Live count is filled in by the repository read paths (findById/findByInviteCode/findByIds)
-        // via copy(memberCount = countLiveMembers(...)). A freshly created club has 0 live members.
+        // Живой счётчик заполняют read-пути репозитория (findById/findByInviteCode/findByIds)
+        // через copy(memberCount = countLiveMembers(...)). У только что созданного клуба 0 живых участников.
         memberCount = 0,
         isActive = record.isActive ?: true,
         telegramGroupId = record.telegramGroupId,
@@ -33,8 +33,8 @@ class ClubMapper {
         updatedAt = record.updatedAt!!
     )
 
-    // includeRequisites gates the SBP payment details: only club members (active/frozen) and the owner
-    // see how to pay — a pending applicant / visitor must not (de-Stars: dues = member→organizer).
+    // includeRequisites гейтит СБП-реквизиты: как платить видят только члены клуба (active/frozen)
+    // и владелец — pending-заявитель / посетитель не должны (de-Stars: взнос = участник→организатор).
     fun toDetailDto(club: Club, includeRequisites: Boolean = false): ClubDetailDto = ClubDetailDto(
         id = club.id,
         ownerId = club.ownerId,

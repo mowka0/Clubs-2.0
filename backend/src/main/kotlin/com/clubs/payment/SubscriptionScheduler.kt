@@ -6,12 +6,13 @@ import org.springframework.stereotype.Component
 import java.time.OffsetDateTime
 
 /**
- * De-Stars (Slice 2): this scheduler is DORMANT. `subscription_expires_at` is no longer written (the
- * Stars pay-to-join flow is retired), so `processExpiry` / `find*` operate on zero rows. It is kept
- * (not deleted) to (1) let any legacy Stars-paid row still carrying an expiry drain naturally, and
- * (2) preserve the forward-only time-transition machinery the future §7 billing state-machine reuses.
- * NOTE: not to be confused with com.clubs.subscription.ServiceSubscriptionScheduler (the live
- * organizer service-fee subscription from Slice 1).
+ * De-Stars (Slice 2): этот планировщик СПИТ. `subscription_expires_at` больше не записывается
+ * (flow оплаты вступления через Stars упразднён), поэтому `processExpiry` / `find*` работают
+ * с нулём строк. Оставлен (не удалён), чтобы (1) дать любым legacy-строкам с оплатой через Stars,
+ * ещё несущим expiry, естественно истечь, и (2) сохранить машинерию однонаправленных временных
+ * переходов, которую переиспользует будущая биллинговая state-machine из §7.
+ * ПРИМЕЧАНИЕ: не путать с com.clubs.subscription.ServiceSubscriptionScheduler (живая подписка
+ * на сервисный сбор организатора из Slice 1).
  */
 @Component
 class SubscriptionScheduler(
@@ -23,9 +24,9 @@ class SubscriptionScheduler(
     fun checkSubscriptions() {
         val now = OffsetDateTime.now()
 
-        // Notifications first — external IO, kept outside the DB transaction.
-        // Read snapshots must be taken BEFORE processExpiry, otherwise the
-        // about-to-expire rows are already moved to grace_period by then.
+        // Сначала уведомления — внешний IO, вынесен за пределы DB-транзакции.
+        // Снимки для чтения нужно брать ДО processExpiry, иначе строки,
+        // которым вот-вот истечёт срок, к тому моменту уже перейдут в grace_period.
         val expiringSoon = lifecycleService.findExpiringWithin(now, now.plusDays(3))
         val enteringGrace = lifecycleService.findActiveExpired(now)
 
@@ -42,7 +43,7 @@ class SubscriptionScheduler(
             )
         }
 
-        // DB mutations — single short transaction via a separate bean to keep AOP proxying.
+        // Изменения в БД — одна короткая транзакция через отдельный бин, чтобы сохранить AOP-проксирование.
         lifecycleService.processExpiry(now)
     }
 }

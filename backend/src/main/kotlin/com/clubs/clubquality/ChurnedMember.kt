@@ -4,12 +4,12 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * A former member to win back: left or expired within the retention window and currently NOT an
- * active/grace member of this club (i.e. genuinely gone, not someone who already came back). Backs
- * the expandable «Верните N ушедших» nudge in the owner «Статистика» panel (§9.5).
+ * Бывший участник для возврата: ушёл или истёк в пределах окна удержания и сейчас НЕ является
+ * active/grace-участником этого клуба (то есть реально ушёл, а не тот, кто уже вернулся). Питает
+ * раскрываемый nudge «Верните N ушедших» на панели «Статистика» владельца (§9.5).
  *
- * [leftAt] is the most recent departure (`membership_history.occurred_at`), used to order the roster
- * most-recently-gone first.
+ * [leftAt] — самый недавний уход (`membership_history.occurred_at`), используется для сортировки
+ * списка так, чтобы недавно ушедшие были первыми.
  */
 data class ChurnedMember(
     val userId: UUID,

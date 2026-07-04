@@ -1,9 +1,9 @@
 import type { PeerStatsDto } from '../../../types/api';
 
 /**
- * Russian plural form picker: forms = [one, few, many].
- * Mirrors the helper in MyClubsPage but kept feature-local to avoid a circular
- * dependency on a page-level module from a leaf util.
+ * Выбор русской формы множественного числа: forms = [один, несколько, много].
+ * Зеркалит хелпер из MyClubsPage, но намеренно живёт внутри фичи — чтобы листовая
+ * утилита не тянула циклическую зависимость от модуля уровня страницы.
  */
 function pluralRu(n: number, forms: readonly [string, string, string]): string {
   const mod10 = n % 10;
@@ -14,12 +14,12 @@ function pluralRu(n: number, forms: readonly [string, string, string]): string {
 }
 
 /**
- * Build the peer-signal string shown in the organizer inbox for each
- * applicant. Three cases (see docs/modules/applications-inbox.md §
- * "Peer-signal — формула и edge cases"):
- *   - no clubs at all → "Новый пользователь"
- *   - has clubs, no Stage-2 confirmations yet → "В N клубе/клубах · ещё не было событий"
- *   - normal case → "В N клубе/клубах · посетил X из Y событий"
+ * Собирает строку peer-signal, показываемую в инбоксе организатора у каждого
+ * заявителя. Три случая (см. docs/modules/applications-inbox.md §
+ * «Peer-signal — формула и edge cases»):
+ *   - клубов нет вовсе → «Новый пользователь»
+ *   - клубы есть, Stage-2-подтверждений ещё нет → «В N клубе/клубах · ещё не было событий»
+ *   - обычный случай → «В N клубе/клубах · посетил X из Y событий»
  */
 export function formatPeerSignal(stats: PeerStatsDto): string {
   const { memberClubCount, totalConfirmations, totalAttendances } = stats;
@@ -35,23 +35,23 @@ export function formatPeerSignal(stats: PeerStatsDto): string {
     return `В ${memberClubCount} ${clubsWord} · ещё не было событий`;
   }
 
-  // "из {Y} <word>" — genitive: «события» for 1 (also 21, 31…), «событий»
-  // for all other counts (включая 0, 2–20, и т.д.).
+  // «из {Y} <слово>» — родительный падеж: «события» для 1 (а также 21, 31…), «событий»
+  // для всех остальных количеств (включая 0, 2–20 и т.д.).
   const eventsWord = pluralRu(totalConfirmations, ['события', 'событий', 'событий']);
   return `В ${memberClubCount} ${clubsWord} · посетил ${totalAttendances} из ${totalConfirmations} ${eventsWord}`;
 }
 
 /**
- * Genitive form of «клуб» after a count in an "из M" construction: «из 1 клуба»,
- * «из 2/5/8 клубов», «из 21 клуба». (1 and counts ending in 1 except 11 → singular.)
+ * Родительный падеж слова «клуб» после числа в конструкции «из M»: «из 1 клуба»,
+ * «из 2/5/8 клубов», «из 21 клуба». (1 и числа, оканчивающиеся на 1, кроме 11 → ед. число.)
  */
 function clubsGenitive(n: number): string {
   return n % 10 === 1 && n % 100 !== 11 ? 'клуба' : 'клубов';
 }
 
 /**
- * Headline for the application card "Активность на платформе" donut: «Надёжен в N из M клубов».
- * Only meaningful when the applicant has a track record (trackRecordClubs ≥ 1); the caller gates it.
+ * Заголовок donut-блока «Активность на платформе» в карточке заявки: «Надёжен в N из M клубов».
+ * Осмыслен только когда у заявителя есть трек-рекорд (trackRecordClubs ≥ 1); гейтит вызывающая сторона.
  */
 export function formatReliabilityHeadline(reliableClubs: number, trackRecordClubs: number): string {
   return `Надёжен в ${reliableClubs} из ${trackRecordClubs} ${clubsGenitive(trackRecordClubs)}`;

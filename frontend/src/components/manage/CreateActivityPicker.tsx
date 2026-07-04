@@ -2,7 +2,7 @@ import { FC } from 'react';
 import type { ActivityType } from '../../api/activities';
 
 interface ActivityTypeOptionsProps {
-  /** Called with the chosen activity type. No side effects here — the parent flow owns step/haptics. */
+  /** Вызывается с выбранным типом активности. Побочных эффектов здесь нет — шаг/хаптику владеет родительский flow. */
   onPick: (type: ActivityType) => void;
 }
 
@@ -75,10 +75,11 @@ const subtitleStyle: React.CSSProperties = {
 };
 
 /**
- * Content-only activity-type list (no Modal wrapper). Rendered inside the
- * single Modal owned by CreateActivityFlow, which controls step transitions
- * and haptics. Keeping this presentational avoids each step owning its own
- * Modal — that caused the overlay teardown / collapse bug.
+ * Список типов активности — только контент (без обёртки Modal). Рендерится внутри
+ * единственного Modal, которым владеет CreateActivityFlow — он же управляет переходами
+ * между шагами и хаптикой. То, что этот компонент чисто презентационный, избавляет от
+ * ситуации, когда каждый шаг владеет своим Modal — именно это вызывало баг с
+ * разрушением/схлопыванием оверлея.
  */
 export const ActivityTypeOptions: FC<ActivityTypeOptionsProps> = ({ onPick }) => (
   <div style={{ paddingBottom: 8 }}>
@@ -100,7 +101,7 @@ export const ActivityTypeOptions: FC<ActivityTypeOptionsProps> = ({ onPick }) =>
   </div>
 );
 
-// Only the built templates are shown. As gear/booking/birthday land, add them here.
+// Показываются только уже реализованные шаблоны. По мере появления gear/booking/birthday — добавлять сюда.
 export type SkladchinaTemplateKey = 'split_bill' | 'custom';
 
 interface SkladchinaTemplateOptionsProps {
@@ -122,7 +123,7 @@ const SKLADCHINA_OPTIONS: { key: SkladchinaTemplateKey; emoji: string; title: st
   },
 ];
 
-/** Template picker shown after «Сбор» in the create flow. Content-only (no Modal wrapper). */
+/** Выбор шаблона, показывается после «Сбор» в flow создания. Только контент (без обёртки Modal). */
 export const SkladchinaTemplateOptions: FC<SkladchinaTemplateOptionsProps> = ({ onPick }) => (
   <div style={{ paddingBottom: 8 }}>
     <div style={headerStyle}>Тип сбора</div>

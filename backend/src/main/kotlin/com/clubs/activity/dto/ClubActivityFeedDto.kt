@@ -1,15 +1,15 @@
 package com.clubs.activity.dto
 
 /**
- * Two-group club activity feed.
+ * Лента активности клуба из двух групп.
  *
- * The feed is split by each activity's own date (not creation date) so the UI
- * can render upcoming items as full cards and collapse past ones:
- * - [upcoming] — not yet completed, sorted by `relevantDate` ASC (soonest first)
- * - [past] — completed, sorted by `relevantDate` DESC (most recent first)
+ * Лента разбита по собственной дате каждой активности (не по дате создания), чтобы UI мог
+ * рендерить предстоящие элементы полными карточками, а прошедшие — сворачивать:
+ * - [upcoming] — ещё не завершённые, отсортированы по `relevantDate` по возрастанию (ближайшие первыми)
+ * - [past] — завершённые, отсортированы по `relevantDate` по убыванию (самые недавние первыми)
  *
- * `relevantDate` is `eventDatetime` for events and `deadline` for skladchinas.
- * See [com.clubs.activity.ActivityService] for partition + sort rules.
+ * `relevantDate` — это `eventDatetime` для событий и `deadline` для складчин.
+ * Правила разбиения и сортировки см. в [com.clubs.activity.ActivityService].
  */
 data class ClubActivityFeedDto(
     val upcoming: List<ActivityItemDto>,

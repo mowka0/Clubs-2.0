@@ -28,16 +28,15 @@ class StorageService(
     private val logger = LoggerFactory.getLogger(StorageService::class.java)
 
     /**
-     * Create the bucket on startup if it doesn't exist (MinIO ships empty) and
-     * apply a public-read policy so uploaded avatars are reachable via <img src>.
+     * Создаёт бакет при старте, если его нет (MinIO поставляется пустым), и
+     * применяет политику public-read, чтобы загруженные аватары были доступны через <img src>.
      *
-     * Failures here are logged but not fatal — backend must still start; the
-     * admin sees the error, and uploads will fail cleanly until the bucket is
-     * reachable.
+     * Ошибки здесь логируются, но не фатальны — backend всё равно должен стартовать;
+     * админ видит ошибку, а загрузки будут аккуратно падать, пока бакет не станет доступен.
      */
     @PostConstruct
     fun initBucket() {
-        // Step 1: ensure bucket exists (idempotent).
+        // Шаг 1: убеждаемся, что бакет существует (идемпотентно).
         var bucketReady = false
         try {
             s3Client.headBucket(HeadBucketRequest.builder().bucket(bucket).build())
@@ -53,7 +52,7 @@ class StorageService(
             }
         } catch (e: S3Exception) {
             if (e.statusCode() == 404) {
-                // Some S3-compatible servers return 404 without NoSuchBucketException — retry create.
+                // Некоторые S3-совместимые серверы возвращают 404 без NoSuchBucketException — повторяем попытку создания.
                 try {
                     s3Client.createBucket(CreateBucketRequest.builder().bucket(bucket).build())
                     logger.info("S3 bucket created: {}", bucket)
@@ -68,10 +67,10 @@ class StorageService(
 
         if (!bucketReady) return
 
-        // Step 2: always (re)apply the public-read policy. Running this on every
-        // startup is safe and idempotent — MinIO overwrites the previous policy.
-        // Critical because a bucket pre-created without policy (e.g. older deploy)
-        // would otherwise block anonymous GET with 403, breaking avatar rendering.
+        // Шаг 2: всегда (пере)применяем политику public-read. Запуск этого при каждом
+        // старте безопасен и идемпотентен — MinIO перезаписывает предыдущую политику.
+        // Критично, потому что бакет, созданный ранее без политики (например, старый деплой),
+        // иначе блокировал бы анонимный GET с 403, ломая отображение аватаров.
         try {
             val policy = """{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::$bucket/*"}]}"""
             s3Client.putBucketPolicy(PutBucketPolicyRequest.builder().bucket(bucket).policy(policy).build())

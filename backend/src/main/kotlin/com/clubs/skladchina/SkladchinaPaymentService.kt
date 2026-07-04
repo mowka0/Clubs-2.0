@@ -18,10 +18,11 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * Participant + organizer payment actions on an active skladchina: mark-paid, decline (and the
- * REQUIRES_APPROVAL request/resolve flow), organizer mark/un-mark, deficit redistribution. Each
- * mutation runs in its own @Transactional and asks [SkladchinaLifecycleService] to auto-close when
- * no `pending` participant remains. Split out of the former god-`SkladchinaService` by responsibility.
+ * Действия участника + организатора над активной складчиной: отметка оплаты, отказ (и флоу
+ * заявки/резолюции REQUIRES_APPROVAL), пометка/снятие пометки организатором, перераспределение
+ * дефицита. Каждая мутация выполняется в своей @Transactional и просит [SkladchinaLifecycleService]
+ * автозакрыть складчину, когда не остаётся ни одного `pending`-участника. Выделено из бывшего
+ * god-`SkladchinaService` по зоне ответственности.
  */
 @Service
 class SkladchinaPaymentService(
@@ -45,7 +46,7 @@ class SkladchinaPaymentService(
             ?: throw ForbiddenException("Not a participant of this skladchina")
 
         if (participant.status == SkladchinaParticipantStatus.paid) {
-            // Idempotent — silently return current state.
+            // Идемпотентно — молча возвращаем текущее состояние.
             return queryService.getDetail(skladchinaId, callerId)
         }
         if (participant.status == SkladchinaParticipantStatus.declined) {
@@ -60,9 +61,9 @@ class SkladchinaPaymentService(
             skladchinaId, callerId, effectiveAmountKopecks, OffsetDateTime.now()
         )
         if (updated == 0) {
-            // F5-03: the participant left `pending` between our read and this UPDATE
-            // (a concurrent close expired/released them) — refuse instead of
-            // overwriting the terminal status its ledger row was emitted for.
+            // F5-03: участник вышел из `pending` между нашим чтением и этим UPDATE
+            // (конкурентное закрытие истекло/освободило его) — отказываем вместо того,
+            // чтобы перезаписать терминальный статус, под который уже выпущена ledger-запись.
             throw ConflictException("Сбор уже закрыт — изменить ответ нельзя. Обновите экран")
         }
         log.info("Skladchina mark-paid: id={} userId={} amount={}", skladchinaId, callerId, effectiveAmountKopecks)
@@ -79,8 +80,8 @@ class SkladchinaPaymentService(
         if (skladchina.status != SkladchinaStatus.active) {
             throw ValidationException("Skladchina is not active")
         }
-        // V28: REQUIRES_APPROVAL templates (split_bill) don't allow an instant free decline —
-        // the participant must submit a request the organizer resolves (see requestDecline).
+        // V28: шаблоны REQUIRES_APPROVAL (split_bill) не допускают мгновенный свободный отказ —
+        // участник должен подать заявку, которую резолвит организатор (см. requestDecline).
         if (templateRegistry.forType(skladchina.template).declinePolicy == DeclinePolicy.REQUIRES_APPROVAL) {
             throw ValidationException("Для этого сбора отказ оформляется заявкой с причиной")
         }
@@ -94,7 +95,7 @@ class SkladchinaPaymentService(
         }
         val updated = skladchinaRepository.setParticipantDeclined(skladchinaId, callerId, OffsetDateTime.now())
         if (updated == 0) {
-            // F5-03: same race as markPaid — concurrent close already resolved this participant.
+            // F5-03: та же гонка, что и в markPaid — конкурентное закрытие уже резолвило этого участника.
             throw ConflictException("Сбор уже закрыт — изменить ответ нельзя. Обновите экран")
         }
         log.info("Skladchina declined: id={} userId={}", skladchinaId, callerId)
@@ -103,9 +104,9 @@ class SkladchinaPaymentService(
     }
 
     /**
-     * V28: a participant opens a decline request with a reason (REQUIRES_APPROVAL templates only,
-     * e.g. split_bill). The participant stays `pending` until the organizer resolves it. Idempotent
-     * when a request is already open; a rejected path can't be reopened (the participant must pay).
+     * V28: участник открывает заявку на отказ с причиной (только для шаблонов REQUIRES_APPROVAL,
+     * например split_bill). Участник остаётся `pending`, пока организатор не резолвит заявку.
+     * Идемпотентно, если заявка уже открыта; отклонённый путь нельзя переоткрыть (участник должен оплатить).
      */
     @Transactional
     fun requestDecline(skladchinaId: UUID, callerId: UUID, reason: String): SkladchinaDetailDto {
@@ -127,7 +128,7 @@ class SkladchinaPaymentService(
             throw ValidationException("Ваш отказ отклонён — нужно оплатить счёт")
         }
         if (participant.declineRequestedAt != null) {
-            return queryService.getDetail(skladchinaId, callerId) // idempotent — request already open
+            return queryService.getDetail(skladchinaId, callerId) // идемпотентно — заявка уже открыта
         }
 
         val now = OffsetDateTime.now()
@@ -137,12 +138,13 @@ class SkladchinaPaymentService(
         if (updated == 0) throw ConflictException("Сбор уже закрыт — обновите экран")
         log.info("Skladchina decline-request: id={} userId={}", skladchinaId, callerId)
 
-        // #5: the organizer must always have a full window to resolve the request. If the deadline
-        // is closer than that, push it out so there are exactly 48h from now (extendDeadline only
-        // ever moves it OUT). Otherwise the request could expire (→ −40) before anyone can answer.
+        // #5: у организатора всегда должно быть полное окно на резолюцию заявки. Если дедлайн
+        // ближе, чем это окно, — отодвигаем его так, чтобы было ровно 48ч от текущего момента
+        // (extendDeadline только сдвигает дедлайн ВПЕРЁД). Иначе заявка могла бы истечь (→ −40)
+        // до того, как кто-то успеет на неё ответить.
         skladchinaRepository.extendDeadline(skladchinaId, now.plusHours(DECLINE_RESOLUTION_WINDOW_HOURS))
 
-        // #6: notify the organizer (DM + button) AFTER commit — they decide approve/reject.
+        // #6: уведомляем организатора (ЛС + кнопка) ПОСЛЕ коммита — он решает approve/reject.
         val clubName = clubRepository.findById(skladchina.clubId)?.name ?: ""
         eventPublisher.publishEvent(
             SkladchinaDeclineRequestedEvent(
@@ -158,11 +160,11 @@ class SkladchinaPaymentService(
     }
 
     /**
-     * V28/V29: the organizer resolves a participant's decline request. Approve → `declined`
-     * (excused); reject → decline path closed (`decline_rejected`), participant stays `pending` and
-     * must pay. Rejecting REQUIRES a reason (#7) — the organizer must justify why the participant
-     * still owes; the rejected participant is then DM'd that reason with a button to the pool.
-     * Creator-only. Approving the last pending participant can auto-close the skladchina.
+     * V28/V29: организатор резолвит заявку участника на отказ. Approve → `declined` (освобождён от
+     * оплаты); reject → путь отказа закрыт (`decline_rejected`), участник остаётся `pending` и должен
+     * оплатить. Отклонение ТРЕБУЕТ причину (#7) — организатор обязан обосновать, почему участник
+     * всё же должен заплатить; после этого отклонённому участнику отправляется ЛС с этой причиной
+     * и кнопкой на пул. Только для создателя. Approve последнего pending-участника может автозакрыть складчину.
      */
     @Transactional
     fun resolveDecline(
@@ -185,14 +187,14 @@ class SkladchinaPaymentService(
             log.info("Skladchina decline-approved: id={} target={} by={}", skladchinaId, targetUserId, callerId)
             lifecycleService.maybeAutoCloseAfterStateChange(skladchinaId)
         } else {
-            // #7: a rejection must be justified — without a reason the organizer can't refuse.
+            // #7: отклонение должно быть обосновано — без причины организатор не может отказать.
             val reason = rejectReason?.trim().orEmpty()
             if (reason.isEmpty()) throw ValidationException("Укажите причину, по которой участник должен оплатить")
             val updated = skladchinaRepository.rejectDeclineRequest(skladchinaId, targetUserId, reason.take(DECLINE_NOTE_MAX))
             if (updated == 0) throw ConflictException("Сбор уже закрыт — обновите экран")
             log.info("Skladchina decline-rejected: id={} target={} by={}", skladchinaId, targetUserId, callerId)
 
-            // Notify the rejected participant (DM + button) AFTER commit — they must still pay.
+            // Уведомляем отклонённого участника (ЛС + кнопка) ПОСЛЕ коммита — он всё ещё должен оплатить.
             val clubName = clubRepository.findById(skladchina.clubId)?.name ?: ""
             eventPublisher.publishEvent(
                 SkladchinaDeclineRejectedEvent(
@@ -208,12 +210,12 @@ class SkladchinaPaymentService(
     }
 
     /**
-     * A-2: the organizer marks a participant paid ("получил наличкой"). Fixed modes only —
-     * the assigned share is recorded in one tap; voluntary has no canonical amount, so the
-     * participant marks it themselves. In an important skladchina this accrues +10 at close
-     * exactly like a self-mark: the organizer vouches for the cash (PO decision 2026-06-15),
-     * and farming is bounded by the 3-important-per-club-per-week rate limit. Idempotent
-     * when the participant is already paid.
+     * A-2: организатор отмечает участника как оплатившего ("получил наличкой"). Только для
+     * фиксированных режимов — назначенная доля записывается одним тапом; у voluntary нет
+     * канонической суммы, поэтому участник отмечает её сам. В важной складчине это начисляет +10
+     * при закрытии точно так же, как самостоятельная отметка: организатор ручается за наличные
+     * (решение PO 2026-06-15), а фарминг ограничен рейт-лимитом 3-важных-на-клуб-в-неделю.
+     * Идемпотентно, если участник уже оплатил.
      */
     @Transactional
     fun organizerMarkPaid(skladchinaId: UUID, callerId: UUID, targetUserId: UUID): SkladchinaDetailDto {
@@ -223,7 +225,7 @@ class SkladchinaPaymentService(
         val participant = skladchinaRepository.findParticipant(skladchinaId, targetUserId)
             ?: throw NotFoundException("Participant not found in this skladchina")
         if (participant.status == SkladchinaParticipantStatus.paid) {
-            return queryService.getDetail(skladchinaId, callerId) // idempotent
+            return queryService.getDetail(skladchinaId, callerId) // идемпотентно
         }
         if (participant.status != SkladchinaParticipantStatus.pending) {
             throw ValidationException("Можно отметить оплату только у ожидающего участника")
@@ -233,7 +235,7 @@ class SkladchinaPaymentService(
 
         val updated = skladchinaRepository.setParticipantPaid(skladchinaId, targetUserId, share, OffsetDateTime.now())
         if (updated == 0) {
-            // F5-03: a concurrent close expired/released the participant between read and UPDATE.
+            // F5-03: конкурентное закрытие истекло/освободило участника между чтением и UPDATE.
             throw ConflictException("Сбор уже закрыт — изменить нельзя. Обновите экран")
         }
         log.info("Skladchina organizer-mark-paid: id={} target={} by={} amount={}",
@@ -243,11 +245,12 @@ class SkladchinaPaymentService(
     }
 
     /**
-     * A-2 (toggle): the organizer reverts a paid participant back to `pending` — undoing a
-     * mis-tap. Fixed modes only (symmetric with the mark). Clears declared_amount/paid_at.
-     * Does NOT auto-close (un-marking only grows `pending`, never empties it). Safe because
-     * reputation is applied only at close — while active there is no ledger row to contradict.
-     * Idempotent when the participant is already pending.
+     * A-2 (toggle): организатор возвращает оплатившего участника обратно в `pending` — отмена
+     * случайного тапа. Только для фиксированных режимов (симметрично отметке). Очищает
+     * declared_amount/paid_at. НЕ автозакрывает (снятие отметки только увеличивает `pending`,
+     * никогда не опустошает его). Безопасно, поскольку репутация применяется только при закрытии —
+     * пока складчина активна, нет ledger-записи, которой это могло бы противоречить.
+     * Идемпотентно, если участник уже pending.
      */
     @Transactional
     fun organizerUnmarkPaid(skladchinaId: UUID, callerId: UUID, targetUserId: UUID): SkladchinaDetailDto {
@@ -257,7 +260,7 @@ class SkladchinaPaymentService(
         val participant = skladchinaRepository.findParticipant(skladchinaId, targetUserId)
             ?: throw NotFoundException("Participant not found in this skladchina")
         if (participant.status == SkladchinaParticipantStatus.pending) {
-            return queryService.getDetail(skladchinaId, callerId) // idempotent
+            return queryService.getDetail(skladchinaId, callerId) // идемпотентно
         }
         if (participant.status != SkladchinaParticipantStatus.paid) {
             throw ValidationException("Снять отметку можно только у оплатившего участника")
@@ -271,7 +274,7 @@ class SkladchinaPaymentService(
         return queryService.getDetail(skladchinaId, callerId)
     }
 
-    /** Loads a skladchina for an organizer-only mutation: must exist, caller must be creator, must be active. */
+    /** Загружает складчину для мутации, доступной только организатору: должна существовать, вызывающий — создатель, статус — активна. */
     private fun requireActiveAsCreator(skladchinaId: UUID, callerId: UUID): Skladchina {
         val skladchina = skladchinaRepository.findById(skladchinaId)
             ?: throw NotFoundException("Skladchina not found")
@@ -291,14 +294,14 @@ class SkladchinaPaymentService(
     }
 
     /**
-     * Fixed modes: the participant has no choice anyway (Phase A removed the UI field
-     * entirely — A-1), so the server records its own assigned share verbatim and
-     * IGNORES the client value (which is now null). Found on staging 2026-06-12: the
-     * UI rounds kopecks to whole rubles (33333 → "333" → 33300), so the previous
-     * strict `declared == expected` check rejected every honest payment of a
-     * non-divisible share. Server-authoritative recording keeps `collected` exact and
-     * still kills the "declare ≥ goal to slam the skladchina shut" amplifier of F5-02.
-     * Voluntary: the declared amount IS the data — required (null/≤0 → 400), sanity cap only.
+     * Фиксированные режимы: у участника всё равно нет выбора (Фаза A полностью убрала это
+     * поле из UI — A-1), поэтому сервер записывает собственную назначенную долю дословно и
+     * ИГНОРИРУЕТ клиентское значение (теперь оно null). Найдено на staging 2026-06-12: UI
+     * округляет копейки до целых рублей (33333 → "333" → 33300), поэтому прежняя строгая
+     * проверка `declared == expected` отклоняла каждую честную оплату неделимой доли.
+     * Серверный авторитетный учёт держит `collected` точным и всё так же убивает усилитель
+     * "заяви ≥ цели, чтобы захлопнуть складчину" из F5-02.
+     * Voluntary: заявленная сумма И ЕСТЬ данные — обязательна (null/≤0 → 400), только sanity-cap.
      */
     private fun resolveDeclaredAmount(mode: SkladchinaMode, expectedAmountKopecks: Long?, declaredAmountKopecks: Long?): Long =
         when (mode) {
@@ -319,10 +322,11 @@ class SkladchinaPaymentService(
         }
 
     companion object {
-        // Voluntary sanity cap: 100 000 ₽ — statistics hygiene, not an anti-abuse bound.
+        // Sanity-cap для voluntary: 100 000 ₽ — гигиена статистики, а не защита от злоупотреблений.
         private const val DECLARED_AMOUNT_MAX_KOPECKS = 10_000_000L
+        // Максимальная длина причины отказа/отклонения заявки (символов).
         private const val DECLINE_NOTE_MAX = 500
-        // #5: guarantee the organizer this many hours to resolve a decline request.
+        // #5: гарантированное число часов организатору на резолюцию заявки на отказ.
         private const val DECLINE_RESOLUTION_WINDOW_HOURS = 48L
     }
 }

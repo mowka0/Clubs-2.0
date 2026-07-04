@@ -13,7 +13,7 @@ class ApplicationScheduler(
 
     private val log = LoggerFactory.getLogger(ApplicationScheduler::class.java)
 
-    @Scheduled(fixedDelay = 3_600_000) // every 1 hour
+    @Scheduled(fixedDelay = 3_600_000) // раз в 1 час
     @Transactional
     fun autoRejectExpiredApplications() {
         val cutoff = OffsetDateTime.now().minusHours(48)

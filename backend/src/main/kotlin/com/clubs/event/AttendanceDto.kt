@@ -21,17 +21,17 @@ data class ResolveDisputeRequest(
     val attended: Boolean
 )
 
-/** Optional free-text note a participant attaches when disputing their attendance. */
+/** Необязательная свободная заметка, которую участник прикладывает, оспаривая свою посещаемость. */
 data class DisputeAttendanceRequest(
     @field:Size(max = 500)
     val note: String? = null
 )
 
 /**
- * F5-04: the caller's OWN attendance state for an event (GET /api/events/{id}/my-attendance).
- * Readable without club membership so a participant who left the club can still reach the dispute
- * UI after the deep-link DM. [canDispute] is computed server-side (window open AND attendance=absent
- * AND not yet terminal) — the frontend keys the "Оспорить" button off it.
+ * F5-04: СОБСТВЕННОЕ состояние посещаемости вызывающего для события (GET /api/events/{id}/my-attendance).
+ * Читается без членства в клубе, чтобы участник, покинувший клуб, всё ещё мог добраться до UI спора
+ * после deep-link DM. [canDispute] считается на сервере (окно открыто И attendance=absent И спор ещё
+ * не терминален) — фронт завязывает на него кнопку «Оспорить».
  */
 data class MyAttendanceDto(
     val attendance: String?,        // attended | absent | disputed | null
@@ -39,5 +39,5 @@ data class MyAttendanceDto(
     val attendanceFinalized: Boolean,
     val disputeTerminal: Boolean,
     val canDispute: Boolean,
-    val disputeNote: String?        // the caller's own note (their own row only)
+    val disputeNote: String?        // собственная заметка вызывающего (только его строка)
 )

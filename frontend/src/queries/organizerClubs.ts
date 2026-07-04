@@ -11,9 +11,9 @@ interface OrganizerClubsResult {
 }
 
 /**
- * Clubs the current user organizes, enriched with name/avatar for the global
- * create flow. Organizer membership is the source of truth (`role === 'organizer'`);
- * club details are fetched per club via the shared detail cache.
+ * Клубы, которыми управляет текущий пользователь, обогащённые именем/аватаром для глобального
+ * потока создания. Источник истины — членство с ролью организатора (`role === 'organizer'`);
+ * детали клуба подгружаются по каждому клубу через общий кэш деталей.
  */
 export function useOrganizerClubs(): OrganizerClubsResult {
   const myClubsQuery = useMyClubsQuery();

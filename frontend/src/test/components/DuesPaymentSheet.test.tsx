@@ -21,16 +21,19 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
+// id клуба-фикстуры, общий для всех моков
 const CLUB = 'club-1';
 
+// Заготовка frozen-membership — её возвращает мок ответа на dues-claim
 const membershipStub = {
   id: 'm-1', userId: 'u-1', clubId: CLUB, status: 'frozen', role: 'member',
   joinedAt: null, subscriptionExpiresAt: null,
 };
 
+// Дата «больше года назад» — организатор давно на платформе (не «свежий»)
 const yearAgo = new Date(Date.now() - 400 * 86_400_000).toISOString();
 
-/** Default organizer-card mock (established organizer) so the trust card renders deterministically. */
+/** Дефолтный мок organizer-card (устоявшийся организатор), чтобы карточка доверия рендерилась детерминированно. */
 function mockOrganizer(over: Partial<{ clubsCount: number; trustedMembers: number; onPlatformSince: string; username: string | null }> = {}) {
   server.use(
     http.get(`*/api/clubs/${CLUB}/organizer-card`, () => HttpResponse.json({
@@ -57,7 +60,7 @@ describe('DuesPaymentSheet', () => {
       <DuesPaymentSheet clubId={CLUB} price={100} paymentLink={null} paymentMethodNote={null} onClose={() => {}} onClaimed={onClaimed} />,
     );
 
-    // No method switch — cash is the only option.
+    // Переключателя способа оплаты нет — наличные единственный вариант.
     expect(screen.queryByRole('tab', { name: /По СБП/ })).not.toBeInTheDocument();
 
     const confirm = screen.getByRole('button', { name: /Подтвердить оплату/ });
@@ -79,22 +82,22 @@ describe('DuesPaymentSheet', () => {
     );
 
     expect(screen.getByRole('button', { name: /Оплатить по СБП/ })).toBeInTheDocument();
-    // Mandatory screenshot — confirm stays disabled with no proof attached.
+    // Скриншот обязателен — без приложенного пруфа подтверждение остаётся disabled.
     expect(screen.getByRole('button', { name: /Подтвердить оплату/ })).toBeDisabled();
   });
 
   it('forces cash-only + a safety note when the organizer has no Telegram username (item 2)', async () => {
-    // Established organizer (has clubs/trust) but no Telegram → can't be messaged → СБП hidden, cash-only.
+    // Устоявшийся организатор (есть клубы/доверие), но без Telegram-username → написать ему нельзя → СБП скрыт, только наличные.
     mockOrganizer({ username: null });
     renderWithProviders(
       <DuesPaymentSheet clubId={CLUB} price={100} paymentLink="https://sbp.example/pay" paymentMethodNote="Сбербанк" onClose={() => {}} onClaimed={() => {}} />,
     );
 
-    // Once the organizer card loads with no username, the safety note appears and СБП is removed.
+    // Как только карточка организатора загрузилась без username, появляется предупреждение о безопасности и СБП убирается.
     expect(await screen.findByText(/Оплата только наличными/)).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /По СБП/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Оплатить по СБП/ })).not.toBeInTheDocument();
-    // Cash attestation is the only path forward.
+    // Подтверждение оплаты наличными — единственный оставшийся путь.
     expect(screen.getByRole('checkbox')).toBeInTheDocument();
   });
 
@@ -118,7 +121,7 @@ describe('DuesPaymentSheet', () => {
 
     expect(await screen.findByText(/На платформе недавно/)).toBeInTheDocument();
     expect(screen.getByText(/напишите ему перед первым переводом/i)).toBeInTheDocument();
-    // No fabricated zeros for a fresh account.
+    // Никаких нарисованных нулей для свежего аккаунта.
     expect(screen.queryByText(/Ведёт/)).not.toBeInTheDocument();
     expect(screen.queryByText(/доверяют/)).not.toBeInTheDocument();
   });

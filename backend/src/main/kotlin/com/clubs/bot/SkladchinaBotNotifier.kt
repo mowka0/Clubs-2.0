@@ -12,13 +12,13 @@ import org.springframework.transaction.event.TransactionalEventListener
 import java.time.format.DateTimeFormatter
 
 /**
- * Bot DM notifier for skladchina lifecycle. Listens to domain events published
- * by SkladchinaService and sends DMs AFTER the originating transaction has
- * committed (`@TransactionalEventListener` default phase = AFTER_COMMIT).
+ * Отправка DM ботом по жизненному циклу складчины. Слушает доменные события,
+ * публикуемые SkladchinaService, и шлёт DM ПОСЛЕ коммита исходной транзакции
+ * (`@TransactionalEventListener` фаза по умолчанию = AFTER_COMMIT).
  *
- * Same pattern as EventBotNotifier — proven path for "send DM after
- * DB mutation succeeded". Avoids the @Async + @Transactional caveats that
- * previously left DMs un-sent.
+ * Тот же паттерн, что EventBotNotifier — проверенный способ «отправить DM после
+ * успешной мутации в БД». Избегает подводных камней @Async + @Transactional,
+ * из-за которых раньше DM не отправлялись.
  */
 @Component
 class SkladchinaBotNotifier(
@@ -56,8 +56,8 @@ class SkladchinaBotNotifier(
             append("\n\n").append(expectedNote)
             append("\n⏰ До: ").append(event.deadline.format(fmt))
             if (event.affectsReputation) {
-                // The -40 silence penalty is legitimate only if the price list was
-                // announced up front (redesign launch-blocker, notification #1).
+                // Штраф -40 за молчание легитимен только если условия были объявлены заранее
+                // (launch-blocker редизайна, уведомление #1).
                 append("\n\n⚠️ Важный сбор: оплата +10, отказ — без штрафа, молчание до дедлайна −40")
             }
             append("\n\n💳 Платёжная ссылка:\n").append(event.paymentLink)
@@ -78,8 +78,8 @@ class SkladchinaBotNotifier(
     }
 
     /**
-     * #6: a participant asked to be excused from paying (REQUIRES_APPROVAL templates). DM the
-     * organizer the requester + reason with a button to decide on the skladchina page.
+     * #6: участник попросил освободить его от оплаты (шаблоны REQUIRES_APPROVAL). Отправляем DM
+     * организатору с именем просителя и причиной, с кнопкой перехода на страницу складчины для решения.
      */
     @TransactionalEventListener(fallbackExecution = true)
     fun onDeclineRequested(event: SkladchinaDeclineRequestedEvent) {
@@ -106,8 +106,8 @@ class SkladchinaBotNotifier(
     }
 
     /**
-     * #7: the organizer rejected a decline request. DM the participant the organizer's reason with a
-     * button to the skladchina page — they must still pay.
+     * #7: организатор отклонил запрос на отказ от оплаты. Отправляем участнику DM с причиной
+     * организатора и кнопкой на страницу складчины — платить всё равно нужно.
      */
     @TransactionalEventListener(fallbackExecution = true)
     fun onDeclineRejected(event: SkladchinaDeclineRejectedEvent) {
@@ -158,9 +158,9 @@ class SkladchinaBotNotifier(
             }
         }
 
-        // Deep-link to the skladchina itself, not the app root — the organizer lands
-        // on the closed pool (participant statuses, collected sum), like every other
-        // skladchina DM (staging feedback 2026-06-12).
+        // Deep-link ведёт прямо на саму складчину, а не на корень приложения — организатор
+        // попадает на закрытый сбор (статусы участников, собранная сумма), как во всех
+        // остальных DM по складчине (фидбек со staging 2026-06-12).
         notificationService.sendDirectMessageWithDeepLink(
             telegramId = creatorTelegramId,
             text = text,
@@ -172,10 +172,10 @@ class SkladchinaBotNotifier(
     }
 
     /**
-     * Notification #3 of the redesign's launch-blocker trio (price DM → 24h reminder →
-     * penalty report): everyone who just got the -40 must be told, not left to discover
-     * it on their profile. [SkladchinaClosedEvent.expiredParticipantUserIds] is non-empty
-     * only for a reputation-affecting close at/after the deadline.
+     * Уведомление #3 из тройки launch-blocker'ов редизайна (DM с суммой → напоминание за 24ч →
+     * отчёт по штрафу): каждый, кто получил -40, должен быть уведомлён явно, а не узнать об этом
+     * случайно из своего профиля. [SkladchinaClosedEvent.expiredParticipantUserIds] непусто
+     * только при закрытии, влияющем на репутацию, в момент/после дедлайна.
      */
     private fun notifyExpiredParticipants(event: SkladchinaClosedEvent) {
         if (event.expiredParticipantUserIds.isEmpty()) return

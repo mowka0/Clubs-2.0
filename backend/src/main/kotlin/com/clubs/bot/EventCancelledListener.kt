@@ -7,10 +7,10 @@ import org.springframework.transaction.event.TransactionPhase
 import org.springframework.transaction.event.TransactionalEventListener
 
 /**
- * F5-14: when an organizer cancels an event, DM the interested voters (going/maybe) that it's off.
- * AFTER_COMMIT because [NotificationService.sendEventCancelled] is @Async and queries voter rows on
- * a separate connection, which must see the committed cancellation. Best-effort — delivery errors
- * are swallowed inside sendDm. Mirrors Stage2StartedListener.
+ * F5-14: когда организатор отменяет событие, шлём DM заинтересованным голосовавшим (going/maybe),
+ * что оно отменено. AFTER_COMMIT — потому что [NotificationService.sendEventCancelled] @Async и
+ * читает строки голосовавших через отдельное соединение, которое обязано видеть уже закоммиченную
+ * отмену. Best-effort — ошибки доставки глотаются внутри sendDm. Зеркалит Stage2StartedListener.
  */
 @Component
 class EventCancelledListener(

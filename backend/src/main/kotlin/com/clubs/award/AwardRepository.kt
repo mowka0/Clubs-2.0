@@ -4,23 +4,23 @@ import java.util.UUID
 
 interface AwardRepository {
 
-    /** All awards granted to [userId] in [clubId], newest first. Visible to all members (R3). */
+    /** Все награды, выданные [userId] в [clubId], сначала новые. Видны всем участникам (R3). */
     fun findByMember(clubId: UUID, userId: UUID): List<Award>
 
-    /** Every award in [clubId] (newest first), for the roster — the service groups them per member. */
+    /** Все награды в [clubId] (сначала новые), для ростера — сервис группирует их по участнику. */
     fun findByClub(clubId: UUID): List<Award>
 
-    /** Distinct (emoji, label) ever granted in [clubId], most-used first — the grant-form autocomplete. */
+    /** Уникальные (emoji, label), когда-либо выданные в [clubId], сначала самые частые — автокомплит формы выдачи. */
     fun findSuggestions(clubId: UUID, limit: Int): List<AwardSuggestion>
 
-    /** How many awards [userId] already holds in [clubId] (enforces the per-member cap). */
+    /** Сколько наград [userId] уже держит в [clubId] (проверка лимита на участника). */
     fun countByMember(clubId: UUID, userId: UUID): Int
 
-    /** Whether [userId] already holds an award with this exact [label] in [clubId] (no duplicates). */
+    /** Есть ли уже у [userId] награда с точно таким [label] в [clubId] (без дублей). */
     fun existsByLabel(clubId: UUID, userId: UUID, label: String): Boolean
 
     fun insert(award: Award): Award
 
-    /** Deletes the award only if it belongs to (clubId, userId). Returns rows affected (0 = not found). */
+    /** Удаляет награду, только если она принадлежит (clubId, userId). Возвращает число затронутых строк (0 = не найдено). */
     fun delete(awardId: UUID, clubId: UUID, userId: UUID): Int
 }

@@ -6,7 +6,7 @@ import { server } from '../mocks/server';
 import { renderWithProviders } from '../utils/renderWithProviders';
 import type { ClubDetailDto } from '../../types/api';
 
-// Mock Telegram SDK
+// Мок Telegram SDK
 vi.mock('@telegram-apps/sdk-react', () => ({
   retrieveLaunchParams: () => ({ initDataRaw: 'test' }),
   init: vi.fn(),
@@ -21,16 +21,16 @@ vi.mock('@telegram-apps/sdk-react', () => ({
   hapticFeedbackSelectionChanged: Object.assign(vi.fn(), { isAvailable: () => false }),
 }));
 
-// Mock Telegram UI with our minimal mock components
+// Мок Telegram UI нашими минимальными мок-компонентами
 vi.mock('@telegram-apps/telegram-ui', () => import('../mocks/telegramUi'));
 
-// Mock the telegram sdk module
+// Мок модуля telegram/sdk
 vi.mock('../../telegram/sdk', () => ({
   initTelegramSdk: vi.fn(),
   getInitDataRaw: () => 'test-init-data',
 }));
 
-// Import after mocks are set up
+// Импорт после настройки моков
 import { CreateClubModal } from '../../components/CreateClubModal';
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
@@ -168,20 +168,20 @@ describe('CreateClubModal', () => {
 
     await user.type(screen.getByLabelText(/название клуба/i), 'Платный клуб');
     await user.type(screen.getByLabelText(/город/i), 'Москва');
-    await user.click(screen.getByRole('button', { name: /далее/i })); // → step 1
-    await user.click(screen.getByRole('button', { name: /далее/i })); // → step 2 (price)
+    await user.click(screen.getByRole('button', { name: /далее/i })); // → шаг 1
+    await user.click(screen.getByRole('button', { name: /далее/i })); // → шаг 2 (цена)
 
     const priceInput = screen.getByLabelText(/цена подписки/i);
     await user.clear(priceInput);
     await user.type(priceInput, '100');
 
-    // Requisites field appears once the club is paid, and advancing without a link is blocked.
+    // Поле реквизитов появляется, как только клуб платный; без ссылки шаг дальше не пройти.
     const linkInput = screen.getByLabelText(/реквизиты для взноса/i);
     await user.click(screen.getByRole('button', { name: /далее/i }));
     expect(screen.getByText('Для платного клуба укажите реквизиты для взноса')).toBeInTheDocument();
     expect(screen.queryByText(/шаг 4/i)).not.toBeInTheDocument();
 
-    // With a link, the step advances.
+    // Со ссылкой шаг проходится.
     await user.type(linkInput, 'https://sbp.example/pay');
     await user.click(screen.getByRole('button', { name: /далее/i }));
     expect(screen.getByText(/шаг 4/i)).toBeInTheDocument();

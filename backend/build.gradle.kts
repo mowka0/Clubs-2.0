@@ -23,7 +23,7 @@ repositories {
 }
 
 dependencies {
-    // Spring Boot starters
+    // Стартеры Spring Boot
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
@@ -48,10 +48,10 @@ dependencies {
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
 
-    // Rate limiting
+    // Rate limiting — ограничение частоты запросов
     implementation("com.bucket4j:bucket4j-core:8.10.1")
 
-    // AOP for role authorization
+    // AOP для ролевой авторизации
     implementation("org.springframework.boot:spring-boot-starter-aop")
 
     // AWS S3 SDK
@@ -65,7 +65,7 @@ dependencies {
     // PostgreSQL
     runtimeOnly("org.postgresql:postgresql")
 
-    // Test
+    // Тесты
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -74,8 +74,8 @@ dependencies {
     testImplementation("org.testcontainers:postgresql:1.20.4")
     testImplementation("org.testcontainers:junit-jupiter:1.20.4")
     testImplementation("org.springframework.security:spring-security-test")
-    // Override docker-java to 3.4.x (Spring Boot BOM locks it to 3.3.x which uses API 1.41,
-    // but Docker Desktop requires minimum API 1.44)
+    // Переопределяем docker-java на 3.4.x (Spring Boot BOM фиксирует 3.3.x с API 1.41,
+    // а Docker Desktop требует минимум API 1.44)
     testImplementation("com.github.docker-java:docker-java-api:3.4.0")
     testImplementation("com.github.docker-java:docker-java-transport-httpclient5:3.4.0")
 }
@@ -88,14 +88,14 @@ configurations.testImplementation {
     )
 }
 
-// jOOQ codegen configuration
+// Конфигурация jOOQ codegen
 jooq {
     version.set("3.19.16")
     edition.set(nu.studer.gradle.jooq.JooqEdition.OSS)
 
     configurations {
         create("main") {
-            generateSchemaSourceOnCompilation.set(false) // Do not auto-run on compile
+            generateSchemaSourceOnCompilation.set(false) // Не запускать codegen автоматически при компиляции
 
             jooqConfiguration.apply {
                 logging = org.jooq.meta.jaxb.Logging.WARN
@@ -114,7 +114,7 @@ jooq {
                         name = "org.jooq.meta.postgres.PostgresDatabase"
                         inputSchema = "public"
 
-                        // Exclude Flyway schema history table
+                        // Исключаем служебную таблицу истории миграций Flyway
                         excludes = "flyway_schema_history"
                     }
 
@@ -140,7 +140,7 @@ jooq {
     }
 }
 
-// Make the generated sources available to the compiler
+// Подключаем сгенерированные jOOQ-исходники к компиляции
 sourceSets {
     main {
         kotlin {
@@ -158,16 +158,17 @@ kotlin {
 
 tasks.withType<Test> {
     useJUnitPlatform()
-    // Pass Docker env to the forked test JVM so Testcontainers can find Docker Desktop on macOS.
-    // Docker Desktop 29.x requires minimum API 1.44; Testcontainers' shaded docker-java defaults to 1.32.
-    // The raw socket supports versioned calls; the proxy socket at /var/run/docker.sock does not.
+    // Прокидываем Docker-окружение в форкнутую тестовую JVM, чтобы Testcontainers нашёл Docker Desktop
+    // на macOS. Docker Desktop 29.x требует минимум API 1.44; shaded docker-java в Testcontainers
+    // по умолчанию использует 1.32. Raw-сокет поддерживает версионированные вызовы,
+    // а proxy-сокет /var/run/docker.sock — нет.
     val home = System.getProperty("user.home") ?: ""
     val rawSock = "$home/Library/Containers/com.docker.docker/Data/docker.raw.sock"
     if (File(rawSock).exists()) {
         environment("DOCKER_HOST", "unix://$rawSock")
         environment("DOCKER_API_VERSION", "1.44")
         systemProperty("api.version", "1.44")
-        // Ryuk needs to mount the socket as a volume, which fails for docker.raw.sock
+        // Ryuk монтирует сокет как volume — с docker.raw.sock это не работает, поэтому отключаем
         environment("TESTCONTAINERS_RYUK_DISABLED", "true")
     }
 }

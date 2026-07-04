@@ -1,10 +1,10 @@
 package com.clubs.event
 
 /**
- * Published when an event transitions to Stage 2 (S2T-2). A bot listener reacts AFTER_COMMIT
- * to DM going/maybe voters asking them to confirm participation (PRD §4.4.2 step 1) — the
- * @Async DM queries voter rows on a separate connection, which only sees the transition and
- * waitlist assignments once the scheduler transaction has committed. Carries the full [Event]
- * snapshot because the DM body needs title/datetime, which the transition never changes.
+ * Публикуется, когда событие переходит на Этап 2 (S2T-2). Бот-листенер реагирует AFTER_COMMIT,
+ * чтобы отправить DM голосовавшим «идёт»/«может быть» с просьбой подтвердить участие (PRD §4.4.2
+ * шаг 1) — @Async DM читает строки голосов на отдельном соединении, которое увидит переход и
+ * назначения waitlist только после коммита транзакции планировщика. Несёт полный снапшот [Event],
+ * потому что тексту DM нужны title/datetime, которые переход никогда не меняет.
  */
 data class Stage2StartedEvent(val event: Event)

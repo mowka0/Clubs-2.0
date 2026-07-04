@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 
 data class ErrorResponse(val error: String, val message: String)
 
-/** 402 payload: enough for the frontend to render the upgrade modal. */
+/** Тело ответа 402: достаточно данных, чтобы фронтенд отрисовал модалку апгрейда тарифа. */
 data class PaywallResponse(
     val error: String,
     val message: String,

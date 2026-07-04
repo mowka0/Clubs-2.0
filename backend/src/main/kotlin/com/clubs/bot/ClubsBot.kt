@@ -36,8 +36,9 @@ class ClubsBot(
     override fun getUpdatesConsumer(): LongPollingSingleThreadUpdateConsumer = this
 
     override fun consume(update: Update) {
-        // De-Stars (Slice 2): the Stars pay-to-join flow is retired. We still answer pre_checkout
-        // within Telegram's 10s window, but only to REJECT it (handlePreCheckoutQuery → ok=false).
+        // De-Stars (Slice 2): поток pay-to-join через Stars упразднён. Мы всё ещё отвечаем на
+        // pre_checkout в пределах 10-секундного окна Telegram, но только чтобы ОТКЛОНИТЬ его
+        // (handlePreCheckoutQuery → ok=false).
         if (update.hasPreCheckoutQuery()) {
             handlePreCheckoutQuery(update.preCheckoutQuery)
             return
@@ -45,9 +46,10 @@ class ClubsBot(
 
         if (!update.hasMessage()) return
 
-        // A successful_payment here is a stray event (e.g. an in-flight old invoice). Do NOT activate
-        // access — access is organizer-controlled now. Log it with the charge id for a manual refund.
-        // Delivered as a message without `text`, so it must be handled BEFORE the hasText() return.
+        // successful_payment здесь — случайное событие (например, старый invoice, который был в
+        // полёте). НЕ активировать доступ — доступ теперь контролирует организатор. Логируем с
+        // charge id для ручного возврата средств.
+        // Приходит как сообщение без `text`, поэтому обрабатывать нужно ДО return в hasText().
         if (update.message.hasSuccessfulPayment()) {
             val payment = update.message.successfulPayment
             log.warn(
@@ -73,9 +75,9 @@ class ClubsBot(
     }
 
     /**
-     * De-Stars (Slice 2): the Stars pay-to-join flow is retired, so every `pre_checkout_query` is
-     * REJECTED — no member is ever charged through the bot. Access is organizer-controlled now
-     * (AccessGateService). Answered within Telegram's 10s window with ok=false + an explanation.
+     * De-Stars (Slice 2): поток pay-to-join через Stars упразднён, поэтому каждый `pre_checkout_query`
+     * ОТКЛОНЯЕТСЯ — через бота больше никого не списывают. Доступ теперь контролирует организатор
+     * (AccessGateService). Ответ даётся в пределах 10-секундного окна Telegram с ok=false + пояснением.
      */
     internal fun handlePreCheckoutQuery(query: PreCheckoutQuery) {
         val answer = AnswerPreCheckoutQuery.builder()

@@ -1,9 +1,9 @@
 package com.clubs.event
 
 /**
- * Published after an event is created and the originating transaction has
- * committed. Listener (EventBotNotifier) DMs the club's members.
- * See SkladchinaBotNotifier / SkladchinaBotNotifier for the canonical
- * @TransactionalEventListener pattern.
+ * Публикуется после создания события и коммита исходной транзакции.
+ * Слушатель (EventBotNotifier) рассылает DM участникам клуба.
+ * Канонический паттерн @TransactionalEventListener см. в
+ * SkladchinaBotNotifier / SkladchinaBotNotifier.
  */
 data class EventCreatedEvent(val event: Event)

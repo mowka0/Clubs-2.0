@@ -6,39 +6,39 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
- * P1b Trust 0-100 — pure formula. A **Bayesian, recency-decayed fraction of KEPT promises**,
- * classified BY KIND (never by points: V18 backfilled stale magnitudes, so points lie across
- * the V18 boundary; kept/broke-by-kind is magnitude-independent).
+ * P1b Trust 0-100 — чистая формула. **Байесовская доля СДЕРЖАННЫХ обещаний с затуханием по свежести**,
+ * классифицируемая ПО KIND (никогда по points: V18 бэкфиллил устаревшие величины, поэтому points
+ * врут через границу V18; kept/broke-по-kind от величины не зависит).
  *
- * Design + simulated contract numbers: docs/modules/reputation-v2.md § P1b,
+ * Дизайн + просимулированные контрактные числа: docs/modules/reputation-v2.md § P1b,
  * docs/backlog/p1b-trust-handoff.md, reputation-v2-redesign.md.
  *
- * Visibility: every constant here is `internal` (§9.1) — never surfaced to users. The UI shows
- * only the resulting 0-100 number (gated by ReputationPolicy.isShown) and the "N из M" aggregate.
+ * Видимость: каждая константа здесь `internal` (§9.1) — пользователям никогда не показывается. UI
+ * показывает только итоговое число 0-100 (за гейтом ReputationPolicy.isShown) и агрегат «N из M».
  *
- * Decay is computed ON READ from occurred_at (it changes with time → it is never cached). The
- * non-decay kept/broke counts in user_club_reputation (V25) are a cheap reference, not this number.
+ * Затухание считается ПРИ ЧТЕНИИ от occurred_at (оно меняется со временем → никогда не кэшируется).
+ * Незатухающие счётчики kept/broke в user_club_reputation (V25) — дешёвый ориентир, а не это число.
  */
 object TrustPolicy {
 
-    // --- per-club Trust (all internal) ---
-    /** Optimistic prior: a user with no track record starts at PRIOR (→ Trust 85), not 0/50. */
+    // --- Trust на клуб (всё internal) ---
+    /** Оптимистичный prior: пользователь без истории стартует с PRIOR (→ Trust 85), а не с 0/50. */
     const val PRIOR = 0.85
-    /** Bayesian strength: ~K prior outcomes. Larger = more forgiving of the first slips. */
+    /** Байесовская сила: ~K априорных исходов. Больше = снисходительнее к первым промахам. */
     const val K = 3.0
-    /** Asymmetry: a broken promise weighs ASYM× a kept one (intent↔action). */
+    /** Асимметрия: нарушенное обещание весит ASYM× от сдержанного (намерение↔действие). */
     const val ASYM = 2.0
-    /** A penalty/credit loses half its weight after this many days (recovery valve). */
+    /** Штраф/кредит теряет половину веса через столько дней (клапан восстановления). */
     const val HALF_LIFE_DAYS = 90.0
 
-    // --- global aggregate "надёжен в N из M клубов" (all internal) ---
-    /** Per-club Trust at or above this counts the club toward N (reliable). */
+    // --- глобальный агрегат «надёжен в N из M клубов» (всё internal) ---
+    /** Per-club Trust не ниже этого порога засчитывает клуб в N (надёжен). */
     const val RELIABLE_THRESHOLD = 70
-    /** Water-filling cap: one club contributes at most this share of the global number. */
+    /** Water-filling cap: один клуб даёт не больше этой доли глобального числа. */
     const val CLUB_WEIGHT_CAP = 0.5
-    /** Volume factor outcome/(outcome+VOLUME_K): few outcomes weigh less in the global mean. */
+    /** Фактор объёма outcome/(outcome+VOLUME_K): малое число исходов весит меньше в глобальном среднем. */
     const val VOLUME_K = 3.0
-    /** Global recency: a club's contribution halves after this many days of inactivity. */
+    /** Глобальная свежесть: вклад клуба уполовинивается после стольких дней неактивности. */
     const val GLOBAL_HALF_LIFE_DAYS = 365.0
 
     enum class TrustClass { KEPT, BROKE, NEUTRAL }
@@ -46,26 +46,26 @@ object TrustPolicy {
     fun classOf(kind: ReputationKind): TrustClass = when (kind) {
         ReputationKind.ironclad, ReputationKind.spontaneous, ReputationKind.skladchina_paid -> TrustClass.KEPT
         ReputationKind.no_show, ReputationKind.spectator, ReputationKind.skladchina_expired -> TrustClass.BROKE
-        // confirmed_unresolved (disputed/unmarked) and historic skladchina_declined are neutral:
-        // excluded from the denominator — they are neither a kept nor a broken promise.
+        // confirmed_unresolved (disputed/unmarked) и исторический skladchina_declined нейтральны:
+        // исключаются из знаменателя — это ни сдержанное, ни нарушенное обещание.
         ReputationKind.confirmed_unresolved, ReputationKind.skladchina_declined -> TrustClass.NEUTRAL
     }
 
-    /** One reputational outcome from the ledger. */
+    /** Один репутационный исход из ledger. */
     data class Outcome(val kind: ReputationKind, val occurredAt: OffsetDateTime)
 
     private fun decay(occurredAt: OffsetDateTime, now: OffsetDateTime, halfLifeDays: Double): Double {
         val ageDays = (now.toEpochSecond() - occurredAt.toEpochSecond()) / 86_400.0
-        // A future-dated row (clock skew) is treated as fresh, never as a >1 weight.
+        // Строка с датой в будущем (рассинхрон часов) считается свежей, но никогда не даёт вес >1.
         return 0.5.pow((if (ageDays < 0.0) 0.0 else ageDays) / halfLifeDays)
     }
 
-    /** The Bayesian core, shared by the Kotlin path and the SQL path (which pre-sums the weights). */
+    /** Байесовское ядро, общее для Kotlin-пути и SQL-пути (который заранее суммирует веса). */
     fun trustFromWeights(keptWeight: Double, brokeWeight: Double): Int =
         (100.0 * (keptWeight + K * PRIOR) / (keptWeight + ASYM * brokeWeight + K)).roundToInt()
 
-    /** Per-club Trust 0-100 from raw outcomes. Always returns a number; the display gate
-     *  (ReputationPolicy.isShown(outcomeCount)) decides whether the UI shows it. */
+    /** Per-club Trust 0-100 из сырых исходов. Всегда возвращает число; гейт показа
+     *  (ReputationPolicy.isShown(outcomeCount)) решает, показывать ли его в UI. */
     fun perClubTrust(outcomes: List<Outcome>, now: OffsetDateTime): Int {
         var keptW = 0.0
         var brokeW = 0.0
@@ -77,17 +77,18 @@ object TrustPolicy {
         return trustFromWeights(keptW, brokeW)
     }
 
-    /** A user's standing in one club, as the global aggregate sees it. */
+    /** Позиция пользователя в одном клубе, как её видит глобальный агрегат. */
     data class ClubStanding(val trust: Int, val outcomeCount: Int, val lastOccurredAt: OffsetDateTime)
 
-    /** Global view. score is null when there is no track record anywhere (M == 0). */
+    /** Глобальное представление. score равен null, если нигде нет истории (M == 0). */
     data class GlobalTrust(val reliableClubs: Int, val trackRecordClubs: Int, val score: Int?)
 
     /**
-     * Global "надёжен в N из M клубов" over ALL clubs with a track record (incl. left clubs).
-     * M = clubs with outcomeCount >= minOutcomes; N = of those, Trust >= RELIABLE_THRESHOLD.
-     * score = diversity/recency-weighted mean of per-club Trust, each club's normalized weight
-     * capped at CLUB_WEIGHT_CAP (water-filling) so one club cannot hijack the number. null when M == 0.
+     * Глобальное «надёжен в N из M клубов» по ВСЕМ клубам с историей (включая покинутые).
+     * M = клубы с outcomeCount >= minOutcomes; N = из них те, где Trust >= RELIABLE_THRESHOLD.
+     * score = взвешенное по разнообразию/свежести среднее per-club Trust, нормализованный вес
+     * каждого клуба ограничен CLUB_WEIGHT_CAP (water-filling), чтобы один клуб не мог захватить число.
+     * null при M == 0.
      */
     fun global(
         standings: List<ClubStanding>,
@@ -108,9 +109,9 @@ object TrustPolicy {
     }
 
     /**
-     * Normalize weights to sum 1 with no element exceeding [cap] (water-filling): clamp the
-     * over-cap elements to cap and redistribute their excess across the rest, proportionally,
-     * repeating until stable. A single element is forced to 1.0 (nothing to redistribute to).
+     * Нормализует веса так, чтобы сумма была 1 и ни один элемент не превышал [cap] (water-filling):
+     * элементы сверх cap обрезаются до cap, а их избыток пропорционально перераспределяется на остальные,
+     * повторяя до стабилизации. Единственный элемент принудительно становится 1.0 (перераспределять некуда).
      */
     internal fun capNormalize(weights: List<Double>, cap: Double): List<Double> {
         val total = weights.sum()
@@ -122,7 +123,7 @@ object TrustPolicy {
             val excess = over.sumOf { w[it] - cap }
             over.forEach { w[it] = cap }
             val underSum = w.indices.filter { it !in over }.sumOf { w[it] }
-            if (underSum <= 1e-12) return List(weights.size) { cap } // all capped — distribute evenly
+            if (underSum <= 1e-12) return List(weights.size) { cap } // все обрезаны — распределяем поровну
             w.indices.filter { it !in over }.forEach { w[it] += excess * (w[it] / underSum) }
         }
         return w

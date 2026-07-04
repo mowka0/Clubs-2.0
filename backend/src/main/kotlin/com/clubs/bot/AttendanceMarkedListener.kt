@@ -7,11 +7,11 @@ import org.springframework.transaction.event.TransactionPhase
 import org.springframework.transaction.event.TransactionalEventListener
 
 /**
- * ATT-3: after an organizer marks attendance, DM the participants flagged absent so they can
- * dispute. Reacts AFTER_COMMIT because [com.clubs.bot.NotificationService.sendAttendanceMarked]
- * is @Async — it queries the just-written `absent` rows on a separate connection, which only
- * sees them once the markAttendance transaction has committed. Best-effort: delivery errors are
- * swallowed inside sendDm, like every other DM. Mirrors AttendanceFinalizedListener.
+ * ATT-3: после того как организатор отметил явку, шлём DM участникам с отметкой absent, чтобы они
+ * могли оспорить. Реагирует AFTER_COMMIT, потому что [com.clubs.bot.NotificationService.sendAttendanceMarked]
+ * — @Async: он читает только что записанные `absent`-строки на отдельном соединении, которое видит
+ * их лишь после коммита транзакции markAttendance. Best-effort: ошибки доставки глотаются внутри
+ * sendDm, как и у любого другого DM. Зеркалит AttendanceFinalizedListener.
  */
 @Component
 class AttendanceMarkedListener(

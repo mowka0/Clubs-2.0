@@ -7,11 +7,11 @@ import org.springframework.transaction.event.TransactionPhase
 import org.springframework.transaction.event.TransactionalEventListener
 
 /**
- * Low-latency reputation processing: reacts to AttendanceFinalizedEvent AFTER the
- * finalize transaction commits, in its own REQUIRES_NEW transaction (inside
- * ReputationService). Best-effort — a failure here is logged and recovered by the
- * hourly poll (ReputationScheduler). Decoupled from finalization on purpose: a
- * reputation error must never roll back the attendance finalize.
+ * Обработка репутации с низкой задержкой: реагирует на AttendanceFinalizedEvent ПОСЛЕ
+ * коммита транзакции финализации, в собственной транзакции REQUIRES_NEW (внутри
+ * ReputationService). Best-effort — ошибка здесь логируется и восстанавливается часовым
+ * опросом (ReputationScheduler). Намеренно отвязано от финализации: ошибка репутации
+ * никогда не должна откатывать финализацию явки.
  */
 @Component
 class AttendanceFinalizedListener(

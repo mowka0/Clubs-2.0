@@ -1,6 +1,6 @@
 logging:
   level:
-    # Override at runtime via env vars without rebuilding:
+    # Переопределяются в рантайме через env vars без пересборки:
     #   LOGGING_LEVEL_COM_CLUBS=DEBUG
     #   LOGGING_LEVEL_ROOT=WARN
     #   LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY=DEBUG
@@ -11,6 +11,7 @@ logging:
     org.hibernate: ${LOGGING_LEVEL_ORG_HIBERNATE:WARN}
     org.flywaydb: ${LOGGING_LEVEL_ORG_FLYWAYDB:INFO}
   pattern:
+    # Формат строки консольного лога: время [поток] уровень логгер - сообщение.
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
 spring:
@@ -30,12 +31,14 @@ spring:
       port: ${REDIS_PORT:6379}
   servlet:
     multipart:
+      # Лимит размера загружаемого файла (аватары/фото) и всего multipart-запроса.
       max-file-size: 5MB
       max-request-size: 5MB
 
 server:
   port: ${SERVER_PORT:8080}
 
+# Actuator: наружу открыты только health/info/metrics; детали health — только авторизованным.
 management:
   endpoints:
     web:
@@ -46,10 +49,12 @@ management:
       show-details: when-authorized
 
 jwt:
+  # Секрет подписи JWT (HS256). Дефолт — заглушка только для локальной разработки;
+  # в staging/prod обязателен настоящий JWT_SECRET (≥256 бит, openssl rand -base64 32).
   secret: ${JWT_SECRET:dev-secret-key-that-is-at-least-32-chars}
-  # 1 hour TTL per security.md. Frontend apiClient has 401-retry with fresh
-  # initData (authenticate() + authInFlight dedup), so users get a seamless
-  # re-auth without being logged out. Override via JWT_EXPIRATION (ms).
+  # TTL 1 час по security.md. Фронтовый apiClient умеет 401-retry со свежим
+  # initData (authenticate() + дедупликация authInFlight), так что пользователь
+  # переавторизуется бесшовно, без разлогина. Переопределяется через JWT_EXPIRATION (мс).
   expiration: ${JWT_EXPIRATION:3600000}
 
 telegram:
@@ -66,81 +71,84 @@ telegram:
   # Prod: https://77-42-23-177.sslip.io, Staging: https://staging.77-42-23-177.sslip.io
   webapp-base-url: ${TELEGRAM_WEBAPP_BASE_URL:https://77-42-23-177.sslip.io}
 
+# Хранилище загрузок (MinIO/S3): имя бакета и публичный базовый URL для ссылок на файлы.
 s3:
   bucket: ${S3_BUCKET:clubs-uploads}
   base-url: ${S3_BASE_URL:http://localhost:9000/clubs-uploads}
 
 features:
-  # Member-pays kill-switch (monetization v2). The subscription engine supports both payer roles, but
-  # the member-pays path (member premium "Clubs+") is gated OFF until the audience grows and the HQ
-  # premium exists to unlock (payment-v2.md §2.2, §10). Organizer-pays is always live, not gated here.
-  # Flip via MEMBER_PAYS_ENABLED=true in Coolify (no rebuild).
+  # Kill-switch пути member-pays (монетизация v2). Движок подписок поддерживает обе роли плательщика,
+  # но путь member-pays (участник платит за премиум "Clubs+") выключен, пока не вырастет аудитория и
+  # не появится HQ-премиум, который есть смысл разблокировать (payment-v2.md §2.2, §10). Organizer-pays
+  # работает всегда и этим флагом не гейтится. Включение: MEMBER_PAYS_ENABLED=true в Coolify (без пересборки).
   member-pays-enabled: ${MEMBER_PAYS_ENABLED:false}
 
 subscription:
-  # Paid period granted per charge (stub provider). Days so staging can shrink it to test period-end.
+  # Оплаченный период за одно списание (стаб-провайдер). В днях, чтобы staging мог
+  # ужать его для теста окончания периода.
   period-days: ${SUBSCRIPTION_PERIOD_DAYS:30}
-  # SubscriptionScheduler.endElapsedSubscriptions cron. Default daily 09:30 UTC.
+  # Cron для SubscriptionScheduler.endElapsedSubscriptions. По умолчанию ежедневно 09:30 UTC.
   lifecycle-cron: ${SUBSCRIPTION_LIFECYCLE_CRON:0 30 9 * * *}
 
 membership:
-  # De-Stars Slice 2: how long one confirmed member dues payment («Взнос получен») grants club access.
-  # Days so staging can shrink it to test auto-expiry → frozen.
+  # De-Stars Slice 2: на какой срок один подтверждённый взнос участника («Взнос получен») даёт доступ
+  # к клубу. В днях, чтобы staging мог ужать его для теста авто-истечения → frozen.
   access-period-days: ${MEMBERSHIP_ACCESS_PERIOD_DAYS:30}
 
 club:
   rank:
-    # L3 "★ Топ-5 в категории" badge kill-switch. The hidden rank is ALWAYS computed (the machinery
-    # and anti-farm invariants are the deliverable); this flag only controls whether the public badge
-    # renders. Default OFF — on a ~10-club prod the badge would be statistical noise, so it stays
-    # suppressed until categories fill. Flip via CLUB_RANK_BADGE_ENABLED=true in Coolify (no rebuild).
-    # An additional in-code GLOBAL_RANK_FLOOR still gates the badge even when this is true.
+    # Kill-switch бейджа L3 «★ Топ-5 в категории». Скрытый ранг считается ВСЕГДА (машинерия и
+    # анти-фарм инварианты — сами по себе deliverable); флаг управляет только рендером публичного
+    # бейджа. По умолчанию OFF — на проде с ~10 клубами бейдж был бы статистическим шумом, поэтому
+    # он подавлен, пока категории не наполнятся. Включение: CLUB_RANK_BADGE_ENABLED=true в Coolify
+    # (без пересборки). Даже при true бейдж дополнительно гейтится in-code порогом GLOBAL_RANK_FLOOR.
     badge-enabled: ${CLUB_RANK_BADGE_ENABLED:false}
 
-# Event lifecycle timing knobs. Defaults match PRD (48h dispute window, hourly
-# finalize). Externalised so staging can shrink them for an end-to-end reputation
-# test without a rebuild — see docs/modules/events.md § "Конфигурация таймингов".
+# Тайминги жизненного цикла событий. Дефолты соответствуют PRD (окно спора 48ч, финализация
+# раз в час). Вынесены в конфиг, чтобы staging мог ужать их для сквозного теста репутации
+# без пересборки — см. docs/modules/events.md § "Конфигурация таймингов".
 events:
-  # Attendance dispute window before reputation finalizes. Minutes so staging can
-  # set a literal 5. Default 2880 = 48h (PRD §4.4.3). Env: ATTENDANCE_DISPUTE_WINDOW_MINUTES
+  # Окно оспаривания посещаемости до финализации репутации. В минутах, чтобы staging мог
+  # поставить буквально 5. Дефолт 2880 = 48ч (PRD §4.4.3). Env: ATTENDANCE_DISPUTE_WINDOW_MINUTES
   dispute-window-minutes: ${ATTENDANCE_DISPUTE_WINDOW_MINUTES:2880}
-  # EXP-2: deadline (minutes after event_datetime) after which a past event whose attendance
-  # was never marked is neutrally auto-finalized (all confirmed → 0, no ledger rows). Protects
-  # reliable participants from an inactive organizer. Default 2880 = 48h (24h organizer reminder
-  # + 24h grace). Minutes so staging can set a literal 5. Env: ATTENDANCE_AUTO_FINALIZE_UNMARKED_MINUTES
+  # EXP-2: дедлайн (минут после event_datetime), после которого прошедшее событие с так и не
+  # отмеченной посещаемостью нейтрально авто-финализируется (все confirmed → 0, без строк в ledger).
+  # Защищает надёжных участников от неактивного организатора. Дефолт 2880 = 48ч (24ч напоминание
+  # организатору + 24ч grace). В минутах, чтобы staging мог поставить буквально 5.
+  # Env: ATTENDANCE_AUTO_FINALIZE_UNMARKED_MINUTES
   auto-finalize-unmarked-minutes: ${ATTENDANCE_AUTO_FINALIZE_UNMARKED_MINUTES:2880}
-  # AttendanceService.finalizeAttendance poll period (ms). Default 3600000 = 1h.
+  # Период опроса AttendanceService.finalizeAttendance (мс). Дефолт 3600000 = 1ч.
   finalize-poll-ms: ${ATTENDANCE_FINALIZE_POLL_MS:3600000}
-  # Stage2Service.expireUnconfirmedParticipants poll period (ms). Default 300000 = 5min.
+  # Период опроса Stage2Service.expireUnconfirmedParticipants (мс). Дефолт 300000 = 5мин.
   stage2-expire-poll-ms: ${STAGE2_EXPIRE_POLL_MS:300000}
-  # Lead time (minutes before event start) at which an upcoming event auto-transitions to
-  # Stage 2 (confirmation). Default 1440 = 24h (PRD §4.4.2). Minutes so staging can set a
-  # small value and keep a brief Stage-1 voting window before the flip, making the full
-  # two-stage flow testable end-to-end. Env: STAGE2_TRIGGER_MINUTES_BEFORE
+  # За сколько минут до старта события оно авто-переходит в Этап 2 (подтверждение).
+  # Дефолт 1440 = 24ч (PRD §4.4.2). В минутах, чтобы staging мог поставить малое значение
+  # и сохранить короткое окно голосования Этапа 1 перед переключением — так двухэтапный
+  # флоу тестируется сквозняком. Env: STAGE2_TRIGGER_MINUTES_BEFORE
   stage2-trigger-minutes-before: ${STAGE2_TRIGGER_MINUTES_BEFORE:1440}
-  # Stage2Service.triggerStage2ForReadyEvents poll period (ms). The confirmation window is
-  # stage2-trigger-minutes-before MINUS the scheduler phase, so this tick must be much finer
-  # than the trigger lead — the old hardcoded 5min tick ate a short lead whole (with a 3min
-  # lead the flip often landed AFTER event start → zero confirm window, dead-end DM).
-  # Default 60000 = 1min. Env: STAGE2_POLL_MS
+  # Период опроса Stage2Service.triggerStage2ForReadyEvents (мс). Окно подтверждения =
+  # stage2-trigger-minutes-before МИНУС фаза шедулера, поэтому тик должен быть сильно мельче
+  # lead-времени триггера — старый захардкоженный тик 5мин съедал короткий lead целиком
+  # (при lead 3мин переключение часто попадало ПОСЛЕ старта события → нулевое окно
+  # подтверждения, тупиковый DM). Дефолт 60000 = 1мин. Env: STAGE2_POLL_MS
   stage2-poll-ms: ${STAGE2_POLL_MS:60000}
-  # EventReminderScheduler poll period (ms). Default 300000 = 5min.
+  # Период опроса EventReminderScheduler (мс). Дефолт 300000 = 5мин.
   reminder-poll-ms: ${EVENT_REMINDER_POLL_MS:300000}
-  # Confirm-participation reminder DM window: minutes before the event it fires.
-  # Default 120 (= 2h). Minutes unit so staging can set a small value (e.g. 5) for testing.
+  # Окно DM-напоминания «подтвердите участие»: за сколько минут до события оно уходит.
+  # Дефолт 120 (= 2ч). В минутах, чтобы staging мог поставить малое значение (например 5) для теста.
   confirm-reminder-minutes-before: ${CONFIRM_REMINDER_MINUTES_BEFORE:120}
-  # Organizer mark-attendance reminder DM: minutes after the event it fires.
-  # Default 1440 (= 24h). Minutes unit for the same reason.
+  # DM-напоминание организатору отметить посещаемость: через сколько минут после события.
+  # Дефолт 1440 (= 24ч). В минутах по той же причине.
   attendance-reminder-minutes-after: ${ATTENDANCE_REMINDER_MINUTES_AFTER:1440}
 
-# Skladchina notification timing knobs (SkladchinaReminderScheduler). Externalised so
-# staging can shrink them for an end-to-end "важный сбор" test without a rebuild.
+# Тайминги уведомлений складчины (SkladchinaReminderScheduler). Вынесены в конфиг,
+# чтобы staging мог ужать их для сквозного теста «важного сбора» без пересборки.
 skladchinas:
-  # SkladchinaReminderScheduler poll period (ms). Default 300000 = 5min.
+  # Период опроса SkladchinaReminderScheduler (мс). Дефолт 300000 = 5мин.
   reminder-poll-ms: ${SKLADCHINA_REMINDER_POLL_MS:300000}
-  # Deadline reminder DM window: minutes before the deadline it fires for pending
-  # participants of a reputation-affecting skladchina. Default 1440 (= 24h). Minutes
-  # unit so staging can set a small value (e.g. 5) for testing.
+  # Окно DM-напоминания о дедлайне: за сколько минут до дедлайна оно уходит pending-участникам
+  # складчины, влияющей на репутацию. Дефолт 1440 (= 24ч). В минутах, чтобы staging мог
+  # поставить малое значение (например 5) для теста.
   deadline-reminder-minutes-before: ${SKLADCHINA_DEADLINE_REMINDER_MINUTES_BEFORE:1440}
 
 ---
@@ -151,6 +159,7 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+    # Существующая dev-БД без истории Flyway помечается как уже прошедшая миграции по V9 включительно.
     baseline-version: 9
 
 s3:
@@ -167,7 +176,7 @@ spring:
 
 s3:
   bucket: ${S3_BUCKET:clubs-uploads}
-  # Empty by default — backend then returns relative URLs like "/uploads/<uuid>.png",
-  # which the frontend nginx proxies to internal MinIO (see frontend/nginx.conf).
-  # Override only when MinIO is exposed publicly via its own hostname.
+  # По умолчанию пусто — бэкенд тогда возвращает относительные URL вида "/uploads/<uuid>.png",
+  # которые фронтовый nginx проксирует во внутренний MinIO (см. frontend/nginx.conf).
+  # Переопределять только когда MinIO выставлен наружу под собственным hostname.
   base-url: ${S3_BASE_URL:}

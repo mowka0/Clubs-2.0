@@ -36,7 +36,7 @@ class SubscriptionService(
         if (subscription != null) {
             return mapper.toStatusDto(subscription, repository.currentPriceKopecks(subscription.plan))
         }
-        // No row = implicit FREE plan.
+        // Нет строки = неявный тариф FREE.
         return SubscriptionStatusDto(
             plan = SubscriptionPlan.FREE.literal,
             status = null,
@@ -53,8 +53,9 @@ class SubscriptionService(
         }
 
     /**
-     * Capacity gate for creating a paid club. The caller (ClubService) supplies the live paid-club
-     * count it already owns; throws 402 with the upgrade target when the plan ceiling is reached.
+     * Гейт ёмкости для создания платного клуба. Вызывающий (ClubService) передаёт текущее живое
+     * количество платных клубов, которыми уже владеет; при достижении потолка тарифа кидает 402
+     * с указанием целевого тарифа для апгрейда.
      */
     @Transactional(readOnly = true)
     fun requirePaidClubCapacity(userId: UUID, currentPaidClubCount: Int) {
@@ -80,11 +81,12 @@ class SubscriptionService(
             if (request.subjectClubId == null) throw ValidationException("subjectClubId is required for member subscriptions")
         }
 
-        // Organizer plan is platform-wide: an existing live one is a plan-swap, not a new row
-        // (the partial-unique index forbids two). Proration is deferred (payment-v2.md §3.5).
+        // Тариф организатора действует на всю платформу: существующий активный тариф — это замена
+        // тарифа, а не новая строка (partial-unique индекс запрещает две). Проратация отложена
+        // (payment-v2.md §3.5).
         if (role == SubscriptionPayerRole.ORGANIZER) {
-            // Block a downgrade that would leave the organizer over the target plan's capacity
-            // (payment-v2.md §4.3, decision A). They must free/delete clubs first.
+            // Блокируем даунгрейд, после которого организатор превысил бы ёмкость целевого тарифа
+            // (payment-v2.md §4.3, решение A). Сначала нужно сделать клубы бесплатными или удалить их.
             val paidClubs = clubRepository.countPaidByOwnerId(userId)
             if (SubscriptionPlanPolicy.maxPaidClubs(plan) < paidClubs) {
                 throw ConflictException(
@@ -114,8 +116,8 @@ class SubscriptionService(
                 providerToken = providerSub.providerToken,
             )
         } catch (e: DataIntegrityViolationException) {
-            // Concurrent double-submit: the partial-unique index already kept the DB consistent;
-            // surface a clean 409 instead of a 500. (payment-v2.md §5.1 active-subscription uniqueness.)
+            // Конкурентный двойной сабмит: partial-unique индекс уже сохранил консистентность БД;
+            // отдаём чистый 409 вместо 500. (payment-v2.md §5.1, уникальность активной подписки.)
             throw ConflictException("Подписка уже оформляется — обновите страницу.")
         }
         log.info("Subscription created: id={} userId={} role={} plan={}", created.id, userId, role, plan)
@@ -126,8 +128,9 @@ class SubscriptionService(
     fun cancel(userId: UUID): SubscriptionStatusDto {
         val subscription = repository.findActiveOrganizerSubscription(userId)
             ?: throw NotFoundException("No active subscription to cancel")
-        // Cancelling reverts to FREE at period end. Block while over FREE capacity so the organizer
-        // can never end up running more paid clubs than their plan allows (payment-v2.md §4.3, decision A).
+        // Отмена возвращает на FREE в конце периода. Блокируем, пока превышена ёмкость FREE, чтобы
+        // организатор никогда не оказался с большим числом платных клубов, чем позволяет его тариф
+        // (payment-v2.md §4.3, решение A).
         val paidClubs = clubRepository.countPaidByOwnerId(userId)
         val freeCapacity = SubscriptionPlanPolicy.maxPaidClubs(SubscriptionPlan.FREE)
         if (paidClubs > freeCapacity) {
@@ -151,8 +154,9 @@ class SubscriptionService(
     }
 
     /**
-     * Inbound provider webhook. Verification + parsing live in [PaymentProvider]; here we map the
-     * result to a forward-only transition, deduped by provider_event_id (UNIQUE) for idempotency.
+     * Входящий вебхук провайдера. Проверка и парсинг живут в [PaymentProvider]; здесь мы мапим
+     * результат в однонаправленный переход состояния, дедуплицированный по provider_event_id
+     * (UNIQUE) для идемпотентности.
      */
     @Transactional
     fun handleWebhook(rawBody: String, signature: String?) {

@@ -17,10 +17,10 @@ import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 /**
- * Creation side of the skladchina engine: validates the request, delegates participant sourcing +
- * amount resolution to the template strategy, persists the pool and announces it (DM). Split out of
- * the former god-`SkladchinaService` by responsibility; the engine owns club/owner, deadline bounds,
- * reputation gates, persistence and the created event, the strategy owns the template-specific parts.
+ * Сторона создания движка складчины: валидирует запрос, делегирует подбор участников + расчёт суммы
+ * стратегии шаблона, сохраняет пул и анонсирует его (DM). Выделен из бывшего god-`SkladchinaService`
+ * по ответственности; движок владеет клубом/владельцем, границами дедлайна, гейтами репутации,
+ * персистентностью и созданным событием, стратегия — шаблон-специфичными частями.
  */
 @Service
 class SkladchinaCreationService(
@@ -51,14 +51,14 @@ class SkladchinaCreationService(
             throw ValidationException("Deadline must be at most $MAX_DEADLINE_DAYS days ahead")
         }
 
-        // The template owns participant sourcing + amount resolution + its own validation;
-        // the engine owns club/owner, deadline bounds, reputation gates, persistence and DM.
+        // Шаблон владеет подбором участников + расчётом суммы + собственной валидацией;
+        // движок владеет клубом/владельцем, границами дедлайна, гейтами репутации, персистентностью и DM.
         val resolution = strategy.resolveCreation(clubId, creatorId, request)
 
-        // #8: a VERIFIED template (split_bill, both modes) ALWAYS affects reputation — its
-        // attendance anchor IS the anti-farm, so it bypasses the "важный сбор" gates (rate limit /
-        // 24h-window / voluntary-block) that exist only to police the organizer-chosen toggle.
-        // The custom toggle still runs the gates.
+        // #8: VERIFIED-шаблон (split_bill, оба режима) ВСЕГДА влияет на репутацию — его якорь
+        // посещаемости И ЕСТЬ анти-фарм-защита, поэтому он обходит гейты «важного сбора» (rate limit /
+        // 24h-окно / блок voluntary-режима), которые существуют только чтобы контролировать
+        // организаторский тумблер. Кастомный тумблер по-прежнему проходит через гейты.
         val affectsReputation = strategy.outcomesVerified || request.affectsReputation
         if (request.affectsReputation && !strategy.outcomesVerified) {
             validateReputationGates(clubId, resolution.mode, deadlineMinAge, now)
@@ -114,25 +114,26 @@ class SkladchinaCreationService(
     }
 
     /**
-     * Gates for the "важный сбор" toggle (affects_reputation = true), per the
-     * 2026-06-12 redesign. Messages are user-facing (organizer's create form).
+     * Гейты для тумблера «важный сбор» (affects_reputation = true), согласно
+     * редизайну 2026-06-12. Сообщения показываются пользователю (форма создания организатора).
      */
     private fun validateReputationGates(clubId: UUID, mode: SkladchinaMode, deadlineHoursAhead: Long, now: OffsetDateTime) {
         if (mode == SkladchinaMode.voluntary) {
-            // "Voluntary with a silence penalty" is an oxymoron — the toggle is fixed-modes only.
+            // «Добровольный сбор со штрафом за молчание» — оксюморон, тумблер работает только с
+            // фиксированными режимами.
             throw ValidationException("Добровольный сбор не может влиять на репутацию")
         }
         if (deadlineHoursAhead < MIN_REPUTATION_DEADLINE_HOURS) {
-            // Anti-"сбор-засада": participants must get a real window to answer
-            // (creation DM + the 24h-before reminder DM).
+            // Анти-«сбор-засада»: у участников должно быть реальное окно, чтобы ответить
+            // (DM при создании + DM-напоминание за 24 часа).
             throw ValidationException("Для важного сбора дедлайн должен быть не раньше чем через 24 часа")
         }
         val recentCount = skladchinaRepository.countReputationAffectingCreatedSince(
             clubId, now.minusDays(REPUTATION_RATE_LIMIT_WINDOW_DAYS)
         )
         if (recentCount >= REPUTATION_RATE_LIMIT_MAX) {
-            // The only real anti-farm AND anti-griefing mechanism: caps farming at
-            // +30/week/club per friend and griefing at -120/week per ignored victim.
+            // Единственный реальный механизм анти-фарма И анти-грифинга: ограничивает фарм
+            // до +30/неделю/клуб на друга и грифинг до -120/неделю на игнорируемую жертву.
             throw ValidationException(
                 "Лимит важных сборов: не больше $REPUTATION_RATE_LIMIT_MAX за " +
                     "$REPUTATION_RATE_LIMIT_WINDOW_DAYS дней в одном клубе. " +
@@ -142,12 +143,12 @@ class SkladchinaCreationService(
     }
 
     companion object {
-        private const val MIN_DEADLINE_HOURS = 1L
-        private const val MAX_DEADLINE_DAYS = 90L
+        private const val MIN_DEADLINE_HOURS = 1L  // минимальный отступ дедлайна сбора от текущего момента
+        private const val MAX_DEADLINE_DAYS = 90L  // максимальный горизонт дедлайна сбора вперёд
 
-        // "Важный сбор" gates (docs/backlog/skladchina-reputation-redesign.md § Валидации):
-        private const val MIN_REPUTATION_DEADLINE_HOURS = 24L   // anti-ambush; 48h rejected (breaks "бронь на завтра")
-        private const val REPUTATION_RATE_LIMIT_MAX = 3         // per club, rolling window
-        private const val REPUTATION_RATE_LIMIT_WINDOW_DAYS = 7L
+        // Гейты «важного сбора» (docs/backlog/skladchina-reputation-redesign.md § Валидации):
+        private const val MIN_REPUTATION_DEADLINE_HOURS = 24L   // анти-засада; 48ч отвергнуты (ломает «бронь на завтра»)
+        private const val REPUTATION_RATE_LIMIT_MAX = 3         // на клуб, скользящее окно
+        private const val REPUTATION_RATE_LIMIT_WINDOW_DAYS = 7L // ширина скользящего окна в днях
     }
 }

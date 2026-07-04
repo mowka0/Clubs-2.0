@@ -51,7 +51,7 @@ class JooqReputationRepository(
             }
     }
 
-    // --- Ledger pipeline ---
+    // --- Пайплайн леджера ---
 
     override fun claimEvent(eventId: UUID): Boolean =
         dsl.update(EVENTS)
@@ -59,9 +59,10 @@ class JooqReputationRepository(
             .where(
                 EVENTS.ID.eq(eventId)
                     .and(EVENTS.REPUTATION_PROCESSED.isFalse)
-                    // Defensive: never mark an event that is not actually finalized+marked,
-                    // or that was cancelled (e.g. by the club-delete cascade) — reputation must
-                    // not accrue on it, regardless of which caller hands us the id.
+                    // Защитная проверка: никогда не помечать событие, которое фактически не
+                    // финализировано+отмечено, или которое было отменено (например, каскадом
+                    // при удалении клуба) — репутация не должна начисляться по нему, независимо
+                    // от того, какой вызывающий код передал нам этот id.
                     .and(EVENTS.ATTENDANCE_FINALIZED.isTrue)
                     .and(EVENTS.ATTENDANCE_MARKED.isTrue)
                     .and(EVENTS.STATUS.ne(EventStatus.cancelled))
@@ -168,22 +169,23 @@ class JooqReputationRepository(
     }
 
     override fun recompute(userId: UUID, clubId: UUID) {
-        // Serialize recompute per (user, club) across transactions so the ledger aggregate
-        // is read against a stable snapshot. Without this, two concurrent recomputes from
-        // different sources (event attendance + skladchina finance) for the same pair could
-        // each miss the other's not-yet-committed ledger row under READ COMMITTED and clobber
-        // the cache (lost update). The xact advisory lock releases automatically on commit.
+        // Сериализуем recompute по паре (user, club) между транзакциями, чтобы агрегат леджера
+        // читался против стабильного снапшота. Без этого два конкурентных recompute из разных
+        // источников (посещаемость события + финансы складчины) для одной и той же пары могли бы
+        // не увидеть ещё не закоммиченную строку леджера друг друга под READ COMMITTED и затереть
+        // кэш (lost update). Advisory-лок транзакции снимается автоматически при коммите.
         dsl.execute("SELECT pg_advisory_xact_lock(hashtext(?))", "$userId:$clubId")
 
         val l = REPUTATION_LEDGER
         val attendanceRow = l.AXIS.eq(ReputationAxis.attendance)
         val attendedKinds = l.KIND.`in`(ReputationKind.ironclad, ReputationKind.spontaneous)
 
-        // Trust 0-100 (P1b) classifies outcomes BY KIND, not by points (V18 backfilled stale
-        // magnitudes, so points lie across the V18 boundary; kept/broke-by-kind is magnitude-
-        // independent). These cached counts give read-projections a non-decay denominator without
-        // re-scanning the ledger; the decay-weighted Trust itself is computed on-read from occurred_at.
-        // neutral = outcome - kept - broke (confirmed_unresolved + historic skladchina_declined).
+        // Trust 0-100 (P1b) классифицирует исходы ПО KIND, а не по points (V18 задним числом
+        // проставил устаревшие величины, поэтому points врут на границе V18; kept/broke по kind
+        // не зависит от величины). Эти кэшированные счётчики дают read-проекциям знаменатель без
+        // затухания, не пересканируя леджер целиком; сам Trust с учётом затухания вычисляется
+        // на чтении из occurred_at.
+        // neutral = outcome - kept - broke (confirmed_unresolved + исторический skladchina_declined).
         val keptKinds = l.KIND.`in`(ReputationKind.ironclad, ReputationKind.spontaneous, ReputationKind.skladchina_paid)
         val brokeKinds = l.KIND.`in`(ReputationKind.no_show, ReputationKind.spectator, ReputationKind.skladchina_expired)
 
@@ -202,9 +204,9 @@ class JooqReputationRepository(
             .fetchOne()!!
 
         val outcome = rec.value5() ?: 0
-        // No ledger rows for this (user, club): nothing to cache. In the live path
-        // recompute is only called right after an append, so outcome >= 1; this
-        // guard only matters for defensive / future delete paths.
+        // Нет строк леджера для этой пары (user, club): кэшировать нечего. В боевом
+        // пути recompute вызывается сразу после append, поэтому outcome >= 1; эта
+        // проверка важна только для защитных / будущих сценариев удаления.
         if (outcome == 0) return
 
         val reliability = (rec.value1() ?: BigDecimal.ZERO).toInt()

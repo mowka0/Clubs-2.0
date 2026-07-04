@@ -2,7 +2,7 @@ import { getInitDataRaw } from '../telegram/sdk';
 
 export class ApiError extends Error {
   readonly status: number;
-  /** Parsed error body — carries structured payloads like the 402 paywall (currentPlan/requiredPlan/priceKopecks). */
+  /** Распарсенное тело ошибки — несёт структурированные payload'ы вроде 402-пейволла (currentPlan/requiredPlan/priceKopecks). */
   readonly body: unknown;
   constructor(status: number, message: string, body?: unknown) {
     super(message);
@@ -40,8 +40,8 @@ class ApiClient {
       Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
     }
 
-    // Capture token at request-send time so we can detect stale-token 401s
-    // (another concurrent request may refresh the token before this one returns).
+    // Фиксируем токен в момент отправки запроса, чтобы можно было отличить 401 из-за
+    // устаревшего токена (другой параллельный запрос мог обновить токен раньше, чем вернулся этот).
     const tokenUsed = this.token;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -60,8 +60,8 @@ class ApiClient {
       const bodyText = await res.clone().text().catch(() => '');
       console.warn(`[api] 401 on ${method} ${path} — ${bodyText}`);
 
-      // If another concurrent request already refreshed the token while this one
-      // was in flight, retry with the new token — don't trigger another auth round.
+      // Если другой параллельный запрос уже обновил токен, пока этот был в полёте —
+      // повторить с новым токеном, не запускать ещё один цикл авторизации.
       if (this.token && this.token !== tokenUsed) {
         return this.request<T>(method, path, body, params, true);
       }
@@ -76,7 +76,7 @@ class ApiClient {
       throw new ApiError(res.status, err.message ?? `HTTP ${res.status}`, err);
     }
 
-    // 204 No Content has an empty body — don't call res.json() or it throws.
+    // 204 No Content имеет пустое тело — не вызывать res.json(), иначе бросит исключение.
     if (res.status === 204) return undefined as T;
 
     return res.json() as Promise<T>;
@@ -130,7 +130,7 @@ class ApiClient {
           '/api/auth/telegram',
           { initData: initDataRaw },
           undefined,
-          true // mark as retry to avoid infinite loop
+          true // помечаем как retry, чтобы избежать бесконечного цикла
         );
         this.token = data.token;
         return data;

@@ -24,12 +24,13 @@ import {
 } from '../api/membership';
 import { queryKeys } from './queryKeys';
 
+// Размер страницы по умолчанию для бесконечного списка клубов.
 const PAGE_SIZE = '20';
 
 /**
- * Infinite-scrolling list of public clubs for DiscoveryPage.
- * `pageParam` is the 0-based page index; `getNextPageParam` returns undefined
- * when there are no more pages so `hasNextPage` flips to false.
+ * Бесконечный список публичных клубов для DiscoveryPage.
+ * `pageParam` — индекс страницы с 0; `getNextPageParam` возвращает undefined,
+ * когда страниц больше нет, тогда `hasNextPage` становится false.
  */
 export function useClubsQuery(filters: Omit<ClubFilters, 'page'>) {
   return useInfiniteQuery({
@@ -49,7 +50,7 @@ export function useMyClubsQuery() {
   });
 }
 
-/** Organizer trust card for the dues-payment sheet. Gate `enabled` on the sheet being open. */
+/** Карточка доверия организатора для шита оплаты взносов. `enabled` завязан на открытие шита. */
 export function useOrganizerCardQuery(clubId: string | undefined, options: { enabled?: boolean } = {}) {
   const enabled = Boolean(clubId) && (options.enabled ?? true);
   return useQuery({
@@ -126,13 +127,13 @@ export function useJoinClubMutation() {
 }
 
 /**
- * Leave the club. Backend cascade for free clubs deletes the caller's RSVPs
- * in active events and participation rows in active skladchinas, plus any
- * pending/approved application. For paid clubs only the application + the
- * subscription itself flip — RSVPs/skladchinas stay valid until expire.
- * We invalidate aggressively so MyClubsPage, ClubPage, the feeds and per-
- * skladchina/event detail caches all refetch instead of showing the user
- * still in a sbor.
+ * Выход из клуба. Бэкенд-каскад для бесплатных клубов удаляет RSVP вызывающего
+ * в активных событиях и строки участия в активных складчинах, плюс любую
+ * pending/approved заявку. Для платных клубов переключаются только заявка и
+ * сама подписка — RSVP/складчины остаются валидными до истечения.
+ * Инвалидируем агрессивно, чтобы MyClubsPage, ClubPage, ленты и кэши деталей
+ * по каждой складчине/событию перезапросили данные, а не показывали, что
+ * юзер всё ещё в сборе.
  */
 export function useLeaveClubMutation() {
   const qc = useQueryClient();
@@ -156,9 +157,9 @@ export function useLeaveClubMutation() {
 }
 
 /**
- * Pre-leave obligation preview, fetched lazily when the leave dialog opens (pass
- * `enabled` = dialog-open AND free club — paid clubs always break nothing). Always
- * fresh: obligations change as the user votes/pays, so `staleTime: 0`.
+ * Превью обязательств перед выходом, подгружается лениво при открытии диалога выхода
+ * (передавайте `enabled` = диалог-открыт И бесплатный клуб — платные клубы ничего не ломают).
+ * Всегда свежее: обязательства меняются по мере голосования/оплат юзера, поэтому `staleTime: 0`.
  */
 export function useLeavePreviewQuery(clubId: string | undefined, enabled: boolean) {
   return useQuery({

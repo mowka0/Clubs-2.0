@@ -5,22 +5,22 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
- * P1b XP / уровни / бейджи — pure formula. A SEPARATE channel from Trust: a global, account-level
- * gamification score for the PERSON. It only accumulates (a broken promise is 0 XP, never a minus)
- * and is derived ON READ from the same ledger as Trust (no new table/query).
+ * P1b XP / уровни / бейджи — чистая формула. ОТДЕЛЬНЫЙ от Trust канал: глобальный геймификационный
+ * счёт ЧЕЛОВЕКА на уровне аккаунта. Только накапливается (нарушенное обещание — 0 XP, никогда не
+ * минус) и выводится ПРИ ЧТЕНИИ из того же ledger, что и Trust (без новой таблицы/запроса).
  *
- * XP rewards PARTICIPATION ONLY (decided 2026-06-14): the kept kinds + a diversity bonus. The old
- * organizer bonus (+15 event / +8 skladchina) was dropped — "organizer result" is a signal about
- * the PLACE and lives in the club-quality track ("Надёжность организатора" axis), not in personal
- * gamification. Anti-farm is inherited for free: the owner has no ledger rows in their own club
- * (rule 1), so they accrue XP only by participating in clubs they don't own.
+ * XP награждает ТОЛЬКО УЧАСТИЕ (решение 2026-06-14): kept-виды плюс бонус за разнообразие. Старый
+ * организаторский бонус (+15 событие / +8 складчина) убран — «результат организатора» — это сигнал
+ * о МЕСТЕ, он живёт в треке качества клуба (ось «Надёжность организатора»), а не в личной
+ * геймификации. Анти-фарм достаётся бесплатно: у владельца нет строк ledger в собственном клубе
+ * (правило 1), поэтому XP он копит только участием в клубах, которыми не владеет.
  *
- * Visibility (§9.1): `self` sees exact XP + progress + badges; `others` see only the level name
- * (the others-tier projection is applied at the DTO boundary, not here).
+ * Видимость (§9.1): `self` видит точный XP + прогресс + бейджи; `others` видят только имя уровня
+ * (others-tier проекция применяется на границе DTO, не здесь).
  */
 object XpPolicy {
 
-    /** XP for one kept ledger outcome. Broken/neutral kinds yield 0 (XP never goes down). */
+    /** XP за один kept-исход в ledger. Broken/neutral-виды дают 0 (XP никогда не убывает). */
     fun kindXp(kind: ReputationKind): Int = when (kind) {
         ReputationKind.ironclad -> 10
         ReputationKind.spontaneous -> 8
@@ -28,42 +28,42 @@ object XpPolicy {
         else -> 0
     }
 
-    /** Bonus for the first kept outcome in each NEW club (distinct club_id with ≥1 kept). */
+    /** Бонус за первый kept-исход в каждом НОВОМ клубе (уникальный club_id с ≥1 kept). */
     const val DIVERSITY_BONUS = 20
 
-    /** Trust at/above this counts a (track-record) club as "reliable" for the trust badges. */
+    /** Trust от этого значения и выше делает клуб (с track record) «надёжным» для trust-бейджей. */
     private const val RELIABLE_TRUST = TrustPolicy.RELIABLE_THRESHOLD // 70
 
-    /** 10 level names, index 0..9. Index 0 (Гость) is the floor — every account starts here. */
+    /** 10 имён уровней, индексы 0..9. Индекс 0 (Гость) — пол: с него стартует каждый аккаунт. */
     val LEVEL_NAMES = listOf(
         "Гость", "Свой", "Участник", "Завсегдатай", "Активист",
         "Энтузиаст", "Душа компании", "Столп сообщества", "Легенда", "Амбассадор"
     )
 
-    /** XP threshold to reach level index [i] (0-based): round(50·i^2). Level 0 = 0 XP.
-     *  Curve calibrated 2026-06-14 (40·i^1.85 → 50·i^2) to make higher levels rarer. */
+    /** Порог XP для достижения уровня с индексом [i] (0-based): round(50·i^2). Уровень 0 = 0 XP.
+     *  Кривая откалибрована 2026-06-14 (40·i^1.85 → 50·i^2), чтобы высокие уровни были реже. */
     fun levelThreshold(i: Int): Int = (50.0 * i.toDouble().pow(2.0)).roundToInt()
 
-    /** 0-based level index for a given XP — the highest level whose threshold is reached. */
+    /** 0-based индекс уровня для данного XP — наивысший уровень, чей порог достигнут. */
     fun levelIndexFor(xp: Int): Int =
         LEVEL_NAMES.indices.last { xp >= levelThreshold(it) }
 
-    /** Counts/standings needed to evaluate XP total and badges, computed once from the ledger. */
+    /** Счётчики/позиции для расчёта суммы XP и бейджей; считаются один раз из ledger. */
     data class XpStats(
         val ironcladCount: Int,
         val spontaneousCount: Int,
         val skladchinaPaidCount: Int,
-        /** distinct club_id with ≥1 kept outcome — the diversity multiplier. */
+        /** уникальные club_id с ≥1 kept-исходом — множитель разнообразия. */
         val distinctKeptClubs: Int,
-        /** clubs with a shown track record (outcomeCount ≥ N) and Trust ≥ RELIABLE_TRUST. */
+        /** клубы с показываемым track record (outcomeCount ≥ N) и Trust ≥ RELIABLE_TRUST. */
         val reliableClubs: Int,
-        /** highest per-club Trust among clubs with a shown track record (0 if none). */
+        /** максимальный клубный Trust среди клубов с показываемым track record (0, если таких нет). */
         val maxTrustWithRecord: Int
     ) {
         val totalKept: Int get() = ironcladCount + spontaneousCount + skladchinaPaidCount
     }
 
-    /** Total XP = Σ kept-kind XP + diversity bonus per distinct kept club. */
+    /** Суммарный XP = Σ XP по kept-видам + бонус разнообразия за каждый уникальный kept-клуб. */
     fun totalXp(stats: XpStats): Int =
         stats.ironcladCount * kindXp(ReputationKind.ironclad) +
             stats.spontaneousCount * kindXp(ReputationKind.spontaneous) +
@@ -72,7 +72,7 @@ object XpPolicy {
 
     enum class BadgeFamily { PARTICIPATION, DIVERSITY, TRUST }
 
-    /** A badge = a passed threshold (not a raw score). Thresholds are calibratable. */
+    /** Бейдж = пройденный порог (не сырой счёт). Пороги поддаются калибровке. */
     data class Badge(
         val id: String,
         val name: String,
@@ -80,8 +80,8 @@ object XpPolicy {
         val earned: (XpStats) -> Boolean
     )
 
-    // Thresholds calibrated 2026-06-14 to make badges rarer. `first_step` and `reliable_1` stay
-    // attainable on purpose (a new member needs a visible starter goal); the rest are real milestones.
+    // Пороги откалиброваны 2026-06-14, чтобы бейджи стали реже. `first_step` и `reliable_1` намеренно
+    // остаются достижимыми (новичку нужна видимая стартовая цель); остальные — настоящие вехи.
     val BADGES: List<Badge> = listOf(
         Badge("first_step", "Первый шаг", BadgeFamily.PARTICIPATION) { it.totalKept >= 1 },
         Badge("ironclad_20", "Железобетон", BadgeFamily.PARTICIPATION) { it.ironcladCount >= 20 },
@@ -94,7 +94,7 @@ object XpPolicy {
         Badge("reliable_5", "Столп доверия", BadgeFamily.TRUST) { it.reliableClubs >= 5 }
     )
 
-    /** Earned badges for the given stats, in declaration order. */
+    /** Заработанные бейджи для данных статов, в порядке объявления. */
     fun badgesFor(stats: XpStats): List<Badge> = BADGES.filter { it.earned(stats) }
 
     fun isReliable(trust: Int): Boolean = trust >= RELIABLE_TRUST

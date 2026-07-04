@@ -10,13 +10,13 @@ const TIER_CLASS: Record<LevelTier, string> = {
 interface LevelPillProps {
   levelName: string;
   tier: LevelTier;
-  /** When set, appends "· ур.N" (full form for the application card hero). */
+  /** Если задано, добавляет «· ур.N» (полная форма для hero-блока карточки заявки). */
   level?: number;
-  /** `sm` is the compact inbox-row chip; `md` (default) is the card hero pill. */
+  /** `sm` — компактный чип строки инбокса; `md` (по умолчанию) — hero-пилюля карточки. */
   size?: 'sm' | 'md';
 }
 
-/** Global gamification level pill — gold at the top tier, accent mid, neutral base. */
+/** Пилюля глобального уровня геймификации — золото на верхнем тире, акцент на среднем, нейтраль на базовом. */
 export const LevelPill: FC<LevelPillProps> = ({ levelName, tier, level, size = 'md' }) => (
   <span className={`rd-lvl-pill ${size === 'sm' ? 'rd-sm' : ''} ${TIER_CLASS[tier]}`}>
     {levelName}{level !== undefined ? ` · ур.${level}` : ''}
