@@ -30,7 +30,11 @@ class Stage2Service(
 ) {
     private val log = LoggerFactory.getLogger(Stage2Service::class.java)
 
-    @Scheduled(fixedDelay = STAGE_2_SCHEDULER_PERIOD_MS)
+    // The confirmation window is [flip .. event start], and the flip lands anywhere within one
+    // poll period after the trigger boundary — so the tick must be much finer than the trigger
+    // lead. The old hardcoded 5min tick ate a short staging lead (3min) whole: the flip often
+    // landed after event start, leaving a zero-length window.
+    @Scheduled(fixedDelayString = "\${events.stage2-poll-ms:60000}")
     @Transactional
     fun triggerStage2ForReadyEvents() {
         val cutoff = OffsetDateTime.now().plusMinutes(stage2TriggerMinutesBefore)
@@ -60,7 +64,14 @@ class Stage2Service(
         // S2T-2: ask going/maybe voters to confirm. Without this DM nobody learns Stage 2
         // started, nobody confirms, and everyone auto-expires at event start. AFTER_COMMIT
         // hop (Stage2StartedListener) — the @Async DM must read committed rows.
-        eventPublisher.publishEvent(Stage2StartedEvent(event))
+        // A late flip (event already started) still transitions — the expiry sweep and the
+        // completion lifecycle depend on it — but the confirm window is already closed
+        // (confirmParticipation rejects at event start), so the DM would be a dead end.
+        if (event.eventDatetime.isAfter(OffsetDateTime.now())) {
+            eventPublisher.publishEvent(Stage2StartedEvent(event))
+        } else {
+            log.info("Stage 2 confirm DM skipped for event ${event.id} — flipped after event start (window closed)")
+        }
     }
 
     @Transactional
@@ -193,9 +204,5 @@ class Stage2Service(
     fun expireUnconfirmedParticipants() {
         val count = eventResponseRepository.expireUnconfirmedForStartedEvents(OffsetDateTime.now())
         if (count > 0) log.info("Auto-expired {} unconfirmed Stage 2 responses", count)
-    }
-
-    companion object {
-        private const val STAGE_2_SCHEDULER_PERIOD_MS = 300_000L
     }
 }

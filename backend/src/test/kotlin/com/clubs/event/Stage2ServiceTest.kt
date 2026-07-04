@@ -156,6 +156,22 @@ class Stage2ServiceTest {
     }
 
     @Test
+    fun `stage 2 trigger for an already-started event flips status but skips the confirm DM`() {
+        // A late flip (coarse scheduler tick / event created inside the trigger lead) must still
+        // transition — the expiry sweep and completion depend on it — but the confirm window is
+        // already closed, so the «Подтвердите участие» DM would be a dead end.
+        val event = event(eventDatetime = OffsetDateTime.now().minusMinutes(2), status = EventStatus.stage_1)
+        every { eventRepository.findEventsToTriggerStage2(any()) } returns listOf(event)
+        justRun { eventRepository.transitionToStage2(eventId) }
+        every { eventResponseRepository.findGoingByEventOrderByTimestamp(eventId) } returns emptyList()
+
+        service.triggerStage2ForReadyEvents()
+
+        verify(exactly = 1) { eventRepository.transitionToStage2(eventId) }
+        verify(exactly = 0) { eventPublisher.publishEvent(Stage2StartedEvent(event)) }
+    }
+
+    @Test
     fun `stage 2 trigger publishes after the waitlist overflow is assigned`() {
         // The AFTER_COMMIT listener reads voter rows fresh — but within the transaction the
         // publication must follow the overflow assignment so a failed assignment also skips the DM.

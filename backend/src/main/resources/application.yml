@@ -118,6 +118,12 @@ events:
   # small value and keep a brief Stage-1 voting window before the flip, making the full
   # two-stage flow testable end-to-end. Env: STAGE2_TRIGGER_MINUTES_BEFORE
   stage2-trigger-minutes-before: ${STAGE2_TRIGGER_MINUTES_BEFORE:1440}
+  # Stage2Service.triggerStage2ForReadyEvents poll period (ms). The confirmation window is
+  # stage2-trigger-minutes-before MINUS the scheduler phase, so this tick must be much finer
+  # than the trigger lead — the old hardcoded 5min tick ate a short lead whole (with a 3min
+  # lead the flip often landed AFTER event start → zero confirm window, dead-end DM).
+  # Default 60000 = 1min. Env: STAGE2_POLL_MS
+  stage2-poll-ms: ${STAGE2_POLL_MS:60000}
   # EventReminderScheduler poll period (ms). Default 300000 = 5min.
   reminder-poll-ms: ${EVENT_REMINDER_POLL_MS:300000}
   # Confirm-participation reminder DM window: minutes before the event it fires.

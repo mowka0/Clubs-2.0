@@ -165,7 +165,11 @@ fun countByVote(eventId: UUID): Map<String, Int>   // going/maybe/not_going
 ## TASK-015 — Этап 2: автоматическое подтверждение
 
 ### Cron-задача (Spring Scheduler)
-- Запускается каждые 5 минут: `@Scheduled(fixedDelay = 300_000)`
+- Период тика — `events.stage2-poll-ms` (дефолт 60000 = 1 мин; env `STAGE2_POLL_MS`). Раньше было
+  захардкожено 5 мин — при коротком lead (staging `STAGE2_TRIGGER_MINUTES_BEFORE=3`) фаза тика
+  съедала всё окно подтверждения: флип случался в интервале `[T−lead .. T−lead+период]`, т.е.
+  зачастую ПОСЛЕ старта события (окно = 0, участники получали DM «подтвердите» в никуда).
+  Окно подтверждения = `lead − фаза тика`, поэтому тик обязан быть сильно мельче lead.
 - Ищет события: `status = upcoming AND stage_2_triggered = false AND event_datetime <= now() + lead`,
   где `lead` = `events.stage2-trigger-minutes-before` (дефолт 1440 мин = 24ч; cutoff считается в
   `Stage2Service`, передаётся в `findEventsToTriggerStage2(cutoff)`). На staging значение можно ужать
@@ -179,7 +183,11 @@ fun countByVote(eventId: UUID): Map<String, Int>   // going/maybe/not_going
 4. Если going < participant_limit → добавить maybe-участников в очередь
 5. Опубликовать `Stage2StartedEvent` → после коммита транзакции going/maybe-воутерам уходит
    DM «Этап 2 начался — подтвердите участие» (S2T-2 ✅, 2026-06-13; см.
-   § «DM при старте Этапа 2 + сериализация слотов» ниже и `telegram-bot.md` § `sendStage2Started`)
+   § «DM при старте Этапа 2 + сериализация слотов» ниже и `telegram-bot.md` § `sendStage2Started`).
+   **Гейт (2026-07-04):** если флип случился уже ПОСЛЕ старта события (поздний тик / событие
+   создано внутри lead-окна) — статус всё равно переводится (на переходе завязаны sweep
+   авто-истечения и completion), но DM НЕ публикуется: окно подтверждения закрывается в момент
+   старта (`confirmParticipation` → «Confirmation window has closed»), и призыв был бы тупиковым.
 
 ### Confirm/Decline endpoints
 ```
@@ -397,6 +405,7 @@ penalty-флоу), а их страницы упираются в скрытый
 | `events.finalize-poll-ms` | `ATTENDANCE_FINALIZE_POLL_MS` | `3600000` (1ч) | Период `AttendanceService.finalizeAttendance` |
 | `events.stage2-expire-poll-ms` | `STAGE2_EXPIRE_POLL_MS` | `300000` (5мин) | Период авто-истечения брони |
 | `events.stage2-trigger-minutes-before` | `STAGE2_TRIGGER_MINUTES_BEFORE` | `1440` (24ч) | За сколько **минут** до старта `upcoming`-событие авто-переходит в `stage_2` |
+| `events.stage2-poll-ms` | `STAGE2_POLL_MS` | `60000` (1мин) | Период тика `triggerStage2ForReadyEvents`; окно подтверждения = trigger-lead − фаза тика, тик должен быть сильно мельче lead |
 | `events.reminder-poll-ms` | `EVENT_REMINDER_POLL_MS` | `300000` (5мин) | Период `EventReminderScheduler` |
 | `events.confirm-reminder-minutes-before` | `CONFIRM_REMINDER_MINUTES_BEFORE` | `120` (2ч) | За сколько **минут** до события слать «подтверди участие» |
 | `events.attendance-reminder-minutes-after` | `ATTENDANCE_REMINDER_MINUTES_AFTER` | `1440` (24ч) | Через сколько **минут** после события напомнить оргу отметить явку |
@@ -407,10 +416,11 @@ penalty-флоу), а их страницы упираются в скрытый
 
 > **Тест на staging:** в Coolify-приложении staging выставить `ATTENDANCE_DISPUTE_WINDOW_MINUTES=5`,
 > `ATTENDANCE_FINALIZE_POLL_MS=60000` (1 мин), при желании `STAGE2_EXPIRE_POLL_MS=60000`.
-> Для проверки полного двухэтапного потока — `STAGE2_TRIGGER_MINUTES_BEFORE=5`: создать событие
-> со стартом > 5 мин в будущем (останется `upcoming`, голосуем), дождаться окна перехода +
-> тик шедулера → событие уходит в `stage_2`, DM «Этап 2 начался». Условие наличия фазы
-> голосования: `(минут до старта) > STAGE2_TRIGGER_MINUTES_BEFORE`.
+> Для проверки полного двухэтапного потока — `STAGE2_TRIGGER_MINUTES_BEFORE=15` (комфортное окно;
+> при дефолтном тике 1 мин окно подтверждения = 14–15 мин, при `=3` — впритык 2–3 мин): создать
+> событие со стартом > lead в будущем (останется `upcoming`, голосуем), дождаться границы
+> `T − lead` + тик шедулера → событие уходит в `stage_2`, DM «Этап 2 начался», подтверждаем до
+> старта. Условие наличия фазы голосования: `(минут до старта) > STAGE2_TRIGGER_MINUTES_BEFORE`.
 > Тот же образ, только env. После теста — удалить переменные (prod-дефолты не меняются).
 > NB: окно оспаривания отсчитывается от **момента отметки явки** (`events.attendance_marked_at`,
 > колонка V24, F5-05/б), а не от `event_datetime`. `finalizeAttendanceBefore` гейтит по
