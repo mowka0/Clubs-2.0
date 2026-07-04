@@ -33,7 +33,7 @@ Telegram Mini App для создания и управления платным
 - Docker Compose для локальной разработки и продакшена
 - Coolify на VPS (Hetzner Cloud, IP: 77.42.23.177) для деплоя
 - GitHub repo: https://github.com/mowka0/Clubs-2.0
-- Auto-deploy: push в `master` → production, push в `bugfix/*`/`feature/*`/`devops/*` → staging
+- Auto-deploy: push в `master` → production (Coolify следит за master), push в **любую другую ветку** (`branches-ignore: [master]`) → staging
 - Staging: отдельное приложение в Coolify на другом домене (настраивается один раз, см. ниже)
 
 #### Настройка staging в Coolify (одноразово)
@@ -230,6 +230,7 @@ Orchestrator → Analyst (спецификация) → Developer (код) → T
 - Язык комментариев в коде и `COMMENT ON` в БД: **русский** (решение PO 2026-07-04). Каждая именованная константа (Kotlin `const val`/companion, top-level const в TS, ключи yaml-конфигов) сопровождается русским пояснением «за что отвечает»
 - Коммиты: conventional commits (feat:, fix:, chore:)
 - Ветки: `master` (продакшен), `feature/*`, `bugfix/*`, `devops/*` для разработки
+- **ЖЁСТКОЕ ПРАВИЛО деплоя (PO 2026-07-04): ничто не попадает в master, минуя staging. Всегда `staging → master`, никак иначе — включая chore/docs/миграции комментариев.** Любая работа: ветка (≠ master) → авто-деплой на staging → ручной тест PO → «готово, запушь» → PR → merge в master → prod. Прямой push/merge в master в обход staging **запрещён**. Enforced: branch protection на master (PR обязателен, required-чек `Gitleaks`, admin-обход только для аварий) + `deploy-preview.yml` деплоит все ветки кроме master. «Протестировано на staging» — человеческий гейт (GitHub его не проверяет), подтверждается командой «готово, запушь». Версионирование с релизами (теги) — отложено PO, пока рано.
 
 ## Важные решения из предыдущей итерации
 - `npm install` требует `--legacy-peer-deps` из-за конфликта telegram-ui и React 19
