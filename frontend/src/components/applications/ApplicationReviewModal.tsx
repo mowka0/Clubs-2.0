@@ -11,7 +11,9 @@ import { LevelPill } from '../reputation/LevelPill';
 import { PlatformActivity } from './PlatformActivity';
 import type { PendingApplicationDto } from '../../types/api';
 
+// Минимальная длина причины отказа (символов после trim) — совпадает с @Size(min=5) на бэкенде.
 const REASON_MIN = 5;
+// Максимальная длина причины отказа — совпадает с @Size(max=500) на бэкенде.
 const REASON_MAX = 500;
 
 interface ApplicationReviewModalProps {
@@ -37,10 +39,10 @@ function formatHoursHint(hours: number): { label: string; urgent: boolean } {
 }
 
 /**
- * Cross-club application review modal. Mirrors the portal pattern of
- * ProfileEditModal (z-index 150). Reject is two-step: tap «Отклонить» reveals
- * a reason textarea, confirming sends the mutation only when reason ≥5 chars
- * after trim (backend now enforces @Size(min=5, max=500), see
+ * Кросс-клубовая модалка рассмотрения заявки. Повторяет portal-паттерн
+ * ProfileEditModal (z-index 150). Отказ — в два шага: тап «Отклонить» открывает
+ * textarea причины, подтверждение шлёт мутацию только когда причина ≥5 символов
+ * после trim (бэкенд теперь навязывает @Size(min=5, max=500), см.
  * docs/modules/applications-inbox.md).
  */
 export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
@@ -57,17 +59,17 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const rejectFieldRef = useRef<HTMLDivElement>(null);
 
-  // Reveal-then-reach: when reject mode opens, the reason field is appended at the end of the scrollable
-  // body — below the fold. Scroll it into view + focus so the organizer isn't left wondering where to type.
+  // Reveal-then-reach: при открытии режима отказа поле причины добавляется в конец скроллируемого
+  // тела — за пределами экрана. Скроллим к нему + фокусируем, чтобы организатор не гадал, где печатать.
   useEffect(() => {
     if (!rejectMode) return;
     rejectFieldRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     document.getElementById('reject-reason')?.focus({ preventScroll: true });
   }, [rejectMode]);
 
-  // Lock body scroll while modal is open and reset internal state every time
-  // it opens — otherwise reopening with the same modal instance leaks stale
-  // reject-mode / reason / error.
+  // Блокируем скролл body, пока модалка открыта, и сбрасываем внутреннее состояние
+  // при каждом открытии — иначе повторное открытие того же инстанса модалки утащит
+  // за собой устаревшие reject-mode / reason / error.
   useEffect(() => {
     if (!open) return;
     setRejectMode(false);
@@ -80,7 +82,7 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
     };
   }, [open, application.applicationId]);
 
-  // Close on Escape — same shortcut as other portal modals in the app.
+  // Закрытие по Escape — тот же шорткат, что и у остальных portal-модалок приложения.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -100,8 +102,8 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
   const fullName = `${applicant.firstName}${applicant.lastName ? ` ${applicant.lastName}` : ''}`;
   const hoursHint = formatHoursHint(hoursUntilAutoReject);
 
-  // City + country: mirror ProfilePage's `pf-identity .location` formatting.
-  // Render only when city is set; country alone (without city) is too vague.
+  // Город + страна: повторяем форматирование `pf-identity .location` из ProfilePage.
+  // Рендерим только когда указан город; страна без города — слишком расплывчато.
   const locationLabel = applicant.city
     ? [applicant.city, countryNameByCode(applicant.country)].filter(Boolean).join(', ')
     : null;
@@ -186,7 +188,7 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
         </div>
 
         <div className="rd-sheet-body">
-          {/* Hero — avatar + name + username */}
+          {/* Шапка — аватар + имя + username */}
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <span className="rd-avatar" style={{ width: 48, height: 48, borderRadius: '50%', fontSize: 18 }}>
               {applicant.avatarUrl ? (
@@ -203,17 +205,17 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
             </div>
           </div>
 
-          {/* Location — only when city is present */}
+          {/* Локация — только когда указан город */}
           {locationLabel && (
             <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>{locationLabel}</div>
           )}
 
-          {/* Global gamification level */}
+          {/* Глобальный геймификационный уровень */}
           <div>
             <LevelPill levelName={peerStats.levelName} tier={peerStats.levelTier} level={peerStats.level} />
           </div>
 
-          {/* About — full bio, wrapped */}
+          {/* О себе — полное bio, с переносами */}
           {bio && (
             <div className="rd-field">
               <span className="rd-label">О себе</span>
@@ -221,7 +223,7 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
             </div>
           )}
 
-          {/* Interests — pill chips */}
+          {/* Интересы — чипы-пилюли */}
           {hasInterests && (
             <div className="rd-field">
               <span className="rd-label">Интересы</span>
@@ -233,18 +235,18 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
             </div>
           )}
 
-          {/* Platform activity — «надёжен в N из M клубов» donut + participation line */}
+          {/* Активность на платформе — донат «надёжен в N из M клубов» + строка участия */}
           <div className="rd-field">
             <span className="rd-label">Активность на платформе</span>
             <PlatformActivity stats={peerStats} />
           </div>
 
-          {/* Club row */}
+          {/* Строка клуба */}
           <div style={{ fontSize: 14, color: 'var(--text)' }}>
             Клуб: <strong>{club.name}</strong>
           </div>
 
-          {/* Q&A — optional */}
+          {/* Вопрос-ответ — опционально */}
           {answerText && (
             <div className="rd-field">
               <span className="rd-label">Ответ на вопрос</span>
@@ -254,14 +256,14 @@ export const ApplicationReviewModal: FC<ApplicationReviewModalProps> = ({
             </div>
           )}
 
-          {/* Auto-reject hint */}
+          {/* Подсказка про автоотклонение */}
           <div className="rd-hint" style={hoursHint.urgent ? { color: 'var(--danger)' } : undefined}>
             {hoursHint.label}
           </div>
 
           {error && <div className="rd-error" style={{ textAlign: 'left' }}>{error}</div>}
 
-          {/* Reject-mode textarea inline so users see context above */}
+          {/* Textarea режима отказа — инлайн, чтобы контекст заявки оставался виден выше */}
           {rejectMode && (
             <div className="rd-field" ref={rejectFieldRef}>
               <span className="rd-label">Причина отказа</span>

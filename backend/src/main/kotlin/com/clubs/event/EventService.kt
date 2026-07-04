@@ -30,9 +30,9 @@ class EventService(
         if (club.ownerId != userId) throw ForbiddenException("Only the club organizer can create events")
         val event = eventRepository.create(request, clubId, userId)
         log.info("Event created: id={} clubId={} title='{}' userId={}", event.id, clubId, event.title, userId)
-        // Member DMs are dispatched AFTER_COMMIT by EventBotNotifier. Publishing
-        // inside the transaction lets the listener skip entirely if the outer
-        // @Transactional rolls back. Mirrors PaymentService / SkladchinaService.
+        // DM участникам рассылает EventBotNotifier на AFTER_COMMIT. Публикация внутри
+        // транзакции позволяет слушателю вовсе не сработать, если внешний
+        // @Transactional откатится. По аналогии с PaymentService / SkladchinaService.
         eventPublisher.publishEvent(EventCreatedEvent(event))
         return eventMapper.toDetailDto(event, goingCount = 0, maybeCount = 0, notGoingCount = 0, confirmedCount = 0)
     }
@@ -59,11 +59,11 @@ class EventService(
     }
 
     /**
-     * F5-14: organizer cancels a not-yet-started event. Cancels the event + any linked active split
-     * (pending → released, no reputation) atomically, then DMs interested voters AFTER_COMMIT. The
-     * SQL guard (status active AND event_datetime > now) yields 0 rows ⇒ 409 for a started/finalized/
-     * already-cancelled event. Reputation is never touched — the cascade runs through repositories,
-     * mirroring ClubService.deleteClub.
+     * F5-14: организатор отменяет ещё не начавшееся событие. Атомарно отменяет событие + привязанный
+     * активный сбор (pending → released, без репутации), затем на AFTER_COMMIT рассылает DM
+     * заинтересованным проголосовавшим. SQL-guard (status active AND event_datetime > now) даёт
+     * 0 строк ⇒ 409 для начавшегося/финализированного/уже отменённого события. Репутация не
+     * трогается никогда — каскад идёт через репозитории, по аналогии с ClubService.deleteClub.
      */
     @Transactional
     fun cancelEvent(eventId: UUID, userId: UUID, reason: String?): EventDetailDto {

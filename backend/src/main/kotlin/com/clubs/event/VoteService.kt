@@ -33,11 +33,11 @@ class VoteService(
             throw ValidationException("Voting is not available for this event")
         }
 
-        // S1-001: the voting window must use the SAME precise boundary as the feed
+        // S1-001: окно голосования должно использовать ТУ ЖЕ точную границу, что и лента
         // (EventMapper.computeActionRequired / JooqEventRepository.findMyFeed):
-        // open iff event_datetime - votingOpensDaysBefore days <= now. ChronoUnit.DAYS.between
-        // truncates the fractional day, opening voting up to ~24h early and diverging from the
-        // UI's "action required" badge. See events.md § voting window.
+        // открыто ⇔ event_datetime - votingOpensDaysBefore дней <= now. ChronoUnit.DAYS.between
+        // отбрасывает дробную часть суток — голосование открывалось бы на ~24 часа раньше и
+        // расходилось с бейджем «требуется действие» в UI. См. events.md § voting window.
         val votingOpensAt = event.eventDatetime.minusDays(event.votingOpensDaysBefore.toLong())
         if (OffsetDateTime.now().isBefore(votingOpensAt)) {
             throw ValidationException("Voting has not started yet")
@@ -62,17 +62,17 @@ class VoteService(
     fun getMyVote(eventId: UUID, userId: UUID): MyVoteDto {
         eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
         val response = eventResponseRepository.findByEventAndUser(eventId, userId)
-        // After Stage 2 the user's effective status is final_status (confirmed / waitlisted /
-        // declined); before Stage 2 it's the stage-1 vote. The EventPage keys BOTH the
-        // confirm/decline buttons and the status badge off this single field, so a confirmed
-        // user must read back "confirmed" — not the unchanged stage-1 "going" — or the UI never
-        // reflects the confirm/decline. Same precedence as getEventResponders below.
+        // После Этапа 2 действующий статус пользователя — final_status (confirmed / waitlisted /
+        // declined); до Этапа 2 — голос этапа 1. EventPage завязывает на это единственное поле
+        // И кнопки подтверждения/отказа, И бейдж статуса, поэтому подтверждённый пользователь
+        // должен прочитать назад "confirmed", а не неизменившийся "going" с этапа 1 — иначе UI
+        // никогда не отразит подтверждение/отказ. Тот же приоритет, что в getEventResponders ниже.
         return MyVoteDto(vote = response?.finalStatus?.literal ?: response?.stage1Vote?.literal)
     }
 
     /**
-     * Returns the list of responders (with user info + current intent) for the
-     * event. Restricted to club members — same visibility rule as voting itself.
+     * Возвращает список откликнувшихся на событие (с данными пользователя + текущим намерением).
+     * Доступно только участникам клуба — то же правило видимости, что и у самого голосования.
      */
     fun getEventResponders(eventId: UUID, userId: UUID): List<EventResponderDto> {
         val event = eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
@@ -81,10 +81,10 @@ class VoteService(
             throw ForbiddenException("Not a member of this club")
         }
 
-        // F5-06 (A01): dispute_note is a private message addressed to the organizer — only the
-        // club owner may read it, not every club member. Keyed on club.ownerId (NOT event.createdBy:
-        // a non-owner creator must not see it, and the owner who resolves disputes must). The note
-        // stays in the SQL projection; we null it here so members never receive it over the wire.
+        // F5-06 (A01): dispute_note — приватное сообщение, адресованное организатору: читать его
+        // может только владелец клуба, а не каждый участник. Ключ — club.ownerId (НЕ event.createdBy:
+        // создатель-невладелец видеть заметку не должен, а владелец, который разбирает споры, — должен).
+        // Заметка остаётся в SQL-проекции; здесь мы зануляем её, чтобы участникам она не ушла по сети.
         val isOwner = clubRepository.findById(event.clubId)?.ownerId == userId
 
         return eventResponseRepository.findRespondersWithUsers(eventId).map { r ->

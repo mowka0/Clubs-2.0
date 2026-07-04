@@ -5,175 +5,178 @@ import java.util.UUID
 import kotlin.math.pow
 
 /**
- * L3 hidden rank — pure formula (the heart of the club-quality track). A composite of four
- * distinct-credible-account axes minus owner-blind negatives, gated by a credibility-weighted min-K
- * floor. INTERNAL: nothing here is ever serialized; the only externally-visible derivative is the
- * boolean "★ Топ-5 в категории".
+ * L3 скрытый ранг — чистая формула (сердце club-quality-трека). Композит из четырёх осей по
+ * distinct-credible-аккаунтам минус owner-blind негативы, за гейтом credibility-взвешенного
+ * min-K-порога. INTERNAL: ничто отсюда никогда не сериализуется; единственная внешне видимая
+ * производная — булев бейдж «★ Топ-5 в категории».
  *
- * Design contract: docs/backlog/club-quality-gamification.md §1–8, docs/modules/club-quality.md §10.
+ * Контракт дизайна: docs/backlog/club-quality-gamification.md §1–8, docs/modules/club-quality.md §10.
  *
- * **Anti-farm spine (every constant serves it):**
- *  1. Owner-authored data never reaches L3 — the repository feeds only member-driven signals.
- *  2. Distinct-CREDIBLE-account weighting: every axis is `Σ credibility(account)`, never raw counts.
- *  3. Absolutes, never ratios (a ring trivially makes 100% of any %).
- *  4. Recency-decay via behaviour time (`occurred_at`), so nothing banks forever.
- *  5. Credibility-WEIGHTED existence gate: a ring of cheap accounts cannot manufacture a rank.
- *  6. Owner-concentration collapse + per-owner category cap: one operator cannot self-populate a
- *     category (the "category manufacturing" Sybil vector).
+ * **Анти-фарм каркас (каждая константа ему служит):**
+ *  1. Данные авторства владельца никогда не попадают в L3 — репозиторий подаёт только сигналы,
+ *     порождённые участниками.
+ *  2. Взвешивание по distinct-CREDIBLE-аккаунтам: каждая ось — `Σ credibility(аккаунт)`,
+ *     никогда не сырые счётчики.
+ *  3. Абсолюты, никогда не доли (кольцо ботов тривиально выдаёт 100% любого %).
+ *  4. Recency-decay по времени поведения (`occurred_at`) — ничего не копится в зачёт навечно.
+ *  5. Credibility-ВЗВЕШЕННЫЙ гейт существования: кольцо дешёвых аккаунтов не может сфабриковать ранг.
+ *  6. Схлопывание owner-концентрации + per-owner cap в категории: один оператор не может сам
+ *     заселить категорию (Sybil-вектор «фабрикация категории»).
  *
- * **PROVISIONAL:** weights/anchors/thresholds are principled defaults, NOT calibrated — calibration
- * on a ~10-club prod is impossible. They live here so a future calibration touches one file, no SQL.
+ * **PROVISIONAL:** веса/якоря/пороги — принципиальные дефолты, НЕ калиброванные: калибровка на
+ * проде из ~10 клубов невозможна. Живут здесь, чтобы будущая калибровка трогала один файл, без SQL.
  */
 object ClubRankPolicy {
 
-    // ---- Existence gate (does the club have a rank at all?) ----
+    // ---- Гейт существования (есть ли у клуба ранг вообще?) ----
 
     /**
-     * Credibility-WEIGHTED min-K: a club is ranked only if `Σ credibility(credibleCore) ≥ EFFECTIVE_K`.
-     * Weighted (not a head-count): a fresh single-club puppet contributes ~0.24, so a ring needs ~22+
-     * accounts, not 8 — the only number that actually scales attacker cost. Below the gate ⇒ UNRANKED.
+     * Credibility-ВЗВЕШЕННЫЙ min-K: клуб ранжируется, только если `Σ credibility(credibleCore) ≥ EFFECTIVE_K`.
+     * Взвешенный (не поголовный счёт): свежая одноклубная марионетка вносит ~0.24, так что кольцу нужно
+     * ~22+ аккаунтов, а не 8 — единственное число, реально масштабирующее цену атаки. Ниже гейта ⇒ UNRANKED.
      */
     const val EFFECTIVE_K = 8.0
 
-    /** Floor of an account's credibility contribution; an account whose raw credibility is below this
-     *  does not count toward the gate or any axis at all. */
+    /** Пол вклада credibility одного аккаунта; аккаунт с сырой credibility ниже этого порога
+     *  вообще не учитывается — ни в гейте, ни в одной из осей. */
     const val CRED_MIN = 0.2
 
-    // ---- Recency decay (TrustPolicy math: 0.5^(age/halfLife), future-dated → weight 1.0) ----
+    // ---- Recency-decay (математика TrustPolicy: 0.5^(возраст/halfLife), даты из будущего → вес 1.0) ----
 
-    /** Positives lose half their weight after this many days (fame leaks out slowly). */
+    /** Позитивы теряют половину веса за столько дней (слава утекает медленно). */
     const val HALF_LIFE_POS_DAYS = 120.0
 
-    /** Negatives decay faster than positives — a recovery valve (a fixed club isn't punished forever). */
+    /** Негативы затухают быстрее позитивов — клапан восстановления (исправившийся клуб не наказан навечно). */
     const val HALF_LIFE_NEG_DAYS = 90.0
 
-    // ---- Per-axis absolute floors (axis below its floor contributes 0, never a fraction) ----
+    // ---- Абсолютные полы по осям (ось ниже своего пола даёт 0, а не долю) ----
 
-    const val PAY_MIN = 3 // distinct Stars payers
-    const val VOTE_MIN = 8 // distinct member voters
-    const val EVENT_MIN = 2 // events with ≥4 distinct qualifying attended
+    const val PAY_MIN = 3 // минимум различных плательщиков (Stars)
+    const val VOTE_MIN = 8 // минимум различных голосовавших участников
+    const val EVENT_MIN = 2 // минимум событий с ≥4 различными квалифицированными посетителями
 
-    // ---- Backbone qualification (anti-farm shape of the core signal) ----
+    // ---- Квалификация «костяка» (анти-фарм форма сигнала ядра) ----
 
-    /** A core member must have attended at least this many DISTINCT events. */
+    /** Участник ядра должен посетить минимум столько РАЗНЫХ событий. */
     const val CORE_MIN_EVENTS = 2
 
-    /** Those qualifying attendances must span at least this many days — a single batch-day farm
-     *  (everyone marked one evening) does not manufacture diversity. */
+    /** Квалифицирующие посещения должны быть разнесены минимум на столько дней — фарм одним
+     *  batch-днём (всех отметили за один вечер) не фабрикует разнообразие. */
     const val MIN_EVENT_GAP_DAYS = 7L
 
-    /** An event counts toward LiveActivity only with at least this many distinct qualifying attendees. */
+    /** Событие идёт в зачёт LiveActivity только при минимум стольких различных квалифицированных посетителях. */
     const val EVENT_MIN_ATTENDEES = 4
 
-    // ---- Read windows ----
+    // ---- Окна чтения ----
 
-    /** DemandResponsiveness counts member voters within this trailing window. */
+    /** DemandResponsiveness считает голосовавших участников внутри этого скользящего окна. */
     const val DEMAND_WINDOW_DAYS = 90L
 
-    /** Signals older than this are not read at all (cheap scan; weight is < 0.13 by then anyway). */
+    /** Сигналы старше этого не читаются вовсе (дешёвый скан; вес к тому моменту всё равно < 0.13). */
     const val HARD_CUTOFF_DAYS = 365L
 
-    /** A payer who left within this many days of paying is the "paid then ghosted" scam signature. */
+    /** Плательщик, ушедший в течение стольких дней после оплаты, — сигнатура скама «заплатил и исчез». */
     const val SCAM_LEFT_WINDOW_DAYS = 14L
 
-    // ---- Composite weights (paid club). Money + core = 65% — the most expensive axes to farm. ----
+    // ---- Веса композита (платный клуб). Деньги + ядро = 65% — самые дорогие для фарма оси. ----
 
-    const val W_DIVERSITY = 0.35
-    const val W_PAYING = 0.30
-    const val W_DEMAND = 0.20
-    const val W_ACTIVITY = 0.15
+    const val W_DIVERSITY = 0.35 // вес оси CoreDiversity (разнообразие ядра)
+    const val W_PAYING = 0.30 // вес оси PayingRetention (удержание плательщиков)
+    const val W_DEMAND = 0.20 // вес оси DemandResponsiveness (отклик на спрос)
+    const val W_ACTIVITY = 0.15 // вес оси LiveActivity (живая активность)
 
-    // Free club: PayingRetention is off; its 0.30 redistributes proportionally onto the other three.
+    // Бесплатный клуб: PayingRetention выключена; её 0.30 пропорционально перераспределяется на три остальные.
     const val W_DIVERSITY_FREE = W_DIVERSITY / (1 - W_PAYING) // 0.50
     const val W_DEMAND_FREE = W_DEMAND / (1 - W_PAYING) // ≈0.286
     const val W_ACTIVITY_FREE = W_ACTIVITY / (1 - W_PAYING) // ≈0.214
 
-    // ---- Saturating normalization anchors (so axes in different units add commensurably) ----
-    // norm(x) = 1 − 0.5^(x/anchor): reaches 0.5 at the anchor, saturates toward 1.
+    // ---- Якоря насыщающей нормализации (чтобы оси в разных единицах складывались соизмеримо) ----
+    // norm(x) = 1 − 0.5^(x/anchor): достигает 0.5 в точке якоря, насыщается к 1.
 
-    const val ANCHOR_DIVERSITY = 12.0
-    const val ANCHOR_PAYING = 8.0
-    const val ANCHOR_DEMAND = 12.0
-    const val ANCHOR_ACTIVITY = 6.0
+    const val ANCHOR_DIVERSITY = 12.0 // якорь оси CoreDiversity (взвешенная сумма, дающая norm = 0.5)
+    const val ANCHOR_PAYING = 8.0 // якорь оси PayingRetention
+    const val ANCHOR_DEMAND = 12.0 // якорь оси DemandResponsiveness
+    const val ANCHOR_ACTIVITY = 6.0 // якорь оси LiveActivity
 
-    /** A payer who left ≤14d after paying (scam signature) contributes at this fraction. */
+    /** Плательщик, ушедший ≤14 дней после оплаты (сигнатура скама), учитывается с этим коэффициентом. */
     const val SCAM_PAYER_FACTOR = 0.5
 
-    // ---- Credibility weight buckets ----
+    // ---- Корзины веса credibility ----
 
-    const val AGE_W_MATURE = 1.0 // ≥180d
-    const val AGE_W_ESTABLISHED = 0.8 // 90–180d
-    const val AGE_W_RECENT = 0.6 // 30–90d
-    const val AGE_W_FRESH = 0.4 // <30d
+    const val AGE_W_MATURE = 1.0 // возраст аккаунта ≥180 дней
+    const val AGE_W_ESTABLISHED = 0.8 // 90–180 дней
+    const val AGE_W_RECENT = 0.6 // 30–90 дней
+    const val AGE_W_FRESH = 0.4 // <30 дней
 
-    const val SIGNAL_W_BASE = 0.6
-    const val SIGNAL_W_USERNAME = 0.2
-    const val SIGNAL_W_AVATAR = 0.2
+    const val SIGNAL_W_BASE = 0.6 // базовый вес профильных сигналов аккаунта
+    const val SIGNAL_W_USERNAME = 0.2 // надбавка за наличие username
+    const val SIGNAL_W_AVATAR = 0.2 // надбавка за наличие аватара
 
-    const val FOOTPRINT_W_BROAD = 1.0 // ≥3 distinct owners
-    const val FOOTPRINT_W_SOME = 0.85 // 2 owners
-    const val FOOTPRINT_W_SINGLE = 0.6 // 1 owner (sock-puppet sits in one operator's clubs)
+    const val FOOTPRINT_W_BROAD = 1.0 // футпринт у ≥3 различных владельцев клубов
+    const val FOOTPRINT_W_SOME = 0.85 // 2 владельца
+    const val FOOTPRINT_W_SINGLE = 0.6 // 1 владелец (sock-puppet сидит в клубах одного оператора)
 
-    /** If ≥ this share of an account's footprint is in THIS club's owner's clubs, it is not independent
-     *  evidence of quality → credibility pressed to CRED_MIN (the lightweight co-occurrence check). */
+    /** Если ≥ этой доли футпринта аккаунта приходится на клубы владельца ЭТОГО клуба — это не независимое
+     *  свидетельство качества → credibility прижимается к CRED_MIN (лёгкая проверка co-occurrence). */
     const val OWNER_CONCENTRATION_THRESHOLD = 0.6
 
-    // ---- Negative penalties (subtracted from the [0,1] base, capped, decayed) ----
-    // Magnitudes are on the normalized [0,1] scale so a few incidents dent the score without auto-zeroing.
+    // ---- Негативные штрафы (вычитаются из базы [0,1], с потолком, с затуханием) ----
+    // Величины — на нормализованной шкале [0,1]: пара инцидентов вминает скор, но не обнуляет его автоматом.
 
-    const val DISPUTE_W = 0.05
-    const val DISPUTE_CAP = 0.30
-    const val GHOST_W = 0.07
-    const val GHOST_CAP = 0.40
-    const val SOFT_W = 0.03 // each of auto-reject / skladchina-ghost
-    const val SOFT_CAP = 0.20 // joint cap on the two soft penalties
+    const val DISPUTE_W = 0.05 // штраф за один диспут посещаемости
+    const val DISPUTE_CAP = 0.30 // потолок суммарного штрафа за диспуты
+    const val GHOST_W = 0.07 // штраф за один ghosting-инцидент
+    const val GHOST_CAP = 0.40 // потолок суммарного штрафа за ghosting
+    const val SOFT_W = 0.03 // за каждый из мягких сигналов: auto-reject / skladchina-ghost
+    const val SOFT_CAP = 0.20 // общий потолок на два мягких штрафа
 
-    // ---- Multipliers ----
+    // ---- Множители ----
 
-    /** "Too clean at volume" dampener: a sizeable club with zero disputes/ghosting/churn over the
-     *  window is statistically suspicious (a smooth ring). One trigger, −0.1. */
-    const val ANOMALY_CLEAN_MIN_CORE = 10
-    const val ANOMALY_STEP = 0.1
-    const val ANOMALY_FLOOR = 0.7
+    /** Демпфер «слишком чисто при объёме»: заметный клуб с нулём диспутов/ghosting/оттока за окно
+     *  статистически подозрителен (гладкое кольцо). Один триггер, −0.1. */
+    const val ANOMALY_CLEAN_MIN_CORE = 10 // размер ядра, с которого «слишком чисто» становится подозрительным
+    const val ANOMALY_STEP = 0.1 // шаг снижения множителя за сработавший триггер аномалии
+    const val ANOMALY_FLOOR = 0.7 // нижняя граница anomaly-множителя
 
-    /** A club younger than this gets a proportional weight (thin history isn't full evidence). */
+    /** Клуб моложе этого возраста получает пропорциональный вес (тонкая история — не полное свидетельство). */
     const val TENURE_FULL_DAYS = 90.0
 
-    // ---- "★ Топ-5 в категории" badge gates ----
+    // ---- Гейты бейджа «★ Топ-5 в категории» ----
 
-    /** A category needs at least this many ranked clubs (after the per-owner cap) before the badge can
-     *  appear — you cannot be "top-5" of three. Keeps the badge a real selection, not a participation
-     *  trophy. Sized deliberately so it is RARE on a small prod (honest absence over false stars). */
+    /** Категории нужно минимум столько ранжированных клубов (после per-owner cap), чтобы бейдж вообще
+     *  появился — нельзя быть «топ-5» из трёх. Держит бейдж реальным отбором, а не призом за участие.
+     *  Размер выбран намеренно так, чтобы на маленьком проде бейдж был РЕДКИМ (честное отсутствие
+     *  лучше фальшивых звёзд). */
     const val MIN_CATEGORY_SIZE = 6
 
-    /** Absolute score floor: even at position ≤5, a club barely over the K gate falls below this and
-     *  gets no badge. The badge means "good AND top-of-category", not "top of a thin category". */
+    /** Абсолютный пол скора: даже на позиции ≤5 клуб, едва переваливший K-гейт, оказывается ниже
+     *  и бейджа не получает. Бейдж значит «хороший И топ категории», а не «топ жидкой категории». */
     const val BADGE_SCORE_FLOOR = 0.20
 
-    /** A position-≤5 club must beat the 6th club by at least this margin; if #5 and #6 are
-     *  indistinguishable, no real selection happened → no badge at the boundary. */
+    /** Клуб на позиции ≤5 обязан обгонять шестой клуб минимум на этот отрыв; если #5 и #6
+     *  неразличимы — реального отбора не случилось → на границе бейджа нет. */
     const val SELECTIVITY_EPS = 0.05
 
-    /** Until at least this many clubs are ranked prod-wide, the badge is suppressed for ALL clubs — the
-     *  explicit "rank not meaningful yet" kill-switch (separate from the deploy feature flag). */
+    /** Пока по всему проду ранжировано меньше стольких клубов, бейдж подавлен у ВСЕХ клубов —
+     *  явный kill-switch «ранг ещё не осмыслен» (отдельный от деплойного feature-флага). */
     const val GLOBAL_RANK_FLOOR = 8
 
-    /** Owner-concentration co-occurrence collapse is the v1 defense; the full cross-club graph is a
-     *  documented stub (=1.0) until a real attack triggers it (design §5). */
+    /** Схлопывание по owner-концентрации (co-occurrence) — защита v1; полный кросс-клубовый граф —
+     *  задокументированная заглушка (=1.0), пока её не активирует реальная атака (дизайн §5). */
     const val CO_OCCURRENCE_COLLAPSE = 1.0
 
-    /** No secondary ownership market yet → transfer probation is a documented stub. */
+    /** Вторичного рынка владения клубами пока нет → transfer probation — задокументированная заглушка. */
     const val TRANSFER_PROBATION = 1.0
 
-    // ---- Pure helpers ----
+    // ---- Чистые хелперы ----
 
-    /** Recency decay weight in (0,1]. Future-dated rows (clock skew) are treated as fresh (weight 1). */
+    /** Вес recency-decay в (0,1]. Строки с датой из будущего (перекос часов) считаются свежими (вес 1). */
     fun decay(occurredAt: OffsetDateTime, now: OffsetDateTime, halfLifeDays: Double): Double {
         val ageDays = (now.toEpochSecond() - occurredAt.toEpochSecond()) / 86_400.0
         return 0.5.pow((if (ageDays < 0.0) 0.0 else ageDays) / halfLifeDays)
     }
 
-    /** Saturating normalization to [0,1): reaches 0.5 at [anchor]. */
+    /** Насыщающая нормализация в [0,1): достигает 0.5 в точке [anchor]. */
     fun norm(x: Double, anchor: Double): Double = 1.0 - 0.5.pow(x / anchor)
 
     private fun ageW(createdAt: OffsetDateTime, now: OffsetDateTime): Double {
@@ -198,8 +201,8 @@ object ClubRankPolicy {
             else -> FOOTPRINT_W_BROAD
         }
 
-    /** Share of an account's kept-outcome clubs that belong to [ownerId]. 0 when the account has no
-     *  footprint (a member with no kept outcome anywhere yet). */
+    /** Доля клубов с kept-outcome у аккаунта, принадлежащих [ownerId]. 0, если у аккаунта нет
+     *  футпринта (участник, у которого нигде ещё нет kept-outcome). */
     private fun ownerConcentration(footprintByOwner: Map<UUID, Int>, ownerId: UUID): Double {
         val total = footprintByOwner.values.sum()
         if (total == 0) return 0.0
@@ -207,9 +210,10 @@ object ClubRankPolicy {
     }
 
     /**
-     * Credibility weight of one account toward THIS club, in [0,1]. An account whose footprint is
-     * dominated by this owner's own clubs is pressed to [CRED_MIN] (not independent evidence). The
-     * result is NOT floored otherwise — the caller drops accounts below [CRED_MIN] from the gate/axes.
+     * Вес credibility одного аккаунта для ЭТОГО клуба, в [0,1]. Аккаунт, чей футпринт доминируется
+     * клубами этого же владельца, прижимается к [CRED_MIN] (не независимое свидетельство). В остальных
+     * случаях результат НЕ подрезается снизу — вызывающий сам выкидывает аккаунты ниже [CRED_MIN]
+     * из гейта/осей.
      */
     fun credibility(input: CredibilityInput, ownerId: UUID, now: OffsetDateTime): Double {
         if (ownerConcentration(input.footprintByOwner, ownerId) >= OWNER_CONCENTRATION_THRESHOLD) {
@@ -219,8 +223,8 @@ object ClubRankPolicy {
             .coerceAtMost(1.0)
     }
 
-    /** Decayed, credibility-weighted sum over a distinct-account axis, after the per-account credibility
-     *  floor. [extraFactor] applies a per-account adjustment (e.g. scam-payer ×0.5); default 1.0. */
+    /** Затухающая, credibility-взвешенная сумма по оси distinct-аккаунтов после per-account пола
+     *  credibility. [extraFactor] — поправка на аккаунт (например, scam-плательщик ×0.5); дефолт 1.0. */
     private fun weightedAxis(
         accounts: List<AccountOutcome>,
         cred: Map<UUID, Double>,
@@ -235,8 +239,8 @@ object ClubRankPolicy {
         times.sumOf { decay(it, now, halfLife) }
 
     /**
-     * Compute the L3 rank for one club. [credibilityInputs] is keyed by userId (shared across clubs).
-     * Returns the stored outcome; [ClubRank.isRanked] = passed the credibility-weighted K gate.
+     * Считает L3-ранг одного клуба. [credibilityInputs] ключуется по userId (общие между клубами).
+     * Возвращает сохраняемый результат; [ClubRank.isRanked] = прошёл credibility-взвешенный K-гейт.
      */
     fun computeRank(
         signals: ClubRankSignals,
@@ -247,7 +251,7 @@ object ClubRankPolicy {
             it.userId to credibility(it, signals.ownerId, now)
         }
 
-        // Existence gate: Σ credibility over the credible core (each account ≥ CRED_MIN).
+        // Гейт существования: Σ credibility по credible-ядру (каждый аккаунт ≥ CRED_MIN).
         val effectiveK = signals.core.sumOf { (cred[it.userId] ?: 0.0).let { c -> if (c < CRED_MIN) 0.0 else c } }
         val isRanked = effectiveK >= EFFECTIVE_K
 
@@ -255,13 +259,13 @@ object ClubRankPolicy {
             return ClubRank(signals.clubId, signals.ownerId, signals.category, 0.0, false, effectiveK)
         }
 
-        // Axes — absolutes, decayed, credibility-weighted; below the per-axis floor ⇒ 0.
-        // Diversity has no separate head-count floor: the credibility-weighted gate (effectiveK ≥
-        // EFFECTIVE_K) already guarantees a real core, and a count floor would reintroduce exactly the
-        // count-based gate the design rejected.
+        // Оси — абсолюты, с затуханием, credibility-взвешенные; ниже пола оси ⇒ 0.
+        // У Diversity нет отдельного поголовного пола: credibility-взвешенный гейт (effectiveK ≥
+        // EFFECTIVE_K) уже гарантирует реальное ядро, а пол по счётчику вернул бы ровно тот
+        // count-гейт, который дизайн отверг.
         val diversityRaw = weightedAxis(signals.core, cred, now)
-        // payers = first-payment (subscription) accounts; renewers = the disjoint renewal loyalty bonus.
-        // The two populations are partitioned in the repository, so a renewer is never counted twice.
+        // payers = аккаунты с первой оплатой (подпиской); renewers = непересекающийся бонус лояльности
+        // за продления. Популяции разделены в репозитории, поэтому продливший не считается дважды.
         val payingRaw = if (signals.isPaid && signals.payers.size >= PAY_MIN) {
             weightedAxis(signals.payers, cred, now) { uid ->
                 if (uid in signals.scamPayers) SCAM_PAYER_FACTOR else 1.0
@@ -308,7 +312,7 @@ object ClubRankPolicy {
         return ClubRank(signals.clubId, signals.ownerId, signals.category, rankScore, true, effectiveK)
     }
 
-    /** Anomaly multiplier in [ANOMALY_FLOOR, 1.0]. v1 = one trigger ("too clean at volume"). */
+    /** Anomaly-множитель в [ANOMALY_FLOOR, 1.0]. v1 = один триггер («слишком чисто при объёме»). */
     private fun anomalyMultiplier(signals: ClubRankSignals): Double {
         var m = 1.0
         val tooCleanAtVolume = signals.core.size >= ANOMALY_CLEAN_MIN_CORE &&
@@ -318,10 +322,10 @@ object ClubRankPolicy {
     }
 
     /**
-     * The clubs that earn "★ Топ-5 в категории", from all ranked clubs prod-wide. Applies, in order:
-     * the deploy feature flag, the global rank floor kill-switch, per-owner collapse (max 1 club per
-     * owner per category — kills category manufacturing), MIN_CATEGORY_SIZE, position ≤5, the absolute
-     * score floor, and the selectivity margin over the 6th club. Returns the badged clubIds.
+     * Клубы, заслужившие «★ Топ-5 в категории», из всех ранжированных клубов прода. Применяет по
+     * порядку: деплойный feature-флаг, kill-switch глобального пола ранга, per-owner collapse
+     * (максимум 1 клуб на владельца в категории — убивает фабрикацию категорий), MIN_CATEGORY_SIZE,
+     * позицию ≤5, абсолютный пол скора и отрыв селективности от шестого клуба. Возвращает clubId с бейджем.
      */
     fun topInCategory(ranked: List<RankedClub>, badgeEnabled: Boolean): Set<UUID> {
         if (!badgeEnabled) return emptySet()
@@ -329,7 +333,7 @@ object ClubRankPolicy {
 
         val badged = mutableSetOf<UUID>()
         ranked.groupBy { it.category }.forEach { (_, clubsInCategory) ->
-            // Per-owner collapse: keep only each owner's best club, so one operator can't populate it.
+            // Per-owner collapse: оставляем только лучший клуб каждого владельца — один оператор не заселит категорию.
             val perOwnerBest = clubsInCategory
                 .groupBy { it.ownerId }
                 .map { (_, clubs) -> clubs.maxBy { it.rankScore } }
@@ -337,7 +341,7 @@ object ClubRankPolicy {
 
             if (perOwnerBest.size < MIN_CATEGORY_SIZE) return@forEach
 
-            val sixthScore = perOwnerBest[5].rankScore // exists: size ≥ MIN_CATEGORY_SIZE ≥ 6
+            val sixthScore = perOwnerBest[5].rankScore // существует: size ≥ MIN_CATEGORY_SIZE ≥ 6
             perOwnerBest.take(5).forEach { club ->
                 if (club.rankScore >= BADGE_SCORE_FLOOR && club.rankScore - sixthScore >= SELECTIVITY_EPS) {
                     badged += club.clubId

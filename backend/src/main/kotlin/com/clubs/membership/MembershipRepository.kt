@@ -5,67 +5,71 @@ import java.util.UUID
 
 interface MembershipRepository {
 
-    // Lookups
+    // Поиск
     fun findActiveByUserAndClub(userId: UUID, clubId: UUID): Membership?
     fun findByUserAndClub(userId: UUID, clubId: UUID): Membership?
     fun findById(id: UUID): Membership?
     fun findByUserId(userId: UUID): List<Membership>
     fun findClubMembersWithUserInfo(clubId: UUID, includeFrozen: Boolean = false): List<ClubMemberInfo>
     fun findUserClubsWithReputation(userId: UUID): List<UserClubReputationInfo>
-    /** `frozen` members across every active club owned by [ownerId] — the cross-club «Ждут оплаты» feed. */
+    /** Участники в статусе `frozen` по всем активным клубам, которыми владеет [ownerId] — кросс-клубовая
+     *  лента «Ждут оплаты». */
     fun findFrozenMembersByOwner(ownerId: UUID): List<OrganizerDuesMember>
-    /** `frozen` members who declared a dues payment (claim pending) across [ownerId]'s clubs — drives the
-     *  «Мои клубы» dot so a paid-and-waiting member is noticed without opening the tab. */
+    /** Участники в статусе `frozen`, заявившие об оплате взноса (claim pending), по всем клубам [ownerId] —
+     *  питает точку-индикатор на «Мои клубы», чтобы оплативший и ждущий участник был замечен без захода в таб. */
     fun countClaimedFrozenByOwner(ownerId: UUID): Int
     fun findExpiryRefByUserAndClub(userId: UUID, clubId: UUID): MembershipExpiryRef?
 
-    // Predicates / counts
+    // Предикаты / счётчики
     fun isMember(userId: UUID, clubId: UUID): Boolean
     fun isActiveMemberInActiveClub(userId: UUID, clubId: UUID): Boolean
     fun countActiveByClubId(clubId: UUID): Int
-    /** Active members excluding the organizer, across [clubIds] — organizer trust card «доверяют N участников». */
+    /** Активные участники без организатора, по всем [clubIds] — карточка доверия организатора «доверяют N участников». */
     fun countActiveNonOrganizerMembersInClubs(clubIds: Collection<UUID>): Int
 
-    // Mutations
+    // Мутации
     fun create(userId: UUID, clubId: UUID): Membership
     fun createFrozen(userId: UUID, clubId: UUID): Membership
     fun createOrganizer(userId: UUID, clubId: UUID): Membership
     fun reactivateFree(membershipId: UUID): Membership
     fun reactivateFrozen(membershipId: UUID): Membership
     fun cancel(membershipId: UUID)
-    /** Organizer kick: cancel the membership AND clear the paid window so the member loses access
-     *  immediately (no leave-style grace until expiry). Returns rows affected (0 = already gone / race). */
+    /** Кик организатором: отменяет membership И очищает окно оплаты, чтобы участник немедленно
+     *  терял доступ (без grace-периода до expiry, как при обычном выходе). Возвращает число затронутых
+     *  строк (0 = уже удалён / гонка). */
     fun remove(membershipId: UUID): Int
     fun activateSubscription(userId: UUID, clubId: UUID, expiresAt: OffsetDateTime): UUID
     fun renewSubscription(membershipId: UUID, newExpiresAt: OffsetDateTime)
 
-    // Access gate (de-Stars, Slice 2) — organizer-controlled freeze + dues tracking. Each returns
-    // rows-affected so the service can guard the optimistic status transition (0 = lost the race → 409).
+    // Access gate (de-Stars, слой 2) — контролируемая организатором заморозка + учёт взносов. Каждый метод
+    // возвращает число затронутых строк, чтобы сервис мог защитить оптимистичный переход статуса (0 = гонка проиграна → 409).
     fun freezeAccess(membershipId: UUID): Int
     fun unfreezeAccess(membershipId: UUID): Int
     fun markDuesPaid(membershipId: UUID, markedBy: UUID, accessUntil: OffsetDateTime): Int
     fun unmarkDues(membershipId: UUID): Int
 
-    // Member-initiated dues claim (de-Stars): the frozen member declares they paid (method "sbp"/"cash";
-    // proofUrl = screenshot for sbp, null for cash). Guarded on status=frozen (0 rows → no longer frozen).
+    // Заявление участника об оплате взноса (de-Stars): замороженный участник заявляет, что оплатил
+    // (method "sbp"/"cash"; proofUrl = скриншот для sbp, null для cash). Защищено условием status=frozen
+    // (0 строк → больше не frozen).
     fun claimDues(membershipId: UUID, method: String, proofUrl: String?): Int
 
-    // Member admin profile (S1) — organizer manually sets the access window end / a private note.
-    /** Grants access until a custom date (status→active, clears frozen). Manual override, not a dues confirm. */
+    // Member admin profile (S1) — организатор вручную задаёт конец окна доступа / приватную заметку.
+    /** Даёт доступ до произвольной даты (status→active, снимает frozen). Ручное переопределение,
+     *  не подтверждение оплаты взноса. */
     fun setAccessUntil(membershipId: UUID, accessUntil: OffsetDateTime): Int
-    /** Sets the private organizer note (null = clears it). */
+    /** Задаёт приватную заметку организатора (null = очищает её). */
     fun updateOrganizerNote(membershipId: UUID, note: String?): Int
 
-    // Lifecycle / scheduler (honor-system access window)
+    // Жизненный цикл / планировщик (honor-system окно доступа)
     fun findExpiringWithin(now: OffsetDateTime, threshold: OffsetDateTime): List<ExpiringSubscriptionNotification>
     fun findActiveExpired(now: OffsetDateTime): List<ExpiringSubscriptionNotification>
-    /** Drops every `active` membership whose access window (subscription_expires_at) has passed to `frozen`. */
+    /** Переводит в `frozen` каждый membership в статусе `active`, чьё окно доступа (subscription_expires_at) истекло. */
     fun expireOverdueAccess(now: OffsetDateTime): Int
-    /** Count of soon-expiring members across [clubIds] — feeds the «Управление» red-dot badge. */
+    /** Число скоро истекающих участников по всем [clubIds] — питает red-dot бейдж на «Управление». */
     fun countExpiringSoonByClubs(clubIds: Collection<UUID>, now: OffsetDateTime, threshold: OffsetDateTime): Int
-    /** Count of `frozen` members (awaiting dues confirmation) across [clubIds] — also lights the red-dot. */
+    /** Число участников в статусе `frozen` (ждут подтверждения взноса) по всем [clubIds] — тоже зажигает red-dot. */
     fun countFrozenByClubs(clubIds: Collection<UUID>): Int
 
-    // Bot/notification
+    // Бот/уведомления
     fun findMemberTelegramIds(clubId: UUID): List<Long>
 }

@@ -1,7 +1,7 @@
 import { pluralRu } from '../../utils/formatters';
 import type { ClubStatsDto, TrendDto } from '../../types/api';
 
-/** Visual tone of a metric value. */
+/** Визуальный тон значения метрики. */
 export type Tone = 'bad' | 'ok' | 'neutral';
 
 export interface LeverVM {
@@ -16,7 +16,7 @@ export interface NudgeVM {
   key: string;
   icon: string;
   severity: 'normal' | 'red';
-  /** Bold call-to-action; [rest] is the normal-weight continuation. */
+  /** Жирный call-to-action; [rest] — продолжение обычным начертанием. */
   lead: string;
   rest: string;
 }
@@ -28,8 +28,11 @@ export interface AttentionVM {
   tone: Tone;
 }
 
+// Процент, от которого метрика читается зелёной (tone 'ok').
 const GOOD_PCT = 75;
+// Процент, ниже которого метрика читается красной (tone 'bad'); между порогами — нейтрально.
 const BAD_PCT = 50;
+// Порог вовлечённости: ниже него срабатывает nudge «напомните о встрече».
 const ENGAGEMENT_NUDGE_THRESHOLD = 70;
 
 function pctTone(value: number): Tone {
@@ -38,7 +41,7 @@ function pctTone(value: number): Tone {
   return 'neutral';
 }
 
-/** Growth levers, adapted to the club type (§9.3). Only applicable levers are returned. */
+/** Рычаги роста, адаптированные под тип клуба (§9.3). Возвращаются только применимые. */
 export function buildLevers(s: ClubStatsDto): LeverVM[] {
   const levers: LeverVM[] = [];
 
@@ -101,7 +104,7 @@ export function buildLevers(s: ClubStatsDto): LeverVM[] {
   return levers;
 }
 
-/** Actionable nudges tied to the levers — a fixed whitelist (§9.5), only the firing ones returned. */
+/** Действенные nudge'и, привязанные к рычагам — фиксированный whitelist (§9.5); возвращаются только сработавшие. */
 export function buildNudges(s: ClubStatsDto): NudgeVM[] {
   const nudges: NudgeVM[] = [];
 
@@ -143,7 +146,7 @@ export function buildNudges(s: ClubStatsDto): NudgeVM[] {
   return nudges;
 }
 
-/** Owner-only «Надёжность организатора» negatives (§9.5). 0 reads green (clean), any count is neutral. */
+/** Owner-only негативы «Надёжности организатора» (§9.5). 0 читается зелёным (чисто), любое число — нейтрально. */
 export function buildAttention(s: ClubStatsDto): AttentionVM[] {
   const items: AttentionVM[] = [
     {

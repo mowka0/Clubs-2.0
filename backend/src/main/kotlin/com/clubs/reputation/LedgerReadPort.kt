@@ -3,26 +3,28 @@ package com.clubs.reputation
 import java.util.UUID
 
 /**
- * Narrow read-port the `reputation` module exposes so `clubquality` (L3 hidden rank) can consume
- * ledger-derived credibility inputs WITHOUT importing [JooqReputationRepository] or any Trust type
- * directly — the module-boundary rule (`principles.md`, design §10: "features don't import each
- * other directly"). The port returns only distinct-club COUNTS grouped by owner, never a Trust
- * magnitude, which keeps the structural invariant **club-L3 ≠ average member-Trust** machine-enforced:
- * a `clubquality` caller physically cannot reach a Trust number through this surface. The counts are
- * used only for owner-counting (footprintW) and the owner-concentration share — never as a score.
+ * Узкий read-порт, который модуль `reputation` выставляет наружу, чтобы `clubquality` (скрытый ранг
+ * L3) мог получать credibility-входы из леджера БЕЗ прямого импорта [JooqReputationRepository] или
+ * любого Trust-типа — правило границ модулей (`principles.md`, design §10: «фичи не импортируют друг
+ * друга напрямую»). Порт возвращает только КОЛИЧЕСТВА уникальных клубов, сгруппированные по владельцу,
+ * и никогда — величину Trust, поэтому структурный инвариант **L3 клуба ≠ средний Trust участников**
+ * обеспечивается механически: вызывающий из `clubquality` физически не может добраться до числа Trust
+ * через эту поверхность. Количества используются только для подсчёта владельцев (footprintW) и доли
+ * концентрации на одном владельце — никогда как очки.
  */
 interface LedgerReadPort {
 
     /**
-     * Cross-owner ledger footprint for each given user: a map `ownerId → distinct clubs owned by that
-     * owner where the user earned a KEPT outcome`. "Kept" = `ironclad` / `spontaneous` ONLY —
-     * `skladchina_paid` is owner-authorable (organizer flips `paid` with no `charge_id`) and is banned
-     * from every L3 input (anti-farm invariant #1).
+     * Кросс-владельческий footprint по леджеру для каждого пользователя: map
+     * `ownerId → число уникальных клубов этого владельца, где пользователь заработал KEPT-исход`.
+     * «Kept» = ТОЛЬКО `ironclad` / `spontaneous` — `skladchina_paid` проставляется самим владельцем
+     * (организатор переключает `paid` без `charge_id`) и запрещён во всех входах L3
+     * (анти-фарм инвариант #1).
      *
-     * Powers the L3 credibility weight: the count of distinct OWNERS is the Sybil-tax (an account
-     * earning outcomes across many independent owners is expensive to fake), and the share concentrated
-     * in one owner's clubs is the sock-puppet signature. Empty input → empty map; a user with no kept
-     * outcomes is simply absent.
+     * Питает credibility-вес L3: число уникальных ВЛАДЕЛЬЦЕВ — это Sybil-налог (аккаунт,
+     * зарабатывающий исходы у многих независимых владельцев, дорого подделать), а доля,
+     * сконцентрированная в клубах одного владельца, — сигнатура sock-puppet'а. Пустой вход →
+     * пустая map; пользователь без kept-исходов просто отсутствует.
      */
     fun footprintByUser(userIds: Collection<UUID>): Map<UUID, Map<UUID, Int>>
 }

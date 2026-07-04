@@ -20,7 +20,7 @@ function rubToKopecks(rub: string): number | null {
   return Math.round(v * 100);
 }
 
-// split_bill preset: deadline +48h (the bill isn't on fire).
+// Пресет для split_bill: срок +48ч (счёт не горит).
 function defaultDeadlineLocal(): string {
   const d = new Date();
   d.setDate(d.getDate() + 2);
@@ -37,10 +37,10 @@ function createErrorMessage(e: unknown): string {
 }
 
 /**
- * "Разделить счёт" (split_bill) creation — entry-agnostic. Reached either from a finished event
- * ("🧾 Разделить счёт" → `?eventId=`) or from the "+" template picker (no eventId → pick a past
- * event here). Participants come from organizer-marked attendance on the backend; this form only
- * needs the bill, the payment link and the deadline.
+ * Создание "Разделить счёт" (split_bill) — не зависит от точки входа. Попасть сюда можно либо
+ * с завершённого события ("🧾 Разделить счёт" → `?eventId=`), либо из пикера шаблонов "+"
+ * (без eventId → выбор прошедшего события здесь). Участники берутся из явки, отмеченной
+ * организатором на бэкенде; этой форме нужны только сумма чека, платёжная ссылка и срок.
  */
 export const CreateSplitBillPage: FC = () => {
   useBackButton(true);
@@ -133,7 +133,7 @@ export const CreateSplitBillPage: FC = () => {
     }
   };
 
-  // --- Step 1: pick a past event (only when none was passed in) ---
+  // --- Шаг 1: выбор прошедшего события (только если оно не передано заранее) ---
   if (!selectedEventId) {
     const events = completedQuery.data?.content ?? [];
     return (
@@ -164,7 +164,7 @@ export const CreateSplitBillPage: FC = () => {
     );
   }
 
-  // --- Step 2: the bill form for the chosen event ---
+  // --- Шаг 2: форма счёта для выбранного события ---
   const attendanceLoading = eventQuery.isPending || respondersQuery.isPending;
   const notEnoughAttended = !attendanceLoading && chargedCount < 2;
 

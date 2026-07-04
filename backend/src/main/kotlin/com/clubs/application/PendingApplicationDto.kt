@@ -4,11 +4,11 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * Pending application card for the organizer cross-club inbox on MyClubsPage.
- * Enriched with applicant identity, peer-signal aggregate, and club brief so
- * the frontend renders the list without N+1 follow-ups.
+ * Карточка ожидающей заявки для кросс-клубового инбокса организатора на MyClubsPage.
+ * Обогащена личностью заявителя, агрегатом peer-сигналов и краткой информацией о клубе,
+ * чтобы фронтенд рендерил список без N+1 доп. запросов.
  *
- * See docs/modules/applications-inbox.md § "GET /api/users/me/applications-pending".
+ * См. docs/modules/applications-inbox.md § "GET /api/users/me/applications-pending".
  */
 data class PendingApplicationDto(
     val applicationId: UUID,
@@ -33,17 +33,17 @@ data class ApplicantInfoDto(
 )
 
 /**
- * Cross-club applicant signal for the organizer review card. Backend returns raw counts; phrasing
- * happens on the frontend.
+ * Кросс-клубовый сигнал о заявителе для карточки review организатора. Бэкенд возвращает сырые
+ * счётчики; формулировки формируются на фронтенде.
  *
- * Participation counts (from `user_club_reputation`, see docs/modules/reputation.md):
- *  - memberClubCount    = number of clubs with a reputation row for the user.
- *  - totalConfirmations = sum of stage-2 commitments (final "идёт"/"не идёт").
- *  - totalAttendances   = sum of actually-attended events from those commitments.
+ * Счётчики участия (из `user_club_reputation`, см. docs/modules/reputation.md):
+ *  - memberClubCount    = число клубов, где у пользователя есть строка репутации.
+ *  - totalConfirmations = сумма подтверждений Этапа 2 (финальное "идёт"/"не идёт").
+ *  - totalAttendances   = сумма реально посещённых событий из этих подтверждений.
  *
- * Cross-club reputation (on-read from the ledger, see [com.clubs.reputation.ApplicantSignalService]):
- *  - reliableClubs / trackRecordClubs = the "надёжен в N из M клубов" donut.
- *  - level / levelName / levelTier     = global gamification level (others projection) for the pill.
+ * Кросс-клубовая репутация (вычисляется on-read из леджера, см. [com.clubs.reputation.ApplicantSignalService]):
+ *  - reliableClubs / trackRecordClubs = donut «надёжен в N из M клубов».
+ *  - level / levelName / levelTier     = глобальный геймификационный уровень (проекция «для других») для пилла.
  */
 data class PeerStatsDto(
     val memberClubCount: Int,
@@ -63,15 +63,15 @@ data class ClubBriefDto(
 )
 
 /**
- * Counter feeding the `/my-clubs` tab-dot indicator: pending applications across the caller's owned
- * clubs (organizer action). De-Stars Slice 2 removed the Stars "awaiting payment" counters — approve
- * creates the membership immediately, so that state no longer exists.
+ * Счётчик, питающий точку на вкладке `/my-clubs`: ожидающие заявки во всех клубах вызывающего,
+ * которыми он владеет (действие организатора). De-Stars Slice 2 убрал счётчики Stars «ожидает
+ * оплаты» — approve создаёт членство сразу, поэтому такого состояния больше не существует.
  *
- * See docs/modules/applications-inbox.md § "GET /api/users/me/applications-pending-count".
+ * См. docs/modules/applications-inbox.md § "GET /api/users/me/applications-pending-count".
  */
 data class PendingApplicationsCountDto(
     val inboxCount: Int,
-    // De-Stars: frozen members who declared a dues payment across the caller's clubs — they're paid and
-    // awaiting the organizer's decision («Взнос получен» / «Отказать»). Lights the «Мои клубы» dot too.
+    // De-Stars: frozen-участники, заявившие об оплате взноса во всех клубах вызывающего — они оплатили
+    // и ждут решения организатора («Взнос получен» / «Отказать»). Тоже зажигает точку на «Мои клубы».
     val awaitingDuesCount: Int = 0
 )

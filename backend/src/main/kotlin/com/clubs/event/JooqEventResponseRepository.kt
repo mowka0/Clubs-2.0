@@ -73,9 +73,9 @@ class JooqEventResponseRepository(
             .fetchOne(0, Int::class.java) ?: 0
 
     override fun lockEventSlots(eventId: UUID) {
-        // Transaction-scoped: auto-released on commit/rollback, so no unlock call and no leak
-        // on exception. hashtext on a prefixed key — same pattern as JooqReputationRepository
-        // .recompute; the prefix keeps the key space distinct from the recompute locks.
+        // Лок в рамках транзакции: снимается автоматически при commit/rollback, поэтому unlock не
+        // нужен и не течёт при исключении. hashtext по префиксованному ключу — тот же паттерн, что
+        // в JooqReputationRepository.recompute; префикс отделяет это пространство ключей от локов recompute.
         dsl.execute("SELECT pg_advisory_xact_lock(hashtext(?))", "event-slots:$eventId")
     }
 
@@ -123,9 +123,9 @@ class JooqEventResponseRepository(
             .map(mapper::toDomain)
 
     override fun expireUnconfirmedForStartedEvents(now: OffsetDateTime): Int {
-        // Started, stage-2-triggered, non-cancelled events. Status-independent on purpose:
-        // EventCompletionService flips stage_2 -> completed after a 6h grace, so gating on
-        // status = stage_2 would miss no-confirms on events older than the grace.
+        // Начавшиеся события с запущенным stage-2, не отменённые. Независимость от статуса —
+        // намеренная: EventCompletionService переводит stage_2 -> completed после 6ч grace-периода,
+        // поэтому фильтр по status = stage_2 пропустил бы неподтверждённых на событиях старше grace.
         val startedTriggeredEventIds = dsl.select(EVENTS.ID)
             .from(EVENTS)
             .where(
@@ -217,28 +217,32 @@ class JooqEventResponseRepository(
         val target = if (attended) AttendanceStatus.attended else AttendanceStatus.absent
         return dsl.update(EVENT_RESPONSES)
             .set(EVENT_RESPONSES.ATTENDANCE, target)
-            // F5-16: a fresh organizer mark re-opens the dispute right (the participant may
-            // contest the NEW mark). Idempotent re-submits match 0 rows (IS DISTINCT FROM target
-            // below), so a previously resolved/terminal row is never re-opened by a no-op re-mark.
+            // F5-16: свежая отметка организатора заново открывает право на спор (участник может
+            // оспорить НОВУЮ отметку). Идемпотентные повторы затрагивают 0 строк (IS DISTINCT FROM
+            // target ниже), так что уже разрешённая/терминальная строка не переоткрывается
+            // повторной no-op отметкой.
             .set(EVENT_RESPONSES.DISPUTE_TERMINAL, false)
             .where(
                 EVENT_RESPONSES.EVENT_ID.eq(eventId)
                     .and(EVENT_RESPONSES.USER_ID.eq(userId))
-                    // Only the final roster is markable (PRD §4.4.3). A going/maybe voter
-                    // who never confirmed is not on it — reputation ignores non-confirmed
-                    // rows anyway, so marking them was a no-op that only cluttered the UI.
+                    // Отмечать можно только финальный ростер (PRD §4.4.3). Проголосовавший
+                    // going/maybe, но так и не подтвердивший — не в нём; репутация всё равно
+                    // игнорирует неподтверждённые строки, так что их отметка была no-op'ом,
+                    // только засорявшим UI.
                     .and(EVENT_RESPONSES.FINAL_STATUS.eq(FinalStatus.confirmed))
-                    // F5-15(1): never overwrite an active dispute — only resolveDispute may move
-                    // a `disputed` row. IS DISTINCT FROM, NOT <>: a first mark has attendance=NULL
-                    // and `NULL <> 'disputed'` is NULL (row silently skipped → happy-path broken).
+                    // F5-15(1): никогда не перезаписывать активный спор — только resolveDispute
+                    // может изменить строку в статусе `disputed`. IS DISTINCT FROM, а не <>: у первой
+                    // отметки attendance=NULL, и `NULL <> 'disputed'` даёт NULL (строка молча
+                    // пропускается → ломается happy-path).
                     .and(EVENT_RESPONSES.ATTENDANCE.isDistinctFrom(AttendanceStatus.disputed))
-                    // Only genuine transitions: an idempotent re-submit (row already at target)
-                    // matches 0 rows. So markedCount counts real changes and `updated > 0 && !attended`
-                    // means exactly "newly absent" for the DM (F5-15.2) without a prior-state read.
+                    // Только настоящие переходы: идемпотентный повтор (строка уже в целевом
+                    // состоянии) затрагивает 0 строк. Поэтому markedCount считает реальные изменения,
+                    // а `updated > 0 && !attended` означает ровно "стал отсутствующим только что" для
+                    // DM (F5-15.2) без чтения предыдущего состояния.
                     .and(EVENT_RESPONSES.ATTENDANCE.isDistinctFrom(target))
-                    // F5-09: never write attendance onto an already-finalized event (TOCTOU with the
-                    // finalizer). Subquery on EVENTS — event_responses.attendance_finalized is dead
-                    // (never written); the live flag lives on events.
+                    // F5-09: никогда не писать посещаемость по уже финализированному событию
+                    // (TOCTOU с финализатором). Подзапрос по EVENTS — event_responses.attendance_finalized
+                    // мёртвая колонка (никогда не пишется); актуальный флаг живёт в events.
                     .and(EVENT_RESPONSES.EVENT_ID.`in`(notFinalizedEvent(eventId)))
             )
             .execute()
@@ -252,14 +256,14 @@ class JooqEventResponseRepository(
                 EVENT_RESPONSES.EVENT_ID.eq(eventId)
                     .and(EVENT_RESPONSES.USER_ID.eq(userId))
                     .and(EVENT_RESPONSES.ATTENDANCE.eq(AttendanceStatus.absent))
-                    // F5-16: a resolved/terminal mark cannot be re-disputed (ping-pong). The dispute
-                    // endpoint has no authz beyond JWT, so this DB guard — not just the UI — is
-                    // load-bearing.
+                    // F5-16: разрешённую/терминальную отметку нельзя оспорить повторно (пинг-понг).
+                    // У endpoint'а спора нет авторизации кроме JWT, поэтому эта проверка на уровне
+                    // БД — не просто UI — несёт реальную нагрузку.
                     .and(EVENT_RESPONSES.DISPUTE_TERMINAL.isFalse)
-                    // F5-10 (ordering A): if the finalizer already committed attendance_finalized=true
-                    // the window is closed — refuse (no spurious disputed row, no false organizer DM).
-                    // ATT-2 (resolveExpiredDisputesToAbsent) remains the backstop for ordering B
-                    // (dispute commits before ATT-2 in the same finalize txn) — do NOT remove it.
+                    // F5-10 (порядок A): если финализатор уже закоммитил attendance_finalized=true,
+                    // окно закрыто — отказать (без лишней строки disputed, без ложной DM организатору).
+                    // ATT-2 (resolveExpiredDisputesToAbsent) остаётся подстраховкой для порядка B
+                    // (спор коммитится раньше ATT-2 в той же транзакции финализации) — НЕ удалять.
                     .and(EVENT_RESPONSES.EVENT_ID.`in`(notFinalizedEvent(eventId)))
             )
             .execute()
@@ -267,7 +271,7 @@ class JooqEventResponseRepository(
     override fun resolveDisputedAttendance(eventId: UUID, userId: UUID, attended: Boolean): Int =
         dsl.update(EVENT_RESPONSES)
             .set(EVENT_RESPONSES.ATTENDANCE, if (attended) AttendanceStatus.attended else AttendanceStatus.absent)
-            // F5-16: the organizer has ruled — the mark is terminal, no re-dispute.
+            // F5-16: организатор вынес решение — отметка терминальна, повторный спор невозможен.
             .set(EVENT_RESPONSES.DISPUTE_TERMINAL, true)
             .where(
                 EVENT_RESPONSES.EVENT_ID.eq(eventId)
@@ -280,24 +284,26 @@ class JooqEventResponseRepository(
         if (eventIds.isEmpty()) return 0
         return dsl.update(EVENT_RESPONSES)
             .set(EVENT_RESPONSES.ATTENDANCE, AttendanceStatus.absent)
-            // F5-16: the window expired with the dispute unresolved — the mark is terminal too
-            // (audit symmetry; attendance_finalized already blocks re-dispute, this is belt-and-suspenders).
+            // F5-16: окно истекло, спор не разрешён — отметка тоже становится терминальной
+            // (симметрия аудита; attendance_finalized уже блокирует повторный спор, это доп. подстраховка).
             .set(EVENT_RESPONSES.DISPUTE_TERMINAL, true)
             .where(
                 EVENT_RESPONSES.EVENT_ID.`in`(eventIds)
                     .and(EVENT_RESPONSES.ATTENDANCE.eq(AttendanceStatus.disputed))
-                    // Only the final (confirmed) roster feeds reputation. A disputed mark can only
-                    // exist on a confirmed row today (setAttendance guards on confirmed), but guard
-                    // here too so a non-confirmed disputed row (corruption / future change) can never
-                    // be silently mutated while the ledger ignores it. Mirrors setAttendance.
+                    // Только финальный (confirmed) ростер попадает в репутацию. Спорная отметка
+                    // сегодня может существовать только на confirmed-строке (setAttendance это
+                    // гарантирует), но проверка добавлена и здесь — чтобы неподтверждённая спорная
+                    // строка (порча данных / будущие изменения) никогда молча не мутировала, пока
+                    // леджер её игнорирует. Зеркалит setAttendance.
                     .and(EVENT_RESPONSES.FINAL_STATUS.eq(FinalStatus.confirmed))
             )
             .execute()
     }
 
-    // F5-09 / F5-10: "this event is not yet finalized" as a subquery on EVENTS, for use inside
-    // EVENT_RESPONSES UPDATEs. event_responses.attendance_finalized is dead (never written) — the
-    // authoritative flag is events.attendance_finalized, set by the finalizer.
+    // F5-09 / F5-10: "это событие ещё не финализировано" в виде подзапроса по EVENTS, для
+    // использования внутри UPDATE'ов EVENT_RESPONSES. event_responses.attendance_finalized —
+    // мёртвая колонка (никогда не пишется); авторитетный флаг — events.attendance_finalized,
+    // выставляется финализатором.
     private fun notFinalizedEvent(eventId: UUID) =
         DSL.select(EVENTS.ID).from(EVENTS)
             .where(EVENTS.ID.eq(eventId).and(EVENTS.ATTENDANCE_FINALIZED.isFalse))
@@ -310,8 +316,8 @@ class JooqEventResponseRepository(
                 EVENT_RESPONSES.USER_ID.eq(userId)
                     .and(EVENTS.CLUB_ID.eq(clubId))
                     .and(EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_1, EventStatus.stage_2))
-                    // A finalized event's outcome belongs to the attendance pipeline — never
-                    // override real attendance with an exit no_show.
+                    // Итог финализированного события принадлежит пайплайну посещаемости — никогда
+                    // не перезаписывать реальную посещаемость выходным no_show.
                     .and(EVENTS.ATTENDANCE_FINALIZED.isFalse)
                     .and(EVENT_RESPONSES.FINAL_STATUS.eq(FinalStatus.confirmed))
             )
@@ -329,11 +335,12 @@ class JooqEventResponseRepository(
             .where(
                 EVENTS.CLUB_ID.eq(clubId)
                     .and(EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_1, EventStatus.stage_2))
-                    // Exclude attendance-finalized events (reachable while status is still stage_2 —
-                    // finalize flips the flag, a separate sweep flips status later). Their REAL
-                    // attendance outcome is owned by the reputation pipeline; deleting the confirmed
-                    // row here would erase a not-yet-processed no_show. Same scope the exit
-                    // enumeration uses (findConfirmedActiveEventObligations also excludes finalized).
+                    // Исключить события с финализированной посещаемостью (достижимо пока статус ещё
+                    // stage_2 — финализация меняет флаг, отдельный проход позже меняет статус). Их
+                    // РЕАЛЬНЫЙ исход посещаемости принадлежит пайплайну репутации; удаление
+                    // подтверждённой строки здесь стёрло бы ещё не обработанный no_show. Тот же
+                    // scope, что использует перечисление при выходе (findConfirmedActiveEventObligations
+                    // тоже исключает финализированные).
                     .and(EVENTS.ATTENDANCE_FINALIZED.isFalse)
             )
         return dsl.deleteFrom(EVENT_RESPONSES)

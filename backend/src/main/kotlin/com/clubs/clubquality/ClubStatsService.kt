@@ -6,9 +6,10 @@ import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
 /**
- * Owner-only club statistics. Ownership is enforced at the controller by `@RequiresOrganizer`
- * (the aspect rejects a missing club with 404 and a non-owner with 403 before this runs), so the
- * null-guard here is defensive — it keeps a consistent 404 contract if ever called directly.
+ * Статистика клуба только для владельца. Владение проверяется на уровне контроллера через
+ * `@RequiresOrganizer` (аспект отклоняет отсутствующий клуб с 404 и не-владельца с 403 ещё
+ * до вызова этого кода), поэтому проверка на null здесь защитная — она сохраняет единообразный
+ * контракт 404, если этот код когда-нибудь вызовут напрямую.
  */
 @Service
 class ClubStatsService(
@@ -23,7 +24,7 @@ class ClubStatsService(
         return clubStatsMapper.toDto(stats)
     }
 
-    /** Win-back roster for the «Верните N ушедших» drill-down. Owner-gated at the controller. */
+    /** Список для возврата участников — drill-down «Верните N ушедших». Доступ ограничен владельцем на контроллере. */
     @Transactional(readOnly = true)
     fun getChurnedMembers(clubId: UUID): List<ChurnedMemberDto> =
         clubStatsRepository.findChurnedMembers(clubId).map(clubStatsMapper::toChurnedDto)

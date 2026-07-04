@@ -39,7 +39,7 @@ export function createEvent(clubId: string, body: CreateEventBody): Promise<Even
   return apiClient.post<EventDetailDto>(`/api/clubs/${clubId}/events`, body);
 }
 
-/** F5-14: organizer cancels a not-yet-started event, with an optional reason (≤500 chars). */
+/** F5-14: организатор отменяет ещё не начавшееся событие, с опциональной причиной (≤500 символов). */
 export function cancelEvent(eventId: string, reason?: string): Promise<EventDetailDto> {
   return apiClient.post<EventDetailDto>(`/api/events/${eventId}/cancel`, reason ? { reason } : undefined);
 }
@@ -57,9 +57,9 @@ export function getEventResponders(eventId: string): Promise<EventResponderDto[]
 }
 
 /**
- * F5-04: the caller's own attendance state. Unlike /responses this is NOT member-gated, so a
- * participant who left the club can still reach the dispute UI. 404 if the caller has no
- * response row (organizer / non-participant).
+ * F5-04: собственный статус посещения вызывающего. В отличие от /responses, доступ НЕ ограничен
+ * членством в клубе, так что участник, покинувший клуб, всё ещё может открыть UI оспаривания.
+ * 404, если у вызывающего нет строки response (организатор / не участник).
  */
 export function getMyAttendance(eventId: string): Promise<MyAttendanceDto> {
   return apiClient.get(`/api/events/${eventId}/my-attendance`);
@@ -77,12 +77,12 @@ export function markAttendance(eventId: string, attendance: { userId: string; at
   return apiClient.post(`/api/events/${eventId}/attendance`, { attendance });
 }
 
-/** Participant disputes being marked absent (ATT-3), with an optional note. Backend: absent → disputed. */
+/** Участник оспаривает отметку «отсутствовал» (ATT-3), с опциональной заметкой. Бэкенд: absent → disputed. */
 export function disputeAttendance(eventId: string, note?: string): Promise<{ eventId: string; markedCount: number }> {
   return apiClient.post(`/api/events/${eventId}/dispute`, note ? { note } : undefined);
 }
 
-/** Organizer resolves a disputed mark into attended/absent. */
+/** Организатор разрешает спорную отметку в attended/absent. */
 export function resolveDispute(eventId: string, userId: string, attended: boolean): Promise<{ eventId: string; markedCount: number }> {
   return apiClient.post(`/api/events/${eventId}/attendance/${userId}/resolve`, { attended });
 }

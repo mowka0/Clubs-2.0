@@ -27,7 +27,9 @@ vi.mock('../../telegram/sdk', () => ({
 
 import { SkladchinaPage } from '../../pages/SkladchinaPage';
 
+// Id складчины, используемый во всех моках теста.
 const SKLADCHINA_ID = 's-1';
+// Дедлайн в будущем (+3 дня) — сбор ещё активен.
 const FUTURE = new Date(Date.now() + 3 * 86_400_000).toISOString();
 
 function buildDetail(overrides: Partial<SkladchinaDetailDto> = {}): SkladchinaDetailDto {
@@ -97,7 +99,7 @@ describe('SkladchinaPage — reputation redesign UI', () => {
     expect(
       screen.getByText(/Это важный сбор\. Оплатите или откажитесь до .+: молчание снизит репутацию на 40/),
     ).toBeInTheDocument();
-    // Old badge text must be gone.
+    // Старый текст бейджа должен исчезнуть.
     expect(screen.queryByText('⚠️ С репутацией')).not.toBeInTheDocument();
   });
 
@@ -180,7 +182,7 @@ describe('SkladchinaPage — Phase A', () => {
     renderPage();
 
     expect(await screen.findByText('Я оплатил 1 000 ₽')).toBeInTheDocument();
-    // No amount input for fixed modes.
+    // Для fixed-режимов поля суммы нет.
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
   });
 
@@ -223,9 +225,9 @@ describe('SkladchinaPage — Phase A', () => {
     }));
     renderPage();
 
-    expect(await screen.findByText('Отметить оплату')).toBeInTheDocument(); // pending row
-    expect(screen.getByText('Отменить')).toBeInTheDocument();               // paid row
-    // Redistribution removed — no deficit panel anymore.
+    expect(await screen.findByText('Отметить оплату')).toBeInTheDocument(); // строка pending
+    expect(screen.getByText('Отменить')).toBeInTheDocument();               // строка paid
+    // Перераспределение убрано — панели дефицита больше нет.
     expect(screen.queryByText(/Не хватает/)).not.toBeInTheDocument();
     expect(screen.queryByText('Перераспределить на неоплативших')).not.toBeInTheDocument();
   });
@@ -321,7 +323,7 @@ describe('SkladchinaPage — decline-with-approval (V28)', () => {
     fireEvent.click(await screen.findByText('Отклонить'));
     const reason = screen.getByPlaceholderText('Почему участник должен оплатить (обязательно)');
     expect(reason).toBeInTheDocument();
-    // Confirm button disabled until a reason is typed.
+    // Кнопка подтверждения неактивна, пока не введена причина.
     const confirm = screen.getByText('Отклонить заявку');
     expect(confirm).toBeDisabled();
     fireEvent.change(reason, { target: { value: 'ты был на событии' } });

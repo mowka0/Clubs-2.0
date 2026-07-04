@@ -58,29 +58,29 @@ export interface MemberListItemDto {
   avatarUrl: string | null;
   role: string;
   joinedAt: string | null;
-  // P1b Trust 0-100. null = "Новичок" (no track record yet, or owner in own club — use `role`
-  // to render the organizer framing). The whole reputation block is suppressed when null.
+  // P1b Trust 0-100. null = «Новичок» (ещё нет трек-рекорда, либо владелец в своём клубе — по `role`
+  // рендерится организаторская подача). При null весь блок репутации скрывается.
   trust: number | null;
   promiseFulfillmentPct: number | null;
-  // Stage-2 confirmations to date. The "Обещания X%" line is gated on this being > 0 so a
-  // finance-only member (skladchina record, no events) never shows a misleading 0% (F5-08).
+  // Подтверждения stage-2 на текущий момент. Строка «Обещания X%» показывается только при значении > 0,
+  // чтобы участник «только финансы» (трек по складчинам, без событий) не видел обманчивые 0% (F5-08).
   totalConfirmations: number | null;
-  // Club-local awards (member admin S2) — public to all members (R3), shown as chips on the roster
-  // card and the profile. Cosmetic; never reflects reputation (R4). Empty array when none.
+  // Клубные награды (member admin S2) — видны всем участникам (R3), показываются чипами на карточке
+  // ростера и в профиле. Косметика; никогда не отражают репутацию (R4). Пустой массив, если наград нет.
   awards: AwardDto[];
-  // De-Stars Slice 2 — organizer dashboard only (null for regular members): access state and the
-  // paid-through date. Drive the «Скоро закончится» / «Ждут оплаты» / «Активные» buckets.
-  // `subscriptionExpiresAt` is also null for free memberships (no expiry).
+  // De-Stars Slice 2 — только для дашборда организатора (null для обычных участников): состояние доступа
+  // и дата, до которой оплачено. Определяют корзины «Скоро закончится» / «Ждут оплаты» / «Активные».
+  // `subscriptionExpiresAt` также null для бесплатных членств (без срока).
   accessStatus?: 'active' | 'frozen' | null;
   subscriptionExpiresAt?: string | null;
-  // Organizer dashboard only: the member's dues claim (null = none) + method ("sbp"|"cash"), so the
-  // «Ждут оплаты» bucket can flag «оплата заявлена».
+  // Только для дашборда организатора: заявление участника об оплате взноса (null = нет) + способ
+  // ("sbp"|"cash"), чтобы корзина «Ждут оплаты» могла пометить «оплата заявлена».
   duesClaimedAt?: string | null;
   duesClaimMethod?: string | null;
 }
 
-/** Organizer trust card for the dues-payment sheet (de-Stars). Account-focused; the UI hides facts
- *  that aren't meaningful yet (clubsCount < 2, trustedMembers below threshold) → no zeros for new accounts. */
+/** Карточка доверия организатора для шита оплаты взноса (de-Stars). Про аккаунт в целом; UI скрывает
+ *  ещё не значимые факты (clubsCount < 2, trustedMembers ниже порога) → у новых аккаунтов нет нулей. */
 export interface OrganizerCardDto {
   firstName: string;
   lastName: string | null;
@@ -91,14 +91,14 @@ export interface OrganizerCardDto {
   trustedMembers: number;
 }
 
-/** A club-local award chip (member admin S2). Cosmetic; never reflects reputation (R4). */
+/** Чип клубной награды (member admin S2). Косметика; никогда не отражает репутацию (R4). */
 export interface AwardDto {
   id: string;
   emoji: string;
   label: string;
 }
 
-/** Autocomplete option in the grant form — a previously-used (emoji, label) in the club. No id. */
+/** Вариант автодополнения в форме выдачи — уже использованная в клубе пара (emoji, label). Без id. */
 export interface AwardSuggestionDto {
   emoji: string;
   label: string;
@@ -110,42 +110,45 @@ export interface MemberProfileDto {
   firstName: string;
   username: string | null;
   avatarUrl: string | null;
-  // Public profile fields, shown to every club member on the member card.
+  // Публичные поля профиля, видны каждому участнику клуба на карточке участника.
   bio: string | null;
   interests: string[];
-  // Member admin S2 — club-local awards, visible to ALL members (R3); cosmetic only (R4).
+  // Member admin S2 — клубные награды, видны ВСЕМ участникам (R3); чисто косметика (R4).
   awards: AwardDto[];
-  // "organizer" = club owner. Drives the organizer framing when trust is null.
+  // "organizer" = владелец клуба. Определяет организаторскую подачу, когда trust = null.
   role: string;
-  // P1b Trust 0-100. null = "Новичок"/suppressed (no track record yet, or owner in own club).
+  // P1b Trust 0-100. null = «Новичок»/скрыто (ещё нет трек-рекорда, либо владелец в своём клубе).
   trust: number | null;
   promiseFulfillmentPct: number | null;
   totalConfirmations: number | null;
   totalAttendances: number | null;
-  // "Возможно → Подтвердил → Пришёл": came though only said "maybe".
+  // «Возможно → Подтвердил → Пришёл»: пришёл, хотя изначально отвечал «возможно».
   spontaneityCount: number | null;
-  // Reputation-affecting skladchina record in this club: paid / (paid + expired).
-  // null when suppressed; the "Сборы" ring is hidden when skladchinaTotal === 0.
+  // Влияющий на репутацию трек складчин в этом клубе: оплачено / (оплачено + просрочено).
+  // null, если скрыто; кольцо «Сборы» скрывается, когда skladchinaTotal === 0.
   skladchinaPaid: number | null;
   skladchinaTotal: number | null;
-  // De-Stars Slice 2 — ORGANIZER ONLY (null for regular members): when this member's paid access
-  // window ends. null also for free memberships. Shown as «Подписка активна до …» on the org card.
+  // De-Stars Slice 2 — ТОЛЬКО ДЛЯ ОРГАНИЗАТОРА (null для обычных участников): когда заканчивается
+  // оплаченный доступ этого участника. Также null для бесплатных членств. Показывается как
+  // «Подписка активна до …» на карточке организатора.
   subscriptionExpiresAt: string | null;
-  // Member admin S1 — ORGANIZER ONLY (null for regular members): the private organizer note.
+  // Member admin S1 — ТОЛЬКО ДЛЯ ОРГАНИЗАТОРА (null для обычных участников): приватная заметка организатора.
   organizerNote: string | null;
-  // De-Stars dues claim — ORGANIZER ONLY (null for regular members): when the member declared payment,
-  // the method ("sbp"|"cash"), and the screenshot URL (sbp only). Reviewed before «Взнос получен».
+  // De-Stars заявление об оплате взноса — ТОЛЬКО ДЛЯ ОРГАНИЗАТОРА (null для обычных участников): когда
+  // участник заявил об оплате, способ ("sbp"|"cash") и URL скриншота (только для sbp). Проверяется до
+  // отметки «Взнос получен».
   duesClaimedAt: string | null;
   duesClaimMethod: string | null;
   duesProofUrl: string | null;
-  // The member's join-application answer (closed clubs) — ORGANIZER ONLY. null for open clubs / no question.
+  // Ответ участника на вопрос при вступлении (закрытые клубы) — ТОЛЬКО ДЛЯ ОРГАНИЗАТОРА. null для
+  // открытых клубов / когда вопроса нет.
   applicationAnswer: string | null;
 }
 
 /**
- * Red-dot feed (organizer-only): the dot lights when either count is > 0.
- *  - expiringSoon — active members whose paid window ends within the week.
- *  - awaitingDues — frozen members who joined but haven't been admitted (first dues unconfirmed).
+ * Лента red-dot (только для организатора): точка загорается, когда любой из счётчиков > 0.
+ *  - expiringSoon — активные участники, у которых оплаченный период заканчивается в течение недели.
+ *  - awaitingDues — замороженные участники, которые вступили, но ещё не приняты (первый взнос не подтверждён).
  */
 export interface MemberAttentionDto {
   expiringSoon: number;
@@ -153,9 +156,9 @@ export interface MemberAttentionDto {
 }
 
 /**
- * A frozen member across one of the caller's owned clubs (joined, dues unconfirmed). Powers the
- * cross-club «Ждут оплаты» section on «Мои клубы». `subscriptionExpiresAt` is the lapsed window
- * (null for a never-paid first join); `joinedAt` drives the «вступил(а) N назад» line.
+ * Замороженный участник в одном из клубов, которыми владеет вызывающий (вступил, взнос не подтверждён).
+ * Питает кросс-клубовую секцию «Ждут оплаты» на «Мои клубы». `subscriptionExpiresAt` — истёкший период
+ * (null для первого вступления без оплаты); `joinedAt` формирует строку «вступил(а) N назад».
  */
 export interface OrganizerDuesMemberDto {
   userId: string;
@@ -168,7 +171,7 @@ export interface OrganizerDuesMemberDto {
   clubAvatarUrl: string | null;
   joinedAt: string | null;
   subscriptionExpiresAt: string | null;
-  // Dues claim flag for the cross-club «Ждут оплаты» list: «оплата заявлена» + method ("sbp"|"cash").
+  // Флаг заявления об оплате для кросс-клубового списка «Ждут оплаты»: «оплата заявлена» + способ ("sbp"|"cash").
   duesClaimedAt: string | null;
   duesClaimMethod: string | null;
 }
@@ -180,8 +183,8 @@ export interface UserClubReputationDto {
   category: string;
   role: string;
   joinedAt: string | null;
-  // P1b Trust 0-100. null = "Новичок"/suppressed (no track record yet, or owner in own club —
-  // `role` = "organizer" renders the organizer framing).
+  // P1b Trust 0-100. null = «Новичок»/скрыто (ещё нет трек-рекорда, либо владелец в своём клубе —
+  // `role` = "organizer" рендерит организаторскую подачу).
   trust: number | null;
   promiseFulfillmentPct: number | null;
   totalConfirmations: number | null;
@@ -189,26 +192,27 @@ export interface UserClubReputationDto {
   spontaneityCount: number | null;
 }
 
-/** Global reputation: primary "надёжен в reliableClubs из trackRecordClubs клубов". */
+/** Глобальная репутация: основной показатель — «надёжен в reliableClubs из trackRecordClubs клубов». */
 export interface GlobalTrustDto {
   reliableClubs: number;
   trackRecordClubs: number;
-  // Secondary 0-100 number; null when there is no track record anywhere (trackRecordClubs === 0).
+  // Вторичное число 0-100; null, если трек-рекорда нигде нет (trackRecordClubs === 0).
   score: number | null;
 }
 
-/** The authenticated user's reputation overview: global aggregate + per-club lists. */
+/** Обзор репутации авторизованного пользователя: глобальный агрегат + списки по клубам. */
 export interface MyReputationDto {
   global: GlobalTrustDto;
   activeClubs: UserClubReputationDto[];
-  // Clubs the user left but still has a track record in ("История").
+  // Клубы, которые пользователь покинул, но трек-рекорд в них ещё сохраняется («История»).
   historyClubs: UserClubReputationDto[];
 }
 
 /**
- * Pre-leave preview for the «Выйти из клуба?» dialog: how many open obligations leaving a
- * free club would break (and thus cost the user reliability). Counts only — penalty
- * magnitudes are server-internal. Paid clubs break nothing (all zero).
+ * Предпросмотр перед выходом для диалога «Выйти из клуба?»: сколько открытых обязательств
+ * будет нарушено при выходе из бесплатного клуба (и, соответственно, снизит надёжность
+ * пользователя). Только счётчики — величины штрафов остаются на сервере. В платных клубах
+ * ничего не нарушается (все нули).
  */
 export interface LeavePreviewDto {
   eventObligations: number;
@@ -216,7 +220,7 @@ export interface LeavePreviewDto {
   totalObligations: number;
 }
 
-/** A passed-threshold gamification badge. */
+/** Геймификационный бейдж, полученный за прохождение порога. */
 export interface BadgeDto {
   id: string;
   name: string;
@@ -224,8 +228,9 @@ export interface BadgeDto {
 }
 
 /**
- * The authenticated user's gamification panel (`self` view): exact XP, current level + progress to
- * the next, earned badges. XP is participation-only and only accumulates. See reputation-v2.md §H3.
+ * Панель геймификации авторизованного пользователя (вид `self`): точный XP, текущий уровень +
+ * прогресс до следующего, полученные бейджи. XP начисляется только за участие и только растёт.
+ * См. reputation-v2.md §H3.
  */
 export interface GamificationDto {
   xp: number;
@@ -279,10 +284,10 @@ export interface PeerStatsDto {
   memberClubCount: number;
   totalConfirmations: number;
   totalAttendances: number;
-  // Cross-club reputation for the review card: "надёжен в reliableClubs из trackRecordClubs клубов".
+  // Кросс-клубовая репутация для карточки отзыва: «надёжен в reliableClubs из trackRecordClubs клубов».
   reliableClubs: number;
   trackRecordClubs: number;
-  // Global gamification level (others projection) for the pill.
+  // Глобальный уровень геймификации (проекция для других) для пилла.
   level: number;
   levelName: string;
   levelTier: LevelTier;
@@ -305,14 +310,14 @@ export interface PendingApplicationDto {
 }
 
 /**
- * Counter feeding the «Мои клубы» tab-dot: organizer-side pending applications
- * in the cross-club inbox. Single endpoint, single cache slot.
- * See docs/modules/applications-inbox.md.
+ * Счётчик, питающий точку на табе «Мои клубы»: ожидающие заявки на стороне организатора
+ * в кросс-клубовом инбоксе. Один эндпоинт, один слот кэша.
+ * См. docs/modules/applications-inbox.md.
  */
 export interface PendingApplicationsCountDto {
   inboxCount: number;
-  // De-Stars: frozen members who declared a dues payment (paid, awaiting the organizer's decision)
-  // across the caller's clubs. Lights the «Мои клубы» nav dot alongside the application inbox.
+  // De-Stars: замороженные участники, заявившие об оплате взноса (оплачено, ждёт решения
+  // организатора) по всем клубам вызывающего. Зажигает точку навигации «Мои клубы» наравне с инбоксом заявок.
   awaitingDuesCount: number;
 }
 
@@ -333,13 +338,14 @@ export interface ClubDetailDto {
   inviteLink: string | null;
   memberCount: number;
   isActive: boolean;
-  // SBP dues requisites — populated only for club members (active/frozen) + owner; null otherwise.
-  // The organizer's off-platform payment details, surfaced as «Оплатить по СБП» to members who owe dues.
+  // Реквизиты для оплаты взноса по СБП — заполнены только для участников клуба (active/frozen) + владельца;
+  // иначе null. Внеплатформенные платёжные данные организатора, показываются как «Оплатить по СБП»
+  // участникам, которые должны взнос.
   paymentLink: string | null;
   paymentMethodNote: string | null;
 }
 
-/** Club-quality facts for `GET /api/clubs/{id}/quality` (rings + achievements). */
+/** Факты качества клуба для `GET /api/clubs/{id}/quality` (кольца + достижения). */
 export interface ClubFactsDto {
   meetingsPerMonth: number;
   avgAttendance: number;
@@ -349,23 +355,23 @@ export interface ClubFactsDto {
   successfulSkladchinas: number;
 }
 
-/** Discovery-card quality facts for `GET /api/clubs/quality/batch` (one per club). */
+/** Факты качества для карточки в Discovery — `GET /api/clubs/quality/batch` (по одному на клуб). */
 export interface ClubCardFactsDto {
   clubId: string;
   ageDays: number;
   engagementPercent: number;
-  /** "★ Топ-5 в категории" — the only externally-visible L3 signal (a pure boolean; the rank score
-   *  never leaves the server). False unless the backend badge feature flag is on. */
+  /** «★ Топ-5 в категории» — единственный внешне видимый сигнал L3 (чистый boolean; сам rank score
+   *  никогда не покидает сервер). False, пока бэкендовый feature flag бейджа выключен. */
   topInCategory: boolean;
 }
 
-/** Window-over-window movement of a percent metric. `delta` is signed, in percentage points. */
+/** Изменение процентной метрики от периода к периоду. `delta` со знаком, в процентных пунктах. */
 export interface TrendDto {
   direction: 'up' | 'down' | 'flat';
   delta: number;
 }
 
-/** A former member to win back — `GET /api/clubs/{clubId}/churned-members` (owner-only, §9.5). */
+/** Бывший участник, которого стоит вернуть — `GET /api/clubs/{clubId}/churned-members` (только владелец, §9.5). */
 export interface ChurnedMemberDto {
   userId: string;
   firstName: string;
@@ -375,9 +381,9 @@ export interface ChurnedMemberDto {
 }
 
 /**
- * Owner-only club statistics for `GET /api/clubs/{id}/stats` (§9 of docs/modules/club-quality.md).
- * Nullable fields don't apply to this club: `retention*` is paid-only, `skladchinaPaid*` needs closed
- * skladchinas, and the application fields are null unless the club is `closed`.
+ * Статистика клуба только для владельца — `GET /api/clubs/{id}/stats` (§9 docs/modules/club-quality.md).
+ * Nullable-поля не применимы к данному клубу: `retention*` только для платных, `skladchinaPaid*`
+ * требует закрытых складчин, а поля заявок null, пока клуб не `closed`.
  */
 export interface ClubStatsDto {
   clubType: 'paid' | 'free';
@@ -405,8 +411,8 @@ export interface MembershipDto {
   role: string;
   joinedAt: string | null;
   subscriptionExpiresAt: string | null;
-  // Member's own dues claim (de-Stars): when they declared payment (null = none) + method ("sbp"|"cash").
-  // Drives «оплата на проверке» on the frozen club screen.
+  // Собственное заявление участника об оплате (de-Stars): когда заявил (null = не заявлял) + способ ("sbp"|"cash").
+  // Управляет «оплата на проверке» на экране замороженного клуба.
   duesClaimedAt?: string | null;
   duesClaimMethod?: string | null;
 }
@@ -427,7 +433,7 @@ export interface EventDetailDto {
   confirmedCount: number;
   attendanceMarked: boolean;
   attendanceFinalized: boolean;
-  // F5-14: organizer's optional cancellation reason; null unless cancelled with a reason given.
+  // F5-14: необязательная причина отмены от организатора; null, если отменено без указания причины.
   cancellationReason: string | null;
   createdAt: string | null;
 }
@@ -449,23 +455,23 @@ export interface EventResponderDto {
   avatarUrl: string | null;
   /** going | maybe | not_going | confirmed | waitlisted | declined | expired_no_confirm */
   status: string;
-  /** Post-event attendance mark, once the organizer marked it; null before marking. */
+  /** Отметка посещения после события, как только организатор её проставил; null до отметки. */
   attendance: 'attended' | 'absent' | 'disputed' | null;
-  /** Optional note the participant left when disputing (shown to the organizer). */
+  /** Необязательная заметка участника при оспаривании (видна организатору). */
   disputeNote?: string | null;
 }
 
 /**
- * F5-04: the caller's OWN attendance state (GET /api/events/{id}/my-attendance).
- * Readable without club membership so a participant who left the club still reaches the
- * dispute UI from the deep-link DM. [canDispute] is computed server-side (window open AND
- * attendance=absent AND not yet terminal).
+ * F5-04: СОБСТВЕННОЕ состояние посещения вызывающего (GET /api/events/{id}/my-attendance).
+ * Доступно без членства в клубе, чтобы участник, покинувший клуб, всё ещё мог попасть в UI
+ * оспаривания по deep-link из DM. [canDispute] вычисляется на сервере (окно открыто И
+ * attendance=absent И спор ещё не завершён).
  */
 export interface MyAttendanceDto {
   attendance: 'attended' | 'absent' | 'disputed' | null;
   attendanceMarked: boolean;
   attendanceFinalized: boolean;
-  /** True once the organizer (or ATT-2) resolved the dispute — no re-dispute (F5-16). */
+  /** True, как только организатор (или ATT-2) разрешил спор — повторный спор невозможен (F5-16). */
   disputeTerminal: boolean;
   canDispute: boolean;
   disputeNote: string | null;
@@ -479,8 +485,8 @@ export type SkladchinaParticipantStatus =
   | 'paid'
   | 'declined'
   | 'expired_no_response'
-  // Skladchina closed before the deadline while the participant was still pending:
-  // no obligation was broken, no reputation entry is emitted.
+  // Складчина закрыта до дедлайна, пока участник ещё был в статусе pending:
+  // обязательство не было нарушено, запись в репутацию не создаётся.
   | 'released';
 
 export interface SkladchinaParticipantDto {
@@ -492,11 +498,11 @@ export interface SkladchinaParticipantDto {
   declaredAmountKopecks: number | null;
   status: SkladchinaParticipantStatus;
   paidAt: string | null;
-  // V28 decline-with-approval (organizer view)
+  // V28 decline-with-approval (вид организатора)
   declineRequested: boolean;
   declineNote: string | null;
   declineRejected: boolean;
-  declineRejectNote: string | null;       // V29: organizer's reason if the decline was rejected
+  declineRejectNote: string | null;       // V29: причина организатора, если отказ был отклонён
 }
 
 export interface SkladchinaDetailDto {
@@ -524,19 +530,19 @@ export interface SkladchinaDetailDto {
   myStatus: SkladchinaParticipantStatus | null;
   myExpectedAmountKopecks: number | null;
   myDeclaredAmountKopecks: number | null;
-  // V28 decline-with-approval
+  // V28: отказ-с-подтверждением
   declineRequiresApproval: boolean;
   myDeclineRequested: boolean;
   myDeclineRejected: boolean;
-  myDeclineRejectNote: string | null;     // V29: organizer's reason for rejecting my decline
+  myDeclineRejectNote: string | null;     // V29: причина организатора, почему отклонил мой отказ
   participants: SkladchinaParticipantDto[] | null;
   participantCount: number;
   paidCount: number;
-  pendingCount: number;                   // #3: lets the last pending participant see what's left
+  pendingCount: number;                   // #3: позволяет последнему pending-участнику увидеть, что осталось
 }
 
-// State of the split linked to an event — drives the EventPage "Разделить счёт" button.
-// skladchinaId null = no split yet (create); status active → open it; closed_success → already collected.
+// Состояние сплита, привязанного к событию — управляет кнопкой «Разделить счёт» на EventPage.
+// skladchinaId null = сплита ещё нет (создать); status active → открыть его; closed_success → уже собрано.
 export interface EventSplitStateDto {
   skladchinaId: string | null;
   status: SkladchinaStatus | null;
@@ -572,16 +578,16 @@ export interface CreateSkladchinaRequest {
   description?: string | null;
   rules?: string | null;
   photoUrl?: string | null;
-  template?: SkladchinaTemplate;          // default "custom" server-side
-  eventId?: string | null;                // split_bill: the source event
-  excludeSelf?: boolean;                  // split_bill: drop the organizer from the charged attendees
+  template?: SkladchinaTemplate;          // по умолчанию "custom" на сервере
+  eventId?: string | null;                // split_bill: исходное событие
+  excludeSelf?: boolean;                  // split_bill: исключить организатора из тех, с кого берут деньги
   paymentMode: SkladchinaMode;
   totalGoalKopecks?: number | null;
   paymentLink: string;
   paymentMethodNote?: string | null;
   deadline: string;
   affectsReputation: boolean;
-  participants?: CreateSkladchinaParticipantInput[];  // omitted/[] for split_bill
+  participants?: CreateSkladchinaParticipantInput[];  // не передаётся/[] для split_bill
 }
 
 export interface MyEventListItemDto {

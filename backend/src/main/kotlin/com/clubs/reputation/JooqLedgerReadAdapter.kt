@@ -9,10 +9,10 @@ import org.springframework.stereotype.Component
 import java.util.UUID
 
 /**
- * jOOQ implementation of [LedgerReadPort]. Reads `reputation_ledger ⋈ clubs.owner_id`, classifying
- * KEPT outcomes by KIND (never by points — V18 backfilled stale magnitudes, so points lie across the
- * boundary). `skladchina_paid` is deliberately excluded from the kept set: it is owner-authorable and
- * must never reach an L3 input.
+ * jOOQ-реализация [LedgerReadPort]. Читает `reputation_ledger ⋈ clubs.owner_id`, классифицируя
+ * KEPT-исходы ПО KIND (никогда по points — бэкфилл V18 записал устаревшие величины, так что points
+ * через эту границу врут). `skladchina_paid` намеренно исключён из kept-набора: его может
+ * проставить владелец, и он никогда не должен попадать во входы L3.
  */
 @Component
 class JooqLedgerReadAdapter(private val dsl: DSLContext) : LedgerReadPort {

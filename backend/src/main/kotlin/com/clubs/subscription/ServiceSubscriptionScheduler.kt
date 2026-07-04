@@ -5,9 +5,9 @@ import org.springframework.stereotype.Component
 import java.time.OffsetDateTime
 
 /**
- * Drives [ServiceSubscriptionLifecycleService]. Distinct from the legacy Stars-membership
- * `com.clubs.payment.SubscriptionScheduler` (that one expires paid memberships; this one ends
- * platform service-fee subscriptions) — different name avoids a Spring bean-name clash.
+ * Управляет [ServiceSubscriptionLifecycleService]. Отличается от устаревшего Stars-membership
+ * `com.clubs.payment.SubscriptionScheduler` (тот истекает платные membership; этот завершает
+ * подписки на сервисный сбор платформы) — другое имя, чтобы избежать конфликта имён Spring-бинов.
  */
 @Component
 class ServiceSubscriptionScheduler(

@@ -11,20 +11,22 @@ import type { MemberListItemDto } from '../../types/api';
 interface ClubMembersTabProps {
   clubId: string;
   /**
-   * Whether the caller is the organizer of [clubId]. Drives the organizer-flavoured member rows
-   * (access info + tap-to-manage). Regular members get the active-only calm list (access fields null).
+   * Является ли вызывающий организатором [clubId]. Включает организаторский вид строк участников
+   * (инфо о доступе + тап для управления). Обычные участники видят спокойный список только активных
+   * (поля доступа null).
    */
   isOrganizer?: boolean;
   /**
-   * Management dashboard context (Управление → Участники). Only here do the «Скоро закончится» /
-   * «Оплата вступления» attention buckets render. On the club page's Участники tab this is false, so
-   * the organizer sees a plain roster — those management blocks live ONLY in Управление, not duplicated.
+   * Контекст дашборда управления (Управление → Участники). Только здесь рендерятся attention-блоки
+   * «Скоро закончится» / «Оплата вступления». На вкладке «Участники» страницы клуба это false, и
+   * организатор видит плоский список — эти блоки живут ТОЛЬКО в Управлении, без дублирования.
    */
   managementView?: boolean;
 }
 
-// Paid access ending within this window surfaces in «Скоро закончится» (mirrors the backend red-dot).
+// Окно (в днях), в котором истекающий платный доступ попадает в «Скоро закончится» (зеркалит red-dot бэкенда).
 const EXPIRING_SOON_DAYS = 7;
+// Миллисекунд в сутках — для расчёта дней до/после даты.
 const MS_PER_DAY = 86_400_000;
 
 function getInitials(firstName: string, lastName: string | null): string {
@@ -45,7 +47,7 @@ function pluralRu(n: number, forms: [string, string, string]): string {
   return forms[2];
 }
 
-/** Whole days from now until [iso] (rounded up — "через 3 дня"). Negative once past. */
+/** Целых дней от «сейчас» до [iso] (округление вверх — «через 3 дня»). Отрицательно после даты. */
 function daysUntil(iso: string): number {
   return Math.ceil((new Date(iso).getTime() - Date.now()) / MS_PER_DAY);
 }
@@ -54,7 +56,7 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 }
 
-/** «до 28 июня · через 3 дня» for the «Скоро закончится» bucket. */
+/** «до 28 июня · через 3 дня» для блока «Скоро закончится». */
 function formatExpiringMeta(iso: string): string {
   const days = daysUntil(iso);
   const date = `до ${formatDate(iso)}`;
@@ -63,7 +65,7 @@ function formatExpiringMeta(iso: string): string {
   return `${date} · через ${days} ${pluralRu(days, ['день', 'дня', 'дней'])}`;
 }
 
-/** «вступил(а) 2 дня назад» for the «Ждут оплаты» (frozen) bucket. */
+/** «вступил(а) 2 дня назад» для блока «Ждут оплаты» (frozen). */
 function formatJoinedMeta(iso: string | null): string {
   if (!iso) return 'ждёт первой оплаты';
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / MS_PER_DAY);
@@ -76,8 +78,8 @@ function formatJoinedMeta(iso: string | null): string {
 type Bucket = 'expiring' | 'awaiting' | 'calm';
 
 /**
- * Bucket a member by access state (de-Stars dashboard). For a regular viewer the access fields are
- * null, so every member lands in «calm» — the legacy active-only list.
+ * Раскладывает участника по бакету состояния доступа (de-Stars дашборд). У обычного зрителя поля
+ * доступа null, поэтому все участники попадают в «calm» — прежний список только активных.
  */
 function bucketOf(member: MemberListItemDto): Bucket {
   if (member.accessStatus === 'frozen') return 'awaiting';
@@ -97,9 +99,10 @@ interface DuesActionRowProps {
 }
 
 /**
- * A «Скоро закончится» / «Ждут оплаты» row: tap the member to open the profile card; the «Взнос
- * получен» button opens access and extends the paid window +30d. The row is a div (not a button) so
- * the two tap targets don't nest. 409 (lost race) is swallowed — the list cache is already refreshed.
+ * Строка «Скоро закончится» / «Ждут оплаты»: тап по участнику открывает карточку профиля; кнопка
+ * «Взнос получен» открывает доступ и продлевает оплаченное окно на +30 дней. Строка — div (не button),
+ * чтобы два тап-таргета не вкладывались друг в друга. 409 (проигранная гонка) глотается — кэш списка
+ * уже обновлён.
  */
 const DuesActionRow: FC<DuesActionRowProps> = ({ clubId, member, metaText, onOpenProfile, onFeedback }) => {
   const haptic = useHaptic();
@@ -152,17 +155,17 @@ interface CalmMemberRowProps {
   onOpenProfile: (member: MemberListItemDto) => void;
 }
 
-/** Calm «Активные» row: reputation score on the right; for the organizer a paid member also shows
- *  «Активен · до DATE». */
+/** Спокойная строка «Активные»: очки репутации справа; организатору у платного участника также
+ *  показывается «Активен · до DATE». */
 const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenProfile }) => {
   const haptic = useHaptic();
   const isOwner = member.role === 'organizer';
-  // Frozen = organizer closed access / dues not yet confirmed. Only the organizer ever sees these rows
-  // (the backend withholds frozen members from regular viewers), so the iced treatment is organizer-only.
+  // Frozen = организатор закрыл доступ / взнос ещё не подтверждён. Такие строки видит только организатор
+  // (бэкенд скрывает frozen-участников от обычных зрителей), так что «ледяное» оформление — только у него.
   const isFrozen = member.accessStatus === 'frozen';
   const hasScore = member.trust !== null;
-  // Show the promise line only when there's an event track; a finance-only member (skladchina
-  // record, 0 confirmations) keeps the score but hides the misleading "Обещания 0%" (F5-08).
+  // Строку обещаний показываем только при наличии событийного трека; участник «только финансы»
+  // (запись по складчине, 0 подтверждений) сохраняет очки, но прячет обманчивое «Обещания 0%» (F5-08).
   const hasActivity = hasScore && (member.totalConfirmations ?? 0) > 0;
   const tier = reliabilityTier(member.trust);
   const repMeta = hasActivity
@@ -172,11 +175,11 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
       : hasScore
         ? null
         : 'Пока нет данных';
-  // Organizer-only access line for a paid active member (free memberships have no expiry).
+  // Видимая только организатору строка доступа платного активного участника (у бесплатных членств нет срока).
   const accessMeta = forOrganizer && !isOwner && member.subscriptionExpiresAt
     ? `Активен · до ${formatDate(member.subscriptionExpiresAt)}`
     : null;
-  // Public club awards (R3) — defend against a payload without the field (boundary isn't schema-checked).
+  // Публичные награды клуба (R3) — защищаемся от payload без этого поля (граница не проверяется схемой).
   const awards = member.awards ?? [];
 
   return (
@@ -195,7 +198,7 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
             <span className="rd-badge rd-rep" style={{ marginLeft: 8, fontSize: 10, padding: '2px 8px' }}>Орг</span>
           )}
         </div>
-        {/* Award chips sit right under the name (above the reliability score). */}
+        {/* Чипы наград идут сразу под именем (над очками надёжности). */}
         {awards.length > 0 && (
           <div className="rd-member-awards">
             {awards.map((a) => (
@@ -242,14 +245,14 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
   }
 
   const members = membersQuery.data ?? [];
-  // Attention buckets are organizer-management info → only in the Управление dashboard (managementView).
-  // On the club page (and for regular viewers) everyone falls into one plain roster (no duplicated blocks).
+  // Attention-бакеты — управленческая информация организатора → только в дашборде «Управление»
+  // (managementView). На странице клуба (и у обычных зрителей) все в одном плоском списке (без дублей).
   const showBuckets = isOrganizer && managementView;
   const expiring = showBuckets ? members.filter((m) => bucketOf(m) === 'expiring') : [];
   const awaiting = showBuckets ? members.filter((m) => bucketOf(m) === 'awaiting') : [];
-  // On the management dashboard frozen members live in their own «Оплата вступления» bucket. On the
-  // flat club-page roster they stay in the list but sink to the bottom, iced — so the organizer sees
-  // at a glance who has no access without losing them in the crowd. (sort is stable → keeps backend order.)
+  // В дашборде управления frozen-участники живут в своём бакете «Оплата вступления». В плоском списке
+  // страницы клуба они остаются, но тонут вниз, «ледяные» — организатор с одного взгляда видит, у кого
+  // нет доступа, не теряя их в общей массе. (sort стабильный → сохраняет порядок бэкенда.)
   const calm = showBuckets
     ? members.filter((m) => bucketOf(m) === 'calm')
     : [...members].sort((a, b) => Number(a.accessStatus === 'frozen') - Number(b.accessStatus === 'frozen'));

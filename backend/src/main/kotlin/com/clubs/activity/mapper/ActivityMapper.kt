@@ -17,10 +17,10 @@ class ActivityMapper {
         confirmedCount: Int,
         actionRequired: Boolean
     ): ActivityItemDto.EventActivity {
-        // events.created_at is NOT NULL at DB level; domain type is nullable only because
-        // the create-path constructs the object before the row is fetched back. Reads always
-        // have createdAt populated. Falling back to event_datetime would corrupt sort order,
-        // so we require it here and fail fast on a violated invariant.
+        // events.created_at на уровне БД NOT NULL; доменный тип nullable только потому, что
+        // путь создания конструирует объект до того, как строка перечитана обратно. При чтении
+        // createdAt всегда заполнено. Fallback на event_datetime сломал бы порядок сортировки,
+        // поэтому здесь мы требуем его наличие и падаем сразу при нарушении инварианта.
         val createdAt = event.createdAt
             ?: error("Event ${event.id} has null createdAt; database invariant violated")
         return ActivityItemDto.EventActivity(
@@ -62,8 +62,8 @@ class ActivityMapper {
     }
 
     /**
-     * Returns null if description is null/blank; otherwise trims and truncates to
-     * [MAX_PREVIEW_LENGTH] chars, appending an ellipsis when truncated.
+     * Возвращает null, если description null/пустой; иначе обрезает пробелы и усекает до
+     * [MAX_PREVIEW_LENGTH] символов, добавляя многоточие при усечении.
      */
     private fun buildDescriptionPreview(description: String?): String? {
         val trimmed = description?.trim().orEmpty()
@@ -76,10 +76,13 @@ class ActivityMapper {
     }
 
     companion object {
+        // Максимальная длина превью описания (символов) до усечения с многоточием
         const val MAX_PREVIEW_LENGTH = 40
         private const val ELLIPSIS = "…"
 
+        // Статусы события, считающиеся завершёнными (не активными) для ленты активности
         private val COMPLETED_EVENT_STATUSES = setOf(EventStatus.completed, EventStatus.cancelled)
+        // Статусы складчины, считающиеся завершёнными (не активными) для ленты активности
         private val COMPLETED_SKLADCHINA_STATUSES = setOf(
             SkladchinaStatus.closed_success,
             SkladchinaStatus.closed_failed,

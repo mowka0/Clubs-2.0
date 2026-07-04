@@ -6,49 +6,52 @@ import com.clubs.skladchina.CreateSkladchinaRequest
 import java.util.UUID
 
 /**
- * Per-template policy (Strategy). The engine (SkladchinaService) owns the lifecycle — club/owner
- * check, deadline bounds, reputation gates, persistence, DM — and delegates the template-specific
- * decisions here. New template = new @Component implementing this; no edits to the engine
- * (Open/Closed). The interface grows ONLY as a template needs it (split_bill drives v1).
+ * Политика для конкретного шаблона (Strategy). Движок (SkladchinaService) владеет жизненным
+ * циклом — проверка клуба/владельца, границы дедлайна, гейты репутации, персистентность, DM —
+ * и делегирует специфичные для шаблона решения сюда. Новый шаблон = новый @Component,
+ * реализующий этот интерфейс; без правок движка (Open/Closed). Интерфейс растёт ТОЛЬКО когда
+ * этого требует шаблон (v1 продиктован split_bill).
  *
- * See docs/backlog/skladchina-templates-architecture.md.
+ * См. docs/backlog/skladchina-templates-architecture.md.
  */
 interface SkladchinaTemplateStrategy {
-    /** The template this strategy serves; the registry keys on it. */
+    /** Шаблон, который обслуживает эта стратегия; реестр ключуется по нему. */
     val type: SkladchinaTemplate
 
     /**
-     * How a participant may decline. FREE = the instant, free `decline` (custom/voluntary — declining
-     * is desired behaviour). REQUIRES_APPROVAL = a justified request the organizer approves/rejects
-     * (split_bill — you already consumed the good, so a free decline is free-riding). V28.
+     * Как участник может отказаться. FREE = мгновенный, бесплатный `decline` (custom/voluntary —
+     * отказ здесь желаемое поведение). REQUIRES_APPROVAL = обоснованный запрос, который организатор
+     * одобряет/отклоняет (split_bill — благо уже потреблено, поэтому бесплатный отказ был бы
+     * безбилетничеством). V28.
      */
     val declinePolicy: DeclinePolicy
 
     /**
-     * Whether reputation outcomes from this template are organizer/rail-VERIFIED (vs honor-system
-     * self-declared). Bridges to the future "financial responsibility" derivation: only verified
-     * outcomes are trustworthy enough to score. (Not yet persisted — no template emits ledger rows
-     * with it until reputation rework; kept here so the contract is explicit from template #1.)
+     * Верифицированы ли исходы репутации от этого шаблона организатором/рельсой (в противовес
+     * honor-system самозаявлению). Мостик к будущему выводу «финансовой ответственности»: только
+     * верифицированные исходы достаточно надёжны, чтобы их оценивать. (Ещё не персистится — ни один
+     * шаблон не эмитит строки ledger с этим полем до переработки репутации; хранится здесь, чтобы
+     * контракт был явным начиная с шаблона №1.)
      */
     val outcomesVerified: Boolean
 
     /**
-     * Validate the create request for this template and resolve the payment mode, total goal,
-     * participants (userId → expected share), and optional source event. Throws ValidationException
-     * (400) / ForbiddenException (403) / NotFoundException (404) on invalid input.
+     * Валидирует запрос создания для этого шаблона и определяет режим оплаты, общую цель,
+     * участников (userId → ожидаемая доля) и опциональное исходное событие. Бросает
+     * ValidationException (400) / ForbiddenException (403) / NotFoundException (404) при невалидном вводе.
      */
     fun resolveCreation(clubId: UUID, creatorId: UUID, request: CreateSkladchinaRequest): TemplateResolution
 }
 
-/** How declining works for a template (V28). */
+/** Как работает отказ для шаблона (V28). */
 enum class DeclinePolicy {
-    /** Instant, free, participant-controlled decline. */
+    /** Мгновенный, бесплатный отказ, контролируемый участником. */
     FREE,
-    /** A justified request the organizer approves (→ declined) or rejects (→ must pay). */
+    /** Обоснованный запрос, который организатор одобряет (→ declined) или отклоняет (→ нужно платить). */
     REQUIRES_APPROVAL,
 }
 
-/** What a template resolves a create request into; the engine persists this verbatim. */
+/** Во что шаблон превращает запрос создания; движок персистит это как есть. */
 data class TemplateResolution(
     val mode: SkladchinaMode,
     val totalGoalKopecks: Long?,

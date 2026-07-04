@@ -72,7 +72,7 @@ class JooqSkladchinaRepository(
                 SKLADCHINAS.EVENT_ID.eq(eventId)
                     .and(SKLADCHINAS.STATUS.`in`(SkladchinaStatus.active, SkladchinaStatus.closed_success))
             )
-            // Active first (the button links to it); then the most recent successful one.
+            // Сначала active (кнопка ведёт именно на него); затем самый свежий успешный.
             .orderBy(
                 DSL.case_().`when`(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active), 0).otherwise(1).asc(),
                 SKLADCHINAS.CREATED_AT.desc()
@@ -155,7 +155,7 @@ class JooqSkladchinaRepository(
         val baseCondition = CLUBS.IS_ACTIVE.eq(true)
             .and(involvementCondition)
 
-        // Total distinct skladchina_id satisfying involvement
+        // Общее число distinct skladchina_id, удовлетворяющих условию вовлечённости
         val total = dsl.select(DSL.countDistinct(SKLADCHINAS.ID))
             .from(SKLADCHINAS)
             .join(CLUBS).on(CLUBS.ID.eq(SKLADCHINAS.CLUB_ID))
@@ -163,8 +163,8 @@ class JooqSkladchinaRepository(
             .where(baseCondition)
             .fetchOne(0, Long::class.java) ?: 0L
 
-        // Page of skladchinaIds — distinct, ordered by actionRequired DESC, deadline ASC.
-        // actionRequired = user is participant AND participant.status='pending'.
+        // Страница skladchinaIds — distinct, сортировка actionRequired DESC, deadline ASC.
+        // actionRequired = user является участником И participant.status='pending'.
         val callerStatus = DSL.field(
             "(SELECT status FROM skladchina_participants WHERE skladchina_id = {0} AND user_id = {1})",
             SkladchinaParticipantStatus::class.java,
@@ -173,11 +173,11 @@ class JooqSkladchinaRepository(
         val actionRequiredOrder = DSL.case_()
             .`when`(callerStatus.eq(SkladchinaParticipantStatus.pending), 1)
             .otherwise(0)
-        // 0 = active (top), 1 = closed (bottom — история)
+        // 0 = active (сверху), 1 = closed (снизу — история)
         val statusBucket = DSL.case_()
             .`when`(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active), 0)
             .otherwise(1)
-        // Conditional sort key — для active = deadline, для closed = NULL.
+        // Условный ключ сортировки — для active = deadline, для closed = NULL.
         // SELECT DISTINCT требует чтобы все ORDER BY-выражения были в select list,
         // поэтому выносим как alias `active_sort`.
         val activeSort = DSL.field(
@@ -213,7 +213,7 @@ class JooqSkladchinaRepository(
             return PageResponse(emptyList(), total, computeTotalPages(total, size), page, size)
         }
 
-        // Fetch skladchina rows with club info
+        // Читаем строки складчин вместе с данными клуба
         val skladchinaRows = dsl.select(
             SKLADCHINAS.asterisk(),
             CLUBS.NAME.`as`("club_name"),
@@ -224,7 +224,7 @@ class JooqSkladchinaRepository(
             .where(SKLADCHINAS.ID.`in`(skladchinaIds))
             .fetch()
 
-        // Batch aggregates
+        // Батч-агрегаты
         val paidCounts = dsl.select(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID, DSL.count())
             .from(SKLADCHINA_PARTICIPANTS)
             .where(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.`in`(skladchinaIds)
@@ -258,7 +258,7 @@ class JooqSkladchinaRepository(
             .fetch()
             .associate { it.value1()!! to it.value2()!! }
 
-        // Build items preserving page order
+        // Собираем items, сохраняя порядок страницы
         val skladchinaById = skladchinaRows.associateBy { it.get(SKLADCHINAS.ID)!! }
         val items = skladchinaIds.mapNotNull { id ->
             val row = skladchinaById[id] ?: return@mapNotNull null
@@ -305,7 +305,7 @@ class JooqSkladchinaRepository(
             .set(SKLADCHINAS.UPDATED_AT, OffsetDateTime.now())
             .where(
                 SKLADCHINAS.ID.eq(id)
-                    // F5-12: only one concurrent closer can flip active → terminal.
+                    // F5-12: только один из конкурентных закрывателей может перевести active → терминальный.
                     .and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active))
             )
             .execute() > 0
@@ -374,9 +374,9 @@ class JooqSkladchinaRepository(
             .where(
                 SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
                     .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
-                    // F5-03: a concurrent close may have just expired/released this
-                    // participant — never overwrite a terminal status (a paid-over-expired
-                    // row would contradict its already-written -40 ledger entry forever).
+                    // F5-03: конкурентное закрытие могло только что перевести участника в
+                    // expired/released — терминальный статус никогда не перезаписываем (строка
+                    // paid поверх expired навсегда противоречила бы уже записанной ledger-записи -40).
                     .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
             )
             .execute()
@@ -392,7 +392,7 @@ class JooqSkladchinaRepository(
             .where(
                 SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
                     .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
-                    // F5-03: same pending-only guard as setParticipantPaid.
+                    // F5-03: тот же pending-only guard, что и в setParticipantPaid.
                     .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.pending))
             )
             .execute()
@@ -405,8 +405,8 @@ class JooqSkladchinaRepository(
             .where(
                 SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.eq(skladchinaId)
                     .and(SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId))
-                    // A-2: only undo a real payment; never reopen a participant a concurrent
-                    // close already moved to a terminal status.
+                    // A-2: откатываем только реальную оплату; участника, которого конкурентное
+                    // закрытие уже перевело в терминальный статус, заново не открываем.
                     .and(SKLADCHINA_PARTICIPANTS.STATUS.eq(SkladchinaParticipantStatus.paid))
             )
             .execute()
@@ -486,9 +486,9 @@ class JooqSkladchinaRepository(
                 SKLADCHINAS.CLUB_ID.eq(clubId)
                     .and(SKLADCHINAS.AFFECTS_REPUTATION.isTrue)
                     .and(SKLADCHINAS.CREATED_AT.greaterThan(since))
-                    // The rate limit guards the "важный сбор" toggle on organizer-chosen pools.
-                    // split_bill is verified by attendance (not farmable) and always reputation-
-                    // affecting — exclude it so splits don't burn a club's custom-important budget.
+                    // Rate limit защищает тумблер «важный сбор» на сборах, выбранных организатором.
+                    // split_bill верифицируется посещаемостью (не фармится) и всегда влияет на
+                    // репутацию — исключаем его, чтобы сплиты не сжигали клубный лимит «важных» сборов.
                     .and(SKLADCHINAS.TEMPLATE.ne(SkladchinaTemplate.split_bill))
             )
             .fetchOne(0, Int::class.java) ?: 0
@@ -499,7 +499,7 @@ class JooqSkladchinaRepository(
             .where(
                 SKLADCHINAS.ID.eq(skladchinaId)
                     .and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active))
-                    // Only ever push the deadline OUT, never pull it in.
+                    // Дедлайн можно только ОТОДВИГАТЬ вперёд, никогда не приближать.
                     .and(SKLADCHINAS.DEADLINE.lessThan(newDeadline))
             )
             .execute()
@@ -534,7 +534,7 @@ class JooqSkladchinaRepository(
     private fun computeTotalPages(total: Long, size: Int): Int =
         if (size == 0) 0 else ((total + size - 1) / size).toInt()
 
-    /** Verify all provided userIds are active members of given club. Returns missing userIds. */
+    /** Проверяет, что все переданные userIds — активные участники клуба. Возвращает отсутствующих. */
     override fun findNonActiveMembers(clubId: UUID, userIds: Collection<UUID>): Set<UUID> {
         if (userIds.isEmpty()) return emptySet()
         val activeMembers = dsl.select(MEMBERSHIPS.USER_ID)
@@ -585,10 +585,10 @@ class JooqSkladchinaRepository(
                 SKLADCHINAS.CLUB_ID.eq(clubId)
                     .and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active))
             )
-        // Release pending participants first (pending → released, no reputation) while their
-        // skladchinas are still `active` and selectable. released ⇒ ReputationPolicy.financeKind
-        // returns null ⇒ no ledger row: deleting a club must not penalize anyone for "silence"
-        // (unlike expired_no_response, which closeInternal would assign past the deadline).
+        // Сначала освобождаем pending-участников (pending → released, без репутации), пока их
+        // складчины ещё `active` и попадают в выборку. released ⇒ ReputationPolicy.financeKind
+        // вернёт null ⇒ ledger-строки нет: удаление клуба не должно никого штрафовать за «молчание»
+        // (в отличие от expired_no_response, который closeInternal назначил бы после дедлайна).
         dsl.update(SKLADCHINA_PARTICIPANTS)
             .set(SKLADCHINA_PARTICIPANTS.STATUS, SkladchinaParticipantStatus.released)
             .where(
@@ -614,8 +614,8 @@ class JooqSkladchinaRepository(
                 SKLADCHINAS.EVENT_ID.eq(eventId)
                     .and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.active))
             )
-        // Release pending participants first (pending → released, no reputation) while their
-        // split is still active and selectable — mirrors cancelActiveByClub.
+        // Сначала освобождаем pending-участников (pending → released, без репутации), пока их
+        // сплит ещё active и попадает в выборку — зеркально cancelActiveByClub.
         dsl.update(SKLADCHINA_PARTICIPANTS)
             .set(SKLADCHINA_PARTICIPANTS.STATUS, SkladchinaParticipantStatus.released)
             .where(

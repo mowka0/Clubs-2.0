@@ -11,15 +11,19 @@ import java.net.URI
 
 @Configuration
 class S3Config(
+    // Access key для S3-совместимого хранилища (дефолт — локальный MinIO)
     @Value("\${AWS_ACCESS_KEY_ID:minioadmin}")
     private val accessKeyId: String,
 
+    // Secret key для S3-совместимого хранилища (дефолт — локальный MinIO)
     @Value("\${AWS_SECRET_ACCESS_KEY:minioadmin}")
     private val secretAccessKey: String,
 
+    // Endpoint S3-совместимого хранилища (дефолт — локальный MinIO)
     @Value("\${S3_ENDPOINT_URL:http://localhost:9000}")
     private val endpointUrl: String,
 
+    // Регион S3-хранилища
     @Value("\${AWS_REGION:ru-1}")
     private val region: String
 ) {
@@ -32,7 +36,7 @@ class S3Config(
             .region(Region.of(region))
             .endpointOverride(URI.create(endpointUrl))
             .credentialsProvider(StaticCredentialsProvider.create(credentials))
-            .forcePathStyle(true) // Required for MinIO and S3-compatible storages
+            .forcePathStyle(true) // Требуется для MinIO и S3-совместимых хранилищ
             .build()
     }
 }

@@ -7,15 +7,16 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * Platform service-fee subscription (docs/modules/payment-v2.md §5.1). Flat monthly: runs the whole
- * paid period regardless of club activity, never pauses, ends only at [currentPeriodEnd].
+ * Подписка на сервисный сбор платформы (docs/modules/payment-v2.md §5.1). Плоская помесячная:
+ * действует весь оплаченный период независимо от активности клуба, никогда не приостанавливается,
+ * заканчивается только в [currentPeriodEnd].
  */
 data class ServiceSubscription(
     val id: UUID,
     val payerUserId: UUID,
     val payerRole: SubscriptionPayerRole,
     val plan: SubscriptionPlan,
-    /** NULL = platform-wide organizer capacity plan; club-scoped for member-pays (phase 2). */
+    /** NULL = платформенный план ёмкости организатора; привязан к клубу для member-pays (фаза 2). */
     val subjectClubId: UUID?,
     val status: SubscriptionStatus,
     val currentPeriodEnd: OffsetDateTime,

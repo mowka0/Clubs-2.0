@@ -25,13 +25,14 @@ export interface EventActivityDto extends ActivityBase {
   locationText: string;
   participantLimit: number;
   goingCount: number;
-  // Stage-2 confirmed roster size. The card shows `goingCount` during stage 1 and switches to
-  // `confirmedCount` once voting closes (stage_2/completed), matching the event page (F5-21).
+  // Размер подтверждённого ростера Этапа 2. Карточка показывает `goingCount` во время stage 1 и
+  // переключается на `confirmedCount`, когда голосование закрывается (stage_2/completed), — так же,
+  // как страница события (F5-21).
   confirmedCount: number;
   status: EventActivityStatus;
   descriptionPreview: string | null;
   photoUrl: string | null;
-  /** Event awaits the current user's stage-1 vote or stage-2 confirmation. */
+  /** Событие ждёт голоса текущего пользователя на этапе 1 или подтверждения на этапе 2. */
   actionRequired: boolean;
 }
 
@@ -62,9 +63,9 @@ export interface SkladchinaActivityDto extends ActivityBase {
 export type ActivityItemDto = EventActivityDto | SkladchinaActivityDto;
 
 /**
- * Feed split by completion status. Backend already sorts each array:
- * `upcoming` soonest-first (by event date / deadline), `past` most-recent-first.
- * The frontend renders both in received order — no client re-sorting.
+ * Фид, разделённый по статусу завершённости. Бэкенд уже сортирует каждый массив:
+ * `upcoming` — ближайшие сначала (по дате события / дедлайну), `past` — сначала самые недавние.
+ * Фронтенд рендерит оба в полученном порядке — без пересортировки на клиенте.
  */
 export interface ClubActivityFeed {
   upcoming: ActivityItemDto[];

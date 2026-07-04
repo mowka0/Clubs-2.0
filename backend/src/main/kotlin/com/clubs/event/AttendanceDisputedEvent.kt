@@ -3,10 +3,10 @@ package com.clubs.event
 import java.util.UUID
 
 /**
- * Published when a participant disputes their "absent" mark (ATT-3). A bot listener reacts
- * AFTER_COMMIT to DM the organizer: an unresolved dispute is converted back to absent (no_show
- * penalty) when the dispute window expires, so the organizer has to learn about the dispute
- * while there is still time to review it — without this DM an organizer who never reopens the
- * event page lets the penalty land unreviewed.
+ * Публикуется, когда участник оспаривает свою отметку «отсутствовал» (ATT-3). Слушатель бота
+ * реагирует AFTER_COMMIT, отправляя организатору DM: неразрешённый спор превращается обратно
+ * в «отсутствовал» (штраф no_show), когда окно спора истекает, поэтому организатор должен
+ * узнать о споре, пока ещё есть время его рассмотреть — без этого DM организатор, который
+ * никогда не открывает страницу события заново, пропустит штраф без рассмотрения.
  */
 data class AttendanceDisputedEvent(val eventId: UUID, val disputerUserId: UUID)

@@ -1,15 +1,17 @@
 package com.clubs.common.auth
 
 /**
- * Ensures the authenticated user is an active member of the club identified by [clubIdParam].
- * [clubIdParam] must match the controller method parameter name that holds the club UUID.
+ * Гарантирует, что авторизованный пользователь — активный участник клуба, определённого
+ * параметром [clubIdParam]. [clubIdParam] должен совпадать с именем параметра метода контроллера,
+ * который хранит UUID клуба.
  */
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
 annotation class RequiresMembership(val clubIdParam: String = "id")
 
 /**
- * Ensures the authenticated user is the owner (organizer) of the club identified by [clubIdParam].
+ * Гарантирует, что авторизованный пользователь — владелец (организатор) клуба, определённого
+ * параметром [clubIdParam].
  */
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)

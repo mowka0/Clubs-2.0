@@ -8,15 +8,16 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 /**
- * Cross-club organizer views over memberships (de-Stars Slice 2). User-scoped (not under a specific
- * club), so it lives outside MemberController's `/api/clubs` mapping. Ownership is enforced inside the
- * query (filtered by `clubs.owner_id` = caller), so a non-owner simply gets an empty list — no 403.
+ * Кросс-клубовые представления организатора над membership (de-Stars, слой 2). Привязан к пользователю
+ * (а не к конкретному клубу), поэтому живёт вне маппинга `/api/clubs` из MemberController. Владение
+ * проверяется внутри запроса (фильтр по `clubs.owner_id` = вызывающий), так что не-владелец просто
+ * получает пустой список — без 403.
  */
 @RestController
 @RequestMapping("/api/users/me/organizer")
 class OrganizerMembersController(private val memberService: MemberService) {
 
-    /** Cross-club «Ждут оплаты»: frozen members across the caller's owned clubs, pending a dues confirm. */
+    /** Кросс-клубовое «Ждут оплаты»: участники в статусе frozen по клубам вызывающего, ждущие подтверждения взноса. */
     @GetMapping("/awaiting-dues")
     fun awaitingDues(
         @AuthenticationPrincipal caller: AuthenticatedUser

@@ -4,16 +4,16 @@ import { formatRub, planCapacityLabel, planLabel } from './planDisplay';
 
 interface PlanCardProps {
   plan: PlanOptionDto;
-  /** Accent border + accent price (the recommended / target tier). */
+  /** Акцентная рамка + акцентная цена (рекомендуемый / целевой тариф). */
   highlighted?: boolean;
-  /** Faded styling (the current plan or a lower, non-selectable tier). */
+  /** Приглушённое оформление (текущий план или более низкий, невыбираемый тариф). */
   dimmed?: boolean;
   chip?: 'current' | 'recommended' | null;
-  /** Action button(s), or nothing for non-selectable tiers. */
+  /** Кнопка(и) действия, либо ничего для невыбираемых тарифов. */
   cta?: ReactNode;
 }
 
-/** One tier row in the plan ladder. Shared by the paywall modal and the profile management card. */
+/** Одна строка тарифа в лестнице планов. Используется и в paywall-модалке, и в карточке управления профилем. */
 export const PlanCard: FC<PlanCardProps> = ({ plan, highlighted = false, dimmed = false, chip = null, cta = null }) => {
   const className = `rd-plan${dimmed ? ' rd-plan--current' : ''}${highlighted ? ' rd-plan--rec' : ''}`;
   return (

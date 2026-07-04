@@ -7,12 +7,14 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * No-op provider for staging/dev: "activates" synchronously and moves NO real money. The subscription
- * engine works end-to-end behind it (subscribe → state machine → capacity → cancel). Wiring a real
- * acquirer = a second @Component (mark it @Primary or gate via @ConditionalOnProperty) — no engine change.
+ * No-op провайдер для staging/dev: "активирует" синхронно и НЕ двигает реальные деньги. За ним
+ * движок подписок работает целиком (subscribe → машина состояний → capacity → cancel). Подключение
+ * реального эквайера = второй @Component (пометить @Primary или включить через @ConditionalOnProperty) —
+ * движок менять не нужно.
  */
 @Component
 class StubPaymentProvider(
+    // Длительность одного периода подписки в днях (для расчёта currentPeriodEnd).
     @Value("\${subscription.period-days:30}") private val periodDays: Long,
 ) : PaymentProvider {
 

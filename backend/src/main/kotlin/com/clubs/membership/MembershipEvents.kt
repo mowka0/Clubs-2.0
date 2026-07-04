@@ -9,9 +9,9 @@ data class ExpiringSubscriptionNotification(
 )
 
 /**
- * Minimal projection of a membership row — just enough for payment/scheduler
- * flows to decide between "new" and "renewal" without pulling a full jOOQ Record.
- * A full Membership domain will land when the `membership` module is refactored.
+ * Минимальная проекция строки membership — ровно столько, чтобы платёжные/шедулерные
+ * флоу отличили «новую» подписку от «продления», не вытягивая полный jOOQ Record.
+ * Полный домен Membership появится при рефакторинге модуля `membership`.
  */
 data class MembershipExpiryRef(
     val id: UUID,

@@ -58,8 +58,8 @@ class MembershipService(
         if (membership.status == MembershipStatus.cancelled) throw ValidationException("Membership already cancelled")
 
         membershipRepository.cancel(membership.id)
-        // Mirror /leave: clear the active application so a cancelled member isn't stuck on an orphan
-        // «Заявка одобрена» and can re-apply.
+        // Зеркалит /leave: очищает активную заявку, чтобы отменённый участник не застревал на
+        // осиротевшей «Заявка одобрена» и мог подать заявку заново.
         val cascadedApplications = applicationRepository.deleteActiveByUserAndClub(userId, clubId)
 
         log.info("Membership cancelled: clubId={} userId={} cascadedApplications={}", clubId, userId, cascadedApplications)
@@ -67,18 +67,18 @@ class MembershipService(
     }
 
     /**
-     * Leave-club operation. Behaviour branches by club type:
-     *  - **Free** (subscriptionPrice <= 0): cascade-clean active obligations
-     *    (event RSVPs + skladchina participation), flip membership to
-     *    `cancelled`. Owner cannot leave.
-     *  - **Paid** (subscriptionPrice > 0): just flip membership to `cancelled`.
-     *    `subscription_expires_at` is preserved — user keeps access until
-     *    expire. Cascade is intentionally skipped: existing
-     *    RSVPs/skladchina participation stay valid until expire.
+     * Операция выхода из клуба. Поведение ветвится по типу клуба:
+     *  - **Бесплатный** (subscriptionPrice <= 0): каскадная очистка активных обязательств
+     *    (RSVP на события + участие в складчинах), перевод членства в
+     *    `cancelled`. Владелец выйти не может.
+     *  - **Платный** (subscriptionPrice > 0): просто перевод членства в `cancelled`.
+     *    `subscription_expires_at` сохраняется — пользователь сохраняет доступ до
+     *    истечения срока. Каскад намеренно пропускается: существующие
+     *    RSVP/участие в складчинах остаются в силе до истечения срока.
      *
-     * Cascade NEVER touches `user_club_reputation`, `transactions`, or
-     * completed events/skladchinas — preserves cross-club reputation
-     * aggregate and financial audit trail.
+     * Каскад НИКОГДА не трогает `user_club_reputation`, `transactions` и
+     * завершённые события/складчины — сохраняет сквозной по клубам агрегат
+     * репутации и финансовый аудиторский след.
      */
     @Transactional
     fun leaveClub(clubId: UUID, userId: UUID): MembershipDto {
@@ -100,12 +100,12 @@ class MembershipService(
     }
 
     /**
-     * "Leave" is a soft subscription-cancel (no penalty, no cascade) for anyone who still holds a
-     * paid period — even if the club has since been switched to free. Only a genuinely free
-     * membership (no active paid period) takes the hard exit-with-obligations path. Routing on the
-     * membership's `subscription_expires_at` (not just the club's current price) is load-bearing: a
-     * paid member of a paid→free-switched club would otherwise be penalized and stripped of bookings
-     * they can still attend until their subscription expires.
+     * «Выход» — это мягкая отмена подписки (без штрафа, без каскада) для любого, кто ещё держит
+     * оплаченный период — даже если клуб с тех пор переключился на бесплатный. Только по-настоящему
+     * бесплатное членство (без активного оплаченного периода) идёт по жёсткому пути «выход с
+     * обязательствами». Маршрутизация по `subscription_expires_at` членства (а не только по текущей
+     * цене клуба) критична: иначе платный участник клуба, переключённого с платного на бесплатный,
+     * был бы оштрафован и лишён броней, которые он ещё вправе посещать до истечения подписки.
      */
     private fun hasActivePaidAccess(club: Club, membership: Membership): Boolean =
         club.subscriptionPrice > 0 || (membership.subscriptionExpiresAt?.isAfter(OffsetDateTime.now()) == true)
@@ -128,10 +128,10 @@ class MembershipService(
         membershipRepository.findByUserId(userId).map(mapper::toDto)
 
     /**
-     * The authenticated user's reputation for the Profile tab: the all-history global aggregate
-     * ("надёжен в N из M клубов") + per-club Trust, split into active clubs and "История" (left
-     * clubs that still carry a track record). Trust is computed on-read from the ledger
-     * ([TrustService]); the club list + active/История split comes from memberships.
+     * Репутация аутентифицированного пользователя для таба «Профиль»: all-history глобальный
+     * агрегат ("надёжен в N из M клубов") + Trust по каждому клубу, разбитый на активные клубы и
+     * "История" (клубы, из которых вышел, но по которым остался след репутации). Trust вычисляется
+     * на чтении из ledger ([TrustService]); список клубов + разбивку активные/История даёт membership.
      */
     @Transactional(readOnly = true)
     fun getMyReputation(userId: UUID): MyReputationDto {
@@ -160,33 +160,35 @@ class MembershipService(
     }
 
     /**
-     * Free-club leave is also "exit-with-obligations" (P1b hole B): open obligations are
-     * enumerated and penalized BEFORE the cascade deletes their source rows, otherwise leaving a
-     * confirmed booking behind would be free. Penalty (internal) + cascade + waitlist promotion
-     * all run in the single [leaveClub] transaction so they commit atomically.
+     * Выход из бесплатного клуба — это тоже «выход с обязательствами» (P1b дыра B): открытые
+     * обязательства перечисляются и штрафуются ДО того, как каскад удалит их исходные строки, иначе
+     * оставить подтверждённую бронь позади было бы бесплатно. Штраф (internal) + каскад + продвижение
+     * waitlist — всё выполняется в единой транзакции [leaveClub], чтобы закоммититься атомарно.
      */
     private fun leaveFreeClub(membership: Membership, clubId: UUID, userId: UUID): MembershipDto {
-        // Enumerate BEFORE any delete — the cascade below removes exactly these source rows.
+        // Перечислить ДО любого удаления — каскад ниже удалит именно эти исходные строки.
         val eventObligations = eventResponseRepository.findConfirmedActiveEventObligations(userId, clubId)
         val skladchinaObligations = skladchinaRepository.findPendingReputationObligations(userId, clubId)
 
-        // Penalties first: a confirmed booking → no_show (−200), a pending reputation skladchina →
-        // skladchina_expired (−40). Idempotent via the ledger UNIQUE — a later natural outcome for
-        // the same source collides and the exit row wins, so a double leave never double-counts.
+        // Сначала штрафы: подтверждённая бронь → no_show (−200), складчина с ожидающей репутацией →
+        // skladchina_expired (−40). Идемпотентно через UNIQUE в ledger — более поздний естественный
+        // исход для того же источника конфликтует, и строка выхода побеждает, так что двойной выход
+        // никогда не засчитывается дважды.
         reputationService.penalizeExit(
             userId, clubId,
             eventObligations.map { ExitObligation(it.eventId, it.eventDatetime) },
             skladchinaObligations.map { ExitObligation(it.skladchinaId, it.deadline) }
         )
 
-        // Hold the per-event slot lock (sorted → deadlock-free, released on commit) across the
-        // delete + promotion so waitlist promotion never races a concurrent confirm/decline.
+        // Держим блокировку слотов по каждому событию (отсортировано → без deadlock, снимается при
+        // commit) на протяжении delete + promotion, чтобы продвижение waitlist никогда не гонялось
+        // с параллельным confirm/decline.
         val freedEventIds = eventObligations.map { it.eventId }.sorted()
         freedEventIds.forEach { eventResponseRepository.lockEventSlots(it) }
 
         val cascadedSkladchinas = skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(userId, clubId)
         val cascadedEventResponses = eventResponseRepository.deleteByUserAndClubAndActiveEvents(userId, clubId)
-        // Each vacated confirmed slot promotes the next waitlisted member so leaving doesn't shrink the roster.
+        // Каждый освободившийся подтверждённый слот продвигает следующего из waitlist, чтобы выход не сокращал ростер.
         val promotedWaitlist = freedEventIds.count { eventResponseRepository.promoteFirstWaitlisted(it) }
         val cascadedApplications = applicationRepository.deleteActiveByUserAndClub(userId, clubId)
 
@@ -202,10 +204,10 @@ class MembershipService(
     }
 
     /**
-     * Pre-leave preview for the confirm dialog: how many open obligations the caller would break
-     * by leaving (and thus lose reliability for). Penalty magnitudes stay server-side (internal,
-     * H8) — only counts are returned. Paid clubs keep obligations valid until expire, so they
-     * break nothing (zeros).
+     * Превью перед выходом для диалога подтверждения: сколько открытых обязательств вызывающий
+     * нарушит выходом (и, соответственно, потеряет за них надёжность). Величины штрафов остаются
+     * на сервере (internal, H8) — возвращаются только количества. Платные клубы сохраняют
+     * обязательства в силе до истечения срока, поэтому ничего не нарушают (нули).
      */
     @Transactional(readOnly = true)
     fun getLeavePreview(clubId: UUID, userId: UUID): LeavePreviewDto {
@@ -213,8 +215,8 @@ class MembershipService(
             ?: throw NotFoundException("Membership not found")
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId == userId) throw ValidationException("Owner cannot leave the club")
-        // Same routing as leaveClub: anyone with an active paid period takes the soft cancel
-        // (no obligations broken until expire), so the preview is all zeros.
+        // Та же маршрутизация, что и в leaveClub: у кого есть активный оплаченный период — идёт
+        // по мягкой отмене (обязательства не нарушаются до истечения), поэтому превью — сплошные нули.
         if (hasActivePaidAccess(club, membership)) return LeavePreviewDto(0, 0, 0)
 
         val events = eventResponseRepository.findConfirmedActiveEventObligations(userId, clubId).size
@@ -227,9 +229,10 @@ class MembershipService(
     }
 
     /**
-     * Joins the validated club (de-Stars, Slice 2). A paid club lands the member in `frozen` — they
-     * belong and hold a slot, but have no content access until the organizer confirms the off-platform
-     * dues (AccessGateService.markDuesPaid). A free club joins straight to `active`. No Stars invoice.
+     * Присоединяет к уже провалидированному клубу (de-Stars, Slice 2). Платный клуб переводит
+     * участника в `frozen` — он числится и занимает слот, но не имеет доступа к контенту, пока
+     * организатор не подтвердит офлайн-взнос (AccessGateService.markDuesPaid). Бесплатный клуб —
+     * сразу в `active`. Инвойса Stars нет.
      */
     private fun joinClubMembership(club: Club, userId: UUID, source: String): MembershipDto {
         val clubId = club.id

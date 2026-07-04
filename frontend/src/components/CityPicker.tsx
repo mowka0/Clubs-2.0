@@ -59,7 +59,7 @@ const COUNTRIES: readonly Country[] = [
 const STORAGE_KEY = 'clubs.cityChoice';
 const DEFAULT_CHOICE: CityChoice = { country: 'RU', city: 'Москва' };
 
-/** Human-readable country name for a stored country code (e.g. 'RU' → 'Россия'). */
+/** Читаемое название страны по сохранённому коду (например, 'RU' → 'Россия'). */
 export function countryNameByCode(code: string | null | undefined): string | null {
   if (!code) return null;
   return COUNTRIES.find((c) => c.code === code)?.name ?? null;
@@ -86,7 +86,7 @@ export function useCityChoice(): [CityChoice, (next: CityChoice) => void] {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch {
-      // localStorage unavailable in some Telegram clients — selection lives in memory.
+      // localStorage недоступен в некоторых клиентах Telegram — выбор живёт только в памяти.
     }
   }, []);
   return [choice, update];
@@ -108,14 +108,14 @@ export const CityPicker: FC<CityPickerProps> = ({ value, onChange, onClose }) =>
   const haptic = useHaptic();
   const [activeCountry, setActiveCountry] = useState<string>(value.country);
 
-  // Lock background scroll while sheet is open
+  // Блокируем скролл фона, пока открыт шит
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prev; };
   }, []);
 
-  // Close on Escape
+  // Закрываем по Escape
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);

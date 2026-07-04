@@ -6,20 +6,20 @@ import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionalEventListener
 
 /**
- * Bot DM notifier for event creation. Listens to [EventCreatedEvent] published by
- * EventService and notifies club members AFTER the originating transaction has
- * committed (`@TransactionalEventListener`, default phase = AFTER_COMMIT). Like
- * SkladchinaBotNotifier / SkladchinaBotNotifier, firing AFTER_COMMIT is the
- * proven path for "send DM after DB mutation succeeded" — the listener is skipped
- * if the createEvent transaction rolls back.
+ * DM-нотификатор бота о создании события. Слушает [EventCreatedEvent], публикуемый
+ * EventService, и уведомляет участников клуба ПОСЛЕ коммита исходной транзакции
+ * (`@TransactionalEventListener`, фаза по умолчанию = AFTER_COMMIT). Как и в
+ * SkladchinaBotNotifier / SkladchinaBotNotifier, срабатывание AFTER_COMMIT —
+ * проверенный путь для «отправить DM после успешной мутации в БД»: если транзакция
+ * createEvent откатится, листенер пропускается.
  *
- * Unlike those handlers (which send a small, fixed number of DMs synchronously),
- * an event can have many recipients, so dispatch is delegated to the @Async
- * [NotificationService.sendEventCreated]: this listener returns immediately and
- * the send loop runs off the request thread (backend rule: mass notifications via
- * @Async). Per-DM Telegram failures are caught and logged inside sendEventCreated;
- * delivery is fire-and-forget by design — a Telegram outage must not fail event
- * creation.
+ * В отличие от тех хендлеров (шлют небольшое фиксированное число DM синхронно),
+ * у события получателей может быть много, поэтому рассылка делегируется @Async
+ * [NotificationService.sendEventCreated]: листенер возвращается сразу, а цикл
+ * отправки крутится вне request-потока (правило бэкенда: массовые уведомления —
+ * через @Async). Ошибки Telegram по отдельным DM ловятся и логируются внутри
+ * sendEventCreated; доставка — fire-and-forget by design: сбой Telegram не должен
+ * завалить создание события.
  */
 @Component
 class EventBotNotifier(

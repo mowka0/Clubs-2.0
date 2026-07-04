@@ -8,19 +8,19 @@ import org.springframework.stereotype.Component
 import java.time.OffsetDateTime
 
 /**
- * Poll-based event reminders (bot module = notification layer; depends on `event`).
+ * Напоминания о событии на основе поллинга (модуль bot = слой уведомлений; зависит от `event`).
  *
- *  A. [remindUnconfirmedVoters] — ~`confirmHoursBefore` (default 2h) before the event, DM
- *     going/maybe voters who haven't confirmed yet, nudging them to confirm before the
- *     window closes at event start (Bug B / Feature A).
- *  B. [remindOrganizersToMarkAttendance] — ~`attendanceHoursAfter` (default 24h) after the
- *     event, DM the organizer to mark attendance (without which reputation never finalizes — EXP-2).
+ *  A. [remindUnconfirmedVoters] — примерно за `confirmHoursBefore` (по умолчанию 2ч) до события,
+ *     DM тем, кто голосовал going/maybe, но ещё не подтвердил, — подталкивает подтвердить до того,
+ *     как окно закроется в момент начала события (Bug B / Feature A).
+ *  B. [remindOrganizersToMarkAttendance] — примерно через `attendanceHoursAfter` (по умолчанию 24ч)
+ *     после события, DM организатору отметить посещаемость (без этого репутация никогда не финализируется — EXP-2).
  *
- * Deliberately NO @Transactional on the loop methods: each event's `mark*ReminderSent` is an
- * independent auto-committed UPDATE, so one bad event can't poison the batch. This avoids the
- * catch-inside-@Transactional pitfall (EXP-3) that the trigger loop has. The dedup flag is set
- * BEFORE the @Async DM so a recurring poll never double-sends; a DM that then fails is logged
- * and dropped (delivery is best-effort, like every other DM in NotificationService).
+ * Намеренно БЕЗ @Transactional на методах цикла: `mark*ReminderSent` каждого события — независимый
+ * автокоммитящийся UPDATE, так что одно плохое событие не может отравить весь батч. Это обходит
+ * ловушку catch-внутри-@Transactional (EXP-3), которая есть у цикла триггеров. Флаг дедупликации
+ * выставляется ДО @Async DM, так что повторяющийся поллинг никогда не шлёт дважды; DM, упавший после
+ * этого, логируется и отбрасывается (доставка «на лучших усилиях», как и все остальные DM в NotificationService).
  */
 @Component
 class EventReminderScheduler(

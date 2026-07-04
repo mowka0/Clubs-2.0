@@ -4,21 +4,21 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import java.util.UUID
 
-/** A granted award shown as a chip on the member card. `id` lets the organizer remove it. */
+/** Выданная награда, показывается чипом на карточке участника. `id` даёт организатору удалить её. */
 data class AwardDto(
     val id: UUID,
     val emoji: String,
     val label: String
 )
 
-/** An autocomplete option in the grant form — a previously-used (emoji, label) in this club. No id:
- *  the same label may exist for many members, so a suggestion is a value, not a single record. */
+/** Опция автокомплита в форме выдачи — ранее использованная пара (emoji, label) в этом клубе. Без id:
+ *  одна и та же подпись может встречаться у многих участников, так что подсказка — это значение, а не запись. */
 data class AwardSuggestionDto(
     val emoji: String,
     val label: String
 )
 
-/** Organizer grants an award «как интересы»: pick a suggestion or type a fresh emoji + label. */
+/** Организатор выдаёт награду «как интересы»: выбирает подсказку или вводит новые emoji + подпись. */
 data class GrantAwardRequest(
     @field:NotBlank(message = "Укажите эмодзи награды")
     @field:Size(max = 16, message = "Эмодзи: максимум 16 символов")

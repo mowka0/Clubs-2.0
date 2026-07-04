@@ -3,7 +3,8 @@ package com.clubs.clubquality
 import java.time.OffsetDateTime
 import java.util.UUID
 
-/** Owner-resistant per-account profile inputs to the L3 credibility weight (the non-footprint half). */
+/** Устойчивые к манипуляциям организатором входные данные профиля аккаунта для веса
+ *  доверия L3 (половина, не связанная с footprint). */
 data class UserProfile(
     val userId: UUID,
     val createdAt: OffsetDateTime,
@@ -14,19 +15,20 @@ data class UserProfile(
 interface ClubRankRepository {
 
     /**
-     * Gathers raw L3 signals for every active club (grouped queries, no N+1). Every distinct-account
-     * list is already filtered to be member-driven and owner-excluded at the query — the repository
-     * shapes data, it does not score. [now] bounds all read windows deterministically.
+     * Собирает сырые L3-сигналы по каждому активному клубу (групповые запросы, без N+1). Каждый
+     * список distinct-аккаунтов уже отфильтрован по признаку «сформирован участниками» и с
+     * исключением владельца прямо в запросе — репозиторий только формирует данные, не считает
+     * скор. [now] детерминированно ограничивает все окна чтения.
      */
     fun findRankSignals(now: OffsetDateTime): List<ClubRankSignals>
 
-    /** Profile half of the credibility inputs for the given users (the footprint half comes from the
-     *  reputation [com.clubs.reputation.LedgerReadPort]). Empty input → empty output. */
+    /** Профильная половина входных данных доверия для указанных пользователей (footprint-половина
+     *  берётся из репутации [com.clubs.reputation.LedgerReadPort]). Пустой вход → пустой выход. */
     fun findUserProfiles(userIds: Collection<UUID>): Map<UUID, UserProfile>
 
-    /** Idempotent upsert of the recomputed ranks (`ON CONFLICT (club_id) DO UPDATE`). */
+    /** Идемпотентный upsert пересчитанных рангов (`ON CONFLICT (club_id) DO UPDATE`). */
     fun upsertRanks(ranks: List<ClubRank>)
 
-    /** All currently-ranked clubs — the input set for the "★ Топ-5 в категории" badge computation. */
+    /** Все клубы с текущим рангом — входное множество для расчёта бейджа "★ Топ-5 в категории". */
     fun findRankedClubs(): List<RankedClub>
 }

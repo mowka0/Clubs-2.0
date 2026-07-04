@@ -1,15 +1,19 @@
 import { FC, ReactNode } from 'react';
 import { MAX_LEVEL } from './qualityLevels';
 
+// Размер SVG-viewBox кольца, в условных единицах
 const VIEWBOX = 64;
+// Радиус окружности-кольца
 const RADIUS = 26;
+// Толщина обводки кольца
 const STROKE = 5;
-const GAP = 8; // gap between sectors, in path units
-const ROTATION = -126.2; // centres the 4 sectors at top/right/bottom/left, gaps on the diagonals
+const GAP = 8; // зазор между секторами, в единицах path
+const ROTATION = -126.2; // центрирует 4 сектора сверху/справа/снизу/слева, зазоры — по диагоналям
+// Длина окружности кольца (2πR)
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-const SEGMENT = (CIRCUMFERENCE - MAX_LEVEL * GAP) / MAX_LEVEL; // one sector's arc length
+const SEGMENT = (CIRCUMFERENCE - MAX_LEVEL * GAP) / MAX_LEVEL; // длина дуги одного сектора
 
-/** dasharray that paints the first `level` of 4 equal sectors (rounded caps), then one long gap. */
+/** dasharray, закрашивающий первые `level` из 4 равных секторов (со скруглёнными концами), затем один длинный зазор. */
 function fillDashArray(level: number): string {
   const n = Math.max(0, Math.min(MAX_LEVEL, Math.round(level)));
   if (n === 0) return `0 ${CIRCUMFERENCE.toFixed(3)}`;
@@ -24,20 +28,21 @@ function fillDashArray(level: number): string {
 }
 
 interface QualityRingProps {
-  /** Filled sectors, 0..4 (a generous discrete level — cosmetic, not a score). */
+  /** Закрашенные сектора, 0..4 (щедрый дискретный уровень — косметика, не строгий счёт). */
   level: number;
-  /** Sector colour — a CSS var, e.g. `var(--live)` (Сплочённость) or `var(--accent)`. */
+  /** Цвет сектора — CSS-переменная, например `var(--live)` (Сплочённость) или `var(--accent)`. */
   color: string;
-  /** Centre content: the distinct-absolute value + a tiny unit. */
+  /** Центральное содержимое: конкретное абсолютное значение + мелкая единица измерения. */
   children: ReactNode;
   size?: number;
   ariaLabel?: string;
 }
 
 /**
- * A 4-equal-sector donut for the L2 club-quality rings. Track = 4 faint sectors; the first `level`
- * sectors are painted in `color`. Pure presentational — the caller decides level, color and center.
- * Style matches [DonutRing] from the reputation cards (same viewBox, radius and overlay).
+ * Пончик с 4 равными секторами для колец L2 клубовой квалификации. Трек = 4 тусклых сектора;
+ * первые `level` секторов закрашены в `color`. Чисто презентационный — уровень, цвет и центр
+ * решает вызывающий код. Стиль совпадает с [DonutRing] из карточек репутации (тот же viewBox,
+ * радиус и наложение).
  */
 export const QualityRing: FC<QualityRingProps> = ({ level, color, children, size = 76, ariaLabel }) => {
   const center = VIEWBOX / 2;

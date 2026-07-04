@@ -144,8 +144,9 @@ export const ProfilePage: FC = () => {
   // + глобальный показатель (он считается по всей истории, включая покинутые клубы).
   const hasReputation = activeClubs.length > 0 || (global?.trackRecordClubs ?? 0) > 0;
 
-  // Global headline: the score 0-100 + a tier word + the breadth ("опыт в N клубах"). The
-  // internal "N из M reliable" feeds ranking, not the card (see TrustPolicy / design §9.1).
+  // Главный показатель: балл 0-100 + слово-уровень + широта опыта («опыт в N клубах»). Внутренний
+  // показатель «N из M reliable» участвует в ранжировании, но не показывается на карточке
+  // (см. TrustPolicy / design §9.1).
   const globalScore = global?.score ?? null;
   const reliablePhrase =
     global && global.trackRecordClubs > 0 && globalScore !== null
@@ -231,9 +232,10 @@ export const ProfilePage: FC = () => {
       )}
 
       {!rep && reputationQuery.error ? (
-        // A failed reputation fetch must not masquerade as the "no clubs yet" onboarding —
-        // show an explicit error + retry instead (F5-20). Only when there's no data at all;
-        // a background-refetch error over stale data keeps showing the stale list below.
+        // Провалившийся запрос репутации не должен маскироваться под онбординг «клубов пока
+        // нет» — вместо этого показываем явную ошибку + повтор (F5-20). Только когда данных
+        // нет вообще; ошибка фонового рефетча поверх устаревших данных ниже продолжает
+        // показывать устаревший список.
         <>
           <div className="rd-section-sub-h">Репутация</div>
           <div className="rd-glass rd-empty">

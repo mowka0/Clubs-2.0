@@ -9,9 +9,9 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * One append-only `reputation_ledger` row to insert idempotently.
- * `occurredAt` is the behaviour time (event datetime / skladchina closed_at),
- * NOT the processing time — the stable, reproducible anchor for P1b decay.
+ * Одна append-only строка `reputation_ledger`, вставляемая идемпотентно.
+ * `occurredAt` — момент поведения (event datetime / skladchina closed_at),
+ * НЕ момент обработки — стабильный, воспроизводимый якорь для decay в P1b.
  */
 data class LedgerEntry(
     val userId: UUID,
@@ -25,18 +25,18 @@ data class LedgerEntry(
 )
 
 /**
- * One open obligation a leaving user abandons (the source row + its behaviour time), passed
- * to [ReputationService.penalizeExit]. `occurredAt` = the event datetime (no_show) or the
- * skladchina deadline (skladchina_expired) — the immutable decay anchor, not leave time.
- * The reputation module owns the kind/points/axis/source mapping; the caller only supplies
- * which obligations broke and when they were due.
+ * Одно открытое обязательство, которое бросает уходящий пользователь (исходная строка + момент
+ * поведения), передаётся в [ReputationService.penalizeExit]. `occurredAt` = дата/время события
+ * (no_show) или дедлайн складчины (skladchina_expired) — неизменяемый якорь decay, а не момент выхода.
+ * Модуль репутации сам владеет маппингом kind/points/axis/source; вызывающий код только сообщает,
+ * какие обязательства были нарушены и когда они должны были быть выполнены.
  */
 data class ExitObligation(
     val sourceId: UUID,
     val occurredAt: OffsetDateTime
 )
 
-/** Club context needed to build attendance ledger rows for one finalized event. */
+/** Контекст клуба, нужный для построения строк ledger по посещаемости для одного финализированного события. */
 data class EventReputationContext(
     val clubId: UUID,
     val ownerId: UUID,
@@ -44,9 +44,9 @@ data class EventReputationContext(
 )
 
 /**
- * A confirmed event response — the only responses that produce a ledger row.
- * Non-confirmed (declined / waitlisted / null) contribute 0 to every aggregate,
- * so they are filtered out at the query and never written.
+ * Подтверждённый отклик на событие — только такие отклики порождают строку ledger.
+ * Неподтверждённые (declined / waitlisted / null) дают 0 в любой агрегат,
+ * поэтому они отфильтровываются на уровне запроса и никогда не записываются.
  */
 data class ConfirmedResponse(
     val userId: UUID,
@@ -55,8 +55,9 @@ data class ConfirmedResponse(
 )
 
 /**
- * One of a user's ledger outcomes (club + kind + behaviour time), read for on-read P1b Trust.
- * `occurredAt` anchors the recency decay; `kind` is classified kept/broke/neutral by TrustPolicy.
+ * Один из ledger-исходов пользователя (клуб + kind + момент поведения), читается для on-read
+ * P1b Trust. `occurredAt` — якорь для decay по давности; `kind` классифицируется как
+ * kept/broke/neutral в TrustPolicy.
  */
 data class ClubLedgerOutcome(
     val clubId: UUID,
@@ -65,8 +66,8 @@ data class ClubLedgerOutcome(
 )
 
 /**
- * A club member's ledger outcome (user + kind + behaviour time) — batch-read for the club member
- * list so per-member Trust is computed from one query rather than an N+1 over members.
+ * Ledger-исход участника клуба (user + kind + момент поведения) — читается пакетно для списка
+ * участников клуба, чтобы Trust на участника считался одним запросом, а не N+1 по участникам.
  */
 data class MemberLedgerOutcome(
     val userId: UUID,

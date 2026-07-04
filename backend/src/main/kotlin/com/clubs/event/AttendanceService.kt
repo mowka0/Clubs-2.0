@@ -20,11 +20,11 @@ class AttendanceService(
     private val eventResponseRepository: EventResponseRepository,
     private val clubRepository: ClubRepository,
     private val eventPublisher: ApplicationEventPublisher,
-    // Dispute window (minutes) before attendance finalizes (PRD §4.4.3 default 48h = 2880).
-    // Minutes unit lets staging set a literal 5 for an end-to-end reputation test.
+    // Окно спора (в минутах) до финализации посещаемости (PRD §4.4.3, дефолт 48ч = 2880).
+    // Единица — минуты, чтобы на staging можно было выставить буквально 5 для сквозного теста репутации.
     @Value("\${events.dispute-window-minutes:2880}") private val disputeWindowMinutes: Long,
-    // EXP-2: deadline (minutes after event_datetime) for neutral auto-finalization of unmarked
-    // past events. Default 48h. Minutes unit so staging can set a literal 5.
+    // EXP-2: дедлайн (в минутах после event_datetime) для нейтральной авто-финализации неотмеченных
+    // прошедших событий. Дефолт 48ч. Единица — минуты, чтобы на staging можно было выставить 5.
     @Value("\${events.auto-finalize-unmarked-minutes:2880}") private val autoFinalizeUnmarkedMinutes: Long
 ) {
 
@@ -37,9 +37,10 @@ class AttendanceService(
         val club = clubRepository.findById(event.clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != organizerId) throw ForbiddenException("Only the club organizer can mark attendance")
 
-        // ATT-4: once finalized the roster is frozen and reputation is computed; re-marking
-        // would silently desync the displayed attendance from the locked-in ledger (recompute
-        // never re-runs — claimEvent is one-shot). Mirror dispute/resolve, which already guard this.
+        // ATT-4: после финализации ростер заморожен и репутация посчитана; повторная отметка
+        // молча рассинхронизировала бы отображаемую посещаемость с зафиксированным леджером
+        // (recompute не перезапускается — claimEvent одноразовый). Зеркалит dispute/resolve,
+        // которые уже это проверяют.
         if (event.attendanceFinalized) {
             throw ValidationException("Attendance has been finalized")
         }
@@ -54,26 +55,26 @@ class AttendanceService(
             val updated = eventResponseRepository.setAttendance(eventId, entry.userId, entry.attended)
             if (updated > 0) {
                 markedCount++
-                // setAttendance only matches genuine transitions (IS DISTINCT FROM target), so
-                // updated > 0 with attended=false means this row NEWLY became absent — exactly who
-                // gets the "оспорьте" DM. A re-mark of an already-absent row matches 0 rows → no
-                // re-DM (F5-15.2).
+                // setAttendance затрагивает только настоящие переходы (IS DISTINCT FROM target),
+                // так что updated > 0 при attended=false означает: эта строка ТОЛЬКО ЧТО стала
+                // отсутствующей — именно она получает DM "оспорьте". Повторная отметка уже
+                // отсутствующей строки затрагивает 0 строк → без повторной DM (F5-15.2).
                 if (!entry.attended) newlyAbsentUserIds.add(entry.userId)
             }
         }
 
-        // F5-09: markAttendanceMarked is guarded on attendance_finalized=false. 0 rows means the
-        // finalizer won the TOCTOU and finalized the event between the guard read above and now —
-        // reject and roll back the setAttendance writes (single @Transactional).
+        // F5-09: markAttendanceMarked защищён условием attendance_finalized=false. 0 строк означает,
+        // что финализатор выиграл гонку TOCTOU и финализировал событие между проверкой выше и этим
+        // моментом — отклонить и откатить записи setAttendance (единая @Transactional).
         if (eventRepository.markAttendanceMarked(eventId) == 0) {
             throw ValidationException("Attendance has been finalized")
         }
 
-        // ATT-3 / F5-15.2: notify only the NEWLY-absent participants (DM "вас отметили
-        // отсутствующим, оспорьте") so the dispute window is reachable without spamming everyone
-        // on a re-mark. Published, not called directly: the @Async DM resolves recipients on a
-        // separate connection AFTER this transaction commits. AttendanceMarkedListener reacts
-        // AFTER_COMMIT — same hazard the reputation pipeline solves for AttendanceFinalizedEvent.
+        // ATT-3 / F5-15.2: уведомляем только НОВЫХ отсутствующих участников (DM "вас отметили
+        // отсутствующим, оспорьте"), чтобы окно спора было доступно без спама всем при повторной
+        // отметке. Публикуется, а не вызывается напрямую: @Async DM резолвит получателей на
+        // отдельном соединении ПОСЛЕ коммита этой транзакции. AttendanceMarkedListener реагирует
+        // AFTER_COMMIT — та же проблема, что пайплайн репутации решает для AttendanceFinalizedEvent.
         eventPublisher.publishEvent(AttendanceMarkedEvent(eventId, newlyAbsentUserIds))
 
         log.info("Attendance marked: eventId={} markedCount={} newlyAbsent={} organizerId={}", eventId, markedCount, newlyAbsentUserIds.size, organizerId)
@@ -81,11 +82,11 @@ class AttendanceService(
     }
 
     /**
-     * F5-04: the caller's OWN attendance state for the event. Deliberately NOT gated on club
-     * membership — a participant who has left the club (or whose subscription lapsed) still
-     * receives the no_show penalty and the "оспорьте" DM, so they must be able to reach the
-     * dispute UI. Scoped to their own response row; [MyAttendanceDto.canDispute] is the single
-     * source of truth the frontend keys the dispute button off.
+     * F5-04: СОБСТВЕННОЕ состояние посещаемости вызывающего для события. Намеренно НЕ завязано на
+     * членство в клубе — участник, покинувший клуб (или с истёкшей подпиской), всё равно получает
+     * штраф no_show и DM "оспорьте", так что должен иметь доступ к UI спора. Ограничено его
+     * собственной строкой ответа; [MyAttendanceDto.canDispute] — единственный источник истины,
+     * от которого фронтенд включает кнопку спора.
      */
     @Transactional(readOnly = true)
     fun getMyAttendance(eventId: UUID, userId: UUID): MyAttendanceDto {
@@ -124,9 +125,9 @@ class AttendanceService(
             throw ValidationException("No absent attendance to dispute")
         }
 
-        // The organizer must hear about the dispute while the window is still open: silence
-        // converts it back to absent (no_show penalty) on finalization. AFTER_COMMIT hop for
-        // the same reason as AttendanceMarkedEvent — the @Async DM reads committed rows.
+        // Организатор должен узнать о споре пока окно ещё открыто: молчание превращает отметку
+        // обратно в absent (штраф no_show) при финализации. Переход через AFTER_COMMIT по той же
+        // причине, что и AttendanceMarkedEvent — @Async DM читает уже закоммиченные строки.
         eventPublisher.publishEvent(AttendanceDisputedEvent(eventId, userId))
 
         log.info("Attendance disputed: eventId={} userId={} hasNote={}", eventId, userId, note != null)
@@ -143,9 +144,9 @@ class AttendanceService(
             throw ValidationException("Attendance has been finalized")
         }
 
-        // Reject a no-op resolve: if the target user has no disputed mark on this event, the update
-        // touches 0 rows. Returning success would lie to the organizer and mask a bad userId / a
-        // dispute that was already resolved. Mirrors the 0-rows guard in disputeAttendance.
+        // Отклонить no-op разрешение спора: если у целевого пользователя нет спорной отметки по
+        // этому событию, update затронет 0 строк. Возврат успеха обманул бы организатора и скрыл
+        // бы неверный userId / уже разрешённый спор. Зеркалит проверку "0 строк" в disputeAttendance.
         val updated = eventResponseRepository.resolveDisputedAttendance(eventId, userId, attended)
         if (updated == 0) {
             throw ValidationException("No disputed attendance to resolve for this user")
@@ -162,28 +163,29 @@ class AttendanceService(
         val finalizedEventIds = eventRepository.finalizeAttendanceBefore(cutoff)
         if (finalizedEventIds.isEmpty()) return
 
-        // ATT-2: the dispute window expired without an organizer correction, so the original
-        // mark stands — convert leftover `disputed` back to `absent`. This runs in the same
-        // transaction, before the reputation listener reads the roster (AFTER_COMMIT), so
-        // (going, absent) maps to no_show instead of confirmed_unresolved (0). A disputed
-        // mark can only exist on a marked event, so neutrally-finalized (unmarked) events are
-        // unaffected. See events.md § ATT-2.
+        // ATT-2: окно спора истекло без корректировки организатора, так что исходная отметка
+        // остаётся в силе — превращаем оставшиеся `disputed` обратно в `absent`. Выполняется в той
+        // же транзакции, до того как слушатель репутации прочитает ростер (AFTER_COMMIT), поэтому
+        // (going, absent) маппится в no_show, а не в confirmed_unresolved (0). Спорная отметка может
+        // существовать только на отмеченном событии, так что нейтрально-финализированные
+        // (неотмеченные) события не затрагиваются. См. events.md § ATT-2.
         val resolved = eventResponseRepository.resolveExpiredDisputesToAbsent(finalizedEventIds)
         log.info("Finalized attendance for {} events ({} expired disputes → absent)", finalizedEventIds.size, resolved)
-        // Reputation listener (AFTER_COMMIT) picks these up for low-latency ledger
-        // processing; the hourly poll is the durable backstop. See reputation-v2.md.
+        // Слушатель репутации (AFTER_COMMIT) подхватывает их для низколатентной обработки леджера;
+        // почасовой опрос — надёжная подстраховка. См. reputation-v2.md.
         finalizedEventIds.forEach { eventPublisher.publishEvent(AttendanceFinalizedEvent(it)) }
     }
 
     /**
-     * EXP-2: neutrally finalizes past events whose attendance the organizer never marked, once the
-     * deadline ([autoFinalizeUnmarkedMinutes] after `event_datetime`) passes. Sets
-     * `attendance_finalized = true` while leaving `attendance_marked = false`, so the reputation
-     * pipeline (which claims only marked+finalized events) produces NO ledger rows — the event
-     * simply does not count (neither +100 nor −50). Reliable participants are not punished for an
-     * inactive organizer, and no one is rewarded for it. Deliberately publishes NO
-     * AttendanceFinalizedEvent. Same poll cadence as [finalizeAttendance]; the two paths touch
-     * disjoint rows (marked=true vs marked=false). See events.md § EXP-2 and reputation-v2.md.
+     * EXP-2: нейтрально финализирует прошедшие события, посещаемость которых организатор так и не
+     * отметил, по истечении дедлайна ([autoFinalizeUnmarkedMinutes] после `event_datetime`).
+     * Выставляет `attendance_finalized = true`, оставляя `attendance_marked = false`, так что
+     * пайплайн репутации (который забирает только marked+finalized события) НЕ создаёт строк в
+     * леджере — событие просто не засчитывается (ни +100, ни −50). Добросовестные участники не
+     * наказываются за бездействие организатора, и никто на этом не выигрывает. Намеренно НЕ
+     * публикует AttendanceFinalizedEvent. Та же периодичность опроса, что и [finalizeAttendance];
+     * два пути затрагивают непересекающиеся строки (marked=true vs marked=false). См. events.md
+     * § EXP-2 и reputation-v2.md.
      */
     @Scheduled(fixedDelayString = "\${events.finalize-poll-ms:3600000}")
     @Transactional

@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service
 import java.time.OffsetDateTime
 import java.util.UUID
 
-// Access expiring within this window surfaces in «Скоро закончится» + triggers the red-dot badge.
+// Окно (в днях): доступ, истекающий в его пределах, попадает в «Скоро закончится» и зажигает red-dot.
 private const val EXPIRING_SOON_DAYS = 7L
 
 @Service
@@ -32,19 +32,19 @@ class MemberService(
 ) {
 
     fun getClubMembers(clubId: UUID, callerId: UUID): List<MemberListItemDto> {
-        // One lookup gives both the access gate and the viewer's role. status==active mirrors
-        // MembershipAccess.hasAccess (a frozen viewer has no access). The organizer additionally sees
-        // each member's access state + paid-through date (de-Stars dashboard); regular members don't.
+        // Один запрос даёт и гейт доступа, и роль смотрящего. status==active зеркалит
+        // MembershipAccess.hasAccess (frozen-смотрящий доступа не имеет). Организатор дополнительно
+        // видит состояние доступа каждого участника + дату «оплачено до» (de-Stars дашборд); обычные — нет.
         val caller = membershipRepository.findByUserAndClub(callerId, clubId)
         if (caller == null || caller.status != MembershipStatus.active) {
             throw ForbiddenException("Not a member of this club")
         }
         val forOrganizer = caller.role == MembershipRole.organizer
-        // Per-member Trust comes from one batch ledger read. Order: organizer first (they do not
-        // accrue Trust in their own club — anti-farm rule 1 — so by Trust alone they'd sort last),
-        // then everyone else by the DISPLAYED Trust, newcomers / suppressed rows at the bottom.
+        // Trust всех участников — одним батч-чтением ledger. Порядок: сначала организатор (он не
+        // копит Trust в своём клубе — анти-фарм правило 1 — и по чистому Trust ушёл бы в конец),
+        // затем остальные по ОТОБРАЖАЕМОМУ Trust; новички / подавленные строки — внизу.
         val trustByUser = trustService.trustForClubMembers(clubId)
-        // Club-local awards for the roster chips (R3), one query grouped per member — no N+1.
+        // Клубные награды для чипов в ростере (R3): один запрос с группировкой по участнику — без N+1.
         val awardsByUser = awardService.getClubAwardsByMember(clubId)
         return membershipRepository.findClubMembersWithUserInfo(clubId, includeFrozen = forOrganizer)
             .map { mapper.toMemberListItemDto(it, trustByUser[it.userId], awardsByUser[it.userId] ?: emptyList(), forOrganizer) }
@@ -55,9 +55,9 @@ class MemberService(
     }
 
     /**
-     * Red-dot feed for [clubId] (organizer-only, gated by @RequiresOrganizer on the controller):
-     * members whose paid access ends within the next week + members frozen pending a first dues
-     * confirmation. The dot lights when either count is > 0.
+     * Red-dot фид для [clubId] (только организатору, гейт @RequiresOrganizer на контроллере):
+     * участники, чей платный доступ кончается в ближайшую неделю, + участники frozen в ожидании
+     * первого подтверждения dues. Точка загорается, когда любой из счётчиков > 0.
      */
     fun getAttention(clubId: UUID): MemberAttentionDto {
         val now = OffsetDateTime.now()
@@ -69,9 +69,10 @@ class MemberService(
     }
 
     /**
-     * Cross-club «Ждут оплаты» for [callerId]: every `frozen` member across the clubs they own, so the
-     * organizer confirms dues from «Мои клубы» without entering each club. Non-owners get an empty list
-     * (the query filters by `clubs.owner_id`), so no authz gate is needed on the endpoint.
+     * Кросс-клубовый список «Ждут оплаты» для [callerId]: все `frozen`-участники по клубам в его
+     * владении — организатор подтверждает dues из «Мои клубы», не заходя в каждый клуб. Не-владелец
+     * получает пустой список (запрос фильтрует по `clubs.owner_id`), поэтому отдельный authz-гейт
+     * на эндпоинте не нужен.
      */
     fun getOrganizerAwaitingDues(callerId: UUID): List<OrganizerDuesMemberDto> =
         membershipRepository.findFrozenMembersByOwner(callerId).map(mapper::toOrganizerDuesDto)
@@ -85,11 +86,11 @@ class MemberService(
         val user = userRepository.findById(userId) ?: throw NotFoundException("User not found")
         val membership = membershipRepository.findByUserAndClub(userId, clubId)
         val reputation = reputationRepository.findByUserAndClub(userId, clubId)
-        // "Право на ошибку": show the real index only once a track record exists; below
-        // the threshold (or no row, or owner in own club) the whole block is suppressed
-        // and the frontend renders "Новичок" / the organizer framing (by role).
+        // «Право на ошибку»: реальный индекс показываем только когда накоплен track record; ниже
+        // порога (или нет строки, или владелец в своём клубе) весь блок подавляется,
+        // а фронтенд рисует «Новичок» / организаторскую подачу (по роли).
         val show = reputation != null && ReputationPolicy.isShown(reputation.outcomeCount)
-        // One ledger read powers both per-club rings (Trust + skladchina); null below the gate.
+        // Одно чтение ledger питает оба клубных кольца (Trust + складчина); ниже гейта — null.
         val summary = if (show) trustService.clubSummary(userId, clubId) else null
         return MemberProfileDto(
             userId = userId,
@@ -99,7 +100,7 @@ class MemberService(
             avatarUrl = user.avatarUrl,
             bio = user.bio,
             interests = interestRepository.findUserInterestNames(userId),
-            // Club-local awards (S2) — public to every member (R3), so no organizer gate here.
+            // Клубные награды (S2) — видны каждому участнику (R3), поэтому организаторского гейта нет.
             awards = awardService.getMemberAwards(clubId, userId),
             role = (membership?.role ?: MembershipRole.member).literal,
             trust = summary?.trust,
@@ -109,16 +110,16 @@ class MemberService(
             spontaneityCount = if (show) reputation!!.spontaneityCount else null,
             skladchinaPaid = summary?.skladchinaPaid,
             skladchinaTotal = summary?.skladchinaTotal,
-            // Organizer-only: the member's paid access window end. null for regular viewers and for
-            // free memberships (no expiry). Drives «Подписка активна до …» on the organizer card.
+            // Только организатору: конец оплаченного окна доступа участника. null для обычных смотрящих
+            // и бесплатных membership'ов (нет истечения). Питает «Подписка активна до …» на карточке.
             subscriptionExpiresAt = if (callerIsOrganizer) membership?.subscriptionExpiresAt else null,
-            // Organizer-only: the private note (member admin S1). null for regular viewers.
+            // Только организатору: приватная заметка (member admin S1). null для обычных смотрящих.
             organizerNote = if (callerIsOrganizer) membership?.organizerNote else null,
-            // Organizer-only: the member's dues claim + payment screenshot (de-Stars). null for regular viewers.
+            // Только организатору: claim участника об оплате + скриншот платежа (de-Stars). null для обычных.
             duesClaimedAt = if (callerIsOrganizer) membership?.duesClaimedAt else null,
             duesClaimMethod = if (callerIsOrganizer) membership?.duesClaimMethod else null,
             duesProofUrl = if (callerIsOrganizer) membership?.duesProofUrl else null,
-            // Organizer-only: the member's join-application answer (closed clubs). null for open clubs / no question.
+            // Только организатору: ответ из заявки на вступление (закрытые клубы). null для открытых / без вопроса.
             applicationAnswer = if (callerIsOrganizer) {
                 applicationRepository.findActiveByUserAndClub(userId, clubId)?.answerText
             } else null

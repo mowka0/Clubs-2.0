@@ -4,13 +4,13 @@ import type { SkladchinaParticipantDto } from '../../types/api';
 interface OrganizerParticipantListProps {
   participants: SkladchinaParticipantDto[];
   totalGoalKopecks: number | null;
-  // A-2: organizer can mark/unmark payments (fixed modes, active skladchina only).
+  // A-2: организатор может отмечать/снимать отметку оплаты (только фиксированные режимы, активная складчина).
   canManagePayments?: boolean;
   busyUserId?: string | null;
   onMarkPaid?: (p: SkladchinaParticipantDto) => void;
   onUnmark?: (p: SkladchinaParticipantDto) => void;
-  // V28/V29: organizer resolves a participant's decline request. Reject (approve=false) carries a
-  // mandatory reason — why the participant must still pay.
+  // V28/V29: организатор разрешает запрос участника на отказ. Отклонение (approve=false) несёт
+  // обязательную причину — почему участник всё же должен заплатить.
   onResolveDecline?: (p: SkladchinaParticipantDto, approve: boolean, rejectReason?: string) => void;
 }
 
@@ -40,7 +40,7 @@ function statusBadge(status: string): { text: string; cls: string } {
     case 'paid':                 return { text: 'Оплатил',        cls: 'rd-going' };
     case 'declined':             return { text: 'Отказался',      cls: 'rd-decline' };
     case 'expired_no_response':  return { text: 'Не ответил',     cls: 'rd-neutral2' };
-    // Closed before the deadline while still pending — neutral, no penalty.
+    // Закрыто до дедлайна, пока участник ещё в статусе pending — нейтрально, без штрафа.
     case 'released':             return { text: 'Не потребовался', cls: 'rd-neutral2' };
     case 'pending':              return { text: 'Ожидает',        cls: 'rd-warn' };
     default:                     return { text: status,           cls: 'rd-warn' };
@@ -55,7 +55,7 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
   onUnmark,
   onResolveDecline,
 }) => {
-  // V29: which row is in "reject with reason" mode, and its draft reason.
+  // V29: какая строка сейчас в режиме «отклонить с причиной» и её черновик причины.
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectText, setRejectText] = useState('');
 
@@ -82,8 +82,8 @@ export const OrganizerParticipantList: FC<OrganizerParticipantListProps> = ({
           ].filter(Boolean).join(' · ');
           const busy = busyUserId === p.userId;
           const showDeclineRequest = !!onResolveDecline && p.declineRequested;
-          // A-2: pending → "Отметить оплату"; paid → "Отменить". A participant with an open decline
-          // request shows the request controls below instead of the mark button.
+          // A-2: pending → «Отметить оплату»; paid → «Отменить». Если у участника открыт запрос
+          // на отказ, вместо кнопки отметки показываются элементы управления запросом ниже.
           const action = !canManagePayments || showDeclineRequest ? null
             : p.status === 'pending' ? (
               <button type="button" style={rowActionStyle} disabled={busy} onClick={() => onMarkPaid?.(p)}>

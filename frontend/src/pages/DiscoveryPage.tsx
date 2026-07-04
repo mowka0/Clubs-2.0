@@ -114,7 +114,7 @@ export const DiscoveryPage: FC = () => {
 
   const clubs = data?.pages.flatMap((p) => p.content) ?? [];
 
-  // Quality facts fetched one batch per loaded page (see useClubCardFacts).
+  // Факты качества подтягиваются пачкой на каждую загруженную страницу (см. useClubCardFacts).
   const factsByClub = useClubCardFacts(data?.pages ?? []);
 
   const handleObserver = useCallback(
@@ -160,9 +160,9 @@ export const DiscoveryPage: FC = () => {
             {activeCount > 0
               ? `Состоишь в ${activeCount} ${pluralizeClubsIn(activeCount)}`
               : reputationQuery.error
-                // Don't claim "no clubs" when the reputation fetch failed — that's a false
-                // onboarding (F5-20). Fall back to a neutral greeting; the club list below is
-                // unaffected (it has its own error handling).
+                // Не утверждаем «нет клубов», если запрос репутации упал — это ложный
+                // онбординг (F5-20). Откатываемся к нейтральному приветствию; список клубов
+                // ниже не затронут (у него своя обработка ошибок).
                 ? 'Клубы по интересам рядом'
                 : 'Найди свой первый клуб'}
           </div>

@@ -1,9 +1,9 @@
 export type ReliabilityTier = 'high' | 'mid' | 'low' | 'new';
 
 /**
- * Maps a P1b Trust 0-100 score to a display tier. `null` = "Новичок" (no track record yet).
- * Thresholds mirror the backend: ≥70 is the "reliable" cutoff (TrustPolicy.RELIABLE_THRESHOLD),
- * ≥85 a strong tier. Single source for every reputation surface so the colouring stays consistent.
+ * Отображает P1b Trust-скор 0-100 в отображаемый тир. `null` = «Новичок» (ещё нет истории).
+ * Пороги зеркалят бэкенд: ≥70 — граница «надёжный» (TrustPolicy.RELIABLE_THRESHOLD),
+ * ≥85 — сильный тир. Единый источник для всех поверхностей репутации, чтобы раскраска была консистентной.
  */
 export function reliabilityTier(score: number | null): ReliabilityTier {
   if (score === null) return 'new';
@@ -19,12 +19,12 @@ const TIER_WORD: Record<ReliabilityTier, string> = {
   new: '',
 };
 
-/** Russian tier label for the global headline ("высокая/средняя/низкая надёжность"). */
+/** Русская подпись тира для глобального заголовка («высокая/средняя/низкая надёжность»). */
 export function tierWord(score: number | null): string {
   return TIER_WORD[reliabilityTier(score)];
 }
 
-/** "клубе" (1) / "клубах" (2+) — prepositional plural for "опыт в N …". */
+/** «клубе» (1) / «клубах» (2+) — предложный падеж множественного числа для «опыт в N …». */
 export function clubsPrepositional(n: number): string {
   return n === 1 ? 'клубе' : 'клубах';
 }

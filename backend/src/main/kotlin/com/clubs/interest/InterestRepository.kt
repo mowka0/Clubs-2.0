@@ -4,26 +4,26 @@ import java.util.UUID
 
 interface InterestRepository {
 
-    /** Names whose canonical form starts with [prefix], most-used first. */
+    /** Названия, чья каноническая форма начинается с [prefix], сначала самые используемые. */
     fun suggest(prefix: String, limit: Int): List<String>
 
-    /** Insert any missing names (ignore conflicts) and return name → id for all. */
+    /** Вставить отсутствующие названия (игнорируя конфликты) и вернуть name → id для всех. */
     fun upsertAll(names: List<String>): Map<String, UUID>
 
     fun findUserInterestIds(userId: UUID): Set<UUID>
     fun findUserInterestNames(userId: UUID): List<String>
 
     /**
-     * Batch lookup of interest names per user (single SQL hit). Used by the
-     * applications inbox to enrich applicant profiles without N+1.
-     * Empty input → emptyMap (no SQL hit). Users with no interests are absent
-     * from the map; callers default to emptyList.
+     * Пакетный поиск названий интересов по пользователям (один SQL-запрос). Используется
+     * инбоксом заявок для обогащения профилей заявителей без N+1.
+     * Пустой вход → emptyMap (без SQL-запроса). Пользователи без интересов отсутствуют
+     * в карте; вызывающие используют emptyList по умолчанию.
      */
     fun findUserInterestNamesByUserIds(userIds: Collection<UUID>): Map<UUID, List<String>>
 
     fun linkUserInterests(userId: UUID, interestIds: Collection<UUID>)
     fun unlinkUserInterests(userId: UUID, interestIds: Collection<UUID>)
 
-    /** Adjust popularity counters (delta clamped at 0 on the floor). */
+    /** Скорректировать счётчики популярности (delta ограничена снизу нулём). */
     fun adjustUsage(interestIds: Collection<UUID>, delta: Int)
 }

@@ -1,9 +1,10 @@
 package com.clubs.membership
 
 /**
- * The authenticated user's reputation for the profile screen: the global "надёжен в N из M клубов"
- * aggregate over ALL clubs with a track record, plus the per-club lists split into currently-active
- * clubs and "История" (clubs the user left but still has a track record in).
+ * Репутация аутентифицированного юзера для экрана профиля: глобальный агрегат
+ * «надёжен в N из M клубов» по ВСЕМ клубам с историей, плюс списки по клубам,
+ * разбитые на текущие активные клубы и «История» (клубы, которые юзер покинул,
+ * но по которым у него ещё есть история).
  */
 data class MyReputationDto(
     val global: GlobalTrustDto,
@@ -12,9 +13,10 @@ data class MyReputationDto(
 )
 
 /**
- * Global view (P1b). Primary signal = "надёжен в [reliableClubs] из [trackRecordClubs] клубов".
- * [score] is the secondary 0-100 number, null when there is no track record anywhere
- * (trackRecordClubs == 0) — the UI then shows "Пока недостаточно истории", never "0 из 0".
+ * Глобальное представление (P1b). Основной сигнал = «надёжен в [reliableClubs] из
+ * [trackRecordClubs] клубов». [score] — второстепенное число 0-100, null, если истории
+ * нет нигде (trackRecordClubs == 0) — тогда UI показывает «Пока недостаточно истории»,
+ * никогда не «0 из 0».
  */
 data class GlobalTrustDto(
     val reliableClubs: Int,

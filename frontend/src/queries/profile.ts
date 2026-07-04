@@ -12,8 +12,8 @@ export function useMyInterestsQuery() {
 }
 
 /**
- * Prefix autocomplete for interests. Caller passes an already-debounced query;
- * disabled below 2 chars so we don't fan out a request per keystroke.
+ * Автодополнение интересов по префиксу. Вызывающий передаёт уже debounced-запрос;
+ * отключено при длине < 2 символов, чтобы не слать запрос на каждое нажатие клавиши.
  */
 export function useInterestSuggestQuery(query: string) {
   const trimmed = query.trim();

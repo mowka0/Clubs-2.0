@@ -10,18 +10,18 @@ import {
 import { useHaptic } from './useHaptic';
 
 /**
- * Manages the Telegram BackButton visibility and behavior.
+ * Управляет видимостью и поведением Telegram BackButton.
  *
- * On main tab pages (/, /my-clubs, /events, /profile) the BackButton is hidden.
- * On nested pages (club detail, event detail, invite, etc.) the BackButton is shown
- * and navigates back in the browser history when clicked.
+ * На главных таб-страницах (/, /my-clubs, /events, /profile) BackButton скрыт.
+ * На вложенных страницах (детали клуба, детали события, приглашение и т.д.) BackButton
+ * показан и по клику переходит назад в истории браузера.
  */
 export function useBackButton(visible: boolean): void {
   const navigate = useNavigate();
   const haptic = useHaptic();
 
   useEffect(() => {
-    // Mount the BackButton component if supported
+    // Монтируем компонент BackButton, если он поддерживается
     if (mountBackButton.isAvailable()) {
       mountBackButton();
     }
@@ -51,9 +51,9 @@ export function useBackButton(visible: boolean): void {
     if (!onBackButtonClick.isAvailable()) return;
 
     const handleBack = () => {
-      // Telegram's native BackButton does not always emit haptic on every
-      // platform/version (observed missing on staging) — fire one ourselves
-      // so the back-tap feels consistent with in-app navigation.
+      // Нативный BackButton Telegram не всегда генерирует haptic на каждой
+      // платформе/версии (замечено отсутствие на staging) — вызываем сами,
+      // чтобы тап «назад» ощущался так же, как навигация внутри приложения.
       haptic.impact('light');
       navigate(-1);
     };

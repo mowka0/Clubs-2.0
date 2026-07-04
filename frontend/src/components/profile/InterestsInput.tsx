@@ -1,11 +1,14 @@
 import { FC, KeyboardEvent, useEffect, useState } from 'react';
 import { useInterestSuggestQuery } from '../../queries/profile';
 
+// Максимум интересов в профиле.
 const MAX_INTERESTS = 15;
+// Максимальная длина одного интереса (символов).
 const MAX_LEN = 40;
+// Обрамляющие кавычки — срезаются с краёв строки при нормализации.
 const QUOTES = /^["'«»“”‘’`]+|["'«»“”‘’`]+$/g;
 
-/** Mirror of the server's InterestNormalizer so chips show the canonical form. */
+/** Зеркало серверного InterestNormalizer — чипы показывают каноничную форму. */
 export function normalizeInterest(raw: string): string {
   return raw
     .normalize('NFC')
@@ -24,10 +27,10 @@ interface InterestsInputProps {
 }
 
 /**
- * Comma-separated interest chips with prefix autocomplete. Commits a chip on
- * comma/Enter, removes the last on Backspace-in-empty. Tapping a suggestion
- * (deduped against current selection) adds it. Normalizes to the same canonical
- * form the backend stores so what you see is what gets saved.
+ * Чипы интересов через запятую с префиксным автодополнением. Чип фиксируется по
+ * запятой/Enter, Backspace в пустом поле удаляет последний. Тап по подсказке
+ * (дедуплицированной против текущего выбора) добавляет её. Нормализует к той же
+ * каноничной форме, которую хранит бэкенд, — что видишь, то и сохранится.
  */
 export const InterestsInput: FC<InterestsInputProps> = ({ value, onChange }) => {
   const [input, setInput] = useState('');

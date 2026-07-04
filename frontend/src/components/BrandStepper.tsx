@@ -11,15 +11,15 @@ interface BrandStepperProps {
 }
 
 /**
- * Brand-styled numeric stepper: [−] value [+].
+ * Числовой степпер в стиле бренда: [−] значение [+].
  *
- * Replaces the native `<input type="number">` spinner (which renders with
- * default browser chrome and clashes with the brand form). The middle value is
- * an editable numeric input: while typing it accepts free input (including a
- * transient empty string), and clamps to [min, max] on blur. The +/− buttons
- * adjust by `step` and clamp on every tap. Haptic `selection` fires only on
- * +/− taps, not per keystroke. Value is always reported to the parent as a
- * `number` within [min, max].
+ * Заменяет нативный спиннер `<input type="number">` (рендерится с дефолтным
+ * браузерным хромом и не вписывается в брендовую форму). Среднее значение —
+ * редактируемое числовое поле: во время ввода принимает свободный ввод
+ * (включая временную пустую строку), а на blur зажимается в [min, max].
+ * Кнопки +/− изменяют значение на `step` и зажимают его при каждом тапе.
+ * Haptic `selection` срабатывает только на тапах +/−, не на каждое нажатие
+ * клавиши. Родителю значение всегда передаётся как `number` в пределах [min, max].
  */
 export const BrandStepper: FC<BrandStepperProps> = ({
   value,
@@ -31,9 +31,9 @@ export const BrandStepper: FC<BrandStepperProps> = ({
 }) => {
   const haptic = useHaptic();
 
-  // Local draft lets the user clear the field and type freely; the committed
-  // numeric value (`value`) stays the source of truth and is re-synced here
-  // whenever it changes from outside (buttons, parent reset).
+  // Локальный черновик позволяет пользователю очистить поле и печатать свободно;
+  // зафиксированное числовое значение (`value`) остаётся источником истины
+  // и пересинхронизируется здесь при каждом внешнем изменении (кнопки, сброс родителем).
   const [draft, setDraft] = useState<string>(String(value));
 
   useEffect(() => {
@@ -58,7 +58,7 @@ export const BrandStepper: FC<BrandStepperProps> = ({
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
-    // Permit only digits while typing; empty string allowed transiently.
+    // Разрешаем только цифры во время ввода; пустая строка допустима временно.
     if (raw === '' || /^\d+$/.test(raw)) {
       setDraft(raw);
     }

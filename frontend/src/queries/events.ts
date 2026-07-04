@@ -51,10 +51,10 @@ export function useEventRespondersQuery(eventId: string | undefined, enabled = t
 }
 
 /**
- * F5-04: the caller's own attendance state — drives the participant dispute controls even for a
- * member who left the club (the member-gated responders query 403s for them). Key extends the
- * detail key, so dispute/resolve/mark mutations (which invalidate detail) refresh it by prefix.
- * 404 (organizer / non-participant) is an expected outcome — no retry.
+ * F5-04: собственное состояние посещаемости вызывающего — управляет контролами оспаривания участника
+ * даже для того, кто уже покинул клуб (member-gated запрос responders для него вернёт 403). Ключ
+ * расширяет detail-ключ, поэтому мутации dispute/resolve/mark (инвалидирующие detail) обновляют
+ * его по префиксу. 404 (организатор / не-участник) — ожидаемый исход, без ретрая.
  */
 export function useMyAttendanceQuery(eventId: string | undefined, enabled = true) {
   return useQuery({
@@ -127,13 +127,13 @@ export function useCreateEventMutation() {
   return useMutation({
     mutationFn: ({ clubId, body }: CreateEventArgs) => createEvent(clubId, body),
     onSuccess: (_data, { clubId }) => {
-      // Invalidate every params variant of this club's event list (filters/pagination).
+      // Инвалидируем все варианты параметров списка событий этого клуба (фильтры/пагинация).
       qc.invalidateQueries({ queryKey: queryKeys.events.byClubAll(clubId) });
-      // Unified activity feed must refresh too — newly created event must
-      // appear at the top across all filter variants of the manage tab.
+      // Единая лента активностей тоже должна обновиться — новое событие должно
+      // появиться сверху во всех вариантах фильтров вкладки управления.
       qc.invalidateQueries({ queryKey: queryKeys.activities.byClubAll(clubId) });
-      // Global /me/events feed (Активности → События) must show the new event
-      // after create — CreateEventPage navigates here, mirror useCreateSkladchina.
+      // Глобальная лента /me/events (Активности → События) должна показать новое событие
+      // после создания — CreateEventPage переходит сюда, зеркалит useCreateSkladchina.
       qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });
     },
   });
@@ -155,9 +155,9 @@ export function useMarkAttendanceMutation() {
   });
 }
 
-// Disputing/resolving changes the per-responder attendance. The responders query key extends
-// the detail key with a `responders` suffix, and TanStack invalidates by prefix — so
-// invalidating the detail key also refreshes the responders list (same trick as queryKeys.ts).
+// Оспаривание/разрешение спора меняет посещаемость конкретного респондента. Ключ запроса responders
+// расширяет detail-ключ суффиксом `responders`, а TanStack инвалидирует по префиксу — поэтому
+// инвалидация detail-ключа обновляет и список responders (тот же трюк, что в queryKeys.ts).
 interface DisputeArgs {
   eventId: string;
   note?: string;
@@ -204,7 +204,7 @@ export function useCancelEventMutation() {
     onSuccess: (_data, { eventId, clubId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
       qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });
-      // The club activity feed renders the cancelled state too.
+      // Лента активностей клуба тоже отображает состояние «отменено».
       qc.invalidateQueries({ queryKey: queryKeys.activities.byClubAll(clubId) });
     },
   });

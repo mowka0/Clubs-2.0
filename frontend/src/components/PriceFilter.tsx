@@ -10,8 +10,8 @@ export interface PriceRange {
 interface Preset {
   readonly id: string;
   readonly label: string;
-  readonly shortLabel: string; // shown on the pill when this preset is active
-  readonly range: PriceRange;  // empty object = "any"
+  readonly shortLabel: string; // показывается на пилюле, когда этот пресет активен
+  readonly range: PriceRange;  // пустой объект = «любая»
 }
 
 const PRESETS: readonly Preset[] = [
@@ -22,7 +22,7 @@ const PRESETS: readonly Preset[] = [
   { id: 'gt3000',  label: 'От 3 000 ₽',      shortLabel: 'от 3 000 ₽',      range: { min: 3000 } },
 ] as const;
 
-/** Match a min/max pair back to a preset id; "any" when nothing is set. */
+/** Сопоставляет пару min/max с id пресета; "any", если ничего не задано. */
 export function presetIdFromRange(range: PriceRange): string {
   const found = PRESETS.find(
     (p) => p.range.min === range.min && p.range.max === range.max,

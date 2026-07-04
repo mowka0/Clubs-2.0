@@ -26,7 +26,7 @@ data class EventDetailDto(
     val confirmedCount: Int,
     val attendanceMarked: Boolean,
     val attendanceFinalized: Boolean,
-    // F5-14: organizer's optional cancellation reason; null unless cancelled with a reason given.
+    // F5-14: опциональная причина отмены от организатора; null, если отменено без указания причины.
     val cancellationReason: String?,
     val photoUrl: String?,
     val createdAt: OffsetDateTime?
@@ -88,7 +88,7 @@ data class CreateEventRequest(
 )
 
 
-/** F5-14: optional organizer-provided reason for cancelling an event (≤500 chars; blank → null). */
+/** F5-14: опциональная причина отмены события от организатора (≤500 символов; пусто → null). */
 data class CancelEventRequest(
     @field:Size(max = 500)
     val reason: String? = null

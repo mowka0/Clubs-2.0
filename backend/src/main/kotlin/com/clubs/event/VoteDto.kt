@@ -19,13 +19,13 @@ data class MyVoteDto(
 )
 
 /**
- * A single responder shown in the event's "who's coming" list.
- * [status] is the user's current intent: stage-2 final status when present
- * (confirmed | waitlisted | declined), otherwise the stage-1 vote
+ * Один проголосовавший в списке события "кто идёт".
+ * [status] — текущее намерение пользователя: финальный статус Этапа 2, если он есть
+ * (confirmed | waitlisted | declined), иначе голос Этапа 1
  * (going | maybe | not_going).
- * [attendance] is the post-event mark, once the organizer has marked it
- * (attended | absent | disputed), else null. Drives the dispute UI: an absent
- * participant can dispute; the organizer resolves a disputed one.
+ * [attendance] — отметка после события, как только организатор её проставил
+ * (attended | absent | disputed), иначе null. Управляет UI оспаривания: отсутствующий
+ * участник может оспорить отметку; организатор разрешает оспоренную.
  */
 data class EventResponderDto(
     val userId: UUID,
@@ -34,6 +34,6 @@ data class EventResponderDto(
     val avatarUrl: String?,
     val status: String,
     val attendance: String?,
-    // Optional free-text note the participant left when disputing (shown to the organizer).
+    // Опциональная свободная заметка, которую оставил участник при оспаривании (показывается организатору).
     val disputeNote: String?
 )

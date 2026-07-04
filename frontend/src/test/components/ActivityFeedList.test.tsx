@@ -59,8 +59,8 @@ describe('ActivityFeedList', () => {
       <ActivityFeedList feed={feed} onActivityClick={vi.fn()} />,
     );
 
-    // Collapsed by default (redesign): the rd-rep-panel with the rows is not
-    // mounted; only the toggle button (aria-expanded=false) and the count show.
+    // По умолчанию свёрнуто (редизайн): rd-rep-panel со строками не смонтирована;
+    // видны только кнопка-тоггл (aria-expanded=false) и счётчик.
     const toggle = screen.getByRole('button', { name: /прошедшие/i });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByText('(2)')).toBeInTheDocument();
@@ -69,7 +69,7 @@ describe('ActivityFeedList', () => {
 
     await user.click(toggle);
 
-    // Expanded: the panel mounts with the compact rd-rep-row rows.
+    // Развёрнуто: панель монтируется с компактными строками rd-rep-row.
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     const panel = container.querySelector('.rd-rep-panel');
     expect(panel).not.toBeNull();

@@ -11,8 +11,9 @@ data class MembershipDto(
     val role: String,
     val joinedAt: OffsetDateTime?,
     val subscriptionExpiresAt: OffsetDateTime?,
-    // Member's own dues claim (de-Stars): when they declared payment (null = none) + the method
-    // ("sbp"|"cash"). Drives the member's «оплата на проверке» state on the frozen club screen.
+    // Собственное заявление участника об оплате взносов (de-Stars): когда он задекларировал оплату
+    // (null = не задекларировано) + способ ("sbp"|"cash"). Управляет состоянием участника
+    // «оплата на проверке» на экране заморозки клуба.
     val duesClaimedAt: OffsetDateTime? = null,
     val duesClaimMethod: String? = null
 )

@@ -34,7 +34,7 @@ function formatRubles(kopecks: number): string {
 }
 
 function pickBadge(s: MySkladchinaListItemDto): Badge | null {
-  // For closed skladchinas surface the final status, not personal myStatus
+  // Для закрытых складчин показываем финальный статус, а не персональный myStatus
   if (s.status !== 'active') {
     switch (s.status) {
       case 'closed_success': return { text: 'Завершён', accent: false };
@@ -59,7 +59,7 @@ export const SkladchinaCard: FC<SkladchinaCardProps> = ({ skladchina, onClick })
   const deadlineStr = DEADLINE_FMT.format(new Date(skladchina.deadline));
 
   const hasGoal = skladchina.totalGoalKopecks != null && skladchina.totalGoalKopecks > 0;
-  // A-5: people-progress is the headline; money is a muted secondary line.
+  // A-5: прогресс по людям — главная строка; деньги — приглушённая вторичная строка.
   const peoplePercent = skladchina.participantCount > 0
     ? Math.round((skladchina.paidCount / skladchina.participantCount) * 100)
     : 0;

@@ -25,7 +25,7 @@ const Icon = ({ children }: { children: ReactNode }) => (
   </svg>
 );
 
-// Order & labels follow the redesign mockup; routes are unchanged.
+// Порядок и подписи следуют мокапу редизайна; роуты не менялись.
 const TABS: readonly TabConfig[] = [
   { path: '/', label: 'Главная', icon: <Icon><path d="M3 11.5 12 4l9 7.5" /><path d="M5 10v10h14V10" /></Icon> },
   { path: '/activities', label: 'Активности', icon: <Icon><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 2v4M16 2v4" /></Icon> },
@@ -35,14 +35,14 @@ const TABS: readonly TabConfig[] = [
 
 const TAB_PATHS = new Set(TABS.map((t) => t.path));
 
-// Routes that should keep the "Активности" tab visually active (sub-segments + details).
+// Роуты, на которых таб "Активности" должен визуально оставаться активным (под-разделы + детали).
 const ACTIVITIES_SECONDARY_PATHS = new Set<string>(['/events', '/skladchina']);
 
 /**
- * Determines if the dock should be displayed for the current path.
- * Also shows on /clubs/:id, /clubs/:id/manage, /events/:id, /skladchina/:id detail
- * pages and segmented routes (/events, /skladchina) so users can switch tabs without
- * losing context.
+ * Определяет, нужно ли показывать док для текущего пути.
+ * Также показывается на страницах деталей /clubs/:id, /clubs/:id/manage, /events/:id,
+ * /skladchina/:id и на сегментированных роутах (/events, /skladchina), чтобы юзер мог
+ * переключать табы, не теряя контекст.
  */
 export function isTabBarRoute(pathname: string): boolean {
   if (TAB_PATHS.has(pathname)) return true;
@@ -59,19 +59,19 @@ function resolveActivePath(pathname: string): string {
 }
 
 interface BottomTabBarProps {
-  /** Invoked by the dock's FAB — opens the unified create-activity flow. */
+  /** Вызывается FAB-кнопкой дока — открывает единый флоу создания активности. */
   onCreate: () => void;
   /**
-   * The FAB is "armed" for the current club — tapping it creates an activity
-   * here without asking which club. Gets an accent ring to advertise it.
+   * FAB "заряжен" на текущий клуб — тап создаёт активность прямо в нём,
+   * не спрашивая какой клуб. Получает акцентное кольцо, чтобы это показать.
    */
   scoped?: boolean;
 }
 
 /**
- * Floating dock — a glass pill with 4 tabs plus a separate circular FAB on the
- * right (always "create"). Notification dots sit on the «Клубы» and «Активности»
- * tabs; the FAB carries no badge. Styling lives in redesign.css (`.rd-dock*`).
+ * Плавающий док — стеклянная таблетка с 4 табами плюс отдельный круглый FAB
+ * справа (всегда "создать"). Точки-уведомления сидят на табах «Клубы» и
+ * «Активности»; у FAB бейджа нет. Стили лежат в redesign.css (`.rd-dock*`).
  */
 export const BottomTabBar: FC<BottomTabBarProps> = ({ onCreate, scoped = false }) => {
   const location = useLocation();
@@ -79,8 +79,8 @@ export const BottomTabBar: FC<BottomTabBarProps> = ({ onCreate, scoped = false }
   const haptic = useHaptic();
 
   const { data: unpaidCount = 0 } = useSkladchinaActionRequiredCountQuery();
-  // Organizer action needed on «Мои клубы»: pending applications (inbox) + paid members awaiting a
-  // dues decision (de-Stars). Either lights the «Клубы» dot.
+  // Организатору требуется действие на «Мои клубы»: заявки в ожидании (inbox) + платные участники,
+  // ожидающие решения по взносу (de-Stars). Любое из них зажигает точку на «Клубы».
   const { data: myClubsActionCounts } = useMyClubsActionCountsQuery();
   const myClubsActionTotal =
     (myClubsActionCounts?.inboxCount ?? 0) + (myClubsActionCounts?.awaitingDuesCount ?? 0);

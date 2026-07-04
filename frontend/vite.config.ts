@@ -17,9 +17,9 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     server: {
       deps: {
-        // msw 2.x pulls in `graphql`, whose CJS build trips vitest's ESM interop
-        // ("does not provide an export named 'parse'") under certain module-load orders.
-        // Inlining it forces a consistent transform so the full suite stays deterministic.
+        // msw 2.x тянет `graphql`, чей CJS-билд ломает ESM-interop vitest
+        // ("does not provide an export named 'parse'") при некоторых порядках загрузки модулей.
+        // Inline форсирует единообразную трансформацию — весь suite остаётся детерминированным.
         inline: ['graphql'],
       },
     },

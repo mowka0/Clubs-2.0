@@ -23,7 +23,7 @@ export function ageBadge(ageMonths: number): Achievement {
   return { icon: '🎂', label: 'Клубу меньше месяца' };
 }
 
-/** Lifetime activity counters — each shown only when > 0 (a young club shows just the age badge). */
+/** Счётчики активности за всё время — каждый показан только когда > 0 (молодой клуб покажет только бейдж возраста). */
 export function counters(facts: ClubFactsDto): Achievement[] {
   const out: Achievement[] = [];
   if (facts.totalMeetings > 0) {

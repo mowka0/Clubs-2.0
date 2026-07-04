@@ -19,19 +19,22 @@ import java.util.UUID
 import kotlin.math.roundToInt
 
 /**
- * Read-only aggregations over existing tables (`clubs`, `events`, `event_responses`, `skladchinas`).
- * No own schema. Reading these shared jOOQ tables is consistent with
- * [com.clubs.reputation.JooqReputationRepository], which already aggregates events/responses.
+ * Read-only агрегации поверх существующих таблиц (`clubs`, `events`, `event_responses`, `skladchinas`).
+ * Своей схемы нет. Чтение этих общих jOOQ-таблиц согласуется с
+ * [com.clubs.reputation.JooqReputationRepository], который уже агрегирует events/responses.
  *
- * Time windows are computed in Kotlin and bound as parameters (no SQL `interval`) — deterministic
- * and testable. "Held" = past, non-cancelled event.
+ * Временные окна вычисляются в Kotlin и передаются параметрами (без SQL `interval`) — детерминированно
+ * и тестируемо. «Состоявшаяся» = прошедшая неотменённая встреча.
  */
 @Repository
 class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityRepository {
 
     private companion object {
+        // Окно (дней) для метрик «частота встреч» и «обычно приходит»
         const val WINDOW_DAYS = 90L
+        // Длина того же окна в месяцах — знаменатель метрики «встреч в месяц»
         const val MONTHS_IN_WINDOW = 3.0
+        // Минимум посещённых встреч, чтобы участник считался частью «основы клуба»
         const val CORE_ATTENDANCE_THRESHOLD = 3
     }
 
@@ -71,9 +74,9 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
     }
 
     /**
-     * Σ attended responses ÷ count of finalized meetings, over the 90-day window. A meeting where
-     * nobody showed up still counts in the denominator (honestly lowers the average). 0 if no
-     * finalized meetings.
+     * Σ ответов attended ÷ число финализированных встреч в 90-дневном окне. Встреча, на которую
+     * никто не пришёл, всё равно входит в знаменатель (честно занижает среднее). 0, если
+     * финализированных встреч нет.
      */
     private fun avgAttendance(clubId: UUID, now: OffsetDateTime, windowStart: OffsetDateTime): Int {
         val record = dsl.select(
@@ -95,15 +98,16 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
     }
 
     /**
-     * Distinct NON-OWNER users with ≥3 attended events for this club who are STILL members (the club's
-     * stable member core / «основа клуба»). The organizer is excluded: they self-mark their own
-     * attendance, so counting them inflates the core (it would never read below 1) and conflates the
-     * organizer with the member core. Owner-exclusion matches the L3 «Сплочённость» rule (gamification §2).
+     * Distinct-пользователи БЕЗ владельца с ≥3 посещёнными встречами клуба, которые ВСЁ ЕЩЁ участники
+     * (стабильное ядро — «основа клуба»). Организатор исключён: он сам отмечает собственную
+     * посещаемость, поэтому его учёт раздувает ядро (оно никогда не опустилось бы ниже 1) и смешивает
+     * организатора с ядром участников. Исключение владельца соответствует правилу L3 «Сплочённость»
+     * (gamification §2).
      *
-     * Current-membership join: a user who left or was removed (status `cancelled`) — or whose access
-     * `expired` — is no longer part of the core, so «основа клуба» drops when they leave/are kicked.
-     * `frozen` still counts: that's the de-Stars monthly dues pause, not a departure, so the core must
-     * not flicker each time a paying member's window briefly lapses.
+     * Join по текущему membership: пользователь, ушедший или удалённый (статус `cancelled`) — или чей
+     * доступ `expired` — больше не входит в ядро, так что «основа клуба» падает при выходе/кике.
+     * `frozen` по-прежнему считается: это de-Stars-пауза месячных dues, а не уход, и ядро не должно
+     * мигать каждый раз, когда платёжное окно участника ненадолго истекает.
      */
     private fun coreSize(clubId: UUID): Int =
         dsl.select(EVENT_RESPONSES.USER_ID)
@@ -125,7 +129,7 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
             .fetch()
             .size
 
-    /** All-time held (past, non-cancelled) events for the club. */
+    /** Состоявшиеся (прошедшие, неотменённые) события клуба за всё время. */
     private fun totalMeetings(clubId: UUID, now: OffsetDateTime): Int =
         dsl.selectCount()
             .from(EVENTS)
@@ -136,14 +140,14 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
             )
             .fetchOne(0, Int::class.java) ?: 0
 
-    /** Skladchinas of the club that closed successfully (milestone «первый сбор»). */
+    /** Складчины клуба, закрытые успешно (майлстоун «первый сбор»). */
     private fun successfulSkladchinas(clubId: UUID): Int =
         dsl.selectCount()
             .from(SKLADCHINAS)
             .where(SKLADCHINAS.CLUB_ID.eq(clubId).and(SKLADCHINAS.STATUS.eq(SkladchinaStatus.closed_success)))
             .fetchOne(0, Int::class.java) ?: 0
 
-    // ---- Batch (Discovery card): возраст · вовлечённость, one grouped query per metric (no N+1) ----
+    // ---- Батч (Discovery-карточка): возраст · вовлечённость, один сгруппированный запрос на метрику (без N+1) ----
 
     override fun findClubCardFacts(clubIds: Collection<UUID>): List<ClubCardFacts> {
         if (clubIds.isEmpty()) return emptyList()
@@ -173,7 +177,7 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
         }
     }
 
-    /** Existing clubs among [ids] → created_at. Ids without a club row are absent (skipped). */
+    /** Существующие клубы среди [ids] → created_at. Ids без строки клуба отсутствуют (пропускаются). */
     private fun createdAtByClub(ids: Set<UUID>): Map<UUID, OffsetDateTime> =
         dsl.select(CLUBS.ID, CLUBS.CREATED_AT)
             .from(CLUBS)
@@ -182,8 +186,8 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
             .associate { it.value1()!! to it.value2()!! }
 
     /**
-     * Distinct members who responded to the club's recent (window-or-upcoming) non-cancelled events.
-     * Member-driven signal (voting/going) — the engagement numerator.
+     * Distinct-участники, откликнувшиеся на недавние (в окне или предстоящие) неотменённые события клуба.
+     * Сигнал, идущий от участников (голосование/going) — числитель вовлечённости.
      */
     private fun recentRespondersByClub(ids: Set<UUID>, windowStart: OffsetDateTime): Map<UUID, Int> =
         dsl.select(EVENTS.CLUB_ID, DSL.countDistinct(EVENT_RESPONSES.USER_ID))
@@ -198,7 +202,7 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
             .fetch()
             .associate { it.value1()!! to it.value2() }
 
-    /** Alive (active + grace_period) memberships per club — the engagement denominator. */
+    /** Живые (active + grace_period) memberships на клуб — знаменатель вовлечённости. */
     private fun aliveMemberCountByClub(ids: Set<UUID>): Map<UUID, Int> =
         dsl.select(MEMBERSHIPS.CLUB_ID, DSL.count())
             .from(MEMBERSHIPS)

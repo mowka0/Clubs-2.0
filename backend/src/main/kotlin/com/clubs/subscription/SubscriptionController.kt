@@ -44,8 +44,9 @@ class SubscriptionController(
     }
 
     /**
-     * Provider webhook. permitAll in SecurityConfig — authenticity is the provider signature, not a JWT.
-     * Raw body so the (future) signature check sees exactly what was signed.
+     * Вебхук провайдера. permitAll в SecurityConfig — подлинность подтверждает подпись провайдера,
+     * а не JWT. Тело принимаем сырым, чтобы (будущая) проверка подписи видела ровно то, что было
+     * подписано.
      */
     @PostMapping("/webhook")
     fun webhook(

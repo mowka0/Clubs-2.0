@@ -11,17 +11,17 @@ import { ClubPickerList, type ClubPickerOption } from './ClubPickerModal';
 import type { ActivityType } from '../../api/activities';
 
 interface CreateActivityFlowProps {
-  /** Whether the creation flow is open. */
+  /** Открыт ли флоу создания. */
   open: boolean;
-  /** Clubs the user organizes — the flow only navigates within these. */
+  /** Клубы, которыми пользователь управляет — флоу навигирует только внутри них. */
   organizerClubs: ClubPickerOption[];
   /**
-   * When set, the club picker is skipped entirely — after choosing the type
-   * the flow navigates straight into this club. Used when the FAB is tapped
-   * from a club the user is currently viewing (and organizes).
+   * Если задан — выбор клуба пропускается целиком: после выбора типа флоу сразу
+   * уходит в этот клуб. Используется, когда FAB нажат со страницы клуба, который
+   * пользователь сейчас просматривает (и организует).
    */
   presetClubId?: string | null;
-  /** Closes the whole flow (resets internal step state). */
+  /** Закрывает весь флоу (сбрасывает внутреннее состояние шага). */
   onClose: () => void;
 }
 
@@ -29,22 +29,22 @@ type Step = 'type' | 'template' | 'club';
 
 function createRoute(clubId: string, type: ActivityType, template: SkladchinaTemplateKey | null): string {
   if (type === 'event') return `/clubs/${clubId}/events/new`;
-  // split_bill has its own entry-agnostic page (picks the event, splits the bill).
+  // У split_bill своя страница, не зависящая от точки входа (выбирает событие, делит счёт).
   if (template === 'split_bill') return `/clubs/${clubId}/skladchina/split`;
   return `/clubs/${clubId}/skladchina/new`;
 }
 
 /**
- * Controller for the global "тип → клуб → форма" creation flow.
+ * Контроллер глобального флоу создания «тип → клуб → форма».
  *
- * Renders a SINGLE Modal whose body swaps by `step`. Step 'type' picks the
- * activity type; step 'club' picks the target club when the user organizes
- * multiple. A single Modal is required: rendering a separate Modal per step
- * made the closing one tear down the shared portal/scroll-lock overlay the
- * opening one had just mounted, collapsing the second instantly.
+ * Рендерит ОДИН Modal, тело которого переключается по `step`. Шаг 'type' выбирает
+ * тип активности; шаг 'club' — целевой клуб, если пользователь организует несколько.
+ * Один Modal обязателен: при отдельном Modal на каждый шаг закрывающийся сносил
+ * общий portal/scroll-lock оверлей, который только что смонтировал открывающийся,
+ * и второй модал мгновенно схлопывался.
  *
- * After resolving type + club, navigate to the per-club create route
- * (CreateEventPage / CreateSkladchinaPage read :id).
+ * После определения типа и клуба навигируем на per-club маршрут создания
+ * (CreateEventPage / CreateSkladchinaPage читают :id).
  */
 export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   open,
@@ -73,7 +73,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
     navigate(createRoute(clubId, type, template));
   };
 
-  // Resolve the club for a chosen (type, template): skip the picker when there's no ambiguity.
+  // Определяем клуб для выбранной пары (тип, шаблон): если неоднозначности нет — пикер пропускаем.
   const resolveClub = (type: ActivityType, template: SkladchinaTemplateKey | null) => {
     if (presetClubId) {
       goToCreate(presetClubId, type, template);
@@ -90,7 +90,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
 
   const handlePickType = (type: ActivityType) => {
     haptic.impact('medium');
-    // «Сбор» fans out into the template step first; «Событие» goes straight to the club.
+    // «Сбор» сначала разветвляется на шаг выбора шаблона; «Событие» идёт сразу к выбору клуба.
     if (type === 'skladchina') {
       setPendingType(type);
       setStep('template');

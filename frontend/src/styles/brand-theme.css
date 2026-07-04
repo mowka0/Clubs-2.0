@@ -1,12 +1,12 @@
-/* Brand palette — derived from logo (navy shield + brass details).
-   Intentionally NOT bound to --tg-theme-* vars: brand identity must stay
-   consistent across user's Telegram themes. See SESSION-NOTES.md. */
+/* Брендовая палитра — выведена из логотипа (тёмно-синий щит + латунные детали).
+   Намеренно НЕ привязана к переменным --tg-theme-*: айдентика бренда должна
+   оставаться одинаковой при любой Telegram-теме пользователя. См. SESSION-NOTES.md. */
 
-/* Body reset — browser default 8px margin would otherwise show the
-   Telegram client's grey through on the sides of our navy canvas.
-   Inter font is the brand-wide default — applied here so ALL pages
-   (Discovery, ClubPage, MyClubsPage, future) inherit it consistently.
-   Children use `font-family: inherit` to pick this up. */
+/* Сброс body — дефолтный браузерный margin 8px иначе просвечивал бы серым фоном
+   Telegram-клиента по краям нашего тёмно-синего холста.
+   Шрифт Inter — дефолт всего бренда, задан здесь, чтобы ВСЕ страницы
+   (Discovery, ClubPage, MyClubsPage, будущие) наследовали его единообразно.
+   Дочерние элементы подхватывают его через `font-family: inherit`. */
 html, body, #root { margin: 0; padding: 0; }
 html, body {
   background: var(--bg);
@@ -20,21 +20,24 @@ html, body {
 }
 
 /* ============================================================
-   DESIGN TOKENS — "Banco-Plata" redesign.
-   Semantic tokens drive the whole UI; two themes are switched
-   via [data-theme] on <html> (set by useThemeStore). :root holds
-   the DARK defaults (so data-theme="dark" needs no extra block),
-   [data-theme="light"] overrides only the semantic values.
-   Legacy --brand-* names are aliased to the semantic tokens so
-   not-yet-redesigned screens recolor automatically.
+   ДИЗАЙН-ТОКЕНЫ — редизайн «Banco-Plata».
+   Семантические токены управляют всем UI; две темы переключаются
+   через [data-theme] на <html> (ставит useThemeStore). :root хранит
+   ТЁМНЫЕ дефолты (так data-theme="dark" не требует отдельного блока),
+   [data-theme="light"] переопределяет только семантические значения.
+   Legacy-имена --brand-* — алиасы на семантические токены, чтобы ещё
+   не переведённые на редизайн экраны перекрашивались автоматически.
    ============================================================ */
 :root {
-  /* — semantic (DARK) — */
+  /* — семантика (ТЁМНАЯ тема) — */
+  /* Базовые фон и текст: --bg — фон приложения, --text — основной текст,
+     --text-dim / --text-faint — приглушённый и самый бледный текст. */
   --bg:            #0B0B0E;
   --text:          #F4F4F6;
   --text-dim:      rgba(244, 244, 246, 0.6);
   --text-faint:    rgba(244, 244, 246, 0.45);
 
+  /* «Стекло»: фон/рамка/тень стеклянных карточек; strong — более плотный вариант. */
   --glass-bg:      linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.015) 100%);
   --glass-border:  rgba(255, 255, 255, 0.08);
   --glass-shadow:  inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.25);
@@ -44,41 +47,50 @@ html, body {
   --glass-strong-border: rgba(255, 255, 255, 0.09);
   --glass-strong-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 12px 32px rgba(0,0,0,0.35);
 
+  /* Поверхности карточек (--surface — базовая, --surface-2 — чуть светлее)
+     и тонкие рамки-разделители (--hairline / более заметная --hairline-2). */
   --surface:       rgba(255, 255, 255, 0.04);
   --surface-2:     rgba(255, 255, 255, 0.05);
   --hairline:      rgba(255, 255, 255, 0.06);
   --hairline-2:    rgba(255, 255, 255, 0.1);
 
+  /* Фирменный оранжевый акцент: базовый/тёмный тона, мягкая подложка и свечение. */
   --accent:        #F47B3C;
   --accent-deep:   #D5611C;
   --accent-soft:   rgba(244, 123, 60, 0.14);
   --accent-glow:   rgba(244, 123, 60, 0.4);
-  /* Tight 2-layer button glow — replaces the old diffuse 24px halo. */
+  /* Плотное двухслойное свечение кнопок — заменяет старый размытый 24px-ореол. */
   --accent-shadow:      rgba(244, 123, 60, 0.30);
   --accent-shadow-soft: rgba(244, 123, 60, 0.15);
+  /* Акцентные градиенты кнопок (--accent-grad*), градиенты заголовков (--grad-text)
+     и крупных чисел (--grad-num); --on-accent — цвет текста поверх акцентной заливки. */
   --accent-grad:        linear-gradient(135deg, #FFA070 0%, #F47B3C 100%);
   --accent-grad-strong: linear-gradient(135deg, #FFCDA8 0%, #F47B3C 50%, #D5611C 100%);
   --grad-text:     linear-gradient(90deg, #FF8A4A 0%, #E84C9A 50%, #8E5DFF 100%);
   --grad-num:      linear-gradient(135deg, #FFE0B5 0%, #FF9B6E 35%, #E84C9A 70%, #6A3DCC 100%);
   --on-accent:     #2A0E04;
 
+  /* Статусные цвета: --live (зелёный, «живая» активность) и --danger (красный,
+     ошибки/опасные действия) + их мягкие подложки *-soft. */
   --live:          #66D49A;
   --live-soft:     rgba(79, 160, 120, 0.18);
   --danger:        #FF8B8B;
   --danger-soft:   rgba(255, 139, 139, 0.14);
-  /* Frozen / no-access (de-Stars): cool «iced» blue, distinct from the warm brand + green/red states. */
+  /* Frozen / нет доступа (de-Stars): холодный «ледяной» голубой, отличимый от тёплого
+     бренда и зелёного/красного статусов. */
   --ice:           #8FC7E8;
   --ice-soft:      rgba(143, 199, 232, 0.10);
 
-  /* Vote palette — single source of truth for the donut chart, the vote buttons and the
-     responder status dots. Brand colours, identical across themes (light does not override). */
+  /* Палитра голосования — единый источник истины для donut-диаграммы, кнопок голосования
+     и статусных точек ответивших. Брендовые цвета, одинаковые в обеих темах (light не переопределяет). */
   --vote-go:       #F47B3C;
   --vote-maybe:    #8E5DFF;
   --vote-no:       #6B6B70;
 
+  /* Прозрачность плёночного зерна (в светлой теме → 0). */
   --grain-opacity: 0.08;
 
-  /* — legacy aliases (resolve lazily → follow active theme) — */
+  /* — legacy-алиасы (резолвятся лениво → следуют активной теме) — */
   --brand-navy-bg:     var(--bg);
   --brand-navy-card:   var(--surface-2);
   --brand-navy-card-2: var(--surface);
@@ -133,15 +145,15 @@ html, body {
   --live:          #2E7D5A;
   --live-soft:     rgba(46, 125, 90, 0.12);
   --danger-soft:   rgba(216, 64, 64, 0.10);
-  /* Frozen / no-access — darker ice for contrast on the light surface. */
+  /* Frozen / нет доступа — более тёмный «лёд» для контраста на светлой поверхности. */
   --ice:           #3B82A6;
   --ice-soft:      rgba(59, 130, 166, 0.08);
 
   --grain-opacity: 0;
 }
 
-/* Discovery page root — brand canvas with ambient mesh.
-   Font / color / antialiasing live on html,body now (universal brand defaults). */
+/* Корень страницы Discovery — брендовый холст с ambient-градиентами.
+   Шрифт / цвет / сглаживание теперь живут на html,body (универсальные бренд-дефолты). */
 .discovery-page {
   position: relative;
   min-height: 100vh;
@@ -151,19 +163,19 @@ html, body {
     var(--brand-navy-bg);
 }
 
-/* All discovery children sit above the SVG backdrop */
-/* Brand SVG backdrop positioning lives inline in <BrandBackdrop> component;
-   classname is a marker for the z-index rule below (and for any consumer that
-   wants to override). */
+/* Все дочерние элементы discovery лежат поверх SVG-фона */
+/* Позиционирование брендового SVG-фона живёт inline в компоненте <BrandBackdrop>;
+   класс — маркер для z-index-правила ниже (и для любого потребителя, который
+   захочет его переопределить). */
 .discovery-page > *:not(.brand-backdrop) { position: relative; z-index: 1; }
 .brand-page > *:not(.brand-backdrop) { position: relative; z-index: 1; }
 
-/* Topbar — brand mark + city pill.
-   Logo image (256×238 PNG) has ~6% transparent margin around the shield.
-   To make the visible shield contour align with the "Н" of "Найди свой клуб"
-   (hero has padding-left: 20px), we offset the brand block with a negative
-   margin-left so the shield's painted edge — not the image bounding box —
-   sits at the same x as the hero text. */
+/* Топбар — знак бренда + пилюля города.
+   У картинки логотипа (PNG 256×238) ~6% прозрачного поля вокруг щита.
+   Чтобы видимый контур щита выровнялся с «Н» из «Найди свой клуб»
+   (у hero padding-left: 20px), сдвигаем бренд-блок отрицательным
+   margin-left — так на одном x с текстом hero оказывается закрашенный
+   край щита, а не bounding box картинки. */
 .discovery-topbar {
   padding: 8px 20px 18px;
   display: flex;
@@ -229,7 +241,7 @@ html, body {
 }
 
 /* ====================================================== */
-/* City picker — bottom sheet (country tabs + city list)  */
+/* Выбор города — bottom sheet (табы стран + список)      */
 /* ====================================================== */
 .city-picker-overlay {
   position: fixed;
@@ -347,7 +359,7 @@ html, body {
   to   { transform: translateY(0); }
 }
 
-/* Hero */
+/* Hero-блок */
 .discovery-hero { padding: 14px 20px 22px; }
 .discovery-hero h1 {
   font-size: 34px;
@@ -375,7 +387,7 @@ html, body {
   filter: blur(6px);
 }
 
-/* Search */
+/* Поиск */
 .discovery-search-wrap { padding: 0 20px 14px; }
 .discovery-search {
   display: flex;
@@ -401,7 +413,7 @@ html, body {
 }
 .discovery-search input::placeholder { color: var(--brand-ink-4); }
 
-/* Chips row */
+/* Ряд chip-фильтров */
 .discovery-chips {
   padding: 0 20px;
   display: flex;
@@ -435,7 +447,7 @@ html, body {
   font-weight: 600;
 }
 
-/* Meta row */
+/* Строка meta-информации */
 .discovery-meta-row {
   padding: 22px 20px 12px;
   display: flex;
@@ -454,7 +466,7 @@ html, body {
   color: var(--brand-ink-2);
   flex-shrink: 0;
 }
-/* Price filter pill (sits between count and sort in meta-row) */
+/* Пилюля фильтра по цене (расположена между счётчиком и сортировкой в meta-row) */
 .discovery-filter-pill {
   display: inline-flex;
   align-items: center;
@@ -487,7 +499,7 @@ html, body {
   opacity: 0.7;
 }
 
-/* List wrapper */
+/* Обёртка списка */
 .discovery-list {
   padding: 0 20px 24px;
   display: flex;
@@ -509,7 +521,7 @@ html, body {
 .discovery-spinner-row { display: flex; justify-content: center; padding: 24px; }
 
 /* ====================================================== */
-/* Club card */
+/* Карточка клуба */
 /* ====================================================== */
 .club-card {
   background: rgba(26, 33, 56, 0.88);
@@ -669,14 +681,14 @@ html, body {
 }
 .capacity-num.almost-full { color: var(--brand-brass-deep); }
 
-/* Bottom navigation moved to the floating dock — see redesign.css `.rd-dock*`
-   and components/BottomTabBar.tsx. */
+/* Нижняя навигация перенесена в плавающий dock — см. redesign.css `.rd-dock*`
+   и components/BottomTabBar.tsx. */
 
 /* ====================================================== */
-/* Brand page canvas (.brand-page) — shared by ClubPage,    */
-/* MyClubsPage, ProfilePage, EventPage, etc. SVG decor in   */
-/* <BrandBackdrop>. Discovery uses its own .discovery-page  */
-/* canvas with hero-specific gradients.                     */
+/* Холст брендовой страницы (.brand-page) — общий для ClubPage,   */
+/* MyClubsPage, ProfilePage, EventPage и т.д. SVG-декор в         */
+/* <BrandBackdrop>. Discovery использует свой холст .discovery-page */
+/* со своими hero-специфичными градиентами.                       */
 /* ====================================================== */
 
 .brand-page {
@@ -684,21 +696,21 @@ html, body {
   min-height: 100vh;
   width: 100%;
   max-width: 100vw;
-  /* contain horizontal overflow from internally-scrolling rows (cp-tab-row).
-     without this, the page body grows wider than the Telegram WebApp
-     viewport and shows a dark strip on the right edge. */
+  /* сдерживаем горизонтальный overflow от внутренне скроллящихся рядов (cp-tab-row).
+     без этого body страницы становится шире, чем viewport Telegram WebApp,
+     и показывает тёмную полосу у правого края. */
   overflow-x: hidden;
-  /* Flat, uniform canvas — same on every screen, matching the mockup. */
+  /* Плоский, единообразный холст — одинаковый на всех экранах, как в макете. */
   background: var(--bg);
   padding-bottom: 100px;
 }
 
-/* Film grain — subtle texture, dark theme only (var → 0 in light). */
+/* Плёночное зерно — тонкая текстура, только в тёмной теме (переменная → 0 в светлой). */
 body::after {
   content: '';
   position: fixed;
   inset: 0;
-  /* Above page content (z auto/1) but below the dock (z 2) and TGUI overlays (z 3+). */
+  /* Поверх контента страницы (z auto/1), но под dock (z 2) и оверлеями TGUI (z 3+). */
   z-index: 1;
   pointer-events: none;
   opacity: var(--grain-opacity);
@@ -706,7 +718,7 @@ body::after {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='2.2' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
 }
 
-/* Top breadcrumb — minimal, since native Telegram back button does the work */
+/* Верхние хлебные крошки — минимальные, т.к. нативная кнопка «назад» Telegram делает свою работу */
 .cp-topbar {
   display: flex;
   align-items: center;
@@ -725,7 +737,7 @@ body::after {
   opacity: 0.7;
 }
 
-/* =========== Header / Cover =========== */
+/* =========== Заголовок / Обложка =========== */
 .cp-cover {
   padding: 14px 20px 22px;
   display: flex;
@@ -734,12 +746,12 @@ body::after {
   position: relative;
 }
 
-/* Compact leave-club affordance in the top-right of the hero. Active members
-   only (owner / cancelled-in-period / visitor never see it). Top-aligned with
-   the avatar (same 14px top inset as `.cp-cover` padding) so it sits on the
-   same baseline as the avatar's top edge. `.cp-cover .body` reserves a
-   matching right gutter (52px = 36 icon + 16 spacing) so a long club name
-   never tucks under the icon. */
+/* Компактная иконка выхода из клуба в правом верхнем углу hero. Видна только
+   активным участникам (owner / cancelled-in-period / visitor её никогда не видят).
+   Выровнена по верху с аватаром (тот же 14px верхний отступ, что и padding
+   `.cp-cover`), поэтому сидит на одной базовой линии с верхним краем аватара.
+   `.cp-cover .body` резервирует такой же правый желоб (52px = 36 иконка +
+   16 отступ), чтобы длинное название клуба никогда не заезжало под иконку. */
 .cp-leave-icon {
   position: absolute;
   top: 14px;
@@ -767,9 +779,9 @@ body::after {
 }
 .cp-leave-icon:active { transform: scale(0.96); }
 
-/* Read-only banner shown to paid members who already cancelled the
-   subscription but are still inside the paid period (membership still grants
-   access; banner just communicates the lifecycle state). */
+/* Баннер только для чтения — показывается платным участникам, которые уже
+   отменили подписку, но всё ещё внутри оплаченного периода (членство всё
+   ещё даёт доступ; баннер просто сообщает про состояние жизненного цикла). */
 .cp-cancelled-note {
   margin: 4px 20px 12px;
   padding: 10px 14px;
@@ -815,10 +827,10 @@ body::after {
 .cp-cover .body {
   flex: 1; min-width: 0;
   padding-top: 4px;
-  /* Reserve room for the leave-icon (36px) + 16px gap so the title can't
-     slide under it when the row has the icon visible. Owners / visitors
-     skip the icon entirely, but a constant gutter keeps the layout stable
-     across roles (no reflow on Quick role checks). */
+  /* Резервируем место под иконку выхода (36px) + 16px отступ, чтобы заголовок
+     не заезжал под неё, когда иконка видна. Owner / visitor вообще не видят
+     иконку, но постоянный желоб держит layout стабильным независимо от роли
+     (нет reflow при быстрой проверке роли). */
   padding-right: 52px;
 }
 .cp-cover .name {
@@ -865,7 +877,7 @@ body::after {
 }
 .cp-chip.closed { color: var(--brand-brass-deep); }
 
-/* =========== Stats row =========== */
+/* =========== Строка статистики =========== */
 .cp-stats {
   margin: 4px 20px 18px;
   padding: 14px 4px;
@@ -930,7 +942,7 @@ body::after {
   border-radius: 2px;
 }
 
-/* =========== Description / Rules card =========== */
+/* =========== Карточка описания / правил =========== */
 .cp-card {
   margin: 0 20px 12px;
   padding: 14px 16px 16px;
@@ -957,7 +969,7 @@ body::after {
 }
 .cp-card.rules .body-text { color: var(--brand-ink-3); }
 
-/* =========== Visitor: lock card + CTA =========== */
+/* =========== Visitor: карточка блокировки + CTA =========== */
 .cp-locked {
   margin: 8px 20px 14px;
   padding: 24px 20px;
@@ -1032,7 +1044,7 @@ body::after {
   line-height: 1.4;
 }
 
-/* =========== Tabs (member / organizer) =========== */
+/* =========== Табы (участник / организатор) =========== */
 .cp-tab-row {
   padding: 8px 20px 16px;
   display: flex;
@@ -1074,7 +1086,7 @@ body::after {
   opacity: 0.7;
 }
 
-/* =========== Section labels inside tabs =========== */
+/* =========== Заголовки секций внутри табов =========== */
 .cp-section-label {
   padding: 6px 20px 10px;
   font-size: 10.5px;
@@ -1084,7 +1096,7 @@ body::after {
   color: var(--brand-brass-2);
 }
 
-/* =========== Event row (events tab) =========== */
+/* =========== Строка события (таб событий) =========== */
 .cp-events { padding: 0 20px; display: flex; flex-direction: column; gap: 10px; }
 .cp-event {
   background: rgba(26, 33, 56, 0.78);
@@ -1097,7 +1109,7 @@ body::after {
   cursor: pointer;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  /* button reset (rendered as <button> for keyboard a11y) */
+  /* сброс стилей кнопки (рендерится как <button> для доступности с клавиатуры) */
   font-family: inherit;
   font-size: inherit;
   text-align: left;
@@ -1190,7 +1202,7 @@ body::after {
 .cp-event.past .date .day { color: var(--brand-ink-3); }
 .cp-event.past .date .mon { color: var(--brand-ink-4); }
 
-/* =========== Members tab =========== */
+/* =========== Таб участников =========== */
 .cp-members { padding: 0 20px; display: flex; flex-direction: column; gap: 6px; }
 .cp-member {
   display: flex;
@@ -1201,7 +1213,7 @@ body::after {
   border: 1px solid var(--brand-hairline);
   border-radius: 12px;
   cursor: pointer;
-  /* button reset (rendered as <button> for keyboard a11y) */
+  /* сброс стилей кнопки (рендерится как <button> для доступности с клавиатуры) */
   font-family: inherit;
   font-size: inherit;
   text-align: left;
@@ -1259,7 +1271,7 @@ body::after {
 .cp-member .reliability .dot.low  { background: var(--brand-ink-4); }
 .cp-member .reliability .num { color: var(--brand-ink-2); font-weight: 600; }
 
-/* =========== Profile tab =========== */
+/* =========== Таб профиля =========== */
 .cp-profile-head {
   margin: 4px 20px 12px;
   padding: 12px 14px;
@@ -1337,9 +1349,9 @@ body::after {
 
 
 /* ====================================================== */
-/* ProfilePage (pf-*) — bottom-tab "Профиль". Identity     */
-/* card + per-club reputation list (reliability index      */
-/* moved here from the club-card "Мой профиль" tab).        */
+/* ProfilePage (pf-*) — нижний таб «Профиль». Карточка      */
+/* идентичности + список репутации по клубам (индекс        */
+/* надёжности перенесён сюда из таба «Мой профиль» карточки клуба). */
 /* ====================================================== */
 .pf-identity {
   margin: 4px 20px 12px;
@@ -1442,7 +1454,7 @@ body::after {
   margin-top: 4px;
 }
 
-/* Gear (edit profile) in the hero — round icon button, mirrors mc-create-btn spot */
+/* Шестерёнка (редактирование профиля) в hero — круглая кнопка-иконка, зеркалит место mc-create-btn */
 .pf-gear {
   flex-shrink: 0;
   width: 40px; height: 40px;
@@ -1459,7 +1471,7 @@ body::after {
 
 .pf-identity .location { font-size: 12.5px; color: var(--brand-ink-3); margin-top: 4px; }
 
-/* Bio + interest tags (read view) */
+/* Bio + теги интересов (вид только для чтения) */
 .pf-bio {
   margin: 0 20px 12px;
   padding: 12px 14px;
@@ -1489,7 +1501,7 @@ body::after {
   border: 1px solid rgba(201, 160, 99, 0.30);
 }
 
-/* ---- Profile edit sheet (own portal, below CityPicker at z-200) ---- */
+/* ---- Шторка редактирования профиля (свой портал, ниже CityPicker на z-200) ---- */
 .pf-edit-overlay {
   position: fixed; inset: 0;
   background: rgba(8, 12, 24, 0.62);
@@ -1556,7 +1568,7 @@ body::after {
 .pf-edit-actions .ghost-btn,
 .pf-edit-actions .mc-create-btn { flex: 1; justify-content: center; }
 
-/* ---- Interest chip input (edit) ---- */
+/* ---- Ввод chip-тегов интересов (редактирование) ---- */
 .pf-interests { position: relative; }
 .pf-chips {
   display: flex; flex-wrap: wrap; gap: 7px;
@@ -1610,15 +1622,15 @@ body::after {
 
 
 /* ====================================================== */
-/* MyClubsPage (mc-*) — see docs/design/myclubs-redesign/  */
+/* MyClubsPage (mc-*) — см. docs/design/myclubs-redesign/  */
 /* ====================================================== */
 
 /* ====================================================== */
 /* MyClubsPage (mc-*)                                     */
 /* ====================================================== */
 
-/* Hero — greeting + h1 with brass accent + summary sub-line.
-   Mass-balances against Discovery hero (logo + h1 + search + chips). */
+/* Hero — приветствие + h1 с латунным акцентом + строка-саммари.
+   Визуально уравновешивает hero Discovery (лого + h1 + поиск + чипы). */
 .mc-hero {
   padding: 16px 20px 24px;
 }
@@ -1690,7 +1702,7 @@ body::after {
   top: -1px;
 }
 
-/* Section label with count */
+/* Заголовок секции со счётчиком */
 .mc-section-label {
   padding: 18px 20px 10px;
   font-size: 10.5px;
@@ -1705,7 +1717,7 @@ body::after {
   margin-left: 4px;
 }
 
-/* Container for cards on MyClubsPage */
+/* Контейнер для карточек на MyClubsPage */
 .mc-list {
   padding: 0 20px;
   display: flex;
@@ -1713,11 +1725,11 @@ body::after {
   gap: 10px;
 }
 
-/* Organizer indicators:
-   - brass ring on avatar (subtle glow)
-   - crown badge in top-right corner of card body (over capacity numbers)
-   Equal 14px padding from card edges thanks to .club-card padding + .top
-   being the first row of .body. */
+/* Индикаторы организатора:
+   - латунное кольцо на аватаре (лёгкое свечение)
+   - бейдж-корона в правом верхнем углу тела карточки (над числами вместимости)
+   Одинаковый отступ 14px от краёв карточки благодаря padding .club-card
+   и тому, что .top — первая строка .body. */
 .club-card .avt.organizer-ring {
   box-shadow:
     inset 0 0 0 1.5px rgba(201, 160, 99, 0.55),
@@ -1737,7 +1749,7 @@ body::after {
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45), 0 0 12px rgba(201, 160, 99, 0.30);
 }
 
-/* Application card — muted variant, status-driven right pill */
+/* Карточка заявки — приглушённый вариант, пилюля справа зависит от статуса */
 .mc-app {
   background: rgba(26, 33, 56, 0.55);
   border: 1px solid var(--brand-hairline);
@@ -1751,10 +1763,10 @@ body::after {
   color: inherit;
   width: 100%;
   cursor: pointer;
-  /* width:100% + padding + border without border-box overflows the .mc-list
-     gutter (20px each side), so the card visually touches the screen edge.
-     Forcing border-box keeps every mc-app variant (pending inbox row)
-     flush with the club cards above/below. */
+  /* width:100% + padding + border без border-box переполняют желоб .mc-list
+     (20px с каждой стороны), из-за чего карточка визуально касается края экрана.
+     Принудительный border-box держит каждый вариант mc-app (строка pending-инбокса)
+     заподлицо с карточками клубов сверху/снизу. */
   box-sizing: border-box;
 }
 .mc-app .avt {
@@ -1820,11 +1832,12 @@ body::after {
   color: #FF8B8B;
   border: 1px solid rgba(255, 139, 139, 0.22);
 }
-/* «Ожидает оплаты» — approved-but-unpaid lifecycle state. Same brass family
-   as `.pending` (waiting for action) but distinct from `.approved` (green,
-   final completion). `.mc-app-status` is the standalone variant for reuse
-   outside the `.mc-app` card (e.g. organizer-view rows on `ClubMembersTab`);
-   it inherits the same chip layout as `.mc-app .status`. */
+/* «Ожидает оплаты» — состояние жизненного цикла approved-but-unpaid. Та же
+   «латунная» семья цветов, что и `.pending` (ожидание действия), но отличается
+   от `.approved` (зелёный, финальное завершение). `.mc-app-status` — отдельный
+   вариант для переиспользования вне карточки `.mc-app` (например, строки
+   organizer-view на `ClubMembersTab`); наследует ту же раскладку чипа, что и
+   `.mc-app .status`. */
 .mc-app .status.awaiting-payment,
 .mc-app-status.awaiting-payment {
   background: var(--brand-brass-soft);
@@ -1842,8 +1855,8 @@ body::after {
   text-transform: uppercase;
 }
 
-/* Awaiting-payment applicant row inside ClubMembersTab (organizer view):
-   non-interactive variant of `.cp-member` with @username + trailing chip. */
+/* Строка заявителя «ожидает оплаты» внутри ClubMembersTab (вид организатора):
+   неинтерактивный вариант `.cp-member` с @username + пилюлей справа. */
 .cp-member-awaiting-payment {
   cursor: default;
 }
@@ -1856,7 +1869,7 @@ body::after {
   color: var(--brand-ink-3);
 }
 
-/* Empty state card (when user has no clubs nor applications) */
+/* Карточка пустого состояния (когда у юзера нет ни клубов, ни заявок) */
 .mc-empty {
   margin: 24px 20px;
   padding: 36px 24px;
@@ -1910,10 +1923,10 @@ body::after {
 }
 
 /* ============================================================
-   Feed (EventsPage / future Skladchina)
-   Generic feed components — FeedSection / FeedSkeleton /
-   FeedEmpty live under components/feed and stay agnostic of
-   what they contain. EventCard is event-specific.
+   Feed (EventsPage / будущая Skladchina)
+   Универсальные компоненты фида — FeedSection / FeedSkeleton /
+   FeedEmpty живут в components/feed и не зависят от того,
+   что именно они отображают. EventCard — специфичен для событий.
    ============================================================ */
 .feed-section-label {
   padding: 18px 20px 10px;
@@ -2086,7 +2099,7 @@ body::after {
   transition: width 0.3s ease;
 }
 
-/* Skeleton placeholder while loading initial feed */
+/* Skeleton-заглушка при загрузке начального фида */
 .feed-skeleton {
   background: var(--brand-navy-card);
   border: 1px solid var(--brand-hairline);
@@ -2111,7 +2124,7 @@ body::after {
   100% { background-position: -200% 0; }
 }
 
-/* Empty state — reused for both "no clubs" and "error" */
+/* Пустое состояние — переиспользуется и для «нет клубов», и для ошибки */
 .feed-empty {
   margin: 40px 20px;
   padding: 28px 20px;
@@ -2145,7 +2158,7 @@ body::after {
 }
 
 /* ============================================================
-   Activities — segmented control on ActivitiesPage
+   Активности — segmented control на ActivitiesPage
    ============================================================ */
 .activities-segments {
   display: flex;
@@ -2175,8 +2188,8 @@ body::after {
   color: var(--brand-brass-deep);
   border-color: rgba(201, 160, 99, 0.45);
 }
-/* Unpaid-skladchina count on the "Сборы" segment — same brass language as
-   the .skladchina-badge.accent "Требует оплаты" chip. */
+/* Счётчик неоплаченных складчин на сегменте «Сборы» — тот же латунный язык,
+   что и у пилюли .skladchina-badge.accent «Требует оплаты». */
 .activities-segments .segment .seg-badge {
   display: inline-flex;
   align-items: center;
@@ -2194,7 +2207,7 @@ body::after {
 }
 
 /* ============================================================
-   Skladchina card — in feed
+   Карточка складчины — в ленте
    ============================================================ */
 .skladchina-card {
   display: flex;
@@ -2319,8 +2332,8 @@ body::after {
 }
 
 /* ============================================================
-   Club picker — bottom-sheet list shown by CreateActivityFlow
-   when the user organizes more than one club (тип → клуб → форма).
+   Выбор клуба — список bottom-sheet, показываемый CreateActivityFlow,
+   когда пользователь организует больше одного клуба (тип → клуб → форма).
    ============================================================ */
 .club-picker {
   padding: 8px 0 12px;
@@ -2380,7 +2393,7 @@ body::after {
 }
 
 /* ============================================================
-   SkladchinaPage — detail view
+   SkladchinaPage — детальный вид
    ============================================================ */
 .sklad-hero {
   padding: 16px 20px 10px;
@@ -2702,7 +2715,7 @@ body::after {
 .status-expired { background: rgba(140, 100, 50, 0.20); color: #C9A063; }
 
 /* ============================================================
-   CreateSkladchinaModal — form
+   CreateSkladchinaModal — форма
    ============================================================ */
 .sklad-create-modal {
   padding: 0 20px 24px;
@@ -2874,11 +2887,11 @@ body::after {
 }
 
 /* ============================================================
-   Skladchina post-staging fixes (2026-05-23)
+   Складчина — фиксы после staging (2026-05-23)
    ============================================================ */
 
-/* #1 iOS zoom — Safari/Telegram WebView zooms viewport when input
-   font-size < 16px. Enforce 16px on all relevant inputs across the app. */
+/* #1 iOS zoom — Safari/Telegram WebView зуммит viewport, когда font-size
+   инпута < 16px. Принудительно ставим 16px на все релевантные инпуты в приложении. */
 input[type="text"],
 input[type="number"],
 input[type="email"],
@@ -2894,16 +2907,16 @@ select {
   font-size: 16px;
 }
 
-/* #7 Modal z-index — telegram-ui's modal occasionally rendered below
-   bottom tab bar or behind main window on desktop Telegram. Force-top
-   via explicit z-index. */
+/* #7 Modal z-index — модалка telegram-ui иногда рендерилась ниже
+   нижнего таб-бара или за главным окном на десктопном Telegram. Принудительно
+   выводим наверх через явный z-index. */
 [role="dialog"],
 .tgui-modal,
 .tgui-overlay {
   z-index: 1000 !important;
 }
 
-/* #8 SkladchinaPage — clickable club card on top (replaces text-link sklad-club-link). */
+/* #8 SkladchinaPage — кликабельная карточка клуба сверху (заменяет текст-ссылку sklad-club-link). */
 .sklad-club-card {
   display: flex;
   align-items: center;
@@ -2970,7 +2983,7 @@ select {
   padding: 4px 20px 10px;
 }
 
-/* #5 Reputation tag — both inline (sklad-meta) and on cards */
+/* #5 Тег репутации — и инлайн (sklad-meta), и на карточках */
 .sklad-reputation-tag {
   font-size: 11px;
   font-weight: 600;
@@ -2988,7 +3001,7 @@ select {
   border: 1px solid rgba(201, 112, 112, 0.20);
 }
 
-/* #3 SkladchinasTab — closed sklаdchinas in history section get muted style */
+/* #3 SkladchinasTab — закрытые складчины в секции истории получают приглушённый стиль */
 .skladchina-card.closed {
   opacity: 0.72;
 }
@@ -3023,11 +3036,11 @@ select {
 }
 
 /* ============================================================
-   OrganizerClubManage — brand shell (hero + pill-tabs)
+   OrganizerClubManage — брендовая оболочка (hero + pill-tabs)
    ============================================================ */
 
-/* Clickable brand hero — routes back to public ClubPage.
-   Mirrors mc-hero spacing while carrying a small club avatar. */
+/* Кликабельный брендовый hero — ведёт обратно на публичный ClubPage.
+   Зеркалит отступы mc-hero, неся при этом маленький аватар клуба. */
 .manage-hero {
   display: flex;
   align-items: center;
@@ -3101,8 +3114,8 @@ select {
   color: var(--brand-ink-4);
 }
 
-/* Pill-tabs — scroll horizontally so the 5 Russian labels never truncate.
-   Active pill gets the brass fill (same language as cp-tab / filter chips). */
+/* Pill-табы — горизонтальный скролл, чтобы 5 русских подписей никогда не обрезались.
+   Активная пилюля получает латунную заливку (тот же язык, что у cp-tab / чипов-фильтров). */
 .manage-tab-row {
   padding: 12px 20px 14px;
   display: flex;
@@ -3134,15 +3147,15 @@ select {
   font-weight: 600;
 }
 
-/* Tab content wrapper — telegram-ui Section/Cell rows render here on the brand
-   navy canvas (they already adapt to the TG dark theme). */
+/* Обёртка контента таба — строки Section/Cell из telegram-ui рендерятся здесь
+   поверх брендового тёмно-синего холста (они уже адаптируются под тёмную тему TG). */
 .manage-tab-content {
   padding-bottom: 8px;
 }
 
 /* ============================================================
-   BrandStepper — [−] value [+] numeric control
-   Replaces native <input type="number"> spinner.
+   BrandStepper — числовой контрол [−] значение [+]
+   Заменяет нативный спиннер <input type="number">.
    ============================================================ */
 .brand-stepper {
   display: inline-flex;
@@ -3177,10 +3190,10 @@ select {
   cursor: default;
   opacity: 0.55;
 }
-/* Editable numeric input. Higher specificity (`.brand-stepper input`) is
-   intentional: the global `input[type="text"] { font-size: 16px }` rule above
-   has specificity 0,1,1 and would otherwise override the brand 17px size. The
-   input is reset to look like the previous static <span> (no border/box). */
+/* Редактируемый числовой инпут. Более высокая специфичность (`.brand-stepper input`)
+   намеренная: глобальное правило `input[type="text"] { font-size: 16px }` выше
+   имеет специфичность 0,1,1 и иначе перебило бы брендовый размер 17px. Инпут
+   сброшен так, чтобы выглядеть как прежний статичный <span> (без border/box). */
 .brand-stepper input.brand-stepper-value {
   width: 56px;
   padding: 0;
@@ -3203,10 +3216,10 @@ select {
 }
 
 /* ============================================================
-   Brand datetime field — native <input type="datetime-local">
-   wrapped so it matches the other .field inputs (height, padding,
-   border, font) and carries a calendar affordance. Native picker
-   still opens on tap (most reliable inside the Telegram WebView).
+   Брендовое поле datetime — нативный <input type="datetime-local">,
+   обёрнутый так, чтобы соответствовать другим инпутам .field (высота,
+   padding, border, шрифт) и нести иконку календаря. Нативный пикер
+   всё ещё открывается по тапу (самый надёжный вариант внутри Telegram WebView).
    ============================================================ */
 .brand-datetime {
   position: relative;
@@ -3220,15 +3233,15 @@ select {
   border: 1px solid var(--brand-hairline-2);
   border-radius: 10px;
   color: var(--brand-ink);
-  /* 16px — iOS Safari/TG WebView zooms on focus below 16px. */
+  /* 16px — iOS Safari/TG WebView зуммит при фокусе, если меньше 16px. */
   font-size: 16px;
   min-height: 44px;
   -webkit-appearance: none;
   appearance: none;
 }
 .sklad-create-modal .field .brand-datetime input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-  /* hide the dim native glyph — our own brass icon sits on top, and the
-     whole control still opens the native picker on tap */
+  /* прячем тусклый нативный глиф — сверху наша собственная латунная иконка,
+     а весь контрол по-прежнему открывает нативный пикер по тапу */
   opacity: 0;
   position: absolute;
   right: 0;
@@ -3248,9 +3261,9 @@ select {
   pointer-events: none;
 }
 
-/* Cancel button in create-screen action rows. Previously only
-   `.mc-empty .ghost-btn` existed, so the create pages rendered the
-   browser-default button next to the brass primary-btn. */
+/* Кнопка отмены в строках действий экранов создания. Раньше существовал
+   только `.mc-empty .ghost-btn`, поэтому страницы создания рендерили
+   дефолтную кнопку браузера рядом с латунной primary-btn. */
 .sklad-create-modal .modal-actions .ghost-btn {
   flex: 1;
   padding: 12px 14px;
@@ -3268,14 +3281,14 @@ select {
 }
 
 /* ====================================================== */
-/* Applications inbox (cross-club organizer inbox on       */
-/* MyClubsPage) + rejected-reason rows on AppCard /        */
-/* pf-rep-card. See docs/modules/applications-inbox.md.    */
+/* Инбокс заявок (кросс-клубовый инбокс организатора на    */
+/* MyClubsPage) + строки причины отказа на AppCard /       */
+/* pf-rep-card. См. docs/modules/applications-inbox.md.    */
 /* ====================================================== */
 
-/* pending-app-card is a styling extension of .mc-app — circular avatar
-   (people, not clubs), tighter rows with peer-signal, club chip and an
-   auto-reject hint. */
+/* pending-app-card — стилевое расширение .mc-app: круглый аватар
+   (люди, а не клубы), более плотные строки с peer-сигналом, чипом клуба и
+   подсказкой авто-отклонения. */
 .mc-app.pending-app-card .avt {
   border-radius: 50%;
   overflow: hidden;
@@ -3321,8 +3334,8 @@ select {
   font-weight: 600;
 }
 
-/* Rejected-reason row on the applicant-side AppCard (.mc-app .body) — third
-   line under "Подана …", 2-line truncate. */
+/* Строка причины отказа на стороне заявителя AppCard (.mc-app .body) — третья
+   строка под «Подана …», обрезка в 2 строки. */
 .mc-app .body .reason {
   font-size: 12px;
   color: #FF8B8B;
@@ -3333,7 +3346,7 @@ select {
   overflow: hidden;
 }
 
-/* Rejected-reason row inside .pf-rep-card on ProfilePage. */
+/* Строка причины отказа внутри .pf-rep-card на ProfilePage. */
 .pf-rep-card .body .reason {
   font-size: 12px;
   color: #FF8B8B;
@@ -3347,9 +3360,8 @@ select {
   text-overflow: clip;
 }
 
-/* ApplicationReviewModal — reuses pf-edit-* sheet/overlay/header/body/actions.
-   Only the inner sections (hero / peer / club / answer / hint) need new
-   rules. */
+/* ApplicationReviewModal — переиспользует pf-edit-* sheet/overlay/header/body/actions.
+   Новые правила нужны только внутренним секциям (hero / peer / club / answer / hint). */
 .app-review-hero {
   display: flex;
   align-items: center;
@@ -3411,9 +3423,9 @@ select {
 }
 .app-review-hint.urgent { color: #FF8B8B; font-weight: 600; }
 
-/* Extended applicant profile in ApplicationReviewModal: location, bio, interests.
-   Sit between hero and peer-signal so the organizer scans identity → background
-   → reputation in a natural top-to-bottom order. */
+/* Расширенный профиль заявителя в ApplicationReviewModal: локация, bio, интересы.
+   Расположен между hero и peer-сигналом, чтобы организатор сканировал
+   идентичность → бэкграунд → репутацию в естественном порядке сверху вниз. */
 .app-review-location {
   font-size: 13.5px;
   color: var(--brand-ink-3);

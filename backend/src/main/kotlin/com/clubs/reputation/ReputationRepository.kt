@@ -4,65 +4,66 @@ import java.util.UUID
 
 interface ReputationRepository {
 
-    // --- Reads (consumed by MemberService, peer-signal) ---
+    // --- Чтение (используется MemberService, peer-signal) ---
 
     fun findByUserAndClub(userId: UUID, clubId: UUID): Reputation?
 
     /**
-     * Cross-club reputation aggregate for a batch of users (one SQL query).
-     * Returns `userId → aggregate`. Users absent from `user_club_reputation`
-     * are absent from the map; callers default to [PeerStatsAggregate.EMPTY].
-     * Empty input → emptyMap (no SQL hit).
+     * Кросс-клубовый агрегат репутации для пачки юзеров (один SQL-запрос).
+     * Возвращает `userId → агрегат`. Юзеры, отсутствующие в `user_club_reputation`,
+     * отсутствуют и в мапе; вызывающий код по умолчанию берёт [PeerStatsAggregate.EMPTY].
+     * Пустой вход → emptyMap (без обращения к БД).
      */
     fun aggregateByUserIds(userIds: Collection<UUID>): Map<UUID, PeerStatsAggregate>
 
     /**
-     * All of a user's ledger outcomes across ALL clubs (incl. left clubs) — the on-read source
-     * for P1b Trust + the all-history global aggregate. No active-membership / is_active filter:
-     * a left club's penalty survives in the ledger and must still count toward the global view.
+     * Все ledger-исходы юзера по ВСЕМ клубам (включая покинутые) — источник для P1b Trust
+     * и глобального агрегата за всю историю, читаемый напрямую. Без фильтра по активному
+     * членству / is_active: штраф из покинутого клуба остаётся в ledger и всё равно должен
+     * учитываться в глобальном показателе.
      */
     fun findTrustOutcomesByUser(userId: UUID): List<ClubLedgerOutcome>
 
     /**
-     * Batch variant of [findTrustOutcomesByUser]: every ledger outcome for a set of users in one
-     * query, grouped `userId → outcomes`. Powers the applicant cross-club signal (level + "N из M")
-     * for the organizer inbox without an N+1 over applicants. Users with no outcomes are absent from
-     * the map; empty input → emptyMap (no SQL hit).
+     * Batch-вариант [findTrustOutcomesByUser]: все ledger-исходы для набора юзеров одним
+     * запросом, сгруппированные `userId → outcomes`. Питает кросс-клубовый сигнал заявителя
+     * (уровень + «N из M») для инбокса организатора без N+1 по заявителям. Юзеры без исходов
+     * отсутствуют в мапе; пустой вход → emptyMap (без обращения к БД).
      */
     fun findOutcomesByUserIds(userIds: Collection<UUID>): Map<UUID, List<ClubLedgerOutcome>>
 
     /**
-     * All ledger outcomes in one club, one row per (user, outcome) — the batch source for
-     * per-member Trust on the club member list (avoids an N+1 over members).
+     * Все ledger-исходы в одном клубе, одна строка на пару (юзер, исход) — batch-источник
+     * для per-member Trust в списке участников клуба (избегает N+1 по участникам).
      */
     fun findClubMemberOutcomes(clubId: UUID): List<MemberLedgerOutcome>
 
-    // --- Ledger pipeline (write side, source of truth) ---
+    // --- Ledger pipeline (сторона записи, источник истины) ---
 
     /**
-     * Atomically claims an event for reputation processing:
+     * Атомарно захватывает событие для обработки репутации:
      * `UPDATE events SET reputation_processed=true WHERE id=? AND NOT reputation_processed`.
-     * Returns true iff this caller won the claim (a row was updated). Makes the
-     * event listener and the hourly poll mutually exclusive — the loser no-ops.
+     * Возвращает true, только если именно этот вызов выиграл захват (строка была обновлена).
+     * Делает event-листенер и часовой polling взаимоисключающими — проигравший ничего не делает.
      */
     fun claimEvent(eventId: UUID): Boolean
 
-    /** Finalized+marked events not yet reputation-processed (poll backstop). */
+    /** Финализированные+отмеченные события, ещё не обработанные для репутации (страховочный poll). */
     fun findPendingFinalizedEventIds(): List<UUID>
 
-    /** Club id + owner id + event datetime, for building attendance ledger rows. */
+    /** Id клуба + id владельца + дата-время события, для построения строк ledger посещаемости. */
     fun findEventContext(eventId: UUID): EventReputationContext?
 
-    /** Confirmed responses of an event (the only ones that yield a ledger row). */
+    /** Подтверждённые отклики на событие (только они дают строку ledger). */
     fun findConfirmedResponses(eventId: UUID): List<ConfirmedResponse>
 
-    /** Append ledger rows, skipping any that already exist (ON CONFLICT DO NOTHING). */
+    /** Добавляет строки ledger, пропуская уже существующие (ON CONFLICT DO NOTHING). */
     fun appendLedgerIfAbsent(entries: List<LedgerEntry>)
 
     /**
-     * Recomputes the user_club_reputation cache row for (user, club) purely from the
-     * ledger via an atomic upsert (ON CONFLICT (user_id, club_id) DO UPDATE). Idempotent
-     * and commutative under concurrency — both racers derive identical values.
+     * Пересчитывает кэш-строку user_club_reputation для (юзер, клуб) чисто на основе
+     * ledger через атомарный upsert (ON CONFLICT (user_id, club_id) DO UPDATE). Идемпотентно
+     * и коммутативно при конкурентности — оба гонщика приходят к одинаковым значениям.
      */
     fun recompute(userId: UUID, clubId: UUID)
 }

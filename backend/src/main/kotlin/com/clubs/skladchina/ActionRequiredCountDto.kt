@@ -1,4 +1,4 @@
 package com.clubs.skladchina
 
-/** Number of active skladchinas the user must still pay (status='pending'). */
+/** Количество активных складчин, которые пользователю ещё нужно оплатить (status='pending'). */
 data class ActionRequiredCountDto(val count: Int)

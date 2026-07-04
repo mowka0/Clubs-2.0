@@ -3,10 +3,10 @@ package com.clubs.user
 import jakarta.validation.constraints.Size
 
 /**
- * Full replace of the user-editable profile fields (the edit form always sends
- * its complete state). Blank country/city/bio clear the field; [interests] is
- * normalized + deduped server-side. Name/avatar/@username are NOT here — they
- * are synced from Telegram on every auth and would be overwritten.
+ * Полная замена редактируемых пользователем полей профиля (форма редактирования всегда
+ * присылает своё полное состояние). Пустые country/city/bio очищают поле; [interests]
+ * нормализуется и дедуплицируется на сервере. Имя/аватар/@username здесь НЕТ — они
+ * синхронизируются из Telegram при каждой авторизации и были бы перезаписаны.
  */
 data class UpdateMeRequest(
     @field:Size(max = 8)

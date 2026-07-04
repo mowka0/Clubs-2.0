@@ -57,8 +57,8 @@ class ApplicationController(private val applicationService: ApplicationService) 
         @Valid @RequestBody request: RejectApplicationRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<ApplicationDto> {
-        // Intentionally NOT logging request.reason — see docs/modules/applications-inbox.md
-        // § Non-functional / Logging: PII-class field.
+        // Намеренно НЕ логируем request.reason — см. docs/modules/applications-inbox.md
+        // § Non-functional / Logging: поле класса PII.
         log.info("Reject application {}: organizerId={}", id, user.userId)
         val application = applicationService.rejectApplication(id, user.userId, request.reason)
         return ResponseEntity.ok(application)

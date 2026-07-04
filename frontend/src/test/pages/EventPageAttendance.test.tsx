@@ -7,7 +7,7 @@ import { server } from '../mocks/server';
 import { renderWithProviders } from '../utils/renderWithProviders';
 import type { EventDetailDto, EventResponderDto, MyAttendanceDto } from '../../types/api';
 
-// Mock Telegram SDK (same shape as ClubPage.test.tsx)
+// Мок Telegram SDK (той же формы, что в ClubPage.test.tsx)
 vi.mock('@telegram-apps/sdk-react', () => ({
   retrieveLaunchParams: () => ({ initDataRaw: 'test' }),
   init: vi.fn(),
@@ -31,9 +31,11 @@ vi.mock('../../telegram/sdk', () => ({
 import { EventPage } from '../../pages/EventPage';
 import { useAuthStore } from '../../store/useAuthStore';
 
+// Фикстурные id организатора-владельца, события и клуба — используются во всех моках теста
 const OWNER_ID = 'user-1';
 const EVENT_ID = 'event-1';
 const CLUB_ID = 'club-1';
+// Дата «сутки назад» — событие уже прошло, окно отметки явки открыто
 const PAST = new Date(Date.now() - 86_400_000).toISOString();
 
 function pastCompletedEvent(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
@@ -62,8 +64,8 @@ function pastCompletedEvent(overrides: Partial<EventDetailDto> = {}): EventDetai
 const RESPONDERS: EventResponderDto[] = [
   { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed', attendance: null },
   { userId: 'u-confirmed2', firstName: 'Дмитрий', lastName: null, avatarUrl: null, status: 'confirmed', attendance: null },
-  // Final roster = confirmed only (PRD §4.4.3). The rest must be EXCLUDED from the
-  // attendance checklist: going = forgot to confirm, expired = booking burned, not_going.
+  // Финальный ростер = только confirmed (PRD §4.4.3). Остальные ОБЯЗАНЫ быть исключены из
+  // чеклиста явки: going = забыл подтвердить, expired = бронь сгорела, not_going.
   { userId: 'u-going', firstName: 'Борис', lastName: null, avatarUrl: null, status: 'going', attendance: null },
   { userId: 'u-expired', firstName: 'Глеб', lastName: null, avatarUrl: null, status: 'expired_no_confirm', attendance: null },
   { userId: 'u-no', firstName: 'Виктор', lastName: null, avatarUrl: null, status: 'not_going', attendance: null },
@@ -75,8 +77,8 @@ function mockEventEndpoints(opts: { ownerId: string; event?: EventDetailDto } = 
     http.get(`*/api/events/${EVENT_ID}`, () => HttpResponse.json(event)),
     http.get(`*/api/events/${EVENT_ID}/my-vote`, () => HttpResponse.json({ vote: 'confirmed' })),
     http.get(`*/api/events/${EVENT_ID}/responses`, () => HttpResponse.json(RESPONDERS)),
-    // F5-04: default = caller has no participation row (organizer / non-participant) → 404.
-    // Tests exercising the participant dispute UI override this with their own state.
+    // F5-04: по умолчанию у вызывающего нет строки участия (организатор / не-участник) → 404.
+    // Тесты, проверяющие UI спора участника, переопределяют это своим состоянием.
     http.get(`*/api/events/${EVENT_ID}/my-attendance`, () => new HttpResponse(null, { status: 404 })),
     http.get(`*/api/clubs/${CLUB_ID}`, () => HttpResponse.json({
       id: CLUB_ID,
@@ -225,7 +227,7 @@ describe('EventPage — отметка посещаемости', () => {
     renderEventPage();
 
     expect(await screen.findByText(/Окно отметки явки истекло/)).toBeInTheDocument();
-    // Backend rejects a late mark on a finalized event, so the marking UI must be gone.
+    // Бэкенд отклоняет позднюю отметку на finalized-событии, поэтому UI отметки должен исчезнуть.
     expect(screen.queryByText('Отметить посещаемость')).not.toBeInTheDocument();
   });
 
@@ -261,7 +263,7 @@ describe('EventPage — отметка посещаемости', () => {
   });
 
   it('участник, отмеченный отсутствующим, видит «Оспорить» и оспаривает', async () => {
-    // Viewer is the absent participant, NOT the organizer.
+    // Смотрит участник, отмеченный отсутствующим, — НЕ организатор.
     useAuthStore.setState({
       user: {
         id: 'u-confirmed', telegramId: 2, telegramUsername: 'anna', firstName: 'Анна',
@@ -279,8 +281,8 @@ describe('EventPage — отметка посещаемости', () => {
       http.get(`*/api/events/${EVENT_ID}/responses`, () => HttpResponse.json([
         { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed', attendance: 'absent' },
       ] satisfies EventResponderDto[])),
-      // F5-04: the dispute controls now read the caller's own attendance from /my-attendance
-      // (reachable without club membership). canDispute is computed server-side.
+      // F5-04: контролы спора теперь читают собственную явку вызывающего из /my-attendance
+      // (доступен без членства в клубе). canDispute вычисляется на сервере.
       http.get(`*/api/events/${EVENT_ID}/my-attendance`, () => HttpResponse.json({
         attendance: 'absent', attendanceMarked: true, attendanceFinalized: false,
         disputeTerminal: false, canDispute: true, disputeNote: null,

@@ -13,8 +13,8 @@ data class SkladchinaParticipant(
     val paidAt: OffsetDateTime?,
     val declinedAt: OffsetDateTime?,
     val reputationApplied: Boolean,
-    // V28: decline-with-approval (REQUIRES_APPROVAL templates). An open request = status `pending`
-    // AND declineRequestedAt != null. declineRejected closes the path (must pay, no re-request).
+    // V28: отказ с подтверждением (шаблоны REQUIRES_APPROVAL). Открытый запрос = status `pending`
+    // И declineRequestedAt != null. declineRejected закрывает путь (обязан заплатить, повторный запрос невозможен).
     val declineNote: String?,
     val declineRequestedAt: OffsetDateTime?,
     val declineRejected: Boolean,
@@ -22,21 +22,21 @@ data class SkladchinaParticipant(
 )
 
 /**
- * Aggregated row for "my feed" — Skladchina + my-participant + computed counts.
- * Returned from repository to service, mapped to MySkladchinaListItemDto.
+ * Агрегированная строка для "моей ленты" — Skladchina + мой-участник + вычисленные счётчики.
+ * Возвращается из repository в service, маппится в MySkladchinaListItemDto.
  */
 data class MySkladchinaFeedItem(
     val skladchina: Skladchina,
     val clubName: String,
     val clubAvatarUrl: String?,
-    val myStatus: SkladchinaParticipantStatus?,    // null if user is creator but not participant
+    val myStatus: SkladchinaParticipantStatus?,    // null, если пользователь создатель, но не участник
     val collectedKopecks: Long,
     val participantCount: Int,
     val paidCount: Int
 )
 
 /**
- * Participant row with denormalized user info — for organizer view of SkladchinaPage.
+ * Строка участника с денормализованной информацией о пользователе — для вида организатора на SkladchinaPage.
  */
 data class SkladchinaParticipantInfo(
     val userId: UUID,

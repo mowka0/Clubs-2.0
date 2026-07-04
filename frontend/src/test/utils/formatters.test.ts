@@ -50,8 +50,8 @@ describe('formatDatetime', () => {
     const iso = '2025-06-15T14:30:00.000Z';
     const result = formatDatetime(iso);
 
-    // The exact output depends on locale support in the test environment,
-    // but we can verify it contains expected parts
+    // Точный вывод зависит от поддержки локали в тестовом окружении,
+    // но можно проверить, что он содержит ожидаемые части
     expect(typeof result).toBe('string');
     expect(result.length).toBeGreaterThan(0);
   });
@@ -59,7 +59,7 @@ describe('formatDatetime', () => {
   it('returns a string containing the day for a known date', () => {
     // 2025-01-01T12:00:00Z
     const result = formatDatetime('2025-01-01T12:00:00.000Z');
-    // Should contain "1" (the day) somewhere in the output
+    // Где-то в выводе должна быть «1» (число месяца)
     expect(result).toMatch(/1/);
   });
 

@@ -19,7 +19,7 @@ export function useSubscriptionPlansQuery(enabled = true) {
     queryKey: queryKeys.subscription.plans,
     queryFn: getSubscriptionPlans,
     enabled,
-    staleTime: 5 * 60 * 1000, // pricing rarely changes within a session
+    staleTime: 5 * 60 * 1000, // прайсинг редко меняется в рамках одной сессии
   });
 }
 

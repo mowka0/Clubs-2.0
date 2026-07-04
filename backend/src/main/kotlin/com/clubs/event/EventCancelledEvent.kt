@@ -1,8 +1,8 @@
 package com.clubs.event
 
 /**
- * Published when an organizer cancels an event (F5-14). Consumed AFTER_COMMIT by
- * [com.clubs.bot.EventCancelledListener] to DM interested voters. Carries the (pre-cancel)
- * domain event for title/datetime and the optional reason for the message body.
+ * Публикуется, когда организатор отменяет событие (F5-14). Обрабатывается AFTER_COMMIT в
+ * [com.clubs.bot.EventCancelledListener], чтобы отправить DM заинтересованным проголосовавшим.
+ * Несёт (до-отменное) доменное событие для названия/даты-времени и опциональную причину для текста сообщения.
  */
 data class EventCancelledEvent(val event: Event, val reason: String?)

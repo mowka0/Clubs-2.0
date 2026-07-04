@@ -17,8 +17,8 @@ import java.util.concurrent.ConcurrentHashMap
 class RateLimitFilter : OncePerRequestFilter() {
 
     private val logger = LoggerFactory.getLogger(RateLimitFilter::class.java)
-    // Separate bucket pools for separate limits — auth endpoints brute-force protection
-    // requires tighter limits than general API (security.md: 5/min on /api/auth/*).
+    // Отдельные пулы bucket'ов под отдельные лимиты — защита auth-эндпоинтов от брутфорса
+    // требует более жёстких лимитов, чем общий API (security.md: 5/мин на /api/auth/*).
     private val apiBuckets = ConcurrentHashMap<String, Bucket>()
     private val authBuckets = ConcurrentHashMap<String, Bucket>()
 
@@ -55,11 +55,10 @@ class RateLimitFilter : OncePerRequestFilter() {
     }
 
     /**
-     * Test support: clears all accumulated buckets. The filter runs BEFORE authentication
-     * (SecurityConfig), so MockMvc requests — all from 127.0.0.1 with no principal — share a
-     * single `ip:127.0.0.1` bucket. An integration-test class that fires >60 requests within a
-     * minute would otherwise drain the shared API bucket and start getting 429s. Never called
-     * in production.
+     * Для тестов: очищает все накопленные bucket'ы. Фильтр выполняется ДО аутентификации
+     * (SecurityConfig), поэтому запросы MockMvc — все от 127.0.0.1 без principal — делят один
+     * bucket `ip:127.0.0.1`. Интеграционный тест-класс, отправляющий >60 запросов за минуту,
+     * иначе исчерпал бы общий API bucket и начал получать 429. В продакшене никогда не вызывается.
      */
     fun resetBuckets() {
         apiBuckets.clear()
@@ -100,8 +99,9 @@ class RateLimitFilter : OncePerRequestFilter() {
         .build()
 
     companion object {
+        // Общий лимит на обычные API-запросы, в минуту на ключ (пользователь или IP).
         private const val API_LIMIT_PER_MIN = 60L
-        // Tight limit for /api/auth/* — brute-force defence against HMAC probing
+        // Жёсткий лимит для /api/auth/* — защита от брутфорса и подбора HMAC
         // (security.md: "агрессивно" — 5 попыток в минуту на IP/user).
         private const val AUTH_LIMIT_PER_MIN = 5L
     }

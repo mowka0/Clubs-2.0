@@ -5,21 +5,23 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
 /**
- * Periodic L3 recompute. The rank is a slow-moving, hidden signal, so a 6-hour full recompute is ample
- * (trivially cheap on a small prod) — no event-driven incrementality needed (YAGNI). Mirrors
- * [com.clubs.reputation.ReputationScheduler]: a failure is logged and the next tick retries.
+ * Периодический пересчёт L3. Ранг — медленно меняющийся скрытый сигнал, поэтому полного пересчёта
+ * раз в 6 часов достаточно (тривиально дёшево на небольшом проде) — событийная инкрементальность
+ * не нужна (YAGNI). Зеркалит [com.clubs.reputation.ReputationScheduler]: ошибка логируется,
+ * следующий тик повторит попытку.
  *
- * The first run is 5 minutes after startup (not a full 6h): every production redeploy restarts the app
- * and resets the timer, so a 6h initial delay meant the job could rarely fire between frequent deploys.
- * A short initial delay guarantees a recompute shortly after each boot, while still letting the app warm
- * up first (DB pool, caches). The 6h steady-state cadence between runs is unchanged.
+ * Первый запуск — через 5 минут после старта (не полные 6ч): каждый продакшен-редеплой
+ * перезапускает приложение и сбрасывает таймер, поэтому initial delay в 6ч означал, что джоба
+ * почти никогда не успевала сработать между частыми деплоями. Короткая начальная задержка
+ * гарантирует пересчёт вскоре после каждого старта, но всё же даёт приложению сначала прогреться
+ * (пул БД, кэши). Установившийся интервал 6ч между запусками не меняется.
  */
 @Component
 class ClubRankScheduler(private val clubRankService: ClubRankService) {
 
     private val log = LoggerFactory.getLogger(ClubRankScheduler::class.java)
 
-    @Scheduled(fixedDelay = 21_600_000, initialDelay = 300_000) // first run 5 min after startup, then every 6 hours
+    @Scheduled(fixedDelay = 21_600_000, initialDelay = 300_000) // первый запуск через 5 мин после старта, далее каждые 6 часов
     fun recompute() {
         try {
             clubRankService.recomputeAll()

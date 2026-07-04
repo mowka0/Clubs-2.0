@@ -26,8 +26,8 @@ const Lever: FC<{ lever: LeverVM }> = ({ lever }) => (
 );
 
 /**
- * Owner-only «Статистика» panel — growth levers, actionable nudges, and the private «зона внимания»
- * (§9 of docs/modules/club-quality.md). Fail-soft: spinner while loading, placeholder on error.
+ * Панель «Статистика», видна только владельцу — рычаги роста, действенные подсказки и приватная
+ * «зона внимания» (§9 docs/modules/club-quality.md). Fail-soft: спиннер во время загрузки, плейсхолдер при ошибке.
  */
 export const ClubStatsTab: FC<{ clubId: string }> = ({ clubId }) => {
   const statsQuery = useClubStatsQuery(clubId);

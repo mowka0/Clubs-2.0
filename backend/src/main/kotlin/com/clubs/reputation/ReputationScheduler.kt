@@ -5,11 +5,11 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
 /**
- * Durable backstop for reputation processing. The event listener gives low latency;
- * this hourly poll guarantees eventual processing if a listener was missed (crash,
- * AFTER_COMMIT failure). Each event is processed in its own REQUIRES_NEW transaction
- * via the (proxied) ReputationService bean, and the atomic claim makes poll and
- * listener mutually exclusive.
+ * Надёжная подстраховка для обработки репутации. Слушатель события даёт низкую задержку;
+ * этот часовой опрос гарантирует итоговую обработку, если слушатель был пропущен (краш,
+ * ошибка AFTER_COMMIT). Каждое событие обрабатывается в собственной транзакции REQUIRES_NEW
+ * через (проксированный) бин ReputationService, а атомарный claim делает опрос и слушатель
+ * взаимоисключающими.
  */
 @Component
 class ReputationScheduler(
@@ -19,7 +19,7 @@ class ReputationScheduler(
 
     private val log = LoggerFactory.getLogger(ReputationScheduler::class.java)
 
-    @Scheduled(fixedDelay = 3_600_000) // every hour
+    @Scheduled(fixedDelay = 3_600_000) // каждый час
     fun processPendingFinalizedEvents() {
         val eventIds = repository.findPendingFinalizedEventIds()
         if (eventIds.isEmpty()) return

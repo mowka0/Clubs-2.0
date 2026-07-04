@@ -23,18 +23,18 @@ class ActivityService(
     private val log = LoggerFactory.getLogger(ActivityService::class.java)
 
     /**
-     * Returns the merged event + skladchina feed for a club, split into two
-     * pre-sorted groups by each activity's own date. Authorization is enforced
-     * at the controller level by `@RequiresMembership`.
+     * Возвращает объединённую ленту событий + складчин клуба, разбитую на две
+     * заранее отсортированные группы по собственной дате каждой активности.
+     * Авторизация обеспечивается на уровне контроллера через `@RequiresMembership`.
      *
-     * Strategy (MVP per spec D-1): pull both collections from their repositories,
-     * merge in-memory, then partition by `isCompleted` and sort each group by
-     * `relevantDate`. No pagination — club activity volume is bounded. Migrate to
-     * SQL UNION when that stops holding.
+     * Стратегия (MVP по спеке D-1): вытягиваем обе коллекции из их репозиториев,
+     * сливаем в памяти, затем разбиваем по `isCompleted` и сортируем каждую группу
+     * по `relevantDate`. Без пагинации — объём активности клуба ограничен. Перейти
+     * на SQL UNION, когда это перестанет выполняться.
      *
-     * - `upcoming` = `!isCompleted`, sorted by relevantDate ASC (soonest first)
-     * - `past` = `isCompleted`, sorted by relevantDate DESC (most recent first)
-     * - ties on relevantDate are broken by `id ASC` in both groups
+     * - `upcoming` = `!isCompleted`, сортировка по relevantDate ASC (ближайшие первыми)
+     * - `past` = `isCompleted`, сортировка по relevantDate DESC (самые недавние первыми)
+     * - ничья по relevantDate разрешается через `id ASC` в обеих группах
      */
     @Transactional(readOnly = true)
     fun getClubActivities(
@@ -50,8 +50,9 @@ class ActivityService(
             eventRepository.findAllByClubWithGoingCount(clubId)
         }
 
-        // Events awaiting this user's stage-1 vote or stage-2 confirmation. Drives both the
-        // "Проголосуй"/"Подтверди участие" badge (per-event flag) and the top-of-feed pinning.
+        // События, ожидающие голоса этапа 1 или подтверждения этапа 2 от этого пользователя.
+        // Управляет и бейджем "Проголосуй"/"Подтверди участие" (флаг на событие), и закреплением
+        // сверху ленты.
         val actionRequiredIds: Set<UUID> = if (rawEvents.isEmpty()) {
             emptySet()
         } else {
@@ -98,21 +99,21 @@ class ActivityService(
 
     companion object {
         /**
-         * Per-item sort key: an event's own datetime, a skladchina's deadline.
-         * Exhaustive `when` over the sealed subtype — compiler enforces a branch
-         * for every future activity type.
+         * Ключ сортировки для элемента: собственный datetime события или deadline складчины.
+         * Исчерпывающий `when` по sealed-подтипу — компилятор требует ветку
+         * для каждого будущего типа активности.
          */
         private fun relevantDate(item: ActivityItemDto): OffsetDateTime = when (item) {
             is ActivityItemDto.EventActivity -> item.eventDatetime
             is ActivityItemDto.SkladchinaActivity -> item.deadline
         }
 
-        /** Soonest first; ties broken by `id ASC` for deterministic order. */
+        /** Ближайшие первыми; ничья разрешается через `id ASC` для детерминированного порядка. */
         private val UPCOMING_ORDER: Comparator<ActivityItemDto> =
             compareBy<ActivityItemDto> { relevantDate(it) }
                 .thenBy { it.id }
 
-        /** Most recent first; ties broken by `id ASC` for deterministic order. */
+        /** Самые недавние первыми; ничья разрешается через `id ASC` для детерминированного порядка. */
         private val PAST_ORDER: Comparator<ActivityItemDto> =
             compareByDescending<ActivityItemDto> { relevantDate(it) }
                 .thenBy { it.id }

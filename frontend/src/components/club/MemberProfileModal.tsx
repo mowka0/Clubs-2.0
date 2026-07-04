@@ -21,24 +21,25 @@ import { ImageLightbox } from '../ImageLightbox';
 import { TRUST_TIER_COLOR, trustTier } from '../reputation/trust-tier';
 import type { AwardDto, MemberListItemDto, MemberProfileDto } from '../../types/api';
 
-// Curated emoji set for the award picker — broad enough to label most kinds of recognition.
+// Подобранный набор эмодзи для пикера наград — достаточно широкий для большинства видов признания.
 const AWARD_EMOJIS = ['🏆', '🥇', '⭐', '🔥', '💎', '👑', '🚀', '❤️', '🌟', '🎯', '💪', '🙌'];
-// Mirrors the backend cap (AwardService.MAX_AWARDS_PER_MEMBER) + label length (GrantAwardRequest).
+// Зеркалит бэкенд: лимит наград (AwardService.MAX_AWARDS_PER_MEMBER) + длину названия (GrantAwardRequest).
 const MAX_AWARDS = 6;
 const MAX_AWARD_LABEL = 40;
 
 interface MemberProfileModalProps {
   member: MemberListItemDto;
   clubId: string;
-  /** Organizer view — unlocks the «Подписка активна до …» strip + dues/freeze actions (de-Stars). */
+  /** Вид организатора — открывает строку «Подписка активна до …» + действия dues/freeze (de-Stars). */
   isOrganizer?: boolean;
   onClose: () => void;
-  /** Surface a toast at the page level after a gate action succeeds. */
+  /** Показать toast на уровне страницы после успешного gate-действия. */
   onActionToast?: (message: string) => void;
 }
 
+// Миллисекунд в сутках.
 const MS_PER_DAY = 86_400_000;
-// Mirrors the backend honor-system period (membership.access-period-days) for the «продлить до …» preview.
+// Зеркалит honor-system-период бэкенда (membership.access-period-days) для превью «продлить до …».
 const ACCESS_PERIOD_DAYS = 30;
 
 function formatDateFull(iso: string): string {
@@ -56,7 +57,7 @@ function relativeUntil(iso: string): string {
   return `через ${days} ${pluralRu(days, ['день', 'дня', 'дней'])}`;
 }
 
-/** End date after «Взнос получен» — backend extends +30d from max(now, current expiry). */
+/** Дата окончания после «Взнос получен» — бэкенд продлевает на +30 дн от max(сейчас, текущее окончание). */
 function extendedEndLabel(iso: string | null): string {
   const base = iso ? Math.max(Date.now(), new Date(iso).getTime()) : Date.now();
   return formatDateFull(new Date(base + ACCESS_PERIOD_DAYS * MS_PER_DAY).toISOString());
@@ -69,11 +70,12 @@ interface AwardEditorProps {
 }
 
 /**
- * Award management «как интересы» (member admin S2): existing award chips with × (revoke) plus a
- * «＋ Добавить награду» control. The add form leads with the club's existing awards (tap to reuse,
- * keeping the same emoji + label — R2), then a «создать свою» path with an emoji picker + label input.
- * Each grant/revoke is an immediate API call (not batched under the form's «Сохранить»), so the
- * organizer can award several in a row without closing the card. Cosmetic only — no reputation effect.
+ * Управление наградами «как интересы» (member admin S2): чипы существующих наград с × (снять) плюс
+ * кнопка «＋ Добавить награду». Форма добавления сначала предлагает уже существующие награды клуба
+ * (тап переиспользует их с тем же эмодзи и названием — R2), затем путь «создать свою» с пикером эмодзи
+ * и полем названия. Каждая выдача/снятие — немедленный API-вызов (не батчится под «Сохранить» формы),
+ * чтобы организатор мог выдать несколько подряд, не закрывая карточку. Чистая косметика — на репутацию
+ * не влияет.
  */
 const AwardEditor: FC<AwardEditorProps> = ({ clubId, userId, awards }) => {
   const haptic = useHaptic();
@@ -88,8 +90,8 @@ const AwardEditor: FC<AwardEditorProps> = ({ clubId, userId, awards }) => {
   const atMax = awards.length >= MAX_AWARDS;
   const busy = grant.isPending || revoke.isPending;
 
-  // Reuse pool: past awards of this club minus the ones already on this member, prefix/substring-filtered
-  // by what's typed — so the organizer reuses «Активист» instead of re-creating it (R2, «как интересы»).
+  // Пул переиспользования: прошлые награды клуба минус уже висящие на этом участнике, с фильтром по
+  // введённой подстроке — организатор переиспользует «Активист», а не создаёт заново (R2, «как интересы»).
   const existingLabels = new Set(awards.map((a) => a.label.toLowerCase()));
   const query = label.trim().toLowerCase();
   const suggestions = (suggestQuery.data ?? [])
@@ -157,7 +159,7 @@ const AwardEditor: FC<AwardEditorProps> = ({ clubId, userId, awards }) => {
 
       {adding && !atMax && (
         <div className="rd-award-form">
-          {/* Reuse an existing club award first («как интересы») — tap grants it with its own emoji. */}
+          {/* Сначала переиспользуем существующую награду клуба («как интересы») — тап выдаёт её с её эмодзи. */}
           {suggestions.length > 0 && (
             <>
               <div className="rd-award-suggest-h">Уже в клубе — нажмите, чтобы выдать</div>
@@ -220,36 +222,37 @@ const AwardEditor: FC<AwardEditorProps> = ({ clubId, userId, awards }) => {
 interface OrganizerGateProps {
   clubId: string;
   member: MemberListItemDto;
-  /** Current private note from the loaded profile (null until loaded / when empty). */
+  /** Текущая приватная заметка из загруженного профиля (null, пока не загружено / когда пусто). */
   organizerNote: string | null;
-  /** Whether the member has a paid access window — gates the subscription strip + dues/freeze + custom date. */
+  /** Есть ли у участника платное окно доступа — гейтит строку подписки + dues/freeze + свою дату. */
   isPaidMember: boolean;
-  /** Member's dues claim to review (de-Stars), organizer-only. null when no claim pending. */
+  /** Claim об оплате взноса на проверку (de-Stars), только организатору. null = ожидающего claim нет. */
   claim: { claimedAt: string; method: string | null; proofUrl: string | null } | null;
-  /** The member's join-application answer (closed clubs), organizer-only. null = open club / no question. */
+  /** Ответ на заявку о вступлении (закрытые клубы), только организатору. null = открытый клуб / без вопроса. */
   applicationAnswer: string | null;
-  /** Edit mode is owned by the modal (toggled by the header ✎): reveals the awards editor (above, under
-   *  interests) and the «Своя дата» form (paid). The note is always-open and NOT gated by this. */
+  /** Режимом редактирования владеет модалка (переключается ✎ в шапке): открывает редактор наград (выше,
+   *  под интересами) и форму «Своя дата» (платные). Заметка открыта всегда и этим флагом НЕ гейтится. */
   editing: boolean;
   onEditingChange: (editing: boolean) => void;
   onDone: (message: string) => void;
 }
 
-/** ISO datetime → yyyy-mm-dd for a `<input type="date">`. */
+/** ISO-дата-время → yyyy-mm-dd для `<input type="date">`. */
 function toDateInput(iso: string | null): string {
   return iso ? new Date(iso).toISOString().slice(0, 10) : '';
 }
 
 /**
- * Organizer admin section for a member (member admin Variant B). Three layers, decoupled:
- *  - Paid-only (isPaidMember): de-Stars access controls — subscription strip + «Взнос получен» /
- *    «Закрыть доступ», and «Своя дата» behind the ✎. A free member has no access window, so none show.
- *  - Always (any club): the private «Заметка» (S1) is an always-open field with its own «Сохранить» —
- *    so the panel has a home for it even in a free club (where it would otherwise be just «Удалить из
- *    клуба»). Saving the note does NOT close the card.
- *  - Awards (S2) live above, under interests, revealed by the same header ✎.
- * Edit mode (`editing`) is owned by the modal: the ✎ toggles the awards editor + the «Своя дата» form.
- * 409 (lost race) on a dues/freeze action closes the card — the list cache is already refreshed.
+ * Админ-секция организатора для участника (member admin Variant B). Три независимых слоя:
+ *  - Только платные (isPaidMember): de-Stars-управление доступом — строка подписки + «Взнос получен» /
+ *    «Закрыть доступ», а также «Своя дата» за ✎. У бесплатного участника нет окна доступа — ничего
+ *    из этого не показывается.
+ *  - Всегда (любой клуб): приватная «Заметка» (S1) — всегда открытое поле со своим «Сохранить», чтобы
+ *    у панели был смысл и в бесплатном клубе (иначе там остался бы лишь «Удалить из клуба»).
+ *    Сохранение заметки НЕ закрывает карточку.
+ *  - Награды (S2) живут выше, под интересами, открываются тем же ✎ в шапке.
+ * Режимом редактирования (`editing`) владеет модалка: ✎ переключает редактор наград + форму «Своя дата».
+ * 409 (проигранная гонка) на dues/freeze-действии закрывает карточку — кэш списка уже обновлён.
  */
 const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, isPaidMember, claim, applicationAnswer, editing, onEditingChange, onDone }) => {
   const haptic = useHaptic();
@@ -269,6 +272,7 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
   const [zoomedProof, setZoomedProof] = useState<string | null>(null);
 
   const busy = markPaid.isPending || freeze.isPending || reject.isPending || remove.isPending;
+  // Минимум символов в причине удаления из клуба — причину увидит участник.
   const KICK_REASON_MIN = 5;
   const savingDate = setAccess.isPending;
   const savingNote = updateNote.isPending;
@@ -279,10 +283,10 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
   const originalDate = toDateInput(expiresAt);
   const noteDirty = noteDraft.trim() !== (organizerNote ?? '');
 
-  // Note is an always-open field — keep its draft synced to the saved value (incl. after a save refetch,
-  // which makes the «Сохранить» button disappear once persisted).
+  // Заметка — всегда открытое поле: держим черновик в синхроне с сохранённым значением (в т.ч. после
+  // refetch по сохранении, из-за которого кнопка «Сохранить» исчезает, как только текст записан).
   useEffect(() => { setNoteDraft(organizerNote ?? ''); }, [organizerNote]);
-  // «Своя дата» form opens with the header ✎; seed it from the current window each time it opens.
+  // Форма «Своя дата» открывается ✎ в шапке; при каждом открытии заполняем её текущим окном доступа.
   useEffect(() => { if (editing) { setError(null); setDateDraft(originalDate); } }, [editing, originalDate]);
 
   const run = (
@@ -340,8 +344,8 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
     );
   };
 
-  // Save the private note in place — does NOT close the card, so the organizer can keep awarding/managing.
-  // The profile refetch (mutation invalidates it) re-seeds noteDraft and hides «Сохранить».
+  // Сохраняем приватную заметку на месте — карточка НЕ закрывается, организатор продолжает награждать
+  // и управлять. Refetch профиля (мутация его инвалидирует) пересеет noteDraft и скроет «Сохранить».
   const handleSaveNote = () => {
     if (!noteDirty || savingNote) return;
     setError(null);
@@ -355,11 +359,11 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
     );
   };
 
-  // «Своя дата» (paid only, behind the ✎) — closes the card on success like the other gate actions.
+  // «Своя дата» (только платные, за ✎) — при успехе закрывает карточку, как остальные gate-действия.
   const handleSaveDate = async () => {
     if (!dateDraft || dateDraft === originalDate) { onEditingChange(false); return; }
     setError(null);
-    // End-of-day local so «до 28 июля» grants access through the 28th.
+    // Конец дня в локальном времени: «до 28 июля» даёт доступ включительно по 28-е.
     const untilIso = new Date(`${dateDraft}T23:59:59`).toISOString();
     try {
       haptic.impact('medium');
@@ -374,22 +378,22 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
 
   return (
     <div className="rd-org-gate">
-      {/* Join-application answer (closed clubs) — review «why they joined» alongside the payment proof. */}
+      {/* Ответ на заявку (закрытые клубы) — «зачем вступает» смотрится рядом с подтверждением оплаты. */}
       {applicationAnswer && (
         <div className="rd-org-note-read" style={{ marginTop: 0, marginBottom: 12 }}>
           <span className="rd-org-note-k">Ответ на заявку</span>{applicationAnswer}
         </div>
       )}
 
-      {/* «Управление участником» panel (R1): subscription summary + paired actions, private note, and the
-          destructive «Удалить из клуба» in the footer — distinct from «Закрыть доступ» (a reversible pause). */}
+      {/* Панель «Управление участником» (R1): сводка подписки + парные действия, приватная заметка и
+          деструктивное «Удалить из клуба» в футере — не путать с «Закрыть доступ» (обратимая пауза). */}
       <div className="rd-mgmt">
         <div className="rd-mgmt-h">⚙ Управление участником</div>
 
-        {/* FROZEN paid member: review the dues claim, then open access or reject+refund the paid join. */}
+        {/* FROZEN платный участник: проверяем claim об оплате, затем открываем доступ или отказ+возврат. */}
         {isPaidMember && frozen && (
           <div className="rd-mgmt-body">
-            {/* Status as plain text (no boxed «rd-claim» card) — the screenshot looked heavy. */}
+            {/* Статус обычным текстом (без рамочной карточки «rd-claim») — на скриншоте выглядело тяжело. */}
             <div className="rd-mgmt-claim-line">
               {claim
                 ? `⏳ Оплата заявлена · ${claim.method === 'cash' ? 'наличные' : 'СБП'}`
@@ -426,7 +430,7 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
           </div>
         )}
 
-        {/* ACTIVE paid member (R1): status summary + paired «Взнос получен» / «Закрыть доступ». */}
+        {/* ACTIVE платный участник (R1): сводка статуса + парные «Взнос получен» / «Закрыть доступ». */}
         {isPaidMember && !frozen && (
           <div className="rd-mgmt-body">
             <div className={`rd-mgmt-sum${soon ? ' rd-soon' : ''}`}>
@@ -449,9 +453,9 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
 
         {error && <div className="rd-error" style={{ textAlign: 'left', padding: '0 14px 4px' }}>{error}</div>}
 
-        {/* Private note (S1) — an always-open field so the panel has a home for it even in a free club
-            (where it would otherwise be just «Удалить из клуба»). Saved on its own «Сохранить», which
-            appears only when the text changed; saving does NOT close the card. */}
+        {/* Приватная заметка (S1) — всегда открытое поле, чтобы у панели был смысл и в бесплатном клубе
+            (иначе там остался бы лишь «Удалить из клуба»). Сохраняется своей кнопкой «Сохранить»,
+            которая появляется только при изменении текста; сохранение НЕ закрывает карточку. */}
         <div className="rd-mgmt-body rd-org-edit">
           <label className="rd-field">
             <span className="rd-label">Заметка (видите только вы)</span>
@@ -464,7 +468,7 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
           )}
         </div>
 
-        {/* «Своя дата окончания доступа» (paid only) — revealed by the header ✎. */}
+        {/* «Своя дата окончания доступа» (только платные) — открывается ✎ в шапке. */}
         {editing && isPaidMember && (
           <div className="rd-mgmt-body rd-org-edit">
             <label className="rd-field">
@@ -478,7 +482,7 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
           </div>
         )}
 
-        {/* «Удалить из клуба» — active/free members only (frozen paid joins use «Отказать·вернуть» above). */}
+        {/* «Удалить из клуба» — только active/бесплатные (frozen платным вступлениям — «Отказать·вернуть» выше). */}
         {!frozen && (
           !confirmingKick ? (
             <div className="rd-mgmt-killzone">
@@ -514,9 +518,9 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
 };
 
 /**
- * Per-club reputation rings + spontaneity/role footer. Надёжность (smart composite) always shows;
- * Посещаемость (events) and Сборы (reputation-affecting skladchina) appear only when there's data,
- * so a member with only one axis never sees an empty "0/0" ring.
+ * Кольца per-club репутации + футер спонтанность/роль. Надёжность (умный композит) показывается всегда;
+ * Посещаемость (события) и Сборы (складчины, влияющие на репутацию) — только когда есть данные, чтобы
+ * участник с единственной осью не видел пустое кольцо «0/0».
  */
 const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
   const trust = profile.trust ?? 0;
@@ -575,8 +579,8 @@ const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
         )}
       </div>
       <div className="rd-rep-foot">
-        {/* Spontaneity is an attendance metric — hide it for a finance-only member (no event
-            track) so it doesn't read as a meaningless "Спонтанных визитов: 0" (F5-08). */}
+        {/* Спонтанность — метрика посещаемости; скрываем её для «финансового» участника (нет трека
+            событий), чтобы не показывать бессмысленное «Спонтанных визитов: 0» (F5-08). */}
         {confirmations > 0 && (
           <>Спонтанных визитов: <b>{profile.spontaneityCount ?? 0}</b> · </>
         )}
@@ -597,16 +601,16 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
   const profile = profileQuery.data;
   const loading = profileQuery.isPending;
 
-  // Admin section: the organizer can manage any non-organizer member (note + awards work in free
-  // clubs too, S2). Never the organizer's own row — the backend rejects managing the organizer.
+  // Админ-секция: организатор управляет любым участником-не-организатором (заметка + награды работают
+  // и в бесплатных клубах, S2). Никогда — своей строкой: бэкенд отклоняет управление организатором.
   const isManageable = isOrganizer && member.role !== 'organizer';
-  // Paid member = has an access window (or is frozen pending dues). Gates the de-Stars layer
-  // (subscription strip + dues/freeze + custom date); a free member only gets note + awards.
+  // Платный участник = есть окно доступа (или frozen в ожидании взноса). Гейтит de-Stars-слой
+  // (строка подписки + dues/freeze + своя дата); бесплатному остаются только заметка + награды.
   const isPaidMember = member.accessStatus === 'frozen' || !!member.subscriptionExpiresAt;
 
-  // Edit mode lives here (not in OrganizerGate) so the header ✎ toggles the awards editor (under
-  // interests) and the «Своя дата» form together. The note is always-open (not gated by ✎). Only
-  // the organizer ever edits.
+  // Режим редактирования живёт здесь (не в OrganizerGate), чтобы ✎ в шапке переключал редактор наград
+  // (под интересами) и форму «Своя дата» вместе. Заметка всегда открыта (✎ её не гейтит). Редактирует
+  // только организатор.
   const [editing, setEditing] = useState(false);
 
   const handleGateDone = (message: string) => {
@@ -614,7 +618,7 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
     onClose();
   };
 
-  // Lock background scroll while the sheet is open (same as the other rd-sheets).
+  // Блокируем скролл фона, пока шторка открыта (как у остальных rd-шторок).
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -653,7 +657,7 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
         </div>
 
         <div className="rd-sheet-body">
-          {/* Avatar + name + (@username · в клубе с DATE) */}
+          {/* Аватар + имя + (@username · в клубе с DATE) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span className="rd-avatar" style={{ width: 56, height: 56, borderRadius: '50%', fontSize: 18 }}>
               {member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : initials}
@@ -671,7 +675,7 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
             </div>
           </div>
 
-          {/* About */}
+          {/* О себе */}
           {bio && (
             <div className="rd-field">
               <span className="rd-label">О себе</span>
@@ -679,7 +683,7 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
             </div>
           )}
 
-          {/* Interests */}
+          {/* Интересы */}
           {hasInterests && (
             <div className="rd-field">
               <span className="rd-label">Интересы</span>
@@ -691,8 +695,8 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
             </div>
           )}
 
-          {/* Club awards (S2) — ONE place: the editor when the organizer is in edit mode, otherwise the
-              public read-only chips (R3, shown to every viewer). No duplicate «Награды клуба» section. */}
+          {/* Награды клуба (S2) — ОДНО место: редактор, когда организатор в режиме редактирования, иначе
+              публичные read-only чипы (R3, видны любому зрителю). Дублирующей секции «Награды клуба» нет. */}
           {isManageable && editing ? (
             <AwardEditor clubId={clubId} userId={member.userId} awards={awards} />
           ) : awards.length > 0 ? (
@@ -708,7 +712,7 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
             </div>
           ) : null}
 
-          {/* Reputation in this club */}
+          {/* Репутация в этом клубе */}
           <div>
             <div className="rd-section-sub-h" style={{ margin: '0 0 8px' }}>Репутация в этом клубе</div>
             {loading ? (
@@ -728,8 +732,8 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
             )}
           </div>
 
-          {/* Organizer admin section: de-Stars access gate (paid-only) + always-open private note (S1) +
-              «Своя дата» behind the ✎. Awards (S2) are handled above, under interests. */}
+          {/* Админ-секция организатора: de-Stars-гейт доступа (только платные) + всегда открытая заметка
+              (S1) + «Своя дата» за ✎. Награды (S2) обрабатываются выше, под интересами. */}
           {isManageable && (
             <OrganizerGate
               clubId={clubId}

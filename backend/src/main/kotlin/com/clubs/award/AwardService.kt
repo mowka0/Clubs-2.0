@@ -10,12 +10,14 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * Club-local awards (member admin profile S2). The organizer grants cosmetic recognition to a member
- * «как интересы» (pick a past award or type a fresh emoji + label). Awards are public to all members
- * (R3) and never touch reputation/XP/rank (R4) — there are no ledger/reputation hooks here by design.
+ * Локальные для клуба награды (member admin profile S2). Организатор выдаёт участнику
+ * косметическое признание «как интересы» (выбрать прошлую награду или ввести новый эмодзи + текст).
+ * Награды публичны для всех участников (R3) и никогда не трогают репутацию/XP/ранг (R4) —
+ * никаких хуков в ledger/репутацию здесь намеренно нет.
  *
- * Caller authorization (organizer) is declarative on the controller (@RequiresOrganizer); this service
- * only enforces the business rules: target must be a member, the per-member cap, and no duplicate label.
+ * Авторизация вызывающего (организатор) декларативна на контроллере (@RequiresOrganizer);
+ * этот сервис проверяет только бизнес-правила: цель должна быть участником, лимит на участника,
+ * отсутствие дубля названия.
  */
 @Service
 class AwardService(
@@ -34,8 +36,9 @@ class AwardService(
         awardRepository.findSuggestions(clubId, MAX_SUGGESTIONS).map(mapper::toDto)
 
     /**
-     * Awards of every member in [clubId], keyed by user id — one query for the roster so each card can
-     * show its chips (R3) without an N+1. Members without awards are simply absent from the map.
+     * Награды всех участников [clubId], сгруппированные по user id — один запрос на весь ростер,
+     * чтобы каждая карточка могла показать свои чипы (R3) без N+1. Участники без наград просто
+     * отсутствуют в карте.
      */
     @Transactional(readOnly = true)
     fun getClubAwardsByMember(clubId: UUID): Map<UUID, List<AwardDto>> =
@@ -43,7 +46,7 @@ class AwardService(
 
     @Transactional
     fun grant(clubId: UUID, targetUserId: UUID, emoji: String, label: String, callerId: UUID): AwardDto {
-        // The award is meaningless for a non-member — require an existing membership in this club.
+        // Награда бессмысленна для не-участника — требуем существующий membership в этом клубе.
         membershipRepository.findByUserAndClub(targetUserId, clubId)
             ?: throw NotFoundException("Участник не найден в этом клубе")
 
@@ -76,14 +79,16 @@ class AwardService(
 
     @Transactional
     fun revoke(clubId: UUID, targetUserId: UUID, awardId: UUID, callerId: UUID) {
-        // Scoped delete (awardId must belong to clubId+userId); 0 rows = wrong club/member or already gone.
+        // Удаление в рамках scope (awardId должен принадлежать clubId+userId); 0 строк = не тот клуб/участник или уже удалено.
         val rows = awardRepository.delete(awardId, clubId, targetUserId)
         if (rows == 0) throw NotFoundException("Награда не найдена")
         log.info("Award revoked: clubId={} targetUserId={} by={} awardId={}", clubId, targetUserId, callerId, awardId)
     }
 
     companion object {
+        // Максимум наград на одного участника клуба.
         const val MAX_AWARDS_PER_MEMBER = 6
+        // Сколько прошлых наград клуба показывать как подсказки при выдаче новой.
         private const val MAX_SUGGESTIONS = 20
         private val WHITESPACE = Regex("\\s+")
     }

@@ -12,10 +12,12 @@ export function useClubQualityQuery(clubId: string | undefined) {
 }
 
 /**
- * Discovery-card facts for an infinite list, fetched ONE BATCH PER PAGE → a `Map` keyed by clubId
- * for O(1) card lookup. Per-page (not over the accumulated set) so each page caches independently:
- * scrolling never refetches earlier pages and no page exceeds the server's batch cap. Result merges
- * every loaded page; clubs whose page is still loading are simply absent (card degrades to name+meta).
+ * Факты для карточек Discovery в бесконечном списке — грузятся ОДНИМ БАТЧЕМ НА СТРАНИЦУ → `Map`
+ * с ключом clubId для O(1)-поиска карточки. Именно постранично (а не по накопленному набору),
+ * чтобы каждая страница кэшировалась независимо: прокрутка никогда не перезапрашивает предыдущие
+ * страницы, и ни одна страница не превышает серверный лимит батча. Результат объединяет все
+ * загруженные страницы; клубы, чья страница ещё грузится, просто отсутствуют (карточка деградирует
+ * до имени+мета).
  */
 export function useClubCardFacts(pages: ReadonlyArray<{ content: ReadonlyArray<{ id: string }> }>) {
   const results = useQueries({

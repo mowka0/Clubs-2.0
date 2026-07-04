@@ -2,15 +2,19 @@ import { FC, useEffect, useRef, useState } from 'react';
 import { useHaptic } from '../hooks/useHaptic';
 
 interface Props {
-  /** The image to show full-screen; null/empty keeps the lightbox closed. */
+  /** Изображение для полноэкранного показа; null/пустая строка держат лайтбокс закрытым. */
   src: string | null;
   alt?: string;
   onClose: () => void;
 }
 
+// Минимальный масштаб (1 = исходный размер, меньше не уменьшаем).
 const MIN_SCALE = 1;
+// Максимальный масштаб pinch-зума.
 const MAX_SCALE = 5;
+// Масштаб, устанавливаемый двойным тапом.
 const DOUBLE_TAP_SCALE = 2.5;
+// Максимальный интервал между тапами, чтобы засчитать двойной тап (мс).
 const DOUBLE_TAP_MS = 300;
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -24,12 +28,12 @@ function touchDistance(t: React.TouchList): number {
 }
 
 /**
- * Full-screen image viewer with pinch-zoom (e.g. a receipt — so everyone reads it and works out
- * their share). Native pinch is disabled app-wide by the viewport meta (`user-scalable=no`), so the
- * zoom is implemented here on a CSS transform: two-finger pinch zooms, one-finger drag pans while
- * zoomed, double-tap toggles zoom. `touch-action: none` on the image hands all gestures to us.
- * Tapping the backdrop / ✕ / Escape closes; tapping the image does not. Reusable: any `<img>`
- * thumbnail opens this by lifting `src` into state.
+ * Полноэкранный просмотрщик изображений с pinch-зумом (например, чека — чтобы каждый прочитал его и
+ * посчитал свою долю). Нативный pinch выключен на всё приложение viewport-метой (`user-scalable=no`),
+ * поэтому зум реализован здесь на CSS-transform: pinch двумя пальцами масштабирует, drag одним пальцем
+ * панорамирует в зуме, двойной тап переключает зум. `touch-action: none` на изображении отдаёт все
+ * жесты нам. Тап по фону / ✕ / Escape закрывает; тап по изображению — нет. Переиспользуемый: любая
+ * `<img>`-миниатюра открывает его, поднимая `src` в state.
  */
 export const ImageLightbox: FC<Props> = ({ src, alt = '', onClose }) => {
   const haptic = useHaptic();
@@ -43,8 +47,8 @@ export const ImageLightbox: FC<Props> = ({ src, alt = '', onClose }) => {
 
   const resetZoom = () => { setScale(1); setTx(0); setTy(0); };
 
-  // Sync with the external world: close on Escape, lock body scroll, and reset zoom whenever the
-  // image changes or the viewer reopens. Cleanup restores scroll — re-runs when `src` toggles.
+  // Синхронизация с внешним миром: закрытие по Escape, блокировка скролла body и сброс зума при смене
+  // изображения или повторном открытии. Cleanup возвращает скролл — эффект перезапускается по `src`.
   useEffect(() => {
     if (!src) return;
     resetZoom();
@@ -89,8 +93,8 @@ export const ImageLightbox: FC<Props> = ({ src, alt = '', onClose }) => {
     pan.current = null;
     if (e.touches.length > 0) return;
     if (scale <= MIN_SCALE) { setScale(1); setTx(0); setTy(0); }
-    // Double-tap toggles zoom (only meaningful for taps — a drag/pinch resets lastTap implicitly
-    // since it lands here too, but the > MS gap from the next real tap keeps them independent).
+    // Двойной тап переключает зум (имеет смысл только для тапов — drag/pinch тоже попадает сюда и
+    // неявно сбрасывает lastTap, но зазор > DOUBLE_TAP_MS до следующего реального тапа их разделяет).
     const now = Date.now();
     if (now - lastTap.current < DOUBLE_TAP_MS) {
       lastTap.current = 0;
@@ -101,7 +105,7 @@ export const ImageLightbox: FC<Props> = ({ src, alt = '', onClose }) => {
     }
   };
 
-  // Desktop / testing convenience: wheel zooms toward MIN..MAX.
+  // Удобство для десктопа/тестов: колесо мыши зумит в пределах MIN..MAX.
   const onWheel = (e: React.WheelEvent) => {
     const next = clamp(scale - Math.sign(e.deltaY) * 0.25, MIN_SCALE, MAX_SCALE);
     setScale(next);

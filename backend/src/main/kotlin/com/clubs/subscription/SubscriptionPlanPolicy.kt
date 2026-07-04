@@ -3,9 +3,9 @@ package com.clubs.subscription
 import com.clubs.generated.jooq.enums.SubscriptionPlan
 
 /**
- * Capacity per plan (docs/modules/payment-v2.md §3.1). The unit is a PAID club
- * (`clubs.subscription_price > 0`); free clubs are unlimited and never counted. `max_paid_clubs`
- * is a stable product invariant — it lives here in code (not the DB), guarded by [PricingInvariant].
+ * Ёмкость каждого плана (docs/modules/payment-v2.md §3.1). Единица счёта — ПЛАТНЫЙ клуб
+ * (`clubs.subscription_price > 0`); бесплатные клубы безлимитны и не считаются вовсе. `max_paid_clubs` —
+ * стабильный продуктовый инвариант: живёт здесь, в коде (не в БД), и охраняется [PricingInvariant].
  */
 object SubscriptionPlanPolicy {
 
@@ -15,14 +15,14 @@ object SubscriptionPlanPolicy {
         SubscriptionPlan.UNLIMITED -> Int.MAX_VALUE
     }
 
-    /** Smallest plan whose capacity covers [paidClubs] paid clubs. */
+    /** Наименьший план, ёмкости которого хватает на [paidClubs] платных клубов. */
     fun smallestPlanFor(paidClubs: Int): SubscriptionPlan = when {
         paidClubs <= maxPaidClubs(SubscriptionPlan.FREE) -> SubscriptionPlan.FREE
         paidClubs <= maxPaidClubs(SubscriptionPlan.TRIO) -> SubscriptionPlan.TRIO
         else -> SubscriptionPlan.UNLIMITED
     }
 
-    /** Capacity for display: null = unlimited (so the API never leaks Int.MAX_VALUE). */
+    /** Ёмкость для отображения: null = безлимит (чтобы API никогда не отдавал наружу Int.MAX_VALUE). */
     fun displayMaxPaidClubs(plan: SubscriptionPlan): Int? =
         maxPaidClubs(plan).takeIf { it != Int.MAX_VALUE }
 }

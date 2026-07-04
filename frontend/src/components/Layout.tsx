@@ -12,7 +12,7 @@ import { useClubContextStore } from '../store/useClubContextStore';
 import { useOrganizerClubs } from '../queries/organizerClubs';
 
 /**
- * Fallback spinner shown while lazy-loaded pages are being fetched.
+ * Спиннер-заглушка, показывается пока подгружаются lazy-загруженные страницы.
  */
 const PageFallback: FC = () => (
   <div
@@ -28,11 +28,11 @@ const PageFallback: FC = () => (
 );
 
 /**
- * Floating dock + its FAB "create" flow. Rendered only when authenticated so
- * the organizer-clubs query never fires before a token exists.
+ * Плавающий док + его FAB-flow «создать». Рендерится только при авторизации, чтобы
+ * запрос organizer-clubs никогда не срабатывал раньше, чем появится токен.
  *
- * Exported for unit testing the FAB guardrail (organizer → open flow,
- * non-organizer → toast). The FAB itself is always shown.
+ * Экспортирован для unit-теста защиты FAB (организатор → открыть flow,
+ * не-организатор → toast). Сама кнопка FAB показывается всегда.
  */
 export const AppDock: FC = () => {
   const haptic = useHaptic();
@@ -41,9 +41,9 @@ export const AppDock: FC = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  // When the user is viewing a club they organize, the FAB pre-selects that
-  // club and skips the picker — create straight into the current club. On any
-  // other screen (or a club they don't organize) the normal flow runs.
+  // Если юзер сейчас смотрит клуб, которым он руководит, FAB заранее выбирает этот
+  // клуб и пропускает выбор — создание сразу в текущий клуб. На любом другом экране
+  // (или в клубе, который он не организует) работает обычный flow.
   const clubContextId = useClubContextStore((s) => s.clubId);
   const presetClubId =
     clubContextId && organizerClubs.some((c) => c.id === clubContextId) ? clubContextId : null;
@@ -74,23 +74,24 @@ export const AppDock: FC = () => {
 };
 
 /**
- * Root layout component.
+ * Корневой компонент layout.
  *
- * - Renders the Telegram BackButton on nested (non-tab) pages.
- * - Wraps child routes in React Suspense for code-split lazy loading.
- * - Renders the floating dock (with its create flow) once authenticated.
+ * - Рендерит Telegram BackButton на вложенных (не-таб) страницах.
+ * - Оборачивает дочерние роуты в React Suspense для code-split lazy loading.
+ * - Рендерит плавающий док (с его create-flow) после авторизации.
  */
 export const Layout: FC = () => {
   const location = useLocation();
   const showTabBar = isTabBarRoute(location.pathname);
   const { isAuthenticated, isLoading, error, login } = useAuthStore();
 
-  // Initialize auth once on app start so token is available before child pages fetch data
+  // Инициализируем авторизацию один раз при старте приложения, чтобы токен был доступен
+  // до того, как дочерние страницы начнут запрашивать данные
   useEffect(() => {
     if (!isAuthenticated && !isLoading && !error) login();
   }, [isAuthenticated, isLoading, error, login]);
 
-  // Show Telegram BackButton only on nested pages (where the dock is hidden)
+  // Показываем Telegram BackButton только на вложенных страницах (где док скрыт)
   useBackButton(!showTabBar);
 
   if (!isAuthenticated) {

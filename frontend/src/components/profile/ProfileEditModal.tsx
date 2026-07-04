@@ -7,6 +7,7 @@ import { useUpdateProfileMutation } from '../../queries/profile';
 import { CityPicker, countryNameByCode, type CityChoice } from '../CityPicker';
 import { InterestsInput } from './InterestsInput';
 
+// Максимальная длина поля «О себе» (символов) — совпадает с лимитом на бэкенде.
 const BIO_MAX = 280;
 
 interface ProfileEditModalProps {
@@ -15,8 +16,8 @@ interface ProfileEditModalProps {
 }
 
 /**
- * Own portal sheet (not a TGUI Modal): the CityPicker portal sits at z-index
- * 200, so this stays below it (150) and the picker opens cleanly on top.
+ * Собственный portal-шит (не TGUI Modal): портал CityPicker живёт на z-index 200,
+ * поэтому этот остаётся ниже (150), и пикер чисто открывается поверх.
  */
 export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, onClose }) => {
   const haptic = useHaptic();

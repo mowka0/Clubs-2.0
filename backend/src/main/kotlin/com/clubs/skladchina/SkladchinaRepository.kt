@@ -16,57 +16,58 @@ interface SkladchinaRepository {
     fun findById(id: UUID): Skladchina?
 
     /**
-     * The split that BLOCKS a new one for [eventId]: an active OR successfully-closed pool. Active
-     * is returned first (the EventPage button links to it); otherwise the latest closed_success.
-     * null → no blocker, a new split may be created. A failed/cancelled split does NOT block (retry).
+     * Складчина, которая БЛОКИРУЕТ создание новой для [eventId]: активная ИЛИ успешно закрытая.
+     * Активная возвращается в приоритете (на неё ведёт кнопка на EventPage), иначе — последняя
+     * closed_success. null → блокера нет, новую складчину можно создать. Провалившаяся/отменённая
+     * складчина НЕ блокирует (можно повторить попытку).
      */
     fun findBlockingByEventId(eventId: UUID): Skladchina?
 
     fun findActiveByClub(clubId: UUID): List<Skladchina>
 
     /**
-     * Returns ALL skladchinas of the given club (any status when [includeCompleted] = true,
-     * active-only otherwise) with batch-loaded aggregates (collected sum, participant
-     * counts). Sorted by `created_at DESC, id ASC` for stable merge with the events feed.
+     * Возвращает ВСЕ складчины указанного клуба (любой статус при [includeCompleted] = true,
+     * иначе только активные) с батчево подгруженными агрегатами (собранная сумма, количество
+     * участников). Отсортировано по `created_at DESC, id ASC` для стабильного слияния с лентой событий.
      *
-     * Used by the unified activity feed. Does NOT load any caller-specific fields —
-     * caller resolves `myStatus` etc. on the detail screen, not in the feed.
+     * Используется единой лентой активностей. НЕ подгружает поля, зависящие от вызывающего пользователя —
+     * `myStatus` и т.п. вычисляется на экране деталей, а не в ленте.
      */
     fun findAllByClubWithAggregates(clubId: UUID, includeCompleted: Boolean): List<SkladchinaWithAggregates>
 
     fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MySkladchinaFeedItem>
 
     /**
-     * Count of active skladchinas where the user is a participant still awaiting
-     * payment (status='pending'). Mirrors the `actionRequired` flag the feed
-     * computes per item — used to badge the "Сборы" tab so unpaid obligations
-     * are not lost from sight.
+     * Количество активных складчин, где пользователь — участник, всё ещё ожидающий
+     * оплаты (status='pending'). Отражает флаг `actionRequired`, который лента
+     * вычисляет для каждого элемента — используется для бейджа таба "Сборы", чтобы
+     * неоплаченные обязательства не терялись из виду.
      */
     fun countActionRequired(userId: UUID): Int
 
     fun findExpiredActive(now: OffsetDateTime): List<Skladchina>
 
     /**
-     * Atomic close claim (F5-12): sets the final status/closed_at/closed_by ONLY if
-     * the skladchina is still `active`. Returns false when another closer (scheduler ×
-     * auto-close × manual) already won — the loser must no-op, so participants are
-     * expired/released once and SkladchinaClosedEvent is published exactly once.
-     * Same rows-affected pattern as JooqReputationRepository.claimEvent.
+     * Атомарная заявка на закрытие (F5-12): выставляет финальный status/closed_at/closed_by ТОЛЬКО
+     * если складчина ещё `active`. Возвращает false, если другой закрывающий (шедулер ×
+     * автозакрытие × ручное) уже выиграл гонку — проигравший должен ничего не делать, чтобы участники
+     * были expired/released ровно один раз и SkladchinaClosedEvent публиковался ровно один раз.
+     * Тот же паттерн rows-affected, что и в JooqReputationRepository.claimEvent.
      */
     fun claimClose(id: UUID, status: SkladchinaStatus, closedBy: UUID?, closedAt: OffsetDateTime): Boolean
 
-    /** Returns participants joined with user info — for organizer view + reputation hook. */
+    /** Возвращает участников с присоединённой информацией о пользователе — для вида организатора + хука репутации. */
     fun findParticipantsWithInfo(skladchinaId: UUID): List<SkladchinaParticipantInfo>
 
-    /** Plain participant records — for state-machine logic (mark paid, reputation hook). */
+    /** Простые записи участников — для логики конечного автомата (отметить оплату, хук репутации). */
     fun findParticipants(skladchinaId: UUID): List<SkladchinaParticipant>
 
     fun findParticipant(skladchinaId: UUID, userId: UUID): SkladchinaParticipant?
 
     /**
-     * Transitions the participant `pending` → `paid` (F5-03: guarded by
-     * `WHERE status = 'pending'`). Returns affected rows — 0 means the participant
-     * was concurrently expired/released/declined and the caller must 409.
+     * Переводит участника `pending` → `paid` (F5-03: защищено условием
+     * `WHERE status = 'pending'`). Возвращает число затронутых строк — 0 означает, что участник
+     * был параллельно expired/released/declined, и вызывающий должен вернуть 409.
      */
     fun setParticipantPaid(
         skladchinaId: UUID,
@@ -75,7 +76,7 @@ interface SkladchinaRepository {
         paidAt: OffsetDateTime
     ): Int
 
-    /** Transitions `pending` → `declined`; same rows-affected contract as [setParticipantPaid]. */
+    /** Переводит `pending` → `declined`; тот же контракт rows-affected, что и [setParticipantPaid]. */
     fun setParticipantDeclined(
         skladchinaId: UUID,
         userId: UUID,
@@ -83,110 +84,110 @@ interface SkladchinaRepository {
     ): Int
 
     /**
-     * A-2 (organizer un-mark): transitions `paid` → `pending`, clearing declared_amount
-     * and paid_at. Guarded by `WHERE status = 'paid'` — returns affected rows (0 means the
-     * participant was concurrently resolved by a close and must not be reopened).
+     * A-2 (отмена организатором): переводит `paid` → `pending`, очищая declared_amount
+     * и paid_at. Защищено условием `WHERE status = 'paid'` — возвращает число затронутых строк
+     * (0 означает, что участник параллельно был закрыт закрытием складчины и не должен переоткрываться).
      */
     fun revertParticipantToPending(skladchinaId: UUID, userId: UUID): Int
 
     /**
-     * V28: opens a decline request (REQUIRES_APPROVAL templates) — note + timestamp. Guarded to a
-     * still-`pending` participant whose decline path isn't already closed (decline_rejected=false).
-     * Returns affected rows.
+     * V28: открывает запрос на отказ (шаблоны REQUIRES_APPROVAL) — заметка + временная метка. Защищено
+     * условием: участник всё ещё `pending`, и путь отказа ещё не закрыт (decline_rejected=false).
+     * Возвращает число затронутых строк.
      */
     fun requestDecline(skladchinaId: UUID, userId: UUID, note: String, requestedAt: OffsetDateTime): Int
 
     /**
-     * V28/V29: organizer rejects the decline request — closes the path (decline_rejected=true),
-     * stores the mandatory justification [note], and clears the open request; participant stays
-     * `pending` (must pay). Guarded to a pending participant with an open request. Returns affected rows.
+     * V28/V29: организатор отклоняет запрос на отказ — закрывает путь (decline_rejected=true),
+     * сохраняет обязательное обоснование [note] и очищает открытый запрос; участник остаётся
+     * `pending` (обязан заплатить). Защищено: участник pending с открытым запросом. Возвращает число затронутых строк.
      */
     fun rejectDeclineRequest(skladchinaId: UUID, userId: UUID, note: String): Int
 
     /**
-     * Pushes the deadline OUT to [newDeadline] (guarded: active + current deadline earlier than the
-     * new one). Used when a decline request lands with <48h left — the organizer must always get a
-     * 48h window to resolve it. Returns affected rows (0 = no change needed).
+     * Сдвигает дедлайн ВПЕРЁД на [newDeadline] (защита: активна + текущий дедлайн раньше нового).
+     * Используется, когда запрос на отказ приходит с <48ч до дедлайна — у организатора всегда должно
+     * быть 48-часовое окно на решение. Возвращает число затронутых строк (0 = изменение не требуется).
      */
     fun extendDeadline(skladchinaId: UUID, newDeadline: OffsetDateTime): Int
 
-    /** Move all `pending` participants to `expired_no_response` (close at/after the deadline). */
+    /** Переводит всех участников `pending` в `expired_no_response` (закрытие в момент дедлайна или после). */
     fun expirePendingParticipants(skladchinaId: UUID): Int
 
     /**
-     * Move all `pending` participants to `released` — the skladchina closed BEFORE its
-     * deadline, so silence broke no promise (F5-02). Neutral: no ledger rows are
-     * emitted for this status (ReputationPolicy.financeKind(released) = null).
+     * Переводит всех участников `pending` в `released` — складчина закрылась ДО своего
+     * дедлайна, поэтому молчание не нарушило никакого обещания (F5-02). Нейтрально: для этого
+     * статуса не создаются строки в леджере (ReputationPolicy.financeKind(released) = null).
      */
     fun releasePendingParticipants(skladchinaId: UUID): Int
 
     fun markReputationApplied(skladchinaId: UUID, userId: UUID)
 
-    /** Sum of declared_amount for participants with status='paid'. */
+    /** Сумма declared_amount по участникам со статусом 'paid'. */
     fun sumCollectedKopecks(skladchinaId: UUID): Long
 
     fun countParticipants(skladchinaId: UUID): Int
 
     fun countParticipantsByStatus(skladchinaId: UUID, status: SkladchinaParticipantStatus): Int
 
-    /** Returns subset of given userIds that are NOT active members of given club. */
+    /** Возвращает подмножество указанных userIds, которые НЕ являются активными участниками указанного клуба. */
     fun findNonActiveMembers(clubId: UUID, userIds: Collection<UUID>): Set<UUID>
 
     /**
-     * Count of the club's reputation-affecting skladchinas created after [since] —
-     * feeds the "≤3 important skladchinas per club per rolling 7 days" rate limit
-     * (the redesign's only real anti-farm AND anti-griefing mechanism).
+     * Количество влияющих на репутацию складчин клуба, созданных после [since] —
+     * питает рейт-лимит "≤3 важных складчины на клуб за скользящие 7 дней"
+     * (единственный настоящий анти-фарм И анти-грифинг механизм редизайна).
      */
     fun countReputationAffectingCreatedSince(clubId: UUID, since: OffsetDateTime): Int
 
     /**
-     * Active reputation-affecting skladchinas whose deadline falls in (now, until]
-     * and whose reminder DM has not been sent yet — feed for SkladchinaReminderScheduler.
+     * Активные влияющие на репутацию складчины, чей дедлайн попадает в (now, until]
+     * и для которых напоминание ещё не отправлено — фид для SkladchinaReminderScheduler.
      */
     fun findNeedingDeadlineReminder(now: OffsetDateTime, until: OffsetDateTime): List<Skladchina>
 
-    /** Dedup stamp for the deadline-reminder DM (set BEFORE sending, like event reminders). */
+    /** Штамп дедупликации для напоминания о дедлайне (ставится ДО отправки, как и напоминания о событиях). */
     fun markReminderSent(skladchinaId: UUID, at: OffsetDateTime)
 
     /**
-     * Exit-with-obligations (P1b hole B): [userId]'s PENDING participations in [clubId]'s active,
-     * reputation-affecting skladchinas — the finance obligations broken by leaving (each → a
-     * skladchina_expired −40, occurred_at = deadline). Deadline is NOT filtered: the leave cascade
-     * deletes every such participant row, so a deadline-passed pending would otherwise escape both
-     * the exit penalty and natural expiry. The exit outcome equals what natural expiry would write
-     * (−40), and a later natural row collides on the ledger UNIQUE — no double. Same scope the
-     * cascade deletes ([deleteParticipantFromActiveSkladchinasInClub]). Read BEFORE the cascade.
+     * Выход с обязательствами (P1b дыра B): PENDING-участия [userId] в активных, влияющих на
+     * репутацию складчинах клуба [clubId] — финансовые обязательства, нарушенные выходом (каждое →
+     * skladchina_expired −40, occurred_at = deadline). Дедлайн НЕ фильтруется: каскад выхода удаляет
+     * каждую такую строку участника, поэтому pending с уже прошедшим дедлайном иначе избежал бы и
+     * штрафа за выход, и естественного истечения. Результат выхода эквивалентен тому, что записало бы
+     * естественное истечение (−40), а более поздняя естественная строка столкнётся на UNIQUE леджера —
+     * дубля не будет. Тот же охват, что удаляет каскад ([deleteParticipantFromActiveSkladchinasInClub]).
+     * Читать ДО каскада.
      */
     fun findPendingReputationObligations(userId: UUID, clubId: UUID): List<SkladchinaObligation>
 
     /**
-     * Cascade-delete on club leave: removes [userId] from every active skladchina
-     * of [clubId]. Closed/cancelled skladchinas are preserved as historical
-     * obligations. Returns number of rows deleted.
+     * Каскадное удаление при выходе из клуба: убирает [userId] из каждой активной складчины
+     * клуба [clubId]. Закрытые/отменённые складчины сохраняются как исторические
+     * обязательства. Возвращает число удалённых строк.
      */
     fun deleteParticipantFromActiveSkladchinasInClub(userId: UUID, clubId: UUID): Int
 
     /**
-     * Club soft-delete cascade: cancels every active skladchina of [clubId] and releases its
-     * pending participants (pending → released — the reputation-neutral terminal status, NOT
-     * expired_no_response which would penalize). Deliberately bypasses
-     * SkladchinaService.closeInternal so no reputation deltas and no SkladchinaClosedEvent DM
-     * fire for a club that is being deleted. Already closed/cancelled skladchinas are left
-     * untouched. Returns the number of skladchinas cancelled.
+     * Каскад мягкого удаления клуба: отменяет каждую активную складчину клуба [clubId] и освобождает
+     * её ожидающих участников (pending → released — нейтральный для репутации терминальный статус, НЕ
+     * expired_no_response, который бы штрафовал). Намеренно обходит SkladchinaService.closeInternal,
+     * чтобы для удаляемого клуба не срабатывали ни дельты репутации, ни SkladchinaClosedEvent DM.
+     * Уже закрытые/отменённые складчины не трогаются. Возвращает число отменённых складчин.
      */
     fun cancelActiveByClub(clubId: UUID): Int
 
     /**
-     * Cancels the active split linked to [eventId] (F5-14 event cancellation): pending participants
-     * are released (no reputation), the split → cancelled. A closed_success split is left intact
-     * (money already collected). Returns rows affected on the skladchina.
+     * Отменяет активную складчину, привязанную к [eventId] (отмена события F5-14): ожидающие участники
+     * освобождаются (без влияния на репутацию), складчина → cancelled. closed_success складчина
+     * остаётся нетронутой (деньги уже собраны). Возвращает число затронутых строк складчины.
      */
     fun cancelActiveByEventId(eventId: UUID): Int
 }
 
 /**
- * A pending reputation-affecting participation a leaving user abandons: the skladchina id
- * (ledger source_id) + its deadline (skladchina_expired occurred_at). Read on club leave.
+ * Ожидающее влияющее на репутацию участие, которое покидающий пользователь бросает: id складчины
+ * (source_id в леджере) + её дедлайн (occurred_at для skladchina_expired). Читается при выходе из клуба.
  */
 data class SkladchinaObligation(
     val skladchinaId: UUID,
@@ -194,9 +195,9 @@ data class SkladchinaObligation(
 )
 
 /**
- * Caller-agnostic feed row: a skladchina plus the aggregates used by the unified
- * activity-feed card. No `myStatus` / `clubName` — those belong to per-user views
- * (`MySkladchinaFeedItem`).
+ * Строка ленты, не зависящая от вызывающего пользователя: складчина плюс агрегаты, используемые
+ * карточкой единой ленты активностей. Без `myStatus` / `clubName` — они относятся к персональным
+ * представлениям (`MySkladchinaFeedItem`).
  */
 data class SkladchinaWithAggregates(
     val skladchina: Skladchina,

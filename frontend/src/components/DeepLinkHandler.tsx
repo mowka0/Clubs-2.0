@@ -3,14 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { getStartParam } from '../telegram/sdk';
 
 /**
- * Mounts once at app root and inspects Telegram's tgWebAppStartParam.
- * When user opens app via t.me/<bot>/app?startapp=<value> link — navigates
- * to the corresponding deep route. Supported prefixes:
+ * Монтируется один раз в корне приложения и разбирает телеграмовский tgWebAppStartParam.
+ * Когда пользователь открывает приложение по ссылке t.me/<bot>/app?startapp=<value> —
+ * ведёт на соответствующий deep-маршрут. Поддерживаемые префиксы:
  *   - `skladchina_<uuid>`   →  /skladchina/<uuid>
  *   - `event_<uuid>`        →  /events/<uuid>
  *   - `club_<uuid>`         →  /clubs/<uuid>
  *
- * Idempotent — runs only on first mount per session; subsequent renders skip.
+ * Идемпотентен — срабатывает только на первом монтировании за сессию; дальнейшие рендеры пропускают.
  */
 export const DeepLinkHandler: FC = () => {
   const navigate = useNavigate();

@@ -52,8 +52,8 @@ class SkladchinaController(
     ): ResponseEntity<SkladchinaDetailDto> =
         ResponseEntity.ok(queryService.getDetail(id, user.userId))
 
-    // EventPage "Разделить счёт" button: is there already a split for this event (active → open it,
-    // closed_success → already collected)? Both null when a new split may be created.
+    // Кнопка "Разделить счёт" на EventPage: уже есть ли сплит для этого события (active → открыть его,
+    // closed_success → уже собрано)? Оба null, когда можно создать новый сплит.
     @GetMapping("/api/events/{eventId}/skladchina")
     fun getEventSkladchina(
         @PathVariable eventId: UUID
@@ -79,7 +79,7 @@ class SkladchinaController(
         return ResponseEntity.ok(paymentService.decline(id, user.userId))
     }
 
-    // V28: participant opens a decline request with a reason (REQUIRES_APPROVAL templates, e.g. split_bill).
+    // V28: участник открывает запрос на отказ с указанием причины (шаблоны REQUIRES_APPROVAL, напр. split_bill).
     @PostMapping("/api/skladchinas/{id}/request-decline")
     fun requestDecline(
         @PathVariable id: UUID,
@@ -90,7 +90,7 @@ class SkladchinaController(
         return ResponseEntity.ok(paymentService.requestDecline(id, user.userId, request.reason))
     }
 
-    // V28: organizer approves/rejects a participant's decline request.
+    // V28: организатор одобряет/отклоняет запрос участника на отказ.
     @PostMapping("/api/skladchinas/{id}/participants/{userId}/resolve-decline")
     fun resolveDecline(
         @PathVariable id: UUID,
@@ -102,7 +102,7 @@ class SkladchinaController(
         return ResponseEntity.ok(paymentService.resolveDecline(id, user.userId, userId, request.approve, request.rejectReason))
     }
 
-    // A-2: organizer marks a participant paid ("получил наличкой"). Creator-only (checked in service).
+    // A-2: организатор отмечает участника оплатившим ("получил наличкой"). Только создатель (проверяется в service).
     @PostMapping("/api/skladchinas/{id}/participants/{userId}/mark-paid")
     fun organizerMarkPaid(
         @PathVariable id: UUID,
@@ -113,7 +113,7 @@ class SkladchinaController(
         return ResponseEntity.ok(paymentService.organizerMarkPaid(id, user.userId, userId))
     }
 
-    // A-2 (toggle): organizer reverts a participant's payment back to pending.
+    // A-2 (toggle): организатор возвращает оплату участника обратно в статус ожидания.
     @PostMapping("/api/skladchinas/{id}/participants/{userId}/unmark")
     fun organizerUnmarkPaid(
         @PathVariable id: UUID,

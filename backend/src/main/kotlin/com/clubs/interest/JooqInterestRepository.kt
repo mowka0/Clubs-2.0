@@ -12,9 +12,9 @@ class JooqInterestRepository(private val dsl: DSLContext) : InterestRepository {
     override fun suggest(prefix: String, limit: Int): List<String> =
         dsl.select(INTERESTS.NAME)
             .from(INTERESTS)
-            // startsWith escapes %/_ and emits `name LIKE 'prefix%'`, which the
-            // varchar_pattern_ops index serves; names are stored canonical so a
-            // plain (case-sensitive) prefix match is enough.
+            // startsWith экранирует %/_ и генерирует `name LIKE 'prefix%'`, который
+            // обслуживается индексом varchar_pattern_ops; имена хранятся в канонической
+            // форме, поэтому простого (чувствительного к регистру) префикс-матча достаточно.
             .where(INTERESTS.NAME.startsWith(prefix))
             .orderBy(INTERESTS.USAGE_COUNT.desc(), INTERESTS.NAME.asc())
             .limit(limit)

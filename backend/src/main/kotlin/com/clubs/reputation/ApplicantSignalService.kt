@@ -6,14 +6,15 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * Cross-club applicant signal for the organizer review surface: the global "надёжен в N из M клубов"
- * aggregate plus the global level projection (name + tier). Computed ON READ from the ledger in ONE
- * batch query for all applicants, then delegated to the canonical [TrustService.globalForOutcomes]
- * and [XpService.levelForOutcomes] — no per-applicant N+1, no duplicated Trust/XP formula.
+ * Кросс-клубовый сигнал заявителя для экрана рассмотрения организатором: глобальный агрегат
+ * "надёжен в N из M клубов" плюс глобальная проекция уровня (имя + tier). Вычисляется ON READ
+ * из ledger одним batch-запросом на всех заявителей, дальше делегируется каноническим
+ * [TrustService.globalForOutcomes] и [XpService.levelForOutcomes] — без N+1 на заявителя,
+ * без дублирования формулы Trust/XP.
  *
- * Owner-blind by construction: the ledger has no rows for an owner's own club (anti-farm rule 1), so
- * this signal reflects the PARTICIPANT track record, not organizer experience. The review card frames
- * it as «Активность на платформе» accordingly.
+ * По конструкции слеп к владельцу: в ledger нет строк для собственного клуба владельца
+ * (анти-фарм правило 1), поэтому этот сигнал отражает историю УЧАСТНИКА, а не опыт организатора.
+ * Карточка рассмотрения соответственно называет это «Активность на платформе».
  */
 @Service
 class ApplicantSignalService(
@@ -43,7 +44,7 @@ class ApplicantSignalService(
         }
     }
 
-    /** 0-based level index → pill tier. Top tier = Столп сообщества/Легенда/Амбассадор (gold pill). */
+    /** Индекс уровня (с 0) → tier пилюли. Top tier = Столп сообщества/Легенда/Амбассадор (золотая пилюля). */
     private fun tierFor(levelIndex: Int): String = when {
         levelIndex >= 7 -> "top"
         levelIndex >= 3 -> "mid"
@@ -52,11 +53,11 @@ class ApplicantSignalService(
 }
 
 /**
- * Applicant's cross-club reputation as the organizer review card shows it:
- *  - reliableClubs / trackRecordClubs — the "N из M" donut (clubs where Trust ≥ reliable, of clubs
- *    with a shown track record). 0/0 when the applicant has no track record yet.
- *  - level / levelName — the global gamification level (others projection).
- *  - levelTier — "base" | "mid" | "top" for the pill color.
+ * Кросс-клубовая репутация заявителя, как её показывает карточка рассмотрения организатора:
+ *  - reliableClubs / trackRecordClubs — донат "N из M" (клубы, где Trust ≥ reliable, из клубов
+ *    с показанной историей). 0/0, если у заявителя ещё нет истории.
+ *  - level / levelName — глобальный геймификационный уровень (проекция «для других»).
+ *  - levelTier — "base" | "mid" | "top" для цвета пилюли.
  */
 data class ApplicantSignal(
     val reliableClubs: Int,
@@ -66,7 +67,7 @@ data class ApplicantSignal(
     val levelTier: String
 ) {
     companion object {
-        /** Default for an applicant with no ledger outcomes: no track record, level 1 (Гость). */
+        /** Значение по умолчанию для заявителя без записей в ledger: нет истории, уровень 1 (Гость). */
         val EMPTY = ApplicantSignal(
             reliableClubs = 0,
             trackRecordClubs = 0,

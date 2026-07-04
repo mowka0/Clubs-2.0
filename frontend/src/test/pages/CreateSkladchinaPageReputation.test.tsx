@@ -28,8 +28,10 @@ vi.mock('../../telegram/sdk', () => ({
 
 import { CreateSkladchinaPage } from '../../pages/CreateSkladchinaPage';
 
+// ID клуба-фикстуры — общий для роута страницы и всех msw-моков
 const CLUB_ID = 'club-1';
 
+// Единственный участник клуба в моках — его выбирают при создании сбора
 const MEMBER: MemberListItemDto = {
   userId: 'u-1',
   firstName: 'Анна',
@@ -75,7 +77,7 @@ describe('CreateSkladchinaPage — «Важный сбор» checkbox', () => {
     expect(
       screen.getByText('Влияет на репутацию участников: оплата +10, отказ — без штрафа, молчание до дедлайна −40'),
     ).toBeInTheDocument();
-    // Stale price from the old design must be gone.
+    // Устаревший прайс из старого дизайна должен исчезнуть.
     expect(screen.queryByText(/за неответ −25/)).not.toBeInTheDocument();
   });
 
@@ -93,7 +95,7 @@ describe('CreateSkladchinaPage — «Важный сбор» checkbox', () => {
     expect(checkbox).not.toBeChecked();
     expect(screen.getByText('Добровольный сбор не влияет на репутацию')).toBeInTheDocument();
 
-    // Switching back re-enables the checkbox (still unchecked).
+    // Переключение обратно снова включает чекбокс (по-прежнему снятый).
     await user.click(screen.getByText('Поровну между всеми'));
     expect(checkbox).toBeEnabled();
     expect(checkbox).not.toBeChecked();
@@ -109,11 +111,11 @@ describe('CreateSkladchinaPage — «Важный сбор» checkbox', () => {
     await user.click(screen.getByText('Анна'));
     await user.click(screen.getByRole('checkbox'));
 
-    // deadline ~2h ahead (< 24h required for an important skladchina)
+    // дедлайн через ~2 часа (меньше 24 часов, требуемых для важного сбора)
     const soon = new Date(Date.now() + 2 * 60 * 60 * 1000);
     soon.setMinutes(soon.getMinutes() - soon.getTimezoneOffset());
     const deadlineInput = screen.getByLabelText(/Срок до/) as HTMLInputElement;
-    // happy-dom doesn't fully emulate datetime-local typing — set value via change event.
+    // happy-dom не полностью эмулирует ввод в datetime-local — ставим значение через change-событие.
     fireEvent.change(deadlineInput, { target: { value: soon.toISOString().slice(0, 16) } });
 
     await user.click(screen.getByRole('button', { name: 'Создать сбор' }));
@@ -125,8 +127,8 @@ describe('CreateSkladchinaPage — «Важный сбор» checkbox', () => {
 
   it('показывает сообщение сервера при 400 (rate-limit важных сборов) и спец-текст при 429', async () => {
     mockMembers();
-    // Backend business gates (24h deadline, ≤3 important per 7d) come back as
-    // 400 ValidationException with a user-facing Russian message.
+    // Бизнес-гейты бэкенда (дедлайн 24 ч, ≤3 важных за 7 дней) возвращаются как
+    // 400 ValidationException с русским сообщением для пользователя.
     const rateLimitMessage =
       'Лимит важных сборов: не больше 3 за 7 дней в одном клубе. Создайте сбор без влияния на репутацию или попробуйте позже';
     server.use(
@@ -147,7 +149,7 @@ describe('CreateSkladchinaPage — «Важный сбор» checkbox', () => {
 
     expect(await screen.findByText(rateLimitMessage)).toBeInTheDocument();
 
-    // Infra-level 429 (bucket4j) → generic human-readable retry hint.
+    // Инфраструктурный 429 (bucket4j) → общая человекочитаемая подсказка «попробуйте позже».
     server.use(
       http.post(`*/api/clubs/${CLUB_ID}/skladchinas`, () =>
         HttpResponse.json(

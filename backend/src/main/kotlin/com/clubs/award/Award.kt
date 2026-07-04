@@ -4,8 +4,9 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * A club-local award (member admin profile S2). Pure cosmetic recognition an organizer grants to a
- * member — NOT a global earned-badge; never affects reputation/XP/rank (R4). Visible to all members (R3).
+ * Локальная награда клуба (member admin profile S2). Чисто косметическое признание, которое
+ * организатор выдаёт участнику — НЕ глобальный заработанный бейдж; никогда не влияет на
+ * репутацию/XP/ранг (R4). Видна всем участникам (R3).
  */
 data class Award(
     val id: UUID,
@@ -17,7 +18,7 @@ data class Award(
     val awardedAt: OffsetDateTime
 )
 
-/** Distinct (emoji, label) ever granted in a club — the autocomplete source for the grant form («как интересы»). */
+/** Уникальные пары (emoji, label), когда-либо выданные в клубе — источник автодополнения для формы выдачи («как интересы»). */
 data class AwardSuggestion(
     val emoji: String,
     val label: String

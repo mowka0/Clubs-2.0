@@ -11,9 +11,10 @@ import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
 /**
- * Read side of the skladchina engine: detail + club-active list, with access checks and DTO mapping.
- * Has no mutation, so every other service depends on it for the response DTO they return (a leaf in
- * the dependency graph). Split out of the former god-`SkladchinaService` by responsibility.
+ * Read-сторона движка складчины: деталка + список активных по клубу, с проверками доступа и
+ * маппингом в DTO. Мутаций нет, поэтому все остальные сервисы зависят от него ради response-DTO,
+ * которые возвращают (лист в графе зависимостей). Выделен из бывшего god-`SkladchinaService`
+ * по ответственности.
  */
 @Service
 class SkladchinaQueryService(
@@ -54,7 +55,7 @@ class SkladchinaQueryService(
         val club = clubRepository.findById(skladchina.clubId)
             ?: throw NotFoundException("Club not found")
 
-        // Access: creator OR active participant
+        // Доступ: создатель ИЛИ активный участник
         val isCreator = skladchina.creatorId == callerId
         val callerParticipant = skladchinaRepository.findParticipant(skladchinaId, callerId)
         if (!isCreator && callerParticipant == null) {
@@ -71,9 +72,10 @@ class SkladchinaQueryService(
     }
 
     /**
-     * State of the split linked to [eventId] — for the EventPage "Разделить счёт" button. Returns the
-     * active split (→ open it) or, failing that, a successfully-closed one (→ already collected); both
-     * null when none exists or the only ones are failed/cancelled (→ the button creates a new split).
+     * Состояние сплита, привязанного к [eventId] — для кнопки «Разделить счёт» на EventPage.
+     * Возвращает активный сплит (→ открыть его) или, если такого нет, успешно закрытый (→ уже
+     * собрано); оба поля null, когда сплита нет либо остались только failed/cancelled (→ кнопка
+     * создаёт новый сплит).
      */
     @Transactional(readOnly = true)
     fun findEventSplitState(eventId: UUID): EventSplitStateDto {

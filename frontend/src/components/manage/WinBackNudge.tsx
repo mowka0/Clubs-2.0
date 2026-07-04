@@ -10,9 +10,10 @@ function getInitials(firstName: string, lastName: string | null): string {
   return firstName.charAt(0).toUpperCase() + (lastName ? lastName.charAt(0).toUpperCase() : '');
 }
 
+// Миллисекунд в сутках — для расчёта количества дней с момента ухода
 const MS_PER_DAY = 86_400_000;
 
-/** Gender-neutral relative time since departure — the «Верните ушедших» header supplies the verb. */
+/** Гендерно-нейтральное относительное время с момента ухода — глагол задаёт заголовок «Верните ушедших». */
 function formatLeftAgo(iso: string): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / MS_PER_DAY);
   if (days <= 0) return 'сегодня';
@@ -21,7 +22,7 @@ function formatLeftAgo(iso: string): string {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 }
 
-/** Open the existing per-club profile card for a churned member (it fetches the full profile by id). */
+/** Открывает уже существующую per-club карточку профиля для ушедшего участника (она сама подгружает полный профиль по id). */
 function toMemberStub(member: ChurnedMemberDto): MemberListItemDto {
   return {
     userId: member.userId,
@@ -43,8 +44,8 @@ interface WinBackNudgeProps {
 }
 
 /**
- * The «Верните N ушедших» nudge, expandable into the roster of former members. Each row opens the
- * same profile card as the «Участники» tab. The roster loads lazily (only once expanded).
+ * Наджт «Верните N ушедших», разворачиваемый в список бывших участников. Каждая строка открывает
+ * ту же карточку профиля, что и таб «Участники». Список подгружается лениво (только после разворачивания).
  */
 export const WinBackNudge: FC<WinBackNudgeProps> = ({ nudge, clubId }) => {
   const haptic = useHaptic();

@@ -28,18 +28,19 @@ import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 /**
- * Read/write for the L3 rank (the recompute job's storage). Reads existing shared tables directly
- * (precedent: [JooqClubQualityRepository]); the only thing it does NOT read directly is
- * `reputation_ledger` — that comes through [com.clubs.reputation.LedgerReadPort]. The repository SHAPES
- * data only; all scoring is in [ClubRankPolicy]. Negatives are read WITHOUT selecting disputer identity
- * (design §4: dispute-identity stays internal). Windows are bound as Kotlin-computed parameters.
+ * Чтение/запись L3-ранга (хранилище джобы пересчёта). Существующие общие таблицы читает напрямую
+ * (прецедент: [JooqClubQualityRepository]); единственное, что НЕ читается напрямую, —
+ * `reputation_ledger`: он приходит через [com.clubs.reputation.LedgerReadPort]. Репозиторий только
+ * ФОРМИРУЕТ данные; весь скоринг — в [ClubRankPolicy]. Негативные сигналы читаются БЕЗ выборки
+ * личности диспутёра (дизайн §4: dispute-identity остаётся внутренней). Окна биндятся как
+ * параметры, вычисленные в Kotlin.
  */
 @Repository
 class JooqClubRankRepository(private val dsl: DSLContext) : ClubRankRepository {
 
     private companion object {
-        /** Single source of truth for the recompute advisory-lock key — a typo here would silently
-         *  acquire a different lock and break the cross-instance serialization. */
+        /** Единственный источник истины для ключа advisory-lock пересчёта — опечатка здесь молча
+         *  взяла бы другой лок и сломала бы сериализацию между инстансами. */
         const val RANK_LOCK_KEY = "club_rank"
     }
 
@@ -108,9 +109,10 @@ class JooqClubRankRepository(private val dsl: DSLContext) : ClubRankRepository {
             }
 
     /**
-     * Qualifying core attendance: member voted (stage-1) before the event, attendance = attended,
-     * non-cancelled, within the hard cutoff, user is NOT the owner. Distinct-events + 7-day temporal
-     * spread are applied in Kotlin (a single batch-day cannot manufacture diversity).
+     * Квалифицирующая посещаемость ядра: участник проголосовал (stage-1) до события, attendance =
+     * attended, событие не отменено, внутри hard cutoff, пользователь НЕ владелец. Distinct-события
+     * + временной разброс в 7 дней применяются в Kotlin (один «пакетный» день не может
+     * изобразить разнообразие).
      */
     private fun coreByClub(hardCutoff: OffsetDateTime): Map<UUID, List<AccountOutcome>> =
         dsl.select(EVENTS.CLUB_ID, EVENT_RESPONSES.USER_ID, EVENTS.EVENT_DATETIME)
@@ -130,8 +132,8 @@ class JooqClubRankRepository(private val dsl: DSLContext) : ClubRankRepository {
             .groupBy({ it.value1()!! }, { it.value2()!! to it.value3()!! })
             .mapValues { (_, userTimes) -> qualifyCore(userTimes) }
 
-    /** From (userId, eventDatetime) rows for one club: distinct users with ≥CORE_MIN_EVENTS events
-     *  spanning ≥MIN_EVENT_GAP_DAYS; anchor = latest qualifying event. */
+    /** Из строк (userId, eventDatetime) одного клуба: distinct-пользователи с ≥CORE_MIN_EVENTS
+     *  событиями с разбросом ≥MIN_EVENT_GAP_DAYS; якорь = последнее квалифицирующее событие. */
     private fun qualifyCore(userTimes: List<Pair<UUID, OffsetDateTime>>): List<AccountOutcome> =
         userTimes.groupBy({ it.first }, { it.second }).mapNotNull { (userId, times) ->
             if (times.size < ClubRankPolicy.CORE_MIN_EVENTS) return@mapNotNull null
@@ -141,10 +143,11 @@ class JooqClubRankRepository(private val dsl: DSLContext) : ClubRankRepository {
         }
 
     /**
-     * Distinct paying accounts per club. [onlyRenewal]=false → first-payment (`subscription`) payers;
-     * =true → the disjoint `renewal` set (the loyalty bonus). The two partition the payment population
-     * so the paying axis never double-counts a renewer. `charge_id NOT NULL` enforces the "Stars proof"
-     * invariant — only a Telegram-signed payment (which always carries a charge id) is real money.
+     * Distinct платящие аккаунты по клубам. [onlyRenewal]=false → плательщики первого платежа
+     * (`subscription`); =true → непересекающееся множество `renewal` (бонус за лояльность). Вместе они
+     * разбивают популяцию платежей так, что платёжная ось никогда не считает продлившего дважды.
+     * `charge_id NOT NULL` обеспечивает инвариант «Stars proof» — реальными деньгами считается только
+     * подписанный Telegram платёж (у него всегда есть charge id).
      */
     private fun payersByClub(hardCutoff: OffsetDateTime, onlyRenewal: Boolean): Map<UUID, List<AccountOutcome>> {
         val type = if (onlyRenewal) TransactionType.renewal else TransactionType.subscription
@@ -163,8 +166,8 @@ class JooqClubRankRepository(private val dsl: DSLContext) : ClubRankRepository {
             .groupBy({ it.value1()!! }, { AccountOutcome(it.value2()!!, it.value3()!!) })
     }
 
-    /** `left`/`expired` membership events per club, keyed by user → their event times. Feeds both the
-     *  90-day churn count (anomaly) and the scam-payer check. */
+    /** События членства `left`/`expired` по клубам, с ключом пользователь → времена его событий.
+     *  Питает и счётчик оттока за 90 дней (аномалия), и проверку scam-плательщиков. */
     private fun leftExpiredByClubUser(hardCutoff: OffsetDateTime): Map<UUID, Map<UUID, List<OffsetDateTime>>> =
         dsl.select(MEMBERSHIP_HISTORY.CLUB_ID, MEMBERSHIP_HISTORY.USER_ID, MEMBERSHIP_HISTORY.OCCURRED_AT)
             .from(MEMBERSHIP_HISTORY)
@@ -178,7 +181,7 @@ class JooqClubRankRepository(private val dsl: DSLContext) : ClubRankRepository {
             .groupBy({ it.value1()!! }, { it.value2()!! to it.value3()!! })
             .mapValues { (_, pairs) -> pairs.groupBy({ it.first }, { it.second }) }
 
-    /** Payers who left within SCAM_LEFT_WINDOW_DAYS after their latest payment (paid-then-ghosted). */
+    /** Плательщики, ушедшие в течение SCAM_LEFT_WINDOW_DAYS после последнего платежа («заплатил и пропал»). */
     private fun scamPayers(
         payers: List<AccountOutcome>,
         leftByUser: Map<UUID, List<OffsetDateTime>>,
@@ -189,7 +192,7 @@ class JooqClubRankRepository(private val dsl: DSLContext) : ClubRankRepository {
         }
     }.map { it.userId }.toSet()
 
-    /** Distinct member stage-1 voters (member-driven, owner excluded) on non-cancelled events, 90d. */
+    /** Distinct участники со stage-1 голосом (member-driven, владелец исключён) по неотменённым событиям, 90 дней. */
     private fun votersByClub(window90: OffsetDateTime): Map<UUID, List<AccountOutcome>> =
         dsl.select(EVENTS.CLUB_ID, EVENT_RESPONSES.USER_ID, DSL.max(EVENT_RESPONSES.STAGE_1_TIMESTAMP))
             .from(EVENT_RESPONSES)
@@ -206,8 +209,8 @@ class JooqClubRankRepository(private val dsl: DSLContext) : ClubRankRepository {
             .fetch()
             .groupBy({ it.value1()!! }, { AccountOutcome(it.value2()!!, it.value3()!!) })
 
-    /** Events with ≥EVENT_MIN_ATTENDEES distinct qualifying attended (member-vote-before-event, owner
-     *  excluded) — the only owner-resistant form of "attended" in LiveActivity. */
+    /** События с ≥EVENT_MIN_ATTENDEES distinct квалифицированными attended (голос участника до события,
+     *  владелец исключён) — единственная устойчивая к накрутке владельцем форма «attended» в LiveActivity. */
     private fun qualityEventsByClub(hardCutoff: OffsetDateTime, now: OffsetDateTime): Map<UUID, List<OffsetDateTime>> =
         dsl.select(EVENTS.CLUB_ID, EVENTS.EVENT_DATETIME)
             .from(EVENTS)
@@ -229,7 +232,7 @@ class JooqClubRankRepository(private val dsl: DSLContext) : ClubRankRepository {
             .fetch()
             .groupBy({ it.value1()!! }, { it.value2()!! })
 
-    /** Dispute behaviour times (event datetimes), cumulative markers, NO identity selected. */
+    /** Времена диспутного поведения (даты событий), накопительные маркеры, личность НЕ выбирается. */
     private fun disputesByClub(hardCutoff: OffsetDateTime): Map<UUID, List<OffsetDateTime>> =
         dsl.select(EVENTS.CLUB_ID, EVENTS.EVENT_DATETIME)
             .from(EVENT_RESPONSES)
@@ -248,7 +251,7 @@ class JooqClubRankRepository(private val dsl: DSLContext) : ClubRankRepository {
             .fetch()
             .groupBy({ it.value1()!! }, { it.value2()!! })
 
-    /** Organizer ghosting: a past, non-cancelled event whose attendance finalized but was never marked. */
+    /** Ghosting организатора: прошедшее неотменённое событие, посещаемость финализирована, но так и не отмечена. */
     private fun ghostingByClub(hardCutoff: OffsetDateTime, now: OffsetDateTime): Map<UUID, List<OffsetDateTime>> =
         dsl.select(EVENTS.CLUB_ID, EVENTS.EVENT_DATETIME)
             .from(EVENTS)
@@ -308,7 +311,7 @@ class JooqClubRankRepository(private val dsl: DSLContext) : ClubRankRepository {
     }
 
     override fun upsertRanks(ranks: List<ClubRank>) {
-        // Serialize concurrent recomputes (multi-instance / scheduler vs manual) — releases on commit.
+        // Сериализуем конкурентные пересчёты (мульти-инстанс / scheduler vs ручной) — лок отпускается на commit.
         dsl.execute("SELECT pg_advisory_xact_lock(hashtext(?))", RANK_LOCK_KEY)
         val now = OffsetDateTime.now()
         ranks.forEach { r ->

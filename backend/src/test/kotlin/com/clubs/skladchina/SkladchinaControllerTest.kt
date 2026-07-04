@@ -80,8 +80,8 @@ class SkladchinaControllerTest {
 
     @BeforeEach
     fun setUp() {
-        // Filter runs before auth → MockMvc requests share one ip:127.0.0.1 bucket. Reset per
-        // test so the shared 60/min API bucket isn't drained across the whole suite.
+        // Фильтр срабатывает до аутентификации → все MockMvc-запросы делят один bucket ip:127.0.0.1.
+        // Сбрасываем перед каждым тестом, чтобы общий API-bucket 60/мин не исчерпался за весь прогон.
         rateLimitFilter.resetBuckets()
         dsl.execute("DELETE FROM reputation_ledger")
         dsl.execute("DELETE FROM skladchina_participants")
@@ -184,7 +184,7 @@ class SkladchinaControllerTest {
     fun `mark-paid sets status returns updated DTO and is idempotent on repeat`() {
         val id = createSkladchina(listOf(memberAId, memberBId))
 
-        // First mark-paid
+        // Первый mark-paid
         mockMvc.perform(
             post("/api/skladchinas/$id/mark-paid")
                 .header("Authorization", "Bearer $memberAToken")
@@ -196,7 +196,7 @@ class SkladchinaControllerTest {
             .andExpect(jsonPath("$.myDeclaredAmountKopecks").value(50000))
             .andExpect(jsonPath("$.collectedKopecks").value(50000))
 
-        // Idempotent repeat — no error, current state
+        // Идемпотентный повтор — без ошибки, возвращается текущее состояние
         mockMvc.perform(
             post("/api/skladchinas/$id/mark-paid")
                 .header("Authorization", "Bearer $memberAToken")
@@ -217,7 +217,7 @@ class SkladchinaControllerTest {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.myStatus").value("declined"))
 
-        // Cannot mark-paid after decline
+        // После decline выполнить mark-paid нельзя
         mockMvc.perform(
             post("/api/skladchinas/$id/mark-paid")
                 .header("Authorization", "Bearer $memberAToken")
@@ -229,7 +229,7 @@ class SkladchinaControllerTest {
 
     @Test
     fun `GET detail as non-participant non-creator returns 403`() {
-        val id = createSkladchina(listOf(memberAId))  // memberB not participant
+        val id = createSkladchina(listOf(memberAId))  // memberB не участник
         mockMvc.perform(
             get("/api/skladchinas/$id")
                 .header("Authorization", "Bearer $memberBToken")
@@ -252,8 +252,8 @@ class SkladchinaControllerTest {
 
     @Test
     fun `all-answered triggers auto-close to closed_success`() {
-        // Goal = 100, two members fixed_equal → 50 each. Both pay → no pending left → closed.
-        // (Phase A: closure is by everyone-answered, not by goal-reached — see the test below.)
+        // Цель = 100, два участника fixed_equal → по 50. Оба платят → pending не осталось → закрыт.
+        // (Phase A: закрытие по «все ответили», а не по достижению цели — см. тест ниже.)
         val id = createSkladchina(listOf(memberAId, memberBId))
         mockMvc.perform(
             post("/api/skladchinas/$id/mark-paid")
@@ -274,8 +274,8 @@ class SkladchinaControllerTest {
 
     @Test
     fun `goal reached while a participant is still pending does NOT auto-close (Phase A A-4)`() {
-        // Voluntary with goal 50000; memberA declares 60000 (≥ goal) but memberB stays pending.
-        // Pre-Phase-A this force-closed on goal-reached; now money is decoration → stays active.
+        // Voluntary с целью 50000; memberA декларирует 60000 (≥ цели), но memberB остаётся pending.
+        // До Phase A это принудительно закрывалось по достижению цели; теперь деньги — декорация → остаётся active.
         val id = createVoluntaryWithGoal(listOf(memberAId, memberBId), 50000)
         mockMvc.perform(
             post("/api/skladchinas/$id/mark-paid")
@@ -293,14 +293,14 @@ class SkladchinaControllerTest {
     @Test
     fun `manual close as creator works but non-creator gets 403`() {
         val id = createSkladchina(listOf(memberAId))
-        // Non-creator cannot close
+        // Не-создатель закрыть не может
         mockMvc.perform(
             post("/api/skladchinas/$id/close")
                 .header("Authorization", "Bearer $memberAToken")
         )
             .andExpect(status().isForbidden)
 
-        // Creator closes — collected = 0, no goal reached → cancelled
+        // Создатель закрывает — собрано 0, цель не достигнута → cancelled
         mockMvc.perform(
             post("/api/skladchinas/$id/close")
                 .header("Authorization", "Bearer $organizerToken")
@@ -311,8 +311,8 @@ class SkladchinaControllerTest {
 
     @Test
     fun `GET me-skladchinas returns active skladchinas only for participant`() {
-        val id1 = createSkladchina(listOf(memberAId))   // memberA participant
-        createSkladchina(listOf(memberBId))             // memberB participant, memberA not — must not leak into A's feed
+        val id1 = createSkladchina(listOf(memberAId))   // memberA участник
+        createSkladchina(listOf(memberBId))             // участник memberB, memberA — нет: не должна протечь в ленту A
 
         mockMvc.perform(
             get("/api/users/me/skladchinas")
@@ -380,7 +380,7 @@ class SkladchinaControllerTest {
 
     @Test
     fun `create voluntary with optional goal persists it and rejects non-positive`() {
-        // Staging feedback 2026-06-12: gift pools want an indicative target too.
+        // Фидбек со staging 2026-06-12: сборам на подарки тоже нужна ориентировочная цель.
         val participants = """{"userId": "$memberAId"}"""
         mockMvc.perform(
             post("/api/clubs/$clubId/skladchinas")
@@ -423,15 +423,15 @@ class SkladchinaControllerTest {
             .andExpect(status().isBadRequest)
     }
 
-    // ---- declared-amount validation (redesign § Валидации) ----
+    // ---- валидация declared-amount (redesign § Валидации) ----
 
     @Test
     fun `mark-paid in fixed mode records the assigned share, ignoring the client value`() {
-        // Server-authoritative recording (staging bug 2026-06-12): the UI rounds kopecks
-        // to whole rubles, so a strict declared == expected check rejected honest payments
-        // of non-divisible shares. The client value must not be able to inflate `collected`
-        // (F5-02 amplifier) — nor block a payment over a 33-kopeck rounding gap.
-        val id = createSkladchina(listOf(memberAId, memberBId))  // fixed_equal, 50000 each
+        // Сервер записывает сумму авторитетно (staging-баг 2026-06-12): UI округляет копейки
+        // до целых рублей, и строгая проверка declared == expected отклоняла честные оплаты
+        // неделимых долей. Клиентское значение не должно ни раздувать `collected`
+        // (усилитель F5-02), ни блокировать оплату из-за 33 копеек разницы от округления.
+        val id = createSkladchina(listOf(memberAId, memberBId))  // fixed_equal, по 50000
         mockMvc.perform(
             post("/api/skladchinas/$id/mark-paid")
                 .header("Authorization", "Bearer $memberAToken")
@@ -465,7 +465,7 @@ class SkladchinaControllerTest {
             .andExpect(jsonPath("$.myStatus").value("paid"))
     }
 
-    // ---- "важный сбор" toggle gates ----
+    // ---- гейты переключателя «важный сбор» ----
 
     @Test
     fun `create reputation-affecting voluntary skladchina returns 400`() {
@@ -490,7 +490,7 @@ class SkladchinaControllerTest {
 
     @Test
     fun `create reputation-affecting skladchina with deadline under 24h returns 400`() {
-        // 2h ahead passes the generic 1h-minimum but fails the 24h reputation gate.
+        // +2 часа проходят общий минимум в 1 час, но не проходят репутационный гейт 24 часа.
         val body = """
             {
               "title": "Ambush",
@@ -529,7 +529,7 @@ class SkladchinaControllerTest {
         )
             .andExpect(status().isBadRequest)
 
-        // A non-reputation skladchina is NOT rate-limited.
+        // Сбор без влияния на репутацию НЕ ограничен по частоте.
         mockMvc.perform(
             post("/api/clubs/$clubId/skladchinas")
                 .header("Authorization", "Bearer $organizerToken")
@@ -539,7 +539,7 @@ class SkladchinaControllerTest {
             .andExpect(status().isCreated)
     }
 
-    // ---- released vs expired predicate (F5-02) ----
+    // ---- предикат released vs expired (F5-02) ----
 
     @Test
     fun `early close releases pending participants - no ledger row, paid keeps +10`() {
@@ -551,8 +551,8 @@ class SkladchinaControllerTest {
                 .content("""{"declaredAmountKopecks": 50000}""")
         ).andExpect(status().isOk)
 
-        // Manual close BEFORE the deadline: memberB never answered, but the deadline
-        // never came — released, neutral.
+        // Ручное закрытие ДО дедлайна: memberB так и не ответил, но дедлайн
+        // не наступил — released, нейтрально.
         mockMvc.perform(
             post("/api/skladchinas/$id/close")
                 .header("Authorization", "Bearer $organizerToken")
@@ -575,7 +575,7 @@ class SkladchinaControllerTest {
                 .content("""{"declaredAmountKopecks": 50000}""")
         ).andExpect(status().isOk)
 
-        // Simulate the deadline passing, then the scheduler path closing it.
+        // Симулируем наступление дедлайна, затем закрытие по пути шедулера.
         dsl.execute("UPDATE skladchinas SET deadline = NOW() - INTERVAL '1 hour' WHERE id = '$id'")
         lifecycleService.closeInternal(id, closedBy = null, manualClose = false)
 
@@ -585,12 +585,12 @@ class SkladchinaControllerTest {
         assertEquals(10, soleLedgerPoints(memberAId, id))
     }
 
-    // ---- F5-03: pending-only transition guard ----
+    // ---- F5-03: guard перехода только из pending ----
 
     @Test
     fun `mark-paid after concurrent expiry returns 409 and keeps the terminal status`() {
         val id = createSkladchina(listOf(memberAId, memberBId))
-        // The race's intermediate state: skladchina still active, participant already resolved.
+        // Промежуточное состояние гонки: складчина ещё active, участник уже resolved.
         dsl.execute(
             "UPDATE skladchina_participants SET status = 'expired_no_response' " +
                 "WHERE skladchina_id = '$id' AND user_id = '$memberAId'"
@@ -620,7 +620,7 @@ class SkladchinaControllerTest {
         assertEquals("expired_no_response", participantStatus(id, memberAId))
     }
 
-    // ---- F5-12: atomic close claim ----
+    // ---- F5-12: атомарный claim закрытия ----
 
     @Test
     fun `claimClose flips active exactly once`() {
@@ -639,18 +639,18 @@ class SkladchinaControllerTest {
         val id = createRepSkladchina(listOf(memberAId, memberBId))
         lifecycleService.closeInternal(id, closedBy = organizerId, manualClose = true)
         val statusAfterFirst = skladchinaStatus(id)
-        // No exception, status untouched, no duplicate participant resolution.
+        // Без исключения, статус не тронут, участники не резолвятся повторно.
         lifecycleService.closeInternal(id, closedBy = null, manualClose = false)
         assertEquals(statusAfterFirst, skladchinaStatus(id))
         assertEquals("released", participantStatus(id, memberAId))
         assertEquals(0, ledgerRows(memberAId, id))
     }
 
-    // ---- Phase A: organizer mark-paid / unmark / redistribute ----
+    // ---- Phase A: организаторские mark-paid / unmark / redistribute ----
 
     @Test
     fun `organizer marks a pending participant paid in fixed mode (records the share)`() {
-        val id = createSkladchina(listOf(memberAId, memberBId)) // fixed_equal 100000 → 50000 each
+        val id = createSkladchina(listOf(memberAId, memberBId)) // fixed_equal 100000 → по 50000
         mockMvc.perform(
             post("/api/skladchinas/$id/participants/$memberAId/mark-paid")
                 .header("Authorization", "Bearer $organizerToken")
@@ -677,7 +677,7 @@ class SkladchinaControllerTest {
         val id = createSkladchina(listOf(memberAId, memberBId))
         mockMvc.perform(
             post("/api/skladchinas/$id/participants/$memberBId/mark-paid")
-                .header("Authorization", "Bearer $memberAToken") // member, not creator
+                .header("Authorization", "Bearer $memberAToken") // участник, не создатель
         )
             .andExpect(status().isForbidden)
     }
@@ -685,7 +685,7 @@ class SkladchinaControllerTest {
     @Test
     fun `organizer unmark reverts a paid participant to pending and clears the amount`() {
         val id = createSkladchina(listOf(memberAId, memberBId))
-        // Member pays themselves first (fixed → empty body, server records the share).
+        // Сначала участник платит сам (fixed → пустое тело, сервер сам записывает долю).
         mockMvc.perform(
             post("/api/skladchinas/$id/mark-paid")
                 .header("Authorization", "Bearer $memberAToken")
@@ -707,7 +707,7 @@ class SkladchinaControllerTest {
     @Test
     fun `organizer mark-paid in an important skladchina accrues +10 at close (org vouches)`() {
         val id = createRepSkladchina(listOf(memberAId, memberBId)) // fixed_equal, affectsReputation
-        // Organizer marks BOTH paid (cash) → no pending left → early auto-close → +10 each.
+        // Организатор отмечает ОБОИХ оплатившими (наличные) → pending не осталось → раннее автозакрытие → +10 каждому.
         mockMvc.perform(
             post("/api/skladchinas/$id/participants/$memberAId/mark-paid")
                 .header("Authorization", "Bearer $organizerToken")
@@ -725,9 +725,9 @@ class SkladchinaControllerTest {
 
     @Test
     fun `voluntary self mark-paid without an amount returns 400 (A-1 contract)`() {
-        // A-1 moved "amount required" from the DTO @NotNull to the service (per-mode). A voluntary
-        // self-mark with an empty body must still be rejected — fixed modes are the only ones that
-        // may omit it.
+        // A-1 перенёс требование «сумма обязательна» из @NotNull в DTO в сервис (по режимам). Voluntary
+        // self-mark с пустым телом всё равно должен отклоняться — опускать сумму разрешено
+        // только в fixed-режимах.
         val id = createVoluntarySkladchina(listOf(memberAId, memberBId))
         mockMvc.perform(
             post("/api/skladchinas/$id/mark-paid")
@@ -742,7 +742,7 @@ class SkladchinaControllerTest {
     @Test
     fun `organizer mark-paid is idempotent and unmark is idempotent`() {
         val id = createSkladchina(listOf(memberAId, memberBId))
-        // Mark twice — second call is a no-op returning the current (paid) state.
+        // Отмечаем дважды — второй вызов no-op, возвращает текущее состояние (paid).
         repeat(2) {
             mockMvc.perform(
                 post("/api/skladchinas/$id/participants/$memberAId/mark-paid")
@@ -750,7 +750,7 @@ class SkladchinaControllerTest {
             ).andExpect(status().isOk)
         }
         assertEquals("paid", participantStatus(id, memberAId))
-        // Unmark twice — second call is a no-op returning the current (pending) state.
+        // Снимаем отметку дважды — второй вызов no-op, возвращает текущее состояние (pending).
         repeat(2) {
             mockMvc.perform(
                 post("/api/skladchinas/$id/participants/$memberAId/unmark")
@@ -764,7 +764,7 @@ class SkladchinaControllerTest {
     @Test
     fun `organizer actions on a closed skladchina return 400`() {
         val id = createSkladchina(listOf(memberAId, memberBId))
-        // Close it manually first.
+        // Сначала закрываем вручную.
         mockMvc.perform(
             post("/api/skladchinas/$id/close").header("Authorization", "Bearer $organizerToken")
         ).andExpect(status().isOk)
@@ -778,7 +778,7 @@ class SkladchinaControllerTest {
         ).andExpect(status().isBadRequest)
     }
 
-    // ---- split_bill template ----
+    // ---- шаблон split_bill ----
 
     @Test
     fun `split_bill creates from attendance with equal shares and links the event`() {
@@ -806,9 +806,9 @@ class SkladchinaControllerTest {
         mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.paymentMode").value("voluntary"))
-            .andExpect(jsonPath("$.totalGoalKopecks").value(90000)) // bill stays the goal the bar fills to
+            .andExpect(jsonPath("$.totalGoalKopecks").value(90000)) // счёт остаётся целью, к которой заполняется прогресс-бар
             .andExpect(jsonPath("$.participantCount").value(2))
-        // "Каждый сам": no assigned share — each enters their own amount when paying.
+        // «Каждый сам»: доля не назначена — каждый вводит свою сумму при оплате.
         assertEquals(null, participantExpected(id, memberAId))
         assertEquals(null, participantExpected(id, memberBId))
     }
@@ -829,7 +829,7 @@ class SkladchinaControllerTest {
         val memberCId = UUID.randomUUID()
         dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$memberCId', 3006, 'MemberC')")
         dsl.execute("INSERT INTO memberships (user_id, club_id, status, role) VALUES ('$memberCId', '$clubId', 'active', 'member')")
-        // A,B attended; outsider attended but is NOT a club member; C absent.
+        // A и B пришли; outsider пришёл, но НЕ участник клуба; C отсутствовал.
         val eventId = createEventWithAttendance(
             attended = listOf(memberAId, memberBId, outsiderId),
             absent = listOf(memberCId)
@@ -838,7 +838,7 @@ class SkladchinaControllerTest {
 
         mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken"))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.participantCount").value(2)) // A and B only
+            .andExpect(jsonPath("$.participantCount").value(2)) // только A и B
         assertEquals(40000L, participantExpected(id, memberAId))
         assertEquals(40000L, participantExpected(id, memberBId))
         assertEquals(null, participantExpected(id, memberCId), "absent member excluded")
@@ -858,7 +858,7 @@ class SkladchinaControllerTest {
 
     @Test
     fun `split_bill validation - missing event, unmarked attendance, missing bill`() {
-        // no eventId
+        // без eventId
         mockMvc.perform(
             post("/api/clubs/$clubId/skladchinas")
                 .header("Authorization", "Bearer $organizerToken")
@@ -874,7 +874,7 @@ class SkladchinaControllerTest {
                 )
         ).andExpect(status().isBadRequest)
 
-        // attendance not marked yet
+        // посещаемость ещё не отмечена
         val unmarked = createEventWithAttendance(attended = listOf(memberAId, memberBId), marked = false)
         mockMvc.perform(
             post("/api/clubs/$clubId/skladchinas")
@@ -883,7 +883,7 @@ class SkladchinaControllerTest {
                 .content(splitBody(unmarked, 90000))
         ).andExpect(status().isBadRequest)
 
-        // missing bill (no totalGoalKopecks)
+        // нет счёта (нет totalGoalKopecks)
         val ev = createEventWithAttendance(attended = listOf(memberAId, memberBId))
         mockMvc.perform(
             post("/api/clubs/$clubId/skladchinas")
@@ -918,7 +918,7 @@ class SkladchinaControllerTest {
         dsl.execute("INSERT INTO event_responses (event_id, user_id, attendance) VALUES ('$eventId', '$memberAId', 'attended')")
         dsl.execute("INSERT INTO event_responses (event_id, user_id, attendance) VALUES ('$eventId', '$memberBId', 'attended')")
 
-        // Split it from THIS club's create endpoint → event belongs to another club → 400.
+        // Сплит через create-эндпоинт ЭТОГО клуба → событие принадлежит другому клубу → 400.
         mockMvc.perform(
             post("/api/clubs/$clubId/skladchinas")
                 .header("Authorization", "Bearer $organizerToken")
@@ -929,7 +929,7 @@ class SkladchinaControllerTest {
 
     @Test
     fun `split_bill excludeSelf drops the organizer and divides across the rest`() {
-        // Organizer also attended; with excludeSelf the bill 80000 splits across A and B only.
+        // Организатор тоже присутствовал; с excludeSelf счёт 80000 делится только между A и B.
         val eventId = createEventWithAttendance(attended = listOf(organizerId, memberAId, memberBId))
         val id = createFromBody(
             """
@@ -943,7 +943,7 @@ class SkladchinaControllerTest {
         mockMvc.perform(get("/api/skladchinas/$id").header("Authorization", "Bearer $organizerToken"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.participantCount").value(2))
-            .andExpect(jsonPath("$.myStatus").doesNotExist()) // organizer is not a participant
+            .andExpect(jsonPath("$.myStatus").doesNotExist()) // организатор — не участник
         assertEquals(40000L, participantExpected(id, memberAId))
         assertEquals(40000L, participantExpected(id, memberBId))
         assertEquals(null, participantExpected(id, organizerId), "organizer excluded from the split")
@@ -951,8 +951,8 @@ class SkladchinaControllerTest {
 
     @Test
     fun `split_bill always affects reputation, both modes, bypassing the important-sbor gates`() {
-        // No affectsReputation in the body, voluntary mode, deadline only +2h (would fail the 24h
-        // gate for a custom важный сбор) — split's verified anchor bypasses the gates entirely.
+        // В теле нет affectsReputation, режим voluntary, дедлайн всего +2ч (для кастомного важного
+        // сбора провалил бы гейт 24ч) — верифицированный якорь сплита полностью обходит гейты.
         val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
         val id = createFromBody(
             """
@@ -985,7 +985,7 @@ class SkladchinaControllerTest {
                 .header("Authorization", "Bearer $memberAToken")
                 .contentType(MediaType.APPLICATION_JSON).content("""{"reason":"мало времени"}""")
         ).andExpect(status().isOk)
-        // The organizer now has ~48h (>47h) to resolve, regardless of the original 3h deadline.
+        // У организатора теперь ~48ч (>47ч) на решение — независимо от исходного дедлайна в 3ч.
         val deadline = dsl.fetchOne("SELECT deadline FROM skladchinas WHERE id = ?", id)!!
             .get(0, OffsetDateTime::class.java)!!
         assertTrue(deadline.isAfter(OffsetDateTime.now().plusHours(47)), "deadline extended to ~48h")
@@ -1007,7 +1007,7 @@ class SkladchinaControllerTest {
     fun `split_bill blocks a new collection after a successful close`() {
         val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
         val id = createFromBody(splitBody(eventId, 90000))
-        // Both pay → all answered → auto-close as closed_success.
+        // Оба платят → все ответили → автозакрытие в closed_success.
         mockMvc.perform(post("/api/skladchinas/$id/mark-paid").header("Authorization", "Bearer $memberAToken")
             .contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isOk)
         mockMvc.perform(post("/api/skladchinas/$id/mark-paid").header("Authorization", "Bearer $memberBToken")
@@ -1026,7 +1026,7 @@ class SkladchinaControllerTest {
     fun `split_bill allows a new collection after a cancelled close`() {
         val eventId = createEventWithAttendance(attended = listOf(memberAId, memberBId))
         val id = createFromBody(splitBody(eventId, 90000))
-        // Close with nothing collected → cancelled (not a blocker — the organizer may retry).
+        // Закрытие с нулевым сбором → cancelled (не блокер — организатор может повторить).
         mockMvc.perform(post("/api/skladchinas/$id/close").header("Authorization", "Bearer $organizerToken"))
             .andExpect(status().isOk)
         assertEquals("cancelled", skladchinaStatus(id))
@@ -1052,7 +1052,7 @@ class SkladchinaControllerTest {
             .andExpect(jsonPath("$.status").value("active"))
     }
 
-    // ---- split_bill decline-with-approval (V28) ----
+    // ---- split_bill: отказ через одобрение организатора (V28) ----
 
     @Test
     fun `split_bill blocks instant decline — must request with a reason`() {
@@ -1100,7 +1100,7 @@ class SkladchinaControllerTest {
                 .content("""{"reason":"не хочу"}""")
         ).andExpect(status().isOk)
 
-        // V29: rejecting without a reason is refused.
+        // V29: отклонение без причины не принимается.
         mockMvc.perform(
             post("/api/skladchinas/$id/participants/$memberAId/resolve-decline")
                 .header("Authorization", "Bearer $organizerToken")
@@ -1118,7 +1118,7 @@ class SkladchinaControllerTest {
         assertTrue(participantDeclineRejected(id, memberAId))
         assertEquals("ты был, плати", participantDeclineRejectNote(id, memberAId))
 
-        // Re-request is blocked — the decline path is closed.
+        // Повторный запрос заблокирован — путь отказа закрыт.
         mockMvc.perform(
             post("/api/skladchinas/$id/request-decline")
                 .header("Authorization", "Bearer $memberAToken")
@@ -1144,7 +1144,7 @@ class SkladchinaControllerTest {
 
     @Test
     fun `request-decline on a custom skladchina is rejected (free decline)`() {
-        val id = createSkladchina(listOf(memberAId, memberBId)) // custom template
+        val id = createSkladchina(listOf(memberAId, memberBId)) // кастомный шаблон
         mockMvc.perform(
             post("/api/skladchinas/$id/request-decline")
                 .header("Authorization", "Bearer $memberAToken")
@@ -1164,14 +1164,14 @@ class SkladchinaControllerTest {
         ).andExpect(status().isOk)
         mockMvc.perform(
             post("/api/skladchinas/$id/participants/$memberAId/resolve-decline")
-                .header("Authorization", "Bearer $memberBToken") // not the creator
+                .header("Authorization", "Bearer $memberBToken") // не создатель
                 .contentType(MediaType.APPLICATION_JSON).content("""{"approve":true}""")
         ).andExpect(status().isForbidden)
     }
 
-    // ---- helpers ----
+    // ---- хелперы ----
 
-    /** Inserts a past, completed event with attendance marked and per-user attendance rows. */
+    /** Вставляет прошедшее завершённое событие с отмеченной посещаемостью и per-user строками посещаемости. */
     private fun createEventWithAttendance(
         attended: List<UUID>,
         absent: List<UUID> = emptyList(),
@@ -1277,8 +1277,8 @@ class SkladchinaControllerTest {
             skladchinaId, userId
         )!!.get(0, String::class.java)!!
 
-    // get(0) returns the boxed column value (Long or null). Long::class.java is the PRIMITIVE
-    // `long`, which jOOQ coerces NULL → 0 — wrong for a "declared is null after unmark" check.
+    // get(0) возвращает boxed-значение колонки (Long или null). Long::class.java — это ПРИМИТИВНЫЙ
+    // `long`, для которого jOOQ приводит NULL → 0 — ломает проверку «declared равен null после unmark».
     private fun participantDeclared(skladchinaId: UUID, userId: UUID): Long? =
         dsl.fetchOne(
             "SELECT declared_amount_kopecks FROM skladchina_participants WHERE skladchina_id = ? AND user_id = ?",

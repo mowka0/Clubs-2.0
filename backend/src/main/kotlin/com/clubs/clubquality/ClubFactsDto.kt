@@ -1,14 +1,17 @@
 package com.clubs.clubquality
 
 /**
- * HTTP shape of [ClubFacts] for `GET /api/clubs/{clubId}/quality`.
+ * HTTP-форма [ClubFacts] для `GET /api/clubs/{clubId}/quality`.
  *
- * @property meetingsPerMonth held events in the last 90 days ÷ 3 (Активность)
- * @property avgAttendance     average distinct attendees per finalized meeting, last 90 days (Приходит)
- * @property coreSize          distinct users with ≥3 attended events, all-time (Сплочённость / ядро)
- * @property ageMonths         full months since the club was created
- * @property totalMeetings     all-time held (past, non-cancelled) events (milestone «N встреч»)
- * @property successfulSkladchinas skladchinas closed as successful (milestone «первый сбор»)
+ * @property meetingsPerMonth проведённые события за последние 90 дней ÷ 3 (Активность)
+ * @property avgAttendance     среднее число уникальных посетителей на завершённую встречу за
+ *                             последние 90 дней (Приходит)
+ * @property coreSize          уникальные пользователи с ≥3 посещёнными событиями за всё время
+ *                             (Сплочённость / ядро)
+ * @property ageMonths         полных месяцев с момента создания клуба
+ * @property totalMeetings     всего проведённых (прошедших, не отменённых) событий за всё время
+ *                             (milestone «N встреч»)
+ * @property successfulSkladchinas складчин, закрытых как успешные (milestone «первый сбор»)
  */
 data class ClubFactsDto(
     val meetingsPerMonth: Double,
@@ -20,17 +23,17 @@ data class ClubFactsDto(
 )
 
 /**
- * HTTP shape of [ClubCardFacts] for `GET /api/clubs/quality/batch?ids=...` — the Discovery feed
- * card's decision trio (возраст · участники · вовлечённость), one element per existing club.
- * «участники» comes from `ClubListItemDto.memberCount`, not here.
+ * HTTP-форма [ClubCardFacts] для `GET /api/clubs/quality/batch?ids=...` — решающая тройка карточки
+ * ленты Discovery (возраст · участники · вовлечённость), один элемент на существующий клуб.
+ * «участники» приходит из `ClubListItemDto.memberCount`, не отсюда.
  *
- * @property clubId            the club these facts belong to (the caller keys the response by it)
- * @property ageDays           whole days since the club was created (возраст)
- * @property engagementPercent distinct recent responders ÷ alive members, 0..100 (вовлечённость)
- * @property topInCategory     "★ Топ-5 в категории" — the ONLY externally-visible L3 derivative. A
- *                             pure boolean: the internal rank score/breakdown NEVER leaves the server
- *                             (design §4 "L3 невидим и необъясним"). False unless the deploy feature
- *                             flag is on and the global rank floor is met.
+ * @property clubId            клуб, к которому относятся эти факты (вызывающий индексирует ответ по нему)
+ * @property ageDays           полных дней с момента создания клуба (возраст)
+ * @property engagementPercent уникальные недавние отвечающие ÷ живые участники, 0..100 (вовлечённость)
+ * @property topInCategory     "★ Топ-5 в категории" — ЕДИНСТВЕННАЯ внешне видимая производная L3.
+ *                             Чистый boolean: внутренний score/разбивку ранга сервер НИКОГДА не отдаёт
+ *                             наружу (дизайн §4 "L3 невидим и необъясним"). False, если feature-флаг
+ *                             деплоя выключен или не достигнут глобальный порог ранга.
  */
 data class ClubCardFactsDto(
     val clubId: java.util.UUID,

@@ -4,22 +4,20 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * Unified club-activity feed item — discriminated union over `type`.
+ * Единый элемент ленты активности клуба — дискриминированное объединение по полю `type`.
  *
- * Discriminator design: the `type` field is **declared explicitly** on each
- * concrete subtype with a constant string value. Jackson serializes it as a
- * regular property, producing exactly one `"type": "event" | "skladchina"`
- * field on the wire.
+ * Дизайн дискриминатора: поле `type` **явно объявлено** в каждом конкретном подтипе с
+ * константным строковым значением. Jackson сериализует его как обычное свойство, давая
+ * ровно одно поле `"type": "event" | "skladchina"` на выходе.
  *
- * Why no `@JsonTypeInfo` / `@JsonSubTypes`: this DTO is **response-only** —
- * the server never deserializes it (the frontend consumes it as a TS
- * discriminated union). Polymorphic deserialization machinery would add
- * complexity for a feature we don't use, and combining it with the explicit
- * `type` val was brittle (relied on `EXISTING_PROPERTY` staying idempotent
- * across Jackson versions).
+ * Почему без `@JsonTypeInfo` / `@JsonSubTypes`: этот DTO **только для ответа** — сервер
+ * никогда его не десериализует (фронтенд потребляет его как TS discriminated union).
+ * Машинерия полиморфной десериализации добавила бы сложность ради фичи, которой мы не
+ * пользуемся, а совмещение её с явным `type` val было хрупким (зависело от того, что
+ * `EXISTING_PROPERTY` остаётся идемпотентным между версиями Jackson).
  *
- * Lives in [com.clubs.activity] because it merges two different domains
- * (events, skladchinas) and should not leak into either's package.
+ * Живёт в [com.clubs.activity], потому что объединяет два разных домена (события,
+ * складчины) и не должен протекать ни в один из их пакетов.
  */
 sealed class ActivityItemDto {
     abstract val type: String
@@ -39,15 +37,15 @@ sealed class ActivityItemDto {
         val locationText: String,
         val participantLimit: Int,
         val goingCount: Int,
-        // Stage-2 confirmed roster size. The feed shows `goingCount` during stage 1 and
-        // switches to `confirmedCount` once voting closes (stage_2/completed), mirroring
-        // the event page so the card and the detail never disagree (F5-21).
+        // Размер подтверждённого ростера stage-2. Лента показывает `goingCount` во время stage 1
+        // и переключается на `confirmedCount`, как только голосование закрывается (stage_2/completed),
+        // зеркаля страницу события, чтобы карточка и деталка никогда не расходились (F5-21).
         val confirmedCount: Int,
         val status: String,
         val descriptionPreview: String?,
         val photoUrl: String?,
-        // True when this event awaits the requesting user's stage-1 vote or stage-2
-        // confirmation — drives the "Проголосуй"/"Подтверди участие" badge in the feed.
+        // true, когда это событие ждёт от запрашивающего пользователя голоса stage-1 или
+        // подтверждения stage-2 — управляет бейджем "Проголосуй"/"Подтверди участие" в ленте.
         val actionRequired: Boolean
     ) : ActivityItemDto() {
         override val type: String = "event"

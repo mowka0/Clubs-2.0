@@ -19,8 +19,8 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
- * Integration tests for club-quality L1 facts against a real Postgres. Covers each fact's
- * window/threshold rules + the empty-club and missing-club (404) paths. Acceptance criteria:
+ * Интеграционные тесты фактов L1 качества клуба на реальном Postgres. Покрывают правила
+ * окна/порогов каждого факта + пути пустого клуба и отсутствующего клуба (404). Критерии приёмки:
  * docs/modules/club-quality.md §7.
  */
 @SpringBootTest(
@@ -35,6 +35,7 @@ import kotlin.test.assertTrue
 class ClubQualityIntegrationTest {
 
     companion object {
+        // Testcontainers-контейнер Postgres 16 — реальная БД для интеграционных тестов
         @Container
         @JvmStatic
         val postgres = PostgreSQLContainer("postgres:16-alpine")
@@ -93,15 +94,15 @@ class ClubQualityIntegrationTest {
 
     @Test
     fun `meetingsPerMonth counts only held events in the 90-day window`() {
-        insertEvent(daysFromNow(-2), "completed")   // held, in window
-        insertEvent(daysFromNow(-30), "completed")  // held, in window
-        insertEvent(daysFromNow(-60), "stage_2")    // held, in window (non-cancelled)
-        insertEvent(daysFromNow(-89), "completed")  // held, in window
-        insertEvent(daysFromNow(3), "upcoming")     // future → excluded
-        insertEvent(daysFromNow(-10), "cancelled")  // cancelled → excluded
-        insertEvent(daysFromNow(-100), "completed") // older than 90d → excluded
+        insertEvent(daysFromNow(-2), "completed")   // состоялось, в окне
+        insertEvent(daysFromNow(-30), "completed")  // состоялось, в окне
+        insertEvent(daysFromNow(-60), "stage_2")    // состоялось, в окне (не отменено)
+        insertEvent(daysFromNow(-89), "completed")  // состоялось, в окне
+        insertEvent(daysFromNow(3), "upcoming")     // будущее → исключено
+        insertEvent(daysFromNow(-10), "cancelled")  // отменено → исключено
+        insertEvent(daysFromNow(-100), "completed") // старше 90 дней → исключено
 
-        // 4 held in window ÷ 3 = 1.333 → 1.3
+        // 4 состоявшихся в окне ÷ 3 = 1.333 → 1.3
         assertEquals(1.3, clubQualityService.getClubFacts(clubId).meetingsPerMonth, 0.001)
     }
 
@@ -116,12 +117,12 @@ class ClubQualityIntegrationTest {
         val b = insertEvent(daysFromNow(-6), "completed", finalized = true)
         insertResponse(b, attendance = "attended")
 
-        // A non-finalized meeting with attendance must not feed the average at all.
+        // Нефинализированная встреча с отметками посещаемости вообще не должна влиять на среднее.
         val c = insertEvent(daysFromNow(-7), "completed", finalized = false)
         insertResponse(c, attendance = "attended")
         insertResponse(c, attendance = "attended")
 
-        // (3 + 1) attended ÷ 2 finalized meetings = 2
+        // (3 + 1) пришедших ÷ 2 финализированные встречи = 2
         assertEquals(2, clubQualityService.getClubFacts(clubId).avgAttendance)
     }
 
@@ -129,9 +130,9 @@ class ClubQualityIntegrationTest {
     fun `a finalized meeting nobody attended lowers the average (counts in denominator)`() {
         val a = insertEvent(daysFromNow(-5), "completed", finalized = true)
         repeat(4) { insertResponse(a, attendance = "attended") }
-        insertEvent(daysFromNow(-6), "completed", finalized = true) // finalized, zero attendance
+        insertEvent(daysFromNow(-6), "completed", finalized = true) // финализирована, нулевая посещаемость
 
-        // 4 attended ÷ 2 finalized meetings = 2 (not 4)
+        // 4 пришедших ÷ 2 финализированные встречи = 2 (не 4)
         assertEquals(2, clubQualityService.getClubFacts(clubId).avgAttendance)
     }
 
@@ -141,23 +142,23 @@ class ClubQualityIntegrationTest {
         val core1 = newUser()
         val core2 = newUser()
         val casual = newUser()
-        listOf(core1, core2, casual).forEach { insertMembership(it, "active") } // current members
+        listOf(core1, core2, casual).forEach { insertMembership(it, "active") } // текущие участники
 
-        events.take(3).forEach { insertResponse(it, attendance = "attended", userId = core1) } // 3 → core
-        events.forEach { insertResponse(it, attendance = "attended", userId = core2) }          // 4 → core
-        events.take(2).forEach { insertResponse(it, attendance = "attended", userId = casual) } // 2 → not core
+        events.take(3).forEach { insertResponse(it, attendance = "attended", userId = core1) } // 3 → ядро
+        events.forEach { insertResponse(it, attendance = "attended", userId = core2) }          // 4 → ядро
+        events.take(2).forEach { insertResponse(it, attendance = "attended", userId = casual) } // 2 → не ядро
 
         assertEquals(2, clubQualityService.getClubFacts(clubId).coreSize)
     }
 
     @Test
     fun `coreSize ignores attended responses on cancelled events`() {
-        // A cancelled event can still hold attended rows (club-delete cascade cancels an already
-        // attendance-marked stage_2 event) — those must not inflate the core.
+        // У отменённого события могут остаться строки attended (каскад удаления клуба отменяет
+        // stage_2-событие с уже отмеченной посещаемостью) — они не должны раздувать ядро.
         val cancelled = (1..3).map { insertEvent(daysFromNow(-it.toLong()), "cancelled") }
         val ghost = newUser()
-        insertMembership(ghost, "active") // current member, isolates the cancelled-event rule
-        cancelled.forEach { insertResponse(it, attendance = "attended", userId = ghost) } // 3 attended, all cancelled
+        insertMembership(ghost, "active") // текущий участник — изолирует правило отменённых событий
+        cancelled.forEach { insertResponse(it, attendance = "attended", userId = ghost) } // 3 посещения, все на отменённых
 
         assertEquals(0, clubQualityService.getClubFacts(clubId).coreSize)
     }
@@ -165,34 +166,34 @@ class ClubQualityIntegrationTest {
     @Test
     fun `coreSize excludes the organizer even when they attend their own events`() {
         val events = (1..3).map { insertEvent(daysFromNow(-it.toLong()), "completed", finalized = true) }
-        // Organizer self-marks attendance on all 3 — must NOT count toward «основа клуба».
+        // Организатор отмечает себе посещение на всех трёх — в «основу клуба» засчитываться НЕ должен.
         events.forEach { insertResponse(it, attendance = "attended", userId = ownerId) }
         val member = newUser()
         insertMembership(member, "active")
-        events.forEach { insertResponse(it, attendance = "attended", userId = member) } // a real member → core
+        events.forEach { insertResponse(it, attendance = "attended", userId = member) } // настоящий участник → ядро
 
         assertEquals(1, clubQualityService.getClubFacts(clubId).coreSize)
     }
 
     @Test
     fun `coreSize drops a member who left or was removed (membership cancelled)`() {
-        // Item 5: «основа клуба» must reflect CURRENT members — a regular who leaves/is kicked
-        // (status cancelled) stops counting, even though their attended events stay on record.
+        // Пункт 5: «основа клуба» должна отражать ТЕКУЩИХ участников — завсегдатай, который вышел
+        // или был кикнут (status cancelled), перестаёт учитываться, хотя его посещения остаются в истории.
         val events = (1..3).map { insertEvent(daysFromNow(-it.toLong()), "completed", finalized = true) }
         val stayer = newUser()
         val leaver = newUser()
         insertMembership(stayer, "active")
         insertMembership(leaver, "cancelled")
-        events.forEach { insertResponse(it, attendance = "attended", userId = stayer) } // 3 → core
-        events.forEach { insertResponse(it, attendance = "attended", userId = leaver) } // 3 attended but left
+        events.forEach { insertResponse(it, attendance = "attended", userId = stayer) } // 3 → ядро
+        events.forEach { insertResponse(it, attendance = "attended", userId = leaver) } // 3 посещения, но вышел
 
         assertEquals(1, clubQualityService.getClubFacts(clubId).coreSize)
     }
 
     @Test
     fun `coreSize still counts a frozen member (de-Stars dues pause is not a departure)`() {
-        // A frozen member is mid-dues-cycle, not gone — the core must not flicker each time a paying
-        // member's window briefly lapses.
+        // Frozen-участник — посреди цикла взносов, а не ушёл: ядро не должно мигать каждый раз,
+        // когда у платящего участника ненадолго истекает окно.
         val events = (1..3).map { insertEvent(daysFromNow(-it.toLong()), "completed", finalized = true) }
         val frozen = newUser()
         insertMembership(frozen, "frozen")
@@ -203,10 +204,10 @@ class ClubQualityIntegrationTest {
 
     @Test
     fun `totalMeetings counts all-time held events, excluding future and cancelled`() {
-        insertEvent(daysFromNow(-200), "completed") // older than the 90-day window, but all-time → counts
-        insertEvent(daysFromNow(-2), "completed")   // held → counts
-        insertEvent(daysFromNow(3), "upcoming")     // future → excluded
-        insertEvent(daysFromNow(-5), "cancelled")   // cancelled → excluded
+        insertEvent(daysFromNow(-200), "completed") // старше 90-дневного окна, но метрика all-time → считается
+        insertEvent(daysFromNow(-2), "completed")   // состоялось → считается
+        insertEvent(daysFromNow(3), "upcoming")     // будущее → исключено
+        insertEvent(daysFromNow(-5), "cancelled")   // отменено → исключено
 
         assertEquals(2, clubQualityService.getClubFacts(clubId).totalMeetings)
     }
@@ -222,26 +223,26 @@ class ClubQualityIntegrationTest {
         assertEquals(2, clubQualityService.getClubFacts(clubId).successfulSkladchinas)
     }
 
-    // ---- batch (Discovery card) ----
+    // ---- батч (Discovery-карточка) ----
 
     @Test
     fun `card facts batch returns age in days and engagement`() {
-        // 4 alive members (denominator); an expired one is excluded.
+        // 4 живых участника (знаменатель); expired-участник исключается.
         val m1 = newUser(); val m2 = newUser()
         listOf(m1, m2, newUser(), newUser()).forEach { insertMembership(it, "active") }
         insertMembership(newUser(), "expired")
 
-        // 2 distinct members respond to recent events → engagement numerator = 2.
+        // 2 разных участника откликаются на недавние события → числитель вовлечённости = 2.
         val e1 = insertEvent(daysFromNow(-3), "completed")
         val e2 = insertEvent(daysFromNow(-10), "completed")
         insertResponse(e1, attendance = null, userId = m1)
         insertResponse(e1, attendance = null, userId = m2)
-        insertResponse(e2, attendance = null, userId = m1) // m1 again → distinct responders = {m1, m2}
+        insertResponse(e2, attendance = null, userId = m1) // снова m1 → уникальные откликнувшиеся = {m1, m2}
 
         val facts = clubQualityService.getClubCardFacts(listOf(clubId)).single()
         assertEquals(clubId, facts.clubId)
-        assertEquals(50, facts.engagementPercent) // 2 distinct responders ÷ 4 alive members
-        // Club was created ~14 months ago in setUp → age in DAYS (not months, not zero).
+        assertEquals(50, facts.engagementPercent) // 2 уникальных откликнувшихся ÷ 4 живых участника
+        // Клуб создан ~14 месяцев назад в setUp → возраст в ДНЯХ (не в месяцах и не ноль).
         assertTrue(facts.ageDays >= 420, "ageDays should reflect days since creation, was ${facts.ageDays}")
     }
 
@@ -254,15 +255,15 @@ class ClubQualityIntegrationTest {
     @Test
     fun `card facts engagement is zero when club has no alive members`() {
         val e = insertEvent(daysFromNow(-3), "completed")
-        insertResponse(e, attendance = null) // a responder exists, but zero alive members
+        insertResponse(e, attendance = null) // откликнувшийся есть, но живых участников ноль
         assertEquals(0, clubQualityService.getClubCardFacts(listOf(clubId)).single().engagementPercent)
     }
 
     @Test
     fun `card facts engagement clamps at 100 percent`() {
-        insertMembership(newUser(), "active") // 1 alive member
+        insertMembership(newUser(), "active") // 1 живой участник
         val e = insertEvent(daysFromNow(-3), "completed")
-        repeat(3) { insertResponse(e, attendance = null) } // 3 distinct responders > 1 member
+        repeat(3) { insertResponse(e, attendance = null) } // 3 уникальных откликнувшихся > 1 участника
         assertEquals(100, clubQualityService.getClubCardFacts(listOf(clubId)).single().engagementPercent)
     }
 
@@ -271,7 +272,7 @@ class ClubQualityIntegrationTest {
         assertEquals(emptyList<ClubCardFactsDto>(), clubQualityService.getClubCardFacts(emptyList()))
     }
 
-    // ---- helpers ----
+    // ---- хелперы ----
 
     private fun newUser(): UUID {
         val id = UUID.randomUUID()

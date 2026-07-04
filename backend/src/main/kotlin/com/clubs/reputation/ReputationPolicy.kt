@@ -6,28 +6,30 @@ import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 
 /**
- * Pure mapping of a behaviour outcome to a `reputation_ledger` kind + points.
- * Single source of truth for the PRD §4.4.4 attendance table and the skladchina
- * finance deltas. See docs/modules/reputation-v2.md.
+ * Чистое отображение исхода поведения в kind + очки `reputation_ledger`.
+ * Единственный источник истины для таблицы посещаемости из PRD §4.4.4 и
+ * финансовых дельт складчины. См. docs/modules/reputation-v2.md.
  *
- * Points are keyed to the stage-2 commitment only: a confirmed booking that is
- * attended/missed scores the same regardless of the stage-1 vote. The stage-1
- * vote still selects the kind (ironclad vs spontaneous, no_show vs spectator) —
- * kinds feed display traits like spontaneity_count, not the score.
+ * Очки привязаны только к обязательству этапа 2: подтверждённая бронь,
+ * которую посетили/пропустили, оценивается одинаково независимо от голоса
+ * этапа 1. Голос этапа 1 всё же определяет kind (ironclad vs spontaneous,
+ * no_show vs spectator) — kind питает отображаемые признаки вроде
+ * spontaneity_count, но не влияет на очки.
  */
 object ReputationPolicy {
 
     /**
-     * "Право на ошибку": below this many ledger outcomes in a club, the UI shows
-     * "Новичок" (no number) so a single early miss does not brand a newcomer.
-     * The cache still stores the true index — this threshold is presentational.
+     * "Право на ошибку": ниже этого числа исходов в леджере клуба UI показывает
+     * "Новичок" (без числа), чтобы один ранний промах не клеймил новичка.
+     * Кэш всё равно хранит настоящий индекс — этот порог влияет только на отображение.
      */
     const val MIN_OUTCOMES_FOR_DISPLAY = 3
 
     /**
-     * A confirmed response → attendance kind. Caller guarantees final_status=confirmed,
-     * which implies stage_1_vote ∈ {going, maybe} (Stage2Service rejects the rest).
-     * disputed / null attendance → confirmed_unresolved (terminal, 0 points).
+     * Подтверждённый ответ → kind посещаемости. Вызывающий код гарантирует
+     * final_status=confirmed, что подразумевает stage_1_vote ∈ {going, maybe}
+     * (Stage2Service отклоняет остальное). disputed / null attendance →
+     * confirmed_unresolved (терминальный статус, 0 очков).
      */
     fun attendanceKind(stage1Vote: Stage_1Vote?, attendance: AttendanceStatus?): ReputationKind = when {
         attendance == AttendanceStatus.attended && stage1Vote == Stage_1Vote.going -> ReputationKind.ironclad
@@ -38,15 +40,15 @@ object ReputationPolicy {
     }
 
     /**
-     * Skladchina terminal participant status → finance kind. Null for non-reputational
-     * statuses (see docs/backlog/skladchina-reputation-redesign.md):
-     *  - declined: an explicit refusal is the DESIRED behaviour ("can't pay — say so
-     *    now") and the free exit from a punitive skladchina. No row at all (not a
-     *    0-point row): three one-tap declines must not graduate a user out of
-     *    "Новичок" (outcome_count inflation). Historic skladchina_declined rows keep
-     *    their stored points; the kind stays in the enum but is never emitted again.
-     *  - released: the skladchina closed BEFORE its deadline (F5-02). The promise was
-     *    "answer by the deadline" and the deadline never came — no promise broken.
+     * Терминальный статус участника складчины → финансовый kind. Null для статусов
+     * без влияния на репутацию (см. docs/backlog/skladchina-reputation-redesign.md):
+     *  - declined: явный отказ — это ЖЕЛАЕМОЕ поведение ("не могу заплатить — скажи
+     *    сразу") и свободный выход из штрафующей складчины. Строка не создаётся вообще
+     *    (не строка с 0 очков): три отказа в один тап не должны выводить пользователя
+     *    из "Новичок" (раздувание outcome_count). Исторические строки skladchina_declined
+     *    сохраняют свои очки; kind остаётся в enum, но больше никогда не выдаётся.
+     *  - released: складчина закрылась ДО дедлайна (F5-02). Обещание было "ответить
+     *    до дедлайна", а дедлайн так и не наступил — обещание не нарушено.
      */
     fun financeKind(status: SkladchinaParticipantStatus): ReputationKind? = when (status) {
         SkladchinaParticipantStatus.paid -> ReputationKind.skladchina_paid
@@ -58,29 +60,29 @@ object ReputationPolicy {
 
     fun pointsFor(kind: ReputationKind): Int = when (kind) {
         ReputationKind.ironclad -> 100
-        // A confirmed booking that is skipped burns the slot and the organizer's
-        // plan: one no-show costs two attendances (break-even attendance = 67%).
+        // Подтверждённая бронь, которую пропустили, сжигает слот и план организатора:
+        // один no-show стоит двух посещений (точка безубыточности посещаемости = 67%).
         ReputationKind.no_show -> -200
-        // Same as ironclad/no_show: once the stage-2 booking is confirmed, the
-        // promise (and the damage of breaking it) does not depend on the stage-1 vote.
+        // То же, что ironclad/no_show: раз бронь этапа 2 подтверждена, обещание
+        // (и ущерб от его нарушения) не зависит от голоса этапа 1.
         ReputationKind.spontaneous -> 100
         ReputationKind.spectator -> -200
         ReputationKind.confirmed_unresolved -> 0
-        // 1/10 of ironclad (+100): attendance is verified by the organizer, payment
-        // is self-declared. Symbolic plus until org-confirmation lands (P2).
+        // 1/10 от ironclad (+100): посещение подтверждает организатор, оплату
+        // декларирует сам участник. Символический плюс до появления org-подтверждения (P2).
         ReputationKind.skladchina_paid -> 10
-        // Historic kind — no longer emitted (financeKind(declined) = null since the
-        // 2026-06-12 redesign). Old -5 rows on staging keep their stored points; the
-        // ledger reads stored points, never this function, so 0 here only guards a
-        // hypothetical future caller.
+        // Исторический kind — больше не выдаётся (financeKind(declined) = null с
+        // редизайна 2026-06-12). Старые строки с -5 на staging сохраняют свои очки;
+        // леджер читает сохранённые очки, а не эту функцию, поэтому 0 здесь лишь
+        // защищает гипотетического будущего вызывающего.
         ReputationKind.skladchina_declined -> 0
-        // 1/5 of no_show (-200): the harm is comparable (a burned booking), but the
-        // obligation was imposed by the organizer — the participant never pressed
-        // "confirm" as in event stage 2. Break-even ≈ 80% payments, slightly above
-        // the "≥70% pay on time" success metric.
+        // 1/5 от no_show (-200): вред сопоставим (сгоревшая бронь), но обязательство
+        // наложил организатор — участник никогда не нажимал "подтвердить", как на
+        // этапе 2 события. Точка безубыточности ≈ 80% оплат, немного выше метрики
+        // успеха "≥70% платят вовремя".
         ReputationKind.skladchina_expired -> -40
     }
 
-    /** Presentational gate: show the real index only once a track record exists. */
+    /** Презентационный гейт: показывать реальный индекс только при наличии истории. */
     fun isShown(outcomeCount: Int): Boolean = outcomeCount >= MIN_OUTCOMES_FOR_DISPLAY
 }

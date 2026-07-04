@@ -10,11 +10,11 @@ import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
 /**
- * Core reputation pipeline over the append-only ledger (reputation v2, P1a).
- * The user_club_reputation table is a derived cache: recompute() is the ONLY writer.
- * Bug B (hourly re-inflation) is dead by construction — ledger rows are unique per
- * (user, source) and inserted ON CONFLICT DO NOTHING; aggregates are recomputed, not
- * incremented. See docs/modules/reputation-v2.md.
+ * Основной пайплайн репутации поверх append-only леджера (reputation v2, P1a).
+ * Таблица user_club_reputation — производный кэш: recompute() — ЕДИНСТВЕННЫЙ, кто в неё пишет.
+ * Баг B (почасовое переначисление) невозможен по конструкции — строки леджера уникальны по
+ * (user, source) и вставляются через ON CONFLICT DO NOTHING; агрегаты пересчитываются, а не
+ * инкрементируются. См. docs/modules/reputation-v2.md.
  */
 @Service
 class ReputationService(
@@ -24,19 +24,19 @@ class ReputationService(
     private val log = LoggerFactory.getLogger(ReputationService::class.java)
 
     /**
-     * Processes one finalized event into the ledger. Called by both the event
-     * listener (low-latency) and the poll (durable backstop); the atomic claim makes
-     * them mutually exclusive. REQUIRES_NEW so each event commits independently and a
-     * failure rolls back the claim (the poll then retries) — must be invoked across a
-     * bean boundary (ReputationScheduler / AttendanceFinalizedListener) for the proxy.
+     * Проводит одно финализированное событие в леджер. Вызывается и слушателем событий
+     * (низкая задержка), и поллером (надёжный бэкстоп); атомарный claim делает их взаимоисключающими.
+     * REQUIRES_NEW, чтобы каждое событие коммитилось независимо, а при ошибке claim откатывался
+     * (поллер потом повторит попытку) — должен вызываться через границу бина (ReputationScheduler /
+     * AttendanceFinalizedListener), чтобы сработал прокси.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun processFinalizedEvent(eventId: UUID) {
-        if (!repository.claimEvent(eventId)) return // already processed — no-op
+        if (!repository.claimEvent(eventId)) return // уже обработано — ничего не делаем
 
         val ctx = repository.findEventContext(eventId) ?: return
         val entries = repository.findConfirmedResponses(eventId)
-            .filter { it.userId != ctx.ownerId } // anti-farm rule 1: owner does not accrue in own club
+            .filter { it.userId != ctx.ownerId } // анти-фарм правило 1: владелец не копит репутацию в своём клубе
             .map { response ->
                 val kind = ReputationPolicy.attendanceKind(response.stage1Vote, response.attendance)
                 LedgerEntry(
@@ -56,13 +56,14 @@ class ReputationService(
     }
 
     /**
-     * Exit-with-obligations (P1b hole B): writes the penalties for the obligations a user
-     * abandons by leaving a club, BEFORE the membership cascade deletes their source rows.
-     * Each abandoned confirmed booking → a `no_show` (−200); each pending reputation-affecting
-     * skladchina with an unexpired deadline → a `skladchina_expired` (−40). Joins the caller's
-     * leave transaction so penalty + cascade commit atomically. Idempotent by construction: the
-     * ledger UNIQUE(user, source_type, source_id) + ON CONFLICT DO NOTHING means a later natural
-     * outcome for the same source collides and the exit row wins — a double leave never double-counts.
+     * Exit-with-obligations (P1b дыра B): записывает штрафы за обязательства, которые пользователь
+     * бросает, покидая клуб, ДО того, как каскад членства удалит исходные строки. Каждое брошенное
+     * подтверждённое бронирование → `no_show` (−200); каждая pending влияющая на репутацию складчина
+     * с ещё не истёкшим дедлайном → `skladchina_expired` (−40). Присоединяется к транзакции выхода
+     * вызывающего, так что штраф + каскад коммитятся атомарно. Идемпотентно по конструкции: леджер
+     * UNIQUE(user, source_type, source_id) + ON CONFLICT DO NOTHING означает, что более поздний
+     * естественный исход для того же source конфликтует, и строка выхода побеждает — двойной выход
+     * никогда не даёт двойного учёта.
      */
     @Transactional
     fun penalizeExit(
@@ -103,18 +104,18 @@ class ReputationService(
     }
 
     /**
-     * Appends ledger rows (idempotent) and recomputes the cache for every affected
-     * (user, club). No new transaction — joins the caller's (processFinalizedEvent's
-     * REQUIRES_NEW, or skladchina's close transaction).
+     * Добавляет строки в леджер (идемпотентно) и пересчитывает кэш для каждой затронутой
+     * пары (user, club). Без новой транзакции — присоединяется к транзакции вызывающего
+     * (REQUIRES_NEW из processFinalizedEvent, либо транзакция закрытия складчины).
      */
     @Transactional
     fun appendAndRecompute(entries: List<LedgerEntry>) {
         if (entries.isEmpty()) return
         repository.appendLedgerIfAbsent(entries)
-        // Deterministic (user, club) order — recompute takes one advisory xact-lock per
-        // pair, and two concurrent transactions (event attendance × skladchina close of
-        // the same club) acquiring the same pairs in different orders deadlock (40P01).
-        // Sorting makes every caller lock in the same global order (F5-13).
+        // Детерминированный порядок (user, club) — recompute берёт по одной advisory xact-lock на
+        // пару, и две конкурентные транзакции (посещение события × закрытие складчины в одном и том
+        // же клубе), захватывающие одни и те же пары в разном порядке, дают дедлок (40P01).
+        // Сортировка гарантирует, что каждый вызывающий блокирует в одном и том же глобальном порядке (F5-13).
         entries.map { it.userId to it.clubId }.toSet()
             .sortedWith(compareBy({ it.first }, { it.second }))
             .forEach { (userId, clubId) -> repository.recompute(userId, clubId) }

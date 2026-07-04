@@ -25,35 +25,35 @@ export interface ApplicationDto {
 }
 
 /**
- * Join an open club. De-Stars Slice 2: always 201 + MembershipDto. A paid club lands the
- * membership in `frozen` (no content access until the organizer confirms the dues offline);
- * a free club lands it `active`. No Stars invoice is created anymore.
+ * Вступить в открытый клуб. De-Stars Slice 2: всегда 201 + MembershipDto. В платном клубе
+ * membership попадает в `frozen` (нет доступа к контенту, пока организатор не подтвердит
+ * офлайн-взнос); в бесплатном — сразу `active`. Инвойс Stars больше не создаётся.
  */
 export function joinClub(clubId: string): Promise<MembershipDto> {
   return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/join`);
 }
 
 /**
- * Cancel caller's membership in [clubId]. Backend semantics depend on the
- * club's `subscription_price`:
- *  - Free club  → immediate cascade-cancel (status=cancelled, member_count-=1,
- *                 active skladchinas/event-responses cleared).
- *  - Paid club  → autorenew off (status=cancelled, access kept until
- *                 `subscription_expires_at`, no cascade, member_count unchanged).
- * Errors:
+ * Отменить membership вызывающего в [clubId]. Поведение бэкенда зависит от
+ * `subscription_price` клуба:
+ *  - Бесплатный клуб → немедленная каскадная отмена (status=cancelled, member_count-=1,
+ *                      активные складчины/отклики на события очищаются).
+ *  - Платный клуб    → выключение автопродления (status=cancelled, доступ сохраняется до
+ *                      `subscription_expires_at`, без каскада, member_count не меняется).
+ * Ошибки:
  *  - 400 «Owner cannot leave the club»
- *  - 404 «Membership not found» (not a member, or already cancelled/expired).
- * See docs/modules/club-leave.md.
+ *  - 404 «Membership not found» (не участник, либо уже отменено/истекло).
+ * См. docs/modules/club-leave.md.
  */
 export function leaveClub(clubId: string): Promise<MembershipDto> {
   return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/leave`);
 }
 
 /**
- * Pre-leave preview: how many open obligations (confirmed bookings + pending
- * reputation skladchinas) leaving a free club would break. Drives the warning
- * line in the leave confirm dialog. Paid clubs return all-zero (nothing breaks
- * until the subscription expires). See docs/modules/club-leave.md § "выход-с-обязательствами".
+ * Превью перед выходом: сколько открытых обязательств (подтверждённые брони + pending
+ * репутационные складчины) сломает выход из бесплатного клуба. Формирует предупреждающую
+ * строку в диалоге подтверждения выхода. Платные клубы возвращают всё нулями (ничего не
+ * ломается, пока не истечёт подписка). См. docs/modules/club-leave.md § "выход-с-обязательствами".
  */
 export function getLeavePreview(clubId: string): Promise<LeavePreviewDto> {
   return apiClient.get<LeavePreviewDto>(`/api/clubs/${clubId}/leave-preview`);
@@ -67,8 +67,8 @@ export function getMyApplications(): Promise<ApplicationDto[]> {
   return apiClient.get<ApplicationDto[]>('/api/users/me/applications');
 }
 
-/** Join via an invite code. Same de-Stars contract as {@link joinClub}: 201 + MembershipDto,
- *  paid clubs land `frozen`. */
+/** Вступить по инвайт-коду. Тот же de-Stars контракт, что у {@link joinClub}: 201 + MembershipDto,
+ *  платные клубы попадают в `frozen`. */
 export function joinByInviteCode(code: string): Promise<MembershipDto> {
   return apiClient.post<MembershipDto>(`/api/invite/${code}/join`);
 }
@@ -78,12 +78,13 @@ export function getClubMembers(clubId: string): Promise<MemberListItemDto[]> {
 }
 
 /**
- * Organizer access gate (de-Stars Slice 2). All four are owner-only (`@RequiresOrganizer`),
- * return the updated `MembershipDto`, and 409 on a lost status-transition race.
- *  - dues-paid : «Взнос получен» — open access + extend the paid window +30d from max(now, current end).
+ * Управление доступом организатором (de-Stars Slice 2). Все четыре — только для владельца
+ * (`@RequiresOrganizer`), возвращают обновлённый `MembershipDto`, 409 при проигранной гонке
+ * перехода статуса.
+ *  - dues-paid : «Взнос получен» — открыть доступ + продлить платное окно +30d от max(now, текущий конец).
  *  - freeze    : «Закрыть доступ» — active → frozen.
- *  - unfreeze  : frozen → active without extending the window.
- *  - dues-unpaid: clear the dues mark (does not touch access/window).
+ *  - unfreeze  : frozen → active без продления окна.
+ *  - dues-unpaid: снять отметку о взносе (не трогает доступ/окно).
  */
 export function markMemberDuesPaid(clubId: string, userId: string): Promise<MembershipDto> {
   return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/dues-paid`);
@@ -102,24 +103,24 @@ export function unmarkMemberDues(clubId: string, userId: string): Promise<Member
 }
 
 /**
- * De-Stars B+C: reject a paid join (instead of «Взнос получен»). Owner-only; removes the frozen member.
- * The refund is the organizer's offline responsibility — the platform is outside the money flow. The
- * member is notified (best-effort DM). Reason optional.
+ * De-Stars B+C: отклонить платное вступление (вместо «Взнос получен»). Только владелец;
+ * убирает frozen-участника. Возврат денег — офлайн-ответственность организатора, платформа
+ * вне потока денег. Участник уведомляется (best-effort DM). Причина опциональна.
  */
 export function rejectMember(clubId: string, userId: string, reason?: string | null): Promise<MembershipDto> {
   return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/reject-dues`, { reason: reason ?? null });
 }
 
-/** Organizer kick: remove a member from the club (reason mandatory ≥5 chars, DM'd to the member). */
+/** Исключение организатором: убрать участника из клуба (причина обязательна, ≥5 символов, шлётся DM участнику). */
 export function removeMember(clubId: string, userId: string, reason: string): Promise<MembershipDto> {
   return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/remove`, { reason });
 }
 
 /**
- * Member admin profile (S1), owner-only:
- *  - setMemberAccessUntil — set a custom access-window end («своя дата»); `until` is an ISO datetime,
- *    must be in the future (backend rejects past dates).
- *  - updateMemberNote — set/clear the private organizer note (null/blank clears it).
+ * Админ-профиль участника (S1), только владелец:
+ *  - setMemberAccessUntil — задать кастомный конец окна доступа («своя дата»); `until` — ISO datetime,
+ *    должен быть в будущем (бэкенд отклоняет прошедшие даты).
+ *  - updateMemberNote — установить/очистить приватную заметку организатора (null/пусто — очищает).
  */
 export function setMemberAccessUntil(clubId: string, userId: string, until: string): Promise<MembershipDto> {
   return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/access-until`, { until });
@@ -130,11 +131,12 @@ export function updateMemberNote(clubId: string, userId: string, note: string | 
 }
 
 /**
- * Member admin profile (S2), owner-only club-local awards «как интересы»:
- *  - grantMemberAward — give an award (emoji + label, ≤40 chars); 400 on dup label / cap (6) reached.
- *  - revokeMemberAward — remove an award by id.
- *  - getAwardSuggestions — distinct past awards in the club, drives the grant-form autocomplete.
- * The awards themselves are public on the member card (returned in MemberProfileDto.awards, R3).
+ * Админ-профиль участника (S2), локальные для клуба награды «как интересы», только владелец:
+ *  - grantMemberAward — выдать награду (emoji + подпись, ≤40 символов); 400 при дублирующейся
+ *    подписи / достижении лимита (6).
+ *  - revokeMemberAward — убрать награду по id.
+ *  - getAwardSuggestions — уникальные прошлые награды в клубе, питают автокомплит формы выдачи.
+ * Сами награды публичны на карточке участника (возвращаются в MemberProfileDto.awards, R3).
  */
 export function grantMemberAward(
   clubId: string,
@@ -154,9 +156,10 @@ export function getAwardSuggestions(clubId: string): Promise<AwardSuggestionDto[
 }
 
 /**
- * De-Stars: the member declares they paid the off-platform dues (member self-service, not owner-gated).
- * method = 'sbp' (proofUrl = uploaded screenshot URL, required) or 'cash' (no proof). Creates a claim
- * the organizer reviews; access still opens only when the organizer presses «Взнос получен».
+ * De-Stars: участник заявляет, что оплатил офлайн-взнос (самообслуживание участника, без гейта
+ * владельца). method = 'sbp' (proofUrl = URL загруженного скриншота, обязателен) или 'cash'
+ * (без доказательства). Создаёт claim, который проверяет организатор; доступ всё равно
+ * открывается только когда организатор нажмёт «Взнос получен».
  */
 export function claimDues(
   clubId: string,
@@ -166,12 +169,12 @@ export function claimDues(
   return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/dues-claim`, { method, proofUrl: proofUrl ?? null });
 }
 
-/** Red-dot feed for [clubId]: soon-expiring + frozen-awaiting-dues counts. Owner-only. */
+/** Данные для красной точки в [clubId]: счётчики скоро-истекающих и frozen-ожидающих-взноса. Только владелец. */
 export function getMemberAttention(clubId: string): Promise<MemberAttentionDto> {
   return apiClient.get<MemberAttentionDto>(`/api/clubs/${clubId}/member-attention`);
 }
 
-/** Cross-club «Ждут оплаты»: frozen members across all clubs the caller owns. Empty for non-owners. */
+/** Кросс-клубовое «Ждут оплаты»: frozen-участники по всем клубам вызывающего-владельца. Пусто для не-владельцев. */
 export function getOrganizerAwaitingDues(): Promise<OrganizerDuesMemberDto[]> {
   return apiClient.get<OrganizerDuesMemberDto[]>('/api/users/me/organizer/awaiting-dues');
 }
@@ -184,7 +187,7 @@ export function getMyReputation(): Promise<MyReputationDto> {
   return apiClient.get<MyReputationDto>('/api/users/me/reputation');
 }
 
-/** Self-view gamification panel: XP, level + progress, badges. See reputation-v2.md §H3. */
+/** Панель геймификации собственного профиля: XP, уровень + прогресс, бейджи. См. reputation-v2.md §H3. */
 export function getMyGamification(): Promise<GamificationDto> {
   return apiClient.get<GamificationDto>('/api/users/me/gamification');
 }
@@ -194,14 +197,14 @@ export function approveApplication(applicationId: string): Promise<void> {
 }
 
 /**
- * Reject a pending application. Backend now requires a non-empty `reason`
- * (5–500 chars after trim) — see docs/modules/applications-inbox.md.
+ * Отклонить заявку в статусе pending. Бэкенд теперь требует непустой `reason`
+ * (5–500 символов после trim) — см. docs/modules/applications-inbox.md.
  */
 export function rejectApplication(applicationId: string, reason: string): Promise<void> {
   return apiClient.post(`/api/applications/${applicationId}/reject`, { reason });
 }
 
-/** Applicant self-withdrawal of their own pending application → status `cancelled`. */
+/** Самостоятельный отзыв заявителем своей pending-заявки → status `cancelled`. */
 export function cancelApplication(applicationId: string): Promise<ApplicationDto> {
   return apiClient.post<ApplicationDto>(`/api/applications/${applicationId}/cancel`);
 }
@@ -211,7 +214,7 @@ export function getMyPendingApplications(): Promise<PendingApplicationDto[]> {
 }
 
 /**
- * Counter that drives the «Мои клубы» tab-dot: organizer-side pending applications (`inboxCount`).
+ * Счётчик, который управляет точкой на табе «Мои клубы»: pending-заявки на стороне организатора (`inboxCount`).
  */
 export function getMyClubsActionCounts(): Promise<PendingApplicationsCountDto> {
   return apiClient.get<PendingApplicationsCountDto>(
@@ -220,11 +223,11 @@ export function getMyClubsActionCounts(): Promise<PendingApplicationsCountDto> {
 }
 
 /**
- * Finalises a free-club membership for an approved application stuck in
- * "approved-without-membership" state (legacy data / earlier free-club approve
- * bug). Backend validates the application is approved AND the club's
- * subscription_price <= 0 AND no active/grace membership exists. Returns the
- * newly-created MembershipDto on success.
+ * Финализирует membership бесплатного клуба для одобренной заявки, застрявшей в
+ * состоянии "approved-without-membership" (старые данные / прежний баг одобрения
+ * бесплатного клуба). Бэкенд проверяет, что заявка одобрена И subscription_price
+ * клуба <= 0 И нет активного/grace membership. При успехе возвращает
+ * только что созданный MembershipDto.
  */
 export function completeFreeMembership(applicationId: string): Promise<MembershipDto> {
   return apiClient.post<MembershipDto>(

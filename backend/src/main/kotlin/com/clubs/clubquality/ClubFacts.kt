@@ -3,36 +3,36 @@ package com.clubs.clubquality
 import java.util.UUID
 
 /**
- * L1 facts about a club ("place" subject, anchored on club_id) — derived read-only from
- * existing tables, no own schema. These are the honest, publicly-visible signals a chooser
- * needs ("is this club alive, worth joining?"). Not a score, not member-Trust average.
+ * Факты L1 о клубе (subject = «место», привязка к club_id) — выводятся read-only из существующих
+ * таблиц, без собственной схемы. Это честные, публично видимые сигналы, нужные выбирающему
+ * («жив ли этот клуб, стоит ли вступать?»). Не оценка, не средний Trust участников.
  *
- * Design contract: docs/backlog/club-quality-gamification.md §1–3, §11.4 ("now" metrics).
+ * Дизайн-контракт: docs/backlog/club-quality-gamification.md §1–3, §11.4 (метрики "сейчас").
  */
 data class ClubFacts(
     val meetingsPerMonth: Double,
     val avgAttendance: Int,
     val coreSize: Int,
     val ageMonths: Int,
-    /** All-time held (past, non-cancelled) events — feeds the «N встреч» milestone. */
+    /** Все проведённые (прошедшие, неотменённые) события за всё время — питает веху «N встреч». */
     val totalMeetings: Int,
-    /** Skladchinas closed as successful — feeds the «первый сбор» milestone. */
+    /** Складчины, закрытые как успешные — питает веху «первый сбор». */
     val successfulSkladchinas: Int,
 )
 
 /**
- * Lean per-club facts for the Discovery feed card («листать или зайти?», §11.1), computed in BATCH
- * over a page of clubs (no N+1). The card's decision trio is **возраст · участники · вовлечённость**:
- * deliberately NOT встреч/мес or ядро — those are the club page's own rings (Активность / Сплочённость),
- * so the card stays minimal and non-duplicating. «участники» isn't here either — the card already has
- * `ClubListItemDto.memberCount`.
+ * Компактные факты по клубу для карточки ленты Discovery («листать или зайти?», §11.1),
+ * вычисляются ПАКЕТОМ по странице клубов (без N+1). Решающая тройка карточки —
+ * **возраст · участники · вовлечённость**: намеренно БЕЗ встреч/мес или ядра — это собственные
+ * кольца страницы клуба (Активность / Сплочённость), так карточка остаётся минимальной и не
+ * дублирует данные. «участники» тоже нет здесь — у карточки уже есть `ClubListItemDto.memberCount`.
  *
- * Design contract: docs/backlog/club-quality-gamification.md §11.1, §11.4 ("now" metrics).
+ * Дизайн-контракт: docs/backlog/club-quality-gamification.md §11.1, §11.4 (метрики "сейчас").
  */
 data class ClubCardFacts(
     val clubId: UUID,
-    /** Whole days since the club was created (возраст). */
+    /** Полных дней с момента создания клуба (возраст). */
     val ageDays: Int,
-    /** Distinct members who responded to events in the last 90 days ÷ alive members, 0..100 (вовлечённость). */
+    /** Уникальные участники, ответившие на события за последние 90 дней ÷ живые участники, 0..100 (вовлечённость). */
     val engagementPercent: Int,
 )

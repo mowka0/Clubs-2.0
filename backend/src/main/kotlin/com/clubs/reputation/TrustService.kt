@@ -7,12 +7,12 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * Read-side P1b Trust derivation. Computes per-club Trust 0-100 and the all-history global
- * aggregate ("надёжен в N из M клубов") ON READ from the ledger via [TrustPolicy].
+ * Read-side вычисление P1b Trust. Считает per-club Trust 0-100 и агрегат по всей истории
+ * ("надёжен в N из M клубов") ПРИ ЧТЕНИИ из леджера через [TrustPolicy].
  *
- * Decay depends on the current time, so nothing here is cached — occurred_at is read fresh each
- * call. Separate from [ReputationService] (which owns the write-side ledger pipeline + recompute):
- * one class = one reason to change.
+ * Decay зависит от текущего времени, поэтому ничего здесь не кэшируется — occurred_at читается
+ * заново при каждом вызове. Отделён от [ReputationService] (который владеет write-side пайплайном
+ * леджера + рекомпутом): один класс = одна причина для изменения.
  */
 @Service
 class TrustService(
@@ -20,9 +20,9 @@ class TrustService(
 ) {
 
     /**
-     * Per-club Trust + the all-history global view for one user. The display gate
-     * (ReputationPolicy.isShown(outcomeCount)) and club metadata (name/avatar/role) are applied by
-     * the caller at the DTO boundary — this returns the raw computed numbers keyed by club.
+     * Per-club Trust + вид глобального агрегата по всей истории для одного пользователя. Гейт
+     * отображения (ReputationPolicy.isShown(outcomeCount)) и метаданные клуба (имя/аватар/роль)
+     * применяются вызывающим на границе DTO — это возвращает сырые вычисленные числа по клубам.
      */
     @Transactional(readOnly = true)
     fun computeForUser(userId: UUID, now: OffsetDateTime = OffsetDateTime.now()): UserTrust {
@@ -41,10 +41,11 @@ class TrustService(
     }
 
     /**
-     * The all-history global aggregate ("надёжен в N из M клубов") from a pre-fetched outcome list.
-     * Single place that derives [TrustPolicy.GlobalTrust] from outcomes — shared by the self overview
-     * ([computeForUser]) and the batch applicant signal ([ApplicantSignalService]), which fetches once
-     * for many users and so must not re-query per user.
+     * Агрегат по всей истории ("надёжен в N из M клубов") из заранее загруженного списка исходов.
+     * Единственное место, вычисляющее [TrustPolicy.GlobalTrust] из исходов — используется и своим
+     * обзором ([computeForUser]), и батчевым сигналом для заявителей ([ApplicantSignalService]),
+     * который загружает данные один раз на много пользователей и потому не должен запрашивать
+     * повторно на каждого.
      */
     fun globalForOutcomes(
         outcomes: List<ClubLedgerOutcome>,
@@ -61,8 +62,8 @@ class TrustService(
     }
 
     /**
-     * Per-member Trust for every member of a club that has ledger outcomes there (one batch query,
-     * no N+1). Members with no outcomes are absent from the map; the caller renders them "Новичок".
+     * Per-member Trust для каждого участника клуба, у которого есть исходы в леджере (один батч-запрос,
+     * без N+1). Участники без исходов отсутствуют в map; вызывающий рендерит их как "Новичок".
      */
     @Transactional(readOnly = true)
     fun trustForClubMembers(clubId: UUID, now: OffsetDateTime = OffsetDateTime.now()): Map<UUID, Int> =
@@ -73,9 +74,9 @@ class TrustService(
             }
 
     /**
-     * One member's per-club reputation for the member card — Trust + the reputation-affecting
-     * skladchina record — from a SINGLE ledger read. null if they have no ledger outcomes there.
-     * Both rings come from one query: no second scan of the same (user, club) ledger.
+     * Per-club репутация одного участника для карточки участника — Trust + влияющая на репутацию
+     * история складчин — из ОДНОГО чтения леджера. null, если у него нет исходов в леджере по клубу.
+     * Оба кольца берутся из одного запроса: без повторного скана того же леджера (user, club).
      */
     @Transactional(readOnly = true)
     fun clubSummary(userId: UUID, clubId: UUID, now: OffsetDateTime = OffsetDateTime.now()): ClubReputationSummary? {
@@ -92,9 +93,10 @@ class TrustService(
 }
 
 /**
- * One member's per-club reputation as the member card shows it, all from one ledger read.
+ * Per-club репутация одного участника в том виде, в каком её показывает карточка участника, вся
+ * из одного чтения леджера.
  *  - trust          = per-club Trust 0-100.
- *  - skladchinaPaid / skladchinaTotal = reputation-affecting skladchina record (paid / paid+expired).
+ *  - skladchinaPaid / skladchinaTotal = влияющая на репутацию история складчин (paid / paid+expired).
  */
 data class ClubReputationSummary(
     val trust: Int,
@@ -102,7 +104,7 @@ data class ClubReputationSummary(
     val skladchinaTotal: Int
 )
 
-/** A user's computed Trust in one club. `trust` is always present; the display gate is presentational. */
+/** Вычисленный Trust пользователя в одном клубе. `trust` присутствует всегда; гейт отображения — на уровне UI. */
 data class ClubTrust(
     val clubId: UUID,
     val trust: Int,

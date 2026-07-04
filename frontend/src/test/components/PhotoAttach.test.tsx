@@ -23,9 +23,9 @@ describe('ImageLightbox', () => {
   it('closes on backdrop tap but NOT when the image itself is tapped', () => {
     const onClose = vi.fn();
     render(<ImageLightbox src="https://x/receipt.jpg" alt="чек" onClose={onClose} />);
-    fireEvent.click(screen.getByAltText('чек')); // image — keeps it open (so you can scroll)
+    fireEvent.click(screen.getByAltText('чек')); // картинка — остаётся открытым (чтобы можно было скроллить)
     expect(onClose).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('dialog')); // backdrop
+    fireEvent.click(screen.getByRole('dialog')); // подложка (backdrop)
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

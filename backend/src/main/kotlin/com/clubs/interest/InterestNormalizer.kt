@@ -3,21 +3,26 @@ package com.clubs.interest
 import java.text.Normalizer
 
 /**
- * Canonicalizes a raw interest string so duplicates collapse to one dictionary
- * row: NFC → strip wrapping quotes → trim → collapse inner whitespace → lower →
- * ё→е. Multi-word phrases are preserved (separator is the comma, handled by the
- * caller); only inner runs of whitespace are squeezed to a single space.
+ * Канонизирует сырую строку интереса, чтобы дубликаты схлопывались в одну строку
+ * словаря: NFC → срезать обрамляющие кавычки → trim → схлопнуть внутренние пробелы →
+ * lower → ё→е. Многословные фразы сохраняются (разделитель — запятая, её обрабатывает
+ * вызывающий); в один пробел сжимаются только внутренние цепочки пробелов.
  */
 object InterestNormalizer {
 
+    // Максимальная длина нормализованного интереса (лишнее обрезается)
     const val MAX_LEN = 40
+    // Максимум интересов в списке пользователя (normalizeList режет по этому лимиту)
     const val MAX_COUNT = 15
+    // Минимальная длина поискового запроса для подсказок интересов (suggest)
     const val MIN_QUERY_LEN = 2
 
+    // Цепочки пробельных символов — схлопываются в один пробел
     private val WHITESPACE = Regex("\\s+")
+    // Кавычки, срезаемые по краям токена
     private val QUOTES = charArrayOf('"', '\'', '«', '»', '“', '”', '‘', '’', '`')
 
-    /** Normalize one token; returns null if it collapses to empty. */
+    /** Нормализует один токен; возвращает null, если он схлопнулся в пустоту. */
     fun normalize(raw: String): String? {
         val cleaned = Normalizer.normalize(raw, Normalizer.Form.NFC)
             .trim()
@@ -30,7 +35,7 @@ object InterestNormalizer {
         return cleaned.take(MAX_LEN)
     }
 
-    /** Normalize a list, dropping blanks and deduping (order-preserving), capped. */
+    /** Нормализует список: выбрасывает пустые, дедуплицирует (с сохранением порядка), режет по лимиту. */
     fun normalizeList(raw: List<String>): List<String> {
         val seen = LinkedHashSet<String>()
         for (item in raw) {

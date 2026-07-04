@@ -109,9 +109,9 @@ class EventController(
     }
 
     /**
-     * F5-04: the caller's OWN attendance state for the event. Intentionally has no
-     * @RequiresMembership — a participant who left the club still needs to reach the dispute UI
-     * after the deep-link DM. The service scopes the result to the caller's own response row.
+     * F5-04: СОБСТВЕННОЕ состояние посещаемости вызывающего для события. Намеренно без
+     * @RequiresMembership — участнику, вышедшему из клуба, всё ещё нужен доступ к UI спора
+     * после deep-link из DM. Сервис ограничивает результат строкой отклика самого вызывающего.
      */
     @GetMapping("/api/events/{id}/my-attendance")
     fun getMyAttendance(

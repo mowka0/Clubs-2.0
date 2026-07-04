@@ -21,9 +21,9 @@ data class SubmitApplicationRequest(
 )
 
 /**
- * Reject payload. Reason is now mandatory (5-500 chars after trim) so the
- * applicant always gets actionable feedback in their profile.
- * See docs/modules/applications-inbox.md § "POST /api/applications/{id}/reject".
+ * Payload отказа. Причина теперь обязательна (5-500 символов после trim), чтобы
+ * заявитель всегда получал в своём профиле фидбек, на который можно опереться.
+ * См. docs/modules/applications-inbox.md § "POST /api/applications/{id}/reject".
  */
 data class RejectApplicationRequest(
     @field:NotBlank

@@ -5,16 +5,17 @@ interface LeaveClubModalProps {
   open: boolean;
   clubName: string;
   /**
-   * Free → immediate access loss + cascade copy.
-   * Paid → autorenew-off + «доступ до …» copy. `paidUntil` must be passed in
-   * pre-formatted ru-RU, parent owns date formatting.
+   * Free → немедленная потеря доступа + каскадный текст.
+   * Paid → отключение автопродления + текст «доступ до …». `paidUntil` должен
+   * передаваться уже отформатированным в ru-RU, форматирование даты — на стороне родителя.
    */
   variant: 'free' | 'paid';
   paidUntilLabel: string | null;
   /**
-   * Number of open obligations (confirmed bookings + pending reputation skladchinas) the
-   * caller would break by leaving a free club. > 0 → show a reliability warning. Ignored for
-   * the paid variant (nothing breaks until expire). 0 while [obligationsLoading].
+   * Число открытых обязательств (подтверждённые записи + незакрытые репутационные
+   * складчины), которые вызывающий сломает, выйдя из free-клуба. > 0 → показать
+   * предупреждение о надёжности. Игнорируется для paid-варианта (ничего не ломается
+   * до истечения срока). 0, пока [obligationsLoading].
    */
   obligationsCount: number;
   obligationsLoading: boolean;

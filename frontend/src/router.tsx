@@ -2,13 +2,13 @@ import { lazy, FC } from 'react';
 import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
 import { Layout } from './components/Layout';
 
-// Main tab pages — eagerly imported for instant tab switching
+// Страницы основных табов — импортируются сразу, для мгновенного переключения таба
 import { DiscoveryPage } from './pages/DiscoveryPage';
 import { MyClubsPage } from './pages/MyClubsPage';
 import { ActivitiesPage } from './pages/ActivitiesPage';
 import { ProfilePage } from './pages/ProfilePage';
 
-// Nested pages — lazy loaded for code splitting
+// Вложенные страницы — lazy-загрузка для code splitting
 const ClubPage = lazy(() =>
   import('./pages/ClubPage').then((m) => ({ default: m.ClubPage })),
 );
@@ -34,8 +34,8 @@ const OrganizerClubManage = lazy(() =>
   import('./pages/OrganizerClubManage').then((m) => ({ default: m.OrganizerClubManage })),
 );
 
-// Legacy /clubs/:id/interior was merged into unified /clubs/:id.
-// Preserve :id in redirect so old bookmarks / deep-links don't 404.
+// Старый /clubs/:id/interior объединён в единый /clubs/:id.
+// Сохраняем :id в редиректе, чтобы старые закладки / deep-link'и не давали 404.
 const InteriorRedirect: FC = () => {
   const { id } = useParams<{ id: string }>();
   return <Navigate to={`/clubs/${id}`} replace />;
@@ -45,7 +45,7 @@ export const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      // Main tab routes
+      // Маршруты основных табов
       {
         path: '/',
         element: <DiscoveryPage />,
@@ -71,14 +71,14 @@ export const router = createBrowserRouter([
         element: <ProfilePage />,
       },
 
-      // Legacy redirect: /organizer was merged into /my-clubs.
-      // Kept so old bookmarks / deep-links don't 404.
+      // Старый редирект: /organizer объединён в /my-clubs.
+      // Оставлен, чтобы старые закладки / deep-link'и не давали 404.
       {
         path: '/organizer',
         element: <Navigate to="/my-clubs" replace />,
       },
 
-      // Nested routes (lazy loaded, show BackButton)
+      // Вложенные маршруты (lazy-загрузка, показывают BackButton)
       {
         path: '/clubs/:id',
         element: <ClubPage />,

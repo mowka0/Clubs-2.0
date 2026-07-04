@@ -14,18 +14,18 @@ interface EventRepository {
     fun findByClubId(clubId: UUID, status: EventStatus?, page: Int, size: Int): PageResponse<EventListItemDto>
 
     /**
-     * Returns ALL events of the given club (any status, any datetime) paired with the
-     * cached going-vote count. Used by the unified activity feed where pagination /
-     * sorting is decided at a higher level (in-memory merge with skladchinas).
+     * Возвращает ВСЕ события указанного клуба (любой статус, любая дата) в паре с
+     * кэшированным счётчиком голосов "иду". Используется единой лентой активностей, где
+     * пагинация/сортировка решаются на более высоком уровне (in-memory слияние со складчинами).
      */
     fun findAllByClubWithGoingCount(clubId: UUID): List<EventWithGoingCount>
 
     /**
-     * IDs of the club's events that require an action from [userId] right now:
-     * a stage-1 vote (voting open, not yet voted) or a stage-2 confirmation
-     * (voted going/maybe, not yet confirmed). Used by the activity feed to pin
-     * action-required events to the top. Same predicate as [findMyFeed]'s
-     * action-required ordering.
+     * ID событий клуба, которые прямо сейчас требуют действия от [userId]:
+     * голосование этапа 1 (голосование открыто, ещё не голосовал) или подтверждение
+     * этапа 2 (проголосовал идёт/может быть, ещё не подтвердил). Используется лентой активностей
+     * для закрепления требующих действия событий наверху. Тот же предикат, что и в
+     * сортировке action-required у [findMyFeed].
      */
     fun findActionRequiredEventIds(clubId: UUID, userId: UUID, now: OffsetDateTime): Set<UUID>
 
@@ -34,9 +34,9 @@ interface EventRepository {
     fun getVoteCounts(eventId: UUID): Map<String, Int>
 
     /**
-     * Events ready to enter Stage 2: still `upcoming`, not yet triggered, and starting at or
-     * before [cutoff]. The caller computes the cutoff from a configurable lead time so staging
-     * can shorten it for end-to-end testing of the two-stage flow.
+     * События, готовые перейти в Этап 2: всё ещё `upcoming`, ещё не запущены и начинаются в
+     * момент [cutoff] или раньше. Вызывающий код вычисляет cutoff из настраиваемого времени
+     * упреждения, чтобы staging мог сократить его для end-to-end тестирования двухэтапного флоу.
      */
     fun findEventsToTriggerStage2(cutoff: OffsetDateTime): List<Event>
 
@@ -45,65 +45,66 @@ interface EventRepository {
     fun transitionToStage2(id: UUID)
 
     /**
-     * Club soft-delete cascade: cancels every non-finalized event of [clubId]
-     * (status IN upcoming/stage_1/stage_2, attendance not finalized) so schedulers stop
-     * processing them and they drop out of feeds. Completed/cancelled and already-finalized
-     * events are left untouched — their reputation is locked. Returns rows updated.
+     * Каскад мягкого удаления клуба: отменяет каждое незавершённое событие клуба [clubId]
+     * (status IN upcoming/stage_1/stage_2, посещаемость не финализирована), чтобы шедулеры
+     * перестали их обрабатывать и они выпали из лент. Завершённые/отменённые и уже финализированные
+     * события не трогаются — их репутация зафиксирована. Возвращает число обновлённых строк.
      */
     fun cancelActiveEventsByClub(clubId: UUID): Int
 
     /**
-     * Cancels a single not-yet-started event (F5-14): status → cancelled + optional reason, but ONLY
-     * while still active and `event_datetime > now`, so a started/finalized meetup is never
-     * retro-cancelled (which would erase legitimate attendance). Returns rows affected
-     * (0 ⇒ not cancellable → caller raises 409).
+     * Отменяет одно ещё не начавшееся событие (F5-14): status → cancelled + опциональная причина, но ТОЛЬКО
+     * пока оно ещё активно и `event_datetime > now`, так что начавшийся/финализированный митап
+     * никогда не отменяется задним числом (это стёрло бы легитимную посещаемость). Возвращает число
+     * затронутых строк (0 ⇒ не отменяемо → вызывающий возвращает 409).
      */
     fun cancelEvent(eventId: UUID, reason: String?): Int
 
     /**
-     * Flags the event attendance-marked and stamps attendance_marked_at = now() (решение (б):
-     * the dispute window runs from mark time). Guarded on attendance_finalized=false (F5-09):
-     * returns 0 if the finalizer already finalized the event, so the caller can reject the mark.
+     * Помечает событие как attendance-marked и проставляет attendance_marked_at = now() (решение (б):
+     * окно для оспаривания отсчитывается с момента отметки). Защищено условием attendance_finalized=false
+     * (F5-09): возвращает 0, если финализирующий уже финализировал событие, чтобы вызывающий мог отклонить отметку.
      */
     fun markAttendanceMarked(id: UUID): Int
 
-    // --- Reminder schedulers (EventReminderScheduler) ---
+    // --- Шедулеры напоминаний (EventReminderScheduler) ---
 
     /**
-     * Feature A: events in stage_2 that start within (now, until] and whose confirm reminder
-     * hasn't been sent. `until` = now + the "hours before" window (default 2h).
+     * Фича A: события на этапе 2, которые начинаются в пределах (now, until] и для которых
+     * напоминание о подтверждении ещё не отправлено. `until` = now + окно "часов до" (по умолчанию 2ч).
      */
     fun findEventsNeedingConfirmReminder(now: OffsetDateTime, until: OffsetDateTime): List<Event>
 
     fun markConfirmReminderSent(id: UUID)
 
     /**
-     * Feature B: past, non-cancelled events whose attendance is still unmarked and whose
-     * organizer reminder hasn't been sent. [cutoff] = now - the "hours after" window (default 24h).
+     * Фича B: прошедшие, неотменённые события, посещаемость которых ещё не отмечена и для которых
+     * напоминание организатору ещё не отправлено. [cutoff] = now - окно "часов после" (по умолчанию 24ч).
      */
     fun findEventsNeedingAttendanceReminder(cutoff: OffsetDateTime): List<Event>
 
     fun markAttendanceReminderSent(id: UUID)
 
-    /** Telegram id of the event's club organizer (owner), or null if unset. */
+    /** Telegram id организатора (владельца) клуба события, или null если не задан. */
     fun findOrganizerTelegramId(eventId: UUID): Long?
 
-    /** Finalizes attendance for past, marked, not-yet-finalized events. Returns the finalized event ids. */
+    /** Финализирует посещаемость для прошедших, отмеченных, ещё не финализированных событий. Возвращает id финализированных событий. */
     fun finalizeAttendanceBefore(eventDatetimeCutoff: OffsetDateTime): List<UUID>
 
     /**
-     * EXP-2: neutrally finalizes past, **unmarked**, not-yet-finalized, non-cancelled events whose
-     * datetime is at/before [eventDatetimeCutoff]. Sets `attendance_finalized = true` while leaving
-     * `attendance_marked = false`, so the reputation pipeline (which claims only marked+finalized
-     * events) never produces ledger rows for them — the event simply doesn't count. Returns the
-     * finalized event ids (for logging). NO AttendanceFinalizedEvent is published for these.
+     * EXP-2: нейтрально финализирует прошедшие, **неотмеченные**, ещё не финализированные, неотменённые
+     * события, чья дата наступила в момент [eventDatetimeCutoff] или раньше. Выставляет
+     * `attendance_finalized = true`, оставляя `attendance_marked = false`, так что пайплайн репутации
+     * (который забирает только marked+finalized события) никогда не создаёт для них строки в леджере —
+     * событие просто не засчитывается. Возвращает id финализированных событий (для логирования).
+     * Для них НЕ публикуется AttendanceFinalizedEvent.
      */
     fun neutrallyFinalizeUnmarkedBefore(eventDatetimeCutoff: OffsetDateTime): List<UUID>
 
     /**
-     * Moves active events (upcoming / stage_1 / stage_2) whose datetime is before [cutoff]
-     * to [EventStatus.completed]. Does not touch already-completed or cancelled events.
-     * Returns the number of rows updated.
+     * Переводит активные события (upcoming / stage_1 / stage_2), чья дата раньше [cutoff],
+     * в [EventStatus.completed]. Не трогает уже завершённые или отменённые события.
+     * Возвращает число обновлённых строк.
      */
     fun markPastEventsCompleted(cutoff: OffsetDateTime): Int
 }
@@ -111,8 +112,8 @@ interface EventRepository {
 data class EventWithGoingCount(
     val event: Event,
     val goingCount: Int,
-    // Stage-2 confirmed roster size. Lets the feed switch from the stage-1 "идёт"
-    // count to the final "подтв." count once voting closes (F5-21). Defaults to 0
-    // so count-agnostic tests construct the projection with goingCount only.
+    // Размер подтверждённого состава этапа 2. Позволяет ленте переключиться со счётчика
+    // "идёт" этапа 1 на финальный счётчик "подтв." после закрытия голосования (F5-21).
+    // По умолчанию 0, чтобы тесты, не зависящие от этого счётчика, строили проекцию только с goingCount.
     val confirmedCount: Int = 0
 )

@@ -24,7 +24,7 @@ export interface CreateClubBody {
   avatarUrl?: string;
   rules?: string;
   applicationQuestion?: string;
-  // SBP dues requisites — required by the backend when subscriptionPrice > 0.
+  // Реквизиты СБП для взносов — обязательны на бэкенде, если subscriptionPrice > 0.
   paymentLink?: string;
   paymentMethodNote?: string;
 }
@@ -63,7 +63,7 @@ export interface UpdateClubBody {
   avatarUrl?: string | null;
   rules?: string | null;
   applicationQuestion?: string | null;
-  // SBP dues requisites (blank string clears, same as rules/district).
+  // Реквизиты СБП для взносов (пустая строка очищает значение, как rules/district).
   paymentLink?: string | null;
   paymentMethodNote?: string | null;
 }
@@ -81,7 +81,7 @@ export async function uploadImage(file: File): Promise<string> {
   return url;
 }
 
-/** Organizer trust card for the dues-payment sheet (de-Stars). JWT-only / others-visible. */
+/** Карточка доверия организатора для шторки оплаты взносов (de-Stars). Только по JWT / видна другим. */
 export function getOrganizerCard(clubId: string): Promise<OrganizerCardDto> {
   return apiClient.get<OrganizerCardDto>(`/api/clubs/${clubId}/organizer-card`);
 }

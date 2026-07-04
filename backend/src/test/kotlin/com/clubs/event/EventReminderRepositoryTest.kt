@@ -17,9 +17,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Integration test for the reminder queries (EventReminderScheduler) against a real Postgres:
- * which events are due for the confirm reminder (A) / attendance reminder (B), the dedup flags,
- * the unconfirmed-voter recipient set, and the organizer telegram lookup.
+ * Интеграционный тест запросов напоминаний (EventReminderScheduler) на реальном Postgres:
+ * какие события попадают под напоминание о подтверждении (A) / об отметке явки (B), dedup-флаги,
+ * множество получателей среди неподтвердивших голосовавших и поиск telegram-id организатора.
  */
 @SpringBootTest(
     properties = [
@@ -33,6 +33,7 @@ import kotlin.test.assertTrue
 class EventReminderRepositoryTest {
 
     companion object {
+        // Общий Postgres-контейнер на все тесты класса
         @Container
         @JvmStatic
         val postgres = PostgreSQLContainer("postgres:16-alpine")
@@ -77,16 +78,16 @@ class EventReminderRepositoryTest {
         )
     }
 
-    // --- A: confirm reminder ---
+    // --- A: напоминание о подтверждении ---
 
     @Test
     fun `confirm reminder finds stage_2 events starting within the window, not yet reminded`() {
         val now = OffsetDateTime.now()
         val due = insertEvent(now.plusHours(1), "stage_2")
-        insertEvent(now.plusHours(3), "stage_2")                       // outside window
-        insertEvent(now.minusHours(1), "stage_2")                      // already started
-        insertEvent(now.plusHours(1), "upcoming")                      // not stage_2
-        insertEvent(now.plusHours(1), "stage_2", confirmReminderSent = true) // already reminded
+        insertEvent(now.plusHours(3), "stage_2")                       // вне окна
+        insertEvent(now.minusHours(1), "stage_2")                      // уже началось
+        insertEvent(now.plusHours(1), "upcoming")                      // не stage_2
+        insertEvent(now.plusHours(1), "stage_2", confirmReminderSent = true) // уже напомнили
 
         val result = eventRepository.findEventsNeedingConfirmReminder(now, now.plusHours(2)).map { it.id }
 
@@ -109,27 +110,27 @@ class EventReminderRepositoryTest {
         val event = insertEvent(OffsetDateTime.now().plusHours(1), "stage_2")
         val goingNull = insertResponseUser(event, "going", null)
         val maybeNull = insertResponseUser(event, "maybe", null)
-        insertResponseUser(event, "going", "confirmed")   // excluded
-        insertResponseUser(event, "going", "declined")    // excluded
-        insertResponseUser(event, "not_going", null)      // excluded
+        insertResponseUser(event, "going", "confirmed")   // исключён
+        insertResponseUser(event, "going", "declined")    // исключён
+        insertResponseUser(event, "not_going", null)      // исключён
 
         val ids = eventResponseRepository.findUnconfirmedVoterTelegramIds(event).toSet()
 
         assertEquals(setOf(goingNull, maybeNull), ids)
     }
 
-    // --- B: attendance reminder ---
+    // --- B: напоминание об отметке явки ---
 
     @Test
     fun `attendance reminder finds past unmarked non-cancelled events with a confirmed roster, not yet reminded`() {
         val now = OffsetDateTime.now()
         val due = insertEvent(now.minusHours(25), "completed")
-        insertResponseUser(due, "going", "confirmed")                            // has a roster to mark
-        insertEvent(now.minusHours(10), "completed").also { insertResponseUser(it, "going", "confirmed") } // within 24h
-        insertEvent(now.minusHours(25), "completed", attendanceMarked = true).also { insertResponseUser(it, "going", "confirmed") }       // already marked
-        insertEvent(now.minusHours(25), "completed", attendanceReminderSent = true).also { insertResponseUser(it, "going", "confirmed") } // already reminded
-        insertEvent(now.minusHours(25), "cancelled").also { insertResponseUser(it, "going", "confirmed") } // cancelled
-        insertEvent(now.minusHours(25), "completed")                             // CC-2: no confirmed roster → skip
+        insertResponseUser(due, "going", "confirmed")                            // есть ростер для отметки
+        insertEvent(now.minusHours(10), "completed").also { insertResponseUser(it, "going", "confirmed") } // ещё не прошло 24ч
+        insertEvent(now.minusHours(25), "completed", attendanceMarked = true).also { insertResponseUser(it, "going", "confirmed") }       // уже отмечено
+        insertEvent(now.minusHours(25), "completed", attendanceReminderSent = true).also { insertResponseUser(it, "going", "confirmed") } // уже напомнили
+        insertEvent(now.minusHours(25), "cancelled").also { insertResponseUser(it, "going", "confirmed") } // отменено
+        insertEvent(now.minusHours(25), "completed")                             // CC-2: нет confirmed-ростера → пропуск
 
         val result = eventRepository.findEventsNeedingAttendanceReminder(now.minusHours(24)).map { it.id }
 
@@ -139,11 +140,11 @@ class EventReminderRepositoryTest {
     @Test
     fun `attendance reminder excludes a neutrally-finalized event (F5-17)`() {
         val now = OffsetDateTime.now()
-        // EXP-2 neutral finalize leaves marked=false, finalized=true. Without the finalized guard
-        // the reminder still fires → organizer taps "mark" → markAttendance throws finalized → 400.
+        // EXP-2: нейтральная финализация оставляет marked=false, finalized=true. Без guard'а по finalized
+        // напоминание всё равно уходит → организатор жмёт «отметить» → markAttendance кидает finalized → 400.
         val neutrallyFinalized = insertEvent(now.minusHours(25), "completed", attendanceFinalized = true)
         insertResponseUser(neutrallyFinalized, "going", "confirmed")
-        // regression guard: a still-open unmarked event is still reminded
+        // регрессионная страховка: по всё ещё открытому неотмеченному событию напоминание сохраняется
         val stillDue = insertEvent(now.minusHours(25), "completed")
         insertResponseUser(stillDue, "going", "confirmed")
 
@@ -156,7 +157,7 @@ class EventReminderRepositoryTest {
     fun `markAttendanceReminderSent flips the flag (dedup)`() {
         val now = OffsetDateTime.now()
         val id = insertEvent(now.minusHours(25), "completed")
-        insertResponseUser(id, "going", "confirmed") // qualifies, so the flag is the only thing stopping it
+        insertResponseUser(id, "going", "confirmed") // подходит под условия — остановить его может только флаг
 
         eventRepository.markAttendanceReminderSent(id)
 
@@ -171,7 +172,7 @@ class EventReminderRepositoryTest {
         assertEquals(ownerTelegramId, eventRepository.findOrganizerTelegramId(event))
     }
 
-    // --- helpers ---
+    // --- хелперы ---
 
     private fun newUser(): UUID {
         val id = UUID.randomUUID()
@@ -200,7 +201,7 @@ class EventReminderRepositoryTest {
         return id
     }
 
-    /** Inserts a fresh user + their response; returns the user's telegram id. */
+    /** Вставляет свежего пользователя + его ответ; возвращает telegram id пользователя. */
     private fun insertResponseUser(eventId: UUID, stage1: String, stage2: String?): Long {
         val tgId = telegramSeq
         val userId = newUser()

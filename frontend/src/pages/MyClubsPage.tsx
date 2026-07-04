@@ -35,6 +35,7 @@ interface MyClubsLocationState {
   toast?: string;
 }
 
+// Русские подписи статусов заявки для строки в карточке.
 const STATUS_LABELS: Record<string, string> = {
   pending: 'На рассмотрении',
   approved: 'Одобрено',
@@ -57,7 +58,7 @@ function formatApplicationDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 }
 
-/** Russian plural form picker: forms = [one, few, many] */
+/** Выбор русской формы множественного числа: forms = [один, несколько, много] */
 function pluralRu(n: number, forms: [string, string, string]): string {
   const mod10 = n % 10;
   const mod100 = n % 100;
@@ -73,6 +74,7 @@ function summaryLine(clubs: number, apps: number): string {
   return parts.join(' · ');
 }
 
+// SVG-иконка «человек» для пустого состояния страницы.
 const PEOPLE_ICON = (
   <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -113,6 +115,7 @@ const MyClubCard: FC<MyClubCardProps> = ({ membership, club, isOrganizer, onClic
   );
 };
 
+// Русские подписи категорий клуба (ключ = enum-значение категории с бэкенда).
 const CATEGORY_LABELS: Record<string, string> = {
   sport: 'Спорт', creative: 'Творчество', food: 'Еда',
   board_games: 'Настолки', cinema: 'Кино', education: 'Образование',
@@ -124,7 +127,7 @@ interface HistoryClubCardProps {
   onClick: () => void;
 }
 
-/** A club the user left but still has a reputation track record in ("История"). */
+/** Клуб, который пользователь покинул, но в котором остался репутационный след («История»). */
 const HistoryClubCard: FC<HistoryClubCardProps> = ({ club, onClick }) => {
   const tier = reliabilityTier(club.trust);
   const meta = [CATEGORY_LABELS[club.category] ?? club.category, 'вы покинули'].filter(Boolean).join(' · ');
@@ -151,15 +154,15 @@ interface AppCardProps {
   application: ApplicationDto;
   club: ClubDetailDto | undefined;
   onClick: () => void;
-  /** Withdraw the application (called after the inline «точно?» confirm). */
+  /** Отозвать заявку (вызывается после инлайн-подтверждения «точно?»). */
   onCancel: () => void;
-  /** This card's withdraw request is in flight. */
+  /** Запрос на отзыв заявки этой карточки сейчас выполняется. */
   cancelling: boolean;
 }
 
 const AppCard: FC<AppCardProps> = ({ application, club, onClick, onCancel, cancelling }) => {
-  // Lightweight inline confirm (no modal): the «×» flips the row into a «Отменить заявку?» two-button
-  // state. Simpler than a popup and consistent with the app's other destructive two-tap confirms.
+  // Лёгкое инлайн-подтверждение (без модалки): «×» переключает строку в состояние «Отменить заявку?»
+  // с двумя кнопками. Проще попапа и согласуется с другими двухтаповыми деструктивными подтверждениями.
   const [confirming, setConfirming] = useState(false);
   const name = club?.name ?? `Клуб ${application.clubId.slice(0, 8)}…`;
   const initials = club ? getInitials(club.name) : '·';
@@ -183,8 +186,8 @@ const AppCard: FC<AppCardProps> = ({ application, club, onClick, onCancel, cance
     );
   }
 
-  // A div (not a <button>) so the «×» can nest as a real button without invalid button-in-button,
-  // while the row keeps its `.rd-rep-row + .rd-rep-row` divider. Only live (pending) apps reach here.
+  // Именно div (а не <button>), чтобы «×» был настоящей кнопкой без невалидного button-in-button,
+  // а строка сохраняла разделитель `.rd-rep-row + .rd-rep-row`. Сюда попадают только живые (pending) заявки.
   return (
     <div
       className="rd-rep-row rd-app-row"
@@ -252,7 +255,7 @@ const PendingAppCard: FC<PendingAppCardProps> = ({ pending, onClick }) => {
   );
 };
 
-/** «вступил(а) N назад» for a frozen member awaiting their first dues confirmation. */
+/** «вступил(а) N назад» для frozen-участника, ждущего подтверждения первого взноса. */
 function formatJoinedRelative(iso: string | null): string {
   if (!iso) return 'ждёт первой оплаты';
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
@@ -262,7 +265,7 @@ function formatJoinedRelative(iso: string | null): string {
   return `вступил(а) ${formatApplicationDate(iso)}`;
 }
 
-/** Open the existing organizer profile card (with the dues gate) for a cross-club frozen member. */
+/** Открывает существующую организаторскую карточку профиля (с dues-гейтом) для frozen-участника из любого клуба. */
 function toFrozenMemberStub(dues: OrganizerDuesMemberDto): MemberListItemDto {
   return {
     userId: dues.userId,
@@ -285,8 +288,8 @@ interface AwaitingDuesRowProps {
   onClick: () => void;
 }
 
-/** Cross-club «Ждут оплаты» row: a frozen member of one of the caller's clubs. Tap → profile card
- *  where the organizer confirms the dues («Взнос получен»). */
+/** Кросс-клубовая строка «Ждут оплаты»: frozen-участник одного из клубов вызывающего. Тап → карточка
+ *  профиля, где организатор подтверждает взнос («Взнос получен»). */
 const AwaitingDuesRow: FC<AwaitingDuesRowProps> = ({ item, onClick }) => {
   const fullName = `${item.firstName}${item.lastName ? ` ${item.lastName}` : ''}`;
   const initials = getInitials(fullName) || '·';
@@ -319,16 +322,16 @@ interface FrozenMembershipRowProps {
   membership: MembershipDto;
   club: ClubDetailDto | undefined;
   onClick: () => void;
-  /** Leave the club (called after the inline «точно?» confirm) — undoes an accidental paid join. */
+  /** Выйти из клуба (вызывается после инлайн-подтверждения «точно?») — откат случайного платного вступления. */
   onLeave: () => void;
-  /** This row's leave request is in flight. */
+  /** Запрос на выход этой строки сейчас выполняется. */
   leaving: boolean;
 }
 
-/** Member-side «Доступ закрыт — оплатите»: one of the CALLER's OWN frozen memberships (the organizer
- *  closed access, or the monthly dues window lapsed). Tap → the club page, where «Оплатить взнос» lets
- *  them declare payment. The «×» (with an inline confirm) leaves the club — undo an accidental paid join.
- *  Mirrors the organizer's «Оплата вступления», but from the member's side. */
+/** Участник-сайд «Доступ закрыт — оплатите»: СОБСТВЕННОЕ frozen-членство вызывающего (организатор
+ *  закрыл доступ, либо истекло окно месячного взноса). Тап → страница клуба, где «Оплатить взнос»
+ *  позволяет заявить оплату. «×» (с инлайн-подтверждением) — выход из клуба, откат случайного платного
+ *  вступления. Зеркалит организаторскую «Оплату вступления», но со стороны участника. */
 const FrozenMembershipRow: FC<FrozenMembershipRowProps> = ({ membership, club, onClick, onLeave, leaving }) => {
   const [confirming, setConfirming] = useState(false);
   const name = club?.name ?? `Клуб ${membership.clubId.slice(0, 8)}…`;
@@ -403,22 +406,22 @@ export const MyClubsPage: FC = () => {
   const leaveMutation = useLeaveClubMutation();
 
   const myClubs = myClubsQuery.data ?? [];
-  // Split the caller's own frozen memberships into a dedicated «Доступ закрыт — оплатите» block so a
-  // frozen member sees they've lost access and must pay, instead of the club sitting silently among the
-  // active ones. The rest render normally under «Где я состою».
+  // Собственные frozen-членства вызывающего выносим в отдельный блок «Доступ закрыт — оплатите»,
+  // чтобы frozen-участник увидел, что потерял доступ и должен оплатить, а не искал клуб, молча
+  // висящий среди активных. Остальные рендерятся как обычно в «Где я состою».
   const frozenMyClubs = useMemo(() => myClubs.filter((m) => m.status === 'frozen'), [myClubs]);
   const activeMyClubs = useMemo(() => myClubs.filter((m) => m.status !== 'frozen'), [myClubs]);
   const applications = applicationsQuery.data ?? [];
   const pendingInbox = pendingInboxQuery.data ?? [];
   const historyClubs = reputationQuery.data?.historyClubs ?? [];
-  // Cross-club «Ждут оплаты»: only fetch for users who actually own a club (server returns [] otherwise).
+  // Кросс-клубовые «Ждут оплаты»: запрашиваем только у владельцев клубов (иначе сервер вернёт []).
   const isAnyOrganizer = myClubs.some((m) => m.role === 'organizer');
   const awaitingDuesQuery = useOrganizerAwaitingDuesQuery({ enabled: isAnyOrganizer });
   const awaitingDues = awaitingDuesQuery.data ?? [];
 
   const inboxSectionRef = useRef<HTMLDivElement | null>(null);
-  // Idempotent scroll: focus=inbox deep-link must scroll exactly once per
-  // mount, even with Vite HMR re-running the effect.
+  // Идемпотентный скролл: deep-link focus=inbox должен проскроллить ровно один раз
+  // на маунт, даже когда Vite HMR перезапускает эффект.
   const focusInboxHandledRef = useRef(false);
 
   const navState = location.state as MyClubsLocationState | null;
@@ -429,10 +432,10 @@ export const MyClubsPage: FC = () => {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Deep-link from DM: /my-clubs?focus=inbox. Scroll to the inbox section once
-  // its data is loaded and the section is in the DOM; then strip the query so
-  // a refresh doesn't re-trigger. If the user has no pending applications,
-  // there is no section and we just clear the query.
+  // Deep-link из DM: /my-clubs?focus=inbox. Скроллим к секции инбокса, когда её данные
+  // загружены и секция есть в DOM; затем убираем query-параметр, чтобы обновление страницы
+  // не сработало повторно. Если у пользователя нет ожидающих заявок — секции нет,
+  // просто чистим query.
   useEffect(() => {
     if (focusInboxHandledRef.current) return;
     if (searchParams.get('focus') !== 'inbox') return;
@@ -470,23 +473,22 @@ export const MyClubsPage: FC = () => {
   });
 
   /*
-   * Silent self-heal for stuck free-club applications.
+   * Тихий self-heal для застрявших заявок в бесплатные клубы.
    *
-   * Background: when a free-club application is approved, the backend creates
-   * the membership inline (see ApplicationService.approveApplication free branch).
-   * If that branch ever failed for legacy reasons — or the approval came from
-   * a pre-fix codepath — the user has status=approved but no membership row,
-   * so the club doesn't show in «Активные клубы». They wouldn't know to tap
-   * «Завершить вступление» on ClubPage.
+   * Предыстория: при одобрении заявки в бесплатный клуб бэкенд создаёт членство
+   * inline (см. free-ветку ApplicationService.approveApplication). Если эта ветка
+   * когда-то падала по legacy-причинам — или одобрение прошло по кодпасу до фикса —
+   * у пользователя status=approved, но строки членства нет, и клуб не показывается
+   * в «Активные клубы». Он не догадается нажать «Завершить вступление» на ClubPage.
    *
-   * Fix: on page mount, after both queries settle, find such stuck applications
-   * (approved + free club + caller not in active membership) and call
-   * completeFreeMembership(applicationId) once each. The mutation is idempotent
-   * server-side (400 «Already a member» if race lands a real membership first),
-   * silent (no toast, no haptic), and refetches myClubs so the club appears.
+   * Фикс: на маунте страницы, когда оба запроса завершились, находим такие застрявшие
+   * заявки (approved + бесплатный клуб + вызывающий не в активном членстве) и вызываем
+   * completeFreeMembership(applicationId) по разу для каждой. Мутация идемпотентна
+   * на сервере (400 «Already a member», если гонка успела создать настоящее членство),
+   * тихая (без тоста и haptic) и рефетчит myClubs, чтобы клуб появился.
    *
-   * Paid clubs are excluded — de-Stars approval creates a `frozen` membership directly, so a paid
-   * member already shows under «Где я состою» (no free self-heal needed).
+   * Платные клубы исключены — de-Stars-одобрение сразу создаёт `frozen`-членство, так что платный
+   * участник уже виден в «Где я состою» (free-self-heal не нужен).
    */
   const completeFreeMutation = useCompleteFreeMembershipMutation();
   const autoHealedRef = useRef(false);
@@ -497,7 +499,7 @@ export const MyClubsPage: FC = () => {
   useEffect(() => {
     if (autoHealedRef.current) return;
     if (myClubsQuery.isPending || applicationsQuery.isPending) return;
-    // Need club detail to know whether subscriptionPrice === 0.
+    // Нужны детали клуба, чтобы понять, subscriptionPrice === 0 или нет.
     const haveAllClubDetails = clubIds.every((id) => Boolean(clubDetails[id]));
     if (clubIds.length > 0 && !haveAllClubDetails) return;
 
@@ -524,12 +526,12 @@ export const MyClubsPage: FC = () => {
     completeFreeMutation,
   ]);
 
-  // Inbox grouped by addressee (see docs/modules/my-clubs-unified.md):
-  //  - «Мои заявки» (outgoing): only LIVE applications — pending, awaiting the organizer's decision.
-  //    Finished-lifecycle apps (rejected / auto_rejected / approved→member) are excluded — they're
-  //    history, not actionable. (De-Stars: approval now creates the membership directly, so there's
-  //    no "approved-awaiting-payment" limbo anymore.)
-  //  - «Заявки в мои клубы» (organizer inbox): pending review.
+  // Инбокс сгруппирован по адресату (см. docs/modules/my-clubs-unified.md):
+  //  - «Мои заявки» (исходящие): только ЖИВЫЕ заявки — pending, ждут решения организатора.
+  //    Заявки с завершённым жизненным циклом (rejected / auto_rejected / approved→member) исключены —
+  //    это история, действий не требует. (De-Stars: одобрение теперь создаёт членство напрямую,
+  //    лимба «approved-awaiting-payment» больше нет.)
+  //  - «Заявки в мои клубы» (инбокс организатора): ждут рассмотрения.
   const myActiveApps = useMemo(
     () => applications.filter((a) => a.status === 'pending'),
     [applications],
@@ -567,7 +569,7 @@ export const MyClubsPage: FC = () => {
 
   return (
     <div className="rd-page">
-      {/* Header */}
+      {/* Шапка */}
       <header className="rd-header">
         <div className="rd-info">
           <div className="rd-ft-eyebrow">
@@ -587,14 +589,14 @@ export const MyClubsPage: FC = () => {
         </button>
       </header>
 
-      {/* Loading spinner */}
+      {/* Спиннер загрузки */}
       {loading && (
         <div className="rd-spinner-row">
           <Spinner size="m" />
         </div>
       )}
 
-      {/* Empty state */}
+      {/* Пустое состояние */}
       {empty && (
         <div className="rd-glass rd-empty">
           <div style={{ color: 'var(--text-faint)', marginBottom: 8 }}>{PEOPLE_ICON}</div>
@@ -612,14 +614,14 @@ export const MyClubsPage: FC = () => {
       )}
 
       {/*
-        Sections grouped by addressee (see docs/modules/my-clubs-unified.md):
-        1. «Мои заявки» — applicant-side: pending applications awaiting the organizer's decision.
-        2. «Заявки в мои клубы» — organizer-side: pending review.
-        3. «Где я состою» — current memberships.
+        Секции сгруппированы по адресату (см. docs/modules/my-clubs-unified.md):
+        1. «Мои заявки» — сторона заявителя: pending-заявки, ждущие решения организатора.
+        2. «Заявки в мои клубы» — сторона организатора: ждут рассмотрения.
+        3. «Где я состою» — текущие членства.
       */}
 
-      {/* 0. My frozen memberships — «Доступ закрыт, оплатите взнос». Highest personal urgency, so it
-            leads. Tap → club page, where «Оплатить взнос» declares payment. */}
+      {/* 0. Мои frozen-членства — «Доступ закрыт, оплатите взнос». Максимальная личная срочность,
+            поэтому идёт первым. Тап → страница клуба, где «Оплатить взнос» заявляет оплату. */}
       {!loading && frozenMyClubs.length > 0 && (
         <>
           <div className="rd-section-sub-h rd-attn-pay">
@@ -647,7 +649,7 @@ export const MyClubsPage: FC = () => {
         </>
       )}
 
-      {/* 1. My applications (outgoing) — pending review */}
+      {/* 1. Мои заявки (исходящие) — ждут рассмотрения */}
       {!loading && myApplicationsCount > 0 && (
         <>
           <div className="rd-section-sub-h">
@@ -677,7 +679,7 @@ export const MyClubsPage: FC = () => {
         </>
       )}
 
-      {/* 2. Applications to my clubs (organizer inbox) — pending review */}
+      {/* 2. Заявки в мои клубы (инбокс организатора) — ждут рассмотрения */}
       {!loading && organizerInboxCount > 0 && (
         <>
           <div className="rd-section-sub-h">
@@ -698,9 +700,9 @@ export const MyClubsPage: FC = () => {
         </>
       )}
 
-      {/* 2b. Awaiting dues (organizer, cross-club) — frozen members the organizer must admit by
-             confirming their off-platform dues: join-by-«Вступить», approved applications, and members
-             who already declared payment («Оплата заявлена»). Mirrors «Оплата вступления» inside
+      {/* 2b. Ждут оплаты (организатор, кросс-клуб) — frozen-участники, которых организатор впускает,
+             подтверждая их внеплатформенный взнос: вступившие по «Вступить», одобренные заявки и те,
+             кто уже заявил оплату («Оплата заявлена»). Зеркалит «Оплату вступления» внутри
              Управление → Участники. */}
       {!loading && awaitingDues.length > 0 && (
         <>
@@ -720,7 +722,7 @@ export const MyClubsPage: FC = () => {
         </>
       )}
 
-      {/* 3. Active clubs (frozen ones are surfaced in the «Доступ закрыт» block above) */}
+      {/* 3. Активные клубы (frozen-члены показаны выше, в блоке «Доступ закрыт») */}
       {!loading && activeMyClubs.length > 0 && (
         <>
           <div className="rd-section-sub-h">
@@ -745,7 +747,7 @@ export const MyClubsPage: FC = () => {
       )}
 
 
-      {/* 4. История — clubs the user left but still has a reputation track record in */}
+      {/* 4. История — клубы, которые пользователь покинул, но репутационный след остался */}
       {!loading && historyClubs.length > 0 && (
         <>
           <div className="rd-section-sub-h">

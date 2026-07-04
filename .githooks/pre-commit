@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Pre-commit hook: detect secrets in staged changes before they hit git history.
+# Pre-commit hook: ловит секреты в staged-изменениях до того, как они попадут в git-историю.
 #
-# Activate once per clone:
+# Активация один раз на свежем clone:
 #   git config core.hooksPath .githooks
 #
-# Requires `gitleaks` on PATH. Install on macOS: brew install gitleaks
-# If gitleaks is missing the hook warns and lets the commit through —
-# CI (.github/workflows/secret-scan.yml) is the source of truth.
+# Требует `gitleaks` в PATH. Установка на macOS: brew install gitleaks
+# Если gitleaks не установлен — hook предупреждает и пропускает коммит:
+# источник истины — CI (.github/workflows/secret-scan.yml).
 
 set -e
 

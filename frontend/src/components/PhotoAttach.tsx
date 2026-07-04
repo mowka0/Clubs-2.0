@@ -3,22 +3,24 @@ import { uploadImage } from '../api/clubs';
 import { useHaptic } from '../hooks/useHaptic';
 import { ImageLightbox } from './ImageLightbox';
 
+// Максимальный размер файла — 5 МБ, зеркалит лимит backend /api/upload.
 const MAX_BYTES = 5 * 1024 * 1024;
+// Разрешённые MIME-типы загружаемого фото — те же, что валидирует backend /api/upload.
 const ALLOWED_MIMES = new Set(['image/jpeg', 'image/png']);
 
 interface Props {
   value: string | null;
   onChange: (url: string | null) => void;
   disabled?: boolean;
-  /** Button text when nothing is attached yet, e.g. "Прикрепить чек". */
+  /** Текст кнопки, пока ничего не прикреплено, например "Прикрепить чек". */
   addLabel?: string;
 }
 
 /**
- * Attach a single photo (receipt) to a form: upload → preview → tap-to-fullscreen. A wide preview
- * (not an avatar crop) keeps the receipt readable, and the [ImageLightbox] opens it full-screen so
- * each participant can work out their share. Upload validation mirrors the backend /api/upload
- * (JPEG/PNG, ≤5 MB). Reusable across skladchina creation forms.
+ * Прикрепление одного фото (чека) к форме: загрузка → превью → тап-на-весь-экран. Широкое превью
+ * (не обрезка под аватар) сохраняет чек читаемым, а [ImageLightbox] открывает его на весь экран,
+ * чтобы каждый участник мог разобрать свою долю. Валидация загрузки зеркалит backend /api/upload
+ * (JPEG/PNG, ≤5 МБ). Переиспользуется в формах создания складчины.
  */
 export const PhotoAttach: FC<Props> = ({ value, onChange, disabled, addLabel = 'Прикрепить фото' }) => {
   const inputRef = useRef<HTMLInputElement>(null);

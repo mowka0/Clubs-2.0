@@ -1,22 +1,22 @@
 /* ============================================================
-   "Banco-Plata" redesign — design-system components.
-   All classes are prefixed `rd-` so they never collide with the
-   legacy brand-theme.css cascade. Colors come exclusively from the
-   semantic tokens defined in brand-theme.css (:root / [data-theme]),
-   so every component works in both dark and light themes.
+   Редизайн «Banco-Plata» — компоненты дизайн-системы.
+   Все классы с префиксом `rd-`, чтобы никогда не пересекаться с
+   каскадом legacy brand-theme.css. Цвета берутся исключительно из
+   семантических токенов brand-theme.css (:root / [data-theme]),
+   поэтому каждый компонент работает и в тёмной, и в светлой теме.
    ============================================================ */
 
-/* Border-box for all redesign elements — padding must not widen the box,
-   otherwise the 16px page padding pushes content past the viewport (legacy
-   brand-theme.css has no global reset). Scoped to rd- containers so the
-   legacy cascade is untouched. */
+/* Border-box для всех элементов редизайна — padding не должен расширять бокс,
+   иначе страничный отступ 16px выталкивает контент за viewport (в legacy
+   brand-theme.css нет глобального reset). Ограничено rd-контейнерами, чтобы
+   не задеть legacy-каскад. */
 .rd-page, .rd-page *, .rd-page *::before, .rd-page *::after,
 .rd-dock, .rd-dock *, .rd-dock *::before,
 .rd-sticky-cta, .rd-sticky-cta * {
   box-sizing: border-box;
 }
 
-/* ---------- Surfaces ---------- */
+/* ---------- Поверхности ---------- */
 .rd-glass {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
@@ -34,19 +34,19 @@
   box-shadow: var(--glass-strong-shadow);
 }
 
-/* ---------- Page scaffold ---------- */
+/* ---------- Каркас страницы ---------- */
 .rd-page {
   position: relative;
   min-height: 100vh;
   width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
-  /* Flat, uniform canvas — same on every screen, matching the mockup. */
+  /* Плоский однородный фон — одинаковый на каждом экране, как в макете. */
   background: var(--bg);
   padding: 16px 16px calc(110px + env(safe-area-inset-bottom, 0px));
 }
 
-/* ---------- Header (home) ---------- */
+/* ---------- Шапка (главная) ---------- */
 .rd-header { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
 .rd-header .rd-avt {
   width: 44px; height: 44px; border-radius: 50%;
@@ -73,7 +73,7 @@
   flex-shrink: 0;
 }
 
-/* ---------- City pill ---------- */
+/* ---------- Пилюля города ---------- */
 .rd-city-pill {
   padding: 6px 10px 6px 12px;
   border-radius: 999px;
@@ -90,7 +90,7 @@
 }
 .rd-city-pill .chev { width: 12px; height: 12px; opacity: 0.6; }
 
-/* ---------- Stat cards ---------- */
+/* ---------- Карточки статистики ---------- */
 .rd-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
 .rd-stat { padding: 14px 14px 16px; min-height: 100px; }
 .rd-stat .rd-stat-label { font-size: 11px; color: var(--text-dim); margin-bottom: 10px; }
@@ -111,7 +111,7 @@
   display: flex; align-items: center; gap: 6px;
 }
 
-/* ---------- Club stats — unified block (кольца + лёгкая строка) ---------- */
+/* ---------- Статистика клуба — единый блок (кольца + лёгкая строка) ---------- */
 /* .qring = равные flex-колонки → промежутки между кольцами всегда одинаковые независимо от длины подписи */
 .qrings { display: flex; justify-content: space-around; gap: 8px; }
 .qring { display: flex; flex-direction: column; align-items: center; gap: 7px; flex: 1 1 0; min-width: 0; }
@@ -120,7 +120,7 @@
 .qr-l {
   font-size: 10px; color: var(--text-faint); font-weight: 600; text-align: center;
   line-height: 1.25; text-transform: uppercase; letter-spacing: 0.03em;
-  white-space: pre-line; /* each label forced to 2 lines (word per line) for uniform height */
+  white-space: pre-line; /* каждая подпись принудительно в 2 строки (слово на строку) для одинаковой высоты */
 }
 .q-divider { height: 1px; background: var(--hairline); margin: 14px 0; }
 .qstat-line { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); }
@@ -129,7 +129,7 @@
 .qstat.muted { color: var(--text-faint); }
 .qstat-line .dot { color: var(--text-faint); }
 
-/* ---------- Feature card ---------- */
+/* ---------- Feature-карточка ---------- */
 .rd-feature {
   padding: 16px 18px 18px; margin-bottom: 14px;
   position: relative; overflow: hidden; min-height: 96px;
@@ -160,7 +160,7 @@
   box-shadow: 0 0 8px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
-/* ---------- Stack (fresh clubs) ---------- */
+/* ---------- Стопка (свежие клубы) ---------- */
 .rd-stack { padding: 14px 14px 16px; margin-bottom: 14px; }
 .rd-stack-label { font-size: 11px; color: var(--text-dim); margin-bottom: 12px; }
 .rd-stack-title { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 14px; color: var(--text); }
@@ -183,7 +183,7 @@
   align-items: center; justify-content: center; padding: 0; box-shadow: none;
 }
 
-/* ---------- Section headings ---------- */
+/* ---------- Заголовки секций ---------- */
 .rd-section-h { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin: 18px 0 12px; color: var(--text); }
 .rd-section-h .rd-accent { color: var(--accent); }
 .rd-section-sub-h {
@@ -193,7 +193,7 @@
 .rd-section-sub-h .rd-count { color: var(--text-faint); }
 .rd-page-h { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; color: var(--text); }
 
-/* ---------- Search ---------- */
+/* ---------- Поиск ---------- */
 .rd-search {
   background: var(--surface); border: 1px solid var(--hairline);
   border-radius: 14px; padding: 11px 14px;
@@ -210,7 +210,7 @@
 .rd-search input::placeholder { color: var(--text-faint); }
 .rd-search svg { flex-shrink: 0; color: var(--text-faint); }
 
-/* ---------- Category chips ---------- */
+/* ---------- Чипы категорий ---------- */
 .rd-cat-chips { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 16px; padding-bottom: 2px; }
 .rd-cat-chips::-webkit-scrollbar { display: none; }
 .rd-cat-chip {
@@ -226,7 +226,7 @@
   box-shadow: 0 2px 6px var(--accent-shadow);
 }
 
-/* ---------- Club card (cover) ---------- */
+/* ---------- Карточка клуба (обложка) ---------- */
 .rd-club-card {
   border-radius: 18px; overflow: hidden; margin-bottom: 12px;
   background: var(--glass-bg); border: 1px solid var(--hairline);
@@ -238,14 +238,14 @@
 .rd-club-card .rd-cover {
   height: 96px;
   position: relative;
-  /* Slight desaturation so a feed of different category colours / photos doesn't clash */
+  /* Лёгкая десатурация, чтобы лента из разных категорийных цветов/фото не пестрила */
   filter: saturate(0.9);
   background:
     radial-gradient(circle at 70% 30%, rgba(255, 232, 200, 0.5), transparent 50%),
     linear-gradient(135deg, #F47B3C 0%, #5a3f1f 60%, #1a1108 100%);
 }
-/* Top→bottom darkening scrim: mutes varied banners across the feed and leaves a dark base at the
-   bottom for content we overlay on the banner later (avatar/name). Chips sit above it (z-index 2). */
+/* Затемняющий скрим сверху вниз: приглушает разномастные баннеры в ленте и оставляет тёмную
+   подложку снизу под контент, накладываемый на баннер позже (аватар/имя). Чипы выше него (z-index 2). */
 .rd-club-card .rd-cover::after {
   content: '';
   position: absolute;
@@ -259,15 +259,15 @@
     rgba(11, 11, 14, 0.78) 100%
   );
 }
-/* Flex column with a single uniform gap so the spacing between badge, name and city is identical —
-   and equal to the top padding, i.e. the same distance down from the cover (обои). */
+/* Flex-колонка с единым gap: расстояния между бейджем, именем и городом одинаковые —
+   и равны верхнему padding, т.е. тому же отступу вниз от обложки (обои). */
 .rd-club-card .rd-body { padding: 5px 14px 14px; display: flex; flex-direction: column; gap: 5px; }
 .rd-club-card .rd-ttl { font-size: 14px; font-weight: 700; color: var(--text); }
 .rd-club-card .rd-meta { font-size: 11px; color: var(--text-dim); }
 
-/* Discovery-card: price chip on the banner + segmented metric trio (возраст · участники · вовлечённость) */
-/* The chip sits on the darkened banner in BOTH themes → fixed light text (not var(--text), which is
-   dark in light theme and would vanish against the dark scrim). */
+/* Discovery-карточка: чип цены на баннере + сегментированное трио метрик (возраст · участники · вовлечённость) */
+/* Чип лежит на затемнённом баннере в ОБЕИХ темах → фиксированный светлый текст (не var(--text):
+   в светлой теме он тёмный и пропал бы на тёмном скриме). */
 .rd-club-card .rd-price-chip {
   position: absolute; top: 10px; right: 12px; z-index: 2;
   font-size: 12px; font-weight: 700; color: #fff;
@@ -278,25 +278,26 @@
   display: flex; gap: 1px;
   background: var(--hairline); border-radius: 13px; overflow: hidden;
 }
-/* Sunken cell. Dark navy in the dark theme (punchy panels, white text); a light grey in the light
-   theme so the dark text/values stay readable. The text colours are theme tokens (--text/--live/
-   --text-faint), which already carry correct light-theme values — only the cell fill needs the override. */
+/* «Утопленная» ячейка. В тёмной теме — тёмно-синяя (контрастные панели, белый текст); в светлой —
+   светло-серая, чтобы тёмный текст/значения оставались читаемыми. Цвета текста — токены темы
+   (--text/--live/--text-faint) с уже верными значениями для светлой темы — переопределяется только заливка ячейки. */
 .rd-club-card .rd-mstat { flex: 1; background: rgba(18, 20, 28, 0.55); padding: 11px 8px; text-align: center; }
 [data-theme="light"] .rd-club-card .rd-mstat { background: rgba(0, 0, 0, 0.04); }
 .rd-club-card .rd-mv { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; color: var(--text); }
 .rd-club-card .rd-mv.ok { color: var(--live); }
 .rd-club-card .rd-ml { font-size: 9.5px; color: var(--text-faint); margin-top: 4px; line-height: 1.2; }
 
-/* Soft-rank "★ Топ-5 в категории" (the only externally-visible L3 derivative). Gold pill, fixed dark
-   text — theme-independent like the price chip (the gold reads in both themes). Ported from the locked
-   mockup final.html. Hidden unless the backend feature flag is on AND the club is badged. */
+/* Soft-ранг «★ Топ-5 в категории» (единственная видимая наружу производная L3). Золотая пилюля,
+   фиксированный тёмный текст — не зависит от темы, как чип цены (золото читается в обеих темах).
+   Перенесено из залоченного макета final.html. Показывается только при включённом backend-фича-флаге
+   И наличии бейджа у клуба. */
 .rd-club-card .rd-rankpill {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
   background: linear-gradient(135deg, #FFD89B 0%, #E9A23C 100%); color: #2A1A04;
 }
 
-/* Category cover gradients (data-cat) */
+/* Градиенты обложек по категориям (data-cat) */
 .rd-cover[data-cat="sport"]       { background: radial-gradient(circle at 70% 30%, rgba(255,232,200,0.5), transparent 50%), linear-gradient(135deg, #F47B3C 0%, #5a3f1f 60%, #1a1108 100%); }
 .rd-cover[data-cat="creative"]    { background: radial-gradient(circle at 70% 30%, rgba(220,210,255,0.45), transparent 50%), linear-gradient(135deg, #7A5CF4 0%, #2f2a57 60%, #100e22 100%); }
 .rd-cover[data-cat="education"]   { background: radial-gradient(circle at 70% 30%, rgba(200,220,255,0.4), transparent 50%), linear-gradient(135deg, #6A82B9 0%, #2c3e57 60%, #0c1018 100%); }
@@ -305,12 +306,12 @@
 .rd-cover[data-cat="board_games"] { background: radial-gradient(circle at 70% 30%, rgba(170,235,200,0.4), transparent 50%), linear-gradient(135deg, #2E9A6A 0%, #144a32 60%, #061a10 100%); }
 .rd-cover[data-cat="travel"]      { background: radial-gradient(circle at 70% 30%, rgba(255,190,210,0.4), transparent 50%), linear-gradient(135deg, #C44E7A 0%, #5a2438 60%, #1a0a14 100%); }
 
-/* ---------- Inbox panel head ---------- */
+/* ---------- Шапка панели инбокса ---------- */
 .rd-inbox-head { padding: 14px 16px 8px; }
 .rd-inbox-head .rd-eyebrow { font-size: 11px; color: var(--text-dim); letter-spacing: 0.04em; margin-bottom: 4px; }
 .rd-inbox-head .rd-title { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
 
-/* ---------- Reputation / club rows ---------- */
+/* ---------- Строки репутации / клубов ---------- */
 .rd-rep-panel { padding: 4px; }
 .rd-rep-row {
   display: flex; align-items: center; gap: 12px; padding: 14px;
@@ -318,8 +319,8 @@
   cursor: pointer; font-family: inherit;
 }
 .rd-rep-row + .rd-rep-row { border-top: 1px solid var(--hairline); }
-/* Application card with a corner «×» (withdraw). Content clears the notch on the right; the notch mirrors
-   the panel's corner radius (top-right rounded like the card, bottom-left rounded as its reflection). */
+/* Карточка заявки с угловым «×» (отзыв заявки). Контент не заходит под вырез справа; вырез повторяет
+   радиус угла панели (правый верхний скруглён как у карточки, левый нижний — его зеркальное отражение). */
 .rd-app-row { position: relative; padding-right: 36px; }
 .rd-app-cancel {
   position: absolute; top: 0; right: 0; width: 32px; height: 32px; padding: 0;
@@ -332,7 +333,7 @@
 .rd-app-cancel:hover, .rd-app-cancel:active { color: #fff; background: var(--danger); }
 .rd-app-cancel:disabled { opacity: 0.5; cursor: default; }
 
-/* Inline withdraw confirmation (replaces the row content on «×» tap — simpler than a modal). */
+/* Инлайн-подтверждение отзыва (замещает контент строки по тапу на «×» — проще, чем модалка). */
 .rd-app-confirm { justify-content: space-between; }
 .rd-app-confirm .rd-info { flex: 1; min-width: 0; }
 .rd-app-confirm-acts { display: flex; gap: 8px; flex-shrink: 0; }
@@ -343,8 +344,8 @@
 .rd-app-confirm-acts > button:disabled { opacity: 0.5; cursor: default; }
 .rd-app-confirm-no { background: var(--surface-2); color: var(--text); }
 .rd-app-confirm-yes { background: var(--danger); color: #fff; }
-/* Status meta lines (frozen «Доступ закрыт» card) — colour replaces the old right-side badge so the
-   top-right corner is free for the «×». A soft accent (not alarming red) reads as a gentle reminder. */
+/* Мета-строки статуса (frozen-карточка «Доступ закрыт») — цвет заменяет старый бейдж справа,
+   освобождая правый верхний угол под «×». Мягкий акцент (не тревожный красный) читается как деликатное напоминание. */
 .rd-rep-row .rd-met.rd-met-soft { color: var(--accent); }
 .rd-rep-row .rd-met.rd-met-ok { color: var(--live); }
 .rd-rep-row .rd-ico {
@@ -364,12 +365,12 @@
 .rd-rep-row .rd-v.rd-high { color: var(--live); }
 .rd-rep-row .rd-v.rd-mid  { color: var(--accent); }
 .rd-rep-row .rd-v.rd-low  { color: #E08A7A; }
-/* Newcomer / own-club organizer — neutral chip, no number yet (see reputation-v2). */
+/* Новичок / организатор своего клуба — нейтральный чип, числа ещё нет (см. reputation-v2). */
 .rd-rep-row .rd-v.rd-new  { color: var(--text-faint); font-size: 13px; font-weight: 600; }
 
-/* ---------- De-Stars members dashboard (attention buckets + gate) ---------- */
-/* Action-row layout: a tappable info area (opens the profile) + a trailing «Взнос получен» button.
-   The row is a div so the two tap targets don't nest. */
+/* ---------- Дашборд участников de-Stars (бакеты внимания + гейт) ---------- */
+/* Раскладка action-строки: тапабельная инфо-зона (открывает профиль) + кнопка «Взнос получен» в конце.
+   Строка — div, чтобы две тап-цели не вкладывались друг в друга. */
 .rd-rep-row .rd-rep-row-main {
   display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;
   background: transparent; border: 0; padding: 0; cursor: pointer; font-family: inherit; text-align: left;
@@ -388,39 +389,39 @@
 .rd-attn-block { margin-bottom: 16px; }
 .rd-attn-block-exp { border-color: rgba(255, 139, 139, 0.26); }
 .rd-attn-block-pay { border-color: var(--accent-soft); }
-/* Access-OK meta line in the calm list (organizer's «Активен · до …»). */
+/* Мета-строка «доступ в порядке» в спокойном списке (организаторское «Активен · до …»). */
 .rd-met.rd-met-ok { color: var(--live); }
 
-/* ── Frozen / no-access member (de-Stars) ──────────────────────────────────────────────
-   One shared «iced» treatment for the club roster row (ClubMembersTab — frozen members sink
-   to the bottom of the flat list) and the skladchina participant picker (CreateSkladchinaPage —
-   frozen members are unselectable). Cool tint + a left ice-rail + muted content, so a member with
-   no club access reads at a glance and never blends into the active list. */
+/* ── Frozen-участник / участник без доступа (de-Stars) ─────────────────────────────────
+   Единый «ледяной» вид для строки ростера клуба (ClubMembersTab — frozen-участники опускаются
+   в конец плоского списка) и пикера участников складчины (CreateSkladchinaPage — frozen-участники
+   невыбираемы). Холодный тон + левая ледяная рейка + приглушённый контент: участник без доступа
+   к клубу считывается с одного взгляда и не сливается с активным списком. */
 .rd-rep-row.rd-frozen,
 .rd-pick-toggle.rd-frozen { background: var(--ice-soft); box-shadow: inset 3px 0 0 var(--ice); }
 .rd-rep-row.rd-frozen .rd-ico,
 .rd-rep-row.rd-frozen .rd-ttl,
 .rd-rep-row.rd-frozen .rd-score { opacity: 0.6; }
 .rd-met.rd-met-frozen { color: var(--ice); }
-/* Round the iced tint + rail at the panel edges so the blue strip follows the block's corner radius
-   instead of poking out square. Frozen rows sink to the bottom → :last-child is the common case;
-   :first-child covers an all-frozen list. Inner radius = panel 22px − 4px panel padding. */
+/* Скругляем ледяной тон + рейку на краях панели, чтобы синяя полоса следовала радиусу угла блока,
+   а не торчала квадратом. Frozen-строки опускаются вниз → :last-child — типовой случай;
+   :first-child покрывает список из одних frozen. Внутренний радиус = 22px панели − 4px её padding. */
 .rd-rep-row.rd-frozen:first-child { border-top-left-radius: 18px; border-top-right-radius: 18px; }
 .rd-rep-row.rd-frozen:last-child { border-bottom-left-radius: 18px; border-bottom-right-radius: 18px; }
-/* Keep the ice tint + «Доступ закрыт» legible — override the 0.45 disabled dim on the picker. */
+/* Сохраняем читаемость ледяного тона + «Доступ закрыт» — перебиваем затемнение 0.45 у disabled-пикера. */
 .rd-pick-toggle.rd-frozen:disabled { opacity: 0.8; }
 .rd-pick-toggle.rd-frozen .rd-pick-note { color: var(--ice); }
 
-/* Organizer gate inside the profile card */
+/* Гейт организатора внутри карточки профиля */
 .rd-org-gate { margin-top: 16px; }
 
-/* «Управление участником» panel (R1): grouped, compact management controls. */
+/* Панель «Управление участником» (R1): сгруппированные компактные управляющие контролы. */
 .rd-mgmt { border: 1px solid var(--hairline-2); border-radius: 18px; background: rgba(255, 255, 255, 0.022); overflow: hidden; }
 [data-theme="light"] .rd-mgmt { background: rgba(0, 0, 0, 0.018); }
 .rd-mgmt-h { font-size: 11px; letter-spacing: 0.06em; color: var(--accent); font-weight: 700; text-transform: uppercase; padding: 13px 14px 0; }
 .rd-mgmt-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
-/* Stacked bodies (subscription strip → note → «своя дата») otherwise add 12+12px between them. Drop the
-   2nd+ body's top padding so consecutive blocks sit at the panel's normal ~12px field rhythm. */
+/* Идущие подряд body (полоса подписки → заметка → «своя дата») иначе дают 12+12px между собой.
+   У 2-го и последующих убираем верхний padding, чтобы блоки держали обычный ~12px ритм полей панели. */
 .rd-mgmt-body + .rd-mgmt-body { padding-top: 0; }
 .rd-mgmt-body .rd-claim-compact { margin-bottom: 0; }
 .rd-mgmt-sum { display: flex; align-items: flex-start; gap: 10px; }
@@ -439,7 +440,7 @@
 .rd-mgmt-pb.primary small { display: block; font-size: 10.5px; font-weight: 600; opacity: 0.92; margin-top: 1px; }
 .rd-mgmt-pb.danger { border: 0; background: var(--danger-soft); color: var(--danger); }
 .rd-mgmt-pb:disabled { opacity: 0.5; cursor: default; }
-/* Frozen status line — plain text (not the boxed «rd-claim» card). */
+/* Строка frozen-статуса — простой текст (не карточка-бокс «rd-claim»). */
 .rd-mgmt-claim-line { font-size: 13px; font-weight: 700; color: var(--text); }
 .rd-mgmt-note { border-top: 1px solid var(--hairline); padding: 11px 15px; display: flex; gap: 9px; font-size: 12.5px; color: var(--text-dim); line-height: 1.45; }
 .rd-mgmt-note-k { color: var(--text-faint); font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; padding-top: 2px; flex-shrink: 0; }
@@ -464,9 +465,9 @@
 }
 .rd-org-gate-acts { display: flex; flex-direction: column; gap: 9px; }
 
-/* Member admin S1 (Variant B): always-open note + «своя дата» blocks inside the management panel.
-   No extra top margin / field bottom margin — the panel's block padding already provides the standard
-   between-fields rhythm (excess spacing looked off vs. the rest of the form). */
+/* Member admin S1 (вариант B): всегда открытые блоки заметки + «своя дата» внутри панели управления.
+   Без лишнего верхнего margin / нижнего margin поля — блочный padding панели уже даёт стандартный
+   ритм между полями (избыточные отступы выбивались на фоне остальной формы). */
 .rd-org-edit { margin-top: 0; }
 .rd-org-edit .rd-field { margin-bottom: 0; }
 .rd-org-note-read {
@@ -478,7 +479,7 @@
   color: var(--text-faint); margin-bottom: 4px;
 }
 
-/* Member admin S2 (Variant B): club awards — chips + «как интересы» grant form. */
+/* Member admin S2 (вариант B): клубные награды — чипы + форма выдачи «как интересы». */
 .rd-award-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .rd-award-chip {
   display: inline-flex; align-items: center; gap: 5px;
@@ -525,12 +526,12 @@
 .rd-award-suggest-h, .rd-award-new-h { font-size: 11px; font-weight: 600; color: var(--text-dim); }
 .rd-award-new-h { margin-top: 12px; margin-bottom: 7px; }
 .rd-award-hint { margin-top: 8px; font-size: 11px; color: var(--text-faint); }
-/* Compact award chips on the roster card (member list, R3) — emoji + label, smaller than the profile. */
+/* Компактные чипы наград на карточке ростера (список участников, R3) — эмодзи + подпись, мельче, чем в профиле. */
 .rd-member-awards { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
 .rd-award-chip-sm { padding: 3px 8px; font-size: 10.5px; }
 .rd-award-chip-sm .rd-award-emoji { font-size: 12px; }
 
-/* De-Stars dues payment flow (member 2-step sheet + organizer claim review). */
+/* Флоу оплаты взноса de-Stars (двухшаговый шит участника + ревью claim организатором). */
 .rd-dues-amount { display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px; }
 .rd-dues-emoji { font-size: 22px; line-height: 1; }
 .rd-dues-sum { font-size: 28px; font-weight: 800; color: var(--text); }
@@ -552,7 +553,8 @@
 }
 .rd-claim-h { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
 .rd-claim-note { font-size: 12px; color: var(--text-dim); }
-/* De-Stars: compact frozen/claim card — neutral surface; tappable screenshot thumbnail (opens ImageLightbox). */
+/* De-Stars: компактная карточка frozen/claim — нейтральная поверхность; тапабельная миниатюра
+   скриншота (открывает ImageLightbox). */
 .rd-claim-compact { padding: 10px 12px; margin-bottom: 10px; background: var(--surface); border-color: var(--hairline); }
 .rd-claim-compact .rd-claim-h { margin-bottom: 0; }
 .rd-claim-compact .rd-claim-note { margin-top: 6px; }
@@ -568,7 +570,7 @@
 .rd-reject-confirm { margin-top: 4px; }
 .rd-reject-q { font-size: 12.5px; color: var(--text-dim); line-height: 1.45; margin-bottom: 9px; }
 
-/* Organizer trust card on the dues-payment sheet («кому вы переводите»). Account-focused, graceful. */
+/* Карточка доверия организатора на шите оплаты взноса («кому вы переводите»). Акцент на аккаунте, деликатная. */
 .rd-ot { background: var(--surface); border: 1px solid var(--hairline); border-radius: 16px; padding: 14px; margin-bottom: 14px; }
 .rd-ot-cap { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 10px; }
 .rd-ot-top { display: flex; gap: 11px; align-items: center; }
@@ -586,14 +588,14 @@
 .rd-ot-f b { font-weight: 700; }
 .rd-ot-nudge { margin-top: 12px; background: var(--accent-soft); border: 1px solid rgba(224, 122, 62, 0.22); border-radius: 12px; padding: 10px 12px; font-size: 12.5px; color: var(--text-dim); line-height: 1.45; }
 
-/* Red-dot on a section tab («Участники» / «Управление») — de-Stars attention badge. */
+/* Red-dot на табе раздела («Участники» / «Управление») — бейдж внимания de-Stars. */
 .rd-tab-link .rd-tab-dot {
   position: absolute; top: 4px; right: -10px; width: 7px; height: 7px; border-radius: 50%;
   background: linear-gradient(135deg, #ff4d6a, #c4304a); box-shadow: 0 0 6px rgba(255, 77, 106, 0.6);
 }
 
-/* ---------- Reputation rings (member card + application card) ---------- */
-/* Single row, no wrap — up to 3 rings share the width equally (flex:1 + min-width:0). */
+/* ---------- Кольца репутации (карточка участника + карточка заявки) ---------- */
+/* Одна строка без переноса — до 3 колец делят ширину поровну (flex:1 + min-width:0). */
 .rd-rings { display: flex; flex-wrap: nowrap; justify-content: space-around; gap: 8px; padding: 16px 4px; }
 .rd-ring { display: flex; flex-direction: column; align-items: center; gap: 7px; flex: 1 1 0; min-width: 0; }
 .rd-ring-l {
@@ -606,10 +608,10 @@
 .rd-rep-foot { font-size: 11px; color: var(--text-faint); margin-top: 10px; line-height: 1.4; text-align: center; }
 .rd-rep-foot b { color: var(--text-dim); }
 
-/* Application card: «надёжен в N из M клубов» donut row. */
+/* Карточка заявки: donut-строка «надёжен в N из M клубов». */
 .rd-activity { display: flex; align-items: center; gap: 16px; padding: 16px; }
 
-/* ---------- Level pill (gamification level — application card + inbox row) ---------- */
+/* ---------- Плашка уровня (уровень геймификации — карточка заявки + строка инбокса) ---------- */
 .rd-lvl-pill {
   display: inline-block; padding: 3px 10px; border-radius: 999px;
   font-size: 12px; font-weight: 700; line-height: 1.25; white-space: nowrap;
@@ -619,7 +621,7 @@
 .rd-lvl-pill--mid { background: var(--accent-soft); color: var(--accent); }
 .rd-lvl-pill--base { background: var(--surface); color: var(--text-dim); border: 1px solid var(--hairline); }
 
-/* ---------- Profile identity ---------- */
+/* ---------- Идентичность профиля ---------- */
 .rd-pf-identity { text-align: center; margin-bottom: 18px; }
 .rd-pf-identity .rd-avt {
   width: 88px; height: 88px; border-radius: 50%; margin: 0 auto 12px;
@@ -638,7 +640,7 @@
 
 .rd-bio { font-size: 13px; color: var(--text-dim); line-height: 1.5; padding: 0 6px; margin-bottom: 18px; text-align: center; }
 
-/* ---------- Tags ---------- */
+/* ---------- Теги ---------- */
 .rd-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
 .rd-tag {
   padding: 5px 11px; border-radius: 999px;
@@ -647,7 +649,7 @@
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
 
-/* ---------- Gear / icon button ---------- */
+/* ---------- Кнопка-шестерёнка / иконка ---------- */
 .rd-icon-btn {
   width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
   background: var(--surface); border: 1px solid var(--glass-border);
@@ -658,15 +660,15 @@
 }
 .rd-icon-btn:disabled { opacity: 0.5; }
 
-/* ---------- Floating dock ---------- */
+/* ---------- Плавающий док ---------- */
 .rd-dock {
   position: fixed;
-  /* Keep ~half of the home-indicator safe-area as breathing room so the dock
-     sits visibly lower without touching the system indicator. */
+  /* Оставляем ~половину safe-area home-indicator как воздух, чтобы док визуально
+     сидел ниже, не касаясь системного индикатора. */
   bottom: calc(4px + env(safe-area-inset-bottom, 0px) * 0.4);
   left: 14px; right: 14px;
   display: flex; gap: 10px; align-items: center;
-  /* above page content (z 1) but below TGUI overlay (z 3) */
+  /* выше контента страницы (z 1), но ниже оверлея TGUI (z 3) */
   z-index: 2;
 }
 .rd-dock-pill {
@@ -709,8 +711,8 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 40px rgba(0, 0, 0, 0.4);
   transition: border-color 0.2s, color 0.2s, box-shadow 0.2s;
 }
-/* "armed" for the current club: accent ring + accent glyph (not a solid fill —
-   solid would read as "already pressed" like the active tab). */
+/* «взведено» для текущего клуба: кольцо + глиф акцентного цвета (не сплошная заливка —
+   она читалась бы как «уже нажато», как активный таб). */
 .rd-dock-action.rd-scoped {
   border: 1.5px solid var(--accent);
   color: var(--accent);
@@ -721,11 +723,11 @@
     0 2px 12px var(--accent-shadow);
 }
 
-/* dock backing — needs more opacity than glass tokens to float over content */
+/* фон дока — нужна непрозрачность выше, чем у glass-токенов, чтобы он «плавал» над контентом */
 :root { --dock-bg: linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%), rgba(15, 15, 20, 0.72); }
 [data-theme="light"] { --dock-bg: linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(250,250,248,0.9) 100%); }
 
-/* ---------- Segmented control ---------- */
+/* ---------- Сегментированный контрол ---------- */
 .rd-seg-control {
   display: flex; background: var(--surface); border: 1px solid var(--hairline);
   border-radius: 14px; padding: 3px; margin-bottom: 14px;
@@ -741,7 +743,7 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-/* ---------- Activity card ---------- */
+/* ---------- Карточка активности ---------- */
 .rd-activity-card {
   border-radius: 18px; overflow: hidden; margin-bottom: 12px;
   background: var(--glass-bg); border: 1px solid var(--hairline);
@@ -784,7 +786,7 @@
 .rd-badge.rd-neutral { background: var(--surface); color: var(--text-dim); border: 1px solid var(--hairline); }
 .rd-badge.rd-rep { background: var(--accent-soft); color: var(--accent); }
 
-/* segmented badge */
+/* сегментированный бейдж */
 .rd-seg-item { position: relative; }
 .rd-seg-badge {
   display: inline-flex; align-items: center; justify-content: center;
@@ -793,7 +795,7 @@
   color: #fff; font-size: 10px; font-weight: 700; vertical-align: middle;
 }
 
-/* feed skeleton */
+/* скелетон ленты */
 .rd-skeleton {
   border-radius: 18px; overflow: hidden; margin-bottom: 12px;
   background: var(--glass-bg); border: 1px solid var(--hairline);
@@ -805,7 +807,7 @@
 .rd-skeleton .rd-sk-line.rd-short { width: 45%; }
 @keyframes rd-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
-/* ---------- Underline tabs ---------- */
+/* ---------- Табы с подчёркиванием ---------- */
 .rd-tabs { display: flex; gap: 20px; padding: 0 4px; margin-bottom: 16px; border-bottom: 1px solid var(--hairline); }
 .rd-tab-link {
   padding: 8px 0 11px; font-size: 13px; font-weight: 600; color: var(--text-dim);
@@ -817,7 +819,7 @@
   background: var(--accent-grad); border-radius: 2px;
 }
 
-/* ---------- Member strip ---------- */
+/* ---------- Полоска аватаров участников ---------- */
 .rd-member-strip { display: flex; align-items: center; margin-bottom: 16px; }
 .rd-m-avt {
   width: 32px; height: 32px; border-radius: 50%; margin-left: -10px;
@@ -830,7 +832,7 @@
 .rd-m-avt img { width: 100%; height: 100%; object-fit: cover; }
 .rd-m-count { font-size: 12px; color: var(--text-dim); margin-left: 10px; }
 
-/* ---------- Sticky CTA ---------- */
+/* ---------- Прилипающая кнопка действия ---------- */
 .rd-sticky-cta {
   position: fixed;
   bottom: calc(96px + env(safe-area-inset-bottom, 0px));
@@ -843,7 +845,7 @@
   box-shadow: 0 4px 10px var(--accent-shadow), 0 8px 18px var(--accent-shadow-soft), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
-/* ---------- Hero (club / event) ---------- */
+/* ---------- Hero-баннер (клуб / событие) ---------- */
 .rd-hero { margin: -16px -16px 16px; position: relative; height: 240px; }
 .rd-hero.rd-compact { height: 200px; }
 .rd-hero .rd-hero-bg {
@@ -881,7 +883,7 @@
   font-size: 9px; font-weight: 700; letter-spacing: 0.12em; margin-bottom: 10px;
 }
 
-/* ---------- Inline CTA buttons ---------- */
+/* ---------- Инлайн-кнопки действий ---------- */
 .rd-cta-wrap { margin: 6px 0 18px; }
 .rd-btn-primary {
   width: 100%; background: var(--accent-grad); color: var(--on-accent);
@@ -910,7 +912,7 @@
   background: var(--accent-soft); border-radius: 12px;
 }
 
-/* ---------- Locked placeholder ---------- */
+/* ---------- Заглушка «доступ закрыт» ---------- */
 .rd-locked { display: flex; gap: 12px; align-items: center; padding: 16px; margin-bottom: 14px; }
 .rd-locked .rd-lock-ico {
   width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
@@ -920,7 +922,7 @@
 .rd-locked .rd-text strong { display: block; font-size: 14px; color: var(--text); margin-bottom: 3px; }
 .rd-locked .rd-text { font-size: 12px; color: var(--text-dim); line-height: 1.45; }
 
-/* ---------- Host card (event organizer row) ---------- */
+/* ---------- Карточка хоста (строка организатора события) ---------- */
 .rd-host-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; }
 .rd-host-row .rd-ico {
   width: 30px; height: 30px; border-radius: 10px; flex-shrink: 0; overflow: hidden;
@@ -933,7 +935,7 @@
 .rd-host-row .rd-ttl { font-size: 13px; font-weight: 600; color: var(--text); }
 .rd-host-row .rd-met { font-size: 10.5px; color: var(--text-dim); margin-top: 1px; }
 
-/* ---------- Address / map ---------- */
+/* ---------- Адрес / карта ---------- */
 .rd-mini-map {
   height: 110px; position: relative;
   background:
@@ -945,7 +947,7 @@
 .rd-addr-body .rd-a-ttl { font-size: 13px; font-weight: 600; color: var(--text); }
 .rd-addr-body .rd-a-met { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 
-/* ---------- Voting / stats (event page) ---------- */
+/* ---------- Голосование / статистика (страница события) ---------- */
 .rd-vote-row { display: flex; gap: 8px; }
 .rd-vote-btn {
   flex: 1; padding: 12px; border-radius: 12px;
@@ -954,13 +956,14 @@
   cursor: pointer; font-family: inherit;
 }
 .rd-vote-btn:disabled { opacity: 0.6; cursor: default; }
-/* Active vote button takes its own vote colour — matches the donut slice and the status dot
-   (going = orange, maybe = purple, not going = grey; see --vote-* in brand-theme.css). */
+/* Активная кнопка голоса окрашивается в свой цвет — совпадает с сегментом donut-диаграммы
+   и точкой статуса (иду = оранжевый, может быть = фиолетовый, не иду = серый; см. --vote-*
+   в brand-theme.css). */
 .rd-vote-btn.rd-active { color: #fff; border-color: transparent; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28); }
 .rd-vote-btn.rd-active.rd-vb-go { background: var(--vote-go); color: var(--on-accent); box-shadow: 0 2px 6px var(--accent-shadow); }
 .rd-vote-btn.rd-active.rd-vb-maybe { background: var(--vote-maybe); }
 .rd-vote-btn.rd-active.rd-vb-no { background: var(--vote-no); }
-/* voting: stacked buttons (left half) + donut chart (right half, ~50/50) */
+/* голосование: колонка кнопок (левая половина) + donut-диаграмма (правая половина, ~50/50) */
 .rd-vote-layout { display: flex; gap: 14px; align-items: center; margin-bottom: 8px; }
 .rd-vote-stack { flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
 .rd-vote-stack .rd-vote-btn {
@@ -974,7 +977,7 @@
 }
 .rd-donut::after { content: ''; position: absolute; inset: 18px; border-radius: 50%; background: var(--bg); }
 .rd-donut-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 1; }
-/* Diagonal fraction (numerator raised, denominator lowered) — like a hand-written 3/4. */
+/* Диагональная дробь (числитель приподнят, знаменатель опущен) — как рукописная 3/4. */
 .rd-donut-num {
   font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1;
   white-space: nowrap;
@@ -984,7 +987,7 @@
 .rd-donut-num .rd-sl { font-size: 1.25em; font-weight: 600; margin: 0 -1px; }
 .rd-donut-cap { font-size: 9px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 3px; }
 
-/* voters list — 2-column compact grid (avatar + name + status dot) */
+/* список проголосовавших — компактная сетка в 2 колонки (аватар + имя + точка статуса) */
 .rd-voters { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 12px; margin-bottom: 18px; }
 .rd-voter { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .rd-voter .rd-av {
@@ -996,16 +999,17 @@
 .rd-voter .rd-av img { width: 100%; height: 100%; object-fit: cover; }
 .rd-voter .rd-vn { font-size: 12.5px; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rd-voter .rd-vdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-/* Dots mirror the vote palette: going = orange, maybe = purple, not going = grey —
-   same colours as the donut chart and the vote buttons (see --vote-* in brand-theme.css). */
+/* Точки повторяют палитру голосования: иду = оранжевый, может быть = фиолетовый, не иду = серый —
+   те же цвета, что у donut-диаграммы и кнопок голосования (см. --vote-* в brand-theme.css). */
 .rd-vdot.rd-d-go { background: var(--vote-go); }
 .rd-vdot.rd-d-maybe { background: var(--vote-maybe); }
 .rd-vdot.rd-d-no { background: var(--vote-no); }
-/* Booking burned (voted going/maybe, never confirmed) — distinct from grey "не пришёл". */
+/* Бронь сгорела (проголосовал «иду»/«может быть», но так и не подтвердил) — отличается
+   от серого «не пришёл». */
 .rd-vdot.rd-d-expired { background: var(--danger); }
 
-/* Contested-attendance resolve list (organizer): name on the left, ✓/✗ icon buttons on the
-   right, optional participant note underneath. */
+/* Список разрешения спорной посещаемости (организатор): имя слева, кнопки-иконки ✓/✗
+   справа, опциональная заметка участника снизу. */
 .rd-dispute-list { padding: 8px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; }
 .rd-dispute-item { display: flex; flex-direction: column; gap: 6px; }
 .rd-dispute-row { display: flex; align-items: center; gap: 10px; }
@@ -1037,10 +1041,10 @@
 .rd-kv + .rd-kv { border-top: 1px solid var(--hairline); }
 .rd-kv .rd-v { color: var(--text-dim); }
 
-/* ---------- Generic body text ---------- */
+/* ---------- Обычный текст в теле страницы ---------- */
 .rd-body-text { font-size: 13px; color: var(--text-dim); line-height: 1.5; padding: 0 4px; margin-bottom: 18px; }
 
-/* ---------- Empty state ---------- */
+/* ---------- Пустое состояние ---------- */
 .rd-empty { padding: 28px 18px; text-align: center; }
 .rd-empty .rd-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
 .rd-empty .rd-sub { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin-bottom: 14px; }
@@ -1053,12 +1057,12 @@
 .rd-spinner-row { display: flex; justify-content: center; padding: 24px 0; }
 
 /* ============================================================
-   Forms (create-event / create-skladchina / create-club / settings)
-   Native inputs styled to match the rd surface language. Works with
-   plain <input>/<textarea>/<select> and react-hook-form `register`.
+   Формы (create-event / create-skladchina / create-club / settings)
+   Нативные инпуты, стилизованные под язык поверхностей rd. Работают с
+   обычными <input>/<textarea>/<select> и react-hook-form `register`.
    ============================================================ */
-/* Modal-hosted forms render in a portal outside `.rd-page`, so they miss the
-   page-level border-box reset — scope one here. */
+/* Формы, живущие в модалках, рендерятся в portal вне `.rd-page`, поэтому им не
+   достаётся page-level сброс border-box — задаём его здесь локально. */
 .rd-modal-form, .rd-modal-form * { box-sizing: border-box; }
 
 .rd-form { display: flex; flex-direction: column; gap: 16px; }
@@ -1081,7 +1085,7 @@
 .rd-input.rd-invalid, .rd-textarea.rd-invalid { border-color: var(--danger); }
 .rd-textarea { resize: vertical; min-height: 78px; line-height: 1.45; }
 
-/* select — custom chevron via wrapper (appearance reset above) */
+/* select — свой шеврон через враппер (appearance сброшен выше) */
 .rd-select-wrap { position: relative; }
 .rd-select { padding-right: 36px; cursor: pointer; }
 .rd-select-wrap::after {
@@ -1091,7 +1095,7 @@
 
 .rd-hint { font-size: 11.5px; color: var(--text-faint); line-height: 1.4; padding-left: 2px; }
 
-/* datetime — native control + trailing icon */
+/* datetime — нативный контрол + иконка справа */
 .rd-datetime { position: relative; }
 .rd-datetime .rd-input { padding-right: 42px; }
 .rd-datetime .rd-dt-ico {
@@ -1099,11 +1103,11 @@
   color: var(--text-faint); pointer-events: none; display: flex;
 }
 
-/* form action row (Cancel / Submit side by side) */
+/* строка действий формы (Отмена / Отправить рядом) */
 .rd-form-actions { display: flex; gap: 10px; margin-top: 6px; }
 .rd-form-actions > .rd-btn-primary, .rd-form-actions > .rd-btn-outline { flex: 1; width: auto; }
 
-/* radio "mode" cards */
+/* радио-карточки «режим» */
 .rd-mode-list { display: flex; flex-direction: column; gap: 8px; }
 .rd-mode-option {
   display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px;
@@ -1115,12 +1119,12 @@
 .rd-mode-option .rd-mo-title { font-size: 14px; font-weight: 600; color: var(--text); }
 .rd-mode-option .rd-mo-desc { font-size: 12px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
 
-/* checkbox row */
+/* строка чекбокса */
 .rd-check { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
 .rd-check input { margin-top: 1px; width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--accent); }
 .rd-check span { font-size: 13px; color: var(--text-dim); line-height: 1.45; }
 
-/* participant picker */
+/* пикер участников */
 .rd-pick-list { display: flex; flex-direction: column; gap: 6px; }
 .rd-pick-row { display: flex; align-items: center; gap: 8px; }
 .rd-pick-toggle {
@@ -1142,7 +1146,7 @@
 .rd-pick-amount { width: 96px; flex-shrink: 0; }
 
 /* ============================================================
-   Skladchina detail page
+   Складчина — детальная страница
    ============================================================ */
 .rd-amounts { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .rd-amounts .rd-collected {
@@ -1161,8 +1165,8 @@
 .rd-badge.rd-neutral2 { background: var(--surface); color: var(--text-dim); border: 1px solid var(--hairline); }
 
 /* ============================================================
-   Bottom sheets (city / price / profile-edit / app-review)
-   Custom portal sheets — own box-sizing reset (rendered outside .rd-page).
+   Нижние шторки (город / цена / редактирование профиля / рассмотрение заявки)
+   Кастомные portal-шторки — свой сброс box-sizing (рендерятся вне .rd-page).
    ============================================================ */
 .rd-sheet-overlay {
   position: fixed; inset: 0; z-index: 150;
@@ -1186,7 +1190,7 @@
 .rd-sheet-close { background: none; border: 0; color: var(--accent); font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; padding: 4px 2px; }
 .rd-sheet-close:disabled { opacity: 0.5; }
 .rd-sheet-head-acts { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-/* Member admin: orange ✎ in the sheet header toggles edit mode (awards + note). */
+/* Member admin: оранжевый ✎ в шапке шита переключает режим редактирования (награды + заметка). */
 .rd-sheet-edit {
   display: inline-flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; border-radius: 9px; cursor: pointer; font-family: inherit;
@@ -1197,9 +1201,10 @@
 .rd-sheet-body { overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
 .rd-sheet-actions { display: flex; gap: 10px; margin-top: 16px; flex-shrink: 0; position: relative; }
 .rd-sheet-actions > .rd-btn-primary, .rd-sheet-actions > .rd-btn-outline { flex: 1; width: auto; }
-/* Scroll affordance: a soft fade above the sticky action bar so it's clear the body keeps going
-   (e.g. the «Причина отказа» field appears below the fold). Spans the full sheet width (negative
-   inset cancels the 16px sheet padding); invisible when the body fits (gradient over the sheet bg). */
+/* Подсказка прокрутки: мягкое затухание над прилипающей панелью действий, чтобы было понятно,
+   что контент продолжается ниже (например, поле «Причина отказа» скрыто за краем экрана).
+   Растянуто на всю ширину шита (отрицательный inset компенсирует его 16px padding); невидимо,
+   когда контент помещается целиком (градиент поверх фона шита). */
 .rd-sheet-actions::before {
   content: ''; position: absolute; left: -16px; right: -16px; top: -30px; height: 30px;
   pointer-events: none; z-index: 1;
@@ -1209,11 +1214,11 @@
   background: linear-gradient(to top, rgba(247, 246, 243, 0.92), rgba(247, 246, 243, 0));
 }
 
-/* horizontal country-tab chips inside a sheet */
+/* горизонтальные чипы-табы стран внутри шита */
 .rd-sheet-tabs { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 14px; padding-bottom: 2px; flex-shrink: 0; }
 .rd-sheet-tabs::-webkit-scrollbar { display: none; }
 
-/* single-select list rows (city / price) */
+/* строки списка одиночного выбора (город / цена) */
 .rd-pick-item {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   width: 100%; padding: 13px 14px; border-radius: 12px;
@@ -1224,9 +1229,9 @@
 .rd-pick-item.rd-selected { color: var(--accent); font-weight: 600; }
 .rd-pick-item .rd-check { display: flex; color: var(--accent); flex-shrink: 0; }
 
-/* standalone avatar (gradient + initials/photo) — unlike `.rd-ico`, not scoped
-   to rep/host rows, so it can be used anywhere (sheets, heroes). Size/radius
-   set inline by the caller. */
+/* самостоятельный аватар (градиент + инициалы/фото) — в отличие от `.rd-ico`, не привязан
+   к строкам репутации/хоста, поэтому используется где угодно (шиты, hero-баннеры).
+   Размер/радиус задаёт вызывающий компонент инлайн. */
 .rd-avatar {
   flex-shrink: 0; overflow: hidden; border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
@@ -1236,13 +1241,13 @@
 }
 .rd-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
-/* button styled as an rd-input (tap-to-open field, e.g. city selector) */
+/* кнопка, стилизованная под rd-input (поле-тап-для-открытия, например селектор города) */
 .rd-field-btn { display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; cursor: pointer; }
 .rd-field-btn .rd-placeholder { color: var(--text-faint); }
 .rd-field-btn .rd-chev { color: var(--text-faint); font-size: 18px; flex-shrink: 0; }
 
-/* ── owner «Статистика» (manage tab): levers · nudges · attention zone ──
-   docs/modules/club-quality.md §9. Colours are theme tokens (light-theme safe). */
+/* ── owner «Статистика» (manage tab): рычаги · напоминания · зона внимания ──
+   docs/modules/club-quality.md §9. Цвета — токены темы (безопасны для светлой темы). */
 .rd-lever-group { padding: 2px 14px; }
 .rd-lever { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px 0; font-size: 14px; }
 .rd-lever + .rd-lever { border-top: 1px solid var(--hairline); }
@@ -1264,7 +1269,7 @@
 
 .rd-owner-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--danger-soft); color: var(--danger); vertical-align: middle; margin-left: 6px; }
 
-/* win-back nudge: clickable, expands into the churned-members roster (§9.5) */
+/* напоминание «вернуть участника»: кликабельно, разворачивается в список ушедших участников (§9.5) */
 .rd-nudge-btn { width: 100%; text-align: left; cursor: pointer; align-items: center; font: inherit; }
 .rd-nudge-chev { margin-left: auto; color: var(--text-faint); font-size: 18px; flex-shrink: 0; transition: transform .15s ease; }
 .rd-nudge-chev.rd-open { transform: rotate(90deg); }

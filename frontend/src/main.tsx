@@ -11,21 +11,21 @@ import { RootErrorFallback } from './components/RootErrorFallback';
 
 initTelegramSdk();
 
-// Single QueryClient instance for the whole app. Defaults below match Telegram
-// Mini App reality — short retries, longer staleTime to avoid re-fetching while
-// the user navigates between tabs (most data is not real-time).
+// Единый экземпляр QueryClient на всё приложение. Настройки по умолчанию ниже отражают реальность
+// Telegram Mini App — короткие ретраи, более длинный staleTime, чтобы не перезапрашивать данные
+// при переключении табов пользователем (большинство данных не realtime).
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30_000,        // 30s — list pages don't need to refetch on every navigation
-      gcTime: 5 * 60_000,       // 5 min — keep cached pages around for tab-switching UX
-      retry: 1,                 // single retry on network blip; 401-retry handled by apiClient itself
-      refetchOnWindowFocus: false, // Mini App can't really lose focus the same way browsers do
+      staleTime: 30_000,        // 30с — страницам-спискам не нужно перезапрашивать данные при каждой навигации
+      gcTime: 5 * 60_000,       // 5 мин — держать закэшированные страницы для UX переключения табов
+      retry: 1,                 // один повтор при сбое сети; повтор 401 обрабатывает сам apiClient
+      refetchOnWindowFocus: false, // Mini App по-настоящему не теряет фокус так, как обычные браузеры
     },
   },
 });
 
-// Lazy-load devtools so they're stripped from the production bundle by Vite tree-shaking.
+// Ленивая загрузка devtools, чтобы Vite tree-shaking вырезал их из продакшен-бандла.
 const Devtools = import.meta.env.DEV
   ? (await import('@tanstack/react-query-devtools')).ReactQueryDevtools
   : null;

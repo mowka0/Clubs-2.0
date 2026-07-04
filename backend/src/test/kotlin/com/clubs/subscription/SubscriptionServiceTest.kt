@@ -68,7 +68,7 @@ class SubscriptionServiceTest {
 
     @Test
     fun `FREE plan - first paid club is allowed`() {
-        service().requirePaidClubCapacity(userId, 0) // no throw
+        service().requirePaidClubCapacity(userId, 0) // не должно бросить исключение
     }
 
     @Test
@@ -120,7 +120,7 @@ class SubscriptionServiceTest {
     fun `cancel is blocked while over FREE capacity`() {
         val existing = sub(SubscriptionPlan.TRIO, SubscriptionStatus.ACTIVE)
         every { repository.findActiveOrganizerSubscription(userId) } returns existing
-        every { clubRepository.countPaidByOwnerId(userId) } returns 3 // FREE allows 1
+        every { clubRepository.countPaidByOwnerId(userId) } returns 3 // FREE допускает 1
 
         assertThrows<ConflictException> { service().cancel(userId) }
 
@@ -130,7 +130,7 @@ class SubscriptionServiceTest {
 
     @Test
     fun `subscribe downgrade is blocked when paid clubs exceed the target plan`() {
-        every { clubRepository.countPaidByOwnerId(userId) } returns 5 // TRIO holds only 3
+        every { clubRepository.countPaidByOwnerId(userId) } returns 5 // TRIO вмещает только 3
 
         assertThrows<ConflictException> {
             service().subscribe(userId, CreateSubscriptionRequest(plan = "TRIO"))
@@ -156,7 +156,7 @@ class SubscriptionServiceTest {
         every { provider.parseWebhook(any(), any()) } returns
             WebhookResult.RenewalSucceeded("evt-1", "tok", existing.currentPeriodEnd.plusDays(30))
         every { repository.findByProviderToken("tok") } returns existing
-        every { repository.recordEventIfNew(existing.id, "evt-1", any()) } returns false // already seen
+        every { repository.recordEventIfNew(existing.id, "evt-1", any()) } returns false // событие уже видели
 
         service().handleWebhook("{}", null)
 

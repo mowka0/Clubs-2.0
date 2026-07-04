@@ -10,9 +10,9 @@ import org.springframework.stereotype.Component
 import java.util.UUID
 
 /**
- * The generic, organizer-driven skladchina — the Phase A behaviour, now expressed as the default
- * template. Organizer picks the mode, the participants and the amounts; payment is honor-system
- * self-declared (→ outcomes NOT verified).
+ * Универсальная складчина, управляемая организатором — поведение Phase A, теперь выраженное
+ * как шаблон по умолчанию. Организатор выбирает режим, участников и суммы; оплата
+ * самозаявляется по honor-system (→ итоги НЕ верифицируются).
  */
 @Component
 class CustomTemplate(
@@ -64,7 +64,7 @@ class CustomTemplate(
                 }
             }
             SkladchinaMode.voluntary -> {
-                // Optional indicative goal; expected amounts ignored.
+                // Опциональная ориентировочная цель; ожидаемые суммы участников игнорируются.
                 if (request.totalGoalKopecks != null && request.totalGoalKopecks <= 0) {
                     throw ValidationException("totalGoalKopecks must be positive")
                 }

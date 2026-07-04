@@ -3,9 +3,10 @@ package com.clubs.skladchina.template
 import java.util.UUID
 
 /**
- * Equal split of a total across participants. Remainder (kopecks that don't divide evenly)
- * goes to the LAST participant in sorted-by-userId order — deterministic, so tests and reruns
- * agree. Shared by every template that splits a fixed total (custom fixed_equal, split_bill).
+ * Равный сплит общей суммы между участниками. Остаток (копейки, которые не делятся нацело)
+ * достаётся ПОСЛЕДНЕМУ участнику в порядке сортировки по userId — детерминированно, чтобы тесты
+ * и повторные прогоны сходились. Общий для всех шаблонов, делящих фиксированную сумму
+ * (custom fixed_equal, split_bill).
  */
 object SkladchinaShares {
     fun equal(totalKopecks: Long, userIds: List<UUID>): List<Pair<UUID, Long>> {

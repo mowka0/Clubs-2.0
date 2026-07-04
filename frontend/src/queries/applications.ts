@@ -18,9 +18,9 @@ export function useMyApplicationsQuery() {
 }
 
 /**
- * All pending applications across clubs the caller owns — used by the
- * cross-club organizer inbox on MyClubsPage. Mirrors the lightweight
- * count query below.
+ * Все ожидающие заявки по всем клубам, которыми владеет вызывающий — используется
+ * кросс-клубовым инбоксом организатора на MyClubsPage. Зеркалит облегчённый
+ * запрос-счётчик ниже.
  */
 export function useMyPendingApplicationsQuery() {
   return useQuery({
@@ -31,8 +31,8 @@ export function useMyPendingApplicationsQuery() {
 }
 
 /**
- * Counter feeding the «Мои клубы» tab-dot: organizer-side pending applications
- * (`{ inboxCount }`). One backend call, one cache slot, mirrors
+ * Счётчик для точки-индикатора на табе «Мои клубы»: ожидающие заявки на стороне
+ * организатора (`{ inboxCount }`). Один вызов бэкенда, один слот кэша, зеркалит
  * useSkladchinaActionRequiredCountQuery.
  */
 export function useMyClubsActionCountsQuery() {
@@ -60,11 +60,11 @@ export function useApproveApplicationMutation() {
       qc.invalidateQueries({ queryKey: queryKeys.applications.mine() });
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPending });
       qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingActionCounts });
-      // Approving a paid-club application now creates the membership directly (in `frozen`),
-      // so the per-club member list (organizer dashboard) refreshes to show the new row.
+      // Одобрение заявки в платный клуб теперь сразу создаёт membership (в статусе `frozen`),
+      // поэтому список участников клуба (дашборд организатора) обновляется, чтобы показать новую строку.
       qc.invalidateQueries({ queryKey: queryKeys.clubs.members(clubId) });
-      // …and the cross-club «Оплата вступления» block on «Мои клубы» — the new frozen member must
-      // appear there too, not only inside Управление → Участники (it has a 60s staleTime otherwise).
+      // …и кросс-клубовый блок «Оплата вступления» на «Мои клубы» — новый frozen-участник должен
+      // появиться и там, а не только в Управление → Участники (иначе там свой 60-сек staleTime).
       qc.invalidateQueries({ queryKey: queryKeys.organizer.awaitingDues });
     },
   });
@@ -97,8 +97,8 @@ interface CancelApplicationArgs {
   applicationId: string;
 }
 
-/** Applicant withdraws their own pending application (→ status `cancelled`). Refresh the applicant's
- *  own caches so the card disappears from «Мои заявки» and the tab-dot count updates. */
+/** Заявитель отзывает свою ожидающую заявку (→ статус `cancelled`). Обновляем кэши самого
+ *  заявителя, чтобы карточка исчезла из «Мои заявки» и обновился счётчик точки на табе. */
 export function useCancelApplicationMutation() {
   const qc = useQueryClient();
   return useMutation({
@@ -116,10 +116,10 @@ interface CompleteFreeMembershipArgs {
 }
 
 /**
- * Finalises a stuck free-club approved application by creating the missing
- * membership. After success: refetch caller's clubs (the new membership
- * appears), the club detail (memberCount bumped), and every applications
- * cache so the stuck CTA disappears.
+ * Завершает зависшую одобренную заявку в бесплатный клуб, создавая недостающий
+ * membership. После успеха: перезапрашиваем клубы вызывающего (появляется новый
+ * membership), детали клуба (memberCount увеличен) и все кэши заявок, чтобы
+ * зависший CTA исчез.
  */
 export function useCompleteFreeMembershipMutation() {
   const qc = useQueryClient();

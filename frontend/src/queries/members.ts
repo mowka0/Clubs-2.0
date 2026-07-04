@@ -22,9 +22,9 @@ import {
 } from '../api/membership';
 import { queryKeys } from './queryKeys';
 
-/** Members of [clubId]. The organizer additionally receives frozen members + each member's
- *  access state and paid-through date (de-Stars dashboard); regular members get the active-only
- *  list with those fields null. */
+/** Участники [clubId]. Организатор дополнительно получает замороженных участников + для каждого
+ *  участника состояние доступа и дату, до которой оплачено (де-Stars дашборд); обычные участники
+ *  получают список только активных с этими полями null. */
 export function useClubMembersQuery(clubId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.clubs.members(clubId ?? ''),
@@ -33,8 +33,9 @@ export function useClubMembersQuery(clubId: string | undefined) {
   });
 }
 
-/** Red-dot feed: soon-expiring + frozen-awaiting-dues counts. Owner-only — gate with
- *  `enabled: isOrganizer` to skip a guaranteed-403 from member/visitor contexts. */
+/** Лента red-dot: счётчики скоро-истекающих + замороженных-ждущих-оплаты. Только для владельца —
+ *  ограничивать через `enabled: isOrganizer`, чтобы не получать гарантированный 403 в контексте
+ *  участника/гостя. */
 export function useMemberAttentionQuery(
   clubId: string | undefined,
   options: { enabled?: boolean } = {},
@@ -48,8 +49,9 @@ export function useMemberAttentionQuery(
   });
 }
 
-/** Cross-club «Ждут оплаты»: frozen members across the caller's owned clubs. Returns [] for
- *  non-owners (server filters by ownership) — gate `enabled` on owning ≥1 club to skip the round-trip. */
+/** Кросс-клубовое «Ждут оплаты»: замороженные участники по всем клубам вызывающего. Возвращает []
+ *  для не-владельцев (сервер фильтрует по владению) — ограничивать `enabled` на владение ≥1 клубом,
+ *  чтобы избежать лишнего запроса. */
 export function useOrganizerAwaitingDuesQuery(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.organizer.awaitingDues,
@@ -59,8 +61,8 @@ export function useOrganizerAwaitingDuesQuery(options: { enabled?: boolean } = {
   });
 }
 
-/** After any access-gate action the member list (badges/buckets), the per-club red-dot count, and
- *  the cross-club «Ждут оплаты» feed all change. */
+/** После любого действия с доступом меняются: список участников (бейджи/корзины), счётчик
+ *  red-dot по клубу и кросс-клубовая лента «Ждут оплаты». */
 function invalidateAfterMemberGateAction(qc: QueryClient, clubId: string) {
   qc.invalidateQueries({ queryKey: queryKeys.clubs.members(clubId) });
   qc.invalidateQueries({ queryKey: queryKeys.clubs.memberAttention(clubId) });
@@ -72,7 +74,7 @@ interface MemberGateArgs {
   userId: string;
 }
 
-/** «Взнос получен» — open access + extend the paid window. The primary dashboard action. */
+/** «Взнос получен» — открыть доступ + продлить оплаченный период. Основное действие дашборда. */
 export function useMarkMemberDuesPaidMutation() {
   const qc = useQueryClient();
   return useMutation({
@@ -90,7 +92,7 @@ export function useFreezeMemberMutation() {
   });
 }
 
-/** Reopen access without extending the paid window (frozen → active). */
+/** Заново открыть доступ без продления оплаченного периода (frozen → active). */
 export function useUnfreezeMemberMutation() {
   const qc = useQueryClient();
   return useMutation({
@@ -99,8 +101,9 @@ export function useUnfreezeMemberMutation() {
   });
 }
 
-/** B+C: reject a paid join (refund offline) — removes the frozen member. Same invalidations as the
- *  other gate actions (buckets + red-dot + cross-club «Ждут оплаты»). */
+/** B+C: отказать в платном вступлении (возврат оффлайн) — удаляет замороженного участника.
+ *  Те же инвалидации, что и у остальных действий с доступом (корзины + red-dot + кросс-клубовое
+ *  «Ждут оплаты»). */
 export function useRejectMemberMutation() {
   const qc = useQueryClient();
   return useMutation({
@@ -110,8 +113,8 @@ export function useRejectMemberMutation() {
   });
 }
 
-/** Organizer kick: remove a member from the club (reason mandatory). Same invalidations as the other
- *  gate actions (roster buckets + red-dot + cross-club «Ждут оплаты»). */
+/** Кик от организатора: удалить участника из клуба (причина обязательна). Те же инвалидации, что
+ *  и у остальных действий с доступом (корзины ростера + red-dot + кросс-клубовое «Ждут оплаты»). */
 export function useRemoveMemberMutation() {
   const qc = useQueryClient();
   return useMutation({
@@ -121,7 +124,7 @@ export function useRemoveMemberMutation() {
   });
 }
 
-/** Clear the dues mark without touching access/window. */
+/** Снять отметку взноса, не трогая доступ/период. */
 export function useUnmarkMemberDuesMutation() {
   const qc = useQueryClient();
   return useMutation({
@@ -130,8 +133,8 @@ export function useUnmarkMemberDuesMutation() {
   });
 }
 
-/** Member admin S1: set a custom access-window end («своя дата»). Touches access → invalidate buckets +
- *  the member profile card (its «Подписка до …» line). */
+/** Member admin S1: задать произвольную дату конца доступа («своя дата»). Затрагивает доступ →
+ *  инвалидировать корзины + карточку профиля участника (её строку «Подписка до …»). */
 export function useSetMemberAccessUntilMutation() {
   const qc = useQueryClient();
   return useMutation({
@@ -144,7 +147,7 @@ export function useSetMemberAccessUntilMutation() {
   });
 }
 
-/** Member admin S1: set/clear the private organizer note. Only the profile card carries it. */
+/** Member admin S1: задать/очистить приватную заметку организатора. Хранится только в карточке профиля. */
 export function useUpdateMemberNoteMutation() {
   const qc = useQueryClient();
   return useMutation({
@@ -156,8 +159,8 @@ export function useUpdateMemberNoteMutation() {
   });
 }
 
-/** Member admin S2: grant a club-local award. Refreshes the member card (its chips) + the club's
- *  award-suggestion pool (a fresh label becomes a future autocomplete option). */
+/** Member admin S2: выдать клубную награду. Обновляет карточку участника (её чипы) + пул подсказок
+ *  наград клуба (новый label становится будущим вариантом автодополнения). */
 export function useGrantMemberAwardMutation() {
   const qc = useQueryClient();
   return useMutation({
@@ -170,7 +173,7 @@ export function useGrantMemberAwardMutation() {
   });
 }
 
-/** Member admin S2: remove a club-local award. Only the member card carries it. */
+/** Member admin S2: отозвать клубную награду. Хранится только в карточке участника. */
 export function useRevokeMemberAwardMutation() {
   const qc = useQueryClient();
   return useMutation({
@@ -182,8 +185,8 @@ export function useRevokeMemberAwardMutation() {
   });
 }
 
-/** Autocomplete pool for the grant form. Organizer-only — gate `enabled` on the edit form being open
- *  so member/visitor contexts never hit a guaranteed-403. */
+/** Пул автодополнения для формы выдачи. Только для организатора — ограничивать `enabled`
+ *  открытием формы редактирования, чтобы контекст участника/гостя никогда не ловил гарантированный 403. */
 export function useAwardSuggestionsQuery(
   clubId: string | undefined,
   options: { enabled?: boolean } = {},
@@ -197,8 +200,8 @@ export function useAwardSuggestionsQuery(
   });
 }
 
-/** Member declares they paid the dues (sbp + screenshot URL, or cash). Refreshes «Мои клубы» so the
- *  frozen club screen flips to «оплата на проверке». */
+/** Участник заявляет, что оплатил взнос (sbp + URL скриншота, либо cash). Обновляет «Мои клубы»,
+ *  чтобы экран замороженного клуба переключился на «оплата на проверке». */
 export function useClaimDuesMutation() {
   const qc = useQueryClient();
   return useMutation({
@@ -221,8 +224,8 @@ export function useMemberProfileQuery(
   });
 }
 
-/** Authenticated user's reputation overview: the global "N из M" aggregate + per-club Trust,
- *  split into active clubs and "История" (left clubs that still carry a track record). */
+/** Обзор репутации авторизованного пользователя: глобальный агрегат «N из M» + Trust по клубам,
+ *  разбит на активные клубы и «История» (покинутые клубы, где ещё сохраняется трек-рекорд). */
 export function useMyReputationQuery() {
   return useQuery({
     queryKey: queryKeys.clubs.myReputation(),
@@ -230,7 +233,7 @@ export function useMyReputationQuery() {
   });
 }
 
-/** Authenticated user's gamification panel (XP, level, progress, badges). Self-view only. */
+/** Панель геймификации авторизованного пользователя (XP, уровень, прогресс, бейджи). Только self-вид. */
 export function useMyGamificationQuery() {
   return useQuery({
     queryKey: queryKeys.clubs.myGamification(),
