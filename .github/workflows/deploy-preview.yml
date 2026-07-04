@@ -1,11 +1,15 @@
 name: Deploy Preview Branch to Staging
 
+# Правило (PO 2026-07-04): ничто не попадает в master, минуя staging. Поэтому на staging
+# едет ЛЮБАЯ рабочая ветка (bugfix/feature/devops/chore/docs/hotfix/эксперименты) — всё,
+# кроме самого master (master → production через Coolify). Так ни один тип ветки не
+# проскочит мимо staging, как это случилось с chore/*-веткой перевода комментариев.
+# NB: staging — одно приложение, перенаводится на последнюю запушенную ветку → работать
+# через staging серийно (одна ветка в полёте за раз).
 on:
   push:
-    branches:
-      - 'bugfix/**'
-      - 'feature/**'
-      - 'devops/**'
+    branches-ignore:
+      - master
 
 jobs:
   deploy-preview:
