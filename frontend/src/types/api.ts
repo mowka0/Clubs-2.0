@@ -431,6 +431,10 @@ export interface EventDetailDto {
   maybeCount: number;
   notGoingCount: number;
   confirmedCount: number;
+  // Крайний момент (ISO), до которого подтверждённый участник может отказаться от места. Считается
+  // бэкендом из events.stage2-decline-cutoff-minutes — фронт не хранит копию порога, а прячет кнопку
+  // «Отказаться» у confirmed, когда текущее время ≥ этого значения. Источник истины — бэкенд.
+  confirmedDeclineDeadline: string;
   attendanceMarked: boolean;
   attendanceFinalized: boolean;
   // F5-14: необязательная причина отмены от организатора; null, если отменено без указания причины.

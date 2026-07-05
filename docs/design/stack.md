@@ -363,6 +363,7 @@ interface EventDetailDto {
   maybeCount: number;
   notGoingCount: number;
   confirmedCount: number;
+  confirmedDeclineDeadline: string;   // ISO; eventDatetime − stage2-decline-cutoff-minutes. Дедлайн отказа confirmed
   attendanceMarked: boolean;
   attendanceFinalized: boolean;
   createdAt: string | null;

@@ -5,9 +5,9 @@ import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
-import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.enums.Stage_2Vote
 import com.clubs.membership.MembershipRepository
+import com.clubs.reputation.ReputationService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationEventPublisher
@@ -23,6 +23,10 @@ class Stage2Service(
     private val eventResponseRepository: EventResponseRepository,
     private val membershipRepository: MembershipRepository,
     private val eventPublisher: ApplicationEventPublisher,
+    private val reputationService: ReputationService,
+    // За сколько минут до старта закрывается отказ от УЖЕ ПОДТВЕРЖДЁННОГО места (замене нужно время
+    // подготовиться). Дефолт 240 = 4ч. В минутах, чтобы staging мог ужать для теста. Env: STAGE2_DECLINE_CUTOFF_MINUTES
+    @Value("\${events.stage2-decline-cutoff-minutes:240}") private val declineCutoffMinutes: Long,
     // Упреждение (минут до старта события), при котором предстоящее событие переходит в Stage 2.
     // По умолчанию 24 ч. Единица «минуты» позволяет staging'у укоротить его для сквозного теста
     // двухэтапки: малое значение оставляет короткое окно голосования Этапа 1 до перехода
@@ -53,14 +57,12 @@ class Stage2Service(
     private fun triggerStage2(event: Event) {
         eventRepository.transitionToStage2(event.id)
 
-        // Первые N проголосовавших going (по stage_1_timestamp) сохраняют stage_2_vote = null —
-        // они подтверждают явно. Остальные сразу становятся waitlisted.
-        val goingVoters = eventResponseRepository.findGoingByEventOrderByTimestamp(event.id)
-        goingVoters.forEachIndexed { index, response ->
-            if (index >= event.participantLimit) {
-                eventResponseRepository.updateStage2Vote(response.id, Stage_2Vote.waitlisted, FinalStatus.waitlisted)
-            }
-        }
+        // Этап 1 — только предварительный визуал: он НЕ резервирует места и НЕ задаёт очередь.
+        // При старте Этапа 2 никто не помечается waitlisted заранее — все места разыгрываются
+        // заново «гонкой за места»: кто первым нажмёт «Подтвердить», тот в зале (confirmParticipation:
+        // confirmedCount < limit → confirmed, иначе waitlisted). Очередь листа ожидания и её
+        // продвижение упорядочены по stage_2_timestamp (времени подтверждения на Этапе 2), а не по
+        // голосу Этапа 1. См. events.md § «Гонка за места».
 
         // S2T-2: просим проголосовавших going/maybe подтвердить участие. Без этого DM никто не
         // узнает, что начался Stage 2, никто не подтвердит, и все автоматически истекут к старту
@@ -104,12 +106,11 @@ class Stage2Service(
         // состояние, как только получит лок.
         eventResponseRepository.lockEventSlots(eventId)
 
+        // Этап 2 открыт ВСЕМ участникам клуба (проверка isMember выше). Кто не голосовал на
+        // Этапе 1 — строки ещё нет, создаём её сейчас (stage_1_vote=NULL, ts=now → в конец FIFO).
+        // Кто голосовал not_going — строка есть, гард «нельзя подтверждать» снят: передумал → может.
         val response = eventResponseRepository.findByEventAndUser(eventId, userId)
-            ?: throw ValidationException("You didn't vote in this event")
-
-        if (response.stage1Vote != Stage_1Vote.going && response.stage1Vote != Stage_1Vote.maybe) {
-            throw ValidationException("You voted not_going for this event")
-        }
+            ?: eventResponseRepository.createLateStage2Entry(eventId, userId)
 
         if (response.stage2Vote == Stage_2Vote.confirmed) {
             val count = eventResponseRepository.countConfirmed(eventId)
@@ -183,12 +184,27 @@ class Stage2Service(
         }
 
         val wasConfirmed = response.stage2Vote == Stage_2Vote.confirmed
+        // Порог отказа: от УЖЕ ПОДТВЕРЖДЁННОГО места нельзя отказаться в последние declineCutoffMinutes
+        // до старта — замене не хватит времени подготовиться. Waitlisted выходит из очереди свободно
+        // (он никого не держит), поэтому гейт только на wasConfirmed.
+        if (wasConfirmed && !event.eventDatetime.isAfter(OffsetDateTime.now().plusMinutes(declineCutoffMinutes))) {
+            throw ValidationException(
+                "Отказаться от подтверждённого участия можно не позже чем за ${declineCutoffMinutes / 60} ч до события"
+            )
+        }
         eventResponseRepository.updateStage2Vote(response.id, Stage_2Vote.declined, FinalStatus.declined)
 
         if (wasConfirmed) {
             val firstWaitlisted = eventResponseRepository.findFirstWaitlisted(eventId)
-            firstWaitlisted?.let {
-                eventResponseRepository.updateStage2Vote(it.id, Stage_2Vote.confirmed, FinalStatus.confirmed)
+            if (firstWaitlisted != null) {
+                // Есть замена → первый из очереди сразу занимает освободившийся слот; отказавшийся чист.
+                eventResponseRepository.updateStage2Vote(firstWaitlisted.id, Stage_2Vote.confirmed, FinalStatus.confirmed)
+                // DM повышенному: место его, с кнопкой на событие. AFTER_COMMIT (WaitlistPromotedListener) —
+                // @Async DM должен читать уже закоммиченное повышение. Зеркалит Stage2StartedEvent.
+                eventPublisher.publishEvent(WaitlistPromotedEvent(eventId, firstWaitlisted.userId))
+            } else {
+                // Замены нет → отказавшийся оставил дыру: штраф abandoned_slot (−100) в этой же транзакции.
+                reputationService.penalizeAbandonedSlot(userId, event.clubId, eventId, OffsetDateTime.now())
             }
         }
 

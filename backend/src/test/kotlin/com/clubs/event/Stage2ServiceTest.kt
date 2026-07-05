@@ -31,7 +31,13 @@ class Stage2ServiceTest {
     private val eventResponseRepository = mockk<EventResponseRepository>(relaxed = true)
     private val membershipRepository = mockk<MembershipRepository>()
     private val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
-    private val service = Stage2Service(eventRepository, eventResponseRepository, membershipRepository, eventPublisher, stage2TriggerMinutesBefore = 1440)
+    private val reputationService = mockk<com.clubs.reputation.ReputationService>(relaxed = true)
+    // declineCutoffMinutes=0 в общем service — большинство decline-тестов не про порог; кейс порога
+    // строит свой инстанс с реальным значением.
+    private val service = Stage2Service(
+        eventRepository, eventResponseRepository, membershipRepository, eventPublisher, reputationService,
+        declineCutoffMinutes = 0, stage2TriggerMinutesBefore = 1440
+    )
 
     private val eventId = UUID.randomUUID()
     private val userId = UUID.randomUUID()
@@ -75,6 +81,41 @@ class Stage2ServiceTest {
         verify(exactly = 1) {
             eventResponseRepository.updateStage2Vote(waitlistedId, Stage_2Vote.confirmed, FinalStatus.confirmed)
         }
+        // Есть замена → отказ бесплатный, штраф abandoned_slot НЕ начисляется.
+        verify(exactly = 0) { reputationService.penalizeAbandonedSlot(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `confirmed decline within the cutoff window is rejected and mutates nothing`() {
+        // Свой инстанс с реальным порогом 4ч; событие через 2ч → отказ подтверждённого запрещён.
+        val strict = Stage2Service(
+            eventRepository, eventResponseRepository, membershipRepository, eventPublisher, reputationService,
+            declineCutoffMinutes = 240, stage2TriggerMinutesBefore = 1440
+        )
+        every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+
+        val ex = assertFailsWith<ValidationException> { strict.declineParticipation(eventId, userId) }
+        assert(ex.message!!.contains("не позже"))
+        verify(exactly = 0) { eventResponseRepository.updateStage2Vote(any(), any(), any()) }
+        verify(exactly = 0) { reputationService.penalizeAbandonedSlot(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `confirmed decline with no waitlist penalizes the abandoned slot`() {
+        every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+        every { eventResponseRepository.findFirstWaitlisted(eventId) } returns null
+        every { eventResponseRepository.countConfirmed(eventId) } returns 0
+
+        service.declineParticipation(eventId, userId)
+
+        // Замены нет → отказавшийся оставил дыру → штраф −100.
+        verify(exactly = 1) { reputationService.penalizeAbandonedSlot(userId, clubId, eventId, any()) }
     }
 
     @Test
@@ -91,6 +132,46 @@ class Stage2ServiceTest {
 
         assertEquals("confirmed", result.status)
         assertEquals(1, result.confirmedCount)
+    }
+
+    @Test
+    fun `confirm by a not_going voter works — Stage 2 is open to all`() {
+        // Этап 2 открыт всем участникам клуба: передумавший not_going-голосующий подтверждается.
+        every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.not_going, stage2 = null)
+        every { eventResponseRepository.countConfirmed(eventId) } returnsMany listOf(0, 1)
+        every { eventResponseRepository.updateStage2Vote(any(), any(), any()) } returns
+            response(stage1 = Stage_1Vote.not_going, stage2 = Stage_2Vote.confirmed)
+
+        val result = service.confirmParticipation(eventId, userId)
+
+        assertEquals("confirmed", result.status)
+        verify { eventResponseRepository.updateStage2Vote(any(), Stage_2Vote.confirmed, FinalStatus.confirmed) }
+        // строка уже есть (голосовал на Этапе 1) — новую не создаём
+        verify(exactly = 0) { eventResponseRepository.createLateStage2Entry(any(), any()) }
+    }
+
+    @Test
+    fun `confirm by a member who never voted creates a late entry then confirms`() {
+        // «Ничего не ответил» на Этапе 1 → строки нет → создаём её и подтверждаем в том же вызове.
+        every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns null
+        every { eventResponseRepository.createLateStage2Entry(eventId, userId) } returns
+            response(stage1 = null, stage2 = null)
+        every { eventResponseRepository.countConfirmed(eventId) } returnsMany listOf(0, 1)
+        every { eventResponseRepository.updateStage2Vote(any(), any(), any()) } returns
+            response(stage1 = null, stage2 = Stage_2Vote.confirmed)
+
+        val result = service.confirmParticipation(eventId, userId)
+
+        assertEquals("confirmed", result.status)
+        verifyOrder {
+            eventResponseRepository.createLateStage2Entry(eventId, userId)
+            eventResponseRepository.updateStage2Vote(any(), Stage_2Vote.confirmed, FinalStatus.confirmed)
+        }
     }
 
     @Test
@@ -148,7 +229,6 @@ class Stage2ServiceTest {
         val event = event(eventDatetime = OffsetDateTime.now().plusDays(1), status = EventStatus.stage_1)
         every { eventRepository.findEventsToTriggerStage2(any()) } returns listOf(event)
         justRun { eventRepository.transitionToStage2(eventId) }
-        every { eventResponseRepository.findGoingByEventOrderByTimestamp(eventId) } returns emptyList()
 
         service.triggerStage2ForReadyEvents()
 
@@ -163,7 +243,6 @@ class Stage2ServiceTest {
         val event = event(eventDatetime = OffsetDateTime.now().minusMinutes(2), status = EventStatus.stage_1)
         every { eventRepository.findEventsToTriggerStage2(any()) } returns listOf(event)
         justRun { eventRepository.transitionToStage2(eventId) }
-        every { eventResponseRepository.findGoingByEventOrderByTimestamp(eventId) } returns emptyList()
 
         service.triggerStage2ForReadyEvents()
 
@@ -172,23 +251,17 @@ class Stage2ServiceTest {
     }
 
     @Test
-    fun `stage 2 trigger publishes after the waitlist overflow is assigned`() {
-        // The AFTER_COMMIT listener reads voter rows fresh — but within the transaction the
-        // publication must follow the overflow assignment so a failed assignment also skips the DM.
+    fun `stage 2 trigger does not pre-assign any waitlist — places are raced on stage 2`() {
+        // Этап 1 больше не резервирует места и не формирует очередь: при старте Этапа 2 никто не
+        // помечается waitlisted, все места разыгрываются подтверждениями на Этапе 2 (гонка за места).
         val event = event(eventDatetime = OffsetDateTime.now().plusDays(1), status = EventStatus.stage_1)
-        val overflow = response(stage1 = Stage_1Vote.going, stage2 = null)
         every { eventRepository.findEventsToTriggerStage2(any()) } returns listOf(event)
         justRun { eventRepository.transitionToStage2(eventId) }
-        // participantLimit = 10 → 11 going voters, the last one overflows to waitlist.
-        every { eventResponseRepository.findGoingByEventOrderByTimestamp(eventId) } returns
-            List(10) { response(stage1 = Stage_1Vote.going, stage2 = null) } + overflow
 
         service.triggerStage2ForReadyEvents()
 
-        verifyOrder {
-            eventResponseRepository.updateStage2Vote(overflow.id, Stage_2Vote.waitlisted, FinalStatus.waitlisted)
-            eventPublisher.publishEvent(Stage2StartedEvent(event))
-        }
+        verify(exactly = 0) { eventResponseRepository.updateStage2Vote(any(), any(), any()) }
+        verify(exactly = 1) { eventPublisher.publishEvent(Stage2StartedEvent(event)) }
     }
 
     @Test
@@ -230,6 +303,25 @@ class Stage2ServiceTest {
             eventResponseRepository.findByEventAndUser(eventId, userId)
             eventResponseRepository.findFirstWaitlisted(eventId)
         }
+    }
+
+    @Test
+    fun `decline promotes first waitlisted and publishes WaitlistPromotedEvent (no penalty)`() {
+        // Пункт 3: освободился слот, замена есть → повышаем первого из очереди И шлём ему DM
+        // (WaitlistPromotedEvent). Штраф abandoned_slot при наличии замены не начисляется.
+        val promotedUserId = UUID.randomUUID()
+        every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+        every { eventResponseRepository.findFirstWaitlisted(eventId) } returns
+            response(stage1 = null, stage2 = Stage_2Vote.waitlisted).copy(userId = promotedUserId)
+        every { eventResponseRepository.countConfirmed(eventId) } returns 1
+
+        service.declineParticipation(eventId, userId)
+
+        verify(exactly = 1) { eventPublisher.publishEvent(WaitlistPromotedEvent(eventId, promotedUserId)) }
+        verify(exactly = 0) { reputationService.penalizeAbandonedSlot(any(), any(), any(), any()) }
     }
 
     @Test

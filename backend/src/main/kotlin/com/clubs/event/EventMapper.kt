@@ -3,11 +3,17 @@ package com.clubs.event
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.tables.records.EventsRecord
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.time.OffsetDateTime
 
 @Component
-class EventMapper {
+class EventMapper(
+    // Порог отказа подтверждённого (минут до старта) — тот же yaml-ключ, что читает
+    // Stage2Service.declineCutoffMinutes (единый источник значения на бэке). Нужен, чтобы отдать
+    // фронту готовый дедлайн отказа в EventDetailDto вместо дублирования порога хардкодом на клиенте.
+    @Value("\${events.stage2-decline-cutoff-minutes:240}") private val declineCutoffMinutes: Long
+) {
 
     fun toDomain(record: EventsRecord): Event = Event(
         id = record.id!!,
@@ -49,6 +55,7 @@ class EventMapper {
         maybeCount = maybeCount,
         notGoingCount = notGoingCount,
         confirmedCount = confirmedCount,
+        confirmedDeclineDeadline = event.eventDatetime.minusMinutes(declineCutoffMinutes),
         attendanceMarked = event.attendanceMarked,
         attendanceFinalized = event.attendanceFinalized,
         cancellationReason = event.cancellationReason,

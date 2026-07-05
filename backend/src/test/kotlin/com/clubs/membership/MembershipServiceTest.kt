@@ -17,6 +17,7 @@ import com.clubs.skladchina.SkladchinaRepository
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import org.springframework.context.ApplicationEventPublisher
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -37,6 +38,7 @@ class MembershipServiceTest {
     private lateinit var applicationRepository: ApplicationRepository
     private lateinit var trustService: TrustService
     private lateinit var reputationService: ReputationService
+    private lateinit var eventPublisher: ApplicationEventPublisher
     private lateinit var membershipService: MembershipService
 
     @BeforeEach
@@ -50,6 +52,7 @@ class MembershipServiceTest {
         applicationRepository = mockk(relaxed = true)
         trustService = mockk(relaxed = true)
         reputationService = mockk(relaxed = true)
+        eventPublisher = mockk(relaxed = true)
         membershipService = MembershipService(
             membershipRepository,
             clubRepository,
@@ -59,7 +62,8 @@ class MembershipServiceTest {
             skladchinaRepository,
             applicationRepository,
             trustService,
-            reputationService
+            reputationService,
+            eventPublisher
         )
     }
 

@@ -57,7 +57,8 @@
 CREATE TYPE reputation_axis   AS ENUM ('attendance', 'finance');
 CREATE TYPE reputation_kind   AS ENUM (
   'ironclad', 'no_show', 'spontaneous', 'spectator', 'confirmed_unresolved',
-  'skladchina_paid', 'skladchina_declined', 'skladchina_expired');
+  'skladchina_paid', 'skladchina_declined', 'skladchina_expired',
+  'abandoned_slot');  -- V45 (2026-07-05): отказ от подтверждённого места без замены, −100
 CREATE TYPE reputation_source AS ENUM ('event', 'skladchina');
 
 CREATE TABLE reputation_ledger (
@@ -158,9 +159,22 @@ disputed/null attendance.
 |---|---|---|---|---|---|---|
 | going | attended | `ironclad` | +100 | 1 | 1 | 0 |
 | going | absent | `no_show` | −200 | 1 | 0 | 0 |
-| maybe | attended | `spontaneous` | +100 | 1 | 1 | 1 |
-| maybe | absent | `spectator` | −200 | 1 | 0 | 0 |
+| **не-going** (maybe / not_going / NULL) | attended | `spontaneous` | +100 | 1 | 1 | 1 |
+| **не-going** (maybe / not_going / NULL) | absent | `spectator` | −200 | 1 | 0 | 0 |
 | (любой) | disputed **OR** null | `confirmed_unresolved` | 0 | 1 | 0 | 0 |
+
+> **UPDATED 2026-07-05 — обязательство = ФАКТ подтверждения, не голос Этапа 1.** С фичей «Этап 2
+> открыт всем» подтвердиться может и `not_going`, и не голосовавший (`stage_1_vote NULL`). Поэтому
+> `attendanceKind` теперь ключует по явке (при confirmed): пришёл → +100, не пришёл → −200 для
+> ЛЮБОГО подтвердившегося. Голос Этапа 1 лишь выбирает ЛЕЙБЛ вида (`ironclad`/`no_show` для going vs
+> `spontaneous`/`spectator` для остальных) — очки идентичны. Раньше `не-going` подтверждённые падали
+> в `else → confirmed_unresolved (0)` = дыра «подтвердился и не пришёл → без штрафа», теперь закрыта.
+
+**`abandoned_slot` (−100)** — отдельный вид (миграция **V45**): отказ от подтверждённого места на
+Этапе 2 без замены в очереди. Начисляется НЕ на явке, а в момент отказа
+(`ReputationService.penalizeAbandonedSlot`, вызывается из `Stage2Service.declineParticipation`, по
+образцу `penalizeExit`). Половина `no_show`: строго меньше −200, чтобы честный ранний отказ был
+выгоднее молчаливой неявки. Класс Trust = `BROKE`, XP = 0 (штрафной). См. events.md § «Логика decline».
 
 > **Отметка явки (решение 2026-06-11, рев. 2):** в форме отметки все confirmed по умолчанию
 > «пришёл», организатор снимает галочку с отсутствующих; UI шлёт явное значение для каждого

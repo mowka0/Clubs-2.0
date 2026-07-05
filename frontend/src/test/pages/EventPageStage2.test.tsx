@@ -35,15 +35,20 @@ const EVENT_ID = 'event-1';
 const CLUB_ID = 'club-1';
 const PAST = new Date(Date.now() - 86_400_000).toISOString();
 const FUTURE = new Date(Date.now() + 86_400_000).toISOString();
+const SOON = new Date(Date.now() + 2 * 3_600_000).toISOString(); // через 2ч < порога 4ч
+// Дефолтный порог отказа бэкенда (events.stage2-decline-cutoff-minutes=240 = 4ч). Дедлайн отказа
+// подтверждённого = eventDatetime − 4ч — то, что бэкенд кладёт в confirmedDeclineDeadline.
+const DECLINE_CUTOFF_MS = 4 * 3_600_000;
 
 function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
+  const eventDatetime = overrides.eventDatetime ?? FUTURE;
   return {
     id: EVENT_ID,
     clubId: CLUB_ID,
     title: 'Событие',
     description: null,
     locationText: 'Бар',
-    eventDatetime: FUTURE,
+    eventDatetime,
     participantLimit: 10,
     votingOpensDaysBefore: 14,
     status: 'stage_2',
@@ -51,6 +56,9 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     maybeCount: 1,
     notGoingCount: 0,
     confirmedCount: 1,
+    // По умолчанию дедлайн = дата события − 4ч (дефолт бэка): при FUTURE он в будущем (кнопка отказа
+    // видна), при SOON — уже в прошлом (кнопка скрыта). Тест может переопределить явно.
+    confirmedDeclineDeadline: new Date(new Date(eventDatetime).getTime() - DECLINE_CUTOFF_MS).toISOString(),
     attendanceMarked: false,
     attendanceFinalized: false,
     cancellationReason: null,
@@ -61,7 +69,7 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
 
 function mockEndpoints(opts: {
   event: EventDetailDto;
-  myVote: string;
+  myVote: string | null;
   responders?: EventResponderDto[];
   ownerId?: string;
 }) {
@@ -123,6 +131,80 @@ describe('EventPage — Stage 2 window (Bug B) + expired status', () => {
     // Окно подтверждения закрыто — секции с кнопками нет
     expect(screen.queryByText('Подтверждение участия')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Подтвердить участие/ })).not.toBeInTheDocument();
+  });
+
+  it('Этап 2 открыт всем: not_going видит «Подтвердить участие», но без «Отказаться»', async () => {
+    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'not_going' });
+    renderEventPage();
+
+    expect(await screen.findByRole('button', { name: /Подтвердить участие/ })).toBeInTheDocument();
+    // «Отказаться» — только для going/maybe (им есть от чего отказываться); not_going его не видит
+    expect(screen.queryByRole('button', { name: 'Отказаться' })).not.toBeInTheDocument();
+  });
+
+  it('Этап 2 открыт всем: не голосовавший (myVote null) тоже видит «Подтвердить участие»', async () => {
+    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: null });
+    renderEventPage();
+
+    expect(await screen.findByRole('button', { name: /Подтвердить участие/ })).toBeInTheDocument();
+  });
+
+  it('подтверждённый (≥4ч): «Отказаться» → инлайн-подтверждение; без очереди предупреждает про репутацию', async () => {
+    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'confirmed', responders: [] });
+    const { user } = renderEventPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Отказаться' }));
+    expect(screen.getByText(/Освободить место/)).toBeInTheDocument();
+    expect(screen.getByText(/спишется 100 очков/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Освободить' })).toBeInTheDocument();
+  });
+
+  it('подтверждённый: при наличии очереди диалог обещает замену (без штрафа-предупреждения)', async () => {
+    const responders: EventResponderDto[] = [
+      { userId: 'me', firstName: 'Я', lastName: null, avatarUrl: null, status: 'confirmed', attendance: null },
+      { userId: 'w', firstName: 'Ждун', lastName: null, avatarUrl: null, status: 'waitlisted', attendance: null },
+    ];
+    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'confirmed', responders });
+    const { user } = renderEventPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Отказаться' }));
+    expect(screen.getByText(/займёт первый из очереди/)).toBeInTheDocument();
+    expect(screen.queryByText(/спишется 100 очков/)).not.toBeInTheDocument();
+  });
+
+  it('подтверждённый: за <4ч до старта кнопки «Отказаться» нет', async () => {
+    mockEndpoints({ event: stage2Event({ eventDatetime: SOON }), myVote: 'confirmed' });
+    renderEventPage();
+
+    expect(await screen.findByText('Подтверждение участия')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Отказаться' })).not.toBeInTheDocument();
+  });
+
+  it('waitlisted видит «Отказаться» (выход из очереди) без порога', async () => {
+    mockEndpoints({ event: stage2Event({ eventDatetime: SOON }), myVote: 'waitlisted' });
+    renderEventPage();
+
+    expect(await screen.findByRole('button', { name: 'Отказаться' })).toBeInTheDocument();
+  });
+
+  it('Этап 2: лист ожидания рендерится в порядке приоритета с номерами позиций', async () => {
+    // Бэкенд уже отдаёт респондеров по приоритету (stage_1_timestamp ASC); фронт сохраняет порядок.
+    const responders: EventResponderDto[] = [
+      { userId: 'u-conf', firstName: 'Анна', lastName: null, avatarUrl: null, status: 'confirmed', attendance: null },
+      { userId: 'u-w1', firstName: 'Борис', lastName: null, avatarUrl: null, status: 'waitlisted', attendance: null },
+      { userId: 'u-w2', firstName: 'Вера', lastName: null, avatarUrl: null, status: 'waitlisted', attendance: null },
+    ];
+    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'confirmed', responders });
+    const { container } = renderEventPage();
+
+    // ждём по уникальной подсказке секции (заголовок «Лист ожидания» дублируется в сводке-счётчике)
+    expect(await screen.findByText(/место получит первый в очереди/)).toBeInTheDocument();
+    const rows = container.querySelectorAll('.rd-wl-row');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector('.rd-wl-pos')?.textContent).toBe('1');
+    expect(rows[0].textContent).toContain('Борис');
+    expect(rows[1].querySelector('.rd-wl-pos')?.textContent).toBe('2');
+    expect(rows[1].textContent).toContain('Вера');
   });
 
   it('на прошедшем событии «Кто идёт» = только confirmed; expired выпадает из состава и из отметки явки', async () => {
@@ -212,5 +294,16 @@ describe('EventPage — отмена события (F5-14)', () => {
 
     expect(await screen.findByText('Событие')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Отменить событие' })).not.toBeInTheDocument();
+  });
+
+  it('Этап 1 (upcoming): секция откликов озаглавлена «Предварительные голоса», не «Кто идёт»', async () => {
+    const responders: EventResponderDto[] = [
+      { userId: 'g1', firstName: 'Гость', lastName: null, avatarUrl: null, status: 'going', attendance: null },
+    ];
+    mockEndpoints({ event: stage2Event({ status: 'upcoming', eventDatetime: FUTURE }), myVote: 'going', responders });
+    renderEventPage();
+
+    expect(await screen.findByText(/Предварительные голоса/)).toBeInTheDocument();
+    expect(screen.queryByText(/Кто идёт/)).not.toBeInTheDocument();
   });
 });

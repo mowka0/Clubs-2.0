@@ -11,6 +11,15 @@ interface EventResponseRepository {
 
     fun upsertStage1Vote(eventId: UUID, userId: UUID, vote: Stage_1Vote): EventResponse
 
+    /**
+     * Создаёт строку ответа для участника, который НЕ голосовал на Этапе 1, но подтверждает участие
+     * на Этапе 2 (Этап 2 открыт всем участникам клуба). `stage_1_vote` остаётся NULL; `stage_1_timestamp`
+     * ставится в now — это ключ FIFO очереди waitlist, поэтому поздний участник встаёт В КОНЕЦ, после
+     * голосовавших на Этапе 1 (у них метка из прошлого). Вызывать только под slot-lock — сериализация
+     * confirm'ов гарантирует, что UNIQUE(event_id, user_id) не нарушится гонкой.
+     */
+    fun createLateStage2Entry(eventId: UUID, userId: UUID): EventResponse
+
     fun findByEventAndUser(eventId: UUID, userId: UUID): EventResponse?
 
     fun countByVote(eventId: UUID): Map<String, Int>
@@ -29,10 +38,6 @@ interface EventResponseRepository {
 
     fun updateStage2Vote(id: UUID, vote: Stage_2Vote, finalStatus: FinalStatus): EventResponse
 
-    fun findGoingByEventOrderByTimestamp(eventId: UUID): List<EventResponse>
-
-    fun findMaybeByEventOrderByTimestamp(eventId: UUID): List<EventResponse>
-
     /**
      * Feature A авто-истечение: для каждого начавшегося, запустившего Этап 2, неотменённого события
      * переводит going/maybe-ответы, которые так и не были подтверждены (stage_2_vote IS NULL), в
@@ -50,11 +55,20 @@ interface EventResponseRepository {
     fun findUnconfirmedVoterTelegramIds(eventId: UUID): List<Long>
 
     /**
-     * Telegram id проголосовавших going/maybe — пользователи, которые должны подтвердить участие
-     * при старте Этапа 2 (PRD §4.4.2 шаг 1). Проголосовавшим not_going нечего подтверждать, они
-     * исключены (GAP-009). Используется NotificationService.sendStage2Started.
+     * Telegram id проголосовавших going/maybe — «заинтересованные» участники события. Используется
+     * DM об ОТМЕНЕ события (F5-14, sendEventCancelled): о ней сообщаем только тем, кто выразил интерес,
+     * а не всему клубу.
      */
     fun findStage2TargetTelegramIds(eventId: UUID): List<Long>
+
+    /**
+     * Telegram id аудитории приглашения на Этап 2 (sendStage2Started): участники клуба С ДОСТУПОМ,
+     * которые НЕ голосовали not_going на Этапе 1 — т.е. going / maybe / вообще не ответившие. Этап 2
+     * открыт всем участникам клуба, поэтому не ответивших тоже зовём подтвердить; проголосовавшим
+     * not_going DM НЕ шлём (но подтвердить они всё равно смогут — см. Stage2Service.confirmParticipation).
+     * Строится от memberships (LEFT JOIN event_responses), а не от голосов, иначе не ответившие бы выпали.
+     */
+    fun findStage2InviteTelegramIds(eventId: UUID): List<Long>
 
     /**
      * F5-15(2): telegram ID для данных (eventId, userIds) — участники, которые СТАЛИ absent именно
@@ -101,12 +115,13 @@ interface EventResponseRepository {
     fun findConfirmedActiveEventObligations(userId: UUID, clubId: UUID): List<EventObligation>
 
     /**
-     * Продвигает самый ранний в очереди waitlisted-ответ события [eventId] (по времени голоса
-     * Этапа 1) в confirmed, занимая слот, который только что освободил ушедший confirmed-участник.
-     * Возвращает true, если кто-то был продвинут. Вызывающий ОБЯЗАН держать [lockEventSlots], чтобы
-     * это никогда не гонялось с конкурентным confirm/decline, продвигающим ту же строку.
+     * Продвигает самый ранний в очереди waitlisted-ответ события [eventId] (по времени вставания в
+     * лист ожидания на Этапе 2, stage_2_timestamp) в confirmed, занимая слот, который только что
+     * освободил ушедший confirmed-участник. Возвращает id продвинутого пользователя, либо null, если
+     * очередь пуста. Вызывающий ОБЯЗАН держать [lockEventSlots], чтобы это никогда не гонялось с
+     * конкурентным confirm/decline, продвигающим ту же строку.
      */
-    fun promoteFirstWaitlisted(eventId: UUID): Boolean
+    fun promoteFirstWaitlisted(eventId: UUID): UUID?
 
     /**
      * Каскадное удаление при выходе из клуба: убирает ответы [userId] на все активные, ещё не

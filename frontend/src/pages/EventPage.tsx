@@ -105,6 +105,8 @@ export const EventPage: FC = () => {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelError, setCancelError] = useState<string | null>(null);
+  // Инлайн-подтверждение отказа от подтверждённого места (защита от случайного клика).
+  const [confirmingDecline, setConfirmingDecline] = useState(false);
 
   const event = eventQuery.data;
   const myVote = myVoteQuery.data?.vote ?? null;
@@ -288,6 +290,11 @@ export const EventPage: FC = () => {
   })();
 
   const eventHappened = new Date(event.eventDatetime).getTime() <= Date.now();
+  // Подтверждённый может отказаться (освободить место) только пока не прошёл дедлайн отказа. Дедлайн
+  // считает бэкенд из своего env-порога и отдаёт в confirmedDeclineDeadline — фронт не хранит копию
+  // порога. Бэкенд остаётся источником истины: declineParticipation всё равно отклонит поздний отказ.
+  const confirmedCanDecline =
+    myVote === 'confirmed' && new Date(event.confirmedDeclineDeadline).getTime() > Date.now();
 
   // Backend (`VoteService.castVote`) принимает голос ТОЛЬКО при status='upcoming'.
   const showVoting = event.status === 'upcoming';
@@ -337,6 +344,10 @@ export const EventPage: FC = () => {
   const pendingCount = responders.filter((r) => r.status === 'going' || r.status === 'maybe').length;
   const waitlistedCount = responders.filter((r) => r.status === 'waitlisted').length;
   const comingList = finalComposition ? responders.filter((r) => r.status === 'confirmed') : responders;
+  // Лист ожидания (только Этап 2+): waitlisted в порядке приоритета. Бэкенд отдаёт респондеров по
+  // stage_1_timestamp ASC — тому же ключу, по которому продвигается очередь (findFirstWaitlisted),
+  // поэтому фильтр сохраняет реальный порядок продвижения.
+  const waitlist = finalComposition ? responders.filter((r) => r.status === 'waitlisted') : [];
 
   return (
     <div className="rd-page">
@@ -462,10 +473,10 @@ export const EventPage: FC = () => {
       </>
       )}
 
-      {/* Кто идёт. Этап 1: все откликнувшиеся (интерес). Этап 2+: только подтверждённый состав. */}
+      {/* Этап 1: предварительные голоса (интерес, мест не резервируют). Этап 2+: подтверждённый состав. */}
       {!isCancelled && comingList.length > 0 && (
         <>
-          <div className="rd-section-sub-h">Кто идёт <span className="rd-count">· {comingList.length}</span></div>
+          <div className="rd-section-sub-h">{finalComposition ? 'Кто идёт' : 'Предварительные голоса'} <span className="rd-count">· {comingList.length}</span></div>
           <div className="rd-voters">
             {comingList.map((r) => {
               const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
@@ -476,6 +487,30 @@ export const EventPage: FC = () => {
                   </span>
                   <span className="rd-vn">{name}</span>
                   <span className={`rd-vdot ${statusDotClass(r.status)}`} title={r.status} />
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* Лист ожидания (Этап 2+): в порядке приоритета — освободится слот, войдёт первый в очереди. */}
+      {!isCancelled && finalComposition && waitlist.length > 0 && (
+        <>
+          <div className="rd-section-sub-h">Лист ожидания <span className="rd-count">· {waitlist.length}</span></div>
+          <div className="rd-attn-hint">Если участник откажется, место получит первый в очереди.</div>
+          <div className="rd-glass rd-wl-panel">
+            {waitlist.map((r, i) => {
+              const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
+              return (
+                <div className="rd-wl-row" key={r.userId}>
+                  <span className="rd-wl-pos">{i + 1}</span>
+                  <div className="rd-voter">
+                    <span className="rd-av">
+                      {r.avatarUrl ? <img src={r.avatarUrl} alt="" /> : getInitials(name)}
+                    </span>
+                    <span className="rd-vn">{name}</span>
+                  </div>
                 </div>
               );
             })}
@@ -718,12 +753,60 @@ export const EventPage: FC = () => {
             )}
           </div>
           {actionError && <div className="rd-error">{actionError}</div>}
-          {(myVote === 'going' || myVote === 'maybe') && (
+          {/* Этап 2 открыт всем участникам клуба: «Подтвердить» показываем всем, кроме тех, кто уже
+              в терминальном статусе Этапа 2 (подтверждён / лист ожидания / отказался). «Отказаться» —
+              только голосовавшим going/maybe (им есть от чего отказываться); not_going и не
+              голосовавшим показываем лишь путь внутрь. */}
+          {myVote !== 'confirmed' && myVote !== 'waitlisted' && myVote !== 'declined' && (
             <div className="rd-cta-wrap">
               <button type="button" className="rd-btn-primary" onClick={handleConfirm} disabled={voting}>
                 {voting ? <Spinner size="s" /> : 'Подтвердить участие'}
               </button>
-              <button type="button" className="rd-btn-outline" style={{ marginTop: 8 }} onClick={handleDecline} disabled={voting}>
+              {(myVote === 'going' || myVote === 'maybe') && (
+                <button type="button" className="rd-btn-outline" style={{ marginTop: 8 }} onClick={handleDecline} disabled={voting}>
+                  Отказаться
+                </button>
+              )}
+            </div>
+          )}
+          {/* Подтверждённый освобождает место — с инлайн-подтверждением (защита). Кнопки нет после
+              дедлайна отказа (confirmedDeclineDeadline с бэка; бэк тоже отклонит). Если замены в очереди
+              нет — предупреждаем про штраф репутации; если есть — что место сразу займёт первый из очереди. */}
+          {confirmedCanDecline && (
+            confirmingDecline ? (
+              <div className="rd-reject-confirm">
+                <div className="rd-reject-q">
+                  Освободить место?{' '}
+                  {waitlistedCount > 0
+                    ? 'Его сразу займёт первый из очереди.'
+                    : 'Замены пока нет — с вашей репутации спишется 100 очков.'}
+                </div>
+                <div className="rd-org-gate-acts">
+                  <button type="button" className="rd-btn-outline" disabled={voting} onClick={() => setConfirmingDecline(false)}>
+                    Нет
+                  </button>
+                  <button
+                    type="button"
+                    className="rd-btn-primary rd-btn-danger"
+                    disabled={voting}
+                    onClick={() => { setConfirmingDecline(false); handleDecline(); }}
+                  >
+                    {voting ? <Spinner size="s" /> : 'Освободить'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="rd-cta-wrap">
+                <button type="button" className="rd-btn-outline" onClick={() => { setActionError(null); setConfirmingDecline(true); }}>
+                  Отказаться
+                </button>
+              </div>
+            )
+          )}
+          {/* Waitlisted выходит из очереди свободно (никого не держит, порога и штрафа нет). */}
+          {myVote === 'waitlisted' && (
+            <div className="rd-cta-wrap">
+              <button type="button" className="rd-btn-outline" onClick={handleDecline} disabled={voting}>
                 Отказаться
               </button>
             </div>

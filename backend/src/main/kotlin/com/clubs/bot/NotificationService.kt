@@ -58,15 +58,16 @@ class NotificationService(
     }
 
     /**
-     * Уведомляет проголосовавших "иду"/"возможно" о начале Этапа 2, с просьбой подтвердить
-     * участие (PRD §4.4.2 шаг 1). Проголосовавшие "не иду" исключены — им нечего подтверждать
-     * (GAP-009).
+     * Приглашает подтвердить участие при старте Этапа 2. Этап 2 открыт всем участникам клуба,
+     * поэтому DM идёт going / maybe / НЕ ответившим на Этапе 1 (findStage2InviteTelegramIds).
+     * Проголосовавшим "не иду" DM НЕ шлём — но подтвердить участие они всё равно смогут, если
+     * передумают (Stage2Service.confirmParticipation открыт всем).
      */
     @Async
     fun sendStage2Started(event: Event) {
-        val voterTelegramIds = eventResponseRepository.findStage2TargetTelegramIds(event.id)
+        val voterTelegramIds = eventResponseRepository.findStage2InviteTelegramIds(event.id)
         if (voterTelegramIds.isEmpty()) {
-            log.info("Stage 2 DM SKIPPED — no going/maybe voters for eventId={}", event.id)
+            log.info("Stage 2 DM SKIPPED — no eligible members for eventId={}", event.id)
             return
         }
         log.info("Stage 2 DM: eventId={} recipients={}", event.id, voterTelegramIds.size)
@@ -78,24 +79,46 @@ class NotificationService(
         }
     }
 
+    /**
+     * DM участнику, автоматически повышённому из листа ожидания в confirmed (освободился слот —
+     * подтверждённый отказался или вышел из клуба). Кнопка ведёт на страницу события. Best-effort
+     * @Async: telegram id резолвим из строки ответа участника; если её/id нет — тихо пропускаем
+     * (повышение уже закоммичено, DM не критичен). Зеркалит sendStage2Started.
+     */
+    @Async
+    fun sendWaitlistPromoted(event: Event, promotedUserId: UUID) {
+        val telegramId = eventResponseRepository
+            .findTelegramIdsByEventAndUserIds(event.id, listOf(promotedUserId))
+            .firstOrNull()
+        if (telegramId == null) {
+            log.warn("Waitlist-promoted DM SKIPPED — no telegram id for userId={} eventId={}", promotedUserId, event.id)
+            return
+        }
+        val text = "🎉 Освободилось место!\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
+            "Вы перешли из листа ожидания — место ваше. Откройте событие:"
+        sendDm(telegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Открыть событие")
+    }
+
 
     /**
-     * F5-14: уведомляет заинтересованных проголосовавших (иду/возможно — та же аудитория,
-     * что и для Этапа 2) об отмене события, с опциональной причиной от организатора.
-     * Best-effort, как и все остальные DM.
+     * F5-14: уведомляет ВСЕХ участников клуба с доступом об отмене события, с опциональной
+     * причиной от организатора (UPDATED 2026-07-05: раньше — только going/maybe; теперь всем,
+     * симметрично уведомлению о создании). Best-effort, как и все остальные DM.
      */
     @Async
     fun sendEventCancelled(event: Event, reason: String?) {
-        val voterTelegramIds = eventResponseRepository.findStage2TargetTelegramIds(event.id)
-        if (voterTelegramIds.isEmpty()) {
-            log.info("Event-cancelled DM SKIPPED — no interested voters for eventId={}", event.id)
+        // Об отмене сообщаем ВСЕМ участникам клуба с доступом (симметрично sendEventCreated:
+        // кто узнал о создании — узнаёт и об отмене), а не только выразившим интерес.
+        val recipientTelegramIds = membershipRepository.findMemberTelegramIds(event.clubId)
+        if (recipientTelegramIds.isEmpty()) {
+            log.info("Event-cancelled DM SKIPPED — no members with access for clubId={}", event.clubId)
             return
         }
-        log.info("Event-cancelled DM: eventId={} recipients={}", event.id, voterTelegramIds.size)
+        log.info("Event-cancelled DM: eventId={} clubId={} recipients={}", event.id, event.clubId, recipientTelegramIds.size)
         val reasonLine = reason?.let { "\n\nПричина: $it" } ?: ""
         val text = "❌ Событие отменено\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}$reasonLine"
         val webAppPath = "/events/${event.id}"
-        voterTelegramIds.forEach { telegramId ->
+        recipientTelegramIds.forEach { telegramId ->
             sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
         }
     }

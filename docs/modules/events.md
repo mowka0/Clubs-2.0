@@ -72,12 +72,19 @@ rd-glass` без тамбнейла; см. [`redesign-banco-style.md`](./redesig
   "maybeCount": 0,
   "notGoingCount": 0,
   "confirmedCount": 0,
+  "confirmedDeclineDeadline": "ISO datetime",
   "attendanceMarked": false,
   "attendanceFinalized": false,
   "createdAt": "ISO datetime",
   "photoUrl": "string|null"
 }
 ```
+> `confirmedDeclineDeadline` = `eventDatetime − events.stage2-decline-cutoff-minutes` (дефолт 240 = 4ч),
+> считается в `EventMapper`. Крайний момент, до которого ПОДТВЕРЖДЁННЫЙ участник может отказаться от
+> места. Фронт прячет кнопку «Отказаться» у `confirmed`, когда `now ≥ confirmedDeclineDeadline`; бэкенд
+> остаётся источником истины (`declineParticipation` отклонит поздний отказ). Waitlisted порогом не
+> гейтится. Не пер-юзер — одинаков для всех, поэтому в общем DTO. Заменил прежнюю фронт-константу-копию
+> порога (`CONFIRMED_DECLINE_CUTOFF_HOURS=4`), которая не была связана с рантайм-env бэка.
 
 ### EventListItemDto
 ```json
@@ -176,14 +183,21 @@ fun countByVote(eventId: UUID): Map<String, Int>   // going/maybe/not_going
   (`STAGE2_TRIGGER_MINUTES_BEFORE`), чтобы протестировать полный поток голос → переход → подтверждение
 - Для каждого такого события: переводит в Stage 2
 
-### Логика перехода в Stage 2
+### Логика перехода в Stage 2 (UPDATED 2026-07-05 — гонка за места по Этапу 2)
 1. Установить `event.status = stage_2`, `event.stage_2_triggered = true`
-2. Получить всех going-участников (stage_1_vote = going), отсортированных по stage_1_timestamp ASC
-3. Первые N (где N = participant_limit) → они могут подтвердить первыми
-4. Если going < participant_limit → добавить maybe-участников в очередь
-5. Опубликовать `Stage2StartedEvent` → после коммита транзакции going/maybe-воутерам уходит
-   DM «Этап 2 начался — подтвердите участие» (S2T-2 ✅, 2026-06-13; см.
-   § «DM при старте Этапа 2 + сериализация слотов» ниже и `telegram-bot.md` § `sendStage2Started`).
+2. **Мест НЕ резервируем и очередь заранее НЕ формируем.** Этап 1 — только предварительный визуал:
+   он не даёт приоритета на место. При старте Этапа 2 никто не помечается `waitlisted` — все
+   `going`/`maybe` остаются `stage_2_vote = NULL` (pending).
+3. Места разыгрываются **гонкой за места** на Этапе 2: кто первым нажмёт «Подтвердить», тот в зале
+   (см. § «Логика confirm»: `confirmedCount < limit → confirmed`, иначе `waitlisted`). Очередь листа
+   ожидания и её продвижение упорядочены по `stage_2_timestamp` (времени подтверждения), НЕ по Этапу 1.
+4. Опубликовать `Stage2StartedEvent` → после коммита транзакции уходит DM «Этап 2 начался —
+   подтвердите участие» (S2T-2 ✅, 2026-06-13; см. § «DM при старте Этапа 2 + сериализация
+   слотов» ниже и `telegram-bot.md` § `sendStage2Started`).
+   **Аудитория DM (UPDATED 2026-07-04):** участники клуба с доступом, которые НЕ голосовали
+   `not_going` — т.е. `going` / `maybe` / **вообще не ответившие** (`findStage2InviteTelegramIds`,
+   строится от memberships). Проголосовавшим `not_going` DM не шлём, но подтвердить участие они
+   всё равно смогут (Этап 2 открыт всем — см. § «Логика confirm»).
    **Гейт (2026-07-04):** если флип случился уже ПОСЛЕ старта события (поздний тик / событие
    создано внутри lead-окна) — статус всё равно переводится (на переходе завязаны sweep
    авто-истечения и completion), но DM НЕ публикуется: окно подтверждения закрывается в момент
@@ -214,24 +228,45 @@ POST /api/events/{id}/decline
 2. Пользователь должен быть участником клуба → 403
 3. Взять per-event advisory-lock `lockEventSlots(eventId)` — **до любого чтения**
    `event_responses` (S2-01/F5-07 ✅, см. § «DM при старте Этапа 2 + сериализация слотов»)
-4. У пользователя должен быть going/maybe голос → 400 "You didn't vote going or maybe"
+4. **Этап 2 открыт ВСЕМ участникам клуба (UPDATED 2026-07-04).** Прежний гард «нужен going/maybe
+   голос» СНЯТ. Кто голосовал `not_going` — просто подтверждается (передумал → может). Кто вообще
+   не голосовал — строки ещё нет, `createLateStage2Entry` создаёт её (`stage_1_vote=NULL`,
+   `stage_1_timestamp=NULL`), дальше тот же путь. Это закрывает дыру «в короткое событие,
+   проскочившее Этап 1, никто не мог вступить».
 5. Текущий confirmed count < participant_limit → stage_2_vote = confirmed, final_status = confirmed
-6. Иначе → stage_2_vote = waitlisted, final_status = waitlisted
+6. Иначе → stage_2_vote = waitlisted, final_status = waitlisted. `stage_2_timestamp` (проставляется
+   этим же `updateStage2Vote`) задаёт позицию в очереди: кто раньше подтвердил при полном зале — выше.
+   > Очередь по Этапу 2, а не по Этапу 1: голос Этапа 1 не влияет на порядок листа ожидания.
+   > Идемпотентность: повторное подтверждение уже-`waitlisted` НЕ перезаписывает его `stage_2_timestamp`
+   > (ранний `return` в confirm), поэтому позиция в очереди стабильна.
 
-### Логика decline
+### Логика decline (UPDATED 2026-07-05 — порог + штраф за брошенное место)
 1. Проверки события/членства (симметрично confirm), затем тот же advisory-lock
    `lockEventSlots(eventId)` (F5-11 ✅)
 2. Найти response пользователя
-3. stage_2_vote = declined, final_status = declined
-4. Найти первого waitlisted участника (по stage_1_timestamp) → promote to confirmed
+3. **Порог отказа для ПОДТВЕРЖДЁННОГО** (`events.stage2-decline-cutoff-minutes`, дефолт 240 = 4ч):
+   если `wasConfirmed` И до старта < порога → 400 «Отказаться … можно не позже чем за N ч». Замене
+   не хватит времени подготовиться → «приходи или неявка −200». Waitlisted этот порог НЕ касается
+   (он никого не держит — выходит из очереди свободно, до старта).
+4. stage_2_vote = declined, final_status = declined
+5. Если отказавшийся был `confirmed`:
+   - **есть первый waitlisted** (по `stage_2_timestamp`) → promote to confirmed; отказавшийся чист (0).
+     Повышённому уходит DM «🎉 Освободилось место» с кнопкой на событие (`WaitlistPromotedEvent` →
+     AFTER_COMMIT `WaitlistPromotedListener` → `sendWaitlistPromoted`). То же уведомление шлётся при
+     авто-повышении из-за выхода подтверждённого из клуба (`MembershipService.promoteFirstWaitlisted`).
+   - **очередь пуста** → отказавшийся оставил дыру → штраф `abandoned_slot` (−100) в ЭТОЙ ЖЕ
+     транзакции (`ReputationService.penalizeAbandonedSlot`, по образцу `penalizeExit`). Половина
+     no_show: предупредил заранее, но место не закрылось. См. reputation.md.
 
 ### Corner Cases
 | Ситуация | Поведение |
 |----------|-----------|
 | Событие ещё в upcoming | 400 "Event is not in confirmation stage" |
-| Пользователь не голосовал в Stage 1 | 400 "You didn't vote going" |
+| Confirmed отказывается за < порога до старта | 400, ничего не меняется (приходит или неявка) |
 | Мест нет (confirmedCount >= limit) | Получает waitlisted |
-| Decline → нет waitlisted | Просто decline, место "теряется" |
+| Confirmed decline → есть waitlisted | Первый из очереди (по `stage_2_timestamp`) → confirmed + DM «место освободилось»; отказавшийся без штрафа |
+| Confirmed decline → нет waitlisted | Слот открывается; отказавшийся получает `abandoned_slot` −100 |
+| Waitlisted decline | Выходит из очереди в любой момент до старта, без штрафа |
 
 ---
 
@@ -406,6 +441,7 @@ penalty-флоу), а их страницы упираются в скрытый
 | `events.stage2-expire-poll-ms` | `STAGE2_EXPIRE_POLL_MS` | `300000` (5мин) | Период авто-истечения брони |
 | `events.stage2-trigger-minutes-before` | `STAGE2_TRIGGER_MINUTES_BEFORE` | `1440` (24ч) | За сколько **минут** до старта `upcoming`-событие авто-переходит в `stage_2` |
 | `events.stage2-poll-ms` | `STAGE2_POLL_MS` | `60000` (1мин) | Период тика `triggerStage2ForReadyEvents`; окно подтверждения = trigger-lead − фаза тика, тик должен быть сильно мельче lead |
+| `events.stage2-decline-cutoff-minutes` | `STAGE2_DECLINE_CUTOFF_MINUTES` | `240` (4ч) | За сколько **минут** до старта закрывается отказ от УЖЕ ПОДТВЕРЖДЁННОГО места (замене нужно время). Фронт дублирует порог константой `CONFIRMED_DECLINE_CUTOFF_HOURS=4`; бэк — источник истины. Waitlisted порогом не гейтится |
 | `events.reminder-poll-ms` | `EVENT_REMINDER_POLL_MS` | `300000` (5мин) | Период `EventReminderScheduler` |
 | `events.confirm-reminder-minutes-before` | `CONFIRM_REMINDER_MINUTES_BEFORE` | `120` (2ч) | За сколько **минут** до события слать «подтверди участие» |
 | `events.attendance-reminder-minutes-after` | `ATTENDANCE_REMINDER_MINUTES_AFTER` | `1440` (24ч) | Через сколько **минут** после события напомнить оргу отметить явку |
@@ -486,6 +522,15 @@ penalty-флоу), а их страницы упираются в скрытый
   `accent`-бейджи (action-required), поэтому терминальные статусы
   (`confirmed`/`declined`/`expired_no_confirm`) бейдж не показывают — видимый эффект для
   `expired_no_confirm` это отсутствие бейджа.
+- **Лист ожидания на странице (UPDATED 2026-07-05):** на Этапе 2+ под «Кто идёт» рендерится
+  секция «Лист ожидания» — `waitlisted`-участники **в порядке приоритета продвижения**
+  (нумерованный список 1..N). Это работает потому, что `findRespondersWithUsers` сортирует по
+  `stage_2_timestamp ASC` (NULLS LAST, вторичный ключ `stage_1_timestamp`) — ровно тот ключ, по
+  которому `findFirstWaitlisted` продвигает очередь (время вставания в лист ожидания на Этапе 2).
+  Тот же запрос теперь включает и поздних участников (`stage_1_vote=NULL`, но есть `final_status`),
+  которых раньше отсекал фильтр `stage_1_vote IS NOT NULL` — иначе подтвердившийся не-голосовавший
+  выпадал бы из ростера. На Этапе 1 (действий Этапа 2 ещё нет, `stage_2_timestamp` у всех NULL)
+  NULLS LAST + `stage_1_timestamp` даёт предварительный порядок «кто раньше откликнулся».
 
 ---
 
@@ -496,16 +541,22 @@ penalty-флоу), а их страницы упираются в скрытый
 > пути» двухэтапки (участников никто не звал подтверждать) и обе слот-гонки.
 
 ### S2T-2 — DM «Этап 2 начался» (+ GAP-004/GAP-009)
-- `Stage2Service.triggerStage2` (в транзакции scheduler'а, **после** назначения overflow →
-  waitlist) публикует `Stage2StartedEvent` (`event/Stage2StartedEvent.kt`, несёт snapshot
-  domain-`Event`).
+- `Stage2Service.triggerStage2` (в транзакции scheduler'а) публикует `Stage2StartedEvent`
+  (`event/Stage2StartedEvent.kt`, несёт snapshot domain-`Event`). NB (UPDATED 2026-07-05): переход
+  больше НЕ назначает overflow → waitlist заранее — места разыгрываются гонкой подтверждений на
+  Этапе 2 (см. § «Логика перехода в Stage 2»).
 - `bot/Stage2StartedListener` (`@TransactionalEventListener`, AFTER_COMMIT) зовёт
   `NotificationService.sendStage2Started` (`@Async`, best-effort: сбой Telegram не валит
   триггер). AFTER_COMMIT обязателен — `@Async`-DM читает строки воутеров на отдельном
   соединении, видящем переход только после коммита.
-- Получатели — `EventResponseRepository.findStage2TargetTelegramIds(eventId)`:
-  **только** `stage_1_vote IN (going, maybe)` (PRD §4.4.2 шаг 1; `not_going` исключены —
-  GAP-009). Метод переименован из `findResponderTelegramIdsByEventId` (старый — без фильтра).
+- Получатели (UPDATED 2026-07-04) — `EventResponseRepository.findStage2InviteTelegramIds(eventId)`:
+  участники клуба **с доступом** (`MembershipAccess.hasAccess`), у которых `stage_1_vote IS DISTINCT
+  FROM 'not_going'` — т.е. `going` / `maybe` / **не ответившие** (строится от memberships LEFT JOIN
+  event_responses, иначе не ответившие бы выпали). `not_going` исключены из DM (GAP-009), но подтвердить
+  участие могут (Этап 2 открыт всем — § «Логика confirm»). Прежний `findStage2TargetTelegramIds`
+  (только going/maybe) больше НЕ используется в DM (осталась только сигнатура): DM об **отмене**
+  события (F5-14) с 2026-07-05 шлётся ВСЕМ участникам клуба с доступом (`findMemberTelegramIds`),
+  симметрично уведомлению о создании.
 - DM с deep-link кнопкой «✅ Подтвердить участие» на `/events/{id}`. Текст и контракт —
   `telegram-bot.md` § `sendStage2Started`.
 
@@ -529,8 +580,11 @@ penalty-флоу), а их страницы упираются в скрытый
 
 ### Acceptance Criteria
 - **AC-S2T2-1:** GIVEN событие переходит в `stage_2` WHEN транзакция триггера закоммичена
-  THEN going/maybe-воутерам уходит DM с кнопкой «✅ Подтвердить участие» (`/events/{id}`);
-  `not_going`-воутерам — нет; при rollback DM не уходит.
+  THEN DM «✅ Подтвердить участие» (`/events/{id}`) уходит участникам с доступом, кроме
+  `not_going` (т.е. going / maybe / не ответившим); `not_going` — нет; при rollback DM не уходит.
+- **AC-OPEN-1 (2026-07-04):** GIVEN событие в `stage_2` до старта WHEN участник клуба с любым
+  Этапом-1 (`not_going` / без голоса) жмёт confirm THEN он `confirmed` (или `waitlisted` при
+  переполнении); строки не было — создаётся. Не-участник клуба → 403.
 - **AC-S2T2-2:** отказ Telegram API логируется `WARN` и не влияет на переход в `stage_2`.
 - **AC-LOCK-1:** GIVEN 1 свободный слот WHEN два параллельных confirm THEN ровно один
   `confirmed`, второй `waitlisted` (никогда `confirmed > participant_limit`).

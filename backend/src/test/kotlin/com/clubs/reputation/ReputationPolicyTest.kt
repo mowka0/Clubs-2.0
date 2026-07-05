@@ -31,7 +31,20 @@ class ReputationPolicyTest {
         assertEquals(ReputationKind.confirmed_unresolved, kind(Stage_1Vote.maybe, AttendanceStatus.disputed))
         assertEquals(ReputationKind.confirmed_unresolved, kind(Stage_1Vote.going, null))
         assertEquals(ReputationKind.confirmed_unresolved, kind(Stage_1Vote.maybe, null))
-        assertEquals(ReputationKind.confirmed_unresolved, kind(null, AttendanceStatus.attended))
+        assertEquals(ReputationKind.confirmed_unresolved, kind(null, AttendanceStatus.disputed))
+    }
+
+    @Test
+    fun `attendance kind keys on confirmation, not the stage-1 vote (Stage 2 open to all)`() {
+        // Фича «Этап 2 открыт всем»: подтвердиться может not_going и не голосовавший (stage1=null).
+        // Обязательство — сам факт подтверждения, поэтому пришёл → +100, не пришёл → −200 и для них.
+        assertEquals(ReputationKind.spontaneous, kind(null, AttendanceStatus.attended))
+        assertEquals(ReputationKind.spontaneous, kind(Stage_1Vote.not_going, AttendanceStatus.attended))
+        assertEquals(ReputationKind.spectator, kind(null, AttendanceStatus.absent))
+        assertEquals(ReputationKind.spectator, kind(Stage_1Vote.not_going, AttendanceStatus.absent))
+        // going сохраняет свои лейблы ironclad / no_show (очки те же).
+        assertEquals(ReputationKind.ironclad, kind(Stage_1Vote.going, AttendanceStatus.attended))
+        assertEquals(ReputationKind.no_show, kind(Stage_1Vote.going, AttendanceStatus.absent))
     }
 
     @Test
