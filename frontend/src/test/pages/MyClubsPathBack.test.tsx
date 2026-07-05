@@ -162,7 +162,7 @@ describe('MyClubsPage — раскрывающаяся карточка клуб
     expect(head).toHaveTextContent('Новичок');
 
     await user.click(head);
-    expect(screen.getByText(/Репутация появится после 3 исходов/)).toBeInTheDocument();
+    expect(screen.getByText(/Статистика накопится после трёх посещений/)).toBeInTheDocument();
     expect(screen.queryByText('Путь наверх')).not.toBeInTheDocument();
   });
 });

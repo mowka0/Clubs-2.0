@@ -133,6 +133,17 @@ export const ProfilePage: FC = () => {
 
       {user.bio && <div className="rd-bio">{user.bio}</div>}
 
+      {interests.length > 0 && (
+        <>
+          <div className="rd-section-sub-h">Интересы</div>
+          <div className="rd-tags">
+            {interests.map((interest) => (
+              <span key={interest} className="rd-tag">{interest}</span>
+            ))}
+          </div>
+        </>
+      )}
+
       {hasReputation && (
         <div className="rd-stats">
           <div className="rd-stat rd-glass">
@@ -156,17 +167,6 @@ export const ProfilePage: FC = () => {
       )}
 
       <SubscriptionCard />
-
-      {interests.length > 0 && (
-        <>
-          <div className="rd-section-sub-h">Интересы</div>
-          <div className="rd-tags">
-            {interests.map((interest) => (
-              <span key={interest} className="rd-tag">{interest}</span>
-            ))}
-          </div>
-        </>
-      )}
 
       {!rep && reputationQuery.error ? (
         // Провалившийся запрос репутации не должен маскироваться под онбординг «клубов пока

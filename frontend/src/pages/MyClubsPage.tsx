@@ -189,12 +189,19 @@ const MyClubCard: FC<MyClubCardProps> = ({
               ))}
             </div>
           )}
-          {/* Статистика — только текстом (решение PO 2026-07-05: кольца Посещаемость/Сборы убраны). */}
-          {hasActivity && (
+          {/* Статистика — только текстом (решение PO 2026-07-05: кольца Посещаемость/Сборы убраны).
+              Нет активности → пишем об этом явно, а не молчим (PO, раунд 3). */}
+          {hasActivity ? (
             <div className="rd-cc-line">
               обещания {Math.round(rep?.promiseFulfillmentPct ?? 0)}% · {rep?.totalConfirmations} подтв. · {rep?.totalAttendances} посещ.
               {(rep?.spontaneityCount ?? 0) > 0 && ` · ${rep?.spontaneityCount} спонт.`}
               {(rep?.skladchinaTotal ?? 0) > 0 && ` · сборы ${rep?.skladchinaPaid}/${rep?.skladchinaTotal}`}
+            </div>
+          ) : (
+            <div className="rd-cc-line">
+              {isOrganizer
+                ? 'Здесь репутация начисляется за организаторские качества.'
+                : 'Статистика накопится после трёх посещений — подтверждайте участие и приходите на встречи.'}
             </div>
           )}
           {showPathBack && (
@@ -211,13 +218,6 @@ const MyClubCard: FC<MyClubCardProps> = ({
                 />
               </div>
               <div className="rd-pb-note">{pathBackNote(rep?.meetingsToReliable ?? 2)}</div>
-            </div>
-          )}
-          {!hasScore && (
-            <div className="rd-cc-line">
-              {isOrganizer
-                ? 'Здесь репутация начисляется за организаторские качества.'
-                : 'Репутация появится после 3 исходов — подтверждайте участие и приходите на встречи.'}
             </div>
           )}
           {rep?.nearestEvent && (
