@@ -262,6 +262,8 @@ class JooqClubRepository(
                 )
         )
 
+    override fun findNearestEvents(clubIds: List<UUID>): Map<UUID, NearestEventDto> = fetchNearestEvents(clubIds)
+
     private fun fetchNearestEvents(clubIds: List<UUID>): Map<UUID, NearestEventDto> {
         if (clubIds.isEmpty()) return emptyMap()
         val now = OffsetDateTime.now()

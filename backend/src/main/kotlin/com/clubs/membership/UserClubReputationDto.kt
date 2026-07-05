@@ -1,5 +1,6 @@
 package com.clubs.membership
 
+import com.clubs.club.NearestEventDto
 import java.math.BigDecimal
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -18,5 +19,19 @@ data class UserClubReputationDto(
     val promiseFulfillmentPct: BigDecimal?,
     val totalConfirmations: Int?,
     val totalAttendances: Int?,
-    val spontaneityCount: Int?
+    val spontaneityCount: Int?,
+    // «Путь назад» (reputation-path-back.md): Trust после +1 / +2 посещений — детерминированная
+    // проекция той же формулы TrustPolicy. null = путь назад не показывается (trust скрыт гейтом,
+    // ИЛИ trust >= 70 — просадки нет, ИЛИ клуб неактивен). Три поля заполняются вместе.
+    val projectedNext1: Int?,
+    val projectedNext2: Int?,
+    // Посещений до надёжной зоны (>= 70); cap 9 — UI пишет «9+». null по тем же правилам.
+    val meetingsToReliable: Int?,
+    // Кольцо «Сборы»: оплачено / (оплачено+просрочено) репутационных складчин. null ниже гейта
+    // показа; total = 0 → фронт кольцо не рендерит.
+    val skladchinaPaid: Int?,
+    val skladchinaTotal: Int?,
+    // Ближайшее предстоящее событие клуба (семантика Discovery) — CTA «Ближайшая встреча» в
+    // раскрытой карточке «Моих клубов». null = предстоящих событий нет ИЛИ клуб в «Истории».
+    val nearestEvent: NearestEventDto?
 )

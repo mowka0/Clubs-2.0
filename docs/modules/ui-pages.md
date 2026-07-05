@@ -244,7 +244,7 @@ rd-sheet bottom-sheet (`createPortal`, как CityPicker/ProfileEditModal — б
 Загружает `GET /api/clubs/:id/members/:userId/profile`. Показывает:
 - Аватар (`rd-avatar`), имя, username
 - «Статус в клубе» (`rd-glass rd-rep-panel` + `rd-kv`): роль, дата вступления
-- «Репутация» (`rd-kv`): надёжность (Trust `profile.trust`), % выполнения обещаний, подтверждения, посещения; при `trust === null` — «Новичок» / организаторская рамка
+- «Репутация» (`rd-kv`): надёжность (Trust `profile.trust`), % выполнения обещаний, подтверждения, посещения; при `trust === null` — «Новичок» / организаторская рамка. **UPDATED 2026-07-05 (асимметричная видимость):** сервер отдаёт оценочные поля только организатору и самому участнику о себе; чужому зрителю приходят null → рендерится та же «Новичок»-подача (скрыто ≡ нет данных). bio/интересы/награды видны всем
 
 #### ~~Заявки~~ (`ApplicationsTab`, удалён в `feature/applications-inbox`, 2026-05-30)
 - Кросс-клубовый organizer-inbox теперь живёт на `MyClubsPage` — секция «Заявки на рассмотрении».
@@ -287,10 +287,11 @@ rd-sheet bottom-sheet (`createPortal`, как CityPicker/ProfileEditModal — б
 | `.pf-identity` (avatar + имя + @username + город/страна) | всегда | `useAuthStore.user` |
 | `.pf-bio` (свободный текст «о себе») | если `user.bio` задан | `useAuthStore.user.bio` |
 | Секция «Интересы» (чипы `.pf-tag`) | если `interests.length > 0` | `useMyInterestsQuery()` |
-| Global-шапка «надёжен в N из M клубов» + секции «Репутация» (активные) / «История» (покинутые) ИЛИ плашка | **всегда** (плашка `.rd-empty` при пустоте) | `useMyReputationQuery()` → `MyReputationDto` |
+| Global-шапка «надёжен в N из M клубов» (плашка `.rd-empty` при пустоте/ошибке) | **всегда** | `useMyReputationQuery()` → `MyReputationDto` (только `global`) |
+| ~~Секции «Репутация» (активные) / «История»~~ — **ПЕРЕЕХАЛИ 2026-07-05**: per-club репутация теперь в «Моих клубах» (раскрывающиеся карточки клубов + «путь назад»), история — там же. См. reputation-path-back.md | — | — |
 | Секция «Активные заявки» | если есть pending / rejected / auto_rejected applications | `useMyApplicationsQuery()` + `useQueries(getClub)` для названий. Для отклонённых заявок с `rejectedReason` рендерится третья строка `.reason` с причиной отказа — см. [`profile.md`](./profile.md) § «AC-12». |
 
-Карточка `ReputationRow`/`.pf-rep-card`: avatar + название клуба + (опц.) `обещания N% · M подтв. · K посещ.` + Trust (`trust`) справа (цвет по тиру: high ≥85 / mid ≥70 / low; null → «Новичок» / «Организатор» рамка). Тап → `/clubs/{clubId}`.
+~~Карточка `ReputationRow`~~ — удалена из Профиля 2026-07-05: её содержимое (метрики + Trust) живёт в раскрывающейся карточке клуба на `MyClubsPage` (+ кольца Посещаемость/Сборы + «путь назад» при просадке). См. reputation-path-back.md.
 
 ### Редактирование (⚙️ → `ProfileEditModal`)
 

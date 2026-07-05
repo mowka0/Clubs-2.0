@@ -190,6 +190,17 @@ export interface UserClubReputationDto {
   totalConfirmations: number | null;
   totalAttendances: number | null;
   spontaneityCount: number | null;
+  // «Путь назад» (reputation-path-back.md): Trust после +1 / +2 посещений — проекция той же формулы
+  // на бэке. null = не показывается (trust скрыт, ИЛИ trust >= 70 — просадки нет, ИЛИ клуб в «Истории»).
+  projectedNext1: number | null;
+  projectedNext2: number | null;
+  // Посещений до надёжной зоны (>= 70); cap 9 — UI пишет «9+». null по тем же правилам.
+  meetingsToReliable: number | null;
+  // Кольцо «Сборы»: оплачено / (оплачено+просрочено) репутационных складчин. total 0 → кольца нет.
+  skladchinaPaid: number | null;
+  skladchinaTotal: number | null;
+  // Ближайшее предстоящее событие клуба — CTA «Ближайшая встреча» в раскрытой карточке «Моих клубов».
+  nearestEvent: NearestEventDto | null;
 }
 
 /** Глобальная репутация: основной показатель — «надёжен в reliableClubs из trackRecordClubs клубов». */

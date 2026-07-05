@@ -296,6 +296,47 @@ describe('EventPage — отмена события (F5-14)', () => {
     expect(screen.queryByRole('button', { name: 'Отменить событие' })).not.toBeInTheDocument();
   });
 
+  it('«путь назад» (C): при просадке Trust в клубе события видна строка-мотиватор с проекцией', async () => {
+    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'going' });
+    server.use(
+      http.get('*/api/users/me/reputation', () => HttpResponse.json({
+        global: { reliableClubs: 0, trackRecordClubs: 1, score: 60 },
+        activeClubs: [{
+          clubId: CLUB_ID, clubName: 'Клуб', clubAvatarUrl: null, category: 'sport', role: 'member',
+          joinedAt: null, trust: 60, promiseFulfillmentPct: 71, totalConfirmations: 9,
+          totalAttendances: 7, spontaneityCount: 0, projectedNext1: 66, projectedNext2: 70,
+          meetingsToReliable: 2, skladchinaPaid: 0, skladchinaTotal: 0, nearestEvent: null,
+        }],
+        historyClubs: [],
+      })),
+    );
+    renderEventPage();
+
+    expect(await screen.findByText(/надёжность вырастет/)).toBeInTheDocument();
+    expect(screen.getByText('60')).toBeInTheDocument();
+    expect(screen.getByText('66')).toBeInTheDocument();
+  });
+
+  it('«путь назад» (C): подтверждённый строку-мотиватор не видит (обещание уже дано)', async () => {
+    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'confirmed' });
+    server.use(
+      http.get('*/api/users/me/reputation', () => HttpResponse.json({
+        global: { reliableClubs: 0, trackRecordClubs: 1, score: 60 },
+        activeClubs: [{
+          clubId: CLUB_ID, clubName: 'Клуб', clubAvatarUrl: null, category: 'sport', role: 'member',
+          joinedAt: null, trust: 60, promiseFulfillmentPct: 71, totalConfirmations: 9,
+          totalAttendances: 7, spontaneityCount: 0, projectedNext1: 66, projectedNext2: 70,
+          meetingsToReliable: 2, skladchinaPaid: 0, skladchinaTotal: 0, nearestEvent: null,
+        }],
+        historyClubs: [],
+      })),
+    );
+    renderEventPage();
+
+    expect(await screen.findByText('Подтверждение участия')).toBeInTheDocument();
+    expect(screen.queryByText(/надёжность вырастет/)).not.toBeInTheDocument();
+  });
+
   it('Этап 1 (upcoming): секция откликов озаглавлена «Предварительные голоса», не «Кто идёт»', async () => {
     const responders: EventResponderDto[] = [
       { userId: 'g1', firstName: 'Гость', lastName: null, avatarUrl: null, status: 'going', attendance: null },

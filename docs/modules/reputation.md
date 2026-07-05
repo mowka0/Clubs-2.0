@@ -110,8 +110,10 @@ Per-club `trust` и global считаются **on-read** из ledger (`TrustSer
 | `/my-clubs` → «Заявки» + `ApplicationReviewModal` | **Peer-signal** заявителя: «В N клубах · посетил X из Y» | `GET /api/users/me/applications-pending` → `peerStats` |
 
 В списке участников per-member Trust считается одним batch-запросом (`TrustService.trustForClubMembers`,
-без N+1), и список сортируется в `MemberService` по **отображаемому Trust** DESC (новички/sub-threshold/
-владельцы = null уходят вниз, а не наверх).
+без N+1). **UPDATED 2026-07-05 (асимметричная видимость, reputation-path-back.md):** чужой Trust видит
+только организатор; рядовой участник получает числа только в собственной строке (остальные — null,
+неотличимо от «Новичка»). Сортировка: организатору — по отображаемому Trust DESC (как раньше);
+участнику — нейтрально по joinedAt ASC (организатор клуба в обоих случаях первым).
 
 **Подавление attendance-метрик для finance-only участника (F5-08, 2026-06-25).** Участник с
 репутацией только от складчин (`outcome_count ≥ 3`, но `total_confirmations = 0`) имеет `trust ≠ null`,

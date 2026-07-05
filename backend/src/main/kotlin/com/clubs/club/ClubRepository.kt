@@ -32,4 +32,12 @@ interface ClubRepository {
     fun findAll(filters: ClubFilterParams): PageResponse<ClubListItemDto>
 
     fun linkTelegramGroup(clubId: UUID, telegramGroupId: Long)
+
+    /**
+     * Ближайшее предстоящее событие для каждого клуба из [clubIds] (status=upcoming,
+     * event_datetime > now). Клубы без предстоящих событий в map отсутствуют. Семантика та же,
+     * что у «ближайшего события» Discovery-карточек; переиспользуется раскрывающейся карточкой
+     * «Моих клубов» (CTA «Ближайшая встреча» — reputation-path-back.md).
+     */
+    fun findNearestEvents(clubIds: List<UUID>): Map<UUID, NearestEventDto>
 }

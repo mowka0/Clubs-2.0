@@ -19,6 +19,8 @@ import { ApplicationReviewModal } from '../components/applications/ApplicationRe
 import { MemberProfileModal } from '../components/club/MemberProfileModal';
 import { formatPeerSignal } from '../features/applications-inbox/lib/peer-signal-format';
 import { LevelPill } from '../components/reputation/LevelPill';
+import { DonutRing } from '../components/reputation/DonutRing';
+import { trustTier, TRUST_TIER_COLOR } from '../components/reputation/trust-tier';
 import { getClub } from '../api/clubs';
 import { reliabilityTier } from '../utils/reputationTier';
 import type {
@@ -86,10 +88,44 @@ interface MyClubCardProps {
   membership: MembershipDto;
   club: ClubDetailDto | undefined;
   isOrganizer: boolean;
-  onClick: () => void;
+  // Репутация вызывающего в этом клубе (activeClubs из /users/me/reputation); undefined = ещё грузится.
+  rep: UserClubReputationDto | undefined;
+  expanded: boolean;
+  onToggle: () => void;
+  onOpenClub: () => void;
+  onOpenEvent: (eventId: string) => void;
 }
 
-const MyClubCard: FC<MyClubCardProps> = ({ membership, club, isOrganizer, onClick }) => {
+// «чт, 19:00» / «сб, 12:00» для CTA «Ближайшая встреча» в раскрытой карточке.
+const NEAREST_EVENT_FMT = new Intl.DateTimeFormat('ru-RU', {
+  weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+});
+
+/** Текст под траекторией «пути назад» — по числу посещений до надёжной зоны. */
+function pathBackNote(meetingsToReliable: number): string {
+  if (meetingsToReliable === 1) return 'Следующая встреча вернёт вас в надёжную зону.';
+  if (meetingsToReliable === 2) return 'Две ближайшие встречи вернут вас в надёжную зону.';
+  return `До надёжной зоны — ${meetingsToReliable >= 9 ? '9+' : meetingsToReliable} посещений.`;
+}
+
+/** Мини-кольцо траектории «пути назад»: значение Trust внутри, подпись снизу. */
+const PathBackStep: FC<{ value: number; label: string }> = ({ value, label }) => (
+  <div className="rd-pb-step">
+    <DonutRing size={42} fraction={value / 100} color={TRUST_TIER_COLOR[trustTier(value)]} strokeWidth={6}>
+      <span className={`rd-pb-num rd-${reliabilityTier(value)}`}>{value}</span>
+    </DonutRing>
+    <span className="rd-pb-lbl">{label}</span>
+  </div>
+);
+
+/**
+ * Раскрывающаяся карточка клуба (reputation-path-back.md): свёрнуто — прежний вид + надёжность
+ * справа (паттерн «Истории»); раскрыто — метрики + кольца + «путь назад» (вариант A) + ближайшая
+ * встреча. Клик по шапке раскрывает; переход в клуб — строкой «Открыть клуб» внутри.
+ */
+const MyClubCard: FC<MyClubCardProps> = ({
+  membership, club, isOrganizer, rep, expanded, onToggle, onOpenClub, onOpenEvent,
+}) => {
   const name = club?.name ?? `Клуб ${membership.clubId.slice(0, 8)}…`;
   const category = club?.category ?? 'other';
   const initials = club ? getInitials(club.name) : '·';
@@ -99,19 +135,126 @@ const MyClubCard: FC<MyClubCardProps> = ({ membership, club, isOrganizer, onClic
     club ? `${club.memberCount} / ${club.memberLimit}` : null,
   ].filter(Boolean).join(' · ');
 
+  const hasScore = rep?.trust != null;
+  const tier = reliabilityTier(rep?.trust ?? null);
+  // Паритет с бывшей строкой Профиля (F5-08): метрики показываем только при реальной активности.
+  const hasActivity =
+    hasScore &&
+    ((rep?.totalAttendances ?? 0) > 0 || (rep?.totalConfirmations ?? 0) > 0 || (rep?.promiseFulfillmentPct ?? 0) > 0);
+  const showAttendanceRing = (rep?.totalConfirmations ?? 0) > 0 && rep?.totalAttendances != null;
+  const showSkladchinaRing = (rep?.skladchinaTotal ?? 0) > 0 && rep?.skladchinaPaid != null;
+  const showPathBack = rep?.projectedNext1 != null && rep?.projectedNext2 != null && rep?.trust != null;
+
   return (
-    <button type="button" className="rd-rep-row" onClick={onClick}>
-      <span className="rd-ico">
-        {club?.avatarUrl ? <img src={club.avatarUrl} alt="" /> : initials}
-      </span>
-      <div className="rd-info">
-        <div className="rd-ttl">
-          {name}
-          {isOrganizer && <span aria-label="Вы организатор" title="Вы организатор"> 👑</span>}
+    <div className={`rd-cc${expanded ? ' rd-cc-open' : ''}`}>
+      <button type="button" className="rd-rep-row rd-cc-head" aria-expanded={expanded} onClick={onToggle}>
+        <span className="rd-ico">
+          {club?.avatarUrl ? <img src={club.avatarUrl} alt="" /> : initials}
+        </span>
+        <div className="rd-info">
+          <div className="rd-ttl">
+            {name}
+            {isOrganizer && <span aria-label="Вы организатор" title="Вы организатор"> 👑</span>}
+          </div>
+          <div className="rd-met">{meta}</div>
         </div>
-        <div className="rd-met">{meta}</div>
-      </div>
-    </button>
+        <div className="rd-score">
+          {hasScore ? (
+            <>
+              <span className={`rd-v rd-${tier}`}>{rep?.trust}</span>
+              <span className="rd-cap">надёжность</span>
+            </>
+          ) : isOrganizer ? (
+            <>
+              <span className="rd-v rd-new">Организатор</span>
+              <span className="rd-cap">ваш клуб</span>
+            </>
+          ) : (
+            <>
+              <span className="rd-v rd-new">Новичок</span>
+              <span className="rd-cap">пока нет данных</span>
+            </>
+          )}
+        </div>
+        <span className="rd-cc-chev" aria-hidden="true">▾</span>
+      </button>
+      {expanded && (
+        <div className="rd-cc-body">
+          {hasActivity && (
+            <div className="rd-cc-line">
+              обещания {Math.round(rep?.promiseFulfillmentPct ?? 0)}% · {rep?.totalConfirmations} подтв. · {rep?.totalAttendances} посещ.
+              {(rep?.spontaneityCount ?? 0) > 0 && ` · ${rep?.spontaneityCount} спонт.`}
+            </div>
+          )}
+          {(showAttendanceRing || showSkladchinaRing) && (
+            <div className="rd-cc-rings">
+              {showAttendanceRing && (
+                <div className="rd-cc-ring">
+                  <DonutRing
+                    size={40}
+                    fraction={(rep?.totalAttendances ?? 0) / Math.max(rep?.totalConfirmations ?? 1, 1)}
+                    color="var(--accent)"
+                    strokeWidth={7}
+                  >
+                    <span className="rd-cc-rv">{rep?.totalAttendances}/{rep?.totalConfirmations}</span>
+                  </DonutRing>
+                  <span className="rd-cc-rl"><b>Посещаемость</b>посещено / подтв.</span>
+                </div>
+              )}
+              {showSkladchinaRing && (
+                <div className="rd-cc-ring">
+                  <DonutRing
+                    size={40}
+                    fraction={(rep?.skladchinaPaid ?? 0) / Math.max(rep?.skladchinaTotal ?? 1, 1)}
+                    color="var(--live)"
+                    strokeWidth={7}
+                  >
+                    <span className="rd-cc-rv">{rep?.skladchinaPaid}/{rep?.skladchinaTotal}</span>
+                  </DonutRing>
+                  <span className="rd-cc-rl"><b>Сборы</b>оплачено</span>
+                </div>
+              )}
+            </div>
+          )}
+          {showPathBack && (
+            <div className="rd-pb">
+              <div className="rd-pb-cap">Путь назад</div>
+              <div className="rd-pb-traj">
+                <PathBackStep value={rep!.trust!} label="сейчас" />
+                <span className="rd-pb-arr" aria-hidden="true">→</span>
+                <PathBackStep value={rep!.projectedNext1!} label="+1 встреча" />
+                <span className="rd-pb-arr" aria-hidden="true">→</span>
+                <PathBackStep
+                  value={rep!.projectedNext2!}
+                  label={rep!.projectedNext2! >= 70 ? 'надёжная зона' : '+2 встречи'}
+                />
+              </div>
+              <div className="rd-pb-note">{pathBackNote(rep?.meetingsToReliable ?? 2)}</div>
+            </div>
+          )}
+          {!hasScore && (
+            <div className="rd-cc-line">
+              {isOrganizer
+                ? 'Здесь репутация начисляется за организаторские качества.'
+                : 'Репутация появится после 3 исходов — подтверждайте участие и приходите на встречи.'}
+            </div>
+          )}
+          {rep?.nearestEvent && (
+            <button type="button" className="rd-cc-cta" onClick={() => onOpenEvent(rep.nearestEvent!.id)}>
+              <span>
+                Ближайшая встреча
+                <small>{rep.nearestEvent.title} · {NEAREST_EVENT_FMT.format(new Date(rep.nearestEvent.eventDatetime))}</small>
+              </span>
+              <span className="rd-cc-go">›</span>
+            </button>
+          )}
+          <button type="button" className="rd-cc-cta rd-cc-cta-plain" onClick={onOpenClub}>
+            <span>Открыть клуб</span>
+            <span className="rd-cc-go">›</span>
+          </button>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -414,6 +557,14 @@ export const MyClubsPage: FC = () => {
   const applications = applicationsQuery.data ?? [];
   const pendingInbox = pendingInboxQuery.data ?? [];
   const historyClubs = reputationQuery.data?.historyClubs ?? [];
+  // Репутация по активным клубам для раскрывающихся карточек (join по clubId с membership'ами).
+  const repByClub = useMemo(() => {
+    const map: Record<string, UserClubReputationDto> = {};
+    (reputationQuery.data?.activeClubs ?? []).forEach((r) => { map[r.clubId] = r; });
+    return map;
+  }, [reputationQuery.data?.activeClubs]);
+  // Раскрытая карточка клуба (аккордеон: максимум одна за раз; повторный тап сворачивает).
+  const [expandedClubId, setExpandedClubId] = useState<string | null>(null);
   // Кросс-клубовые «Ждут оплаты»: запрашиваем только у владельцев клубов (иначе сервер вернёт []).
   const isAnyOrganizer = myClubs.some((m) => m.role === 'organizer');
   const awaitingDuesQuery = useOrganizerAwaitingDuesQuery({ enabled: isAnyOrganizer });
@@ -738,7 +889,11 @@ export const MyClubsPage: FC = () => {
                   membership={m}
                   club={club}
                   isOrganizer={isOrganizer}
-                  onClick={() => handleClubClick(m.clubId)}
+                  rep={repByClub[m.clubId]}
+                  expanded={expandedClubId === m.clubId}
+                  onToggle={() => setExpandedClubId((cur) => (cur === m.clubId ? null : m.clubId))}
+                  onOpenClub={() => handleClubClick(m.clubId)}
+                  onOpenEvent={(eventId) => navigate(`/events/${eventId}`)}
                 />
               );
             })}

@@ -40,18 +40,34 @@ class MemberService(
             throw ForbiddenException("Not a member of this club")
         }
         val forOrganizer = caller.role == MembershipRole.organizer
-        // Trust всех участников — одним батч-чтением ledger. Порядок: сначала организатор (он не
-        // копит Trust в своём клубе — анти-фарм правило 1 — и по чистому Trust ушёл бы в конец),
-        // затем остальные по ОТОБРАЖАЕМОМУ Trust; новички / подавленные строки — внизу.
+        // Trust всех участников — одним батч-чтением ledger.
         val trustByUser = trustService.trustForClubMembers(clubId)
         // Клубные награды для чипов в ростере (R3): один запрос с группировкой по участнику — без N+1.
         val awardsByUser = awardService.getClubAwardsByMember(clubId)
-        return membershipRepository.findClubMembersWithUserInfo(clubId, includeFrozen = forOrganizer)
-            .map { mapper.toMemberListItemDto(it, trustByUser[it.userId], awardsByUser[it.userId] ?: emptyList(), forOrganizer) }
-            .sortedWith(
-                compareByDescending<MemberListItemDto> { it.role == "organizer" }
-                    .thenByDescending { it.trust ?: Int.MIN_VALUE }
-            )
+        val members = membershipRepository.findClubMembersWithUserInfo(clubId, includeFrozen = forOrganizer)
+            .map {
+                mapper.toMemberListItemDto(
+                    it,
+                    trustByUser[it.userId],
+                    awardsByUser[it.userId] ?: emptyList(),
+                    forOrganizer,
+                    // Асимметричная видимость (reputation-path-back.md AC-3): оценочные метрики видит
+                    // организатор (все) и участник (только свою строку); чужие — null.
+                    canSeeScores = forOrganizer || it.userId == callerId
+                )
+            }
+        // Организатору — рабочий порядок по Trust (он принимает решения по числам). Участнику —
+        // нейтральный порядок по давности вступления: публичного рейтинга («дна таблицы») больше нет.
+        // Организатор клуба в обоих случаях первым (он не копит Trust в своём клубе — анти-фарм №1 —
+        // и по чистому Trust ушёл бы в конец).
+        val order = if (forOrganizer) {
+            compareByDescending<MemberListItemDto> { it.role == "organizer" }
+                .thenByDescending { it.trust ?: Int.MIN_VALUE }
+        } else {
+            compareByDescending<MemberListItemDto> { it.role == "organizer" }
+                .thenBy { it.joinedAt ?: OffsetDateTime.MAX }
+        }
+        return members.sortedWith(order)
     }
 
     /**
@@ -89,7 +105,11 @@ class MemberService(
         // «Право на ошибку»: реальный индекс показываем только когда накоплен track record; ниже
         // порога (или нет строки, или владелец в своём клубе) весь блок подавляется,
         // а фронтенд рисует «Новичок» / организаторскую подачу (по роли).
-        val show = reputation != null && ReputationPolicy.isShown(reputation.outcomeCount)
+        // + Асимметричная видимость (reputation-path-back.md AC-5): оценочные метрики чужой карточки
+        // видят только организатор и сам участник о себе. Чужому зрителю — null, что неотличимо
+        // от «Новичка» (неоднозначность по дизайну). bio/интересы/награды не гейтятся (позитив публичен).
+        val canSeeScores = callerIsOrganizer || userId == callerId
+        val show = canSeeScores && reputation != null && ReputationPolicy.isShown(reputation.outcomeCount)
         // Одно чтение ledger питает оба клубных кольца (Trust + складчина); ниже гейта — null.
         val summary = if (show) trustService.clubSummary(userId, clubId) else null
         return MemberProfileDto(

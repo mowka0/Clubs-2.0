@@ -65,9 +65,11 @@ object TrustPolicy {
     fun trustFromWeights(keptWeight: Double, brokeWeight: Double): Int =
         (100.0 * (keptWeight + K * PRIOR) / (keptWeight + ASYM * brokeWeight + K)).roundToInt()
 
-    /** Per-club Trust 0-100 из сырых исходов. Всегда возвращает число; гейт показа
-     *  (ReputationPolicy.isShown(outcomeCount)) решает, показывать ли его в UI. */
-    fun perClubTrust(outcomes: List<Outcome>, now: OffsetDateTime): Int {
+    /** Суммарные decay-веса сдержанных/нарушенных обещаний — общая база [perClubTrust] и проекции «пути назад». */
+    data class TrustWeights(val kept: Double, val broke: Double)
+
+    /** Веса kept/broke из сырых исходов (decay от occurred_at к [now]). */
+    fun weightsOf(outcomes: List<Outcome>, now: OffsetDateTime): TrustWeights {
         var keptW = 0.0
         var brokeW = 0.0
         for (o in outcomes) when (classOf(o.kind)) {
@@ -75,7 +77,36 @@ object TrustPolicy {
             TrustClass.BROKE -> brokeW += decay(o.occurredAt, now, HALF_LIFE_DAYS)
             TrustClass.NEUTRAL -> Unit
         }
-        return trustFromWeights(keptW, brokeW)
+        return TrustWeights(keptW, brokeW)
+    }
+
+    /** Per-club Trust 0-100 из сырых исходов. Всегда возвращает число; гейт показа
+     *  (ReputationPolicy.isShown(outcomeCount)) решает, показывать ли его в UI. */
+    fun perClubTrust(outcomes: List<Outcome>, now: OffsetDateTime): Int =
+        weightsOf(outcomes, now).let { trustFromWeights(it.kept, it.broke) }
+
+    // --- «Путь назад»: проекция восстановления (docs/modules/reputation-path-back.md) ---
+    /** Сколько шагов проекции перебираем максимум; UI при этом значении пишет «9+». */
+    const val PATH_BACK_MAX_STEPS = 9
+
+    /**
+     * Проекция «пути назад»: Trust после [steps] дополнительных ПОСЕЩЕНИЙ (kept-исходов).
+     * Новый исход происходит «сейчас» → его decay-вес ровно 1.0, поэтому проекция — чистая
+     * детерминированная подстановка в то же байесовское ядро, без новой механики.
+     */
+    fun projectedTrust(weights: TrustWeights, steps: Int): Int =
+        trustFromWeights(weights.kept + steps, weights.broke)
+
+    /**
+     * Сколько посещений нужно, чтобы вернуться в надёжную зону (Trust >= [RELIABLE_THRESHOLD]).
+     * Capped [PATH_BACK_MAX_STEPS]: при большой просадке возвращаем cap, а не точный марафон —
+     * UI показывает «9+» (спека: не обещать точным числом то, что далеко).
+     */
+    fun meetingsToReliable(weights: TrustWeights): Int {
+        for (k in 1..PATH_BACK_MAX_STEPS) {
+            if (projectedTrust(weights, k) >= RELIABLE_THRESHOLD) return k
+        }
+        return PATH_BACK_MAX_STEPS
     }
 
     /** Позиция пользователя в одном клубе, как её видит глобальный агрегат. */

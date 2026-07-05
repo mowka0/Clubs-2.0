@@ -139,15 +139,20 @@ class MembershipService(
     @Transactional(readOnly = true)
     fun getMyReputation(userId: UUID): MyReputationDto {
         val trust = trustService.computeForUser(userId)
-        val trustByClub = trust.perClub.associate { it.clubId to it.trust }
+        // Полный ClubTrust (не только число): маппер берёт из него и Trust, и проекцию «пути назад»,
+        // и счётчики сборов — всё из одного вычисления computeForUser.
+        val trustByClub = trust.perClub.associateBy { it.clubId }
         val (active, history) = membershipRepository.findUserClubsWithReputation(userId).partition { it.active }
+        // CTA «Ближайшая встреча» в раскрытой карточке «Моих клубов»: только для активных клубов
+        // (в «Истории» идти некуда). Один батч-вызов на все клубы.
+        val nearestEvents = clubRepository.findNearestEvents(active.map { it.clubId })
         return MyReputationDto(
             global = GlobalTrustDto(
                 reliableClubs = trust.global.reliableClubs,
                 trackRecordClubs = trust.global.trackRecordClubs,
                 score = trust.global.score
             ),
-            activeClubs = active.map { mapper.toUserClubReputationDto(it, trustByClub[it.clubId]) },
+            activeClubs = active.map { mapper.toUserClubReputationDto(it, trustByClub[it.clubId], nearestEvents[it.clubId]) },
             historyClubs = history.map { mapper.toUserClubReputationDto(it, trustByClub[it.clubId]) }
         )
     }

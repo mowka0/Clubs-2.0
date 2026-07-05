@@ -1325,3 +1325,48 @@
 }
 .rd-chip--cur { background: var(--surface-2); color: var(--text-dim); }
 .rd-chip--rec { background: var(--accent-grad-strong); color: #1a0e04; }
+
+/* ============================================================
+   Раскрывающаяся карточка клуба в «Моих клубах» + «путь назад»
+   (reputation-path-back.md; мокап docs/design/reputation-path-back/mockups/02)
+   ============================================================ */
+/* Шапка = прежний .rd-rep-row; шеврон поворачивается при раскрытии. */
+.rd-cc-chev { flex-shrink: 0; color: var(--text-faint); font-size: 12px; margin-left: 2px; transition: transform 0.25s ease; }
+.rd-cc-open .rd-cc-chev { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .rd-cc-chev { transition: none; } }
+.rd-cc + .rd-cc { border-top: 1px solid var(--hairline); }
+.rd-cc-body { border-top: 1px solid var(--hairline); padding: 12px; display: grid; gap: 12px; }
+/* Строка метрик («обещания 71% · 9 подтв. · 7 посещ.») и пояснения новичку/организатору. */
+.rd-cc-line { font-size: 11px; color: var(--text-faint); line-height: 1.45; }
+/* Мини-кольца Посещаемость / Сборы. */
+.rd-cc-rings { display: flex; align-items: center; gap: 16px; }
+.rd-cc-ring { display: flex; align-items: center; gap: 8px; }
+.rd-cc-rv { font-size: 9.5px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+.rd-cc-rl { font-size: 10px; color: var(--text-faint); line-height: 1.3; }
+.rd-cc-rl b { display: block; color: var(--text-dim); font-weight: 600; font-size: 11px; }
+/* Блок «Путь назад» (вариант A): траектория из трёх колец. */
+.rd-pb { background: var(--surface); border: 1px solid var(--glass-border); border-radius: 12px; padding: 10px 12px 12px; }
+.rd-pb-cap { font-size: 9px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 8px; }
+.rd-pb-traj { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.rd-pb-step { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.rd-pb-num { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rd-pb-num.rd-high { color: var(--live); }
+.rd-pb-num.rd-mid { color: var(--accent); }
+.rd-pb-num.rd-low { color: var(--danger); }
+.rd-pb-lbl { font-size: 9px; color: var(--text-faint); }
+.rd-pb-arr { color: var(--text-faint); font-size: 12px; padding-bottom: 12px; }
+.rd-pb-note { font-size: 11.5px; color: var(--text-dim); line-height: 1.45; margin-top: 8px; }
+/* CTA-строки раскрытой карточки: «Ближайшая встреча» (в рамке) и «Открыть клуб» (плоская). */
+.rd-cc-cta {
+  display: flex; justify-content: space-between; align-items: center; width: 100%;
+  background: var(--surface); border: 1px solid var(--glass-border); border-radius: 10px;
+  padding: 9px 12px; font-size: 12.5px; font-weight: 550; color: var(--text);
+  text-align: left; font-family: inherit; cursor: pointer;
+}
+.rd-cc-cta small { display: block; font-weight: 400; color: var(--text-faint); font-size: 10.5px; margin-top: 1px; }
+.rd-cc-cta-plain { background: none; border: none; padding: 2px 2px 0; color: var(--text-dim); font-size: 12px; }
+.rd-cc-go { color: var(--accent); flex-shrink: 0; }
+/* Строка-мотиватор на странице события (вариант C «пути назад»). */
+.rd-pb-nudge { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-dim); padding: 9px 2px 0; }
+.rd-pb-nudge .rd-pb-up { color: var(--live); font-weight: 700; }
+.rd-pb-nudge b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
