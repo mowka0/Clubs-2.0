@@ -141,6 +141,26 @@ describe('EventPage — Stage 2 window (Bug B) + expired status', () => {
     expect(await screen.findByRole('button', { name: /Подтвердить участие/ })).toBeInTheDocument();
   });
 
+  it('Этап 2: лист ожидания рендерится в порядке приоритета с номерами позиций', async () => {
+    // Бэкенд уже отдаёт респондеров по приоритету (stage_1_timestamp ASC); фронт сохраняет порядок.
+    const responders: EventResponderDto[] = [
+      { userId: 'u-conf', firstName: 'Анна', lastName: null, avatarUrl: null, status: 'confirmed', attendance: null },
+      { userId: 'u-w1', firstName: 'Борис', lastName: null, avatarUrl: null, status: 'waitlisted', attendance: null },
+      { userId: 'u-w2', firstName: 'Вера', lastName: null, avatarUrl: null, status: 'waitlisted', attendance: null },
+    ];
+    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'confirmed', responders });
+    const { container } = renderEventPage();
+
+    // ждём по уникальной подсказке секции (заголовок «Лист ожидания» дублируется в сводке-счётчике)
+    expect(await screen.findByText(/место получит первый в очереди/)).toBeInTheDocument();
+    const rows = container.querySelectorAll('.rd-wl-row');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector('.rd-wl-pos')?.textContent).toBe('1');
+    expect(rows[0].textContent).toContain('Борис');
+    expect(rows[1].querySelector('.rd-wl-pos')?.textContent).toBe('2');
+    expect(rows[1].textContent).toContain('Вера');
+  });
+
   it('на прошедшем событии «Кто идёт» = только confirmed; expired выпадает из состава и из отметки явки', async () => {
     const responders: EventResponderDto[] = [
       { userId: 'u-confirmed', firstName: 'Анна', lastName: 'К', avatarUrl: null, status: 'confirmed', attendance: null },

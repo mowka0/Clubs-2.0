@@ -176,9 +176,14 @@ class JooqEventResponseRepository(
             .join(USERS).on(USERS.ID.eq(EVENT_RESPONSES.USER_ID))
             .where(
                 EVENT_RESPONSES.EVENT_ID.eq(eventId)
-                    .and(EVENT_RESPONSES.STAGE_1_VOTE.isNotNull)
+                    // Голосовавшие на Этапе 1 ИЛИ поздние участники со статусом Этапа 2
+                    // (у не голосовавших stage_1_vote=NULL, но появляется final_status — их нельзя терять).
+                    .and(EVENT_RESPONSES.STAGE_1_VOTE.isNotNull.or(EVENT_RESPONSES.FINAL_STATUS.isNotNull))
             )
-            .orderBy(EVENT_RESPONSES.STAGE_1_VOTE.asc(), EVENT_RESPONSES.STAGE_1_TIMESTAMP.asc())
+            // Сортировка по stage_1_timestamp ASC — тот же ключ, что и у продвижения waitlist
+            // (findFirstWaitlisted), поэтому лист ожидания на странице события идёт РОВНО в порядке
+            // приоритета (кто раньше выразил намерение — выше; поздние с меткой now — в конце).
+            .orderBy(EVENT_RESPONSES.STAGE_1_TIMESTAMP.asc())
             .fetch { r ->
                 EventResponderInfo(
                     userId = r.get(EVENT_RESPONSES.USER_ID)!!,

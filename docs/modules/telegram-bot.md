@@ -198,7 +198,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 ### `sendStage2Started(event: Event)` — **подключено** `[GAP-004 ✅, GAP-009 ✅, S2T-2 ✅]`
 
 **Назначение (по PRD §4.6.3 / §4.4.2 шаг 1):** при переходе события в `stage_2` — попросить голосовавших подтвердить участие. Реализовано в `bugfix/stage2-dm-and-slot-races` (2026-06-13).
-**Получатели:** `eventResponseRepository.findStage2TargetTelegramIds(event.id)` — **только** воутеры с `stage_1_vote IN (going, maybe)` (им есть что подтверждать; `not_going` исключены — `[GAP-009 ✅]`). До фикса метод назывался `findResponderTelegramIdsByEventId` и слал всем воутерам.
+**Получатели (UPDATED 2026-07-05):** `eventResponseRepository.findStage2InviteTelegramIds(event.id)` — участники клуба с доступом, у кого `stage_1_vote IS DISTINCT FROM 'not_going'`, т.е. `going` / `maybe` / **не ответившие** (Этап 2 открыт всем — зовём подтвердить и тех, кто молчал). `not_going` DM не получают (`[GAP-009 ✅]`), но подтвердить участие могут. Раньше слался только going/maybe (`findStage2TargetTelegramIds`).
 **Текст** (`NotificationService.kt`):
 ```
 ⏰ Этап 2 начался!
@@ -333,7 +333,7 @@ AND отказ Telegram API не откатывает переход в stage_2 
 ## Интеграции
 
 - **`payment` модуль** (`PaymentService`): `handlePreCheckoutQuery` и `successful_payment` диспатчатся в `ClubsBot.consume`; `PaymentNotificationHandler` зовёт `NotificationService.sendDirectMessage` после `PaymentConfirmedEvent`. См. `docs/modules/payment.md` § Интеграции.
-- **`event` модуль** (`EventRepository`, `EventResponseRepository`): `findNextUpcomingEvent`, `countByVote` для `/кто_идет`; `findStage2TargetTelegramIds` (going/maybe-воутеры, для `sendStage2Started`), `findTelegramIdsByEventAndUserIds` (newly-absent набор, для `sendAttendanceMarked` — F5-15.2), `findUnconfirmedVoterTelegramIds` (для `sendConfirmReminder`). Доменные события: `Stage2StartedEvent`, `AttendanceMarkedEvent(eventId, newlyAbsentUserIds)` (+ disputed) — слушатели в bot-пакете.
+- **`event` модуль** (`EventRepository`, `EventResponseRepository`): `findNextUpcomingEvent`, `countByVote` для `/кто_идет`; `findStage2InviteTelegramIds` (участники с доступом кроме `not_going`, для `sendStage2Started`; членство-driven), `findTelegramIdsByEventAndUserIds` (newly-absent набор, для `sendAttendanceMarked` — F5-15.2), `findUnconfirmedVoterTelegramIds` (для `sendConfirmReminder`). Доменные события: `Stage2StartedEvent`, `AttendanceMarkedEvent(eventId, newlyAbsentUserIds)` (+ disputed) — слушатели в bot-пакете.
 - **`membership` модуль** (`MembershipRepository`): `findMemberTelegramIds(clubId)` для `sendEventCreated`. См. `docs/modules/membership.md`.
 - **Telegram Bot API** (через `TelegramClient` из `BotConfig`):
   - `SendMessage` (команды, DM).

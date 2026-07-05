@@ -193,6 +193,23 @@ class EventReminderRepositoryTest {
     }
 
     @Test
+    fun `responders include late joiners (null stage1) and are ordered by fifo timestamp`() {
+        val event = insertEvent(OffsetDateTime.now().plusHours(1), "stage_2")
+        // Вставляем НЕ в приоритетном порядке — проверяем сортировку по stage_1_timestamp ASC.
+        val (uConf, _) = insertMember(); insertResponseAt(event, uConf, "going", "confirmed", "2026-01-01T08:00:00Z")   // самый ранний
+        val (uW2, _) = insertMember(); insertResponseAt(event, uW2, "going", "waitlisted", "2026-01-01T10:00:00Z")     // 3-й
+        val (uW1, _) = insertMember(); insertResponseAt(event, uW1, "maybe", "waitlisted", "2026-01-01T09:00:00Z")     // 2-й (раньше going-uW2!)
+        val (uLate, _) = insertMember(); insertResponseAt(event, uLate, null, "confirmed", "2026-01-01T12:00:00Z")     // поздний, stage1=NULL
+
+        val order = eventResponseRepository.findRespondersWithUsers(event).map { it.userId }
+
+        // строго по времени (ключ продвижения очереди), НЕ сгруппировано по голосу:
+        assertEquals(listOf(uConf, uW1, uW2, uLate), order)
+        // поздний участник (stage_1_vote=NULL, final_status=confirmed) не потерян
+        assertTrue(uLate in order)
+    }
+
+    @Test
     fun `createLateStage2Entry inserts a row with null stage_1_vote and a fifo timestamp`() {
         val event = insertEvent(OffsetDateTime.now().plusHours(1), "stage_2")
         val (userId, _) = insertMember()
@@ -217,15 +234,20 @@ class EventReminderRepositoryTest {
         return userId to tgId
     }
 
-    /** Ответ на событие для уже существующего пользователя (stage1/stage2 опциональны). */
-    private fun insertResponse(eventId: UUID, userId: UUID, stage1: String?, stage2: String? = null) {
+    /** Ответ на событие для уже существующего пользователя (stage1/stage2 опциональны), метка = NOW. */
+    private fun insertResponse(eventId: UUID, userId: UUID, stage1: String?, stage2: String? = null) =
+        insertResponseAt(eventId, userId, stage1, stage2, "NOW()")
+
+    /** Как insertResponse, но с явной stage_1_timestamp (передавай ISO-строку в кавычках или NOW()). */
+    private fun insertResponseAt(eventId: UUID, userId: UUID, stage1: String?, stage2: String?, ts: String) {
         val s1 = stage1?.let { "'$it'::stage_1_vote" } ?: "NULL"
         val s2 = stage2?.let { "'$it'::stage_2_vote" } ?: "NULL"
         val fs = stage2?.let { "'$it'::final_status" } ?: "NULL"
+        val tsExpr = if (ts == "NOW()") "NOW()" else "'$ts'::timestamptz"
         dsl.execute(
             """
             INSERT INTO event_responses (id, event_id, user_id, stage_1_vote, stage_1_timestamp, stage_2_vote, final_status)
-            VALUES ('${UUID.randomUUID()}', '$eventId', '$userId', $s1, NOW(), $s2, $fs)
+            VALUES ('${UUID.randomUUID()}', '$eventId', '$userId', $s1, $tsExpr, $s2, $fs)
             """.trimIndent()
         )
     }

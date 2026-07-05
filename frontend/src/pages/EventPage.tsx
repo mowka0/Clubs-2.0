@@ -337,6 +337,10 @@ export const EventPage: FC = () => {
   const pendingCount = responders.filter((r) => r.status === 'going' || r.status === 'maybe').length;
   const waitlistedCount = responders.filter((r) => r.status === 'waitlisted').length;
   const comingList = finalComposition ? responders.filter((r) => r.status === 'confirmed') : responders;
+  // Лист ожидания (только Этап 2+): waitlisted в порядке приоритета. Бэкенд отдаёт респондеров по
+  // stage_1_timestamp ASC — тому же ключу, по которому продвигается очередь (findFirstWaitlisted),
+  // поэтому фильтр сохраняет реальный порядок продвижения.
+  const waitlist = finalComposition ? responders.filter((r) => r.status === 'waitlisted') : [];
 
   return (
     <div className="rd-page">
@@ -476,6 +480,30 @@ export const EventPage: FC = () => {
                   </span>
                   <span className="rd-vn">{name}</span>
                   <span className={`rd-vdot ${statusDotClass(r.status)}`} title={r.status} />
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* Лист ожидания (Этап 2+): в порядке приоритета — освободится слот, войдёт первый в очереди. */}
+      {!isCancelled && finalComposition && waitlist.length > 0 && (
+        <>
+          <div className="rd-section-sub-h">Лист ожидания <span className="rd-count">· {waitlist.length}</span></div>
+          <div className="rd-attn-hint">Если участник откажется, место получит первый в очереди.</div>
+          <div className="rd-glass rd-wl-panel">
+            {waitlist.map((r, i) => {
+              const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
+              return (
+                <div className="rd-wl-row" key={r.userId}>
+                  <span className="rd-wl-pos">{i + 1}</span>
+                  <div className="rd-voter">
+                    <span className="rd-av">
+                      {r.avatarUrl ? <img src={r.avatarUrl} alt="" /> : getInitials(name)}
+                    </span>
+                    <span className="rd-vn">{name}</span>
+                  </div>
                 </div>
               );
             })}

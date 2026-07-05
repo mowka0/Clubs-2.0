@@ -81,22 +81,24 @@ class NotificationService(
 
 
     /**
-     * F5-14: уведомляет заинтересованных проголосовавших (иду/возможно — та же аудитория,
-     * что и для Этапа 2) об отмене события, с опциональной причиной от организатора.
-     * Best-effort, как и все остальные DM.
+     * F5-14: уведомляет ВСЕХ участников клуба с доступом об отмене события, с опциональной
+     * причиной от организатора (UPDATED 2026-07-05: раньше — только going/maybe; теперь всем,
+     * симметрично уведомлению о создании). Best-effort, как и все остальные DM.
      */
     @Async
     fun sendEventCancelled(event: Event, reason: String?) {
-        val voterTelegramIds = eventResponseRepository.findStage2TargetTelegramIds(event.id)
-        if (voterTelegramIds.isEmpty()) {
-            log.info("Event-cancelled DM SKIPPED — no interested voters for eventId={}", event.id)
+        // Об отмене сообщаем ВСЕМ участникам клуба с доступом (симметрично sendEventCreated:
+        // кто узнал о создании — узнаёт и об отмене), а не только выразившим интерес.
+        val recipientTelegramIds = membershipRepository.findMemberTelegramIds(event.clubId)
+        if (recipientTelegramIds.isEmpty()) {
+            log.info("Event-cancelled DM SKIPPED — no members with access for clubId={}", event.clubId)
             return
         }
-        log.info("Event-cancelled DM: eventId={} recipients={}", event.id, voterTelegramIds.size)
+        log.info("Event-cancelled DM: eventId={} clubId={} recipients={}", event.id, event.clubId, recipientTelegramIds.size)
         val reasonLine = reason?.let { "\n\nПричина: $it" } ?: ""
         val text = "❌ Событие отменено\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}$reasonLine"
         val webAppPath = "/events/${event.id}"
-        voterTelegramIds.forEach { telegramId ->
+        recipientTelegramIds.forEach { telegramId ->
             sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
         }
     }
