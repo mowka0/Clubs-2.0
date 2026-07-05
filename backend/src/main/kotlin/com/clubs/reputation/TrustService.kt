@@ -30,11 +30,20 @@ class TrustService(
         val clubs = outcomes
             .groupBy { it.clubId }
             .map { (clubId, rows) ->
+                // Одни веса питают и текущий Trust, и проекцию «пути назад» — исходы не сканируются повторно.
+                val weights = TrustPolicy.weightsOf(rows.map { TrustPolicy.Outcome(it.kind, it.occurredAt) }, now)
                 ClubTrust(
                     clubId = clubId,
-                    trust = TrustPolicy.perClubTrust(rows.map { TrustPolicy.Outcome(it.kind, it.occurredAt) }, now),
+                    trust = TrustPolicy.trustFromWeights(weights.kept, weights.broke),
                     outcomeCount = rows.size,
-                    lastOccurredAt = rows.maxOf { it.occurredAt }
+                    lastOccurredAt = rows.maxOf { it.occurredAt },
+                    projectedNext1 = TrustPolicy.projectedTrust(weights, 1),
+                    projectedNext2 = TrustPolicy.projectedTrust(weights, 2),
+                    meetingsToReliable = TrustPolicy.meetingsToReliable(weights),
+                    skladchinaPaid = rows.count { it.kind == ReputationKind.skladchina_paid },
+                    skladchinaTotal = rows.count {
+                        it.kind == ReputationKind.skladchina_paid || it.kind == ReputationKind.skladchina_expired
+                    }
                 )
             }
         return UserTrust(perClub = clubs, global = globalForOutcomes(outcomes, now))
@@ -104,12 +113,23 @@ data class ClubReputationSummary(
     val skladchinaTotal: Int
 )
 
-/** Вычисленный Trust пользователя в одном клубе. `trust` присутствует всегда; гейт отображения — на уровне UI. */
+/**
+ * Вычисленный Trust пользователя в одном клубе. `trust` присутствует всегда; гейт отображения — на
+ * уровне DTO-маппера. Поля проекции «пути назад» тоже сырые (посчитаны всегда) — обнуление по
+ * правилам показа (trust >= 70 / гейт новичка / неактивный клуб) применяет маппер, не эта модель.
+ */
 data class ClubTrust(
     val clubId: UUID,
     val trust: Int,
     val outcomeCount: Int,
-    val lastOccurredAt: OffsetDateTime
+    val lastOccurredAt: OffsetDateTime,
+    // «Путь назад»: Trust после +1 / +2 посещений и посещений до надёжной зоны (cap 9 → UI «9+»).
+    val projectedNext1: Int,
+    val projectedNext2: Int,
+    val meetingsToReliable: Int,
+    // Кольцо «Сборы»: оплачено / (оплачено+просрочено) репутационных складчин из тех же исходов.
+    val skladchinaPaid: Int,
+    val skladchinaTotal: Int
 )
 
 data class UserTrust(

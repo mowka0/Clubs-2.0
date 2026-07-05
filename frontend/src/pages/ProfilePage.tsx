@@ -10,8 +10,7 @@ import { countryNameByCode } from '../components/CityPicker';
 import { ProfileEditModal } from '../components/profile/ProfileEditModal';
 import { GamificationPanel } from '../components/profile/GamificationPanel';
 import { SubscriptionCard } from '../components/subscription/SubscriptionCard';
-import { reliabilityTier, tierWord, clubsPrepositional } from '../utils/reputationTier';
-import type { UserClubReputationDto } from '../types/api';
+import { tierWord, clubsPrepositional } from '../utils/reputationTier';
 
 const GearIcon: FC = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -35,63 +34,6 @@ function getInitials(name: string): string {
     .map((w) => w.charAt(0).toUpperCase())
     .join('');
 }
-
-interface ReputationRowProps {
-  row: UserClubReputationDto;
-  onOpen: (clubId: string) => void;
-}
-
-const ReputationRow: FC<ReputationRowProps> = ({ row: r, onOpen }) => {
-  const isOwnClub = r.role === 'organizer';
-  const hasScore = r.trust !== null;
-  const tier = reliabilityTier(r.trust);
-  const hasActivity =
-    hasScore &&
-    ((r.totalAttendances ?? 0) > 0 ||
-      (r.totalConfirmations ?? 0) > 0 ||
-      (r.promiseFulfillmentPct ?? 0) > 0);
-  return (
-    <button
-      type="button"
-      className="rd-rep-row"
-      onClick={() => onOpen(r.clubId)}
-    >
-      <span className="rd-ico">
-        {r.clubAvatarUrl ? <img src={r.clubAvatarUrl} alt="" /> : getInitials(r.clubName)}
-      </span>
-      <div className="rd-info">
-        <div className="rd-ttl">{r.clubName}</div>
-        {hasActivity && (
-          <div className="rd-met">
-            обещания {Math.round(r.promiseFulfillmentPct ?? 0)}% · {r.totalConfirmations} подтв. · {r.totalAttendances} посещ.
-            {(r.spontaneityCount ?? 0) > 0 && ` · ${r.spontaneityCount} спонт.`}
-          </div>
-        )}
-        {!hasScore && isOwnClub && (
-          <div className="rd-met">Здесь репутация начисляется за организаторские качества</div>
-        )}
-      </div>
-      <div className="rd-score">
-        {hasScore ? (
-          <>
-            <span className={`rd-v rd-${tier}`}>{r.trust}</span>
-            <span className="rd-cap">надёжность</span>
-          </>
-        ) : isOwnClub ? (
-          <>
-            <span className="rd-v rd-new">Организатор</span>
-            <span className="rd-cap">ваш клуб</span>
-          </>
-        ) : (
-          <>
-            <span className="rd-v rd-new">Новичок</span>
-            <span className="rd-cap">пока нет данных</span>
-          </>
-        )}
-      </div>
-    </button>
-  );
-};
 
 export const ProfilePage: FC = () => {
   const navigate = useNavigate();
@@ -153,11 +95,6 @@ export const ProfilePage: FC = () => {
       ? `${tierWord(globalScore)} · опыт в ${global.trackRecordClubs} ${clubsPrepositional(global.trackRecordClubs)}`
       : 'пока недостаточно истории';
 
-  const openClub = (clubId: string) => {
-    haptic.impact('light');
-    navigate(`/clubs/${clubId}`);
-  };
-
   const theme = THEME_META[themeMode];
 
   return (
@@ -196,6 +133,17 @@ export const ProfilePage: FC = () => {
 
       {user.bio && <div className="rd-bio">{user.bio}</div>}
 
+      {interests.length > 0 && (
+        <>
+          <div className="rd-section-sub-h">Интересы</div>
+          <div className="rd-tags">
+            {interests.map((interest) => (
+              <span key={interest} className="rd-tag">{interest}</span>
+            ))}
+          </div>
+        </>
+      )}
+
       {hasReputation && (
         <div className="rd-stats">
           <div className="rd-stat rd-glass">
@@ -219,17 +167,6 @@ export const ProfilePage: FC = () => {
       )}
 
       <SubscriptionCard />
-
-      {interests.length > 0 && (
-        <>
-          <div className="rd-section-sub-h">Интересы</div>
-          <div className="rd-tags">
-            {interests.map((interest) => (
-              <span key={interest} className="rd-tag">{interest}</span>
-            ))}
-          </div>
-        </>
-      )}
 
       {!rep && reputationQuery.error ? (
         // Провалившийся запрос репутации не должен маскироваться под онбординг «клубов пока
@@ -267,26 +204,9 @@ export const ProfilePage: FC = () => {
             </button>
           </div>
         </>
-      ) : activeClubs.length > 0 ? (
-        <>
-          <div className="rd-section-sub-h">
-            Репутация
-            <span className="rd-count"> · {activeClubs.length}</span>
-          </div>
-          <div className="rd-glass rd-rep-panel">
-            {activeClubs.map((r) => (
-              <ReputationRow key={r.clubId} row={r} onOpen={openClub} />
-            ))}
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="rd-section-sub-h">Репутация</div>
-          <div className="rd-glass rd-empty">
-            <div className="rd-sub">Активных клубов сейчас нет — история клубов во&nbsp;вкладке «Клубы».</div>
-          </div>
-        </>
-      )}
+      ) : null}
+      {/* Per-club список репутации переехал в «Мои клубы» (раскрывающиеся карточки клубов) —
+          reputation-path-back.md. Здесь остаётся только глобальный блок (rd-stats выше). */}
 
       {editOpen && (
         <ProfileEditModal initialInterests={interests} onClose={() => setEditOpen(false)} />

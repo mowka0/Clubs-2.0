@@ -6,6 +6,7 @@ import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useClubQuery } from '../queries/clubs';
+import { useMyReputationQuery } from '../queries/members';
 import { useEventSplitStateQuery } from '../queries/skladchina';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { Toast } from '../components/Toast';
@@ -68,6 +69,8 @@ export const EventPage: FC = () => {
 
   const eventQuery = useEventQuery(isAuthenticated ? id : undefined);
   const myVoteQuery = useMyVoteQuery(isAuthenticated ? id : undefined);
+  // «Путь назад» вариант C: репутация вызывающего по клубам (общий кэш с Профилем/«Моими клубами»).
+  const myReputationQuery = useMyReputationQuery();
   const hostClubQuery = useClubQuery(eventQuery.data?.clubId);
   const respondersQuery = useEventRespondersQuery(isAuthenticated ? id : undefined);
   // Существующий сплит этого события — кнопка «Разделить счёт» открывает его / блокирует пересоздание.
@@ -303,6 +306,21 @@ export const EventPage: FC = () => {
   // бэкенд-гард `event_datetime > now` в Stage2Service. См. events.md.
   const showStage2 = event.status === 'stage_2' && !eventHappened;
 
+  // «Путь назад», вариант C (reputation-path-back.md AC-8): строка-мотиватор «придёте — надёжность
+  // вырастет» при просадке Trust в клубе события. Скрыта у терминальных статусов: confirmed уже
+  // пообещал, declined/expired звать бессмысленно. Данные — из общего кэша /users/me/reputation.
+  const myClubRep = myReputationQuery.data?.activeClubs.find((r) => r.clubId === event.clubId);
+  const nudgeTerminal = myVote === 'confirmed' || myVote === 'declined' || myVote === 'expired_no_confirm';
+  const showPathBackNudge = myClubRep?.projectedNext1 != null && myClubRep?.trust != null && !nudgeTerminal;
+  const pathBackNudge = showPathBackNudge ? (
+    <div className="rd-pb-nudge">
+      <span className="rd-pb-up" aria-hidden="true">↗</span>
+      <span>
+        Придёте на эту встречу — надёжность вырастет: <b>{myClubRep!.trust}</b> → <b>{myClubRep!.projectedNext1}</b>
+      </span>
+    </div>
+  ) : null;
+
   // Отметка явки — только организатор и только после того, как событие состоялось. Бэкенд
   // (AttendanceService) гейтит по event_datetime <= now + флагу attendance_marked,
   // никогда по status (см. events.md § attendance flow). Кандидаты = ФИНАЛЬНЫЙ состав:
@@ -470,6 +488,7 @@ export const EventPage: FC = () => {
           <span className="rd-badge rd-going">Ваш голос: {VOTE_LABELS[myVote] ?? myVote}</span>
         </div>
       )}
+      {showVoting && pathBackNudge}
       </>
       )}
 
@@ -811,6 +830,7 @@ export const EventPage: FC = () => {
               </button>
             </div>
           )}
+          {pathBackNudge}
         </>
       )}
 

@@ -105,13 +105,16 @@ Per-club `trust` и global считаются **on-read** из ledger (`TrustSer
 
 | Локация | Что показывает | Источник |
 |---|---|---|
-| `/profile` → «Моя репутация» | global «надёжен в N из M клубов» (вся история) + per-club Trust в двух секциях «Репутация» (активные) / «История» (покинутые с track record); новичок → «Новичок»; свой клуб → организаторская рамка | `GET /api/users/me/reputation` |
+| `/profile` → «Моя репутация» | ТОЛЬКО global «надёжен в N из M клубов» (вся история). **UPDATED 2026-07-05:** per-club карточки клубов переехали в «Мои клубы» (раскрывающиеся карточки + «Путь наверх», reputation-path-back.md) | `GET /api/users/me/reputation` |
+| `/my-clubs` → карточка клуба | per-club Trust вызывающего + раскрытие (метрики, награды, «Путь наверх» при просадке, ближайшая встреча); «История» покинутых там же | `GET /api/users/me/reputation` (`activeClubs`/`historyClubs`) |
 | `/clubs/:id` → «Участники» → `MemberProfileModal` | полные метрики; null → «Новичок»; владелец → рамка | `GET /api/clubs/:id/members/:userId` (`MemberProfileDto`, теперь с `role` + nullable полями) |
 | `/my-clubs` → «Заявки» + `ApplicationReviewModal` | **Peer-signal** заявителя: «В N клубах · посетил X из Y» | `GET /api/users/me/applications-pending` → `peerStats` |
 
 В списке участников per-member Trust считается одним batch-запросом (`TrustService.trustForClubMembers`,
-без N+1), и список сортируется в `MemberService` по **отображаемому Trust** DESC (новички/sub-threshold/
-владельцы = null уходят вниз, а не наверх).
+без N+1). **UPDATED 2026-07-05 (асимметричная видимость, reputation-path-back.md):** чужой Trust видит
+только организатор; рядовой участник получает числа только в собственной строке (остальные — null,
+неотличимо от «Новичка»). Сортировка: организатору — по отображаемому Trust DESC (как раньше);
+участнику — нейтрально по joinedAt ASC (организатор клуба в обоих случаях первым).
 
 **Подавление attendance-метрик для finance-only участника (F5-08, 2026-06-25).** Участник с
 репутацией только от складчин (`outcome_count ≥ 3`, но `total_confirmations = 0`) имеет `trust ≠ null`,

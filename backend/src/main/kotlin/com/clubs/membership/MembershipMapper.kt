@@ -2,7 +2,9 @@ package com.clubs.membership
 
 import com.clubs.award.AwardDto
 import com.clubs.generated.jooq.tables.records.MembershipsRecord
+import com.clubs.reputation.ClubTrust
 import com.clubs.reputation.ReputationPolicy
+import com.clubs.reputation.TrustPolicy
 import org.springframework.stereotype.Component
 
 @Component
@@ -38,9 +40,17 @@ class MembershipMapper {
 
     // forOrganizer закрывает поля доступа/взносов: только дашборд организатора видит статус доступа
     // участника и дату оплаты до; обычные участники получают null (ростер никогда не палит, кто не заплатил).
-    // Награды публичны (R3) — передаются любому зрителю.
-    fun toMemberListItemDto(info: ClubMemberInfo, trust: Int?, awards: List<AwardDto>, forOrganizer: Boolean): MemberListItemDto {
-        val show = ReputationPolicy.isShown(info.outcomeCount)
+    // canSeeScores — асимметричная видимость (reputation-path-back.md): оценочные метрики (trust,
+    // обещания, подтверждения) видят только организатор и сам участник о себе; чужим — null,
+    // неотличимый от «Новичка» (неоднозначность по дизайну). Награды публичны (R3) — любому зрителю.
+    fun toMemberListItemDto(
+        info: ClubMemberInfo,
+        trust: Int?,
+        awards: List<AwardDto>,
+        forOrganizer: Boolean,
+        canSeeScores: Boolean
+    ): MemberListItemDto {
+        val show = ReputationPolicy.isShown(info.outcomeCount) && canSeeScores
         return MemberListItemDto(
             userId = info.userId,
             firstName = info.firstName ?: "",
@@ -74,8 +84,17 @@ class MembershipMapper {
         duesClaimMethod = member.duesClaimMethod
     )
 
-    fun toUserClubReputationDto(info: UserClubReputationInfo, trust: Int?): UserClubReputationDto {
+    fun toUserClubReputationDto(
+        info: UserClubReputationInfo,
+        clubTrust: ClubTrust?,
+        nearestEvent: com.clubs.club.NearestEventDto? = null,
+        awards: List<AwardDto> = emptyList()
+    ): UserClubReputationDto {
         val show = ReputationPolicy.isShown(info.outcomeCount)
+        val trust = if (show) clubTrust?.trust else null
+        // «Путь назад» — только при видимой просадке в живом клубе: trust показан, ниже надёжной
+        // зоны и клуб активен (в «Истории» возвращаться некуда). См. reputation-path-back.md AC-2.
+        val showPathBack = trust != null && trust < TrustPolicy.RELIABLE_THRESHOLD && info.active
         return UserClubReputationDto(
             clubId = info.clubId,
             clubName = info.clubName,
@@ -83,11 +102,18 @@ class MembershipMapper {
             category = info.category.literal,
             role = info.role.literal,
             joinedAt = info.joinedAt,
-            trust = if (show) trust else null,
+            trust = trust,
             promiseFulfillmentPct = if (show) info.promiseFulfillmentPct else null,
             totalConfirmations = if (show) info.totalConfirmations else null,
             totalAttendances = if (show) info.totalAttendances else null,
-            spontaneityCount = if (show) info.spontaneityCount else null
+            spontaneityCount = if (show) info.spontaneityCount else null,
+            projectedNext1 = if (showPathBack) clubTrust?.projectedNext1 else null,
+            projectedNext2 = if (showPathBack) clubTrust?.projectedNext2 else null,
+            meetingsToReliable = if (showPathBack) clubTrust?.meetingsToReliable else null,
+            skladchinaPaid = if (show) clubTrust?.skladchinaPaid else null,
+            skladchinaTotal = if (show) clubTrust?.skladchinaTotal else null,
+            nearestEvent = nearestEvent,
+            awards = awards
         )
     }
 }
