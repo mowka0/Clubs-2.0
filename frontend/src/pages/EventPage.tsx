@@ -37,11 +37,6 @@ function statusDotClass(status: string): string {
 }
 
 // Русские подписи статусов голоса/участия — для бейджей и строки «Ваш голос».
-// Отказаться от УЖЕ ПОДТВЕРЖДЁННОГО места можно не позже, чем за столько часов до старта (замене
-// нужно время подготовиться). Совпадает с дефолтом бэкенда events.stage2-decline-cutoff-minutes=240;
-// бэкенд — источник истины (отклонит поздний отказ), фронт лишь прячет кнопку.
-const CONFIRMED_DECLINE_CUTOFF_HOURS = 4;
-
 const VOTE_LABELS: Record<string, string> = {
   going: 'Пойду',
   maybe: 'Возможно',
@@ -295,9 +290,11 @@ export const EventPage: FC = () => {
   })();
 
   const eventHappened = new Date(event.eventDatetime).getTime() <= Date.now();
-  // Подтверждённый может отказаться (освободить место) только пока до старта ≥ порога.
-  const hoursUntilStart = (new Date(event.eventDatetime).getTime() - Date.now()) / 3_600_000;
-  const confirmedCanDecline = myVote === 'confirmed' && hoursUntilStart >= CONFIRMED_DECLINE_CUTOFF_HOURS;
+  // Подтверждённый может отказаться (освободить место) только пока не прошёл дедлайн отказа. Дедлайн
+  // считает бэкенд из своего env-порога и отдаёт в confirmedDeclineDeadline — фронт не хранит копию
+  // порога. Бэкенд остаётся источником истины: declineParticipation всё равно отклонит поздний отказ.
+  const confirmedCanDecline =
+    myVote === 'confirmed' && new Date(event.confirmedDeclineDeadline).getTime() > Date.now();
 
   // Backend (`VoteService.castVote`) принимает голос ТОЛЬКО при status='upcoming'.
   const showVoting = event.status === 'upcoming';
@@ -772,9 +769,9 @@ export const EventPage: FC = () => {
               )}
             </div>
           )}
-          {/* Подтверждённый освобождает место — с инлайн-подтверждением (защита). Кнопки нет в
-              последние CONFIRMED_DECLINE_CUTOFF_HOURS ч (бэк тоже отклонит). Если замены в очереди нет —
-              предупреждаем про штраф репутации; если есть — что место сразу займёт первый из очереди. */}
+          {/* Подтверждённый освобождает место — с инлайн-подтверждением (защита). Кнопки нет после
+              дедлайна отказа (confirmedDeclineDeadline с бэка; бэк тоже отклонит). Если замены в очереди
+              нет — предупреждаем про штраф репутации; если есть — что место сразу займёт первый из очереди. */}
           {confirmedCanDecline && (
             confirmingDecline ? (
               <div className="rd-reject-confirm">

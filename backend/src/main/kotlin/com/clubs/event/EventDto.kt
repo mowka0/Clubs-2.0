@@ -24,6 +24,13 @@ data class EventDetailDto(
     val maybeCount: Int,
     val notGoingCount: Int,
     val confirmedCount: Int,
+    // Крайний момент, до которого ПОДТВЕРЖДЁННЫЙ участник ещё может отказаться от места
+    // (= eventDatetime − events.stage2-decline-cutoff-minutes). Фронт прячет кнопку «Отказаться»
+    // у confirmed, когда now ≥ этого значения; бэк остаётся источником истины (declineParticipation
+    // отклонит поздний отказ). У waitlisted порога нет. Значение — чистая функция от даты события,
+    // поэтому одинаково для всех (не пер-юзер) и живёт в общем DTO. Убирает прежний рассинхрон:
+    // фронт держал копию порога хардкодом (4 ч), не связанную с рантайм-env бэка.
+    val confirmedDeclineDeadline: OffsetDateTime,
     val attendanceMarked: Boolean,
     val attendanceFinalized: Boolean,
     // F5-14: опциональная причина отмены от организатора; null, если отменено без указания причины.

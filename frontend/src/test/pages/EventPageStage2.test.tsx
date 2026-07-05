@@ -36,15 +36,19 @@ const CLUB_ID = 'club-1';
 const PAST = new Date(Date.now() - 86_400_000).toISOString();
 const FUTURE = new Date(Date.now() + 86_400_000).toISOString();
 const SOON = new Date(Date.now() + 2 * 3_600_000).toISOString(); // через 2ч < порога 4ч
+// Дефолтный порог отказа бэкенда (events.stage2-decline-cutoff-minutes=240 = 4ч). Дедлайн отказа
+// подтверждённого = eventDatetime − 4ч — то, что бэкенд кладёт в confirmedDeclineDeadline.
+const DECLINE_CUTOFF_MS = 4 * 3_600_000;
 
 function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
+  const eventDatetime = overrides.eventDatetime ?? FUTURE;
   return {
     id: EVENT_ID,
     clubId: CLUB_ID,
     title: 'Событие',
     description: null,
     locationText: 'Бар',
-    eventDatetime: FUTURE,
+    eventDatetime,
     participantLimit: 10,
     votingOpensDaysBefore: 14,
     status: 'stage_2',
@@ -52,6 +56,9 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     maybeCount: 1,
     notGoingCount: 0,
     confirmedCount: 1,
+    // По умолчанию дедлайн = дата события − 4ч (дефолт бэка): при FUTURE он в будущем (кнопка отказа
+    // видна), при SOON — уже в прошлом (кнопка скрыта). Тест может переопределить явно.
+    confirmedDeclineDeadline: new Date(new Date(eventDatetime).getTime() - DECLINE_CUTOFF_MS).toISOString(),
     attendanceMarked: false,
     attendanceFinalized: false,
     cancellationReason: null,

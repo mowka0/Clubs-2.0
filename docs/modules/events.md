@@ -72,12 +72,19 @@ rd-glass` без тамбнейла; см. [`redesign-banco-style.md`](./redesig
   "maybeCount": 0,
   "notGoingCount": 0,
   "confirmedCount": 0,
+  "confirmedDeclineDeadline": "ISO datetime",
   "attendanceMarked": false,
   "attendanceFinalized": false,
   "createdAt": "ISO datetime",
   "photoUrl": "string|null"
 }
 ```
+> `confirmedDeclineDeadline` = `eventDatetime − events.stage2-decline-cutoff-minutes` (дефолт 240 = 4ч),
+> считается в `EventMapper`. Крайний момент, до которого ПОДТВЕРЖДЁННЫЙ участник может отказаться от
+> места. Фронт прячет кнопку «Отказаться» у `confirmed`, когда `now ≥ confirmedDeclineDeadline`; бэкенд
+> остаётся источником истины (`declineParticipation` отклонит поздний отказ). Waitlisted порогом не
+> гейтится. Не пер-юзер — одинаков для всех, поэтому в общем DTO. Заменил прежнюю фронт-константу-копию
+> порога (`CONFIRMED_DECLINE_CUTOFF_HOURS=4`), которая не была связана с рантайм-env бэка.
 
 ### EventListItemDto
 ```json

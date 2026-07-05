@@ -53,6 +53,8 @@ function pastCompletedEvent(overrides: Partial<EventDetailDto> = {}): EventDetai
     maybeCount: 0,
     notGoingCount: 1,
     confirmedCount: 1,
+    // Событие прошло — дедлайн отказа неактуален; задаём валидную дату (окно закрыто по eventHappened).
+    confirmedDeclineDeadline: PAST,
     attendanceMarked: false,
     attendanceFinalized: false,
     cancellationReason: null,
