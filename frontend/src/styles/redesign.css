@@ -1339,10 +1339,17 @@
 .rd-cc-open .rd-cc-chev { transform: rotate(180deg); color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .rd-cc-chev { transition: none; } }
 .rd-cc + .rd-cc { border-top: 1px solid var(--hairline); }
+/* Панель-аккордеон «Где я состою»: backdrop-blur отключён НАМЕРЕННО. При анимации высоты
+   панель ресайзится каждый кадр, и re-blur(30px) фона за ней не влезал в кадровый бюджет A15
+   (iPhone 13 дропал до ~30fps; A16+ вытягивал). Фон под панелью — плоский тёмный, визуальной
+   разницы практически нет: градиент и рамка «стекла» остаются. */
+.rd-cc-panel { backdrop-filter: none; -webkit-backdrop-filter: none; }
 /* Плавное раскрытие: transition по измеренному max-height (px задаёт компонент инлайном).
    Паддинга у .rd-cc-body нет намеренно: при border-box он не сжимается ниже max-height:0
-   и «протекал» строкой наружу — весь внутренний отступ живёт на .rd-cc-inner. */
-.rd-cc-body { overflow: hidden; transition: max-height 0.25s ease; }
+   и «протекал» строкой наружу — весь внутренний отступ живёт на .rd-cc-inner.
+   Тайминг ease-out: основное движение в первых кадрах — редкие пропуски кадров ближе к концу
+   анимации глазом почти не читаются. */
+.rd-cc-body { overflow: hidden; transition: max-height 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
 @media (prefers-reduced-motion: reduce) { .rd-cc-body { transition: none; } }
 .rd-cc-inner { border-top: 1px solid var(--hairline); padding: 12px; display: grid; gap: 12px; }
 /* Строка метрик («обещания 71% · 9 подтв. · 7 посещ.») и пояснения новичку/организатору. */

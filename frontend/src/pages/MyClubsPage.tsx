@@ -872,7 +872,7 @@ export const MyClubsPage: FC = () => {
           <div className="rd-section-sub-h">
             Где я состою <span className="rd-count">· {activeMyClubs.length}</span>
           </div>
-          <div className="rd-glass rd-rep-panel">
+          <div className="rd-glass rd-rep-panel rd-cc-panel">
             {activeMyClubs.map((m) => {
               const club = clubDetails[m.clubId];
               const isOrganizer = m.role === 'organizer' || club?.ownerId === user?.id;
