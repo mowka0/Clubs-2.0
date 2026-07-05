@@ -32,6 +32,12 @@ class AwardService(
         awardRepository.findByMember(clubId, userId).map(mapper::toDto)
 
     @Transactional(readOnly = true)
+    /** Награды пользователя, сгруппированные по клубу (один запрос) — чипы в карточках «Моих клубов». */
+    fun getUserAwardsByClub(userId: UUID): Map<UUID, List<AwardDto>> =
+        awardRepository.findByUser(userId)
+            .groupBy { it.clubId }
+            .mapValues { (_, awards) -> awards.map(mapper::toDto) }
+
     fun getSuggestions(clubId: UUID): List<AwardSuggestionDto> =
         awardRepository.findSuggestions(clubId, MAX_SUGGESTIONS).map(mapper::toDto)
 

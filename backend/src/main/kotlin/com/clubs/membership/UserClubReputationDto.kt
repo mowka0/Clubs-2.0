@@ -33,5 +33,8 @@ data class UserClubReputationDto(
     val skladchinaTotal: Int?,
     // Ближайшее предстоящее событие клуба (семантика Discovery) — CTA «Ближайшая встреча» в
     // раскрытой карточке «Моих клубов». null = предстоящих событий нет ИЛИ клуб в «Истории».
-    val nearestEvent: NearestEventDto?
+    val nearestEvent: NearestEventDto?,
+    // Клубные награды вызывающего в ЭТОМ клубе (чипы в раскрытой карточке; R3 — косметика,
+    // на репутацию не влияет). Пусто, если наград нет или клуб в «Истории».
+    val awards: List<com.clubs.award.AwardDto> = emptyList()
 )

@@ -53,6 +53,7 @@ function repClub(overrides: Partial<UserClubReputationDto> = {}): UserClubReputa
     skladchinaPaid: 3,
     skladchinaTotal: 3,
     nearestEvent: { id: 'evt-1', title: 'Покерный вечер', eventDatetime: '2026-07-09T19:00:00Z', goingCount: 5 },
+    awards: [{ id: 'aw-1', emoji: '🏆', label: 'Душа компании' }],
     ...overrides,
   };
 }
@@ -127,6 +128,7 @@ describe('MyClubsPage — раскрывающаяся карточка клуб
     expect(screen.getByText('надёжная зона')).toBeInTheDocument();
     expect(screen.getByText(/Две ближайшие встречи вернут вас/)).toBeInTheDocument();
     expect(screen.getByText(/Покерный вечер/)).toBeInTheDocument();
+    expect(screen.getByText(/Душа компании/)).toBeInTheDocument();   // чип клубной награды
     expect(screen.getByRole('button', { name: /Открыть клуб/ })).toBeInTheDocument();
 
     // Повторный тап сворачивает.
@@ -152,7 +154,7 @@ describe('MyClubsPage — раскрывающаяся карточка клуб
     mockEndpoints(repClub({
       trust: null, promiseFulfillmentPct: null, totalConfirmations: null, totalAttendances: null,
       spontaneityCount: null, projectedNext1: null, projectedNext2: null, meetingsToReliable: null,
-      skladchinaPaid: null, skladchinaTotal: null, nearestEvent: null,
+      skladchinaPaid: null, skladchinaTotal: null, nearestEvent: null, awards: [],
     }));
     const { user } = renderPage();
 

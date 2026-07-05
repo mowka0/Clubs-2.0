@@ -179,6 +179,16 @@ const MyClubCard: FC<MyClubCardProps> = ({
       </button>
       {expanded && (
         <div className="rd-cc-body">
+          {/* Наши награды в этом клубе — те же чипы, что в ростере участников (R3, косметика). */}
+          {(rep?.awards?.length ?? 0) > 0 && (
+            <div className="rd-member-awards">
+              {rep!.awards.map((a) => (
+                <span key={a.id} className="rd-award-chip rd-award-chip-ro rd-award-chip-sm">
+                  <span className="rd-award-emoji" aria-hidden="true">{a.emoji}</span>{a.label}
+                </span>
+              ))}
+            </div>
+          )}
           {/* Статистика — только текстом (решение PO 2026-07-05: кольца Посещаемость/Сборы убраны). */}
           {hasActivity && (
             <div className="rd-cc-line">

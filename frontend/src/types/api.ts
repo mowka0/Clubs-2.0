@@ -201,6 +201,8 @@ export interface UserClubReputationDto {
   skladchinaTotal: number | null;
   // Ближайшее предстоящее событие клуба — CTA «Ближайшая встреча» в раскрытой карточке «Моих клубов».
   nearestEvent: NearestEventDto | null;
+  // Клубные награды вызывающего в этом клубе — чипы в раскрытой карточке (косметика, R3).
+  awards: AwardDto[];
 }
 
 /** Глобальная репутация: основной показатель — «надёжен в reliableClubs из trackRecordClubs клубов». */

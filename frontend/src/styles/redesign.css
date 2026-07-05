@@ -1331,8 +1331,12 @@
    (reputation-path-back.md; мокап docs/design/reputation-path-back/mockups/02)
    ============================================================ */
 /* Шапка = прежний .rd-rep-row; шеврон поворачивается при раскрытии. */
-.rd-cc-chev { flex-shrink: 0; color: var(--text-faint); font-size: 12px; margin-left: 2px; transition: transform 0.25s ease; }
-.rd-cc-open .rd-cc-chev { transform: rotate(180deg); }
+/* Шеврон крупный и заметный (запрос PO): 24px, при раскрытии — переворот + акцентный цвет. */
+.rd-cc-chev {
+  flex-shrink: 0; color: var(--text-dim); font-size: 24px; line-height: 1; margin-left: 4px;
+  transition: transform 0.25s ease, color 0.25s ease;
+}
+.rd-cc-open .rd-cc-chev { transform: rotate(180deg); color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .rd-cc-chev { transition: none; } }
 .rd-cc + .rd-cc { border-top: 1px solid var(--hairline); }
 .rd-cc-body { border-top: 1px solid var(--hairline); padding: 12px; display: grid; gap: 12px; }

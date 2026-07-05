@@ -87,7 +87,8 @@ class MembershipMapper {
     fun toUserClubReputationDto(
         info: UserClubReputationInfo,
         clubTrust: ClubTrust?,
-        nearestEvent: com.clubs.club.NearestEventDto? = null
+        nearestEvent: com.clubs.club.NearestEventDto? = null,
+        awards: List<AwardDto> = emptyList()
     ): UserClubReputationDto {
         val show = ReputationPolicy.isShown(info.outcomeCount)
         val trust = if (show) clubTrust?.trust else null
@@ -111,7 +112,8 @@ class MembershipMapper {
             meetingsToReliable = if (showPathBack) clubTrust?.meetingsToReliable else null,
             skladchinaPaid = if (show) clubTrust?.skladchinaPaid else null,
             skladchinaTotal = if (show) clubTrust?.skladchinaTotal else null,
-            nearestEvent = nearestEvent
+            nearestEvent = nearestEvent,
+            awards = awards
         )
     }
 }

@@ -7,6 +7,9 @@ interface AwardRepository {
     /** Все награды, выданные [userId] в [clubId], сначала новые. Видны всем участникам (R3). */
     fun findByMember(clubId: UUID, userId: UUID): List<Award>
 
+    /** Все награды пользователя по всем клубам (один запрос) — для карточек «Моих клубов». */
+    fun findByUser(userId: UUID): List<Award>
+
     /** Все награды в [clubId] (сначала новые), для ростера — сервис группирует их по участнику. */
     fun findByClub(clubId: UUID): List<Award>
 

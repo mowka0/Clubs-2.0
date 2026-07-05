@@ -19,6 +19,13 @@ class JooqAwardRepository(
             .fetch()
             .map(mapper::recordToDomain)
 
+    override fun findByUser(userId: UUID): List<Award> =
+        dsl.selectFrom(CLUB_AWARDS)
+            .where(CLUB_AWARDS.USER_ID.eq(userId))
+            .orderBy(CLUB_AWARDS.AWARDED_AT.desc())
+            .fetch()
+            .map(mapper::recordToDomain)
+
     override fun findByClub(clubId: UUID): List<Award> =
         dsl.selectFrom(CLUB_AWARDS)
             .where(CLUB_AWARDS.CLUB_ID.eq(clubId))

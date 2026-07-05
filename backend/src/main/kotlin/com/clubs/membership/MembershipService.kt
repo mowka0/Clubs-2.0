@@ -1,6 +1,7 @@
 package com.clubs.membership
 
 import com.clubs.application.ApplicationRepository
+import com.clubs.award.AwardService
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
@@ -32,7 +33,8 @@ class MembershipService(
     private val applicationRepository: ApplicationRepository,
     private val trustService: TrustService,
     private val reputationService: ReputationService,
-    private val eventPublisher: ApplicationEventPublisher
+    private val eventPublisher: ApplicationEventPublisher,
+    private val awardService: AwardService
 ) {
 
     private val log = LoggerFactory.getLogger(MembershipService::class.java)
@@ -146,13 +148,19 @@ class MembershipService(
         // CTA «Ближайшая встреча» в раскрытой карточке «Моих клубов»: только для активных клубов
         // (в «Истории» идти некуда). Один батч-вызов на все клубы.
         val nearestEvents = clubRepository.findNearestEvents(active.map { it.clubId })
+        // Клубные награды вызывающего — чипы в раскрытых карточках (один запрос на все клубы).
+        val awardsByClub = awardService.getUserAwardsByClub(userId)
         return MyReputationDto(
             global = GlobalTrustDto(
                 reliableClubs = trust.global.reliableClubs,
                 trackRecordClubs = trust.global.trackRecordClubs,
                 score = trust.global.score
             ),
-            activeClubs = active.map { mapper.toUserClubReputationDto(it, trustByClub[it.clubId], nearestEvents[it.clubId]) },
+            activeClubs = active.map {
+                mapper.toUserClubReputationDto(
+                    it, trustByClub[it.clubId], nearestEvents[it.clubId], awardsByClub[it.clubId] ?: emptyList()
+                )
+            },
             historyClubs = history.map { mapper.toUserClubReputationDto(it, trustByClub[it.clubId]) }
         )
     }
