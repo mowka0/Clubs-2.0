@@ -1338,13 +1338,7 @@
 .rd-cc-body { border-top: 1px solid var(--hairline); padding: 12px; display: grid; gap: 12px; }
 /* Строка метрик («обещания 71% · 9 подтв. · 7 посещ.») и пояснения новичку/организатору. */
 .rd-cc-line { font-size: 11px; color: var(--text-faint); line-height: 1.45; }
-/* Мини-кольца Посещаемость / Сборы. */
-.rd-cc-rings { display: flex; align-items: center; gap: 16px; }
-.rd-cc-ring { display: flex; align-items: center; gap: 8px; }
-.rd-cc-rv { font-size: 9.5px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
-.rd-cc-rl { font-size: 10px; color: var(--text-faint); line-height: 1.3; }
-.rd-cc-rl b { display: block; color: var(--text-dim); font-weight: 600; font-size: 11px; }
-/* Блок «Путь назад» (вариант A): траектория из трёх колец. */
+/* Блок «Путь наверх» (вариант A): траектория из трёх колец. */
 .rd-pb { background: var(--surface); border: 1px solid var(--glass-border); border-radius: 12px; padding: 10px 12px 12px; }
 .rd-pb-cap { font-size: 9px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 8px; }
 .rd-pb-traj { display: flex; align-items: center; justify-content: space-between; gap: 4px; }

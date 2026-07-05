@@ -39,13 +39,15 @@ class TrustPolicyPathBackTest {
     }
 
     @Test
-    fun `projection climbs step by step - fresh 1 kept + 1 broke = 59, then 65, 69, reliable on 3rd`() {
-        // kept=1, broke=1 (свежие, вес 1.0): (1+2.55)/(1+2+3) = 59; +1 → 65; +2 → 69; +3 → 73 ≥ 70.
+    fun `projection climbs step by step - fresh 1 kept + 1 broke = 59, then 66, 72 (reliable on 2nd)`() {
+        // kept=1, broke=1 (свежие): сейчас (1+2.55)/(1+2+3) = 59. Проекция моделирует время
+        // (встреча = +14 дней, d = 0.5^(14/90) ≈ 0.898): старые веса затухают, новое посещение
+        // добавляется с весом 1.0 → 66 после первой встречи, 72 после второй (≥ 70 — надёжная зона).
         val w = TrustPolicy.weightsOf(listOf(out(KEPT), out(BROKE)), now)
         assertEquals(59, TrustPolicy.trustFromWeights(w.kept, w.broke))
-        assertEquals(65, TrustPolicy.projectedTrust(w, 1))
-        assertEquals(69, TrustPolicy.projectedTrust(w, 2))
-        assertEquals(3, TrustPolicy.meetingsToReliable(w))
+        assertEquals(66, TrustPolicy.projectedTrust(w, 1))
+        assertEquals(72, TrustPolicy.projectedTrust(w, 2))
+        assertEquals(2, TrustPolicy.meetingsToReliable(w))
     }
 
     @Test

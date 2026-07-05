@@ -106,8 +106,8 @@ beforeEach(() => {
   } as never);
 });
 
-describe('MyClubsPage — раскрывающаяся карточка клуба с «путём назад»', () => {
-  it('свёрнутая карточка показывает надёжность справа; тап раскрывает «Путь назад» с траекторией', async () => {
+describe('MyClubsPage — раскрывающаяся карточка клуба с «путём наверх»', () => {
+  it('свёрнутая карточка показывает надёжность справа; тап раскрывает «Путь наверх» с траекторией', async () => {
     mockEndpoints(repClub());
     const { user } = renderPage();
 
@@ -115,13 +115,13 @@ describe('MyClubsPage — раскрывающаяся карточка клуб
     const head = await screen.findByRole('button', { name: /Партия/ });
     expect(head).toHaveTextContent('60');
     expect(head).toHaveTextContent('надёжность');
-    expect(screen.queryByText('Путь назад')).not.toBeInTheDocument();
+    expect(screen.queryByText('Путь наверх')).not.toBeInTheDocument();
 
     await user.click(head);
 
     // Раскрыто: метрики, траектория 60 → 66 → 70, подпись зоны, встреча, «Открыть клуб».
-    expect(screen.getByText('Путь назад')).toBeInTheDocument();
-    expect(screen.getByText(/обещания 71%/)).toBeInTheDocument();
+    expect(screen.getByText('Путь наверх')).toBeInTheDocument();
+    expect(screen.getByText(/обещания 71%.*сборы 3\/3/)).toBeInTheDocument();
     expect(screen.getByText('66')).toBeInTheDocument();
     expect(screen.getByText('70')).toBeInTheDocument();
     expect(screen.getByText('надёжная зона')).toBeInTheDocument();
@@ -131,10 +131,10 @@ describe('MyClubsPage — раскрывающаяся карточка клуб
 
     // Повторный тап сворачивает.
     await user.click(head);
-    expect(screen.queryByText('Путь назад')).not.toBeInTheDocument();
+    expect(screen.queryByText('Путь наверх')).not.toBeInTheDocument();
   });
 
-  it('здоровый Trust (82, projected null): раскрытый вид БЕЗ «пути назад», метрики на месте', async () => {
+  it('здоровый Trust (82, projected null): раскрытый вид БЕЗ «пути наверх», метрики на месте', async () => {
     mockEndpoints(repClub({
       trust: 82, projectedNext1: null, projectedNext2: null, meetingsToReliable: null,
       promiseFulfillmentPct: 90, totalConfirmations: 10, totalAttendances: 9,
@@ -145,7 +145,7 @@ describe('MyClubsPage — раскрывающаяся карточка клуб
     await user.click(head);
 
     expect(screen.getByText(/обещания 90%/)).toBeInTheDocument();
-    expect(screen.queryByText('Путь назад')).not.toBeInTheDocument();
+    expect(screen.queryByText('Путь наверх')).not.toBeInTheDocument();
   });
 
   it('новичок (trust null): свёрнуто «Новичок», раскрыто — пояснение без метрик', async () => {
@@ -161,6 +161,6 @@ describe('MyClubsPage — раскрывающаяся карточка клуб
 
     await user.click(head);
     expect(screen.getByText(/Репутация появится после 3 исходов/)).toBeInTheDocument();
-    expect(screen.queryByText('Путь назад')).not.toBeInTheDocument();
+    expect(screen.queryByText('Путь наверх')).not.toBeInTheDocument();
   });
 });

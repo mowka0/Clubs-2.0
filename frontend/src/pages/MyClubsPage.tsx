@@ -101,11 +101,12 @@ const NEAREST_EVENT_FMT = new Intl.DateTimeFormat('ru-RU', {
   weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
 });
 
-/** Текст под траекторией «пути назад» — по числу посещений до надёжной зоны. */
+/** Текст под траекторией «пути наверх» — по числу посещений до надёжной зоны. */
 function pathBackNote(meetingsToReliable: number): string {
   if (meetingsToReliable === 1) return 'Следующая встреча вернёт вас в надёжную зону.';
   if (meetingsToReliable === 2) return 'Две ближайшие встречи вернут вас в надёжную зону.';
-  return `До надёжной зоны — ${meetingsToReliable >= 9 ? '9+' : meetingsToReliable} посещений.`;
+  if (meetingsToReliable >= 9) return 'До надёжной зоны — 9+ посещений.';
+  return `До надёжной зоны — ${meetingsToReliable} ${pluralRu(meetingsToReliable, ['посещение', 'посещения', 'посещений'])}.`;
 }
 
 /** Мини-кольцо траектории «пути назад»: значение Trust внутри, подпись снизу. */
@@ -141,8 +142,6 @@ const MyClubCard: FC<MyClubCardProps> = ({
   const hasActivity =
     hasScore &&
     ((rep?.totalAttendances ?? 0) > 0 || (rep?.totalConfirmations ?? 0) > 0 || (rep?.promiseFulfillmentPct ?? 0) > 0);
-  const showAttendanceRing = (rep?.totalConfirmations ?? 0) > 0 && rep?.totalAttendances != null;
-  const showSkladchinaRing = (rep?.skladchinaTotal ?? 0) > 0 && rep?.skladchinaPaid != null;
   const showPathBack = rep?.projectedNext1 != null && rep?.projectedNext2 != null && rep?.trust != null;
 
   return (
@@ -180,45 +179,17 @@ const MyClubCard: FC<MyClubCardProps> = ({
       </button>
       {expanded && (
         <div className="rd-cc-body">
+          {/* Статистика — только текстом (решение PO 2026-07-05: кольца Посещаемость/Сборы убраны). */}
           {hasActivity && (
             <div className="rd-cc-line">
               обещания {Math.round(rep?.promiseFulfillmentPct ?? 0)}% · {rep?.totalConfirmations} подтв. · {rep?.totalAttendances} посещ.
               {(rep?.spontaneityCount ?? 0) > 0 && ` · ${rep?.spontaneityCount} спонт.`}
-            </div>
-          )}
-          {(showAttendanceRing || showSkladchinaRing) && (
-            <div className="rd-cc-rings">
-              {showAttendanceRing && (
-                <div className="rd-cc-ring">
-                  <DonutRing
-                    size={40}
-                    fraction={(rep?.totalAttendances ?? 0) / Math.max(rep?.totalConfirmations ?? 1, 1)}
-                    color="var(--accent)"
-                    strokeWidth={7}
-                  >
-                    <span className="rd-cc-rv">{rep?.totalAttendances}/{rep?.totalConfirmations}</span>
-                  </DonutRing>
-                  <span className="rd-cc-rl"><b>Посещаемость</b>посещено / подтв.</span>
-                </div>
-              )}
-              {showSkladchinaRing && (
-                <div className="rd-cc-ring">
-                  <DonutRing
-                    size={40}
-                    fraction={(rep?.skladchinaPaid ?? 0) / Math.max(rep?.skladchinaTotal ?? 1, 1)}
-                    color="var(--live)"
-                    strokeWidth={7}
-                  >
-                    <span className="rd-cc-rv">{rep?.skladchinaPaid}/{rep?.skladchinaTotal}</span>
-                  </DonutRing>
-                  <span className="rd-cc-rl"><b>Сборы</b>оплачено</span>
-                </div>
-              )}
+              {(rep?.skladchinaTotal ?? 0) > 0 && ` · сборы ${rep?.skladchinaPaid}/${rep?.skladchinaTotal}`}
             </div>
           )}
           {showPathBack && (
             <div className="rd-pb">
-              <div className="rd-pb-cap">Путь назад</div>
+              <div className="rd-pb-cap">Путь наверх</div>
               <div className="rd-pb-traj">
                 <PathBackStep value={rep!.trust!} label="сейчас" />
                 <span className="rd-pb-arr" aria-hidden="true">→</span>
