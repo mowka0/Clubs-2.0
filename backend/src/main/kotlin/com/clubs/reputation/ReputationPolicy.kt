@@ -26,16 +26,18 @@ object ReputationPolicy {
     const val MIN_OUTCOMES_FOR_DISPLAY = 3
 
     /**
-     * Подтверждённый ответ → kind посещаемости. Вызывающий код гарантирует
-     * final_status=confirmed, что подразумевает stage_1_vote ∈ {going, maybe}
-     * (Stage2Service отклоняет остальное). disputed / null attendance →
-     * confirmed_unresolved (терминальный статус, 0 очков).
+     * Подтверждённый ответ → kind посещаемости. Обязательство — это САМ ФАКТ подтверждения
+     * (final_status=confirmed), а не голос Этапа 1: с фичей «Этап 2 открыт всем» подтвердиться
+     * может и not_going, и не голосовавший (stage_1_vote NULL). Поэтому пришёл → +100, не пришёл
+     * → −200 для ЛЮБОГО подтвердившегося. Голос Этапа 1 лишь выбирает лейбл вида (ironclad vs
+     * spontaneous / no_show vs spectator) — очки одинаковые. disputed / null attendance →
+     * confirmed_unresolved (терминальный, 0 очков).
      */
-    fun attendanceKind(stage1Vote: Stage_1Vote?, attendance: AttendanceStatus?): ReputationKind = when {
-        attendance == AttendanceStatus.attended && stage1Vote == Stage_1Vote.going -> ReputationKind.ironclad
-        attendance == AttendanceStatus.attended && stage1Vote == Stage_1Vote.maybe -> ReputationKind.spontaneous
-        attendance == AttendanceStatus.absent && stage1Vote == Stage_1Vote.going -> ReputationKind.no_show
-        attendance == AttendanceStatus.absent && stage1Vote == Stage_1Vote.maybe -> ReputationKind.spectator
+    fun attendanceKind(stage1Vote: Stage_1Vote?, attendance: AttendanceStatus?): ReputationKind = when (attendance) {
+        AttendanceStatus.attended ->
+            if (stage1Vote == Stage_1Vote.going) ReputationKind.ironclad else ReputationKind.spontaneous
+        AttendanceStatus.absent ->
+            if (stage1Vote == Stage_1Vote.going) ReputationKind.no_show else ReputationKind.spectator
         else -> ReputationKind.confirmed_unresolved
     }
 
@@ -81,6 +83,12 @@ object ReputationPolicy {
         // этапе 2 события. Точка безубыточности ≈ 80% оплат, немного выше метрики
         // успеха "≥70% платят вовремя".
         ReputationKind.skladchina_expired -> -40
+        // Отказ от подтверждённого места на Этапе 2 без замены в очереди — половина no_show.
+        // Начисляется только когда waitlist пуст (иначе первый из очереди сразу закрывает слот,
+        // ущерба нет). Предупредил заранее (отказ разрешён лишь ≥ порога до старта), но дыру
+        // оставил → мягче молчаливой неявки, но строго дороже нуля, чтобы честный отказ был
+        // выгоднее «пропасть молча» (−200), а не наоборот.
+        ReputationKind.abandoned_slot -> -100
     }
 
     /** Презентационный гейт: показывать реальный индекс только при наличии истории. */

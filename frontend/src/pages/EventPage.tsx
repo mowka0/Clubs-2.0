@@ -37,6 +37,11 @@ function statusDotClass(status: string): string {
 }
 
 // Русские подписи статусов голоса/участия — для бейджей и строки «Ваш голос».
+// Отказаться от УЖЕ ПОДТВЕРЖДЁННОГО места можно не позже, чем за столько часов до старта (замене
+// нужно время подготовиться). Совпадает с дефолтом бэкенда events.stage2-decline-cutoff-minutes=240;
+// бэкенд — источник истины (отклонит поздний отказ), фронт лишь прячет кнопку.
+const CONFIRMED_DECLINE_CUTOFF_HOURS = 4;
+
 const VOTE_LABELS: Record<string, string> = {
   going: 'Пойду',
   maybe: 'Возможно',
@@ -105,6 +110,8 @@ export const EventPage: FC = () => {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelError, setCancelError] = useState<string | null>(null);
+  // Инлайн-подтверждение отказа от подтверждённого места (защита от случайного клика).
+  const [confirmingDecline, setConfirmingDecline] = useState(false);
 
   const event = eventQuery.data;
   const myVote = myVoteQuery.data?.vote ?? null;
@@ -288,6 +295,9 @@ export const EventPage: FC = () => {
   })();
 
   const eventHappened = new Date(event.eventDatetime).getTime() <= Date.now();
+  // Подтверждённый может отказаться (освободить место) только пока до старта ≥ порога.
+  const hoursUntilStart = (new Date(event.eventDatetime).getTime() - Date.now()) / 3_600_000;
+  const confirmedCanDecline = myVote === 'confirmed' && hoursUntilStart >= CONFIRMED_DECLINE_CUTOFF_HOURS;
 
   // Backend (`VoteService.castVote`) принимает голос ТОЛЬКО при status='upcoming'.
   const showVoting = event.status === 'upcoming';
@@ -760,6 +770,48 @@ export const EventPage: FC = () => {
                   Отказаться
                 </button>
               )}
+            </div>
+          )}
+          {/* Подтверждённый освобождает место — с инлайн-подтверждением (защита). Кнопки нет в
+              последние CONFIRMED_DECLINE_CUTOFF_HOURS ч (бэк тоже отклонит). Если замены в очереди нет —
+              предупреждаем про штраф репутации; если есть — что место сразу займёт первый из очереди. */}
+          {confirmedCanDecline && (
+            confirmingDecline ? (
+              <div className="rd-reject-confirm">
+                <div className="rd-reject-q">
+                  Освободить место?{' '}
+                  {waitlistedCount > 0
+                    ? 'Его сразу займёт первый из очереди.'
+                    : 'Замены пока нет — отказ снизит вашу репутацию.'}
+                </div>
+                <div className="rd-org-gate-acts">
+                  <button type="button" className="rd-btn-outline" disabled={voting} onClick={() => setConfirmingDecline(false)}>
+                    Нет
+                  </button>
+                  <button
+                    type="button"
+                    className="rd-btn-primary rd-btn-danger"
+                    disabled={voting}
+                    onClick={() => { setConfirmingDecline(false); handleDecline(); }}
+                  >
+                    {voting ? <Spinner size="s" /> : 'Освободить'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="rd-cta-wrap">
+                <button type="button" className="rd-btn-outline" onClick={() => { setActionError(null); setConfirmingDecline(true); }}>
+                  Отказаться
+                </button>
+              </div>
+            )
+          )}
+          {/* Waitlisted выходит из очереди свободно (никого не держит, порога и штрафа нет). */}
+          {myVote === 'waitlisted' && (
+            <div className="rd-cta-wrap">
+              <button type="button" className="rd-btn-outline" onClick={handleDecline} disabled={voting}>
+                Отказаться
+              </button>
             </div>
           )}
         </>

@@ -229,20 +229,30 @@ POST /api/events/{id}/decline
    > поэтому в переполненном waitlist может оказаться выше `maybe`-голосовавшего. Пограничный
    > кейс (оверсабскрайб + флип), в v1 принят осознанно; не-голосовавший встаёт в конец корректно.
 
-### Логика decline
+### Логика decline (UPDATED 2026-07-05 — порог + штраф за брошенное место)
 1. Проверки события/членства (симметрично confirm), затем тот же advisory-lock
    `lockEventSlots(eventId)` (F5-11 ✅)
 2. Найти response пользователя
-3. stage_2_vote = declined, final_status = declined
-4. Найти первого waitlisted участника (по stage_1_timestamp) → promote to confirmed
+3. **Порог отказа для ПОДТВЕРЖДЁННОГО** (`events.stage2-decline-cutoff-minutes`, дефолт 240 = 4ч):
+   если `wasConfirmed` И до старта < порога → 400 «Отказаться … можно не позже чем за N ч». Замене
+   не хватит времени подготовиться → «приходи или неявка −200». Waitlisted этот порог НЕ касается
+   (он никого не держит — выходит из очереди свободно, до старта).
+4. stage_2_vote = declined, final_status = declined
+5. Если отказавшийся был `confirmed`:
+   - **есть первый waitlisted** (по stage_1_timestamp) → promote to confirmed; отказавшийся чист (0);
+   - **очередь пуста** → отказавшийся оставил дыру → штраф `abandoned_slot` (−100) в ЭТОЙ ЖЕ
+     транзакции (`ReputationService.penalizeAbandonedSlot`, по образцу `penalizeExit`). Половина
+     no_show: предупредил заранее, но место не закрылось. См. reputation.md.
 
 ### Corner Cases
 | Ситуация | Поведение |
 |----------|-----------|
 | Событие ещё в upcoming | 400 "Event is not in confirmation stage" |
-| Пользователь не голосовал в Stage 1 | 400 "You didn't vote going" |
+| Confirmed отказывается за < порога до старта | 400, ничего не меняется (приходит или неявка) |
 | Мест нет (confirmedCount >= limit) | Получает waitlisted |
-| Decline → нет waitlisted | Просто decline, место "теряется" |
+| Confirmed decline → есть waitlisted | Первый из очереди → confirmed; отказавшийся без штрафа |
+| Confirmed decline → нет waitlisted | Слот открывается; отказавшийся получает `abandoned_slot` −100 |
+| Waitlisted decline | Выходит из очереди в любой момент до старта, без штрафа |
 
 ---
 
@@ -417,6 +427,7 @@ penalty-флоу), а их страницы упираются в скрытый
 | `events.stage2-expire-poll-ms` | `STAGE2_EXPIRE_POLL_MS` | `300000` (5мин) | Период авто-истечения брони |
 | `events.stage2-trigger-minutes-before` | `STAGE2_TRIGGER_MINUTES_BEFORE` | `1440` (24ч) | За сколько **минут** до старта `upcoming`-событие авто-переходит в `stage_2` |
 | `events.stage2-poll-ms` | `STAGE2_POLL_MS` | `60000` (1мин) | Период тика `triggerStage2ForReadyEvents`; окно подтверждения = trigger-lead − фаза тика, тик должен быть сильно мельче lead |
+| `events.stage2-decline-cutoff-minutes` | `STAGE2_DECLINE_CUTOFF_MINUTES` | `240` (4ч) | За сколько **минут** до старта закрывается отказ от УЖЕ ПОДТВЕРЖДЁННОГО места (замене нужно время). Фронт дублирует порог константой `CONFIRMED_DECLINE_CUTOFF_HOURS=4`; бэк — источник истины. Waitlisted порогом не гейтится |
 | `events.reminder-poll-ms` | `EVENT_REMINDER_POLL_MS` | `300000` (5мин) | Период `EventReminderScheduler` |
 | `events.confirm-reminder-minutes-before` | `CONFIRM_REMINDER_MINUTES_BEFORE` | `120` (2ч) | За сколько **минут** до события слать «подтверди участие» |
 | `events.attendance-reminder-minutes-after` | `ATTENDANCE_REMINDER_MINUTES_AFTER` | `1440` (24ч) | Через сколько **минут** после события напомнить оргу отметить явку |

@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
+import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
@@ -101,6 +102,33 @@ class ReputationService(
             "Exit penalties written: userId={} clubId={} eventNoShows={} skladchinaExpiries={}",
             userId, clubId, eventNoShows.size, skladchinaExpiries.size
         )
+    }
+
+    /**
+     * Штраф за отказ от ПОДТВЕРЖДЁННОГО места на Этапе 2, когда в очереди нет замены (abandoned_slot,
+     * −100). Вызывается из Stage2Service.declineParticipation В ТОЙ ЖЕ транзакции (default REQUIRED →
+     * отказ + штраф атомарны), только при пустом waitlist — иначе слот сразу закрывает первый из
+     * очереди, ущерба нет. Идемпотентно по конструкции леджера: UNIQUE(user, source) + ON CONFLICT DO
+     * NOTHING (одна строка на пару user×event; у отказавшегося её ещё нет — явка не размечалась).
+     * occurredAt = момент отказа (якорь decay).
+     */
+    @Transactional
+    fun penalizeAbandonedSlot(userId: UUID, clubId: UUID, eventId: UUID, occurredAt: OffsetDateTime) {
+        appendAndRecompute(
+            listOf(
+                LedgerEntry(
+                    userId = userId,
+                    clubId = clubId,
+                    axis = ReputationAxis.attendance,
+                    kind = ReputationKind.abandoned_slot,
+                    points = ReputationPolicy.pointsFor(ReputationKind.abandoned_slot),
+                    occurredAt = occurredAt,
+                    sourceType = ReputationSource.event,
+                    sourceId = eventId
+                )
+            )
+        )
+        log.info("Abandoned-slot penalty: userId={} clubId={} eventId={}", userId, clubId, eventId)
     }
 
     /**

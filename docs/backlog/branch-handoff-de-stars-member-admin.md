@@ -32,7 +32,7 @@
 5. **Frozen-вид панели переоформлен** (PO): статус «🔒 Доступ закрыт…» простым текстом (не в боксе), «Взнос получен» + «Отказать» — **парные кнопки** в пол-ширины (`rd-mgmt-pair`, текст переносится; «Отказать» был текст-ссылкой).
 6. **Копирайт/выравнивание**: «Нужно оплатить» (красный) → «Не забудьте оплатить взнос» (мягкий accent); `.rd-mgmt-h` padding 15→14px (выравнивание заголовка панели с телом); «@username» и «в клубе с DATE» — на отдельных строках.
 
-> Тесты сессии 5: фронт **192** + build; backend ApplicationServiceTest (+3 cancel) + ClubQuality (полная Flyway-цепочка с V43) зелёные. ⚠️ jOOQ-enum `ApplicationStatus.cancelled` **дописан вручную** в `backend/src/generated/jooq/.../ApplicationStatus.kt` (локальная codegen-БД отстала на V18; `./gradlew generateJooq` против актуальной БД воспроизведёт идентично). Доки: `application.md` (эндпоинт+статус), `my-clubs-unified.md §0`, `member-admin-profile.md`, реестр миграций (**V43 занят `cancelled`; V44 занята русскими COMMENT ON схемы, отложенный S3 → V45**). Коммиты: `11302ed`→`39546ed`.
+> Тесты сессии 5: фронт **192** + build; backend ApplicationServiceTest (+3 cancel) + ClubQuality (полная Flyway-цепочка с V43) зелёные. ⚠️ jOOQ-enum `ApplicationStatus.cancelled` **дописан вручную** в `backend/src/generated/jooq/.../ApplicationStatus.kt` (локальная codegen-БД отстала на V18; `./gradlew generateJooq` против актуальной БД воспроизведёт идентично). Доки: `application.md` (эндпоинт+статус), `my-clubs-unified.md §0`, `member-admin-profile.md`, реестр миграций (**V43 `cancelled`; V44 русские COMMENT ON; V45 abandoned_slot (2026-07-05); отложенный S3 → V46**). Коммиты: `11302ed`→`39546ed`.
 
 ## 1. Что на ветке (коммиты, новые сверху)
 
@@ -58,7 +58,7 @@
 | `36774f4` | кросс-клубовый «Ждут оплаты» + red-dot. |
 | `09926fd`/`5b7099e` | **de-Stars Slice 2** (frontend/backend): орг-гейт доступа, дашборд, P2P-join, ₽ вместо Stars. **V37**. |
 
-**Миграции:** V37–V43 заняты (V37 access-gate, V38 note, V39 СБП-реквизиты, V40 награды, V41 claim, V42 ослабление UNIQUE заявок, **V43 = `application_status` ADD VALUE `cancelled`** — отзыв заявки). **V44 = русские `COMMENT ON` всей legacy-схемы (2026-07-04). Следующая свободная = V45.** *(Отложенный S3 roles, если вернёмся, теперь = V45.)*
+**Миграции:** V37–V43 заняты (V37 access-gate, V38 note, V39 СБП-реквизиты, V40 награды, V41 claim, V42 ослабление UNIQUE заявок, **V43 = `application_status` ADD VALUE `cancelled`** — отзыв заявки). **V44 = русские `COMMENT ON` legacy-схемы (2026-07-04). V45 = `reputation_kind` ADD VALUE `abandoned_slot` (2026-07-05). Следующая свободная = V46.** *(Отложенный S3 roles, если вернёмся, теперь = V46.)*
 
 ## 2. Состояние staging
 
@@ -85,7 +85,7 @@
 
 ## 5. Отложено (беклог, НЕ в этой ветке)
 
-- **S3 роли+права** ⏸️ (PO, YAGNI; OWASP A01). Impact-анализ + матрица готовы → `member-admin-roles-S3-deferred.md`. Миграция была бы **V45** (V43 занята отзывом заявки `cancelled`, V44 — русскими COMMENT ON схемы).
+- **S3 роли+права** ⏸️ (PO, YAGNI; OWASP A01). Impact-анализ + матрица готовы → `member-admin-roles-S3-deferred.md`. Миграция была бы **V46** (V43 `cancelled`, V44 COMMENT ON, V45 `abandoned_slot`).
 - **Анти-скам: петля жалоб/не-доставки** (репутация доставки орга + выпуск из cold-start) — keystone, отдельная фича → `payment-trust-and-antiscam.md`.
 - **TG Premium-бейдж** в карточке доверия — нужно начать сохранять `is_premium` из initData.
 

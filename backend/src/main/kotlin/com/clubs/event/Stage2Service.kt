@@ -7,6 +7,7 @@ import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.enums.Stage_2Vote
 import com.clubs.membership.MembershipRepository
+import com.clubs.reputation.ReputationService
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationEventPublisher
@@ -22,6 +23,10 @@ class Stage2Service(
     private val eventResponseRepository: EventResponseRepository,
     private val membershipRepository: MembershipRepository,
     private val eventPublisher: ApplicationEventPublisher,
+    private val reputationService: ReputationService,
+    // За сколько минут до старта закрывается отказ от УЖЕ ПОДТВЕРЖДЁННОГО места (замене нужно время
+    // подготовиться). Дефолт 240 = 4ч. В минутах, чтобы staging мог ужать для теста. Env: STAGE2_DECLINE_CUTOFF_MINUTES
+    @Value("\${events.stage2-decline-cutoff-minutes:240}") private val declineCutoffMinutes: Long,
     // Упреждение (минут до старта события), при котором предстоящее событие переходит в Stage 2.
     // По умолчанию 24 ч. Единица «минуты» позволяет staging'у укоротить его для сквозного теста
     // двухэтапки: малое значение оставляет короткое окно голосования Этапа 1 до перехода
@@ -181,12 +186,24 @@ class Stage2Service(
         }
 
         val wasConfirmed = response.stage2Vote == Stage_2Vote.confirmed
+        // Порог отказа: от УЖЕ ПОДТВЕРЖДЁННОГО места нельзя отказаться в последние declineCutoffMinutes
+        // до старта — замене не хватит времени подготовиться. Waitlisted выходит из очереди свободно
+        // (он никого не держит), поэтому гейт только на wasConfirmed.
+        if (wasConfirmed && !event.eventDatetime.isAfter(OffsetDateTime.now().plusMinutes(declineCutoffMinutes))) {
+            throw ValidationException(
+                "Отказаться от подтверждённого участия можно не позже чем за ${declineCutoffMinutes / 60} ч до события"
+            )
+        }
         eventResponseRepository.updateStage2Vote(response.id, Stage_2Vote.declined, FinalStatus.declined)
 
         if (wasConfirmed) {
             val firstWaitlisted = eventResponseRepository.findFirstWaitlisted(eventId)
-            firstWaitlisted?.let {
-                eventResponseRepository.updateStage2Vote(it.id, Stage_2Vote.confirmed, FinalStatus.confirmed)
+            if (firstWaitlisted != null) {
+                // Есть замена → первый из очереди сразу занимает освободившийся слот; отказавшийся чист.
+                eventResponseRepository.updateStage2Vote(firstWaitlisted.id, Stage_2Vote.confirmed, FinalStatus.confirmed)
+            } else {
+                // Замены нет → отказавшийся оставил дыру: штраф abandoned_slot (−100) в этой же транзакции.
+                reputationService.penalizeAbandonedSlot(userId, event.clubId, eventId, OffsetDateTime.now())
             }
         }
 

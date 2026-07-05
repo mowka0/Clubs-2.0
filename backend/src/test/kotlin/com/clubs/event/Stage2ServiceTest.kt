@@ -31,7 +31,13 @@ class Stage2ServiceTest {
     private val eventResponseRepository = mockk<EventResponseRepository>(relaxed = true)
     private val membershipRepository = mockk<MembershipRepository>()
     private val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
-    private val service = Stage2Service(eventRepository, eventResponseRepository, membershipRepository, eventPublisher, stage2TriggerMinutesBefore = 1440)
+    private val reputationService = mockk<com.clubs.reputation.ReputationService>(relaxed = true)
+    // declineCutoffMinutes=0 в общем service — большинство decline-тестов не про порог; кейс порога
+    // строит свой инстанс с реальным значением.
+    private val service = Stage2Service(
+        eventRepository, eventResponseRepository, membershipRepository, eventPublisher, reputationService,
+        declineCutoffMinutes = 0, stage2TriggerMinutesBefore = 1440
+    )
 
     private val eventId = UUID.randomUUID()
     private val userId = UUID.randomUUID()
@@ -75,6 +81,41 @@ class Stage2ServiceTest {
         verify(exactly = 1) {
             eventResponseRepository.updateStage2Vote(waitlistedId, Stage_2Vote.confirmed, FinalStatus.confirmed)
         }
+        // Есть замена → отказ бесплатный, штраф abandoned_slot НЕ начисляется.
+        verify(exactly = 0) { reputationService.penalizeAbandonedSlot(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `confirmed decline within the cutoff window is rejected and mutates nothing`() {
+        // Свой инстанс с реальным порогом 4ч; событие через 2ч → отказ подтверждённого запрещён.
+        val strict = Stage2Service(
+            eventRepository, eventResponseRepository, membershipRepository, eventPublisher, reputationService,
+            declineCutoffMinutes = 240, stage2TriggerMinutesBefore = 1440
+        )
+        every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+
+        val ex = assertFailsWith<ValidationException> { strict.declineParticipation(eventId, userId) }
+        assert(ex.message!!.contains("не позже"))
+        verify(exactly = 0) { eventResponseRepository.updateStage2Vote(any(), any(), any()) }
+        verify(exactly = 0) { reputationService.penalizeAbandonedSlot(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `confirmed decline with no waitlist penalizes the abandoned slot`() {
+        every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+        every { eventResponseRepository.findFirstWaitlisted(eventId) } returns null
+        every { eventResponseRepository.countConfirmed(eventId) } returns 0
+
+        service.declineParticipation(eventId, userId)
+
+        // Замены нет → отказавшийся оставил дыру → штраф −100.
+        verify(exactly = 1) { reputationService.penalizeAbandonedSlot(userId, clubId, eventId, any()) }
     }
 
     @Test
