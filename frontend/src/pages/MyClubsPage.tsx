@@ -127,6 +127,9 @@ const PathBackStep: FC<{ value: number; label: string }> = ({ value, label }) =>
 const MyClubCard: FC<MyClubCardProps> = ({
   membership, club, isOrganizer, rep, expanded, onToggle, onOpenClub, onOpenEvent,
 }) => {
+  // Измеренная высота тела для плавного раскрытия: transition по max-height в px
+  // (grid-template-rows 0fr→1fr в WebKit анимировался с просадкой кадров и не клипал паддинг).
+  const bodyRef = useRef<HTMLDivElement>(null);
   const name = club?.name ?? `Клуб ${membership.clubId.slice(0, 8)}…`;
   const category = club?.category ?? 'other';
   const initials = club ? getInitials(club.name) : '·';
@@ -177,10 +180,17 @@ const MyClubCard: FC<MyClubCardProps> = ({
         </div>
         <span className="rd-cc-chev" aria-hidden="true">▾</span>
       </button>
-      {/* Тело всегда в DOM: плавное раскрытие анимируется grid-обёрткой (0fr→1fr);
-          inert выключает фокус/клики внутри свёрнутой карточки. */}
-      <div className="rd-cc-wrap" inert={!expanded}>
-        <div className="rd-cc-body">
+      {/* Тело всегда в DOM: плавное раскрытие — transition по измеренному max-height.
+          Анимируемый элемент БЕЗ паддинга (иначе при border-box паддинг не сжимается и «течёт»
+          строкой наружу); паддинг — на внутреннем .rd-cc-inner. inert выключает фокус внутри
+          свёрнутой карточки. */}
+      <div
+        className="rd-cc-body"
+        ref={bodyRef}
+        inert={!expanded}
+        style={{ maxHeight: expanded ? (bodyRef.current?.scrollHeight ?? 600) : 0 }}
+      >
+        <div className="rd-cc-inner">
           {/* Наши награды в этом клубе — те же чипы, что в ростере участников (R3, косметика). */}
           {(rep?.awards?.length ?? 0) > 0 && (
             <div className="rd-member-awards">
