@@ -177,7 +177,9 @@ const MyClubCard: FC<MyClubCardProps> = ({
         </div>
         <span className="rd-cc-chev" aria-hidden="true">▾</span>
       </button>
-      {expanded && (
+      {/* Тело всегда в DOM: плавное раскрытие анимируется grid-обёрткой (0fr→1fr);
+          inert выключает фокус/клики внутри свёрнутой карточки. */}
+      <div className="rd-cc-wrap" inert={!expanded}>
         <div className="rd-cc-body">
           {/* Наши награды в этом клубе — те же чипы, что в ростере участников (R3, косметика). */}
           {(rep?.awards?.length ?? 0) > 0 && (
@@ -234,7 +236,7 @@ const MyClubCard: FC<MyClubCardProps> = ({
             <span className="rd-cc-go">›</span>
           </button>
         </div>
-      )}
+      </div>
     </div>
   );
 };

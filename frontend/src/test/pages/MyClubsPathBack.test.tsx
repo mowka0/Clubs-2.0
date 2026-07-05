@@ -116,9 +116,11 @@ describe('MyClubsPage — раскрывающаяся карточка клуб
     const head = await screen.findByRole('button', { name: /Партия/ });
     expect(head).toHaveTextContent('60');
     expect(head).toHaveTextContent('надёжность');
-    expect(screen.queryByText('Путь наверх')).not.toBeInTheDocument();
+    // Тело теперь всегда в DOM (плавная анимация) — свёрнутость проверяем по aria-expanded.
+    expect(head).toHaveAttribute('aria-expanded', 'false');
 
     await user.click(head);
+    expect(head).toHaveAttribute('aria-expanded', 'true');
 
     // Раскрыто: метрики, траектория 60 → 66 → 70, подпись зоны, встреча, «Открыть клуб».
     expect(screen.getByText('Путь наверх')).toBeInTheDocument();
@@ -133,7 +135,7 @@ describe('MyClubsPage — раскрывающаяся карточка клуб
 
     // Повторный тап сворачивает.
     await user.click(head);
-    expect(screen.queryByText('Путь наверх')).not.toBeInTheDocument();
+    expect(head).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('здоровый Trust (82, projected null): раскрытый вид БЕЗ «пути наверх», метрики на месте', async () => {

@@ -1339,7 +1339,15 @@
 .rd-cc-open .rd-cc-chev { transform: rotate(180deg); color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .rd-cc-chev { transition: none; } }
 .rd-cc + .rd-cc { border-top: 1px solid var(--hairline); }
-.rd-cc-body { border-top: 1px solid var(--hairline); padding: 12px; display: grid; gap: 12px; }
+/* Плавное раскрытие: grid-обёртка анимирует высоту auto через 0fr→1fr (max-height-хак не нужен).
+   overflow:hidden на обёртке клипует и рамку тела, пока карточка свёрнута. */
+.rd-cc-wrap {
+  display: grid; grid-template-rows: 0fr; overflow: hidden;
+  transition: grid-template-rows 0.3s ease;
+}
+.rd-cc-open .rd-cc-wrap { grid-template-rows: 1fr; }
+@media (prefers-reduced-motion: reduce) { .rd-cc-wrap { transition: none; } }
+.rd-cc-body { min-height: 0; border-top: 1px solid var(--hairline); padding: 12px; display: grid; gap: 12px; }
 /* Строка метрик («обещания 71% · 9 подтв. · 7 посещ.») и пояснения новичку/организатору. */
 .rd-cc-line { font-size: 11px; color: var(--text-faint); line-height: 1.45; }
 /* Блок «Путь наверх» (вариант A): траектория из трёх колец. */
