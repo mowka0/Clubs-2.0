@@ -229,7 +229,6 @@ class Stage2ServiceTest {
         val event = event(eventDatetime = OffsetDateTime.now().plusDays(1), status = EventStatus.stage_1)
         every { eventRepository.findEventsToTriggerStage2(any()) } returns listOf(event)
         justRun { eventRepository.transitionToStage2(eventId) }
-        every { eventResponseRepository.findGoingByEventOrderByTimestamp(eventId) } returns emptyList()
 
         service.triggerStage2ForReadyEvents()
 
@@ -244,7 +243,6 @@ class Stage2ServiceTest {
         val event = event(eventDatetime = OffsetDateTime.now().minusMinutes(2), status = EventStatus.stage_1)
         every { eventRepository.findEventsToTriggerStage2(any()) } returns listOf(event)
         justRun { eventRepository.transitionToStage2(eventId) }
-        every { eventResponseRepository.findGoingByEventOrderByTimestamp(eventId) } returns emptyList()
 
         service.triggerStage2ForReadyEvents()
 
@@ -253,23 +251,17 @@ class Stage2ServiceTest {
     }
 
     @Test
-    fun `stage 2 trigger publishes after the waitlist overflow is assigned`() {
-        // The AFTER_COMMIT listener reads voter rows fresh — but within the transaction the
-        // publication must follow the overflow assignment so a failed assignment also skips the DM.
+    fun `stage 2 trigger does not pre-assign any waitlist — places are raced on stage 2`() {
+        // Этап 1 больше не резервирует места и не формирует очередь: при старте Этапа 2 никто не
+        // помечается waitlisted, все места разыгрываются подтверждениями на Этапе 2 (гонка за места).
         val event = event(eventDatetime = OffsetDateTime.now().plusDays(1), status = EventStatus.stage_1)
-        val overflow = response(stage1 = Stage_1Vote.going, stage2 = null)
         every { eventRepository.findEventsToTriggerStage2(any()) } returns listOf(event)
         justRun { eventRepository.transitionToStage2(eventId) }
-        // participantLimit = 10 → 11 going voters, the last one overflows to waitlist.
-        every { eventResponseRepository.findGoingByEventOrderByTimestamp(eventId) } returns
-            List(10) { response(stage1 = Stage_1Vote.going, stage2 = null) } + overflow
 
         service.triggerStage2ForReadyEvents()
 
-        verifyOrder {
-            eventResponseRepository.updateStage2Vote(overflow.id, Stage_2Vote.waitlisted, FinalStatus.waitlisted)
-            eventPublisher.publishEvent(Stage2StartedEvent(event))
-        }
+        verify(exactly = 0) { eventResponseRepository.updateStage2Vote(any(), any(), any()) }
+        verify(exactly = 1) { eventPublisher.publishEvent(Stage2StartedEvent(event)) }
     }
 
     @Test
@@ -311,6 +303,25 @@ class Stage2ServiceTest {
             eventResponseRepository.findByEventAndUser(eventId, userId)
             eventResponseRepository.findFirstWaitlisted(eventId)
         }
+    }
+
+    @Test
+    fun `decline promotes first waitlisted and publishes WaitlistPromotedEvent (no penalty)`() {
+        // Пункт 3: освободился слот, замена есть → повышаем первого из очереди И шлём ему DM
+        // (WaitlistPromotedEvent). Штраф abandoned_slot при наличии замены не начисляется.
+        val promotedUserId = UUID.randomUUID()
+        every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+        every { eventResponseRepository.findFirstWaitlisted(eventId) } returns
+            response(stage1 = null, stage2 = Stage_2Vote.waitlisted).copy(userId = promotedUserId)
+        every { eventResponseRepository.countConfirmed(eventId) } returns 1
+
+        service.declineParticipation(eventId, userId)
+
+        verify(exactly = 1) { eventPublisher.publishEvent(WaitlistPromotedEvent(eventId, promotedUserId)) }
+        verify(exactly = 0) { reputationService.penalizeAbandonedSlot(any(), any(), any(), any()) }
     }
 
     @Test

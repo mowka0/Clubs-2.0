@@ -51,13 +51,12 @@ class JooqEventResponseRepository(
     }
 
     override fun createLateStage2Entry(eventId: UUID, userId: UUID): EventResponse {
-        val now = OffsetDateTime.now()
         val record = dsl.insertInto(EVENT_RESPONSES)
             .set(EVENT_RESPONSES.EVENT_ID, eventId)
             .set(EVENT_RESPONSES.USER_ID, userId)
-            // stage_1_vote остаётся NULL — участник не голосовал на Этапе 1. stage_1_timestamp = now:
-            // ключ FIFO ставит его в КОНЕЦ waitlist (метки голосовавших на Этапе 1 — из прошлого).
-            .set(EVENT_RESPONSES.STAGE_1_TIMESTAMP, now)
+            // stage_1_vote / stage_1_timestamp остаются NULL — участник не голосовал на Этапе 1.
+            // Позицию в очереди задаёт stage_2_timestamp, который проставит следующий за этой вставкой
+            // updateStage2Vote (в той же транзакции под slot-lock), поэтому метка Этапа 1 не нужна.
             .returning()
             .fetchOne()!!
         return mapper.toDomain(record)
@@ -100,7 +99,10 @@ class JooqEventResponseRepository(
                 EVENT_RESPONSES.EVENT_ID.eq(eventId)
                     .and(EVENT_RESPONSES.STAGE_2_VOTE.eq(Stage_2Vote.waitlisted))
             )
-            .orderBy(EVENT_RESPONSES.STAGE_1_TIMESTAMP.asc())
+            // Очередь — по времени вставания в лист ожидания на ЭТАПЕ 2 (stage_2_timestamp
+            // проставляется при updateStage2Vote(waitlisted)), НЕ по голосу Этапа 1. Кто раньше
+            // подтвердил при полном зале — тот выше. Waitlisted всегда имеет stage_2_timestamp.
+            .orderBy(EVENT_RESPONSES.STAGE_2_TIMESTAMP.asc())
             .limit(1)
             .fetchOne()
             ?.let(mapper::toDomain)
@@ -116,26 +118,6 @@ class JooqEventResponseRepository(
             .fetchOne()!!
         return mapper.toDomain(record)
     }
-
-    override fun findGoingByEventOrderByTimestamp(eventId: UUID): List<EventResponse> =
-        dsl.selectFrom(EVENT_RESPONSES)
-            .where(
-                EVENT_RESPONSES.EVENT_ID.eq(eventId)
-                    .and(EVENT_RESPONSES.STAGE_1_VOTE.eq(Stage_1Vote.going))
-            )
-            .orderBy(EVENT_RESPONSES.STAGE_1_TIMESTAMP.asc())
-            .fetch()
-            .map(mapper::toDomain)
-
-    override fun findMaybeByEventOrderByTimestamp(eventId: UUID): List<EventResponse> =
-        dsl.selectFrom(EVENT_RESPONSES)
-            .where(
-                EVENT_RESPONSES.EVENT_ID.eq(eventId)
-                    .and(EVENT_RESPONSES.STAGE_1_VOTE.eq(Stage_1Vote.maybe))
-            )
-            .orderBy(EVENT_RESPONSES.STAGE_1_TIMESTAMP.asc())
-            .fetch()
-            .map(mapper::toDomain)
 
     override fun expireUnconfirmedForStartedEvents(now: OffsetDateTime): Int {
         // Начавшиеся события с запущенным stage-2, не отменённые. Независимость от статуса —
@@ -180,10 +162,11 @@ class JooqEventResponseRepository(
                     // (у не голосовавших stage_1_vote=NULL, но появляется final_status — их нельзя терять).
                     .and(EVENT_RESPONSES.STAGE_1_VOTE.isNotNull.or(EVENT_RESPONSES.FINAL_STATUS.isNotNull))
             )
-            // Сортировка по stage_1_timestamp ASC — тот же ключ, что и у продвижения waitlist
-            // (findFirstWaitlisted), поэтому лист ожидания на странице события идёт РОВНО в порядке
-            // приоритета (кто раньше выразил намерение — выше; поздние с меткой now — в конце).
-            .orderBy(EVENT_RESPONSES.STAGE_1_TIMESTAMP.asc())
+            // Первичный ключ — stage_2_timestamp ASC (NULLS LAST): лист ожидания на странице события
+            // идёт РОВНО в порядке приоритета продвижения (findFirstWaitlisted, тоже по stage_2). Для
+            // предварительного списка Этапа 1 (действий Этапа 2 ещё нет, stage_2_timestamp=NULL у всех)
+            // NULLS LAST + вторичный stage_1_timestamp сохраняет порядок «кто раньше откликнулся».
+            .orderBy(EVENT_RESPONSES.STAGE_2_TIMESTAMP.asc().nullsLast(), EVENT_RESPONSES.STAGE_1_TIMESTAMP.asc())
             .fetch { r ->
                 EventResponderInfo(
                     userId = r.get(EVENT_RESPONSES.USER_ID)!!,
@@ -362,10 +345,10 @@ class JooqEventResponseRepository(
             )
             .fetch { r -> EventObligation(r.get(EVENTS.ID)!!, r.get(EVENTS.EVENT_DATETIME)!!) }
 
-    override fun promoteFirstWaitlisted(eventId: UUID): Boolean {
-        val first = findFirstWaitlisted(eventId) ?: return false
+    override fun promoteFirstWaitlisted(eventId: UUID): UUID? {
+        val first = findFirstWaitlisted(eventId) ?: return null
         updateStage2Vote(first.id, Stage_2Vote.confirmed, FinalStatus.confirmed)
-        return true
+        return first.userId
     }
 
     override fun deleteByUserAndClubAndActiveEvents(userId: UUID, clubId: UUID): Int {

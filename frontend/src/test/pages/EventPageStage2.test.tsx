@@ -155,7 +155,7 @@ describe('EventPage — Stage 2 window (Bug B) + expired status', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Отказаться' }));
     expect(screen.getByText(/Освободить место/)).toBeInTheDocument();
-    expect(screen.getByText(/снизит вашу репутацию/)).toBeInTheDocument();
+    expect(screen.getByText(/спишется 100 очков/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Освободить' })).toBeInTheDocument();
   });
 
@@ -169,7 +169,7 @@ describe('EventPage — Stage 2 window (Bug B) + expired status', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Отказаться' }));
     expect(screen.getByText(/займёт первый из очереди/)).toBeInTheDocument();
-    expect(screen.queryByText(/снизит вашу репутацию/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/спишется 100 очков/)).not.toBeInTheDocument();
   });
 
   it('подтверждённый: за <4ч до старта кнопки «Отказаться» нет', async () => {
@@ -294,5 +294,16 @@ describe('EventPage — отмена события (F5-14)', () => {
 
     expect(await screen.findByText('Событие')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Отменить событие' })).not.toBeInTheDocument();
+  });
+
+  it('Этап 1 (upcoming): секция откликов озаглавлена «Предварительные голоса», не «Кто идёт»', async () => {
+    const responders: EventResponderDto[] = [
+      { userId: 'g1', firstName: 'Гость', lastName: null, avatarUrl: null, status: 'going', attendance: null },
+    ];
+    mockEndpoints({ event: stage2Event({ status: 'upcoming', eventDatetime: FUTURE }), myVote: 'going', responders });
+    renderEventPage();
+
+    expect(await screen.findByText(/Предварительные голоса/)).toBeInTheDocument();
+    expect(screen.queryByText(/Кто идёт/)).not.toBeInTheDocument();
   });
 });

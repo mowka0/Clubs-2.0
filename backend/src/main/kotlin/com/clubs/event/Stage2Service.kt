@@ -57,14 +57,12 @@ class Stage2Service(
     private fun triggerStage2(event: Event) {
         eventRepository.transitionToStage2(event.id)
 
-        // Первые N проголосовавших going (по stage_1_timestamp) сохраняют stage_2_vote = null —
-        // они подтверждают явно. Остальные сразу становятся waitlisted.
-        val goingVoters = eventResponseRepository.findGoingByEventOrderByTimestamp(event.id)
-        goingVoters.forEachIndexed { index, response ->
-            if (index >= event.participantLimit) {
-                eventResponseRepository.updateStage2Vote(response.id, Stage_2Vote.waitlisted, FinalStatus.waitlisted)
-            }
-        }
+        // Этап 1 — только предварительный визуал: он НЕ резервирует места и НЕ задаёт очередь.
+        // При старте Этапа 2 никто не помечается waitlisted заранее — все места разыгрываются
+        // заново «гонкой за места»: кто первым нажмёт «Подтвердить», тот в зале (confirmParticipation:
+        // confirmedCount < limit → confirmed, иначе waitlisted). Очередь листа ожидания и её
+        // продвижение упорядочены по stage_2_timestamp (времени подтверждения на Этапе 2), а не по
+        // голосу Этапа 1. См. events.md § «Гонка за места».
 
         // S2T-2: просим проголосовавших going/maybe подтвердить участие. Без этого DM никто не
         // узнает, что начался Stage 2, никто не подтвердит, и все автоматически истекут к старту
@@ -201,6 +199,9 @@ class Stage2Service(
             if (firstWaitlisted != null) {
                 // Есть замена → первый из очереди сразу занимает освободившийся слот; отказавшийся чист.
                 eventResponseRepository.updateStage2Vote(firstWaitlisted.id, Stage_2Vote.confirmed, FinalStatus.confirmed)
+                // DM повышенному: место его, с кнопкой на событие. AFTER_COMMIT (WaitlistPromotedListener) —
+                // @Async DM должен читать уже закоммиченное повышение. Зеркалит Stage2StartedEvent.
+                eventPublisher.publishEvent(WaitlistPromotedEvent(eventId, firstWaitlisted.userId))
             } else {
                 // Замены нет → отказавшийся оставил дыру: штраф abandoned_slot (−100) в этой же транзакции.
                 reputationService.penalizeAbandonedSlot(userId, event.clubId, eventId, OffsetDateTime.now())

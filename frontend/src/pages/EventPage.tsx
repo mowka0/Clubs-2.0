@@ -473,10 +473,10 @@ export const EventPage: FC = () => {
       </>
       )}
 
-      {/* Кто идёт. Этап 1: все откликнувшиеся (интерес). Этап 2+: только подтверждённый состав. */}
+      {/* Этап 1: предварительные голоса (интерес, мест не резервируют). Этап 2+: подтверждённый состав. */}
       {!isCancelled && comingList.length > 0 && (
         <>
-          <div className="rd-section-sub-h">Кто идёт <span className="rd-count">· {comingList.length}</span></div>
+          <div className="rd-section-sub-h">{finalComposition ? 'Кто идёт' : 'Предварительные голоса'} <span className="rd-count">· {comingList.length}</span></div>
           <div className="rd-voters">
             {comingList.map((r) => {
               const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
@@ -779,7 +779,7 @@ export const EventPage: FC = () => {
                   Освободить место?{' '}
                   {waitlistedCount > 0
                     ? 'Его сразу займёт первый из очереди.'
-                    : 'Замены пока нет — отказ снизит вашу репутацию.'}
+                    : 'Замены пока нет — с вашей репутации спишется 100 очков.'}
                 </div>
                 <div className="rd-org-gate-acts">
                   <button type="button" className="rd-btn-outline" disabled={voting} onClick={() => setConfirmingDecline(false)}>

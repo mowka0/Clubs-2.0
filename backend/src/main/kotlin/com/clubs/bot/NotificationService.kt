@@ -79,6 +79,26 @@ class NotificationService(
         }
     }
 
+    /**
+     * DM участнику, автоматически повышённому из листа ожидания в confirmed (освободился слот —
+     * подтверждённый отказался или вышел из клуба). Кнопка ведёт на страницу события. Best-effort
+     * @Async: telegram id резолвим из строки ответа участника; если её/id нет — тихо пропускаем
+     * (повышение уже закоммичено, DM не критичен). Зеркалит sendStage2Started.
+     */
+    @Async
+    fun sendWaitlistPromoted(event: Event, promotedUserId: UUID) {
+        val telegramId = eventResponseRepository
+            .findTelegramIdsByEventAndUserIds(event.id, listOf(promotedUserId))
+            .firstOrNull()
+        if (telegramId == null) {
+            log.warn("Waitlist-promoted DM SKIPPED — no telegram id for userId={} eventId={}", promotedUserId, event.id)
+            return
+        }
+        val text = "🎉 Освободилось место!\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
+            "Вы перешли из листа ожидания — место ваше. Откройте событие:"
+        sendDm(telegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Открыть событие")
+    }
+
 
     /**
      * F5-14: уведомляет ВСЕХ участников клуба с доступом об отмене события, с опциональной

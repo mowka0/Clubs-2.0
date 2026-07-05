@@ -20,8 +20,9 @@
 
 **`cfaa1b1` — Этап 2 открыт всем участникам клуба**
 - `Stage2Service.confirmParticipation`: снят гард «нужен голос going/maybe». `not_going` подтверждается;
-  не голосовавший → `createLateStage2Entry` создаёт строку (`stage_1_vote=NULL`, `stage_1_timestamp=now`
-  → в конец FIFO). `isMember` (доступ) остаётся.
+  не голосовавший → `createLateStage2Entry` создаёт строку. `isMember` (доступ) остаётся.
+  > ЗАМЕЩЕНО (2026-07-05): `createLateStage2Entry` больше НЕ ставит `stage_1_timestamp=now` — очередь
+  > теперь по `stage_2_timestamp` (см. раздел «Модель мест по Этапу 2» ниже).
 - DM о старте Этапа 2 → `findStage2InviteTelegramIds`: участники с доступом, у кого `stage_1_vote IS
   DISTINCT FROM 'not_going'` (going/maybe/не ответившие). Строится от memberships. `not_going` DM не шлём.
 - Фронт `EventPage`: «Подтвердить участие» показывается всем, кроме терминальных Этапа-2; «Отказаться» —
@@ -30,8 +31,23 @@
 **`457dd18` — DM об отмене всем + лист ожидания на странице**
 - `sendEventCancelled` → `findMemberTelegramIds` (ВСЕ участники клуба с доступом), не только going/maybe.
 - `findRespondersWithUsers`: фильтр `(stage_1_vote IS NOT NULL OR final_status IS NOT NULL)` (не терять
-  поздних участников) + `ORDER BY stage_1_timestamp ASC` (= ключ продвижения очереди).
+  поздних участников) + `ORDER BY stage_1_timestamp ASC`.
+  > ЗАМЕЩЕНО (2026-07-05): сортировка теперь `stage_2_timestamp ASC NULLS LAST, stage_1_timestamp ASC`
+  > (ключ продвижения очереди = Этап 2). См. «Модель мест по Этапу 2» ниже.
 - Фронт: секция «Лист ожидания» под «Кто идёт» — нумерованный список в порядке приоритета (`.rd-wl-*`).
+
+**Сессия 2026-07-05 — модель мест по Этапу 2 + DM повышения + UI-тексты (эта ветка, поверх 3 коммитов)**
+- **Гонка за места:** `triggerStage2` больше НЕ предраспределяет waitlist по голосам Этапа 1 — при старте
+  Этапа 2 все `going`/`maybe` остаются pending, места разыгрываются подтверждениями. Этап 1 = только
+  предварительный визуал (и фильтр `not_going` из DM). Очередь и её продвижение (`findFirstWaitlisted`,
+  `findRespondersWithUsers`) — по `stage_2_timestamp`. Удалены мёртвые `findGoing/findMaybeByEventOrderByTimestamp`.
+- **DM повышения:** `WaitlistPromotedEvent` (eventId + userId) → AFTER_COMMIT `WaitlistPromotedListener` →
+  `NotificationService.sendWaitlistPromoted` (кнопка на `/events/{id}`). Публикуется в ОБОИХ местах
+  авто-повышения: `Stage2Service.declineParticipation` и `MembershipService` (выход из клуба;
+  `promoteFirstWaitlisted` теперь возвращает `UUID?` повышённого). Best-effort @Async, зеркалит `sendStage2Started`.
+- **UI:** заголовок откликов на Этапе 1 → «Предварительные голоса» (Этап 2+ остаётся «Кто идёт»);
+  инлайн-подтверждение отказа без замены явно называет штраф «спишется 100 очков».
+- Миграция НЕ понадобилась — колонка `stage_2_timestamp` уже была в схеме (V6) и проставлялась `updateStage2Vote`.
 
 **`7de1e55` — отказ подтверждённого + модель accountability** (самый крупный, трогает репутацию)
 - `declineParticipation`: подтверждённый может отказаться → освобождает слот. Есть замена → первый из
@@ -65,7 +81,7 @@ PO спросил, не слишком ли жёстко (форс-мажор з
 ## Модель целиком (для контекста)
 | Ситуация подтверждённого | Итог |
 |---|---|
-| Отказ ≥4ч, есть замена | №1 из очереди → confirmed; отказавшийся 0 |
+| Отказ ≥4ч, есть замена | №1 из очереди (по `stage_2_timestamp`) → confirmed + DM «место освободилось»; отказавшийся 0 |
 | Отказ ≥4ч, замены нет | слот открыт; отказавшийся −100 (`abandoned_slot`) |
 | Отказ <4ч | ❌ нельзя (сейчас); приходит или неявка −200 ← ОТКРЫТЫЙ ВОПРОС |
 | Подтвердился, не пришёл | −200 (`no_show`/`spectator`), для ЛЮБОГО голоса Этапа 1 |

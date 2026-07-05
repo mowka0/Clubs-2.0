@@ -38,10 +38,6 @@ interface EventResponseRepository {
 
     fun updateStage2Vote(id: UUID, vote: Stage_2Vote, finalStatus: FinalStatus): EventResponse
 
-    fun findGoingByEventOrderByTimestamp(eventId: UUID): List<EventResponse>
-
-    fun findMaybeByEventOrderByTimestamp(eventId: UUID): List<EventResponse>
-
     /**
      * Feature A авто-истечение: для каждого начавшегося, запустившего Этап 2, неотменённого события
      * переводит going/maybe-ответы, которые так и не были подтверждены (stage_2_vote IS NULL), в
@@ -119,12 +115,13 @@ interface EventResponseRepository {
     fun findConfirmedActiveEventObligations(userId: UUID, clubId: UUID): List<EventObligation>
 
     /**
-     * Продвигает самый ранний в очереди waitlisted-ответ события [eventId] (по времени голоса
-     * Этапа 1) в confirmed, занимая слот, который только что освободил ушедший confirmed-участник.
-     * Возвращает true, если кто-то был продвинут. Вызывающий ОБЯЗАН держать [lockEventSlots], чтобы
-     * это никогда не гонялось с конкурентным confirm/decline, продвигающим ту же строку.
+     * Продвигает самый ранний в очереди waitlisted-ответ события [eventId] (по времени вставания в
+     * лист ожидания на Этапе 2, stage_2_timestamp) в confirmed, занимая слот, который только что
+     * освободил ушедший confirmed-участник. Возвращает id продвинутого пользователя, либо null, если
+     * очередь пуста. Вызывающий ОБЯЗАН держать [lockEventSlots], чтобы это никогда не гонялось с
+     * конкурентным confirm/decline, продвигающим ту же строку.
      */
-    fun promoteFirstWaitlisted(eventId: UUID): Boolean
+    fun promoteFirstWaitlisted(eventId: UUID): UUID?
 
     /**
      * Каскадное удаление при выходе из клуба: убирает ответы [userId] на все активные, ещё не

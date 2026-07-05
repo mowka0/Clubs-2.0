@@ -29,6 +29,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
   - `sendAccessFrozenDM(memberTelegramId, clubName, clubId)` — member-DM, когда организатор закрыл доступ («Закрыть доступ» → frozen): deep-link на клуб, кнопка «Оплатить взнос» `[подключено: AccessGateService.freezeAccess, сессия 4]`
   - `sendEventCreated(event)` — анонс нового события участникам клуба `[подключено: EventBotNotifier @TransactionalEventListener ← EventService.createEvent, GAP-003 ✅ / GAP-010 ✅]`
   - `sendStage2Started(event)` — DM «Этап 2 начался — подтвердите участие» going/maybe-воутерам `[подключено: Stage2StartedListener @TransactionalEventListener ← Stage2Service.triggerStage2, GAP-004 ✅ / GAP-009 ✅ / S2T-2 ✅, 2026-06-13]`
+  - `sendWaitlistPromoted(event, promotedUserId)` — DM «🎉 Освободилось место» повышённому из листа ожидания, кнопка на `/events/{id}` `[подключено: WaitlistPromotedListener @TransactionalEventListener ← Stage2Service.declineParticipation И MembershipService (выход из клуба), 2026-07-05]`
   - `sendAttendanceMarked(eventId, newlyAbsentUserIds)` — DM участникам, **впервые** отмеченным `absent` в этой отметке (F5-15.2; раньше — всем `attendance=absent`) `[подключено: AttendanceMarkedListener @TransactionalEventListener ← AttendanceService.markAttendance, GAP-005 ✅ / ATT-3 ✅, Блок 1 2026-06-07]`
   - `sendConfirmReminder(event)` / `sendAttendanceReminder(event, organizerTelegramId)` — poll-напоминания «подтверди участие» (за 2ч) / «отметь явку» (через 24ч), зовутся из `EventReminderScheduler` (Блок 1; детали и дедуп-флаги — `docs/modules/events.md` § «Напоминания событий»)
   - `sendAttendanceDisputed(event, organizerTelegramId, disputerName)` — DM организатору при споре отметки (`AttendanceDisputedListener`, Блок 1, см. `events.md` § ATT-3)
@@ -208,7 +209,22 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 Подтвердите или откажитесь от участия в приложении:
 ```
 **Inline-кнопка:** «✅ Подтвердить участие» с `WebAppInfo`, deep-link на `webAppPath=/events/{eventId}` — открывает страницу события (кнопки этапа 2) напрямую.
-**Подключение:** `Stage2Service.triggerStage2` (в транзакции scheduler'а, после `transitionToStage2` и назначения overflow → waitlist) публикует `Stage2StartedEvent` (`event/Stage2StartedEvent.kt`, несёт snapshot domain-`Event` — DM нужны title/datetime); `bot/Stage2StartedListener.onStage2Started` (`@TransactionalEventListener`, фаза AFTER_COMMIT) вызывает `sendStage2Started` (`@Async`). AFTER_COMMIT обязателен: `@Async`-DM читает строки воутеров на отдельном соединении, которое видит переход и waitlist-назначения только после коммита. Best-effort: ошибки доставки гасятся внутри `sendDm` (`WARN`), сбой Telegram не валит триггер этапа 2. Пустой список получателей → `INFO` + return. Та же схема, что у `EventBotNotifier` (GAP-003) и `AttendanceMarkedListener` (ATT-3).
+**Подключение:** `Stage2Service.triggerStage2` (в транзакции scheduler'а, после `transitionToStage2`) публикует `Stage2StartedEvent` (`event/Stage2StartedEvent.kt`, несёт snapshot domain-`Event` — DM нужны title/datetime); `bot/Stage2StartedListener.onStage2Started` (`@TransactionalEventListener`, фаза AFTER_COMMIT) вызывает `sendStage2Started` (`@Async`). AFTER_COMMIT обязателен: `@Async`-DM читает строки воутеров на отдельном соединении, которое видит переход только после коммита. Best-effort: ошибки доставки гасятся внутри `sendDm` (`WARN`), сбой Telegram не валит триггер этапа 2. Пустой список получателей → `INFO` + return. Та же схема, что у `EventBotNotifier` (GAP-003) и `AttendanceMarkedListener` (ATT-3). NB (2026-07-05): переход больше НЕ назначает overflow → waitlist — места разыгрываются гонкой подтверждений на Этапе 2 (см. `events.md` § «Логика перехода в Stage 2»).
+
+### `sendWaitlistPromoted(event: Event, promotedUserId: UUID)` — **подключено** `[2026-07-05]`
+
+**Назначение (по PRD §4.4.2 шаг 4):** когда участник автоматически повышен из листа ожидания в `confirmed` (освободился слот), сообщить ему «место ваше» с кнопкой на событие.
+**Получатель:** `eventResponseRepository.findTelegramIdsByEventAndUserIds(event.id, [promotedUserId])` — telegram id повышённого из его строки ответа; пусто → `WARN` + return (best-effort).
+**Текст** (`NotificationService.kt`):
+```
+🎉 Освободилось место!
+
+📌 {title} — {eventDatetime, dd.MM.yyyy HH:mm}
+
+Вы перешли из листа ожидания — место ваше. Откройте событие:
+```
+**Inline-кнопка:** «Открыть событие» с `WebAppInfo`, deep-link на `webAppPath=/events/{eventId}`.
+**Подключение:** публикуется `WaitlistPromotedEvent(eventId, promotedUserId)` в ДВУХ местах авто-повышения: `Stage2Service.declineParticipation` (отказ подтверждённого освободил слот) и `MembershipService` (выход подтверждённого из клуба; `promoteFirstWaitlisted` возвращает `UUID?` повышённого). `bot/WaitlistPromotedListener` (`@TransactionalEventListener`, AFTER_COMMIT) дозапрашивает событие по `eventId` и зовёт `@Async sendWaitlistPromoted`. AFTER_COMMIT обязателен: DM читает закоммиченное повышение. Best-effort, зеркалит `sendStage2Started`.
 
 ### `sendAttendanceMarked(eventId: UUID, newlyAbsentUserIds: List<UUID>)` — **подключено** `[GAP-005 ✅, ATT-3 ✅]`
 

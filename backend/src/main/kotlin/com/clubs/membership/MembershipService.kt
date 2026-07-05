@@ -7,6 +7,7 @@ import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.event.EventResponseRepository
+import com.clubs.event.WaitlistPromotedEvent
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.reputation.ExitObligation
@@ -15,6 +16,7 @@ import com.clubs.reputation.TrustService
 import com.clubs.skladchina.SkladchinaRepository
 import java.time.OffsetDateTime
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -29,7 +31,8 @@ class MembershipService(
     private val skladchinaRepository: SkladchinaRepository,
     private val applicationRepository: ApplicationRepository,
     private val trustService: TrustService,
-    private val reputationService: ReputationService
+    private val reputationService: ReputationService,
+    private val eventPublisher: ApplicationEventPublisher
 ) {
 
     private val log = LoggerFactory.getLogger(MembershipService::class.java)
@@ -188,8 +191,17 @@ class MembershipService(
 
         val cascadedSkladchinas = skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(userId, clubId)
         val cascadedEventResponses = eventResponseRepository.deleteByUserAndClubAndActiveEvents(userId, clubId)
-        // Каждый освободившийся подтверждённый слот продвигает следующего из waitlist, чтобы выход не сокращал ростер.
-        val promotedWaitlist = freedEventIds.count { eventResponseRepository.promoteFirstWaitlisted(it) }
+        // Каждый освободившийся подтверждённый слот продвигает следующего из waitlist, чтобы выход не
+        // сокращал ростер. Повышённому шлём DM (WaitlistPromotedEvent → AFTER_COMMIT), как и при отказе.
+        val promotedWaitlist = freedEventIds.count { eventId ->
+            val promotedUserId = eventResponseRepository.promoteFirstWaitlisted(eventId)
+            if (promotedUserId != null) {
+                eventPublisher.publishEvent(WaitlistPromotedEvent(eventId, promotedUserId))
+                true
+            } else {
+                false
+            }
+        }
         val cascadedApplications = applicationRepository.deleteActiveByUserAndClub(userId, clubId)
 
         membershipRepository.cancel(membership.id)
