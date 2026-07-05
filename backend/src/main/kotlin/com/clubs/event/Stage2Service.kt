@@ -3,6 +3,7 @@ package com.clubs.event
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
+import com.clubs.common.util.DurationFormatter
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.enums.Stage_2Vote
@@ -189,7 +190,8 @@ class Stage2Service(
         // (он никого не держит), поэтому гейт только на wasConfirmed.
         if (wasConfirmed && !event.eventDatetime.isAfter(OffsetDateTime.now().plusMinutes(declineCutoffMinutes))) {
             throw ValidationException(
-                "Отказаться от подтверждённого участия можно не позже чем за ${declineCutoffMinutes / 60} ч до события"
+                "Отказаться от подтверждённого участия можно не позже чем за " +
+                    "${DurationFormatter.formatMinutes(declineCutoffMinutes)} до события"
             )
         }
         eventResponseRepository.updateStage2Vote(response.id, Stage_2Vote.declined, FinalStatus.declined)
