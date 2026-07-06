@@ -14,6 +14,7 @@ import {
   useUpdateMemberNoteMutation,
 } from '../../queries/members';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useAuthStore } from '../../store/useAuthStore';
 import { ApiError } from '../../api/apiClient';
 import { pluralRu } from '../../utils/formatters';
 import { DonutRing } from '../reputation/DonutRing';
@@ -601,6 +602,22 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
   const profile = profileQuery.data;
   const loading = profileQuery.isPending;
 
+  // Смотрит ли пользователь свою же карточку. trust=null у бэкенда неотличим «нет истории» ↔ «скрыто
+  // асимметрией» (#94): чужому фолбэк «Новичок» не показываем, себе и организатору — можно (у них null честен).
+  const viewerId = useAuthStore((s) => s.user?.id);
+  const isSelf = viewerId != null && viewerId === member.userId;
+  // Секцию «Репутация в этом клубе» показываем, если: реальный скор пришёл (в списочной строке ИЛИ в
+  // загруженном профиле — бэкенд уже решил, что зритель вправе его видеть → рисуем кольца) ЛИБО это карточка
+  // организатора (объяснялка ролевая, не скор — видна всем) ЛИБО смотрящий вправе видеть фолбэк-статус
+  // (организатор / сам о себе → null покажется как «Новичок»). Чужому участнику со скрытым скором (trust=null,
+  // асимметрия #94) секцию не рендерим вовсе — вместо ложного «Новичок» просто ничего.
+  const showReputationSection =
+    member.trust !== null
+    || profile?.trust != null
+    || member.role === 'organizer'
+    || isOrganizer
+    || isSelf;
+
   // Админ-секция: организатор управляет любым участником-не-организатором (заметка + награды работают
   // и в бесплатных клубах, S2). Никогда — своей строкой: бэкенд отклоняет управление организатором.
   const isManageable = isOrganizer && member.role !== 'organizer';
@@ -712,25 +729,27 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
             </div>
           ) : null}
 
-          {/* Репутация в этом клубе */}
-          <div>
-            <div className="rd-section-sub-h" style={{ margin: '0 0 8px' }}>Репутация в этом клубе</div>
-            {loading ? (
-              <div className="rd-spinner-row" style={{ padding: '8px 0' }}><Spinner size="s" /></div>
-            ) : profile && profile.trust !== null ? (
-              <ReputationRings profile={profile} />
-            ) : (
-              <div className="rd-glass rd-rep-panel">
-                <div className="rd-kv">
-                  <span>
-                    {profile?.role === 'organizer'
-                      ? 'Здесь репутация начисляется за организаторские качества'
-                      : 'Новичок — пока недостаточно данных'}
-                  </span>
+          {/* Репутация в этом клубе — скрыта для чужого зрителя при скрытом скоре (см. showReputationSection) */}
+          {showReputationSection && (
+            <div>
+              <div className="rd-section-sub-h" style={{ margin: '0 0 8px' }}>Репутация в этом клубе</div>
+              {loading ? (
+                <div className="rd-spinner-row" style={{ padding: '8px 0' }}><Spinner size="s" /></div>
+              ) : profile && profile.trust !== null ? (
+                <ReputationRings profile={profile} />
+              ) : (
+                <div className="rd-glass rd-rep-panel">
+                  <div className="rd-kv">
+                    <span>
+                      {profile?.role === 'organizer'
+                        ? 'Здесь репутация начисляется за организаторские качества'
+                        : 'Новичок — пока недостаточно данных'}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           {/* Админ-секция организатора: de-Stars-гейт доступа (только платные) + всегда открытая заметка
               (S1) + «Своя дата» за ✎. Награды (S2) обрабатываются выше, под интересами. */}

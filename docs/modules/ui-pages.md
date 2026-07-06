@@ -133,7 +133,7 @@ X = memberLimit * subscriptionPrice * 0.8
 | Файл | Источник данных | Заметки |
 |---|---|---|
 | `ClubActivitiesTab.tsx` | `useClubActivitiesQuery(clubId, { type? })` (`useQuery`, без пагинации) | Read-only unified-feed events + skladchinas клуба: секция `Предстоящие` (полные карточки, `relevantDate ASC`) + сворачиваемый аккордеон `Прошедшие (N)` (компактные строки, DESC). Tap по карточке → `/events/:id` или `/skladchina/:id`. Создание активностей — через **глобальный FAB** в доке (см. ниже § «FAB и контекст клуба»), не отдельной кнопкой в табе. Заменил `ClubEventsTab.tsx` (удалён) в `feature/unified-activity-creation`. |
-| `ClubMembersTab.tsx` | `useClubMembersQuery(clubId)` | rd-список `rd-rep-row` (avatar/Trust `member.trust` с тиром `rd-high/mid/low`; null → «Новичок»), badge «Орг» для `role === 'organizer'`. При `isOrganizer` — доп. секция «Ожидают оплаты». Тап по члену (включая себя) → `MemberProfileModal` с полными метриками. Используется и в member-view `ClubPage`, и в `OrganizerClubManage`. |
+| `ClubMembersTab.tsx` | `useClubMembersQuery(clubId)` | rd-список `rd-rep-row` (avatar/Trust `member.trust` с тиром `rd-high/mid/low`). Фолбэк при `trust===null`: «Орг» для `role === 'organizer'` (всем); «Новичок» — **только организатору** (`forOrganizer`), обычному зрителю пусто (асимметрия #94 — чужой null неотличим от скрытого, ложный «Новичок» не пишем). При `managementView` (передаётся как `isOrganizer` со страницы клуба) — доп. attention-бакеты «Скоро закончится» / «Оплата вступления». Тап по члену (включая себя) → `MemberProfileModal`. Используется **только** в member/organizer-view `ClubPage` (из `OrganizerClubManage` таб удалён, `feature/members-tab-unification`). |
 | ~~`ClubProfileTab.tsx`~~ | — | **Удалён** в `feature/profile-reputation-and-skladchina-badge` (2026-05-30). Функция переехала в `ProfilePage` (см. ниже). |
 
 Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — non-active tabs не монтируются и их queries не выполняются. Visitor-режим вообще не подключает эти query.
@@ -200,9 +200,11 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 ## OrganizerClubManage — Страница управления клубом (`/clubs/:id/manage`)
 
 ### Описание
-Страница доступна только организатору. Содержит **3 вкладки**: Участники, Финансы, Настройки.
+Страница доступна только организатору. Содержит **3 вкладки**: Статистика, Финансы, Настройки.
 
-> **Update (post `feature/applications-inbox`, 2026-05-30):** таб **«Заявки»** (`ApplicationsTab`) удалён. Approve / reject заявок выполняется через кросс-клубовый organizer-inbox на `MyClubsPage` — секция «Заявки на рассмотрении». Legacy deep-link `?tab=applications` редиректит на `members` (через `LEGACY_TAB_KEYS`). Полная спека инбокса — [`applications-inbox.md`](./applications-inbox.md).
+> **Update (`feature/members-tab-unification`, 2026-07-06):** таб **«Участники»** удалён из «Управления» — участники дублировались (таб на странице клуба + таб здесь с идентичными данными и действиями). Теперь участники живут ТОЛЬКО на `ClubPage` → таб «Участники»; организаторские attention-бакеты «Скоро закончится» / «Оплата вступления» переехали туда же (`ClubPage` рендерит `ClubMembersTab` с `managementView={isOrganizer}` — владелец видит бакеты, обычный участник плоский ростер). Дефолтная вкладка «Управления» — **Статистика**. Legacy deep-link `?tab=members` редиректит на дефолт (через `LEGACY_TAB_KEYS`). Красная точка attention теперь на табе «Управление» страницы клуба (была на табе «Участники» здесь).
+
+> **Update (post `feature/applications-inbox`, 2026-05-30):** таб **«Заявки»** (`ApplicationsTab`) удалён. Approve / reject заявок выполняется через кросс-клубовый organizer-inbox на `MyClubsPage` — секция «Заявки на рассмотрении». Legacy deep-link `?tab=applications` редиректит на дефолт (через `LEGACY_TAB_KEYS`). Полная спека инбокса — [`applications-inbox.md`](./applications-inbox.md).
 
 > **Note (post `feature/unified-activity-creation`, итерация 4 — 2026-05-24):**
 > история табов: изначально было 6 (`События` + `Сборы` отдельно) → итерация 1

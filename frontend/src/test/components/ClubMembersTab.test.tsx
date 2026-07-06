@@ -84,6 +84,23 @@ describe('ClubMembersTab — de-Stars dashboard', () => {
     expect(screen.queryByRole('button', { name: /Взнос получен/ })).not.toBeInTheDocument();
   });
 
+  it('hides «Новичок» from a non-organizer but shows it to the organizer (asymmetric trust #94)', async () => {
+    // trust=null неотличим «нет истории» ↔ «скрыто от чужого зрителя». Обычному участнику фолбэк
+    // «Новичок» не показываем (иначе врём тому, у кого история есть); организатору — показываем.
+    const newbie = member({ userId: 'nb', firstName: 'Новобранец', trust: null, totalConfirmations: 0, accessStatus: null });
+
+    mockMembers([newbie]);
+    const { unmount } = renderWithProviders(<ClubMembersTab clubId={CLUB_ID} isOrganizer={false} />);
+    expect(await screen.findByText('Новобранец')).toBeInTheDocument();
+    expect(screen.queryByText('Новичок')).not.toBeInTheDocument();
+    unmount();
+
+    mockMembers([newbie]);
+    renderWithProviders(<ClubMembersTab clubId={CLUB_ID} isOrganizer />);
+    expect(await screen.findByText('Новобранец')).toBeInTheDocument();
+    expect(screen.getByText('Новичок')).toBeInTheDocument();
+  });
+
   it('organizer on the club page (no managementView) sees a plain roster — no management buckets', async () => {
     // Same data as the management view, but without managementView the attention blocks are suppressed
     // (they live only in Управление → Участники, not duplicated on the club page).

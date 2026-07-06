@@ -17,9 +17,9 @@ interface ClubMembersTabProps {
    */
   isOrganizer?: boolean;
   /**
-   * Контекст дашборда управления (Управление → Участники). Только здесь рендерятся attention-блоки
-   * «Скоро закончится» / «Оплата вступления». На вкладке «Участники» страницы клуба это false, и
-   * организатор видит плоский список — эти блоки живут ТОЛЬКО в Управлении, без дублирования.
+   * Организаторский дашборд-вид: рендерит attention-блоки «Скоро закончится» / «Оплата вступления».
+   * Участники живут на вкладке «Участники» страницы клуба (без дубля в «Управлении»), поэтому там
+   * передаётся managementView={isOrganizer}: владелец видит бакеты, обычный участник — плоский список.
    */
   managementView?: boolean;
 }
@@ -168,13 +168,18 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
   // (запись по складчине, 0 подтверждений) сохраняет очки, но прячет обманчивое «Обещания 0%» (F5-08).
   const hasActivity = hasScore && (member.totalConfirmations ?? 0) > 0;
   const tier = reliabilityTier(member.trust);
+  // trust=null неотличим от «нет истории» ↔ «скрыто асимметрией» (бэкенд занулил чужие скоры для
+  // не-организатора). Поэтому фолбэк-мету «Пока нет данных» показываем ТОЛЬКО организатору: у него
+  // null = честно «нет истории». Обычному зрителю — ничего (иначе врём «новичок» тому, у кого история есть).
   const repMeta = hasActivity
     ? `Обещания ${Math.round(member.promiseFulfillmentPct ?? 0)}%`
     : isOwner
       ? 'Репутация за организаторские качества'
       : hasScore
         ? null
-        : 'Пока нет данных';
+        : forOrganizer
+          ? 'Пока нет данных'
+          : null;
   // Видимая только организатору строка доступа платного активного участника (у бесплатных членств нет срока).
   const accessMeta = forOrganizer && !isOwner && member.subscriptionExpiresAt
     ? `Активен · до ${formatDate(member.subscriptionExpiresAt)}`
@@ -219,9 +224,14 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
             <span className={`rd-v rd-${tier}`}>{member.trust}</span>
             <span className="rd-cap">надёжность</span>
           </>
-        ) : (
-          <span className="rd-v rd-new">{isOwner ? 'Орг' : 'Новичок'}</span>
-        )}
+        ) : isOwner ? (
+          // «Орг» — ролевая метка организатора клуба, не скор → видна всем.
+          <span className="rd-v rd-new">Орг</span>
+        ) : forOrganizer ? (
+          // «Новичок» — фолбэк отсутствия истории; только организатору (у него trust=null честен).
+          // Обычному зрителю не пишем ничего: его null может скрывать реальную историю (асимметрия #94).
+          <span className="rd-v rd-new">Новичок</span>
+        ) : null}
       </span>
     </button>
   );

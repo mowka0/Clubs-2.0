@@ -517,7 +517,12 @@ export const ClubPage: FC = () => {
           </div>
 
           {activeTab === 'activities' && <ClubActivitiesTab clubId={id} />}
-          {activeTab === 'members' && <ClubMembersTab clubId={id} isOrganizer={isOrganizer} />}
+          {/* managementView={isOrganizer}: организатору здесь показываются attention-бакеты
+              «Скоро закончится» / «Оплата вступления» (раньше жили в дублирующем табе «Управление»,
+              теперь участники только тут). Обычный участник видит плоский список — бакеты за гейтом. */}
+          {activeTab === 'members' && (
+            <ClubMembersTab clubId={id} isOrganizer={isOrganizer} managementView={isOrganizer} />
+          )}
         </>
       )}
 
