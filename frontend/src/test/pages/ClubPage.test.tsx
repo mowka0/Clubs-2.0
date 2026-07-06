@@ -385,7 +385,9 @@ describe('ClubPage', () => {
     expect(screen.queryByRole('button', { name: /^вступить$/i })).not.toBeInTheDocument();
   });
 
-  it('members tab renders score / "Новичок" / organizer framing per trust', async () => {
+  it('members tab (non-organizer viewer): shows real score, HIDES «Новичок» for hidden trust, keeps organizer framing', async () => {
+    // Смотрящий user-1 — обычный участник (владелец other-owner). Асимметрия #94: чужой скрытый скор
+    // приходит как trust=null и неотличим от новичка → ложный «Новичок» показывать нельзя (пишем ничего).
     server.use(
       http.get('*/api/clubs/:id', () =>
         HttpResponse.json({ ...mockClubDetail, ownerId: 'other-owner' } as ClubDetailDto)),
@@ -411,12 +413,43 @@ describe('ClubPage', () => {
     });
     await user.click(screen.getByRole('button', { name: /^участники$/i }));
 
-    // Ветеран: реальное число + тир. Новичок: «Новичок» без числа. Владелец: организаторская подача.
+    // Ветеран: реальное число + тир (пришёл скор — показываем).
     await waitFor(() => {
       expect(screen.getByText('90')).toBeInTheDocument();
     });
-    expect(screen.getByText('Новичок')).toBeInTheDocument();
+    // Скрытый скор участника: НЕ пишем «Новичок» чужому зрителю (иначе врём тому, у кого история есть).
+    expect(screen.queryByText('Новичок')).not.toBeInTheDocument();
+    // Ролевая подача организатора — не скор, видна всем.
     expect(screen.getByText(/репутация за организаторские качества/i)).toBeInTheDocument();
+  });
+
+  it('members tab (organizer viewer): shows «Новичок» for a genuine no-track-record member', async () => {
+    // Владелец видит скоры честно: у него trust=null означает именно «нет истории» → «Новичок» уместен.
+    useAuthStore.setState({
+      user: { id: 'owner-1', telegramId: 1, telegramUsername: null, firstName: 'O', lastName: null, avatarUrl: null, city: null, country: null, bio: null },
+      isAuthenticated: true, isLoading: false, error: null,
+    });
+    server.use(
+      http.get('*/api/clubs/:id', () =>
+        HttpResponse.json({ ...mockClubDetail, ownerId: 'owner-1' } as ClubDetailDto)),
+      http.get('*/api/users/me/clubs', () => HttpResponse.json([] as MembershipDto[])),
+      http.get('*/api/clubs/club-123/activities', () => HttpResponse.json({ upcoming: [], past: [] })),
+      http.get('*/api/clubs/club-123/events', () =>
+        HttpResponse.json({ content: [], totalElements: 0, totalPages: 0, page: 0, size: 100 })),
+      http.get('*/api/clubs/club-123/members', () =>
+        HttpResponse.json([
+          { userId: 'u-new', firstName: 'Newbie', lastName: null, avatarUrl: null, role: 'member', joinedAt: '2025-02-01T00:00:00Z', trust: null, promiseFulfillmentPct: null },
+        ])),
+    );
+
+    const { user } = renderClubPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^участники$/i })).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole('button', { name: /^участники$/i }));
+
+    expect(await screen.findByText('Новичок')).toBeInTheDocument();
   });
 
   it('organizer sees extra "Управление" tab when ownerId matches user id', async () => {

@@ -17,9 +17,9 @@ interface ClubMembersTabProps {
    */
   isOrganizer?: boolean;
   /**
-   * Контекст дашборда управления (Управление → Участники). Только здесь рендерятся attention-блоки
-   * «Скоро закончится» / «Оплата вступления». На вкладке «Участники» страницы клуба это false, и
-   * организатор видит плоский список — эти блоки живут ТОЛЬКО в Управлении, без дублирования.
+   * Организаторский дашборд-вид: рендерит attention-блоки «Скоро закончится» / «Оплата вступления».
+   * Участники живут на вкладке «Участники» страницы клуба (без дубля в «Управлении»), поэтому там
+   * передаётся managementView={isOrganizer}: владелец видит бакеты, обычный участник — плоский список.
    */
   managementView?: boolean;
 }
@@ -56,13 +56,22 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 }
 
-/** «до 28 июня · через 3 дня» для блока «Скоро закончится». */
+/** «до 28 июня · через 3 дня» для блока «Скоро закончится» (уже-истёкшие живут в бакете «Доступ истёк»). */
 function formatExpiringMeta(iso: string): string {
   const days = daysUntil(iso);
   const date = `до ${formatDate(iso)}`;
   if (days <= 0) return `${date} · истекла`;
   if (days === 1) return `${date} · завтра`;
   return `${date} · через ${days} ${pluralRu(days, ['день', 'дня', 'дней'])}`;
+}
+
+/** «истекла 5 июня · 3 дня назад» для блока «Доступ истёк». */
+function formatExpiredMeta(iso: string): string {
+  const daysAgo = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / MS_PER_DAY));
+  const date = `истекла ${formatDate(iso)}`;
+  if (daysAgo === 0) return `${date} · сегодня`;
+  if (daysAgo === 1) return `${date} · вчера`;
+  return `${date} · ${daysAgo} ${pluralRu(daysAgo, ['день', 'дня', 'дней'])} назад`;
 }
 
 /** «вступил(а) 2 дня назад» для блока «Ждут оплаты» (frozen). */
@@ -75,17 +84,21 @@ function formatJoinedMeta(iso: string | null): string {
   return `вступил(а) ${formatDate(iso)}`;
 }
 
-type Bucket = 'expiring' | 'awaiting' | 'calm';
+type Bucket = 'expired' | 'expiring' | 'awaiting' | 'calm';
 
 /**
  * Раскладывает участника по бакету состояния доступа (de-Stars дашборд). У обычного зрителя поля
  * доступа null, поэтому все участники попадают в «calm» — прежний список только активных.
+ * «expired» ≠ «expiring»: у уже-истёкшего окна заголовок «скоро закончится» врал бы по смыслу.
+ * Active с истёкшим окном — короткоживущее состояние: ежедневный тик шедулера (processExpiry, 9:00)
+ * переводит таких во frozen; до тика организатор видит их в своём бакете с тем же действием.
  */
 function bucketOf(member: MemberListItemDto): Bucket {
   if (member.accessStatus === 'frozen') return 'awaiting';
-  if (member.accessStatus === 'active' && member.subscriptionExpiresAt
-      && daysUntil(member.subscriptionExpiresAt) <= EXPIRING_SOON_DAYS) {
-    return 'expiring';
+  if (member.accessStatus === 'active' && member.subscriptionExpiresAt) {
+    const days = daysUntil(member.subscriptionExpiresAt);
+    if (days <= 0) return 'expired';
+    if (days <= EXPIRING_SOON_DAYS) return 'expiring';
   }
   return 'calm';
 }
@@ -168,13 +181,18 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
   // (запись по складчине, 0 подтверждений) сохраняет очки, но прячет обманчивое «Обещания 0%» (F5-08).
   const hasActivity = hasScore && (member.totalConfirmations ?? 0) > 0;
   const tier = reliabilityTier(member.trust);
+  // trust=null неотличим от «нет истории» ↔ «скрыто асимметрией» (бэкенд занулил чужие скоры для
+  // не-организатора). Поэтому фолбэк-мету «Пока нет данных» показываем ТОЛЬКО организатору: у него
+  // null = честно «нет истории». Обычному зрителю — ничего (иначе врём «новичок» тому, у кого история есть).
   const repMeta = hasActivity
     ? `Обещания ${Math.round(member.promiseFulfillmentPct ?? 0)}%`
     : isOwner
       ? 'Репутация за организаторские качества'
       : hasScore
         ? null
-        : 'Пока нет данных';
+        : forOrganizer
+          ? 'Пока нет данных'
+          : null;
   // Видимая только организатору строка доступа платного активного участника (у бесплатных членств нет срока).
   const accessMeta = forOrganizer && !isOwner && member.subscriptionExpiresAt
     ? `Активен · до ${formatDate(member.subscriptionExpiresAt)}`
@@ -219,9 +237,14 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
             <span className={`rd-v rd-${tier}`}>{member.trust}</span>
             <span className="rd-cap">надёжность</span>
           </>
-        ) : (
-          <span className="rd-v rd-new">{isOwner ? 'Орг' : 'Новичок'}</span>
-        )}
+        ) : isOwner ? (
+          // «Орг» — ролевая метка организатора клуба, не скор → видна всем.
+          <span className="rd-v rd-new">Орг</span>
+        ) : forOrganizer ? (
+          // «Новичок» — фолбэк отсутствия истории; только организатору (у него trust=null честен).
+          // Обычному зрителю не пишем ничего: его null может скрывать реальную историю (асимметрия #94).
+          <span className="rd-v rd-new">Новичок</span>
+        ) : null}
       </span>
     </button>
   );
@@ -245,20 +268,44 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
   }
 
   const members = membersQuery.data ?? [];
-  // Attention-бакеты — управленческая информация организатора → только в дашборде «Управление»
-  // (managementView). На странице клуба (и у обычных зрителей) все в одном плоском списке (без дублей).
+  // Attention-бакеты — управленческая информация: их видит только организатор в managementView
+  // (страница клуба передаёт managementView={isOrganizer}). Обычный зритель — плоский список.
   const showBuckets = isOrganizer && managementView;
+  const expired = showBuckets ? members.filter((m) => bucketOf(m) === 'expired') : [];
   const expiring = showBuckets ? members.filter((m) => bucketOf(m) === 'expiring') : [];
   const awaiting = showBuckets ? members.filter((m) => bucketOf(m) === 'awaiting') : [];
-  // В дашборде управления frozen-участники живут в своём бакете «Оплата вступления». В плоском списке
-  // страницы клуба они остаются, но тонут вниз, «ледяные» — организатор с одного взгляда видит, у кого
-  // нет доступа, не теряя их в общей массе. (sort стабильный → сохраняет порядок бэкенда.)
+  // В бакет-виде frozen-участники живут в «Оплата вступления». В плоском списке (без managementView)
+  // они остаются, но тонут вниз, «ледяные» — организатор с одного взгляда видит, у кого нет доступа,
+  // не теряя их в общей массе. (sort стабильный → сохраняет порядок бэкенда.)
   const calm = showBuckets
     ? members.filter((m) => bucketOf(m) === 'calm')
     : [...members].sort((a, b) => Number(a.accessStatus === 'frozen') - Number(b.accessStatus === 'frozen'));
 
   return (
     <>
+      {expired.length > 0 && (
+        <>
+          <div className="rd-section-sub-h rd-attn-exp">
+            ⛔ Доступ истёк <span className="rd-count">· {expired.length}</span>
+          </div>
+          <div className="rd-attn-hint">
+            Оплаченный период закончился — доступ скоро закроется автоматически. Получил продление — подтверди.
+          </div>
+          <div className="rd-glass rd-rep-panel rd-attn-block rd-attn-block-exp">
+            {expired.map((member) => (
+              <DuesActionRow
+                key={member.userId}
+                clubId={clubId}
+                member={member}
+                metaText={member.subscriptionExpiresAt ? formatExpiredMeta(member.subscriptionExpiresAt) : ''}
+                onOpenProfile={setSelectedMember}
+                onFeedback={setToast}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
       {expiring.length > 0 && (
         <>
           <div className="rd-section-sub-h rd-attn-exp">

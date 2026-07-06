@@ -78,24 +78,16 @@ export function getClubMembers(clubId: string): Promise<MemberListItemDto[]> {
 }
 
 /**
- * Управление доступом организатором (de-Stars Slice 2). Все четыре — только для владельца
+ * Управление доступом организатором (de-Stars Slice 2). Оба — только для владельца
  * (`@RequiresOrganizer`), возвращают обновлённый `MembershipDto`, 409 при проигранной гонке
  * перехода статуса.
  *  - dues-paid : «Взнос получен» — открыть доступ + продлить платное окно +30d от max(now, текущий конец).
- *  - freeze    : «Закрыть доступ» — active → frozen.
- *  - unfreeze  : frozen → active без продления окна.
  *  - dues-unpaid: снять отметку о взносе (не трогает доступ/окно).
+ * Клиенты /freeze и /unfreeze удалены (PO 2026-07-06) — просрочку окна закрывает шедулер, ручная
+ * пауза убрана из UI; бэкенд-эндпоинты пока живы до переосмысления freeze-флоу.
  */
 export function markMemberDuesPaid(clubId: string, userId: string): Promise<MembershipDto> {
   return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/dues-paid`);
-}
-
-export function freezeMember(clubId: string, userId: string): Promise<MembershipDto> {
-  return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/freeze`);
-}
-
-export function unfreezeMember(clubId: string, userId: string): Promise<MembershipDto> {
-  return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/unfreeze`);
 }
 
 export function unmarkMemberDues(clubId: string, userId: string): Promise<MembershipDto> {

@@ -13,19 +13,16 @@ import { useSetClubContext } from '../store/useClubContextStore';
 import { AvatarUpload } from '../components/AvatarUpload';
 import { Toast } from '../components/Toast';
 import { ManageHeader } from '../components/manage/ManageHeader';
-import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubStatsTab } from '../components/manage/ClubStatsTab';
 import { useClubQuery, useDeleteClubMutation, useUpdateClubMutation } from '../queries/clubs';
-import { useMemberAttentionQuery } from '../queries/members';
 import { useClubFinancesQuery } from '../queries/finances';
 import type { UpdateClubBody } from '../api/clubs';
 import type { ClubDetailDto } from '../types/api';
 
-type TabKey = 'members' | 'stats' | 'finances' | 'settings';
+type TabKey = 'stats' | 'finances' | 'settings';
 
 // Вкладки страницы управления клубом (порядок массива = порядок отображения).
 const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
-  { key: 'members', label: 'Участники' },
   { key: 'stats', label: 'Статистика' },
   { key: 'finances', label: 'Финансы' },
   { key: 'settings', label: 'Настройки' },
@@ -36,13 +33,15 @@ const VALID_TABS = new Set<string>(TABS.map((t) => t.key));
 
 // Создание/просмотр активностей переехали из «Управления» (теперь на глобальном табе
 // «Активности»). Заявки переехали в кросс-клубовый инбокс на MyClubsPage — см.
-// docs/modules/applications-inbox.md. Legacy deep-link'и на удалённые вкладки
-// откатываются на «Участники», чтобы старые шары/рефреши не отдавали 404.
-const LEGACY_TAB_KEYS = new Set<string>(['activities', 'applications', 'events', 'skladchina']);
+// docs/modules/applications-inbox.md. Участники теперь живут ТОЛЬКО на странице клуба
+// (вкладка «Участники»), без дубля в «Управлении» — организаторские attention-бакеты
+// переехали туда же (managementView). Legacy deep-link'и на удалённые вкладки
+// откатываются на дефолтную «Статистику», чтобы старые шары/рефреши не отдавали 404.
+const LEGACY_TAB_KEYS = new Set<string>(['members', 'activities', 'applications', 'events', 'skladchina']);
 
 function resolveInitialTab(raw: string | null): TabKey {
   if (raw && VALID_TABS.has(raw)) return raw as TabKey;
-  return 'members';
+  return 'stats';
 }
 
 // ---- Вкладка «Финансы» ----
@@ -451,12 +450,6 @@ export const OrganizerClubManage: FC = () => {
   const clubId = id ?? '';
   const clubQuery = useClubQuery(clubId || undefined);
   const club = clubQuery.data;
-  // Красная точка на «Участники»: у участников скоро истекает доступ ИЛИ есть frozen-участники,
-  // ожидающие подтверждения взноса.
-  const memberAttentionQuery = useMemberAttentionQuery(clubId || undefined);
-  const showMembersDot =
-    (memberAttentionQuery.data?.expiringSoon ?? 0) > 0
-    || (memberAttentionQuery.data?.awaitingDues ?? 0) > 0;
 
   const handleTabChange = (key: TabKey) => {
     if (key === activeTab) return;
@@ -484,8 +477,6 @@ export const OrganizerClubManage: FC = () => {
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'members':
-        return <ClubMembersTab clubId={clubId} isOrganizer managementView />;
       case 'stats':
         return <ClubStatsTab clubId={clubId} />;
       case 'finances':
@@ -523,9 +514,6 @@ export const OrganizerClubManage: FC = () => {
             onClick={() => handleTabChange(tab.key)}
           >
             {tab.label}
-            {tab.key === 'members' && showMembersDot && (
-              <span className="rd-tab-dot" aria-hidden="true" />
-            )}
           </button>
         ))}
       </div>

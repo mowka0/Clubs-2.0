@@ -120,7 +120,7 @@ export const ClubPage: FC = () => {
   const isOwner = !!club && club.ownerId === user?.id;
   const isOrganizer = isOwner || membership?.role === 'organizer';
   // Красная точка на «Управление»: есть участники, у которых скоро истекает срок, ИЛИ frozen-участники,
-  // ожидающие подтверждения взноса.
+  // ЗАЯВИВШИЕ об оплате (ждут «Взнос получен»). Просто frozen (пауза/автоистечение) точку не зажигает.
   const memberAttentionQuery = useMemberAttentionQuery(id, { enabled: isOrganizer });
   const showManageDot =
     (memberAttentionQuery.data?.expiringSoon ?? 0) > 0
@@ -517,7 +517,12 @@ export const ClubPage: FC = () => {
           </div>
 
           {activeTab === 'activities' && <ClubActivitiesTab clubId={id} />}
-          {activeTab === 'members' && <ClubMembersTab clubId={id} isOrganizer={isOrganizer} />}
+          {/* managementView={isOrganizer}: организатору здесь показываются attention-бакеты
+              «Скоро закончится» / «Оплата вступления» (раньше жили в дублирующем табе «Управление»,
+              теперь участники только тут). Обычный участник видит плоский список — бакеты за гейтом. */}
+          {activeTab === 'members' && (
+            <ClubMembersTab clubId={id} isOrganizer={isOrganizer} managementView={isOrganizer} />
+          )}
         </>
       )}
 

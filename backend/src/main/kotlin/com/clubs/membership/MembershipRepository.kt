@@ -67,8 +67,14 @@ interface MembershipRepository {
     fun expireOverdueAccess(now: OffsetDateTime): Int
     /** Число скоро истекающих участников по всем [clubIds] — питает red-dot бейдж на «Управление». */
     fun countExpiringSoonByClubs(clubIds: Collection<UUID>, now: OffsetDateTime, threshold: OffsetDateTime): Int
-    /** Число участников в статусе `frozen` (ждут подтверждения взноса) по всем [clubIds] — тоже зажигает red-dot. */
-    fun countFrozenByClubs(clubIds: Collection<UUID>): Int
+    /**
+     * Число `frozen`-участников, ЗАЯВИВШИХ об оплате (dues_claimed_at IS NOT NULL), по всем [clubIds] —
+     * тоже зажигает red-dot. Именно claimed: только такой frozen требует действия организатора
+     * («Взнос получен»). Просто frozen (ручная пауза или автоистечение окна) точку не зажигает —
+     * мяч на стороне участника, организатору делать нечего. Зеркалит countClaimedFrozenByOwner
+     * (бейдж таб-бара) — оба сигнала считают одно и то же множество.
+     */
+    fun countClaimedFrozenByClubs(clubIds: Collection<UUID>): Int
 
     // Бот/уведомления
     fun findMemberTelegramIds(clubId: UUID): List<Long>

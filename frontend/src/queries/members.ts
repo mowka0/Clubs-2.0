@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import {
   claimDues,
-  freezeMember,
   getAwardSuggestions,
   getClubMembers,
   getMemberAttention,
@@ -16,7 +15,6 @@ import {
   removeMember,
   revokeMemberAward,
   setMemberAccessUntil,
-  unfreezeMember,
   unmarkMemberDues,
   updateMemberNote,
 } from '../api/membership';
@@ -83,23 +81,9 @@ export function useMarkMemberDuesPaidMutation() {
   });
 }
 
-/** «Закрыть доступ» — active → frozen. */
-export function useFreezeMemberMutation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ clubId, userId }: MemberGateArgs) => freezeMember(clubId, userId),
-    onSuccess: (_data, { clubId }) => invalidateAfterMemberGateAction(qc, clubId),
-  });
-}
-
-/** Заново открыть доступ без продления оплаченного периода (frozen → active). */
-export function useUnfreezeMemberMutation() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ clubId, userId }: MemberGateArgs) => unfreezeMember(clubId, userId),
-    onSuccess: (_data, { clubId }) => invalidateAfterMemberGateAction(qc, clubId),
-  });
-}
+// Мутации freeze/unfreeze удалены (PO 2026-07-06): ручное «Закрыть доступ» убрано из UI — просрочку
+// окна ежедневно закрывает шедулер (processExpiry). Бэкенд-эндпоинты /freeze и /unfreeze пока живы
+// (переосмысление freeze-флоу — отдельная ветка, см. docs/backlog/freeze-flow-rethink.md).
 
 /** B+C: отказать в платном вступлении (возврат оффлайн) — удаляет замороженного участника.
  *  Те же инвалидации, что и у остальных действий с доступом (корзины + red-dot + кросс-клубовое
