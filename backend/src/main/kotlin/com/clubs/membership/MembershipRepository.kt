@@ -10,14 +10,15 @@ interface MembershipRepository {
     fun findByUserAndClub(userId: UUID, clubId: UUID): Membership?
     fun findById(id: UUID): Membership?
     fun findByUserId(userId: UUID): List<Membership>
-    fun findClubMembersWithUserInfo(clubId: UUID, includeFrozen: Boolean = false): List<ClubMemberInfo>
+    fun findClubMembersWithUserInfo(clubId: UUID, includeWithoutAccess: Boolean = false): List<ClubMemberInfo>
     fun findUserClubsWithReputation(userId: UUID): List<UserClubReputationInfo>
-    /** Участники в статусе `frozen` по всем активным клубам, которыми владеет [ownerId] — кросс-клубовая
-     *  лента «Ждут оплаты». */
-    fun findFrozenMembersByOwner(ownerId: UUID): List<OrganizerDuesMember>
-    /** Участники в статусе `frozen`, заявившие об оплате взноса (claim pending), по всем клубам [ownerId] —
-     *  питает точку-индикатор на «Мои клубы», чтобы оплативший и ждущий участник был замечен без захода в таб. */
-    fun countClaimedFrozenByOwner(ownerId: UUID): Int
+    /** Участники без доступа — `frozen` (ждут первого взноса) и `expired` (просрочили продление) —
+     *  по всем активным клубам, которыми владеет [ownerId]: кросс-клубовая лента «Ждут оплаты». */
+    fun findAwaitingDuesMembersByOwner(ownerId: UUID): List<OrganizerDuesMember>
+    /** Участники без доступа (`frozen`/`expired`), заявившие об оплате взноса (claim pending), по всем
+     *  клубам [ownerId] — питает точку-индикатор на «Мои клубы», чтобы оплативший и ждущий участник
+     *  был замечен без захода в таб. */
+    fun countClaimedAwaitingDuesByOwner(ownerId: UUID): Int
     fun findExpiryRefByUserAndClub(userId: UUID, clubId: UUID): MembershipExpiryRef?
 
     // Предикаты / счётчики
@@ -38,8 +39,6 @@ interface MembershipRepository {
      *  терял доступ (без grace-периода до expiry, как при обычном выходе). Возвращает число затронутых
      *  строк (0 = уже удалён / гонка). */
     fun remove(membershipId: UUID): Int
-    fun activateSubscription(userId: UUID, clubId: UUID, expiresAt: OffsetDateTime): UUID
-    fun renewSubscription(membershipId: UUID, newExpiresAt: OffsetDateTime)
 
     // Access gate (de-Stars, слой 2) — контролируемая организатором заморозка + учёт взносов. Каждый метод
     // возвращает число затронутых строк, чтобы сервис мог защитить оптимистичный переход статуса (0 = гонка проиграна → 409).
@@ -48,9 +47,9 @@ interface MembershipRepository {
     fun markDuesPaid(membershipId: UUID, markedBy: UUID, accessUntil: OffsetDateTime): Int
     fun unmarkDues(membershipId: UUID): Int
 
-    // Заявление участника об оплате взноса (de-Stars): замороженный участник заявляет, что оплатил
-    // (method "sbp"/"cash"; proofUrl = скриншот для sbp, null для cash). Защищено условием status=frozen
-    // (0 строк → больше не frozen).
+    // Заявление участника об оплате взноса (de-Stars): участник без доступа (frozen — первый взнос,
+    // expired — просрочка продления) заявляет, что оплатил (method "sbp"/"cash"; proofUrl = скриншот
+    // для sbp, null для cash). Защищено условием status IN (frozen, expired) (0 строк → доступ уже открыт).
     fun claimDues(membershipId: UUID, method: String, proofUrl: String?): Int
 
     // Member admin profile (S1) — организатор вручную задаёт конец окна доступа / приватную заметку.
@@ -63,18 +62,18 @@ interface MembershipRepository {
     // Жизненный цикл / планировщик (honor-system окно доступа)
     fun findExpiringWithin(now: OffsetDateTime, threshold: OffsetDateTime): List<ExpiringSubscriptionNotification>
     fun findActiveExpired(now: OffsetDateTime): List<ExpiringSubscriptionNotification>
-    /** Переводит в `frozen` каждый membership в статусе `active`, чьё окно доступа (subscription_expires_at) истекло. */
+    /** Переводит в `expired` каждый membership в статусе `active`, чьё окно доступа (subscription_expires_at) истекло. */
     fun expireOverdueAccess(now: OffsetDateTime): Int
     /** Число скоро истекающих участников по всем [clubIds] — питает red-dot бейдж на «Управление». */
     fun countExpiringSoonByClubs(clubIds: Collection<UUID>, now: OffsetDateTime, threshold: OffsetDateTime): Int
     /**
-     * Число `frozen`-участников, ЗАЯВИВШИХ об оплате (dues_claimed_at IS NOT NULL), по всем [clubIds] —
-     * тоже зажигает red-dot. Именно claimed: только такой frozen требует действия организатора
-     * («Взнос получен»). Просто frozen (ручная пауза или автоистечение окна) точку не зажигает —
-     * мяч на стороне участника, организатору делать нечего. Зеркалит countClaimedFrozenByOwner
+     * Число участников без доступа (`frozen`/`expired`), ЗАЯВИВШИХ об оплате (dues_claimed_at IS NOT
+     * NULL), по всем [clubIds] — тоже зажигает red-dot. Именно claimed: только такой участник требует
+     * действия организатора («Взнос получен»). Просто frozen/expired без claim точку не зажигает —
+     * мяч на стороне участника, организатору делать нечего. Зеркалит countClaimedAwaitingDuesByOwner
      * (бейдж таб-бара) — оба сигнала считают одно и то же множество.
      */
-    fun countClaimedFrozenByClubs(clubIds: Collection<UUID>): Int
+    fun countClaimedAwaitingDuesByClubs(clubIds: Collection<UUID>): Int
 
     // Бот/уведомления
     fun findMemberTelegramIds(clubId: UUID): List<Long>

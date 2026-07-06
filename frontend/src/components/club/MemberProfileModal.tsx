@@ -277,8 +277,12 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
   const savingDate = setAccess.isPending;
   const savingNote = updateNote.isPending;
   const frozen = member.accessStatus === 'frozen';
+  // Просрочил продление: был доступ, окно истекло (шедулер active → expired). Путь назад — оплата
+  // взноса, поэтому claim-линия и «Взнос получен» как у frozen, но без «Отказать · вернуть»
+  // (это действие только про ПЕРВОЕ вступление; должника удаляют киком в футере).
+  const expired = member.accessStatus === 'expired';
   const expiresAt = member.subscriptionExpiresAt ?? null;
-  const soon = !frozen && !!expiresAt && daysUntil(expiresAt) <= 7;
+  const soon = !frozen && !expired && !!expiresAt && daysUntil(expiresAt) <= 7;
   const today = new Date().toISOString().slice(0, 10);
   const originalDate = toDateInput(expiresAt);
   const noteDirty = noteDraft.trim() !== (organizerNote ?? '');
@@ -430,11 +434,44 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
           </div>
         )}
 
+        {/* EXPIRED платный участник: подписка истекла (шедулер закрыл доступ). Сводка честная —
+            «Доступ истёк», claim-линия как у frozen (должник тоже заявляет оплату), «Взнос получен»
+            открывает доступ на +30 дн. «Отказать · вернуть» здесь нет — это про первое вступление. */}
+        {isPaidMember && expired && (
+          <div className="rd-mgmt-body">
+            <div className="rd-mgmt-sum rd-soon">
+              <span className="rd-mgmt-dot" aria-hidden="true" />
+              <div>
+                <div className="rd-mgmt-sum-v">Доступ истёк</div>
+                <div className="rd-mgmt-sum-k">{expiresAt ? `подписка закончилась ${formatDateFull(expiresAt)}` : '—'}</div>
+              </div>
+            </div>
+            <div className="rd-mgmt-claim-line">
+              {claim
+                ? `⏳ Оплата заявлена · ${claim.method === 'cash' ? 'наличные' : 'СБП'}`
+                : '🔒 Доступ закрыт · участник ещё не оплатил продление'}
+            </div>
+            {claim?.proofUrl ? (
+              <button type="button" className="rd-claim-thumb" onClick={() => setZoomedProof(claim.proofUrl)}>
+                <img src={claim.proofUrl} alt="Скриншот оплаты" />
+                <span className="rd-claim-thumb-hint">нажмите, чтобы увеличить</span>
+              </button>
+            ) : claim ? (
+              <div className="rd-claim-note">Наличные — скриншота нет, подтвердите после получения.</div>
+            ) : null}
+            <div className="rd-mgmt-pair">
+              <button type="button" className="rd-mgmt-pb primary" disabled={busy} onClick={() => run(markPaid, `Доступ ${member.firstName} открыт`)}>
+                {markPaid.isPending ? <Spinner size="s" /> : <>Взнос получен · открыть доступ<small>+30 дн · до {extendedEndLabel(expiresAt)}</small></>}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ACTIVE платный участник (R1): сводка статуса + «Взнос получен». Ручной кнопки «Закрыть
             доступ» больше нет (решение PO 2026-07-06): просроченное окно ежедневно закрывает шедулер
-            (processExpiry, active → frozen), ручная пауза дублировала автоматику и путала организатора.
+            (processExpiry, active → expired), ручная пауза дублировала автоматику и путала организатора.
             Радикальный рычаг остался один — «Удалить из клуба» в футере. */}
-        {isPaidMember && !frozen && (
+        {isPaidMember && !frozen && !expired && (
           <div className="rd-mgmt-body">
             <div className={`rd-mgmt-sum${soon ? ' rd-soon' : ''}`}>
               <span className="rd-mgmt-dot" aria-hidden="true" />
@@ -620,9 +657,11 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
   // Админ-секция: организатор управляет любым участником-не-организатором (заметка + награды работают
   // и в бесплатных клубах, S2). Никогда — своей строкой: бэкенд отклоняет управление организатором.
   const isManageable = isOrganizer && member.role !== 'organizer';
-  // Платный участник = есть окно доступа (или frozen в ожидании взноса). Гейтит de-Stars-слой
-  // (строка подписки + dues-действия + своя дата); бесплатному остаются только заметка + награды.
-  const isPaidMember = member.accessStatus === 'frozen' || !!member.subscriptionExpiresAt;
+  // Платный участник = есть окно доступа, либо статус без доступа (frozen — ждёт первого взноса,
+  // expired — просрочил продление). Гейтит de-Stars-слой (строка подписки + dues-действия + своя
+  // дата); бесплатному остаются только заметка + награды.
+  const isPaidMember =
+    member.accessStatus === 'frozen' || member.accessStatus === 'expired' || !!member.subscriptionExpiresAt;
 
   // Режим редактирования живёт здесь (не в OrganizerGate), чтобы ✎ в шапке переключал редактор наград
   // (под интересами) и форму «Своя дата» вместе. Заметка всегда открыта (✎ её не гейтит). Редактирует

@@ -344,7 +344,7 @@ class ClubIntegrationTest {
                 "'sport', 'open', 'Moscow', 30)"
         )
         // Seed `memberCount` real member rows: the discovery sort + «Популярный» tag read the live
-        // count from `memberships` (active/grace); the old `clubs.member_count` column was dropped (V33).
+        // count from `memberships` (active/frozen/expired); the old `clubs.member_count` column was dropped (V33).
         repeat(memberCount) { insertMembership(newMember(), id, "active", "member") }
     }
 
@@ -363,20 +363,21 @@ class ClubIntegrationTest {
     }
 
     @Test
-    fun `GET api clubs id returns live member count (active plus grace incl owner, excl cancelled)`() {
+    fun `GET api clubs id returns live member count (active plus frozen plus expired incl owner, excl cancelled)`() {
         val clubId = UUID.randomUUID()
         // Column deliberately left at 0 (the drift the bug produced); the response must ignore it.
         insertClub(clubId, "Live Count", memberCount = 0)
         insertMembership(testUserId, clubId, "active", "organizer")   // owner — counted
         insertMembership(newMember(), clubId, "active", "member")     // active member — counted
-        insertMembership(newMember(), clubId, "grace_period", "member") // grace member — counted
+        insertMembership(newMember(), clubId, "frozen", "member")     // ждёт первого взноса, слот занят — counted
+        insertMembership(newMember(), clubId, "expired", "member")    // должник по продлению, слот занят — counted
         insertMembership(newMember(), clubId, "cancelled", "member")  // left — NOT counted
 
         mockMvc.perform(
             get("/api/clubs/$clubId").header("Authorization", "Bearer $testToken")
         )
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.memberCount").value(3)) // owner + active + grace; cancelled excluded (live count from memberships)
+            .andExpect(jsonPath("$.memberCount").value(4)) // owner + active + frozen + expired; cancelled excluded
     }
 
     /** A recent (yesterday), non-cancelled event — counted by the discovery activity signal. */

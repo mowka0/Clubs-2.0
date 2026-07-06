@@ -104,10 +104,10 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
      * организатора с ядром участников. Исключение владельца соответствует правилу L3 «Сплочённость»
      * (gamification §2).
      *
-     * Join по текущему membership: пользователь, ушедший или удалённый (статус `cancelled`) — или чей
-     * доступ `expired` — больше не входит в ядро, так что «основа клуба» падает при выходе/кике.
-     * `frozen` по-прежнему считается: это de-Stars-пауза месячных dues, а не уход, и ядро не должно
-     * мигать каждый раз, когда платёжное окно участника ненадолго истекает.
+     * Join по текущему membership: пользователь, ушедший или удалённый (статус `cancelled`), больше
+     * не входит в ядро, так что «основа клуба» падает при выходе/кике. `frozen` и `expired`
+     * по-прежнему считаются: это пауза доступа (первый взнос / просрочка продления), а не уход, и
+     * ядро не должно мигать каждый раз, когда платёжное окно участника ненадолго истекает.
      */
     private fun coreSize(clubId: UUID): Int =
         dsl.select(EVENT_RESPONSES.USER_ID)
@@ -116,7 +116,7 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
             .join(MEMBERSHIPS).on(
                 MEMBERSHIPS.USER_ID.eq(EVENT_RESPONSES.USER_ID)
                     .and(MEMBERSHIPS.CLUB_ID.eq(clubId))
-                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period, MembershipStatus.frozen)),
+                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.expired, MembershipStatus.frozen)),
             )
             .where(
                 EVENTS.CLUB_ID.eq(clubId)
@@ -202,13 +202,14 @@ class JooqClubQualityRepository(private val dsl: DSLContext) : ClubQualityReposi
             .fetch()
             .associate { it.value1()!! to it.value2() }
 
-    /** Живые (active + grace_period) memberships на клуб — знаменатель вовлечённости. */
+    /** Живые membership'ы с доступом (active) на клуб — знаменатель вовлечённости. frozen/expired
+     *  исключены: без доступа участвовать в событиях нельзя, их учёт разбавлял бы вовлечённость. */
     private fun aliveMemberCountByClub(ids: Set<UUID>): Map<UUID, Int> =
         dsl.select(MEMBERSHIPS.CLUB_ID, DSL.count())
             .from(MEMBERSHIPS)
             .where(
                 MEMBERSHIPS.CLUB_ID.`in`(ids)
-                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period)),
+                    .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active)),
             )
             .groupBy(MEMBERSHIPS.CLUB_ID)
             .fetch()

@@ -51,7 +51,10 @@ function member(over: Partial<MemberListItemDto> & { userId: string; firstName: 
 const ORGANIZER = member({ userId: 'org', firstName: 'Анна', role: 'organizer', trust: null });
 const FAR = member({ userId: 'far', firstName: 'Дмитрий', subscriptionExpiresAt: inDays(40) });
 const EXPIRING = member({ userId: 'exp', firstName: 'Игорь', subscriptionExpiresAt: inDays(3) });
+// Транзиентный кейс: active с уже прошедшим окном — safety-окно до тика шедулера (9:00).
 const EXPIRED = member({ userId: 'expd', firstName: 'Пётр', subscriptionExpiresAt: agoDays(5) });
+// Статусный кейс (2026-07-06): шедулер уже перевёл должника в expired — стабильный обитатель бакета.
+const EXPIRED_STATUS = member({ userId: 'lapsed', firstName: 'Семён', accessStatus: 'expired', subscriptionExpiresAt: agoDays(12) });
 const FROZEN = member({ userId: 'frz', firstName: 'Мария', accessStatus: 'frozen', joinedAt: agoDays(2) });
 
 function mockMembers(rows: MemberListItemDto[]) {
@@ -60,7 +63,7 @@ function mockMembers(rows: MemberListItemDto[]) {
 
 describe('ClubMembersTab — de-Stars dashboard', () => {
   it('management view splits members into «Доступ истёк» / «Скоро закончится» / «Оплата вступления» / «Участники»', async () => {
-    mockMembers([ORGANIZER, FAR, EXPIRING, EXPIRED, FROZEN]);
+    mockMembers([ORGANIZER, FAR, EXPIRING, EXPIRED, EXPIRED_STATUS, FROZEN]);
     renderWithProviders(<ClubMembersTab clubId={CLUB_ID} isOrganizer managementView />);
 
     expect(await screen.findByText(/Доступ истёк/)).toBeInTheDocument();
@@ -68,11 +71,23 @@ describe('ClubMembersTab — de-Stars dashboard', () => {
     expect(screen.getByText(/Оплата вступления/)).toBeInTheDocument();
     expect(screen.getByText(/^Участники/)).toBeInTheDocument();
 
-    // Expired + frozen + expiring each expose a «Взнос получен» action; the calm members do not.
-    expect(screen.getAllByRole('button', { name: /Взнос получен/ })).toHaveLength(3);
+    // Expired (transient + status) + frozen + expiring each expose a «Взнос получен» action; calm — нет.
+    expect(screen.getAllByRole('button', { name: /Взнос получен/ })).toHaveLength(4);
     expect(screen.getByText('Игорь')).toBeInTheDocument();
     expect(screen.getByText('Пётр')).toBeInTheDocument();
+    expect(screen.getByText('Семён')).toBeInTheDocument();
     expect(screen.getByText('Мария')).toBeInTheDocument();
+  });
+
+  it('a status-expired debtor lives in «Доступ истёк», not in «Оплата вступления»', async () => {
+    // Оживление expired (PO 2026-07-06): должник по продлению — стабильный обитатель статусного
+    // бакета, а не «вступивший» (хинт «Вступили — подтвердите взнос» для него врал).
+    mockMembers([EXPIRED_STATUS]);
+    renderWithProviders(<ClubMembersTab clubId={CLUB_ID} isOrganizer managementView />);
+
+    expect(await screen.findByText(/Доступ истёк/)).toBeInTheDocument();
+    expect(screen.queryByText(/Оплата вступления/)).not.toBeInTheDocument();
+    expect(screen.getByText(/истекла .+ назад/)).toBeInTheDocument();
   });
 
   it('an already-expired subscription lands in «Доступ истёк», NOT in «Скоро закончится»', async () => {

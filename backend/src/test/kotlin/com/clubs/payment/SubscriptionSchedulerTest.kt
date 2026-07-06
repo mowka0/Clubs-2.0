@@ -13,6 +13,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.OffsetDateTime
+import java.util.UUID
 
 /**
  * Tests the cron entry point and the transactional lifecycle service separately.
@@ -43,7 +44,7 @@ class SubscriptionSchedulerTest {
     fun `scheduler sends expiry notifications for subscriptions expiring within 3 days`() {
         val tgId = 123L
         every { membershipRepository.findExpiringWithin(any(), any()) } returns listOf(
-            ExpiringSubscriptionNotification(telegramId = tgId, clubName = "Chess Club")
+            ExpiringSubscriptionNotification(telegramId = tgId, clubName = "Chess Club", clubId = UUID.randomUUID())
         )
         every { membershipRepository.findActiveExpired(any()) } returns emptyList()
 
@@ -65,29 +66,34 @@ class SubscriptionSchedulerTest {
         scheduler.checkSubscriptions()
 
         verify(exactly = 0) { notificationService.sendDirectMessage(any(), any()) }
+        verify(exactly = 0) { notificationService.sendDirectMessageWithDeepLink(any(), any(), any(), any()) }
     }
 
-    // PRD §4.7.3.3: notification when subscription moves to grace_period.
+    // Статусная модель 2026-07-06: DM «подписка истекла» уходит с кнопкой-диплинком «Оплатить взнос»
+    // на страницу клуба (expired-участник заявляет там оплату) — AC-6 membership-lifecycle.md.
     @Test
-    fun `scheduler notifies users when their subscription enters grace period`() {
+    fun `scheduler notifies newly expired users with a deep-link payment button`() {
         val tgId = 321L
+        val club = UUID.randomUUID()
         every { membershipRepository.findExpiringWithin(any(), any()) } returns emptyList()
         every { membershipRepository.findActiveExpired(any()) } returns listOf(
-            ExpiringSubscriptionNotification(telegramId = tgId, clubName = "Poker Club")
+            ExpiringSubscriptionNotification(telegramId = tgId, clubName = "Poker Club", clubId = club)
         )
 
         scheduler.checkSubscriptions()
 
         verify(exactly = 1) {
-            notificationService.sendDirectMessage(
+            notificationService.sendDirectMessageWithDeepLink(
                 tgId,
-                match { it.contains("Poker Club") && it.contains("истёк") && it.contains("организатор") }
+                match { it.contains("Poker Club") && it.contains("истёк") },
+                "/clubs/$club",
+                "Оплатить взнос"
             )
         }
     }
 
     // findActiveExpired (the DM snapshot) must run BEFORE processExpiry — otherwise the rows we want to
-    // notify about have already flipped to frozen.
+    // notify about have already flipped to expired.
     @Test
     fun `scheduler reads active-expired before expiring access`() {
         every { membershipRepository.findExpiringWithin(any(), any()) } returns emptyList()
@@ -106,7 +112,7 @@ class SubscriptionSchedulerTest {
     fun `scheduler sends notifications before expiring access`() {
         val tgId = 123L
         every { membershipRepository.findExpiringWithin(any(), any()) } returns listOf(
-            ExpiringSubscriptionNotification(telegramId = tgId, clubName = "A")
+            ExpiringSubscriptionNotification(telegramId = tgId, clubName = "A", clubId = UUID.randomUUID())
         )
         every { membershipRepository.findActiveExpired(any()) } returns emptyList()
 
@@ -118,9 +124,9 @@ class SubscriptionSchedulerTest {
         }
     }
 
-    // De-Stars: processExpiry drops overdue active memberships straight to frozen (no grace).
+    // Статусная модель 2026-07-06: processExpiry переводит просроченные active в expired (должник остаётся в клубе).
     @Test
-    fun `processExpiry expires overdue access to frozen`() {
+    fun `processExpiry expires overdue access to expired`() {
         every { membershipRepository.expireOverdueAccess(any()) } returns 3
 
         lifecycleService.processExpiry(OffsetDateTime.now())

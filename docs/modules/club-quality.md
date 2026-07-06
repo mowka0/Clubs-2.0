@@ -63,7 +63,7 @@ owner-статистика и скрытый L3-ранг (§10 дизайн-до
   (Встреча, куда никто не пришёл, входит в знаменатель — честно занижает среднее.)
 - **coreSize** = `count(distinct user_id, имеющих ≥3 строки attendance='attended'` по НЕ-cancelled событиям
   этого клуба, без ограничения по времени, **исключая `clubs.owner_id`** и **только среди текущих участников**
-  — `memberships.status IN (active, grace_period, frozen)`). Организатор исключён: он сам
+  — `memberships.status IN (active, frozen, expired)` — пауза доступа не выкидывает из ядра). Организатор исключён: он сам
   отмечает свою явку, поэтому его учёт раздувал «основу клуба» (она никогда не падала бы ниже 1) и смешивал
   организатора с членским ядром; owner-исключение согласовано с правилом L3 «Сплочённость» (gamification §2).
   Cancelled-событие исключается, т.к. club-delete cascade может
@@ -304,7 +304,7 @@ ownership-проверки обязательны.
   событий left/expired, отдельный счёт) — разные числа для разных целей, см. код-комменты.
 - **rejoinedThisPeriod** (рендерится для free): count `membership_history` `event='rejoined'` за 30д.
 - **engagementPercent** (оба): distinct откликнувшихся (`event_responses`) на non-cancelled события клуба
-  за 90д ÷ живые участники (`memberships.status ∈ {active, grace_period}`) × 100, clamp 0..100; 0 если живых нет.
+  за 90д ÷ участники с доступом (`memberships.status = active`; frozen/expired без доступа — исключены) × 100, clamp 0..100; 0 если живых нет.
   (То же определение, что `engagementPercent` карточки — консистентно.)
 - **skladchinaPaidPercent** (если есть складчины в окне): `paid / terminal × 100`, где по складчинам клуба,
   **закрытым** (`closed_at`) в окне 90д: `paid` = участники `status='paid'`, `terminal` = участники в

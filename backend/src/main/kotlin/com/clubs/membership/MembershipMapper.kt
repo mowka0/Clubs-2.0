@@ -81,7 +81,8 @@ class MembershipMapper {
         joinedAt = member.joinedAt,
         subscriptionExpiresAt = member.subscriptionExpiresAt,
         duesClaimedAt = member.duesClaimedAt,
-        duesClaimMethod = member.duesClaimMethod
+        duesClaimMethod = member.duesClaimMethod,
+        accessStatus = member.accessStatus
     )
 
     fun toUserClubReputationDto(

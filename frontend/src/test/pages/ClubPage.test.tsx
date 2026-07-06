@@ -315,6 +315,81 @@ describe('ClubPage', () => {
     expect(screen.queryByText(/вы участник/i)).not.toBeInTheDocument();
   });
 
+  it('expired member: shows «Подписка истекла» with «Оплатить взнос», no guest CTA and no tabs', async () => {
+    // Оживление expired (PO 2026-07-06): должник по продлению видит зеркальный frozen-вид,
+    // но текст говорит о продлении подписки, а не о вступлении. Claim-флоу тот же.
+    server.use(
+      http.get('*/api/clubs/:id', () => {
+        return HttpResponse.json({
+          ...mockClubDetail,
+          accessType: 'open',
+          ownerId: 'other-owner',
+          subscriptionPrice: 500,
+        });
+      }),
+      http.get('*/api/users/me/clubs', () => {
+        return HttpResponse.json([
+          {
+            id: 'm-1',
+            userId: 'user-1',
+            clubId: 'club-123',
+            status: 'expired',
+            role: 'member',
+            joinedAt: '2025-01-01T00:00:00Z',
+            subscriptionExpiresAt: '2025-06-01T00:00:00Z',
+          },
+        ] as MembershipDto[]);
+      }),
+    );
+    mockEmptyTabData();
+
+    renderClubPage();
+
+    await waitFor(() => {
+      expect(screen.getByText(/подписка истекла/i)).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: /оплатить взнос/i })).toBeInTheDocument();
+    // Не гость (нет «Вступить») и не полноправный участник (нет табов/бейджа).
+    expect(screen.queryByRole('button', { name: /^вступить$/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/вы участник/i)).not.toBeInTheDocument();
+  });
+
+  it('expired member with a pending claim: shows «Оплата на проверке» instead of the pay CTA', async () => {
+    server.use(
+      http.get('*/api/clubs/:id', () => {
+        return HttpResponse.json({
+          ...mockClubDetail,
+          accessType: 'open',
+          ownerId: 'other-owner',
+          subscriptionPrice: 500,
+        });
+      }),
+      http.get('*/api/users/me/clubs', () => {
+        return HttpResponse.json([
+          {
+            id: 'm-1',
+            userId: 'user-1',
+            clubId: 'club-123',
+            status: 'expired',
+            role: 'member',
+            joinedAt: '2025-01-01T00:00:00Z',
+            subscriptionExpiresAt: '2025-06-01T00:00:00Z',
+            duesClaimedAt: '2025-06-02T00:00:00Z',
+            duesClaimMethod: 'sbp',
+          },
+        ] as MembershipDto[]);
+      }),
+    );
+    mockEmptyTabData();
+
+    renderClubPage();
+
+    await waitFor(() => {
+      expect(screen.getByText(/оплата на проверке/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: /оплатить взнос/i })).not.toBeInTheDocument();
+  });
+
   it('shows error message when join API fails', async () => {
     server.use(
       http.get('*/api/clubs/:id', () => {

@@ -24,9 +24,9 @@ private const val MAX_CLUBS_PER_ORGANIZER = 10
 private const val INVITE_CODE_LENGTH = 16
 
 // "Принадлежит клубу" для видимости реквизитов СБП — участники, которым может понадобиться
-// платить, + действующий владелец.
+// платить, + действующий владелец. expired (должник по продлению) — главный кандидат на оплату.
 private val MEMBER_REQUISITE_STATUSES = setOf(
-    MembershipStatus.active, MembershipStatus.frozen, MembershipStatus.grace_period
+    MembershipStatus.active, MembershipStatus.frozen, MembershipStatus.expired
 )
 
 @Service

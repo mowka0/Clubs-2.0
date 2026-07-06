@@ -82,13 +82,13 @@ class AccessGateService(
     @Transactional
     fun markDuesPaid(clubId: UUID, targetUserId: UUID, callerId: UUID): MembershipDto {
         val membership = loadManageableMember(clubId, targetUserId)
-        if (membership.status != MembershipStatus.active && membership.status != MembershipStatus.frozen) {
+        if (membership.status !in DUES_PAYABLE_STATUSES) {
             throw ValidationException("Отметить взнос можно только у действующего участника")
         }
         // Honor-system помесячное членство: подтверждение оплаты взноса открывает доступ и продлевает его на
         // один период. Продлеваем от ТЕКУЩЕГО срока истечения (или от текущего момента, что позже), чтобы ранняя
         // оплата никогда не теряла уже оплаченные дни — например, «до 28 июня» + оплата → «до 28 июля». Планировщик
-        // позже сам переводит просроченный доступ обратно в `frozen`, поэтому дата здесь — единственный источник истины.
+        // позже сам переводит просроченный доступ в `expired`, поэтому дата здесь — единственный источник истины.
         val now = OffsetDateTime.now()
         val base = membership.subscriptionExpiresAt?.takeIf { it.isAfter(now) } ?: now
         val newExpiresAt = base.plusDays(accessPeriodDays)
@@ -135,11 +135,12 @@ class AccessGateService(
     // вызывающий действует над своим собственным membership. Создаёт заявку (claim), которую проверяет
     // организатор; доступ всё равно открывается только когда организатор нажмёт «Взнос получен»
     // (honor-system сохраняется). sbp требует скриншот; cash — просто утверждение (без доказательства).
+    // Claim доступен обоим состояниям «без доступа»: frozen (первый взнос) и expired (просрочка продления).
     @Transactional
     fun claimDues(clubId: UUID, callerId: UUID, method: String, proofUrl: String?): MembershipDto {
         val membership = membershipRepository.findByUserAndClub(callerId, clubId)
             ?: throw NotFoundException("Вы не состоите в этом клубе")
-        if (membership.status != MembershipStatus.frozen) {
+        if (membership.status !in CLAIMABLE_STATUSES) {
             throw ValidationException("Заявить об оплате можно только пока доступ закрыт")
         }
         val normalizedMethod = when (method.trim().lowercase()) {
@@ -283,6 +284,13 @@ class AccessGateService(
     }
 
     companion object {
+        // Статусы, из которых участник может заявить об оплате взноса: frozen = ждёт первого взноса,
+        // expired = просрочил продление (оба «без доступа», путь назад одинаковый).
+        private val CLAIMABLE_STATUSES = setOf(MembershipStatus.frozen, MembershipStatus.expired)
+        // Статусы, у которых организатор может отметить «Взнос получен»: действующий участник (active —
+        // раннее продление), ждущий первого взноса (frozen) или должник по продлению (expired).
+        private val DUES_PAYABLE_STATUSES =
+            setOf(MembershipStatus.active, MembershipStatus.frozen, MembershipStatus.expired)
         // Способ оплаты «СБП» (перевод по номеру телефона).
         const val CLAIM_SBP = "sbp"
         // Способ оплаты «наличными».

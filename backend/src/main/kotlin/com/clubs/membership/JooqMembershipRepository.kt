@@ -25,10 +25,11 @@ class JooqMembershipRepository(
     private val history: MembershipHistoryRepository
 ) : MembershipRepository {
 
-    // Поиск «текущей принадлежности» для управления/выхода/идемпотентности вступления: `frozen`-участник
-    // (организатор заблокировал доступ до оплаты офлайн-взноса) всё ещё числится участником и должен
-    // находиться этим методом, чтобы его можно было разморозить, дать выйти или сказать «уже участник»
-    // при повторной попытке вступления. Намеренно шире, чем MembershipAccess.hasAccess (доступ к контенту).
+    // Поиск «текущей принадлежности» для управления/выхода/идемпотентности вступления: `frozen`
+    // (ждёт первого взноса) и `expired` (просрочил продление) всё ещё числятся участниками и должны
+    // находиться этим методом, чтобы их можно было допустить/продлить, дать выйти или сказать
+    // «уже участник» при повторной попытке вступления. Намеренно шире, чем
+    // MembershipAccess.hasAccess (доступ к контенту). Матрица: docs/modules/membership-lifecycle.md.
     override fun findActiveByUserAndClub(userId: UUID, clubId: UUID): Membership? =
         dsl.selectFrom(MEMBERSHIPS)
             .where(
@@ -38,7 +39,7 @@ class JooqMembershipRepository(
                         MEMBERSHIPS.STATUS.`in`(
                             MembershipStatus.active,
                             MembershipStatus.frozen,
-                            MembershipStatus.grace_period
+                            MembershipStatus.expired
                         )
                     )
             )
@@ -60,9 +61,10 @@ class JooqMembershipRepository(
             .fetchOne()
             ?.let(mapper::toDomain)
 
-    // Список «Мои клубы»: клубы, где юзер сейчас числится участником. `frozen` включён — заблокированный
-    // участник всё равно должен видеть клуб (чтобы узнать, что он заморожен / оплатить взнос). Убрана
-    // старая ветка «cancelled, но ещё оплачено» (de-Stars: subscription_expires_at больше не драйвер).
+    // Список «Мои клубы»: клубы, где юзер сейчас числится участником. `frozen` и `expired` включены —
+    // участник без доступа всё равно должен видеть клуб (чтобы узнать, что доступ закрыт / оплатить
+    // взнос). Убрана старая ветка «cancelled, но ещё оплачено» (de-Stars: subscription_expires_at
+    // больше не драйвер).
     override fun findByUserId(userId: UUID): List<Membership> {
         return dsl.select(*MEMBERSHIPS.fields())
             .from(MEMBERSHIPS)
@@ -74,7 +76,7 @@ class JooqMembershipRepository(
                         MEMBERSHIPS.STATUS.`in`(
                             MembershipStatus.active,
                             MembershipStatus.frozen,
-                            MembershipStatus.grace_period
+                            MembershipStatus.expired
                         )
                     )
             )
@@ -82,12 +84,13 @@ class JooqMembershipRepository(
             .map(mapper::toDomain)
     }
 
-    override fun findClubMembersWithUserInfo(clubId: UUID, includeFrozen: Boolean): List<ClubMemberInfo> {
-        // Дашборду организатора нужны и `frozen`-участники тоже (они показаны в «Ждут оплаты»); ростер
-        // для обычного участника на ClubPage видит только `active`. includeFrozen задаёт вызывающий код
-        // (MemberService) исходя из того, является ли зритель организатором.
-        val statusCondition = if (includeFrozen) {
-            MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.frozen)
+    override fun findClubMembersWithUserInfo(clubId: UUID, includeWithoutAccess: Boolean): List<ClubMemberInfo> {
+        // Дашборду организатора нужны и участники без доступа: `frozen` (ждут первого взноса) и
+        // `expired` (просрочили продление) — они показаны в бакетах «Оплата вступления» / «Доступ истёк».
+        // Ростер для обычного участника на ClubPage видит только `active`. includeWithoutAccess задаёт
+        // вызывающий код (MemberService) исходя из того, является ли зритель организатором.
+        val statusCondition = if (includeWithoutAccess) {
+            MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.frozen, MembershipStatus.expired)
         } else {
             MEMBERSHIPS.STATUS.eq(MembershipStatus.active)
         }
@@ -139,16 +142,16 @@ class JooqMembershipRepository(
 
     override fun findUserClubsWithReputation(userId: UUID): List<UserClubReputationInfo> {
         val outcomeCount = DSL.coalesce(USER_CLUB_REPUTATION.OUTCOME_COUNT, DSL.`val`(0))
-        // «Active» в профиле = участник всё ещё числится И клуб жив. `frozen` тоже считается принадлежностью
-        // (заблокирован до оплаты взноса, но клуб всё ещё «его»). Всё остальное, что проходит фильтр ниже
-        // (вышедшее/истёкшее членство) — это «История»: оно появляется только потому, что живёт след
-        // репутации (outcome_count > 0). P1b: глобальный агрегат теперь all-history, поэтому этот запрос
-        // больше не отбрасывает клубы, из которых юзер вышел (закрывает дыру active-only A). De-Stars:
-        // убрана старая ветка «cancelled, но ещё оплачено» (subscription_expires_at больше не драйвер доступа).
+        // «Active» в профиле = участник всё ещё числится И клуб жив. `frozen` и `expired` тоже считаются
+        // принадлежностью (доступ закрыт до оплаты взноса, но клуб всё ещё «его»). Всё остальное, что
+        // проходит фильтр ниже (вышедшее членство) — это «История»: оно появляется только потому, что
+        // живёт след репутации (outcome_count > 0). P1b: глобальный агрегат теперь all-history, поэтому
+        // этот запрос больше не отбрасывает клубы, из которых юзер вышел (закрывает дыру active-only A).
+        // De-Stars: убрана старая ветка «cancelled, но ещё оплачено».
         val activeCondition = MEMBERSHIPS.STATUS.`in`(
             MembershipStatus.active,
             MembershipStatus.frozen,
-            MembershipStatus.grace_period
+            MembershipStatus.expired
         ).and(CLUBS.IS_ACTIVE.eq(true))
         val activeField = DSL.field(activeCondition).`as`("active")
         return dsl.select(
@@ -234,11 +237,12 @@ class JooqMembershipRepository(
     // Число занятых слотов для проверки лимита участников. `frozen` тоже считается: вступление в
     // платный клуб сразу переводит участника в `frozen` (заблокирован до оплаты взноса), и он всё равно
     // занимает слот — иначе N человек могли бы набиться в клуб на 1 место, все во frozen, обойдя лимит.
+    // `expired` (должник по продлению) аналогично остаётся участником и держит слот.
     override fun countActiveByClubId(clubId: UUID): Int =
         dsl.selectCount().from(MEMBERSHIPS)
             .where(
                 MEMBERSHIPS.CLUB_ID.eq(clubId)
-                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.frozen))
+                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.frozen, MembershipStatus.expired))
             )
             .fetchOne(0, Int::class.java) ?: 0
 
@@ -298,7 +302,7 @@ class JooqMembershipRepository(
     }
 
     /**
-     * Возвращает к жизни ранее мёртвую (cancelled / expired) строку membership. UNIQUE(user_id, club_id)
+     * Возвращает к жизни ранее мёртвую (cancelled) строку membership. UNIQUE(user_id, club_id)
      * означает, что нельзя INSERT-ить свежую строку, когда одна уже существует, — реактивация единственный
      * путь. Сбрасывает поля жизненного цикла так, что вступление неотличимо от совершенно нового.
      * [reactivateFree] → `active` (бесплатный клуб, без биллинга); [reactivateFrozen] → `frozen`
@@ -373,44 +377,6 @@ class JooqMembershipRepository(
         return 0
     }
 
-    override fun activateSubscription(userId: UUID, clubId: UUID, expiresAt: OffsetDateTime): UUID {
-        val id = UUID.randomUUID()
-        val now = OffsetDateTime.now()
-        dsl.insertInto(MEMBERSHIPS)
-            .set(MEMBERSHIPS.ID, id)
-            .set(MEMBERSHIPS.USER_ID, userId)
-            .set(MEMBERSHIPS.CLUB_ID, clubId)
-            .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
-            .set(MEMBERSHIPS.ROLE, MembershipRole.member)
-            .set(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT, expiresAt)
-            .execute()
-        history.record(userId, clubId, MembershipEvent.joined, now)
-        return id
-    }
-
-    /**
-     * Устанавливает active + новый срок. Это ОДНОВРЕМЕННО путь продления платной подписки (прежний
-     * статус active/grace_period — участник доступа не терял → не событие оттока, ничего не логируется)
-     * и путь повторного платного вступления (прежний статус cancelled/expired — мёртвое членство
-     * возвращается к жизни → `rejoined`). Прежний статус читается до update, чтобы отличить эти два случая.
-     */
-    override fun renewSubscription(membershipId: UUID, newExpiresAt: OffsetDateTime) {
-        val now = OffsetDateTime.now()
-        val prior = dsl.select(MEMBERSHIPS.USER_ID, MEMBERSHIPS.CLUB_ID, MEMBERSHIPS.STATUS)
-            .from(MEMBERSHIPS)
-            .where(MEMBERSHIPS.ID.eq(membershipId))
-            .fetchOne()
-        dsl.update(MEMBERSHIPS)
-            .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
-            .set(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT, newExpiresAt)
-            .where(MEMBERSHIPS.ID.eq(membershipId))
-            .execute()
-        val priorStatus = prior?.get(MEMBERSHIPS.STATUS)
-        if (priorStatus == MembershipStatus.cancelled || priorStatus == MembershipStatus.expired) {
-            history.record(prior.get(MEMBERSHIPS.USER_ID)!!, prior.get(MEMBERSHIPS.CLUB_ID)!!, MembershipEvent.rejoined, now)
-        }
-    }
-
     // Мутации access-gate (de-Stars, Slice 2). Намеренно НЕ пишутся в membership_history:
     // заморозка/разморозка — временная приостановка доступа, а не событие оттока join/leave/expire
     // (для неё нет MembershipEvent). Замороженный участник всё равно числится; когда он реально выходит,
@@ -446,15 +412,19 @@ class JooqMembershipRepository(
             .set(MEMBERSHIPS.DUES_CLAIM_METHOD, method)
             .set(MEMBERSHIPS.DUES_PROOF_URL, proofUrl)
             .set(MEMBERSHIPS.UPDATED_AT, now)
-            // Claim делает только frozen (заблокированный) участник; 0 строк = уже не frozen (например,
-            // организатор только что впустил).
-            .where(MEMBERSHIPS.ID.eq(membershipId).and(MEMBERSHIPS.STATUS.eq(MembershipStatus.frozen)))
+            // Claim делает участник без доступа: frozen (ждёт первого взноса) или expired (просрочил
+            // продление); 0 строк = доступ уже открыт (например, организатор только что впустил).
+            .where(
+                MEMBERSHIPS.ID.eq(membershipId)
+                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.frozen, MembershipStatus.expired))
+            )
             .execute()
     }
 
-    // «Взнос получен»: фиксирует офлайн-оплату взноса, открывает доступ (status→active, снимает frozen)
-    // И одним атомарным шагом устанавливает конец окна доступа (subscription_expires_at = accessUntil).
-    // Позже шедулер автоматически переводит просроченный доступ обратно во frozen — см. expireOverdueAccess.
+    // «Взнос получен»: фиксирует офлайн-оплату взноса, открывает доступ (status→active из
+    // frozen/expired) И одним атомарным шагом устанавливает конец окна доступа
+    // (subscription_expires_at = accessUntil). Позже шедулер автоматически переводит просроченный
+    // доступ в expired — см. expireOverdueAccess.
     override fun markDuesPaid(membershipId: UUID, markedBy: UUID, accessUntil: OffsetDateTime): Int {
         val now = OffsetDateTime.now()
         return dsl.update(MEMBERSHIPS)
@@ -470,7 +440,7 @@ class JooqMembershipRepository(
             .set(MEMBERSHIPS.UPDATED_AT, now)
             .where(
                 MEMBERSHIPS.ID.eq(membershipId)
-                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.frozen))
+                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.frozen, MembershipStatus.expired))
             )
             .execute()
     }
@@ -515,7 +485,7 @@ class JooqMembershipRepository(
     }
 
     override fun findExpiringWithin(now: OffsetDateTime, threshold: OffsetDateTime): List<ExpiringSubscriptionNotification> =
-        dsl.select(USERS.TELEGRAM_ID, CLUBS.NAME)
+        dsl.select(USERS.TELEGRAM_ID, CLUBS.NAME, CLUBS.ID)
             .from(MEMBERSHIPS)
             .join(USERS).on(USERS.ID.eq(MEMBERSHIPS.USER_ID))
             .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))
@@ -527,12 +497,13 @@ class JooqMembershipRepository(
             .fetch { record ->
                 ExpiringSubscriptionNotification(
                     telegramId = record.get(USERS.TELEGRAM_ID)!!,
-                    clubName = record.get(CLUBS.NAME)!!
+                    clubName = record.get(CLUBS.NAME)!!,
+                    clubId = record.get(CLUBS.ID)!!
                 )
             }
 
     override fun findActiveExpired(now: OffsetDateTime): List<ExpiringSubscriptionNotification> =
-        dsl.select(USERS.TELEGRAM_ID, CLUBS.NAME)
+        dsl.select(USERS.TELEGRAM_ID, CLUBS.NAME, CLUBS.ID)
             .from(MEMBERSHIPS)
             .join(USERS).on(USERS.ID.eq(MEMBERSHIPS.USER_ID))
             .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))
@@ -543,19 +514,23 @@ class JooqMembershipRepository(
             .fetch { record ->
                 ExpiringSubscriptionNotification(
                     telegramId = record.get(USERS.TELEGRAM_ID)!!,
-                    clubName = record.get(CLUBS.NAME)!!
+                    clubName = record.get(CLUBS.NAME)!!,
+                    clubId = record.get(CLUBS.ID)!!
                 )
             }
 
     // Автоистечение honor-system: `active`-платное членство, у которого прошло окно доступа, переходит
-    // в `frozen` («ждёт оплаты») — остаётся членством, теряет доступ к контенту до следующего
-    // подтверждённого взноса. Бесплатные членства (subscription_expires_at IS NULL) исключены.
-    // Не логируется в membership_history: заморозка — приостановка доступа, а не событие оттока
-    // (то же правило, что и для ручной заморозки/разморозки выше).
+    // в `expired` (просрочено продление) — остаётся членством и занимает слот, но теряет доступ к
+    // контенту до следующего подтверждённого взноса. Бесплатные членства (subscription_expires_at
+    // IS NULL) исключены. `access_frozen_at` не трогаем — это метка заморозки, момент истечения и так
+    // виден по subscription_expires_at. НЕ логируется в membership_history: лапс продления —
+    // приостановка доступа, а не событие оттока; club-quality считает события `left`+`expired`
+    // оттоком, и лог на каждый транзиентный лапс штрафовал бы ранг клуба ложным churn'ом
+    // (решение зафиксировано в docs/modules/membership-lifecycle.md §3).
     override fun expireOverdueAccess(now: OffsetDateTime): Int =
         dsl.update(MEMBERSHIPS)
-            .set(MEMBERSHIPS.STATUS, MembershipStatus.frozen)
-            .set(MEMBERSHIPS.ACCESS_FROZEN_AT, now)
+            .set(MEMBERSHIPS.STATUS, MembershipStatus.expired)
+            .set(MEMBERSHIPS.UPDATED_AT, now)
             .where(
                 MEMBERSHIPS.STATUS.eq(MembershipStatus.active)
                     .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.isNotNull)
@@ -575,30 +550,30 @@ class JooqMembershipRepository(
             .fetchOne(0, Int::class.java) ?: 0
     }
 
-    override fun countClaimedFrozenByClubs(clubIds: Collection<UUID>): Int {
+    override fun countClaimedAwaitingDuesByClubs(clubIds: Collection<UUID>): Int {
         if (clubIds.isEmpty()) return 0
         return dsl.selectCount().from(MEMBERSHIPS)
             .where(
                 MEMBERSHIPS.CLUB_ID.`in`(clubIds)
-                    .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.frozen))
-                    // Только заявившие об оплате: не-claimed frozen (пауза/автоистечение) внимания не требует.
+                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.frozen, MembershipStatus.expired))
+                    // Только заявившие об оплате: не-claimed frozen/expired внимания не требует (мяч у участника).
                     .and(MEMBERSHIPS.DUES_CLAIMED_AT.isNotNull)
             )
             .fetchOne(0, Int::class.java) ?: 0
     }
 
-    override fun countClaimedFrozenByOwner(ownerId: UUID): Int =
+    override fun countClaimedAwaitingDuesByOwner(ownerId: UUID): Int =
         dsl.selectCount().from(MEMBERSHIPS)
             .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))
             .where(
                 CLUBS.OWNER_ID.eq(ownerId)
                     .and(CLUBS.IS_ACTIVE.eq(true))
-                    .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.frozen))
+                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.frozen, MembershipStatus.expired))
                     .and(MEMBERSHIPS.DUES_CLAIMED_AT.isNotNull)
             )
             .fetchOne(0, Int::class.java) ?: 0
 
-    override fun findFrozenMembersByOwner(ownerId: UUID): List<OrganizerDuesMember> {
+    override fun findAwaitingDuesMembersByOwner(ownerId: UUID): List<OrganizerDuesMember> {
         return dsl.select(
             MEMBERSHIPS.USER_ID,
             USERS.FIRST_NAME,
@@ -611,7 +586,8 @@ class JooqMembershipRepository(
             MEMBERSHIPS.JOINED_AT,
             MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT,
             MEMBERSHIPS.DUES_CLAIMED_AT,
-            MEMBERSHIPS.DUES_CLAIM_METHOD
+            MEMBERSHIPS.DUES_CLAIM_METHOD,
+            MEMBERSHIPS.STATUS
         )
             .from(MEMBERSHIPS)
             .join(USERS).on(USERS.ID.eq(MEMBERSHIPS.USER_ID))
@@ -619,7 +595,7 @@ class JooqMembershipRepository(
             .where(
                 CLUBS.OWNER_ID.eq(ownerId)
                     .and(CLUBS.IS_ACTIVE.eq(true))
-                    .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.frozen))
+                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.frozen, MembershipStatus.expired))
             )
             .orderBy(MEMBERSHIPS.JOINED_AT.desc())
             .fetch { r ->
@@ -635,14 +611,15 @@ class JooqMembershipRepository(
                     joinedAt = r.get(MEMBERSHIPS.JOINED_AT)!!,
                     subscriptionExpiresAt = r.get(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT),
                     duesClaimedAt = r.get(MEMBERSHIPS.DUES_CLAIMED_AT),
-                    duesClaimMethod = r.get(MEMBERSHIPS.DUES_CLAIM_METHOD)
+                    duesClaimMethod = r.get(MEMBERSHIPS.DUES_CLAIM_METHOD),
+                    accessStatus = (r.get(MEMBERSHIPS.STATUS) ?: MembershipStatus.frozen).literal
                 )
             }
     }
 
     // Telegram ID участников, у которых сейчас есть доступ к клубу — общий предикат
     // MembershipAccess (status `active`). Участникам без доступа
-    // (frozen/expired/grace_period) нельзя слать DM про событие, которое им не открыть. (GAP-010)
+    // (frozen/expired) нельзя слать DM про событие, которое им не открыть. (GAP-010)
     override fun findMemberTelegramIds(clubId: UUID): List<Long> {
         return dsl.select(USERS.TELEGRAM_ID)
             .from(MEMBERSHIPS)

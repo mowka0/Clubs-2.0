@@ -55,10 +55,10 @@ data class MemberAttentionDto(
 )
 
 /**
- * `frozen`-участник в одном из клубов вызывающего — вступил, но ещё не был допущен (взнос ещё не
- * подтверждён). Питает кросс-клубовую секцию «Ждут оплаты» на «Мои клубы», чтобы организатор мог
- * подтверждать взносы, не заходя в каждый клуб. `subscriptionExpiresAt` — истёкшее окно
- * (null при первом вступлении без оплаты); `joinedAt` формирует строку «вступил(а) N назад».
+ * Участник без доступа в одном из клубов вызывающего: `frozen` (вступил, первый взнос не подтверждён)
+ * или `expired` (просрочил продление). Питает кросс-клубовую секцию «Ждут оплаты» на «Мои клубы»,
+ * чтобы организатор мог подтверждать взносы, не заходя в каждый клуб. `subscriptionExpiresAt` —
+ * истёкшее окно (null при первом вступлении без оплаты); `joinedAt` формирует строку «вступил(а) N назад».
  */
 data class OrganizerDuesMember(
     val userId: UUID,
@@ -72,7 +72,10 @@ data class OrganizerDuesMember(
     val joinedAt: OffsetDateTime,
     val subscriptionExpiresAt: OffsetDateTime?,
     val duesClaimedAt: OffsetDateTime?,
-    val duesClaimMethod: String?
+    val duesClaimMethod: String?,
+    // Статус членства ("frozen"|"expired") — фронтенд различает «первый взнос» и «просрочку продления»
+    // (у второй в карточке нет «Отказать · вернуть», а мета говорит о подписке, не о вступлении).
+    val accessStatus: String
 )
 
 data class OrganizerDuesMemberDto(
@@ -89,7 +92,9 @@ data class OrganizerDuesMemberDto(
     // Кросс-клубовая «Ждут оплаты»: заявка участника об оплате (null = нет заявки) + способ, чтобы
     // строка могла пометить «оплата заявлена» и организатор приоритизировал подтверждение.
     val duesClaimedAt: OffsetDateTime?,
-    val duesClaimMethod: String?
+    val duesClaimMethod: String?,
+    // "frozen" (первый взнос) | "expired" (просрочка продления) — управляет текстами и действиями карточки.
+    val accessStatus: String
 )
 
 /** Заявка об оплате взноса по инициативе участника (de-Stars): frozen-участник заявляет, что оплатил.

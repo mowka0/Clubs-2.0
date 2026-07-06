@@ -89,11 +89,13 @@ type Bucket = 'expired' | 'expiring' | 'awaiting' | 'calm';
 /**
  * Раскладывает участника по бакету состояния доступа (de-Stars дашборд). У обычного зрителя поля
  * доступа null, поэтому все участники попадают в «calm» — прежний список только активных.
- * «expired» ≠ «expiring»: у уже-истёкшего окна заголовок «скоро закончится» врал бы по смыслу.
- * Active с истёкшим окном — короткоживущее состояние: ежедневный тик шедулера (processExpiry, 9:00)
- * переводит таких во frozen; до тика организатор видит их в своём бакете с тем же действием.
+ * Бакет «Доступ истёк» — статусный (accessStatus === 'expired', должники по продлению, стабильное
+ * множество); active с уже прошедшим окном попадает туда же как safety-окно до ближайшего тика
+ * шедулера (processExpiry, 9:00, переводит таких в expired). «frozen» — только новые участники,
+ * ждущие ПЕРВОГО взноса («Оплата вступления»).
  */
 function bucketOf(member: MemberListItemDto): Bucket {
+  if (member.accessStatus === 'expired') return 'expired';
   if (member.accessStatus === 'frozen') return 'awaiting';
   if (member.accessStatus === 'active' && member.subscriptionExpiresAt) {
     const days = daysUntil(member.subscriptionExpiresAt);
@@ -173,9 +175,11 @@ interface CalmMemberRowProps {
 const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenProfile }) => {
   const haptic = useHaptic();
   const isOwner = member.role === 'organizer';
-  // Frozen = организатор закрыл доступ / взнос ещё не подтверждён. Такие строки видит только организатор
-  // (бэкенд скрывает frozen-участников от обычных зрителей), так что «ледяное» оформление — только у него.
+  // Без доступа: frozen (первый взнос не подтверждён) или expired (просрочил продление). Такие строки
+  // видит только организатор (бэкенд скрывает их от обычных зрителей), так что «ледяное» оформление —
+  // только у него.
   const isFrozen = member.accessStatus === 'frozen';
+  const isExpired = member.accessStatus === 'expired';
   const hasScore = member.trust !== null;
   // Строку обещаний показываем только при наличии событийного трека; участник «только финансы»
   // (запись по складчине, 0 подтверждений) сохраняет очки, но прячет обманчивое «Обещания 0%» (F5-08).
@@ -193,8 +197,9 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
         : forOrganizer
           ? 'Пока нет данных'
           : null;
-  // Видимая только организатору строка доступа платного активного участника (у бесплатных членств нет срока).
-  const accessMeta = forOrganizer && !isOwner && member.subscriptionExpiresAt
+  // Видимая только организатору строка доступа платного активного участника (у бесплатных членств нет
+  // срока). Гейт по accessStatus === 'active': у expired тоже есть subscriptionExpiresAt, но «Активен» врал бы.
+  const accessMeta = forOrganizer && !isOwner && member.accessStatus === 'active' && member.subscriptionExpiresAt
     ? `Активен · до ${formatDate(member.subscriptionExpiresAt)}`
     : null;
   // Публичные награды клуба (R3) — защищаемся от payload без этого поля (граница не проверяется схемой).
@@ -203,7 +208,7 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
   return (
     <button
       type="button"
-      className={`rd-rep-row${isFrozen ? ' rd-frozen' : ''}`}
+      className={`rd-rep-row${isFrozen || isExpired ? ' rd-frozen' : ''}`}
       onClick={() => { haptic.impact('light'); onOpenProfile(member); }}
     >
       <span className="rd-ico">
@@ -226,9 +231,9 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
             ))}
           </div>
         )}
-        {isFrozen
-          ? <div className="rd-met rd-met-frozen">❄️ Доступ закрыт</div>
-          : accessMeta && <div className="rd-met rd-met-ok">{accessMeta}</div>}
+        {isFrozen && <div className="rd-met rd-met-frozen">❄️ Доступ закрыт</div>}
+        {isExpired && <div className="rd-met rd-met-frozen">⛔ Доступ истёк</div>}
+        {accessMeta && <div className="rd-met rd-met-ok">{accessMeta}</div>}
         {repMeta && <div className="rd-met">{repMeta}</div>}
       </div>
       <span className="rd-score">
@@ -274,12 +279,14 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
   const expired = showBuckets ? members.filter((m) => bucketOf(m) === 'expired') : [];
   const expiring = showBuckets ? members.filter((m) => bucketOf(m) === 'expiring') : [];
   const awaiting = showBuckets ? members.filter((m) => bucketOf(m) === 'awaiting') : [];
-  // В бакет-виде frozen-участники живут в «Оплата вступления». В плоском списке (без managementView)
-  // они остаются, но тонут вниз, «ледяные» — организатор с одного взгляда видит, у кого нет доступа,
-  // не теряя их в общей массе. (sort стабильный → сохраняет порядок бэкенда.)
+  // В бакет-виде участники без доступа живут в «Оплата вступления» (frozen) / «Доступ истёк» (expired).
+  // В плоском списке (без managementView) они остаются, но тонут вниз, «ледяные» — организатор с
+  // одного взгляда видит, у кого нет доступа, не теряя их в общей массе. (sort стабильный → сохраняет
+  // порядок бэкенда.)
+  const hasNoAccess = (m: MemberListItemDto) => m.accessStatus === 'frozen' || m.accessStatus === 'expired';
   const calm = showBuckets
     ? members.filter((m) => bucketOf(m) === 'calm')
-    : [...members].sort((a, b) => Number(a.accessStatus === 'frozen') - Number(b.accessStatus === 'frozen'));
+    : [...members].sort((a, b) => Number(hasNoAccess(a)) - Number(hasNoAccess(b)));
 
   return (
     <>
@@ -289,7 +296,7 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
             ⛔ Доступ истёк <span className="rd-count">· {expired.length}</span>
           </div>
           <div className="rd-attn-hint">
-            Оплаченный период закончился — доступ скоро закроется автоматически. Получил продление — подтверди.
+            Оплаченный период закончился — доступ закрыт до нового взноса. Получил продление — подтверди.
           </div>
           <div className="rd-glass rd-rep-panel rd-attn-block rd-attn-block-exp">
             {expired.map((member) => (

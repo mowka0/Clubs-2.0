@@ -84,12 +84,6 @@ class MembershipHistoryIntegrationTest {
     }
 
     @Test
-    fun `activateSubscription records joined`() {
-        membershipRepository.activateSubscription(memberId, clubId, OffsetDateTime.now().plusDays(30))
-        assertEvents(memberId, MembershipEvent.joined)
-    }
-
-    @Test
     fun `cancel records left`() {
         val m = membershipRepository.create(memberId, clubId)
         membershipRepository.cancel(m.id)
@@ -105,22 +99,14 @@ class MembershipHistoryIntegrationTest {
     }
 
     @Test
-    fun `renewSubscription from active does NOT record (renewal, not churn)`() {
-        val id = membershipRepository.activateSubscription(memberId, clubId, OffsetDateTime.now().plusDays(30))
-        membershipRepository.renewSubscription(id, OffsetDateTime.now().plusDays(60))
+    fun `markDuesPaid from expired does NOT record (resumption, not rejoin)`() {
+        // Expired-должник — всё ещё участник (статусная модель 2026-07-06): продление взноса
+        // возвращает active без события в истории. `rejoined` остаётся только за cancelled → active.
+        val m = expiredMembership(memberId)
+        val updated = membershipRepository.markDuesPaid(m, ownerId, OffsetDateTime.now().plusDays(30))
+        assertEquals(1, updated)
+        assertStatus(m, MembershipStatus.active)
         assertEvents(memberId, MembershipEvent.joined) // only the original join
-    }
-
-    @Test
-    fun `renewSubscription from a dead membership records rejoined`() {
-        val id = membershipRepository.activateSubscription(memberId, clubId, OffsetDateTime.now().plusDays(30))
-        // Simulate a lapsed membership directly (the flip itself is not a logged transition here).
-        dsl.update(MEMBERSHIPS)
-            .set(MEMBERSHIPS.STATUS, MembershipStatus.expired)
-            .where(MEMBERSHIPS.ID.eq(id))
-            .execute()
-        membershipRepository.renewSubscription(id, OffsetDateTime.now().plusDays(30))
-        assertEvents(memberId, MembershipEvent.joined, MembershipEvent.rejoined)
     }
 
     @Test
@@ -145,32 +131,67 @@ class MembershipHistoryIntegrationTest {
     }
 
     @Test
-    fun `expireOverdueAccess flips overdue active to frozen without a churn event`() {
+    fun `expireOverdueAccess flips overdue active to expired without a churn event`() {
         val now = OffsetDateTime.now()
-        membershipRepository.activateSubscription(memberId, clubId, now.minusDays(1)) // joined, already past expiry
-        val count = membershipRepository.expireOverdueAccess(now) // active → frozen (access suspension)
+        // joined + активное окно уже в прошлом (репозиторный setAccessUntil не валидирует дату —
+        // валидация будущего живёт в AccessGateService).
+        val m = membershipRepository.create(memberId, clubId)
+        membershipRepository.setAccessUntil(m.id, now.minusDays(1))
+        val count = membershipRepository.expireOverdueAccess(now) // active → expired (просрочка продления)
         assertEquals(1, count)
-        // De-Stars: a freeze (access suspension) is NOT churn, so only the original join is logged.
+        assertStatus(m.id, MembershipStatus.expired)
+        // Лапс продления — приостановка доступа, НЕ churn: логируется только исходный join
+        // (docs/modules/membership-lifecycle.md §3 — иначе club-quality штрафовал бы ранг ложным оттоком).
         assertEvents(memberId, MembershipEvent.joined)
     }
 
     @Test
-    fun `countClaimedFrozenByClubs counts only frozen members with a live dues claim`() {
-        // Red-dot фикс (2026-07-06): просто frozen (ручная пауза / автоистечение) точку не зажигает —
-        // считаются только заявившие об оплате (им нужно действие организатора «Взнос получен»).
-        val claimedUser = newUser()
-        membershipRepository.createFrozen(memberId, clubId)                  // frozen БЕЗ claim — не считается
-        val claimed = membershipRepository.createFrozen(claimedUser, clubId) // frozen С claim — считается
-        membershipRepository.claimDues(claimed.id, "sbp", null)
+    fun `claimDues works from expired (renewal debtor claims payment)`() {
+        val m = expiredMembership(memberId)
+        val updated = membershipRepository.claimDues(m, "cash", null)
+        assertEquals(1, updated)
+        assertClaimPresent(m)
+    }
 
-        assertEquals(1, membershipRepository.countClaimedFrozenByClubs(listOf(clubId)))
+    @Test
+    fun `countClaimedAwaitingDuesByClubs counts frozen AND expired members with a live dues claim`() {
+        // Red-dot (2026-07-06): без claim точку не зажигает никто — считаются только заявившие об
+        // оплате (им нужно действие организатора «Взнос получен»), и frozen, и expired.
+        val claimedFrozenUser = newUser()
+        val claimedExpiredUser = newUser()
+        membershipRepository.createFrozen(memberId, clubId)                            // frozen БЕЗ claim — не считается
+        val claimedFrozen = membershipRepository.createFrozen(claimedFrozenUser, clubId) // frozen С claim — считается
+        membershipRepository.claimDues(claimedFrozen.id, "sbp", null)
+        val claimedExpired = expiredMembership(claimedExpiredUser)                       // expired С claim — считается
+        membershipRepository.claimDues(claimedExpired, "cash", null)
 
-        // «Взнос получен» открывает доступ и снимает claim — счётчик гаснет, хотя первый frozen остался.
-        membershipRepository.markDuesPaid(claimed.id, ownerId, OffsetDateTime.now().plusDays(30))
-        assertEquals(0, membershipRepository.countClaimedFrozenByClubs(listOf(clubId)))
+        assertEquals(2, membershipRepository.countClaimedAwaitingDuesByClubs(listOf(clubId)))
+
+        // «Взнос получен» открывает доступ и снимает claim — счётчик гаснет по одному.
+        membershipRepository.markDuesPaid(claimedFrozen.id, ownerId, OffsetDateTime.now().plusDays(30))
+        assertEquals(1, membershipRepository.countClaimedAwaitingDuesByClubs(listOf(clubId)))
+        membershipRepository.markDuesPaid(claimedExpired, ownerId, OffsetDateTime.now().plusDays(30))
+        assertEquals(0, membershipRepository.countClaimedAwaitingDuesByClubs(listOf(clubId)))
     }
 
     // ---- helpers ----
+
+    /** Создаёт membership и проводит его через реальный путь просрочки: create → окно в прошлом →
+     *  expireOverdueAccess. Возвращает id membership в статусе `expired`. */
+    private fun expiredMembership(userId: UUID): UUID {
+        val m = membershipRepository.create(userId, clubId)
+        membershipRepository.setAccessUntil(m.id, OffsetDateTime.now().minusDays(1))
+        membershipRepository.expireOverdueAccess(OffsetDateTime.now())
+        assertStatus(m.id, MembershipStatus.expired) // sanity: фикстура действительно expired
+        return m.id
+    }
+
+    private fun assertStatus(membershipId: UUID, expected: MembershipStatus) {
+        val actual = dsl.select(MEMBERSHIPS.STATUS)
+            .from(MEMBERSHIPS).where(MEMBERSHIPS.ID.eq(membershipId))
+            .fetchOne(MEMBERSHIPS.STATUS)
+        assertEquals(expected, actual, "membership status")
+    }
 
     /** Asserts the multiset of logged events for (userId, clubId) equals [expected] (order-independent). */
     private fun assertEvents(userId: UUID, vararg expected: MembershipEvent) {

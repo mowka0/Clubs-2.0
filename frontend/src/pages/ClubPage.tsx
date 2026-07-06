@@ -137,6 +137,9 @@ export const ClubPage: FC = () => {
   // De-Stars: платный участник, который вступил, но ещё не допущен (организатор не подтвердил
   // офлайн-взнос). Он уже внутри клуба, но без доступа к контенту — без табов, с заметкой «в ожидании».
   const isFrozenMember = membership?.status === 'frozen' || joinedStatus === 'frozen';
+  // Просрочил продление (шедулер: active → expired): всё ещё участник-должник, доступ закрыт до
+  // нового взноса. Вид зеркалит frozen (тот же claim-флоу), но текст говорит о продлении, не вступлении.
+  const isExpiredMember = membership?.status === 'expired';
   const isMember = isActiveMember || isCancelledInPeriod;
   const myApplication = applications.find((a) => a.clubId === id) ?? null;
 
@@ -434,14 +437,24 @@ export const ClubPage: FC = () => {
         </>
       )}
 
-      {/* Frozen-участник: вступил в платный клуб, но ещё не допущен — ждёт подтверждения взноса организатором. */}
-      {!showTabs && isFrozenMember && (
+      {/* Участник без доступа: frozen (вступил, ждёт подтверждения первого взноса) или expired
+          (подписка истекла — должник по продлению). Один claim-флоу, разные тексты. */}
+      {!showTabs && (isFrozenMember || isExpiredMember) && (
         <>
           <div className="rd-glass rd-locked">
             <div className="rd-lock-ico"><LockIcon /></div>
             <div className="rd-text">
-              <strong>Вы вступили в клуб</strong>
-              Доступ к активностям откроет организатор после того, как вы передадите ему взнос.
+              {isExpiredMember ? (
+                <>
+                  <strong>Подписка истекла</strong>
+                  Доступ к активностям закрыт. Продлите взнос организатору — и он снова откроет доступ.
+                </>
+              ) : (
+                <>
+                  <strong>Вы вступили в клуб</strong>
+                  Доступ к активностям откроет организатор после того, как вы передадите ему взнос.
+                </>
+              )}
             </div>
           </div>
 
@@ -479,7 +492,7 @@ export const ClubPage: FC = () => {
       )}
 
       {/* Гость: заглушка с замком + CTA */}
-      {!showTabs && !isFrozenMember && (
+      {!showTabs && !isFrozenMember && !isExpiredMember && (
         <>
           <div className="rd-glass rd-locked">
             <div className="rd-lock-ico"><LockIcon /></div>

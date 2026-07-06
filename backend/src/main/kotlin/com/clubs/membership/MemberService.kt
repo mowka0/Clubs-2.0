@@ -44,7 +44,7 @@ class MemberService(
         val trustByUser = trustService.trustForClubMembers(clubId)
         // Клубные награды для чипов в ростере (R3): один запрос с группировкой по участнику — без N+1.
         val awardsByUser = awardService.getClubAwardsByMember(clubId)
-        val members = membershipRepository.findClubMembersWithUserInfo(clubId, includeFrozen = forOrganizer)
+        val members = membershipRepository.findClubMembersWithUserInfo(clubId, includeWithoutAccess = forOrganizer)
             .map {
                 mapper.toMemberListItemDto(
                     it,
@@ -72,30 +72,30 @@ class MemberService(
 
     /**
      * Red-dot фид для [clubId] (только организатору, гейт @RequiresOrganizer на контроллере):
-     * участники, чей платный доступ кончается в ближайшую неделю, + участники frozen в ожидании
-     * первого подтверждения dues. Точка загорается, когда любой из счётчиков > 0.
+     * участники, чей платный доступ кончается в ближайшую неделю, + участники без доступа
+     * (frozen/expired), заявившие об оплате. Точка загорается, когда любой из счётчиков > 0.
      */
     fun getAttention(clubId: UUID): MemberAttentionDto {
         val now = OffsetDateTime.now()
         val clubs = listOf(clubId)
         return MemberAttentionDto(
             expiringSoon = membershipRepository.countExpiringSoonByClubs(clubs, now, now.plusDays(EXPIRING_SOON_DAYS)),
-            // Только claimed-frozen: считаем ровно тех, кому нужно действие организатора («Взнос получен»).
-            // Ручная пауза / автоистечение без claim точку не зажигают (мяч у участника) — иначе red-dot
-            // горел бы вечно после «Закрыть доступ». Та же семантика, что у бейджа таб-бара
-            // (countClaimedFrozenByOwner).
-            awaitingDues = membershipRepository.countClaimedFrozenByClubs(clubs)
+            // Только claimed (frozen ИЛИ expired): считаем ровно тех, кому нужно действие организатора
+            // («Взнос получен»). Без claim точку не зажигают (мяч у участника) — иначе red-dot горел бы
+            // вечно у любого должника. Та же семантика, что у бейджа таб-бара
+            // (countClaimedAwaitingDuesByOwner).
+            awaitingDues = membershipRepository.countClaimedAwaitingDuesByClubs(clubs)
         )
     }
 
     /**
-     * Кросс-клубовый список «Ждут оплаты» для [callerId]: все `frozen`-участники по клубам в его
-     * владении — организатор подтверждает dues из «Мои клубы», не заходя в каждый клуб. Не-владелец
-     * получает пустой список (запрос фильтрует по `clubs.owner_id`), поэтому отдельный authz-гейт
-     * на эндпоинте не нужен.
+     * Кросс-клубовый список «Ждут оплаты» для [callerId]: все участники без доступа (`frozen` —
+     * первый взнос, `expired` — просрочка продления) по клубам в его владении — организатор
+     * подтверждает dues из «Мои клубы», не заходя в каждый клуб. Не-владелец получает пустой список
+     * (запрос фильтрует по `clubs.owner_id`), поэтому отдельный authz-гейт на эндпоинте не нужен.
      */
     fun getOrganizerAwaitingDues(callerId: UUID): List<OrganizerDuesMemberDto> =
-        membershipRepository.findFrozenMembersByOwner(callerId).map(mapper::toOrganizerDuesDto)
+        membershipRepository.findAwaitingDuesMembersByOwner(callerId).map(mapper::toOrganizerDuesDto)
 
     fun getMemberProfile(clubId: UUID, userId: UUID, callerId: UUID): MemberProfileDto {
         val caller = membershipRepository.findByUserAndClub(callerId, clubId)
