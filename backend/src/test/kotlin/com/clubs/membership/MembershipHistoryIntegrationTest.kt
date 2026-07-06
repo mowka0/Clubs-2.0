@@ -154,6 +154,22 @@ class MembershipHistoryIntegrationTest {
         assertEvents(memberId, MembershipEvent.joined)
     }
 
+    @Test
+    fun `countClaimedFrozenByClubs counts only frozen members with a live dues claim`() {
+        // Red-dot фикс (2026-07-06): просто frozen (ручная пауза / автоистечение) точку не зажигает —
+        // считаются только заявившие об оплате (им нужно действие организатора «Взнос получен»).
+        val claimedUser = newUser()
+        membershipRepository.createFrozen(memberId, clubId)                  // frozen БЕЗ claim — не считается
+        val claimed = membershipRepository.createFrozen(claimedUser, clubId) // frozen С claim — считается
+        membershipRepository.claimDues(claimed.id, "sbp", null)
+
+        assertEquals(1, membershipRepository.countClaimedFrozenByClubs(listOf(clubId)))
+
+        // «Взнос получен» открывает доступ и снимает claim — счётчик гаснет, хотя первый frozen остался.
+        membershipRepository.markDuesPaid(claimed.id, ownerId, OffsetDateTime.now().plusDays(30))
+        assertEquals(0, membershipRepository.countClaimedFrozenByClubs(listOf(clubId)))
+    }
+
     // ---- helpers ----
 
     /** Asserts the multiset of logged events for (userId, clubId) equals [expected] (order-independent). */

@@ -575,12 +575,14 @@ class JooqMembershipRepository(
             .fetchOne(0, Int::class.java) ?: 0
     }
 
-    override fun countFrozenByClubs(clubIds: Collection<UUID>): Int {
+    override fun countClaimedFrozenByClubs(clubIds: Collection<UUID>): Int {
         if (clubIds.isEmpty()) return 0
         return dsl.selectCount().from(MEMBERSHIPS)
             .where(
                 MEMBERSHIPS.CLUB_ID.`in`(clubIds)
                     .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.frozen))
+                    // Только заявившие об оплате: не-claimed frozen (пауза/автоистечение) внимания не требует.
+                    .and(MEMBERSHIPS.DUES_CLAIMED_AT.isNotNull)
             )
             .fetchOne(0, Int::class.java) ?: 0
     }

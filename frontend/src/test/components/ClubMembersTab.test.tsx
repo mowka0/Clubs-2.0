@@ -47,10 +47,11 @@ function member(over: Partial<MemberListItemDto> & { userId: string; firstName: 
   };
 }
 
-// One member per bucket: organizer (calm), active-far (calm), expiring-soon, frozen (awaiting).
+// One member per bucket: organizer (calm), active-far (calm), expiring-soon, expired, frozen (awaiting).
 const ORGANIZER = member({ userId: 'org', firstName: 'Анна', role: 'organizer', trust: null });
 const FAR = member({ userId: 'far', firstName: 'Дмитрий', subscriptionExpiresAt: inDays(40) });
 const EXPIRING = member({ userId: 'exp', firstName: 'Игорь', subscriptionExpiresAt: inDays(3) });
+const EXPIRED = member({ userId: 'expd', firstName: 'Пётр', subscriptionExpiresAt: agoDays(5) });
 const FROZEN = member({ userId: 'frz', firstName: 'Мария', accessStatus: 'frozen', joinedAt: agoDays(2) });
 
 function mockMembers(rows: MemberListItemDto[]) {
@@ -58,18 +59,30 @@ function mockMembers(rows: MemberListItemDto[]) {
 }
 
 describe('ClubMembersTab — de-Stars dashboard', () => {
-  it('management view splits members into «Скоро закончится» / «Оплата вступления» / «Участники»', async () => {
-    mockMembers([ORGANIZER, FAR, EXPIRING, FROZEN]);
+  it('management view splits members into «Доступ истёк» / «Скоро закончится» / «Оплата вступления» / «Участники»', async () => {
+    mockMembers([ORGANIZER, FAR, EXPIRING, EXPIRED, FROZEN]);
     renderWithProviders(<ClubMembersTab clubId={CLUB_ID} isOrganizer managementView />);
 
-    expect(await screen.findByText(/Скоро закончится/)).toBeInTheDocument();
+    expect(await screen.findByText(/Доступ истёк/)).toBeInTheDocument();
+    expect(screen.getByText(/Скоро закончится/)).toBeInTheDocument();
     expect(screen.getByText(/Оплата вступления/)).toBeInTheDocument();
     expect(screen.getByText(/^Участники/)).toBeInTheDocument();
 
-    // Frozen + expiring each expose a «Взнос получен» action; the calm members do not.
-    expect(screen.getAllByRole('button', { name: /Взнос получен/ })).toHaveLength(2);
+    // Expired + frozen + expiring each expose a «Взнос получен» action; the calm members do not.
+    expect(screen.getAllByRole('button', { name: /Взнос получен/ })).toHaveLength(3);
     expect(screen.getByText('Игорь')).toBeInTheDocument();
+    expect(screen.getByText('Пётр')).toBeInTheDocument();
     expect(screen.getByText('Мария')).toBeInTheDocument();
+  });
+
+  it('an already-expired subscription lands in «Доступ истёк», NOT in «Скоро закончится»', async () => {
+    // Смысловой фикс (PO 2026-07-06): «скоро закончится» врал для уже истёкшего окна.
+    mockMembers([EXPIRED]);
+    renderWithProviders(<ClubMembersTab clubId={CLUB_ID} isOrganizer managementView />);
+
+    expect(await screen.findByText(/Доступ истёк/)).toBeInTheDocument();
+    expect(screen.queryByText(/Скоро закончится/)).not.toBeInTheDocument();
+    expect(screen.getByText(/истекла .+ назад/)).toBeInTheDocument();
   });
 
   it('regular-member view shows a flat list with no buckets or actions', async () => {

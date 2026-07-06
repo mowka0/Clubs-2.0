@@ -6,12 +6,15 @@ import org.springframework.stereotype.Component
 import java.time.OffsetDateTime
 
 /**
- * De-Stars (Slice 2): этот планировщик СПИТ. `subscription_expires_at` больше не записывается
- * (flow оплаты вступления через Stars упразднён), поэтому `processExpiry` / `find*` работают
- * с нулём строк. Оставлен (не удалён), чтобы (1) дать любым legacy-строкам с оплатой через Stars,
- * ещё несущим expiry, естественно истечь, и (2) сохранить машинерию однонаправленных временных
- * переходов, которую переиспользует будущая биллинговая state-machine из §7.
- * ПРИМЕЧАНИЕ: не путать с com.clubs.subscription.ServiceSubscriptionScheduler (живая подписка
+ * Ежедневный жизненный цикл honor-system окна доступа (de-Stars Slice 2). НЕ спит: хотя Stars-flow
+ * упразднён, `subscription_expires_at` снова записывается организаторскими действиями «Взнос получен»
+ * (markDuesPaid, +30 дн) и «Своя дата» (setAccessUntil), поэтому планировщик ежедневно в 9:00:
+ *  1) шлёт DM «истекает через 3 дня» и «истёк» (внешний IO до транзакции);
+ *  2) processExpiry: каждый active с истёкшим окном → frozen (доступ закрыт до подтверждения
+ *     следующего взноса). Жёсткое отсечение без grace-периода — решение PO (de-Stars).
+ * Прежний комментарий «планировщик спит» был написан в момент смерти Stars-flow и устарел с
+ * появлением honor-system (этот факт уже вводил в заблуждение при ревью — не возвращать его).
+ * ПРИМЕЧАНИЕ: не путать с com.clubs.subscription.ServiceSubscriptionScheduler (подписка
  * на сервисный сбор организатора из Slice 1).
  */
 @Component

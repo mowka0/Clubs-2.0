@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import {
   useAwardSuggestionsQuery,
-  useFreezeMemberMutation,
   useGrantMemberAwardMutation,
   useMarkMemberDuesPaidMutation,
   useMemberProfileQuery,
@@ -31,7 +30,7 @@ const MAX_AWARD_LABEL = 40;
 interface MemberProfileModalProps {
   member: MemberListItemDto;
   clubId: string;
-  /** Вид организатора — открывает строку «Подписка активна до …» + действия dues/freeze (de-Stars). */
+  /** Вид организатора — открывает строку «Подписка активна до …» + dues-действия (de-Stars). */
   isOrganizer?: boolean;
   onClose: () => void;
   /** Показать toast на уровне страницы после успешного gate-действия. */
@@ -225,7 +224,7 @@ interface OrganizerGateProps {
   member: MemberListItemDto;
   /** Текущая приватная заметка из загруженного профиля (null, пока не загружено / когда пусто). */
   organizerNote: string | null;
-  /** Есть ли у участника платное окно доступа — гейтит строку подписки + dues/freeze + свою дату. */
+  /** Есть ли у участника платное окно доступа — гейтит строку подписки + dues-действия + свою дату. */
   isPaidMember: boolean;
   /** Claim об оплате взноса на проверку (de-Stars), только организатору. null = ожидающего claim нет. */
   claim: { claimedAt: string; method: string | null; proofUrl: string | null } | null;
@@ -245,20 +244,20 @@ function toDateInput(iso: string | null): string {
 
 /**
  * Админ-секция организатора для участника (member admin Variant B). Три независимых слоя:
- *  - Только платные (isPaidMember): de-Stars-управление доступом — строка подписки + «Взнос получен» /
- *    «Закрыть доступ», а также «Своя дата» за ✎. У бесплатного участника нет окна доступа — ничего
- *    из этого не показывается.
+ *  - Только платные (isPaidMember): de-Stars-управление доступом — строка подписки + «Взнос получен»,
+ *    а также «Своя дата» за ✎. У бесплатного участника нет окна доступа — ничего из этого не
+ *    показывается. Ручной кнопки «Закрыть доступ» нет (PO 2026-07-06): просрочку окна ежедневно
+ *    закрывает шедулер (processExpiry), ручная пауза дублировала автоматику.
  *  - Всегда (любой клуб): приватная «Заметка» (S1) — всегда открытое поле со своим «Сохранить», чтобы
  *    у панели был смысл и в бесплатном клубе (иначе там остался бы лишь «Удалить из клуба»).
  *    Сохранение заметки НЕ закрывает карточку.
  *  - Награды (S2) живут выше, под интересами, открываются тем же ✎ в шапке.
  * Режимом редактирования (`editing`) владеет модалка: ✎ переключает редактор наград + форму «Своя дата».
- * 409 (проигранная гонка) на dues/freeze-действии закрывает карточку — кэш списка уже обновлён.
+ * 409 (проигранная гонка) на dues-действии закрывает карточку — кэш списка уже обновлён.
  */
 const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, isPaidMember, claim, applicationAnswer, editing, onEditingChange, onDone }) => {
   const haptic = useHaptic();
   const markPaid = useMarkMemberDuesPaidMutation();
-  const freeze = useFreezeMemberMutation();
   const reject = useRejectMemberMutation();
   const remove = useRemoveMemberMutation();
   const setAccess = useSetMemberAccessUntilMutation();
@@ -272,7 +271,7 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
   const [kickReason, setKickReason] = useState('');
   const [zoomedProof, setZoomedProof] = useState<string | null>(null);
 
-  const busy = markPaid.isPending || freeze.isPending || reject.isPending || remove.isPending;
+  const busy = markPaid.isPending || reject.isPending || remove.isPending;
   // Минимум символов в причине удаления из клуба — причину увидит участник.
   const KICK_REASON_MIN = 5;
   const savingDate = setAccess.isPending;
@@ -291,7 +290,7 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
   useEffect(() => { if (editing) { setError(null); setDateDraft(originalDate); } }, [editing, originalDate]);
 
   const run = (
-    mutation: ReturnType<typeof useMarkMemberDuesPaidMutation> | ReturnType<typeof useFreezeMemberMutation>,
+    mutation: ReturnType<typeof useMarkMemberDuesPaidMutation>,
     successMessage: string,
   ) => {
     if (busy) return;
@@ -386,8 +385,8 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
         </div>
       )}
 
-      {/* Панель «Управление участником» (R1): сводка подписки + парные действия, приватная заметка и
-          деструктивное «Удалить из клуба» в футере — не путать с «Закрыть доступ» (обратимая пауза). */}
+      {/* Панель «Управление участником» (R1): сводка подписки + «Взнос получен», приватная заметка и
+          деструктивное «Удалить из клуба» в футере. */}
       <div className="rd-mgmt">
         <div className="rd-mgmt-h">⚙ Управление участником</div>
 
@@ -431,7 +430,10 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
           </div>
         )}
 
-        {/* ACTIVE платный участник (R1): сводка статуса + парные «Взнос получен» / «Закрыть доступ». */}
+        {/* ACTIVE платный участник (R1): сводка статуса + «Взнос получен». Ручной кнопки «Закрыть
+            доступ» больше нет (решение PO 2026-07-06): просроченное окно ежедневно закрывает шедулер
+            (processExpiry, active → frozen), ручная пауза дублировала автоматику и путала организатора.
+            Радикальный рычаг остался один — «Удалить из клуба» в футере. */}
         {isPaidMember && !frozen && (
           <div className="rd-mgmt-body">
             <div className={`rd-mgmt-sum${soon ? ' rd-soon' : ''}`}>
@@ -444,9 +446,6 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
             <div className="rd-mgmt-pair">
               <button type="button" className="rd-mgmt-pb primary" disabled={busy} onClick={() => run(markPaid, `Доступ ${member.firstName} продлён на 30 дней`)}>
                 {markPaid.isPending ? <Spinner size="s" /> : <>Взнос получен<small>+30 дн · до {extendedEndLabel(expiresAt)}</small></>}
-              </button>
-              <button type="button" className="rd-mgmt-pb" disabled={busy} onClick={() => run(freeze, `Доступ ${member.firstName} закрыт`)}>
-                {freeze.isPending ? <Spinner size="s" /> : 'Закрыть доступ'}
               </button>
             </div>
           </div>
@@ -622,7 +621,7 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
   // и в бесплатных клубах, S2). Никогда — своей строкой: бэкенд отклоняет управление организатором.
   const isManageable = isOrganizer && member.role !== 'organizer';
   // Платный участник = есть окно доступа (или frozen в ожидании взноса). Гейтит de-Stars-слой
-  // (строка подписки + dues/freeze + своя дата); бесплатному остаются только заметка + награды.
+  // (строка подписки + dues-действия + своя дата); бесплатному остаются только заметка + награды.
   const isPaidMember = member.accessStatus === 'frozen' || !!member.subscriptionExpiresAt;
 
   // Режим редактирования живёт здесь (не в OrganizerGate), чтобы ✎ в шапке переключал редактор наград

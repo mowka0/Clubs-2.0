@@ -80,7 +80,11 @@ class MemberService(
         val clubs = listOf(clubId)
         return MemberAttentionDto(
             expiringSoon = membershipRepository.countExpiringSoonByClubs(clubs, now, now.plusDays(EXPIRING_SOON_DAYS)),
-            awaitingDues = membershipRepository.countFrozenByClubs(clubs)
+            // Только claimed-frozen: считаем ровно тех, кому нужно действие организатора («Взнос получен»).
+            // Ручная пауза / автоистечение без claim точку не зажигают (мяч у участника) — иначе red-dot
+            // горел бы вечно после «Закрыть доступ». Та же семантика, что у бейджа таб-бара
+            // (countClaimedFrozenByOwner).
+            awaitingDues = membershipRepository.countClaimedFrozenByClubs(clubs)
         )
     }
 
