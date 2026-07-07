@@ -11,6 +11,7 @@ import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember
 import org.telegram.telegrambots.meta.api.methods.groupadministration.LeaveChat
 import org.telegram.telegrambots.meta.api.methods.groupadministration.RevokeChatInviteLink
+import org.telegram.telegrambots.meta.api.methods.groupadministration.UnbanChatMember
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberAdministrator
@@ -32,6 +33,13 @@ data class BotChatState(
     val canPinMessages: Boolean,
     val canInviteUsers: Boolean
 )
+
+/**
+ * Положение ПОЛЬЗОВАТЕЛЯ в чате для «двери»: BANNED выделен отдельно, потому что
+ * забаненному не работает ни одна invite-ссылка — перед приглашением нужен unban
+ * (реестр багов №1: «удалить из группы» в Telegram = бан).
+ */
+enum class UserChatState { IN_CHAT, NOT_IN_CHAT, BANNED, UNKNOWN }
 
 /**
  * Тонкая обёртка над Telegram Bot API для чат-интеграции (club-chat-link): всё общение бота
@@ -81,14 +89,26 @@ class ChatTelegramGateway(
         }
     }
 
-    /** Состоит ли ПОЛЬЗОВАТЕЛЬ в чате. Null = не удалось узнать (сеть/права — не путать с false). */
-    fun isChatParticipant(chatId: Long, userId: Long): Boolean? {
-        val member = getChatMember(chatId, userId) ?: return null
+    /** Положение ПОЛЬЗОВАТЕЛЯ в чате (перевод статуса Telegram в наши четыре случая). */
+    fun getUserChatState(chatId: Long, userId: Long): UserChatState {
+        val member = getChatMember(chatId, userId) ?: return UserChatState.UNKNOWN
         return when (member.status) {
-            "creator", "administrator", "member" -> true
-            "restricted" -> (member as? ChatMemberRestricted)?.isMember ?: false
-            else -> false
+            "creator", "administrator", "member" -> UserChatState.IN_CHAT
+            "restricted" ->
+                if ((member as? ChatMemberRestricted)?.isMember == true) UserChatState.IN_CHAT
+                else UserChatState.NOT_IN_CHAT
+            "kicked" -> UserChatState.BANNED
+            else -> UserChatState.NOT_IN_CHAT
         }
+    }
+
+    /** Снять бан (only_if_banned — состоящего в чате не кикнет). Нужно право «Блокировка пользователей». */
+    fun unbanChatMember(chatId: Long, userId: Long): Boolean = try {
+        telegramClient.execute(UnbanChatMember.builder().chatId(chatId).userId(userId).onlyIfBanned(true).build())
+        true
+    } catch (e: Exception) {
+        log.warn("unbanChatMember failed (нет права «Блокировка пользователей»?): chatId={} userId={} error={}", chatId, userId, e.message)
+        false
     }
 
     fun getChatTitle(chatId: Long): String? = try {

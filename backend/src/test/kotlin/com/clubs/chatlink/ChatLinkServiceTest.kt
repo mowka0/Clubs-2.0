@@ -45,7 +45,8 @@ class ChatLinkServiceTest {
         val status = service.getStatus(clubId, ownerId)
 
         assertFalse(status.linked)
-        assertEquals("https://t.me/clubs_test_bot?startgroup=$clubId&admin=pin_messages+invite_users", status.startGroupUrl)
+        // restrict_members — право снимать баны (реестр багов №1: «удалить из группы» = бан)
+        assertEquals("https://t.me/clubs_test_bot?startgroup=$clubId&admin=pin_messages+invite_users+restrict_members", status.startGroupUrl)
     }
 
     @Test
@@ -63,8 +64,8 @@ class ChatLinkServiceTest {
     }
 
     @Test
-    fun `setDoor включение — создаёт join-request ссылку и сохраняет`() {
-        val link = chatLinkFixture(clubId = clubId, canInviteUsers = true)
+    fun `setDoor включение без ссылки — создаёт join-request ссылку и сохраняет`() {
+        val link = chatLinkFixture(clubId = clubId, canInviteUsers = true, doorInviteLink = null)
         every { chatLinkRepository.findByClubId(clubId) } returns link andThen
             link.copy(doorEnabled = true, doorInviteLink = "https://t.me/+abc")
         every { gateway.createJoinRequestInviteLink(link.chatId, any()) } returns "https://t.me/+abc"
@@ -77,8 +78,20 @@ class ChatLinkServiceTest {
     }
 
     @Test
+    fun `setDoor включение переиспользует ссылку, созданную при привязке`() {
+        // Реестр багов №4: ссылка живёт независимо от тумблера.
+        val link = chatLinkFixture(clubId = clubId, canInviteUsers = true, doorInviteLink = "https://t.me/+linked")
+        every { chatLinkRepository.findByClubId(clubId) } returns link andThen link.copy(doorEnabled = true)
+
+        service.setDoor(clubId, ownerId, enabled = true)
+
+        verify(exactly = 0) { gateway.createJoinRequestInviteLink(any(), any()) }
+        verify { chatLinkRepository.updateDoor(clubId, true, "https://t.me/+linked") }
+    }
+
+    @Test
     fun `setDoor включение при недоступном Telegram — 409, ничего не сохраняем`() {
-        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId)
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, doorInviteLink = null)
         every { gateway.createJoinRequestInviteLink(any(), any()) } returns null
 
         assertThrows(ConflictException::class.java) { service.setDoor(clubId, ownerId, enabled = true) }
@@ -86,16 +99,16 @@ class ChatLinkServiceTest {
     }
 
     @Test
-    fun `setDoor выключение — отзывает ссылку и чистит её`() {
+    fun `setDoor выключение — ссылка ЖИВЁТ (по ней работает кнопка «Чат клуба»)`() {
         val link = chatLinkFixture(clubId = clubId, doorEnabled = true, doorInviteLink = "https://t.me/+abc")
-        every { chatLinkRepository.findByClubId(clubId) } returns link andThen link.copy(doorEnabled = false, doorInviteLink = null)
+        every { chatLinkRepository.findByClubId(clubId) } returns link andThen link.copy(doorEnabled = false)
 
         val status = service.setDoor(clubId, ownerId, enabled = false)
 
         assertFalse(status.doorEnabled)
-        assertNull(status.doorInviteLink)
-        verify { gateway.revokeInviteLink(link.chatId, "https://t.me/+abc") }
-        verify { chatLinkRepository.updateDoor(clubId, false, null) }
+        assertEquals("https://t.me/+abc", status.doorInviteLink)
+        verify(exactly = 0) { gateway.revokeInviteLink(any(), any()) }
+        verify { chatLinkRepository.updateDoor(clubId, false, "https://t.me/+abc") }
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.clubs.chatlink
 
 import com.clubs.bot.ChatTelegramGateway
+import com.clubs.bot.UserChatState
 import com.clubs.club.ClubRepository
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.membership.MembershipRepository
@@ -35,7 +36,6 @@ class ChatDoorService(
      */
     fun onChatJoinRequest(chatId: Long, requesterTelegramId: Long) {
         val link = chatLinkRepository.findByChatId(chatId) ?: return
-        if (!link.doorEnabled) return // дверь выключена — заявки разбирает организатор вручную
         val club = clubRepository.findById(link.clubId) ?: return
 
         val user = userRepository.findByTelegramId(requesterTelegramId)
@@ -44,9 +44,14 @@ class ChatDoorService(
         when {
             membership != null && hasClubAccess(membership.status, membership.subscriptionExpiresAt) -> {
                 // Уже свой — впускаем сразу, без DM (система молчит, когда всё хорошо).
+                // НЕЗАВИСИМО от тумблера двери (реестр багов №4): по этой ветке работает
+                // кнопка «Чат клуба», доступная участникам сразу после привязки.
                 val approved = gateway.approveJoinRequest(chatId, requesterTelegramId)
                 log.info("Door: member join request auto-approved={} clubId={} telegramId={}", approved, club.id, requesterTelegramId)
             }
+            // Дальше — чужие и должники: их бот обслуживает только при включённой двери,
+            // иначе их заявки разбирает организатор вручную в клиенте Telegram.
+            !link.doorEnabled -> return
             membership != null && membership.status in setOf(MembershipStatus.frozen, MembershipStatus.expired) -> {
                 // Должник: заявка остаётся висеть, впустим автоматически после «Взнос получен».
                 gateway.sendDmWithWebApp(
@@ -83,7 +88,8 @@ class ChatDoorService(
     @Async
     fun onAccessOpened(clubId: UUID, userId: UUID) {
         val link = chatLinkRepository.findByClubId(clubId) ?: return
-        if (!link.doorEnabled || !link.botStatus.isInChat) return
+        // Работает независимо от тумблера двери — как и кнопка «Чат клуба» (реестр багов №4).
+        if (!link.botStatus.isInChat) return
         val doorLink = link.doorInviteLink ?: return
         val telegramId = userRepository.findById(userId)?.telegramId ?: return
         val clubName = clubRepository.findById(clubId)?.name ?: "клуба"
@@ -103,9 +109,22 @@ class ChatDoorService(
         // При неизвестности (Telegram не ответил / базовая группа не отдаёт незнакомого юзера)
         // приглашение ШЛЁМ: систематически потерять вход для новичка хуже, чем изредка прислать
         // лишний DM действующему участнику чата.
-        if (gateway.isChatParticipant(link.chatId, telegramId) == true) {
-            log.info("Door: access opened, user already in chat — no DM: clubId={} userId={}", clubId, userId)
-            return
+        when (gateway.getUserChatState(link.chatId, telegramId)) {
+            UserChatState.IN_CHAT -> {
+                log.info("Door: access opened, user already in chat — no DM: clubId={} userId={}", clubId, userId)
+                return
+            }
+            UserChatState.BANNED -> {
+                // Реестр багов №1 (главный корень «ссылка не валидна», подтверждён логами
+                // staging: USER_KICKED): «удалить из группы» в Telegram = бан, забаненному
+                // любая invite-ссылка недействительна. Организатор открыл человеку доступ
+                // В ПРИЛОЖЕНИИ — снимаем бан, иначе дверь не открыть ничем. Требует права
+                // «Блокировка пользователей» (restrict_members в deep link привязки);
+                // без права — DM всё равно шлём, а warn в логе укажет причину.
+                val unbanned = gateway.unbanChatMember(link.chatId, telegramId)
+                log.info("Door: user was banned in chat, unban={} clubId={} userId={}", unbanned, clubId, userId)
+            }
+            UserChatState.NOT_IN_CHAT, UserChatState.UNKNOWN -> Unit
         }
         gateway.sendDmWithUrlButton(
             telegramId = telegramId,
@@ -124,7 +143,6 @@ class ChatDoorService(
     @Async
     fun onAccessRevoked(clubId: UUID, userId: UUID) {
         val link = chatLinkRepository.findByClubId(clubId) ?: return
-        if (!link.doorEnabled) return
         val telegramId = userRepository.findById(userId)?.telegramId ?: return
         val declined = gateway.declineJoinRequest(link.chatId, telegramId)
         if (declined) {

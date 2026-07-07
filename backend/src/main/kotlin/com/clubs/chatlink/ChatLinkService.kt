@@ -28,11 +28,6 @@ class ChatLinkService(
 ) {
     private val log = LoggerFactory.getLogger(ChatLinkService::class.java)
 
-    // Имя door-ссылки в списке приглашений группы — чтобы организатор узнавал её в настройках Telegram.
-    private companion object {
-        const val DOOR_INVITE_LINK_NAME = "Clubs: вход через заявки"
-    }
-
     fun getStatus(clubId: UUID, callerId: UUID): ChatLinkStatusDto {
         requireOwner(clubId, callerId)
         return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
@@ -56,13 +51,25 @@ class ChatLinkService(
         gateway.getChatTitle(link.chatId)?.let { title ->
             if (title != link.chatTitle) chatLinkRepository.updateChatTitle(clubId, title)
         }
+        // Лечим отсутствующую invite-ссылку (привязали без права приглашать, право выдали позже,
+        // а my_chat_member-переход по какой-то причине не был пойман) — refresh как ручной ремонт.
+        val nowInChat = BotChatStatus.fromTelegramStatus(state.statusLiteral).isInChat
+        if (link.doorInviteLink == null && nowInChat && state.canInviteUsers) {
+            gateway.createJoinRequestInviteLink(link.chatId, DOOR_INVITE_LINK_NAME)?.let {
+                chatLinkRepository.updateInviteLink(clubId, it)
+                log.info("Invite link created on refresh: clubId={} chatId={}", clubId, link.chatId)
+            }
+        }
         log.info("Chat link refreshed: clubId={} chatId={} status={}", clubId, link.chatId, state.statusLiteral)
         return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
     }
 
     /**
-     * Тумблер «Вход в чат через заявки». Включение требует, чтобы бот был админом с правом
-     * приглашать (иначе createChatInviteLink невозможен) — возвращаем 409 с объяснением.
+     * Тумблер «Вход в чат через заявки» = политика для ЧУЖИХ (включён → бот пишет стучащимся
+     * не-участникам правила и впускает только одобренных в клубе). Invite-ссылка живёт
+     * НЕЗАВИСИМО от тумблера (реестр багов №4): создаётся при привязке, по ней работает
+     * кнопка «Чат клуба», выключение двери её НЕ отзывает — иначе умирает кнопка и все
+     * разосланные DM. Включение требует право приглашать (иначе бот не сможет одобрять).
      */
     @Transactional
     fun setDoor(clubId: UUID, callerId: UUID, enabled: Boolean): ChatLinkStatusDto {
@@ -81,16 +88,16 @@ class ChatLinkService(
             if (!link.canInviteUsers) {
                 throw ConflictException("Боту нужно право «Приглашение участников» в настройках группы")
             }
-            val inviteLink = gateway.createJoinRequestInviteLink(link.chatId, DOOR_INVITE_LINK_NAME)
+            // Ссылка обычно уже создана при привязке; создаём только если её ещё нет
+            // (например, право приглашать выдали позже и переход не был пойман).
+            val inviteLink = link.doorInviteLink
+                ?: gateway.createJoinRequestInviteLink(link.chatId, DOOR_INVITE_LINK_NAME)
                 ?: throw ConflictException("Не удалось создать ссылку-приглашение — проверьте права бота и попробуйте позже")
             chatLinkRepository.updateDoor(clubId, doorEnabled = true, doorInviteLink = inviteLink)
             log.info("Chat door enabled: clubId={} chatId={}", clubId, link.chatId)
         } else {
-            // Отзыв старой ссылки best-effort: даже если Telegram недоступен, дверь у нас выключена,
-            // а заявки по мёртвой ссылке бот больше не одобряет (door_enabled = false).
-            link.doorInviteLink?.let { gateway.revokeInviteLink(link.chatId, it) }
-            chatLinkRepository.updateDoor(clubId, doorEnabled = false, doorInviteLink = null)
-            log.info("Chat door disabled: clubId={} chatId={}", clubId, link.chatId)
+            chatLinkRepository.updateDoor(clubId, doorEnabled = false, doorInviteLink = link.doorInviteLink)
+            log.info("Chat door disabled (invite link kept alive): clubId={} chatId={}", clubId, link.chatId)
         }
         return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
     }
@@ -120,10 +127,11 @@ class ChatLinkService(
     /**
      * Deep link для кнопки «Привязать чат»: payload = club_id (решение PO — без одноразовых
      * кодов, гейт — верификация владельца при /start), admin= сразу просит права для
-     * закрепа и двери, чтобы не выпрашивать их вторым заходом.
+     * закрепа, двери и снятия банов (restrict_members — реестр багов №1: «удалить из группы»
+     * = бан, и без этого права бот не может впустить вернувшегося участника).
      */
     fun startGroupUrl(clubId: UUID): String =
-        "https://t.me/$botUsername?startgroup=$clubId&admin=pin_messages+invite_users"
+        "https://t.me/$botUsername?startgroup=$clubId&admin=pin_messages+invite_users+restrict_members"
 
     private fun requireOwner(clubId: UUID, callerId: UUID): Club {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")

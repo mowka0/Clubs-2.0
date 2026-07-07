@@ -95,9 +95,10 @@ class ChatLinkBotServiceTest {
     }
 
     @Test
-    fun `успешная привязка - insert, подтверждение в чат и DM-петля владельцу с кнопкой отвязки`() {
+    fun `успешная привязка - insert, invite-ссылка сразу, подтверждение в чат и DM-петля владельцу`() {
         every { gateway.getBotChatState(chatId) } returns
             BotChatState("administrator", canPinMessages = true, canInviteUsers = true)
+        every { gateway.createJoinRequestInviteLink(chatId, any()) } returns "https://t.me/+fresh"
         val inserted = slot<ChatLink>()
         every { chatLinkRepository.insert(capture(inserted)) } answers { inserted.captured }
 
@@ -108,7 +109,9 @@ class ChatLinkBotServiceTest {
         assertEquals(BotChatStatus.ADMINISTRATOR, inserted.captured.botStatus)
         assertTrue(inserted.captured.canPinMessages)
         assertEquals(ownerId, inserted.captured.linkedByUserId)
-        verify { gateway.sendGroupMessage(chatId, match { it.contains("привязан к клубу") }) }
+        // Реестр багов №4: ссылка создаётся при привязке, не дожидаясь тумблера двери
+        verify { chatLinkRepository.updateInviteLink(clubId, "https://t.me/+fresh") }
+        verify { gateway.sendGroupMessage(chatId, match { it.contains("Чат привязан к клубу") }) }
         verify {
             gateway.sendDmWithCallbackButton(
                 telegramId = ownerTelegramId,
@@ -121,14 +124,52 @@ class ChatLinkBotServiceTest {
     }
 
     @Test
-    fun `повторный старт в том же чате - идемпотентно, без второй петли подтверждения`() {
-        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, chatId = chatId)
+    fun `привязка БЕЗ права приглашать - ссылка не создаётся (создастся при выдаче права)`() {
+        every { gateway.getBotChatState(chatId) } returns
+            BotChatState("member", canPinMessages = false, canInviteUsers = false)
+        val inserted = slot<ChatLink>()
+        every { chatLinkRepository.insert(capture(inserted)) } answers { inserted.captured }
+
+        service.handleGroupStart(chatId, "Партия — чат", ownerTelegramId, clubId)
+
+        verify(exactly = 0) { gateway.createJoinRequestInviteLink(any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.updateInviteLink(any(), any()) }
+    }
+
+    @Test
+    fun `повторный старт в том же чате - идемпотентно, ТО ЖЕ сообщение, без второй DM-петли`() {
+        // Реестр багов №3: «уже привязан» сбивал с толку после кика бота.
+        every { chatLinkRepository.findByClubId(clubId) } returns
+            chatLinkFixture(clubId = clubId, chatId = chatId, doorInviteLink = "https://t.me/+alive")
+        every { gateway.getBotChatState(chatId) } returns
+            BotChatState("administrator", canPinMessages = true, canInviteUsers = true)
 
         service.handleGroupStart(chatId, "Партия — чат", ownerTelegramId, clubId)
 
         verify(exactly = 0) { chatLinkRepository.insert(any()) }
         verify(exactly = 0) { gateway.sendDmWithCallbackButton(any(), any(), any(), any()) }
         verify(exactly = 0) { gateway.leaveChat(any()) }
+        verify { gateway.sendGroupMessage(chatId, match { it.contains("Чат привязан к клубу") }) }
+        // Ссылка была живой (бот всё время мог приглашать) — не пересоздаём
+        verify(exactly = 0) { gateway.createJoinRequestInviteLink(any(), any()) }
+    }
+
+    @Test
+    fun `повторная привязка после кика - пересоздаёт мёртвую invite-ссылку`() {
+        // Реестр багов №2: Telegram отзывает все ссылки удалённого админа.
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(
+            clubId = clubId, chatId = chatId,
+            botStatus = BotChatStatus.KICKED,
+            doorInviteLink = "https://t.me/+dead"
+        )
+        every { gateway.getBotChatState(chatId) } returns
+            BotChatState("administrator", canPinMessages = true, canInviteUsers = true)
+        every { gateway.createJoinRequestInviteLink(chatId, any()) } returns "https://t.me/+fresh"
+
+        service.handleGroupStart(chatId, "Партия — чат", ownerTelegramId, clubId)
+
+        verify { gateway.revokeInviteLink(chatId, "https://t.me/+dead") }
+        verify { chatLinkRepository.updateInviteLink(clubId, "https://t.me/+fresh") }
     }
 
     @Test
@@ -148,6 +189,49 @@ class ChatLinkBotServiceTest {
 
         verify { chatLinkRepository.updateBotState(clubId, BotChatStatus.KICKED, false, false) }
         verify(exactly = 0) { chatLinkRepository.delete(any()) }
+    }
+
+    @Test
+    fun `my_chat_member - возвращение бота с правами пересоздаёт мёртвую invite-ссылку`() {
+        every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(
+            clubId = clubId, chatId = chatId,
+            botStatus = BotChatStatus.KICKED,
+            doorInviteLink = "https://t.me/+dead"
+        )
+        every { gateway.createJoinRequestInviteLink(chatId, any()) } returns "https://t.me/+fresh"
+
+        service.handleMyChatMember(chatId, "administrator", canPinMessages = true, canInviteUsers = true)
+
+        verify { gateway.revokeInviteLink(chatId, "https://t.me/+dead") }
+        verify { chatLinkRepository.updateInviteLink(clubId, "https://t.me/+fresh") }
+    }
+
+    @Test
+    fun `my_chat_member - возвращение БЕЗ права приглашать ссылку не трогает`() {
+        every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(
+            clubId = clubId, chatId = chatId,
+            botStatus = BotChatStatus.KICKED,
+            doorInviteLink = "https://t.me/+dead"
+        )
+
+        service.handleMyChatMember(chatId, "member", canPinMessages = false, canInviteUsers = false)
+
+        verify(exactly = 0) { gateway.createJoinRequestInviteLink(any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.updateInviteLink(any(), any()) }
+    }
+
+    @Test
+    fun `my_chat_member - права не менялись (бот и так мог приглашать) - живую ссылку не пересоздаём`() {
+        every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(
+            clubId = clubId, chatId = chatId,
+            botStatus = BotChatStatus.ADMINISTRATOR, canInviteUsers = true,
+            doorInviteLink = "https://t.me/+alive"
+        )
+
+        service.handleMyChatMember(chatId, "administrator", canPinMessages = true, canInviteUsers = true)
+
+        verify(exactly = 0) { gateway.createJoinRequestInviteLink(any(), any()) }
+        verify(exactly = 0) { gateway.revokeInviteLink(any(), any()) }
     }
 
     @Test
@@ -175,11 +259,16 @@ class ChatLinkBotServiceTest {
     }
 
     @Test
-    fun `миграция группы в супергруппу переносит chat_id`() {
-        every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(clubId = clubId, chatId = chatId)
+    fun `миграция группы в супергруппу переносит chat_id и пересоздаёт invite-ссылку`() {
+        // Все ссылки старой группы при миграции умирают (реестр багов №2).
+        every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(
+            clubId = clubId, chatId = chatId, doorInviteLink = "https://t.me/+old-group"
+        )
+        every { gateway.createJoinRequestInviteLink(-1009999L, any()) } returns "https://t.me/+supergroup"
 
         service.handleChatMigration(chatId, -1009999L)
 
         verify { chatLinkRepository.updateChatId(chatId, -1009999L) }
+        verify { chatLinkRepository.updateInviteLink(clubId, "https://t.me/+supergroup") }
     }
 }

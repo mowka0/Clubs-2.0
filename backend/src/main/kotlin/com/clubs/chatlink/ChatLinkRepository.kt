@@ -13,8 +13,11 @@ interface ChatLinkRepository {
     /** Обновить название чата (refresh через GetChat). */
     fun updateChatTitle(clubId: UUID, chatTitle: String?)
 
-    /** Тумблер двери вместе со ссылкой (включение — ссылка обязана быть, выключение — null). */
+    /** Тумблер двери. Ссылка живёт НЕЗАВИСИМО от тумблера (по ней работает кнопка «Чат клуба»). */
     fun updateDoor(clubId: UUID, doorEnabled: Boolean, doorInviteLink: String?)
+
+    /** Обновить только invite-ссылку (создание при привязке / пересоздание после возврата бота). */
+    fun updateInviteLink(clubId: UUID, doorInviteLink: String)
 
     /** Миграция группы в супергруппу: Telegram меняет chat_id (migrate_to_chat_id). */
     fun updateChatId(oldChatId: Long, newChatId: Long)

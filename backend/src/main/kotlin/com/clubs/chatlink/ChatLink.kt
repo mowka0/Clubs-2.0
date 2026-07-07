@@ -3,6 +3,11 @@ package com.clubs.chatlink
 import java.time.OffsetDateTime
 import java.util.UUID
 
+// Имя invite-ссылки бота в списке приглашений группы — чтобы организатор узнавал её в
+// настройках Telegram. Общая для создания при привязке/включении двери (ChatLinkService)
+// и пересоздания после возвращения бота (ChatLinkBotService).
+internal const val DOOR_INVITE_LINK_NAME = "Clubs: вход через заявки"
+
 /**
  * Статус БОТА в привязанном чате (зеркалит статусы Telegram my_chat_member,
  * которые нам важны). Хранится в club_chat_links.bot_status как lowercase-литерал.
