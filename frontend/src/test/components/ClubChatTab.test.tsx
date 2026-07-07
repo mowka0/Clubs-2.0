@@ -33,7 +33,7 @@ afterEach(() => { server.resetHandlers(); vi.clearAllMocks(); });
 afterAll(() => server.close());
 
 const CLUB_ID = 'club-1';
-const START_URL = `https://t.me/clubs_test_bot?startgroup=${CLUB_ID}&admin=pin_messages+invite_users`;
+const START_URL = `https://t.me/clubs_test_bot?startgroup=${CLUB_ID}&admin=pin_messages+invite_users+restrict_members`;
 
 function status(over: Partial<ChatLinkStatusDto> = {}): ChatLinkStatusDto {
   return {
@@ -110,6 +110,14 @@ describe('ClubChatTab', () => {
     expect(await screen.findByText('https://t.me/+door123')).toBeInTheDocument();
   });
 
+  it('invite-ссылка видна и при ВЫКЛЮЧЕННОЙ двери (создаётся при привязке, реестр №4)', async () => {
+    mockStatus({ ...linkedHealthy(), doorEnabled: false, doorInviteLink: 'https://t.me/+linked' });
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByText('https://t.me/+linked')).toBeInTheDocument();
+    expect(screen.getByText(/Данная ссылка уже активна и работает/)).toBeInTheDocument();
+  });
+
   it('без права приглашать тумблер двери задизейблен', async () => {
     mockStatus(status({
       linked: true,
@@ -142,6 +150,11 @@ describe('ClubChatTab', () => {
     renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
 
     expect(await screen.findByText('Бот удалён из чата')).toBeInTheDocument();
+
+    // Под алертом — быстрая повторная привязка тем же deep link'ом (реестр №5)
+    await userEvent.click(screen.getByRole('button', { name: 'Привязать бота заново' }));
+    expect(openTelegramLinkMock).toHaveBeenCalledWith(START_URL);
+
     await userEvent.click(screen.getByRole('button', { name: 'Проверить права ещё раз' }));
 
     await waitFor(() => expect(refreshed).toBe(true));

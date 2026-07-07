@@ -1,6 +1,7 @@
 package com.clubs.chatlink
 
 import com.clubs.bot.ChatTelegramGateway
+import com.clubs.bot.UserChatState
 import com.clubs.club.ClubRepository
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
@@ -69,14 +70,27 @@ class ChatDoorServiceTest {
     // ---- chat_join_request ----
 
     @Test
-    fun `стук при выключенной двери игнорируется`() {
+    fun `стук ЧУЖОГО при выключенной двери игнорируется (заявки разбирает организатор)`() {
         every { chatLinkRepository.findByChatId(chatId) } returns
             chatLinkFixture(clubId = clubId, chatId = chatId, doorEnabled = false)
+        every { userRepository.findByTelegramId(telegramId) } returns null
 
         service.onChatJoinRequest(chatId, telegramId)
 
         verify(exactly = 0) { gateway.approveJoinRequest(any(), any()) }
         verify(exactly = 0) { gateway.sendDmWithWebApp(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `стук УЧАСТНИКА с доступом при выключенной двери - всё равно впуск (кнопка «Чат клуба»)`() {
+        // Реестр багов №4: участников бот впускает независимо от тумблера.
+        every { chatLinkRepository.findByChatId(chatId) } returns
+            chatLinkFixture(clubId = clubId, chatId = chatId, doorEnabled = false)
+        every { membershipRepository.findByUserAndClub(userId, clubId) } returns membership(MembershipStatus.active)
+
+        service.onChatJoinRequest(chatId, telegramId)
+
+        verify { gateway.approveJoinRequest(chatId, telegramId) }
     }
 
     @Test
@@ -145,17 +159,32 @@ class ChatDoorServiceTest {
     @Test
     fun `доступ открылся без заявки - не в чате - DM с приглашением`() {
         every { gateway.approveJoinRequest(chatId, telegramId) } returns false
-        every { gateway.isChatParticipant(chatId, telegramId) } returns false
+        every { gateway.getUserChatState(chatId, telegramId) } returns UserChatState.NOT_IN_CHAT
 
         service.onAccessOpened(clubId, userId)
 
         verify { gateway.sendDmWithUrlButton(telegramId, match { it.contains("Вступай в чат") || it.contains("чат клуба") }, any(), doorLink) }
+        verify(exactly = 0) { gateway.unbanChatMember(any(), any()) }
+    }
+
+    @Test
+    fun `доступ открылся - человек ЗАБАНЕН в чате (удалён из группы) - unban перед приглашением`() {
+        // Реестр багов №1 (главный корень «ссылка не валидна», USER_KICKED со staging):
+        // «удалить из группы» = бан, забаненному любая ссылка недействительна.
+        every { gateway.approveJoinRequest(chatId, telegramId) } returns false
+        every { gateway.getUserChatState(chatId, telegramId) } returns UserChatState.BANNED
+        every { gateway.unbanChatMember(chatId, telegramId) } returns true
+
+        service.onAccessOpened(clubId, userId)
+
+        verify { gateway.unbanChatMember(chatId, telegramId) }
+        verify { gateway.sendDmWithUrlButton(telegramId, any(), any(), doorLink) }
     }
 
     @Test
     fun `доступ открылся - уже в чате (продление взноса) - без DM, не спамим`() {
         every { gateway.approveJoinRequest(chatId, telegramId) } returns false
-        every { gateway.isChatParticipant(chatId, telegramId) } returns true
+        every { gateway.getUserChatState(chatId, telegramId) } returns UserChatState.IN_CHAT
 
         service.onAccessOpened(clubId, userId)
 
@@ -166,7 +195,7 @@ class ChatDoorServiceTest {
     fun `доступ открылся - статус в чате неизвестен (Telegram молчит) - приглашение всё равно шлём`() {
         // Потерять вход для новичка хуже, чем изредка прислать лишний DM участнику чата.
         every { gateway.approveJoinRequest(chatId, telegramId) } returns false
-        every { gateway.isChatParticipant(chatId, telegramId) } returns null
+        every { gateway.getUserChatState(chatId, telegramId) } returns UserChatState.UNKNOWN
 
         service.onAccessOpened(clubId, userId)
 
@@ -174,9 +203,21 @@ class ChatDoorServiceTest {
     }
 
     @Test
-    fun `доступ открылся при выключенной двери - no-op`() {
+    fun `доступ открылся при выключенной двери - приглашение всё равно работает (реестр №4)`() {
         every { chatLinkRepository.findByClubId(clubId) } returns
-            chatLinkFixture(clubId = clubId, chatId = chatId, doorEnabled = false)
+            chatLinkFixture(clubId = clubId, chatId = chatId, doorEnabled = false, doorInviteLink = doorLink)
+        every { gateway.approveJoinRequest(chatId, telegramId) } returns false
+        every { gateway.getUserChatState(chatId, telegramId) } returns UserChatState.NOT_IN_CHAT
+
+        service.onAccessOpened(clubId, userId)
+
+        verify { gateway.sendDmWithUrlButton(telegramId, any(), any(), doorLink) }
+    }
+
+    @Test
+    fun `доступ открылся, но invite-ссылки ещё нет - no-op`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns
+            chatLinkFixture(clubId = clubId, chatId = chatId, doorEnabled = false, doorInviteLink = null)
 
         service.onAccessOpened(clubId, userId)
 
@@ -204,12 +245,12 @@ class ChatDoorServiceTest {
     }
 
     @Test
-    fun `отказ при выключенной двери - заявки не наши, не трогаем`() {
+    fun `отказ при выключенной двери - висящая заявка всё равно отклоняется (блайндовый decline безвреден)`() {
         every { chatLinkRepository.findByClubId(clubId) } returns
             chatLinkFixture(clubId = clubId, chatId = chatId, doorEnabled = false)
 
         service.onAccessRevoked(clubId, userId)
 
-        verify(exactly = 0) { gateway.declineJoinRequest(any(), any()) }
+        verify { gateway.declineJoinRequest(chatId, telegramId) }
     }
 }

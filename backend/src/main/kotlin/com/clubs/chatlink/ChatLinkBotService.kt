@@ -47,9 +47,26 @@ class ChatLinkBotService(
 
         val existingForClub = chatLinkRepository.findByClubId(clubId)
         if (existingForClub != null && existingForClub.chatId == chatId) {
-            // Повторное добавление в тот же чат — идемпотентно освежаем состояние, без петли подтверждения.
-            refreshState(existingForClub)
-            gateway.sendGroupMessage(chatId, "Чат уже привязан к клубу «${club.name}».")
+            // Повторное добавление в тот же чат (типовой случай — бота кикнули и вернули кнопкой
+            // «Привязать бота заново»): идемпотентно освежаем права и при необходимости
+            // пересоздаём invite-ссылку. Сообщение в чат — ТО ЖЕ, что при первой привязке
+            // (реестр багов №3: «уже привязан» сбивал с толку, когда бот фактически отсутствовал).
+            // DM-петля подтверждения не дублируется — гейт владельца уже пройден.
+            val state = gateway.getBotChatState(chatId)
+            if (state != null) {
+                chatLinkRepository.updateBotState(
+                    clubId = clubId,
+                    botStatus = BotChatStatus.fromTelegramStatus(state.statusLiteral),
+                    canPinMessages = state.canPinMessages,
+                    canInviteUsers = state.canInviteUsers
+                )
+                ensureInviteLink(
+                    link = existingForClub,
+                    nowInChat = BotChatStatus.fromTelegramStatus(state.statusLiteral).isInChat,
+                    nowCanInvite = state.canInviteUsers
+                )
+            }
+            gateway.sendGroupMessage(chatId, linkedMessage(club.name))
             return
         }
         if (existingForClub != null) {
@@ -82,8 +99,12 @@ class ChatLinkBotService(
         )
         log.info("Chat linked: clubId={} chatId={} byTelegramId={} botStatus={}", clubId, chatId, fromTelegramId, link.botStatus.literal)
 
+        // Invite-ссылка создаётся сразу при привязке (реестр багов №4): по ней работает кнопка
+        // «Чат клуба» у участников — не дожидаясь включения тумблера «Вход через заявки».
+        ensureInviteLink(link, nowInChat = link.botStatus.isInChat, nowCanInvite = link.canInviteUsers)
+
         // Петля подтверждения (решение PO): фишинг-привязка мгновенно видна и обратима.
-        gateway.sendGroupMessage(chatId, "✅ Чат привязан к клубу «${club.name}». Управление — в приложении Clubs, вкладка «Чат».")
+        gateway.sendGroupMessage(chatId, linkedMessage(club.name))
         gateway.sendDmWithCallbackButton(
             telegramId = fromTelegramId,
             text = "Чат «${chatTitle ?: "без названия"}» привязан к вашему клубу «${club.name}». Это были вы?\n\nЕсли нет — отвяжите чат кнопкой ниже.",
@@ -105,14 +126,29 @@ class ChatLinkBotService(
             "Bot chat state updated: clubId={} chatId={} status={} canPin={} canInvite={}",
             link.clubId, chatId, status.literal, canPinMessages, canInviteUsers
         )
+        ensureInviteLink(link, nowInChat = status.isInChat, nowCanInvite = canInviteUsers)
     }
 
-    /** Группа мигрировала в супергруппу — Telegram сменил chat_id, переносим привязку. */
+    /**
+     * Группа мигрировала в супергруппу — Telegram сменил chat_id, переносим привязку.
+     * Все invite-ссылки старой группы при миграции умирают — сразу пересоздаём для нового
+     * chat_id (реестр багов №2), иначе кнопка «Чат клуба» и DM останутся с мёртвой ссылкой.
+     */
     @Transactional
     fun handleChatMigration(oldChatId: Long, newChatId: Long) {
         val link = chatLinkRepository.findByChatId(oldChatId) ?: return
         chatLinkRepository.updateChatId(oldChatId, newChatId)
         log.info("Chat id migrated (group→supergroup): clubId={} {} → {}", link.clubId, oldChatId, newChatId)
+        if (link.doorInviteLink != null) {
+            // Отзывать старую бессмысленно — старого чата больше нет.
+            val fresh = gateway.createJoinRequestInviteLink(newChatId, DOOR_INVITE_LINK_NAME)
+            if (fresh != null) {
+                chatLinkRepository.updateInviteLink(link.clubId, fresh)
+                log.info("Invite link recreated after migration: clubId={} chatId={}", link.clubId, newChatId)
+            } else {
+                log.warn("Invite link recreation after migration failed — stale link remains until refresh: clubId={}", link.clubId)
+            }
+        }
     }
 
     /**
@@ -129,15 +165,34 @@ class ChatLinkBotService(
         return "Чат отвязан от клуба «${club.name}»"
     }
 
-    private fun refreshState(link: ChatLink) {
-        val state = gateway.getBotChatState(link.chatId) ?: return
-        chatLinkRepository.updateBotState(
-            clubId = link.clubId,
-            botStatus = BotChatStatus.fromTelegramStatus(state.statusLiteral),
-            canPinMessages = state.canPinMessages,
-            canInviteUsers = state.canInviteUsers
-        )
+    /**
+     * Гарантирует живую invite-ссылку, когда бот может приглашать. Два случая (реестр №2 и №4):
+     *  - ссылки ещё нет (привязали без права приглашать, право выдали позже) → создать;
+     *  - бот был кикнут и вернулся → Telegram ОТОЗВАЛ все его ссылки, старая мертва → пересоздать.
+     * Вызывается из my_chat_member И повторного /start — порядок этих апдейтов Telegram не
+     * гарантирует; двойного пересоздания нет, потому что условие сравнивает с состоянием строки
+     * ДО обновления, а первый сработавший его уже обновил.
+     */
+    private fun ensureInviteLink(link: ChatLink, nowInChat: Boolean, nowCanInvite: Boolean) {
+        if (!nowInChat || !nowCanInvite) return
+        // Ссылка живая, если существует и бот всё это время оставался в чате с правом приглашать.
+        val linkStillValid = link.doorInviteLink != null && link.botStatus.isInChat && link.canInviteUsers
+        if (linkStillValid) return
+
+        // Старую отзываем best-effort (после кика она и так мертва) — не копим живые дубли.
+        link.doorInviteLink?.let { gateway.revokeInviteLink(link.chatId, it) }
+        val fresh = gateway.createJoinRequestInviteLink(link.chatId, DOOR_INVITE_LINK_NAME)
+        if (fresh != null) {
+            chatLinkRepository.updateInviteLink(link.clubId, fresh)
+            log.info("Invite link (re)created: clubId={} chatId={}", link.clubId, link.chatId)
+        } else {
+            log.warn("Invite link creation failed — will retry on next state transition/refresh: clubId={} chatId={}", link.clubId, link.chatId)
+        }
     }
+
+    // Единый текст подтверждения в чат — и при первой привязке, и при повторной (после кика).
+    private fun linkedMessage(clubName: String): String =
+        "✅ Чат привязан к клубу «$clubName». Управление — в приложении Clubs, вкладка «Чат»."
 
     private fun refuseAndLeave(chatId: Long, text: String) {
         gateway.sendGroupMessage(chatId, text)

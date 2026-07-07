@@ -114,9 +114,11 @@ class ClubService(
         val isMember = membership != null && membership.status in MEMBER_REQUISITE_STATUSES
 
         // Чат-интеграция (club-chat-link): факт привязки и включённой «двери» публичен (гость
-        // видит чип «у клуба есть чат»), а сама door-ссылка — только тем, у кого есть доступ:
+        // видит чип «у клуба есть чат»), а сама invite-ссылка — только тем, у кого есть доступ:
         // active-участник, отменённый в оплаченном периоде, владелец. Frozen/expired — должники,
         // им в чат рано (least exposure, зеркалит гейт ChatDoorService.hasClubAccess).
+        // Ссылка отдаётся БЕЗ условия «дверь включена» (реестр багов №4): кнопка «Чат клуба»
+        // работает сразу после привязки — участников с доступом бот впускает всегда.
         val chatLink = chatLinkRepository.findByClubId(id)
         val chatLinked = chatLink?.botStatus?.isInChat == true
         val chatDoorEnabled = chatLinked && chatLink?.doorEnabled == true
@@ -129,7 +131,7 @@ class ClubService(
             includeRequisites = isMember,
             chatLinked = chatLinked,
             chatDoorEnabled = chatDoorEnabled,
-            chatInviteLink = if (chatDoorEnabled && hasChatAccess) chatLink?.doorInviteLink else null
+            chatInviteLink = if (chatLinked && hasChatAccess) chatLink?.doorInviteLink else null
         )
     }
 

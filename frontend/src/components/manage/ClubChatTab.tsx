@@ -62,7 +62,7 @@ const NotLinkedState: FC<{ startGroupUrl: string }> = ({ startGroupUrl }) => {
       </button>
       <div className="rd-cta-hint" style={{ marginTop: 8 }}>
         Откроется Telegram — выберите группу клуба.<br />
-        Бот попросит права администратора: закреплять сообщения и приглашать участников.
+        Бот попросит права администратора: закреплять сообщения, приглашать участников и снимать блокировки.
       </div>
     </div>
   );
@@ -141,6 +141,20 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
         </div>
       )}
 
+      {/* Бот выпал из чата — быстрая повторная привязка тем же deep link'ом, не заставляя
+          сначала отвязывать: повторный /start в том же чате идемпотентен (бэкенд освежит
+          права и пересоздаст invite-ссылку). Реестр багов №5. */}
+      {!botInChat && (
+        <button
+          type="button"
+          className="rd-btn-primary"
+          style={{ marginBottom: 12 }}
+          onClick={() => { haptic.impact('medium'); openTmeLink(status.startGroupUrl); }}
+        >
+          Привязать бота заново
+        </button>
+      )}
+
       {/* Карточка чата + пиллы прав */}
       <div className="rd-glass" style={{ padding: 14, marginBottom: 10 }}>
         <div className="rd-cl-chat-row">
@@ -157,6 +171,19 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
           <span className={`rd-cl-pill ${status.canPinMessages ? 'ok' : 'bad'}`}>{status.canPinMessages ? '✓ закреп разрешён' : '✕ закреп запрещён'}</span>
           <span className={`rd-cl-pill ${status.canInviteUsers ? 'ok' : 'bad'}`}>{status.canInviteUsers ? '✓ приглашения разрешены' : '✕ приглашения запрещены'}</span>
         </div>
+        {/* Invite-ссылка живёт независимо от тумблера двери (создаётся при привязке) — по ней
+            работает кнопка «Чат клуба» у участников. Реестр багов №4, текст — формулировка PO. */}
+        {status.doorInviteLink && (
+          <>
+            <div className="rd-cl-link-row">
+              <span className="rd-cl-link-text">{status.doorInviteLink}</span>
+              <button type="button" className="rd-cl-copy" onClick={handleCopyDoorLink}>Копировать</button>
+            </div>
+            <div className="rd-cl-chat-sub" style={{ marginTop: 6 }}>
+              Данная ссылка уже активна и работает, поменяйте старую, если где-то её используете.
+            </div>
+          </>
+        )}
       </div>
 
       {/* Тумблеры фич: дверь — активная, закреп и строгий режим — «скоро» (следующие слайсы) */}
@@ -165,20 +192,9 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
           <div className="fi">
             <div className="ft">Вход в чат через заявки</div>
             <div className="fd">
-              Бот выдаст новую ссылку-приглашение: тап по ней — заявка, впускается только одобренный в клубе.
+              Стучащимся в чат не-участникам бот напишет правила и впустит только после одобрения
+              заявки в клуб. Участников с доступом бот впускает всегда.
             </div>
-            {status.doorEnabled && status.doorInviteLink && (
-              <div className="rd-cl-link-row">
-                <span className="rd-cl-link-text">{status.doorInviteLink}</span>
-                <button type="button" className="rd-cl-copy" onClick={handleCopyDoorLink}>Копировать</button>
-              </div>
-            )}
-            {status.doorEnabled && (
-              <div className="fd" style={{ marginTop: 6 }}>
-                Опубликуйте эту ссылку вместо старой и отзовите прежние приглашения в настройках группы —
-                тогда все новые люди будут заходить через заявку в клуб.
-              </div>
-            )}
           </div>
           <button
             type="button"
