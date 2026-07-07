@@ -4,7 +4,8 @@ import { getStartParam } from '../telegram/sdk';
 
 /**
  * Монтируется один раз в корне приложения и разбирает телеграмовский tgWebAppStartParam.
- * Когда пользователь открывает приложение по ссылке t.me/<bot>/app?startapp=<value> —
+ * Когда пользователь открывает приложение по Main-Mini-App-ссылке
+ * t.me/<bot>?startapp=<value> (например, url-кнопки живого закрепа в чате клуба) —
  * ведёт на соответствующий deep-маршрут. Поддерживаемые префиксы:
  *   - `skladchina_<uuid>`   →  /skladchina/<uuid>
  *   - `event_<uuid>`        →  /events/<uuid>

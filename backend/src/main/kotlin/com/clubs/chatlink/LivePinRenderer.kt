@@ -22,10 +22,14 @@ class LivePinRenderer(
         .withZone(ZoneId.of("Europe/Moscow"))
 
     /**
-     * Url-кнопка для ГРУППЫ: только deep link `t.me/<bot>/app?startapp=event_…` —
-     * WebApp-кнопки в группах запрещены Telegram. DeepLinkHandler фронта парсит `event_<uuid>`.
+     * Url-кнопка для ГРУППЫ: WebApp-кнопки в группах запрещены Telegram, поэтому только
+     * deep link Main Mini App `t.me/<bot>?startapp=event_…`. Требует включённого Mini App
+     * у бота (BotFather → Bot Settings → Configure Mini App), иначе ссылка молча открывает
+     * чат с ботом. Формат `t.me/<bot>/app?…` НЕ используется — он требует отдельной
+     * регистрации short name через /newapp, которой у наших ботов нет (staging-баг:
+     * «Bot App Not Found»). DeepLinkHandler фронта парсит `event_<uuid>` из startParam.
      */
-    fun eventUrl(eventId: UUID): String = "https://t.me/$botUsername/app?startapp=event_$eventId"
+    fun eventUrl(eventId: UUID): String = "https://t.me/$botUsername?startapp=event_$eventId"
 
     /** Кнопка под статусом: на Этапе 2 зовём подтверждать, до него — голосовать. */
     fun buttonText(event: Event): String =

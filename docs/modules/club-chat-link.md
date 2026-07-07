@@ -237,8 +237,14 @@ CREATE TABLE event_chat_pins (
   (Дедлайн = старт события — честная граница окна подтверждения на бэке; отказ от
   подтверждённого места закрывается раньше, T-4ч, но в закрепе показываем именно окно
   подтверждения.)
-- ⚠️ Кнопки — **только url** `https://t.me/<bot>/app?startapp=event_<uuid>` (WebApp-кнопки в
-  группах запрещены Telegram; `DeepLinkHandler` фронта уже парсит `event_*`).
+- ⚠️ Кнопки — **только url** `https://t.me/<bot>?startapp=event_<uuid>` (Main Mini App):
+  WebApp-кнопки в группах запрещены Telegram, а формат `t.me/<bot>/app?…` требует отдельной
+  регистрации short name через /newapp, которой у ботов нет («Bot App Not Found» на staging).
+  **Требование инфраструктуры:** у бота должен быть включён Mini App
+  (BotFather → Bot Settings → Configure Mini App → Enable, URL = базовый URL фронта) — и у
+  staging-бота (`clubs_v2_test_bot` → staging URL), и у прод-бота (`clubs_v2_bot` → прод URL);
+  без этого ссылка молча открывает чат с ботом. `DeepLinkHandler` фронта парсит `event_*`
+  из `startParam`.
 
 ### Итог после встречи
 
@@ -306,7 +312,8 @@ CREATE TABLE event_chat_pins (
 18. Организатор отмечает явку → бот постит итог (№ встречи, «пришли X из Y», «впервые» — если есть,
     следующее событие + кнопка). Повторная отметка явки итог НЕ дублирует.
 19. Выключение тумблера → живые закрепы открепляются; включение обратно → свежие пины.
-20. Кнопки в группе открывают Mini App на странице события (url t.me/<bot>/app?startapp=event_…).
+20. Кнопки в группе открывают Mini App на странице события (url t.me/<bot>?startapp=event_…;
+    требует включённого Mini App у бота в BotFather — см. § Слайс 3).
 
 ## Рамки/факты Telegram (проверено, notes.md)
 - `my_chat_member` и `chat_join_request` приходят при пустом `allowed_updates` (наш стартер).

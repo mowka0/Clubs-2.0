@@ -80,7 +80,7 @@ class LivePinServiceTest {
                 chatId,
                 match { it.contains("Поход в баню") && it.contains("Идут — 3") },
                 "Проголосовать",
-                "https://t.me/clubs_test_bot/app?startapp=event_${event.id}"
+                "https://t.me/clubs_test_bot?startapp=event_${event.id}"
             )
         }
         verify { pinRepository.insert(match { it.eventId == event.id && it.messageId == 777L }) }
@@ -216,7 +216,7 @@ class LivePinServiceTest {
                         it.contains("Наташа — впервые") && it.contains("Следующая")
                 },
                 "Иду на следующую",
-                "https://t.me/clubs_test_bot/app?startapp=event_${next.id}"
+                "https://t.me/clubs_test_bot?startapp=event_${next.id}"
             )
         }
         verify { pinRepository.setSummaryMessageId(event.id, 888L) }

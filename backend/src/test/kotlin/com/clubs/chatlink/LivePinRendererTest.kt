@@ -60,9 +60,9 @@ class LivePinRendererTest {
     }
 
     @Test
-    fun `url кнопки — t_me app-диплинк с event-payload (не WebApp)`() {
+    fun `url кнопки — Main Mini App диплинк с event-payload (не WebApp, не short-name app)`() {
         assertEquals(
-            "https://t.me/clubs_test_bot/app?startapp=event_00000000-0000-0000-0000-000000000001",
+            "https://t.me/clubs_test_bot?startapp=event_00000000-0000-0000-0000-000000000001",
             renderer.eventUrl(event.id)
         )
     }
