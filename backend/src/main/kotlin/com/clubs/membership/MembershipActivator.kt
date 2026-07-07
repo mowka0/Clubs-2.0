@@ -2,6 +2,7 @@ package com.clubs.membership
 
 import com.clubs.generated.jooq.enums.MembershipStatus
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Component
 import java.util.UUID
 
@@ -23,7 +24,8 @@ import java.util.UUID
  */
 @Component
 class MembershipActivator(
-    private val membershipRepository: MembershipRepository
+    private val membershipRepository: MembershipRepository,
+    private val eventPublisher: ApplicationEventPublisher
 ) {
 
     private val log = LoggerFactory.getLogger(MembershipActivator::class.java)
@@ -52,6 +54,9 @@ class MembershipActivator(
             if (existing == null) "created" else "reactivated",
             if (frozen) "frozen" else "active", userId, clubId
         )
+        // Бесплатная активация = доступ открыт сразу; frozen откроется позже через
+        // AccessGateService.markDuesPaid (там своя публикация). Слушает чат-«дверь» AFTER_COMMIT.
+        if (!frozen) eventPublisher.publishEvent(MembershipAccessOpenedEvent(clubId, userId))
         return membership
     }
 

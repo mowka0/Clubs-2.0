@@ -320,11 +320,4 @@ class JooqClubRepository(
         step.where(CLUBS.ID.eq(id)).execute()
         return findById(id)
     }
-
-    override fun linkTelegramGroup(clubId: UUID, telegramGroupId: Long) {
-        dsl.update(CLUBS)
-            .set(CLUBS.TELEGRAM_GROUP_ID, telegramGroupId)
-            .where(CLUBS.ID.eq(clubId))
-            .execute()
-    }
 }

@@ -11,6 +11,7 @@ import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
@@ -38,7 +39,8 @@ class AccessGateService(
     private val userRepository: UserRepository,
     private val clubRepository: ClubRepository,
     private val applicationRepository: ApplicationRepository,
-    private val notificationService: NotificationService
+    private val notificationService: NotificationService,
+    private val eventPublisher: ApplicationEventPublisher
 ) {
     private val log = LoggerFactory.getLogger(AccessGateService::class.java)
 
@@ -76,6 +78,7 @@ class AccessGateService(
         }
         guardApplied(membershipRepository.unfreezeAccess(membership.id))
         log.info("Access unfrozen: clubId={} targetUserId={} by={}", clubId, targetUserId, callerId)
+        eventPublisher.publishEvent(MembershipAccessOpenedEvent(clubId, targetUserId))
         return mapper.toDto(membership.copy(status = MembershipStatus.active))
     }
 
@@ -94,6 +97,7 @@ class AccessGateService(
         val newExpiresAt = base.plusDays(accessPeriodDays)
         guardApplied(membershipRepository.markDuesPaid(membership.id, callerId, newExpiresAt))
         log.info("Dues marked paid: clubId={} targetUserId={} by={} accessUntil={}", clubId, targetUserId, callerId, newExpiresAt)
+        eventPublisher.publishEvent(MembershipAccessOpenedEvent(clubId, targetUserId))
         // markDuesPaid открывает доступ (active) вне зависимости от предыдущего frozen-состояния, до newExpiresAt.
         return mapper.toDto(membership.copy(status = MembershipStatus.active, subscriptionExpiresAt = newExpiresAt))
     }
@@ -118,6 +122,7 @@ class AccessGateService(
         }
         guardApplied(membershipRepository.setAccessUntil(membership.id, until))
         log.info("Access window set: clubId={} targetUserId={} by={} until={}", clubId, targetUserId, callerId, until)
+        eventPublisher.publishEvent(MembershipAccessOpenedEvent(clubId, targetUserId))
         return mapper.toDto(membership.copy(status = MembershipStatus.active, subscriptionExpiresAt = until))
     }
 
@@ -209,6 +214,7 @@ class AccessGateService(
         val cascaded = applicationRepository.deleteActiveByUserAndClub(targetUserId, clubId)
         log.info("Join rejected (refund): clubId={} targetUserId={} by={} hasReason={} cascadedApplications={}", clubId, targetUserId, callerId, reason != null, cascaded)
         notifyRejected(targetUserId, reason)
+        eventPublisher.publishEvent(MembershipAccessRevokedEvent(clubId, targetUserId))
         return mapper.toDto(membership.copy(status = MembershipStatus.cancelled))
     }
 
@@ -233,6 +239,7 @@ class AccessGateService(
         val cascaded = applicationRepository.deleteActiveByUserAndClub(targetUserId, clubId)
         log.info("Member removed (kick): clubId={} targetUserId={} by={} cascadedApplications={}", clubId, targetUserId, callerId, cascaded)
         notifyRemoved(targetUserId, clubId, cleanReason)
+        eventPublisher.publishEvent(MembershipAccessRevokedEvent(clubId, targetUserId))
         return mapper.toDto(membership.copy(status = MembershipStatus.cancelled, subscriptionExpiresAt = null))
     }
 

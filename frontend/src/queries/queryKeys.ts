@@ -29,6 +29,8 @@ export const queryKeys = {
     applications: (clubId: string, status?: string) =>
       ['clubs', 'detail', clubId, 'applications', status ?? 'all'] as const,
     finances: (clubId: string) => ['clubs', 'detail', clubId, 'finances'] as const,
+    // Привязка телеграм-чата (club-chat-link) — статус для таба «Чат» в «Управлении».
+    chatLink: (clubId: string) => ['clubs', 'detail', clubId, 'chat-link'] as const,
     stats: (clubId: string) => ['clubs', 'detail', clubId, 'stats'] as const,
     churnedMembers: (clubId: string) => ['clubs', 'detail', clubId, 'churned-members'] as const,
     quality: (clubId: string) => ['clubs', 'detail', clubId, 'quality'] as const,

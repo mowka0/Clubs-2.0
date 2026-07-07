@@ -7,7 +7,7 @@
 
 ## Цель
 
-Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App **и** канал DM-нотификаций. Запускается как Spring `@Component`, реализующий `SpringLongPollingBot` + `LongPollingSingleThreadUpdateConsumer` (long-polling). Обрабатывает три типа Telegram updates: команды-сообщения, `pre_checkout_query`, `successful_payment`. Отдельно — отправка DM-уведомлений из других модулей через `NotificationService`.
+Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App **и** канал DM-нотификаций. Запускается как Spring `@Component`, реализующий `SpringLongPollingBot` + `LongPollingSingleThreadUpdateConsumer` (long-polling). Обрабатывает Telegram updates: команды-сообщения, `pre_checkout_query`, `successful_payment`, а с эпика чат-интеграции — `my_chat_member`, `chat_join_request`, `callback_query` и миграцию chat_id (`migrate_to_chat_id`); чат-логика делегируется в модуль `chatlink/` (см. `docs/modules/club-chat-link.md`). Отдельно — отправка DM-уведомлений из других модулей через `NotificationService`.
 
 ## Scope
 
@@ -85,18 +85,22 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 `ClubsBot.consume(update: Update)` — единственная точка входа. Диспатч **строго в этом порядке** (порядок load-bearing):
 
 1. `update.hasPreCheckoutQuery()` → `handlePreCheckoutQuery(query)` → return
-2. `update.hasMessage()` == false → return
-3. `update.message.hasSuccessfulPayment()` → `paymentService.handleSuccessfulPayment(...)` → return (важно: проверяется **до** `hasText()`, потому что `successful_payment` приходит как message без `text`)
-4. `update.message.hasText()` == false → return
-5. Диспатч по `text.startsWith(...)`:
-   - `/start` → `handleStart(chatId)`
+2. `update.hasMyChatMember()` → health привязки чата (`ChatLinkBotService.handleMyChatMember`) → return
+3. `update.hasChatJoinRequest()` → «дверь» (`ChatDoorService.onChatJoinRequest`) → return
+4. `update.hasCallbackQuery()` → inline-кнопки (сейчас только `chatlink:unlink:<uuid>` из DM-петли подтверждения) → return
+5. `update.hasMessage()` == false → return
+6. `message.migrateToChatId != null` → перенос привязки на новый chat_id (`handleChatMigration`) → return
+7. `update.message.hasSuccessfulPayment()` → залоггировать stray-платёж (Stars упразднён) → return (важно: проверяется **до** `hasText()`, потому что `successful_payment` приходит как message без `text`)
+8. `update.message.hasText()` == false → return
+9. Диспатч по `text.startsWith(...)`:
+   - `/start` в личке → `handleStart(chatId)`; `/start <club_id>` в группе/супергруппе → привязка чата (`ChatLinkBotService.handleGroupStart`, гейт «отправитель = владелец клуба»); `/start` в группе без валидного UUID-payload — молчаливый no-op
    - `/кто_идет` или `/kto_idet` → `handleWhoIsGoing(chatId)`
 
 Любое исключение во время диспатча команды ловится `catch (e: Exception)` на уровне `consume` и логируется `ERROR`. Long-polling loop при этом не падает.
 
 ### `/start`
 
-**Триггер:** message text начинается с `/start`.
+**Триггер:** message text начинается с `/start` в ЛИЧНОМ чате (в группах `/start` — вход в привязку чата, см. `docs/modules/club-chat-link.md`).
 **Response (через `telegramClient.execute(SendMessage)`):**
 ```
 👋 Привет! Clubs — платформа для офлайн-сообществ.

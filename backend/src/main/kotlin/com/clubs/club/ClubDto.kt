@@ -48,7 +48,15 @@ data class ClubDetailDto(
     val isActive: Boolean,
     // Реквизиты для взносов по СБП — заполняются только для участников клуба (active/frozen) + владельца; иначе null.
     val paymentLink: String?,
-    val paymentMethodNote: String?
+    val paymentMethodNote: String?,
+    // Чат-интеграция (club-chat-link): к клубу привязан телеграм-чат и бот в нём жив.
+    // Публично — гость видит чип «у клуба есть чат» (мокап 02-C).
+    val chatLinked: Boolean = false,
+    // Включён «вход в чат через заявки» (дверь). Тоже публично — чип обещает вход после одобрения.
+    val chatDoorEnabled: Boolean = false,
+    // Door-ссылка для кнопки «Чат клуба» — ТОЛЬКО участникам с доступом (active / cancelled-в-периоде)
+    // и владельцу; гостям/frozen/expired — null (least exposure, как paymentLink).
+    val chatInviteLink: String? = null
 )
 
 data class CreateClubRequest(

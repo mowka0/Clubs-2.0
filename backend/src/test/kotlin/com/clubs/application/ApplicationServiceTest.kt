@@ -69,7 +69,8 @@ class ApplicationServiceTest {
             applicantSignalService,
             interestRepository,
             membershipMapper,
-            membershipActivator
+            membershipActivator,
+            eventPublisher = mockk(relaxed = true)
         )
     }
 
@@ -99,7 +100,6 @@ class ApplicationServiceTest {
             inviteLink = null,
             memberCount = memberCount,
             isActive = true,
-            telegramGroupId = null,
             createdAt = now,
             updatedAt = now
         )
@@ -196,7 +196,6 @@ class ApplicationServiceTest {
             inviteLink = null,
             memberCount = 0,
             isActive = true,
-            telegramGroupId = null,
             createdAt = now,
             updatedAt = now
         )

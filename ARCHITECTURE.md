@@ -52,10 +52,12 @@ POST /api/clubs/{id}/regenerate-invite
   Response 200: { inviteLink: string }
   Errors: 403 (not owner)
 
-POST /api/clubs/{id}/link-group
-  Body: { telegramGroupId: long }
-  Response 200: ClubDetailDto
-  Errors: 403 (not owner)
+GET    /api/clubs/{clubId}/chat-link           # статус привязки телеграм-чата (владелец)
+POST   /api/clubs/{clubId}/chat-link/refresh   # перечитать права бота из Telegram
+PATCH  /api/clubs/{clubId}/chat-link           # { doorEnabled } — тумблер «вход через заявки»
+DELETE /api/clubs/{clubId}/chat-link           # отвязать чат (бот выйдет из группы)
+  Errors: 403 (not owner), 404 (не привязан), 409 (нет прав бота / Telegram недоступен)
+  Спека: docs/modules/club-chat-link.md
 ```
 
 ### 1.4 Membership
@@ -467,7 +469,7 @@ backend/src/main/kotlin/com/clubs/
 │   └── dto/
 │       └── UserDto.kt
 ├── club/
-│   ├── ClubController.kt                  # CRUD + link-group + finances endpoints
+│   ├── ClubController.kt                  # CRUD + finances endpoints
 │   ├── InviteController.kt                # /api/invite/* + regenerate-invite
 │   ├── ClubService.kt
 │   ├── FinancesService.kt

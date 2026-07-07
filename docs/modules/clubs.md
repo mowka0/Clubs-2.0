@@ -36,7 +36,7 @@ FinancesService ──▶ ClubRepository (ownership), MembershipRepository (acti
 |---|---|
 | `club/ClubController.kt` | REST endpoints `/api/clubs/*` |
 | `club/InviteController.kt` | REST endpoints `/api/invite/*` + `/api/clubs/{id}/regenerate-invite` |
-| `club/ClubService.kt` | Бизнес-логика клуба (CRUD, регенерация инвайт-кода, link-group) |
+| `club/ClubService.kt` | Бизнес-логика клуба (CRUD, регенерация инвайт-кода; поля `chat*` детали клуба собирает из `chatlink/`) |
 | `club/FinancesService.kt` | Расчёт `FinancesDto` для организатора (active members, monthly revenue, доля 80/20) |
 | `club/Club.kt` | Domain data class (внутренний тип Service-слоя) |
 | `club/ClubMapper.kt` | `ClubsRecord → Club` + `Club → ClubDetailDto` |
@@ -118,7 +118,9 @@ Backend явно не принимает category/accessType в `UpdateClubReque
   (см. `membership.md` § AC-2), orphan-membership в выдачу не попадает
 - `transactions` остаются в БД для audit trail
 - Активные подписки не возвращаются (refund вне scope MVP)
-- Telegram-группу клуба (`telegram_group_id`) **не трогает** — остаётся как есть
+- Привязку телеграм-чата (`club_chat_links`) **не отвязывает**: строка остаётся, но бот перестаёт
+  обслуживать чат fail-close (все пути начинаются с `clubRepository.findById`, который фильтрует
+  `is_active`). Известная шероховатость v1 — бот не выходит из группы сам (см. docs/modules/club-chat-link.md)
 - Идемпотентно: повторный DELETE → 204 (но 404 после первого, т.к. findById фильтрует is_active)
 
 ### Corner Cases

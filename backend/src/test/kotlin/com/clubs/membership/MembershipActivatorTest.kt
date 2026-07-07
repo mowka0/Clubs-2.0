@@ -20,7 +20,7 @@ class MembershipActivatorTest {
     @BeforeEach
     fun setUp() {
         membershipRepository = mockk(relaxed = true)
-        activator = MembershipActivator(membershipRepository)
+        activator = MembershipActivator(membershipRepository, eventPublisher = mockk(relaxed = true))
     }
 
     private fun makeMembership(

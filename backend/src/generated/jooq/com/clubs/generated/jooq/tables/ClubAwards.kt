@@ -83,9 +83,10 @@ open class ClubAwards(
     override fun getRecordType(): Class<ClubAwardsRecord> = ClubAwardsRecord::class.java
 
     /**
-     * The column <code>public.club_awards.id</code>.
+     * The column <code>public.club_awards.id</code>. Суррогатный первичный ключ
+     * награды (UUID).
      */
-    val ID: TableField<ClubAwardsRecord, UUID?> = createField(DSL.name("id"), SQLDataType.UUID.nullable(false).defaultValue(DSL.field(DSL.raw("gen_random_uuid()"), SQLDataType.UUID)), this, "")
+    val ID: TableField<ClubAwardsRecord, UUID?> = createField(DSL.name("id"), SQLDataType.UUID.nullable(false).defaultValue(DSL.field(DSL.raw("gen_random_uuid()"), SQLDataType.UUID)), this, "Суррогатный первичный ключ награды (UUID).")
 
     /**
      * The column <code>public.club_awards.club_id</code>. Клуб, в котором

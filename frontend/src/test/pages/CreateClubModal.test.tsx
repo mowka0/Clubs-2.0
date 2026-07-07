@@ -125,6 +125,9 @@ describe('CreateClubModal', () => {
           isActive: true,
           paymentLink: null,
           paymentMethodNote: null,
+          chatLinked: false,
+          chatDoorEnabled: false,
+          chatInviteLink: null,
         };
         return HttpResponse.json(club, { status: 201 });
       }),

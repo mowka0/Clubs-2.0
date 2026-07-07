@@ -41,7 +41,8 @@ class AccessGateServiceTest {
         service = AccessGateService(
             membershipRepository, MembershipMapper(), accessPeriodDays = 30, storageBaseUrl = "",
             userRepository = userRepository, clubRepository = clubRepository,
-            applicationRepository = applicationRepository, notificationService = notificationService
+            applicationRepository = applicationRepository, notificationService = notificationService,
+            eventPublisher = mockk(relaxed = true)
         )
     }
 

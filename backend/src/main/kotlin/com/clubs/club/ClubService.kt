@@ -6,6 +6,7 @@ import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.application.ApplicationRepository
+import com.clubs.chatlink.ChatLinkRepository
 import com.clubs.event.EventRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
@@ -16,6 +17,7 @@ import com.clubs.subscription.SubscriptionService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.OffsetDateTime
 import java.util.UUID
 
 // Максимум клубов на одного организатора
@@ -37,6 +39,7 @@ class ClubService(
     private val skladchinaRepository: SkladchinaRepository,
     private val applicationRepository: ApplicationRepository,
     private val subscriptionService: SubscriptionService,
+    private val chatLinkRepository: ChatLinkRepository,
     private val mapper: ClubMapper
 ) {
 
@@ -109,17 +112,25 @@ class ClubService(
         // организатор, honor-system).
         val membership = membershipRepository.findByUserAndClub(callerId, id)
         val isMember = membership != null && membership.status in MEMBER_REQUISITE_STATUSES
-        return mapper.toDetailDto(club, includeRequisites = isMember)
-    }
 
-    @Transactional
-    fun linkTelegramGroup(clubId: UUID, telegramGroupId: Long, userId: UUID): ClubDetailDto {
-        val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        if (club.ownerId != userId) throw ForbiddenException("Only the club owner can link a Telegram group")
-        clubRepository.linkTelegramGroup(clubId, telegramGroupId)
-        log.info("Telegram group {} linked to club {}: userId={}", telegramGroupId, clubId, userId)
-        val updated = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found after update")
-        return mapper.toDetailDto(updated, includeRequisites = true)
+        // Чат-интеграция (club-chat-link): факт привязки и включённой «двери» публичен (гость
+        // видит чип «у клуба есть чат»), а сама door-ссылка — только тем, у кого есть доступ:
+        // active-участник, отменённый в оплаченном периоде, владелец. Frozen/expired — должники,
+        // им в чат рано (least exposure, зеркалит гейт ChatDoorService.hasClubAccess).
+        val chatLink = chatLinkRepository.findByClubId(id)
+        val chatLinked = chatLink?.botStatus?.isInChat == true
+        val chatDoorEnabled = chatLinked && chatLink?.doorEnabled == true
+        val hasChatAccess = club.ownerId == callerId ||
+            (membership != null && (membership.status == MembershipStatus.active ||
+                (membership.status == MembershipStatus.cancelled &&
+                    membership.subscriptionExpiresAt?.isAfter(OffsetDateTime.now()) == true)))
+        return mapper.toDetailDto(
+            club,
+            includeRequisites = isMember,
+            chatLinked = chatLinked,
+            chatDoorEnabled = chatDoorEnabled,
+            chatInviteLink = if (chatDoorEnabled && hasChatAccess) chatLink?.doorInviteLink else null
+        )
     }
 
     @Transactional

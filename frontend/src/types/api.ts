@@ -351,6 +351,29 @@ export interface ClubDetailDto {
   // участникам, которые должны взнос.
   paymentLink: string | null;
   paymentMethodNote: string | null;
+  // Чат-интеграция (club-chat-link): чат привязан и бот в нём жив — гость видит чип «у клуба есть чат».
+  chatLinked: boolean;
+  // Включён «вход в чат через заявки» (дверь).
+  chatDoorEnabled: boolean;
+  // Door-ссылка для кнопки «Чат клуба» — только участникам с доступом + владельцу; иначе null.
+  chatInviteLink: string | null;
+}
+
+/**
+ * Статус привязки телеграм-чата — `GET /api/clubs/{id}/chat-link` (только владелец).
+ * botStatus: administrator | member | left | kicked; null пока чат не привязан.
+ */
+export interface ChatLinkStatusDto {
+  linked: boolean;
+  chatTitle: string | null;
+  linkedAt: string | null;
+  botStatus: string | null;
+  canPinMessages: boolean;
+  canInviteUsers: boolean;
+  doorEnabled: boolean;
+  doorInviteLink: string | null;
+  // Deep link ?startgroup= для кнопки «Привязать чат» (username бота живёт на сервере).
+  startGroupUrl: string;
 }
 
 /** Факты качества клуба для `GET /api/clubs/{id}/quality` (кольца + достижения). */

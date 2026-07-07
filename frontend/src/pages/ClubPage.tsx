@@ -27,6 +27,7 @@ import {
 } from '../queries/applications';
 import { ApiError } from '../api/apiClient';
 import { formatPrice } from '../utils/formatters';
+import { openTmeLink } from '../utils/telegramLinks';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
@@ -417,6 +418,23 @@ export const ClubPage: FC = () => {
         <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{club.description}</div>
       </div>
 
+      {/* Чат клуба (club-chat-link): участнику с доступом — кнопка входа по door-ссылке
+          (уже в чате → Telegram просто откроет чат; ещё нет → заявка + авто-впуск ботом). */}
+      {showTabs && club.chatInviteLink && (
+        <button
+          type="button"
+          className="rd-btn-outline"
+          style={{ marginBottom: 14 }}
+          onClick={() => {
+            if (!club.chatInviteLink) return;
+            haptic.impact('light');
+            openTmeLink(club.chatInviteLink);
+          }}
+        >
+          💬 Чат клуба
+        </button>
+      )}
+
       {/* Качество клуба — единый публичный блок (кольца + подпись возраст/активность), виден всем */}
       {id && <ClubQualityFacts clubId={id} memberCount={club.memberCount} />}
 
@@ -494,6 +512,17 @@ export const ClubPage: FC = () => {
               Содержимое клуба открывается после вступления.
             </div>
           </div>
+
+          {/* Чат и клуб — одно целое (club-chat-link): гость видит, что вход в чат
+              лежит через вступление (мокап 02-C). */}
+          {club.chatLinked && club.chatDoorEnabled && (
+            <div className="rd-cl-chip">
+              <span aria-hidden="true">💬</span>
+              <span>
+                У клуба есть чат — вход откроется после {club.accessType === 'closed' ? 'одобрения заявки' : 'вступления'}
+              </span>
+            </div>
+          )}
 
           {joinError && <div className="rd-error">{joinError}</div>}
 

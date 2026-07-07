@@ -30,7 +30,9 @@ class ClubsBotTest {
             botToken = "dummy-token",
             telegramClient = telegramClient,
             eventRepository = eventRepository,
-            eventResponseRepository = eventResponseRepository
+            eventResponseRepository = eventResponseRepository,
+            chatLinkBotService = mockk(relaxed = true),
+            chatDoorService = mockk(relaxed = true)
         )
     }
 

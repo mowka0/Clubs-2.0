@@ -22,7 +22,6 @@ data class Club(
     val inviteLink: String?,
     val memberCount: Int,
     val isActive: Boolean,
-    val telegramGroupId: Long?,
     // Реквизиты СБП для взносов (платёжные данные организатора вне платформы). Видны только участникам.
     // По умолчанию null, чтобы не пришлось обновлять все существующие тестовые билдеры Club(...);
     // в проде значения выставляются через mapper.

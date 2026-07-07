@@ -19,8 +19,6 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
-data class LinkGroupRequest(val telegramGroupId: Long)
-
 @RestController
 @RequestMapping("/api/clubs")
 class ClubController(
@@ -89,17 +87,6 @@ class ClubController(
         log.info("Delete club: id={} userId={}", id, user.userId)
         clubService.deleteClub(id, user.userId)
         return ResponseEntity.noContent().build()
-    }
-
-    @RequiresOrganizer
-    @PostMapping("/{id}/link-group")
-    fun linkGroup(
-        @PathVariable id: UUID,
-        @RequestBody request: LinkGroupRequest,
-        @AuthenticationPrincipal user: AuthenticatedUser
-    ): ResponseEntity<ClubDetailDto> {
-        log.info("Link Telegram group {} to club {}: userId={}", request.telegramGroupId, id, user.userId)
-        return ResponseEntity.ok(clubService.linkTelegramGroup(id, request.telegramGroupId, user.userId))
     }
 
     @RequiresOrganizer

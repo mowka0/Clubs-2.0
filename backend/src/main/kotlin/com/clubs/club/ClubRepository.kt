@@ -31,8 +31,6 @@ interface ClubRepository {
 
     fun findAll(filters: ClubFilterParams): PageResponse<ClubListItemDto>
 
-    fun linkTelegramGroup(clubId: UUID, telegramGroupId: Long)
-
     /**
      * Ближайшее предстоящее событие для каждого клуба из [clubIds] (status=upcoming,
      * event_datetime > now). Клубы без предстоящих событий в map отсутствуют. Семантика та же,

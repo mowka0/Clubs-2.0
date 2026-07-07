@@ -99,7 +99,6 @@ class MembershipServiceTest {
             inviteLink = null,
             memberCount = memberCount,
             isActive = true,
-            telegramGroupId = null,
             createdAt = now,
             updatedAt = now
         )
