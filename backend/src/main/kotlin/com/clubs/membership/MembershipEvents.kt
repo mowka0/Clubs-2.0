@@ -5,7 +5,9 @@ import java.util.UUID
 
 data class ExpiringSubscriptionNotification(
     val telegramId: Long,
-    val clubName: String
+    val clubName: String,
+    // Для inline-кнопки-диплинка в DM «подписка истекла» (открывает /clubs/{id}, где живёт «Оплатить взнос»).
+    val clubId: UUID
 )
 
 /**

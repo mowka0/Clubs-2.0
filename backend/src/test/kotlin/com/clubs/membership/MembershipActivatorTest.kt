@@ -100,14 +100,14 @@ class MembershipActivatorTest {
     }
 
     @Test
-    fun `activateFrozen reactivates expired membership via reactivateFrozen`() {
+    fun `activateFrozen reactivates cancelled membership via reactivateFrozen`() {
         val userId = UUID.randomUUID()
         val clubId = UUID.randomUUID()
         val membershipId = UUID.randomUUID()
-        val expired = makeMembership(membershipId, userId, clubId, MembershipStatus.expired)
+        val cancelled = makeMembership(membershipId, userId, clubId, MembershipStatus.cancelled)
         val reactivated = makeMembership(membershipId, userId, clubId, MembershipStatus.frozen)
 
-        every { membershipRepository.findByUserAndClub(userId, clubId) } returns expired
+        every { membershipRepository.findByUserAndClub(userId, clubId) } returns cancelled
         every { membershipRepository.reactivateFrozen(membershipId) } returns reactivated
 
         val result = activator.activateFrozen(userId, clubId)
@@ -147,14 +147,18 @@ class MembershipActivatorTest {
     }
 
     @Test
-    fun `activate throws IllegalStateException when grace_period membership exists`() {
+    fun `activate throws IllegalStateException when expired membership exists`() {
+        // Оживление expired (2026-07-06): должник по продлению — всё ещё участник; повторное
+        // вступление не должно молча стереть его жизненный цикл (путь назад — оплата взноса).
         val userId = UUID.randomUUID()
         val clubId = UUID.randomUUID()
         every { membershipRepository.findByUserAndClub(userId, clubId) } returns
-            makeMembership(UUID.randomUUID(), userId, clubId, MembershipStatus.grace_period)
+            makeMembership(UUID.randomUUID(), userId, clubId, MembershipStatus.expired)
 
         assertThrows<IllegalStateException> { activator.activateFree(userId, clubId) }
+        assertThrows<IllegalStateException> { activator.activateFrozen(userId, clubId) }
         verify(exactly = 0) { membershipRepository.create(any(), any()) }
         verify(exactly = 0) { membershipRepository.reactivateFree(any()) }
+        verify(exactly = 0) { membershipRepository.reactivateFrozen(any()) }
     }
 }

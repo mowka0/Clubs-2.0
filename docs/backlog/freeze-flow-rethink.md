@@ -38,6 +38,13 @@ READ-фильтров занятости, если они не должны сч
 
 ## ✅ РЕШЕНИЕ PO (2026-07-06): вернуть к жизни статус `expired` для просрочки продления
 
+> **✅ РЕАЛИЗОВАНО веткой `feature/expired-status-revival` (2026-07-06).** Спека as-built —
+> `docs/modules/membership-lifecycle.md` (статусная модель + матрица status×surface + AC).
+> Сверх плана по запросу PO: уборка `grace_period` из ВСЕХ read-фильтров + V46 флипает застрявшие
+> `grace_period`-строки и легаси frozen-должников (окно в прошлом) в `expired`; удалены мёртвые
+> Stars-методы `activateSubscription`/`renewSubscription`. `membership_history` НЕ пишется при
+> active→expired (лапс ≠ churn — обоснование в membership-lifecycle.md §3). Ниже — исходный план.
+
 Целевая модель (слайс 1 этого rethink'а, отдельная ветка после мержа members-tab-unification):
 
 - Шедулер: `active` + просроченное окно → **`expired`** (не `frozen`). Enum-значение уже есть (V3),

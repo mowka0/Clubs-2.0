@@ -15,7 +15,7 @@ POST /api/clubs/{id}/join
 ### Бизнес-правила
 - Клуб должен существовать → 404
 - Клуб должен иметь `access_type = open` → 400 "Club is not open for joining"
-- Юзер не должен быть уже участником (active/grace_period) → 409 "Already a member"
+- Юзер не должен быть уже участником (active/frozen/expired — expired-должник всё ещё участник, путь назад через оплату) → 409 "Already a member"
 - Количество active memberships < `member_limit` → 400 "Club is full"
 - **Если `club.subscription_price > 0` (платный):**
   - Вызвать `paymentService.createInvoice(userId, clubId)` — шлёт Stars invoice в DM
@@ -54,7 +54,7 @@ POST /api/clubs/{id}/join
 - `POST /api/clubs/{unknownId}/join` → 404 NOT_FOUND
 - `POST /api/clubs/{closedClubId}/join` → 400 "Club is not open for joining"
 - `POST /api/clubs/{fullClubId}/join` → 400 "Club is full"
-- Повторное вступление (уже active/grace_period) → 409 CONFLICT "Already a member"
+- Повторное вступление (уже active/frozen/expired) → 409 CONFLICT "Already a member"
 - Повторное нажатие «Вступить» в платный клуб, пока оплата не прошла → идемпотентно: `createInvoice` вызывается снова (Telegram сам управляет дубликатами invoice), ответ 202
 - Вступление без токена → 401
 - Expired/cancelled membership существует для **бесплатного** клуба → автоматическая реактивация через `FreeMembershipActivator` (status=active, joined_at=now, subscription_expires_at=null, updated_at=now). Ответ 201 с MembershipDto, как для нового вступления. Счётчик участников отдельно не пишется — он считается на лету из `memberships`, и реактивированная строка автоматически снова попадает в live-счёт. См. § «Free-club reactivate-or-create».
@@ -101,7 +101,7 @@ POST /api/invite/{code}/join
 ### Зачем
 
 Таблица `memberships` имеет `UNIQUE (user_id, club_id)`. Если для пары
-`(user, club)` уже есть строка со статусом `cancelled` / `expired`, прямой
+`(user, club)` уже есть строка со статусом `cancelled`, прямой
 `INSERT` ловит `DuplicateKeyException` (HTTP 500). До этого все три call-site
 использовали паттерн «findActiveByUserAndClub → INSERT», который покрывал
 только `active`/`grace_period` строки; мёртвые строки приводили к 500.
@@ -111,11 +111,11 @@ POST /api/invite/{code}/join
 | Состояние строки в `memberships` | Действие | Эффект на live-счёт участников |
 |---|---|---|
 | Нет строки | INSERT (`status=active`, `joined_at=now`, `subscription_expires_at=null`*) | `+1` (новая active-строка попадает в счёт) |
-| `status ∈ {cancelled, expired}` | UPDATE: `status=active`, `joined_at=now`, `subscription_expires_at=null`, `updated_at=now` | `+1` (строка возвращается в счёт) |
-| `status ∈ {active, grace_period}` | `IllegalStateException` | — |
+| `status = cancelled` | UPDATE: `status=active`, `joined_at=now`, `subscription_expires_at=null`, `updated_at=now` | `+1` (строка возвращается в счёт) |
+| `status ∈ {active, frozen, expired}` | `IllegalStateException` (живое членство — включая expired-должника — нельзя молча пересоздать) | — |
 
 > **Note**: Счётчик участников нигде не пишется — колонка `clubs.member_count`
-> дропнута в V33. Значение считается на лету из `memberships` (статусы active/grace,
+> дропнута в V33. Значение считается на лету из `memberships` (статусы active/frozen/expired,
 > включая организатора). Реактивация только меняет статус строки на `active`, и она
 > автоматически снова входит в live-счёт. Цикл leave/rejoin больше не может «уплыть»:
 > нет денормализованного счётчика, который мог бы рассинхронизироваться.
@@ -162,7 +162,7 @@ POST /api/clubs/{id}/cancel
 Caller (JWT principal) = владелец membership. Отдельный userId в пути не нужен — нельзя отменить чужую подписку.
 
 ### Бизнес-правила
-- У caller должен существовать membership в этом клубе со статусом `active` или `grace_period` → иначе 404 "Membership not found"
+- У caller должен существовать membership в этом клубе со статусом `active`/`frozen`/`expired` → иначе 404 "Membership not found"
 - Если статус уже `cancelled` → 400 "Membership already cancelled"
 - При успехе:
   - `memberships.status = cancelled` (через `MEMBERSHIPS.STATUS`)
@@ -187,8 +187,8 @@ AND в БД memberships.status = cancelled
 AND subscription_expires_at не изменился
 AND отдельной записи счётчика участников нет (он считается на лету из `memberships`; cancelled-строка в live-счёт не входит)
 
-**AC-2: отмена в grace_period**
-GIVEN caller — member клуба X со status=grace_period
+**AC-2: отмена в expired (должник по продлению)**
+GIVEN caller — member клуба X со status=expired
 WHEN POST /api/clubs/X/cancel
 THEN 200 OK, аналогично AC-1
 
@@ -196,7 +196,7 @@ THEN 200 OK, аналогично AC-1
 GIVEN caller уже отменил подписку (status=cancelled)
 WHEN POST /api/clubs/X/cancel
 THEN 404 "Membership not found"
-(потому что `findActiveByUserAndClub` ищет только active+grace_period; cancelled не попадает в выборку — это сознательно)
+(потому что `findActiveByUserAndClub` ищет только active+frozen+expired; cancelled не попадает в выборку — это сознательно)
 
 ### Corner Cases
 | Ситуация | Код | Сообщение |
@@ -239,7 +239,7 @@ GET /api/clubs/{id}/members
 `trust` — P1b Trust 0-100 (on-read из ledger), сменил прежнее `reliabilityIndex`.
 
 ### Бизнес-правила
-- Возвращаются ТОЛЬКО участники со статусом `active` (grace_period, cancelled, expired — не входят)
+- Обычному зрителю возвращаются ТОЛЬКО участники со статусом `active`; организатору — также `frozen`/`expired` (бакеты «Оплата вступления»/«Доступ истёк»). `cancelled` не входит никогда
 - Per-member Trust считается одним batch-запросом (`TrustService.trustForClubMembers`, без N+1)
 - **Асимметричная видимость (UPDATED 2026-07-05, reputation-path-back.md):** оценочные метрики (`trust`, `promiseFulfillmentPct`, `totalConfirmations`) видят только **организатор** (у всех) и **сам участник** (свою строку); в остальных строках рядовой зритель получает **null**, неотличимый от «Новичка» (неоднозначность по дизайну — публичного рейтинга больше нет). Награды (awards) публичны для всех, как раньше
 - **Сортировка по зрителю:** организатору — организатор первым, дальше по отображаемому Trust DESC (рабочий порядок для решений); рядовому участнику — организатор первым, дальше **нейтрально по `joinedAt` ASC** (никакого «дна таблицы»)
@@ -268,7 +268,7 @@ THEN 403 "Not a member of this club"
 | Ситуация | Код | Сообщение |
 |----------|-----|-----------|
 | Caller не member | 403 | "Not a member of this club" |
-| Caller в grace_period | 403 | "Not a member of this club" (isMember проверяет только active) |
+| Caller во frozen/expired | 403 | "Not a member of this club" (гейт по status=active — без доступа список не виден) |
 | В клубе нет других участников (только сам caller) | 200 | Массив из одного элемента (сам caller) |
 | Клуб не существует | 403 | "Not a member of this club" (privacy — не раскрываем существование клуба) |
 | Запрос без JWT | 401 | стандартный Spring Security |
@@ -370,7 +370,7 @@ GET /api/users/me/clubs
 См. формат в секции TASK-010 выше.
 
 ### Бизнес-правила
-- Возвращаются membership'ы со статусом `active` / `grace_period`, **а также** `cancelled` при `subscription_expires_at > now` (paid-cancelled-в-периоде — см. [club-leave.md](club-leave.md) § «Видимость cancelled-в-периоде membership»)
+- Возвращаются membership'ы со статусом `active` / `frozen` / `expired` (участник без доступа должен видеть клуб, чтобы оплатить взнос). Ветка «`cancelled` при `subscription_expires_at > now`» удалена в de-Stars (subscription_expires_at больше не драйвер доступа)
 - Дополнительный фильтр: связанный `club.is_active = true` (soft-deleted клубы исключаются — см. PRD-Clubs.md §4.5.4)
 - Сортировка явно не задаётся — порядок зависит от БД (внутри одной транзакции стабилен)
 - Пустой список — валидный ответ (200 + `[]`)
@@ -380,11 +380,11 @@ GET /api/users/me/clubs
 - Caller получает ТОЛЬКО свои membership'ы — `userId` неявно = `principal.userId`. Подмена невозможна.
 
 ### Acceptance Criteria
-**AC-1: вернуть active+grace_period в active-клубах**
-GIVEN caller имеет 3 membership: 1 active в active-клубе, 1 grace_period в active-клубе, 1 cancelled
+**AC-1: вернуть active+frozen+expired в active-клубах**
+GIVEN caller имеет 3 membership: 1 active в active-клубе, 1 expired в active-клубе, 1 cancelled
 WHEN GET /api/users/me/clubs
 THEN 200 OK
-AND response — массив из 2 элементов (active + grace_period; cancelled исключён)
+AND response — массив из 2 элементов (active + expired; cancelled исключён)
 
 **AC-2: исключить membership'ы в soft-deleted клубах**
 GIVEN caller имеет active membership в клубе со `is_active = false`

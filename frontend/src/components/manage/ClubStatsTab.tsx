@@ -79,9 +79,9 @@ export const ClubStatsTab: FC<{ clubId: string }> = ({ clubId }) => {
         <div className="rd-glass rd-nudge-empty">Сейчас всё под контролем — срочных действий нет.</div>
       )}
 
-      <div className="rd-section-sub-h">
-        Зона внимания <span className="rd-owner-badge">👁 только вам</span>
-      </div>
+      {/* Бейдж «👁 только вам» убран (PO 2026-07-07): весь таб «Статистика» и так виден только
+          владельцу, а точечный бейдж на одной секции ложно намекал, что остальное публично. */}
+      <div className="rd-section-sub-h">Зона внимания</div>
       <div className="rd-glass rd-lever-group">
         {attention.map((item) => (
           <div key={item.key} className="rd-lever">

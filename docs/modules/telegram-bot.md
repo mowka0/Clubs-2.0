@@ -161,7 +161,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 **Получатель:** один `telegramId`.
 **Caller'ы (реальные):**
 - `PaymentNotificationHandler.onPaymentConfirmed` — welcome DM после успешной оплаты (`@TransactionalEventListener`, AFTER_COMMIT).
-- `SubscriptionScheduler.checkSubscriptions` — два варианта: «истекает через 3 дня» и «вошла в grace_period».
+- `SubscriptionScheduler.checkSubscriptions` — «истекает через 3 дня» (без кнопки). Второй вариант — «подписка истекла» — с 2026-07-06 уходит через `sendDirectMessageWithDeepLink` с кнопкой «Оплатить взнос» → `/clubs/{id}` (expired-участник заявляет там оплату).
 **Текст:** формируется caller'ом.
 **Inline-кнопка:** «📱 Открыть Clubs» → корень Mini App.
 
@@ -181,7 +181,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 ### `sendEventCreated(event: Event)` — **подключено** `[GAP-003 ✅, GAP-010 ✅]`
 
 **Назначение (по PRD §4.6.3):** при создании события — DM участникам клуба, имеющим доступ.
-**Получатели:** `membershipRepository.findMemberTelegramIds(event.clubId)` — telegram_id участников **с доступом к клубу**: `active` ИЛИ `cancelled` с неистёкшей подпиской (зеркалит предикат `isMember` / `@RequiresMembership`). `expired`/`grace_period` исключены — у них нет доступа к событию, не должны получать о нём DM. `[GAP-010 ✅]`
+**Получатели:** `membershipRepository.findMemberTelegramIds(event.clubId)` — telegram_id участников **с доступом к клубу**: только `active` (канонический предикат `MembershipAccess.hasAccess`). `frozen`/`expired`/`cancelled` исключены — у них нет доступа к событию, не должны получать о нём DM. `[GAP-010 ✅]`
 **Текст** (`NotificationService.kt:37`):
 ```
 🆕 Новое событие в клубе!
@@ -309,9 +309,8 @@ AND отказ Telegram API логируется WARN, не пробрасыва
 GIVEN organizer создаёт событие через POST /api/clubs/{id}/events
 WHEN транзакция EventService.createEvent коммитится
 THEN EventBotNotifier (AFTER_COMMIT) вызывает sendEventCreated
-AND участники с доступом к клубу (active | cancelled с неистёкшей подпиской)
-    получают DM с inline-кнопкой «📱 Открыть Clubs»
-AND участники со статусом expired/grace_period DM НЕ получают
+AND участники с доступом к клубу (active) получают DM с inline-кнопкой «📱 Открыть Clubs»
+AND участники со статусом frozen/expired/cancelled DM НЕ получают
 AND при rollback createEvent DM не отправляются
 ```
 

@@ -43,13 +43,6 @@ class MemberController(
     ): ResponseEntity<MemberProfileDto> =
         ResponseEntity.ok(memberService.getMemberProfile(clubId, userId, caller.userId))
 
-    // Фид для red-dot бейджа (de-Stars): сколько у скольких участников доступ заканчивается в течение недели.
-    // Отдельный путь (не под /members/{userId}), чтобы path-variable не конфликтовал с id участника.
-    @RequiresOrganizer(clubIdParam = "clubId")
-    @GetMapping("/{clubId}/member-attention")
-    fun memberAttention(@PathVariable clubId: UUID): ResponseEntity<MemberAttentionDto> =
-        ResponseEntity.ok(memberService.getAttention(clubId))
-
     // Шлюз доступа от организатора (de-Stars, Slice 2). Только владелец через @RequiresOrganizer; сервис
     // защищает переход статуса (409 при проигранной гонке) и запрещает управлять организатором.
     @RequiresOrganizer(clubIdParam = "clubId")

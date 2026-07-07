@@ -7,7 +7,7 @@ import { AvatarUpload } from '../components/AvatarUpload';
 import { ApiError } from '../api/apiClient';
 import { useClubMembersQuery } from '../queries/members';
 import { useCreateSkladchinaMutation } from '../queries/skladchina';
-import type { CreateSkladchinaRequest, SkladchinaMode } from '../types/api';
+import type { CreateSkladchinaRequest, MemberListItemDto, SkladchinaMode } from '../types/api';
 
 const MODE_LABELS: Record<SkladchinaMode, string> = {
   fixed_equal: 'Поровну между всеми',
@@ -70,17 +70,16 @@ export const CreateSkladchinaPage: FC = () => {
   const membersQuery = useClubMembersQuery(clubId);
   const createMut = useCreateSkladchinaMutation();
 
-  // De-Stars: у frozen-участника (платный доступ ещё не подтверждён) нет доступа к клубу, поэтому
-  // включить его в новую складчину нельзя. Он остаётся видимым (чтобы организатор понимал почему),
-  // но неактивным, и сортируется в конец списка — чтобы активный состав читался первым.
+  // De-Stars: у участника без доступа — frozen (первый взнос не подтверждён) или expired (просрочил
+  // продление) — нет доступа к клубу, поэтому включить его в новую складчину нельзя. Он остаётся
+  // видимым (чтобы организатор понимал почему), но неактивным, и сортируется в конец списка —
+  // чтобы активный состав читался первым.
   const eligibleMembers = useMemo(
     () => {
       const rows = membersQuery.data ?? [];
-      return [...rows].sort((a, b) => {
-        const aFrozen = a.accessStatus === 'frozen' ? 1 : 0;
-        const bFrozen = b.accessStatus === 'frozen' ? 1 : 0;
-        return aFrozen - bFrozen;
-      });
+      const locked = (m: MemberListItemDto) =>
+        m.accessStatus === 'frozen' || m.accessStatus === 'expired' ? 1 : 0;
+      return [...rows].sort((a, b) => locked(a) - locked(b));
     },
     [membersQuery.data],
   );
@@ -111,7 +110,7 @@ export const CreateSkladchinaPage: FC = () => {
 
   const toggleParticipant = (userId: string) => {
     const member = eligibleMembers.find((m) => m.userId === userId);
-    if (member?.accessStatus === 'frozen') return;
+    if (member?.accessStatus === 'frozen' || member?.accessStatus === 'expired') return;
     haptic.select();
     const next = new Set(selectedIds);
     if (next.has(userId)) next.delete(userId);
@@ -329,7 +328,8 @@ export const CreateSkladchinaPage: FC = () => {
             <div className="rd-pick-list">
               {eligibleMembers.map((m) => {
                 const isSelected = selectedIds.has(m.userId);
-                const isFrozen = m.accessStatus === 'frozen';
+                // Без доступа = вне складчины: frozen (первый взнос) и expired (просрочка продления).
+                const isFrozen = m.accessStatus === 'frozen' || m.accessStatus === 'expired';
                 return (
                   <div key={m.userId} className="rd-pick-row">
                     <button
@@ -344,7 +344,9 @@ export const CreateSkladchinaPage: FC = () => {
                         {m.firstName}{m.lastName ? ` ${m.lastName}` : ''}
                       </span>
                       {isFrozen && (
-                        <span className="rd-pick-note">❄️ Доступ закрыт</span>
+                        <span className="rd-pick-note">
+                          {m.accessStatus === 'expired' ? '⛔ Доступ истёк' : '❄️ Доступ закрыт'}
+                        </span>
                       )}
                     </button>
                     {!isFrozen && mode === 'fixed_individual' && isSelected && (

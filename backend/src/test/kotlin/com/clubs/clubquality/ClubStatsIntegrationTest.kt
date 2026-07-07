@@ -239,10 +239,16 @@ class ClubStatsIntegrationTest {
         // A: left 5d ago, no membership row (genuinely gone) → in roster.
         val a = newUser("Anna")
         insertMembershipHistory(a, "left", daysAgo(5))
-        // B: expired 10d ago with an expired membership row → in roster (older than A).
+        // B: legacy `expired` history event 10d ago, membership now cancelled (kicked after the lapse)
+        // → in roster (older than A). NB: строка со status=expired больше НЕ отток (оживление expired
+        // 2026-07-06) — должник по продлению остаётся участником, см. кейс E ниже.
         val b = newUser("Boris")
         insertMembershipHistory(b, "expired", daysAgo(10))
-        insertMembership(b, "expired")
+        insertMembership(b, "cancelled")
+        // E: legacy `expired` event, но membership сейчас в статусе expired (должник, всё ещё в клубе) → excluded.
+        val e = newUser("Egor")
+        insertMembershipHistory(e, "expired", daysAgo(3))
+        insertMembership(e, "expired")
         // C: left 8d ago but rejoined → currently active → excluded.
         val c = newUser("Clara")
         insertMembershipHistory(c, "left", daysAgo(8))

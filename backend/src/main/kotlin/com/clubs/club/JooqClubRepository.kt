@@ -34,15 +34,15 @@ class JooqClubRepository(
 
     /**
      * Живой счётчик участников для отображения = distinct-строки `memberships`, сейчас принадлежащие
-     * клубу — `active`, `frozen` (доступ закрыт до оплаты офф-платформенных dues, но слот занят) или
-     * `grace_period` — ВКЛЮЧАЯ membership организатора. Совпадает с семантикой занятости слотов
+     * клубу — `active`, `frozen` (ждёт первого взноса, слот занят) или `expired` (просрочил продление,
+     * слот занят) — ВКЛЮЧАЯ membership организатора. Совпадает с семантикой занятости слотов
      * в countActiveByClubId. Считается напрямую из `memberships`. Старая денормализованная колонка
      * `clubs.member_count` удалена (V33): разбросанный и неполный набор мест инкремента/декремента
      * позволял ей рассинхронизироваться (например, leave→rejoin→leave дважды декрементировал её
      * до 0 у клуба из 2 человек). «Фактическое значение из БД» дрейфовать не может.
      */
     private fun aliveMembers(): org.jooq.Condition =
-        MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.frozen, MembershipStatus.grace_period)
+        MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.frozen, MembershipStatus.expired)
 
     private fun countLiveMembers(clubId: UUID): Int =
         dsl.selectCount().from(MEMBERSHIPS)

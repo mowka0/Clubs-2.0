@@ -401,8 +401,10 @@ function formatJoinedRelative(iso: string | null): string {
   return `вступил(а) ${formatApplicationDate(iso)}`;
 }
 
-/** Открывает существующую организаторскую карточку профиля (с dues-гейтом) для frozen-участника из любого клуба. */
-function toFrozenMemberStub(dues: OrganizerDuesMemberDto): MemberListItemDto {
+/** Открывает существующую организаторскую карточку профиля (с dues-гейтом) для участника без доступа
+ *  (frozen/expired) из любого клуба. Статус пробрасывается как есть: у expired карточка показывает
+ *  «Доступ истёк» без «Отказать · вернуть». */
+function toAwaitingDuesMemberStub(dues: OrganizerDuesMemberDto): MemberListItemDto {
   return {
     userId: dues.userId,
     firstName: dues.firstName,
@@ -414,7 +416,7 @@ function toFrozenMemberStub(dues: OrganizerDuesMemberDto): MemberListItemDto {
     promiseFulfillmentPct: null,
     totalConfirmations: null,
     awards: [],
-    accessStatus: 'frozen',
+    accessStatus: dues.accessStatus,
     subscriptionExpiresAt: dues.subscriptionExpiresAt,
   };
 }
@@ -424,11 +426,16 @@ interface AwaitingDuesRowProps {
   onClick: () => void;
 }
 
-/** Кросс-клубовая строка «Ждут оплаты»: frozen-участник одного из клубов вызывающего. Тап → карточка
- *  профиля, где организатор подтверждает взнос («Взнос получен»). */
+/** Кросс-клубовая строка «Ждут оплаты»: участник без доступа (frozen — первый взнос, expired —
+ *  просрочка продления) одного из клубов вызывающего. Тап → карточка профиля, где организатор
+ *  подтверждает взнос («Взнос получен»). */
 const AwaitingDuesRow: FC<AwaitingDuesRowProps> = ({ item, onClick }) => {
   const fullName = `${item.firstName}${item.lastName ? ` ${item.lastName}` : ''}`;
   const initials = getInitials(fullName) || '·';
+  // У должника по продлению мета говорит о подписке; «вступил(а) N назад» здесь врала бы о сути долга.
+  const meta = item.accessStatus === 'expired' && item.subscriptionExpiresAt
+    ? `подписка истекла ${formatApplicationDate(item.subscriptionExpiresAt)}`
+    : formatJoinedRelative(item.joinedAt);
   return (
     <button type="button" className="rd-rep-row" onClick={onClick}>
       <span className="rd-ico">
@@ -441,7 +448,7 @@ const AwaitingDuesRow: FC<AwaitingDuesRowProps> = ({ item, onClick }) => {
             <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}> · @{item.telegramUsername}</span>
           )}
         </div>
-        <div className="rd-met">{item.clubName} · {formatJoinedRelative(item.joinedAt)}</div>
+        <div className="rd-met">{item.clubName} · {meta}</div>
       </div>
       <div className="rd-score">
         {item.duesClaimedAt ? (
@@ -464,22 +471,23 @@ interface FrozenMembershipRowProps {
   leaving: boolean;
 }
 
-/** Участник-сайд «Доступ закрыт — оплатите»: СОБСТВЕННОЕ frozen-членство вызывающего (организатор
- *  закрыл доступ, либо истекло окно месячного взноса). Тап → страница клуба, где «Оплатить взнос»
- *  позволяет заявить оплату. «×» (с инлайн-подтверждением) — выход из клуба, откат случайного платного
- *  вступления. Зеркалит организаторскую «Оплату вступления», но со стороны участника. */
+/** Участник-сайд «Доступ закрыт — оплатите»: СОБСТВЕННОЕ членство вызывающего без доступа —
+ *  frozen (вступил, ждёт подтверждения первого взноса) или expired (подписка истекла, должник по
+ *  продлению). Тап → страница клуба, где «Оплатить взнос» позволяет заявить оплату. «×» (с
+ *  инлайн-подтверждением) — выход из клуба. Зеркалит организаторскую «Ждут оплаты», но со стороны участника. */
 const FrozenMembershipRow: FC<FrozenMembershipRowProps> = ({ membership, club, onClick, onLeave, leaving }) => {
   const [confirming, setConfirming] = useState(false);
   const name = club?.name ?? `Клуб ${membership.clubId.slice(0, 8)}…`;
   const initials = club ? getInitials(club.name) : '·';
   const claimed = Boolean(membership.duesClaimedAt);
+  const expired = membership.status === 'expired';
   const priceLine = club && club.subscriptionPrice > 0 ? `Взнос ${club.subscriptionPrice} ₽ / мес` : 'Доступ закрыт';
 
   if (confirming) {
     return (
       <div className="rd-rep-row rd-app-confirm">
         <div className="rd-info">
-          <div className="rd-ttl">Отменить вступление?</div>
+          <div className="rd-ttl">{expired ? 'Выйти из клуба?' : 'Отменить вступление?'}</div>
           <div className="rd-met">«{name}» — выйдете из клуба.</div>
         </div>
         <div className="rd-app-confirm-acts">
@@ -509,13 +517,17 @@ const FrozenMembershipRow: FC<FrozenMembershipRowProps> = ({ membership, club, o
         <div className="rd-ttl">{name}</div>
         <div className="rd-met">{priceLine}</div>
         <div className={`rd-met ${claimed ? 'rd-met-ok' : 'rd-met-soft'}`}>
-          {claimed ? 'Оплата на проверке' : 'Не забудьте оплатить взнос'}
+          {claimed
+            ? 'Оплата на проверке'
+            : expired
+              ? 'Подписка истекла — продлите взнос'
+              : 'Не забудьте оплатить взнос'}
         </div>
       </div>
       <button
         type="button"
         className="rd-app-cancel"
-        aria-label="Отменить вступление"
+        aria-label={expired ? 'Выйти из клуба' : 'Отменить вступление'}
         onClick={(e) => { e.stopPropagation(); setConfirming(true); }}
       >
         <span aria-hidden="true">✕</span>
@@ -542,11 +554,17 @@ export const MyClubsPage: FC = () => {
   const leaveMutation = useLeaveClubMutation();
 
   const myClubs = myClubsQuery.data ?? [];
-  // Собственные frozen-членства вызывающего выносим в отдельный блок «Доступ закрыт — оплатите»,
-  // чтобы frozen-участник увидел, что потерял доступ и должен оплатить, а не искал клуб, молча
-  // висящий среди активных. Остальные рендерятся как обычно в «Где я состою».
-  const frozenMyClubs = useMemo(() => myClubs.filter((m) => m.status === 'frozen'), [myClubs]);
-  const activeMyClubs = useMemo(() => myClubs.filter((m) => m.status !== 'frozen'), [myClubs]);
+  // Собственные членства без доступа — frozen (ждёт первого взноса) и expired (подписка истекла) —
+  // выносим в отдельный блок «Доступ закрыт — оплатите», чтобы участник увидел, что потерял доступ
+  // и должен оплатить, а не искал клуб, молча висящий среди активных. Остальные — в «Где я состою».
+  const lockedMyClubs = useMemo(
+    () => myClubs.filter((m) => m.status === 'frozen' || m.status === 'expired'),
+    [myClubs],
+  );
+  const activeMyClubs = useMemo(
+    () => myClubs.filter((m) => m.status !== 'frozen' && m.status !== 'expired'),
+    [myClubs],
+  );
   const applications = applicationsQuery.data ?? [];
   const pendingInbox = pendingInboxQuery.data ?? [];
   const historyClubs = reputationQuery.data?.historyClubs ?? [];
@@ -764,16 +782,17 @@ export const MyClubsPage: FC = () => {
         3. «Где я состою» — текущие членства.
       */}
 
-      {/* 0. Мои frozen-членства — «Доступ закрыт, оплатите взнос». Максимальная личная срочность,
-            поэтому идёт первым. Тап → страница клуба, где «Оплатить взнос» заявляет оплату. */}
-      {!loading && frozenMyClubs.length > 0 && (
+      {/* 0. Мои членства без доступа (frozen — первый взнос, expired — истекла подписка) — «Доступ
+            закрыт, оплатите взнос». Максимальная личная срочность, поэтому идёт первым. Тап →
+            страница клуба, где «Оплатить взнос» заявляет оплату. */}
+      {!loading && lockedMyClubs.length > 0 && (
         <>
           <div className="rd-section-sub-h rd-attn-pay">
-            🔒 Доступ закрыт — оплатите <span className="rd-count">· {frozenMyClubs.length}</span>
+            🔒 Доступ закрыт — оплатите <span className="rd-count">· {lockedMyClubs.length}</span>
           </div>
           <div className="rd-attn-hint">Здесь доступ закрыт. Оплатите взнос организатору, чтобы вернуть его.</div>
           <div className="rd-glass rd-rep-panel rd-attn-block rd-attn-block-pay">
-            {frozenMyClubs.map((m) => (
+            {lockedMyClubs.map((m) => (
               <FrozenMembershipRow
                 key={m.id}
                 membership={m}
@@ -844,16 +863,16 @@ export const MyClubsPage: FC = () => {
         </>
       )}
 
-      {/* 2b. Ждут оплаты (организатор, кросс-клуб) — frozen-участники, которых организатор впускает,
-             подтверждая их внеплатформенный взнос: вступившие по «Вступить», одобренные заявки и те,
-             кто уже заявил оплату («Оплата заявлена»). Зеркалит «Оплату вступления» внутри
-             Управление → Участники. */}
+      {/* 2b. Ждут оплаты (организатор, кросс-клуб) — участники без доступа: frozen (вступившие по
+             «Вступить»/одобренной заявке, ждут первого взноса) и expired (подписка истекла, ждут
+             продления). Организатор подтверждает внеплатформенный взнос — «Взнос получен». Зеркалит
+             бакеты «Оплата вступления»/«Доступ истёк» внутри клуба (таб «Участники»). */}
       {!loading && awaitingDues.length > 0 && (
         <>
           <div className="rd-section-sub-h rd-attn-pay">
-            💸 Оплата вступления <span className="rd-count">· {awaitingDues.length}</span>
+            💸 Ждут оплаты <span className="rd-count">· {awaitingDues.length}</span>
           </div>
-          <div className="rd-attn-hint">Вступили в ваши клубы — подтвердите взнос, чтобы открыть доступ.</div>
+          <div className="rd-attn-hint">Взнос не подтверждён — доступ закрыт. Получили оплату — подтвердите.</div>
           <div className="rd-glass rd-rep-panel rd-attn-block rd-attn-block-pay">
             {awaitingDues.map((item) => (
               <AwaitingDuesRow
@@ -866,7 +885,7 @@ export const MyClubsPage: FC = () => {
         </>
       )}
 
-      {/* 3. Активные клубы (frozen-члены показаны выше, в блоке «Доступ закрыт») */}
+      {/* 3. Активные клубы (frozen/expired-члены показаны выше, в блоке «Доступ закрыт») */}
       {!loading && activeMyClubs.length > 0 && (
         <>
           <div className="rd-section-sub-h">
@@ -925,7 +944,7 @@ export const MyClubsPage: FC = () => {
 
       {duesMember && (
         <MemberProfileModal
-          member={toFrozenMemberStub(duesMember)}
+          member={toAwaitingDuesMemberStub(duesMember)}
           clubId={duesMember.clubId}
           isOrganizer
           onClose={() => setDuesMember(null)}

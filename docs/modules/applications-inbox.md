@@ -178,9 +178,9 @@ Response 200:
 
 Поля:
 - `inboxCount` — pending-заявки по клубам, где caller — owner (organizer-action).
-- `awaitingDuesCount` — frozen-участники, заявившие оплату (claim) по клубам
-  caller'а (owner): оплатили off-platform и ждут решения «Взнос получен» /
-  «Отказать». De-Stars: `membershipRepository.countClaimedFrozenByOwner`.
+- `awaitingDuesCount` — участники без доступа (frozen/expired), заявившие оплату
+  (claim) по клубам caller'а (owner): оплатили off-platform и ждут решения
+  «Взнос получен». De-Stars: `membershipRepository.countClaimedAwaitingDuesByOwner`.
 
 Оба зажигают точку на «Мои клубы» (sum > 0).
 

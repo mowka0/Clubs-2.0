@@ -308,9 +308,9 @@ class ApplicationService(
     fun getMyClubsActionCounts(userId: UUID): PendingApplicationsCountDto {
         val ownedClubIds = clubRepository.findIdsByOwnerId(userId)
         val inboxCount = applicationRepository.countPendingByClubIds(ownedClubIds)
-        // De-Stars: участники «оплатил и ждёт» (frozen + взнос заявлен) тоже требуют решения
+        // De-Stars: участники «оплатил и ждёт» (frozen/expired + взнос заявлен) тоже требуют решения
         // организатора, поэтому они тоже зажигают точку «Мои клубы» вместе с инбоксом заявок.
-        val awaitingDuesCount = membershipRepository.countClaimedFrozenByOwner(userId)
+        val awaitingDuesCount = membershipRepository.countClaimedAwaitingDuesByOwner(userId)
         return PendingApplicationsCountDto(inboxCount = inboxCount, awaitingDuesCount = awaitingDuesCount)
     }
 

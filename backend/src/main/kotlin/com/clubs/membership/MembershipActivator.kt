@@ -14,10 +14,10 @@ import java.util.UUID
  *
  * Обе ветки используют одну и ту же логику, чтобы решение create/reactivate жило в одном месте:
  *   - строки нет вообще → INSERT новой membership в целевом статусе.
- *   - строка есть и она "жива" (active / frozen / grace_period) → баг вызывающего кода; бросаем
+ *   - строка есть и она "жива" (active / frozen / expired) → баг вызывающего кода; бросаем
  *     IllegalState (вызывающий код обязан проверить `findActiveByUserAndClub` ДО вызова и вернуть
  *     правильную HTTP-ошибку).
- *   - строка есть и она "мертва" (cancelled / expired) → реактивируем в целевой статус.
+ *   - строка есть и она "мертва" (cancelled) → реактивируем в целевой статус.
  *
  * Контракт: вызывающий код гарантирует, что клуб уже провалидирован (тип, лимит участников, ownership).
  */
@@ -56,9 +56,11 @@ class MembershipActivator(
     }
 
     // "Жива" = membership всё ещё принадлежит клубу, поэтому её НЕЛЬЗЯ молча реактивировать как
-    // свежее вступление. `frozen` (закрыта организатором, ожидает офлайн-взнос) тоже считается принадлежащей.
+    // свежее вступление. `frozen` (ждёт первого взноса) и `expired` (просрочил продление — должник,
+    // путь назад через оплату, не через повторное вступление) тоже считаются принадлежащими; иначе
+    // повторный join стёр бы жизненный цикл должника. Матрица: docs/modules/membership-lifecycle.md.
     private fun MembershipStatus.isAlive(): Boolean =
         this == MembershipStatus.active ||
             this == MembershipStatus.frozen ||
-            this == MembershipStatus.grace_period
+            this == MembershipStatus.expired
 }

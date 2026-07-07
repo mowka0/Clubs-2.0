@@ -440,8 +440,12 @@
 .rd-mgmt-pb.primary small { display: block; font-size: 10.5px; font-weight: 600; opacity: 0.92; margin-top: 1px; }
 .rd-mgmt-pb.danger { border: 0; background: var(--danger-soft); color: var(--danger); }
 .rd-mgmt-pb:disabled { opacity: 0.5; cursor: default; }
-/* Строка frozen-статуса — простой текст (не карточка-бокс «rd-claim»). */
-.rd-mgmt-claim-line { font-size: 13px; font-weight: 700; color: var(--text); }
+/* Строка статуса взноса (frozen/expired) — простой текст (не карточка-бокс «rd-claim»).
+   Флекс: эмодзи — отдельный маркер слева, перенесённый текст выравнивается по своему левому краю. */
+.rd-mgmt-claim-line { display: flex; align-items: flex-start; gap: 7px; text-align: left; font-size: 13px; font-weight: 700; color: var(--text); }
+/* Эмодзи-глиф несёт собственный левый side-bearing (пустоту внутри бокса) — компенсируем отрицательным
+   отступом, чтобы ВИЗУАЛЬНЫЙ край замка сидел на общей левой рельсе панели (как ●-маркер и поля ниже). */
+.rd-mgmt-claim-line > span:first-child { flex-shrink: 0; margin-left: -3px; }
 .rd-mgmt-note { border-top: 1px solid var(--hairline); padding: 11px 15px; display: flex; gap: 9px; font-size: 12.5px; color: var(--text-dim); line-height: 1.45; }
 .rd-mgmt-note-k { color: var(--text-faint); font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; padding-top: 2px; flex-shrink: 0; }
 .rd-mgmt-killzone { border-top: 1px solid var(--hairline); padding: 10px 15px; display: flex; justify-content: center; }
@@ -588,11 +592,6 @@
 .rd-ot-f b { font-weight: 700; }
 .rd-ot-nudge { margin-top: 12px; background: var(--accent-soft); border: 1px solid rgba(224, 122, 62, 0.22); border-radius: 12px; padding: 10px 12px; font-size: 12.5px; color: var(--text-dim); line-height: 1.45; }
 
-/* Red-dot на табе раздела («Участники» / «Управление») — бейдж внимания de-Stars. */
-.rd-tab-link .rd-tab-dot {
-  position: absolute; top: 4px; right: -10px; width: 7px; height: 7px; border-radius: 50%;
-  background: linear-gradient(135deg, #ff4d6a, #c4304a); box-shadow: 0 0 6px rgba(255, 77, 106, 0.6);
-}
 
 /* ---------- Кольца репутации (карточка участника + карточка заявки) ---------- */
 /* Одна строка без переноса — до 3 колец делят ширину поровну (flex:1 + min-width:0). */
@@ -1279,7 +1278,6 @@
 .rd-nudge-t { font-size: 12.5px; line-height: 1.4; color: var(--text); }
 .rd-nudge-empty { padding: 14px; font-size: 13px; color: var(--text-dim); text-align: center; }
 
-.rd-owner-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--danger-soft); color: var(--danger); vertical-align: middle; margin-left: 6px; }
 
 /* напоминание «вернуть участника»: кликабельно, разворачивается в список ушедших участников (§9.5) */
 .rd-nudge-btn { width: 100%; text-align: left; cursor: pointer; align-items: center; font: inherit; }

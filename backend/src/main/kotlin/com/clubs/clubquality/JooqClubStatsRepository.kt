@@ -167,10 +167,12 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
             .and(
                 MEMBERSHIPS.STATUS.isNull
                     .or(
+                        // «Состоит» = active/frozen/expired (expired-должник — всё ещё участник,
+                        // он не ушёл; grace_period мёртв и вычищен V46).
                         MEMBERSHIPS.STATUS.notIn(
                             MembershipStatus.active,
                             MembershipStatus.frozen,
-                            MembershipStatus.grace_period,
+                            MembershipStatus.expired,
                         ),
                     ),
             )
@@ -223,12 +225,13 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
             )
             .fetchOne(0, Int::class.java) ?: 0
 
-    /** «Живые» membership'ы (active + grace_period) — знаменатель вовлечённости. */
+    /** «Живые» membership'ы с доступом (active) — знаменатель вовлечённости. frozen/expired исключены:
+     *  без доступа участвовать в событиях нельзя, и их учёт разбавлял бы вовлечённость. */
     private fun aliveMembers(clubId: UUID): Int =
         dsl.selectCount().from(MEMBERSHIPS)
             .where(
                 MEMBERSHIPS.CLUB_ID.eq(clubId)
-                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.active, MembershipStatus.grace_period)),
+                    .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active)),
             )
             .fetchOne(0, Int::class.java) ?: 0
 

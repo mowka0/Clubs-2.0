@@ -4,7 +4,6 @@ import {
   claimDues,
   getAwardSuggestions,
   getClubMembers,
-  getMemberAttention,
   getMemberProfile,
   getMyGamification,
   getMyReputation,
@@ -31,22 +30,6 @@ export function useClubMembersQuery(clubId: string | undefined) {
   });
 }
 
-/** Лента red-dot: счётчики скоро-истекающих + замороженных-ждущих-оплаты. Только для владельца —
- *  ограничивать через `enabled: isOrganizer`, чтобы не получать гарантированный 403 в контексте
- *  участника/гостя. */
-export function useMemberAttentionQuery(
-  clubId: string | undefined,
-  options: { enabled?: boolean } = {},
-) {
-  const enabled = Boolean(clubId) && (options.enabled ?? true);
-  return useQuery({
-    queryKey: queryKeys.clubs.memberAttention(clubId ?? ''),
-    queryFn: () => getMemberAttention(clubId!),
-    enabled,
-    staleTime: 60_000,
-  });
-}
-
 /** Кросс-клубовое «Ждут оплаты»: замороженные участники по всем клубам вызывающего. Возвращает []
  *  для не-владельцев (сервер фильтрует по владению) — ограничивать `enabled` на владение ≥1 клубом,
  *  чтобы избежать лишнего запроса. */
@@ -59,11 +42,10 @@ export function useOrganizerAwaitingDuesQuery(options: { enabled?: boolean } = {
   });
 }
 
-/** После любого действия с доступом меняются: список участников (бейджи/корзины), счётчик
- *  red-dot по клубу и кросс-клубовая лента «Ждут оплаты». */
+/** После любого действия с доступом меняются: список участников (бейджи/корзины)
+ *  и кросс-клубовая лента «Ждут оплаты». */
 function invalidateAfterMemberGateAction(qc: QueryClient, clubId: string) {
   qc.invalidateQueries({ queryKey: queryKeys.clubs.members(clubId) });
-  qc.invalidateQueries({ queryKey: queryKeys.clubs.memberAttention(clubId) });
   qc.invalidateQueries({ queryKey: queryKeys.organizer.awaitingDues });
 }
 

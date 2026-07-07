@@ -20,7 +20,7 @@
   «approved-заявка + frozen/отсутствующий membership» — проверить ветку ClubPage.tsx ~строки 273-320
   (joinedStatus / application status / orphaned approval recovery).
 - Бакет «Оплата вступления» строится по `accessStatus === 'frozen'` из members-списка; инбокс —
-  по pending-заявкам; кросс-клубовое «Ждут оплаты» — по claimed-frozen (`findFrozenMembersByOwner`
+  по pending-заявкам; кросс-клубовое «Ждут оплаты» — по claimed-frozen (`findAwaitingDuesMembersByOwner`, до 2026-07-06 `findFrozenMembersByOwner`
   → `dues_claimed_at IS NOT NULL`?? — проверить: если фильтр по claim, то X без claim в «Мои клубы»
   и не должен показываться, но в клубном бакете «Оплата вступления» обязан быть).
 - Гипотезы на проверку: (а) у X заявка осталась в статусе approved с прошлого цикла и «reactivate»

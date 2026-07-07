@@ -23,16 +23,16 @@ class SubscriptionLifecycleService(
         membershipRepository.findActiveExpired(now)
 
     /**
-     * Автоистечение по honor-system (de-Stars Slice 2): в одной короткой транзакции каждое `active`
-     * платное membership, у которого окно доступа (subscription_expires_at) истекло, переходит в
-     * `frozen` («ждёт оплаты») — участник остаётся в клубе, но теряет доступ к контенту, пока организатор
-     * не подтвердит следующий платёж взноса. Free-membership (без истечения) не затрагиваются. Внешний
-     * IO (уведомления) должен выполняться вне этого метода. Жёсткое отсечение, без grace-периода —
-     * по решению PO (de-Stars).
+     * Автоистечение по honor-system (de-Stars Slice 2, статусная модель 2026-07-06): в одной короткой
+     * транзакции каждое `active` платное membership, у которого окно доступа (subscription_expires_at)
+     * истекло, переходит в `expired` («просрочено продление») — участник остаётся в клубе должником,
+     * но теряет доступ к контенту, пока организатор не подтвердит следующий платёж взноса.
+     * `frozen` зарезервирован за новыми участниками, ждущими ПЕРВОГО взноса. Free-membership (без
+     * истечения) не затрагиваются. Внешний IO (уведомления) должен выполняться вне этого метода.
      */
     @Transactional
     fun processExpiry(now: OffsetDateTime) {
         val expired = membershipRepository.expireOverdueAccess(now)
-        if (expired > 0) log.info("Auto-expired {} overdue memberships to frozen (awaiting dues)", expired)
+        if (expired > 0) log.info("Auto-expired {} overdue memberships to expired (awaiting renewal dues)", expired)
     }
 }

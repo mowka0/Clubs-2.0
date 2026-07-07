@@ -95,19 +95,19 @@
 > (содержимое) — без изменений, поменялись только группировка и заголовки.
 >
 > **[ОБНОВЛЕНО de-Stars + сессия 4 — фактический порядок секций as-built]** (top → bottom):
-> 0. **«🔒 Доступ закрыт — оплатите · N»** (member-side, NEW сессия 4) — собственные **frozen**-членства
->    каллера (`frozenMyClubs = myClubs.filter(m => m.status === 'frozen')`, компонент `FrozenMembershipRow`).
->    Статус-строка «Не забудьте оплатить взнос» (мягкий accent — не алармно-красный) / «Оплата на проверке»
->    (зелёная, по `membership.duesClaimedAt`).
+> 0. **«🔒 Доступ закрыт — оплатите · N»** (member-side, NEW сессия 4; upd 2026-07-06 оживление expired) —
+>    собственные членства каллера **без доступа**: `frozen` (ждёт первого взноса) и `expired` (подписка
+>    истекла) — `lockedMyClubs = myClubs.filter(m => m.status === 'frozen' || m.status === 'expired')`,
+>    компонент `FrozenMembershipRow`. Статус-строка «Не забудьте оплатить взнос» (frozen) /
+>    «Подписка истекла — продлите взнос» (expired) / «Оплата на проверке» (зелёная, по `membership.duesClaimedAt`).
 >    Тап по телу → страница клуба (там «Оплатить взнос»). Самое срочное личное действие → ведёт список.
->    Эти клубы **исключены** из «Где я состою» (`activeMyClubs`), чтобы frozen не висел молча среди активных.
->    **Крестик «×» (сессия 5)** в углу карточки → инлайн-подтверждение «Отменить вступление?» → `leaveClub`
->    (membership → `cancelled`) — отмена случайного платного вступления прямо отсюда (frozen платного =
->    `leavePaidClub`, чистый cancel без обязательств).
+>    Эти клубы **исключены** из «Где я состою» (`activeMyClubs`), чтобы участник без доступа не висел молча среди активных.
+>    **Крестик «×» (сессия 5)** в углу карточки → инлайн-подтверждение («Отменить вступление?» у frozen,
+>    «Выйти из клуба?» у expired) → `leaveClub` (membership → `cancelled`).
 > 1. **«Мои заявки»** — только `pending` (de-Stars: approved сразу = членство, лимба нет).
 > 2. **«Заявки в мои клубы»** — organizer inbox (`PendingApplicationDto`).
-> 2b. **«💸 Оплата вступления»** (organizer-side) — frozen-участники в клубах каллера (`useOrganizerAwaitingDuesQuery`).
-> 3. **«Где я состою»** — активные членства (`activeMyClubs`, без frozen).
+> 2b. **«💸 Ждут оплаты»** (organizer-side, upd 2026-07-06) — участники без доступа (frozen + expired) в клубах каллера (`useOrganizerAwaitingDuesQuery`; DTO несёт `accessStatus`). Мета строки: frozen → «вступил(а) …», expired → «подписка истекла DATE». Тап → карточка участника (стаб `toAwaitingDuesMemberStub` пробрасывает статус, у expired нет «Отказать · вернуть»).
+> 3. **«Где я состою»** — активные членства (`activeMyClubs`, без frozen/expired).
 > 4. **«История»** — покинутые клубы с остаточной репутацией.
 > (Stars-эра `AwaitingPaymentCard` / `OrganizerAwaitingPaymentRow` из блока выше удалены de-Stars.)
 >
