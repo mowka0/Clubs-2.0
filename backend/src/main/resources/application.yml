@@ -92,8 +92,12 @@ subscription:
 
 membership:
   # De-Stars Slice 2: на какой срок один подтверждённый взнос участника («Взнос получен») даёт доступ
-  # к клубу. В днях, чтобы staging мог ужать его для теста авто-истечения → frozen.
+  # к клубу. В днях, чтобы staging мог ужать его для теста авто-истечения → expired.
   access-period-days: ${MEMBERSHIP_ACCESS_PERIOD_DAYS:30}
+  # Cron для SubscriptionScheduler.checkSubscriptions (DM «истекает через 3 дня» / «истёк» +
+  # авто-флип active → expired). По умолчанию ежедневно 09:00 по времени сервера (UTC в Docker).
+  # Конфигурируем, чтобы staging мог тикать каждые пару минут для теста уведомлений.
+  expiry-cron: ${MEMBERSHIP_EXPIRY_CRON:0 0 9 * * *}
 
 club:
   rank:

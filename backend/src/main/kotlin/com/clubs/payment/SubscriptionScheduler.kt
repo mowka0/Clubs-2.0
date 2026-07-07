@@ -8,7 +8,8 @@ import java.time.OffsetDateTime
 /**
  * Ежедневный жизненный цикл honor-system окна доступа (de-Stars Slice 2). НЕ спит: хотя Stars-flow
  * упразднён, `subscription_expires_at` снова записывается организаторскими действиями «Взнос получен»
- * (markDuesPaid, +30 дн) и «Своя дата» (setAccessUntil), поэтому планировщик ежедневно в 9:00:
+ * (markDuesPaid, +30 дн) и «Своя дата» (setAccessUntil), поэтому планировщик по крону
+ * `membership.expiry-cron` (дефолт — ежедневно 9:00):
  *  1) шлёт DM «истекает через 3 дня» и «истёк» (внешний IO до транзакции);
  *  2) processExpiry: каждый active с истёкшим окном → expired (доступ закрыт до подтверждения
  *     следующего взноса, участник остаётся в клубе должником). Жёсткое отсечение — решение PO (de-Stars).
@@ -23,7 +24,9 @@ class SubscriptionScheduler(
     private val notificationService: NotificationService
 ) {
 
-    @Scheduled(cron = "0 0 9 * * *")
+    // Крон конфигурируем (membership.expiry-cron, env MEMBERSHIP_EXPIRY_CRON): прод — ежедневно 9:00,
+    // staging может тикать каждые пару минут для теста DM-уведомлений и авто-истечения.
+    @Scheduled(cron = "\${membership.expiry-cron}")
     fun checkSubscriptions() {
         val now = OffsetDateTime.now()
 
