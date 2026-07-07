@@ -9,6 +9,7 @@ import com.clubs.generated.jooq.tables.ClubAwards
 import com.clubs.generated.jooq.tables.ClubChatLinks
 import com.clubs.generated.jooq.tables.ClubRank
 import com.clubs.generated.jooq.tables.Clubs
+import com.clubs.generated.jooq.tables.EventChatPins
 import com.clubs.generated.jooq.tables.EventResponses
 import com.clubs.generated.jooq.tables.Events
 import com.clubs.generated.jooq.tables.Interests
@@ -62,6 +63,13 @@ val CLUB_RANK: ClubRank = ClubRank.CLUB_RANK
  * членство, события и складчины привязаны к клубу.
  */
 val CLUBS: Clubs = Clubs.CLUBS
+
+/**
+ * Сообщения бота в привязанном чате по конкретному событию («живой закреп»,
+ * слайс 3 club-chat-link): закреплённый статус, который бот редактирует при
+ * изменении ростера, и пост-итог после отметки явки. Одна строка на событие.
+ */
+val EVENT_CHAT_PINS: EventChatPins = EventChatPins.EVENT_CHAT_PINS
 
 /**
  * Отклики участников на событие: голос Этапа 1, подтверждение Этапа 2,

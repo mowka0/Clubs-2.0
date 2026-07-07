@@ -86,6 +86,14 @@ class JooqEventResponseRepository(
             )
             .fetchOne(0, Int::class.java) ?: 0
 
+    override fun countWaitlisted(eventId: UUID): Int =
+        dsl.selectCount().from(EVENT_RESPONSES)
+            .where(
+                EVENT_RESPONSES.EVENT_ID.eq(eventId)
+                    .and(EVENT_RESPONSES.STAGE_2_VOTE.eq(Stage_2Vote.waitlisted))
+            )
+            .fetchOne(0, Int::class.java) ?: 0
+
     override fun lockEventSlots(eventId: UUID) {
         // Лок в рамках транзакции: снимается автоматически при commit/rollback, поэтому unlock не
         // нужен и не течёт при исключении. hashtext по префиксованному ключу — тот же паттерн, что
@@ -382,6 +390,33 @@ class JooqEventResponseRepository(
             )
             .fetch()
             .mapNotNull { it.value1() }
+
+    override fun findFirstTimeAttendeeFirstNames(eventId: UUID, clubId: UUID): List<String> {
+        // «Другие attended-строки в клубе»: коррелированный NOT EXISTS по событиям того же клуба.
+        val other = EVENT_RESPONSES.`as`("other_responses")
+        val otherEvents = EVENTS.`as`("other_events")
+        return dsl.select(USERS.FIRST_NAME)
+            .from(EVENT_RESPONSES)
+            .join(USERS).on(USERS.ID.eq(EVENT_RESPONSES.USER_ID))
+            .where(
+                EVENT_RESPONSES.EVENT_ID.eq(eventId)
+                    .and(EVENT_RESPONSES.ATTENDANCE.eq(AttendanceStatus.attended))
+                    .andNotExists(
+                        dsl.selectOne()
+                            .from(other)
+                            .join(otherEvents).on(otherEvents.ID.eq(other.EVENT_ID))
+                            .where(
+                                other.USER_ID.eq(EVENT_RESPONSES.USER_ID)
+                                    .and(other.EVENT_ID.ne(eventId))
+                                    .and(other.ATTENDANCE.eq(AttendanceStatus.attended))
+                                    .and(otherEvents.CLUB_ID.eq(clubId))
+                            )
+                    )
+            )
+            .orderBy(USERS.FIRST_NAME.asc())
+            .fetch()
+            .mapNotNull { it.value1() }
+    }
 
     private fun countByStage1Vote(eventId: UUID, vote: Stage_1Vote): Int =
         dsl.selectCount().from(EVENT_RESPONSES)

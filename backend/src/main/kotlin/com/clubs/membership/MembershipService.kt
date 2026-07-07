@@ -8,6 +8,7 @@ import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.event.EventResponseRepository
+import com.clubs.event.EventRosterChangedEvent
 import com.clubs.event.WaitlistPromotedEvent
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.MembershipStatus
@@ -208,6 +209,8 @@ class MembershipService(
         // сокращал ростер. Повышённому шлём DM (WaitlistPromotedEvent → AFTER_COMMIT), как и при отказе.
         val promotedWaitlist = freedEventIds.count { eventId ->
             val promotedUserId = eventResponseRepository.promoteFirstWaitlisted(eventId)
+            // Живой закреп: бронь освободилась (и, возможно, занята из очереди) — перерисовать статус.
+            eventPublisher.publishEvent(EventRosterChangedEvent(eventId))
             if (promotedUserId != null) {
                 eventPublisher.publishEvent(WaitlistPromotedEvent(eventId, promotedUserId))
                 true

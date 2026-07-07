@@ -12,7 +12,10 @@ import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMem
 import org.telegram.telegrambots.meta.api.methods.groupadministration.LeaveChat
 import org.telegram.telegrambots.meta.api.methods.groupadministration.RevokeChatInviteLink
 import org.telegram.telegrambots.meta.api.methods.groupadministration.UnbanChatMember
+import org.telegram.telegrambots.meta.api.methods.pinnedmessages.PinChatMessage
+import org.telegram.telegrambots.meta.api.methods.pinnedmessages.UnpinChatMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberAdministrator
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberOwner
@@ -131,6 +134,66 @@ class ChatTelegramGateway(
         true
     } catch (e: Exception) {
         log.warn("sendGroupMessage failed: chatId={} error={}", chatId, e.message)
+        false
+    }
+
+    /**
+     * Пост в группу с url-кнопкой, возвращает message_id (null = не удалось). Для «живого закрепа»:
+     * в ГРУППАХ Telegram запрещает WebApp-кнопки, поэтому кнопка — только url
+     * `t.me/<bot>/app?startapp=…` (DeepLinkHandler фронта разруливает payload).
+     */
+    fun sendGroupMessageWithUrlButton(chatId: Long, text: String, buttonText: String?, url: String?): Long? = try {
+        val builder = SendMessage.builder().chatId(chatId).text(text)
+        if (buttonText != null && url != null) {
+            val button = InlineKeyboardButton.builder().text(buttonText).url(url).build()
+            builder.replyMarkup(InlineKeyboardMarkup(listOf(InlineKeyboardRow(button))))
+        }
+        telegramClient.execute(builder.build()).messageId?.toLong()
+    } catch (e: Exception) {
+        log.warn("sendGroupMessageWithUrlButton failed: chatId={} error={}", chatId, e.message)
+        null
+    }
+
+    /**
+     * Редактирование своего сообщения в группе (живой закреп). «Message is not modified» —
+     * не ошибка (перерисовка совпала с текущим текстом), считаем успехом.
+     */
+    fun editGroupMessage(chatId: Long, messageId: Long, text: String, buttonText: String?, url: String?): Boolean = try {
+        val builder = EditMessageText.builder()
+            .chatId(chatId)
+            .messageId(messageId.toInt())
+            .text(text)
+        if (buttonText != null && url != null) {
+            val button = InlineKeyboardButton.builder().text(buttonText).url(url).build()
+            builder.replyMarkup(InlineKeyboardMarkup(listOf(InlineKeyboardRow(button))))
+        }
+        telegramClient.execute(builder.build())
+        true
+    } catch (e: Exception) {
+        if (e.message?.contains("message is not modified") == true) {
+            true
+        } else {
+            log.warn("editGroupMessage failed: chatId={} messageId={} error={}", chatId, messageId, e.message)
+            false
+        }
+    }
+
+    /** Закрепить сообщение (тихо, без пуша всем участникам). Нужно право «Закрепление сообщений». */
+    fun pinChatMessage(chatId: Long, messageId: Long): Boolean = try {
+        telegramClient.execute(
+            PinChatMessage.builder().chatId(chatId).messageId(messageId.toInt()).disableNotification(true).build()
+        )
+        true
+    } catch (e: Exception) {
+        log.warn("pinChatMessage failed (нет права «Закрепление сообщений»?): chatId={} messageId={} error={}", chatId, messageId, e.message)
+        false
+    }
+
+    fun unpinChatMessage(chatId: Long, messageId: Long): Boolean = try {
+        telegramClient.execute(UnpinChatMessage.builder().chatId(chatId).messageId(messageId.toInt()).build())
+        true
+    } catch (e: Exception) {
+        log.warn("unpinChatMessage failed: chatId={} messageId={} error={}", chatId, messageId, e.message)
         false
     }
 

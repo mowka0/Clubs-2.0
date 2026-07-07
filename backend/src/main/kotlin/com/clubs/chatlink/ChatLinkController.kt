@@ -48,8 +48,11 @@ class ChatLinkController(
         @RequestBody @Valid request: UpdateChatLinkRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<ChatLinkStatusDto> {
-        log.info("Chat door toggle: clubId={} doorEnabled={} userId={}", clubId, request.doorEnabled, user.userId)
-        return ResponseEntity.ok(chatLinkService.setDoor(clubId, user.userId, request.doorEnabled))
+        log.info(
+            "Chat link toggle: clubId={} doorEnabled={} livePinEnabled={} userId={}",
+            clubId, request.doorEnabled, request.livePinEnabled, user.userId
+        )
+        return ResponseEntity.ok(chatLinkService.update(clubId, user.userId, request))
     }
 
     @DeleteMapping

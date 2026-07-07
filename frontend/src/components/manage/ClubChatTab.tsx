@@ -46,7 +46,7 @@ const NotLinkedState: FC<{ startGroupUrl: string }> = ({ startGroupUrl }) => {
         </div>
         <div className="rd-cl-step">
           <span className="n">2</span>
-          <span className="t"><b>Живой закреп</b> — в шапке чата всегда актуальное «кто идёт» по ближайшей встрече (скоро)</span>
+          <span className="t"><b>Живой закреп</b> — в шапке чата всегда актуальное «кто идёт» по ближайшей встрече</span>
         </div>
         <div className="rd-cl-step">
           <span className="n">3</span>
@@ -88,7 +88,9 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
     ? { title: 'Бот удалён из чата', sub: 'Привязка сохранена: верните бота в группу и нажмите «Проверить права ещё раз» — всё оживёт само.' }
     : status.doorEnabled && !status.canInviteUsers
       ? { title: 'Бот потерял право приглашать участников', sub: 'Вход через заявки остановлен. Верните боту право «Приглашение участников» в настройках группы — и всё оживёт.' }
-      : null;
+      : status.livePinEnabled && !status.canPinMessages
+        ? { title: 'Бот потерял право закреплять сообщения', sub: 'Уже созданные статусы бот продолжит обновлять, но закрепить новые не сможет. Верните боту право «Закрепление сообщений» в настройках группы.' }
+        : null;
 
   const handleToggleDoor = () => {
     if (busy) return;
@@ -96,6 +98,19 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
     haptic.impact('medium');
     updateMutation.mutate(
       { doorEnabled: !status.doorEnabled },
+      {
+        onSuccess: () => haptic.notify('success'),
+        onError: (e) => { setError(e.message); haptic.notify('error'); },
+      },
+    );
+  };
+
+  const handleToggleLivePin = () => {
+    if (busy) return;
+    setError(null);
+    haptic.impact('medium');
+    updateMutation.mutate(
+      { livePinEnabled: !status.livePinEnabled },
       {
         onSuccess: () => haptic.notify('success'),
         onError: (e) => { setError(e.message); haptic.notify('error'); },
@@ -186,7 +201,7 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
         )}
       </div>
 
-      {/* Тумблеры фич: дверь — активная, закреп и строгий режим — «скоро» (следующие слайсы) */}
+      {/* Тумблеры фич: дверь и живой закреп — активные, строгий режим — «скоро» (слайс 5) */}
       <div className="rd-glass" style={{ padding: '2px 14px', marginBottom: 10 }}>
         <div className="rd-cl-feat">
           <div className="fi">
@@ -206,12 +221,23 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
             onClick={handleToggleDoor}
           />
         </div>
-        <div className="rd-cl-feat soon">
+        <div className="rd-cl-feat">
           <div className="fi">
-            <div className="ft">Живой закреп<span className="rd-cl-soon-tag">скоро</span></div>
-            <div className="fd">Одно закреплённое сообщение с актуальным «кто идёт». Бот редактирует его, а не спамит новыми.</div>
+            <div className="ft">Живой закреп</div>
+            <div className="fd">
+              Одно закреплённое сообщение с актуальным «кто идёт» по каждой будущей встрече.
+              Бот редактирует его, а не спамит новыми, а после встречи публикует итог.
+            </div>
           </div>
-          <button type="button" className="rd-cl-tgl" role="switch" aria-checked={false} aria-label="Живой закреп (скоро)" disabled />
+          <button
+            type="button"
+            className={`rd-cl-tgl${status.livePinEnabled ? ' on' : ''}`}
+            role="switch"
+            aria-checked={status.livePinEnabled}
+            aria-label="Живой закреп"
+            disabled={busy || (!status.livePinEnabled && (!botInChat || !status.canPinMessages))}
+            onClick={handleToggleLivePin}
+          />
         </div>
         <div className="rd-cl-feat soon">
           <div className="fi">

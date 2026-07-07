@@ -94,7 +94,8 @@ class ChatLinkBotService(
                 canPinMessages = state?.canPinMessages ?: false,
                 canInviteUsers = state?.canInviteUsers ?: false,
                 doorEnabled = false,
-                doorInviteLink = null
+                doorInviteLink = null,
+                livePinEnabled = false
             )
         )
         log.info("Chat linked: clubId={} chatId={} byTelegramId={} botStatus={}", clubId, chatId, fromTelegramId, link.botStatus.literal)

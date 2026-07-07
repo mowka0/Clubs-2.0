@@ -16,7 +16,8 @@ class ChatLinkMapper {
         canPinMessages = record.canPinMessages!!,
         canInviteUsers = record.canInviteUsers!!,
         doorEnabled = record.doorEnabled!!,
-        doorInviteLink = record.doorInviteLink
+        doorInviteLink = record.doorInviteLink,
+        livePinEnabled = record.livePinEnabled!!
     )
 
     fun toStatusDto(link: ChatLink?, startGroupUrl: String): ChatLinkStatusDto = ChatLinkStatusDto(
@@ -28,6 +29,7 @@ class ChatLinkMapper {
         canInviteUsers = link?.canInviteUsers ?: false,
         doorEnabled = link?.doorEnabled ?: false,
         doorInviteLink = link?.doorInviteLink,
+        livePinEnabled = link?.livePinEnabled ?: false,
         startGroupUrl = startGroupUrl
     )
 }

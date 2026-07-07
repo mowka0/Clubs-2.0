@@ -76,6 +76,14 @@ class JooqChatLinkRepository(
             .execute()
     }
 
+    override fun updateLivePin(clubId: UUID, livePinEnabled: Boolean) {
+        dsl.update(CLUB_CHAT_LINKS)
+            .set(CLUB_CHAT_LINKS.LIVE_PIN_ENABLED, livePinEnabled)
+            .set(CLUB_CHAT_LINKS.UPDATED_AT, OffsetDateTime.now())
+            .where(CLUB_CHAT_LINKS.CLUB_ID.eq(clubId))
+            .execute()
+    }
+
     override fun updateChatId(oldChatId: Long, newChatId: Long) {
         dsl.update(CLUB_CHAT_LINKS)
             .set(CLUB_CHAT_LINKS.CHAT_ID, newChatId)
