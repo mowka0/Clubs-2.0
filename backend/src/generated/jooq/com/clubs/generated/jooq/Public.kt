@@ -6,6 +6,7 @@ package com.clubs.generated.jooq
 
 import com.clubs.generated.jooq.tables.Applications
 import com.clubs.generated.jooq.tables.ClubAwards
+import com.clubs.generated.jooq.tables.ClubChatLinks
 import com.clubs.generated.jooq.tables.ClubRank
 import com.clubs.generated.jooq.tables.Clubs
 import com.clubs.generated.jooq.tables.EventResponses
@@ -46,7 +47,9 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     }
 
     /**
-     * The table <code>public.applications</code>.
+     * Заявки на вступление в клубы с access_type = closed. Активная
+     * (pending/approved) заявка — максимум одна на пару (user, club);
+     * терминальные могут повторяться при повторных подачах.
      */
     val APPLICATIONS: Applications get() = Applications.APPLICATIONS
 
@@ -58,92 +61,138 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val CLUB_AWARDS: ClubAwards get() = ClubAwards.CLUB_AWARDS
 
     /**
-     * The table <code>public.club_rank</code>.
+     * Привязка телеграм-группы к клубу (один клуб = один чат, один чат = один
+     * клуб). Создаётся ботом при добавлении в группу владельцем клуба по deep
+     * link ?startgroup=&lt;club_id&gt;. Спека: docs/modules/club-chat-link.md
+     */
+    val CLUB_CHAT_LINKS: ClubChatLinks get() = ClubChatLinks.CLUB_CHAT_LINKS
+
+    /**
+     * Внутренний скрытый ранг клуба L3 — результат периодического пересчёта
+     * (ClubRankScheduler). Служебные величины (rank_score, effective_k) никогда
+     * не сериализуются в DTO; наружу уходит только бейдж «Топ-5 в категории»,
+     * выводимый отсюда на чтении.
      */
     val CLUB_RANK: ClubRank get() = ClubRank.CLUB_RANK
 
     /**
-     * The table <code>public.clubs</code>.
+     * Клубы — платные или бесплатные офлайн-сообщества по интересам. Ядро
+     * продукта: членство, события и складчины привязаны к клубу.
      */
     val CLUBS: Clubs get() = Clubs.CLUBS
 
     /**
-     * The table <code>public.event_responses</code>.
+     * Отклики участников на событие: голос Этапа 1, подтверждение Этапа 2,
+     * финальный статус и отметка явки. Одна строка на пару (event, user).
      */
     val EVENT_RESPONSES: EventResponses get() = EventResponses.EVENT_RESPONSES
 
     /**
-     * The table <code>public.events</code>.
+     * События клуба с двухэтапным подтверждением участия: Этап 1 — голосование
+     * «пойду/может быть», Этап 2 (~за 24 часа) — подтверждение брони в пределах
+     * лимита, затем отметка явки организатором и начисление репутации.
      */
     val EVENTS: Events get() = Events.EVENTS
 
     /**
-     * The table <code>public.interests</code>.
+     * Общий словарь интересов для профилей пользователей. Имена нормализуются
+     * на сервере (trim, одиночные пробелы, lowercase, ё -&gt; е), чтобы
+     * дубликаты схлопывались; словарь питает префиксный автокомплит.
      */
     val INTERESTS: Interests get() = Interests.INTERESTS
 
     /**
-     * The table <code>public.membership_history</code>.
+     * Append-only лог переходов статуса членства для retention/churn-аналитики.
+     * Пишется в одной транзакции со сменой статуса; строки не меняются и не
+     * удаляются. Backfill истории не делался — лог строится с момента V31.
+     * Членство самого организатора не логируется.
      */
     val MEMBERSHIP_HISTORY: MembershipHistory get() = MembershipHistory.MEMBERSHIP_HISTORY
 
     /**
-     * The table <code>public.memberships</code>.
+     * Членство пользователя в клубе: статусный жизненный цикл
+     * (active/frozen/cancelled + легаси grace_period/expired), роль и учёт
+     * внеплатформенного взноса (de-Stars). Одна строка на пару (user, club).
      */
     val MEMBERSHIPS: Memberships get() = Memberships.MEMBERSHIPS
 
     /**
-     * The table <code>public.reputation_ledger</code>.
+     * Append-only леджер репутационных исходов (источник истины репутации v2).
+     * Одна строка на пару (участник, источник); кэш user_club_reputation —
+     * производный и пересчитывается отсюда. Строки не редактируются и не
+     * удаляются.
      */
     val REPUTATION_LEDGER: ReputationLedger get() = ReputationLedger.REPUTATION_LEDGER
 
     /**
-     * The table <code>public.service_subscription</code>.
+     * Рекуррентная сервисная подписка платформы (монетизация v2): организатор
+     * платит за план-ёмкость (сколько платных клубов можно вести). Плоская
+     * месячная плата — не приостанавливается, действует до конца оплаченного
+     * периода. Поток member-pays построен, но выключен флагом
+     * MEMBER_PAYS_ENABLED.
      */
     val SERVICE_SUBSCRIPTION: ServiceSubscription get() = ServiceSubscription.SERVICE_SUBSCRIPTION
 
     /**
-     * The table <code>public.skladchina_participants</code>.
+     * Участие члена клуба в складчине: назначенная/заявленная сумма, статус
+     * ответа и репутационная отметка. Составной PK (skladchina_id, user_id).
      */
     val SKLADCHINA_PARTICIPANTS: SkladchinaParticipants get() = SkladchinaParticipants.SKLADCHINA_PARTICIPANTS
 
     /**
-     * The table <code>public.skladchinas</code>.
+     * Складчины — сборы денег внутри клуба (на аренду, инвентарь, деление счёта
+     * и т.п.). Honor-system: деньги идут участник -&gt; организатор напрямую
+     * (СБП) мимо платформы, приложение ведёт учёт статусов и напоминания.
      */
     val SKLADCHINAS: Skladchinas get() = Skladchinas.SKLADCHINAS
 
     /**
-     * The table <code>public.subscription_event</code>.
+     * Идемпотентный леджер входящих вебхуков платёжного провайдера по
+     * подпискам: защита от ретраев и внеочередной доставки (аналог дедупа по
+     * charge_id у Stars, V12).
      */
     val SUBSCRIPTION_EVENT: SubscriptionEvent get() = SubscriptionEvent.SUBSCRIPTION_EVENT
 
     /**
-     * The table <code>public.subscription_pricing</code>.
+     * Прайс планов подписки, версионируемый по effective_from: цены правятся
+     * вставкой новой строки без миграции. Сервер всегда берёт сумму отсюда —
+     * клиенту не доверяет. Ёмкость планов здесь не хранится (константа
+     * SubscriptionPlanPolicy в коде).
      */
     val SUBSCRIPTION_PRICING: SubscriptionPricing get() = SubscriptionPricing.SUBSCRIPTION_PRICING
 
     /**
-     * The table <code>public.transactions</code>.
+     * Легаси-леджер платежей Telegram Stars за членство (монетизация v1). После
+     * отказа от Stars (de-Stars) новые строки не пишутся — таблица заморожена
+     * как аудит-история; текущая монетизация живёт в service_subscription.
      */
     val TRANSACTIONS: Transactions get() = Transactions.TRANSACTIONS
 
     /**
-     * The table <code>public.user_club_reputation</code>.
+     * Производный кэш пер-клубной репутации: агрегаты, пересчитываемые из
+     * reputation_ledger (единственного источника истины). Одна строка на пару
+     * (user, club). Не редактируется вручную — только recompute.
      */
     val USER_CLUB_REPUTATION: UserClubReputation get() = UserClubReputation.USER_CLUB_REPUTATION
 
     /**
-     * The table <code>public.user_club_reputation_pre_v18</code>.
+     * Форензик-снапшот user_club_reputation, снятый миграцией V18 ПЕРЕД
+     * перестройкой кэша из леджера. Данные испорчены багом почасовой
+     * ре-инфляции (bug B) — только для сравнения/расследований, восстанавливать
+     * из него нельзя. Без FK и индексов; колонок kept/broke/neutral (V25) здесь
+     * нет.
      */
     val USER_CLUB_REPUTATION_PRE_V18: UserClubReputationPreV18 get() = UserClubReputationPreV18.USER_CLUB_REPUTATION_PRE_V18
 
     /**
-     * The table <code>public.user_interests</code>.
+     * Связь M:N «пользователь — интерес» (выбранные интересы профиля).
+     * Составной PK (user_id, interest_id).
      */
     val USER_INTERESTS: UserInterests get() = UserInterests.USER_INTERESTS
 
     /**
-     * The table <code>public.users</code>.
+     * Пользователи: Telegram-профили, создаются и синхронизируются при
+     * авторизации через подписанный initData Mini App.
      */
     val USERS: Users get() = Users.USERS
 
@@ -152,6 +201,7 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     override fun getTables(): List<Table<*>> = listOf(
         Applications.APPLICATIONS,
         ClubAwards.CLUB_AWARDS,
+        ClubChatLinks.CLUB_CHAT_LINKS,
         ClubRank.CLUB_RANK,
         Clubs.CLUBS,
         EventResponses.EVENT_RESPONSES,

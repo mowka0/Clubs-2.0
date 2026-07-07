@@ -84,7 +84,7 @@
 **PRD §4.2.1.4:** «После успешной оплаты: пользователь автоматически добавляется в Telegram-группу клуба и получает доступ к календарю событий в Mini App.»
 **PRD §4.2.1 AC:** «После оплаты пользователь автоматически добавляется в группу (через Telegram Bot API invite link).»
 
-**Реальность:** `PaymentService.handleSuccessfulPayment` создаёт membership и transaction, но **не шлёт invite link** и не вызывает никакого Telegram API для добавления в группу. В `clubs.telegram_group_id` группа может быть привязана (V10), но invite-flow не реализован.
+**Реальность:** `PaymentService.handleSuccessfulPayment` создаёт membership и transaction, но **не шлёт invite link** и не вызывает никакого Telegram API для добавления в группу. В `clubs.telegram_group_id` группа может быть привязана (V10), но invite-flow не реализован. *(Update 2026-07-07: закрыто эпиком club-chat-link — V47 + «дверь» с авто-впуском, см. docs/modules/club-chat-link.md; сам Stars-флоу к тому моменту уже был упразднён.)*
 
 **Impact:** ключевое обещание воронки MVP не выполняется — пользователь заплатил, но в группу не попал.
 

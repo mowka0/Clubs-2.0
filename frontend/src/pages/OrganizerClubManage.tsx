@@ -14,17 +14,21 @@ import { AvatarUpload } from '../components/AvatarUpload';
 import { Toast } from '../components/Toast';
 import { ManageHeader } from '../components/manage/ManageHeader';
 import { ClubStatsTab } from '../components/manage/ClubStatsTab';
+import { ClubChatTab } from '../components/manage/ClubChatTab';
 import { useClubQuery, useDeleteClubMutation, useUpdateClubMutation } from '../queries/clubs';
 import { useClubFinancesQuery } from '../queries/finances';
 import type { UpdateClubBody } from '../api/clubs';
 import type { ClubDetailDto } from '../types/api';
 
-type TabKey = 'stats' | 'finances' | 'settings';
+type TabKey = 'stats' | 'finances' | 'chat' | 'settings';
 
 // Вкладки страницы управления клубом (порядок массива = порядок отображения).
+// «Чат» — привязка телеграм-группы (club-chat-link), решение PO 2026-07-05:
+// итоговые табы Статистика · Финансы · Чат · Настройки.
 const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
   { key: 'stats', label: 'Статистика' },
   { key: 'finances', label: 'Финансы' },
+  { key: 'chat', label: 'Чат' },
   { key: 'settings', label: 'Настройки' },
 ];
 
@@ -481,6 +485,8 @@ export const OrganizerClubManage: FC = () => {
         return <ClubStatsTab clubId={clubId} />;
       case 'finances':
         return <FinancesTab clubId={clubId} />;
+      case 'chat':
+        return <ClubChatTab clubId={clubId} />;
       case 'settings':
         return (
           <SettingsTab

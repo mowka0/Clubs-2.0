@@ -12,6 +12,7 @@ import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ApplicationStatus
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.interest.InterestRepository
+import com.clubs.membership.MembershipAccessRevokedEvent
 import com.clubs.membership.MembershipActivator
 import com.clubs.membership.MembershipDto
 import com.clubs.membership.MembershipMapper
@@ -22,6 +23,7 @@ import com.clubs.reputation.PeerStatsAggregate
 import com.clubs.reputation.ReputationRepository
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
@@ -42,7 +44,8 @@ class ApplicationService(
     private val applicantSignalService: ApplicantSignalService,
     private val interestRepository: InterestRepository,
     private val membershipMapper: MembershipMapper,
-    private val membershipActivator: MembershipActivator
+    private val membershipActivator: MembershipActivator,
+    private val eventPublisher: ApplicationEventPublisher
 ) {
 
     private val log = LoggerFactory.getLogger(ApplicationService::class.java)
@@ -217,6 +220,8 @@ class ApplicationService(
             "Application rejected: id={} clubId={} userId={} organizerId={}",
             applicationId, application.clubId, application.userId, organizerId
         )
+        // Чат-«дверь» (club-chat-link): отклоняем висящую заявку человека на вход в чат клуба.
+        eventPublisher.publishEvent(MembershipAccessRevokedEvent(application.clubId, application.userId))
         return mapper.toDto(updated)
     }
 

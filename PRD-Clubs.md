@@ -569,7 +569,7 @@
 - avatar_url: text
 - rules: varchar(2000)
 - application_question: varchar(200)
-- telegram_group_id: bigint
+- ~~telegram_group_id~~ — V47: вынесено в таблицу `club_chat_links` (привязка чата с верификацией владельца, см. `docs/modules/club-chat-link.md`)
 - invite_link: varchar(255)
 - is_active: boolean (default true)
 - created_at: timestamp

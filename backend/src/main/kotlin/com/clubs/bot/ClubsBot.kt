@@ -1,5 +1,7 @@
 package com.clubs.bot
 
+import com.clubs.chatlink.ChatDoorService
+import com.clubs.chatlink.ChatLinkBotService
 import com.clubs.event.EventRepository
 import com.clubs.event.EventResponseRepository
 import org.slf4j.LoggerFactory
@@ -7,9 +9,13 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer
 import org.telegram.telegrambots.longpolling.starter.SpringLongPollingBot
+import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery
 import org.telegram.telegrambots.meta.api.methods.AnswerPreCheckoutQuery
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.objects.CallbackQuery
 import org.telegram.telegrambots.meta.api.objects.Update
+import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberAdministrator
+import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.payments.PreCheckoutQuery
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton
@@ -18,6 +24,7 @@ import org.telegram.telegrambots.meta.api.objects.webapp.WebAppInfo
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
+import java.util.UUID
 
 @Component
 class ClubsBot(
@@ -25,6 +32,8 @@ class ClubsBot(
     private val telegramClient: TelegramClient,
     private val eventRepository: EventRepository,
     private val eventResponseRepository: EventResponseRepository,
+    private val chatLinkBotService: ChatLinkBotService,
+    private val chatDoorService: ChatDoorService,
 ) : SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
     private val log = LoggerFactory.getLogger(ClubsBot::class.java)
@@ -44,7 +53,49 @@ class ClubsBot(
             return
         }
 
+        // Чат-интеграция (club-chat-link): статус самого бота в группах (кик/возврат/права) —
+        // health-мониторинг привязки. my_chat_member приходит при пустом allowed_updates из коробки.
+        if (update.hasMyChatMember()) {
+            try {
+                handleMyChatMember(update)
+            } catch (e: Exception) {
+                log.error("Error handling my_chat_member: {}", e.message, e)
+            }
+            return
+        }
+
+        // Чат-«дверь»: человек постучался в привязанный чат по door-ссылке.
+        if (update.hasChatJoinRequest()) {
+            val request = update.chatJoinRequest
+            try {
+                chatDoorService.onChatJoinRequest(request.chat.id, request.user.id)
+            } catch (e: Exception) {
+                log.error("Error handling chat_join_request: chatId={} error={}", request.chat.id, e.message, e)
+            }
+            return
+        }
+
+        // Inline-кнопки бота (сейчас единственная — «Отвязать чат» из DM-петли подтверждения привязки).
+        if (update.hasCallbackQuery()) {
+            try {
+                handleCallbackQuery(update.callbackQuery)
+            } catch (e: Exception) {
+                log.error("Error handling callback query: {}", e.message, e)
+            }
+            return
+        }
+
         if (!update.hasMessage()) return
+
+        // Миграция группы в супергруппу: Telegram меняет chat_id — переносим привязку чата.
+        update.message.migrateToChatId?.let { newChatId ->
+            try {
+                chatLinkBotService.handleChatMigration(update.message.chatId, newChatId)
+            } catch (e: Exception) {
+                log.error("Error handling chat migration: {} → {}: {}", update.message.chatId, newChatId, e.message, e)
+            }
+            return
+        }
 
         // successful_payment здесь — случайное событие (например, старый invoice, который был в
         // полёте). НЕ активировать доступ — доступ теперь контролирует организатор. Логируем с
@@ -66,11 +117,82 @@ class ClubsBot(
 
         try {
             when {
-                text.startsWith("/start") -> handleStart(chatId)
+                // /start в ГРУППЕ — попытка привязки чата deep link'ом ?startgroup=<club_id>
+                // (клиент Telegram шлёт «/start <payload>» в группу после добавления бота).
+                // /start в личке — прежний welcome.
+                text.startsWith("/start") ->
+                    if (isGroupChat(update.message)) handleGroupStart(update.message) else handleStart(chatId)
                 text.startsWith("/кто_идет") || text.startsWith("/kto_idet") -> handleWhoIsGoing(chatId)
             }
         } catch (e: Exception) {
             log.error("Error handling command '{}' from chat {}: {}", text, chatId, e.message, e)
+        }
+    }
+
+    private fun isGroupChat(message: Message): Boolean =
+        message.chat.type == "group" || message.chat.type == "supergroup"
+
+    /**
+     * «/start <club_id>» в группе → привязка чата к клубу. Без валидного UUID-payload —
+     * молчаливый no-op: бота могли добавить в группу руками или тапнуть /start@bot без
+     * payload'а, спамить группу инструкциями не надо.
+     */
+    private fun handleGroupStart(message: Message) {
+        val payload = message.text.split(Regex("\\s+")).getOrNull(1) ?: return
+        val clubId = try {
+            UUID.fromString(payload)
+        } catch (_: IllegalArgumentException) {
+            log.warn("Group /start with non-UUID payload ignored: chatId={}", message.chatId)
+            return
+        }
+        val from = message.from ?: return
+        chatLinkBotService.handleGroupStart(
+            chatId = message.chatId,
+            chatTitle = message.chat.title,
+            fromTelegramId = from.id,
+            clubId = clubId
+        )
+    }
+
+    /** Статус самого бота в чате изменился: обновляем health привязки (мокап 01-C). */
+    private fun handleMyChatMember(update: Update) {
+        val updated = update.myChatMember
+        val chat = updated.chat
+        if (chat.type != "group" && chat.type != "supergroup") return
+        val newMember = updated.newChatMember
+        val admin = newMember as? ChatMemberAdministrator
+        chatLinkBotService.handleMyChatMember(
+            chatId = chat.id,
+            newStatusLiteral = newMember.status,
+            canPinMessages = admin?.canPinMessages ?: false,
+            canInviteUsers = admin?.canInviteUsers ?: false
+        )
+    }
+
+    /** Ответ на inline-кнопку. Формат data: «chatlink:unlink:<uuid>» (см. ChatLinkBotService). */
+    private fun handleCallbackQuery(query: CallbackQuery) {
+        val data = query.data ?: return
+        val answerText = if (data.startsWith(ChatLinkBotService.UNLINK_CALLBACK_PREFIX)) {
+            val clubId = try {
+                UUID.fromString(data.removePrefix(ChatLinkBotService.UNLINK_CALLBACK_PREFIX))
+            } catch (_: IllegalArgumentException) {
+                null
+            }
+            clubId?.let { chatLinkBotService.handleUnlinkCallback(query.from.id, it) } ?: "Некорректный запрос"
+        } else {
+            log.warn("Unknown callback data ignored: {}", data.take(32))
+            null
+        }
+
+        // Telegram требует ответить на каждый callback, иначе у пользователя крутится спиннер.
+        val answer = AnswerCallbackQuery.builder()
+            .callbackQueryId(query.id)
+            .apply { answerText?.let { text(it).showAlert(true) } }
+            .build()
+        try {
+            telegramClient.execute(answer)
+        } catch (e: Exception) {
+            log.warn("Failed to answer callback query {}: {}", query.id, e.message)
         }
     }
 

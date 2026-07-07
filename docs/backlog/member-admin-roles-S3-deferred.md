@@ -18,7 +18,7 @@
 ### Слой 1 — аннотация `@RequiresOrganizer(clubIdParam)` (owner-only, `AuthorizationAspect`)
 clubId есть в пути → можно завести `@RequiresClubRole(min = MODERATOR|CO_ORGANIZER, clubIdParam)`:
 - `MemberController` — ~11: freeze/unfreeze/dues-paid/dues-unpaid/access-until/note/awards(grant/revoke)/award-suggestions/member-attention. (управление участником + награды → CO_ORGANIZER)
-- `ClubController` — link-group (OWNER), finances (CO_ORG/аналитика).
+- `ClubController` — finances (CO_ORG/аналитика). `ChatLinkController` (привязка чата) — OWNER.
 - `EventController` — createEvent (MODERATOR).
 - `SkladchinaController` — getClubActiveSkladchinas, create (MODERATOR).
 - `ClubQualityController` — stats, churned-members (аналитика → CO_ORG).
@@ -30,7 +30,7 @@ clubId есть в пути → можно завести `@RequiresClubRole(min
 - `SkladchinaPaymentService` — markPaid / «manage» (≥1 проверка `Only the organizer can manage`) → MODERATOR.
 - `SkladchinaCreationService` — create (`Only the club organizer can create skladchina`) → MODERATOR. (дублирует аннотацию контроллера — свериться, чтобы не было двойного гейта)
 - `SkladchinaLifecycleService` — close: **«Only creator can close»** (проверка по СОЗДАТЕЛЮ сбора, не владельцу клуба) — отдельная семантика, решить: модератор/со-орг закрывает любой сбор или только свой созданный.
-- `ClubService` — update/delete/regenerate-invite/link-group → OWNER (владельческое, не трогаем).
+- `ClubService` — update/delete/regenerate-invite → OWNER; `ChatLinkService` (чат) → OWNER (владельческое, не трогаем).
 - `FinancesService` — view finances → CO_ORG.
 
 **Итого ~20 точек авторизации в двух слоях.** Каждую — покрыть тестами на каждую роль (owner проходит любой гейт; member — нет; moderator/co-org — по матрице).

@@ -26,7 +26,6 @@ class ClubMapper {
         // через copy(memberCount = countLiveMembers(...)). У только что созданного клуба 0 живых участников.
         memberCount = 0,
         isActive = record.isActive ?: true,
-        telegramGroupId = record.telegramGroupId,
         paymentLink = record.paymentLink,
         paymentMethodNote = record.paymentMethodNote,
         createdAt = record.createdAt!!,
@@ -35,7 +34,15 @@ class ClubMapper {
 
     // includeRequisites гейтит СБП-реквизиты: как платить видят только члены клуба (active/frozen)
     // и владелец — pending-заявитель / посетитель не должны (de-Stars: взнос = участник→организатор).
-    fun toDetailDto(club: Club, includeRequisites: Boolean = false): ClubDetailDto = ClubDetailDto(
+    // chat*-поля считает ClubService.getClub (нужны membership и строка привязки чата); остальные
+    // call-sites (create/update — там смотрит владелец сразу после мутации) живут на дефолтах.
+    fun toDetailDto(
+        club: Club,
+        includeRequisites: Boolean = false,
+        chatLinked: Boolean = false,
+        chatDoorEnabled: Boolean = false,
+        chatInviteLink: String? = null
+    ): ClubDetailDto = ClubDetailDto(
         id = club.id,
         ownerId = club.ownerId,
         name = club.name,
@@ -53,6 +60,9 @@ class ClubMapper {
         memberCount = club.memberCount,
         isActive = club.isActive,
         paymentLink = if (includeRequisites) club.paymentLink else null,
-        paymentMethodNote = if (includeRequisites) club.paymentMethodNote else null
+        paymentMethodNote = if (includeRequisites) club.paymentMethodNote else null,
+        chatLinked = chatLinked,
+        chatDoorEnabled = chatDoorEnabled,
+        chatInviteLink = chatInviteLink
     )
 }
