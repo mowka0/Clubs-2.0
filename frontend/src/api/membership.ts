@@ -4,7 +4,6 @@ import type {
   AwardSuggestionDto,
   GamificationDto,
   LeavePreviewDto,
-  MemberAttentionDto,
   MemberListItemDto,
   MembershipDto,
   MemberProfileDto,
@@ -161,12 +160,8 @@ export function claimDues(
   return apiClient.post<MembershipDto>(`/api/clubs/${clubId}/dues-claim`, { method, proofUrl: proofUrl ?? null });
 }
 
-/** Данные для красной точки в [clubId]: счётчики скоро-истекающих и frozen-ожидающих-взноса. Только владелец. */
-export function getMemberAttention(clubId: string): Promise<MemberAttentionDto> {
-  return apiClient.get<MemberAttentionDto>(`/api/clubs/${clubId}/member-attention`);
-}
-
-/** Кросс-клубовое «Ждут оплаты»: frozen-участники по всем клубам вызывающего-владельца. Пусто для не-владельцев. */
+/** Кросс-клубовое «Ждут оплаты»: участники без доступа (frozen/expired) по всем клубам
+ *  вызывающего-владельца. Пусто для не-владельцев. */
 export function getOrganizerAwaitingDues(): Promise<OrganizerDuesMemberDto[]> {
   return apiClient.get<OrganizerDuesMemberDto[]>('/api/users/me/organizer/awaiting-dues');
 }

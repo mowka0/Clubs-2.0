@@ -16,9 +16,6 @@ import org.springframework.stereotype.Service
 import java.time.OffsetDateTime
 import java.util.UUID
 
-// Окно (в днях): доступ, истекающий в его пределах, попадает в «Скоро закончится» и зажигает red-dot.
-private const val EXPIRING_SOON_DAYS = 7L
-
 @Service
 class MemberService(
     private val membershipRepository: MembershipRepository,
@@ -68,24 +65,6 @@ class MemberService(
                 .thenBy { it.joinedAt ?: OffsetDateTime.MAX }
         }
         return members.sortedWith(order)
-    }
-
-    /**
-     * Red-dot фид для [clubId] (только организатору, гейт @RequiresOrganizer на контроллере):
-     * участники, чей платный доступ кончается в ближайшую неделю, + участники без доступа
-     * (frozen/expired), заявившие об оплате. Точка загорается, когда любой из счётчиков > 0.
-     */
-    fun getAttention(clubId: UUID): MemberAttentionDto {
-        val now = OffsetDateTime.now()
-        val clubs = listOf(clubId)
-        return MemberAttentionDto(
-            expiringSoon = membershipRepository.countExpiringSoonByClubs(clubs, now, now.plusDays(EXPIRING_SOON_DAYS)),
-            // Только claimed (frozen ИЛИ expired): считаем ровно тех, кому нужно действие организатора
-            // («Взнос получен»). Без claim точку не зажигают (мяч у участника) — иначе red-dot горел бы
-            // вечно у любого должника. Та же семантика, что у бейджа таб-бара
-            // (countClaimedAwaitingDuesByOwner).
-            awaitingDues = membershipRepository.countClaimedAwaitingDuesByClubs(clubs)
-        )
     }
 
     /**

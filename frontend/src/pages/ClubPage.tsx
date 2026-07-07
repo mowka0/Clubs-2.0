@@ -25,7 +25,6 @@ import {
   useCompleteFreeMembershipMutation,
   useMyApplicationsQuery,
 } from '../queries/applications';
-import { useMemberAttentionQuery } from '../queries/members';
 import { ApiError } from '../api/apiClient';
 import { formatPrice } from '../utils/formatters';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
@@ -119,12 +118,6 @@ export const ClubPage: FC = () => {
 
   const isOwner = !!club && club.ownerId === user?.id;
   const isOrganizer = isOwner || membership?.role === 'organizer';
-  // Красная точка на «Управление»: есть участники, у которых скоро истекает срок, ИЛИ frozen-участники,
-  // ЗАЯВИВШИЕ об оплате (ждут «Взнос получен»). Просто frozen (пауза/автоистечение) точку не зажигает.
-  const memberAttentionQuery = useMemberAttentionQuery(id, { enabled: isOrganizer });
-  const showManageDot =
-    (memberAttentionQuery.data?.expiringSoon ?? 0) > 0
-    || (memberAttentionQuery.data?.awaitingDues ?? 0) > 0;
   // Active membership = полноценный участник; отменённое платное membership внутри своего
   // оплаченного периода = «всё ещё в клубе» — табы остаются видимыми, но вместо
   // «Выйти из клуба» в футере показывается read-only заметка «Подписка отменена».
@@ -522,9 +515,6 @@ export const ClubPage: FC = () => {
                 onClick={() => handleTabClick(item.key)}
               >
                 {item.label}
-                {item.key === 'manage' && showManageDot && (
-                  <span className="rd-tab-dot" aria-hidden="true" />
-                )}
               </button>
             ))}
           </div>

@@ -17,9 +17,6 @@ export const queryKeys = {
     // Общий префикс списка участников. TanStack инвалидирует по префиксу, поэтому
     // мутации leave / join / member-profile / access-gate используют именно его.
     members: (clubId: string) => ['clubs', 'detail', clubId, 'members'] as const,
-    // De-Stars red-dot фид: число участников, чей платный доступ заканчивается в течение недели.
-    memberAttention: (clubId: string) =>
-      ['clubs', 'detail', clubId, 'member-attention'] as const,
     memberProfile: (clubId: string, userId: string) =>
       ['clubs', 'detail', clubId, 'members', userId] as const,
     // Member admin S2 — distinct прошлых наград в клубе, источник автодополнения формы выдачи.

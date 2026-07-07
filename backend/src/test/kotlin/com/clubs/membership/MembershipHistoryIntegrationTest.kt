@@ -154,8 +154,8 @@ class MembershipHistoryIntegrationTest {
     }
 
     @Test
-    fun `countClaimedAwaitingDuesByClubs counts frozen AND expired members with a live dues claim`() {
-        // Red-dot (2026-07-06): без claim точку не зажигает никто — считаются только заявившие об
+    fun `countClaimedAwaitingDuesByOwner counts frozen AND expired members with a live dues claim`() {
+        // Бейдж таб-бара «Мои клубы» (2026-07-06): без claim не считается никто — только заявившие об
         // оплате (им нужно действие организатора «Взнос получен»), и frozen, и expired.
         val claimedFrozenUser = newUser()
         val claimedExpiredUser = newUser()
@@ -165,13 +165,28 @@ class MembershipHistoryIntegrationTest {
         val claimedExpired = expiredMembership(claimedExpiredUser)                       // expired С claim — считается
         membershipRepository.claimDues(claimedExpired, "cash", null)
 
-        assertEquals(2, membershipRepository.countClaimedAwaitingDuesByClubs(listOf(clubId)))
+        assertEquals(2, membershipRepository.countClaimedAwaitingDuesByOwner(ownerId))
 
         // «Взнос получен» открывает доступ и снимает claim — счётчик гаснет по одному.
         membershipRepository.markDuesPaid(claimedFrozen.id, ownerId, OffsetDateTime.now().plusDays(30))
-        assertEquals(1, membershipRepository.countClaimedAwaitingDuesByClubs(listOf(clubId)))
+        assertEquals(1, membershipRepository.countClaimedAwaitingDuesByOwner(ownerId))
         membershipRepository.markDuesPaid(claimedExpired, ownerId, OffsetDateTime.now().plusDays(30))
-        assertEquals(0, membershipRepository.countClaimedAwaitingDuesByClubs(listOf(clubId)))
+        assertEquals(0, membershipRepository.countClaimedAwaitingDuesByOwner(ownerId))
+    }
+
+    @Test
+    fun `findAwaitingDuesMembersByOwner lists frozen and expired members with their accessStatus`() {
+        val frozenUser = newUser()
+        val expiredUser = newUser()
+        membershipRepository.createFrozen(frozenUser, clubId)
+        expiredMembership(expiredUser)
+
+        val rows = membershipRepository.findAwaitingDuesMembersByOwner(ownerId)
+
+        assertEquals(
+            mapOf(frozenUser to "frozen", expiredUser to "expired"),
+            rows.associate { it.userId to it.accessStatus }
+        )
     }
 
     // ---- helpers ----

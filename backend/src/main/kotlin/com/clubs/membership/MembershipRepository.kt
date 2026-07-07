@@ -64,16 +64,6 @@ interface MembershipRepository {
     fun findActiveExpired(now: OffsetDateTime): List<ExpiringSubscriptionNotification>
     /** Переводит в `expired` каждый membership в статусе `active`, чьё окно доступа (subscription_expires_at) истекло. */
     fun expireOverdueAccess(now: OffsetDateTime): Int
-    /** Число скоро истекающих участников по всем [clubIds] — питает red-dot бейдж на «Управление». */
-    fun countExpiringSoonByClubs(clubIds: Collection<UUID>, now: OffsetDateTime, threshold: OffsetDateTime): Int
-    /**
-     * Число участников без доступа (`frozen`/`expired`), ЗАЯВИВШИХ об оплате (dues_claimed_at IS NOT
-     * NULL), по всем [clubIds] — тоже зажигает red-dot. Именно claimed: только такой участник требует
-     * действия организатора («Взнос получен»). Просто frozen/expired без claim точку не зажигает —
-     * мяч на стороне участника, организатору делать нечего. Зеркалит countClaimedAwaitingDuesByOwner
-     * (бейдж таб-бара) — оба сигнала считают одно и то же множество.
-     */
-    fun countClaimedAwaitingDuesByClubs(clubIds: Collection<UUID>): Int
 
     // Бот/уведомления
     fun findMemberTelegramIds(clubId: UUID): List<Long>

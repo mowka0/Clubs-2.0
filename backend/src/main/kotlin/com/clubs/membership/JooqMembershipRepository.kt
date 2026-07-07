@@ -538,30 +538,6 @@ class JooqMembershipRepository(
             )
             .execute()
 
-    override fun countExpiringSoonByClubs(clubIds: Collection<UUID>, now: OffsetDateTime, threshold: OffsetDateTime): Int {
-        if (clubIds.isEmpty()) return 0
-        return dsl.selectCount().from(MEMBERSHIPS)
-            .where(
-                MEMBERSHIPS.CLUB_ID.`in`(clubIds)
-                    .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active))
-                    .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.greaterThan(now))
-                    .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.lessOrEqual(threshold))
-            )
-            .fetchOne(0, Int::class.java) ?: 0
-    }
-
-    override fun countClaimedAwaitingDuesByClubs(clubIds: Collection<UUID>): Int {
-        if (clubIds.isEmpty()) return 0
-        return dsl.selectCount().from(MEMBERSHIPS)
-            .where(
-                MEMBERSHIPS.CLUB_ID.`in`(clubIds)
-                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.frozen, MembershipStatus.expired))
-                    // Только заявившие об оплате: не-claimed frozen/expired внимания не требует (мяч у участника).
-                    .and(MEMBERSHIPS.DUES_CLAIMED_AT.isNotNull)
-            )
-            .fetchOne(0, Int::class.java) ?: 0
-    }
-
     override fun countClaimedAwaitingDuesByOwner(ownerId: UUID): Int =
         dsl.selectCount().from(MEMBERSHIPS)
             .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))

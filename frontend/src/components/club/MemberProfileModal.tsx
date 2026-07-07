@@ -397,11 +397,15 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
         {/* FROZEN платный участник: проверяем claim об оплате, затем открываем доступ или отказ+возврат. */}
         {isPaidMember && frozen && (
           <div className="rd-mgmt-body">
-            {/* Статус обычным текстом (без рамочной карточки «rd-claim») — на скриншоте выглядело тяжело. */}
+            {/* Статус обычным текстом (без рамочной карточки «rd-claim») — на скриншоте выглядело тяжело.
+                Эмодзи отдельным флекс-элементом: перенесённый текст выравнивается по левому краю (PO 2026-07-07). */}
             <div className="rd-mgmt-claim-line">
-              {claim
-                ? `⏳ Оплата заявлена · ${claim.method === 'cash' ? 'наличные' : 'СБП'}`
-                : '🔒 Доступ закрыт · участник ещё не оплатил'}
+              <span aria-hidden="true">{claim ? '⏳' : '🔒'}</span>
+              <span>
+                {claim
+                  ? `Оплата заявлена · ${claim.method === 'cash' ? 'наличные' : 'СБП'}`
+                  : 'Доступ закрыт · участник ещё не оплатил'}
+              </span>
             </div>
             {claim?.proofUrl ? (
               <button type="button" className="rd-claim-thumb" onClick={() => setZoomedProof(claim.proofUrl)}>
@@ -447,9 +451,12 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
               </div>
             </div>
             <div className="rd-mgmt-claim-line">
-              {claim
-                ? `⏳ Оплата заявлена · ${claim.method === 'cash' ? 'наличные' : 'СБП'}`
-                : '🔒 Доступ закрыт · участник ещё не оплатил продление'}
+              <span aria-hidden="true">{claim ? '⏳' : '🔒'}</span>
+              <span>
+                {claim
+                  ? `Оплата заявлена · ${claim.method === 'cash' ? 'наличные' : 'СБП'}`
+                  : 'Доступ закрыт · участник ещё не оплатил продление'}
+              </span>
             </div>
             {claim?.proofUrl ? (
               <button type="button" className="rd-claim-thumb" onClick={() => setZoomedProof(claim.proofUrl)}>
