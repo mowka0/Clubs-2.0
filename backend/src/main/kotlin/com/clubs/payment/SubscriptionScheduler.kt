@@ -34,9 +34,13 @@ class SubscriptionScheduler(
         val nowExpired = lifecycleService.findActiveExpired(now)
 
         expiringSoon.forEach { entry ->
-            notificationService.sendDirectMessage(
+            // Кнопка ведёт на «Мои клубы» — там в окне T-3 живёт секция «Подписка истекает»
+            // с «Продлить подписку» (раннее продление, membership-lifecycle.md §7).
+            notificationService.sendDirectMessageWithDeepLink(
                 entry.telegramId,
-                "⚠️ Ваш доступ к клубу «${entry.clubName}» истекает через 3 дня. Свяжитесь с организатором, чтобы продлить участие."
+                "⚠️ Ваша подписка на клуб «${entry.clubName}» истекает через 3 дня. Продлите взнос, чтобы не потерять доступ.",
+                webAppPath = "/my-clubs",
+                buttonText = "Продлить подписку"
             )
         }
         nowExpired.forEach { entry ->

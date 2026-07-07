@@ -487,6 +487,24 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
                 <div className="rd-mgmt-sum-k">{expiresAt ? `до ${formatDateFull(expiresAt)} · ${relativeUntil(expiresAt)}` : '—'}</div>
               </div>
             </div>
+            {/* Раннее продление (§7): участник заявил оплату СЛЕДУЮЩЕГО периода до истечения —
+                показываем claim + скриншот, чтобы организатор проверил перевод до «Взнос получен». */}
+            {claim && (
+              <>
+                <div className="rd-mgmt-claim-line">
+                  <span aria-hidden="true">⏳</span>
+                  <span>{`Оплата заявлена (продление) · ${claim.method === 'cash' ? 'наличные' : 'СБП'}`}</span>
+                </div>
+                {claim.proofUrl ? (
+                  <button type="button" className="rd-claim-thumb" onClick={() => setZoomedProof(claim.proofUrl)}>
+                    <img src={claim.proofUrl} alt="Скриншот оплаты" />
+                    <span className="rd-claim-thumb-hint">нажмите, чтобы увеличить</span>
+                  </button>
+                ) : (
+                  <div className="rd-claim-note">Наличные — скриншота нет, подтвердите после получения.</div>
+                )}
+              </>
+            )}
             <div className="rd-mgmt-pair">
               <button type="button" className="rd-mgmt-pb primary" disabled={busy} onClick={() => run(markPaid, `Доступ ${member.firstName} продлён на 30 дней`)}>
                 {markPaid.isPending ? <Spinner size="s" /> : <>Взнос получен<small>+30 дн · до {extendedEndLabel(expiresAt)}</small></>}

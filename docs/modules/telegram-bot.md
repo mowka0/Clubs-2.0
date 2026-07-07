@@ -161,7 +161,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 **Получатель:** один `telegramId`.
 **Caller'ы (реальные):**
 - `PaymentNotificationHandler.onPaymentConfirmed` — welcome DM после успешной оплаты (`@TransactionalEventListener`, AFTER_COMMIT).
-- `SubscriptionScheduler.checkSubscriptions` — «истекает через 3 дня» (без кнопки). Второй вариант — «подписка истекла» — с 2026-07-06 уходит через `sendDirectMessageWithDeepLink` с кнопкой «Оплатить взнос» → `/clubs/{id}` (expired-участник заявляет там оплату).
+- `SubscriptionScheduler.checkSubscriptions` — оба варианта через `sendDirectMessageWithDeepLink`: «истекает через 3 дня» с кнопкой «Продлить подписку» → `/my-clubs` (раннее продление, membership-lifecycle.md §7) и «подписка истекла» с кнопкой «Оплатить взнос» → `/clubs/{id}`.
 **Текст:** формируется caller'ом.
 **Inline-кнопка:** «📱 Открыть Clubs» → корень Mini App.
 

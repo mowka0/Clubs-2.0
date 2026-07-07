@@ -135,13 +135,24 @@ class AccessGateService(
     // вызывающий действует над своим собственным membership. Создаёт заявку (claim), которую проверяет
     // организатор; доступ всё равно открывается только когда организатор нажмёт «Взнос получен»
     // (honor-system сохраняется). sbp требует скриншот; cash — просто утверждение (без доказательства).
-    // Claim доступен обоим состояниям «без доступа»: frozen (первый взнос) и expired (просрочка продления).
+    // Claim доступен: frozen (первый взнос), expired (просрочка продления) и active — но active только
+    // в окне раннего продления (T-3 дня до конца подписки, membership-lifecycle.md §7).
     @Transactional
     fun claimDues(clubId: UUID, callerId: UUID, method: String, proofUrl: String?): MembershipDto {
         val membership = membershipRepository.findByUserAndClub(callerId, clubId)
             ?: throw NotFoundException("Вы не состоите в этом клубе")
-        if (membership.status !in CLAIMABLE_STATUSES) {
-            throw ValidationException("Заявить об оплате можно только пока доступ закрыт")
+        when (membership.status) {
+            MembershipStatus.active -> {
+                // Раннее продление: окно нужно, чтобы «оплатил» нельзя было заявить за месяц вперёд —
+                // орг не сможет осмысленно проверить такой перевод, а claim провисит до истечения.
+                val expiresAt = membership.subscriptionExpiresAt
+                    ?: throw ValidationException("У этого членства нет платной подписки")
+                if (expiresAt.isAfter(OffsetDateTime.now().plusDays(RENEWAL_CLAIM_WINDOW_DAYS))) {
+                    throw ValidationException("Продлить подписку можно за $RENEWAL_CLAIM_WINDOW_DAYS дня до её окончания")
+                }
+            }
+            in CLAIMABLE_STATUSES -> Unit // frozen/expired — доступ закрыт, claim всегда уместен
+            else -> throw ValidationException("Заявить об оплате можно только пока доступ закрыт")
         }
         val normalizedMethod = when (method.trim().lowercase()) {
             CLAIM_SBP -> CLAIM_SBP
@@ -284,9 +295,14 @@ class AccessGateService(
     }
 
     companion object {
-        // Статусы, из которых участник может заявить об оплате взноса: frozen = ждёт первого взноса,
-        // expired = просрочил продление (оба «без доступа», путь назад одинаковый).
+        // Статусы «без доступа», из которых участник может заявить об оплате взноса в любой момент:
+        // frozen = ждёт первого взноса, expired = просрочил продление. active обрабатывается отдельно
+        // (раннее продление, только в окне ниже).
         private val CLAIMABLE_STATUSES = setOf(MembershipStatus.frozen, MembershipStatus.expired)
+        // Окно раннего продления (в днях до конца подписки), в котором active-участник может заявить
+        // оплату. Синхронизировано с DM «истекает через 3 дня» (SubscriptionScheduler) и фронтовой
+        // секцией «Подписка истекает» на «Моих клубах».
+        private const val RENEWAL_CLAIM_WINDOW_DAYS = 3L
         // Статусы, у которых организатор может отметить «Взнос получен»: действующий участник (active —
         // раннее продление), ждущий первого взноса (frozen) или должник по продлению (expired).
         private val DUES_PAYABLE_STATUSES =

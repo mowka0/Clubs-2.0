@@ -175,18 +175,26 @@ class MembershipHistoryIntegrationTest {
     }
 
     @Test
-    fun `findAwaitingDuesMembersByOwner lists frozen and expired members with their accessStatus`() {
+    fun `findAwaitingDuesMembersByOwner lists frozen, expired and claimed-active members with their accessStatus`() {
         val frozenUser = newUser()
         val expiredUser = newUser()
+        val renewingUser = newUser()   // active + claim (раннее продление) — в ленте
+        val calmActiveUser = newUser() // active БЕЗ claim — в ленту не попадает
         membershipRepository.createFrozen(frozenUser, clubId)
         expiredMembership(expiredUser)
+        val renewing = membershipRepository.create(renewingUser, clubId)
+        membershipRepository.setAccessUntil(renewing.id, OffsetDateTime.now().plusDays(2))
+        membershipRepository.claimDues(renewing.id, "cash", null)
+        membershipRepository.create(calmActiveUser, clubId)
 
         val rows = membershipRepository.findAwaitingDuesMembersByOwner(ownerId)
 
         assertEquals(
-            mapOf(frozenUser to "frozen", expiredUser to "expired"),
+            mapOf(frozenUser to "frozen", expiredUser to "expired", renewingUser to "active"),
             rows.associate { it.userId to it.accessStatus }
         )
+        // Claimed-active (раннее продление) зажигает и бейдж таб-бара.
+        assertEquals(1, membershipRepository.countClaimedAwaitingDuesByOwner(ownerId))
     }
 
     // ---- helpers ----
