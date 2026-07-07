@@ -104,9 +104,14 @@
 >    Эти клубы **исключены** из «Где я состою» (`activeMyClubs`), чтобы участник без доступа не висел молча среди активных.
 >    **Крестик «×» (сессия 5)** в углу карточки → инлайн-подтверждение («Отменить вступление?» у frozen,
 >    «Выйти из клуба?» у expired) → `leaveClub` (membership → `cancelled`).
+> 0b. **«⏳ Подписка истекает · N»** (member-side, раннее продление §7 membership-lifecycle.md,
+>    2026-07-07) — собственные active-членства в окне T-3 дня до конца подписки
+>    (`isRenewalDue`, `RENEWAL_WINDOW_DAYS = 3` зеркалит бэкенд). Строка: клуб + «подписка до DATE»,
+>    кнопка «Продлить подписку» → `DuesPaymentSheet` (тот же claim-флоу, что у frozen/expired);
+>    после claim — «Оплата на проверке». Клуб при этом остаётся в «Где я состою» (доступ жив).
 > 1. **«Мои заявки»** — только `pending` (de-Stars: approved сразу = членство, лимба нет).
 > 2. **«Заявки в мои клубы»** — organizer inbox (`PendingApplicationDto`).
-> 2b. **«💸 Ждут оплаты»** (organizer-side, upd 2026-07-06) — участники без доступа (frozen + expired) в клубах каллера (`useOrganizerAwaitingDuesQuery`; DTO несёт `accessStatus`). Мета строки: frozen → «вступил(а) …», expired → «подписка истекла DATE». Тап → карточка участника (стаб `toAwaitingDuesMemberStub` пробрасывает статус, у expired нет «Отказать · вернуть»).
+> 2b. **«💸 Ждут оплаты»** (organizer-side, upd 2026-07-07) — участники без доступа (frozen + expired) плюс active **с claim** (раннее продление) в клубах каллера (`useOrganizerAwaitingDuesQuery`; DTO несёт `accessStatus`). Мета строки: frozen → «вступил(а) …», expired → «подписка истекла DATE», active → «продление · подписка до DATE». Тап → карточка участника (стаб `toAwaitingDuesMemberStub` пробрасывает статус; «Отказать · вернуть» только у frozen).
 > 3. **«Где я состою»** — активные членства (`activeMyClubs`, без frozen/expired).
 > 4. **«История»** — покинутые клубы с остаточной репутацией.
 > (Stars-эра `AwaitingPaymentCard` / `OrganizerAwaitingPaymentRow` из блока выше удалены de-Stars.)

@@ -412,11 +412,19 @@ class JooqMembershipRepository(
             .set(MEMBERSHIPS.DUES_CLAIM_METHOD, method)
             .set(MEMBERSHIPS.DUES_PROOF_URL, proofUrl)
             .set(MEMBERSHIPS.UPDATED_AT, now)
-            // Claim делает участник без доступа: frozen (ждёт первого взноса) или expired (просрочил
-            // продление); 0 строк = доступ уже открыт (например, организатор только что впустил).
+            // Claim делает участник без доступа — frozen (ждёт первого взноса) / expired (просрочил
+            // продление) — либо active в окне раннего продления (окно валидирует AccessGateService;
+            // здесь active разрешён, чтобы гонка «claim против тика шедулера active→expired» не давала
+            // ложный 409). 0 строк = членство ушло в cancelled (параллельный выход/кик).
             .where(
                 MEMBERSHIPS.ID.eq(membershipId)
-                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.frozen, MembershipStatus.expired))
+                    .and(
+                        MEMBERSHIPS.STATUS.`in`(
+                            MembershipStatus.frozen,
+                            MembershipStatus.expired,
+                            MembershipStatus.active
+                        )
+                    )
             )
             .execute()
     }
@@ -544,7 +552,13 @@ class JooqMembershipRepository(
             .where(
                 CLUBS.OWNER_ID.eq(ownerId)
                     .and(CLUBS.IS_ACTIVE.eq(true))
-                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.frozen, MembershipStatus.expired))
+                    // active-claimed = раннее продление (membership-lifecycle.md §7) — тоже требует
+                    // действия организатора «Взнос получен», поэтому считается наравне с frozen/expired.
+                    .and(
+                        MEMBERSHIPS.STATUS.`in`(
+                            MembershipStatus.frozen, MembershipStatus.expired, MembershipStatus.active
+                        )
+                    )
                     .and(MEMBERSHIPS.DUES_CLAIMED_AT.isNotNull)
             )
             .fetchOne(0, Int::class.java) ?: 0
@@ -571,7 +585,15 @@ class JooqMembershipRepository(
             .where(
                 CLUBS.OWNER_ID.eq(ownerId)
                     .and(CLUBS.IS_ACTIVE.eq(true))
-                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.frozen, MembershipStatus.expired))
+                    .and(
+                        // Без доступа (frozen/expired) — всегда; active — только с claim
+                        // (раннее продление: заявил оплату, ждёт «Взнос получен»).
+                        MEMBERSHIPS.STATUS.`in`(MembershipStatus.frozen, MembershipStatus.expired)
+                            .or(
+                                MEMBERSHIPS.STATUS.eq(MembershipStatus.active)
+                                    .and(MEMBERSHIPS.DUES_CLAIMED_AT.isNotNull)
+                            )
+                    )
             )
             .orderBy(MEMBERSHIPS.JOINED_AT.desc())
             .fetch { r ->

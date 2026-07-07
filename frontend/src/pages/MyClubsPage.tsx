@@ -17,6 +17,7 @@ import { Toast } from '../components/Toast';
 import { CreateClubModal } from '../components/CreateClubModal';
 import { ApplicationReviewModal } from '../components/applications/ApplicationReviewModal';
 import { MemberProfileModal } from '../components/club/MemberProfileModal';
+import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
 import { formatPeerSignal } from '../features/applications-inbox/lib/peer-signal-format';
 import { LevelPill } from '../components/reputation/LevelPill';
 import { DonutRing } from '../components/reputation/DonutRing';
@@ -432,10 +433,13 @@ interface AwaitingDuesRowProps {
 const AwaitingDuesRow: FC<AwaitingDuesRowProps> = ({ item, onClick }) => {
   const fullName = `${item.firstName}${item.lastName ? ` ${item.lastName}` : ''}`;
   const initials = getInitials(fullName) || '·';
-  // У должника по продлению мета говорит о подписке; «вступил(а) N назад» здесь врала бы о сути долга.
+  // Мета по сути долга: expired — «подписка истекла», active-claimed — раннее продление,
+  // frozen — «вступил(а) N назад» (первый взнос).
   const meta = item.accessStatus === 'expired' && item.subscriptionExpiresAt
     ? `подписка истекла ${formatApplicationDate(item.subscriptionExpiresAt)}`
-    : formatJoinedRelative(item.joinedAt);
+    : item.accessStatus === 'active' && item.subscriptionExpiresAt
+      ? `продление · подписка до ${formatApplicationDate(item.subscriptionExpiresAt)}`
+      : formatJoinedRelative(item.joinedAt);
   return (
     <button type="button" className="rd-rep-row" onClick={onClick}>
       <span className="rd-ico">
@@ -536,6 +540,51 @@ const FrozenMembershipRow: FC<FrozenMembershipRowProps> = ({ membership, club, o
   );
 };
 
+// Окно раннего продления (в днях до конца подписки) — зеркалит бэкенд
+// (AccessGateService.RENEWAL_CLAIM_WINDOW_DAYS): в нём появляется секция «Подписка истекает»
+// и claim из active принимается сервером.
+const RENEWAL_WINDOW_DAYS = 3;
+
+/** true, когда активная платная подписка входит в окно раннего продления (включая уже прошедшую
+ *  дату — транзиентное состояние до тика шедулера). */
+function isRenewalDue(m: MembershipDto): boolean {
+  if (m.status !== 'active' || !m.subscriptionExpiresAt) return false;
+  return new Date(m.subscriptionExpiresAt).getTime() <= Date.now() + RENEWAL_WINDOW_DAYS * 86_400_000;
+}
+
+interface RenewalRowProps {
+  membership: MembershipDto;
+  club: ClubDetailDto | undefined;
+  /** Открыть DuesPaymentSheet для этого клуба (undefined-club → кнопка задизейблена до загрузки деталей). */
+  onRenew: () => void;
+}
+
+/** Member-side строка «Подписка истекает» (раннее продление, membership-lifecycle.md §7): active-членство
+ *  в окне T-3. «Продлить подписку» → DuesPaymentSheet (claim); после claim — «Оплата на проверке». */
+const RenewalRow: FC<RenewalRowProps> = ({ membership, club, onRenew }) => {
+  const name = club?.name ?? `Клуб ${membership.clubId.slice(0, 8)}…`;
+  const initials = club ? getInitials(club.name) : '·';
+  const claimed = Boolean(membership.duesClaimedAt);
+  const until = membership.subscriptionExpiresAt ? formatApplicationDate(membership.subscriptionExpiresAt) : '—';
+  return (
+    <div className="rd-rep-row">
+      <span className="rd-ico">
+        {club?.avatarUrl ? <img src={club.avatarUrl} alt="" /> : initials}
+      </span>
+      <div className="rd-info">
+        <div className="rd-ttl">{name}</div>
+        <div className="rd-met">подписка до {until}</div>
+        {claimed && <div className="rd-met rd-met-ok">Оплата на проверке</div>}
+      </div>
+      {!claimed && (
+        <button type="button" className="rd-row-act-pri" disabled={!club} onClick={onRenew}>
+          Продлить подписку
+        </button>
+      )}
+    </div>
+  );
+};
+
 export const MyClubsPage: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -565,6 +614,11 @@ export const MyClubsPage: FC = () => {
     () => myClubs.filter((m) => m.status !== 'frozen' && m.status !== 'expired'),
     [myClubs],
   );
+  // Раннее продление: активные подписки в окне T-3 — секция «Подписка истекает» с CTA
+  // «Продлить подписку». Клубы при этом остаются и в «Где я состою» (доступ ещё жив).
+  const renewalMyClubs = useMemo(() => myClubs.filter(isRenewalDue), [myClubs]);
+  // Клуб, для которого открыт шит оплаты продления (null = закрыт).
+  const [renewalClubId, setRenewalClubId] = useState<string | null>(null);
   const applications = applicationsQuery.data ?? [];
   const pendingInbox = pendingInboxQuery.data ?? [];
   const historyClubs = reputationQuery.data?.historyClubs ?? [];
@@ -812,6 +866,27 @@ export const MyClubsPage: FC = () => {
         </>
       )}
 
+      {/* 0b. Подписка истекает (member-side, раннее продление §7): active-членства в окне T-3.
+             «Продлить подписку» → DuesPaymentSheet → claim → «Оплата на проверке». */}
+      {!loading && renewalMyClubs.length > 0 && (
+        <>
+          <div className="rd-section-sub-h rd-attn-pay">
+            ⏳ Подписка истекает <span className="rd-count">· {renewalMyClubs.length}</span>
+          </div>
+          <div className="rd-attn-hint">Продлите взнос заранее — доступ не прервётся, дни не сгорают.</div>
+          <div className="rd-glass rd-rep-panel rd-attn-block rd-attn-block-pay">
+            {renewalMyClubs.map((m) => (
+              <RenewalRow
+                key={m.id}
+                membership={m}
+                club={clubDetails[m.clubId]}
+                onRenew={() => { haptic.impact('medium'); setRenewalClubId(m.clubId); }}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
       {/* 1. Мои заявки (исходящие) — ждут рассмотрения */}
       {!loading && myApplicationsCount > 0 && (
         <>
@@ -939,6 +1014,19 @@ export const MyClubsPage: FC = () => {
           application={reviewing}
           open
           onClose={() => setReviewing(null)}
+        />
+      )}
+
+      {/* Шит оплаты продления (member-side, раннее продление §7). clubDetails гарантированно
+          загружен: кнопка «Продлить подписку» задизейблена, пока деталей клуба нет. */}
+      {renewalClubId && clubDetails[renewalClubId] && (
+        <DuesPaymentSheet
+          clubId={renewalClubId}
+          price={clubDetails[renewalClubId].subscriptionPrice}
+          paymentLink={clubDetails[renewalClubId].paymentLink}
+          paymentMethodNote={clubDetails[renewalClubId].paymentMethodNote}
+          onClose={() => setRenewalClubId(null)}
+          onClaimed={() => { setRenewalClubId(null); setToastMessage('Оплата заявлена — организатор проверит и продлит доступ'); }}
         />
       )}
 

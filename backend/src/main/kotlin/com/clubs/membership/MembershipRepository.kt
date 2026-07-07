@@ -12,12 +12,13 @@ interface MembershipRepository {
     fun findByUserId(userId: UUID): List<Membership>
     fun findClubMembersWithUserInfo(clubId: UUID, includeWithoutAccess: Boolean = false): List<ClubMemberInfo>
     fun findUserClubsWithReputation(userId: UUID): List<UserClubReputationInfo>
-    /** Участники без доступа — `frozen` (ждут первого взноса) и `expired` (просрочили продление) —
-     *  по всем активным клубам, которыми владеет [ownerId]: кросс-клубовая лента «Ждут оплаты». */
+    /** Кросс-клубовая лента «Ждут оплаты» по всем активным клубам [ownerId]: участники без доступа —
+     *  `frozen` (ждут первого взноса) и `expired` (просрочили продление) — плюс `active` С claim
+     *  (раннее продление: заявил оплату до истечения, ждёт «Взнос получен»). */
     fun findAwaitingDuesMembersByOwner(ownerId: UUID): List<OrganizerDuesMember>
-    /** Участники без доступа (`frozen`/`expired`), заявившие об оплате взноса (claim pending), по всем
-     *  клубам [ownerId] — питает точку-индикатор на «Мои клубы», чтобы оплативший и ждущий участник
-     *  был замечен без захода в таб. */
+    /** Участники, заявившие об оплате взноса (claim pending) — `frozen`/`expired`/`active` (раннее
+     *  продление) — по всем клубам [ownerId]; питает точку-индикатор на «Мои клубы», чтобы оплативший
+     *  и ждущий участник был замечен без захода в таб. */
     fun countClaimedAwaitingDuesByOwner(ownerId: UUID): Int
     fun findExpiryRefByUserAndClub(userId: UUID, clubId: UUID): MembershipExpiryRef?
 
@@ -47,9 +48,10 @@ interface MembershipRepository {
     fun markDuesPaid(membershipId: UUID, markedBy: UUID, accessUntil: OffsetDateTime): Int
     fun unmarkDues(membershipId: UUID): Int
 
-    // Заявление участника об оплате взноса (de-Stars): участник без доступа (frozen — первый взнос,
-    // expired — просрочка продления) заявляет, что оплатил (method "sbp"/"cash"; proofUrl = скриншот
-    // для sbp, null для cash). Защищено условием status IN (frozen, expired) (0 строк → доступ уже открыт).
+    // Заявление участника об оплате взноса (de-Stars): frozen (первый взнос), expired (просрочка
+    // продления) или active (раннее продление — окно T-3 валидирует AccessGateService) заявляет,
+    // что оплатил (method "sbp"/"cash"; proofUrl = скриншот для sbp, null для cash). Защищено
+    // условием status IN (frozen, expired, active) (0 строк → членство ушло в cancelled).
     fun claimDues(membershipId: UUID, method: String, proofUrl: String?): Int
 
     // Member admin profile (S1) — организатор вручную задаёт конец окна доступа / приватную заметку.

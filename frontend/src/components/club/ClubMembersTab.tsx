@@ -86,6 +86,13 @@ function formatJoinedMeta(iso: string | null): string {
 
 type Bucket = 'expired' | 'expiring' | 'awaiting' | 'calm';
 
+/** Дописывает к мете бакета пометку живого claim — участник заявил оплату (в т.ч. раннее
+ *  продление из «Скоро закончится»), организатору осталось проверить и нажать «Взнос получен». */
+function withClaimMark(member: MemberListItemDto, meta: string): string {
+  if (!member.duesClaimedAt) return meta;
+  return meta ? `${meta} · оплата заявлена` : 'оплата заявлена';
+}
+
 /**
  * Раскладывает участника по бакету состояния доступа (de-Stars дашборд). У обычного зрителя поля
  * доступа null, поэтому все участники попадают в «calm» — прежний список только активных.
@@ -304,7 +311,7 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
                 key={member.userId}
                 clubId={clubId}
                 member={member}
-                metaText={member.subscriptionExpiresAt ? formatExpiredMeta(member.subscriptionExpiresAt) : ''}
+                metaText={withClaimMark(member, member.subscriptionExpiresAt ? formatExpiredMeta(member.subscriptionExpiresAt) : '')}
                 onOpenProfile={setSelectedMember}
                 onFeedback={setToast}
               />
@@ -325,7 +332,7 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
                 key={member.userId}
                 clubId={clubId}
                 member={member}
-                metaText={member.subscriptionExpiresAt ? formatExpiringMeta(member.subscriptionExpiresAt) : ''}
+                metaText={withClaimMark(member, member.subscriptionExpiresAt ? formatExpiringMeta(member.subscriptionExpiresAt) : '')}
                 onOpenProfile={setSelectedMember}
                 onFeedback={setToast}
               />

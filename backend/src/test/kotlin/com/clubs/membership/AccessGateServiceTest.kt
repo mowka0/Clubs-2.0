@@ -325,6 +325,42 @@ class AccessGateServiceTest {
         verify(exactly = 0) { membershipRepository.claimDues(any(), any(), any()) }
     }
 
+    // --- claimDues из active: раннее продление (membership-lifecycle.md §7, окно T-3 дня) ---
+
+    @Test
+    fun `claimDues accepts a renewal claim from an active member inside the T-3 window`() {
+        val m = callerMembership(MembershipStatus.active)
+            .copy(subscriptionExpiresAt = OffsetDateTime.now().plusDays(2))
+        every { membershipRepository.findByUserAndClub(callerId, clubId) } returns m
+        every { membershipRepository.claimDues(m.id, "cash", null) } returns 1
+
+        val result = service.claimDues(clubId, callerId, "cash", null)
+
+        assertEquals("cash", result.duesClaimMethod)
+        verify(exactly = 1) { membershipRepository.claimDues(m.id, "cash", null) }
+    }
+
+    @Test
+    fun `claimDues rejects a renewal claim from an active member outside the T-3 window`() {
+        // За месяц вперёд заявить «оплатил» нельзя — орг не сможет осмысленно проверить перевод.
+        val m = callerMembership(MembershipStatus.active)
+            .copy(subscriptionExpiresAt = OffsetDateTime.now().plusDays(10))
+        every { membershipRepository.findByUserAndClub(callerId, clubId) } returns m
+
+        assertThrows<ValidationException> { service.claimDues(clubId, callerId, "cash", null) }
+        verify(exactly = 0) { membershipRepository.claimDues(any(), any(), any()) }
+    }
+
+    @Test
+    fun `claimDues rejects an active member without a paid subscription window`() {
+        // Бесплатное членство (subscription_expires_at IS NULL) — продлевать нечего.
+        every { membershipRepository.findByUserAndClub(callerId, clubId) } returns
+            callerMembership(MembershipStatus.active)
+
+        assertThrows<ValidationException> { service.claimDues(clubId, callerId, "cash", null) }
+        verify(exactly = 0) { membershipRepository.claimDues(any(), any(), any()) }
+    }
+
     @Test
     fun `claimDues rejects an sbp claim whose proof is not an uploaded image URL`() {
         every { membershipRepository.findByUserAndClub(callerId, clubId) } returns callerMembership(MembershipStatus.frozen)

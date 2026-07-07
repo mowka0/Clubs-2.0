@@ -166,8 +166,9 @@ export interface OrganizerDuesMemberDto {
   // Флаг заявления об оплате для кросс-клубового списка «Ждут оплаты»: «оплата заявлена» + способ ("sbp"|"cash").
   duesClaimedAt: string | null;
   duesClaimMethod: string | null;
-  // 'frozen' (первый взнос) | 'expired' (просрочка продления) — тексты и действия карточки различаются.
-  accessStatus: 'frozen' | 'expired';
+  // 'frozen' (первый взнос) | 'expired' (просрочка продления) | 'active' (раннее продление —
+  // попадает в ленту только с claim) — тексты и действия карточки различаются.
+  accessStatus: 'frozen' | 'expired' | 'active';
 }
 
 export interface UserClubReputationDto {

@@ -39,9 +39,9 @@ class SubscriptionSchedulerTest {
         unmockkStatic(OffsetDateTime::class)
     }
 
-    // AC-9
+    // AC-9 + AC-R1 (раннее продление §7): T-3 DM ведёт кнопкой «Продлить подписку» на «Мои клубы».
     @Test
-    fun `scheduler sends expiry notifications for subscriptions expiring within 3 days`() {
+    fun `scheduler sends expiry notifications with a renew deep-link for subscriptions expiring within 3 days`() {
         val tgId = 123L
         every { membershipRepository.findExpiringWithin(any(), any()) } returns listOf(
             ExpiringSubscriptionNotification(telegramId = tgId, clubName = "Chess Club", clubId = UUID.randomUUID())
@@ -51,9 +51,11 @@ class SubscriptionSchedulerTest {
         scheduler.checkSubscriptions()
 
         verify(exactly = 1) {
-            notificationService.sendDirectMessage(
+            notificationService.sendDirectMessageWithDeepLink(
                 tgId,
-                match { it.contains("Chess Club") && it.contains("3 дня") }
+                match { it.contains("Chess Club") && it.contains("3 дня") },
+                "/my-clubs",
+                "Продлить подписку"
             )
         }
     }
@@ -119,7 +121,7 @@ class SubscriptionSchedulerTest {
         scheduler.checkSubscriptions()
 
         verifyOrder {
-            notificationService.sendDirectMessage(tgId, any())
+            notificationService.sendDirectMessageWithDeepLink(tgId, any(), any(), any())
             membershipRepository.expireOverdueAccess(any())
         }
     }
