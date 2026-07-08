@@ -55,6 +55,13 @@ interface EventRepository {
      */
     fun countPastEvents(clubId: UUID, now: OffsetDateTime): Int
 
+    /**
+     * Переводит одно событие в completed (если оно ещё в активном статусе, cancelled не трогается).
+     * Вызывается при отметке явки (PO 2026-07-08): организатор зафиксировал, что встреча прошла, —
+     * событие уходит из «предстоящих» сразу, не дожидаясь часового EventCompletionService.
+     */
+    fun markCompleted(id: UUID)
+
     fun transitionToStage2(id: UUID)
 
     /**

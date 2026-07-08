@@ -303,6 +303,17 @@ class JooqEventRepository(
             )
             .fetchOne(0, Int::class.java) ?: 0
 
+    override fun markCompleted(id: UUID) {
+        dsl.update(EVENTS)
+            .set(EVENTS.STATUS, EventStatus.completed)
+            .set(EVENTS.UPDATED_AT, OffsetDateTime.now())
+            .where(
+                EVENTS.ID.eq(id)
+                    .and(EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_1, EventStatus.stage_2))
+            )
+            .execute()
+    }
+
     override fun transitionToStage2(id: UUID) {
         dsl.update(EVENTS)
             .set(EVENTS.STATUS, EventStatus.stage_2)
