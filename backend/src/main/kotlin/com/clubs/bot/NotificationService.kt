@@ -22,6 +22,7 @@ class NotificationService(
     private val membershipRepository: MembershipRepository,
     private val eventResponseRepository: EventResponseRepository,
     private val telegramClient: TelegramClient,
+    private val chatAwareBroadcast: ChatAwareBroadcast,
     @Value("\${telegram.bot-username}") private val botUsername: String,
     @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String
 ) {
@@ -36,13 +37,17 @@ class NotificationService(
 
     /**
      * Уведомляет участников клуба о создании нового события.
-     * Отправляет сообщение в личку каждому активному участнику со ссылкой на Mini App.
+     * Маршрутизатор (PO 2026-07-08): [chatPostChatId] — чат, куда фактически вышел пост живого
+     * закрепа; участники этого чата уведомлены постом, DM идёт только остальным. Поста нет
+     * (null: чат не привязан / тумблер выключен / сбой) — DM каждому, как до чат-интеграции.
      */
     @Async
-    fun sendEventCreated(event: Event) {
-        val memberTelegramIds = membershipRepository.findMemberTelegramIds(event.clubId)
+    fun sendEventCreated(event: Event, chatPostChatId: Long? = null) {
+        val memberTelegramIds = chatAwareBroadcast.dmTargets(
+            chatPostChatId, membershipRepository.findMemberTelegramIds(event.clubId)
+        )
         if (memberTelegramIds.isEmpty()) {
-            log.warn("Event-created DM SKIPPED — no members with access for clubId={}", event.clubId)
+            log.info("Event-created DM SKIPPED — all covered by chat or no members, clubId={}", event.clubId)
             return
         }
         log.info("Event-created DM: eventId={} clubId={} recipients={}", event.id, event.clubId, memberTelegramIds.size)
@@ -101,17 +106,20 @@ class NotificationService(
 
 
     /**
-     * F5-14: уведомляет ВСЕХ участников клуба с доступом об отмене события, с опциональной
+     * F5-14: уведомляет участников клуба с доступом об отмене события, с опциональной
      * причиной от организатора (UPDATED 2026-07-05: раньше — только going/maybe; теперь всем,
-     * симметрично уведомлению о создании). Best-effort, как и все остальные DM.
+     * симметрично уведомлению о создании). Маршрутизатор (PO 2026-07-08): участники чата,
+     * куда вышел пост об отмене ([chatPostChatId]), DM не получают. Best-effort.
      */
     @Async
-    fun sendEventCancelled(event: Event, reason: String?) {
+    fun sendEventCancelled(event: Event, reason: String?, chatPostChatId: Long? = null) {
         // Об отмене сообщаем ВСЕМ участникам клуба с доступом (симметрично sendEventCreated:
         // кто узнал о создании — узнаёт и об отмене), а не только выразившим интерес.
-        val recipientTelegramIds = membershipRepository.findMemberTelegramIds(event.clubId)
+        val recipientTelegramIds = chatAwareBroadcast.dmTargets(
+            chatPostChatId, membershipRepository.findMemberTelegramIds(event.clubId)
+        )
         if (recipientTelegramIds.isEmpty()) {
-            log.info("Event-cancelled DM SKIPPED — no members with access for clubId={}", event.clubId)
+            log.info("Event-cancelled DM SKIPPED — all covered by chat or no members, clubId={}", event.clubId)
             return
         }
         log.info("Event-cancelled DM: eventId={} clubId={} recipients={}", event.id, event.clubId, recipientTelegramIds.size)

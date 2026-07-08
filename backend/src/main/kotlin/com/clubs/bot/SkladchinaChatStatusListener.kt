@@ -13,16 +13,15 @@ import org.springframework.transaction.event.TransactionalEventListener
  * складчины в действия [SkladchinaChatStatusService] ПОСЛЕ коммита исходной транзакции
  * (AFTER_COMMIT — как остальные бот-листенеры). Изменения прогресса только ставят dirty-флаг —
  * реальный edit идёт flush-планировщиком с дебаунсом.
+ *
+ * Создание складчины здесь НЕ слушается: его оркестрирует [SkladchinaBotNotifier] —
+ * чат-пост и DM-рассылка связаны маршрутизатором ([ChatAwareBroadcast]) и обязаны идти
+ * последовательно, а не гоняться двумя листенерами.
  */
 @Component
 class SkladchinaChatStatusListener(
     private val chatStatusService: SkladchinaChatStatusService
 ) {
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
-    fun onSkladchinaCreated(created: SkladchinaCreatedEvent) {
-        chatStatusService.onSkladchinaCreated(created.clubId, created.skladchinaId)
-    }
-
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     fun onProgressChanged(changed: SkladchinaProgressChangedEvent) {
         chatStatusService.markDirty(changed.skladchinaId)

@@ -46,26 +46,43 @@ class LivePinService(
         dirtyEventIds.add(eventId)
     }
 
-    /** Создание события: пост-статус + pin, если у клуба включён живой закреп. */
-    @Async
+    /**
+     * Создание события: пост-статус + pin, если у клуба включён живой закреп.
+     * Возвращает chatId, когда живой пост фактически существует после попытки, — маршрутизатор
+     * рассылок ([com.clubs.bot.ChatAwareBroadcast]) подавит DM участникам этого чата.
+     * Вызывается синхронно из @Async-оркестратора EventBotNotifier (не сам @Async —
+     * возврат значения из @Async-метода терялся бы).
+     */
     @Transactional
-    fun onEventCreated(event: Event) {
-        val link = liveLinkFor(event.clubId) ?: return
-        createPin(link, event)
+    fun onEventCreated(event: Event): Long? {
+        val link = liveLinkFor(event.clubId) ?: return null
+        return if (createPin(link, event)) link.chatId else null
     }
 
-    /** Отмена события: финальный текст + unpin немедленно (не ждём flush). */
-    @Async
+    /**
+     * Отмена события: тихая правка закрепа + unpin немедленно (не ждём flush) + отдельный
+     * ГРОМКИЙ пост об отмене — правки по механике Telegram никого не уведомляют, а после
+     * маршрутизации пост становится единственным пингом для участников чата.
+     * Возвращает chatId, когда пост отмены фактически вышел (для DM-фоллбека).
+     */
     @Transactional
-    fun onEventCancelled(event: Event, reason: String?) {
-        val pin = pinRepository.findByEventId(event.id) ?: return
-        if (pin.closedAt != null) return
-        pin.messageId?.let { messageId ->
-            gateway.editGroupMessage(pin.chatId, messageId, renderer.cancelledText(event, reason), null, null)
-            gateway.unpinChatMessage(pin.chatId, messageId)
+    fun onEventCancelled(event: Event, reason: String?): Long? {
+        pinRepository.findByEventId(event.id)?.takeIf { it.closedAt == null }?.let { pin ->
+            pin.messageId?.let { messageId ->
+                gateway.editGroupMessage(pin.chatId, messageId, renderer.cancelledText(event, reason), null, null)
+                gateway.unpinChatMessage(pin.chatId, messageId)
+            }
+            pinRepository.markClosed(event.id)
+            log.info("Live pin closed (event cancelled): eventId={} chatId={}", event.id, pin.chatId)
         }
-        pinRepository.markClosed(event.id)
-        log.info("Live pin closed (event cancelled): eventId={} chatId={}", event.id, pin.chatId)
+        val link = liveLinkFor(event.clubId) ?: return null
+        val messageId = gateway.sendGroupMessageWithUrlButton(
+            chatId = link.chatId,
+            text = renderer.cancelledText(event, reason),
+            buttonText = null,
+            url = null
+        )
+        return if (messageId != null) link.chatId else null
     }
 
     /**
@@ -90,11 +107,14 @@ class LivePinService(
         val nextEvent = eventRepository.findFutureEventsByClub(event.clubId, OffsetDateTime.now()).firstOrNull()
 
         val text = renderer.summaryText(meetingNumber, attended, confirmedTotal, firstTimers, nextEvent)
+        // Тихий пост (решение PO 2026-07-08): итог встречи — фоновая сводка, пуш всем участникам
+        // чата не нужен; громкое уведомление об отметке явки и так живёт в личных DM.
         val messageId = gateway.sendGroupMessageWithUrlButton(
             chatId = link.chatId,
             text = text,
             buttonText = nextEvent?.let { "Иду на следующую" },
-            url = nextEvent?.let { renderer.eventUrl(it.id) }
+            url = nextEvent?.let { renderer.eventUrl(it.id) },
+            silent = true
         )
         if (messageId != null) {
             pinRepository.setSummaryMessageId(eventId, messageId)
@@ -143,8 +163,9 @@ class LivePinService(
         }
     }
 
-    private fun createPin(link: ChatLink, event: Event) {
-        if (pinRepository.findByEventId(event.id) != null) return
+    /** TRUE = живой пост существует после попытки (уже был или только что создан). */
+    private fun createPin(link: ChatLink, event: Event): Boolean {
+        if (pinRepository.findByEventId(event.id) != null) return true
         val messageId = gateway.sendGroupMessageWithUrlButton(
             chatId = link.chatId,
             text = renderStatus(event),
@@ -155,12 +176,13 @@ class LivePinService(
             // Пост не удался — строку не создаём: повторная попытка случится при следующем
             // включении тумблера/backfill, а здоровье чата организатор видит в табе «Чат».
             log.warn("Live pin post failed: eventId={} chatId={}", event.id, link.chatId)
-            return
+            return false
         }
         pinRepository.insert(EventChatPin(event.id, link.chatId, messageId, closedAt = null, summaryMessageId = null))
         // Право закрепа могли и не выдать: пост уходит без pin, счётчики всё равно живут.
         if (link.canPinMessages) gateway.pinChatMessage(link.chatId, messageId)
         log.info("Live pin created: eventId={} chatId={} messageId={}", event.id, link.chatId, messageId)
+        return true
     }
 
     private fun refreshPin(eventId: UUID) {

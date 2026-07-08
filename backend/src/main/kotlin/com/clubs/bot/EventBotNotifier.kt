@@ -1,35 +1,39 @@
 package com.clubs.bot
 
+import com.clubs.chatlink.LivePinService
 import com.clubs.event.EventCreatedEvent
 import org.slf4j.LoggerFactory
+import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionalEventListener
 
 /**
- * DM-нотификатор бота о создании события. Слушает [EventCreatedEvent], публикуемый
- * EventService, и уведомляет участников клуба ПОСЛЕ коммита исходной транзакции
- * (`@TransactionalEventListener`, фаза по умолчанию = AFTER_COMMIT). Как и в
- * SkladchinaBotNotifier / SkladchinaBotNotifier, срабатывание AFTER_COMMIT —
- * проверенный путь для «отправить DM после успешной мутации в БД»: если транзакция
- * createEvent откатится, листенер пропускается.
+ * Оркестратор уведомления «событие создано» (маршрутизатор рассылок, решение PO 2026-07-08):
+ * сначала пост живого закрепа в чат (если включён), затем DM — только тем участникам клуба,
+ * кого пост не покрыл ([ChatAwareBroadcast]). Порядок обязателен: решение «кому DM» зависит
+ * от ФАКТА выхода поста, поэтому оба шага идут последовательно в одном @Async-потоке,
+ * а не двумя независимыми листенерами (гонка дала бы двойной пинг).
  *
- * В отличие от тех хендлеров (шлют небольшое фиксированное число DM синхронно),
- * у события получателей может быть много, поэтому рассылка делегируется @Async
- * [NotificationService.sendEventCreated]: листенер возвращается сразу, а цикл
- * отправки крутится вне request-потока (правило бэкенда: массовые уведомления —
- * через @Async). Ошибки Telegram по отдельным DM ловятся и логируются внутри
- * sendEventCreated; доставка — fire-and-forget by design: сбой Telegram не должен
- * завалить создание события.
+ * AFTER_COMMIT (@TransactionalEventListener) — если транзакция createEvent откатится,
+ * листенер пропускается. @Async — Telegram I/O (пост + N getChatMember + DM) не должен
+ * жить на потоке запроса. Ошибки Telegram по отдельным шагам ловятся ниже; доставка —
+ * fire-and-forget by design: сбой Telegram не должен завалить создание события.
  */
 @Component
 class EventBotNotifier(
-    private val notificationService: NotificationService
+    private val notificationService: NotificationService,
+    private val livePinService: LivePinService
 ) {
     private val log = LoggerFactory.getLogger(EventBotNotifier::class.java)
 
+    @Async
     @TransactionalEventListener(fallbackExecution = true)
     fun onEventCreated(created: EventCreatedEvent) {
-        log.info("Event-created DM dispatch: eventId={} clubId={}", created.event.id, created.event.clubId)
-        notificationService.sendEventCreated(created.event)
+        val chatPostChatId = livePinService.onEventCreated(created.event)
+        log.info(
+            "Event-created dispatch: eventId={} clubId={} chatPost={}",
+            created.event.id, created.event.clubId, chatPostChatId != null
+        )
+        notificationService.sendEventCreated(created.event, chatPostChatId)
     }
 }

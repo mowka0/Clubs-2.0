@@ -146,13 +146,22 @@ class ChatTelegramGateway(
      * в ГРУППАХ Telegram запрещает WebApp-кнопки, поэтому кнопка — только url
      * `t.me/<bot>?startapp=…` (Main Mini App; DeepLinkHandler фронта разруливает payload).
      */
-    fun sendGroupMessageWithUrlButton(chatId: Long, text: String, buttonText: String?, url: String?, parseMode: String? = null): Long? = try {
+    fun sendGroupMessageWithUrlButton(
+        chatId: Long,
+        text: String,
+        buttonText: String?,
+        url: String?,
+        parseMode: String? = null,
+        // Тихий пост: приходит в чат без пуша участникам (итог встречи — фон, не событие)
+        silent: Boolean = false
+    ): Long? = try {
         val builder = SendMessage.builder().chatId(chatId).text(text)
         if (buttonText != null && url != null) {
             val button = InlineKeyboardButton.builder().text(buttonText).url(url).build()
             builder.replyMarkup(InlineKeyboardMarkup(listOf(InlineKeyboardRow(button))))
         }
         parseMode?.let { builder.parseMode(it) }
+        if (silent) builder.disableNotification(true)
         telegramClient.execute(builder.build()).messageId?.toLong()
     } catch (e: Exception) {
         log.warn("sendGroupMessageWithUrlButton failed: chatId={} error={}", chatId, e.message)

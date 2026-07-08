@@ -47,13 +47,18 @@ class SkladchinaChatStatusService(
         dirtySkladchinaIds.add(skladchinaId)
     }
 
-    /** Создание складчины: пост-статус (пинг №1 — упоминания в «Ждём:»), если тумблер включён. */
-    @Async
+    /**
+     * Создание складчины: пост-статус (пинг №1 — упоминания в «Ждём:»), если тумблер включён.
+     * Возвращает chatId, когда живой пост фактически существует после попытки, — маршрутизатор
+     * ([com.clubs.bot.ChatAwareBroadcast]) подавит DM участникам этого чата. Вызывается
+     * синхронно из @Async-оркестратора SkladchinaBotNotifier (не сам @Async — возврат
+     * значения из @Async-метода терялся бы).
+     */
     @Transactional
-    fun onSkladchinaCreated(clubId: UUID, skladchinaId: UUID) {
-        val link = liveLinkFor(clubId) ?: return
-        val skladchina = skladchinaRepository.findById(skladchinaId) ?: return
-        createPost(link, skladchina)
+    fun onSkladchinaCreated(clubId: UUID, skladchinaId: UUID): Long? {
+        val link = liveLinkFor(clubId) ?: return null
+        val skladchina = skladchinaRepository.findById(skladchinaId) ?: return null
+        return if (createPost(link, skladchina)) link.chatId else null
     }
 
     /** Закрытие складчины: немедленный финальный edit + unpin (не ждём flush). */
@@ -111,7 +116,7 @@ class SkladchinaChatStatusService(
         if (inChat.isEmpty()) return emptySet()
 
         val mentions = inChat.map { ChatMention(it.telegramId!!, it.firstName ?: "Участник") }
-        val messageId = gateway.sendGroupMessageWithUrlButton(
+        gateway.sendGroupMessageWithUrlButton(
             chatId = link.chatId,
             text = renderer.reminderText(skladchina.title, skladchina.deadline, mentions),
             buttonText = renderer.buttonText(),
@@ -139,9 +144,10 @@ class SkladchinaChatStatusService(
         postRepository.findOpenPostsOfInactiveSkladchinas().forEach { closeFromDb(it) }
     }
 
-    private fun createPost(link: ChatLink, skladchina: Skladchina) {
-        if (skladchina.status != SkladchinaStatus.active) return
-        if (postRepository.findBySkladchinaId(skladchina.id) != null) return
+    /** TRUE = живой пост существует после попытки (уже был, только что создан или создан конкурентом). */
+    private fun createPost(link: ChatLink, skladchina: Skladchina): Boolean {
+        if (skladchina.status != SkladchinaStatus.active) return false
+        if (postRepository.findBySkladchinaId(skladchina.id) != null) return true
         val messageId = gateway.sendGroupMessageWithUrlButton(
             chatId = link.chatId,
             text = renderStatus(skladchina),
@@ -153,19 +159,20 @@ class SkladchinaChatStatusService(
             // Пост не удался — строку не создаём: повторная попытка при следующем включении
             // тумблера/backfill, здоровье чата организатор видит в табе «Чат».
             log.warn("Skladchina chat status post failed: skladchinaId={} chatId={}", skladchina.id, link.chatId)
-            return
+            return false
         }
         // Гонка backfill × onSkladchinaCreated: оба могли пройти проверку выше и отправить пост.
         // Проигравший не роняет транзакцию тумблера на PK-конфликте, а просто не закрепляет
         // (его сообщение останется в чате дублем — редкое окно, best-effort).
         if (!postRepository.insertIfAbsent(SkladchinaChatPost(skladchina.id, link.chatId, messageId, closedAt = null))) {
             log.info("Skladchina chat status already posted by concurrent path: skladchinaId={}", skladchina.id)
-            return
+            return true
         }
         // Право закрепа могли и не выдать: пост уходит без pin, статус всё равно живёт.
         if (link.canPinMessages) gateway.pinChatMessage(link.chatId, messageId)
         log.info("Skladchina chat status created: skladchinaId={} chatId={} messageId={}",
             skladchina.id, link.chatId, messageId)
+        return true
     }
 
     private fun refreshPost(skladchinaId: UUID) {
