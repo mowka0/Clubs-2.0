@@ -164,9 +164,11 @@ interface SkladchinaRepository {
     /**
      * Каскадное удаление при выходе из клуба: убирает [userId] из каждой активной складчины
      * клуба [clubId]. Закрытые/отменённые складчины сохраняются как исторические
-     * обязательства. Возвращает число удалённых строк.
+     * обязательства. Возвращает id затронутых складчин — вызывающий публикует по ним
+     * SkladchinaProgressChangedEvent, чтобы «живой статус сбора» в чате перерисовался
+     * (ушедший не должен висеть в «Ждём:», особенно после кика).
      */
-    fun deleteParticipantFromActiveSkladchinasInClub(userId: UUID, clubId: UUID): Int
+    fun deleteParticipantFromActiveSkladchinasInClub(userId: UUID, clubId: UUID): List<UUID>
 
     /**
      * Каскад мягкого удаления клуба: отменяет каждую активную складчину клуба [clubId] и освобождает

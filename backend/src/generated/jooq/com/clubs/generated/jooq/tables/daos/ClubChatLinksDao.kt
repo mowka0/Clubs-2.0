@@ -172,4 +172,16 @@ open class ClubChatLinksDao(configuration: Configuration?) : DAOImpl<ClubChatLin
      * Fetch records that have <code>live_pin_enabled IN (values)</code>
      */
     fun fetchByLivePinEnabled(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetch(ClubChatLinks.CLUB_CHAT_LINKS.LIVE_PIN_ENABLED, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>skladchina_status_enabled BETWEEN
+     * lowerInclusive AND upperInclusive</code>
+     */
+    fun fetchRangeOfSkladchinaStatusEnabled(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetchRange(ClubChatLinks.CLUB_CHAT_LINKS.SKLADCHINA_STATUS_ENABLED, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>skladchina_status_enabled IN
+     * (values)</code>
+     */
+    fun fetchBySkladchinaStatusEnabled(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetch(ClubChatLinks.CLUB_CHAT_LINKS.SKLADCHINA_STATUS_ENABLED, *values.toTypedArray())
 }

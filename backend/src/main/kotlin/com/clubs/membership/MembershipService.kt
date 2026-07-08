@@ -15,6 +15,7 @@ import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.reputation.ExitObligation
 import com.clubs.reputation.ReputationService
 import com.clubs.reputation.TrustService
+import com.clubs.skladchina.SkladchinaProgressChangedEvent
 import com.clubs.skladchina.SkladchinaRepository
 import java.time.OffsetDateTime
 import org.slf4j.LoggerFactory
@@ -204,6 +205,9 @@ class MembershipService(
         freedEventIds.forEach { eventResponseRepository.lockEventSlots(it) }
 
         val cascadedSkladchinas = skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(userId, clubId)
+        // Живой статус сбора: состав складчины изменился — перерисовать пост в чате (ушедший
+        // не должен оставаться в «Ждём:»).
+        cascadedSkladchinas.forEach { eventPublisher.publishEvent(SkladchinaProgressChangedEvent(it)) }
         val cascadedEventResponses = eventResponseRepository.deleteByUserAndClubAndActiveEvents(userId, clubId)
         // Каждый освободившийся подтверждённый слот продвигает следующего из waitlist, чтобы выход не
         // сокращал ростер. Повышённому шлём DM (WaitlistPromotedEvent → AFTER_COMMIT), как и при отказе.
@@ -226,7 +230,7 @@ class MembershipService(
             "User left free club: clubId={} userId={} eventNoShows={} skladchinaExpiries={} promotedWaitlist={} " +
                 "cascadedSkladchinas={} cascadedEventResponses={} cascadedApplications={}",
             clubId, userId, eventObligations.size, skladchinaObligations.size, promotedWaitlist,
-            cascadedSkladchinas, cascadedEventResponses, cascadedApplications
+            cascadedSkladchinas.size, cascadedEventResponses, cascadedApplications
         )
         return mapper.toDto(membership.copy(status = MembershipStatus.cancelled))
     }

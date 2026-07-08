@@ -17,6 +17,7 @@ import com.clubs.generated.jooq.tables.MembershipHistory
 import com.clubs.generated.jooq.tables.Memberships
 import com.clubs.generated.jooq.tables.ReputationLedger
 import com.clubs.generated.jooq.tables.ServiceSubscription
+import com.clubs.generated.jooq.tables.SkladchinaChatPosts
 import com.clubs.generated.jooq.tables.SkladchinaParticipants
 import com.clubs.generated.jooq.tables.Skladchinas
 import com.clubs.generated.jooq.tables.SubscriptionEvent
@@ -120,6 +121,15 @@ val REPUTATION_LEDGER: ReputationLedger = ReputationLedger.REPUTATION_LEDGER
  * member-pays построен, но выключен флагом MEMBER_PAYS_ENABLED.
  */
 val SERVICE_SUBSCRIPTION: ServiceSubscription = ServiceSubscription.SERVICE_SUBSCRIPTION
+
+/**
+ * Сообщение-статус бота в привязанном чате по конкретной складчине («живой
+ * статус сбора», слайс 3.5 club-chat-link): прогресс «Скинулись N из M»,
+ * дедлайн и упоминания ещё не ответивших. Бот редактирует его при изменении
+ * прогресса. Одна строка на складчину; поста-итога нет — финал это последний
+ * edit.
+ */
+val SKLADCHINA_CHAT_POSTS: SkladchinaChatPosts = SkladchinaChatPosts.SKLADCHINA_CHAT_POSTS
 
 /**
  * Участие члена клуба в складчине: назначенная/заявленная сумма, статус ответа

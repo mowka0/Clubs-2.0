@@ -16,9 +16,11 @@ import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CLOSED_BY_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CREATOR_ID_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_EVENT_ID_FKEY
+import com.clubs.generated.jooq.keys.SKLADCHINA_CHAT_POSTS__SKLADCHINA_CHAT_POSTS_SKLADCHINA_ID_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINA_PARTICIPANTS__SKLADCHINA_PARTICIPANTS_SKLADCHINA_ID_FKEY
 import com.clubs.generated.jooq.tables.Clubs.ClubsPath
 import com.clubs.generated.jooq.tables.Events.EventsPath
+import com.clubs.generated.jooq.tables.SkladchinaChatPosts.SkladchinaChatPostsPath
 import com.clubs.generated.jooq.tables.SkladchinaParticipants.SkladchinaParticipantsPath
 import com.clubs.generated.jooq.tables.Users.UsersPath
 import com.clubs.generated.jooq.tables.records.SkladchinasRecord
@@ -333,6 +335,22 @@ open class Skladchinas(
 
     val events: EventsPath
         get(): EventsPath = events()
+
+    private lateinit var _skladchinaChatPosts: SkladchinaChatPostsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.skladchina_chat_posts</code> table
+     */
+    fun skladchinaChatPosts(): SkladchinaChatPostsPath {
+        if (!this::_skladchinaChatPosts.isInitialized)
+            _skladchinaChatPosts = SkladchinaChatPostsPath(this, null, SKLADCHINA_CHAT_POSTS__SKLADCHINA_CHAT_POSTS_SKLADCHINA_ID_FKEY.inverseKey)
+
+        return _skladchinaChatPosts;
+    }
+
+    val skladchinaChatPosts: SkladchinaChatPostsPath
+        get(): SkladchinaChatPostsPath = skladchinaChatPosts()
 
     private lateinit var _skladchinaParticipants: SkladchinaParticipantsPath
 

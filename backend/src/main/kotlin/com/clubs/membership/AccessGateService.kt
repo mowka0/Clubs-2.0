@@ -11,6 +11,7 @@ import com.clubs.event.EventRosterChangedEvent
 import com.clubs.event.WaitlistPromotedEvent
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
+import com.clubs.skladchina.SkladchinaProgressChangedEvent
 import com.clubs.skladchina.SkladchinaRepository
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
@@ -253,7 +254,10 @@ class AccessGateService(
             .map { it.eventId }
             .sorted()
         freedEventIds.forEach { eventResponseRepository.lockEventSlots(it) }
+        // Живой статус сбора: кикнутый не должен публично висеть «должником» в «Ждём:» —
+        // перерисовываем пост каждой затронутой складчины.
         skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(targetUserId, clubId)
+            .forEach { eventPublisher.publishEvent(SkladchinaProgressChangedEvent(it)) }
         val cascadedResponses = eventResponseRepository.deleteByUserAndClubAndActiveEvents(targetUserId, clubId)
         freedEventIds.forEach { eventId ->
             val promotedUserId = eventResponseRepository.promoteFirstWaitlisted(eventId)

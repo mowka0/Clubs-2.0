@@ -50,5 +50,6 @@ data class ChatLink(
     val canInviteUsers: Boolean,
     val doorEnabled: Boolean,
     val doorInviteLink: String?,
-    val livePinEnabled: Boolean
+    val livePinEnabled: Boolean,
+    val skladchinaStatusEnabled: Boolean
 )

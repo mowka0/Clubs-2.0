@@ -17,15 +17,18 @@ data class ChatLinkStatusDto(
     val doorEnabled: Boolean,
     val doorInviteLink: String?,
     val livePinEnabled: Boolean,
+    val skladchinaStatusEnabled: Boolean,
     /** Deep link ?startgroup= для кнопки «Привязать чат» (username бота живёт на сервере). */
     val startGroupUrl: String
 )
 
 /**
  * Тумблеры фич чата — частичный PATCH: меняются только присланные поля
- * (doorEnabled — «Вход в чат через заявки», livePinEnabled — «Живой закреп»).
+ * (doorEnabled — «Вход в чат через заявки», livePinEnabled — «Живой закреп»,
+ * skladchinaStatusEnabled — «Статус сборов в чате»).
  */
 data class UpdateChatLinkRequest(
     val doorEnabled: Boolean? = null,
-    val livePinEnabled: Boolean? = null
+    val livePinEnabled: Boolean? = null,
+    val skladchinaStatusEnabled: Boolean? = null
 )

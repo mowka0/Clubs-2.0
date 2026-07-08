@@ -44,6 +44,7 @@ fun chatLinkFixture(
     doorEnabled: Boolean = false,
     doorInviteLink: String? = null,
     livePinEnabled: Boolean = false,
+    skladchinaStatusEnabled: Boolean = false,
     linkedByUserId: UUID = UUID.randomUUID()
 ): ChatLink = ChatLink(
     clubId = clubId,
@@ -56,5 +57,6 @@ fun chatLinkFixture(
     canInviteUsers = canInviteUsers,
     doorEnabled = doorEnabled,
     doorInviteLink = doorInviteLink,
-    livePinEnabled = livePinEnabled
+    livePinEnabled = livePinEnabled,
+    skladchinaStatusEnabled = skladchinaStatusEnabled
 )

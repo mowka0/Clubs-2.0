@@ -44,6 +44,10 @@ data class BotChatState(
  */
 enum class UserChatState { IN_CHAT, NOT_IN_CHAT, BANNED, UNKNOWN }
 
+// HTML parse_mode Telegram — нужен сообщениям с text_mention-упоминаниями («живой статус
+// сбора»); вызывающий обязан экранировать пользовательский ввод (&, <, >).
+const val PARSE_MODE_HTML = "HTML"
+
 /**
  * Тонкая обёртка над Telegram Bot API для чат-интеграции (club-chat-link): всё общение бота
  * с ГРУППАМИ и заявками на вход живёт здесь, чтобы сервисы chatlink не зависели от
@@ -142,12 +146,13 @@ class ChatTelegramGateway(
      * в ГРУППАХ Telegram запрещает WebApp-кнопки, поэтому кнопка — только url
      * `t.me/<bot>?startapp=…` (Main Mini App; DeepLinkHandler фронта разруливает payload).
      */
-    fun sendGroupMessageWithUrlButton(chatId: Long, text: String, buttonText: String?, url: String?): Long? = try {
+    fun sendGroupMessageWithUrlButton(chatId: Long, text: String, buttonText: String?, url: String?, parseMode: String? = null): Long? = try {
         val builder = SendMessage.builder().chatId(chatId).text(text)
         if (buttonText != null && url != null) {
             val button = InlineKeyboardButton.builder().text(buttonText).url(url).build()
             builder.replyMarkup(InlineKeyboardMarkup(listOf(InlineKeyboardRow(button))))
         }
+        parseMode?.let { builder.parseMode(it) }
         telegramClient.execute(builder.build()).messageId?.toLong()
     } catch (e: Exception) {
         log.warn("sendGroupMessageWithUrlButton failed: chatId={} error={}", chatId, e.message)
@@ -158,7 +163,7 @@ class ChatTelegramGateway(
      * Редактирование своего сообщения в группе (живой закреп). «Message is not modified» —
      * не ошибка (перерисовка совпала с текущим текстом), считаем успехом.
      */
-    fun editGroupMessage(chatId: Long, messageId: Long, text: String, buttonText: String?, url: String?): Boolean = try {
+    fun editGroupMessage(chatId: Long, messageId: Long, text: String, buttonText: String?, url: String?, parseMode: String? = null): Boolean = try {
         val builder = EditMessageText.builder()
             .chatId(chatId)
             .messageId(messageId.toInt())
@@ -167,6 +172,7 @@ class ChatTelegramGateway(
             val button = InlineKeyboardButton.builder().text(buttonText).url(url).build()
             builder.replyMarkup(InlineKeyboardMarkup(listOf(InlineKeyboardRow(button))))
         }
+        parseMode?.let { builder.parseMode(it) }
         telegramClient.execute(builder.build())
         true
     } catch (e: Exception) {

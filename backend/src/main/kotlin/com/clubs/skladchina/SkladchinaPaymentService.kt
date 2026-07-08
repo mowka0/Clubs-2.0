@@ -68,6 +68,7 @@ class SkladchinaPaymentService(
         }
         log.info("Skladchina mark-paid: id={} userId={} amount={}", skladchinaId, callerId, effectiveAmountKopecks)
 
+        eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
         lifecycleService.maybeAutoCloseAfterStateChange(skladchinaId)
 
         return queryService.getDetail(skladchinaId, callerId)
@@ -99,6 +100,7 @@ class SkladchinaPaymentService(
             throw ConflictException("Сбор уже закрыт — изменить ответ нельзя. Обновите экран")
         }
         log.info("Skladchina declined: id={} userId={}", skladchinaId, callerId)
+        eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
         lifecycleService.maybeAutoCloseAfterStateChange(skladchinaId)
         return queryService.getDetail(skladchinaId, callerId)
     }
@@ -142,7 +144,13 @@ class SkladchinaPaymentService(
         // ближе, чем это окно, — отодвигаем его так, чтобы было ровно 48ч от текущего момента
         // (extendDeadline только сдвигает дедлайн ВПЕРЁД). Иначе заявка могла бы истечь (→ −40)
         // до того, как кто-то успеет на неё ответить.
-        skladchinaRepository.extendDeadline(skladchinaId, now.plusHours(DECLINE_RESOLUTION_WINDOW_HOURS))
+        val deadlineExtended = skladchinaRepository.extendDeadline(
+            skladchinaId, now.plusHours(DECLINE_RESOLUTION_WINDOW_HOURS)
+        )
+        // Сдвиг дедлайна виден в «живом статусе сбора» (строка «⏳ До») — перерисовать.
+        if (deadlineExtended > 0) {
+            eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
+        }
 
         // #6: уведомляем организатора (ЛС + кнопка) ПОСЛЕ коммита — он решает approve/reject.
         val clubName = clubRepository.findById(skladchina.clubId)?.name ?: ""
@@ -185,6 +193,7 @@ class SkladchinaPaymentService(
             val updated = skladchinaRepository.setParticipantDeclined(skladchinaId, targetUserId, OffsetDateTime.now())
             if (updated == 0) throw ConflictException("Сбор уже закрыт — обновите экран")
             log.info("Skladchina decline-approved: id={} target={} by={}", skladchinaId, targetUserId, callerId)
+            eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
             lifecycleService.maybeAutoCloseAfterStateChange(skladchinaId)
         } else {
             // #7: отклонение должно быть обосновано — без причины организатор не может отказать.
@@ -240,6 +249,7 @@ class SkladchinaPaymentService(
         }
         log.info("Skladchina organizer-mark-paid: id={} target={} by={} amount={}",
             skladchinaId, targetUserId, callerId, share)
+        eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
         lifecycleService.maybeAutoCloseAfterStateChange(skladchinaId)
         return queryService.getDetail(skladchinaId, callerId)
     }
@@ -271,6 +281,7 @@ class SkladchinaPaymentService(
             throw ConflictException("Сбор уже закрыт — изменить нельзя. Обновите экран")
         }
         log.info("Skladchina organizer-unmark: id={} target={} by={}", skladchinaId, targetUserId, callerId)
+        eventPublisher.publishEvent(SkladchinaProgressChangedEvent(skladchinaId))
         return queryService.getDetail(skladchinaId, callerId)
     }
 

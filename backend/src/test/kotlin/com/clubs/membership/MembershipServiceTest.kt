@@ -373,7 +373,8 @@ class MembershipServiceTest {
 
         every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns activeMembership
         every { clubRepository.findById(clubId) } returns club
-        every { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(userId, clubId) } returns 2
+        every { skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(userId, clubId) } returns
+            listOf(UUID.randomUUID(), UUID.randomUUID())
         every { eventResponseRepository.deleteByUserAndClubAndActiveEvents(userId, clubId) } returns 1
 
         val result = membershipService.leaveClub(clubId, userId)

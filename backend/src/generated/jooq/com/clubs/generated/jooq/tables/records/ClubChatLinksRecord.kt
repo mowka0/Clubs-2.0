@@ -69,6 +69,10 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
         set(value): Unit = set(11, value)
         get(): Boolean? = get(11) as Boolean?
 
+    open var skladchinaStatusEnabled: Boolean?
+        set(value): Unit = set(12, value)
+        get(): Boolean? = get(12) as Boolean?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -78,7 +82,7 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
     /**
      * Create a detached, initialised ClubChatLinksRecord
      */
-    constructor(clubId: UUID, chatId: Long, chatTitle: String? = null, linkedByUserId: UUID, linkedAt: OffsetDateTime? = null, botStatus: String? = null, canPinMessages: Boolean? = null, canInviteUsers: Boolean? = null, doorEnabled: Boolean? = null, doorInviteLink: String? = null, updatedAt: OffsetDateTime? = null, livePinEnabled: Boolean? = null): this() {
+    constructor(clubId: UUID, chatId: Long, chatTitle: String? = null, linkedByUserId: UUID, linkedAt: OffsetDateTime? = null, botStatus: String? = null, canPinMessages: Boolean? = null, canInviteUsers: Boolean? = null, doorEnabled: Boolean? = null, doorInviteLink: String? = null, updatedAt: OffsetDateTime? = null, livePinEnabled: Boolean? = null, skladchinaStatusEnabled: Boolean? = null): this() {
         this.clubId = clubId
         this.chatId = chatId
         this.chatTitle = chatTitle
@@ -91,6 +95,7 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
         this.doorInviteLink = doorInviteLink
         this.updatedAt = updatedAt
         this.livePinEnabled = livePinEnabled
+        this.skladchinaStatusEnabled = skladchinaStatusEnabled
         resetChangedOnNotNull()
     }
 
@@ -111,6 +116,7 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
             this.doorInviteLink = value.doorInviteLink
             this.updatedAt = value.updatedAt
             this.livePinEnabled = value.livePinEnabled
+            this.skladchinaStatusEnabled = value.skladchinaStatusEnabled
             resetChangedOnNotNull()
         }
     }
