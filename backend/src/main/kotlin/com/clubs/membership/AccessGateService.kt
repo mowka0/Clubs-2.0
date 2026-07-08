@@ -64,6 +64,18 @@ class AccessGateService(
         return mapper.toDto(membership.copy(status = MembershipStatus.frozen))
     }
 
+    // DM участнику о продлении подписки/доступа до конкретной даты («Взнос получен» / ручное окно),
+    // «на лучших усилиях»: без него в клубе без чата продление проходило молча (фидбек PO 2026-07-08).
+    private fun notifyAccessExtended(clubId: UUID, targetUserId: UUID, until: OffsetDateTime) {
+        try {
+            val member = userRepository.findById(targetUserId) ?: return
+            val clubName = clubRepository.findById(clubId)?.name ?: "клуб"
+            notificationService.sendAccessExtendedDM(member.telegramId, clubName, clubId, until)
+        } catch (e: Exception) {
+            log.warn("Failed to DM extended member (non-fatal): clubId={} targetUserId={} error={}", clubId, targetUserId, e.message)
+        }
+    }
+
     // DM участнику, которому организатор только что закрыл доступ, «на лучших усилиях»: «доступ закрыт — оплатите взнос»
     // с inline-кнопкой deep-link на страницу клуба (где живёт «Оплатить взнос»). Никогда не отменяет freeze.
     private fun notifyFrozen(clubId: UUID, targetUserId: UUID) {
@@ -109,6 +121,7 @@ class AccessGateService(
         eventPublisher.publishEvent(
             MembershipAccessOpenedEvent(clubId, targetUserId, wasAccessClosed = membership.status != MembershipStatus.active)
         )
+        notifyAccessExtended(clubId, targetUserId, newExpiresAt)
         // markDuesPaid открывает доступ (active) вне зависимости от предыдущего frozen-состояния, до newExpiresAt.
         return mapper.toDto(membership.copy(status = MembershipStatus.active, subscriptionExpiresAt = newExpiresAt))
     }
@@ -136,6 +149,7 @@ class AccessGateService(
         eventPublisher.publishEvent(
             MembershipAccessOpenedEvent(clubId, targetUserId, wasAccessClosed = membership.status != MembershipStatus.active)
         )
+        notifyAccessExtended(clubId, targetUserId, until)
         return mapper.toDto(membership.copy(status = MembershipStatus.active, subscriptionExpiresAt = until))
     }
 
