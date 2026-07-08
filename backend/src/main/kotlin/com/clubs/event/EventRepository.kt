@@ -42,6 +42,26 @@ interface EventRepository {
 
     fun findNextUpcomingEvent(now: OffsetDateTime): Event?
 
+    /**
+     * Будущие неотменённые события клуба (status IN upcoming/stage_1/stage_2, event_datetime > now),
+     * ближайшее первым. «Живой закреп»: backfill пинов при включении тумблера и строка
+     * «Следующая — …» в посте-итоге.
+     */
+    fun findFutureEventsByClub(clubId: UUID, now: OffsetDateTime): List<Event>
+
+    /**
+     * Все прошедшие неотменённые события клуба (event_datetime <= now, status != cancelled) —
+     * порядковый «Встреча №N» в посте-итоге. Та же семантика, что totalMeetings в ClubFacts.
+     */
+    fun countPastEvents(clubId: UUID, now: OffsetDateTime): Int
+
+    /**
+     * Переводит одно событие в completed (если оно ещё в активном статусе, cancelled не трогается).
+     * Вызывается при отметке явки (PO 2026-07-08): организатор зафиксировал, что встреча прошла, —
+     * событие уходит из «предстоящих» сразу, не дожидаясь часового EventCompletionService.
+     */
+    fun markCompleted(id: UUID)
+
     fun transitionToStage2(id: UUID)
 
     /**

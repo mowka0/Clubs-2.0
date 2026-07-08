@@ -45,6 +45,7 @@ function status(over: Partial<ChatLinkStatusDto> = {}): ChatLinkStatusDto {
     canInviteUsers: false,
     doorEnabled: false,
     doorInviteLink: null,
+    livePinEnabled: false,
     startGroupUrl: START_URL,
     ...over,
   };
@@ -84,9 +85,49 @@ describe('ClubChatTab', () => {
     expect(screen.getByText('✓ бот в чате')).toBeInTheDocument();
     expect(screen.getByText('✓ приглашения разрешены')).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Вход в чат через заявки' })).toBeEnabled();
-    // Закреп и строгий режим — «скоро», выключены до следующих слайсов
-    expect(screen.getByRole('switch', { name: 'Живой закреп (скоро)' })).toBeDisabled();
+    // Живой закреп активен (слайс 3); строгий режим — «скоро» (слайс 5)
+    expect(screen.getByRole('switch', { name: 'Живой закреп' })).toBeEnabled();
     expect(screen.getByRole('switch', { name: 'Строгий режим (скоро)' })).toBeDisabled();
+  });
+
+  it('включение живого закрепа шлёт PATCH только с livePinEnabled', async () => {
+    let current = linkedHealthy();
+    let patched: unknown = null;
+    server.use(
+      http.get(`*/api/clubs/${CLUB_ID}/chat-link`, () => HttpResponse.json(current)),
+      http.patch(`*/api/clubs/${CLUB_ID}/chat-link`, async ({ request }) => {
+        patched = await request.json();
+        current = { ...linkedHealthy(), livePinEnabled: true };
+        return HttpResponse.json(current);
+      }),
+    );
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    await userEvent.click(await screen.findByRole('switch', { name: 'Живой закреп' }));
+
+    await waitFor(() => expect(patched).toEqual({ livePinEnabled: true }));
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Живой закреп' })).toHaveAttribute('aria-checked', 'true'));
+  });
+
+  it('без права закрепа тумблер живого закрепа задизейблен', async () => {
+    mockStatus(status({
+      linked: true,
+      chatTitle: 'Партия — чат',
+      botStatus: 'administrator',
+      canPinMessages: false,
+      canInviteUsers: true,
+    }));
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByRole('switch', { name: 'Живой закреп' })).toBeDisabled();
+    expect(screen.getByText('✕ закреп запрещён')).toBeInTheDocument();
+  });
+
+  it('живой закреп включён, но право закрепа отняли — алерт деградации', async () => {
+    mockStatus({ ...linkedHealthy(), livePinEnabled: true, canPinMessages: false });
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByText('Бот потерял право закреплять сообщения')).toBeInTheDocument();
   });
 
   it('включение двери шлёт PATCH и показывает door-ссылку из ответа', async () => {

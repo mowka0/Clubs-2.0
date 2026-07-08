@@ -19,6 +19,9 @@ interface ChatLinkRepository {
     /** Обновить только invite-ссылку (создание при привязке / пересоздание после возврата бота). */
     fun updateInviteLink(clubId: UUID, doorInviteLink: String)
 
+    /** Тумблер «Живой закреп» (слайс 3). */
+    fun updateLivePin(clubId: UUID, livePinEnabled: Boolean)
+
     /** Миграция группы в супергруппу: Telegram меняет chat_id (migrate_to_chat_id). */
     fun updateChatId(oldChatId: Long, newChatId: Long)
 

@@ -12,9 +12,11 @@ import com.clubs.generated.jooq.indexes.IDX_EVENTS_STATUS
 import com.clubs.generated.jooq.keys.EVENTS_PKEY
 import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CREATED_BY_FKEY
+import com.clubs.generated.jooq.keys.EVENT_CHAT_PINS__EVENT_CHAT_PINS_EVENT_ID_FKEY
 import com.clubs.generated.jooq.keys.EVENT_RESPONSES__EVENT_RESPONSES_EVENT_ID_FKEY
 import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_EVENT_ID_FKEY
 import com.clubs.generated.jooq.tables.Clubs.ClubsPath
+import com.clubs.generated.jooq.tables.EventChatPins.EventChatPinsPath
 import com.clubs.generated.jooq.tables.EventResponses.EventResponsesPath
 import com.clubs.generated.jooq.tables.Skladchinas.SkladchinasPath
 import com.clubs.generated.jooq.tables.Users.UsersPath
@@ -295,6 +297,22 @@ open class Events(
 
     val users: UsersPath
         get(): UsersPath = users()
+
+    private lateinit var _eventChatPins: EventChatPinsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.event_chat_pins</code> table
+     */
+    fun eventChatPins(): EventChatPinsPath {
+        if (!this::_eventChatPins.isInitialized)
+            _eventChatPins = EventChatPinsPath(this, null, EVENT_CHAT_PINS__EVENT_CHAT_PINS_EVENT_ID_FKEY.inverseKey)
+
+        return _eventChatPins;
+    }
+
+    val eventChatPins: EventChatPinsPath
+        get(): EventChatPinsPath = eventChatPins()
 
     private lateinit var _eventResponses: EventResponsesPath
 

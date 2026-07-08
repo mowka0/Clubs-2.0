@@ -138,23 +138,39 @@ open class ClubChatLinks(
 
     /**
      * The column <code>public.club_chat_links.door_enabled</code>. Тумблер
-     * «Вход в чат через заявки»: TRUE = бот выдал door_invite_link и
-     * обрабатывает chat_join_request (членство в чате = членство в клубе).
+     * «Вход в чат через заявки» = политика для ЧУЖИХ: TRUE = бот пишет
+     * стучащимся не-участникам правила и впускает только одобренных в клубе;
+     * FALSE = заявки чужих организатор разбирает вручную. Участников С ДОСТУПОМ
+     * бот впускает по заявке всегда, независимо от тумблера.
      */
-    val DOOR_ENABLED: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("door_enabled"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Тумблер «Вход в чат через заявки»: TRUE = бот выдал door_invite_link и обрабатывает chat_join_request (членство в чате = членство в клубе).")
+    val DOOR_ENABLED: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("door_enabled"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Тумблер «Вход в чат через заявки» = политика для ЧУЖИХ: TRUE = бот пишет стучащимся не-участникам правила и впускает только одобренных в клубе; FALSE = заявки чужих организатор разбирает вручную. Участников С ДОСТУПОМ бот впускает по заявке всегда, независимо от тумблера.")
 
     /**
      * The column <code>public.club_chat_links.door_invite_link</code>.
-     * Ссылка-приглашение createChatInviteLink(creates_join_request=true) (NULL
-     * = дверь выключена). Видна только участникам с доступом + владельцу.
+     * Invite-ссылка бота (createChatInviteLink с creates_join_request):
+     * создаётся при привязке (или как только у бота появляется право
+     * приглашать) и живёт НЕЗАВИСИМО от тумблера двери — по ней работает кнопка
+     * «Чат клуба» у участников. NULL = ещё не создана (у бота нет права
+     * приглашать). Пересоздаётся при возврате кикнутого бота и миграции группы
+     * в супергруппу (Telegram отзывает ссылки удалённого админа / старой
+     * группы).
      */
-    val DOOR_INVITE_LINK: TableField<ClubChatLinksRecord, String?> = createField(DSL.name("door_invite_link"), SQLDataType.CLOB, this, "Ссылка-приглашение createChatInviteLink(creates_join_request=true) (NULL = дверь выключена). Видна только участникам с доступом + владельцу.")
+    val DOOR_INVITE_LINK: TableField<ClubChatLinksRecord, String?> = createField(DSL.name("door_invite_link"), SQLDataType.CLOB, this, "Invite-ссылка бота (createChatInviteLink с creates_join_request): создаётся при привязке (или как только у бота появляется право приглашать) и живёт НЕЗАВИСИМО от тумблера двери — по ней работает кнопка «Чат клуба» у участников. NULL = ещё не создана (у бота нет права приглашать). Пересоздаётся при возврате кикнутого бота и миграции группы в супергруппу (Telegram отзывает ссылки удалённого админа / старой группы).")
 
     /**
      * The column <code>public.club_chat_links.updated_at</code>. Когда строка
      * обновлялась в последний раз (права, тумблеры, миграция chat_id).
      */
     val UPDATED_AT: TableField<ClubChatLinksRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "Когда строка обновлялась в последний раз (права, тумблеры, миграция chat_id).")
+
+    /**
+     * The column <code>public.club_chat_links.live_pin_enabled</code>. Тумблер
+     * «Живой закреп»: TRUE = бот постит в чат закреплённый статус каждого
+     * будущего события (голоса Этапа 1 / гонка за места Этапа 2) и редактирует
+     * его, а после отметки явки публикует итог встречи. Включение требует права
+     * закреплять сообщения.
+     */
+    val LIVE_PIN_ENABLED: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("live_pin_enabled"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Тумблер «Живой закреп»: TRUE = бот постит в чат закреплённый статус каждого будущего события (голоса Этапа 1 / гонка за места Этапа 2) и редактирует его, а после отметки явки публикует итог встречи. Включение требует права закреплять сообщения.")
 
     private constructor(alias: Name, aliased: Table<ClubChatLinksRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<ClubChatLinksRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)

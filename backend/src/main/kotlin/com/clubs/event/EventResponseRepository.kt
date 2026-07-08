@@ -26,6 +26,9 @@ interface EventResponseRepository {
 
     fun countConfirmed(eventId: UUID): Int
 
+    /** Размер очереди листа ожидания (stage_2_vote = waitlisted) — для «живого закрепа» в чате. */
+    fun countWaitlisted(eventId: UUID): Int
+
     /**
      * S2-01/F5-07/F5-11: берёт per-event transaction-scoped Postgres advisory lock
      * (`pg_advisory_xact_lock`), сериализующий мутации слотов Этапа 2. Должен вызываться внутри
@@ -145,6 +148,13 @@ interface EventResponseRepository {
      * Верифицированный набор участников для шаблона складчины split_bill.
      */
     fun findAttendedUserIds(eventId: UUID): List<UUID>
+
+    /**
+     * Имена (first_name) пришедших, для кого это событие — ПЕРВОЕ посещённое в клубе (других
+     * attended-строк по событиям того же клуба нет). Питает «🎉 впервые на встрече клуба»
+     * в посте-итоге живого закрепа. Порядок — по имени, чтобы текст был стабильным.
+     */
+    fun findFirstTimeAttendeeFirstNames(eventId: UUID, clubId: UUID): List<String>
 }
 
 /**

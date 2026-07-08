@@ -10,6 +10,7 @@ import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import io.mockk.every
+import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Test
@@ -93,12 +94,16 @@ class AttendanceServiceTest {
         stubClub()
         every { eventResponseRepository.setAttendance(eventId, attendeeId, true) } returns 1
         every { eventRepository.markAttendanceMarked(eventId) } returns 1
+        justRun { eventRepository.markCompleted(eventId) }
 
         val result = service.markAttendance(eventId, organizerId, request)
 
         assertEquals(1, result.markedCount)
         verify { eventResponseRepository.setAttendance(eventId, attendeeId, true) }
         verify { eventRepository.markAttendanceMarked(eventId) }
+        // PO 2026-07-08: отметка явки = встреча прошла — событие сразу уходит из «предстоящих»,
+        // не дожидаясь часового EventCompletionService.
+        verify { eventRepository.markCompleted(eventId) }
     }
 
     @Test
@@ -108,6 +113,7 @@ class AttendanceServiceTest {
         stubClub()
         every { eventResponseRepository.setAttendance(eventId, attendeeId, false) } returns 1
         every { eventRepository.markAttendanceMarked(eventId) } returns 1
+        justRun { eventRepository.markCompleted(eventId) }
 
         service.markAttendance(eventId, organizerId, absentRequest)
 
@@ -122,6 +128,7 @@ class AttendanceServiceTest {
         stubClub()
         every { eventResponseRepository.setAttendance(eventId, attendeeId, true) } returns 1
         every { eventRepository.markAttendanceMarked(eventId) } returns 1
+        justRun { eventRepository.markCompleted(eventId) }
 
         service.markAttendance(eventId, organizerId, request)
 

@@ -8,6 +8,7 @@ import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -17,7 +18,8 @@ class VoteService(
     private val eventRepository: EventRepository,
     private val eventResponseRepository: EventResponseRepository,
     private val membershipRepository: MembershipRepository,
-    private val clubRepository: ClubRepository
+    private val clubRepository: ClubRepository,
+    private val eventPublisher: ApplicationEventPublisher
 ) {
 
     private val log = LoggerFactory.getLogger(VoteService::class.java)
@@ -48,6 +50,8 @@ class VoteService(
 
         eventResponseRepository.upsertStage1Vote(eventId, userId, voteEnum)
         log.info("Vote cast: eventId={} userId={} vote={}", eventId, userId, request.vote)
+        // Живой закреп в чате перерисовывает счётчики голосов (dirty-флаг, дебаунс на стороне слушателя).
+        eventPublisher.publishEvent(EventRosterChangedEvent(eventId))
 
         val counts = eventResponseRepository.countByVote(eventId)
         return VoteResponseDto(

@@ -372,8 +372,16 @@ export interface ChatLinkStatusDto {
   canInviteUsers: boolean;
   doorEnabled: boolean;
   doorInviteLink: string | null;
+  // Тумблер «Живой закреп» (слайс 3): бот ведёт закреплённый статус событий в чате.
+  livePinEnabled: boolean;
   // Deep link ?startgroup= для кнопки «Привязать чат» (username бота живёт на сервере).
   startGroupUrl: string;
+}
+
+/** Частичный PATCH тумблеров чата: меняются только присланные поля. */
+export interface UpdateChatLinkRequest {
+  doorEnabled?: boolean;
+  livePinEnabled?: boolean;
 }
 
 /** Факты качества клуба для `GET /api/clubs/{id}/quality` (кольца + достижения). */

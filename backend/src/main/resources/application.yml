@@ -59,8 +59,9 @@ jwt:
 
 telegram:
   bot-token: ${TELEGRAM_BOT_TOKEN:}
-  # Bot username (без @) — используется в Mini App deep-link URL вида
-  # https://t.me/<bot-username>/app?startapp=... В DM inline-кнопках.
+  # Bot username (без @) — используется в deep link'ах ?startgroup= (привязка чата) и
+  # Main-Mini-App-ссылках https://t.me/<bot-username>?startapp=... (url-кнопки в ГРУППАХ,
+  # где WebApp-кнопки запрещены; требует включённого Mini App у бота в BotFather).
   # Prod: clubs_v2_bot, Staging: clubs_v2_test_bot.
   bot-username: ${TELEGRAM_BOT_USERNAME:clubs_v2_bot}
   # Base URL фронта Mini App — используется в WebApp inline-кнопках

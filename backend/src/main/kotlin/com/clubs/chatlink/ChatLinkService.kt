@@ -24,9 +24,22 @@ class ChatLinkService(
     private val clubRepository: ClubRepository,
     private val mapper: ChatLinkMapper,
     private val gateway: ChatTelegramGateway,
+    private val livePinService: LivePinService,
     @Value("\${telegram.bot-username}") private val botUsername: String
 ) {
     private val log = LoggerFactory.getLogger(ChatLinkService::class.java)
+
+    /**
+     * Частичный PATCH тумблеров таба «Чат»: применяет только присланные поля
+     * (сейчас фронт шлёт по одному тумблеру за запрос).
+     */
+    @Transactional
+    fun update(clubId: UUID, callerId: UUID, request: UpdateChatLinkRequest): ChatLinkStatusDto {
+        var status: ChatLinkStatusDto? = null
+        request.doorEnabled?.let { status = setDoor(clubId, callerId, it) }
+        request.livePinEnabled?.let { status = setLivePin(clubId, callerId, it) }
+        return status ?: getStatus(clubId, callerId)
+    }
 
     fun getStatus(clubId: UUID, callerId: UUID): ChatLinkStatusDto {
         requireOwner(clubId, callerId)
@@ -102,6 +115,40 @@ class ChatLinkService(
         return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
     }
 
+    /**
+     * Тумблер «Живой закреп» (слайс 3). Включение требует бота в чате и право закрепа (409 —
+     * зеркалит дверь) и сразу делает backfill: статус-посты для всех будущих событий клуба.
+     * Выключение открепляет живые закрепы (сообщения остаются в истории); потеря права закрепа
+     * ПОСЛЕ включения тумблер не сбрасывает — редактирование своих сообщений права не требует.
+     */
+    @Transactional
+    fun setLivePin(clubId: UUID, callerId: UUID, enabled: Boolean): ChatLinkStatusDto {
+        requireOwner(clubId, callerId)
+        val link = chatLinkRepository.findByClubId(clubId)
+            ?: throw NotFoundException("Chat is not linked")
+
+        if (enabled == link.livePinEnabled) {
+            return mapper.toStatusDto(link, startGroupUrl(clubId)) // идемпотентно
+        }
+
+        if (enabled) {
+            if (!link.botStatus.isInChat) {
+                throw ConflictException("Бот удалён из чата — верните его в группу и проверьте права")
+            }
+            if (!link.canPinMessages) {
+                throw ConflictException("Боту нужно право «Закрепление сообщений» в настройках группы")
+            }
+            chatLinkRepository.updateLivePin(clubId, livePinEnabled = true)
+            livePinService.backfillForClub(clubId)
+            log.info("Live pin enabled: clubId={} chatId={}", clubId, link.chatId)
+        } else {
+            chatLinkRepository.updateLivePin(clubId, livePinEnabled = false)
+            livePinService.disableForClub(link)
+            log.info("Live pin disabled: clubId={} chatId={}", clubId, link.chatId)
+        }
+        return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
+    }
+
     /** Отвязка владельцем из приложения (или кнопкой в DM-петле подтверждения — через [unlinkAsOwner]). */
     @Transactional
     fun unlink(clubId: UUID, callerId: UUID) {
@@ -112,12 +159,15 @@ class ChatLinkService(
     }
 
     /**
-     * Общий механизм отвязки (REST и DM-callback): отозвать door-ссылку, выйти из чата,
-     * удалить строку. Telegram-шаги best-effort — запись у нас удаляется в любом случае,
-     * иначе мёртвая привязка блокировала бы повторную.
+     * Общий механизм отвязки (REST и DM-callback): снять живые закрепы (пока бот ещё в чате и
+     * может unpin), отозвать door-ссылку, выйти из чата, удалить строку. Telegram-шаги
+     * best-effort — запись у нас удаляется в любом случае, иначе мёртвая привязка блокировала
+     * бы повторную. Без чистки закрепов их строки остались бы «живыми» навсегда, а flush
+     * пытался бы редактировать сообщения в чате, из которого бот вышел.
      */
     @Transactional
     fun doUnlink(link: ChatLink) {
+        livePinService.disableForClub(link)
         link.doorInviteLink?.let { gateway.revokeInviteLink(link.chatId, it) }
         gateway.leaveChat(link.chatId)
         chatLinkRepository.delete(link.clubId)

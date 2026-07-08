@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getChatLinkStatus, refreshChatLink, unlinkChat, updateChatLink } from '../api/chatLink';
-import type { ChatLinkStatusDto } from '../types/api';
+import type { ChatLinkStatusDto, UpdateChatLinkRequest } from '../types/api';
 import { queryKeys } from './queryKeys';
 
 // Server state привязки чата (club-chat-link). Мутации кладут свежий статус в кэш сразу
@@ -40,7 +40,7 @@ export function useRefreshChatLinkMutation(clubId: string) {
 export function useUpdateChatLinkMutation(clubId: string) {
   const apply = useApplyChatLinkResult(clubId);
   return useMutation({
-    mutationFn: (body: { doorEnabled: boolean }) => updateChatLink(clubId, body),
+    mutationFn: (body: UpdateChatLinkRequest) => updateChatLink(clubId, body),
     onSuccess: apply,
   });
 }

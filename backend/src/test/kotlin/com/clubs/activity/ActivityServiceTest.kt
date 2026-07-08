@@ -31,7 +31,10 @@ class ActivityServiceTest {
 
     private val clubId = UUID.randomUUID()
     private val userId = UUID.randomUUID()
-    private val now: OffsetDateTime = OffsetDateTime.parse("2026-05-22T18:30:00Z")
+    // Относительное «сейчас»: partition upcoming/past теперь зависит от реального времени
+    // (ActivityService сравнивает event_datetime с wall clock), фиксированная дата из прошлого
+    // отправила бы все «будущие» события теста в past.
+    private val now: OffsetDateTime = OffsetDateTime.now()
 
     @BeforeEach
     fun setUp() {
@@ -148,6 +151,23 @@ class ActivityServiceTest {
         assertEquals(3, result.past.size)
         assertTrue(result.upcoming.none { it.isCompleted })
         assertTrue(result.past.all { it.isCompleted })
+    }
+
+    @Test
+    fun `стартовавшее событие уходит в past по ВРЕМЕНИ, не дожидаясь смены статуса шедулером`() {
+        // PO 2026-07-08: статус completed переключают шедулер (раз в час, +6ч запас) и отметка
+        // явки — «предстоящие» не должны зависеть ни от того, ни от другого.
+        val startedButNotCompleted = makeEvent(status = EventStatus.stage_2, eventDatetime = now.minusMinutes(10))
+        every { eventRepository.findAllByClubWithGoingCount(clubId) } returns listOf(
+            EventWithGoingCount(startedButNotCompleted, 0)
+        )
+        every { skladchinaRepository.findAllByClubWithAggregates(clubId, true) } returns emptyList()
+
+        val result = service.getClubActivities(clubId, userId, null)
+
+        assertTrue(result.upcoming.isEmpty())
+        assertEquals(1, result.past.size)
+        assertTrue(result.past.single().isCompleted)
     }
 
     @Test

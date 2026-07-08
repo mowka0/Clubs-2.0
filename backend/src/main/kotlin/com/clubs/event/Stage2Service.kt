@@ -146,6 +146,8 @@ class Stage2Service(
         }
 
         eventResponseRepository.updateStage2Vote(response.id, newStatus, finalStatus)
+        // Живой закреп: изменились подтверждённые/очередь — перерисовать статус в чате (AFTER_COMMIT).
+        eventPublisher.publishEvent(EventRosterChangedEvent(eventId))
 
         val newCount = eventResponseRepository.countConfirmed(eventId)
         return ConfirmResponseDto(eventId, newStatus.literal, newCount, event.participantLimit)
@@ -209,6 +211,9 @@ class Stage2Service(
                 reputationService.penalizeAbandonedSlot(userId, event.clubId, eventId, OffsetDateTime.now())
             }
         }
+
+        // Живой закреп: отказ (и возможный промоут выше) поменяли подтверждённых/очередь.
+        eventPublisher.publishEvent(EventRosterChangedEvent(eventId))
 
         val count = eventResponseRepository.countConfirmed(eventId)
         return ConfirmResponseDto(eventId, "declined", count, event.participantLimit)

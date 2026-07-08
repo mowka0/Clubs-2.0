@@ -65,6 +65,10 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
         set(value): Unit = set(10, value)
         get(): OffsetDateTime? = get(10) as OffsetDateTime?
 
+    open var livePinEnabled: Boolean?
+        set(value): Unit = set(11, value)
+        get(): Boolean? = get(11) as Boolean?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -74,7 +78,7 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
     /**
      * Create a detached, initialised ClubChatLinksRecord
      */
-    constructor(clubId: UUID, chatId: Long, chatTitle: String? = null, linkedByUserId: UUID, linkedAt: OffsetDateTime? = null, botStatus: String? = null, canPinMessages: Boolean? = null, canInviteUsers: Boolean? = null, doorEnabled: Boolean? = null, doorInviteLink: String? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(clubId: UUID, chatId: Long, chatTitle: String? = null, linkedByUserId: UUID, linkedAt: OffsetDateTime? = null, botStatus: String? = null, canPinMessages: Boolean? = null, canInviteUsers: Boolean? = null, doorEnabled: Boolean? = null, doorInviteLink: String? = null, updatedAt: OffsetDateTime? = null, livePinEnabled: Boolean? = null): this() {
         this.clubId = clubId
         this.chatId = chatId
         this.chatTitle = chatTitle
@@ -86,6 +90,7 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
         this.doorEnabled = doorEnabled
         this.doorInviteLink = doorInviteLink
         this.updatedAt = updatedAt
+        this.livePinEnabled = livePinEnabled
         resetChangedOnNotNull()
     }
 
@@ -105,6 +110,7 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
             this.doorEnabled = value.doorEnabled
             this.doorInviteLink = value.doorInviteLink
             this.updatedAt = value.updatedAt
+            this.livePinEnabled = value.livePinEnabled
             resetChangedOnNotNull()
         }
     }

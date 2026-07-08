@@ -31,7 +31,8 @@ class VoteServiceTest {
     private val eventResponseRepository = mockk<EventResponseRepository>()
     private val membershipRepository = mockk<MembershipRepository>()
     private val clubRepository = mockk<ClubRepository>()
-    private val service = VoteService(eventRepository, eventResponseRepository, membershipRepository, clubRepository)
+    private val eventPublisher = mockk<org.springframework.context.ApplicationEventPublisher>(relaxed = true)
+    private val service = VoteService(eventRepository, eventResponseRepository, membershipRepository, clubRepository, eventPublisher)
 
     private val eventId = UUID.randomUUID()
     private val userId = UUID.randomUUID()

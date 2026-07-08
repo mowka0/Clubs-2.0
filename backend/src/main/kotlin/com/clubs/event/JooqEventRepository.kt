@@ -283,6 +283,37 @@ class JooqEventRepository(
             .fetchOne()
             ?.let(mapper::toDomain)
 
+    override fun findFutureEventsByClub(clubId: UUID, now: OffsetDateTime): List<Event> =
+        dsl.selectFrom(EVENTS)
+            .where(
+                EVENTS.CLUB_ID.eq(clubId)
+                    .and(EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_1, EventStatus.stage_2))
+                    .and(EVENTS.EVENT_DATETIME.gt(now))
+            )
+            .orderBy(EVENTS.EVENT_DATETIME.asc())
+            .fetch()
+            .map(mapper::toDomain)
+
+    override fun countPastEvents(clubId: UUID, now: OffsetDateTime): Int =
+        dsl.selectCount().from(EVENTS)
+            .where(
+                EVENTS.CLUB_ID.eq(clubId)
+                    .and(EVENTS.STATUS.ne(EventStatus.cancelled))
+                    .and(EVENTS.EVENT_DATETIME.lessOrEqual(now))
+            )
+            .fetchOne(0, Int::class.java) ?: 0
+
+    override fun markCompleted(id: UUID) {
+        dsl.update(EVENTS)
+            .set(EVENTS.STATUS, EventStatus.completed)
+            .set(EVENTS.UPDATED_AT, OffsetDateTime.now())
+            .where(
+                EVENTS.ID.eq(id)
+                    .and(EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_1, EventStatus.stage_2))
+            )
+            .execute()
+    }
+
     override fun transitionToStage2(id: UUID) {
         dsl.update(EVENTS)
             .set(EVENTS.STATUS, EventStatus.stage_2)

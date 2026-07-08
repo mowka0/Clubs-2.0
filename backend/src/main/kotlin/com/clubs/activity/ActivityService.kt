@@ -50,13 +50,15 @@ class ActivityService(
             eventRepository.findAllByClubWithGoingCount(clubId)
         }
 
+        val now = OffsetDateTime.now()
+
         // События, ожидающие голоса этапа 1 или подтверждения этапа 2 от этого пользователя.
         // Управляет и бейджем "Проголосуй"/"Подтверди участие" (флаг на событие), и закреплением
         // сверху ленты.
         val actionRequiredIds: Set<UUID> = if (rawEvents.isEmpty()) {
             emptySet()
         } else {
-            eventRepository.findActionRequiredEventIds(clubId, userId, OffsetDateTime.now())
+            eventRepository.findActionRequiredEventIds(clubId, userId, now)
         }
 
         val events: List<ActivityItemDto.EventActivity> = rawEvents.map {
@@ -64,7 +66,8 @@ class ActivityService(
                 it.event,
                 it.goingCount,
                 it.confirmedCount,
-                actionRequired = it.event.id in actionRequiredIds
+                actionRequired = it.event.id in actionRequiredIds,
+                now = now
             )
         }
 

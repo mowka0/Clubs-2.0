@@ -1,6 +1,7 @@
-import { FC, useState } from 'react';
+import { FC, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
+import { ApiError } from '../api/apiClient';
 import { Spinner, Placeholder } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
@@ -84,6 +85,22 @@ export const EventPage: FC = () => {
       : undefined,
   );
   useSetClubContext(eventQuery.data?.clubId);
+
+  // Не-участник на странице БУДУЩЕГО события (кикнутый/вышедший, пришёл по старой ссылке или
+  // кнопке из чата): голосовать нельзя, ростер закрыт (403) — уводим на страницу клуба, где есть
+  // CTA вступления/оплаты (PO 2026-07-08). ПРОШЕДШИЕ события не редиректим: экс-участнику может
+  // быть нужно окно спора явки (F5-04 — myAttendance намеренно не гейтится членством).
+  const respondersForbidden =
+    respondersQuery.error instanceof ApiError && respondersQuery.error.status === 403;
+  const redirectClubId =
+    respondersForbidden &&
+    eventQuery.data &&
+    new Date(eventQuery.data.eventDatetime).getTime() > Date.now()
+      ? eventQuery.data.clubId
+      : null;
+  useEffect(() => {
+    if (redirectClubId) navigate(`/clubs/${redirectClubId}`, { replace: true });
+  }, [redirectClubId, navigate]);
 
   const castVoteMutation = useCastVoteMutation();
   const confirmMutation = useConfirmParticipationMutation();

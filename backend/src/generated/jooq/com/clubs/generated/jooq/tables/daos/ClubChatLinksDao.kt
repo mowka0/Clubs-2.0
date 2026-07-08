@@ -161,4 +161,15 @@ open class ClubChatLinksDao(configuration: Configuration?) : DAOImpl<ClubChatLin
      * Fetch records that have <code>updated_at IN (values)</code>
      */
     fun fetchByUpdatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetch(ClubChatLinks.CLUB_CHAT_LINKS.UPDATED_AT, *values)
+
+    /**
+     * Fetch records that have <code>live_pin_enabled BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfLivePinEnabled(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetchRange(ClubChatLinks.CLUB_CHAT_LINKS.LIVE_PIN_ENABLED, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>live_pin_enabled IN (values)</code>
+     */
+    fun fetchByLivePinEnabled(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetch(ClubChatLinks.CLUB_CHAT_LINKS.LIVE_PIN_ENABLED, *values.toTypedArray())
 }

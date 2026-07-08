@@ -6,8 +6,12 @@ import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
+import com.clubs.event.EventResponseRepository
+import com.clubs.event.EventRosterChangedEvent
+import com.clubs.event.WaitlistPromotedEvent
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
+import com.clubs.skladchina.SkladchinaRepository
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -39,6 +43,8 @@ class AccessGateService(
     private val userRepository: UserRepository,
     private val clubRepository: ClubRepository,
     private val applicationRepository: ApplicationRepository,
+    private val eventResponseRepository: EventResponseRepository,
+    private val skladchinaRepository: SkladchinaRepository,
     private val notificationService: NotificationService,
     private val eventPublisher: ApplicationEventPublisher
 ) {
@@ -237,7 +243,30 @@ class AccessGateService(
         // Очищаем approved/pending заявку, чтобы удалённый участник мог заново подать заявку без осиротевшей
         // «Заявка одобрена». Аналогично /leave + reject.
         val cascaded = applicationRepository.deleteActiveByUserAndClub(targetUserId, clubId)
-        log.info("Member removed (kick): clubId={} targetUserId={} by={} cascadedApplications={}", clubId, targetUserId, callerId, cascaded)
+        // Каскад активностей (PO 2026-07-08): кикнутый не должен удерживать подтверждённую бронь —
+        // место освобождается и достаётся первому из листа ожидания, как при добровольном выходе
+        // (MembershipService.leaveFreeClub). Отличие — БЕЗ репутационных штрафов за брошенные
+        // обязательства: бронь рушит организатор киком, а не участник выходом. Дублирование с
+        // leaveFreeClub осознанное: тот путь меняется по правилам штрафов, этот — нет.
+        val freedEventIds = eventResponseRepository
+            .findConfirmedActiveEventObligations(targetUserId, clubId)
+            .map { it.eventId }
+            .sorted()
+        freedEventIds.forEach { eventResponseRepository.lockEventSlots(it) }
+        skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(targetUserId, clubId)
+        val cascadedResponses = eventResponseRepository.deleteByUserAndClubAndActiveEvents(targetUserId, clubId)
+        freedEventIds.forEach { eventId ->
+            val promotedUserId = eventResponseRepository.promoteFirstWaitlisted(eventId)
+            // Живой закреп: бронь освободилась (и, возможно, перезанята из очереди) — перерисовать статус.
+            eventPublisher.publishEvent(EventRosterChangedEvent(eventId))
+            if (promotedUserId != null) {
+                eventPublisher.publishEvent(WaitlistPromotedEvent(eventId, promotedUserId))
+            }
+        }
+        log.info(
+            "Member removed (kick): clubId={} targetUserId={} by={} cascadedApplications={} cascadedResponses={} freedSlots={}",
+            clubId, targetUserId, callerId, cascaded, cascadedResponses, freedEventIds.size
+        )
         notifyRemoved(targetUserId, clubId, cleanReason)
         eventPublisher.publishEvent(MembershipAccessRevokedEvent(clubId, targetUserId))
         return mapper.toDto(membership.copy(status = MembershipStatus.cancelled, subscriptionExpiresAt = null))

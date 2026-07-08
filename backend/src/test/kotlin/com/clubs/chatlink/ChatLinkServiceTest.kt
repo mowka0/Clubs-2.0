@@ -22,6 +22,7 @@ class ChatLinkServiceTest {
     private lateinit var chatLinkRepository: ChatLinkRepository
     private lateinit var clubRepository: ClubRepository
     private lateinit var gateway: ChatTelegramGateway
+    private lateinit var livePinService: LivePinService
     private lateinit var service: ChatLinkService
 
     private val clubId = UUID.randomUUID()
@@ -34,7 +35,8 @@ class ChatLinkServiceTest {
         chatLinkRepository = mockk(relaxed = true)
         clubRepository = mockk(relaxed = true)
         gateway = mockk(relaxed = true)
-        service = ChatLinkService(chatLinkRepository, clubRepository, ChatLinkMapper(), gateway, botUsername = "clubs_test_bot")
+        livePinService = mockk(relaxed = true)
+        service = ChatLinkService(chatLinkRepository, clubRepository, ChatLinkMapper(), gateway, livePinService, botUsername = "clubs_test_bot")
         every { clubRepository.findById(clubId) } returns club
     }
 
@@ -123,6 +125,68 @@ class ChatLinkServiceTest {
     }
 
     @Test
+    fun `setLivePin включение без права закрепа — 409, ничего не сохраняем`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns
+            chatLinkFixture(clubId = clubId, canPinMessages = false)
+
+        assertThrows(ConflictException::class.java) { service.setLivePin(clubId, ownerId, enabled = true) }
+        verify(exactly = 0) { chatLinkRepository.updateLivePin(any(), any()) }
+        verify(exactly = 0) { livePinService.backfillForClub(any()) }
+    }
+
+    @Test
+    fun `setLivePin включение — сохраняет тумблер и запускает backfill будущих событий`() {
+        val link = chatLinkFixture(clubId = clubId, canPinMessages = true)
+        every { chatLinkRepository.findByClubId(clubId) } returns link andThen link.copy(livePinEnabled = true)
+
+        val status = service.setLivePin(clubId, ownerId, enabled = true)
+
+        assertTrue(status.livePinEnabled)
+        verify { chatLinkRepository.updateLivePin(clubId, true) }
+        verify { livePinService.backfillForClub(clubId) }
+    }
+
+    @Test
+    fun `setLivePin выключение — открепляет живые пины через LivePinService`() {
+        val link = chatLinkFixture(clubId = clubId, livePinEnabled = true)
+        every { chatLinkRepository.findByClubId(clubId) } returns link andThen link.copy(livePinEnabled = false)
+
+        val status = service.setLivePin(clubId, ownerId, enabled = false)
+
+        assertFalse(status.livePinEnabled)
+        verify { chatLinkRepository.updateLivePin(clubId, false) }
+        verify { livePinService.disableForClub(link) }
+    }
+
+    @Test
+    fun `setLivePin идемпотентен — то же значение не трогает БД и LivePinService`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns
+            chatLinkFixture(clubId = clubId, livePinEnabled = false)
+
+        val status = service.setLivePin(clubId, ownerId, enabled = false)
+
+        assertFalse(status.livePinEnabled)
+        verify(exactly = 0) { chatLinkRepository.updateLivePin(any(), any()) }
+        verify(exactly = 0) { livePinService.disableForClub(any()) }
+    }
+
+    @Test
+    fun `setLivePin не-владельцу — 403`() {
+        assertThrows(ForbiddenException::class.java) { service.setLivePin(clubId, strangerId, enabled = true) }
+    }
+
+    @Test
+    fun `update применяет только присланные поля — livePinEnabled без doorEnabled`() {
+        val link = chatLinkFixture(clubId = clubId, canPinMessages = true)
+        every { chatLinkRepository.findByClubId(clubId) } returns link andThen link.copy(livePinEnabled = true)
+
+        service.update(clubId, ownerId, UpdateChatLinkRequest(livePinEnabled = true))
+
+        verify { chatLinkRepository.updateLivePin(clubId, true) }
+        verify(exactly = 0) { chatLinkRepository.updateDoor(any(), any(), any()) }
+    }
+
+    @Test
     fun `unlink — отзыв ссылки, выход из чата, удаление строки`() {
         val link = chatLinkFixture(clubId = clubId, doorEnabled = true, doorInviteLink = "https://t.me/+abc")
         every { chatLinkRepository.findByClubId(clubId) } returns link
@@ -132,6 +196,9 @@ class ChatLinkServiceTest {
         verify { gateway.revokeInviteLink(link.chatId, "https://t.me/+abc") }
         verify { gateway.leaveChat(link.chatId) }
         verify { chatLinkRepository.delete(clubId) }
+        // Живые закрепы снимаются ДО выхода из чата — иначе flush редактировал бы сообщения
+        // в чате, где бота больше нет
+        verify { livePinService.disableForClub(link) }
     }
 
     @Test
