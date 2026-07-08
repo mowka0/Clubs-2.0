@@ -163,6 +163,22 @@ class NotificationService(
     }
 
     /**
+     * ATT-3, исход спора: организатор разрешил спор — спорщик узнаёт результат из DM,
+     * а не случайно со страницы события (фидбек PO 2026-07-08).
+     */
+    @Async
+    fun sendAttendanceDisputeResolved(event: Event, participantTelegramId: Long, attended: Boolean) {
+        val text = if (attended) {
+            "✅ Спор решён в вашу пользу: организатор подтвердил ваше присутствие на " +
+                "«${event.title}» (${event.eventDatetime.format(fmt)}). Отметка исправлена на «пришёл»."
+        } else {
+            "⚖️ Организатор рассмотрел ваш спор по «${event.title}» " +
+                "(${event.eventDatetime.format(fmt)}) — отметка «не пришёл» осталась в силе."
+        }
+        sendDm(participantTelegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Открыть событие")
+    }
+
+    /**
      * ATT-3: участник оспорил отметку "не пришёл" — организатор должен разрешить спор до
      * закрытия окна оспаривания, иначе исходная отметка останется в силе и штраф применится.
      */

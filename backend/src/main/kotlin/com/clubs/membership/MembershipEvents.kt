@@ -27,7 +27,14 @@ data class MembershipExpiryRef(
  */
 data class MembershipAccessOpenedEvent(
     val clubId: UUID,
-    val userId: UUID
+    val userId: UUID,
+    /**
+     * TRUE = до мутации доступа НЕ БЫЛО (вступление, разморозка, взнос после frozen/expired) —
+     * человек ждёт подтверждения, DM «доступ открыт» уместен, даже если он уже сидит в чате
+     * (кейс PO 2026-07-08: кик → повторное вступление → участник остался в чате → молчание).
+     * FALSE = продление при живом доступе — DM сидящему в чате был бы спамом.
+     */
+    val wasAccessClosed: Boolean
 )
 
 /**

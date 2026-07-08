@@ -33,6 +33,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
   - `sendAttendanceMarked(eventId, newlyAbsentUserIds)` — DM участникам, **впервые** отмеченным `absent` в этой отметке (F5-15.2; раньше — всем `attendance=absent`) `[подключено: AttendanceMarkedListener @TransactionalEventListener ← AttendanceService.markAttendance, GAP-005 ✅ / ATT-3 ✅, Блок 1 2026-06-07]`
   - `sendAttendanceReminder(event, organizerTelegramId)` — poll-напоминание «отметь явку» (через 24ч), зовётся из `EventReminderScheduler` (Блок 1; детали и дедуп-флаг — `docs/modules/events.md` § «Напоминания событий»). Напоминание «подтверди участие» за 2ч (`sendConfirmReminder`) удалено PO 2026-07-08 (V51 — лишний пинг, nudge остаётся один: DM при старте Этапа 2)
   - `sendAttendanceDisputed(event, organizerTelegramId, disputerName)` — DM организатору при споре отметки (`AttendanceDisputedListener`, Блок 1, см. `events.md` § ATT-3)
+  - `sendAttendanceDisputeResolved(event, participantTelegramId, attended)` — DM спорщику об исходе спора: «присутствие подтверждено» / «отметка осталась в силе» (`AttendanceDisputedListener` ← `AttendanceService.resolveDispute`, фидбек PO 2026-07-08)
 - Generic DM имеют inline-кнопку «📱 Открыть Clubs» с `WebAppInfo("https://t.me/clubs_v2_bot/app")`. Deep-link DM (skladchina / application-created) — кнопку с кастомным `webAppPath` (например `/my-clubs?focus=inbox`).
 
 ### НЕ входит (в текущем состоянии кода)

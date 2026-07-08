@@ -85,7 +85,7 @@ class AccessGateService(
         }
         guardApplied(membershipRepository.unfreezeAccess(membership.id))
         log.info("Access unfrozen: clubId={} targetUserId={} by={}", clubId, targetUserId, callerId)
-        eventPublisher.publishEvent(MembershipAccessOpenedEvent(clubId, targetUserId))
+        eventPublisher.publishEvent(MembershipAccessOpenedEvent(clubId, targetUserId, wasAccessClosed = true))
         return mapper.toDto(membership.copy(status = MembershipStatus.active))
     }
 
@@ -104,7 +104,11 @@ class AccessGateService(
         val newExpiresAt = base.plusDays(accessPeriodDays)
         guardApplied(membershipRepository.markDuesPaid(membership.id, callerId, newExpiresAt))
         log.info("Dues marked paid: clubId={} targetUserId={} by={} accessUntil={}", clubId, targetUserId, callerId, newExpiresAt)
-        eventPublisher.publishEvent(MembershipAccessOpenedEvent(clubId, targetUserId))
+        // Взнос после frozen/expired = доступ ОТКРЫЛСЯ (DM уместен даже сидящему в чате);
+        // взнос при active = продление (сидящему в чате не спамим).
+        eventPublisher.publishEvent(
+            MembershipAccessOpenedEvent(clubId, targetUserId, wasAccessClosed = membership.status != MembershipStatus.active)
+        )
         // markDuesPaid открывает доступ (active) вне зависимости от предыдущего frozen-состояния, до newExpiresAt.
         return mapper.toDto(membership.copy(status = MembershipStatus.active, subscriptionExpiresAt = newExpiresAt))
     }
@@ -129,7 +133,9 @@ class AccessGateService(
         }
         guardApplied(membershipRepository.setAccessUntil(membership.id, until))
         log.info("Access window set: clubId={} targetUserId={} by={} until={}", clubId, targetUserId, callerId, until)
-        eventPublisher.publishEvent(MembershipAccessOpenedEvent(clubId, targetUserId))
+        eventPublisher.publishEvent(
+            MembershipAccessOpenedEvent(clubId, targetUserId, wasAccessClosed = membership.status != MembershipStatus.active)
+        )
         return mapper.toDto(membership.copy(status = MembershipStatus.active, subscriptionExpiresAt = until))
     }
 

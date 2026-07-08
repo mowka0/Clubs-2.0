@@ -84,9 +84,14 @@ class ChatDoorService(
      * Если человек стучался — одобряем его заявку; если нет и его ещё нет в чате — шлём
      * приглашение door-ссылкой (мокап 02-D: «нажал — и в чате», заявка одобрится по ветке
      * onChatJoinRequest как участнику с доступом).
+     *
+     * [wasAccessClosed] = доступа до этого не было (вступление/разморозка/взнос должника) —
+     * тогда «доступ открыт» сообщаем даже тому, кто уже сидит в чате (кейс PO 2026-07-08:
+     * кик из клуба не убирает из чата; после повторного вступления человек не получал ничего).
+     * Продление при живом доступе (false) сидящему в чате по-прежнему не спамим.
      */
     @Async
-    fun onAccessOpened(clubId: UUID, userId: UUID) {
+    fun onAccessOpened(clubId: UUID, userId: UUID, wasAccessClosed: Boolean) {
         val link = chatLinkRepository.findByClubId(clubId) ?: return
         // Работает независимо от тумблера двери — как и кнопка «Чат клуба» (реестр багов №4).
         if (!link.botStatus.isInChat) return
@@ -111,7 +116,19 @@ class ChatDoorService(
         // лишний DM действующему участнику чата.
         when (gateway.getUserChatState(link.chatId, telegramId)) {
             UserChatState.IN_CHAT -> {
-                log.info("Door: access opened, user already in chat — no DM: clubId={} userId={}", clubId, userId)
+                if (wasAccessClosed) {
+                    // Человек ЖДАЛ подтверждения (вступление/взнос должника) — сообщаем об
+                    // открытии доступа, даже если из чата он никуда не уходил.
+                    gateway.sendDmWithUrlButton(
+                        telegramId = telegramId,
+                        text = "🎉 Организатор открыл тебе доступ в клуб «$clubName» — ты уже в чате клуба.",
+                        buttonText = "Открыть чат",
+                        url = doorLink
+                    )
+                    log.info("Door: access opened for user already in chat, DM sent: clubId={} userId={}", clubId, userId)
+                } else {
+                    log.info("Door: access renewed, user already in chat — no DM: clubId={} userId={}", clubId, userId)
+                }
                 return
             }
             UserChatState.BANNED -> {

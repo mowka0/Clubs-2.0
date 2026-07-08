@@ -166,7 +166,7 @@ class LivePinServiceTest {
 
         service.flush()
 
-        verify { gateway.editGroupMessage(chatId, 777L, match { it.contains("Сбор закрыт") }, null, null) }
+        verify { gateway.editGroupMessage(chatId, 777L, match { it.contains("Событие началось") }, null, null) }
         verify { gateway.unpinChatMessage(chatId, 777L) }
         verify { pinRepository.markClosed(event.id) }
     }

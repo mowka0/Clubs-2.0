@@ -157,6 +157,10 @@ class AttendanceService(
             throw ValidationException("No disputed attendance to resolve for this user")
         }
 
+        // Спорщик должен узнать исход, не открывая страницу события (AFTER_COMMIT-DM,
+        // как AttendanceDisputedEvent в обратную сторону).
+        eventPublisher.publishEvent(AttendanceDisputeResolvedEvent(eventId, userId, attended))
+
         log.info("Dispute resolved: eventId={} userId={} attended={} organizerId={}", eventId, userId, attended, organizerId)
         return AttendanceResultDto(eventId, updated)
     }

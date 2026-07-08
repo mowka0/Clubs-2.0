@@ -102,9 +102,9 @@ class LivePinRendererTest {
     }
 
     @Test
-    fun `финал при старте — сбор закрыт`() {
+    fun `финал при старте — «Событие началось», не «Сбор закрыт» (сбор = складчина, путало PO)`() {
         val text = renderer.closedText(event, confirmed = 12)
-        assertTrue(text.contains("Сбор закрыт — подтвердили 12 из 15"))
+        assertTrue(text.contains("Событие началось — подтвердили 12 из 15"))
         assertTrue(text.contains("Итог появится после отметки явки"))
     }
 }

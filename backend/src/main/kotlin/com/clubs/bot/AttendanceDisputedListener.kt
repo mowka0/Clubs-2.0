@@ -1,5 +1,6 @@
 package com.clubs.bot
 
+import com.clubs.event.AttendanceDisputeResolvedEvent
 import com.clubs.event.AttendanceDisputedEvent
 import com.clubs.event.EventRepository
 import com.clubs.user.UserRepository
@@ -40,5 +41,21 @@ class AttendanceDisputedListener(
             ?.let { listOfNotNull(it.firstName, it.lastName).joinToString(" ").ifBlank { null } }
             ?: "Участник"
         notificationService.sendAttendanceDisputed(domainEvent, organizerTelegramId, disputerName)
+    }
+
+    /** Исход спора — DM спорщику (фидбек PO 2026-07-08: раньше результат узнавали только из UI). */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    fun onDisputeResolved(event: AttendanceDisputeResolvedEvent) {
+        val domainEvent = eventRepository.findById(event.eventId)
+        if (domainEvent == null) {
+            log.warn("Dispute-resolved DM skipped: event not found eventId={}", event.eventId)
+            return
+        }
+        val participantTelegramId = userRepository.findById(event.userId)?.telegramId
+        if (participantTelegramId == null) {
+            log.warn("Dispute-resolved DM skipped: participant telegram id not found userId={}", event.userId)
+            return
+        }
+        notificationService.sendAttendanceDisputeResolved(domainEvent, participantTelegramId, event.attended)
     }
 }
