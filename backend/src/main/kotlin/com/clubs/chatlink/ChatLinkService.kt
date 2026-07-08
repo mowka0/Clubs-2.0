@@ -25,6 +25,7 @@ class ChatLinkService(
     private val mapper: ChatLinkMapper,
     private val gateway: ChatTelegramGateway,
     private val livePinService: LivePinService,
+    private val skladchinaChatStatusService: SkladchinaChatStatusService,
     @Value("\${telegram.bot-username}") private val botUsername: String
 ) {
     private val log = LoggerFactory.getLogger(ChatLinkService::class.java)
@@ -38,6 +39,7 @@ class ChatLinkService(
         var status: ChatLinkStatusDto? = null
         request.doorEnabled?.let { status = setDoor(clubId, callerId, it) }
         request.livePinEnabled?.let { status = setLivePin(clubId, callerId, it) }
+        request.skladchinaStatusEnabled?.let { status = setSkladchinaStatus(clubId, callerId, it) }
         return status ?: getStatus(clubId, callerId)
     }
 
@@ -149,6 +151,37 @@ class ChatLinkService(
         return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
     }
 
+    /**
+     * Тумблер «Статус сборов в чате» (слайс 3.5). Включение требует только бота в чате —
+     * посты, редактирования и text_mention-упоминания прав администратора не требуют
+     * (pin — best-effort при праве закрепа). Сразу backfill: статус-посты для всех активных
+     * складчин клуба. Выключение открепляет живые посты (сообщения остаются в истории).
+     */
+    @Transactional
+    fun setSkladchinaStatus(clubId: UUID, callerId: UUID, enabled: Boolean): ChatLinkStatusDto {
+        requireOwner(clubId, callerId)
+        val link = chatLinkRepository.findByClubId(clubId)
+            ?: throw NotFoundException("Chat is not linked")
+
+        if (enabled == link.skladchinaStatusEnabled) {
+            return mapper.toStatusDto(link, startGroupUrl(clubId)) // идемпотентно
+        }
+
+        if (enabled) {
+            if (!link.botStatus.isInChat) {
+                throw ConflictException("Бот удалён из чата — верните его в группу и проверьте права")
+            }
+            chatLinkRepository.updateSkladchinaStatus(clubId, skladchinaStatusEnabled = true)
+            skladchinaChatStatusService.backfillForClub(clubId)
+            log.info("Skladchina chat status enabled: clubId={} chatId={}", clubId, link.chatId)
+        } else {
+            chatLinkRepository.updateSkladchinaStatus(clubId, skladchinaStatusEnabled = false)
+            skladchinaChatStatusService.disableForClub(link)
+            log.info("Skladchina chat status disabled: clubId={} chatId={}", clubId, link.chatId)
+        }
+        return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
+    }
+
     /** Отвязка владельцем из приложения (или кнопкой в DM-петле подтверждения — через [unlinkAsOwner]). */
     @Transactional
     fun unlink(clubId: UUID, callerId: UUID) {
@@ -168,6 +201,7 @@ class ChatLinkService(
     @Transactional
     fun doUnlink(link: ChatLink) {
         livePinService.disableForClub(link)
+        skladchinaChatStatusService.disableForClub(link)
         link.doorInviteLink?.let { gateway.revokeInviteLink(link.chatId, it) }
         gateway.leaveChat(link.chatId)
         chatLinkRepository.delete(link.clubId)

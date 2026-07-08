@@ -51,10 +51,13 @@ class LivePinRenderer(
             "📋 В очереди — $waitlisted\n" +
             "⏳ Подтвердить до — ${event.eventDatetime.format(fmt)}"
 
-    /** Финальный текст при старте события (закреп гаснет, итог придёт после отметки явки). */
+    /**
+     * Финальный текст при старте события (закреп гаснет, итог придёт после отметки явки).
+     * Не «Сбор закрыт» — слово «сбор» у нас занято складчиной и путало (фидбек PO 2026-07-08).
+     */
     fun closedText(event: Event, confirmed: Int): String =
         "📅 ${event.title} · ${event.eventDatetime.format(fmt)}\n" +
-            "Сбор закрыт — подтвердили ${confirmed} из ${event.participantLimit}. " +
+            "Событие началось — подтвердили ${confirmed} из ${event.participantLimit}. " +
             "Итог появится после отметки явки."
 
     /** Финальный текст при отмене события. */

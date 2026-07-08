@@ -22,6 +22,9 @@ interface ChatLinkRepository {
     /** Тумблер «Живой закреп» (слайс 3). */
     fun updateLivePin(clubId: UUID, livePinEnabled: Boolean)
 
+    /** Тумблер «Статус сборов в чате» (слайс 3.5). */
+    fun updateSkladchinaStatus(clubId: UUID, skladchinaStatusEnabled: Boolean)
+
     /** Миграция группы в супергруппу: Telegram меняет chat_id (migrate_to_chat_id). */
     fun updateChatId(oldChatId: Long, newChatId: Long)
 

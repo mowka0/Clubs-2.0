@@ -172,6 +172,17 @@ open class ClubChatLinks(
      */
     val LIVE_PIN_ENABLED: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("live_pin_enabled"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Тумблер «Живой закреп»: TRUE = бот постит в чат закреплённый статус каждого будущего события (голоса Этапа 1 / гонка за места Этапа 2) и редактирует его, а после отметки явки публикует итог встречи. Включение требует права закреплять сообщения.")
 
+    /**
+     * The column <code>public.club_chat_links.skladchina_status_enabled</code>.
+     * Тумблер «Статус сборов в чате»: TRUE = бот постит в чат живой статус
+     * каждой активной складчины («Скинулись N из M», дедлайн, упоминания ещё не
+     * ответивших) и редактирует его при изменении прогресса, а напоминание за
+     * 24ч до дедлайна важного сбора шлёт в чат вместо DM (DM — только тем, кого
+     * нет в чате). Отдельный от live_pin_enabled — публичные упоминания
+     * организатор включает осознанно.
+     */
+    val SKLADCHINA_STATUS_ENABLED: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("skladchina_status_enabled"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Тумблер «Статус сборов в чате»: TRUE = бот постит в чат живой статус каждой активной складчины («Скинулись N из M», дедлайн, упоминания ещё не ответивших) и редактирует его при изменении прогресса, а напоминание за 24ч до дедлайна важного сбора шлёт в чат вместо DM (DM — только тем, кого нет в чате). Отдельный от live_pin_enabled — публичные упоминания организатор включает осознанно.")
+
     private constructor(alias: Name, aliased: Table<ClubChatLinksRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<ClubChatLinksRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<ClubChatLinksRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

@@ -11,6 +11,7 @@ import com.clubs.event.EventRosterChangedEvent
 import com.clubs.event.WaitlistPromotedEvent
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
+import com.clubs.skladchina.SkladchinaProgressChangedEvent
 import com.clubs.skladchina.SkladchinaRepository
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
@@ -84,7 +85,7 @@ class AccessGateService(
         }
         guardApplied(membershipRepository.unfreezeAccess(membership.id))
         log.info("Access unfrozen: clubId={} targetUserId={} by={}", clubId, targetUserId, callerId)
-        eventPublisher.publishEvent(MembershipAccessOpenedEvent(clubId, targetUserId))
+        eventPublisher.publishEvent(MembershipAccessOpenedEvent(clubId, targetUserId, wasAccessClosed = true))
         return mapper.toDto(membership.copy(status = MembershipStatus.active))
     }
 
@@ -103,7 +104,11 @@ class AccessGateService(
         val newExpiresAt = base.plusDays(accessPeriodDays)
         guardApplied(membershipRepository.markDuesPaid(membership.id, callerId, newExpiresAt))
         log.info("Dues marked paid: clubId={} targetUserId={} by={} accessUntil={}", clubId, targetUserId, callerId, newExpiresAt)
-        eventPublisher.publishEvent(MembershipAccessOpenedEvent(clubId, targetUserId))
+        // Взнос после frozen/expired = доступ ОТКРЫЛСЯ (DM уместен даже сидящему в чате);
+        // взнос при active = продление (сидящему в чате не спамим).
+        eventPublisher.publishEvent(
+            MembershipAccessOpenedEvent(clubId, targetUserId, wasAccessClosed = membership.status != MembershipStatus.active)
+        )
         // markDuesPaid открывает доступ (active) вне зависимости от предыдущего frozen-состояния, до newExpiresAt.
         return mapper.toDto(membership.copy(status = MembershipStatus.active, subscriptionExpiresAt = newExpiresAt))
     }
@@ -128,7 +133,9 @@ class AccessGateService(
         }
         guardApplied(membershipRepository.setAccessUntil(membership.id, until))
         log.info("Access window set: clubId={} targetUserId={} by={} until={}", clubId, targetUserId, callerId, until)
-        eventPublisher.publishEvent(MembershipAccessOpenedEvent(clubId, targetUserId))
+        eventPublisher.publishEvent(
+            MembershipAccessOpenedEvent(clubId, targetUserId, wasAccessClosed = membership.status != MembershipStatus.active)
+        )
         return mapper.toDto(membership.copy(status = MembershipStatus.active, subscriptionExpiresAt = until))
     }
 
@@ -253,7 +260,10 @@ class AccessGateService(
             .map { it.eventId }
             .sorted()
         freedEventIds.forEach { eventResponseRepository.lockEventSlots(it) }
+        // Живой статус сбора: кикнутый не должен публично висеть «должником» в «Ждём:» —
+        // перерисовываем пост каждой затронутой складчины.
         skladchinaRepository.deleteParticipantFromActiveSkladchinasInClub(targetUserId, clubId)
+            .forEach { eventPublisher.publishEvent(SkladchinaProgressChangedEvent(it)) }
         val cascadedResponses = eventResponseRepository.deleteByUserAndClubAndActiveEvents(targetUserId, clubId)
         freedEventIds.forEach { eventId ->
             val promotedUserId = eventResponseRepository.promoteFirstWaitlisted(eventId)

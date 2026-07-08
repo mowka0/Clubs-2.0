@@ -84,6 +84,14 @@ class JooqChatLinkRepository(
             .execute()
     }
 
+    override fun updateSkladchinaStatus(clubId: UUID, skladchinaStatusEnabled: Boolean) {
+        dsl.update(CLUB_CHAT_LINKS)
+            .set(CLUB_CHAT_LINKS.SKLADCHINA_STATUS_ENABLED, skladchinaStatusEnabled)
+            .set(CLUB_CHAT_LINKS.UPDATED_AT, OffsetDateTime.now())
+            .where(CLUB_CHAT_LINKS.CLUB_ID.eq(clubId))
+            .execute()
+    }
+
     override fun updateChatId(oldChatId: Long, newChatId: Long) {
         dsl.update(CLUB_CHAT_LINKS)
             .set(CLUB_CHAT_LINKS.CHAT_ID, newChatId)

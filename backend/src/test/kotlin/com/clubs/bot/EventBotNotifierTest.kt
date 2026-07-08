@@ -1,8 +1,10 @@
 package com.clubs.bot
 
+import com.clubs.chatlink.LivePinService
 import com.clubs.event.Event
 import com.clubs.event.EventCreatedEvent
 import com.clubs.generated.jooq.enums.EventStatus
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Test
@@ -14,19 +16,34 @@ import java.util.UUID
  * the @TransactionalEventListener must forward the created Event to
  * NotificationService.sendEventCreated. (EventService publishing the event is
  * covered by EventServiceTest; AFTER_COMMIT dispatch is a Spring guarantee.)
+ *
+ * Маршрутизатор (PO 2026-07-08): листенер — оркестратор «сначала чат-пост, потом DM»,
+ * chatId фактически вышедшего поста прокидывается в sendEventCreated для DM-фоллбека.
  */
 class EventBotNotifierTest {
 
     private val notificationService = mockk<NotificationService>(relaxed = true)
-    private val notifier = EventBotNotifier(notificationService)
+    private val livePinService = mockk<LivePinService>(relaxed = true)
+    private val notifier = EventBotNotifier(notificationService, livePinService)
 
     @Test
-    fun `onEventCreated forwards the event to sendEventCreated`() {
+    fun `onEventCreated постит живой закреп и передаёт его chatId в sendEventCreated`() {
         val event = sampleEvent()
+        every { livePinService.onEventCreated(event) } returns -100123L
 
         notifier.onEventCreated(EventCreatedEvent(event))
 
-        verify(exactly = 1) { notificationService.sendEventCreated(event) }
+        verify(exactly = 1) { notificationService.sendEventCreated(event, -100123L) }
+    }
+
+    @Test
+    fun `onEventCreated без чат-поста — sendEventCreated с null (DM всем)`() {
+        val event = sampleEvent()
+        every { livePinService.onEventCreated(event) } returns null
+
+        notifier.onEventCreated(EventCreatedEvent(event))
+
+        verify(exactly = 1) { notificationService.sendEventCreated(event, null) }
     }
 
     private fun sampleEvent() = Event(

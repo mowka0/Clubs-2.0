@@ -49,8 +49,8 @@ class ChatLinkController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<ChatLinkStatusDto> {
         log.info(
-            "Chat link toggle: clubId={} doorEnabled={} livePinEnabled={} userId={}",
-            clubId, request.doorEnabled, request.livePinEnabled, user.userId
+            "Chat link toggle: clubId={} doorEnabled={} livePinEnabled={} skladchinaStatusEnabled={} userId={}",
+            clubId, request.doorEnabled, request.livePinEnabled, request.skladchinaStatusEnabled, user.userId
         )
         return ResponseEntity.ok(chatLinkService.update(clubId, user.userId, request))
     }

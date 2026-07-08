@@ -143,11 +143,8 @@ events:
   stage2-decline-cutoff-minutes: ${STAGE2_DECLINE_CUTOFF_MINUTES:240}
   # Период опроса EventReminderScheduler (мс). Дефолт 300000 = 5мин.
   reminder-poll-ms: ${EVENT_REMINDER_POLL_MS:300000}
-  # Окно DM-напоминания «подтвердите участие»: за сколько минут до события оно уходит.
-  # Дефолт 120 (= 2ч). В минутах, чтобы staging мог поставить малое значение (например 5) для теста.
-  confirm-reminder-minutes-before: ${CONFIRM_REMINDER_MINUTES_BEFORE:120}
   # DM-напоминание организатору отметить посещаемость: через сколько минут после события.
-  # Дефолт 1440 (= 24ч). В минутах по той же причине.
+  # Дефолт 1440 (= 24ч). В минутах, чтобы staging мог поставить малое значение (например 5) для теста.
   attendance-reminder-minutes-after: ${ATTENDANCE_REMINDER_MINUTES_AFTER:1440}
 
 # Тайминги уведомлений складчины (SkladchinaReminderScheduler). Вынесены в конфиг,

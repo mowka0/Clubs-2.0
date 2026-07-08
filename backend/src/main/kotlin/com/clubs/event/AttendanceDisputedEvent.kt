@@ -10,3 +10,11 @@ import java.util.UUID
  * никогда не открывает страницу события заново, пропустит штраф без рассмотрения.
  */
 data class AttendanceDisputedEvent(val eventId: UUID, val disputerUserId: UUID)
+
+/**
+ * Организатор разрешил спор по явке (ATT-3): [attended] = true — присутствие подтверждено
+ * (отметка исправлена на «пришёл»), false — отметка «не пришёл» осталась в силе.
+ * Слушатель шлёт спорщику DM с исходом — без него участник узнавал результат только
+ * случайно со страницы события (фидбек PO 2026-07-08).
+ */
+data class AttendanceDisputeResolvedEvent(val eventId: UUID, val userId: UUID, val attended: Boolean)

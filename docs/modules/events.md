@@ -465,7 +465,6 @@ penalty-флоу), а их страницы упираются в скрытый
 | `events.stage2-poll-ms` | `STAGE2_POLL_MS` | `60000` (1мин) | Период тика `triggerStage2ForReadyEvents`; окно подтверждения = trigger-lead − фаза тика, тик должен быть сильно мельче lead |
 | `events.stage2-decline-cutoff-minutes` | `STAGE2_DECLINE_CUTOFF_MINUTES` | `240` (4ч) | За сколько **минут** до старта закрывается отказ от УЖЕ ПОДТВЕРЖДЁННОГО места (замене нужно время). Фронт дублирует порог константой `CONFIRMED_DECLINE_CUTOFF_HOURS=4`; бэк — источник истины. Waitlisted порогом не гейтится |
 | `events.reminder-poll-ms` | `EVENT_REMINDER_POLL_MS` | `300000` (5мин) | Период `EventReminderScheduler` |
-| `events.confirm-reminder-minutes-before` | `CONFIRM_REMINDER_MINUTES_BEFORE` | `120` (2ч) | За сколько **минут** до события слать «подтверди участие» |
 | `events.attendance-reminder-minutes-after` | `ATTENDANCE_REMINDER_MINUTES_AFTER` | `1440` (24ч) | Через сколько **минут** после события напомнить оргу отметить явку |
 
 `@Scheduled(fixedDelay)` требует compile-time константу — поэтому период задаётся через
@@ -489,28 +488,24 @@ penalty-флоу), а их страницы упираются в скрытый
 
 ### Напоминания событий (`EventReminderScheduler`, bot-модуль)
 
-> **Реализовано** в `feature/two-stage-confirmation-gaps` (2026-06-07). Два poll-уведомления
-> (`backend/.../bot/EventReminderScheduler.kt`, период `events.reminder-poll-ms`). Дедуп — флаги
-> `events.confirm_reminder_sent` / `events.attendance_reminder_sent` (миграция V21): флаг ставится
-> ДО `@Async` DM, поэтому повторный poll не дублирует рассылку. Циклы **без** `@Transactional`
-> (каждый `mark*ReminderSent` — самостоятельный auto-commit UPDATE), чтобы одна ошибка не валила
-> весь батч (урок EXP-3).
+> **Реализовано** в `feature/two-stage-confirmation-gaps` (2026-06-07). Poll-уведомление
+> (`backend/.../bot/EventReminderScheduler.kt`, период `events.reminder-poll-ms`). Дедуп — флаг
+> `events.attendance_reminder_sent` (миграция V21): флаг ставится ДО `@Async` DM, поэтому
+> повторный poll не дублирует рассылку. Цикл **без** `@Transactional` (каждый
+> `markAttendanceReminderSent` — самостоятельный auto-commit UPDATE), чтобы одна ошибка
+> не валила весь батч (урок EXP-3).
 
-- **A — «подтверди участие» (за `confirm-reminder-minutes-before` = 120мин/2ч до события):**
-  `remindUnconfirmedVoters` → события `stage_2`, `event_datetime ∈ (now, now+2ч]`,
-  `confirm_reminder_sent=false` → DM голосовавшим `going/maybe` с `stage_2_vote IS NULL`
-  (`findUnconfirmedVoterTelegramIds`) с deep-link на событие.
 - **B — «отметь явку» (через `attendance-reminder-minutes-after` = 1440мин/24ч после события):**
   `remindOrganizersToMarkAttendance` → события `event_datetime <= now−24ч`, `attendance_marked=false`,
   `attendance_reminder_sent=false`, `status ≠ cancelled` → DM организатору (`findOrganizerTelegramId`).
 
-> **Отклонение от PRD (узаконено продуктом 2026-06-07):** PRD §4.4.2 предполагает уведомление о
-> подтверждении **при старте Этапа 2 (за 24ч)**, а §4.4.3 — напоминание оргу **через 12ч**. Принято:
-> подтверждение-напоминание — **за 2ч** (один nudge близко к событию), орг-напоминание — **через 24ч**.
-> PRD-уведомление при старте Этапа 2 (`sendStage2Started`, S2T-2) **подключено 2026-06-13**
-> (`bugfix/stage2-dm-and-slot-races`) — см. § «DM при старте Этапа 2 + сериализация слотов» ниже.
-> Итого участник получает **два** nudge: при старте Этапа 2 (≈за 24ч) и за 2ч до события
-> (только не подтвердившим).
+> **A — «подтверди участие» за ~2ч до события — УДАЛЕНО (решение PO 2026-07-08, V51):** лишний
+> пинг — участник получает DM при старте Этапа 2 (`sendStage2Started`, S2T-2, подключено
+> 2026-06-13), а дедлайн подтверждения виден в живом закрепе чата. Снесены:
+> `remindUnconfirmedVoters`, `sendConfirmReminder`, `findEventsNeedingConfirmReminder` /
+> `markConfirmReminderSent`, `findUnconfirmedVoterTelegramIds`, конфиг
+> `events.confirm-reminder-minutes-before`, колонка `events.confirm_reminder_sent` (V21→V51).
+> Итого участник получает **один** nudge о подтверждении: при старте Этапа 2.
 >
 > **Отложено (C):** штраф организатору, если явка не отмечена через 48ч — реализуется вместе с
 > «репутацией организатора» (бэклог).
@@ -529,9 +524,7 @@ penalty-флоу), а их страницы упираются в скрытый
   `confirmedCount` не меняется.
 - **AC-A4 (репутация):** `expired_no_confirm` строка **не создаёт** ledger-записи (репутация 0).
 - **AC-A5 (cancelled):** ответы на `cancelled`-событии не истекают.
-- **AC-R1 (confirm reminder):** GIVEN событие `stage_2`, старт через 1ч, есть going/maybe c
-  `stage_2_vote=NULL`, `confirm_reminder_sent=false` WHEN отработал scheduler THEN им уходит DM,
-  `confirm_reminder_sent=true`; повторный прогон DM не дублирует; уже подтверждённым DM не идёт.
+- **AC-R1 (confirm reminder):** снят — напоминание удалено PO 2026-07-08 (V51), см. § «Напоминания событий».
 - **AC-R2 (attendance reminder):** GIVEN событие прошло >24ч назад, `attendance_marked=false`,
   `attendance_reminder_sent=false`, не `cancelled` WHEN scheduler THEN оргу уходит DM,
   `attendance_reminder_sent=true`, повтор не дублирует. Помеченные/cancelled — пропускаются.
@@ -695,6 +688,11 @@ penalty-флоу), а их страницы упираются в скрытый
   → `bot/AttendanceDisputedListener` (AFTER_COMMIT) → `sendAttendanceDisputed` — DM организатору
   «N оспорил отметку, разберите до закрытия окна» с deep-link. Без этого орг, не открывающий событие,
   пропускал спор, и ATT-2 наказывал участника без чьего-либо решения.
+- **DM спорщику об исходе (2026-07-08, фидбек PO):** `resolveDispute` публикует
+  `AttendanceDisputeResolvedEvent(eventId, userId, attended)` → тот же `AttendanceDisputedListener`
+  (AFTER_COMMIT) → `sendAttendanceDisputeResolved` — DM участнику: «спор решён в вашу пользу,
+  отметка исправлена на „пришёл“» либо «отметка „не пришёл“ осталась в силе», с deep-link на
+  событие. Раньше исход спора участник узнавал только случайно со страницы события.
 
 **Дефолт отметки — «пришёл» (2026-06-11, рев. 2):** в форме отметки все confirmed по умолчанию
 отмечены пришедшими (подсказка: «снимите галочку с тех, кто не пришёл») — отсутствующие в офлайне
@@ -767,7 +765,8 @@ penalty-флоу), а их страницы упираются в скрытый
 - **AC-PH2:** GIVEN событие в `stage_2` с `goingCount=5`, `confirmedCount=2` WHEN открыта вкладка
   «Активности» клуба THEN карточка показывает «2/{limit} · подтв.» (не «5/{limit} · идёт»).
 
-**Текст confirm-reminder DM (ATT/Feature A).** `NotificationService.sendConfirmReminder` —
+**Текст confirm-reminder DM (ATT/Feature A).** *(историческое: само напоминание удалено PO
+2026-07-08, V51 — см. § «Напоминания событий»)* `NotificationService.sendConfirmReminder` —
 «Подтвердите участие, иначе место займут другие:» (было «…иначе место освободится:» — слабее побуждало).
 
 **Спонтанность видна в UI.** `spontaneityCount` (счётчик «Возможно → Подтвердил → Пришёл») считался и

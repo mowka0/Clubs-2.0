@@ -22,8 +22,9 @@ class NotificationServiceTest {
     private val membershipRepository = mockk<MembershipRepository>(relaxed = true)
     private val eventResponseRepository = mockk<EventResponseRepository>(relaxed = true)
     private val telegramClient = mockk<TelegramClient>(relaxed = true)
+    private val gateway = mockk<ChatTelegramGateway>(relaxed = true)
     private val service = NotificationService(
-        membershipRepository, eventResponseRepository, telegramClient, "bot", "https://app"
+        membershipRepository, eventResponseRepository, telegramClient, ChatAwareBroadcast(gateway), "bot", "https://app"
     )
 
     @Test
@@ -47,6 +48,45 @@ class NotificationServiceTest {
         service.sendEventCancelled(event, reason = null)
 
         verify(exactly = 0) { telegramClient.execute(any<SendMessage>()) }
+    }
+
+    @Test
+    fun `маршрутизатор — участники чата не получают DM об отмене, остальные получают`() {
+        val event = sampleEvent()
+        val chatId = -100123L
+        every { membershipRepository.findMemberTelegramIds(event.clubId) } returns listOf(101L, 102L, 103L)
+        every { gateway.getUserChatState(chatId, 101L) } returns UserChatState.IN_CHAT
+        every { gateway.getUserChatState(chatId, 102L) } returns UserChatState.NOT_IN_CHAT
+        // Telegram молчит про 103 → UNKNOWN → DM (лишний DM лучше потерянного уведомления)
+        every { gateway.getUserChatState(chatId, 103L) } returns UserChatState.UNKNOWN
+
+        service.sendEventCancelled(event, reason = "погода", chatPostChatId = chatId)
+
+        verify(exactly = 2) { telegramClient.execute(any<SendMessage>()) }
+    }
+
+    @Test
+    fun `маршрутизатор — событие создано, пост вышел, DM только не-в-чате`() {
+        val event = sampleEvent()
+        val chatId = -100123L
+        every { membershipRepository.findMemberTelegramIds(event.clubId) } returns listOf(101L, 102L)
+        every { gateway.getUserChatState(chatId, 101L) } returns UserChatState.IN_CHAT
+        every { gateway.getUserChatState(chatId, 102L) } returns UserChatState.NOT_IN_CHAT
+
+        service.sendEventCreated(event, chatPostChatId = chatId)
+
+        verify(exactly = 1) { telegramClient.execute(any<SendMessage>()) }
+    }
+
+    @Test
+    fun `маршрутизатор — поста нет (null) — DM всем, как до чат-интеграции`() {
+        val event = sampleEvent()
+        every { membershipRepository.findMemberTelegramIds(event.clubId) } returns listOf(101L, 102L)
+
+        service.sendEventCreated(event, chatPostChatId = null)
+
+        verify(exactly = 2) { telegramClient.execute(any<SendMessage>()) }
+        verify(exactly = 0) { gateway.getUserChatState(any(), any()) }
     }
 
     private fun sampleEvent() = Event(

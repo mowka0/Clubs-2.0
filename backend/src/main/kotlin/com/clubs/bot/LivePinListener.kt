@@ -16,17 +16,17 @@ import org.springframework.transaction.event.TransactionalEventListener
  * в действия [LivePinService] ПОСЛЕ коммита исходной транзакции (AFTER_COMMIT — как остальные
  * бот-листенеры: перерисовка читает уже закоммиченные голоса/подтверждения). Изменения ростера
  * только ставят dirty-флаг — реальный edit идёт flush-планировщиком с дебаунсом.
+ *
+ * Создание и отмена события здесь НЕ слушаются: их оркестрирует [EventBotNotifier] /
+ * [EventCancelledListener] — чат-пост и DM-рассылка связаны маршрутизатором
+ * ([ChatAwareBroadcast]: DM только тем, кого пост в чате не покрыл), поэтому обязаны
+ * идти последовательно в одном потоке, а не гоняться двумя листенерами.
  */
 @Component
 class LivePinListener(
     private val livePinService: LivePinService
 ) {
     private val log = LoggerFactory.getLogger(LivePinListener::class.java)
-
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
-    fun onEventCreated(created: EventCreatedEvent) {
-        livePinService.onEventCreated(created.event)
-    }
 
     // fallbackExecution: castVote публикует без активной транзакции — событие не должно теряться.
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
@@ -38,11 +38,6 @@ class LivePinListener(
     fun onStage2Started(started: Stage2StartedEvent) {
         log.info("Live pin: stage 2 started, mark dirty: eventId={}", started.event.id)
         livePinService.markDirty(started.event.id)
-    }
-
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
-    fun onEventCancelled(cancelled: EventCancelledEvent) {
-        livePinService.onEventCancelled(cancelled.event, cancelled.reason)
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)

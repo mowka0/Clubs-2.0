@@ -46,6 +46,7 @@ function status(over: Partial<ChatLinkStatusDto> = {}): ChatLinkStatusDto {
     doorEnabled: false,
     doorInviteLink: null,
     livePinEnabled: false,
+    skladchinaStatusEnabled: false,
     startGroupUrl: START_URL,
     ...over,
   };
@@ -85,9 +86,51 @@ describe('ClubChatTab', () => {
     expect(screen.getByText('✓ бот в чате')).toBeInTheDocument();
     expect(screen.getByText('✓ приглашения разрешены')).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Вход в чат через заявки' })).toBeEnabled();
-    // Живой закреп активен (слайс 3); строгий режим — «скоро» (слайс 5)
+    // Живой закреп активен (слайс 3); статус сборов активен (слайс 3.5); строгий режим — «скоро» (слайс 5)
     expect(screen.getByRole('switch', { name: 'Живой закреп' })).toBeEnabled();
+    expect(screen.getByRole('switch', { name: 'Статус сборов в чате' })).toBeEnabled();
     expect(screen.getByRole('switch', { name: 'Строгий режим (скоро)' })).toBeDisabled();
+  });
+
+  it('включение статуса сборов шлёт PATCH только с skladchinaStatusEnabled', async () => {
+    let current = linkedHealthy();
+    let patched: unknown = null;
+    server.use(
+      http.get(`*/api/clubs/${CLUB_ID}/chat-link`, () => HttpResponse.json(current)),
+      http.patch(`*/api/clubs/${CLUB_ID}/chat-link`, async ({ request }) => {
+        patched = await request.json();
+        current = { ...linkedHealthy(), skladchinaStatusEnabled: true };
+        return HttpResponse.json(current);
+      }),
+    );
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    await userEvent.click(await screen.findByRole('switch', { name: 'Статус сборов в чате' }));
+
+    await waitFor(() => expect(patched).toEqual({ skladchinaStatusEnabled: true }));
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Статус сборов в чате' })).toHaveAttribute('aria-checked', 'true'));
+  });
+
+  it('статус сборов НЕ требует права закрепа (гейт — только бот в чате)', async () => {
+    mockStatus(status({
+      linked: true,
+      chatTitle: 'Партия — чат',
+      botStatus: 'administrator',
+      canPinMessages: false,
+      canInviteUsers: true,
+    }));
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByRole('switch', { name: 'Статус сборов в чате' })).toBeEnabled();
+    // а живой закреп при этом задизейблен — права разные
+    expect(screen.getByRole('switch', { name: 'Живой закреп' })).toBeDisabled();
+  });
+
+  it('бот кикнут — статус сборов включить нельзя', async () => {
+    mockStatus(status({ linked: true, chatTitle: 'Партия — чат', botStatus: 'kicked' }));
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByRole('switch', { name: 'Статус сборов в чате' })).toBeDisabled();
   });
 
   it('включение живого закрепа шлёт PATCH только с livePinEnabled', async () => {

@@ -9,7 +9,7 @@ import {
 } from '../../queries/chatLink';
 import { openTmeLink } from '../../utils/telegramLinks';
 import { Toast } from '../Toast';
-import type { ChatLinkStatusDto } from '../../types/api';
+import type { ChatLinkStatusDto, UpdateChatLinkRequest } from '../../types/api';
 
 // Таб «Чат» в «Управлении клубом» — три состояния по мокапу 01-manage-chat-section:
 // A (не привязан) → CTA привязки, B (привязан, здоров) → карточка + тумблеры фич,
@@ -92,31 +92,23 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
         ? { title: 'Бот потерял право закреплять сообщения', sub: 'Уже созданные статусы бот продолжит обновлять, но закрепить новые не сможет. Верните боту право «Закрепление сообщений» в настройках группы.' }
         : null;
 
-  const handleToggleDoor = () => {
+  // Один PATCH-хендлер на все тумблеры фич (дверь / живой закреп / статус сборов):
+  // частичный запрос содержит ровно одно переключаемое поле.
+  const makeToggle = (patch: () => UpdateChatLinkRequest) => () => {
     if (busy) return;
     setError(null);
     haptic.impact('medium');
-    updateMutation.mutate(
-      { doorEnabled: !status.doorEnabled },
-      {
-        onSuccess: () => haptic.notify('success'),
-        onError: (e) => { setError(e.message); haptic.notify('error'); },
-      },
-    );
+    updateMutation.mutate(patch(), {
+      onSuccess: () => haptic.notify('success'),
+      onError: (e) => { setError(e.message); haptic.notify('error'); },
+    });
   };
 
-  const handleToggleLivePin = () => {
-    if (busy) return;
-    setError(null);
-    haptic.impact('medium');
-    updateMutation.mutate(
-      { livePinEnabled: !status.livePinEnabled },
-      {
-        onSuccess: () => haptic.notify('success'),
-        onError: (e) => { setError(e.message); haptic.notify('error'); },
-      },
-    );
-  };
+  const handleToggleDoor = makeToggle(() => ({ doorEnabled: !status.doorEnabled }));
+  const handleToggleLivePin = makeToggle(() => ({ livePinEnabled: !status.livePinEnabled }));
+  const handleToggleSkladchinaStatus = makeToggle(
+    () => ({ skladchinaStatusEnabled: !status.skladchinaStatusEnabled }),
+  );
 
   const handleRefresh = () => {
     setError(null);
@@ -237,6 +229,26 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
             aria-label="Живой закреп"
             disabled={busy || (!status.livePinEnabled && (!botInChat || !status.canPinMessages))}
             onClick={handleToggleLivePin}
+          />
+        </div>
+        {/* Статус сборов не требует прав администратора (посты и упоминания доступны
+            любому участнику чата) — гейт только «бот в чате». Пин — best-effort. */}
+        <div className="rd-cl-feat">
+          <div className="fi">
+            <div className="ft">Статус сборов в чате</div>
+            <div className="fd">
+              Живой пост по каждому сбору: «скинулись N из M», дедлайн и кто ещё не ответил
+              (с упоминаниями). Напоминание о дедлайне придёт в чат вместо личных сообщений.
+            </div>
+          </div>
+          <button
+            type="button"
+            className={`rd-cl-tgl${status.skladchinaStatusEnabled ? ' on' : ''}`}
+            role="switch"
+            aria-checked={status.skladchinaStatusEnabled}
+            aria-label="Статус сборов в чате"
+            disabled={busy || (!status.skladchinaStatusEnabled && !botInChat)}
+            onClick={handleToggleSkladchinaStatus}
           />
         </div>
         <div className="rd-cl-feat soon">

@@ -150,7 +150,7 @@ class ChatDoorServiceTest {
     fun `доступ открылся - висящая заявка одобрена, DM 'ты уже в чате'`() {
         every { gateway.approveJoinRequest(chatId, telegramId) } returns true
 
-        service.onAccessOpened(clubId, userId)
+        service.onAccessOpened(clubId, userId, wasAccessClosed = true)
 
         verify { gateway.approveJoinRequest(chatId, telegramId) }
         verify { gateway.sendDmWithUrlButton(telegramId, match { it.contains("уже в чате") }, any(), doorLink) }
@@ -161,7 +161,7 @@ class ChatDoorServiceTest {
         every { gateway.approveJoinRequest(chatId, telegramId) } returns false
         every { gateway.getUserChatState(chatId, telegramId) } returns UserChatState.NOT_IN_CHAT
 
-        service.onAccessOpened(clubId, userId)
+        service.onAccessOpened(clubId, userId, wasAccessClosed = true)
 
         verify { gateway.sendDmWithUrlButton(telegramId, match { it.contains("Вступай в чат") || it.contains("чат клуба") }, any(), doorLink) }
         verify(exactly = 0) { gateway.unbanChatMember(any(), any()) }
@@ -175,7 +175,7 @@ class ChatDoorServiceTest {
         every { gateway.getUserChatState(chatId, telegramId) } returns UserChatState.BANNED
         every { gateway.unbanChatMember(chatId, telegramId) } returns true
 
-        service.onAccessOpened(clubId, userId)
+        service.onAccessOpened(clubId, userId, wasAccessClosed = true)
 
         verify { gateway.unbanChatMember(chatId, telegramId) }
         verify { gateway.sendDmWithUrlButton(telegramId, any(), any(), doorLink) }
@@ -186,9 +186,21 @@ class ChatDoorServiceTest {
         every { gateway.approveJoinRequest(chatId, telegramId) } returns false
         every { gateway.getUserChatState(chatId, telegramId) } returns UserChatState.IN_CHAT
 
-        service.onAccessOpened(clubId, userId)
+        service.onAccessOpened(clubId, userId, wasAccessClosed = false)
 
         verify(exactly = 0) { gateway.sendDmWithUrlButton(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `доступ ОТКРЫЛСЯ (не продление) - человек уже в чате - DM «доступ открыт» шлём (кейс кика)`() {
+        // Кейс PO 2026-07-08: кик из клуба не убирает из чата → повторное вступление →
+        // взнос получен → человек ждёт подтверждения, а система молчала.
+        every { gateway.approveJoinRequest(chatId, telegramId) } returns false
+        every { gateway.getUserChatState(chatId, telegramId) } returns UserChatState.IN_CHAT
+
+        service.onAccessOpened(clubId, userId, wasAccessClosed = true)
+
+        verify { gateway.sendDmWithUrlButton(telegramId, match { it.contains("открыл тебе доступ") }, any(), doorLink) }
     }
 
     @Test
@@ -197,7 +209,7 @@ class ChatDoorServiceTest {
         every { gateway.approveJoinRequest(chatId, telegramId) } returns false
         every { gateway.getUserChatState(chatId, telegramId) } returns UserChatState.UNKNOWN
 
-        service.onAccessOpened(clubId, userId)
+        service.onAccessOpened(clubId, userId, wasAccessClosed = true)
 
         verify { gateway.sendDmWithUrlButton(telegramId, any(), any(), doorLink) }
     }
@@ -209,7 +221,7 @@ class ChatDoorServiceTest {
         every { gateway.approveJoinRequest(chatId, telegramId) } returns false
         every { gateway.getUserChatState(chatId, telegramId) } returns UserChatState.NOT_IN_CHAT
 
-        service.onAccessOpened(clubId, userId)
+        service.onAccessOpened(clubId, userId, wasAccessClosed = true)
 
         verify { gateway.sendDmWithUrlButton(telegramId, any(), any(), doorLink) }
     }
@@ -219,7 +231,7 @@ class ChatDoorServiceTest {
         every { chatLinkRepository.findByClubId(clubId) } returns
             chatLinkFixture(clubId = clubId, chatId = chatId, doorEnabled = false, doorInviteLink = null)
 
-        service.onAccessOpened(clubId, userId)
+        service.onAccessOpened(clubId, userId, wasAccessClosed = true)
 
         verify(exactly = 0) { gateway.approveJoinRequest(any(), any()) }
         verify(exactly = 0) { gateway.sendDmWithUrlButton(any(), any(), any(), any()) }
@@ -230,7 +242,7 @@ class ChatDoorServiceTest {
         every { chatLinkRepository.findByClubId(clubId) } returns
             chatLinkFixture(clubId = clubId, chatId = chatId, doorEnabled = true, doorInviteLink = doorLink, botStatus = BotChatStatus.KICKED)
 
-        service.onAccessOpened(clubId, userId)
+        service.onAccessOpened(clubId, userId, wasAccessClosed = true)
 
         verify(exactly = 0) { gateway.approveJoinRequest(any(), any()) }
     }

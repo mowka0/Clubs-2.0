@@ -22,6 +22,7 @@ class NotificationService(
     private val membershipRepository: MembershipRepository,
     private val eventResponseRepository: EventResponseRepository,
     private val telegramClient: TelegramClient,
+    private val chatAwareBroadcast: ChatAwareBroadcast,
     @Value("\${telegram.bot-username}") private val botUsername: String,
     @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String
 ) {
@@ -36,13 +37,17 @@ class NotificationService(
 
     /**
      * Уведомляет участников клуба о создании нового события.
-     * Отправляет сообщение в личку каждому активному участнику со ссылкой на Mini App.
+     * Маршрутизатор (PO 2026-07-08): [chatPostChatId] — чат, куда фактически вышел пост живого
+     * закрепа; участники этого чата уведомлены постом, DM идёт только остальным. Поста нет
+     * (null: чат не привязан / тумблер выключен / сбой) — DM каждому, как до чат-интеграции.
      */
     @Async
-    fun sendEventCreated(event: Event) {
-        val memberTelegramIds = membershipRepository.findMemberTelegramIds(event.clubId)
+    fun sendEventCreated(event: Event, chatPostChatId: Long? = null) {
+        val memberTelegramIds = chatAwareBroadcast.dmTargets(
+            chatPostChatId, membershipRepository.findMemberTelegramIds(event.clubId)
+        )
         if (memberTelegramIds.isEmpty()) {
-            log.warn("Event-created DM SKIPPED — no members with access for clubId={}", event.clubId)
+            log.info("Event-created DM SKIPPED — all covered by chat or no members, clubId={}", event.clubId)
             return
         }
         log.info("Event-created DM: eventId={} clubId={} recipients={}", event.id, event.clubId, memberTelegramIds.size)
@@ -101,17 +106,20 @@ class NotificationService(
 
 
     /**
-     * F5-14: уведомляет ВСЕХ участников клуба с доступом об отмене события, с опциональной
+     * F5-14: уведомляет участников клуба с доступом об отмене события, с опциональной
      * причиной от организатора (UPDATED 2026-07-05: раньше — только going/maybe; теперь всем,
-     * симметрично уведомлению о создании). Best-effort, как и все остальные DM.
+     * симметрично уведомлению о создании). Маршрутизатор (PO 2026-07-08): участники чата,
+     * куда вышел пост об отмене ([chatPostChatId]), DM не получают. Best-effort.
      */
     @Async
-    fun sendEventCancelled(event: Event, reason: String?) {
+    fun sendEventCancelled(event: Event, reason: String?, chatPostChatId: Long? = null) {
         // Об отмене сообщаем ВСЕМ участникам клуба с доступом (симметрично sendEventCreated:
         // кто узнал о создании — узнаёт и об отмене), а не только выразившим интерес.
-        val recipientTelegramIds = membershipRepository.findMemberTelegramIds(event.clubId)
+        val recipientTelegramIds = chatAwareBroadcast.dmTargets(
+            chatPostChatId, membershipRepository.findMemberTelegramIds(event.clubId)
+        )
         if (recipientTelegramIds.isEmpty()) {
-            log.info("Event-cancelled DM SKIPPED — no members with access for clubId={}", event.clubId)
+            log.info("Event-cancelled DM SKIPPED — all covered by chat or no members, clubId={}", event.clubId)
             return
         }
         log.info("Event-cancelled DM: eventId={} clubId={} recipients={}", event.id, event.clubId, recipientTelegramIds.size)
@@ -121,24 +129,6 @@ class NotificationService(
         recipientTelegramIds.forEach { telegramId ->
             sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
         }
-    }
-
-    /**
-     * Напоминание Feature A (~за 2ч до события): подталкивает проголосовавших "иду"/"возможно",
-     * кто ещё не подтвердил участие, сделать это до закрытия окна в момент начала события.
-     */
-    @Async
-    fun sendConfirmReminder(event: Event) {
-        val telegramIds = eventResponseRepository.findUnconfirmedVoterTelegramIds(event.id)
-        if (telegramIds.isEmpty()) {
-            log.info("Confirm reminder SKIPPED — no unconfirmed voters for eventId={}", event.id)
-            return
-        }
-        log.info("Confirm reminder DM: eventId={} recipients={}", event.id, telegramIds.size)
-        val text = "⏰ Скоро начало: «${event.title}» — ${event.eventDatetime.format(fmt)}.\n\n" +
-            "Подтвердите участие, иначе место займут другие:"
-        val path = "/events/${event.id}"
-        telegramIds.forEach { sendDm(it.toString(), text, webAppPath = path, buttonText = "✅ Подтвердить участие") }
     }
 
     /**
@@ -170,6 +160,22 @@ class NotificationService(
         absentTelegramIds.forEach { telegramId ->
             sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "Оспорить явку")
         }
+    }
+
+    /**
+     * ATT-3, исход спора: организатор разрешил спор — спорщик узнаёт результат из DM,
+     * а не случайно со страницы события (фидбек PO 2026-07-08).
+     */
+    @Async
+    fun sendAttendanceDisputeResolved(event: Event, participantTelegramId: Long, attended: Boolean) {
+        val text = if (attended) {
+            "✅ Спор решён в вашу пользу: организатор подтвердил ваше присутствие на " +
+                "«${event.title}» (${event.eventDatetime.format(fmt)}). Отметка исправлена на «пришёл»."
+        } else {
+            "⚖️ Организатор рассмотрел ваш спор по «${event.title}» " +
+                "(${event.eventDatetime.format(fmt)}) — отметка «не пришёл» осталась в силе."
+        }
+        sendDm(participantTelegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Открыть событие")
     }
 
     /**

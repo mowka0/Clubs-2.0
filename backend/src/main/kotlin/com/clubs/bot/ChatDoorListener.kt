@@ -24,8 +24,11 @@ class ChatDoorListener(
     // @Transactional) не должна молча терять событие — как у EventBotNotifier.
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     fun onAccessOpened(event: MembershipAccessOpenedEvent) {
-        log.info("Chat door: access opened, dispatching: clubId={} userId={}", event.clubId, event.userId)
-        chatDoorService.onAccessOpened(event.clubId, event.userId)
+        log.info(
+            "Chat door: access opened, dispatching: clubId={} userId={} wasAccessClosed={}",
+            event.clubId, event.userId, event.wasAccessClosed
+        )
+        chatDoorService.onAccessOpened(event.clubId, event.userId, event.wasAccessClosed)
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)

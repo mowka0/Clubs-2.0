@@ -166,7 +166,7 @@ class LivePinServiceTest {
 
         service.flush()
 
-        verify { gateway.editGroupMessage(chatId, 777L, match { it.contains("Сбор закрыт") }, null, null) }
+        verify { gateway.editGroupMessage(chatId, 777L, match { it.contains("Событие началось") }, null, null) }
         verify { gateway.unpinChatMessage(chatId, 777L) }
         verify { pinRepository.markClosed(event.id) }
     }
@@ -191,6 +191,45 @@ class LivePinServiceTest {
     }
 
     @Test
+    fun `onEventCancelled постит громкое сообщение об отмене и возвращает chatId (маршрутизатор)`() {
+        val event = livePinEvent(clubId = clubId)
+        every { pinRepository.findByEventId(event.id) } returns
+            EventChatPin(event.id, chatId, 777L, closedAt = null, summaryMessageId = null)
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), null, null) } returns 999L
+
+        val postedChatId = service.onEventCancelled(event, "все заболели")
+
+        // Правки беззвучны — пост отмены единственный пинг чата, DM уйдёт только не-в-чате.
+        verify { gateway.sendGroupMessageWithUrlButton(chatId, match { it.contains("отменено") }, null, null) }
+        org.junit.jupiter.api.Assertions.assertEquals(chatId, postedChatId)
+    }
+
+    @Test
+    fun `onEventCancelled — пост отмены не вышел (Telegram молчит) — null, DM всем`() {
+        val event = livePinEvent(clubId = clubId)
+        every { pinRepository.findByEventId(event.id) } returns null
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), null, null) } returns null
+
+        org.junit.jupiter.api.Assertions.assertNull(service.onEventCancelled(event, null))
+    }
+
+    @Test
+    fun `onEventCreated возвращает chatId вышедшего поста (маршрутизатор)`() {
+        val event = livePinEvent(clubId = clubId)
+        every { pinRepository.findByEventId(event.id) } returns null
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any()) } returns 777L
+
+        org.junit.jupiter.api.Assertions.assertEquals(chatId, service.onEventCreated(event))
+    }
+
+    @Test
+    fun `onEventCreated при выключенном тумблере — null (DM всем)`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns link.copy(livePinEnabled = false)
+
+        org.junit.jupiter.api.Assertions.assertNull(service.onEventCreated(livePinEvent(clubId = clubId)))
+    }
+
+    @Test
     fun `onAttendanceMarked постит итог один раз — второй вызов гасится claim'ом`() {
         val event = livePinEvent(clubId = clubId, eventDatetime = OffsetDateTime.now().minusHours(3))
         every { eventRepository.findById(event.id) } returns event
@@ -203,11 +242,12 @@ class LivePinServiceTest {
         every { eventResponseRepository.findFirstTimeAttendeeFirstNames(event.id, clubId) } returns listOf("Наташа")
         val next = livePinEvent(clubId = clubId, eventDatetime = OffsetDateTime.now().plusDays(7))
         every { eventRepository.findFutureEventsByClub(clubId, any()) } returns listOf(next)
-        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any()) } returns 888L
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any(), any(), any()) } returns 888L
 
         service.onAttendanceMarked(event.id)
         service.onAttendanceMarked(event.id)
 
+        // Итог — тихий пост (silent=true, решение PO 2026-07-08): сводка без пуша всем участникам.
         verify(exactly = 1) {
             gateway.sendGroupMessageWithUrlButton(
                 chatId,
@@ -216,7 +256,9 @@ class LivePinServiceTest {
                         it.contains("Наташа — впервые") && it.contains("Следующая")
                 },
                 "Иду на следующую",
-                "https://t.me/clubs_test_bot?startapp=event_${next.id}"
+                "https://t.me/clubs_test_bot?startapp=event_${next.id}",
+                null,
+                true
             )
         }
         verify { pinRepository.setSummaryMessageId(event.id, 888L) }
@@ -233,11 +275,15 @@ class LivePinServiceTest {
         every { eventRepository.countPastEvents(clubId, any()) } returns 1
         every { eventResponseRepository.findFirstTimeAttendeeFirstNames(event.id, clubId) } returns emptyList()
         every { eventRepository.findFutureEventsByClub(clubId, any()) } returns emptyList()
-        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), null, null) } returns 888L
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), null, null, any(), any()) } returns 888L
 
         service.onAttendanceMarked(event.id)
 
-        verify { gateway.sendGroupMessageWithUrlButton(chatId, match { it.contains("Пришли — 0") && !it.contains("из") }, null, null) }
+        verify {
+            gateway.sendGroupMessageWithUrlButton(
+                chatId, match { it.contains("Пришли — 0") && !it.contains("из") }, null, null, null, true
+            )
+        }
     }
 
     @Test

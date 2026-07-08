@@ -563,7 +563,7 @@ class JooqSkladchinaRepository(
             )
             .fetch { r -> SkladchinaObligation(r.get(SKLADCHINAS.ID)!!, r.get(SKLADCHINAS.DEADLINE)!!) }
 
-    override fun deleteParticipantFromActiveSkladchinasInClub(userId: UUID, clubId: UUID): Int {
+    override fun deleteParticipantFromActiveSkladchinasInClub(userId: UUID, clubId: UUID): List<UUID> {
         val activeSkladchinaIds = dsl.select(SKLADCHINAS.ID)
             .from(SKLADCHINAS)
             .where(
@@ -575,7 +575,9 @@ class JooqSkladchinaRepository(
                 SKLADCHINA_PARTICIPANTS.USER_ID.eq(userId)
                     .and(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID.`in`(activeSkladchinaIds))
             )
-            .execute()
+            .returningResult(SKLADCHINA_PARTICIPANTS.SKLADCHINA_ID)
+            .fetch()
+            .mapNotNull { it.value1() }
     }
 
     override fun cancelActiveByClub(clubId: UUID): Int {

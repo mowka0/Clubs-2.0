@@ -23,6 +23,7 @@ class ChatLinkServiceTest {
     private lateinit var clubRepository: ClubRepository
     private lateinit var gateway: ChatTelegramGateway
     private lateinit var livePinService: LivePinService
+    private lateinit var skladchinaChatStatusService: SkladchinaChatStatusService
     private lateinit var service: ChatLinkService
 
     private val clubId = UUID.randomUUID()
@@ -36,7 +37,8 @@ class ChatLinkServiceTest {
         clubRepository = mockk(relaxed = true)
         gateway = mockk(relaxed = true)
         livePinService = mockk(relaxed = true)
-        service = ChatLinkService(chatLinkRepository, clubRepository, ChatLinkMapper(), gateway, livePinService, botUsername = "clubs_test_bot")
+        skladchinaChatStatusService = mockk(relaxed = true)
+        service = ChatLinkService(chatLinkRepository, clubRepository, ChatLinkMapper(), gateway, livePinService, skladchinaChatStatusService, botUsername = "clubs_test_bot")
         every { clubRepository.findById(clubId) } returns club
     }
 
@@ -173,6 +175,69 @@ class ChatLinkServiceTest {
     @Test
     fun `setLivePin не-владельцу — 403`() {
         assertThrows(ForbiddenException::class.java) { service.setLivePin(clubId, strangerId, enabled = true) }
+    }
+
+    @Test
+    fun `setSkladchinaStatus включение при кикнутом боте — 409, ничего не сохраняем`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns
+            chatLinkFixture(clubId = clubId, botStatus = BotChatStatus.KICKED)
+
+        assertThrows(ConflictException::class.java) { service.setSkladchinaStatus(clubId, ownerId, enabled = true) }
+        verify(exactly = 0) { chatLinkRepository.updateSkladchinaStatus(any(), any()) }
+        verify(exactly = 0) { skladchinaChatStatusService.backfillForClub(any()) }
+    }
+
+    @Test
+    fun `setSkladchinaStatus включение БЕЗ права закрепа — работает (право не требуется)`() {
+        val link = chatLinkFixture(clubId = clubId, canPinMessages = false)
+        every { chatLinkRepository.findByClubId(clubId) } returns link andThen link.copy(skladchinaStatusEnabled = true)
+
+        val status = service.setSkladchinaStatus(clubId, ownerId, enabled = true)
+
+        assertTrue(status.skladchinaStatusEnabled)
+        verify { chatLinkRepository.updateSkladchinaStatus(clubId, true) }
+        verify { skladchinaChatStatusService.backfillForClub(clubId) }
+    }
+
+    @Test
+    fun `setSkladchinaStatus выключение — снимает живые статусы через сервис`() {
+        val link = chatLinkFixture(clubId = clubId, skladchinaStatusEnabled = true)
+        every { chatLinkRepository.findByClubId(clubId) } returns link andThen link.copy(skladchinaStatusEnabled = false)
+
+        val status = service.setSkladchinaStatus(clubId, ownerId, enabled = false)
+
+        assertFalse(status.skladchinaStatusEnabled)
+        verify { chatLinkRepository.updateSkladchinaStatus(clubId, false) }
+        verify { skladchinaChatStatusService.disableForClub(link) }
+    }
+
+    @Test
+    fun `setSkladchinaStatus идемпотентен — то же значение не трогает БД и сервис`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns
+            chatLinkFixture(clubId = clubId, skladchinaStatusEnabled = false)
+
+        val status = service.setSkladchinaStatus(clubId, ownerId, enabled = false)
+
+        assertFalse(status.skladchinaStatusEnabled)
+        verify(exactly = 0) { chatLinkRepository.updateSkladchinaStatus(any(), any()) }
+        verify(exactly = 0) { skladchinaChatStatusService.disableForClub(any()) }
+    }
+
+    @Test
+    fun `setSkladchinaStatus не-владельцу — 403`() {
+        assertThrows(ForbiddenException::class.java) { service.setSkladchinaStatus(clubId, strangerId, enabled = true) }
+    }
+
+    @Test
+    fun `update применяет только присланные поля — skladchinaStatusEnabled без остальных`() {
+        val link = chatLinkFixture(clubId = clubId)
+        every { chatLinkRepository.findByClubId(clubId) } returns link andThen link.copy(skladchinaStatusEnabled = true)
+
+        service.update(clubId, ownerId, UpdateChatLinkRequest(skladchinaStatusEnabled = true))
+
+        verify { chatLinkRepository.updateSkladchinaStatus(clubId, true) }
+        verify(exactly = 0) { chatLinkRepository.updateDoor(any(), any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.updateLivePin(any(), any()) }
     }
 
     @Test

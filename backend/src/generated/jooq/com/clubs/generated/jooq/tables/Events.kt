@@ -204,13 +204,6 @@ open class Events(
     val REPUTATION_PROCESSED: TableField<EventsRecord, Boolean?> = createField(DSL.name("reputation_processed"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Идемпотентный маркер: по событию уже начислена репутация. Захватывается атомарным условным UPDATE, чтобы событийный listener и часовой поллер не обработали событие дважды.")
 
     /**
-     * The column <code>public.events.confirm_reminder_sent</code>. TRUE =
-     * DM-напоминание «подтверди участие» (~за 2 часа до события, голосовавшим
-     * going/maybe без подтверждения) уже отправлено — дедуп планировщика.
-     */
-    val CONFIRM_REMINDER_SENT: TableField<EventsRecord, Boolean?> = createField(DSL.name("confirm_reminder_sent"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "TRUE = DM-напоминание «подтверди участие» (~за 2 часа до события, голосовавшим going/maybe без подтверждения) уже отправлено — дедуп планировщика.")
-
-    /**
      * The column <code>public.events.attendance_reminder_sent</code>. TRUE =
      * DM-напоминание организатору «отметь явку» (~через 24 часа после события)
      * уже отправлено — дедуп планировщика.

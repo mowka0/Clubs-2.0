@@ -56,7 +56,7 @@ class MembershipActivator(
         )
         // Бесплатная активация = доступ открыт сразу; frozen откроется позже через
         // AccessGateService.markDuesPaid (там своя публикация). Слушает чат-«дверь» AFTER_COMMIT.
-        if (!frozen) eventPublisher.publishEvent(MembershipAccessOpenedEvent(clubId, userId))
+        if (!frozen) eventPublisher.publishEvent(MembershipAccessOpenedEvent(clubId, userId, wasAccessClosed = true))
         return membership
     }
 

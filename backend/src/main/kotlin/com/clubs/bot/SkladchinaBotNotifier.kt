@@ -1,5 +1,6 @@
 package com.clubs.bot
 
+import com.clubs.chatlink.SkladchinaChatStatusService
 import com.clubs.generated.jooq.enums.SkladchinaStatus
 import com.clubs.skladchina.SkladchinaClosedEvent
 import com.clubs.skladchina.SkladchinaCreatedEvent
@@ -7,6 +8,7 @@ import com.clubs.skladchina.SkladchinaDeclineRejectedEvent
 import com.clubs.skladchina.SkladchinaDeclineRequestedEvent
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
+import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionalEventListener
 import java.time.format.DateTimeFormatter
@@ -17,24 +19,33 @@ import java.time.format.DateTimeFormatter
  * (`@TransactionalEventListener` фаза по умолчанию = AFTER_COMMIT).
  *
  * Тот же паттерн, что EventBotNotifier — проверенный способ «отправить DM после
- * успешной мутации в БД». Избегает подводных камней @Async + @Transactional,
- * из-за которых раньше DM не отправлялись.
+ * успешной мутации в БД». Создание складчины дополнительно оркестрирует чат-пост
+ * (маршрутизатор рассылок, PO 2026-07-08): сначала живой статус в чат, затем DM
+ * только тем участникам, кого пост не покрыл ([ChatAwareBroadcast]).
  */
 @Component
 class SkladchinaBotNotifier(
     private val userRepository: UserRepository,
-    private val notificationService: NotificationService
+    private val notificationService: NotificationService,
+    private val skladchinaChatStatusService: SkladchinaChatStatusService,
+    private val chatAwareBroadcast: ChatAwareBroadcast
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaBotNotifier::class.java)
     private val fmt = DateTimeFormatter.ofPattern("dd.MM HH:mm")
 
+    // @Async: пост в чат + N getChatMember + DM-цикл — Telegram I/O не место на потоке коммита.
+    @Async
     @TransactionalEventListener(fallbackExecution = true)
     fun onSkladchinaCreated(event: SkladchinaCreatedEvent) {
-        val telegramIds = userRepository.findTelegramIds(event.participantUserIds)
-        log.info("Skladchina-created DM: id={} participants={} resolved telegramIds={}",
-            event.skladchinaId, event.participantUserIds.size, telegramIds.size)
+        // Сначала чат: решение «кому DM» зависит от ФАКТА выхода поста — шаги последовательны.
+        val chatPostChatId = skladchinaChatStatusService.onSkladchinaCreated(event.clubId, event.skladchinaId)
+        val telegramIds = chatAwareBroadcast.dmTargets(
+            chatPostChatId, userRepository.findTelegramIds(event.participantUserIds)
+        )
+        log.info("Skladchina-created DM: id={} participants={} chatPost={} dmTargets={}",
+            event.skladchinaId, event.participantUserIds.size, chatPostChatId != null, telegramIds.size)
         if (telegramIds.isEmpty()) {
-            log.warn("Skladchina-created DM SKIPPED — no telegramIds resolved for skladchina={}", event.skladchinaId)
+            log.info("Skladchina-created DM SKIPPED — all covered by chat or no telegramIds, skladchina={}", event.skladchinaId)
             return
         }
 
