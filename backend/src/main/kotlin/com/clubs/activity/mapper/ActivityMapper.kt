@@ -7,6 +7,7 @@ import com.clubs.generated.jooq.enums.SkladchinaStatus
 import com.clubs.skladchina.Skladchina
 import com.clubs.skladchina.SkladchinaWithAggregates
 import org.springframework.stereotype.Component
+import java.time.OffsetDateTime
 
 @Component
 class ActivityMapper {
@@ -15,7 +16,8 @@ class ActivityMapper {
         event: Event,
         goingCount: Int,
         confirmedCount: Int,
-        actionRequired: Boolean
+        actionRequired: Boolean,
+        now: OffsetDateTime
     ): ActivityItemDto.EventActivity {
         // events.created_at на уровне БД NOT NULL; доменный тип nullable только потому, что
         // путь создания конструирует объект до того, как строка перечитана обратно. При чтении
@@ -28,7 +30,12 @@ class ActivityMapper {
             clubId = event.clubId,
             title = event.title,
             createdAt = createdAt,
-            isCompleted = event.status in COMPLETED_EVENT_STATUSES,
+            // «Предстоящее/прошедшее» для события определяет ВРЕМЯ, не статус (PO 2026-07-08):
+            // статус completed переключают шедулер (раз в час, с 6-часовым запасом) и отметка
+            // явки — лента не должна ждать ни того, ни другого. Стартовало — значит уже не
+            // «предстоящее». Статусная ветка остаётся для cancelled (отменённое будущее событие
+            // тоже уходит из предстоящих).
+            isCompleted = event.status in COMPLETED_EVENT_STATUSES || !event.eventDatetime.isAfter(now),
             eventDatetime = event.eventDatetime,
             locationText = event.locationText,
             participantLimit = event.participantLimit,
