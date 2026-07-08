@@ -35,6 +35,22 @@ class NotificationService(
     private val fmt = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm 'МСК'")
         .withZone(ZoneId.of("Europe/Moscow"))
 
+    // Для дат без времени (граница подписки): день по МСК, часы-минуты юзеру не нужны.
+    private val dateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+        .withZone(ZoneId.of("Europe/Moscow"))
+
+    /**
+     * Организатор продлил подписку/доступ участника («Взнос получен» или ручное окно доступа) —
+     * участник узнаёт дату, до которой оплачен доступ, из лички, а не со страницы клуба
+     * (фидбек PO 2026-07-08: раньше в клубе без чата продление проходило вообще без уведомления).
+     * Персональное membership-DM — маршрутизатор клубных рассылок его не касается.
+     */
+    @Async
+    fun sendAccessExtendedDM(memberTelegramId: Long, clubName: String, clubId: UUID, until: java.time.OffsetDateTime) {
+        val text = "✅ Организатор продлил вашу подписку в клубе «$clubName» — доступ открыт до ${dateFmt.format(until)}."
+        sendDm(memberTelegramId.toString(), text, webAppPath = "/clubs/$clubId", buttonText = "Открыть клуб")
+    }
+
     /**
      * Уведомляет участников клуба о создании нового события.
      * Маршрутизатор (PO 2026-07-08): [chatPostChatId] — чат, куда фактически вышел пост живого

@@ -194,6 +194,39 @@ class AccessGateServiceTest {
     }
 
     @Test
+    fun `markDuesPaid DMs the member the new access-until date (фидбек PO 2026-07-08)`() {
+        val m = membership(MembershipStatus.frozen)
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns m
+        every { membershipRepository.markDuesPaid(m.id, callerId, any()) } returns 1
+        val club = mockk<com.clubs.club.Club>(relaxed = true)
+        every { club.name } returns "Бег по утрам"
+        every { clubRepository.findById(clubId) } returns club
+        val member = mockk<UsersRecord>(relaxed = true) { every { telegramId } returns 77L }
+        every { userRepository.findById(targetUserId) } returns member
+
+        service.markDuesPaid(clubId, targetUserId, callerId)
+
+        verify(exactly = 1) { notificationService.sendAccessExtendedDM(77L, "Бег по утрам", clubId, any()) }
+    }
+
+    @Test
+    fun `setAccessUntil DMs the member the manually set access-until date`() {
+        val m = membership(MembershipStatus.active)
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns m
+        every { membershipRepository.setAccessUntil(m.id, any()) } returns 1
+        val club = mockk<com.clubs.club.Club>(relaxed = true)
+        every { club.name } returns "Бег по утрам"
+        every { clubRepository.findById(clubId) } returns club
+        val member = mockk<UsersRecord>(relaxed = true) { every { telegramId } returns 77L }
+        every { userRepository.findById(targetUserId) } returns member
+        val until = java.time.OffsetDateTime.now().plusDays(45)
+
+        service.setAccessUntil(clubId, targetUserId, until, callerId)
+
+        verify(exactly = 1) { notificationService.sendAccessExtendedDM(77L, "Бег по утрам", clubId, until) }
+    }
+
+    @Test
     fun `markDuesPaid rejects a non-member (cancelled)`() {
         every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns membership(MembershipStatus.cancelled)
 
