@@ -137,8 +137,8 @@ class MembershipHistoryIntegrationTest {
         // валидация будущего живёт в AccessGateService).
         val m = membershipRepository.create(memberId, clubId)
         membershipRepository.setAccessUntil(m.id, now.minusDays(1))
-        val count = membershipRepository.expireOverdueAccess(now) // active → expired (просрочка продления)
-        assertEquals(1, count)
+        val expired = membershipRepository.expireOverdueAccess(now) // active → expired (просрочка продления)
+        assertEquals(1, expired.size)
         assertStatus(m.id, MembershipStatus.expired)
         // Лапс продления — приостановка доступа, НЕ churn: логируется только исходный join
         // (docs/modules/membership-lifecycle.md §3 — иначе club-quality штрафовал бы ранг ложным оттоком).

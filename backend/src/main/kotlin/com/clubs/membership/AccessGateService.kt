@@ -61,6 +61,8 @@ class AccessGateService(
         guardApplied(membershipRepository.freezeAccess(membership.id))
         log.info("Access frozen: clubId={} targetUserId={} by={}", clubId, targetUserId, callerId)
         notifyFrozen(clubId, targetUserId)
+        // Строгий режим чата (слайс 5): замороженный — должник, AFTER_COMMIT мьютится в чате клуба.
+        eventPublisher.publishEvent(MembershipAccessClosedEvent(clubId, targetUserId))
         return mapper.toDto(membership.copy(status = MembershipStatus.frozen))
     }
 

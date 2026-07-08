@@ -50,7 +50,7 @@ const NotLinkedState: FC<{ startGroupUrl: string }> = ({ startGroupUrl }) => {
         </div>
         <div className="rd-cl-step">
           <span className="n">3</span>
-          <span className="t"><b>Строгий режим</b> — должники читают, но не пишут; исключённые уходят и из чата (скоро)</span>
+          <span className="t"><b>Строгий режим</b> — должники читают, но не пишут; покинувшие клуб уходят и из чата</span>
         </div>
       </div>
       <button
@@ -90,7 +90,9 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
       ? { title: 'Бот потерял право приглашать участников', sub: 'Вход через заявки остановлен. Верните боту право «Приглашение участников» в настройках группы — и всё оживёт.' }
       : status.livePinEnabled && !status.canPinMessages
         ? { title: 'Бот потерял право закреплять сообщения', sub: 'Уже созданные статусы бот продолжит обновлять, но закрепить новые не сможет. Верните боту право «Закрепление сообщений» в настройках группы.' }
-        : null;
+        : status.strictModeEnabled && !status.canRestrictMembers
+          ? { title: 'Бот потерял право блокировать участников', sub: 'Строгий режим остановлен: бот не может ограничивать должников и банить покинувших клуб. Верните боту право «Блокировка пользователей» в настройках группы.' }
+          : null;
 
   // Один PATCH-хендлер на все тумблеры фич (дверь / живой закреп / статус сборов):
   // частичный запрос содержит ровно одно переключаемое поле.
@@ -109,6 +111,7 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
   const handleToggleSkladchinaStatus = makeToggle(
     () => ({ skladchinaStatusEnabled: !status.skladchinaStatusEnabled }),
   );
+  const handleToggleStrictMode = makeToggle(() => ({ strictModeEnabled: !status.strictModeEnabled }));
 
   const handleRefresh = () => {
     setError(null);
@@ -177,6 +180,7 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
           <span className={`rd-cl-pill ${botInChat ? 'ok' : 'bad'}`}>{botInChat ? '✓ бот в чате' : '✕ бот не в чате'}</span>
           <span className={`rd-cl-pill ${status.canPinMessages ? 'ok' : 'bad'}`}>{status.canPinMessages ? '✓ закреп разрешён' : '✕ закреп запрещён'}</span>
           <span className={`rd-cl-pill ${status.canInviteUsers ? 'ok' : 'bad'}`}>{status.canInviteUsers ? '✓ приглашения разрешены' : '✕ приглашения запрещены'}</span>
+          <span className={`rd-cl-pill ${status.canRestrictMembers ? 'ok' : 'bad'}`}>{status.canRestrictMembers ? '✓ блокировки разрешены' : '✕ блокировки запрещены'}</span>
         </div>
         {/* Invite-ссылка живёт независимо от тумблера двери (создаётся при привязке) — по ней
             работает кнопка «Чат клуба» у участников. Реестр багов №4, текст — формулировка PO. */}
@@ -193,7 +197,7 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
         )}
       </div>
 
-      {/* Тумблеры фич: дверь и живой закреп — активные, строгий режим — «скоро» (слайс 5) */}
+      {/* Тумблеры фич: дверь, живой закреп, статус сборов, строгий режим */}
       <div className="rd-glass" style={{ padding: '2px 14px', marginBottom: 10 }}>
         <div className="rd-cl-feat">
           <div className="fi">
@@ -251,12 +255,25 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
             onClick={handleToggleSkladchinaStatus}
           />
         </div>
-        <div className="rd-cl-feat soon">
+        {/* Строгий режим (слайс 5): включение требует права «Блокировка пользователей»,
+            сразу мьютит текущих должников (backfill на бэке). */}
+        <div className="rd-cl-feat">
           <div className="fi">
-            <div className="ft">Строгий режим<span className="rd-cl-soon-tag">скоро</span></div>
-            <div className="fd">Должники — только чтение; исключённые из клуба — бан в чате.</div>
+            <div className="ft">Строгий режим</div>
+            <div className="fd">
+              Должники — только чтение до оплаты взноса; покинувшие клуб — бан в чате.
+              Возврат в клуб автоматически снимает бан.
+            </div>
           </div>
-          <button type="button" className="rd-cl-tgl" role="switch" aria-checked={false} aria-label="Строгий режим (скоро)" disabled />
+          <button
+            type="button"
+            className={`rd-cl-tgl${status.strictModeEnabled ? ' on' : ''}`}
+            role="switch"
+            aria-checked={status.strictModeEnabled}
+            aria-label="Строгий режим"
+            disabled={busy || (!status.strictModeEnabled && (!botInChat || !status.canRestrictMembers))}
+            onClick={handleToggleStrictMode}
+          />
         </div>
       </div>
 

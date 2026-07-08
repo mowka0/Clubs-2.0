@@ -45,8 +45,10 @@ function status(over: Partial<ChatLinkStatusDto> = {}): ChatLinkStatusDto {
     canInviteUsers: false,
     doorEnabled: false,
     doorInviteLink: null,
+    canRestrictMembers: false,
     livePinEnabled: false,
     skladchinaStatusEnabled: false,
+    strictModeEnabled: false,
     startGroupUrl: START_URL,
     ...over,
   };
@@ -65,6 +67,7 @@ const linkedHealthy = () => status({
   botStatus: 'administrator',
   canPinMessages: true,
   canInviteUsers: true,
+  canRestrictMembers: true,
 });
 
 describe('ClubChatTab', () => {
@@ -86,10 +89,10 @@ describe('ClubChatTab', () => {
     expect(screen.getByText('✓ бот в чате')).toBeInTheDocument();
     expect(screen.getByText('✓ приглашения разрешены')).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Вход в чат через заявки' })).toBeEnabled();
-    // Живой закреп активен (слайс 3); статус сборов активен (слайс 3.5); строгий режим — «скоро» (слайс 5)
+    // Живой закреп (слайс 3), статус сборов (слайс 3.5) и строгий режим (слайс 5) активны
     expect(screen.getByRole('switch', { name: 'Живой закреп' })).toBeEnabled();
     expect(screen.getByRole('switch', { name: 'Статус сборов в чате' })).toBeEnabled();
-    expect(screen.getByRole('switch', { name: 'Строгий режим (скоро)' })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'Строгий режим' })).toBeEnabled();
   });
 
   it('включение статуса сборов шлёт PATCH только с skladchinaStatusEnabled', async () => {
@@ -244,6 +247,47 @@ describe('ClubChatTab', () => {
     await waitFor(() => expect(refreshed).toBe(true));
     // После refresh пришло здоровое состояние — алерт исчез
     await waitFor(() => expect(screen.queryByText('Бот удалён из чата')).not.toBeInTheDocument());
+  });
+
+  it('включение строгого режима шлёт PATCH только с strictModeEnabled', async () => {
+    let current = linkedHealthy();
+    let patched: unknown = null;
+    server.use(
+      http.get(`*/api/clubs/${CLUB_ID}/chat-link`, () => HttpResponse.json(current)),
+      http.patch(`*/api/clubs/${CLUB_ID}/chat-link`, async ({ request }) => {
+        patched = await request.json();
+        current = { ...linkedHealthy(), strictModeEnabled: true };
+        return HttpResponse.json(current);
+      }),
+    );
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    await userEvent.click(await screen.findByRole('switch', { name: 'Строгий режим' }));
+
+    await waitFor(() => expect(patched).toEqual({ strictModeEnabled: true }));
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Строгий режим' })).toHaveAttribute('aria-checked', 'true'));
+  });
+
+  it('без права блокировки тумблер строгого режима задизейблен', async () => {
+    mockStatus(status({
+      linked: true,
+      chatTitle: 'Партия — чат',
+      botStatus: 'administrator',
+      canPinMessages: true,
+      canInviteUsers: true,
+      canRestrictMembers: false,
+    }));
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByRole('switch', { name: 'Строгий режим' })).toBeDisabled();
+    expect(screen.getByText('✕ блокировки запрещены')).toBeInTheDocument();
+  });
+
+  it('строгий режим включён, но право блокировки отняли — алерт деградации', async () => {
+    mockStatus({ ...linkedHealthy(), strictModeEnabled: true, canRestrictMembers: false });
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByText('Бот потерял право блокировать участников')).toBeInTheDocument();
   });
 
   it('отвязка: подтверждение в модалке шлёт DELETE', async () => {

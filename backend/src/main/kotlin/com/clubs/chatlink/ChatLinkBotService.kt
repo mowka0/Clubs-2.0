@@ -58,7 +58,8 @@ class ChatLinkBotService(
                     clubId = clubId,
                     botStatus = BotChatStatus.fromTelegramStatus(state.statusLiteral),
                     canPinMessages = state.canPinMessages,
-                    canInviteUsers = state.canInviteUsers
+                    canInviteUsers = state.canInviteUsers,
+                    canRestrictMembers = state.canRestrictMembers
                 )
                 ensureInviteLink(
                     link = existingForClub,
@@ -93,10 +94,12 @@ class ChatLinkBotService(
                 botStatus = state?.let { BotChatStatus.fromTelegramStatus(it.statusLiteral) } ?: BotChatStatus.MEMBER,
                 canPinMessages = state?.canPinMessages ?: false,
                 canInviteUsers = state?.canInviteUsers ?: false,
+                canRestrictMembers = state?.canRestrictMembers ?: false,
                 doorEnabled = false,
                 doorInviteLink = null,
                 livePinEnabled = false,
-                skladchinaStatusEnabled = false
+                skladchinaStatusEnabled = false,
+                strictModeEnabled = false
             )
         )
         log.info("Chat linked: clubId={} chatId={} byTelegramId={} botStatus={}", clubId, chatId, fromTelegramId, link.botStatus.literal)
@@ -120,13 +123,13 @@ class ChatLinkBotService(
      * права). Привязку НЕ удаляем — фичи гаснут, а после возврата прав всё оживает (мокап 01-C).
      */
     @Transactional
-    fun handleMyChatMember(chatId: Long, newStatusLiteral: String, canPinMessages: Boolean, canInviteUsers: Boolean) {
+    fun handleMyChatMember(chatId: Long, newStatusLiteral: String, canPinMessages: Boolean, canInviteUsers: Boolean, canRestrictMembers: Boolean) {
         val link = chatLinkRepository.findByChatId(chatId) ?: return
         val status = BotChatStatus.fromTelegramStatus(newStatusLiteral)
-        chatLinkRepository.updateBotState(link.clubId, status, canPinMessages, canInviteUsers)
+        chatLinkRepository.updateBotState(link.clubId, status, canPinMessages, canInviteUsers, canRestrictMembers)
         log.info(
-            "Bot chat state updated: clubId={} chatId={} status={} canPin={} canInvite={}",
-            link.clubId, chatId, status.literal, canPinMessages, canInviteUsers
+            "Bot chat state updated: clubId={} chatId={} status={} canPin={} canInvite={} canRestrict={}",
+            link.clubId, chatId, status.literal, canPinMessages, canInviteUsers, canRestrictMembers
         )
         ensureInviteLink(link, nowInChat = status.isInChat, nowCanInvite = canInviteUsers)
     }

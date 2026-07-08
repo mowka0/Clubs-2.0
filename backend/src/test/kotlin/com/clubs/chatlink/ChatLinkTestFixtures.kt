@@ -41,10 +41,12 @@ fun chatLinkFixture(
     botStatus: BotChatStatus = BotChatStatus.ADMINISTRATOR,
     canPinMessages: Boolean = true,
     canInviteUsers: Boolean = true,
+    canRestrictMembers: Boolean = true,
     doorEnabled: Boolean = false,
     doorInviteLink: String? = null,
     livePinEnabled: Boolean = false,
     skladchinaStatusEnabled: Boolean = false,
+    strictModeEnabled: Boolean = false,
     linkedByUserId: UUID = UUID.randomUUID()
 ): ChatLink = ChatLink(
     clubId = clubId,
@@ -55,8 +57,10 @@ fun chatLinkFixture(
     botStatus = botStatus,
     canPinMessages = canPinMessages,
     canInviteUsers = canInviteUsers,
+    canRestrictMembers = canRestrictMembers,
     doorEnabled = doorEnabled,
     doorInviteLink = doorInviteLink,
     livePinEnabled = livePinEnabled,
-    skladchinaStatusEnabled = skladchinaStatusEnabled
+    skladchinaStatusEnabled = skladchinaStatusEnabled,
+    strictModeEnabled = strictModeEnabled
 )

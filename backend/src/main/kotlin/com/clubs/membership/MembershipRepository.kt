@@ -64,9 +64,15 @@ interface MembershipRepository {
     // Жизненный цикл / планировщик (honor-system окно доступа)
     fun findExpiringWithin(now: OffsetDateTime, threshold: OffsetDateTime): List<ExpiringSubscriptionNotification>
     fun findActiveExpired(now: OffsetDateTime): List<ExpiringSubscriptionNotification>
-    /** Переводит в `expired` каждый membership в статусе `active`, чьё окно доступа (subscription_expires_at) истекло. */
-    fun expireOverdueAccess(now: OffsetDateTime): Int
+    /** Переводит в `expired` каждый membership в статусе `active`, чьё окно доступа (subscription_expires_at)
+     *  истекло. Возвращает затронутые (clubId, userId) — по ним строгий режим чата мьютит должников. */
+    fun expireOverdueAccess(now: OffsetDateTime): List<MembershipAccessRef>
+    /** Cancelled-membership'ы, чьё оплаченное окно истекло в интервале (from; to] — «человек вышел из клуба,
+     *  оплаченный период закончился». По ним строгий режим чата банит (слайс 5). */
+    fun findCancelledExpiredBetween(from: OffsetDateTime, to: OffsetDateTime): List<MembershipAccessRef>
 
     // Бот/уведомления
     fun findMemberTelegramIds(clubId: UUID): List<Long>
+    /** telegram_id должников клуба (frozen/expired) — backfill/снятие мьютов строгого режима (слайс 5). */
+    fun findDebtorTelegramIds(clubId: UUID): List<Long>
 }

@@ -1421,12 +1421,6 @@
 .rd-cl-feat .fi { flex: 1; min-width: 0; }
 .rd-cl-feat .ft { font-size: 13px; font-weight: 600; }
 .rd-cl-feat .fd { font-size: 11.5px; color: var(--text-faint); line-height: 1.45; margin-top: 3px; }
-.rd-cl-feat.soon .ft, .rd-cl-feat.soon .fd { opacity: 0.45; }
-.rd-cl-soon-tag {
-  font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--text-faint); background: var(--surface); border: 1px solid var(--glass-border);
-  padding: 2px 7px; border-radius: 999px; vertical-align: 2px; margin-left: 6px;
-}
 .rd-cl-tgl {
   width: 40px; height: 24px; border-radius: 999px; flex-shrink: 0; margin-top: 2px;
   background: var(--surface); border: 1px solid var(--glass-border);

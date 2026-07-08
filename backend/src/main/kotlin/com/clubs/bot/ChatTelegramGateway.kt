@@ -5,11 +5,13 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import org.telegram.telegrambots.meta.api.methods.GetMe
 import org.telegram.telegrambots.meta.api.methods.groupadministration.ApproveChatJoinRequest
+import org.telegram.telegrambots.meta.api.methods.groupadministration.BanChatMember
 import org.telegram.telegrambots.meta.api.methods.groupadministration.CreateChatInviteLink
 import org.telegram.telegrambots.meta.api.methods.groupadministration.DeclineChatJoinRequest
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember
 import org.telegram.telegrambots.meta.api.methods.groupadministration.LeaveChat
+import org.telegram.telegrambots.meta.api.methods.groupadministration.RestrictChatMember
 import org.telegram.telegrambots.meta.api.methods.groupadministration.RevokeChatInviteLink
 import org.telegram.telegrambots.meta.api.methods.groupadministration.UnbanChatMember
 import org.telegram.telegrambots.meta.api.methods.pinnedmessages.PinChatMessage
@@ -19,6 +21,7 @@ import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageTe
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberAdministrator
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberOwner
+import org.telegram.telegrambots.meta.api.objects.ChatPermissions
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberRestricted
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton
@@ -34,7 +37,8 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 data class BotChatState(
     val statusLiteral: String,
     val canPinMessages: Boolean,
-    val canInviteUsers: Boolean
+    val canInviteUsers: Boolean,
+    val canRestrictMembers: Boolean
 )
 
 /**
@@ -88,11 +92,12 @@ class ChatTelegramGateway(
             is ChatMemberAdministrator -> BotChatState(
                 statusLiteral = member.status,
                 canPinMessages = member.canPinMessages ?: false,
-                canInviteUsers = member.canInviteUsers ?: false
+                canInviteUsers = member.canInviteUsers ?: false,
+                canRestrictMembers = member.canRestrictMembers ?: false
             )
             // creator недостижим для бота, но маппинг честный: владельцу можно всё.
-            is ChatMemberOwner -> BotChatState(member.status, canPinMessages = true, canInviteUsers = true)
-            else -> BotChatState(member.status, canPinMessages = false, canInviteUsers = false)
+            is ChatMemberOwner -> BotChatState(member.status, canPinMessages = true, canInviteUsers = true, canRestrictMembers = true)
+            else -> BotChatState(member.status, canPinMessages = false, canInviteUsers = false, canRestrictMembers = false)
         }
     }
 
@@ -115,6 +120,61 @@ class ChatTelegramGateway(
         true
     } catch (e: Exception) {
         log.warn("unbanChatMember failed (нет права «Блокировка пользователей»?): chatId={} userId={} error={}", chatId, userId, e.message)
+        false
+    }
+
+    /**
+     * Строгий режим: должник — «только чтение». Пустой ChatPermissions = все права false
+     * (по Bot API опущенное право = запрет), без until_date = бессрочно. Работает только в
+     * супергруппах и не действует на админов чата — обе ошибки Telegram глотаются с warn.
+     */
+    fun muteChatMember(chatId: Long, userId: Long): Boolean = try {
+        telegramClient.execute(
+            RestrictChatMember.builder().chatId(chatId).userId(userId)
+                .permissions(ChatPermissions.builder().build())
+                .build()
+        )
+        true
+    } catch (e: Exception) {
+        log.warn("muteChatMember failed (базовая группа / админ / не участник?): chatId={} userId={} error={}", chatId, userId, e.message)
+        false
+    }
+
+    /**
+     * Снять «только чтение»: все permissions=true возвращают участника к дефолтным правам
+     * группы (стандартный анмьют Bot API). Трогаем ТОЛЬКО restricted-участников — обычного
+     * member не превращаем в restricted-с-полными-правами.
+     */
+    fun unmuteChatMember(chatId: Long, userId: Long): Boolean {
+        val member = getChatMember(chatId, userId) ?: return false
+        if (member.status != "restricted") return true // и так с голосом — no-op
+        return try {
+            telegramClient.execute(
+                RestrictChatMember.builder().chatId(chatId).userId(userId)
+                    .permissions(
+                        ChatPermissions.builder()
+                            .canSendMessages(true).canSendAudios(true).canSendDocuments(true)
+                            .canSendPhotos(true).canSendVideos(true).canSendVideoNotes(true)
+                            .canSendVoiceNotes(true).canSendPolls(true).canSendOtherMessages(true)
+                            .canAddWebPagePreviews(true).canChangeInfo(true).canInviteUsers(true)
+                            .canPinMessages(true).canManageTopics(true)
+                            .build()
+                    )
+                    .build()
+            )
+            true
+        } catch (e: Exception) {
+            log.warn("unmuteChatMember failed: chatId={} userId={} error={}", chatId, userId, e.message)
+            false
+        }
+    }
+
+    /** Строгий режим: покинувший клуб вылетает из чата (бан). Снятие — unbanChatMember при возврате в клуб. */
+    fun banChatMember(chatId: Long, userId: Long): Boolean = try {
+        telegramClient.execute(BanChatMember.builder().chatId(chatId).userId(userId).build())
+        true
+    } catch (e: Exception) {
+        log.warn("banChatMember failed (нет права «Блокировка пользователей»?): chatId={} userId={} error={}", chatId, userId, e.message)
         false
     }
 

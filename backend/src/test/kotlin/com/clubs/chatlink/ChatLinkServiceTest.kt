@@ -24,6 +24,7 @@ class ChatLinkServiceTest {
     private lateinit var gateway: ChatTelegramGateway
     private lateinit var livePinService: LivePinService
     private lateinit var skladchinaChatStatusService: SkladchinaChatStatusService
+    private lateinit var strictModeService: StrictModeService
     private lateinit var service: ChatLinkService
 
     private val clubId = UUID.randomUUID()
@@ -38,7 +39,8 @@ class ChatLinkServiceTest {
         gateway = mockk(relaxed = true)
         livePinService = mockk(relaxed = true)
         skladchinaChatStatusService = mockk(relaxed = true)
-        service = ChatLinkService(chatLinkRepository, clubRepository, ChatLinkMapper(), gateway, livePinService, skladchinaChatStatusService, botUsername = "clubs_test_bot")
+        strictModeService = mockk(relaxed = true)
+        service = ChatLinkService(chatLinkRepository, clubRepository, ChatLinkMapper(), gateway, livePinService, skladchinaChatStatusService, strictModeService, botUsername = "clubs_test_bot")
         every { clubRepository.findById(clubId) } returns club
     }
 
@@ -278,6 +280,64 @@ class ChatLinkServiceTest {
         every { gateway.getBotChatState(any()) } returns null
 
         assertThrows(ConflictException::class.java) { service.refresh(clubId, ownerId) }
-        verify(exactly = 0) { chatLinkRepository.updateBotState(any(), any(), any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.updateBotState(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `setStrictMode включение без права блокировки — 409, ничего не сохраняем`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns
+            chatLinkFixture(clubId = clubId, canRestrictMembers = false)
+
+        assertThrows(ConflictException::class.java) { service.setStrictMode(clubId, ownerId, enabled = true) }
+        verify(exactly = 0) { chatLinkRepository.updateStrictMode(any(), any()) }
+        verify(exactly = 0) { strictModeService.backfillForClub(any()) }
+    }
+
+    @Test
+    fun `setStrictMode включение — сохраняет тумблер и мьютит текущих должников (backfill)`() {
+        val link = chatLinkFixture(clubId = clubId, canRestrictMembers = true)
+        every { chatLinkRepository.findByClubId(clubId) } returns link andThen link.copy(strictModeEnabled = true)
+
+        val status = service.setStrictMode(clubId, ownerId, enabled = true)
+
+        assertTrue(status.strictModeEnabled)
+        verify { chatLinkRepository.updateStrictMode(clubId, true) }
+        verify { strictModeService.backfillForClub(link) }
+    }
+
+    @Test
+    fun `setStrictMode выключение — возвращает голос должникам`() {
+        val link = chatLinkFixture(clubId = clubId, strictModeEnabled = true)
+        every { chatLinkRepository.findByClubId(clubId) } returns link andThen link.copy(strictModeEnabled = false)
+
+        val status = service.setStrictMode(clubId, ownerId, enabled = false)
+
+        assertFalse(status.strictModeEnabled)
+        verify { chatLinkRepository.updateStrictMode(clubId, false) }
+        verify { strictModeService.disableForClub(link) }
+    }
+
+    @Test
+    fun `setStrictMode идемпотентен — то же значение не трогает БД и должников`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns
+            chatLinkFixture(clubId = clubId, strictModeEnabled = false)
+
+        val status = service.setStrictMode(clubId, ownerId, enabled = false)
+
+        assertFalse(status.strictModeEnabled)
+        verify(exactly = 0) { chatLinkRepository.updateStrictMode(any(), any()) }
+        verify(exactly = 0) { strictModeService.disableForClub(any()) }
+    }
+
+    @Test
+    fun `unlink при включённом строгом режиме — возвращает голос должникам до выхода бота`() {
+        val link = chatLinkFixture(clubId = clubId, strictModeEnabled = true, doorInviteLink = "https://t.me/+abc")
+        every { chatLinkRepository.findByClubId(clubId) } returns link
+
+        service.unlink(clubId, ownerId)
+
+        verify { strictModeService.disableForClub(link) }
+        verify { gateway.leaveChat(link.chatId) }
+        verify { chatLinkRepository.delete(clubId) }
     }
 }

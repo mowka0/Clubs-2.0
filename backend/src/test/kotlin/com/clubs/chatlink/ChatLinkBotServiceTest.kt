@@ -97,7 +97,7 @@ class ChatLinkBotServiceTest {
     @Test
     fun `успешная привязка - insert, invite-ссылка сразу, подтверждение в чат и DM-петля владельцу`() {
         every { gateway.getBotChatState(chatId) } returns
-            BotChatState("administrator", canPinMessages = true, canInviteUsers = true)
+            BotChatState("administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true)
         every { gateway.createJoinRequestInviteLink(chatId, any()) } returns "https://t.me/+fresh"
         val inserted = slot<ChatLink>()
         every { chatLinkRepository.insert(capture(inserted)) } answers { inserted.captured }
@@ -126,7 +126,7 @@ class ChatLinkBotServiceTest {
     @Test
     fun `привязка БЕЗ права приглашать - ссылка не создаётся (создастся при выдаче права)`() {
         every { gateway.getBotChatState(chatId) } returns
-            BotChatState("member", canPinMessages = false, canInviteUsers = false)
+            BotChatState("member", canPinMessages = false, canInviteUsers = false, canRestrictMembers = false)
         val inserted = slot<ChatLink>()
         every { chatLinkRepository.insert(capture(inserted)) } answers { inserted.captured }
 
@@ -142,7 +142,7 @@ class ChatLinkBotServiceTest {
         every { chatLinkRepository.findByClubId(clubId) } returns
             chatLinkFixture(clubId = clubId, chatId = chatId, doorInviteLink = "https://t.me/+alive")
         every { gateway.getBotChatState(chatId) } returns
-            BotChatState("administrator", canPinMessages = true, canInviteUsers = true)
+            BotChatState("administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true)
 
         service.handleGroupStart(chatId, "Партия — чат", ownerTelegramId, clubId)
 
@@ -163,7 +163,7 @@ class ChatLinkBotServiceTest {
             doorInviteLink = "https://t.me/+dead"
         )
         every { gateway.getBotChatState(chatId) } returns
-            BotChatState("administrator", canPinMessages = true, canInviteUsers = true)
+            BotChatState("administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true)
         every { gateway.createJoinRequestInviteLink(chatId, any()) } returns "https://t.me/+fresh"
 
         service.handleGroupStart(chatId, "Партия — чат", ownerTelegramId, clubId)
@@ -176,18 +176,18 @@ class ChatLinkBotServiceTest {
     fun `my_chat_member по непривязанному чату - no-op`() {
         every { chatLinkRepository.findByChatId(-1L) } returns null
 
-        service.handleMyChatMember(-1L, "kicked", canPinMessages = false, canInviteUsers = false)
+        service.handleMyChatMember(-1L, "kicked", canPinMessages = false, canInviteUsers = false, canRestrictMembers = false)
 
-        verify(exactly = 0) { chatLinkRepository.updateBotState(any(), any(), any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.updateBotState(any(), any(), any(), any(), any()) }
     }
 
     @Test
     fun `my_chat_member kick - статус обновлён, привязка живёт`() {
         every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(clubId = clubId, chatId = chatId)
 
-        service.handleMyChatMember(chatId, "kicked", canPinMessages = false, canInviteUsers = false)
+        service.handleMyChatMember(chatId, "kicked", canPinMessages = false, canInviteUsers = false, canRestrictMembers = false)
 
-        verify { chatLinkRepository.updateBotState(clubId, BotChatStatus.KICKED, false, false) }
+        verify { chatLinkRepository.updateBotState(clubId, BotChatStatus.KICKED, false, false, false) }
         verify(exactly = 0) { chatLinkRepository.delete(any()) }
     }
 
@@ -200,7 +200,7 @@ class ChatLinkBotServiceTest {
         )
         every { gateway.createJoinRequestInviteLink(chatId, any()) } returns "https://t.me/+fresh"
 
-        service.handleMyChatMember(chatId, "administrator", canPinMessages = true, canInviteUsers = true)
+        service.handleMyChatMember(chatId, "administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true)
 
         verify { gateway.revokeInviteLink(chatId, "https://t.me/+dead") }
         verify { chatLinkRepository.updateInviteLink(clubId, "https://t.me/+fresh") }
@@ -214,7 +214,7 @@ class ChatLinkBotServiceTest {
             doorInviteLink = "https://t.me/+dead"
         )
 
-        service.handleMyChatMember(chatId, "member", canPinMessages = false, canInviteUsers = false)
+        service.handleMyChatMember(chatId, "member", canPinMessages = false, canInviteUsers = false, canRestrictMembers = false)
 
         verify(exactly = 0) { gateway.createJoinRequestInviteLink(any(), any()) }
         verify(exactly = 0) { chatLinkRepository.updateInviteLink(any(), any()) }
@@ -228,7 +228,7 @@ class ChatLinkBotServiceTest {
             doorInviteLink = "https://t.me/+alive"
         )
 
-        service.handleMyChatMember(chatId, "administrator", canPinMessages = true, canInviteUsers = true)
+        service.handleMyChatMember(chatId, "administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true)
 
         verify(exactly = 0) { gateway.createJoinRequestInviteLink(any(), any()) }
         verify(exactly = 0) { gateway.revokeInviteLink(any(), any()) }

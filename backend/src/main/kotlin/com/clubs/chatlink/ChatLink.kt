@@ -48,8 +48,10 @@ data class ChatLink(
     val botStatus: BotChatStatus,
     val canPinMessages: Boolean,
     val canInviteUsers: Boolean,
+    val canRestrictMembers: Boolean,
     val doorEnabled: Boolean,
     val doorInviteLink: String?,
     val livePinEnabled: Boolean,
-    val skladchinaStatusEnabled: Boolean
+    val skladchinaStatusEnabled: Boolean,
+    val strictModeEnabled: Boolean
 )

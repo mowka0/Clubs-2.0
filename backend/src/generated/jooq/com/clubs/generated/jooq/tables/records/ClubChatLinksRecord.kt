@@ -73,6 +73,14 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
         set(value): Unit = set(12, value)
         get(): Boolean? = get(12) as Boolean?
 
+    open var strictModeEnabled: Boolean?
+        set(value): Unit = set(13, value)
+        get(): Boolean? = get(13) as Boolean?
+
+    open var canRestrictMembers: Boolean?
+        set(value): Unit = set(14, value)
+        get(): Boolean? = get(14) as Boolean?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -82,7 +90,7 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
     /**
      * Create a detached, initialised ClubChatLinksRecord
      */
-    constructor(clubId: UUID, chatId: Long, chatTitle: String? = null, linkedByUserId: UUID, linkedAt: OffsetDateTime? = null, botStatus: String? = null, canPinMessages: Boolean? = null, canInviteUsers: Boolean? = null, doorEnabled: Boolean? = null, doorInviteLink: String? = null, updatedAt: OffsetDateTime? = null, livePinEnabled: Boolean? = null, skladchinaStatusEnabled: Boolean? = null): this() {
+    constructor(clubId: UUID, chatId: Long, chatTitle: String? = null, linkedByUserId: UUID, linkedAt: OffsetDateTime? = null, botStatus: String? = null, canPinMessages: Boolean? = null, canInviteUsers: Boolean? = null, doorEnabled: Boolean? = null, doorInviteLink: String? = null, updatedAt: OffsetDateTime? = null, livePinEnabled: Boolean? = null, skladchinaStatusEnabled: Boolean? = null, strictModeEnabled: Boolean? = null, canRestrictMembers: Boolean? = null): this() {
         this.clubId = clubId
         this.chatId = chatId
         this.chatTitle = chatTitle
@@ -96,6 +104,8 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
         this.updatedAt = updatedAt
         this.livePinEnabled = livePinEnabled
         this.skladchinaStatusEnabled = skladchinaStatusEnabled
+        this.strictModeEnabled = strictModeEnabled
+        this.canRestrictMembers = canRestrictMembers
         resetChangedOnNotNull()
     }
 
@@ -117,6 +127,8 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
             this.updatedAt = value.updatedAt
             this.livePinEnabled = value.livePinEnabled
             this.skladchinaStatusEnabled = value.skladchinaStatusEnabled
+            this.strictModeEnabled = value.strictModeEnabled
+            this.canRestrictMembers = value.canRestrictMembers
             resetChangedOnNotNull()
         }
     }

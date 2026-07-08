@@ -14,10 +14,12 @@ data class ChatLinkStatusDto(
     val botStatus: String?,
     val canPinMessages: Boolean,
     val canInviteUsers: Boolean,
+    val canRestrictMembers: Boolean,
     val doorEnabled: Boolean,
     val doorInviteLink: String?,
     val livePinEnabled: Boolean,
     val skladchinaStatusEnabled: Boolean,
+    val strictModeEnabled: Boolean,
     /** Deep link ?startgroup= для кнопки «Привязать чат» (username бота живёт на сервере). */
     val startGroupUrl: String
 )
@@ -25,10 +27,11 @@ data class ChatLinkStatusDto(
 /**
  * Тумблеры фич чата — частичный PATCH: меняются только присланные поля
  * (doorEnabled — «Вход в чат через заявки», livePinEnabled — «Живой закреп»,
- * skladchinaStatusEnabled — «Статус сборов в чате»).
+ * skladchinaStatusEnabled — «Статус сборов в чате», strictModeEnabled — «Строгий режим»).
  */
 data class UpdateChatLinkRequest(
     val doorEnabled: Boolean? = null,
     val livePinEnabled: Boolean? = null,
-    val skladchinaStatusEnabled: Boolean? = null
+    val skladchinaStatusEnabled: Boolean? = null,
+    val strictModeEnabled: Boolean? = null
 )
