@@ -87,15 +87,8 @@ interface EventRepository {
      */
     fun markAttendanceMarked(id: UUID): Int
 
-    // --- Шедулеры напоминаний (EventReminderScheduler) ---
-
-    /**
-     * Фича A: события на этапе 2, которые начинаются в пределах (now, until] и для которых
-     * напоминание о подтверждении ещё не отправлено. `until` = now + окно "часов до" (по умолчанию 2ч).
-     */
-    fun findEventsNeedingConfirmReminder(now: OffsetDateTime, until: OffsetDateTime): List<Event>
-
-    fun markConfirmReminderSent(id: UUID)
+    // --- Шедулер напоминаний (EventReminderScheduler) ---
+    // Напоминание «подтверди участие» за ~2ч (фича A) удалено PO 2026-07-08 — лишний пинг.
 
     /**
      * Фича B: прошедшие, неотменённые события, посещаемость которых ещё не отмечена и для которых

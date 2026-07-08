@@ -369,24 +369,6 @@ class JooqEventRepository(
             )
             .execute()
 
-    override fun findEventsNeedingConfirmReminder(now: OffsetDateTime, until: OffsetDateTime): List<Event> =
-        dsl.selectFrom(EVENTS)
-            .where(
-                EVENTS.STATUS.eq(EventStatus.stage_2)
-                    .and(EVENTS.CONFIRM_REMINDER_SENT.isFalse)
-                    .and(EVENTS.EVENT_DATETIME.greaterThan(now))      // ещё не началось
-                    .and(EVENTS.EVENT_DATETIME.lessOrEqual(until))    // в пределах окна «часов до»
-            )
-            .fetch()
-            .map(mapper::toDomain)
-
-    override fun markConfirmReminderSent(id: UUID) {
-        dsl.update(EVENTS)
-            .set(EVENTS.CONFIRM_REMINDER_SENT, true)
-            .where(EVENTS.ID.eq(id))
-            .execute()
-    }
-
     override fun findEventsNeedingAttendanceReminder(cutoff: OffsetDateTime): List<Event> =
         dsl.selectFrom(EVENTS)
             .where(

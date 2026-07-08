@@ -52,12 +52,6 @@ interface EventResponseRepository {
     fun expireUnconfirmedForStartedEvents(now: OffsetDateTime): Int
 
     /**
-     * Telegram id проголосовавших going/maybe, которые ещё НЕ подтвердили (stage_2_vote IS NULL).
-     * Адресаты напоминания Feature A "подтверди участие" (~2ч до события).
-     */
-    fun findUnconfirmedVoterTelegramIds(eventId: UUID): List<Long>
-
-    /**
      * Telegram id проголосовавших going/maybe — «заинтересованные» участники события. Используется
      * DM об ОТМЕНЕ события (F5-14, sendEventCancelled): о ней сообщаем только тем, кто выразил интерес,
      * а не всему клубу.

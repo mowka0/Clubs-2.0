@@ -188,18 +188,6 @@ class JooqEventResponseRepository(
                 )
             }
 
-    override fun findUnconfirmedVoterTelegramIds(eventId: UUID): List<Long> =
-        dsl.select(USERS.TELEGRAM_ID)
-            .from(EVENT_RESPONSES)
-            .join(USERS).on(USERS.ID.eq(EVENT_RESPONSES.USER_ID))
-            .where(
-                EVENT_RESPONSES.EVENT_ID.eq(eventId)
-                    .and(EVENT_RESPONSES.STAGE_1_VOTE.`in`(Stage_1Vote.going, Stage_1Vote.maybe))
-                    .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull)
-            )
-            .fetch(USERS.TELEGRAM_ID)
-            .filterNotNull()
-
     override fun findStage2TargetTelegramIds(eventId: UUID): List<Long> =
         dsl.select(USERS.TELEGRAM_ID)
             .from(EVENT_RESPONSES)

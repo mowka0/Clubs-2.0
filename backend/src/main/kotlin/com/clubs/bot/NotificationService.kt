@@ -132,24 +132,6 @@ class NotificationService(
     }
 
     /**
-     * Напоминание Feature A (~за 2ч до события): подталкивает проголосовавших "иду"/"возможно",
-     * кто ещё не подтвердил участие, сделать это до закрытия окна в момент начала события.
-     */
-    @Async
-    fun sendConfirmReminder(event: Event) {
-        val telegramIds = eventResponseRepository.findUnconfirmedVoterTelegramIds(event.id)
-        if (telegramIds.isEmpty()) {
-            log.info("Confirm reminder SKIPPED — no unconfirmed voters for eventId={}", event.id)
-            return
-        }
-        log.info("Confirm reminder DM: eventId={} recipients={}", event.id, telegramIds.size)
-        val text = "⏰ Скоро начало: «${event.title}» — ${event.eventDatetime.format(fmt)}.\n\n" +
-            "Подтвердите участие, иначе место займут другие:"
-        val path = "/events/${event.id}"
-        telegramIds.forEach { sendDm(it.toString(), text, webAppPath = path, buttonText = "✅ Подтвердить участие") }
-    }
-
-    /**
      * Напоминание Feature B (~через 24ч после события): подталкивает организатора отметить явку.
      * Пока он это не сделает, репутация по событию не финализируется (см. events.md, EXP-2).
      */

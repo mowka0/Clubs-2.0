@@ -18,8 +18,8 @@ import kotlin.test.assertTrue
 
 /**
  * Интеграционный тест запросов напоминаний (EventReminderScheduler) на реальном Postgres:
- * какие события попадают под напоминание о подтверждении (A) / об отметке явки (B), dedup-флаги,
- * множество получателей среди неподтвердивших голосовавших и поиск telegram-id организатора.
+ * какие события попадают под напоминание об отметке явки (B), dedup-флаг и поиск telegram-id
+ * организатора. Напоминание «подтверди участие» (A) удалено PO 2026-07-08 (V51).
  */
 @SpringBootTest(
     properties = [
@@ -76,47 +76,6 @@ class EventReminderRepositoryTest {
             VALUES ('$clubId', '$ownerId', 'Club', 'desc', 'sport', 'open', 'Moscow', 20, 0, true)
             """.trimIndent()
         )
-    }
-
-    // --- A: напоминание о подтверждении ---
-
-    @Test
-    fun `confirm reminder finds stage_2 events starting within the window, not yet reminded`() {
-        val now = OffsetDateTime.now()
-        val due = insertEvent(now.plusHours(1), "stage_2")
-        insertEvent(now.plusHours(3), "stage_2")                       // вне окна
-        insertEvent(now.minusHours(1), "stage_2")                      // уже началось
-        insertEvent(now.plusHours(1), "upcoming")                      // не stage_2
-        insertEvent(now.plusHours(1), "stage_2", confirmReminderSent = true) // уже напомнили
-
-        val result = eventRepository.findEventsNeedingConfirmReminder(now, now.plusHours(2)).map { it.id }
-
-        assertEquals(listOf(due), result)
-    }
-
-    @Test
-    fun `markConfirmReminderSent flips the flag (dedup)`() {
-        val now = OffsetDateTime.now()
-        val id = insertEvent(now.plusHours(1), "stage_2")
-
-        eventRepository.markConfirmReminderSent(id)
-
-        assertTrue(flag(id, "confirm_reminder_sent"))
-        assertTrue(eventRepository.findEventsNeedingConfirmReminder(now, now.plusHours(2)).isEmpty())
-    }
-
-    @Test
-    fun `unconfirmed voter recipients = going_maybe with null stage_2_vote only`() {
-        val event = insertEvent(OffsetDateTime.now().plusHours(1), "stage_2")
-        val goingNull = insertResponseUser(event, "going", null)
-        val maybeNull = insertResponseUser(event, "maybe", null)
-        insertResponseUser(event, "going", "confirmed")   // исключён
-        insertResponseUser(event, "going", "declined")    // исключён
-        insertResponseUser(event, "not_going", null)      // исключён
-
-        val ids = eventResponseRepository.findUnconfirmedVoterTelegramIds(event).toSet()
-
-        assertEquals(setOf(goingNull, maybeNull), ids)
     }
 
     // --- B: напоминание об отметке явки ---
@@ -288,7 +247,6 @@ class EventReminderRepositoryTest {
     private fun insertEvent(
         eventDatetime: OffsetDateTime,
         status: String,
-        confirmReminderSent: Boolean = false,
         attendanceMarked: Boolean = false,
         attendanceReminderSent: Boolean = false,
         attendanceFinalized: Boolean = false
@@ -298,9 +256,9 @@ class EventReminderRepositoryTest {
             """
             INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime,
                 participant_limit, voting_opens_days_before, status, stage_2_triggered,
-                attendance_marked, confirm_reminder_sent, attendance_reminder_sent, attendance_finalized)
+                attendance_marked, attendance_reminder_sent, attendance_finalized)
             VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$eventDatetime', 10, 14,
-                '$status'::event_status, true, $attendanceMarked, $confirmReminderSent, $attendanceReminderSent, $attendanceFinalized)
+                '$status'::event_status, true, $attendanceMarked, $attendanceReminderSent, $attendanceFinalized)
             """.trimIndent()
         )
         return id
