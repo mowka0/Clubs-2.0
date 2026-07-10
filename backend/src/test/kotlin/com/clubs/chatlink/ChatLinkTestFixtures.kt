@@ -42,13 +42,13 @@ fun chatLinkFixture(
     canPinMessages: Boolean = true,
     canInviteUsers: Boolean = true,
     canRestrictMembers: Boolean = true,
-    canPromoteMembers: Boolean = true,
+    canManageTags: Boolean = true,
     doorEnabled: Boolean = false,
     doorInviteLink: String? = null,
     livePinEnabled: Boolean = false,
     skladchinaStatusEnabled: Boolean = false,
     strictModeEnabled: Boolean = false,
-    awardTitlesEnabled: Boolean = false,
+    awardTagsEnabled: Boolean = false,
     linkedByUserId: UUID = UUID.randomUUID()
 ): ChatLink = ChatLink(
     clubId = clubId,
@@ -60,11 +60,11 @@ fun chatLinkFixture(
     canPinMessages = canPinMessages,
     canInviteUsers = canInviteUsers,
     canRestrictMembers = canRestrictMembers,
-    canPromoteMembers = canPromoteMembers,
+    canManageTags = canManageTags,
     doorEnabled = doorEnabled,
     doorInviteLink = doorInviteLink,
     livePinEnabled = livePinEnabled,
     skladchinaStatusEnabled = skladchinaStatusEnabled,
     strictModeEnabled = strictModeEnabled,
-    awardTitlesEnabled = awardTitlesEnabled
+    awardTagsEnabled = awardTagsEnabled
 )

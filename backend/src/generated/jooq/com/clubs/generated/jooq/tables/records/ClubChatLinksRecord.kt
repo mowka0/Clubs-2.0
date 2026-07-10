@@ -81,11 +81,11 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
         set(value): Unit = set(14, value)
         get(): Boolean? = get(14) as Boolean?
 
-    open var awardTitlesEnabled: Boolean?
+    open var awardTagsEnabled: Boolean?
         set(value): Unit = set(15, value)
         get(): Boolean? = get(15) as Boolean?
 
-    open var canPromoteMembers: Boolean?
+    open var canManageTags: Boolean?
         set(value): Unit = set(16, value)
         get(): Boolean? = get(16) as Boolean?
 
@@ -98,7 +98,7 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
     /**
      * Create a detached, initialised ClubChatLinksRecord
      */
-    constructor(clubId: UUID, chatId: Long, chatTitle: String? = null, linkedByUserId: UUID, linkedAt: OffsetDateTime? = null, botStatus: String? = null, canPinMessages: Boolean? = null, canInviteUsers: Boolean? = null, doorEnabled: Boolean? = null, doorInviteLink: String? = null, updatedAt: OffsetDateTime? = null, livePinEnabled: Boolean? = null, skladchinaStatusEnabled: Boolean? = null, strictModeEnabled: Boolean? = null, canRestrictMembers: Boolean? = null, awardTitlesEnabled: Boolean? = null, canPromoteMembers: Boolean? = null): this() {
+    constructor(clubId: UUID, chatId: Long, chatTitle: String? = null, linkedByUserId: UUID, linkedAt: OffsetDateTime? = null, botStatus: String? = null, canPinMessages: Boolean? = null, canInviteUsers: Boolean? = null, doorEnabled: Boolean? = null, doorInviteLink: String? = null, updatedAt: OffsetDateTime? = null, livePinEnabled: Boolean? = null, skladchinaStatusEnabled: Boolean? = null, strictModeEnabled: Boolean? = null, canRestrictMembers: Boolean? = null, awardTagsEnabled: Boolean? = null, canManageTags: Boolean? = null): this() {
         this.clubId = clubId
         this.chatId = chatId
         this.chatTitle = chatTitle
@@ -114,8 +114,8 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
         this.skladchinaStatusEnabled = skladchinaStatusEnabled
         this.strictModeEnabled = strictModeEnabled
         this.canRestrictMembers = canRestrictMembers
-        this.awardTitlesEnabled = awardTitlesEnabled
-        this.canPromoteMembers = canPromoteMembers
+        this.awardTagsEnabled = awardTagsEnabled
+        this.canManageTags = canManageTags
         resetChangedOnNotNull()
     }
 
@@ -139,8 +139,8 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
             this.skladchinaStatusEnabled = value.skladchinaStatusEnabled
             this.strictModeEnabled = value.strictModeEnabled
             this.canRestrictMembers = value.canRestrictMembers
-            this.awardTitlesEnabled = value.awardTitlesEnabled
-            this.canPromoteMembers = value.canPromoteMembers
+            this.awardTagsEnabled = value.awardTagsEnabled
+            this.canManageTags = value.canManageTags
             resetChangedOnNotNull()
         }
     }

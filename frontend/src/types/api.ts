@@ -372,8 +372,8 @@ export interface ChatLinkStatusDto {
   canInviteUsers: boolean;
   // Право бота «Блокировка пользователей» — гейт тумблера «Строгий режим» (слайс 5).
   canRestrictMembers: boolean;
-  // Право бота «Назначение администраторов» — гейт тумблера «Титулы наград» (слайс 4).
-  canPromoteMembers: boolean;
+  // Право бота «Управление тегами» (Bot API 9.5) — гейт тумблера «Теги наград» (слайс 4).
+  canManageTags: boolean;
   doorEnabled: boolean;
   doorInviteLink: string | null;
   // Тумблер «Живой закреп» (слайс 3): бот ведёт закреплённый статус событий в чате.
@@ -382,8 +382,8 @@ export interface ChatLinkStatusDto {
   skladchinaStatusEnabled: boolean;
   // Тумблер «Строгий режим» (слайс 5): должники — только чтение, покинувшие клуб — бан.
   strictModeEnabled: boolean;
-  // Тумблер «Титулы наград» (слайс 4): последняя награда участника — титул рядом с именем в чате.
-  awardTitlesEnabled: boolean;
+  // Тумблер «Теги наград» (слайс 4): последняя награда участника — тег рядом с именем в чате.
+  awardTagsEnabled: boolean;
   // Deep link ?startgroup= для кнопки «Привязать чат» (username бота живёт на сервере).
   startGroupUrl: string;
 }
@@ -394,7 +394,7 @@ export interface UpdateChatLinkRequest {
   livePinEnabled?: boolean;
   skladchinaStatusEnabled?: boolean;
   strictModeEnabled?: boolean;
-  awardTitlesEnabled?: boolean;
+  awardTagsEnabled?: boolean;
 }
 
 /** Факты качества клуба для `GET /api/clubs/{id}/quality` (кольца + достижения). */

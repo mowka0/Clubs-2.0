@@ -49,11 +49,11 @@ data class ChatLink(
     val canPinMessages: Boolean,
     val canInviteUsers: Boolean,
     val canRestrictMembers: Boolean,
-    val canPromoteMembers: Boolean,
+    val canManageTags: Boolean,
     val doorEnabled: Boolean,
     val doorInviteLink: String?,
     val livePinEnabled: Boolean,
     val skladchinaStatusEnabled: Boolean,
     val strictModeEnabled: Boolean,
-    val awardTitlesEnabled: Boolean
+    val awardTagsEnabled: Boolean
 )

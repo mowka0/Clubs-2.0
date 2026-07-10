@@ -202,21 +202,21 @@ open class ClubChatLinks(
     val CAN_RESTRICT_MEMBERS: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("can_restrict_members"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Право бота «Блокировка пользователей» в чате (зеркалит can_pin_messages/can_invite_users; обновляется из my_chat_member и «Проверить права ещё раз»). Для строк, привязанных до V52, — FALSE до первого refresh.")
 
     /**
-     * The column <code>public.club_chat_links.award_titles_enabled</code>.
-     * Тумблер «Титулы наград» (слайс 4): TRUE = бот показывает последнюю
-     * награду участника титулом рядом с именем в чате (повышение в админа с
-     * минимальным правом + custom title). Включение требует права «Назначение
-     * администраторов» (can_promote_members).
+     * The column <code>public.club_chat_links.award_tags_enabled</code>.
+     * Тумблер «Теги наград» (слайс 4): TRUE = последняя награда участника видна
+     * тегом рядом с именем в чате (setChatMemberTag) + двусторонняя
+     * синхронизация тег↔награда шедулером. Включение требует права бота
+     * «Управление тегами» (can_manage_tags).
      */
-    val AWARD_TITLES_ENABLED: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("award_titles_enabled"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Тумблер «Титулы наград» (слайс 4): TRUE = бот показывает последнюю награду участника титулом рядом с именем в чате (повышение в админа с минимальным правом + custom title). Включение требует права «Назначение администраторов» (can_promote_members).")
+    val AWARD_TAGS_ENABLED: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("award_tags_enabled"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Тумблер «Теги наград» (слайс 4): TRUE = последняя награда участника видна тегом рядом с именем в чате (setChatMemberTag) + двусторонняя синхронизация тег↔награда шедулером. Включение требует права бота «Управление тегами» (can_manage_tags).")
 
     /**
-     * The column <code>public.club_chat_links.can_promote_members</code>. Право
-     * бота «Назначение администраторов» в чате (зеркалит can_restrict_members;
-     * обновляется из my_chat_member и «Проверить права ещё раз»). Для строк,
-     * привязанных до V54, — FALSE до первого refresh.
+     * The column <code>public.club_chat_links.can_manage_tags</code>. Право
+     * бота «Управление тегами» (Bot API 9.5, can_manage_tags). Библиотека бота
+     * его не знает — читается прямым HTTP-вызовом getChatMember при
+     * привязке/refresh/my_chat_member.
      */
-    val CAN_PROMOTE_MEMBERS: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("can_promote_members"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Право бота «Назначение администраторов» в чате (зеркалит can_restrict_members; обновляется из my_chat_member и «Проверить права ещё раз»). Для строк, привязанных до V54, — FALSE до первого refresh.")
+    val CAN_MANAGE_TAGS: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("can_manage_tags"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Право бота «Управление тегами» (Bot API 9.5, can_manage_tags). Библиотека бота его не знает — читается прямым HTTP-вызовом getChatMember при привязке/refresh/my_chat_member.")
 
     private constructor(alias: Name, aliased: Table<ClubChatLinksRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<ClubChatLinksRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)

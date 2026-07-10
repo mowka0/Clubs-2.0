@@ -62,7 +62,7 @@ class ChatLinkBotService(
                     canPinMessages = state.canPinMessages,
                     canInviteUsers = state.canInviteUsers,
                     canRestrictMembers = state.canRestrictMembers,
-                    canPromoteMembers = state.canPromoteMembers
+                    canManageTags = state.canManageTags
                 )
                 ensureInviteLink(
                     link = existingForClub,
@@ -98,13 +98,13 @@ class ChatLinkBotService(
                 canPinMessages = state?.canPinMessages ?: false,
                 canInviteUsers = state?.canInviteUsers ?: false,
                 canRestrictMembers = state?.canRestrictMembers ?: false,
-                canPromoteMembers = state?.canPromoteMembers ?: false,
+                canManageTags = state?.canManageTags ?: false,
                 doorEnabled = false,
                 doorInviteLink = null,
                 livePinEnabled = false,
                 skladchinaStatusEnabled = false,
                 strictModeEnabled = false,
-                awardTitlesEnabled = false
+                awardTagsEnabled = false
             )
         )
         log.info("Chat linked: clubId={} chatId={} byTelegramId={} botStatus={}", clubId, chatId, fromTelegramId, link.botStatus.literal)
@@ -138,13 +138,16 @@ class ChatLinkBotService(
      * права). Привязку НЕ удаляем — фичи гаснут, а после возврата прав всё оживает (мокап 01-C).
      */
     @Transactional
-    fun handleMyChatMember(chatId: Long, newStatusLiteral: String, canPinMessages: Boolean, canInviteUsers: Boolean, canRestrictMembers: Boolean, canPromoteMembers: Boolean) {
+    fun handleMyChatMember(chatId: Long, newStatusLiteral: String, canPinMessages: Boolean, canInviteUsers: Boolean, canRestrictMembers: Boolean) {
         val link = chatLinkRepository.findByChatId(chatId) ?: return
         val status = BotChatStatus.fromTelegramStatus(newStatusLiteral)
-        chatLinkRepository.updateBotState(link.clubId, status, canPinMessages, canInviteUsers, canRestrictMembers, canPromoteMembers)
+        // Право «Управление тегами» (Bot API 9.5) не приходит в объекте старой библиотеки —
+        // дотягиваем raw-вызовом, пока бот в чате (событие редкое, вызов дешёвый).
+        val canManageTags = status.isInChat && gateway.fetchCanManageTags(chatId)
+        chatLinkRepository.updateBotState(link.clubId, status, canPinMessages, canInviteUsers, canRestrictMembers, canManageTags)
         log.info(
-            "Bot chat state updated: clubId={} chatId={} status={} canPin={} canInvite={} canRestrict={} canPromote={}",
-            link.clubId, chatId, status.literal, canPinMessages, canInviteUsers, canRestrictMembers, canPromoteMembers
+            "Bot chat state updated: clubId={} chatId={} status={} canPin={} canInvite={} canRestrict={} canManageTags={}",
+            link.clubId, chatId, status.literal, canPinMessages, canInviteUsers, canRestrictMembers, canManageTags
         )
         ensureInviteLink(link, nowInChat = status.isInChat, nowCanInvite = canInviteUsers)
     }

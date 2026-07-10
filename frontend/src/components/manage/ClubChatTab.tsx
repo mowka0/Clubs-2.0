@@ -50,7 +50,7 @@ const NotLinkedState: FC<{ startGroupUrl: string }> = ({ startGroupUrl }) => {
         </div>
         <div className="rd-cl-step">
           <span className="n">3</span>
-          <span className="t"><b>Титулы наград</b> — награды участников видны в чате титулами рядом с именами</span>
+          <span className="t"><b>Теги наград</b> — награды участников видны в чате тегами рядом с именами</span>
         </div>
         <div className="rd-cl-step">
           <span className="n">4</span>
@@ -66,7 +66,7 @@ const NotLinkedState: FC<{ startGroupUrl: string }> = ({ startGroupUrl }) => {
       </button>
       <div className="rd-cta-hint" style={{ marginTop: 8 }}>
         Откроется Telegram — выберите группу клуба.<br />
-        Бот попросит права администратора: закреплять сообщения, приглашать участников, снимать блокировки и назначать титулы.
+        Бот попросит права администратора: закреплять сообщения, приглашать участников, снимать блокировки и управлять тегами.
       </div>
     </div>
   );
@@ -96,8 +96,8 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
         ? { title: 'Бот потерял право закреплять сообщения', sub: 'Уже созданные статусы бот продолжит обновлять, но закрепить новые не сможет. Верните боту право «Закрепление сообщений» в настройках группы.' }
         : status.strictModeEnabled && !status.canRestrictMembers
           ? { title: 'Бот потерял право блокировать участников', sub: 'Строгий режим остановлен: бот не может ограничивать должников и банить покинувших клуб. Верните боту право «Блокировка пользователей» в настройках группы.' }
-          : status.awardTitlesEnabled && !status.canPromoteMembers
-            ? { title: 'Бот потерял право назначать администраторов', sub: 'Титулы наград остановлены: бот не может выставлять и менять титулы. Верните боту право «Назначение администраторов» в настройках группы.' }
+          : status.awardTagsEnabled && !status.canManageTags
+            ? { title: 'Бот потерял право управлять тегами', sub: 'Теги наград остановлены: бот не может выставлять и менять теги участников. Верните боту право «Управление тегами» в настройках группы.' }
             : null;
 
   // Один PATCH-хендлер на все тумблеры фич (дверь / живой закреп / статус сборов):
@@ -118,7 +118,7 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
     () => ({ skladchinaStatusEnabled: !status.skladchinaStatusEnabled }),
   );
   const handleToggleStrictMode = makeToggle(() => ({ strictModeEnabled: !status.strictModeEnabled }));
-  const handleToggleAwardTitles = makeToggle(() => ({ awardTitlesEnabled: !status.awardTitlesEnabled }));
+  const handleToggleAwardTags = makeToggle(() => ({ awardTagsEnabled: !status.awardTagsEnabled }));
 
   const handleRefresh = () => {
     setError(null);
@@ -188,7 +188,7 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
           <span className={`rd-cl-pill ${status.canPinMessages ? 'ok' : 'bad'}`}>{status.canPinMessages ? '✓ закреп разрешён' : '✕ закреп запрещён'}</span>
           <span className={`rd-cl-pill ${status.canInviteUsers ? 'ok' : 'bad'}`}>{status.canInviteUsers ? '✓ приглашения разрешены' : '✕ приглашения запрещены'}</span>
           <span className={`rd-cl-pill ${status.canRestrictMembers ? 'ok' : 'bad'}`}>{status.canRestrictMembers ? '✓ блокировки разрешены' : '✕ блокировки запрещены'}</span>
-          <span className={`rd-cl-pill ${status.canPromoteMembers ? 'ok' : 'bad'}`}>{status.canPromoteMembers ? '✓ назначение админов разрешено' : '✕ назначение админов запрещено'}</span>
+          <span className={`rd-cl-pill ${status.canManageTags ? 'ok' : 'bad'}`}>{status.canManageTags ? '✓ теги разрешены' : '✕ теги запрещены'}</span>
         </div>
         {/* Invite-ссылка живёт независимо от тумблера двери (создаётся при привязке) — по ней
             работает кнопка «Чат клуба» у участников. Реестр багов №4, текст — формулировка PO. */}
@@ -263,24 +263,24 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
             onClick={handleToggleSkladchinaStatus}
           />
         </div>
-        {/* Титулы наград (слайс 4): последняя награда — титул рядом с именем.
-            Включение требует права «Назначение администраторов», сразу титулует всех (backfill). */}
+        {/* Теги наград (слайс 4, Bot API 9.5): последняя награда — тег рядом с именем.
+            Включение требует права «Управление тегами»; дальше теги держит шедулер синхронизации. */}
         <div className="rd-cl-feat">
           <div className="fi">
-            <div className="ft">Титулы наград</div>
+            <div className="ft">Теги наград</div>
             <div className="fd">
-              Последняя награда участника видна в чате титулом рядом с именем.
-              Выдали новую — титул обновится, отозвали — откатится к предыдущей.
+              Последняя награда участника видна в чате тегом рядом с именем. Работает в обе
+              стороны: тег, поставленный в чате руками, станет наградой в приложении.
             </div>
           </div>
           <button
             type="button"
-            className={`rd-cl-tgl${status.awardTitlesEnabled ? ' on' : ''}`}
+            className={`rd-cl-tgl${status.awardTagsEnabled ? ' on' : ''}`}
             role="switch"
-            aria-checked={status.awardTitlesEnabled}
-            aria-label="Титулы наград"
-            disabled={busy || (!status.awardTitlesEnabled && (!botInChat || !status.canPromoteMembers))}
-            onClick={handleToggleAwardTitles}
+            aria-checked={status.awardTagsEnabled}
+            aria-label="Теги наград"
+            disabled={busy || (!status.awardTagsEnabled && (!botInChat || !status.canManageTags))}
+            onClick={handleToggleAwardTags}
           />
         </div>
         {/* Строгий режим (слайс 5): включение требует права «Блокировка пользователей»,

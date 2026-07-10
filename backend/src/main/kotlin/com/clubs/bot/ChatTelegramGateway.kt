@@ -11,9 +11,7 @@ import org.telegram.telegrambots.meta.api.methods.groupadministration.DeclineCha
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember
 import org.telegram.telegrambots.meta.api.methods.groupadministration.LeaveChat
-import org.telegram.telegrambots.meta.api.methods.groupadministration.PromoteChatMember
 import org.telegram.telegrambots.meta.api.methods.groupadministration.RestrictChatMember
-import org.telegram.telegrambots.meta.api.methods.groupadministration.SetChatAdministratorCustomTitle
 import org.telegram.telegrambots.meta.api.methods.groupadministration.RevokeChatInviteLink
 import org.telegram.telegrambots.meta.api.methods.groupadministration.UnbanChatMember
 import org.telegram.telegrambots.meta.api.methods.pinnedmessages.PinChatMessage
@@ -41,7 +39,8 @@ data class BotChatState(
     val canPinMessages: Boolean,
     val canInviteUsers: Boolean,
     val canRestrictMembers: Boolean,
-    val canPromoteMembers: Boolean
+    /** Право «Управление тегами» (Bot API 9.5) — библиотека бота его не знает, читается raw HTTP. */
+    val canManageTags: Boolean
 )
 
 /**
@@ -50,6 +49,12 @@ data class BotChatState(
  * (реестр багов №1: «удалить из группы» в Telegram = бан).
  */
 enum class UserChatState { IN_CHAT, NOT_IN_CHAT, BANNED, UNKNOWN }
+
+/**
+ * Результат чтения тега участника: tag=null — тега нет; inChat=false — человек не в чате
+ * (тег ставить некуда). Сбой вызова кодируется null всего объекта.
+ */
+data class MemberTagLookup(val tag: String?, val inChat: Boolean)
 
 // HTML parse_mode Telegram — нужен сообщениям с text_mention-упоминаниями («живой статус
 // сбора»); вызывающий обязан экранировать пользовательский ввод (&, <, >).
@@ -67,9 +72,35 @@ const val PARSE_MODE_HTML = "HTML"
 @Component
 class ChatTelegramGateway(
     private val telegramClient: TelegramClient,
-    @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String
+    @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String,
+    // Для методов Bot API новее библиотеки (9.5: member tags) — прямые HTTP-вызовы.
+    @Value("\${telegram.bot-token}") private val botToken: String
 ) {
     private val log = LoggerFactory.getLogger(ChatTelegramGateway::class.java)
+
+    // Прямые вызовы Bot API мимо библиотеки (setChatMemberTag и чтение поля tag появились
+    // в Bot API 9.5, март 2026 — библиотека telegrambots 7.10 их не знает).
+    private val rawHttp = java.net.http.HttpClient.newHttpClient()
+    private val json = com.fasterxml.jackson.databind.ObjectMapper()
+
+    private fun rawApiCall(method: String, params: Map<String, Any>): com.fasterxml.jackson.databind.JsonNode? = try {
+        val request = java.net.http.HttpRequest.newBuilder()
+            .uri(java.net.URI.create("https://api.telegram.org/bot$botToken/$method"))
+            .header("Content-Type", "application/json")
+            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(json.writeValueAsString(params)))
+            .timeout(java.time.Duration.ofSeconds(10))
+            .build()
+        val response = rawHttp.send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+        val body = json.readTree(response.body())
+        if (body.path("ok").asBoolean()) body.path("result")
+        else {
+            log.warn("raw Bot API {} failed: {}", method, body.path("description").asText())
+            null
+        }
+    } catch (e: Exception) {
+        log.warn("raw Bot API {} failed: {}", method, e.message)
+        null
+    }
 
     // id бота стабилен на всё время жизни процесса (одна нода = один токен) — кэшируем первый
     // УСПЕШНЫЙ GetMe. Именно поэтому не `by lazy`: lazy закэшировал бы и неудачу (null) навсегда,
@@ -97,11 +128,12 @@ class ChatTelegramGateway(
                 canPinMessages = member.canPinMessages ?: false,
                 canInviteUsers = member.canInviteUsers ?: false,
                 canRestrictMembers = member.canRestrictMembers ?: false,
-                canPromoteMembers = member.canPromoteMembers ?: false
+                // Поле Bot API 9.5 — старая библиотека его не десериализует, читаем raw.
+                canManageTags = fetchCanManageTags(chatId)
             )
             // creator недостижим для бота, но маппинг честный: владельцу можно всё.
-            is ChatMemberOwner -> BotChatState(member.status, canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, canPromoteMembers = true)
-            else -> BotChatState(member.status, canPinMessages = false, canInviteUsers = false, canRestrictMembers = false, canPromoteMembers = false)
+            is ChatMemberOwner -> BotChatState(member.status, canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, canManageTags = true)
+            else -> BotChatState(member.status, canPinMessages = false, canInviteUsers = false, canRestrictMembers = false, canManageTags = false)
         }
     }
 
@@ -174,44 +206,30 @@ class ChatTelegramGateway(
     }
 
     /**
-     * Титулы наград (слайс 4): повысить участника в «минимального админа» — единственный
-     * законный способ дать подпись рядом с именем. Promote со всеми правами false Bot API
-     * трактует как демоут, поэтому даётся одно безвредное право (видеочаты).
+     * Теги наград (слайс 4, Bot API 9.5): поставить/сменить тег ОБЫЧНОМУ участнику —
+     * без повышения в админы. Пустая строка снимает тег. Боту нужно право «Управление
+     * тегами» (can_manage_tags). Тег ≤16 символов, без эмодзи — рамки Telegram.
      */
-    fun promoteToTitledAdmin(chatId: Long, userId: Long): Boolean = try {
-        telegramClient.execute(
-            PromoteChatMember.builder().chatId(chatId).userId(userId)
-                .canManageVideoChats(true)
-                .build()
-        )
-        true
-    } catch (e: Exception) {
-        log.warn("promoteToTitledAdmin failed (нет права «Назначение администраторов» / кап 50 админов?): chatId={} userId={} error={}", chatId, userId, e.message)
-        false
+    fun setMemberTag(chatId: Long, userId: Long, tag: String): Boolean =
+        rawApiCall("setChatMemberTag", mapOf("chat_id" to chatId, "user_id" to userId, "tag" to tag)) != null
+
+    /**
+     * Текущий тег участника (поле tag у member/restricted, Bot API 9.5). null = сбой вызова
+     * (шедулер синхронизации должен отличать «нет тега» от «Telegram не ответил»).
+     */
+    fun getMemberTag(chatId: Long, userId: Long): MemberTagLookup? {
+        val result = rawApiCall("getChatMember", mapOf("chat_id" to chatId, "user_id" to userId)) ?: return null
+        val tag = result.path("tag").asText("").takeIf { it.isNotEmpty() }
+        val inChat = result.path("status").asText() in setOf("creator", "administrator", "member", "restricted")
+        return MemberTagLookup(tag, inChat)
     }
 
-    /** Снять «минимальную админку» титула (все права false = демоут). Работает только для повышенных ботом. */
-    fun demoteTitledAdmin(chatId: Long, userId: Long): Boolean = try {
-        telegramClient.execute(
-            PromoteChatMember.builder().chatId(chatId).userId(userId)
-                .canManageVideoChats(false)
-                .build()
-        )
-        true
-    } catch (e: Exception) {
-        log.warn("demoteTitledAdmin failed: chatId={} userId={} error={}", chatId, userId, e.message)
-        false
-    }
-
-    /** Титул рядом с именем (≤16 символов, без эмодзи — рамки Telegram). Только для повышенных ботом. */
-    fun setAdminCustomTitle(chatId: Long, userId: Long, title: String): Boolean = try {
-        telegramClient.execute(
-            SetChatAdministratorCustomTitle.builder().chatId(chatId).userId(userId).customTitle(title).build()
-        )
-        true
-    } catch (e: Exception) {
-        log.warn("setAdminCustomTitle failed: chatId={} userId={} error={}", chatId, userId, e.message)
-        false
+    /** Право бота «Управление тегами» (raw: библиотека не знает can_manage_tags). */
+    fun fetchCanManageTags(chatId: Long): Boolean {
+        val self = botId() ?: return false
+        val result = rawApiCall("getChatMember", mapOf("chat_id" to chatId, "user_id" to self)) ?: return false
+        // Владелец чата (creator) может всё; у админа смотрим само право.
+        return result.path("status").asText() == "creator" || result.path("can_manage_tags").asBoolean(false)
     }
 
     /** Строгий режим: покинувший клуб вылетает из чата (бан). Снятие — unbanChatMember при возврате в клуб. */

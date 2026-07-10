@@ -28,17 +28,16 @@ interface AwardRepository {
     fun delete(awardId: UUID, clubId: UUID, userId: UUID): Int
 
     /**
-     * Кандидаты на титул в чате (слайс 4): по каждому «живому» участнику клуба (не cancelled)
-     * с наградами — последняя награда и telegram_id. Для backfill при включении тумблера.
+     * Строки синхронизации тегов (слайс 4): КАЖДЫЙ «живой» участник клуба (не cancelled)
+     * с его последней наградой (label=null — наград нет). Для backfill тумблера и шедулера
+     * полной сверки тег↔награда.
      */
-    fun findTitleCandidates(clubId: UUID): List<AwardTitleCandidate>
+    fun findTagSyncRows(clubId: UUID): List<TagSyncRow>
 }
 
-/** Кандидат на титул: последняя награда живого участника клуба (см. [AwardRepository.findTitleCandidates]). */
-data class AwardTitleCandidate(
+/** Строка сверки тегов: живой участник клуба + его последняя награда (null — наград нет). */
+data class TagSyncRow(
     val userId: UUID,
     val telegramId: Long,
-    val label: String,
-    /** Статус membership — гейт «не титуловать должника при включённом строгом режиме». */
-    val membershipStatus: String
+    val label: String?
 )
