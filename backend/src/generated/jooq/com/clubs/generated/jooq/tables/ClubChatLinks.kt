@@ -183,6 +183,24 @@ open class ClubChatLinks(
      */
     val SKLADCHINA_STATUS_ENABLED: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("skladchina_status_enabled"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Тумблер «Статус сборов в чате»: TRUE = бот постит в чат живой статус каждой активной складчины («Скинулись N из M», дедлайн, упоминания ещё не ответивших) и редактирует его при изменении прогресса, а напоминание за 24ч до дедлайна важного сбора шлёт в чат вместо DM (DM — только тем, кого нет в чате). Отдельный от live_pin_enabled — публичные упоминания организатор включает осознанно.")
 
+    /**
+     * The column <code>public.club_chat_links.strict_mode_enabled</code>.
+     * Тумблер «Строгий режим» (слайс 5): TRUE = бот мьютит должников клуба
+     * (frozen/expired) в чате и банит покинувших клуб (кик, отказ, отклонённая
+     * заявка, выход, истёкшая отменённая подписка). Включение требует права
+     * «Блокировка пользователей» (can_restrict_members).
+     */
+    val STRICT_MODE_ENABLED: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("strict_mode_enabled"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Тумблер «Строгий режим» (слайс 5): TRUE = бот мьютит должников клуба (frozen/expired) в чате и банит покинувших клуб (кик, отказ, отклонённая заявка, выход, истёкшая отменённая подписка). Включение требует права «Блокировка пользователей» (can_restrict_members).")
+
+    /**
+     * The column <code>public.club_chat_links.can_restrict_members</code>.
+     * Право бота «Блокировка пользователей» в чате (зеркалит
+     * can_pin_messages/can_invite_users; обновляется из my_chat_member и
+     * «Проверить права ещё раз»). Для строк, привязанных до V52, — FALSE до
+     * первого refresh.
+     */
+    val CAN_RESTRICT_MEMBERS: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("can_restrict_members"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Право бота «Блокировка пользователей» в чате (зеркалит can_pin_messages/can_invite_users; обновляется из my_chat_member и «Проверить права ещё раз»). Для строк, привязанных до V52, — FALSE до первого refresh.")
+
     private constructor(alias: Name, aliased: Table<ClubChatLinksRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<ClubChatLinksRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<ClubChatLinksRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

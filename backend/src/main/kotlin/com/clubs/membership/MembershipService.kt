@@ -70,6 +70,7 @@ class MembershipService(
         val cascadedApplications = applicationRepository.deleteActiveByUserAndClub(userId, clubId)
 
         log.info("Membership cancelled: clubId={} userId={} cascadedApplications={}", clubId, userId, cascadedApplications)
+        publishRevokedIfNoLiveWindow(membership, clubId, userId)
         return mapper.toDto(membership.copy(status = MembershipStatus.cancelled))
     }
 
@@ -174,7 +175,20 @@ class MembershipService(
             "User cancelled paid subscription via /leave: clubId={} userId={} cascadedApplications={}",
             clubId, userId, cascadedApplications
         )
+        publishRevokedIfNoLiveWindow(membership, clubId, userId)
         return mapper.toDto(membership.copy(status = MembershipStatus.cancelled))
+    }
+
+    /**
+     * Добровольный уход закрывает чат-путь (decline заявки + бан строгого режима, слайс 5)
+     * СРАЗУ, только если у человека нет живого оплаченного окна: cancelled-в-периоде сохраняет
+     * доступ — и чат — до конца периода, а истечение окна ловит шедулер
+     * (findCancelledExpiredBetween).
+     */
+    private fun publishRevokedIfNoLiveWindow(membership: Membership, clubId: UUID, userId: UUID) {
+        if (membership.subscriptionExpiresAt?.isAfter(OffsetDateTime.now()) != true) {
+            eventPublisher.publishEvent(MembershipAccessRevokedEvent(clubId, userId))
+        }
     }
 
     /**
@@ -232,6 +246,7 @@ class MembershipService(
             clubId, userId, eventObligations.size, skladchinaObligations.size, promotedWaitlist,
             cascadedSkladchinas.size, cascadedEventResponses, cascadedApplications
         )
+        publishRevokedIfNoLiveWindow(membership, clubId, userId)
         return mapper.toDto(membership.copy(status = MembershipStatus.cancelled))
     }
 

@@ -2,6 +2,7 @@ package com.clubs.payment
 
 import com.clubs.bot.NotificationService
 import com.clubs.membership.ExpiringSubscriptionNotification
+import com.clubs.membership.MembershipAccessRef
 import com.clubs.membership.MembershipRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -12,6 +13,7 @@ import io.mockk.verifyOrder
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.context.ApplicationEventPublisher
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -23,14 +25,16 @@ class SubscriptionSchedulerTest {
 
     private lateinit var membershipRepository: MembershipRepository
     private lateinit var notificationService: NotificationService
+    private lateinit var eventPublisher: ApplicationEventPublisher
     private lateinit var lifecycleService: SubscriptionLifecycleService
     private lateinit var scheduler: SubscriptionScheduler
 
     @BeforeEach
     fun setUp() {
         membershipRepository = mockk(relaxed = true)
+        eventPublisher = mockk(relaxed = true)
         notificationService = mockk(relaxed = true)
-        lifecycleService = SubscriptionLifecycleService(membershipRepository)
+        lifecycleService = SubscriptionLifecycleService(membershipRepository, eventPublisher)
         scheduler = SubscriptionScheduler(lifecycleService, notificationService)
     }
 
@@ -129,7 +133,11 @@ class SubscriptionSchedulerTest {
     // Статусная модель 2026-07-06: processExpiry переводит просроченные active в expired (должник остаётся в клубе).
     @Test
     fun `processExpiry expires overdue access to expired`() {
-        every { membershipRepository.expireOverdueAccess(any()) } returns 3
+        every { membershipRepository.expireOverdueAccess(any()) } returns listOf(
+            MembershipAccessRef(UUID.randomUUID(), UUID.randomUUID()),
+            MembershipAccessRef(UUID.randomUUID(), UUID.randomUUID()),
+            MembershipAccessRef(UUID.randomUUID(), UUID.randomUUID())
+        )
 
         lifecycleService.processExpiry(OffsetDateTime.now())
 
@@ -139,7 +147,7 @@ class SubscriptionSchedulerTest {
     @Test
     fun `processExpiry passes now to expireOverdueAccess`() {
         val fixedNow = OffsetDateTime.parse("2026-04-24T10:00:00Z")
-        every { membershipRepository.expireOverdueAccess(any()) } returns 0
+        every { membershipRepository.expireOverdueAccess(any()) } returns emptyList()
 
         lifecycleService.processExpiry(fixedNow)
 

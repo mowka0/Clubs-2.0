@@ -85,10 +85,11 @@ expired (аналог frozen-вида с claim); `membership_history` — реш
 
 ## Что осталось переосмыслить
 
-1. **Бэкенд-эндпоинты `/freeze` и `/unfreeze` живы, но с UI не вызываются.**
-   `AccessGateService.freezeAccess/unfreezeAccess` + DM «доступ закрыт». Решить: удалить целиком
-   (dead code) или оставить под будущий «строгий режим» чата (бот мьютит должника — понадобится
-   программная пауза). Решение связано с чат-интеграцией (docs/design/club-chat-link/notes.md).
+1. ~~**Бэкенд-эндпоинты `/freeze` и `/unfreeze` живы, но с UI не вызываются.**~~
+   ✅ РЕШЕНО (feature/strict-mode, 2026-07-08): оставлены и стали частью строгого режима чата —
+   `freezeAccess` публикует `MembershipAccessClosedEvent` (бот мьютит должника),
+   `unfreezeAccess` — `MembershipAccessOpenedEvent` (возвращает голос).
+   Спека: docs/modules/club-chat-link.md § Слайс 5.
 2. **Семантика frozen перегружена** — сейчас это и «новичок ждёт первого взноса» (авто при approve
    платного клуба), и «просрочил продление» (авто-шедулер). UI-бакеты уже различают их косвенно
    (claim/не-claim, дата вступления), но статусная модель — нет.

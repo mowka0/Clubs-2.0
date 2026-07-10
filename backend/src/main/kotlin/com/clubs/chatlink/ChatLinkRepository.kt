@@ -8,7 +8,7 @@ interface ChatLinkRepository {
     fun insert(link: ChatLink): ChatLink
 
     /** Обновить статус бота и его права (my_chat_member / refresh). */
-    fun updateBotState(clubId: UUID, botStatus: BotChatStatus, canPinMessages: Boolean, canInviteUsers: Boolean)
+    fun updateBotState(clubId: UUID, botStatus: BotChatStatus, canPinMessages: Boolean, canInviteUsers: Boolean, canRestrictMembers: Boolean)
 
     /** Обновить название чата (refresh через GetChat). */
     fun updateChatTitle(clubId: UUID, chatTitle: String?)
@@ -24,6 +24,9 @@ interface ChatLinkRepository {
 
     /** Тумблер «Статус сборов в чате» (слайс 3.5). */
     fun updateSkladchinaStatus(clubId: UUID, skladchinaStatusEnabled: Boolean)
+
+    /** Тумблер «Строгий режим» (слайс 5). */
+    fun updateStrictMode(clubId: UUID, strictModeEnabled: Boolean)
 
     /** Миграция группы в супергруппу: Telegram меняет chat_id (migrate_to_chat_id). */
     fun updateChatId(oldChatId: Long, newChatId: Long)

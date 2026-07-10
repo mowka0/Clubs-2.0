@@ -26,6 +26,7 @@ class ChatLinkService(
     private val gateway: ChatTelegramGateway,
     private val livePinService: LivePinService,
     private val skladchinaChatStatusService: SkladchinaChatStatusService,
+    private val strictModeService: StrictModeService,
     @Value("\${telegram.bot-username}") private val botUsername: String
 ) {
     private val log = LoggerFactory.getLogger(ChatLinkService::class.java)
@@ -40,6 +41,7 @@ class ChatLinkService(
         request.doorEnabled?.let { status = setDoor(clubId, callerId, it) }
         request.livePinEnabled?.let { status = setLivePin(clubId, callerId, it) }
         request.skladchinaStatusEnabled?.let { status = setSkladchinaStatus(clubId, callerId, it) }
+        request.strictModeEnabled?.let { status = setStrictMode(clubId, callerId, it) }
         return status ?: getStatus(clubId, callerId)
     }
 
@@ -61,7 +63,8 @@ class ChatLinkService(
             clubId = clubId,
             botStatus = BotChatStatus.fromTelegramStatus(state.statusLiteral),
             canPinMessages = state.canPinMessages,
-            canInviteUsers = state.canInviteUsers
+            canInviteUsers = state.canInviteUsers,
+            canRestrictMembers = state.canRestrictMembers
         )
         gateway.getChatTitle(link.chatId)?.let { title ->
             if (title != link.chatTitle) chatLinkRepository.updateChatTitle(clubId, title)
@@ -182,6 +185,41 @@ class ChatLinkService(
         return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
     }
 
+    /**
+     * Тумблер «Строгий режим» (слайс 5): должники — «только чтение», покинувшие клуб — бан.
+     * Включение требует бота в чате и право «Блокировка пользователей» (409 — зеркалит дверь)
+     * и сразу делает backfill: mute всех текущих должников клуба (решение PO 2026-07-08).
+     * Выключение возвращает голос текущим должникам; баны НЕ снимаются — путь назад через
+     * повторное вступление (unban-флоу двери).
+     */
+    @Transactional
+    fun setStrictMode(clubId: UUID, callerId: UUID, enabled: Boolean): ChatLinkStatusDto {
+        requireOwner(clubId, callerId)
+        val link = chatLinkRepository.findByClubId(clubId)
+            ?: throw NotFoundException("Chat is not linked")
+
+        if (enabled == link.strictModeEnabled) {
+            return mapper.toStatusDto(link, startGroupUrl(clubId)) // идемпотентно
+        }
+
+        if (enabled) {
+            if (!link.botStatus.isInChat) {
+                throw ConflictException("Бот удалён из чата — верните его в группу и проверьте права")
+            }
+            if (!link.canRestrictMembers) {
+                throw ConflictException("Боту нужно право «Блокировка пользователей» в настройках группы")
+            }
+            chatLinkRepository.updateStrictMode(clubId, strictModeEnabled = true)
+            strictModeService.backfillForClub(link)
+            log.info("Strict mode enabled: clubId={} chatId={}", clubId, link.chatId)
+        } else {
+            chatLinkRepository.updateStrictMode(clubId, strictModeEnabled = false)
+            strictModeService.disableForClub(link)
+            log.info("Strict mode disabled: clubId={} chatId={}", clubId, link.chatId)
+        }
+        return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
+    }
+
     /** Отвязка владельцем из приложения (или кнопкой в DM-петле подтверждения — через [unlinkAsOwner]). */
     @Transactional
     fun unlink(clubId: UUID, callerId: UUID) {
@@ -202,6 +240,12 @@ class ChatLinkService(
     fun doUnlink(link: ChatLink) {
         livePinService.disableForClub(link)
         skladchinaChatStatusService.disableForClub(link)
+        // Вернуть голос замьюченным должникам, пока бот ещё в чате — иначе мьюты
+        // остались бы навсегда без инструмента снятия из приложения.
+        if (link.strictModeEnabled) strictModeService.disableForClub(link)
+        // Снять ВСЕ баны строгого режима (независимо от тумблера — баны переживают его
+        // выключение, а после отвязки впустить забаненного больше некому).
+        strictModeService.liftBansForClub(link)
         link.doorInviteLink?.let { gateway.revokeInviteLink(link.chatId, it) }
         gateway.leaveChat(link.chatId)
         chatLinkRepository.delete(link.clubId)

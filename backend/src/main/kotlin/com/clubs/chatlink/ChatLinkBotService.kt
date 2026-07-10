@@ -4,6 +4,7 @@ import com.clubs.bot.ChatTelegramGateway
 import com.clubs.club.ClubRepository
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
@@ -20,7 +21,8 @@ class ChatLinkBotService(
     private val clubRepository: ClubRepository,
     private val userRepository: UserRepository,
     private val chatLinkService: ChatLinkService,
-    private val gateway: ChatTelegramGateway
+    private val gateway: ChatTelegramGateway,
+    @Value("\${telegram.bot-username}") private val botUsername: String
 ) {
     private val log = LoggerFactory.getLogger(ChatLinkBotService::class.java)
 
@@ -58,7 +60,8 @@ class ChatLinkBotService(
                     clubId = clubId,
                     botStatus = BotChatStatus.fromTelegramStatus(state.statusLiteral),
                     canPinMessages = state.canPinMessages,
-                    canInviteUsers = state.canInviteUsers
+                    canInviteUsers = state.canInviteUsers,
+                    canRestrictMembers = state.canRestrictMembers
                 )
                 ensureInviteLink(
                     link = existingForClub,
@@ -93,10 +96,12 @@ class ChatLinkBotService(
                 botStatus = state?.let { BotChatStatus.fromTelegramStatus(it.statusLiteral) } ?: BotChatStatus.MEMBER,
                 canPinMessages = state?.canPinMessages ?: false,
                 canInviteUsers = state?.canInviteUsers ?: false,
+                canRestrictMembers = state?.canRestrictMembers ?: false,
                 doorEnabled = false,
                 doorInviteLink = null,
                 livePinEnabled = false,
-                skladchinaStatusEnabled = false
+                skladchinaStatusEnabled = false,
+                strictModeEnabled = false
             )
         )
         log.info("Chat linked: clubId={} chatId={} byTelegramId={} botStatus={}", clubId, chatId, fromTelegramId, link.botStatus.literal)
@@ -107,6 +112,16 @@ class ChatLinkBotService(
 
         // Петля подтверждения (решение PO): фишинг-привязка мгновенно видна и обратима.
         gateway.sendGroupMessage(chatId, linkedMessage(club.name))
+        // Приглашение сидящим в чате (фидбек PO 2026-07-08): чат мог существовать до клуба —
+        // зовём его участников в клуб кнопкой-диплинком. Только при ПЕРВИЧНОЙ привязке:
+        // повторный /start (возврат кикнутого бота) приглашение не дублирует — спам-бюджет.
+        gateway.sendGroupMessageWithUrlButton(
+            chatId = chatId,
+            text = "👋 Теперь встречи, сборы и записи клуба «${club.name}» живут в приложении Clubs.\n" +
+                "Если ты ещё не в клубе — вступай, чтобы участвовать:",
+            buttonText = "Вступить в клуб",
+            url = clubMiniAppUrl(clubId)
+        )
         gateway.sendDmWithCallbackButton(
             telegramId = fromTelegramId,
             text = "Чат «${chatTitle ?: "без названия"}» привязан к вашему клубу «${club.name}». Это были вы?\n\nЕсли нет — отвяжите чат кнопкой ниже.",
@@ -120,13 +135,13 @@ class ChatLinkBotService(
      * права). Привязку НЕ удаляем — фичи гаснут, а после возврата прав всё оживает (мокап 01-C).
      */
     @Transactional
-    fun handleMyChatMember(chatId: Long, newStatusLiteral: String, canPinMessages: Boolean, canInviteUsers: Boolean) {
+    fun handleMyChatMember(chatId: Long, newStatusLiteral: String, canPinMessages: Boolean, canInviteUsers: Boolean, canRestrictMembers: Boolean) {
         val link = chatLinkRepository.findByChatId(chatId) ?: return
         val status = BotChatStatus.fromTelegramStatus(newStatusLiteral)
-        chatLinkRepository.updateBotState(link.clubId, status, canPinMessages, canInviteUsers)
+        chatLinkRepository.updateBotState(link.clubId, status, canPinMessages, canInviteUsers, canRestrictMembers)
         log.info(
-            "Bot chat state updated: clubId={} chatId={} status={} canPin={} canInvite={}",
-            link.clubId, chatId, status.literal, canPinMessages, canInviteUsers
+            "Bot chat state updated: clubId={} chatId={} status={} canPin={} canInvite={} canRestrict={}",
+            link.clubId, chatId, status.literal, canPinMessages, canInviteUsers, canRestrictMembers
         )
         ensureInviteLink(link, nowInChat = status.isInChat, nowCanInvite = canInviteUsers)
     }
@@ -195,6 +210,11 @@ class ChatLinkBotService(
     // Единый текст подтверждения в чат — и при первой привязке, и при повторной (после кика).
     private fun linkedMessage(clubName: String): String =
         "✅ Чат привязан к клубу «$clubName». Управление — в приложении Clubs, вкладка «Чат»."
+
+    // Deep link Main Mini App на страницу клуба (DeepLinkHandler фронта парсит club_<uuid>).
+    // url-кнопка, не WebApp: WebApp-кнопки в группах запрещены Telegram (рамка слайса 3).
+    private fun clubMiniAppUrl(clubId: UUID): String =
+        "https://t.me/$botUsername?startapp=club_$clubId"
 
     private fun refuseAndLeave(chatId: Long, text: String) {
         gateway.sendGroupMessage(chatId, text)

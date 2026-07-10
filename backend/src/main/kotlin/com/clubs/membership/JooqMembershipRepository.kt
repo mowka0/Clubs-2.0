@@ -535,7 +535,7 @@ class JooqMembershipRepository(
     // приостановка доступа, а не событие оттока; club-quality считает события `left`+`expired`
     // оттоком, и лог на каждый транзиентный лапс штрафовал бы ранг клуба ложным churn'ом
     // (решение зафиксировано в docs/modules/membership-lifecycle.md §3).
-    override fun expireOverdueAccess(now: OffsetDateTime): Int =
+    override fun expireOverdueAccess(now: OffsetDateTime): List<MembershipAccessRef> =
         dsl.update(MEMBERSHIPS)
             .set(MEMBERSHIPS.STATUS, MembershipStatus.expired)
             .set(MEMBERSHIPS.UPDATED_AT, now)
@@ -544,7 +544,20 @@ class JooqMembershipRepository(
                     .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.isNotNull)
                     .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.lessOrEqual(now))
             )
-            .execute()
+            // RETURNING: по каждой затронутой строке шедулер публикует «доступ закрылся» —
+            // строгий режим чата (слайс 5) мьютит должника по просрочке.
+            .returning(MEMBERSHIPS.CLUB_ID, MEMBERSHIPS.USER_ID)
+            .fetch { MembershipAccessRef(clubId = it.get(MEMBERSHIPS.CLUB_ID)!!, userId = it.get(MEMBERSHIPS.USER_ID)!!) }
+
+    override fun findCancelledExpiredBetween(from: OffsetDateTime, to: OffsetDateTime): List<MembershipAccessRef> =
+        dsl.select(MEMBERSHIPS.CLUB_ID, MEMBERSHIPS.USER_ID)
+            .from(MEMBERSHIPS)
+            .where(
+                MEMBERSHIPS.STATUS.eq(MembershipStatus.cancelled)
+                    .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.greaterThan(from))
+                    .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.lessOrEqual(to))
+            )
+            .fetch { MembershipAccessRef(clubId = it.get(MEMBERSHIPS.CLUB_ID)!!, userId = it.get(MEMBERSHIPS.USER_ID)!!) }
 
     override fun countClaimedAwaitingDuesByOwner(ownerId: UUID): Int =
         dsl.selectCount().from(MEMBERSHIPS)
@@ -625,6 +638,18 @@ class JooqMembershipRepository(
             .where(
                 MEMBERSHIPS.CLUB_ID.eq(clubId)
                     .and(MembershipAccess.hasAccess())
+            )
+            .fetch(USERS.TELEGRAM_ID)
+            .filterNotNull()
+    }
+
+    override fun findDebtorTelegramIds(clubId: UUID): List<Long> {
+        return dsl.select(USERS.TELEGRAM_ID)
+            .from(MEMBERSHIPS)
+            .join(USERS).on(USERS.ID.eq(MEMBERSHIPS.USER_ID))
+            .where(
+                MEMBERSHIPS.CLUB_ID.eq(clubId)
+                    .and(MEMBERSHIPS.STATUS.`in`(MembershipStatus.frozen, MembershipStatus.expired))
             )
             .fetch(USERS.TELEGRAM_ID)
             .filterNotNull()

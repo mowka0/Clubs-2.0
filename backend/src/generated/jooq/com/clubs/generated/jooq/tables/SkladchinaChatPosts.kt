@@ -96,9 +96,11 @@ open class SkladchinaChatPosts(
 
     /**
      * The column <code>public.skladchina_chat_posts.message_id</code>. Telegram
-     * id сообщения-статуса (NULL = пост не создавался или не удался).
+     * id сообщения-статуса. NOT NULL: строка создаётся только после успешной
+     * отправки поста (неудачный пост строку не оставляет — повторная попытка
+     * при следующем включении тумблера).
      */
-    val MESSAGE_ID: TableField<SkladchinaChatPostsRecord, Long?> = createField(DSL.name("message_id"), SQLDataType.BIGINT.nullable(false), this, "Telegram id сообщения-статуса (NULL = пост не создавался или не удался).")
+    val MESSAGE_ID: TableField<SkladchinaChatPostsRecord, Long?> = createField(DSL.name("message_id"), SQLDataType.BIGINT.nullable(false), this, "Telegram id сообщения-статуса. NOT NULL: строка создаётся только после успешной отправки поста (неудачный пост строку не оставляет — повторная попытка при следующем включении тумблера).")
 
     /**
      * The column <code>public.skladchina_chat_posts.closed_at</code>. Когда

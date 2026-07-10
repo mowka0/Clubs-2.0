@@ -15,10 +15,12 @@ class ChatLinkMapper {
         botStatus = BotChatStatus.fromLiteral(record.botStatus!!),
         canPinMessages = record.canPinMessages!!,
         canInviteUsers = record.canInviteUsers!!,
+        canRestrictMembers = record.canRestrictMembers!!,
         doorEnabled = record.doorEnabled!!,
         doorInviteLink = record.doorInviteLink,
         livePinEnabled = record.livePinEnabled!!,
-        skladchinaStatusEnabled = record.skladchinaStatusEnabled!!
+        skladchinaStatusEnabled = record.skladchinaStatusEnabled!!,
+        strictModeEnabled = record.strictModeEnabled!!
     )
 
     fun toStatusDto(link: ChatLink?, startGroupUrl: String): ChatLinkStatusDto = ChatLinkStatusDto(
@@ -28,10 +30,12 @@ class ChatLinkMapper {
         botStatus = link?.botStatus?.literal,
         canPinMessages = link?.canPinMessages ?: false,
         canInviteUsers = link?.canInviteUsers ?: false,
+        canRestrictMembers = link?.canRestrictMembers ?: false,
         doorEnabled = link?.doorEnabled ?: false,
         doorInviteLink = link?.doorInviteLink,
         livePinEnabled = link?.livePinEnabled ?: false,
         skladchinaStatusEnabled = link?.skladchinaStatusEnabled ?: false,
+        strictModeEnabled = link?.strictModeEnabled ?: false,
         startGroupUrl = startGroupUrl
     )
 }

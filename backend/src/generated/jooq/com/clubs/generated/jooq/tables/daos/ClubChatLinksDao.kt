@@ -184,4 +184,26 @@ open class ClubChatLinksDao(configuration: Configuration?) : DAOImpl<ClubChatLin
      * (values)</code>
      */
     fun fetchBySkladchinaStatusEnabled(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetch(ClubChatLinks.CLUB_CHAT_LINKS.SKLADCHINA_STATUS_ENABLED, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>strict_mode_enabled BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfStrictModeEnabled(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetchRange(ClubChatLinks.CLUB_CHAT_LINKS.STRICT_MODE_ENABLED, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>strict_mode_enabled IN (values)</code>
+     */
+    fun fetchByStrictModeEnabled(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetch(ClubChatLinks.CLUB_CHAT_LINKS.STRICT_MODE_ENABLED, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>can_restrict_members BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfCanRestrictMembers(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetchRange(ClubChatLinks.CLUB_CHAT_LINKS.CAN_RESTRICT_MEMBERS, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>can_restrict_members IN (values)</code>
+     */
+    fun fetchByCanRestrictMembers(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetch(ClubChatLinks.CLUB_CHAT_LINKS.CAN_RESTRICT_MEMBERS, *values.toTypedArray())
 }
