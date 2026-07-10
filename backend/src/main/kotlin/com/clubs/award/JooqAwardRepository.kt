@@ -1,6 +1,9 @@
 package com.clubs.award
 
+import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.tables.references.CLUB_AWARDS
+import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
+import com.clubs.generated.jooq.tables.references.USERS
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
@@ -83,4 +86,28 @@ class JooqAwardRepository(
                     .and(CLUB_AWARDS.USER_ID.eq(userId))
             )
             .execute()
+
+    override fun findTitleCandidates(clubId: UUID): List<AwardTitleCandidate> =
+        // DISTINCT ON: одна строка на участника — его ПОСЛЕДНЯЯ награда (титул = последняя, решение PO).
+        dsl.select(CLUB_AWARDS.USER_ID, USERS.TELEGRAM_ID, CLUB_AWARDS.LABEL, MEMBERSHIPS.STATUS)
+            .distinctOn(CLUB_AWARDS.USER_ID)
+            .from(CLUB_AWARDS)
+            .join(USERS).on(USERS.ID.eq(CLUB_AWARDS.USER_ID))
+            .join(MEMBERSHIPS).on(
+                MEMBERSHIPS.USER_ID.eq(CLUB_AWARDS.USER_ID)
+                    .and(MEMBERSHIPS.CLUB_ID.eq(CLUB_AWARDS.CLUB_ID))
+            )
+            .where(
+                CLUB_AWARDS.CLUB_ID.eq(clubId)
+                    .and(MEMBERSHIPS.STATUS.ne(MembershipStatus.cancelled))
+            )
+            .orderBy(CLUB_AWARDS.USER_ID, CLUB_AWARDS.AWARDED_AT.desc())
+            .fetch {
+                AwardTitleCandidate(
+                    userId = it.get(CLUB_AWARDS.USER_ID)!!,
+                    telegramId = it.get(USERS.TELEGRAM_ID)!!,
+                    label = it.get(CLUB_AWARDS.LABEL)!!,
+                    membershipStatus = it.get(MEMBERSHIPS.STATUS)!!.literal
+                )
+            }
 }

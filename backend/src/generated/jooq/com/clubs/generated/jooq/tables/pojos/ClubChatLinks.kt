@@ -30,7 +30,9 @@ data class ClubChatLinks(
     var livePinEnabled: Boolean? = null,
     var skladchinaStatusEnabled: Boolean? = null,
     var strictModeEnabled: Boolean? = null,
-    var canRestrictMembers: Boolean? = null
+    var canRestrictMembers: Boolean? = null,
+    var awardTitlesEnabled: Boolean? = null,
+    var canPromoteMembers: Boolean? = null
 ): Serializable {
 
 
@@ -120,6 +122,18 @@ data class ClubChatLinks(
         }
         else if (this.canRestrictMembers != o.canRestrictMembers)
             return false
+        if (this.awardTitlesEnabled == null) {
+            if (o.awardTitlesEnabled != null)
+                return false
+        }
+        else if (this.awardTitlesEnabled != o.awardTitlesEnabled)
+            return false
+        if (this.canPromoteMembers == null) {
+            if (o.canPromoteMembers != null)
+                return false
+        }
+        else if (this.canPromoteMembers != o.canPromoteMembers)
+            return false
         return true
     }
 
@@ -141,6 +155,8 @@ data class ClubChatLinks(
         result = prime * result + (if (this.skladchinaStatusEnabled == null) 0 else this.skladchinaStatusEnabled.hashCode())
         result = prime * result + (if (this.strictModeEnabled == null) 0 else this.strictModeEnabled.hashCode())
         result = prime * result + (if (this.canRestrictMembers == null) 0 else this.canRestrictMembers.hashCode())
+        result = prime * result + (if (this.awardTitlesEnabled == null) 0 else this.awardTitlesEnabled.hashCode())
+        result = prime * result + (if (this.canPromoteMembers == null) 0 else this.canPromoteMembers.hashCode())
         return result
     }
 
@@ -162,6 +178,8 @@ data class ClubChatLinks(
         sb.append(", ").append(skladchinaStatusEnabled)
         sb.append(", ").append(strictModeEnabled)
         sb.append(", ").append(canRestrictMembers)
+        sb.append(", ").append(awardTitlesEnabled)
+        sb.append(", ").append(canPromoteMembers)
 
         sb.append(")")
         return sb.toString()

@@ -206,4 +206,26 @@ open class ClubChatLinksDao(configuration: Configuration?) : DAOImpl<ClubChatLin
      * Fetch records that have <code>can_restrict_members IN (values)</code>
      */
     fun fetchByCanRestrictMembers(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetch(ClubChatLinks.CLUB_CHAT_LINKS.CAN_RESTRICT_MEMBERS, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>award_titles_enabled BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfAwardTitlesEnabled(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetchRange(ClubChatLinks.CLUB_CHAT_LINKS.AWARD_TITLES_ENABLED, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>award_titles_enabled IN (values)</code>
+     */
+    fun fetchByAwardTitlesEnabled(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetch(ClubChatLinks.CLUB_CHAT_LINKS.AWARD_TITLES_ENABLED, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>can_promote_members BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfCanPromoteMembers(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetchRange(ClubChatLinks.CLUB_CHAT_LINKS.CAN_PROMOTE_MEMBERS, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>can_promote_members IN (values)</code>
+     */
+    fun fetchByCanPromoteMembers(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetch(ClubChatLinks.CLUB_CHAT_LINKS.CAN_PROMOTE_MEMBERS, *values.toTypedArray())
 }

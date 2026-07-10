@@ -5,6 +5,7 @@ package com.clubs.generated.jooq
 
 
 import com.clubs.generated.jooq.tables.Applications
+import com.clubs.generated.jooq.tables.ChatAwardTitles
 import com.clubs.generated.jooq.tables.ChatStrictBans
 import com.clubs.generated.jooq.tables.ClubAwards
 import com.clubs.generated.jooq.tables.ClubChatLinks
@@ -55,6 +56,16 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
      * терминальные могут повторяться при повторных подачах.
      */
     val APPLICATIONS: Applications get() = Applications.APPLICATIONS
+
+    /**
+     * Титулы наград, выставленные ботом в клубном чате (слайс 4
+     * club-chat-link): кого бот повысил в «минимального админа» и какой титул
+     * стоит. Нужна для снятия титулов при выключении тумблера/отвязке, отката
+     * при отзыве награды и для строгого режима (перед mute/ban титулованного
+     * бот сначала разжалует). «Настоящие» админы, назначенные организатором,
+     * здесь не учитываются и не трогаются.
+     */
+    val CHAT_AWARD_TITLES: ChatAwardTitles get() = ChatAwardTitles.CHAT_AWARD_TITLES
 
     /**
      * Баны, наложенные строгим режимом чата (слайс 5 club-chat-link): кого бот
@@ -228,6 +239,7 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
 
     override fun getTables(): List<Table<*>> = listOf(
         Applications.APPLICATIONS,
+        ChatAwardTitles.CHAT_AWARD_TITLES,
         ChatStrictBans.CHAT_STRICT_BANS,
         ClubAwards.CLUB_AWARDS,
         ClubChatLinks.CLUB_CHAT_LINKS,

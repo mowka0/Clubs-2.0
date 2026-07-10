@@ -27,6 +27,7 @@ class ChatLinkService(
     private val livePinService: LivePinService,
     private val skladchinaChatStatusService: SkladchinaChatStatusService,
     private val strictModeService: StrictModeService,
+    private val titleService: TitleService,
     @Value("\${telegram.bot-username}") private val botUsername: String
 ) {
     private val log = LoggerFactory.getLogger(ChatLinkService::class.java)
@@ -42,6 +43,7 @@ class ChatLinkService(
         request.livePinEnabled?.let { status = setLivePin(clubId, callerId, it) }
         request.skladchinaStatusEnabled?.let { status = setSkladchinaStatus(clubId, callerId, it) }
         request.strictModeEnabled?.let { status = setStrictMode(clubId, callerId, it) }
+        request.awardTitlesEnabled?.let { status = setAwardTitles(clubId, callerId, it) }
         return status ?: getStatus(clubId, callerId)
     }
 
@@ -64,7 +66,8 @@ class ChatLinkService(
             botStatus = BotChatStatus.fromTelegramStatus(state.statusLiteral),
             canPinMessages = state.canPinMessages,
             canInviteUsers = state.canInviteUsers,
-            canRestrictMembers = state.canRestrictMembers
+            canRestrictMembers = state.canRestrictMembers,
+            canPromoteMembers = state.canPromoteMembers
         )
         gateway.getChatTitle(link.chatId)?.let { title ->
             if (title != link.chatTitle) chatLinkRepository.updateChatTitle(clubId, title)
@@ -220,6 +223,39 @@ class ChatLinkService(
         return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
     }
 
+    /**
+     * Тумблер «Титулы наград» (слайс 4): последняя награда участника видна титулом в чате.
+     * Включение требует бота в чате и право «Назначение администраторов» (409 — зеркалит
+     * остальные тумблеры) и сразу делает backfill. Выключение снимает все титулы из учёта.
+     */
+    @Transactional
+    fun setAwardTitles(clubId: UUID, callerId: UUID, enabled: Boolean): ChatLinkStatusDto {
+        requireOwner(clubId, callerId)
+        val link = chatLinkRepository.findByClubId(clubId)
+            ?: throw NotFoundException("Chat is not linked")
+
+        if (enabled == link.awardTitlesEnabled) {
+            return mapper.toStatusDto(link, startGroupUrl(clubId)) // идемпотентно
+        }
+
+        if (enabled) {
+            if (!link.botStatus.isInChat) {
+                throw ConflictException("Бот удалён из чата — верните его в группу и проверьте права")
+            }
+            if (!link.canPromoteMembers) {
+                throw ConflictException("Боту нужно право «Назначение администраторов» в настройках группы")
+            }
+            chatLinkRepository.updateAwardTitles(clubId, awardTitlesEnabled = true)
+            titleService.backfillForClub(link)
+            log.info("Award titles enabled: clubId={} chatId={}", clubId, link.chatId)
+        } else {
+            chatLinkRepository.updateAwardTitles(clubId, awardTitlesEnabled = false)
+            titleService.disableForClub(link)
+            log.info("Award titles disabled: clubId={} chatId={}", clubId, link.chatId)
+        }
+        return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
+    }
+
     /** Отвязка владельцем из приложения (или кнопкой в DM-петле подтверждения — через [unlinkAsOwner]). */
     @Transactional
     fun unlink(clubId: UUID, callerId: UUID) {
@@ -246,6 +282,8 @@ class ChatLinkService(
         // Снять ВСЕ баны строгого режима (независимо от тумблера — баны переживают его
         // выключение, а после отвязки впустить забаненного больше некому).
         strictModeService.liftBansForClub(link)
+        // Снять титулы наград, пока бот ещё может разжаловать (учёт сам скажет, есть ли что снимать).
+        titleService.disableForClub(link)
         link.doorInviteLink?.let { gateway.revokeInviteLink(link.chatId, it) }
         gateway.leaveChat(link.chatId)
         chatLinkRepository.delete(link.clubId)
@@ -259,7 +297,7 @@ class ChatLinkService(
      * = бан, и без этого права бот не может впустить вернувшегося участника).
      */
     fun startGroupUrl(clubId: UUID): String =
-        "https://t.me/$botUsername?startgroup=$clubId&admin=pin_messages+invite_users+restrict_members"
+        "https://t.me/$botUsername?startgroup=$clubId&admin=pin_messages+invite_users+restrict_members+promote_members"
 
     private fun requireOwner(clubId: UUID, callerId: UUID): Club {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")

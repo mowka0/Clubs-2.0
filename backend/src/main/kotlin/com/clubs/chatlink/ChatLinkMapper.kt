@@ -16,11 +16,13 @@ class ChatLinkMapper {
         canPinMessages = record.canPinMessages!!,
         canInviteUsers = record.canInviteUsers!!,
         canRestrictMembers = record.canRestrictMembers!!,
+        canPromoteMembers = record.canPromoteMembers!!,
         doorEnabled = record.doorEnabled!!,
         doorInviteLink = record.doorInviteLink,
         livePinEnabled = record.livePinEnabled!!,
         skladchinaStatusEnabled = record.skladchinaStatusEnabled!!,
-        strictModeEnabled = record.strictModeEnabled!!
+        strictModeEnabled = record.strictModeEnabled!!,
+        awardTitlesEnabled = record.awardTitlesEnabled!!
     )
 
     fun toStatusDto(link: ChatLink?, startGroupUrl: String): ChatLinkStatusDto = ChatLinkStatusDto(
@@ -31,11 +33,13 @@ class ChatLinkMapper {
         canPinMessages = link?.canPinMessages ?: false,
         canInviteUsers = link?.canInviteUsers ?: false,
         canRestrictMembers = link?.canRestrictMembers ?: false,
+        canPromoteMembers = link?.canPromoteMembers ?: false,
         doorEnabled = link?.doorEnabled ?: false,
         doorInviteLink = link?.doorInviteLink,
         livePinEnabled = link?.livePinEnabled ?: false,
         skladchinaStatusEnabled = link?.skladchinaStatusEnabled ?: false,
         strictModeEnabled = link?.strictModeEnabled ?: false,
+        awardTitlesEnabled = link?.awardTitlesEnabled ?: false,
         startGroupUrl = startGroupUrl
     )
 }

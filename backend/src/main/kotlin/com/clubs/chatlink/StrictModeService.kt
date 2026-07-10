@@ -24,36 +24,51 @@ class StrictModeService(
     private val membershipRepository: MembershipRepository,
     private val userRepository: UserRepository,
     private val strictBanRepository: StrictBanRepository,
+    private val titleService: TitleService,
     private val gateway: ChatTelegramGateway
 ) {
     private val log = LoggerFactory.getLogger(StrictModeService::class.java)
 
-    /** Доступ закрылся, человек остался в клубе должником (freeze / просрочка / ждёт первого взноса) → mute. */
+    /**
+     * Доступ закрылся, человек остался в клубе должником (freeze / просрочка / ждёт первого взноса) → mute.
+     * Титул (слайс 4) снимается ПЕРЕД мьютом в этом же потоке: Telegram-админ неподвластен restrict.
+     */
     @Async
     fun onAccessClosed(clubId: UUID, userId: UUID) {
         val link = strictLink(clubId) ?: return
         val telegramId = userRepository.findById(userId)?.telegramId ?: return
+        titleService.removeTitle(link, telegramId)
         val muted = gateway.muteChatMember(link.chatId, telegramId)
         log.info("Strict mode: debtor mute={} clubId={} userId={}", muted, clubId, userId)
     }
 
-    /** Доступ открылся (взнос получен / разморозка / вступление) → вернуть голос, если был mute. */
+    /** Доступ открылся (взнос получен / разморозка / вступление) → вернуть голос и титул. */
     @Async
     fun onAccessOpened(clubId: UUID, userId: UUID) {
         val telegramId = userRepository.findById(userId)?.telegramId ?: return
         // Учёт бана чистим НЕЗАВИСИМО от тумблера: сам бан при открытии доступа снимает
         // дверь (ChatDoorService, unban работает и при выключенном строгом режиме).
         strictBanRepository.delete(clubId, telegramId)
-        val link = strictLink(clubId) ?: return
-        val unmuted = gateway.unmuteChatMember(link.chatId, telegramId)
-        log.info("Strict mode: member unmute={} clubId={} userId={}", unmuted, clubId, userId)
+        val link = chatLinkRepository.findByClubId(clubId)?.takeIf { it.botStatus.isInChat } ?: return
+        if (link.strictModeEnabled) {
+            val unmuted = gateway.unmuteChatMember(link.chatId, telegramId)
+            log.info("Strict mode: member unmute={} clubId={} userId={}", unmuted, clubId, userId)
+        }
+        // Титул возвращается ПОСЛЕ голоса (тот же поток — без гонки), независимо от строгого режима.
+        titleService.restoreTitle(link, userId, telegramId)
     }
 
-    /** Человек покинул клуб (кик / отказ / отклонённая заявка / выход / истёкшая отменённая подписка) → ban. */
+    /**
+     * Человек покинул клуб (кик / отказ / отклонённая заявка / выход / истёкшая отменённая
+     * подписка): титул снимается всегда (ушедший не носит регалии клуба), бан — при
+     * включённом строгом режиме, причём demote обязан идти первым (админа не забанить).
+     */
     @Async
     fun onMembershipRevoked(clubId: UUID, userId: UUID) {
-        val link = strictLink(clubId) ?: return
+        val link = chatLinkRepository.findByClubId(clubId)?.takeIf { it.botStatus.isInChat } ?: return
         val telegramId = userRepository.findById(userId)?.telegramId ?: return
+        titleService.removeTitle(link, telegramId)
+        if (!link.strictModeEnabled) return
         val banned = gateway.banChatMember(link.chatId, telegramId)
         // Учитываем только реально наложенные баны — по учёту отвязка чата снимет их все.
         if (banned) strictBanRepository.record(clubId, telegramId)
@@ -82,7 +97,11 @@ class StrictModeService(
      */
     fun backfillForClub(link: ChatLink) {
         val debtors = membershipRepository.findDebtorTelegramIds(link.clubId)
-        val muted = debtors.count { gateway.muteChatMember(link.chatId, it) }
+        val muted = debtors.count {
+            // Титулованный должник — сначала снять титул (админа не замьютить), потом mute.
+            titleService.removeTitle(link, it)
+            gateway.muteChatMember(link.chatId, it)
+        }
         log.info("Strict mode backfill: muted {}/{} debtors clubId={}", muted, debtors.size, link.clubId)
     }
 

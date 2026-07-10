@@ -35,6 +35,7 @@ class JooqChatLinkRepository(
             .set(CLUB_CHAT_LINKS.CAN_PIN_MESSAGES, link.canPinMessages)
             .set(CLUB_CHAT_LINKS.CAN_INVITE_USERS, link.canInviteUsers)
             .set(CLUB_CHAT_LINKS.CAN_RESTRICT_MEMBERS, link.canRestrictMembers)
+            .set(CLUB_CHAT_LINKS.CAN_PROMOTE_MEMBERS, link.canPromoteMembers)
             .set(CLUB_CHAT_LINKS.DOOR_ENABLED, link.doorEnabled)
             .set(CLUB_CHAT_LINKS.DOOR_INVITE_LINK, link.doorInviteLink)
             .returning()
@@ -42,12 +43,13 @@ class JooqChatLinkRepository(
         return mapper.recordToDomain(record)
     }
 
-    override fun updateBotState(clubId: UUID, botStatus: BotChatStatus, canPinMessages: Boolean, canInviteUsers: Boolean, canRestrictMembers: Boolean) {
+    override fun updateBotState(clubId: UUID, botStatus: BotChatStatus, canPinMessages: Boolean, canInviteUsers: Boolean, canRestrictMembers: Boolean, canPromoteMembers: Boolean) {
         dsl.update(CLUB_CHAT_LINKS)
             .set(CLUB_CHAT_LINKS.BOT_STATUS, botStatus.literal)
             .set(CLUB_CHAT_LINKS.CAN_PIN_MESSAGES, canPinMessages)
             .set(CLUB_CHAT_LINKS.CAN_INVITE_USERS, canInviteUsers)
             .set(CLUB_CHAT_LINKS.CAN_RESTRICT_MEMBERS, canRestrictMembers)
+            .set(CLUB_CHAT_LINKS.CAN_PROMOTE_MEMBERS, canPromoteMembers)
             .set(CLUB_CHAT_LINKS.UPDATED_AT, OffsetDateTime.now())
             .where(CLUB_CHAT_LINKS.CLUB_ID.eq(clubId))
             .execute()
@@ -97,6 +99,14 @@ class JooqChatLinkRepository(
     override fun updateStrictMode(clubId: UUID, strictModeEnabled: Boolean) {
         dsl.update(CLUB_CHAT_LINKS)
             .set(CLUB_CHAT_LINKS.STRICT_MODE_ENABLED, strictModeEnabled)
+            .set(CLUB_CHAT_LINKS.UPDATED_AT, OffsetDateTime.now())
+            .where(CLUB_CHAT_LINKS.CLUB_ID.eq(clubId))
+            .execute()
+    }
+
+    override fun updateAwardTitles(clubId: UUID, awardTitlesEnabled: Boolean) {
+        dsl.update(CLUB_CHAT_LINKS)
+            .set(CLUB_CHAT_LINKS.AWARD_TITLES_ENABLED, awardTitlesEnabled)
             .set(CLUB_CHAT_LINKS.UPDATED_AT, OffsetDateTime.now())
             .where(CLUB_CHAT_LINKS.CLUB_ID.eq(clubId))
             .execute()

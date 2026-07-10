@@ -10,6 +10,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import org.springframework.context.ApplicationEventPublisher
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -21,6 +22,7 @@ class AwardServiceTest {
 
     private lateinit var awardRepository: AwardRepository
     private lateinit var membershipRepository: MembershipRepository
+    private lateinit var eventPublisher: ApplicationEventPublisher
     private lateinit var service: AwardService
 
     private val clubId = UUID.randomUUID()
@@ -31,7 +33,8 @@ class AwardServiceTest {
     fun setUp() {
         awardRepository = mockk(relaxed = true)
         membershipRepository = mockk(relaxed = true)
-        service = AwardService(awardRepository, membershipRepository, AwardMapper())
+        eventPublisher = mockk(relaxed = true)
+        service = AwardService(awardRepository, membershipRepository, AwardMapper(), eventPublisher)
         // Default: target is a member; the cap/dup checks return "room available" unless overridden.
         every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns member()
         every { awardRepository.countByMember(clubId, targetUserId) } returns 0

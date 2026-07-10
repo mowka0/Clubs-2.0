@@ -11,7 +11,9 @@ import org.telegram.telegrambots.meta.api.methods.groupadministration.DeclineCha
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember
 import org.telegram.telegrambots.meta.api.methods.groupadministration.LeaveChat
+import org.telegram.telegrambots.meta.api.methods.groupadministration.PromoteChatMember
 import org.telegram.telegrambots.meta.api.methods.groupadministration.RestrictChatMember
+import org.telegram.telegrambots.meta.api.methods.groupadministration.SetChatAdministratorCustomTitle
 import org.telegram.telegrambots.meta.api.methods.groupadministration.RevokeChatInviteLink
 import org.telegram.telegrambots.meta.api.methods.groupadministration.UnbanChatMember
 import org.telegram.telegrambots.meta.api.methods.pinnedmessages.PinChatMessage
@@ -38,7 +40,8 @@ data class BotChatState(
     val statusLiteral: String,
     val canPinMessages: Boolean,
     val canInviteUsers: Boolean,
-    val canRestrictMembers: Boolean
+    val canRestrictMembers: Boolean,
+    val canPromoteMembers: Boolean
 )
 
 /**
@@ -93,11 +96,12 @@ class ChatTelegramGateway(
                 statusLiteral = member.status,
                 canPinMessages = member.canPinMessages ?: false,
                 canInviteUsers = member.canInviteUsers ?: false,
-                canRestrictMembers = member.canRestrictMembers ?: false
+                canRestrictMembers = member.canRestrictMembers ?: false,
+                canPromoteMembers = member.canPromoteMembers ?: false
             )
             // creator недостижим для бота, но маппинг честный: владельцу можно всё.
-            is ChatMemberOwner -> BotChatState(member.status, canPinMessages = true, canInviteUsers = true, canRestrictMembers = true)
-            else -> BotChatState(member.status, canPinMessages = false, canInviteUsers = false, canRestrictMembers = false)
+            is ChatMemberOwner -> BotChatState(member.status, canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, canPromoteMembers = true)
+            else -> BotChatState(member.status, canPinMessages = false, canInviteUsers = false, canRestrictMembers = false, canPromoteMembers = false)
         }
     }
 
@@ -167,6 +171,47 @@ class ChatTelegramGateway(
             log.warn("unmuteChatMember failed: chatId={} userId={} error={}", chatId, userId, e.message)
             false
         }
+    }
+
+    /**
+     * Титулы наград (слайс 4): повысить участника в «минимального админа» — единственный
+     * законный способ дать подпись рядом с именем. Promote со всеми правами false Bot API
+     * трактует как демоут, поэтому даётся одно безвредное право (видеочаты).
+     */
+    fun promoteToTitledAdmin(chatId: Long, userId: Long): Boolean = try {
+        telegramClient.execute(
+            PromoteChatMember.builder().chatId(chatId).userId(userId)
+                .canManageVideoChats(true)
+                .build()
+        )
+        true
+    } catch (e: Exception) {
+        log.warn("promoteToTitledAdmin failed (нет права «Назначение администраторов» / кап 50 админов?): chatId={} userId={} error={}", chatId, userId, e.message)
+        false
+    }
+
+    /** Снять «минимальную админку» титула (все права false = демоут). Работает только для повышенных ботом. */
+    fun demoteTitledAdmin(chatId: Long, userId: Long): Boolean = try {
+        telegramClient.execute(
+            PromoteChatMember.builder().chatId(chatId).userId(userId)
+                .canManageVideoChats(false)
+                .build()
+        )
+        true
+    } catch (e: Exception) {
+        log.warn("demoteTitledAdmin failed: chatId={} userId={} error={}", chatId, userId, e.message)
+        false
+    }
+
+    /** Титул рядом с именем (≤16 символов, без эмодзи — рамки Telegram). Только для повышенных ботом. */
+    fun setAdminCustomTitle(chatId: Long, userId: Long, title: String): Boolean = try {
+        telegramClient.execute(
+            SetChatAdministratorCustomTitle.builder().chatId(chatId).userId(userId).customTitle(title).build()
+        )
+        true
+    } catch (e: Exception) {
+        log.warn("setAdminCustomTitle failed: chatId={} userId={} error={}", chatId, userId, e.message)
+        false
     }
 
     /** Строгий режим: покинувший клуб вылетает из чата (бан). Снятие — unbanChatMember при возврате в клуб. */

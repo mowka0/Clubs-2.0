@@ -25,6 +25,7 @@ class ChatLinkServiceTest {
     private lateinit var livePinService: LivePinService
     private lateinit var skladchinaChatStatusService: SkladchinaChatStatusService
     private lateinit var strictModeService: StrictModeService
+    private lateinit var titleService: TitleService
     private lateinit var service: ChatLinkService
 
     private val clubId = UUID.randomUUID()
@@ -40,7 +41,8 @@ class ChatLinkServiceTest {
         livePinService = mockk(relaxed = true)
         skladchinaChatStatusService = mockk(relaxed = true)
         strictModeService = mockk(relaxed = true)
-        service = ChatLinkService(chatLinkRepository, clubRepository, ChatLinkMapper(), gateway, livePinService, skladchinaChatStatusService, strictModeService, botUsername = "clubs_test_bot")
+        titleService = mockk(relaxed = true)
+        service = ChatLinkService(chatLinkRepository, clubRepository, ChatLinkMapper(), gateway, livePinService, skladchinaChatStatusService, strictModeService, titleService, botUsername = "clubs_test_bot")
         every { clubRepository.findById(clubId) } returns club
     }
 
@@ -52,7 +54,7 @@ class ChatLinkServiceTest {
 
         assertFalse(status.linked)
         // restrict_members — право снимать баны (реестр багов №1: «удалить из группы» = бан)
-        assertEquals("https://t.me/clubs_test_bot?startgroup=$clubId&admin=pin_messages+invite_users+restrict_members", status.startGroupUrl)
+        assertEquals("https://t.me/clubs_test_bot?startgroup=$clubId&admin=pin_messages+invite_users+restrict_members+promote_members", status.startGroupUrl)
     }
 
     @Test
@@ -280,7 +282,7 @@ class ChatLinkServiceTest {
         every { gateway.getBotChatState(any()) } returns null
 
         assertThrows(ConflictException::class.java) { service.refresh(clubId, ownerId) }
-        verify(exactly = 0) { chatLinkRepository.updateBotState(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.updateBotState(any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -340,6 +342,51 @@ class ChatLinkServiceTest {
         verify { strictModeService.liftBansForClub(link) }
         verify { gateway.leaveChat(link.chatId) }
         verify { chatLinkRepository.delete(clubId) }
+    }
+
+    @Test
+    fun `setAwardTitles включение без права назначения админов — 409, ничего не сохраняем`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns
+            chatLinkFixture(clubId = clubId, canPromoteMembers = false)
+
+        assertThrows(ConflictException::class.java) { service.setAwardTitles(clubId, ownerId, enabled = true) }
+        verify(exactly = 0) { chatLinkRepository.updateAwardTitles(any(), any()) }
+        verify(exactly = 0) { titleService.backfillForClub(any()) }
+    }
+
+    @Test
+    fun `setAwardTitles включение — сохраняет тумблер и титулует участников с наградами (backfill)`() {
+        val link = chatLinkFixture(clubId = clubId, canPromoteMembers = true)
+        every { chatLinkRepository.findByClubId(clubId) } returns link andThen link.copy(awardTitlesEnabled = true)
+
+        val status = service.setAwardTitles(clubId, ownerId, enabled = true)
+
+        assertTrue(status.awardTitlesEnabled)
+        verify { chatLinkRepository.updateAwardTitles(clubId, true) }
+        verify { titleService.backfillForClub(link) }
+    }
+
+    @Test
+    fun `setAwardTitles выключение — снимает титулы`() {
+        val link = chatLinkFixture(clubId = clubId, awardTitlesEnabled = true)
+        every { chatLinkRepository.findByClubId(clubId) } returns link andThen link.copy(awardTitlesEnabled = false)
+
+        val status = service.setAwardTitles(clubId, ownerId, enabled = false)
+
+        assertFalse(status.awardTitlesEnabled)
+        verify { chatLinkRepository.updateAwardTitles(clubId, false) }
+        verify { titleService.disableForClub(link) }
+    }
+
+    @Test
+    fun `unlink снимает титулы наград до выхода бота`() {
+        val link = chatLinkFixture(clubId = clubId, awardTitlesEnabled = true)
+        every { chatLinkRepository.findByClubId(clubId) } returns link
+
+        service.unlink(clubId, ownerId)
+
+        verify { titleService.disableForClub(link) }
+        verify { gateway.leaveChat(link.chatId) }
     }
 
     @Test

@@ -26,4 +26,19 @@ interface AwardRepository {
 
     /** Удаляет награду, только если она принадлежит (clubId, userId). Возвращает число затронутых строк (0 = не найдено). */
     fun delete(awardId: UUID, clubId: UUID, userId: UUID): Int
+
+    /**
+     * Кандидаты на титул в чате (слайс 4): по каждому «живому» участнику клуба (не cancelled)
+     * с наградами — последняя награда и telegram_id. Для backfill при включении тумблера.
+     */
+    fun findTitleCandidates(clubId: UUID): List<AwardTitleCandidate>
 }
+
+/** Кандидат на титул: последняя награда живого участника клуба (см. [AwardRepository.findTitleCandidates]). */
+data class AwardTitleCandidate(
+    val userId: UUID,
+    val telegramId: Long,
+    val label: String,
+    /** Статус membership — гейт «не титуловать должника при включённом строгом режиме». */
+    val membershipStatus: String
+)

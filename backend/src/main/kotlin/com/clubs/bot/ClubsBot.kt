@@ -166,7 +166,8 @@ class ClubsBot(
             newStatusLiteral = newMember.status,
             canPinMessages = admin?.canPinMessages ?: false,
             canInviteUsers = admin?.canInviteUsers ?: false,
-            canRestrictMembers = admin?.canRestrictMembers ?: false
+            canRestrictMembers = admin?.canRestrictMembers ?: false,
+            canPromoteMembers = admin?.canPromoteMembers ?: false
         )
     }
 

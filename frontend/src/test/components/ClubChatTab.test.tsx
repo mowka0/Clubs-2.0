@@ -33,7 +33,7 @@ afterEach(() => { server.resetHandlers(); vi.clearAllMocks(); });
 afterAll(() => server.close());
 
 const CLUB_ID = 'club-1';
-const START_URL = `https://t.me/clubs_test_bot?startgroup=${CLUB_ID}&admin=pin_messages+invite_users+restrict_members`;
+const START_URL = `https://t.me/clubs_test_bot?startgroup=${CLUB_ID}&admin=pin_messages+invite_users+restrict_members+promote_members`;
 
 function status(over: Partial<ChatLinkStatusDto> = {}): ChatLinkStatusDto {
   return {
@@ -46,9 +46,11 @@ function status(over: Partial<ChatLinkStatusDto> = {}): ChatLinkStatusDto {
     doorEnabled: false,
     doorInviteLink: null,
     canRestrictMembers: false,
+    canPromoteMembers: false,
     livePinEnabled: false,
     skladchinaStatusEnabled: false,
     strictModeEnabled: false,
+    awardTitlesEnabled: false,
     startGroupUrl: START_URL,
     ...over,
   };
@@ -68,6 +70,7 @@ const linkedHealthy = () => status({
   canPinMessages: true,
   canInviteUsers: true,
   canRestrictMembers: true,
+  canPromoteMembers: true,
 });
 
 describe('ClubChatTab', () => {
@@ -93,6 +96,7 @@ describe('ClubChatTab', () => {
     expect(screen.getByRole('switch', { name: 'Живой закреп' })).toBeEnabled();
     expect(screen.getByRole('switch', { name: 'Статус сборов в чате' })).toBeEnabled();
     expect(screen.getByRole('switch', { name: 'Строгий режим' })).toBeEnabled();
+    expect(screen.getByRole('switch', { name: 'Титулы наград' })).toBeEnabled();
   });
 
   it('включение статуса сборов шлёт PATCH только с skladchinaStatusEnabled', async () => {
@@ -288,6 +292,48 @@ describe('ClubChatTab', () => {
     renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
 
     expect(await screen.findByText('Бот потерял право блокировать участников')).toBeInTheDocument();
+  });
+
+  it('включение титулов наград шлёт PATCH только с awardTitlesEnabled', async () => {
+    let current = linkedHealthy();
+    let patched: unknown = null;
+    server.use(
+      http.get(`*/api/clubs/${CLUB_ID}/chat-link`, () => HttpResponse.json(current)),
+      http.patch(`*/api/clubs/${CLUB_ID}/chat-link`, async ({ request }) => {
+        patched = await request.json();
+        current = { ...linkedHealthy(), awardTitlesEnabled: true };
+        return HttpResponse.json(current);
+      }),
+    );
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    await userEvent.click(await screen.findByRole('switch', { name: 'Титулы наград' }));
+
+    await waitFor(() => expect(patched).toEqual({ awardTitlesEnabled: true }));
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Титулы наград' })).toHaveAttribute('aria-checked', 'true'));
+  });
+
+  it('без права назначения админов тумблер титулов задизейблен', async () => {
+    mockStatus(status({
+      linked: true,
+      chatTitle: 'Партия — чат',
+      botStatus: 'administrator',
+      canPinMessages: true,
+      canInviteUsers: true,
+      canRestrictMembers: true,
+      canPromoteMembers: false,
+    }));
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByRole('switch', { name: 'Титулы наград' })).toBeDisabled();
+    expect(screen.getByText('✕ назначение админов запрещено')).toBeInTheDocument();
+  });
+
+  it('титулы включены, но право отняли — алерт деградации', async () => {
+    mockStatus({ ...linkedHealthy(), awardTitlesEnabled: true, canPromoteMembers: false });
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByText('Бот потерял право назначать администраторов')).toBeInTheDocument();
   });
 
   it('отвязка: подтверждение в модалке шлёт DELETE', async () => {
