@@ -201,6 +201,23 @@ open class ClubChatLinks(
      */
     val CAN_RESTRICT_MEMBERS: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("can_restrict_members"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Право бота «Блокировка пользователей» в чате (зеркалит can_pin_messages/can_invite_users; обновляется из my_chat_member и «Проверить права ещё раз»). Для строк, привязанных до V52, — FALSE до первого refresh.")
 
+    /**
+     * The column <code>public.club_chat_links.award_tags_enabled</code>.
+     * Тумблер «Теги наград» (слайс 4): TRUE = последняя награда участника видна
+     * тегом рядом с именем в чате (setChatMemberTag) + двусторонняя
+     * синхронизация тег↔награда шедулером. Включение требует права бота
+     * «Управление тегами» (can_manage_tags).
+     */
+    val AWARD_TAGS_ENABLED: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("award_tags_enabled"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Тумблер «Теги наград» (слайс 4): TRUE = последняя награда участника видна тегом рядом с именем в чате (setChatMemberTag) + двусторонняя синхронизация тег↔награда шедулером. Включение требует права бота «Управление тегами» (can_manage_tags).")
+
+    /**
+     * The column <code>public.club_chat_links.can_manage_tags</code>. Право
+     * бота «Управление тегами» (Bot API 9.5, can_manage_tags). Библиотека бота
+     * его не знает — читается прямым HTTP-вызовом getChatMember при
+     * привязке/refresh/my_chat_member.
+     */
+    val CAN_MANAGE_TAGS: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("can_manage_tags"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Право бота «Управление тегами» (Bot API 9.5, can_manage_tags). Библиотека бота его не знает — читается прямым HTTP-вызовом getChatMember при привязке/refresh/my_chat_member.")
+
     private constructor(alias: Name, aliased: Table<ClubChatLinksRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<ClubChatLinksRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<ClubChatLinksRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

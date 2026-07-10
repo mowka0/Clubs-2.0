@@ -5,6 +5,7 @@ package com.clubs.generated.jooq
 
 
 import com.clubs.generated.jooq.tables.Applications
+import com.clubs.generated.jooq.tables.ChatAwardTags
 import com.clubs.generated.jooq.tables.ChatStrictBans
 import com.clubs.generated.jooq.tables.ClubAwards
 import com.clubs.generated.jooq.tables.ClubChatLinks
@@ -55,6 +56,15 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
      * терминальные могут повторяться при повторных подачах.
      */
     val APPLICATIONS: Applications get() = Applications.APPLICATIONS
+
+    /**
+     * Теги наград, выставленные ботом в клубном чате (слайс 4): кому бот
+     * поставил тег и какой. Нужна для снятия тегов при выключении
+     * тумблера/отвязке/уходе из клуба и дедупа перевыставления. Теги,
+     * поставленные организатором руками (или самим участником при
+     * can_edit_tag), здесь не учитываются.
+     */
+    val CHAT_AWARD_TAGS: ChatAwardTags get() = ChatAwardTags.CHAT_AWARD_TAGS
 
     /**
      * Баны, наложенные строгим режимом чата (слайс 5 club-chat-link): кого бот
@@ -228,6 +238,7 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
 
     override fun getTables(): List<Table<*>> = listOf(
         Applications.APPLICATIONS,
+        ChatAwardTags.CHAT_AWARD_TAGS,
         ChatStrictBans.CHAT_STRICT_BANS,
         ClubAwards.CLUB_AWARDS,
         ClubChatLinks.CLUB_CHAT_LINKS,

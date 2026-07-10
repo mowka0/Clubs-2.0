@@ -25,7 +25,8 @@ import type { AwardDto, MemberListItemDto, MemberProfileDto } from '../../types/
 const AWARD_EMOJIS = ['🏆', '🥇', '⭐', '🔥', '💎', '👑', '🚀', '❤️', '🌟', '🎯', '💪', '🙌'];
 // Зеркалит бэкенд: лимит наград (AwardService.MAX_AWARDS_PER_MEMBER) + длину названия (GrantAwardRequest).
 const MAX_AWARDS = 6;
-const MAX_AWARD_LABEL = 40;
+// 16 — лимит титула Telegram: награда целиком помещается в титул рядом с именем в чате (слайс 4).
+const MAX_AWARD_LABEL = 16;
 
 interface MemberProfileModalProps {
   member: MemberListItemDto;

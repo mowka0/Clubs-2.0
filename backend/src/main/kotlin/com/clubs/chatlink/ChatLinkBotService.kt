@@ -61,7 +61,8 @@ class ChatLinkBotService(
                     botStatus = BotChatStatus.fromTelegramStatus(state.statusLiteral),
                     canPinMessages = state.canPinMessages,
                     canInviteUsers = state.canInviteUsers,
-                    canRestrictMembers = state.canRestrictMembers
+                    canRestrictMembers = state.canRestrictMembers,
+                    canManageTags = state.canManageTags
                 )
                 ensureInviteLink(
                     link = existingForClub,
@@ -97,11 +98,13 @@ class ChatLinkBotService(
                 canPinMessages = state?.canPinMessages ?: false,
                 canInviteUsers = state?.canInviteUsers ?: false,
                 canRestrictMembers = state?.canRestrictMembers ?: false,
+                canManageTags = state?.canManageTags ?: false,
                 doorEnabled = false,
                 doorInviteLink = null,
                 livePinEnabled = false,
                 skladchinaStatusEnabled = false,
-                strictModeEnabled = false
+                strictModeEnabled = false,
+                awardTagsEnabled = false
             )
         )
         log.info("Chat linked: clubId={} chatId={} byTelegramId={} botStatus={}", clubId, chatId, fromTelegramId, link.botStatus.literal)
@@ -138,10 +141,13 @@ class ChatLinkBotService(
     fun handleMyChatMember(chatId: Long, newStatusLiteral: String, canPinMessages: Boolean, canInviteUsers: Boolean, canRestrictMembers: Boolean) {
         val link = chatLinkRepository.findByChatId(chatId) ?: return
         val status = BotChatStatus.fromTelegramStatus(newStatusLiteral)
-        chatLinkRepository.updateBotState(link.clubId, status, canPinMessages, canInviteUsers, canRestrictMembers)
+        // Право «Управление тегами» (Bot API 9.5) не приходит в объекте старой библиотеки —
+        // дотягиваем raw-вызовом, пока бот в чате (событие редкое, вызов дешёвый).
+        val canManageTags = status.isInChat && gateway.fetchCanManageTags(chatId)
+        chatLinkRepository.updateBotState(link.clubId, status, canPinMessages, canInviteUsers, canRestrictMembers, canManageTags)
         log.info(
-            "Bot chat state updated: clubId={} chatId={} status={} canPin={} canInvite={} canRestrict={}",
-            link.clubId, chatId, status.literal, canPinMessages, canInviteUsers, canRestrictMembers
+            "Bot chat state updated: clubId={} chatId={} status={} canPin={} canInvite={} canRestrict={} canManageTags={}",
+            link.clubId, chatId, status.literal, canPinMessages, canInviteUsers, canRestrictMembers, canManageTags
         )
         ensureInviteLink(link, nowInChat = status.isInChat, nowCanInvite = canInviteUsers)
     }

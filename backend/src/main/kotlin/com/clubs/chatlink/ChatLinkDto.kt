@@ -15,11 +15,13 @@ data class ChatLinkStatusDto(
     val canPinMessages: Boolean,
     val canInviteUsers: Boolean,
     val canRestrictMembers: Boolean,
+    val canManageTags: Boolean,
     val doorEnabled: Boolean,
     val doorInviteLink: String?,
     val livePinEnabled: Boolean,
     val skladchinaStatusEnabled: Boolean,
     val strictModeEnabled: Boolean,
+    val awardTagsEnabled: Boolean,
     /** Deep link ?startgroup= для кнопки «Привязать чат» (username бота живёт на сервере). */
     val startGroupUrl: String
 )
@@ -33,5 +35,6 @@ data class UpdateChatLinkRequest(
     val doorEnabled: Boolean? = null,
     val livePinEnabled: Boolean? = null,
     val skladchinaStatusEnabled: Boolean? = null,
-    val strictModeEnabled: Boolean? = null
+    val strictModeEnabled: Boolean? = null,
+    val awardTagsEnabled: Boolean? = null
 )

@@ -25,6 +25,7 @@ class ChatLinkServiceTest {
     private lateinit var livePinService: LivePinService
     private lateinit var skladchinaChatStatusService: SkladchinaChatStatusService
     private lateinit var strictModeService: StrictModeService
+    private lateinit var memberTagService: MemberTagService
     private lateinit var service: ChatLinkService
 
     private val clubId = UUID.randomUUID()
@@ -40,7 +41,8 @@ class ChatLinkServiceTest {
         livePinService = mockk(relaxed = true)
         skladchinaChatStatusService = mockk(relaxed = true)
         strictModeService = mockk(relaxed = true)
-        service = ChatLinkService(chatLinkRepository, clubRepository, ChatLinkMapper(), gateway, livePinService, skladchinaChatStatusService, strictModeService, botUsername = "clubs_test_bot")
+        memberTagService = mockk(relaxed = true)
+        service = ChatLinkService(chatLinkRepository, clubRepository, ChatLinkMapper(), gateway, livePinService, skladchinaChatStatusService, strictModeService, memberTagService, botUsername = "clubs_test_bot")
         every { clubRepository.findById(clubId) } returns club
     }
 
@@ -52,7 +54,7 @@ class ChatLinkServiceTest {
 
         assertFalse(status.linked)
         // restrict_members — право снимать баны (реестр багов №1: «удалить из группы» = бан)
-        assertEquals("https://t.me/clubs_test_bot?startgroup=$clubId&admin=pin_messages+invite_users+restrict_members", status.startGroupUrl)
+        assertEquals("https://t.me/clubs_test_bot?startgroup=$clubId&admin=pin_messages+invite_users+restrict_members+manage_tags", status.startGroupUrl)
     }
 
     @Test
@@ -280,7 +282,7 @@ class ChatLinkServiceTest {
         every { gateway.getBotChatState(any()) } returns null
 
         assertThrows(ConflictException::class.java) { service.refresh(clubId, ownerId) }
-        verify(exactly = 0) { chatLinkRepository.updateBotState(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.updateBotState(any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -340,6 +342,51 @@ class ChatLinkServiceTest {
         verify { strictModeService.liftBansForClub(link) }
         verify { gateway.leaveChat(link.chatId) }
         verify { chatLinkRepository.delete(clubId) }
+    }
+
+    @Test
+    fun `setAwardTags включение без права управления тегами — 409, ничего не сохраняем`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns
+            chatLinkFixture(clubId = clubId, canManageTags = false)
+
+        assertThrows(ConflictException::class.java) { service.setAwardTags(clubId, ownerId, enabled = true) }
+        verify(exactly = 0) { chatLinkRepository.updateAwardTags(any(), any()) }
+        verify(exactly = 0) { memberTagService.backfillForClub(any()) }
+    }
+
+    @Test
+    fun `setAwardTags включение — сохраняет тумблер и тегирует участников с наградами (backfill)`() {
+        val link = chatLinkFixture(clubId = clubId, canManageTags = true)
+        every { chatLinkRepository.findByClubId(clubId) } returns link andThen link.copy(awardTagsEnabled = true)
+
+        val status = service.setAwardTags(clubId, ownerId, enabled = true)
+
+        assertTrue(status.awardTagsEnabled)
+        verify { chatLinkRepository.updateAwardTags(clubId, true) }
+        verify { memberTagService.backfillForClub(link) }
+    }
+
+    @Test
+    fun `setAwardTags выключение — снимает теги`() {
+        val link = chatLinkFixture(clubId = clubId, awardTagsEnabled = true)
+        every { chatLinkRepository.findByClubId(clubId) } returns link andThen link.copy(awardTagsEnabled = false)
+
+        val status = service.setAwardTags(clubId, ownerId, enabled = false)
+
+        assertFalse(status.awardTagsEnabled)
+        verify { chatLinkRepository.updateAwardTags(clubId, false) }
+        verify { memberTagService.disableForClub(link) }
+    }
+
+    @Test
+    fun `unlink снимает теги наград до выхода бота`() {
+        val link = chatLinkFixture(clubId = clubId, awardTagsEnabled = true)
+        every { chatLinkRepository.findByClubId(clubId) } returns link
+
+        service.unlink(clubId, ownerId)
+
+        verify { memberTagService.disableForClub(link) }
+        verify { gateway.leaveChat(link.chatId) }
     }
 
     @Test

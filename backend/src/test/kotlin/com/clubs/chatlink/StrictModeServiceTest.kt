@@ -7,6 +7,7 @@ import com.clubs.user.UserRepository
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import io.mockk.verifyOrder
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.UUID
@@ -22,6 +23,7 @@ class StrictModeServiceTest {
     private lateinit var membershipRepository: MembershipRepository
     private lateinit var userRepository: UserRepository
     private lateinit var strictBanRepository: StrictBanRepository
+    private lateinit var memberTagService: MemberTagService
     private lateinit var gateway: ChatTelegramGateway
     private lateinit var service: StrictModeService
 
@@ -36,8 +38,9 @@ class StrictModeServiceTest {
         membershipRepository = mockk(relaxed = true)
         userRepository = mockk(relaxed = true)
         strictBanRepository = mockk(relaxed = true)
+        memberTagService = mockk(relaxed = true)
         gateway = mockk(relaxed = true)
-        service = StrictModeService(chatLinkRepository, membershipRepository, userRepository, strictBanRepository, gateway)
+        service = StrictModeService(chatLinkRepository, membershipRepository, userRepository, strictBanRepository, memberTagService, gateway)
         val user = mockk<UsersRecord> {
             every { telegramId } returns this@StrictModeServiceTest.telegramId
         }
@@ -153,6 +156,29 @@ class StrictModeServiceTest {
         service.liftBansForClub(link)
 
         verify(exactly = 0) { gateway.unbanChatMember(any(), any()) }
+    }
+
+    @Test
+    fun `уход из клуба при ВЫКЛЮЧЕННОМ строгом режиме — тег снимается, бана нет`() {
+        val link = chatLinkFixture(clubId = clubId, chatId = chatId, strictModeEnabled = false)
+        every { chatLinkRepository.findByClubId(clubId) } returns link
+
+        service.onMembershipRevoked(clubId, userId)
+
+        verify { memberTagService.removeTag(link, telegramId) }
+        verify(exactly = 0) { gateway.banChatMember(any(), any()) }
+    }
+
+    @Test
+    fun `уход при включённом строгом режиме — тег снят и бан наложен`() {
+        val link = chatLinkFixture(clubId = clubId, chatId = chatId, strictModeEnabled = true)
+        every { chatLinkRepository.findByClubId(clubId) } returns link
+        every { gateway.banChatMember(chatId, telegramId) } returns true
+
+        service.onMembershipRevoked(clubId, userId)
+
+        verify { memberTagService.removeTag(link, telegramId) }
+        verify { gateway.banChatMember(chatId, telegramId) }
     }
 
     @Test

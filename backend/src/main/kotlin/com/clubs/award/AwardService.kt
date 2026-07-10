@@ -4,6 +4,7 @@ import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
@@ -23,7 +24,8 @@ import java.util.UUID
 class AwardService(
     private val awardRepository: AwardRepository,
     private val membershipRepository: MembershipRepository,
-    private val mapper: AwardMapper
+    private val mapper: AwardMapper,
+    private val eventPublisher: ApplicationEventPublisher
 ) {
     private val log = LoggerFactory.getLogger(AwardService::class.java)
 
@@ -60,6 +62,11 @@ class AwardService(
         val cleanLabel = label.trim().replace(WHITESPACE, " ")
         if (cleanEmoji.isEmpty()) throw ValidationException("Укажите эмодзи награды")
         if (cleanLabel.isEmpty()) throw ValidationException("Укажите название награды")
+        // Лимит титула Telegram (слайс 4): награда целиком помещается в титул рядом с именем.
+        // Дублирует @Size DTO после нормализации пробелов; легаси-награды длиннее живут как есть.
+        if (cleanLabel.length > MAX_LABEL_LENGTH) {
+            throw ValidationException("Название награды — до $MAX_LABEL_LENGTH символов (лимит титула в чате)")
+        }
 
         if (awardRepository.countByMember(clubId, targetUserId) >= MAX_AWARDS_PER_MEMBER) {
             throw ValidationException("Максимум $MAX_AWARDS_PER_MEMBER наград на участника")
@@ -80,6 +87,8 @@ class AwardService(
             )
         )
         log.info("Award granted: clubId={} targetUserId={} by={} label={}", clubId, targetUserId, callerId, cleanLabel)
+        // Титулы наград (слайс 4): титул в чате = последняя награда — пересчитать AFTER_COMMIT.
+        eventPublisher.publishEvent(AwardGrantedEvent(clubId, targetUserId))
         return mapper.toDto(saved)
     }
 
@@ -89,11 +98,15 @@ class AwardService(
         val rows = awardRepository.delete(awardId, clubId, targetUserId)
         if (rows == 0) throw NotFoundException("Награда не найдена")
         log.info("Award revoked: clubId={} targetUserId={} by={} awardId={}", clubId, targetUserId, callerId, awardId)
+        // Титул откатывается к предыдущей награде (или снимается, если наград не осталось).
+        eventPublisher.publishEvent(AwardRevokedEvent(clubId, targetUserId))
     }
 
     companion object {
         // Максимум наград на одного участника клуба.
         const val MAX_AWARDS_PER_MEMBER = 6
+        // Максимальная длина названия награды = лимит титула Telegram (слайс 4 чат-интеграции).
+        const val MAX_LABEL_LENGTH = 16
         // Сколько прошлых наград клуба показывать как подсказки при выдаче новой.
         private const val MAX_SUGGESTIONS = 20
         private val WHITESPACE = Regex("\\s+")

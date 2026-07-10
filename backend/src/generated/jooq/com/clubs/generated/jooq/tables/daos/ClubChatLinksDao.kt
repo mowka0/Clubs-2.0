@@ -206,4 +206,26 @@ open class ClubChatLinksDao(configuration: Configuration?) : DAOImpl<ClubChatLin
      * Fetch records that have <code>can_restrict_members IN (values)</code>
      */
     fun fetchByCanRestrictMembers(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetch(ClubChatLinks.CLUB_CHAT_LINKS.CAN_RESTRICT_MEMBERS, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>award_tags_enabled BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfAwardTagsEnabled(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetchRange(ClubChatLinks.CLUB_CHAT_LINKS.AWARD_TAGS_ENABLED, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>award_tags_enabled IN (values)</code>
+     */
+    fun fetchByAwardTagsEnabled(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetch(ClubChatLinks.CLUB_CHAT_LINKS.AWARD_TAGS_ENABLED, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>can_manage_tags BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfCanManageTags(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetchRange(ClubChatLinks.CLUB_CHAT_LINKS.CAN_MANAGE_TAGS, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>can_manage_tags IN (values)</code>
+     */
+    fun fetchByCanManageTags(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetch(ClubChatLinks.CLUB_CHAT_LINKS.CAN_MANAGE_TAGS, *values.toTypedArray())
 }

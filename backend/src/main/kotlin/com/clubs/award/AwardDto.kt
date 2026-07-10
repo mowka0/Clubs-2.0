@@ -24,6 +24,7 @@ data class GrantAwardRequest(
     @field:Size(max = 16, message = "Эмодзи: максимум 16 символов")
     val emoji: String,
     @field:NotBlank(message = "Укажите название награды")
-    @field:Size(max = 40, message = "Название награды: максимум 40 символов")
+    // 16 — лимит титула Telegram (слайс 4 чат-интеграции): награда целиком помещается в титул.
+    @field:Size(max = 16, message = "Название награды: максимум 16 символов")
     val label: String
 )

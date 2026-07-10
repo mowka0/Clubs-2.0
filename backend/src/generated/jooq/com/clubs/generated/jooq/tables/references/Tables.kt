@@ -5,6 +5,7 @@ package com.clubs.generated.jooq.tables.references
 
 
 import com.clubs.generated.jooq.tables.Applications
+import com.clubs.generated.jooq.tables.ChatAwardTags
 import com.clubs.generated.jooq.tables.ChatStrictBans
 import com.clubs.generated.jooq.tables.ClubAwards
 import com.clubs.generated.jooq.tables.ClubChatLinks
@@ -37,6 +38,14 @@ import com.clubs.generated.jooq.tables.Users
  * могут повторяться при повторных подачах.
  */
 val APPLICATIONS: Applications = Applications.APPLICATIONS
+
+/**
+ * Теги наград, выставленные ботом в клубном чате (слайс 4): кому бот поставил
+ * тег и какой. Нужна для снятия тегов при выключении тумблера/отвязке/уходе из
+ * клуба и дедупа перевыставления. Теги, поставленные организатором руками (или
+ * самим участником при can_edit_tag), здесь не учитываются.
+ */
+val CHAT_AWARD_TAGS: ChatAwardTags = ChatAwardTags.CHAT_AWARD_TAGS
 
 /**
  * Баны, наложенные строгим режимом чата (слайс 5 club-chat-link): кого бот

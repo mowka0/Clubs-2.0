@@ -12,6 +12,7 @@ import com.clubs.generated.jooq.indexes.IDX_CLUBS_CATEGORY
 import com.clubs.generated.jooq.indexes.IDX_CLUBS_CITY
 import com.clubs.generated.jooq.indexes.IDX_CLUBS_OWNER_ID
 import com.clubs.generated.jooq.keys.APPLICATIONS__APPLICATIONS_CLUB_ID_FKEY
+import com.clubs.generated.jooq.keys.CHAT_AWARD_TAGS__CHAT_AWARD_TITLES_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.CHAT_STRICT_BANS__CHAT_STRICT_BANS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.CLUBS_INVITE_LINK_KEY
 import com.clubs.generated.jooq.keys.CLUBS_PKEY
@@ -28,6 +29,7 @@ import com.clubs.generated.jooq.keys.SKLADCHINAS__SKLADCHINAS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.TRANSACTIONS__TRANSACTIONS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.USER_CLUB_REPUTATION__USER_CLUB_REPUTATION_CLUB_ID_FKEY
 import com.clubs.generated.jooq.tables.Applications.ApplicationsPath
+import com.clubs.generated.jooq.tables.ChatAwardTags.ChatAwardTagsPath
 import com.clubs.generated.jooq.tables.ChatStrictBans.ChatStrictBansPath
 import com.clubs.generated.jooq.tables.ClubAwards.ClubAwardsPath
 import com.clubs.generated.jooq.tables.ClubChatLinks.ClubChatLinksPath
@@ -306,6 +308,22 @@ open class Clubs(
 
     val applications: ApplicationsPath
         get(): ApplicationsPath = applications()
+
+    private lateinit var _chatAwardTags: ChatAwardTagsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.chat_award_tags</code> table
+     */
+    fun chatAwardTags(): ChatAwardTagsPath {
+        if (!this::_chatAwardTags.isInitialized)
+            _chatAwardTags = ChatAwardTagsPath(this, null, CHAT_AWARD_TAGS__CHAT_AWARD_TITLES_CLUB_ID_FKEY.inverseKey)
+
+        return _chatAwardTags;
+    }
+
+    val chatAwardTags: ChatAwardTagsPath
+        get(): ChatAwardTagsPath = chatAwardTags()
 
     private lateinit var _chatStrictBans: ChatStrictBansPath
 

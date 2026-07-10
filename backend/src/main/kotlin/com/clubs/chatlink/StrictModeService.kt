@@ -24,11 +24,15 @@ class StrictModeService(
     private val membershipRepository: MembershipRepository,
     private val userRepository: UserRepository,
     private val strictBanRepository: StrictBanRepository,
+    private val memberTagService: MemberTagService,
     private val gateway: ChatTelegramGateway
 ) {
     private val log = LoggerFactory.getLogger(StrictModeService::class.java)
 
-    /** Доступ закрылся, человек остался в клубе должником (freeze / просрочка / ждёт первого взноса) → mute. */
+    /**
+     * Доступ закрылся, человек остался в клубе должником (freeze / просрочка / ждёт первого
+     * взноса) → mute. Тег наград (слайс 4) мьюту не мешает — участник остаётся обычным member.
+     */
     @Async
     fun onAccessClosed(clubId: UUID, userId: UUID) {
         val link = strictLink(clubId) ?: return
@@ -49,11 +53,17 @@ class StrictModeService(
         log.info("Strict mode: member unmute={} clubId={} userId={}", unmuted, clubId, userId)
     }
 
-    /** Человек покинул клуб (кик / отказ / отклонённая заявка / выход / истёкшая отменённая подписка) → ban. */
+    /**
+     * Человек покинул клуб (кик / отказ / отклонённая заявка / выход / истёкшая отменённая
+     * подписка): тег наград снимается всегда (ушедший не носит регалии клуба, слайс 4),
+     * бан — при включённом строгом режиме.
+     */
     @Async
     fun onMembershipRevoked(clubId: UUID, userId: UUID) {
-        val link = strictLink(clubId) ?: return
+        val link = chatLinkRepository.findByClubId(clubId)?.takeIf { it.botStatus.isInChat } ?: return
         val telegramId = userRepository.findById(userId)?.telegramId ?: return
+        memberTagService.removeTag(link, telegramId)
+        if (!link.strictModeEnabled) return
         val banned = gateway.banChatMember(link.chatId, telegramId)
         // Учитываем только реально наложенные баны — по учёту отвязка чата снимет их все.
         if (banned) strictBanRepository.record(clubId, telegramId)

@@ -30,7 +30,9 @@ data class ClubChatLinks(
     var livePinEnabled: Boolean? = null,
     var skladchinaStatusEnabled: Boolean? = null,
     var strictModeEnabled: Boolean? = null,
-    var canRestrictMembers: Boolean? = null
+    var canRestrictMembers: Boolean? = null,
+    var awardTagsEnabled: Boolean? = null,
+    var canManageTags: Boolean? = null
 ): Serializable {
 
 
@@ -120,6 +122,18 @@ data class ClubChatLinks(
         }
         else if (this.canRestrictMembers != o.canRestrictMembers)
             return false
+        if (this.awardTagsEnabled == null) {
+            if (o.awardTagsEnabled != null)
+                return false
+        }
+        else if (this.awardTagsEnabled != o.awardTagsEnabled)
+            return false
+        if (this.canManageTags == null) {
+            if (o.canManageTags != null)
+                return false
+        }
+        else if (this.canManageTags != o.canManageTags)
+            return false
         return true
     }
 
@@ -141,6 +155,8 @@ data class ClubChatLinks(
         result = prime * result + (if (this.skladchinaStatusEnabled == null) 0 else this.skladchinaStatusEnabled.hashCode())
         result = prime * result + (if (this.strictModeEnabled == null) 0 else this.strictModeEnabled.hashCode())
         result = prime * result + (if (this.canRestrictMembers == null) 0 else this.canRestrictMembers.hashCode())
+        result = prime * result + (if (this.awardTagsEnabled == null) 0 else this.awardTagsEnabled.hashCode())
+        result = prime * result + (if (this.canManageTags == null) 0 else this.canManageTags.hashCode())
         return result
     }
 
@@ -162,6 +178,8 @@ data class ClubChatLinks(
         sb.append(", ").append(skladchinaStatusEnabled)
         sb.append(", ").append(strictModeEnabled)
         sb.append(", ").append(canRestrictMembers)
+        sb.append(", ").append(awardTagsEnabled)
+        sb.append(", ").append(canManageTags)
 
         sb.append(")")
         return sb.toString()
