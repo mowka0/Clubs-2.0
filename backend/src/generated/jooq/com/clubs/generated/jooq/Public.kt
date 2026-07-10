@@ -5,6 +5,7 @@ package com.clubs.generated.jooq
 
 
 import com.clubs.generated.jooq.tables.Applications
+import com.clubs.generated.jooq.tables.ChatStrictBans
 import com.clubs.generated.jooq.tables.ClubAwards
 import com.clubs.generated.jooq.tables.ClubChatLinks
 import com.clubs.generated.jooq.tables.ClubRank
@@ -54,6 +55,14 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
      * терминальные могут повторяться при повторных подачах.
      */
     val APPLICATIONS: Applications get() = Applications.APPLICATIONS
+
+    /**
+     * Баны, наложенные строгим режимом чата (слайс 5 club-chat-link): кого бот
+     * забанил за уход из клуба. Нужна для снятия ВСЕХ наших банов при отвязке
+     * чата (бот уходит — иначе баны навсегда). Ручные баны организатора здесь
+     * не учитываются и не снимаются.
+     */
+    val CHAT_STRICT_BANS: ChatStrictBans get() = ChatStrictBans.CHAT_STRICT_BANS
 
     /**
      * Награды уровня клуба, которые организатор вручает участнику (club-local,
@@ -219,6 +228,7 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
 
     override fun getTables(): List<Table<*>> = listOf(
         Applications.APPLICATIONS,
+        ChatStrictBans.CHAT_STRICT_BANS,
         ClubAwards.CLUB_AWARDS,
         ClubChatLinks.CLUB_CHAT_LINKS,
         ClubRank.CLUB_RANK,

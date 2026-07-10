@@ -37,7 +37,7 @@ class ChatLinkBotServiceTest {
         userRepository = mockk(relaxed = true)
         chatLinkService = mockk(relaxed = true)
         gateway = mockk(relaxed = true)
-        service = ChatLinkBotService(chatLinkRepository, clubRepository, userRepository, chatLinkService, gateway)
+        service = ChatLinkBotService(chatLinkRepository, clubRepository, userRepository, chatLinkService, gateway, botUsername = "clubs_test_bot")
 
         every { clubRepository.findById(clubId) } returns club
         val owner = mockk<UsersRecord>(relaxed = true) {
@@ -112,6 +112,15 @@ class ChatLinkBotServiceTest {
         // Реестр багов №4: ссылка создаётся при привязке, не дожидаясь тумблера двери
         verify { chatLinkRepository.updateInviteLink(clubId, "https://t.me/+fresh") }
         verify { gateway.sendGroupMessage(chatId, match { it.contains("Чат привязан к клубу") }) }
+        // Приглашение сидящим в чате вступить в клуб (фидбек PO 2026-07-08) — кнопка-диплинк
+        verify {
+            gateway.sendGroupMessageWithUrlButton(
+                chatId = chatId,
+                text = match { it.contains("вступай") },
+                buttonText = "Вступить в клуб",
+                url = "https://t.me/clubs_test_bot?startapp=club_$clubId"
+            )
+        }
         verify {
             gateway.sendDmWithCallbackButton(
                 telegramId = ownerTelegramId,
@@ -150,6 +159,8 @@ class ChatLinkBotServiceTest {
         verify(exactly = 0) { gateway.sendDmWithCallbackButton(any(), any(), any(), any()) }
         verify(exactly = 0) { gateway.leaveChat(any()) }
         verify { gateway.sendGroupMessage(chatId, match { it.contains("Чат привязан к клубу") }) }
+        // Приглашение «Вступить в клуб» — только при первичной привязке (спам-бюджет)
+        verify(exactly = 0) { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any(), any(), any()) }
         // Ссылка была живой (бот всё время мог приглашать) — не пересоздаём
         verify(exactly = 0) { gateway.createJoinRequestInviteLink(any(), any()) }
     }

@@ -21,6 +21,7 @@ class StrictModeServiceTest {
     private lateinit var chatLinkRepository: ChatLinkRepository
     private lateinit var membershipRepository: MembershipRepository
     private lateinit var userRepository: UserRepository
+    private lateinit var strictBanRepository: StrictBanRepository
     private lateinit var gateway: ChatTelegramGateway
     private lateinit var service: StrictModeService
 
@@ -34,8 +35,9 @@ class StrictModeServiceTest {
         chatLinkRepository = mockk(relaxed = true)
         membershipRepository = mockk(relaxed = true)
         userRepository = mockk(relaxed = true)
+        strictBanRepository = mockk(relaxed = true)
         gateway = mockk(relaxed = true)
-        service = StrictModeService(chatLinkRepository, membershipRepository, userRepository, gateway)
+        service = StrictModeService(chatLinkRepository, membershipRepository, userRepository, strictBanRepository, gateway)
         val user = mockk<UsersRecord> {
             every { telegramId } returns this@StrictModeServiceTest.telegramId
         }
@@ -98,13 +100,59 @@ class StrictModeServiceTest {
     }
 
     @Test
-    fun `человек покинул клуб — бан в чате`() {
+    fun `человек покинул клуб — бан в чате, бан попадает в учёт`() {
         every { chatLinkRepository.findByClubId(clubId) } returns
             chatLinkFixture(clubId = clubId, chatId = chatId, strictModeEnabled = true)
+        every { gateway.banChatMember(chatId, telegramId) } returns true
 
         service.onMembershipRevoked(clubId, userId)
 
         verify { gateway.banChatMember(chatId, telegramId) }
+        verify { strictBanRepository.record(clubId, telegramId) }
+    }
+
+    @Test
+    fun `бан не сработал (Telegram отказал) — в учёт не пишем`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns
+            chatLinkFixture(clubId = clubId, chatId = chatId, strictModeEnabled = true)
+        every { gateway.banChatMember(chatId, telegramId) } returns false
+
+        service.onMembershipRevoked(clubId, userId)
+
+        verify(exactly = 0) { strictBanRepository.record(any(), any()) }
+    }
+
+    @Test
+    fun `доступ открылся — учёт бана чистится даже при выключенном тумблере`() {
+        every { chatLinkRepository.findByClubId(clubId) } returns
+            chatLinkFixture(clubId = clubId, chatId = chatId, strictModeEnabled = false)
+
+        service.onAccessOpened(clubId, userId)
+
+        verify { strictBanRepository.delete(clubId, telegramId) }
+        verify(exactly = 0) { gateway.unmuteChatMember(any(), any()) }
+    }
+
+    @Test
+    fun `отвязка чата снимает все баны из учёта и чистит его`() {
+        val link = chatLinkFixture(clubId = clubId, chatId = chatId, strictModeEnabled = false)
+        every { strictBanRepository.findTelegramIds(clubId) } returns listOf(10L, 20L)
+
+        service.liftBansForClub(link)
+
+        verify { gateway.unbanChatMember(chatId, 10L) }
+        verify { gateway.unbanChatMember(chatId, 20L) }
+        verify { strictBanRepository.deleteAllForClub(clubId) }
+    }
+
+    @Test
+    fun `отвязка без банов в учёте — Telegram не трогаем`() {
+        val link = chatLinkFixture(clubId = clubId, chatId = chatId)
+        every { strictBanRepository.findTelegramIds(clubId) } returns emptyList()
+
+        service.liftBansForClub(link)
+
+        verify(exactly = 0) { gateway.unbanChatMember(any(), any()) }
     }
 
     @Test

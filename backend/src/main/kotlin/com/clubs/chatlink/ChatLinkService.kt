@@ -243,6 +243,9 @@ class ChatLinkService(
         // Вернуть голос замьюченным должникам, пока бот ещё в чате — иначе мьюты
         // остались бы навсегда без инструмента снятия из приложения.
         if (link.strictModeEnabled) strictModeService.disableForClub(link)
+        // Снять ВСЕ баны строгого режима (независимо от тумблера — баны переживают его
+        // выключение, а после отвязки впустить забаненного больше некому).
+        strictModeService.liftBansForClub(link)
         link.doorInviteLink?.let { gateway.revokeInviteLink(link.chatId, it) }
         gateway.leaveChat(link.chatId)
         chatLinkRepository.delete(link.clubId)

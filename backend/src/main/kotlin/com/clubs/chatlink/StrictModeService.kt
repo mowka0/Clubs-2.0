@@ -23,6 +23,7 @@ class StrictModeService(
     private val chatLinkRepository: ChatLinkRepository,
     private val membershipRepository: MembershipRepository,
     private val userRepository: UserRepository,
+    private val strictBanRepository: StrictBanRepository,
     private val gateway: ChatTelegramGateway
 ) {
     private val log = LoggerFactory.getLogger(StrictModeService::class.java)
@@ -39,8 +40,11 @@ class StrictModeService(
     /** Доступ открылся (взнос получен / разморозка / вступление) → вернуть голос, если был mute. */
     @Async
     fun onAccessOpened(clubId: UUID, userId: UUID) {
-        val link = strictLink(clubId) ?: return
         val telegramId = userRepository.findById(userId)?.telegramId ?: return
+        // Учёт бана чистим НЕЗАВИСИМО от тумблера: сам бан при открытии доступа снимает
+        // дверь (ChatDoorService, unban работает и при выключенном строгом режиме).
+        strictBanRepository.delete(clubId, telegramId)
+        val link = strictLink(clubId) ?: return
         val unmuted = gateway.unmuteChatMember(link.chatId, telegramId)
         log.info("Strict mode: member unmute={} clubId={} userId={}", unmuted, clubId, userId)
     }
@@ -51,7 +55,24 @@ class StrictModeService(
         val link = strictLink(clubId) ?: return
         val telegramId = userRepository.findById(userId)?.telegramId ?: return
         val banned = gateway.banChatMember(link.chatId, telegramId)
+        // Учитываем только реально наложенные баны — по учёту отвязка чата снимет их все.
+        if (banned) strictBanRepository.record(clubId, telegramId)
         log.info("Strict mode: leaver ban={} clubId={} userId={}", banned, clubId, userId)
+    }
+
+    /**
+     * Отвязка чата: снять ВСЕ баны, наложенные строгим режимом (фидбек PO со staging
+     * 2026-07-08: после отвязки бот уходит, и забаненного больше некому впустить).
+     * Вызывается независимо от текущего состояния тумблера — баны переживают его
+     * выключение по дизайну, но отвязка терминальна. Ручные баны организатора не трогаем
+     * (их нет в учёте). Учёт чистим даже при сбое unban — привязка умирает в любом случае.
+     */
+    fun liftBansForClub(link: ChatLink) {
+        val banned = strictBanRepository.findTelegramIds(link.clubId)
+        if (banned.isEmpty()) return
+        val lifted = banned.count { gateway.unbanChatMember(link.chatId, it) }
+        strictBanRepository.deleteAllForClub(link.clubId)
+        log.info("Strict mode unlink: lifted {}/{} bans clubId={}", lifted, banned.size, link.clubId)
     }
 
     /**

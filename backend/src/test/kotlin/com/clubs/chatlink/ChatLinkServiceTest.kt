@@ -337,7 +337,21 @@ class ChatLinkServiceTest {
         service.unlink(clubId, ownerId)
 
         verify { strictModeService.disableForClub(link) }
+        verify { strictModeService.liftBansForClub(link) }
         verify { gateway.leaveChat(link.chatId) }
         verify { chatLinkRepository.delete(clubId) }
+    }
+
+    @Test
+    fun `unlink снимает баны строгого режима даже при ВЫКЛЮЧЕННОМ тумблере`() {
+        // Баны переживают выключение тумблера по дизайну, но отвязка терминальна:
+        // после ухода бота впустить забаненного больше некому (фидбек PO со staging).
+        val link = chatLinkFixture(clubId = clubId, strictModeEnabled = false)
+        every { chatLinkRepository.findByClubId(clubId) } returns link
+
+        service.unlink(clubId, ownerId)
+
+        verify { strictModeService.liftBansForClub(link) }
+        verify(exactly = 0) { strictModeService.disableForClub(any()) }
     }
 }

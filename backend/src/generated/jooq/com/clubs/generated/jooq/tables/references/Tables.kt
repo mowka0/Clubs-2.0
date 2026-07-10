@@ -5,6 +5,7 @@ package com.clubs.generated.jooq.tables.references
 
 
 import com.clubs.generated.jooq.tables.Applications
+import com.clubs.generated.jooq.tables.ChatStrictBans
 import com.clubs.generated.jooq.tables.ClubAwards
 import com.clubs.generated.jooq.tables.ClubChatLinks
 import com.clubs.generated.jooq.tables.ClubRank
@@ -36,6 +37,14 @@ import com.clubs.generated.jooq.tables.Users
  * могут повторяться при повторных подачах.
  */
 val APPLICATIONS: Applications = Applications.APPLICATIONS
+
+/**
+ * Баны, наложенные строгим режимом чата (слайс 5 club-chat-link): кого бот
+ * забанил за уход из клуба. Нужна для снятия ВСЕХ наших банов при отвязке чата
+ * (бот уходит — иначе баны навсегда). Ручные баны организатора здесь не
+ * учитываются и не снимаются.
+ */
+val CHAT_STRICT_BANS: ChatStrictBans = ChatStrictBans.CHAT_STRICT_BANS
 
 /**
  * Награды уровня клуба, которые организатор вручает участнику (club-local, НЕ
