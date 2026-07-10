@@ -160,6 +160,7 @@ class MemberTagServiceTest {
         every { awardRepository.findTagSyncRows(clubId) } returns
             listOf(TagSyncRow(userId, telegramId, null))
         every { gateway.getMemberTag(chatId, telegramId) } returns MemberTagLookup(tag = "Ветеран", inChat = true)
+        every { awardRepository.touch(clubId, userId, "Ветеран") } returns 0
         every { clubRepository.findById(clubId) } returns testClub()
 
         service.syncClub(link)
@@ -169,16 +170,46 @@ class MemberTagServiceTest {
     }
 
     @Test
-    fun `sync - обе стороны заполнены - конфликт не трогаем (ручной тег уважается)`() {
+    fun `sync - тег отличается от последней награды - импортируется наградой (тег главнее)`() {
         val link = taggedLink()
         every { awardRepository.findTagSyncRows(clubId) } returns
             listOf(TagSyncRow(userId, telegramId, "Летописец"))
         every { gateway.getMemberTag(chatId, telegramId) } returns MemberTagLookup(tag = "Свой тег", inChat = true)
+        every { awardRepository.touch(clubId, userId, "Свой тег") } returns 0
+        every { clubRepository.findById(clubId) } returns testClub()
+
+        service.syncClub(link)
+
+        verify { awardService.grant(clubId, userId, MemberTagService.IMPORTED_AWARD_EMOJI, "Свой тег", ownerId) }
+        verify(exactly = 0) { gateway.setMemberTag(any(), any(), any()) }
+    }
+
+    @Test
+    fun `sync - вернули руками СТАРЫЙ тег - существующая награда переподнимается без дубля`() {
+        val link = taggedLink()
+        every { awardRepository.findTagSyncRows(clubId) } returns
+            listOf(TagSyncRow(userId, telegramId, "Летописец"))
+        every { gateway.getMemberTag(chatId, telegramId) } returns MemberTagLookup(tag = "Казначей", inChat = true)
+        every { awardRepository.touch(clubId, userId, "Казначей") } returns 1
+
+        service.syncClub(link)
+
+        verify(exactly = 0) { awardService.grant(any(), any(), any(), any(), any()) }
+        verify { tagRepository.upsert(clubId, telegramId, "Казначей") }
+    }
+
+    @Test
+    fun `sync - тег совпадает с последней наградой - ничего не происходит`() {
+        val link = taggedLink()
+        every { awardRepository.findTagSyncRows(clubId) } returns
+            listOf(TagSyncRow(userId, telegramId, "Летописец"))
+        every { gateway.getMemberTag(chatId, telegramId) } returns MemberTagLookup(tag = "Летописец", inChat = true)
 
         service.syncClub(link)
 
         verify(exactly = 0) { gateway.setMemberTag(any(), any(), any()) }
         verify(exactly = 0) { awardService.grant(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { awardRepository.touch(any(), any(), any()) }
     }
 
     @Test

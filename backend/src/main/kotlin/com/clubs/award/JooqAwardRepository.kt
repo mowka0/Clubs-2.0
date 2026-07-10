@@ -87,6 +87,16 @@ class JooqAwardRepository(
             )
             .execute()
 
+    override fun touch(clubId: UUID, userId: UUID, label: String): Int =
+        dsl.update(CLUB_AWARDS)
+            .set(CLUB_AWARDS.AWARDED_AT, java.time.OffsetDateTime.now())
+            .where(
+                CLUB_AWARDS.CLUB_ID.eq(clubId)
+                    .and(CLUB_AWARDS.USER_ID.eq(userId))
+                    .and(CLUB_AWARDS.LABEL.eq(label))
+            )
+            .execute()
+
     override fun findTagSyncRows(clubId: UUID): List<TagSyncRow> =
         // DISTINCT ON от memberships: одна строка на живого участника, LEFT JOIN наград —
         // участники без наград тоже нужны (обратная синхронизация тег→награда, правила PO).

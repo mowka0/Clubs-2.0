@@ -18,10 +18,11 @@ import java.util.UUID
  * режимом: mute/ban работают на тегированных участниках как на обычных.
  *
  * Помимо событийных обновлений (выдача/отзыв награды) работает шедулер полной синхронизации
- * [syncClub] (правила PO, «полная синхронность»):
+ * [syncClub] (правила PO, «полная синхронность»; уточнение со staging 2026-07-10):
  *  - награда в клубе есть, тега в чате нет → поставить тег;
- *  - награды в клубе нет, тег в чате есть → импортировать награду в приложение;
- *  - обе стороны заполнены/пусты → не трогаем (ручной тег организатора уважается).
+ *  - тег в чате отличается от последней награды (включая «наград нет») → ручная правка
+ *    главнее: тег импортируется наградой (существующая с тем же названием переподнимается);
+ *  - тег совпадает с последней наградой / обе стороны пусты → ничего.
  *
  * Все методы best-effort: сбой Telegram логируется и не ломает награды/членство.
  */
@@ -76,9 +77,14 @@ class MemberTagService(
     }
 
     /**
-     * Полная сверка клуба (шедулер, правила PO). Читает фактический тег каждого живого
-     * участника (getChatMember — надёжнее событий, ловит ручные правки и «был не в чате»)
-     * и заполняет пустую сторону; конфликтов не решает.
+     * Полная сверка клуба (шедулер, правила PO + уточнение со staging 2026-07-10).
+     * Читает фактический тег каждого живого участника (getChatMember — ловит ручные правки
+     * и «был не в чате») и сводит стороны:
+     *  - награда есть, тега нет → поставить тег из последней награды;
+     *  - тег есть и ОТЛИЧАЕТСЯ от последней награды → ручная правка в чате главнее:
+     *    тег импортируется наградой (существующая с тем же названием «переподнимается»
+     *    в последние, дубль не создаётся);
+     *  - совпадают / обе пусты → ничего.
      */
     fun syncClub(link: ChatLink) {
         val rows = awardRepository.findTagSyncRows(link.clubId)
@@ -88,24 +94,32 @@ class MemberTagService(
             val clubTag = row.label?.take(TAG_MAX_LENGTH)
             when {
                 clubTag != null && lookup.tag == null -> applyTag(link, row.telegramId, clubTag)
-                clubTag == null && lookup.tag != null -> importAward(link, row, lookup.tag)
-                else -> Unit // обе стороны заполнены или обе пусты — правила PO не трогают
+                lookup.tag != null && lookup.tag != clubTag -> importAward(link, row, lookup.tag)
+                else -> Unit // тег совпадает с последней наградой или обе стороны пусты
             }
         }
     }
 
     /**
-     * Обратная синхронизация (правило PO): тег в чате есть, наград в клубе нет → тег
-     * становится наградой в приложении (от имени владельца клуба, дефолтный эмодзи).
-     * Выдача опубликует AwardGrantedEvent → applyTag зафиксирует тег в учёте.
+     * Обратная синхронизация: ручной тег из чата становится наградой в приложении
+     * (от имени владельца клуба, дефолтный эмодзи). Если награда с таким названием у
+     * участника уже есть — она «переподнимается» в последние (организатор вернул старый
+     * тег), без дубля. Выдача/переподнятие фиксируется в учёте, чтобы не переимпортировать.
      */
     private fun importAward(link: ChatLink, row: TagSyncRow, tag: String) {
-        val ownerId = clubRepository.findById(link.clubId)?.ownerId ?: return
         try {
+            if (awardRepository.touch(link.clubId, row.userId, tag) > 0) {
+                tagRepository.upsert(link.clubId, row.telegramId, tag)
+                log.info("Award re-raised from chat tag: clubId={} userId={}", link.clubId, row.userId)
+                return
+            }
+            val ownerId = clubRepository.findById(link.clubId)?.ownerId ?: return
             awardService.grant(link.clubId, row.userId, IMPORTED_AWARD_EMOJI, tag, ownerId)
+            // Учёт сразу: тег уже стоит (ручной), событие grant лишь подтвердит его.
+            tagRepository.upsert(link.clubId, row.telegramId, tag)
             log.info("Award imported from chat tag: clubId={} userId={}", link.clubId, row.userId)
         } catch (e: Exception) {
-            // Лимит/дубль/гонка с выдачей — не валим сверку остальных участников.
+            // Лимит наград/гонка с выдачей — не валим сверку остальных участников.
             log.warn("Award import from chat tag failed: clubId={} userId={} error={}", link.clubId, row.userId, e.message)
         }
     }
