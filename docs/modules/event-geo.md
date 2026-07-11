@@ -90,8 +90,9 @@ ALTER TABLE events
 
 - Лоадер JS API: `https://api-maps.yandex.ru/2.1/?apikey=<MAPS-KEY>&lang=ru_RU` (v2.1,
   см. «Провайдер и ключи» — почему не v3).
-- Геокодер: `https://geocode-maps.yandex.ru/1.x/?apikey=<GEOCODER-KEY>&geocode=<text>&format=json&results=1&lang=ru_RU`
-  (и обратный: `geocode=<lon>,<lat>`). Таймаут запроса — 10 с (`AbortSignal.timeout`,
+- Геокодер: `https://geocode-maps.yandex.ru/v1/?apikey=<GEOCODER-KEY>&geocode=<text>&format=json&results=1&lang=ru_RU`
+  (и обратный: `geocode=<lon>,<lat>`; `/v1/` — endpoint нового продукта «API Геокодера»,
+  `/1.x/` — легаси старой связки). Таймаут запроса — 10 с (`AbortSignal.timeout`,
   в старых webview без него).
 - Статичная карта: `https://static-maps.yandex.ru/v1?apikey=<STATIC-KEY>&ll=<lon>,<lat>&z=16&size=650,300&pt=<lon>,<lat>,pm2rdm`.
 - Маршрут: `https://yandex.ru/maps/?rtext=~<lat>,<lon>` (от текущей геопозиции).

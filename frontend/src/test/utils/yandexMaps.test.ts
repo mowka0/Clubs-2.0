@@ -79,7 +79,7 @@ describe('yandexMaps geocoder', () => {
       address: 'Россия, Москва, улица Покровка, 47/24с1',
     });
     const requestedUrl = String(fetchMock.mock.calls[0]?.[0]);
-    expect(requestedUrl).toContain('https://geocode-maps.yandex.ru/1.x/');
+    expect(requestedUrl).toContain('https://geocode-maps.yandex.ru/v1/');
     expect(requestedUrl).toContain('apikey=test-geocoder-key');
     expect(requestedUrl).toContain(`geocode=${encodeURIComponent('Покровка 47')}`);
     expect(requestedUrl).toContain('results=1');

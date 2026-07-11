@@ -170,8 +170,10 @@ interface GeocoderResponse {
 async function requestGeocoder(geocodeParam: string): Promise<GeocodeResult | null> {
   const apiKey = geocoderApiKey();
   if (!apiKey) throw new Error('VITE_YANDEX_GEOCODER_API_KEY is not set');
+  // /v1/ — документированный endpoint нового продукта «API Геокодера»; /1.x/ — легаси
+  // для ключей старой связки. Формат ответа (GeoObjectCollection) одинаковый.
   const url =
-    'https://geocode-maps.yandex.ru/1.x/' +
+    'https://geocode-maps.yandex.ru/v1/' +
     `?apikey=${encodeURIComponent(apiKey)}` +
     `&geocode=${encodeURIComponent(geocodeParam)}` +
     '&format=json&results=1&lang=ru_RU';
