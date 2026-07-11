@@ -777,4 +777,184 @@ class ApplicationServiceTest {
         assertThrows<ValidationException> { applicationService.cancelApplication(applicationId, userId) }
         verify(exactly = 0) { applicationRepository.updateStatus(any(), ApplicationStatus.cancelled) }
     }
+
+    // ===== club-invites: заявка в полный клуб («Попроситься») =====
+
+    @Test
+    fun `submitApplication rejects open club with free spots`() {
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val club = createClosedClub(clubId, UUID.randomUUID(), memberLimit = 20)
+            .copy(accessType = AccessType.open)
+
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.countActiveByClubId(clubId) } returns 5
+
+        assertThrows<ValidationException> {
+            applicationService.submitApplication(clubId, userId, SubmitApplicationRequest())
+        }
+        verify(exactly = 0) { applicationRepository.create(any(), any(), any()) }
+    }
+
+    @Test
+    fun `submitApplication accepts full open club as expand request`() {
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val club = createClosedClub(clubId, UUID.randomUUID(), memberLimit = 20)
+            .copy(accessType = AccessType.open)
+        val application = createPendingApplication(userId, clubId, null)
+
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.countActiveByClubId(clubId) } returns 20
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
+        every { applicationRepository.findActiveByUserAndClub(userId, clubId) } returns null
+        every { applicationRepository.countTodayByUser(userId) } returns 0
+        every { applicationRepository.create(userId, clubId, null) } returns application
+
+        val result = applicationService.submitApplication(clubId, userId, SubmitApplicationRequest())
+
+        assertEquals("pending", result.status)
+        verify(exactly = 1) { applicationRepository.create(userId, clubId, null) }
+    }
+
+    // ===== club-invites: «Расширить клуб и принять всех» =====
+
+    private fun stubExpandScenario(
+        clubId: UUID,
+        ownerId: UUID,
+        memberLimit: Int = 20,
+        activeCount: Int = 20,
+        subscriptionPrice: Int = 0
+    ): Club {
+        val club = createClosedClub(clubId, ownerId, memberLimit = memberLimit, subscriptionPrice = subscriptionPrice)
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.countActiveByClubId(clubId) } returns activeCount
+        return club
+    }
+
+    @Test
+    fun `expandAndApproveAll raises limit and approves all pending applications atomically`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val club = stubExpandScenario(clubId, ownerId, memberLimit = 20, activeCount = 20)
+        val app1 = createPendingApplication(UUID.randomUUID(), clubId, null)
+        val app2 = createPendingApplication(UUID.randomUUID(), clubId, null)
+
+        every { applicationRepository.findById(app1.id) } returns app1
+        every { applicationRepository.findById(app2.id) } returns app2
+        every { clubRepository.updateMemberLimit(clubId, 22) } returns club.copy(memberLimit = 22)
+        every { applicationRepository.updateStatus(app1.id, ApplicationStatus.approved) } returns app1.copy(status = ApplicationStatus.approved)
+        every { applicationRepository.updateStatus(app2.id, ApplicationStatus.approved) } returns app2.copy(status = ApplicationStatus.approved)
+
+        val result = applicationService.expandAndApproveAll(
+            clubId, ownerId, ExpandAndApproveRequest(newMemberLimit = 22, applicationIds = listOf(app1.id, app2.id))
+        )
+
+        assertEquals(2, result.size)
+        assertEquals(setOf("approved"), result.map { it.status }.toSet())
+        verify(exactly = 1) { clubRepository.updateMemberLimit(clubId, 22) }
+        // Бесплатный клуб → сразу active-членство обоим.
+        verify(exactly = 1) { membershipActivator.activateFree(app1.userId, clubId) }
+        verify(exactly = 1) { membershipActivator.activateFree(app2.userId, clubId) }
+    }
+
+    @Test
+    fun `expandAndApproveAll creates frozen memberships in a paid club`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val club = stubExpandScenario(clubId, ownerId, subscriptionPrice = 500)
+        val app = createPendingApplication(UUID.randomUUID(), clubId, null)
+
+        every { applicationRepository.findById(app.id) } returns app
+        every { clubRepository.updateMemberLimit(clubId, 21) } returns club.copy(memberLimit = 21)
+        every { applicationRepository.updateStatus(app.id, ApplicationStatus.approved) } returns app.copy(status = ApplicationStatus.approved)
+
+        applicationService.expandAndApproveAll(
+            clubId, ownerId, ExpandAndApproveRequest(newMemberLimit = 21, applicationIds = listOf(app.id))
+        )
+
+        verify(exactly = 1) { membershipActivator.activateFrozen(app.userId, clubId) }
+        verify(exactly = 0) { membershipActivator.activateFree(any(), any()) }
+    }
+
+    @Test
+    fun `expandAndApproveAll rejects a caller who is not the owner`() {
+        val clubId = UUID.randomUUID()
+        stubExpandScenario(clubId, ownerId = UUID.randomUUID())
+
+        assertThrows<ForbiddenException> {
+            applicationService.expandAndApproveAll(
+                clubId, UUID.randomUUID(), ExpandAndApproveRequest(newMemberLimit = 22, applicationIds = listOf(UUID.randomUUID()))
+            )
+        }
+        verify(exactly = 0) { clubRepository.updateMemberLimit(any(), any()) }
+    }
+
+    @Test
+    fun `expandAndApproveAll rejects a limit not above the current one`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        stubExpandScenario(clubId, ownerId, memberLimit = 20)
+        val app = createPendingApplication(UUID.randomUUID(), clubId, null)
+        every { applicationRepository.findById(app.id) } returns app
+
+        assertThrows<ValidationException> {
+            applicationService.expandAndApproveAll(
+                clubId, ownerId, ExpandAndApproveRequest(newMemberLimit = 20, applicationIds = listOf(app.id))
+            )
+        }
+        verify(exactly = 0) { clubRepository.updateMemberLimit(any(), any()) }
+    }
+
+    @Test
+    fun `expandAndApproveAll rejects a limit too small for everyone in the batch`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        stubExpandScenario(clubId, ownerId, memberLimit = 20, activeCount = 20)
+        val app1 = createPendingApplication(UUID.randomUUID(), clubId, null)
+        val app2 = createPendingApplication(UUID.randomUUID(), clubId, null)
+        every { applicationRepository.findById(app1.id) } returns app1
+        every { applicationRepository.findById(app2.id) } returns app2
+
+        // 21 места на 20 занятых + 2 заявки — не вмещает всех.
+        assertThrows<ValidationException> {
+            applicationService.expandAndApproveAll(
+                clubId, ownerId, ExpandAndApproveRequest(newMemberLimit = 21, applicationIds = listOf(app1.id, app2.id))
+            )
+        }
+        verify(exactly = 0) { clubRepository.updateMemberLimit(any(), any()) }
+    }
+
+    @Test
+    fun `expandAndApproveAll rejects an application from another club`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        stubExpandScenario(clubId, ownerId)
+        val foreign = createPendingApplication(UUID.randomUUID(), UUID.randomUUID(), null)
+        every { applicationRepository.findById(foreign.id) } returns foreign
+
+        assertThrows<ValidationException> {
+            applicationService.expandAndApproveAll(
+                clubId, ownerId, ExpandAndApproveRequest(newMemberLimit = 25, applicationIds = listOf(foreign.id))
+            )
+        }
+        verify(exactly = 0) { clubRepository.updateMemberLimit(any(), any()) }
+    }
+
+    @Test
+    fun `expandAndApproveAll rejects a non-pending application`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        stubExpandScenario(clubId, ownerId)
+        val approved = createPendingApplication(UUID.randomUUID(), clubId, null)
+            .copy(status = ApplicationStatus.approved)
+        every { applicationRepository.findById(approved.id) } returns approved
+
+        assertThrows<ValidationException> {
+            applicationService.expandAndApproveAll(
+                clubId, ownerId, ExpandAndApproveRequest(newMemberLimit = 25, applicationIds = listOf(approved.id))
+            )
+        }
+        verify(exactly = 0) { clubRepository.updateMemberLimit(any(), any()) }
+    }
 }

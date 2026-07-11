@@ -105,6 +105,14 @@ class JooqClubRepository(
         return findById(id)
     }
 
+    override fun updateMemberLimit(id: UUID, memberLimit: Int): Club? {
+        dsl.update(CLUBS)
+            .set(CLUBS.MEMBER_LIMIT, memberLimit)
+            .where(CLUBS.ID.eq(id))
+            .execute()
+        return findById(id)
+    }
+
     override fun findById(id: UUID): Club? =
         dsl.selectFrom(CLUBS)
             .where(CLUBS.ID.eq(id).and(CLUBS.IS_ACTIVE.eq(true)))

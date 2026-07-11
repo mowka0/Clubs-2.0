@@ -14,6 +14,7 @@ import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.membership.MembershipRepository
 import com.clubs.skladchina.SkladchinaRepository
 import com.clubs.subscription.SubscriptionService
+import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -40,6 +41,7 @@ class ClubService(
     private val applicationRepository: ApplicationRepository,
     private val subscriptionService: SubscriptionService,
     private val chatLinkRepository: ChatLinkRepository,
+    private val userRepository: UserRepository,
     private val mapper: ClubMapper
 ) {
 
@@ -92,7 +94,23 @@ class ClubService(
 
     fun getClubByInviteCode(code: String): ClubDetailDto {
         val club = clubRepository.findByInviteCode(code) ?: throw NotFoundException("Invite link not found")
-        return mapper.toDetailDto(club)
+        // Имя владельца — для подписи «Приглашение от <имя>» на посадочной (club-invites, кадр D).
+        val owner = userRepository.findById(club.ownerId)
+        return mapper.toDetailDto(club, ownerFirstName = owner?.firstName, ownerLastName = owner?.lastName)
+    }
+
+    /**
+     * Инвайт-код клуба с ленивой генерацией: private-клуб получает код при создании,
+     * open/closed — при первом использовании кнопки «Пригласить» (club-invites).
+     */
+    @Transactional
+    fun ensureInviteCode(clubId: UUID): String {
+        val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
+        club.inviteLink?.let { return it }
+        val code = generateInviteCode()
+        clubRepository.updateInviteCode(clubId, code)
+        log.info("Invite code lazily generated: clubId={}", clubId)
+        return code
     }
 
     @Transactional

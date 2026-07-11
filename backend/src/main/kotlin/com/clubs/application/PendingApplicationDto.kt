@@ -59,7 +59,11 @@ data class PeerStatsDto(
 data class ClubBriefDto(
     val id: UUID,
     val name: String,
-    val avatarUrl: String?
+    val avatarUrl: String?,
+    // Вместимость клуба (club-invites): инбокс группирует заявки ПОЛНОГО клуба в блок
+    // «Расширить клуб и принять всех» — фронту нужны живой счётчик занятых мест и лимит.
+    val memberCount: Int,
+    val memberLimit: Int
 )
 
 /**

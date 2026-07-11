@@ -56,7 +56,21 @@ data class ClubDetailDto(
     val chatDoorEnabled: Boolean = false,
     // Door-ссылка для кнопки «Чат клуба» — ТОЛЬКО участникам с доступом (active / cancelled-в-периоде)
     // и владельцу; гостям/frozen/expired — null (least exposure, как paymentLink).
-    val chatInviteLink: String? = null
+    val chatInviteLink: String? = null,
+    // Имя владельца — только для посадочной инвайта (подпись «Приглашение от <имя>», club-invites).
+    // В остальных ответах null: не тянем лишний lookup пользователя.
+    val ownerFirstName: String? = null,
+    val ownerLastName: String? = null
+)
+
+/**
+ * Ответ POST /api/clubs/{id}/invite-share (club-invites): deep-link для «Скопировать ссылку»
+ * + id prepared message для нативного шаринга. preparedMessageId = null — Telegram не ответил,
+ * фронт оставляет в шите только копирование.
+ */
+data class InviteShareDto(
+    val inviteUrl: String,
+    val preparedMessageId: String?
 )
 
 data class CreateClubRequest(

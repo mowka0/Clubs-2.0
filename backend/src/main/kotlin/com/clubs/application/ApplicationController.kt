@@ -51,6 +51,19 @@ class ApplicationController(private val applicationService: ApplicationService) 
         return ResponseEntity.ok(application)
     }
 
+    @PostMapping("/api/clubs/{id}/expand-and-approve")
+    fun expandAndApprove(
+        @PathVariable id: UUID,
+        @Valid @RequestBody request: ExpandAndApproveRequest,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<List<ApplicationDto>> {
+        log.info(
+            "Expand and approve: clubId={} newLimit={} applications={} organizerId={}",
+            id, request.newMemberLimit, request.applicationIds.size, user.userId
+        )
+        return ResponseEntity.ok(applicationService.expandAndApproveAll(id, user.userId, request))
+    }
+
     @PostMapping("/api/applications/{id}/reject")
     fun reject(
         @PathVariable id: UUID,

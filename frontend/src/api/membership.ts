@@ -62,6 +62,22 @@ export function applyToClub(clubId: string, answerText: string): Promise<Applica
   return apiClient.post<ApplicationDto>(`/api/clubs/${clubId}/apply`, { answerText });
 }
 
+/**
+ * «Расширить клуб и принять всех» (club-invites): атомарно поднять лимит участников и
+ * одобрить перечисленные pending-заявки полного клуба. Только владелец; 400 — лимит
+ * не больше текущего или не вмещает всех.
+ */
+export function expandAndApprove(
+  clubId: string,
+  newMemberLimit: number,
+  applicationIds: string[],
+): Promise<ApplicationDto[]> {
+  return apiClient.post<ApplicationDto[]>(`/api/clubs/${clubId}/expand-and-approve`, {
+    newMemberLimit,
+    applicationIds,
+  });
+}
+
 export function getMyApplications(): Promise<ApplicationDto[]> {
   return apiClient.get<ApplicationDto[]>('/api/users/me/applications');
 }
