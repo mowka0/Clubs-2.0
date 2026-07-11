@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
-import { useApplyToClubMutation, useClubByInviteQuery, useJoinByInviteMutation } from '../queries/clubs';
+import { useApplyToClubMutation, useClubByInviteQuery, useJoinByInviteMutation, useMyClubsQuery } from '../queries/clubs';
 import { formatPrice } from '../utils/formatters';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -28,6 +28,7 @@ export const InvitePage: FC = () => {
   const haptic = useHaptic();
 
   const clubQuery = useClubByInviteQuery(code);
+  const myClubsQuery = useMyClubsQuery();
   const joinMutation = useJoinByInviteMutation();
   const applyMutation = useApplyToClubMutation();
 
@@ -44,6 +45,13 @@ export const InvitePage: FC = () => {
   // club-invites (кадр G): в полный клуб прямое вступление невозможно — приглашение
   // деградирует в обычную заявку, организатор может расширить клуб из инбокса.
   const isClubFull = !!club && club.memberCount >= club.memberLimit;
+
+  // Приглашение открыл человек, который уже в клубе (active / frozen / expired — место
+  // занято): вместо CTA вступления — «Перейти в клуб». Отфильтровать его в нативном
+  // пикере Telegram нельзя (пикер не сообщает и не ограничивает выбор), поэтому
+  // страхуемся на посадочной; бэкенд повторное вступление и так отбивает (409).
+  const myMembership = myClubsQuery.data?.find((m) => m.clubId === club?.id);
+  const isAlreadyMember = !!myMembership && ['active', 'frozen', 'expired'].includes(myMembership.status);
 
   const handleJoin = () => {
     if (!code) return;
@@ -179,7 +187,7 @@ export const InvitePage: FC = () => {
         )}
       </div>
 
-      {isClubFull && (
+      {!isAlreadyMember && isClubFull && (
         <div className="rd-cl-chip">
           <span aria-hidden="true">👥</span>
           <span>В клубе кончились места — вы всё равно можете попроситься, организатор может расширить клуб</span>
@@ -196,7 +204,7 @@ export const InvitePage: FC = () => {
       )}
 
       {/* Полный клуб + вопрос организатора: заявка требует ответа — поле в общем стиле форм. */}
-      {isClubFull && club.applicationQuestion && (
+      {!isAlreadyMember && isClubFull && club.applicationQuestion && (
         <label className="rd-field" style={{ marginBottom: 14 }}>
           <span className="rd-label">{club.applicationQuestion}</span>
           <input
@@ -211,7 +219,21 @@ export const InvitePage: FC = () => {
       {actionError && <div className="rd-error">{actionError}</div>}
 
       <div className="rd-cta-wrap">
-        {isClubFull ? (
+        {isAlreadyMember ? (
+          <>
+            <div className="rd-cl-chip">
+              <span aria-hidden="true">✓</span>
+              <span>Вы уже состоите в этом клубе</span>
+            </div>
+            <button
+              type="button"
+              className="rd-btn-primary"
+              onClick={() => { haptic.impact('light'); navigate(`/clubs/${club.id}`, { replace: true }); }}
+            >
+              Перейти в клуб
+            </button>
+          </>
+        ) : isClubFull ? (
           <button type="button" className="rd-btn-primary" onClick={handleApply} disabled={joining}>
             {joining ? <Spinner size="s" /> : 'Попроситься в клуб'}
           </button>
@@ -220,7 +242,7 @@ export const InvitePage: FC = () => {
             {joining ? <Spinner size="s" /> : 'Вступить в клуб'}
           </button>
         )}
-        {club.ownerFirstName && (
+        {!isAlreadyMember && club.ownerFirstName && (
           <div className="rd-cta-hint">
             Приглашение от {club.ownerFirstName}{club.ownerLastName ? ` ${club.ownerLastName}` : ''}
           </div>
