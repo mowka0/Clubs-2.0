@@ -381,4 +381,26 @@ describe('EventPage — блок места (event-geo, кадр C)', () => {
     expect(screen.queryByAltText('Карта места события')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Маршрут/ })).not.toBeInTheDocument();
   });
+
+  it('уточнение к месту видно и без гео-точки: адрес + серое уточнение', async () => {
+    mockEndpoints({
+      event: stage2Event({ eventDatetime: FUTURE, locationHint: 'Вход со двора, домофон 12' }),
+      myVote: 'going',
+    });
+    renderEventPage();
+
+    expect(await screen.findByText('Бар')).toBeInTheDocument();
+    expect(screen.getByText('Вход со двора, домофон 12')).toBeInTheDocument();
+  });
+
+  it('hint-only событие (места нет): уточнение показано как место', async () => {
+    mockEndpoints({
+      event: stage2Event({ eventDatetime: FUTURE, locationText: null, locationHint: 'Встречаемся в зуме' }),
+      myVote: 'going',
+    });
+    renderEventPage();
+
+    expect(await screen.findByText('Встречаемся в зуме')).toBeInTheDocument();
+    expect(screen.queryByAltText('Карта места события')).not.toBeInTheDocument();
+  });
 });

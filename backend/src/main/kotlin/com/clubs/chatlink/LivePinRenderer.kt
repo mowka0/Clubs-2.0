@@ -1,6 +1,7 @@
 package com.clubs.chatlink
 
 import com.clubs.event.Event
+import com.clubs.event.locationDisplay
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.time.ZoneId
@@ -35,10 +36,10 @@ class LivePinRenderer(
     fun buttonText(event: Event): String =
         if (event.stage2Triggered) "Подтвердить участие" else "Проголосовать"
 
-    /** Строка «дата · 📍 место»; у события без места (V58) — только дата. */
+    /** Строка «дата · 📍 адрес (уточнение)»; у события без места (V58) — только дата. */
     private fun dateLocationLine(event: Event): String =
         "🗓 ${event.eventDatetime.format(fmt)}" +
-            (event.locationText?.let { " · 📍 $it" } ?: "")
+            (event.locationDisplay?.let { " · 📍 $it" } ?: "")
 
     /** Этап 1: набор — голоса и лимит мест. */
     fun stage1Text(event: Event, going: Int, maybe: Int): String =

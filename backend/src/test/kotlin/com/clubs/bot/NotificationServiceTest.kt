@@ -134,11 +134,41 @@ class NotificationServiceTest {
         assertTrue(!msgSlot.captured.text.contains("📍"))
     }
 
+    @Test
+    fun `уточнение к месту попадает в текст DM в скобках после адреса`() {
+        val event = sampleEvent(locationHint = "Вход со двора")
+        every { membershipRepository.findMemberTelegramIds(event.clubId) } returns listOf(101L)
+        val msgSlot = slot<SendMessage>()
+        every { telegramClient.execute(capture(msgSlot)) } returns mockk(relaxed = true)
+
+        service.sendEventCreated(event)
+
+        assertTrue(msgSlot.captured.text.contains("📍 Бар (Вход со двора)"))
+    }
+
+    @Test
+    fun `hint-only событие — уточнение как место в тексте DM, кнопки карт нет`() {
+        val event = sampleEvent(locationText = null, locationHint = "Встречаемся в зуме")
+        every { membershipRepository.findMemberTelegramIds(event.clubId) } returns listOf(101L)
+        val msgSlot = slot<SendMessage>()
+        every { telegramClient.execute(capture(msgSlot)) } returns mockk(relaxed = true)
+
+        service.sendEventCreated(event)
+
+        assertTrue(msgSlot.captured.text.contains("📍 Встречаемся в зуме"))
+        assertTrue(markupUrls(msgSlot.captured.replyMarkup as InlineKeyboardMarkup).none { it.contains("yandex.ru/maps") })
+    }
+
     /** Все url-значения кнопок клавиатуры (webApp-кнопки дают null и отфильтровываются). */
     private fun markupUrls(markup: InlineKeyboardMarkup): List<String> =
         markup.keyboard.flatten().mapNotNull { it.url }
 
-    private fun sampleEvent(lat: Double? = null, lon: Double? = null, locationText: String? = "Бар") = Event(
+    private fun sampleEvent(
+        lat: Double? = null,
+        lon: Double? = null,
+        locationText: String? = "Бар",
+        locationHint: String? = null
+    ) = Event(
         id = UUID.randomUUID(),
         clubId = UUID.randomUUID(),
         createdBy = UUID.randomUUID(),
@@ -147,6 +177,7 @@ class NotificationServiceTest {
         locationText = locationText,
         locationLat = lat,
         locationLon = lon,
+        locationHint = locationHint,
         eventDatetime = OffsetDateTime.now().plusDays(3),
         participantLimit = 20,
         votingOpensDaysBefore = 14,

@@ -426,21 +426,24 @@ export const EventPage: FC = () => {
       )}
 
       {/* Место проведения: с гео-точкой — мини-карта + маршрут (event-geo, кадр C);
-          легаси-события без координат — текст как раньше, без карты. */}
+          без координат — текстом: адрес (легаси) и/или уточнение организатора (V58). */}
       {event.locationLat != null && event.locationLon != null ? (
         <EventPlaceCard
           locationText={event.locationText ?? 'Место на карте'}
           locationHint={event.locationHint}
           point={{ lat: event.locationLat, lon: event.locationLon }}
         />
-      ) : event.locationText && (
+      ) : (event.locationText || event.locationHint) ? (
         <div className="rd-glass" style={{ marginBottom: 14, overflow: 'hidden' }}>
-          <div className="rd-mini-map" />
+          {event.locationText && <div className="rd-mini-map" />}
           <div className="rd-addr-body">
-            <div className="rd-a-ttl">{event.locationText}</div>
+            <div className="rd-a-ttl">{event.locationText ?? event.locationHint}</div>
+            {event.locationText && event.locationHint && (
+              <div className="rd-a-met">{event.locationHint}</div>
+            )}
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Описание */}
       {event.description && (

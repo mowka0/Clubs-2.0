@@ -45,6 +45,17 @@ class LivePinRendererTest {
     }
 
     @Test
+    fun `место в закрепе — уточнение в скобках после адреса, у события без места строки 📍 нет`() {
+        assertTrue(renderer.stage1Text(event, going = 1, maybe = 0).contains("📍 Сандуны"))
+        val withHint = renderer.stage1Text(event.copy(locationHint = "3-й этаж"), going = 1, maybe = 0)
+        assertTrue(withHint.contains("📍 Сандуны (3-й этаж)"))
+        val hintOnly = renderer.stage1Text(event.copy(locationText = null, locationHint = "В зуме"), going = 1, maybe = 0)
+        assertTrue(hintOnly.contains("📍 В зуме"))
+        val noLocation = renderer.stage1Text(event.copy(locationText = null), going = 1, maybe = 0)
+        assertTrue(!noLocation.contains("📍"))
+    }
+
+    @Test
     fun `stage2 — подтверждённые, очередь и дедлайн = старт события`() {
         val text = renderer.stage2Text(event, confirmed = 12, waitlisted = 2)
         assertTrue(text.contains("подтверждение мест"))

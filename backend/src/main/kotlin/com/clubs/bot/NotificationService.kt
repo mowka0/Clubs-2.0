@@ -2,6 +2,8 @@ package com.clubs.bot
 
 import com.clubs.event.Event
 import com.clubs.event.EventResponseRepository
+import com.clubs.event.OPEN_IN_YANDEX_MAPS_BUTTON
+import com.clubs.event.locationDisplay
 import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -71,8 +73,9 @@ class NotificationService(
         }
         log.info("Event-created DM: eventId={} clubId={} recipients={}", event.id, event.clubId, memberTelegramIds.size)
         val dateStr = event.eventDatetime.format(fmt)
-        // Место опционально (V58): у события без места строка 📍 не рендерится вовсе.
-        val locationLine = event.locationText?.let { "📍 $it\n" } ?: ""
+        // Место опционально (V58): у события без места строка 📍 не рендерится вовсе;
+        // уточнение организатора («Вход со двора») показывается в скобках после адреса.
+        val locationLine = event.locationDisplay?.let { "📍 $it\n" } ?: ""
         val text = "🆕 Новое событие в клубе!\n\n📌 ${event.title}\n$locationLine🗓 $dateStr\n👥 Лимит: ${event.participantLimit}\n\nГолосуйте в приложении:"
         // Диплинк сразу на страницу события, чтобы кнопка открывала голосование, а не
         // общую домашнюю страницу приложения. React Router рендерит EventPage на /events/:id.
@@ -99,7 +102,7 @@ class NotificationService(
         val markup = buildKeyboard(
             "📅 Открыть событие",
             webAppPath = webAppPath,
-            externalUrlButton = "🗺 Открыть в Яндекс.Картах" to openMapUrl(lat, lon)
+            externalUrlButton = OPEN_IN_YANDEX_MAPS_BUTTON to openMapUrl(lat, lon)
         )
         try {
             val msg = SendMessage.builder().chatId(chatId).text(text).replyMarkup(markup).build()

@@ -263,13 +263,13 @@ class ChatTelegramGateway(
         url: String?,
         parseMode: String? = null,
         // Тихий пост: приходит в чат без пуша участникам (итог встречи — фон, не событие)
-        silent: Boolean = false
+        silent: Boolean = false,
+        // Необязательная вторая строка клавиатуры «текст → https-ссылка»
+        // (например «Открыть в Яндекс.Картах» у живого закрепа события с гео-точкой)
+        secondaryButton: Pair<String, String>? = null
     ): Long? = try {
         val builder = SendMessage.builder().chatId(chatId).text(text)
-        if (buttonText != null && url != null) {
-            val button = InlineKeyboardButton.builder().text(buttonText).url(url).build()
-            builder.replyMarkup(InlineKeyboardMarkup(listOf(InlineKeyboardRow(button))))
-        }
+        buildUrlKeyboard(buttonText, url, secondaryButton)?.let { builder.replyMarkup(it) }
         parseMode?.let { builder.parseMode(it) }
         if (silent) builder.disableNotification(true)
         telegramClient.execute(builder.build()).messageId?.toLong()
@@ -282,15 +282,20 @@ class ChatTelegramGateway(
      * Редактирование своего сообщения в группе (живой закреп). «Message is not modified» —
      * не ошибка (перерисовка совпала с текущим текстом), считаем успехом.
      */
-    fun editGroupMessage(chatId: Long, messageId: Long, text: String, buttonText: String?, url: String?, parseMode: String? = null): Boolean = try {
+    fun editGroupMessage(
+        chatId: Long,
+        messageId: Long,
+        text: String,
+        buttonText: String?,
+        url: String?,
+        parseMode: String? = null,
+        secondaryButton: Pair<String, String>? = null
+    ): Boolean = try {
         val builder = EditMessageText.builder()
             .chatId(chatId)
             .messageId(messageId.toInt())
             .text(text)
-        if (buttonText != null && url != null) {
-            val button = InlineKeyboardButton.builder().text(buttonText).url(url).build()
-            builder.replyMarkup(InlineKeyboardMarkup(listOf(InlineKeyboardRow(button))))
-        }
+        buildUrlKeyboard(buttonText, url, secondaryButton)?.let { builder.replyMarkup(it) }
         parseMode?.let { builder.parseMode(it) }
         telegramClient.execute(builder.build())
         true
@@ -301,6 +306,25 @@ class ChatTelegramGateway(
             log.warn("editGroupMessage failed: chatId={} messageId={} error={}", chatId, messageId, e.message)
             false
         }
+    }
+
+    /**
+     * Клавиатура групповых постов: основная url-кнопка (t.me-диплинк в Mini App) + необязательная
+     * вторая строка (внешняя https-ссылка, например «Открыть в Яндекс.Картах»). null = без клавиатуры.
+     */
+    private fun buildUrlKeyboard(
+        buttonText: String?,
+        url: String?,
+        secondaryButton: Pair<String, String>?
+    ): InlineKeyboardMarkup? {
+        val rows = mutableListOf<InlineKeyboardRow>()
+        if (buttonText != null && url != null) {
+            rows += InlineKeyboardRow(InlineKeyboardButton.builder().text(buttonText).url(url).build())
+        }
+        secondaryButton?.let { (text, secondaryUrl) ->
+            rows += InlineKeyboardRow(InlineKeyboardButton.builder().text(text).url(secondaryUrl).build())
+        }
+        return if (rows.isEmpty()) null else InlineKeyboardMarkup(rows)
     }
 
     /** Закрепить сообщение (тихо, без пуша всем участникам). Нужно право «Закрепление сообщений». */
