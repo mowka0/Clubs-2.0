@@ -292,8 +292,10 @@ COPY . .
 # Публичные фронтовые ключи Яндекс.Карт (event-geo): Vite инлайнит VITE_* в бандл на сборке
 ARG VITE_YANDEX_MAPS_API_KEY
 ARG VITE_YANDEX_STATIC_API_KEY
+ARG VITE_YANDEX_GEOCODER_API_KEY
 ENV VITE_YANDEX_MAPS_API_KEY=$VITE_YANDEX_MAPS_API_KEY \
-    VITE_YANDEX_STATIC_API_KEY=$VITE_YANDEX_STATIC_API_KEY
+    VITE_YANDEX_STATIC_API_KEY=$VITE_YANDEX_STATIC_API_KEY \
+    VITE_YANDEX_GEOCODER_API_KEY=$VITE_YANDEX_GEOCODER_API_KEY
 RUN npm run build
 
 FROM nginx:alpine
@@ -306,10 +308,13 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
 
 **Важно:** `npm install` требует `--legacy-peer-deps` из-за конфликта `@telegram-apps/telegram-ui` и React 19.
 
-**Ключи Яндекс.Карт (фича event-geo, 2026-07-11):** `VITE_YANDEX_MAPS_API_KEY`
-(JavaScript API v3 + HTTP-геокодер) и `VITE_YANDEX_STATIC_API_KEY` (Static API) —
-публичные фронтовые ключи, уходят в браузер по определению, но в git не хранятся
-(`.env.example` — плейсхолдеры). Передаются build args'ами из
+**Ключи Яндекс.Карт (фича event-geo, 2026-07-11):** три отдельных продукта кабинета —
+`VITE_YANDEX_MAPS_API_KEY` («JavaScript API», v2.1 — карта пикера),
+`VITE_YANDEX_STATIC_API_KEY` («Static API» — мини-карта события),
+`VITE_YANDEX_GEOCODER_API_KEY` («API Геокодера» — поиск адреса/реверс).
+Связки «JavaScript API и HTTP Геокодер» (ключи которой принимает ymaps3/v3) в кабинете
+нет, поэтому пикер на v2.1. Ключи публичные фронтовые, уходят в браузер по определению,
+но в git не хранятся (`.env.example` — плейсхолдеры). Передаются build args'ами из
 `docker-compose.prod.yml` → значения PO задаёт в env обоих приложений Coolify
 (staging + prod); защита ключей — referer-ограничение в кабинете
 developer.tech.yandex.ru. Локально — `frontend/.env.local` (gitignored).
@@ -359,6 +364,7 @@ services:
         # Публичные ключи Яндекс.Карт (event-geo) — из env приложения Coolify
         VITE_YANDEX_MAPS_API_KEY: ${VITE_YANDEX_MAPS_API_KEY}
         VITE_YANDEX_STATIC_API_KEY: ${VITE_YANDEX_STATIC_API_KEY}
+        VITE_YANDEX_GEOCODER_API_KEY: ${VITE_YANDEX_GEOCODER_API_KEY}
     ports:
       - "80:80"
       - "443:443"

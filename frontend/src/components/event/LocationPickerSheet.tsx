@@ -6,11 +6,11 @@ import {
   GeocoderHttpError,
   PICKER_ZOOM_DEFAULT,
   PICKER_ZOOM_FOCUSED,
+  createPickerMap,
   geocode,
-  loadYmaps3,
   reverseGeocode,
   type GeoPoint,
-  type Ymaps3Map,
+  type PickerMap,
 } from '../../utils/yandexMaps';
 
 interface LocationPickerSheetProps {
@@ -31,7 +31,7 @@ interface LocationPickerSheetProps {
 export const LocationPickerSheet: FC<LocationPickerSheetProps> = ({ initial, onSelect, onClose }) => {
   const haptic = useHaptic();
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<Ymaps3Map | null>(null);
+  const mapRef = useRef<PickerMap | null>(null);
   const [mapState, setMapState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
@@ -47,19 +47,21 @@ export const LocationPickerSheet: FC<LocationPickerSheetProps> = ({ initial, onS
 
   useEffect(() => {
     let cancelled = false;
-    let map: Ymaps3Map | null = null;
-    loadYmaps3()
-      .then((api) => {
-        if (cancelled || !containerRef.current) return;
-        const center = initial ?? DEFAULT_CENTER;
-        map = new api.YMap(containerRef.current, {
-          location: {
-            center: [center.lon, center.lat],
-            zoom: initial ? PICKER_ZOOM_FOCUSED : PICKER_ZOOM_DEFAULT,
-          },
-        });
-        map.addChild(new api.YMapDefaultSchemeLayer());
-        mapRef.current = map;
+    let map: PickerMap | null = null;
+    const container = containerRef.current;
+    if (!container) return undefined;
+    createPickerMap(
+      container,
+      initial ?? DEFAULT_CENTER,
+      initial ? PICKER_ZOOM_FOCUSED : PICKER_ZOOM_DEFAULT,
+    )
+      .then((created) => {
+        if (cancelled) {
+          created.destroy();
+          return;
+        }
+        map = created;
+        mapRef.current = created;
         setMapState('ready');
       })
       .catch(() => { if (!cancelled) setMapState('error'); });
@@ -85,11 +87,7 @@ export const LocationPickerSheet: FC<LocationPickerSheetProps> = ({ initial, onS
         setSearchError('Не нашли адрес — попробуйте сформулировать иначе.');
       } else {
         setFoundAddress(result.address);
-        mapRef.current?.setLocation({
-          center: [result.point.lon, result.point.lat],
-          zoom: PICKER_ZOOM_FOCUSED,
-          duration: 300,
-        });
+        mapRef.current?.panTo(result.point, PICKER_ZOOM_FOCUSED);
       }
     } catch (e) {
       setFoundAddress(null);
@@ -110,7 +108,7 @@ export const LocationPickerSheet: FC<LocationPickerSheetProps> = ({ initial, onS
     if (!map || mapState !== 'ready' || saving) return;
     haptic.impact('medium');
     setSaving(true);
-    const [lon, lat] = map.center;
+    const { lat, lon } = map.getCenter();
     // Адрес — приятное дополнение, а не условие: если реверс-геокодер упал, местом
     // становятся координаты строкой (точка при этом полноценно выбрана).
     let address: string | null = null;

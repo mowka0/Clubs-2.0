@@ -7,13 +7,13 @@ vi.mock('../../hooks/useHaptic', () => ({
   useHaptic: () => ({ impact: vi.fn(), notify: vi.fn() }),
 }));
 
-// Реальная карта в jsdom не поднимется — стабим только лоадер (reject = CDN недоступен),
-// остальной модуль (URL-билдеры и т.п.) остаётся настоящим.
+// Реальная карта в jsdom не поднимется — стабим только создание карты (reject = CDN
+// недоступен), остальной модуль (URL-билдеры и т.п.) остаётся настоящим.
 vi.mock('../../utils/yandexMaps', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../utils/yandexMaps')>();
   return {
     ...actual,
-    loadYmaps3: vi.fn(() => Promise.reject(new Error('CDN down'))),
+    createPickerMap: vi.fn(() => Promise.reject(new Error('CDN down'))),
   };
 });
 

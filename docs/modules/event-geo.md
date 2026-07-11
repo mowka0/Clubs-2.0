@@ -32,9 +32,12 @@
 ## Провайдер и ключи
 
 - Яндекс.Карты, бесплатный тариф **~100 запросов/сутки на сервис**. Ключи — фронтовые
-  публичные, в env (в git не попадают):
-  - `VITE_YANDEX_MAPS_API_KEY` — JavaScript API v3 + HTTP-геокодер (связка);
-  - `VITE_YANDEX_STATIC_API_KEY` — Static API.
+  публичные, в env (в git не попадают). В кабинете PO продукты **раздельные** (связки
+  «JavaScript API и HTTP Геокодер», чьи ключи принимает ymaps3/v3, там нет — v3 отвечает
+  403 «Invalid api key», проверено curl 2026-07-11; поэтому пикер работает на **JS API v2.1**):
+  - `VITE_YANDEX_MAPS_API_KEY` — продукт «JavaScript API» (v2.1), скрипт карты пикера;
+  - `VITE_YANDEX_STATIC_API_KEY` — продукт «Static API», мини-карта события;
+  - `VITE_YANDEX_GEOCODER_API_KEY` — продукт «API Геокодера», поиск адреса + реверс.
 - Экономия лимита: геокодинг **только по кнопке «Найти»** (никакого live-саджеста),
   обратный геокодинг — **один раз** по «Готово».
 - **Изоляция провайдера**: весь Яндекс-специфичный код — в `frontend/src/utils/yandexMaps.ts`
@@ -85,15 +88,18 @@ ALTER TABLE events
 
 ### URL-форматы Яндекса (`utils/yandexMaps.ts`)
 
-- Лоадер JS API: `https://api-maps.yandex.ru/v3/?apikey=<MAPS-KEY>&lang=ru_RU` (ymaps3).
-- Геокодер: `https://geocode-maps.yandex.ru/1.x/?apikey=<MAPS-KEY>&geocode=<text>&format=json&results=1&lang=ru_RU`
+- Лоадер JS API: `https://api-maps.yandex.ru/2.1/?apikey=<MAPS-KEY>&lang=ru_RU` (v2.1,
+  см. «Провайдер и ключи» — почему не v3).
+- Геокодер: `https://geocode-maps.yandex.ru/1.x/?apikey=<GEOCODER-KEY>&geocode=<text>&format=json&results=1&lang=ru_RU`
   (и обратный: `geocode=<lon>,<lat>`). Таймаут запроса — 10 с (`AbortSignal.timeout`,
   в старых webview без него).
 - Статичная карта: `https://static-maps.yandex.ru/v1?apikey=<STATIC-KEY>&ll=<lon>,<lat>&z=16&size=650,300&pt=<lon>,<lat>,pm2rdm`.
 - Маршрут: `https://yandex.ru/maps/?rtext=~<lat>,<lon>` (от текущей геопозиции).
 - Открыть точку: `https://yandex.ru/maps/?pt=<lon>,<lat>&z=17`.
 
-⚠️ Ловушка: в `ll`/`pt`/`geocode` у Яндекса порядок **lon,lat**; в `rtext` — **lat,lon**.
+⚠️ Ловушка: в `ll`/`pt`/`geocode` у Яндекса порядок **lon,lat**; в `rtext` — **lat,lon**;
+а JS API **v2.1** внутри использует **[lat, lon]**. Наружу порядки не торчат: интерфейс
+`PickerMap` (обёртка над v2.1) оперирует только `GeoPoint {lat, lon}`.
 
 ### Кадр A — CreateEventPage
 
@@ -113,9 +119,9 @@ ALTER TABLE events
   пустой ответ — «Не нашли адрес — попробуйте сформулировать иначе.», HTTP-ошибка геокодера
   (лимит/ключ, `GeocoderHttpError`) — «Поиск временно недоступен, попробуйте позже.»,
   сетевая — «Не получилось найти адрес — проверьте соединение и попробуйте ещё раз.».
-- Карта ymaps3 (`YMap` + `YMapDefaultSchemeLayer`), **пин — абсолютный div в центре
-  контейнера** (не маркер на карте): тянешь карту — точка под пином. Подпись-пилюля
-  «Пин в центре — тяните карту».
+- Карта JS API v2.1 через провайдер-нейтральную обёртку `createPickerMap` → `PickerMap`
+  (`getCenter`/`panTo`/`destroy`), **пин — абсолютный div в центре контейнера** (не маркер
+  на карте): тянешь карту — точка под пином. Подпись-пилюля «Пин в центре — тяните карту».
 - «Готово» → координаты центра карты + `reverseGeocode()` (1 запрос) → адрес в форму;
   если реверс упал — адресом становится «lat, lon» строкой (6 знаков после запятой).
 - «Отмена» → закрыть без изменений. Дефолт-центр — Москва (55.751244, 37.618423), zoom 12;
@@ -134,9 +140,9 @@ ALTER TABLE events
 
 ## Env-проводка (фронт собирается в Docker)
 
-- `frontend/Dockerfile`: `ARG` + `ENV` для обоих `VITE_YANDEX_*` ключей перед `npm run build`.
-- `docker-compose.prod.yml` → `frontend.build.args`: обе переменные из env приложения Coolify.
-- `.env.example`: два плейсхолдера.
+- `frontend/Dockerfile`: `ARG` + `ENV` для всех трёх `VITE_YANDEX_*` ключей перед `npm run build`.
+- `docker-compose.prod.yml` → `frontend.build.args`: три переменные из env приложения Coolify.
+- `.env.example`: три плейсхолдера.
 - `frontend/.env.local` (gitignored) для локальной разработки создаёт PO руками.
 - `frontend/src/vite-env.d.ts`: типы обеих переменных.
 

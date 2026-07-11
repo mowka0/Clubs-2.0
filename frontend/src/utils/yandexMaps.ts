@@ -13,13 +13,18 @@
 
 // Ключи читаются лениво (не в module scope): vitest может застабить их через vi.stubEnv
 // уже после импорта модуля.
-// Ключ JavaScript API v3; по связке «JavaScript API и HTTP Геокодер» им же ходим в геокодер.
+// Ключ продукта «JavaScript API» (v2.1) — только скрипт карты.
 function mapsApiKey(): string | undefined {
   return import.meta.env.VITE_YANDEX_MAPS_API_KEY;
 }
 // Отдельный ключ Static API — картинка мини-карты на странице события.
 function staticApiKey(): string | undefined {
   return import.meta.env.VITE_YANDEX_STATIC_API_KEY;
+}
+// Отдельный ключ HTTP-геокодера: в кабинете PO «API Геокодера» — самостоятельный продукт
+// со своим ключом (связки с JS API нет).
+function geocoderApiKey(): string | undefined {
+  return import.meta.env.VITE_YANDEX_GEOCODER_API_KEY;
 }
 
 // Дефолт-центр пикера, пока точка не выбрана (решение мокапа): Москва.
@@ -38,68 +43,100 @@ export interface GeocodeResult {
   address: string;
 }
 
-/** Координаты ymaps3: [lon, lat] — именно в этом порядке. */
-type LngLat = [number, number];
+// ---- JS API v2.1 ----
+// Не v3 (ymaps3): в кабинете PO продукты раздельные («JavaScript API» = v2.1 и «API
+// Геокодера»), связки «JavaScript API и HTTP Геокодер», чьи ключи принимает v3, там нет —
+// v3 отвечает 403 «Invalid api key» (проверено curl 2026-07-11), а v2.1 тем же ключом работает.
+// ⚠️ Порядковая ловушка №2: v2.1 использует [lat, lon] — наоборот от v3 и Static API.
+// Наружу порядок не торчит: интерфейс PickerMap оперирует только GeoPoint.
 
-interface Ymaps3MapLocation {
-  center?: LngLat;
-  zoom?: number;
-  duration?: number;
-}
-
-export interface Ymaps3Map {
-  center: Readonly<LngLat>;
-  setLocation(location: Ymaps3MapLocation): void;
-  addChild(child: unknown): void;
+/** Внутренний тип карты v2.1 (минимум, официальные типы не тянем ради одного компонента). */
+interface YmapsV2Map {
+  getCenter(): [number, number]; // [lat, lon]
+  setCenter(center: [number, number], zoom?: number, options?: { duration?: number }): unknown;
   destroy(): void;
 }
 
-export interface Ymaps3Api {
-  ready: Promise<unknown>;
-  YMap: new (root: HTMLElement, props: { location: { center: LngLat; zoom: number } }) => Ymaps3Map;
-  YMapDefaultSchemeLayer: new (props?: Record<string, unknown>) => unknown;
+interface YmapsV2Api {
+  ready(callback: () => void): void;
+  Map: new (
+    root: HTMLElement,
+    state: { center: [number, number]; zoom: number; controls: string[] },
+  ) => YmapsV2Map;
 }
 
 declare global {
   interface Window {
-    ymaps3?: Ymaps3Api;
+    ymaps?: YmapsV2Api;
   }
+}
+
+/** Провайдер-нейтральная карта пикера: только GeoPoint, без координатных порядков Яндекса. */
+export interface PickerMap {
+  getCenter(): GeoPoint;
+  panTo(point: GeoPoint, zoom: number): void;
+  destroy(): void;
 }
 
 // Кэш промиса загрузки скрипта: пикер может открываться много раз, скрипт грузим однажды.
 // При ошибке кэш сбрасывается, чтобы повторное открытие пикера могло ретраить загрузку.
-let ymaps3Promise: Promise<Ymaps3Api> | null = null;
+let ymapsPromise: Promise<YmapsV2Api> | null = null;
 
-/** Ленивый лоадер Yandex JS API v3. Бросает Error, если CDN недоступен или ключ не задан. */
-export function loadYmaps3(): Promise<Ymaps3Api> {
-  if (window.ymaps3) {
-    const api = window.ymaps3;
-    return api.ready.then(() => api);
+/** Ленивый лоадер Yandex JS API v2.1. Бросает Error, если CDN недоступен или ключ не задан. */
+function loadYmaps(): Promise<YmapsV2Api> {
+  if (window.ymaps) {
+    const api = window.ymaps;
+    return new Promise((resolve) => api.ready(() => resolve(api)));
   }
-  if (!ymaps3Promise) {
-    ymaps3Promise = new Promise<Ymaps3Api>((resolve, reject) => {
+  if (!ymapsPromise) {
+    ymapsPromise = new Promise<YmapsV2Api>((resolve, reject) => {
       const apiKey = mapsApiKey();
       if (!apiKey) {
         reject(new Error('VITE_YANDEX_MAPS_API_KEY is not set'));
         return;
       }
       const script = document.createElement('script');
-      script.src = `https://api-maps.yandex.ru/v3/?apikey=${encodeURIComponent(apiKey)}&lang=ru_RU`;
+      script.src = `https://api-maps.yandex.ru/2.1/?apikey=${encodeURIComponent(apiKey)}&lang=ru_RU`;
       script.async = true;
       script.onload = () => {
-        const api = window.ymaps3;
+        const api = window.ymaps;
         if (!api) {
-          reject(new Error('ymaps3 global is missing after script load'));
+          reject(new Error('ymaps global is missing after script load'));
           return;
         }
-        api.ready.then(() => resolve(api), reject);
+        api.ready(() => resolve(api));
       };
       script.onerror = () => reject(new Error('Failed to load Yandex Maps JS API'));
       document.head.appendChild(script);
     });
-    ymaps3Promise.catch(() => { ymaps3Promise = null; });
+    ymapsPromise.catch(() => { ymapsPromise = null; });
   }
-  return ymaps3Promise;
+  return ymapsPromise;
+}
+
+/**
+ * Создаёт карту пикера в контейнере (лениво грузит JS API) и оборачивает её в
+ * провайдер-нейтральный PickerMap. controls: [] — чистая карта, пин рисует сам пикер.
+ */
+export async function createPickerMap(
+  container: HTMLElement,
+  center: GeoPoint,
+  zoom: number,
+): Promise<PickerMap> {
+  const api = await loadYmaps();
+  const map = new api.Map(container, { center: [center.lat, center.lon], zoom, controls: [] });
+  return {
+    getCenter() {
+      const [lat, lon] = map.getCenter();
+      return { lat, lon };
+    },
+    panTo(point, targetZoom) {
+      map.setCenter([point.lat, point.lon], targetZoom, { duration: 300 });
+    },
+    destroy() {
+      map.destroy();
+    },
+  };
 }
 
 // Предел ожидания ответа геокодера, мс.
@@ -131,8 +168,8 @@ interface GeocoderResponse {
 }
 
 async function requestGeocoder(geocodeParam: string): Promise<GeocodeResult | null> {
-  const apiKey = mapsApiKey();
-  if (!apiKey) throw new Error('VITE_YANDEX_MAPS_API_KEY is not set');
+  const apiKey = geocoderApiKey();
+  if (!apiKey) throw new Error('VITE_YANDEX_GEOCODER_API_KEY is not set');
   const url =
     'https://geocode-maps.yandex.ru/1.x/' +
     `?apikey=${encodeURIComponent(apiKey)}` +

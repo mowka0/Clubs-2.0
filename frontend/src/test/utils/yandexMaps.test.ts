@@ -58,7 +58,8 @@ function geocoderResponse(pos: string | null, address: string | null) {
 
 describe('yandexMaps geocoder', () => {
   beforeEach(() => {
-    vi.stubEnv('VITE_YANDEX_MAPS_API_KEY', 'test-maps-key');
+    // У геокодера собственный ключ (отдельный продукт «API Геокодера» в кабинете).
+    vi.stubEnv('VITE_YANDEX_GEOCODER_API_KEY', 'test-geocoder-key');
   });
 
   afterEach(() => {
@@ -79,7 +80,7 @@ describe('yandexMaps geocoder', () => {
     });
     const requestedUrl = String(fetchMock.mock.calls[0]?.[0]);
     expect(requestedUrl).toContain('https://geocode-maps.yandex.ru/1.x/');
-    expect(requestedUrl).toContain('apikey=test-maps-key');
+    expect(requestedUrl).toContain('apikey=test-geocoder-key');
     expect(requestedUrl).toContain(`geocode=${encodeURIComponent('Покровка 47')}`);
     expect(requestedUrl).toContain('results=1');
   });
