@@ -66,8 +66,11 @@ export const CreateEventPage: FC = () => {
     setSubmitError(null);
     if (!title.trim()) return fail('Укажите название');
     if (title.trim().length > TITLE_MAX) return fail(`Название: максимум ${TITLE_MAX} символов`);
-    // Fail-closed (решение PO): место — только точка на карте, текстового фолбэка нет.
-    if (!location) return fail('Укажите место на карте');
+    // Правило PO (V58): место опционально, но хоть какое-то указание нужно —
+    // либо точка на карте, либо текстовое уточнение («в зуме», «место скинем в чат»).
+    if (!location && !locationHint.trim()) {
+      return fail('Укажите место на карте или заполните уточнение к месту');
+    }
     if (locationHint.trim().length > LOCATION_HINT_MAX) {
       return fail(`Уточнение к месту: максимум ${LOCATION_HINT_MAX} символов`);
     }
@@ -84,9 +87,9 @@ export const CreateEventPage: FC = () => {
     const body: CreateEventBody = {
       title: title.trim(),
       description: description.trim() || undefined,
-      locationText: location.address.trim().slice(0, LOCATION_MAX),
-      locationLat: location.point.lat,
-      locationLon: location.point.lon,
+      locationText: location ? location.address.trim().slice(0, LOCATION_MAX) : undefined,
+      locationLat: location?.point.lat,
+      locationLon: location?.point.lon,
       locationHint: locationHint.trim() || undefined,
       eventDatetime: eventDate.toISOString(),
       participantLimit,
@@ -148,7 +151,7 @@ export const CreateEventPage: FC = () => {
         </label>
 
         <div className="rd-field">
-          <span className="rd-label">Место <span className="rd-req">*</span></span>
+          <span className="rd-label">Место</span>
           {location ? (
             <div className="rd-place-chip">
               <span className="rd-place-ic" aria-hidden="true">📍</span>
@@ -162,6 +165,13 @@ export const CreateEventPage: FC = () => {
                 onClick={() => { haptic.impact('light'); setPickerOpen(true); }}
               >
                 Изменить
+              </button>
+              <button
+                type="button"
+                className="rd-place-edit"
+                onClick={() => { haptic.impact('light'); setLocation(null); }}
+              >
+                Убрать
               </button>
             </div>
           ) : (
@@ -181,7 +191,7 @@ export const CreateEventPage: FC = () => {
         </div>
 
         <label className="rd-field">
-          <span className="rd-label">Уточнение к месту (необязательно)</span>
+          <span className="rd-label">Уточнение к месту</span>
           <input
             className="rd-input"
             value={locationHint}

@@ -4,12 +4,12 @@ import type { EventDetailDto, EventListItemDto, EventResponderDto, MyAttendanceD
 export interface CreateEventBody {
   title: string;
   description?: string;
-  locationText: string;
-  // Гео-точка места обязательна (fail-closed, решение PO): бэкенд отвергает событие без
-  // координат. locationText — адрес из обратного геокодера по выбранной точке.
-  locationLat: number;
-  locationLon: number;
-  // Опциональное уточнение к месту (≤200 символов), отдельное от адреса.
+  // Место опционально (V58), но точка ИЛИ уточнение обязательны (бэкенд отдаст 400 без
+  // обоих). locationText — адрес из обратного геокодера по выбранной точке.
+  locationText?: string;
+  locationLat?: number;
+  locationLon?: number;
+  // Уточнение к месту (≤200 символов), отдельное от адреса.
   locationHint?: string;
   eventDatetime: string;
   participantLimit: number;

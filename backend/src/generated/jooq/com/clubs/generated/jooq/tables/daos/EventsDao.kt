@@ -96,7 +96,7 @@ open class EventsDao(configuration: Configuration?) : DAOImpl<EventsRecord, com.
      * Fetch records that have <code>location_text BETWEEN lowerInclusive AND
      * upperInclusive</code>
      */
-    fun fetchRangeOfLocationText(lowerInclusive: String, upperInclusive: String): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.LOCATION_TEXT, lowerInclusive, upperInclusive)
+    fun fetchRangeOfLocationText(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.LOCATION_TEXT, lowerInclusive, upperInclusive)
 
     /**
      * Fetch records that have <code>location_text IN (values)</code>

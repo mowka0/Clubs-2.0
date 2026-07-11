@@ -44,7 +44,8 @@ const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => {
       <div className="rd-ft-body">
         <div className="rd-ft-title">{event.title}</div>
         <div className="rd-ft-sub">
-          {formatDatetime(event.eventDatetime)} · {event.locationText}
+          {/* Место опционально (V58): без него — только дата, без висячего разделителя. */}
+          {[formatDatetime(event.eventDatetime), event.locationText].filter(Boolean).join(' · ')}
         </div>
         {event.descriptionPreview !== null && (
           <div className="rd-ft-sub">{event.descriptionPreview}</div>

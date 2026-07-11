@@ -23,7 +23,7 @@ data class Events(
     var createdBy: UUID,
     var title: String,
     var description: String? = null,
-    var locationText: String,
+    var locationText: String? = null,
     var eventDatetime: OffsetDateTime,
     var participantLimit: Int,
     var votingOpensDaysBefore: Int? = null,
@@ -70,7 +70,11 @@ data class Events(
         }
         else if (this.description != o.description)
             return false
-        if (this.locationText != o.locationText)
+        if (this.locationText == null) {
+            if (o.locationText != null)
+                return false
+        }
+        else if (this.locationText != o.locationText)
             return false
         if (this.eventDatetime != o.eventDatetime)
             return false
@@ -177,7 +181,7 @@ data class Events(
         result = prime * result + this.createdBy.hashCode()
         result = prime * result + this.title.hashCode()
         result = prime * result + (if (this.description == null) 0 else this.description.hashCode())
-        result = prime * result + this.locationText.hashCode()
+        result = prime * result + (if (this.locationText == null) 0 else this.locationText.hashCode())
         result = prime * result + this.eventDatetime.hashCode()
         result = prime * result + this.participantLimit.hashCode()
         result = prime * result + (if (this.votingOpensDaysBefore == null) 0 else this.votingOpensDaysBefore.hashCode())

@@ -72,13 +72,6 @@ telegram:
   # Prod: https://77-42-23-177.sslip.io, Staging: https://staging.77-42-23-177.sslip.io
   webapp-base-url: ${TELEGRAM_WEBAPP_BASE_URL:https://77-42-23-177.sslip.io}
 
-yandex:
-  # Ключ Static API Яндекс.Карт БЕЗ referer-ограничений — картинка-карта в DM бота о новом
-  # событии (event-geo). Telegram скачивает фото по URL своими серверами (referer пустой),
-  # поэтому фронтовый referer-ограниченный ключ НЕ подходит — нужен отдельный ключ в том же
-  # продукте «Static API». Пусто = DM без картинки (останется кнопка «Открыть в Яндекс.Картах»).
-  static-maps-api-key: ${YANDEX_STATIC_API_KEY:}
-
 # Хранилище загрузок (MinIO/S3): имя бакета и публичный базовый URL для ссылок на файлы.
 s3:
   bucket: ${S3_BUCKET:clubs-uploads}

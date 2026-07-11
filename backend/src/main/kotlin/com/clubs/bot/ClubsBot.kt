@@ -258,7 +258,8 @@ class ClubsBot(
 
         val text = buildString {
             appendLine("\uD83D\uDCC5 Ближайшее событие: ${event.title}")
-            appendLine("\uD83D\uDCCD ${event.locationText}")
+            // \u041C\u0435\u0441\u0442\u043E \u043E\u043F\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u043E (V58): \u0441\u0442\u0440\u043E\u043A\u0430 \uD83D\uDCCD \u0442\u043E\u043B\u044C\u043A\u043E \u043A\u043E\u0433\u0434\u0430 \u043E\u043D\u043E \u0443\u043A\u0430\u0437\u0430\u043D\u043E.
+            event.locationText?.let { appendLine("\uD83D\uDCCD $it") }
             appendLine("\uD83D\uDDD3 $formattedDate")
             appendLine("\u2705 Пойдут: $goingCount")
             appendLine("\uD83E\uDD14 Возможно: $maybeCount")

@@ -7,22 +7,23 @@ import org.junit.jupiter.api.Test
 import java.time.OffsetDateTime
 
 /**
- * Bean Validation границ гео-полей CreateEventRequest (фича event-geo).
- * Решение PO — fail-closed: координаты обязательны, событие без точки на карте
- * не создаётся; уточнение к месту ограничено 200 символами.
+ * Bean Validation гео-полей CreateEventRequest (фича event-geo, правила PO 2026-07-11):
+ * место опционально (V58), но хоть какое-то указание места обязательно — либо гео-точка
+ * с карты, либо текстовое уточнение; координаты валидны только парой и в диапазонах WGS-84.
  */
 class CreateEventRequestValidationTest {
 
     private val validator: Validator = Validation.buildDefaultValidatorFactory().validator
 
     private fun request(
+        locationText: String? = "ул. Покровка, 47/24с1, Москва",
         locationLat: Double? = 55.761216,
         locationLon: Double? = 37.646488,
         locationHint: String? = null
     ) = CreateEventRequest(
         title = "Test event",
         description = null,
-        locationText = "ул. Покровка, 47/24с1, Москва",
+        locationText = locationText,
         locationLat = locationLat,
         locationLon = locationLon,
         locationHint = locationHint,
@@ -35,19 +36,39 @@ class CreateEventRequestValidationTest {
         validator.validate(request).map { it.propertyPath.toString() }.toSet()
 
     @Test
-    fun `valid request with coordinates and hint passes`() {
+    fun `request with map point passes`() {
         val violations = validator.validate(request(locationHint = "Вход со двора, домофон 12"))
         assertTrue(violations.isEmpty(), "Expected no violations, got: $violations")
     }
 
     @Test
-    fun `missing latitude is rejected`() {
-        assertTrue("locationLat" in violatedProperties(request(locationLat = null)))
+    fun `request with hint only (no point) passes`() {
+        val violations = validator.validate(
+            request(locationText = null, locationLat = null, locationLon = null, locationHint = "Встречаемся в зуме")
+        )
+        assertTrue(violations.isEmpty(), "Expected no violations, got: ${violations.map { "${it.propertyPath}: ${it.message}" }}")
     }
 
     @Test
-    fun `missing longitude is rejected`() {
-        assertTrue("locationLon" in violatedProperties(request(locationLon = null)))
+    fun `request without point AND without hint is rejected`() {
+        val violated = violatedProperties(request(locationText = null, locationLat = null, locationLon = null))
+        assertTrue("someLocationProvided" in violated)
+    }
+
+    @Test
+    fun `blank hint does not count as location`() {
+        val violated = violatedProperties(
+            request(locationText = null, locationLat = null, locationLon = null, locationHint = "   ")
+        )
+        assertTrue("someLocationProvided" in violated)
+    }
+
+    @Test
+    fun `half a coordinate pair is rejected`() {
+        val violatedLonNull = violatedProperties(request(locationLon = null, locationHint = "х"))
+        assertTrue("locationPairConsistent" in violatedLonNull, "got: $violatedLonNull")
+        val violatedLatNull = violatedProperties(request(locationLat = null, locationHint = "х"))
+        assertTrue("locationPairConsistent" in violatedLatNull, "got: $violatedLatNull")
     }
 
     @Test
@@ -75,6 +96,7 @@ class CreateEventRequestValidationTest {
 
     @Test
     fun `hint of exactly 200 characters is accepted`() {
-        assertTrue(validator.validate(request(locationHint = "х".repeat(200))).isEmpty())
+        val violations = validator.validate(request(locationHint = "х".repeat(200)))
+        assertTrue(violations.isEmpty(), "got: ${violations.map { "${it.propertyPath}: ${it.message}" }}")
     }
 }

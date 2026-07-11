@@ -11,7 +11,6 @@ import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
-import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.time.OffsetDateTime
@@ -93,33 +92,10 @@ class NotificationServiceTest {
         verify(exactly = 0) { gateway.getUserChatState(any(), any()) }
     }
 
-    // ---- event-geo: карта в DM о новом событии ----
-
-    private fun serviceWithStaticKey(key: String) = NotificationService(
-        membershipRepository, eventResponseRepository, telegramClient, ChatAwareBroadcast(gateway),
-        "bot", "https://app", key
-    )
+    // ---- event-geo: кнопка «Открыть в Яндекс.Картах» в DM о новом событии ----
 
     @Test
-    fun `событие с гео-точкой и бэкенд-ключом — DM уходит фото-картой с кнопкой Яндекс_Карт`() {
-        val event = sampleEvent(lat = 55.761216, lon = 37.646488)
-        every { membershipRepository.findMemberTelegramIds(event.clubId) } returns listOf(101L)
-        val photoSlot = slot<SendPhoto>()
-        every { telegramClient.execute(capture(photoSlot)) } returns mockk(relaxed = true)
-
-        serviceWithStaticKey("static-key").sendEventCreated(event)
-
-        verify(exactly = 1) { telegramClient.execute(any<SendPhoto>()) }
-        verify(exactly = 0) { telegramClient.execute(any<SendMessage>()) }
-        val photo = photoSlot.captured
-        // порядок Яндекса в ll/pt — lon,lat
-        assertTrue(photo.photo.attachName.contains("ll=37.646488,55.761216"))
-        assertTrue(photo.photo.attachName.contains("apikey=static-key"))
-        assertTrue(markupUrls(photo.replyMarkup as InlineKeyboardMarkup).any { it.contains("yandex.ru/maps") })
-    }
-
-    @Test
-    fun `событие с гео-точкой БЕЗ бэкенд-ключа — текстовый DM, но с кнопкой Яндекс_Карт`() {
+    fun `событие с гео-точкой — DM с кнопкой Яндекс_Карт (lon,lat в pt) второй строкой`() {
         val event = sampleEvent(lat = 55.761216, lon = 37.646488)
         every { membershipRepository.findMemberTelegramIds(event.clubId) } returns listOf(101L)
         val msgSlot = slot<SendMessage>()
@@ -127,49 +103,48 @@ class NotificationServiceTest {
 
         service.sendEventCreated(event)
 
-        verify(exactly = 0) { telegramClient.execute(any<SendPhoto>()) }
         verify(exactly = 1) { telegramClient.execute(any<SendMessage>()) }
-        assertTrue(markupUrls(msgSlot.captured.replyMarkup as InlineKeyboardMarkup).any { it.contains("yandex.ru/maps") })
+        val urls = markupUrls(msgSlot.captured.replyMarkup as InlineKeyboardMarkup)
+        // порядок Яндекса в pt — lon,lat
+        assertTrue(urls.any { it.contains("yandex.ru/maps") && it.contains("pt=37.646488,55.761216") })
     }
 
     @Test
-    fun `легаси-событие без координат — обычный текстовый DM без кнопки карт`() {
+    fun `событие без координат — обычный текстовый DM без кнопки карт`() {
         val event = sampleEvent()
         every { membershipRepository.findMemberTelegramIds(event.clubId) } returns listOf(101L)
         val msgSlot = slot<SendMessage>()
         every { telegramClient.execute(capture(msgSlot)) } returns mockk(relaxed = true)
 
-        serviceWithStaticKey("static-key").sendEventCreated(event)
+        service.sendEventCreated(event)
 
-        verify(exactly = 0) { telegramClient.execute(any<SendPhoto>()) }
         verify(exactly = 1) { telegramClient.execute(any<SendMessage>()) }
         assertTrue(markupUrls(msgSlot.captured.replyMarkup as InlineKeyboardMarkup).none { it.contains("yandex.ru/maps") })
     }
 
     @Test
-    fun `сбой отправки фото-карты деградирует до текстового DM с кнопкой карт`() {
-        val event = sampleEvent(lat = 55.761216, lon = 37.646488)
+    fun `событие без места — строка 📍 в тексте DM не рендерится`() {
+        val event = sampleEvent(locationText = null)
         every { membershipRepository.findMemberTelegramIds(event.clubId) } returns listOf(101L)
-        every { telegramClient.execute(any<SendPhoto>()) } throws RuntimeException("wrong file identifier")
-        every { telegramClient.execute(any<SendMessage>()) } returns mockk(relaxed = true)
+        val msgSlot = slot<SendMessage>()
+        every { telegramClient.execute(capture(msgSlot)) } returns mockk(relaxed = true)
 
-        serviceWithStaticKey("static-key").sendEventCreated(event)
+        service.sendEventCreated(event)
 
-        verify(exactly = 1) { telegramClient.execute(any<SendPhoto>()) }
-        verify(exactly = 1) { telegramClient.execute(any<SendMessage>()) }
+        assertTrue(!msgSlot.captured.text.contains("📍"))
     }
 
     /** Все url-значения кнопок клавиатуры (webApp-кнопки дают null и отфильтровываются). */
     private fun markupUrls(markup: InlineKeyboardMarkup): List<String> =
         markup.keyboard.flatten().mapNotNull { it.url }
 
-    private fun sampleEvent(lat: Double? = null, lon: Double? = null) = Event(
+    private fun sampleEvent(lat: Double? = null, lon: Double? = null, locationText: String? = "Бар") = Event(
         id = UUID.randomUUID(),
         clubId = UUID.randomUUID(),
         createdBy = UUID.randomUUID(),
         title = "Событие",
         description = null,
-        locationText = "Бар",
+        locationText = locationText,
         locationLat = lat,
         locationLon = lon,
         eventDatetime = OffsetDateTime.now().plusDays(3),

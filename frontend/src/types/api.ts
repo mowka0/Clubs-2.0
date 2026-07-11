@@ -492,9 +492,10 @@ export interface EventDetailDto {
   clubId: string;
   title: string;
   description: string | null;
-  locationText: string;
-  // Гео-точка места (WGS-84, event-geo): null у легаси-событий, созданных до фичи, —
-  // тогда место показывается текстом без карты. У новых событий оба значения заданы.
+  // null = место не указано (опционально с V58) — блок места не показывается вовсе.
+  locationText: string | null;
+  // Гео-точка места (WGS-84, event-geo): null у легаси-событий и событий без точки —
+  // тогда место (если есть) показывается текстом без карты.
   locationLat: number | null;
   locationLon: number | null;
   // Опциональное уточнение организатора к месту («Вход со двора, домофон 12»).
@@ -522,7 +523,7 @@ export interface EventListItemDto {
   id: string;
   title: string;
   eventDatetime: string;
-  locationText: string;
+  locationText: string | null;
   participantLimit: number;
   goingCount: number;
   status: string;
@@ -674,7 +675,7 @@ export interface MyEventListItemDto {
   id: string;
   title: string;
   eventDatetime: string;
-  locationText: string;
+  locationText: string | null;
   status: string;
   clubId: string;
   clubName: string;

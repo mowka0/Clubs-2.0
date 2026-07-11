@@ -429,7 +429,7 @@ export const EventPage: FC = () => {
           легаси-события без координат — текст как раньше, без карты. */}
       {event.locationLat != null && event.locationLon != null ? (
         <EventPlaceCard
-          locationText={event.locationText}
+          locationText={event.locationText ?? 'Место на карте'}
           locationHint={event.locationHint}
           point={{ lat: event.locationLat, lon: event.locationLon }}
         />

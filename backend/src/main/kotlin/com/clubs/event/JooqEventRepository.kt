@@ -221,7 +221,7 @@ class JooqEventRepository(
                 createdBy = r.get(EVENTS.CREATED_BY)!!,
                 title = r.get(EVENTS.TITLE)!!,
                 description = r.get(EVENTS.DESCRIPTION),
-                locationText = r.get(EVENTS.LOCATION_TEXT)!!,
+                locationText = r.get(EVENTS.LOCATION_TEXT),
                 eventDatetime = r.get(EVENTS.EVENT_DATETIME)!!,
                 participantLimit = r.get(EVENTS.PARTICIPANT_LIMIT)!!,
                 votingOpensDaysBefore = r.get(EVENTS.VOTING_OPENS_DAYS_BEFORE) ?: EventMapper.DEFAULT_VOTING_OPENS_DAYS_BEFORE,
