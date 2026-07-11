@@ -55,7 +55,8 @@ photo_url`). Зеркалит `skladchinas.photo_url`: у существующи
   Складчина переиспользует уже существовавшее `skladchinas.photo_url`.
 
 Фронт: `CreateEventPage` получил поле загрузки фото через компонент
-`AvatarUpload` → `CreateEventBody.photoUrl`. (Левый thumbnail карточки
+`AvatarUpload` → `CreateEventBody.photoUrl`. **Отображение (PO 2026-07-11): фото события —
+фон хиро на странице события (`EventPage`, `rd-hero-bg`); фолбэк — аватар клуба, как раньше.** (Левый thumbnail карточки
 (`ActivityThumb`) убран в Banco-редизайне — карточка перешла на `rd-feature
 rd-glass` без тамбнейла; см. [`redesign-banco-style.md`](./redesign-banco-style.md).)
 

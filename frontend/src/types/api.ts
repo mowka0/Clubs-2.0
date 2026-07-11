@@ -516,6 +516,9 @@ export interface EventDetailDto {
   attendanceFinalized: boolean;
   // F5-14: необязательная причина отмены от организатора; null, если отменено без указания причины.
   cancellationReason: string | null;
+  // Фото события (опциональное, из формы создания) — фон хиро на странице события;
+  // null = фоном остаётся аватар клуба.
+  photoUrl: string | null;
   createdAt: string | null;
 }
 

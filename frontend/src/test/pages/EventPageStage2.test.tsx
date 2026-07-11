@@ -65,6 +65,7 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     attendanceMarked: false,
     attendanceFinalized: false,
     cancellationReason: null,
+    photoUrl: null,
     createdAt: null,
     ...overrides,
   };
@@ -402,5 +403,28 @@ describe('EventPage — блок места (event-geo, кадр C)', () => {
 
     expect(await screen.findByText('Встречаемся в зуме')).toBeInTheDocument();
     expect(screen.queryByAltText('Карта места события')).not.toBeInTheDocument();
+  });
+});
+
+describe('EventPage — фото события как фон хиро', () => {
+  it('фото события задано — оно фон хиро (не аватар клуба)', async () => {
+    mockEndpoints({
+      event: stage2Event({ eventDatetime: FUTURE, photoUrl: 'https://cdn.example.com/event-cover.jpg' }),
+      myVote: 'going',
+    });
+    const { container } = renderEventPage();
+
+    await screen.findByText('Событие');
+    const heroBg = container.querySelector('.rd-hero-bg');
+    expect(heroBg).toHaveStyle({ backgroundImage: 'url(https://cdn.example.com/event-cover.jpg)' });
+  });
+
+  it('без фото — фолбэк на аватар клуба отсутствует у клуба без аватарки (без backgroundImage)', async () => {
+    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'going' });
+    const { container } = renderEventPage();
+
+    await screen.findByText('Событие');
+    const heroBg = container.querySelector('.rd-hero-bg');
+    expect(heroBg?.getAttribute('style') ?? '').not.toContain('background-image');
   });
 });

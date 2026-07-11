@@ -58,6 +58,7 @@ const mockEvent: EventDetailDto = {
   attendanceMarked: false,
   attendanceFinalized: false,
   cancellationReason: null,
+  photoUrl: null,
   createdAt: null,
 };
 

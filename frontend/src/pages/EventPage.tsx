@@ -385,14 +385,19 @@ export const EventPage: FC = () => {
   // поэтому фильтр сохраняет реальный порядок продвижения.
   const waitlist = finalComposition ? responders.filter((r) => r.status === 'waitlisted') : [];
 
+  // Фон хиро: фото события (решение PO 2026-07-11 — прежде нигде не показывалось),
+  // фолбэк — аватар клуба, как раньше.
+  const heroImage = event.photoUrl ?? hostClubQuery.data?.avatarUrl ?? null;
+
   return (
     <div className="rd-page">
-      {/* Хиро — аватар клуба как фон (так же, как на странице клуба) */}
+      {/* Хиро — фото события как фон (решение PO 2026-07-11: фото прежде нигде не
+          показывалось); фолбэк — аватар клуба, как раньше. */}
       <div className="rd-hero rd-compact">
         <div
           className="rd-hero-bg"
           data-cat={hostClubQuery.data?.category ?? 'sport'}
-          style={hostClubQuery.data?.avatarUrl ? { backgroundImage: `url(${hostClubQuery.data.avatarUrl})` } : undefined}
+          style={heroImage ? { backgroundImage: `url(${heroImage})` } : undefined}
         />
         <div className="rd-hero-meta">
           <div className="rd-hero-type-badge">СОБЫТИЕ</div>
