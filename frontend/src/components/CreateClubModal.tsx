@@ -8,6 +8,7 @@ import { paywallFromError, type PaywallInfo } from '../api/subscription';
 import { PaywallModal } from './subscription/PaywallModal';
 import { AvatarUpload } from './AvatarUpload';
 import type { CreateClubBody } from '../api/clubs';
+import type { ClubDetailDto } from '../types/api';
 
 const CATEGORIES = [
   { value: 'sport', label: 'Спорт' },
@@ -52,13 +53,19 @@ const FieldError: FC<{ message?: string }> = ({ message }) =>
     </div>
   ) : null;
 
-export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) => void }> = ({ onClose, onCreated }) => {
+export const CreateClubModal: FC<{
+  onClose: () => void;
+  /** openInvite = true — «Пригласить участников» с экрана успеха (кадр E): клуб откроется с шитом. */
+  onCreated: (id: string, openInvite: boolean) => void;
+}> = ({ onClose, onCreated }) => {
   const haptic = useHaptic();
   const createClubMutation = useCreateClubMutation();
   const subscribeMutation = useSubscribeMutation();
   const [step, setStep] = useState(0);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // club-invites (кадр E): после успешного создания форма сменяется экраном «Клуб создан 🎉».
+  const [created, setCreated] = useState<ClubDetailDto | null>(null);
   // Состояние пейвола: бэкенд возвращает 402, когда платный клуб превышает потолок плана. Сохраняем
   // тело клуба в ожидании, показываем лестницу планов и после успешной подписки повторяем создание.
   const [paywall, setPaywall] = useState<PaywallInfo | null>(null);
@@ -142,7 +149,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
     createClubMutation.mutate(body, {
       onSuccess: (club) => {
         haptic.notify('success');
-        onCreated(club.id);
+        setCreated(club);
       },
       onError: (e) => {
         const pw = paywallFromError(e);
@@ -169,7 +176,7 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
         createClubMutation.mutate(pendingBody, {
           onSuccess: (club) => {
             haptic.notify('success');
-            onCreated(club.id);
+            setCreated(club);
           },
           onError: (e) => {
             setSubmittingPlan(null);
@@ -183,6 +190,37 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
       },
     });
   };
+
+  // club-invites (кадр E мокапа): momentum-экран — клуб только что создан и пуст,
+  // «позвать своих» — следующее действие. «Позже» просто открывает клуб без шита.
+  if (created) {
+    return (
+      <div style={{ padding: '34px 24px 24px', textAlign: 'center' }}>
+        <div style={{ fontSize: 44, marginBottom: 12 }} aria-hidden="true">🎉</div>
+        <h3 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 8px' }}>
+          Клуб «{created.name}» создан
+        </h3>
+        <p style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.55, margin: '0 0 22px' }}>
+          Теперь позовите своих — приглашение уйдёт в Telegram от вашего имени, с карточкой клуба.
+        </p>
+        <button
+          type="button"
+          className="rd-btn-primary"
+          onClick={() => { haptic.impact('medium'); onCreated(created.id, true); }}
+        >
+          Пригласить участников
+        </button>
+        <button
+          type="button"
+          className="rd-btn-outline"
+          style={{ marginTop: 8 }}
+          onClick={() => { haptic.impact('light'); onCreated(created.id, false); }}
+        >
+          Позже
+        </button>
+      </div>
+    );
+  }
 
   if (paywall) {
     return (
@@ -291,9 +329,10 @@ export const CreateClubModal: FC<{ onClose: () => void; onCreated: (id: string) 
               {...register('memberLimit', {
                 validate: (v) => {
                   const n = Number(v);
-                  // Согласовано с Bean Validation на бэкенде в CreateClubRequest.kt (10-80).
-                  if (!v || !Number.isFinite(n) || n < 10 || n > 80) return 'Лимит участников: 10–80';
-                  if (!Number.isInteger(n)) return 'Лимит участников: 10–80';
+                  // Согласовано с Bean Validation на бэкенде в CreateClubRequest.kt
+                  // (минимум временно 1 — тест заполняемости, PO 2026-07-11).
+                  if (!v || !Number.isFinite(n) || n < 1 || n > 80) return 'Лимит участников: 1–80';
+                  if (!Number.isInteger(n)) return 'Лимит участников: 1–80';
                   return true;
                 },
               })}

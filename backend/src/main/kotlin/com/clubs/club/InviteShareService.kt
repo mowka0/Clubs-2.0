@@ -38,12 +38,18 @@ class InviteShareService(
         val inviteUrl = "https://t.me/$botUsername?startapp=invite_$code"
 
         val caller = userRepository.findById(callerId) ?: throw NotFoundException("User not found")
-        val sharerName = listOfNotNull(caller.firstName, caller.lastName).joinToString(" ").ifBlank { "Организатор" }
 
+        // Кадр C мокапа: личное обращение (имя не нужно — отправитель и есть орг) + «карточка»
+        // клуба цитатой (blockquote ≈ выделенный блок) + сниппет описания с призывом.
         val messageHtml = buildString {
-            append("<b>").append(escapeHtml(sharerName)).append("</b>")
-            append(" приглашает вас в клуб «").append(escapeHtml(club.name)).append("»\n")
+            append("<b>Приглашаю тебя в мой клуб!</b>\n")
+            append("<blockquote><b>").append(escapeHtml(club.name)).append("</b>\n")
             append(categoryRu(club.category.literal)).append(" · ").append(escapeHtml(club.city))
+            append(" · ").append(club.memberCount).append(' ').append(membersWord(club.memberCount))
+            append("</blockquote>")
+            val snippet = club.description.trim().let { if (it.length > DESCRIPTION_SNIPPET_MAX) it.take(DESCRIPTION_SNIPPET_MAX).trimEnd() + "…" else it }
+            if (snippet.isNotBlank()) append(escapeHtml(snippet)).append('\n')
+            append("Посмотри и вступай 👇")
         }
 
         val preparedMessageId = notificationService.savePreparedInviteMessage(
@@ -80,7 +86,24 @@ class InviteShareService(
         else -> "Другое"
     }
 
-    // parse_mode=HTML: пользовательские строки (имя, название клуба, город) обязаны экранироваться.
+    // parse_mode=HTML: пользовательские строки (название клуба, город, описание) обязаны экранироваться.
     private fun escapeHtml(s: String): String =
         s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    // Русское склонение «участник» для строки-меты карточки.
+    private fun membersWord(n: Int): String {
+        val mod10 = n % 10
+        val mod100 = n % 100
+        return when {
+            mod100 in 11..14 -> "участников"
+            mod10 == 1 -> "участник"
+            mod10 in 2..4 -> "участника"
+            else -> "участников"
+        }
+    }
+
+    private companion object {
+        // Максимум символов описания клуба в карточке-приглашении (дальше — многоточие).
+        const val DESCRIPTION_SNIPPET_MAX = 120
+    }
 }

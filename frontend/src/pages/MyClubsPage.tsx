@@ -780,11 +780,11 @@ export const MyClubsPage: FC = () => {
     organizerInboxCount === 0 &&
     historyClubs.length === 0;
 
-  const handleCreated = (id: string) => {
+  // club-invites (кадр E): выбор сделан на экране «Клуб создан 🎉» внутри модалки —
+  // «Пригласить участников» открывает клуб с шитом приглашения, «Позже» — просто клуб.
+  const handleCreated = (id: string, openInvite: boolean) => {
     setShowCreateModal(false);
-    // club-invites (кадр E, momentum): свежесозданный клуб пуст — ведём орга на страницу клуба
-    // с открытым шитом приглашения («Позже» = просто закрыть шит).
-    navigate(`/clubs/${id}`, { state: { openInvite: true } });
+    navigate(`/clubs/${id}`, openInvite ? { state: { openInvite: true } } : undefined);
   };
 
   const openCreate = () => {

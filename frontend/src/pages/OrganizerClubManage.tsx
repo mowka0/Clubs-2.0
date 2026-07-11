@@ -167,8 +167,9 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
       return;
     }
     const limit = Number(memberLimit);
-    if (!Number.isInteger(limit) || limit < 10 || limit > 80) {
-      fail('memberLimit', 'Лимит участников: 10–80');
+    // Минимум временно 1 (тест заполняемости, PO 2026-07-11) — согласовано с UpdateClubRequest.
+    if (!Number.isInteger(limit) || limit < 1 || limit > 80) {
+      fail('memberLimit', 'Лимит участников: 1–80');
       return;
     }
     const price = Number(subscriptionPrice);

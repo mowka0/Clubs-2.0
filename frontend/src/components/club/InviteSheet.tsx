@@ -77,12 +77,9 @@ export const InviteSheet: FC<InviteSheetProps> = ({ clubId, onClose }) => {
       <div className="rd-sheet-overlay" onClick={onClose} aria-hidden="true" />
       <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Пригласить в клуб">
         <div className="rd-sheet-grabber" aria-hidden="true" />
-        <div className="rd-sheet-head">
-          <h2>Пригласить в клуб</h2>
-          <button type="button" className="rd-sheet-close" onClick={onClose}>Закрыть</button>
-        </div>
 
         <div className="rd-sheet-body">
+          <div className="rd-inv-title">Пригласить в клуб</div>
           <div className="rd-inv-sub">Приглашение уйдёт от вашего имени</div>
 
           {loadError && <div className="rd-error" style={{ textAlign: 'left' }}>{loadError}</div>}
@@ -113,12 +110,10 @@ export const InviteSheet: FC<InviteSheetProps> = ({ clubId, onClose }) => {
               </button>
 
               {actionError && <div className="rd-error" style={{ textAlign: 'left' }}>{actionError}</div>}
-
-              <div className="rd-cta-hint" style={{ wordBreak: 'break-all', userSelect: 'all' }}>
-                {share.inviteUrl}
-              </div>
             </>
           )}
+
+          <button type="button" className="rd-inv-cancel" onClick={onClose}>Отмена</button>
         </div>
       </div>
     </>,

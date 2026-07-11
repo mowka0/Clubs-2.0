@@ -94,7 +94,8 @@ data class CreateClubRequest(
     val district: String? = null,
 
     @field:NotNull(message = "Member limit is required")
-    @field:Min(value = 10, message = "Member limit must be at least 10")
+    // Минимум временно 1 (было 10) — тест заполняемости полного клуба (PO 2026-07-11, club-invites).
+    @field:Min(value = 1, message = "Member limit must be at least 1")
     @field:Max(value = 80, message = "Member limit must be at most 80")
     val memberLimit: Int,
 
@@ -124,7 +125,8 @@ data class UpdateClubRequest(
     val city: String? = null,
     val district: String? = null,
 
-    @field:Min(value = 10, message = "Member limit must be at least 10")
+    // Минимум временно 1 (было 10) — тест заполняемости полного клуба (PO 2026-07-11, club-invites).
+    @field:Min(value = 1, message = "Member limit must be at least 1")
     @field:Max(value = 80, message = "Member limit must be at most 80")
     val memberLimit: Int? = null,
 
