@@ -83,9 +83,7 @@ export const InviteSheet: FC<InviteSheetProps> = ({ clubId, onClose }) => {
         </div>
 
         <div className="rd-sheet-body">
-          <div className="rd-cta-hint" style={{ marginTop: 0, textAlign: 'left' }}>
-            Приглашение уйдёт от вашего имени — получатель увидит карточку клуба с кнопкой.
-          </div>
+          <div className="rd-inv-sub">Приглашение уйдёт от вашего имени</div>
 
           {loadError && <div className="rd-error" style={{ textAlign: 'left' }}>{loadError}</div>}
 
@@ -98,17 +96,20 @@ export const InviteSheet: FC<InviteSheetProps> = ({ clubId, onClose }) => {
           {share && (
             <>
               {shareAvailable && (
-                <button type="button" className="rd-btn-primary" onClick={handleShare}>
-                  ✈️ Отправить в Telegram
+                <button type="button" className="rd-inv-opt" onClick={handleShare}>
+                  <span className="rd-inv-opt-ic" aria-hidden="true">✈️</span>
+                  <span className="rd-inv-opt-txt">
+                    <b>Отправить в Telegram</b>
+                    <span>Выберите друзей или чаты — они получат карточку клуба с кнопкой</span>
+                  </span>
                 </button>
               )}
-              <button
-                type="button"
-                className="rd-btn-outline"
-                style={{ marginTop: shareAvailable ? 8 : 0 }}
-                onClick={handleCopy}
-              >
-                {copied ? '✓ Скопировано' : '🔗 Скопировать ссылку'}
+              <button type="button" className="rd-inv-opt" onClick={handleCopy}>
+                <span className="rd-inv-opt-ic" aria-hidden="true">🔗</span>
+                <span className="rd-inv-opt-txt">
+                  <b>{copied ? '✓ Скопировано' : 'Скопировать ссылку'}</b>
+                  <span>Для поста, объявления или другого мессенджера</span>
+                </span>
               </button>
 
               {actionError && <div className="rd-error" style={{ textAlign: 'left' }}>{actionError}</div>}

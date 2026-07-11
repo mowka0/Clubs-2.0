@@ -289,8 +289,12 @@ class NotificationService(
                 .userId(sharerTelegramId)
                 .result(card)
                 // Личные приглашения: люди и группы; боты/каналы — не наш сценарий.
+                // Все четыре флага ОБЯЗАТЕЛЬНЫ: поля @NonNull в библиотеке, незаданный флаг
+                // роняет builder («allowChannelChats is marked non-null but is null»).
                 .allowUserChats(true)
                 .allowGroupChats(true)
+                .allowBotChats(false)
+                .allowChannelChats(false)
                 .build()
         )
         prepared.messageId

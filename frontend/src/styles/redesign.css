@@ -1502,3 +1502,20 @@
   padding: 12px 13px; font-size: 15px; font-weight: 600; color: var(--text); font-family: inherit;
 }
 .rd-fullblock-input:focus { outline: none; border-color: var(--accent); }
+
+/* club-invites: боттом-шит «Пригласить» — строки-опции (кадр B мокапа) */
+.rd-inv-sub { font-size: 12px; color: var(--text-dim); text-align: center; margin: -2px 0 12px; }
+.rd-inv-opt {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px;
+  padding: 12px 10px; cursor: pointer; font-family: inherit;
+}
+.rd-inv-opt + .rd-inv-opt { margin-top: 8px; }
+.rd-inv-opt-ic {
+  width: 38px; height: 38px; border-radius: 12px; flex-shrink: 0;
+  background: rgba(244, 123, 60, .14);
+  display: flex; align-items: center; justify-content: center; font-size: 18px;
+}
+.rd-inv-opt-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rd-inv-opt-txt b { font-size: 13.5px; font-weight: 650; color: var(--text); }
+.rd-inv-opt-txt span { font-size: 11px; color: var(--text-dim); line-height: 1.4; }
