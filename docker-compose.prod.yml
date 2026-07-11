@@ -83,6 +83,9 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-3600000}  # 1ч по security.md; frontend apiClient автоматически повторяет 401 со свежим initData
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      # Ключ Static API БЕЗ referer-ограничений (отдельный от фронтового VITE_*) — карта в DM
+      # бота о событии; пусто = DM без картинки. Telegram качает фото без referer.
+      YANDEX_STATIC_API_KEY: ${YANDEX_STATIC_API_KEY:-}
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
       S3_ENDPOINT_URL: http://minio:9000

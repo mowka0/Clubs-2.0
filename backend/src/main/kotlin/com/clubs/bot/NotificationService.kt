@@ -9,6 +9,8 @@ import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import org.telegram.telegrambots.meta.api.methods.message.SavePreparedInlineMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
+import org.telegram.telegrambots.meta.api.objects.InputFile
 import org.telegram.telegrambots.meta.api.objects.inlinequery.inputmessagecontent.InputTextMessageContent
 import org.telegram.telegrambots.meta.api.objects.inlinequery.result.InlineQueryResultArticle
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
@@ -27,7 +29,11 @@ class NotificationService(
     private val telegramClient: TelegramClient,
     private val chatAwareBroadcast: ChatAwareBroadcast,
     @Value("\${telegram.bot-username}") private val botUsername: String,
-    @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String
+    @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String,
+    // Ключ Static API БЕЗ referer-ограничений — для картинки-карты в DM о событии (event-geo):
+    // Telegram скачивает фото по URL своими серверами без referer, поэтому фронтовый
+    // (referer-ограниченный) ключ не подходит. Пусто = DM без картинки, только кнопка-ссылка.
+    @Value("\${yandex.static-maps-api-key:}") private val staticMapsApiKey: String = ""
 ) {
 
     private val log = LoggerFactory.getLogger(NotificationService::class.java)
@@ -77,7 +83,53 @@ class NotificationService(
         val webAppPath = "/events/${event.id}"
 
         memberTelegramIds.forEach { telegramId ->
-            sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
+            sendEventCreatedDm(telegramId.toString(), text, webAppPath, event)
+        }
+    }
+
+    /**
+     * DM о новом событии (event-geo): для события с гео-точкой — фото статичной карты
+     * (если задан [staticMapsApiKey]) + кнопка «Открыть в Яндекс.Картах» (бесключевой
+     * deep-link) второй строкой под WebApp-кнопкой. Любой сбой фото-пути (Telegram не смог
+     * скачать картинку, лимит Static API) деградирует до текстового DM — само уведомление
+     * важнее карты. Легаси-события без координат — текстовый DM, как раньше.
+     */
+    private fun sendEventCreatedDm(chatId: String, text: String, webAppPath: String, event: Event) {
+        val lat = event.locationLat
+        val lon = event.locationLon
+        if (lat == null || lon == null) {
+            sendDm(chatId, text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
+            return
+        }
+        val markup = buildKeyboard(
+            "📅 Открыть событие",
+            webAppPath = webAppPath,
+            externalUrlButton = "🗺 Открыть в Яндекс.Картах" to openMapUrl(lat, lon)
+        )
+        if (staticMapsApiKey.isNotBlank()) {
+            try {
+                val photo = SendPhoto.builder()
+                    .chatId(chatId)
+                    .photo(InputFile(staticMapUrl(lat, lon)))
+                    .caption(text)
+                    .replyMarkup(markup)
+                    .build()
+                telegramClient.execute(photo)
+                log.info("Event-created DM sent with map photo: chatId={}", chatId)
+                return
+            } catch (e: Exception) {
+                log.error("Failed to send event DM with map photo to chat {}: {} ({})", chatId, e.message, e.javaClass.simpleName, e)
+            }
+        }
+        // Без ключа (или после сбоя фото): текстовый DM, но кнопку карт сохраняем.
+        try {
+            val msg = SendMessage.builder().chatId(chatId).text(text).replyMarkup(markup).build()
+            telegramClient.execute(msg)
+            log.info("Event-created DM sent with maps button: chatId={}", chatId)
+        } catch (e: Exception) {
+            log.error("Failed to send event DM with maps button to chat {}: {} ({})", chatId, e.message, e.javaClass.simpleName, e)
+            // Последний фолбэк — стандартный DM с одной WebApp-кнопкой.
+            sendDm(chatId, text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
         }
     }
 
@@ -384,7 +436,14 @@ class NotificationService(
         }
     }
 
-    private fun buildKeyboard(buttonText: String, webAppPath: String?): InlineKeyboardMarkup {
+    private fun buildKeyboard(
+        buttonText: String,
+        webAppPath: String?,
+        // Необязательная вторая строка клавиатуры: внешняя URL-кнопка «текст → https-ссылка»
+        // (например «Открыть в Яндекс.Картах»). Внешние https-ссылки в DM разрешены —
+        // Telegram блокирует только self-bot t.me-ссылки.
+        externalUrlButton: Pair<String, String>? = null
+    ): InlineKeyboardMarkup {
         // WebApp-кнопка с URL фронтенда — открывает Mini App напрямую на нужном
         // route (через React Router). URL-кнопка вида t.me/<bot>/... НЕ используется,
         // потому что Telegram блокирует self-bot ссылки внутри DM с этим же ботом.
@@ -393,8 +452,25 @@ class NotificationService(
             .text(buttonText)
             .webApp(WebAppInfo(url))
             .build()
-        return InlineKeyboardMarkup(listOf(InlineKeyboardRow(button)))
+        val rows = mutableListOf(InlineKeyboardRow(button))
+        externalUrlButton?.let { (text, externalUrl) ->
+            rows += InlineKeyboardRow(
+                InlineKeyboardButton.builder().text(text).url(externalUrl).build()
+            )
+        }
+        return InlineKeyboardMarkup(rows)
     }
+
+    /**
+     * URL статичной мини-карты с пином (Static API) для фото в DM. ⚠️ Порядок координат
+     * у Яндекса в ll/pt — lon,lat. Зеркалит staticMapUrl фронта (utils/yandexMaps.ts).
+     */
+    private fun staticMapUrl(lat: Double, lon: Double): String =
+        "https://static-maps.yandex.ru/v1?apikey=$staticMapsApiKey&ll=$lon,$lat&z=16&size=650,300&pt=$lon,$lat,pm2rdm"
+
+    /** Бесключевой deep-link «открыть точку в Яндекс.Картах». Порядок в pt — lon,lat. */
+    private fun openMapUrl(lat: Double, lon: Double): String =
+        "https://yandex.ru/maps/?pt=$lon,$lat&z=17"
 
     companion object {
         // Текст кнопки по умолчанию для DM без явно заданного текста кнопки
