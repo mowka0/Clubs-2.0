@@ -1525,3 +1525,30 @@
   color: var(--text-dim); font-weight: 600; font-size: 13.5px; padding: 12px 0 2px;
   cursor: pointer; font-family: inherit; margin-top: 8px;
 }
+
+/* club-invites: собственные классы блока полного клуба (rd-ico/rd-met заскоуплены под
+   .rd-rep-row и снаружи не работают — блок верстается своими) */
+.rd-fullblock { padding: 14px; margin-bottom: 14px; }
+.rd-fb-head { display: flex; align-items: center; gap: 10px; padding-bottom: 11px; border-bottom: 1px solid var(--hairline); }
+.rd-fb-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
+.rd-fb-row + .rd-fb-row { border-top: 1px solid var(--hairline); }
+.rd-fb-person {
+  display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; text-align: left;
+  background: none; border: none; padding: 0; cursor: pointer; font-family: inherit;
+}
+.rd-fb-ava {
+  width: 38px; height: 38px; border-radius: 12px; flex-shrink: 0; overflow: hidden;
+  background: linear-gradient(135deg, #F47B3C, #C4531F); color: #fff;
+  font-size: 15px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.rd-fb-ava img { width: 100%; height: 100%; object-fit: cover; }
+.rd-fb-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.rd-fb-name { font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-fb-sub { font-size: 11px; color: var(--text-faint); }
+.rd-fb-label { font-size: 12px; font-weight: 600; color: var(--text-dim); margin: 10px 0 7px; padding-left: 2px; }
+
+/* number-инпут без нативных стрелок-спиннеров */
+.rd-fullblock-input::-webkit-outer-spin-button,
+.rd-fullblock-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.rd-fullblock-input { appearance: textfield; -moz-appearance: textfield; }

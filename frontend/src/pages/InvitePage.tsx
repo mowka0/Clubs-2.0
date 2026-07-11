@@ -1,6 +1,6 @@
 import { FC, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Input, Spinner } from '@telegram-apps/telegram-ui';
+import { Spinner } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useApplyToClubMutation, useClubByInviteQuery, useJoinByInviteMutation } from '../queries/clubs';
@@ -139,6 +139,14 @@ export const InvitePage: FC = () => {
             В клубе «{club.name}» сейчас нет мест. Организатор увидит вашу заявку и может
             расширить клуб — мы сообщим о решении.
           </div>
+          <button
+            type="button"
+            className="rd-btn-primary"
+            onClick={() => { haptic.impact('light'); navigate('/', { replace: true }); }}
+            style={{ maxWidth: 240, margin: '0 auto' }}
+          >
+            К списку клубов
+          </button>
         </div>
       </div>
     );
@@ -187,16 +195,17 @@ export const InvitePage: FC = () => {
         </>
       )}
 
-      {/* Полный клуб + вопрос организатора: заявка требует ответа — поле прямо на посадочной. */}
+      {/* Полный клуб + вопрос организатора: заявка требует ответа — поле в общем стиле форм. */}
       {isClubFull && club.applicationQuestion && (
-        <div style={{ marginBottom: 14 }}>
-          <div className="rd-section-sub-h">{club.applicationQuestion}</div>
-          <Input
+        <label className="rd-field" style={{ marginBottom: 14 }}>
+          <span className="rd-label">{club.applicationQuestion}</span>
+          <input
+            className="rd-input"
             placeholder="Ваш ответ"
             value={answerText}
             onChange={(e) => setAnswerText(e.target.value)}
           />
-        </div>
+        </label>
       )}
 
       {actionError && <div className="rd-error">{actionError}</div>}

@@ -58,14 +58,14 @@ export const FullClubBlock: FC<FullClubBlockProps> = ({ applications, onReview, 
   };
 
   return (
-    <div className="rd-glass rd-rep-panel" style={{ marginBottom: 14 }}>
-      <div className="rd-fullblock-row" style={{ paddingTop: 2 }}>
-        <span className="rd-ico">
+    <div className="rd-glass rd-fullblock">
+      <div className="rd-fb-head">
+        <span className="rd-fb-ava">
           {club.avatarUrl ? <img src={club.avatarUrl} alt="" /> : club.name.charAt(0).toUpperCase()}
         </span>
-        <div className="rd-info">
-          <div className="rd-ttl">{club.name}</div>
-          <div className="rd-met">{count} {pluralRu(count, ['заявка', 'заявки', 'заявок'])}</div>
+        <div className="rd-fb-meta">
+          <div className="rd-fb-name">{club.name}</div>
+          <div className="rd-fb-sub">{count} {pluralRu(count, ['заявка', 'заявки', 'заявок'])}</div>
         </div>
         <span className="rd-badge rd-warn">Клуб полон · {club.memberCount}/{club.memberLimit}</span>
       </div>
@@ -73,22 +73,21 @@ export const FullClubBlock: FC<FullClubBlockProps> = ({ applications, onReview, 
       {applications.map((p) => {
         const fullName = `${p.applicant.firstName}${p.applicant.lastName ? ` ${p.applicant.lastName}` : ''}`;
         return (
-          <div key={p.applicationId} className="rd-fullblock-row">
+          <div key={p.applicationId} className="rd-fb-row">
             <button
               type="button"
-              className="rd-rep-row"
-              style={{ flex: 1, padding: 0, border: 'none' }}
+              className="rd-fb-person"
               onClick={() => { haptic.impact('light'); onReview(p); }}
             >
-              <span className="rd-ico">
+              <span className="rd-fb-ava">
                 {p.applicant.avatarUrl
                   ? <img src={p.applicant.avatarUrl} alt="" />
                   : fullName.charAt(0).toUpperCase()}
               </span>
-              <div className="rd-info">
-                <div className="rd-ttl">{fullName}</div>
-                <div className="rd-met">{formatPeerSignal(p.peerStats)}</div>
-              </div>
+              <span className="rd-fb-meta">
+                <span className="rd-fb-name">{fullName}</span>
+                <span className="rd-fb-sub">{formatPeerSignal(p.peerStats)}</span>
+              </span>
             </button>
             <button
               type="button"
@@ -103,7 +102,7 @@ export const FullClubBlock: FC<FullClubBlockProps> = ({ applications, onReview, 
       })}
 
       <div className="rd-fullblock-foot">
-        <div className="rd-met" style={{ marginBottom: 6 }}>Новый лимит участников</div>
+        <div className="rd-fb-label">Новый лимит участников</div>
         <input
           type="number"
           inputMode="numeric"
@@ -113,7 +112,8 @@ export const FullClubBlock: FC<FullClubBlockProps> = ({ applications, onReview, 
           onChange={(e) => { setLimitInput(e.target.value); setError(null); }}
         />
         <div className="rd-cta-hint" style={{ textAlign: 'left' }}>
-          Сейчас {club.memberLimit} мест, все заняты. {count} {pluralRu(count, ['заявка ждёт', 'заявки ждут', 'заявок ждут'])} —
+          Сейчас {club.memberLimit} {pluralRu(club.memberLimit, ['место', 'места', 'мест'])}, все заняты.
+          {' '}{count} {pluralRu(count, ['заявка ждёт', 'заявки ждут', 'заявок ждут'])} —
           чтобы принять всех, укажите не меньше {minLimit}
         </div>
 
