@@ -13,6 +13,7 @@ import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMem
 import org.telegram.telegrambots.meta.api.methods.groupadministration.LeaveChat
 import org.telegram.telegrambots.meta.api.methods.groupadministration.RestrictChatMember
 import org.telegram.telegrambots.meta.api.methods.groupadministration.RevokeChatInviteLink
+import org.telegram.telegrambots.meta.api.methods.groupadministration.SetChatMemberTag
 import org.telegram.telegrambots.meta.api.methods.groupadministration.UnbanChatMember
 import org.telegram.telegrambots.meta.api.methods.pinnedmessages.PinChatMessage
 import org.telegram.telegrambots.meta.api.methods.pinnedmessages.UnpinChatMessage
@@ -20,6 +21,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberAdministrator
+import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberMember
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberOwner
 import org.telegram.telegrambots.meta.api.objects.ChatPermissions
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberRestricted
@@ -72,35 +74,9 @@ const val PARSE_MODE_HTML = "HTML"
 @Component
 class ChatTelegramGateway(
     private val telegramClient: TelegramClient,
-    @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String,
-    // Для методов Bot API новее библиотеки (9.5: member tags) — прямые HTTP-вызовы.
-    @Value("\${telegram.bot-token}") private val botToken: String
+    @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String
 ) {
     private val log = LoggerFactory.getLogger(ChatTelegramGateway::class.java)
-
-    // Прямые вызовы Bot API мимо библиотеки (setChatMemberTag и чтение поля tag появились
-    // в Bot API 9.5, март 2026 — библиотека telegrambots 7.10 их не знает).
-    private val rawHttp = java.net.http.HttpClient.newHttpClient()
-    private val json = com.fasterxml.jackson.databind.ObjectMapper()
-
-    private fun rawApiCall(method: String, params: Map<String, Any>): com.fasterxml.jackson.databind.JsonNode? = try {
-        val request = java.net.http.HttpRequest.newBuilder()
-            .uri(java.net.URI.create("https://api.telegram.org/bot$botToken/$method"))
-            .header("Content-Type", "application/json")
-            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(json.writeValueAsString(params)))
-            .timeout(java.time.Duration.ofSeconds(10))
-            .build()
-        val response = rawHttp.send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
-        val body = json.readTree(response.body())
-        if (body.path("ok").asBoolean()) body.path("result")
-        else {
-            log.warn("raw Bot API {} failed: {}", method, body.path("description").asText())
-            null
-        }
-    } catch (e: Exception) {
-        log.warn("raw Bot API {} failed: {}", method, e.message)
-        null
-    }
 
     // id бота стабилен на всё время жизни процесса (одна нода = один токен) — кэшируем первый
     // УСПЕШНЫЙ GetMe. Именно поэтому не `by lazy`: lazy закэшировал бы и неудачу (null) навсегда,
@@ -128,8 +104,7 @@ class ChatTelegramGateway(
                 canPinMessages = member.canPinMessages ?: false,
                 canInviteUsers = member.canInviteUsers ?: false,
                 canRestrictMembers = member.canRestrictMembers ?: false,
-                // Поле Bot API 9.5 — старая библиотека его не десериализует, читаем raw.
-                canManageTags = fetchCanManageTags(chatId)
+                canManageTags = member.canManageTags ?: false
             )
             // creator недостижим для бота, но маппинг честный: владельцу можно всё.
             is ChatMemberOwner -> BotChatState(member.status, canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, canManageTags = true)
@@ -210,26 +185,38 @@ class ChatTelegramGateway(
      * без повышения в админы. Пустая строка снимает тег. Боту нужно право «Управление
      * тегами» (can_manage_tags). Тег ≤16 символов, без эмодзи — рамки Telegram.
      */
-    fun setMemberTag(chatId: Long, userId: Long, tag: String): Boolean =
-        rawApiCall("setChatMemberTag", mapOf("chat_id" to chatId, "user_id" to userId, "tag" to tag)) != null
+    fun setMemberTag(chatId: Long, userId: Long, tag: String): Boolean = try {
+        telegramClient.execute(SetChatMemberTag.builder().chatId(chatId).userId(userId).tag(tag).build())
+        true
+    } catch (e: Exception) {
+        log.warn("setMemberTag failed: chatId={} userId={} error={}", chatId, userId, e.message)
+        false
+    }
 
     /**
      * Текущий тег участника (поле tag у member/restricted, Bot API 9.5). null = сбой вызова
      * (шедулер синхронизации должен отличать «нет тега» от «Telegram не ответил»).
      */
     fun getMemberTag(chatId: Long, userId: Long): MemberTagLookup? {
-        val result = rawApiCall("getChatMember", mapOf("chat_id" to chatId, "user_id" to userId)) ?: return null
-        val tag = result.path("tag").asText("").takeIf { it.isNotEmpty() }
-        val inChat = result.path("status").asText() in setOf("creator", "administrator", "member", "restricted")
+        val member = getChatMember(chatId, userId) ?: return null
+        val tag = when (member) {
+            is ChatMemberMember -> member.tag
+            is ChatMemberRestricted -> member.tag
+            else -> null // у админов/владельца тегов нет (у них custom title)
+        }?.takeIf { it.isNotEmpty() }
+        val inChat = member.status in setOf("creator", "administrator", "member", "restricted")
         return MemberTagLookup(tag, inChat)
     }
 
-    /** Право бота «Управление тегами» (raw: библиотека не знает can_manage_tags). */
+    /** Право бота «Управление тегами» (can_manage_tags, Bot API 9.5). */
     fun fetchCanManageTags(chatId: Long): Boolean {
         val self = botId() ?: return false
-        val result = rawApiCall("getChatMember", mapOf("chat_id" to chatId, "user_id" to self)) ?: return false
-        // Владелец чата (creator) может всё; у админа смотрим само право.
-        return result.path("status").asText() == "creator" || result.path("can_manage_tags").asBoolean(false)
+        return when (val member = getChatMember(chatId, self)) {
+            // Владелец чата (creator) может всё; у админа смотрим само право.
+            is ChatMemberOwner -> true
+            is ChatMemberAdministrator -> member.canManageTags ?: false
+            else -> false
+        }
     }
 
     /** Строгий режим: покинувший клуб вылетает из чата (бан). Снятие — unbanChatMember при возврате в клуб. */
