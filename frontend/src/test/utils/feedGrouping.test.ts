@@ -8,6 +8,7 @@ function buildEvent(overrides: Partial<MyEventListItemDto>): MyEventListItemDto 
     title: 'Test',
     eventDatetime: overrides.eventDatetime ?? new Date().toISOString(),
     locationText: 'Place',
+    photoUrl: null,
     status: overrides.status ?? 'upcoming',
     clubId: '00000000-0000-0000-0000-000000000001',
     clubName: 'Club',

@@ -1,5 +1,8 @@
 package com.clubs.event
 
+import jakarta.validation.constraints.AssertTrue
+import jakarta.validation.constraints.DecimalMax
+import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.Future
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
@@ -15,7 +18,14 @@ data class EventDetailDto(
     val clubId: UUID,
     val title: String,
     val description: String?,
-    val locationText: String,
+    // null = место не указано (опционально с V58) — фронт прячет блок места целиком.
+    val locationText: String?,
+    // Гео-точка места (WGS-84). null у легаси-событий и событий без места —
+    // фронт показывает место текстом без карты (или ничего). Инвариант: оба или ни одного.
+    val locationLat: Double?,
+    val locationLon: Double?,
+    // Опциональное уточнение организатора к месту («Вход со двора, домофон 12»); null = нет.
+    val locationHint: String?,
     val eventDatetime: OffsetDateTime,
     val participantLimit: Int,
     val votingOpensDaysBefore: Int,
@@ -43,7 +53,7 @@ data class EventListItemDto(
     val id: UUID,
     val title: String,
     val eventDatetime: OffsetDateTime,
-    val locationText: String,
+    val locationText: String?,
     val participantLimit: Int,
     val goingCount: Int,
     val status: String,
@@ -54,7 +64,9 @@ data class MyEventListItemDto(
     val id: UUID,
     val title: String,
     val eventDatetime: OffsetDateTime,
-    val locationText: String,
+    val locationText: String?,
+    // Фото события — фон обложки карточки в табе «Активности»; null = фолбэк на аватар клуба.
+    val photoUrl: String?,
     val status: String,
     val clubId: UUID,
     val clubName: String,
@@ -74,9 +86,21 @@ data class CreateEventRequest(
 
     val description: String? = null,
 
-    @field:NotBlank(message = "Location is required")
+    // Место опционально (решение PO 2026-07-11, V58): без поиска организаций обязательная
+    // гео-точка неудобна. Адрес приходит из обратного геокодера пикера, когда точка выбрана.
     @field:Size(max = 500, message = "Location must be at most 500 characters")
-    val locationText: String,
+    val locationText: String? = null,
+
+    @field:DecimalMin(value = "-90.0", message = "Latitude must be >= -90")
+    @field:DecimalMax(value = "90.0", message = "Latitude must be <= 90")
+    val locationLat: Double? = null,
+
+    @field:DecimalMin(value = "-180.0", message = "Longitude must be >= -180")
+    @field:DecimalMax(value = "180.0", message = "Longitude must be <= 180")
+    val locationLon: Double? = null,
+
+    @field:Size(max = 200, message = "Location hint must be at most 200 characters")
+    val locationHint: String? = null,
 
     @field:NotNull(message = "Event datetime is required")
     @field:Future(message = "Event datetime must be in the future")
@@ -92,7 +116,19 @@ data class CreateEventRequest(
 
     @field:Size(max = 1024, message = "Photo URL must be at most 1024 characters")
     val photoUrl: String? = null
-)
+) {
+    // Инвариант пары координат (зеркалит CHECK chk_events_location_pair в БД): половинная
+    // точка бессмысленна — Bean Validation отдаёт дружелюбный 400 раньше, чем упадёт insert.
+    @get:AssertTrue(message = "Latitude and longitude must be provided together")
+    val isLocationPairConsistent: Boolean
+        get() = (locationLat == null) == (locationLon == null)
+
+    // Требование PO (2026-07-11): у события должно быть хоть какое-то указание места —
+    // либо гео-точка с карты, либо текстовое уточнение («в зуме», «место скинем в чат»).
+    @get:AssertTrue(message = "Either a map point or a location hint is required")
+    val isSomeLocationProvided: Boolean
+        get() = (locationLat != null && locationLon != null) || !locationHint.isNullOrBlank()
+}
 
 
 /** F5-14: опциональная причина отмены события от организатора (≤500 символов; пусто → null). */

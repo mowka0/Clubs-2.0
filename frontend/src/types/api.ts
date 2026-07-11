@@ -492,7 +492,14 @@ export interface EventDetailDto {
   clubId: string;
   title: string;
   description: string | null;
-  locationText: string;
+  // null = место не указано (опционально с V58) — блок места не показывается вовсе.
+  locationText: string | null;
+  // Гео-точка места (WGS-84, event-geo): null у легаси-событий и событий без точки —
+  // тогда место (если есть) показывается текстом без карты.
+  locationLat: number | null;
+  locationLon: number | null;
+  // Опциональное уточнение организатора к месту («Вход со двора, домофон 12»).
+  locationHint: string | null;
   eventDatetime: string;
   participantLimit: number;
   votingOpensDaysBefore: number;
@@ -509,6 +516,9 @@ export interface EventDetailDto {
   attendanceFinalized: boolean;
   // F5-14: необязательная причина отмены от организатора; null, если отменено без указания причины.
   cancellationReason: string | null;
+  // Фото события (опциональное, из формы создания) — фон хиро на странице события;
+  // null = фоном остаётся аватар клуба.
+  photoUrl: string | null;
   createdAt: string | null;
 }
 
@@ -516,7 +526,7 @@ export interface EventListItemDto {
   id: string;
   title: string;
   eventDatetime: string;
-  locationText: string;
+  locationText: string | null;
   participantLimit: number;
   goingCount: number;
   status: string;
@@ -668,7 +678,9 @@ export interface MyEventListItemDto {
   id: string;
   title: string;
   eventDatetime: string;
-  locationText: string;
+  locationText: string | null;
+  // Фото события — фон обложки карточки в «Активностях»; null = фолбэк на аватар клуба.
+  photoUrl: string | null;
   status: string;
   clubId: string;
   clubName: string;

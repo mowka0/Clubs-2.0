@@ -11,6 +11,7 @@ import { useMyReputationQuery } from '../queries/members';
 import { useEventSplitStateQuery } from '../queries/skladchina';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { Toast } from '../components/Toast';
+import { EventPlaceCard } from '../components/event/EventPlaceCard';
 import {
   useCastVoteMutation,
   useConfirmParticipationMutation,
@@ -384,14 +385,19 @@ export const EventPage: FC = () => {
   // поэтому фильтр сохраняет реальный порядок продвижения.
   const waitlist = finalComposition ? responders.filter((r) => r.status === 'waitlisted') : [];
 
+  // Фон хиро: фото события (решение PO 2026-07-11 — прежде нигде не показывалось),
+  // фолбэк — аватар клуба, как раньше.
+  const heroImage = event.photoUrl ?? hostClubQuery.data?.avatarUrl ?? null;
+
   return (
     <div className="rd-page">
-      {/* Хиро — аватар клуба как фон (так же, как на странице клуба) */}
+      {/* Хиро — фото события как фон (решение PO 2026-07-11: фото прежде нигде не
+          показывалось); фолбэк — аватар клуба, как раньше. */}
       <div className="rd-hero rd-compact">
         <div
           className="rd-hero-bg"
           data-cat={hostClubQuery.data?.category ?? 'sport'}
-          style={hostClubQuery.data?.avatarUrl ? { backgroundImage: `url(${hostClubQuery.data.avatarUrl})` } : undefined}
+          style={heroImage ? { backgroundImage: `url(${heroImage})` } : undefined}
         />
         <div className="rd-hero-meta">
           <div className="rd-hero-type-badge">СОБЫТИЕ</div>
@@ -424,15 +430,25 @@ export const EventPage: FC = () => {
         </button>
       )}
 
-      {/* Место проведения */}
-      {event.locationText && (
+      {/* Место проведения: с гео-точкой — мини-карта + маршрут (event-geo, кадр C);
+          без координат — текстом: адрес (легаси) и/или уточнение организатора (V58). */}
+      {event.locationLat != null && event.locationLon != null ? (
+        <EventPlaceCard
+          locationText={event.locationText ?? 'Место на карте'}
+          locationHint={event.locationHint}
+          point={{ lat: event.locationLat, lon: event.locationLon }}
+        />
+      ) : (event.locationText || event.locationHint) ? (
         <div className="rd-glass" style={{ marginBottom: 14, overflow: 'hidden' }}>
-          <div className="rd-mini-map" />
+          {event.locationText && <div className="rd-mini-map" />}
           <div className="rd-addr-body">
-            <div className="rd-a-ttl">{event.locationText}</div>
+            <div className="rd-a-ttl">{event.locationText ?? event.locationHint}</div>
+            {event.locationText && event.locationHint && (
+              <div className="rd-a-met">{event.locationHint}</div>
+            )}
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Описание */}
       {event.description && (

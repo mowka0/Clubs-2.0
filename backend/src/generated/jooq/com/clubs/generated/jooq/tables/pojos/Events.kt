@@ -23,7 +23,7 @@ data class Events(
     var createdBy: UUID,
     var title: String,
     var description: String? = null,
-    var locationText: String,
+    var locationText: String? = null,
     var eventDatetime: OffsetDateTime,
     var participantLimit: Int,
     var votingOpensDaysBefore: Int? = null,
@@ -37,7 +37,10 @@ data class Events(
     var reputationProcessed: Boolean? = null,
     var attendanceReminderSent: Boolean? = null,
     var attendanceMarkedAt: OffsetDateTime? = null,
-    var cancellationReason: String? = null
+    var cancellationReason: String? = null,
+    var locationLat: Double? = null,
+    var locationLon: Double? = null,
+    var locationHint: String? = null
 ): Serializable {
 
 
@@ -67,7 +70,11 @@ data class Events(
         }
         else if (this.description != o.description)
             return false
-        if (this.locationText != o.locationText)
+        if (this.locationText == null) {
+            if (o.locationText != null)
+                return false
+        }
+        else if (this.locationText != o.locationText)
             return false
         if (this.eventDatetime != o.eventDatetime)
             return false
@@ -145,6 +152,24 @@ data class Events(
         }
         else if (this.cancellationReason != o.cancellationReason)
             return false
+        if (this.locationLat == null) {
+            if (o.locationLat != null)
+                return false
+        }
+        else if (this.locationLat != o.locationLat)
+            return false
+        if (this.locationLon == null) {
+            if (o.locationLon != null)
+                return false
+        }
+        else if (this.locationLon != o.locationLon)
+            return false
+        if (this.locationHint == null) {
+            if (o.locationHint != null)
+                return false
+        }
+        else if (this.locationHint != o.locationHint)
+            return false
         return true
     }
 
@@ -156,7 +181,7 @@ data class Events(
         result = prime * result + this.createdBy.hashCode()
         result = prime * result + this.title.hashCode()
         result = prime * result + (if (this.description == null) 0 else this.description.hashCode())
-        result = prime * result + this.locationText.hashCode()
+        result = prime * result + (if (this.locationText == null) 0 else this.locationText.hashCode())
         result = prime * result + this.eventDatetime.hashCode()
         result = prime * result + this.participantLimit.hashCode()
         result = prime * result + (if (this.votingOpensDaysBefore == null) 0 else this.votingOpensDaysBefore.hashCode())
@@ -171,6 +196,9 @@ data class Events(
         result = prime * result + (if (this.attendanceReminderSent == null) 0 else this.attendanceReminderSent.hashCode())
         result = prime * result + (if (this.attendanceMarkedAt == null) 0 else this.attendanceMarkedAt.hashCode())
         result = prime * result + (if (this.cancellationReason == null) 0 else this.cancellationReason.hashCode())
+        result = prime * result + (if (this.locationLat == null) 0 else this.locationLat.hashCode())
+        result = prime * result + (if (this.locationLon == null) 0 else this.locationLon.hashCode())
+        result = prime * result + (if (this.locationHint == null) 0 else this.locationHint.hashCode())
         return result
     }
 
@@ -197,6 +225,9 @@ data class Events(
         sb.append(", ").append(attendanceReminderSent)
         sb.append(", ").append(attendanceMarkedAt)
         sb.append(", ").append(cancellationReason)
+        sb.append(", ").append(locationLat)
+        sb.append(", ").append(locationLon)
+        sb.append(", ").append(locationHint)
 
         sb.append(")")
         return sb.toString()

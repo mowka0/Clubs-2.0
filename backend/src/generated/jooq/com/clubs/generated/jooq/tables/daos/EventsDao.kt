@@ -96,7 +96,7 @@ open class EventsDao(configuration: Configuration?) : DAOImpl<EventsRecord, com.
      * Fetch records that have <code>location_text BETWEEN lowerInclusive AND
      * upperInclusive</code>
      */
-    fun fetchRangeOfLocationText(lowerInclusive: String, upperInclusive: String): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.LOCATION_TEXT, lowerInclusive, upperInclusive)
+    fun fetchRangeOfLocationText(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.LOCATION_TEXT, lowerInclusive, upperInclusive)
 
     /**
      * Fetch records that have <code>location_text IN (values)</code>
@@ -256,4 +256,37 @@ open class EventsDao(configuration: Configuration?) : DAOImpl<EventsRecord, com.
      * Fetch records that have <code>cancellation_reason IN (values)</code>
      */
     fun fetchByCancellationReason(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.CANCELLATION_REASON, *values)
+
+    /**
+     * Fetch records that have <code>location_lat BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfLocationLat(lowerInclusive: Double?, upperInclusive: Double?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.LOCATION_LAT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>location_lat IN (values)</code>
+     */
+    fun fetchByLocationLat(vararg values: Double): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.LOCATION_LAT, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>location_lon BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfLocationLon(lowerInclusive: Double?, upperInclusive: Double?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.LOCATION_LON, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>location_lon IN (values)</code>
+     */
+    fun fetchByLocationLon(vararg values: Double): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.LOCATION_LON, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>location_hint BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfLocationHint(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.LOCATION_HINT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>location_hint IN (values)</code>
+     */
+    fun fetchByLocationHint(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.LOCATION_HINT, *values)
 }

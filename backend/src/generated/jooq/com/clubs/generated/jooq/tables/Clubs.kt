@@ -171,9 +171,10 @@ open class Clubs(
 
     /**
      * The column <code>public.clubs.member_limit</code>. Лимит числа участников
-     * клуба, от 10 до 80 (CHECK).
+     * клуба, от 1 до 80 (CHECK; минимум временно 1 для теста заполняемости, PO
+     * 2026-07-11). Занятое место = membership в active/frozen/expired.
      */
-    val MEMBER_LIMIT: TableField<ClubsRecord, Int?> = createField(DSL.name("member_limit"), SQLDataType.INTEGER.nullable(false), this, "Лимит числа участников клуба, от 10 до 80 (CHECK).")
+    val MEMBER_LIMIT: TableField<ClubsRecord, Int?> = createField(DSL.name("member_limit"), SQLDataType.INTEGER.nullable(false), this, "Лимит числа участников клуба, от 1 до 80 (CHECK; минимум временно 1 для теста заполняемости, PO 2026-07-11). Занятое место = membership в active/frozen/expired.")
 
     /**
      * The column <code>public.clubs.subscription_price</code>. Месячный
@@ -531,7 +532,7 @@ open class Clubs(
     val userClubReputationUserIdFkey: UsersPath
         get(): UsersPath = userClubReputation().users()
     override fun getChecks(): List<Check<ClubsRecord>> = listOf(
-        Internal.createCheck(this, DSL.name("clubs_member_limit_check"), "(((member_limit >= 10) AND (member_limit <= 80)))", true),
+        Internal.createCheck(this, DSL.name("clubs_member_limit_check"), "(((member_limit >= 1) AND (member_limit <= 80)))", true),
         Internal.createCheck(this, DSL.name("clubs_subscription_price_check"), "((subscription_price >= 0))", true)
     )
     override fun `as`(alias: String): Clubs = Clubs(DSL.name(alias), this)

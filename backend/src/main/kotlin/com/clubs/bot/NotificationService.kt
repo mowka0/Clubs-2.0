@@ -2,6 +2,8 @@ package com.clubs.bot
 
 import com.clubs.event.Event
 import com.clubs.event.EventResponseRepository
+import com.clubs.event.OPEN_IN_YANDEX_MAPS_BUTTON
+import com.clubs.event.locationDisplay
 import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -9,6 +11,8 @@ import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import org.telegram.telegrambots.meta.api.methods.message.SavePreparedInlineMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
+import org.telegram.telegrambots.meta.api.objects.InputFile
 import org.telegram.telegrambots.meta.api.objects.inlinequery.inputmessagecontent.InputTextMessageContent
 import org.telegram.telegrambots.meta.api.objects.inlinequery.result.InlineQueryResultArticle
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
@@ -71,15 +75,72 @@ class NotificationService(
         }
         log.info("Event-created DM: eventId={} clubId={} recipients={}", event.id, event.clubId, memberTelegramIds.size)
         val dateStr = event.eventDatetime.format(fmt)
-        val text = "🆕 Новое событие в клубе!\n\n📌 ${event.title}\n📍 ${event.locationText}\n🗓 $dateStr\n👥 Лимит: ${event.participantLimit}\n\nГолосуйте в приложении:"
+        // Место опционально (V58): у события без места строка 📍 не рендерится вовсе;
+        // уточнение организатора («Вход со двора») показывается в скобках после адреса.
+        val locationLine = event.locationDisplay?.let { "📍 $it\n" } ?: ""
+        val text = "🆕 Новое событие в клубе!\n\n📌 ${event.title}\n$locationLine🗓 $dateStr\n👥 Лимит: ${event.participantLimit}\n\nГолосуйте в приложении:"
         // Диплинк сразу на страницу события, чтобы кнопка открывала голосование, а не
         // общую домашнюю страницу приложения. React Router рендерит EventPage на /events/:id.
         val webAppPath = "/events/${event.id}"
 
         memberTelegramIds.forEach { telegramId ->
-            sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
+            sendEventCreatedDm(telegramId.toString(), text, webAppPath, event)
         }
     }
+
+    /**
+     * DM о новом событии (event-geo + фото): у события с гео-точкой под WebApp-кнопкой —
+     * вторая строка «Открыть в Яндекс.Картах» (бесключевой deep-link); у события с фото
+     * DM уходит фото-сообщением (caption = тот же текст; Telegram скачивает картинку по
+     * абсолютному URL нашего фронта). Любой сбой деградирует до текстового DM —
+     * уведомление важнее оформления. Событие без всего — обычный текстовый DM.
+     */
+    private fun sendEventCreatedDm(chatId: String, text: String, webAppPath: String, event: Event) {
+        val lat = event.locationLat
+        val lon = event.locationLon
+        val markup = if (lat != null && lon != null) {
+            buildKeyboard(
+                "📅 Открыть событие",
+                webAppPath = webAppPath,
+                externalUrlButton = OPEN_IN_YANDEX_MAPS_BUTTON to openMapUrl(lat, lon)
+            )
+        } else {
+            buildKeyboard("📅 Открыть событие", webAppPath = webAppPath)
+        }
+        val photoUrl = event.photoUrl?.let(::absolutePhotoUrl)
+        if (photoUrl != null) {
+            try {
+                val photo = SendPhoto.builder()
+                    .chatId(chatId)
+                    .photo(InputFile(photoUrl))
+                    .caption(text)
+                    .replyMarkup(markup)
+                    .build()
+                telegramClient.execute(photo)
+                log.info("Event-created DM sent with event photo: chatId={}", chatId)
+                return
+            } catch (e: Exception) {
+                log.error("Failed to send event DM with photo to chat {}: {} ({})", chatId, e.message, e.javaClass.simpleName, e)
+            }
+        }
+        try {
+            val msg = SendMessage.builder().chatId(chatId).text(text).replyMarkup(markup).build()
+            telegramClient.execute(msg)
+            log.info("Event-created DM sent: chatId={}", chatId)
+        } catch (e: Exception) {
+            log.error("Failed to send event DM to chat {}: {} ({})", chatId, e.message, e.javaClass.simpleName, e)
+            // Последний фолбэк — стандартный DM с одной WebApp-кнопкой.
+            sendDm(chatId, text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
+        }
+    }
+
+    /**
+     * Абсолютный URL фото для Telegram: photo_url хранится относительным («/uploads/…»,
+     * S3_BASE_URL не задан — фронтовый nginx проксирует на MinIO), а Telegram скачивает
+     * картинку своими серверами и относительный путь не поймёт.
+     */
+    private fun absolutePhotoUrl(photoUrl: String): String =
+        if (photoUrl.startsWith("http")) photoUrl else "$webAppBaseUrl$photoUrl"
 
     /**
      * Приглашает подтвердить участие при старте Этапа 2. Этап 2 открыт всем участникам клуба,
@@ -384,7 +445,14 @@ class NotificationService(
         }
     }
 
-    private fun buildKeyboard(buttonText: String, webAppPath: String?): InlineKeyboardMarkup {
+    private fun buildKeyboard(
+        buttonText: String,
+        webAppPath: String?,
+        // Необязательная вторая строка клавиатуры: внешняя URL-кнопка «текст → https-ссылка»
+        // (например «Открыть в Яндекс.Картах»). Внешние https-ссылки в DM разрешены —
+        // Telegram блокирует только self-bot t.me-ссылки.
+        externalUrlButton: Pair<String, String>? = null
+    ): InlineKeyboardMarkup {
         // WebApp-кнопка с URL фронтенда — открывает Mini App напрямую на нужном
         // route (через React Router). URL-кнопка вида t.me/<bot>/... НЕ используется,
         // потому что Telegram блокирует self-bot ссылки внутри DM с этим же ботом.
@@ -393,8 +461,18 @@ class NotificationService(
             .text(buttonText)
             .webApp(WebAppInfo(url))
             .build()
-        return InlineKeyboardMarkup(listOf(InlineKeyboardRow(button)))
+        val rows = mutableListOf(InlineKeyboardRow(button))
+        externalUrlButton?.let { (text, externalUrl) ->
+            rows += InlineKeyboardRow(
+                InlineKeyboardButton.builder().text(text).url(externalUrl).build()
+            )
+        }
+        return InlineKeyboardMarkup(rows)
     }
+
+    /** Бесключевой deep-link «открыть точку в Яндекс.Картах». ⚠️ Порядок у Яндекса в pt — lon,lat. */
+    private fun openMapUrl(lat: Double, lon: Double): String =
+        "https://yandex.ru/maps/?pt=$lon,$lat&z=17"
 
     companion object {
         // Текст кнопки по умолчанию для DM без явно заданного текста кнопки

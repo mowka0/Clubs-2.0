@@ -22,7 +22,8 @@ export type EventActivityStatus =
 export interface EventActivityDto extends ActivityBase {
   type: 'event';
   eventDatetime: string;
-  locationText: string;
+  // null = место не указано (опционально с V58).
+  locationText: string | null;
   participantLimit: number;
   goingCount: number;
   // Размер подтверждённого ростера Этапа 2. Карточка показывает `goingCount` во время stage 1 и

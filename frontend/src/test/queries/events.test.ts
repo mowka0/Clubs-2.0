@@ -43,6 +43,9 @@ const mockEvent: EventDetailDto = {
   title: 'Test event',
   description: null,
   locationText: 'Park',
+  locationLat: null,
+  locationLon: null,
+  locationHint: null,
   eventDatetime: '2026-05-01T18:00:00Z',
   participantLimit: 10,
   votingOpensDaysBefore: 7,
@@ -55,6 +58,7 @@ const mockEvent: EventDetailDto = {
   attendanceMarked: false,
   attendanceFinalized: false,
   cancellationReason: null,
+  photoUrl: null,
   createdAt: null,
 };
 

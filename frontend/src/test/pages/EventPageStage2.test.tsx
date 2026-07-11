@@ -48,6 +48,9 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     title: 'Событие',
     description: null,
     locationText: 'Бар',
+    locationLat: null,
+    locationLon: null,
+    locationHint: null,
     eventDatetime,
     participantLimit: 10,
     votingOpensDaysBefore: 14,
@@ -62,6 +65,7 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     attendanceMarked: false,
     attendanceFinalized: false,
     cancellationReason: null,
+    photoUrl: null,
     createdAt: null,
     ...overrides,
   };
@@ -346,5 +350,81 @@ describe('EventPage — отмена события (F5-14)', () => {
 
     expect(await screen.findByText(/Предварительные голоса/)).toBeInTheDocument();
     expect(screen.queryByText(/Кто идёт/)).not.toBeInTheDocument();
+  });
+});
+
+describe('EventPage — блок места (event-geo, кадр C)', () => {
+  it('событие с координатами: карточка места с мини-картой, уточнением и кнопками маршрута', async () => {
+    mockEndpoints({
+      event: stage2Event({
+        eventDatetime: FUTURE,
+        locationText: 'ул. Покровка, 47/24с1, Москва',
+        locationLat: 55.761216,
+        locationLon: 37.646488,
+        locationHint: 'Вход со двора, домофон 12',
+      }),
+      myVote: 'going',
+    });
+    renderEventPage();
+
+    expect(await screen.findByText('ул. Покровка, 47/24с1, Москва')).toBeInTheDocument();
+    expect(screen.getByText('Вход со двора, домофон 12')).toBeInTheDocument();
+    expect(screen.getByAltText('Карта места события')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Маршрут/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Открыть в Картах' })).toBeInTheDocument();
+  });
+
+  it('легаси-событие без координат: место текстом, без карты и кнопок', async () => {
+    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'going' });
+    renderEventPage();
+
+    expect(await screen.findByText('Бар')).toBeInTheDocument();
+    expect(screen.queryByAltText('Карта места события')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Маршрут/ })).not.toBeInTheDocument();
+  });
+
+  it('уточнение к месту видно и без гео-точки: адрес + серое уточнение', async () => {
+    mockEndpoints({
+      event: stage2Event({ eventDatetime: FUTURE, locationHint: 'Вход со двора, домофон 12' }),
+      myVote: 'going',
+    });
+    renderEventPage();
+
+    expect(await screen.findByText('Бар')).toBeInTheDocument();
+    expect(screen.getByText('Вход со двора, домофон 12')).toBeInTheDocument();
+  });
+
+  it('hint-only событие (места нет): уточнение показано как место', async () => {
+    mockEndpoints({
+      event: stage2Event({ eventDatetime: FUTURE, locationText: null, locationHint: 'Встречаемся в зуме' }),
+      myVote: 'going',
+    });
+    renderEventPage();
+
+    expect(await screen.findByText('Встречаемся в зуме')).toBeInTheDocument();
+    expect(screen.queryByAltText('Карта места события')).not.toBeInTheDocument();
+  });
+});
+
+describe('EventPage — фото события как фон хиро', () => {
+  it('фото события задано — оно фон хиро (не аватар клуба)', async () => {
+    mockEndpoints({
+      event: stage2Event({ eventDatetime: FUTURE, photoUrl: 'https://cdn.example.com/event-cover.jpg' }),
+      myVote: 'going',
+    });
+    const { container } = renderEventPage();
+
+    await screen.findByText('Событие');
+    const heroBg = container.querySelector('.rd-hero-bg');
+    expect(heroBg).toHaveStyle({ backgroundImage: 'url(https://cdn.example.com/event-cover.jpg)' });
+  });
+
+  it('без фото — фолбэк на аватар клуба отсутствует у клуба без аватарки (без backgroundImage)', async () => {
+    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'going' });
+    const { container } = renderEventPage();
+
+    await screen.findByText('Событие');
+    const heroBg = container.querySelector('.rd-hero-bg');
+    expect(heroBg?.getAttribute('style') ?? '').not.toContain('background-image');
   });
 });

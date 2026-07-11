@@ -158,6 +158,9 @@ class EventControllerSecurityTest {
             {
               "title": "Photo Event",
               "locationText": "Park",
+              "locationLat": 55.761216,
+              "locationLon": 37.646488,
+              "locationHint": "Вход со двора, домофон 12",
               "eventDatetime": "$eventDatetime",
               "participantLimit": 20,
               "photoUrl": "$photoUrl"
@@ -172,6 +175,9 @@ class EventControllerSecurityTest {
         )
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.photoUrl").value(photoUrl))
+            .andExpect(jsonPath("$.locationLat").value(55.761216))
+            .andExpect(jsonPath("$.locationLon").value(37.646488))
+            .andExpect(jsonPath("$.locationHint").value("Вход со двора, домофон 12"))
 
         // List endpoint also carries it
         mockMvc.perform(
@@ -227,6 +233,8 @@ class EventControllerSecurityTest {
             {
               "title": "No Photo Event",
               "locationText": "Park",
+              "locationLat": 55.761216,
+              "locationLon": 37.646488,
               "eventDatetime": "$eventDatetime",
               "participantLimit": 20
             }
@@ -240,5 +248,73 @@ class EventControllerSecurityTest {
         )
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.photoUrl").value(nullValue()))
+            .andExpect(jsonPath("$.locationHint").value(nullValue()))
+    }
+
+    @Test
+    fun `POST event without point AND without hint should return 400`() {
+        val eventDatetime = OffsetDateTime.now().plusDays(10)
+        // Правило PO (V58): место опционально, но точка ИЛИ уточнение обязательны.
+        val body = """
+            {
+              "title": "No Location Event",
+              "eventDatetime": "$eventDatetime",
+              "participantLimit": 20
+            }
+        """.trimIndent()
+
+        mockMvc.perform(
+            post("/api/clubs/$clubId/events")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+        )
+            .andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `POST event with hint only (no point) should return 201 with null location`() {
+        val eventDatetime = OffsetDateTime.now().plusDays(10)
+        val body = """
+            {
+              "title": "Online Event",
+              "locationHint": "Встречаемся в зуме",
+              "eventDatetime": "$eventDatetime",
+              "participantLimit": 20
+            }
+        """.trimIndent()
+
+        mockMvc.perform(
+            post("/api/clubs/$clubId/events")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+        )
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.locationText").value(nullValue()))
+            .andExpect(jsonPath("$.locationLat").value(nullValue()))
+            .andExpect(jsonPath("$.locationHint").value("Встречаемся в зуме"))
+    }
+
+    @Test
+    fun `POST event with half a coordinate pair should return 400`() {
+        val eventDatetime = OffsetDateTime.now().plusDays(10)
+        val body = """
+            {
+              "title": "Half Pair Event",
+              "locationLat": 55.761216,
+              "locationHint": "х",
+              "eventDatetime": "$eventDatetime",
+              "participantLimit": 20
+            }
+        """.trimIndent()
+
+        mockMvc.perform(
+            post("/api/clubs/$clubId/events")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+        )
+            .andExpect(status().isBadRequest)
     }
 }

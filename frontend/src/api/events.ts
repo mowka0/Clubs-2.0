@@ -4,7 +4,13 @@ import type { EventDetailDto, EventListItemDto, EventResponderDto, MyAttendanceD
 export interface CreateEventBody {
   title: string;
   description?: string;
-  locationText: string;
+  // Место опционально (V58), но точка ИЛИ уточнение обязательны (бэкенд отдаст 400 без
+  // обоих). locationText — адрес из обратного геокодера по выбранной точке.
+  locationText?: string;
+  locationLat?: number;
+  locationLon?: number;
+  // Уточнение к месту (≤200 символов), отдельное от адреса.
+  locationHint?: string;
   eventDatetime: string;
   participantLimit: number;
   votingOpensDaysBefore?: number;

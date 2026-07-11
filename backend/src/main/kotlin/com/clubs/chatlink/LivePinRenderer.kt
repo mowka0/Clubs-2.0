@@ -1,6 +1,7 @@
 package com.clubs.chatlink
 
 import com.clubs.event.Event
+import com.clubs.event.locationDisplay
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.time.ZoneId
@@ -35,10 +36,15 @@ class LivePinRenderer(
     fun buttonText(event: Event): String =
         if (event.stage2Triggered) "Подтвердить участие" else "Проголосовать"
 
+    /** Строка «дата · 📍 адрес (уточнение)»; у события без места (V58) — только дата. */
+    private fun dateLocationLine(event: Event): String =
+        "🗓 ${event.eventDatetime.format(fmt)}" +
+            (event.locationDisplay?.let { " · 📍 $it" } ?: "")
+
     /** Этап 1: набор — голоса и лимит мест. */
     fun stage1Text(event: Event, going: Int, maybe: Int): String =
         "📅 ${event.title}\n" +
-            "🗓 ${event.eventDatetime.format(fmt)} · 📍 ${event.locationText}\n\n" +
+            "${dateLocationLine(event)}\n\n" +
             "✅ Идут — $going\n" +
             "🤔 Возможно — $maybe\n" +
             "👥 Мест — ${event.participantLimit}"
@@ -46,7 +52,7 @@ class LivePinRenderer(
     /** Этап 2: гонка за места — подтверждённые, очередь, дедлайн (= старт события, граница окна на бэке). */
     fun stage2Text(event: Event, confirmed: Int, waitlisted: Int): String =
         "🏁 ${event.title} — подтверждение мест\n" +
-            "🗓 ${event.eventDatetime.format(fmt)} · 📍 ${event.locationText}\n\n" +
+            "${dateLocationLine(event)}\n\n" +
             "✅ Подтвердили — $confirmed из ${event.participantLimit}\n" +
             "📋 В очереди — $waitlisted\n" +
             "⏳ Подтвердить до — ${event.eventDatetime.format(fmt)}"

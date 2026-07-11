@@ -4,6 +4,15 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --legacy-peer-deps
 COPY . .
+# Публичные фронтовые ключи Яндекс.Карт (event-geo): Vite инлайнит VITE_* в бандл на этапе
+# сборки, поэтому передаются build args'ами из docker-compose (Coolify берёт из env приложения).
+# Это НЕ секреты (уходят в браузер по определению), защита ключей — referer-ограничение в кабинете Яндекса.
+ARG VITE_YANDEX_MAPS_API_KEY
+ARG VITE_YANDEX_STATIC_API_KEY
+ARG VITE_YANDEX_GEOCODER_API_KEY
+ENV VITE_YANDEX_MAPS_API_KEY=$VITE_YANDEX_MAPS_API_KEY \
+    VITE_YANDEX_STATIC_API_KEY=$VITE_YANDEX_STATIC_API_KEY \
+    VITE_YANDEX_GEOCODER_API_KEY=$VITE_YANDEX_GEOCODER_API_KEY
 RUN npm run build
 
 # Этап 2: раздача

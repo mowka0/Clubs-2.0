@@ -123,10 +123,12 @@ open class Events(
     val DESCRIPTION: TableField<EventsRecord, String?> = createField(DSL.name("description"), SQLDataType.CLOB, this, "Описание события (NULL = без описания).")
 
     /**
-     * The column <code>public.events.location_text</code>. Место встречи
-     * свободным текстом, до 500 символов.
+     * The column <code>public.events.location_text</code>. Адрес места события
+     * (для гео-событий — из обратного геокодера). NULL = место не указано
+     * (опционально с V58); у гео-событий задан вместе с
+     * location_lat/location_lon.
      */
-    val LOCATION_TEXT: TableField<EventsRecord, String?> = createField(DSL.name("location_text"), SQLDataType.VARCHAR(500).nullable(false), this, "Место встречи свободным текстом, до 500 символов.")
+    val LOCATION_TEXT: TableField<EventsRecord, String?> = createField(DSL.name("location_text"), SQLDataType.VARCHAR(500), this, "Адрес места события (для гео-событий — из обратного геокодера). NULL = место не указано (опционально с V58); у гео-событий задан вместе с location_lat/location_lon.")
 
     /**
      * The column <code>public.events.event_datetime</code>. Дата и время начала
@@ -224,6 +226,27 @@ open class Events(
      * в DM и на странице события (NULL = причина не указана).
      */
     val CANCELLATION_REASON: TableField<EventsRecord, String?> = createField(DSL.name("cancellation_reason"), SQLDataType.CLOB, this, "Причина отмены, указанная организатором; показывается заинтересованным участникам в DM и на странице события (NULL = причина не указана).")
+
+    /**
+     * The column <code>public.events.location_lat</code>. Широта точки места
+     * события (WGS-84, [-90..90]). NULL = легаси-событие без гео-точки; иначе
+     * задана вместе с location_lon.
+     */
+    val LOCATION_LAT: TableField<EventsRecord, Double?> = createField(DSL.name("location_lat"), SQLDataType.DOUBLE, this, "Широта точки места события (WGS-84, [-90..90]). NULL = легаси-событие без гео-точки; иначе задана вместе с location_lon.")
+
+    /**
+     * The column <code>public.events.location_lon</code>. Долгота точки места
+     * события (WGS-84, [-180..180]). NULL = легаси-событие без гео-точки; иначе
+     * задана вместе с location_lat.
+     */
+    val LOCATION_LON: TableField<EventsRecord, Double?> = createField(DSL.name("location_lon"), SQLDataType.DOUBLE, this, "Долгота точки места события (WGS-84, [-180..180]). NULL = легаси-событие без гео-точки; иначе задана вместе с location_lat.")
+
+    /**
+     * The column <code>public.events.location_hint</code>. Опциональное
+     * уточнение организатора к месту («Вход со двора, домофон 12»), не входит в
+     * адрес. NULL = нет уточнения.
+     */
+    val LOCATION_HINT: TableField<EventsRecord, String?> = createField(DSL.name("location_hint"), SQLDataType.VARCHAR(200), this, "Опциональное уточнение организатора к месту («Вход со двора, домофон 12»), не входит в адрес. NULL = нет уточнения.")
 
     private constructor(alias: Name, aliased: Table<EventsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<EventsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
@@ -339,6 +362,7 @@ open class Events(
     val skladchinas: SkladchinasPath
         get(): SkladchinasPath = skladchinas()
     override fun getChecks(): List<Check<EventsRecord>> = listOf(
+        Internal.createCheck(this, DSL.name("chk_events_location_pair"), "(((location_lat IS NULL) = (location_lon IS NULL)))", true),
         Internal.createCheck(this, DSL.name("events_participant_limit_check"), "((participant_limit > 0))", true),
         Internal.createCheck(this, DSL.name("events_voting_opens_days_before_check"), "(((voting_opens_days_before >= 1) AND (voting_opens_days_before <= 14)))", true)
     )

@@ -31,6 +31,9 @@ class JooqEventRepository(
             .set(EVENTS.TITLE, request.title)
             .set(EVENTS.DESCRIPTION, request.description)
             .set(EVENTS.LOCATION_TEXT, request.locationText)
+            .set(EVENTS.LOCATION_LAT, request.locationLat)
+            .set(EVENTS.LOCATION_LON, request.locationLon)
+            .set(EVENTS.LOCATION_HINT, request.locationHint)
             .set(EVENTS.EVENT_DATETIME, request.eventDatetime)
             .set(EVENTS.PARTICIPANT_LIMIT, request.participantLimit)
             .set(EVENTS.VOTING_OPENS_DAYS_BEFORE, request.votingOpensDaysBefore)
@@ -218,7 +221,7 @@ class JooqEventRepository(
                 createdBy = r.get(EVENTS.CREATED_BY)!!,
                 title = r.get(EVENTS.TITLE)!!,
                 description = r.get(EVENTS.DESCRIPTION),
-                locationText = r.get(EVENTS.LOCATION_TEXT)!!,
+                locationText = r.get(EVENTS.LOCATION_TEXT),
                 eventDatetime = r.get(EVENTS.EVENT_DATETIME)!!,
                 participantLimit = r.get(EVENTS.PARTICIPANT_LIMIT)!!,
                 votingOpensDaysBefore = r.get(EVENTS.VOTING_OPENS_DAYS_BEFORE) ?: EventMapper.DEFAULT_VOTING_OPENS_DAYS_BEFORE,

@@ -45,6 +45,9 @@ function pastCompletedEvent(overrides: Partial<EventDetailDto> = {}): EventDetai
     title: 'Прошедшее событие',
     description: null,
     locationText: 'Бар',
+    locationLat: null,
+    locationLon: null,
+    locationHint: null,
     eventDatetime: PAST,
     participantLimit: 10,
     votingOpensDaysBefore: 14,
@@ -58,6 +61,7 @@ function pastCompletedEvent(overrides: Partial<EventDetailDto> = {}): EventDetai
     attendanceMarked: false,
     attendanceFinalized: false,
     cancellationReason: null,
+    photoUrl: null,
     createdAt: null,
     ...overrides,
   };

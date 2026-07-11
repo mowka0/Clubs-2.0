@@ -10,7 +10,15 @@ data class Event(
     val createdBy: UUID,
     val title: String,
     val description: String?,
-    val locationText: String,
+    // Адрес места; null = место не указано (опционально с V58, решение PO 2026-07-11).
+    val locationText: String?,
+    // Гео-точка места (WGS-84): null у событий без точки (легаси или созданы без места).
+    // Инвариант: оба null или оба заданы. Дефолты null, чтобы точечные выборки (findMyFeed),
+    // не показывающие карту, могли не читать колонки.
+    val locationLat: Double? = null,
+    val locationLon: Double? = null,
+    // Опциональное уточнение организатора к месту, отдельное от адреса; null = нет.
+    val locationHint: String? = null,
     val eventDatetime: OffsetDateTime,
     val participantLimit: Int,
     val votingOpensDaysBefore: Int,

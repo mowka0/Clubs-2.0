@@ -4,6 +4,8 @@ import com.clubs.bot.ChatTelegramGateway
 import com.clubs.event.Event
 import com.clubs.event.EventRepository
 import com.clubs.event.EventResponseRepository
+import com.clubs.event.OPEN_IN_YANDEX_MAPS_BUTTON
+import com.clubs.event.yandexMapsUrl
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.scheduling.annotation.Scheduled
@@ -170,7 +172,8 @@ class LivePinService(
             chatId = link.chatId,
             text = renderStatus(event),
             buttonText = renderer.buttonText(event),
-            url = renderer.eventUrl(event.id)
+            url = renderer.eventUrl(event.id),
+            secondaryButton = mapsButton(event)
         )
         if (messageId == null) {
             // Пост не удался — строку не создаём: повторная попытка случится при следующем
@@ -197,9 +200,14 @@ class LivePinService(
             messageId = messageId,
             text = renderStatus(event),
             buttonText = renderer.buttonText(event),
-            url = renderer.eventUrl(event.id)
+            url = renderer.eventUrl(event.id),
+            secondaryButton = mapsButton(event)
         )
     }
+
+    /** Вторая кнопка закрепа — точка события в Яндекс.Картах; null у события без гео-точки. */
+    private fun mapsButton(event: Event): Pair<String, String>? =
+        event.yandexMapsUrl?.let { OPEN_IN_YANDEX_MAPS_BUTTON to it }
 
     private fun closePin(pin: EventChatPin, event: Event) {
         pin.messageId?.let { messageId ->

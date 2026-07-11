@@ -34,7 +34,8 @@ sealed class ActivityItemDto {
         override val createdAt: OffsetDateTime,
         override val isCompleted: Boolean,
         val eventDatetime: OffsetDateTime,
-        val locationText: String,
+        // null = место не указано (опционально с V58).
+        val locationText: String?,
         val participantLimit: Int,
         val goingCount: Int,
         // Размер подтверждённого ростера stage-2. Лента показывает `goingCount` во время stage 1
