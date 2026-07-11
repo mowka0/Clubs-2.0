@@ -535,12 +535,13 @@ interface CreateActivityPickerProps {
 **Поля (те же что в существующем inline-form):**
 - `title` (string, required, max 255) — `Input`
 - `description` (string, optional) — `Textarea`
-- Место (required) — **с фичи event-geo (2026-07-11) не текстовый input**: кнопка
+- Место (optional) — **с фичи event-geo (2026-07-11) не текстовый input**: кнопка
   «Добавить место» → шит-пикер `LocationPickerSheet` (Яндекс.Карты, поиск адреса +
-  уточнение пином, fail-closed). Даёт `locationLat`/`locationLon` (обязательные) +
-  `locationText` (адрес из обратного геокодера, подрезается до 500). Ниже — поле
-  «Уточнение к месту (необязательно)» → `locationHint` (≤ 200). Спека:
-  [`event-geo.md`](./event-geo.md)
+  уточнение пином; у выбранного места кнопки «Изменить»/«Убрать»). Даёт
+  `locationLat`/`locationLon` + `locationText` (адрес из обратного геокодера,
+  подрезается до 500). Ниже — поле «Уточнение к месту» → `locationHint` (≤ 200).
+  **Правило (V58): точка ИЛИ непустое уточнение обязательны** — сабмит без обоих
+  блокируется. Спека: [`event-geo.md`](./event-geo.md)
 - `eventDatetime` (datetime-local, required, future) — `<input type="datetime-local">` обёрнут в `.brand-datetime` (стилизованный wrapper + brass calendar icon; нативный picker сохранён)
 - `participantLimit` (int, required, > 0) — `BrandStepper` (`[− N +]`), не `<input type="number">` (итерация 2)
 - `votingOpensDaysBefore` — **НЕ показывается в UI вообще**. Backend всегда применяет default 14 (определён в `CreateEventRequest`). Решение: упрощение формы для organizer'а; кастомизация — за отдельной фичей, если когда-нибудь будет реальный запрос.
