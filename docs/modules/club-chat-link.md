@@ -424,9 +424,9 @@ CREATE TABLE skladchina_chat_posts (
 Со строгим режимом (слайс 5) теги НЕ конфликтуют: тегированный участник — не админ,
 mute/ban работают на нём как на обычном. При уходе из клуба тег снимается (регалии клуба).
 
-**Рамка библиотеки**: telegrambots 7.10 не знает Bot API 9.5 — `setChatMemberTag`, чтение
-поля `tag` и права `can_manage_tags` выполняются прямыми HTTP-вызовами Bot API
-(`ChatTelegramGateway.rawApiCall`, токен тот же).
+**Рамка библиотеки** (снята 2026-07-11): telegrambots обновлена до 9.5.0 —
+`SetChatMemberTag`, поле `tag` и право `can_manage_tags` доступны типизированно;
+прямые HTTP-вызовы (`rawApiCall`) из `ChatTelegramGateway` удалены.
 
 ### Данные
 

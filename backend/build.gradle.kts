@@ -57,10 +57,10 @@ dependencies {
     // AWS S3 SDK
     implementation("software.amazon.awssdk:s3:2.25.0")
 
-    // Telegram Bot
-    implementation("org.telegram:telegrambots-springboot-longpolling-starter:7.10.0")
-    implementation("org.telegram:telegrambots-longpolling:7.10.0")
-    implementation("org.telegram:telegrambots-client:7.10.0")
+    // Telegram Bot (9.5 = Bot API 9.5: типизированные Member Tags + prepared messages для инвайтов)
+    implementation("org.telegram:telegrambots-springboot-longpolling-starter:9.5.0")
+    implementation("org.telegram:telegrambots-longpolling:9.5.0")
+    implementation("org.telegram:telegrambots-client:9.5.0")
 
     // PostgreSQL
     runtimeOnly("org.postgresql:postgresql")
