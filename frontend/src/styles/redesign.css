@@ -1552,3 +1552,11 @@
 .rd-fullblock-input::-webkit-outer-spin-button,
 .rd-fullblock-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .rd-fullblock-input { appearance: textfield; -moz-appearance: textfield; }
+
+/* Дестрактив-кнопка для подтверждений удаления — зеркалит rd-btn-primary в danger-цветах */
+.rd-btn-danger {
+  display: block; width: 100%; text-align: center; border: none; cursor: pointer;
+  background: var(--danger); color: #fff; font-weight: 700; font-size: 14px;
+  padding: 13px; border-radius: 13px; font-family: inherit;
+}
+.rd-btn-danger:disabled { opacity: .55; cursor: default; }

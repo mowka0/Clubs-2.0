@@ -1,14 +1,6 @@
 import { FC, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import {
-  Button,
-  Spinner,
-  Placeholder,
-  Input,
-  Modal,
-  Section,
-  Text,
-} from '@telegram-apps/telegram-ui';
+import { Spinner, Placeholder, Modal } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
@@ -611,35 +603,43 @@ export const ClubPage: FC = () => {
         <InviteSheet clubId={id} onClose={() => setShowInviteSheet(false)} />
       )}
 
-      {/* Модалка заявки (флоу гостя для закрытого клуба) */}
+      {/* Модалка заявки (флоу гостя: закрытый клуб или «Попроситься» в полный) */}
       {showApplyModal && (
         <Modal open onOpenChange={(open) => !open && setShowApplyModal(false)}>
-          <div style={{ padding: 16 }}>
-            <Text weight="2" style={{ fontSize: 18, display: 'block', marginBottom: 16 }}>
+          <div className="rd-modal-form" style={{ padding: 16 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 14px' }}>
               Заявка в клуб
-            </Text>
+            </h3>
             {club.applicationQuestion && (
-              <Section>
-                <div style={{ padding: '8px 16px', color: 'var(--tgui--hint_color)', fontSize: 14 }}>
-                  {club.applicationQuestion}
-                </div>
-                <Input
+              <label className="rd-field" style={{ marginBottom: 12 }}>
+                <span className="rd-label">{club.applicationQuestion}</span>
+                <input
+                  className="rd-input"
                   placeholder="Ваш ответ"
                   value={answerText}
                   onChange={(e) => setAnswerText(e.target.value)}
                 />
-              </Section>
+              </label>
             )}
-            {joinError && (
-              <div style={{ padding: '8px 0', color: 'var(--tgui--destructive_text_color)', fontSize: 14 }}>
-                {joinError}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              <Button size="m" mode="outline" onClick={() => setShowApplyModal(false)} stretched>Отмена</Button>
-              <Button size="m" onClick={handleApply} disabled={joining} stretched>
+            {joinError && <div className="rd-error" style={{ textAlign: 'left' }}>{joinError}</div>}
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button
+                type="button"
+                className="rd-btn-outline"
+                style={{ flex: 1 }}
+                onClick={() => setShowApplyModal(false)}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                className="rd-btn-primary"
+                style={{ flex: 1 }}
+                onClick={handleApply}
+                disabled={joining}
+              >
                 {joining ? <Spinner size="s" /> : 'Отправить'}
-              </Button>
+              </button>
             </div>
           </div>
         </Modal>
