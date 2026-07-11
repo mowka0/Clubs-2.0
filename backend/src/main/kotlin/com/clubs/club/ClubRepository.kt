@@ -13,6 +13,9 @@ interface ClubRepository {
 
     fun updateInviteCode(id: UUID, code: String): Club?
 
+    /** Точечное поднятие лимита участников («Расширить клуб и принять всех», club-invites). */
+    fun updateMemberLimit(id: UUID, memberLimit: Int): Club?
+
     fun update(id: UUID, request: UpdateClubRequest): Club?
 
     fun countByOwnerId(ownerId: UUID): Int

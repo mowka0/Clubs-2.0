@@ -41,7 +41,10 @@ class ClubMapper {
         includeRequisites: Boolean = false,
         chatLinked: Boolean = false,
         chatDoorEnabled: Boolean = false,
-        chatInviteLink: String? = null
+        chatInviteLink: String? = null,
+        // Имя владельца заполняет только посадочная инвайта (club-invites) — см. ClubDetailDto.
+        ownerFirstName: String? = null,
+        ownerLastName: String? = null
     ): ClubDetailDto = ClubDetailDto(
         id = club.id,
         ownerId = club.ownerId,
@@ -63,6 +66,8 @@ class ClubMapper {
         paymentMethodNote = if (includeRequisites) club.paymentMethodNote else null,
         chatLinked = chatLinked,
         chatDoorEnabled = chatDoorEnabled,
-        chatInviteLink = chatInviteLink
+        chatInviteLink = chatInviteLink,
+        ownerFirstName = ownerFirstName,
+        ownerLastName = ownerLastName
     )
 }

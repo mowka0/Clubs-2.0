@@ -3,9 +3,7 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 import {
   Spinner,
   Placeholder,
-  Button,
   Modal,
-  Text,
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
@@ -167,8 +165,9 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
       return;
     }
     const limit = Number(memberLimit);
-    if (!Number.isInteger(limit) || limit < 10 || limit > 80) {
-      fail('memberLimit', 'Лимит участников: 10–80');
+    // Минимум временно 1 (тест заполняемости, PO 2026-07-11) — согласовано с UpdateClubRequest.
+    if (!Number.isInteger(limit) || limit < 1 || limit > 80) {
+      fail('memberLimit', 'Лимит участников: 1–80');
       return;
     }
     const price = Number(subscriptionPrice);
@@ -381,25 +380,33 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
       </button>
 
       <Modal open={showDeleteModal} onOpenChange={(v) => !deleting && setShowDeleteModal(v)}>
-        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Text weight="2">Удалить клуб «{club.name}»?</Text>
-          <Text>
+        <div className="rd-modal-form" style={{ padding: 16 }}>
+          <h3 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 10px' }}>
+            Удалить клуб «{club.name}»?
+          </h3>
+          <p style={{ fontSize: 13.5, color: 'var(--text-dim)', lineHeight: 1.55, margin: '0 0 16px' }}>
             Клуб скроется из каталога и «Моих клубов». {club.memberCount} активных участников потеряют доступ.
             Это действие необратимо.
-          </Text>
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <Button
-              size="m"
-              stretched
-              mode="outline"
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className="rd-btn-outline"
+              style={{ flex: 1 }}
               onClick={() => setShowDeleteModal(false)}
               disabled={deleting}
             >
               Отмена
-            </Button>
-            <Button size="m" stretched onClick={handleDelete} disabled={deleting}>
+            </button>
+            <button
+              type="button"
+              className="rd-btn-danger"
+              style={{ flex: 1 }}
+              onClick={handleDelete}
+              disabled={deleting}
+            >
               {deleting ? <Spinner size="s" /> : 'Удалить'}
-            </Button>
+            </button>
           </div>
         </div>
       </Modal>

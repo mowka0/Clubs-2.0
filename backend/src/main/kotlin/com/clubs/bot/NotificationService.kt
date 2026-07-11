@@ -7,7 +7,10 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
+import org.telegram.telegrambots.meta.api.methods.message.SavePreparedInlineMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.objects.inlinequery.inputmessagecontent.InputTextMessageContent
+import org.telegram.telegrambots.meta.api.objects.inlinequery.result.InlineQueryResultArticle
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow
@@ -238,15 +241,66 @@ class NotificationService(
     fun sendApplicationCreatedDM(
         organizerTelegramId: Long,
         applicantDisplayName: String,
-        clubName: String
+        clubName: String,
+        clubFull: Boolean = false
     ) {
-        val text = "📥 Новая заявка от $applicantDisplayName в клуб «$clubName»"
+        // club-invites: заявка в полный клуб = просьба расширить лимит — говорим это оргу сразу,
+        // чтобы «Принять» в инбоксе не стало сюрпризом «мест нет».
+        val fullNote = if (clubFull) "\n👥 Клуб полон — можно расширить лимит и принять прямо из заявок" else ""
+        val text = "📥 Новая заявка от $applicantDisplayName в клуб «$clubName»$fullNote"
         sendDm(
             chatId = organizerTelegramId.toString(),
             text = text,
             webAppPath = "/my-clubs?focus=inbox",
             buttonText = "Открыть заявки"
         )
+    }
+
+    /**
+     * Prepared message для личных приглашений (club-invites): бот заранее собирает карточку
+     * «приглашение в клуб» с url-кнопкой, а Mini App отдаёт её в нативный пикер через
+     * shareMessage — сообщение уходит ОТ ИМЕНИ пользователя [sharerTelegramId], не от бота.
+     * Синхронный вызов (не @Async): id нужен фронту в ответе эндпоинта. null = сбой Telegram —
+     * вызывающий деградирует шит до «Скопировать ссылку».
+     */
+    fun savePreparedInviteMessage(
+        sharerTelegramId: Long,
+        messageHtml: String,
+        buttonText: String,
+        buttonUrl: String
+    ): String? = try {
+        val card = InlineQueryResultArticle.builder()
+            .id(UUID.randomUUID().toString())
+            .title("Приглашение в клуб")
+            .inputMessageContent(
+                InputTextMessageContent.builder()
+                    .messageText(messageHtml)
+                    .parseMode("HTML")
+                    .build()
+            )
+            .replyMarkup(
+                InlineKeyboardMarkup.builder()
+                    .keyboardRow(InlineKeyboardRow(InlineKeyboardButton.builder().text(buttonText).url(buttonUrl).build()))
+                    .build()
+            )
+            .build()
+        val prepared = telegramClient.execute(
+            SavePreparedInlineMessage.builder()
+                .userId(sharerTelegramId)
+                .result(card)
+                // Личные приглашения: люди и группы; боты/каналы — не наш сценарий.
+                // Все четыре флага ОБЯЗАТЕЛЬНЫ: поля @NonNull в библиотеке, незаданный флаг
+                // роняет builder («allowChannelChats is marked non-null but is null»).
+                .allowUserChats(true)
+                .allowGroupChats(true)
+                .allowBotChats(false)
+                .allowChannelChats(false)
+                .build()
+        )
+        prepared.messageId
+    } catch (e: Exception) {
+        log.warn("savePreparedInviteMessage failed: telegramId={} error={}", sharerTelegramId, e.message)
+        null
     }
 
     /**

@@ -152,9 +152,15 @@ describe('CreateClubModal', () => {
     const submitButton = screen.getByRole('button', { name: /создать клуб/i });
     await user.click(submitButton);
 
+    // club-invites (кадр E): после создания — экран «Клуб создан 🎉», а не мгновенный onCreated.
     await waitFor(() => {
-      expect(onCreated).toHaveBeenCalledWith('created-club-id');
+      expect(screen.getByText(/Клуб «API Test Club» создан/)).toBeInTheDocument();
     });
+    expect(onCreated).not.toHaveBeenCalled();
+
+    // «Пригласить участников» → onCreated с флагом открытия шита приглашения.
+    await user.click(screen.getByRole('button', { name: /пригласить участников/i }));
+    expect(onCreated).toHaveBeenCalledWith('created-club-id', true);
 
     expect(capturedBody).not.toBeNull();
     expect(capturedBody!.name).toBe('API Test Club');

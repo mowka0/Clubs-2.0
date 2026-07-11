@@ -10,6 +10,7 @@ import { getStartParam } from '../telegram/sdk';
  *   - `skladchina_<uuid>`   →  /skladchina/<uuid>
  *   - `event_<uuid>`        →  /events/<uuid>
  *   - `club_<uuid>`         →  /clubs/<uuid>
+ *   - `invite_<code>`       →  /invite/<code>   (личные приглашения, club-invites)
  *
  * Идемпотентен — срабатывает только на первом монтировании за сессию; дальнейшие рендеры пропускают.
  */
@@ -37,6 +38,13 @@ export const DeepLinkHandler: FC = () => {
     const club = startParam.match(/^club_([0-9a-f-]{36})$/i);
     if (club) {
       navigate(`/clubs/${club[1]}`, { replace: true });
+      return;
+    }
+    // Инвайт-код — 16 hex-символов (ClubService.generateInviteCode); диапазон в regex
+    // шире на случай будущей смены длины.
+    const invite = startParam.match(/^invite_([0-9a-f]{8,64})$/i);
+    if (invite) {
+      navigate(`/invite/${invite[1]}`, { replace: true });
       return;
     }
   }, [navigate]);

@@ -305,6 +305,10 @@ export interface ClubBriefDto {
   id: string;
   name: string;
   avatarUrl: string | null;
+  // Вместимость клуба (club-invites): инбокс собирает заявки ПОЛНОГО клуба в блок
+  // «Расширить клуб и принять всех» — для группировки нужны живой счётчик и лимит.
+  memberCount: number;
+  memberLimit: number;
 }
 
 export interface PendingApplicationDto {
@@ -357,6 +361,20 @@ export interface ClubDetailDto {
   chatDoorEnabled: boolean;
   // Door-ссылка для кнопки «Чат клуба» — только участникам с доступом + владельцу; иначе null.
   chatInviteLink: string | null;
+  // Имя владельца — заполнено ТОЛЬКО в ответе GET /api/invite/{code} (подпись
+  // «Приглашение от <имя>» на посадочной, club-invites); в остальных ответах null.
+  ownerFirstName?: string | null;
+  ownerLastName?: string | null;
+}
+
+/**
+ * Ответ POST /api/clubs/{id}/invite-share (club-invites): deep-link приглашения +
+ * id prepared message для нативного шаринга. preparedMessageId = null — Telegram не
+ * ответил, шит оставляет только «Скопировать ссылку».
+ */
+export interface InviteShareDto {
+  inviteUrl: string;
+  preparedMessageId: string | null;
 }
 
 /**

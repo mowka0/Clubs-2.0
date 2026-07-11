@@ -74,7 +74,7 @@ DELETE /api/clubs/{id}     → 204 No Content        (soft delete)
 | category | one of: sport, creative, food, board_games, cinema, education, travel, other | 400 |
 | accessType | one of: open, closed, private | 400 |
 | city | not blank | 400 |
-| memberLimit | 10-80 | 400 |
+| memberLimit | 1-80 (мин. временно 1, V56; было 10) | 400 |
 | subscriptionPrice | >= 0 (0 = free club) | 400 |
 
 ### UpdateClubRequest (PUT /api/clubs/{id})
@@ -149,7 +149,7 @@ Backend явно не принимает category/accessType в `UpdateClubReque
 2. Название — 1-60 символов
 3. Город — not blank
 4. Район (опционально)
-5. Лимит участников — 10-80
+5. Лимит участников — 1-80 (минимум временно 1 для теста заполняемости, V56; было 10)
 6. Цена подписки — `0` (free) или `>= 1` (Stars)
 7. Описание — 1-500 символов
 8. Правила (опционально)

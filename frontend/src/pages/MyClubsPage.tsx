@@ -16,6 +16,7 @@ import { queryKeys } from '../queries/queryKeys';
 import { Toast } from '../components/Toast';
 import { CreateClubModal } from '../components/CreateClubModal';
 import { ApplicationReviewModal } from '../components/applications/ApplicationReviewModal';
+import { FullClubBlock } from '../components/applications/FullClubBlock';
 import { MemberProfileModal } from '../components/club/MemberProfileModal';
 import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
 import { formatPeerSignal } from '../features/applications-inbox/lib/peer-signal-format';
@@ -755,6 +756,22 @@ export const MyClubsPage: FC = () => {
   const myApplicationsCount = myActiveApps.length;
   const organizerInboxCount = pendingInbox.length;
 
+  // club-invites (кадры H/I): заявки ПОЛНЫХ клубов собираются в блоки «Расширить клуб и принять
+  // всех» (по блоку на клуб); заявки клубов с местами остаются обычными карточками.
+  const fullClubGroups = useMemo(() => {
+    const groups = new Map<string, PendingApplicationDto[]>();
+    for (const p of pendingInbox) {
+      if (p.club.memberCount >= p.club.memberLimit) {
+        groups.set(p.club.id, [...(groups.get(p.club.id) ?? []), p]);
+      }
+    }
+    return [...groups.values()];
+  }, [pendingInbox]);
+  const regularInbox = useMemo(
+    () => pendingInbox.filter((p) => p.club.memberCount < p.club.memberLimit),
+    [pendingInbox],
+  );
+
   const loading = myClubsQuery.isPending || applicationsQuery.isPending;
   const empty =
     !loading &&
@@ -763,9 +780,11 @@ export const MyClubsPage: FC = () => {
     organizerInboxCount === 0 &&
     historyClubs.length === 0;
 
-  const handleCreated = (id: string) => {
+  // club-invites (кадр E): выбор сделан на экране «Клуб создан 🎉» внутри модалки —
+  // «Пригласить участников» открывает клуб с шитом приглашения, «Позже» — просто клуб.
+  const handleCreated = (id: string, openInvite: boolean) => {
     setShowCreateModal(false);
-    navigate(`/clubs/${id}/manage`);
+    navigate(`/clubs/${id}`, openInvite ? { state: { openInvite: true } } : undefined);
   };
 
   const openCreate = () => {
@@ -917,24 +936,35 @@ export const MyClubsPage: FC = () => {
         </>
       )}
 
-      {/* 2. Заявки в мои клубы (инбокс организатора) — ждут рассмотрения */}
+      {/* 2. Заявки в мои клубы (инбокс организатора) — ждут рассмотрения.
+             Заявки полных клубов — блоками «Расширить клуб и принять всех» (club-invites). */}
       {!loading && organizerInboxCount > 0 && (
         <>
-          <div className="rd-section-sub-h">
+          <div ref={inboxSectionRef} className="rd-section-sub-h">
             Заявки в мои клубы <span className="rd-count">· {organizerInboxCount}</span>
           </div>
-          <div ref={inboxSectionRef} className="rd-glass rd-rep-panel">
-            {pendingInbox.map((p) => (
-              <PendingAppCard
-                key={p.applicationId}
-                pending={p}
-                onClick={() => {
-                  haptic.impact('light');
-                  setReviewing(p);
-                }}
-              />
-            ))}
-          </div>
+          {fullClubGroups.map((group) => (
+            <FullClubBlock
+              key={group[0]!.club.id}
+              applications={group}
+              onReview={(p) => { setReviewing(p); }}
+              onExpanded={(message) => setToastMessage(message)}
+            />
+          ))}
+          {regularInbox.length > 0 && (
+            <div className="rd-glass rd-rep-panel">
+              {regularInbox.map((p) => (
+                <PendingAppCard
+                  key={p.applicationId}
+                  pending={p}
+                  onClick={() => {
+                    haptic.impact('light');
+                    setReviewing(p);
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </>
       )}
 

@@ -15,10 +15,20 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 class InviteController(
     private val clubService: ClubService,
-    private val membershipService: MembershipService
+    private val membershipService: MembershipService,
+    private val inviteShareService: InviteShareService
 ) {
 
     private val log = LoggerFactory.getLogger(InviteController::class.java)
+
+    @PostMapping("/api/clubs/{id}/invite-share")
+    fun createInviteShare(
+        @PathVariable id: java.util.UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<InviteShareDto> {
+        log.info("Invite share requested: clubId={} userId={}", id, user.userId)
+        return ResponseEntity.ok(inviteShareService.createShare(id, user.userId))
+    }
 
     @GetMapping("/api/invite/{code}")
     fun getClubByInvite(

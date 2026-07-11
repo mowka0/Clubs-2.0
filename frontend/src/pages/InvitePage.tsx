@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
-import { useClubByInviteQuery, useJoinByInviteMutation } from '../queries/clubs';
+import { useApplyToClubMutation, useClubByInviteQuery, useJoinByInviteMutation, useMyClubsQuery } from '../queries/clubs';
 import { formatPrice } from '../utils/formatters';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -28,15 +28,30 @@ export const InvitePage: FC = () => {
   const haptic = useHaptic();
 
   const clubQuery = useClubByInviteQuery(code);
+  const myClubsQuery = useMyClubsQuery();
   const joinMutation = useJoinByInviteMutation();
+  const applyMutation = useApplyToClubMutation();
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
+  const [applied, setApplied] = useState(false);
+  const [answerText, setAnswerText] = useState('');
 
   const club = clubQuery.data;
   const loading = clubQuery.isPending;
   const loadError = clubQuery.error?.message;
-  const joining = joinMutation.isPending;
+  const joining = joinMutation.isPending || applyMutation.isPending;
+
+  // club-invites (кадр G): в полный клуб прямое вступление невозможно — приглашение
+  // деградирует в обычную заявку, организатор может расширить клуб из инбокса.
+  const isClubFull = !!club && club.memberCount >= club.memberLimit;
+
+  // Приглашение открыл человек, который уже в клубе (active / frozen / expired — место
+  // занято): вместо CTA вступления — «Перейти в клуб». Отфильтровать его в нативном
+  // пикере Telegram нельзя (пикер не сообщает и не ограничивает выбор), поэтому
+  // страхуемся на посадочной; бэкенд повторное вступление и так отбивает (409).
+  const myMembership = myClubsQuery.data?.find((m) => m.clubId === club?.id);
+  const isAlreadyMember = !!myMembership && ['active', 'frozen', 'expired'].includes(myMembership.status);
 
   const handleJoin = () => {
     if (!code) return;
@@ -52,6 +67,29 @@ export const InvitePage: FC = () => {
         haptic.notify('error');
       },
     });
+  };
+
+  const handleApply = () => {
+    if (!club) return;
+    if (club.applicationQuestion && !answerText.trim()) {
+      setActionError('Введите ответ на вопрос организатора');
+      return;
+    }
+    haptic.impact('medium');
+    setActionError(null);
+    applyMutation.mutate(
+      { clubId: club.id, answerText: answerText.trim() },
+      {
+        onSuccess: () => {
+          setApplied(true);
+          haptic.notify('success');
+        },
+        onError: (e) => {
+          setActionError(e.message);
+          haptic.notify('error');
+        },
+      },
+    );
   };
 
   if (loading) {
@@ -100,6 +138,28 @@ export const InvitePage: FC = () => {
     );
   }
 
+  if (applied) {
+    return (
+      <div className="rd-page">
+        <div className="rd-glass rd-empty" style={{ marginTop: 40 }}>
+          <div className="rd-title">Заявка отправлена</div>
+          <div className="rd-sub">
+            В клубе «{club.name}» сейчас нет мест. Организатор увидит вашу заявку и может
+            расширить клуб — мы сообщим о решении.
+          </div>
+          <button
+            type="button"
+            className="rd-btn-primary"
+            onClick={() => { haptic.impact('light'); navigate('/', { replace: true }); }}
+            style={{ maxWidth: 240, margin: '0 auto' }}
+          >
+            К списку клубов
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rd-page">
       <div className="rd-ft-eyebrow">Приглашение в клуб</div>
@@ -118,11 +178,21 @@ export const InvitePage: FC = () => {
 
       <div className="rd-glass rd-rep-panel" style={{ marginBottom: 14 }}>
         <div className="rd-kv"><span>Город</span><span className="rd-v">{club.city}</span></div>
-        <div className="rd-kv"><span>Участники</span><span className="rd-v">{club.memberCount} / {club.memberLimit}</span></div>
+        <div className="rd-kv">
+          <span>Участники</span>
+          <span className="rd-v">{club.memberCount} / {club.memberLimit}{isClubFull ? ' · мест нет' : ''}</span>
+        </div>
         {club.subscriptionPrice > 0 && (
           <div className="rd-kv"><span>Подписка</span><span className="rd-v">{formatPrice(club.subscriptionPrice)}</span></div>
         )}
       </div>
+
+      {!isAlreadyMember && isClubFull && (
+        <div className="rd-cl-chip">
+          <span aria-hidden="true">👥</span>
+          <span>В клубе кончились места — вы всё равно можете попроситься, организатор может расширить клуб</span>
+        </div>
+      )}
 
       {club.description && (
         <>
@@ -133,12 +203,50 @@ export const InvitePage: FC = () => {
         </>
       )}
 
+      {/* Полный клуб + вопрос организатора: заявка требует ответа — поле в общем стиле форм. */}
+      {!isAlreadyMember && isClubFull && club.applicationQuestion && (
+        <label className="rd-field" style={{ marginBottom: 14 }}>
+          <span className="rd-label">{club.applicationQuestion}</span>
+          <input
+            className="rd-input"
+            placeholder="Ваш ответ"
+            value={answerText}
+            onChange={(e) => setAnswerText(e.target.value)}
+          />
+        </label>
+      )}
+
       {actionError && <div className="rd-error">{actionError}</div>}
 
       <div className="rd-cta-wrap">
-        <button type="button" className="rd-btn-primary" onClick={handleJoin} disabled={joining}>
-          {joining ? <Spinner size="s" /> : 'Вступить в клуб'}
-        </button>
+        {isAlreadyMember ? (
+          <>
+            <div className="rd-cl-chip">
+              <span aria-hidden="true">✓</span>
+              <span>Вы уже состоите в этом клубе</span>
+            </div>
+            <button
+              type="button"
+              className="rd-btn-primary"
+              onClick={() => { haptic.impact('light'); navigate(`/clubs/${club.id}`, { replace: true }); }}
+            >
+              Перейти в клуб
+            </button>
+          </>
+        ) : isClubFull ? (
+          <button type="button" className="rd-btn-primary" onClick={handleApply} disabled={joining}>
+            {joining ? <Spinner size="s" /> : 'Попроситься в клуб'}
+          </button>
+        ) : (
+          <button type="button" className="rd-btn-primary" onClick={handleJoin} disabled={joining}>
+            {joining ? <Spinner size="s" /> : 'Вступить в клуб'}
+          </button>
+        )}
+        {!isAlreadyMember && club.ownerFirstName && (
+          <div className="rd-cta-hint">
+            Приглашение от {club.ownerFirstName}{club.ownerLastName ? ` ${club.ownerLastName}` : ''}
+          </div>
+        )}
       </div>
     </div>
   );

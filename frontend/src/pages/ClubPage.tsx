@@ -1,14 +1,6 @@
 import { FC, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import {
-  Button,
-  Spinner,
-  Placeholder,
-  Input,
-  Modal,
-  Section,
-  Text,
-} from '@telegram-apps/telegram-ui';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { Spinner, Placeholder, Modal } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
@@ -32,6 +24,7 @@ import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
 import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
+import { InviteSheet } from '../components/club/InviteSheet';
 import { LeaveClubModal } from '../components/club/LeaveClubModal';
 
 const ACCESS_LABELS: Record<string, string> = {
@@ -74,9 +67,14 @@ export const ClubPage: FC = () => {
   useBackButton(true);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const haptic = useHaptic();
   const { user } = useAuthStore();
   useSetClubContext(id);
+
+  // club-invites (кадр E, momentum): после создания клуба MyClubsPage ведёт сюда с
+  // state.openInvite — открываем таб «Участники» с уже открытым шитом приглашения.
+  const openInviteOnMount = !!(location.state as { openInvite?: boolean } | null)?.openInvite;
 
   const clubQuery = useClubQuery(id);
   const myClubsQuery = useMyClubsQuery();
@@ -89,13 +87,14 @@ export const ClubPage: FC = () => {
 
   const [joinError, setJoinError] = useState<string | null>(null);
   const [showApplyModal, setShowApplyModal] = useState(false);
+  const [showInviteSheet, setShowInviteSheet] = useState(openInviteOnMount);
   const [answerText, setAnswerText] = useState('');
   // De-Stars: вступление возвращает MembershipDto. В платном клубе membership попадает в `frozen`
   // (нет доступа, пока организатор не подтвердит офлайн-взнос); в бесплатном — сразу `active`.
   // Запоминаем статус из результата мутации, чтобы CTA среагировал раньше, чем придёт рефетч membership.
   const [joinedStatus, setJoinedStatus] = useState<string | null>(null);
   const [showDuesSheet, setShowDuesSheet] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabId>('activities');
+  const [activeTab, setActiveTab] = useState<TabId>(openInviteOnMount ? 'members' : 'activities');
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
 
@@ -315,6 +314,31 @@ export const ClubPage: FC = () => {
         <button type="button" className="rd-btn-outline" disabled>
           Заявка одобрена — организатор откроет доступ
         </button>
+      );
+    }
+    // club-invites (кадр F): клуб полон — прямое вступление невозможно при любом типе доступа,
+    // витрина деградирует в заявку-«просьбу расширить». Решение за организатором (инбокс).
+    if (club.memberCount >= club.memberLimit) {
+      return (
+        <>
+          <div className="rd-cl-chip">
+            <span aria-hidden="true">👥</span>
+            <span>Клуб сейчас полон — вы всё равно можете попроситься, организатор может расширить клуб</span>
+          </div>
+          <button
+            type="button"
+            className="rd-btn-primary"
+            onClick={() => {
+              // Есть вопрос клуба → обычная модалка заявки; нет — подаём сразу.
+              if (club.applicationQuestion) { haptic.impact('light'); setShowApplyModal(true); return; }
+              handleApply();
+            }}
+            disabled={joining}
+          >
+            {joining ? <Spinner size="s" /> : 'Попроситься в клуб'}
+          </button>
+          <div className="rd-cta-hint">Заявка попадёт к организатору — он решает, расширять ли клуб</div>
+        </>
       );
     }
     if (club.accessType === 'open') {
@@ -553,40 +577,69 @@ export const ClubPage: FC = () => {
               «Скоро закончится» / «Оплата вступления» (раньше жили в дублирующем табе «Управление»,
               теперь участники только тут). Обычный участник видит плоский список — бакеты за гейтом. */}
           {activeTab === 'members' && (
-            <ClubMembersTab clubId={id} isOrganizer={isOrganizer} managementView={isOrganizer} />
+            <>
+              {/* club-invites (кадр A): личные приглашения — вход там, где орг видит состав.
+                  Только владелец/organizer; обычному участнику строка не показывается. */}
+              {isOrganizer && (
+                <button
+                  type="button"
+                  className="rd-invite-row"
+                  onClick={() => { haptic.impact('light'); setShowInviteSheet(true); }}
+                >
+                  <span className="rd-invite-plus" aria-hidden="true">＋</span>
+                  <span className="rd-invite-txt">
+                    <b>Пригласить в клуб</b>
+                    <span>Отправьте приглашение от своего имени</span>
+                  </span>
+                </button>
+              )}
+              <ClubMembersTab clubId={id} isOrganizer={isOrganizer} managementView={isOrganizer} />
+            </>
           )}
         </>
       )}
 
-      {/* Модалка заявки (флоу гостя для закрытого клуба) */}
+      {showInviteSheet && id && (
+        <InviteSheet clubId={id} onClose={() => setShowInviteSheet(false)} />
+      )}
+
+      {/* Модалка заявки (флоу гостя: закрытый клуб или «Попроситься» в полный) */}
       {showApplyModal && (
         <Modal open onOpenChange={(open) => !open && setShowApplyModal(false)}>
-          <div style={{ padding: 16 }}>
-            <Text weight="2" style={{ fontSize: 18, display: 'block', marginBottom: 16 }}>
+          <div className="rd-modal-form" style={{ padding: 16 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 14px' }}>
               Заявка в клуб
-            </Text>
+            </h3>
             {club.applicationQuestion && (
-              <Section>
-                <div style={{ padding: '8px 16px', color: 'var(--tgui--hint_color)', fontSize: 14 }}>
-                  {club.applicationQuestion}
-                </div>
-                <Input
+              <label className="rd-field" style={{ marginBottom: 12 }}>
+                <span className="rd-label">{club.applicationQuestion}</span>
+                <input
+                  className="rd-input"
                   placeholder="Ваш ответ"
                   value={answerText}
                   onChange={(e) => setAnswerText(e.target.value)}
                 />
-              </Section>
+              </label>
             )}
-            {joinError && (
-              <div style={{ padding: '8px 0', color: 'var(--tgui--destructive_text_color)', fontSize: 14 }}>
-                {joinError}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              <Button size="m" mode="outline" onClick={() => setShowApplyModal(false)} stretched>Отмена</Button>
-              <Button size="m" onClick={handleApply} disabled={joining} stretched>
+            {joinError && <div className="rd-error" style={{ textAlign: 'left' }}>{joinError}</div>}
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button
+                type="button"
+                className="rd-btn-outline"
+                style={{ flex: 1 }}
+                onClick={() => setShowApplyModal(false)}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                className="rd-btn-primary"
+                style={{ flex: 1 }}
+                onClick={handleApply}
+                disabled={joining}
+              >
                 {joining ? <Spinner size="s" /> : 'Отправить'}
-              </Button>
+              </button>
             </div>
           </div>
         </Modal>

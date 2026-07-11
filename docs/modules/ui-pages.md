@@ -83,7 +83,7 @@ Frontend рендерит теги как badges на `ClubCard`.
 |-----|------|
 | 1 | `name` (до 60 символов), `city`, `district?` |
 | 2 | `category` (select), `accessType` (radio: open/closed) |
-| 3 | `memberLimit` (10-80), `subscriptionPrice` (0 или > 0) |
+| 3 | `memberLimit` (1-80), `subscriptionPrice` (0 или > 0) |
 | 4 | `description` (до 500 символов), `rules?` |
 | 5 | `applicationQuestion?` (если accessType = closed) |
 
@@ -97,7 +97,7 @@ X = memberLimit * subscriptionPrice * 0.8
 ### Валидация
 - `name`: 3-60 символов
 - `city`: обязательный
-- `memberLimit`: 10-80 (синхронизировано с backend `@Min(10) @Max(80)` в `CreateClubRequest`)
+- `memberLimit`: 1-80 (синхронизировано с backend `@Min(1) @Max(80)` в `CreateClubRequest`; минимум временно 1 — тест заполняемости, V56)
 - `subscriptionPrice`: 0 или >= 100 (в Telegram Stars)
 - `description`: до 500 символов
 - `applicationQuestion`: до 200 символов

@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import type { ClubDetailDto, ClubListItemDto, MembershipDto, OrganizerCardDto, PageResponse } from '../types/api';
+import type { ClubDetailDto, ClubListItemDto, InviteShareDto, MembershipDto, OrganizerCardDto, PageResponse } from '../types/api';
 
 export interface ClubFilters {
   category?: string;
@@ -51,6 +51,15 @@ export function getMyClubs(): Promise<MembershipDto[]> {
 
 export function getClubByInvite(code: string): Promise<ClubDetailDto> {
   return apiClient.get<ClubDetailDto>(`/api/invite/${code}`);
+}
+
+/**
+ * Данные для боттом-шита «Пригласить» (club-invites): deep-link + prepared message.
+ * Только владелец/organizer. Вызывается при каждом открытии шита — prepared message
+ * короткоживущий на стороне Telegram, кэшировать нельзя.
+ */
+export function createInviteShare(clubId: string): Promise<InviteShareDto> {
+  return apiClient.post<InviteShareDto>(`/api/clubs/${clubId}/invite-share`);
 }
 
 export interface UpdateClubBody {

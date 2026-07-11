@@ -4,6 +4,7 @@ import {
   initData,
   viewport,
   swipeBehavior,
+  shareMessage,
 } from '@telegram-apps/sdk-react';
 
 let initialized = false;
@@ -92,6 +93,28 @@ export function getStartParam(): string | null {
     ?.Telegram?.WebApp?.initDataUnsafe?.start_param;
   if (fromNative) return fromNative;
   return null;
+}
+
+/**
+ * Доступен ли нативный шаринг prepared message (Mini Apps 8.0+). false — старый клиент
+ * или не-Telegram среда: боттом-шит приглашения прячет «Отправить в Telegram»
+ * и оставляет только «Скопировать ссылку».
+ */
+export function canShareMessage(): boolean {
+  try {
+    return shareMessage.isAvailable();
+  } catch (_e) {
+    return false;
+  }
+}
+
+/**
+ * Открывает нативный пикер чатов с карточкой-приглашением (club-invites): сообщение,
+ * заранее собранное ботом (savePreparedInlineMessage), уходит ОТ ИМЕНИ пользователя.
+ * Бросает исключение при отказе/сбое — вызывающий показывает ошибку в шите.
+ */
+export async function shareInviteMessage(preparedMessageId: string): Promise<void> {
+  await shareMessage(preparedMessageId);
 }
 
 export function getInitDataRaw(): string {

@@ -41,7 +41,7 @@ class ClubServiceTest {
         applicationRepository = mockk(relaxed = true)
         subscriptionService = mockk(relaxed = true)
         mapper = ClubMapper()
-        clubService = ClubService(clubRepository, membershipRepository, eventRepository, skladchinaRepository, applicationRepository, subscriptionService, chatLinkRepository = mockk(relaxed = true), mapper = mapper)
+        clubService = ClubService(clubRepository, membershipRepository, eventRepository, skladchinaRepository, applicationRepository, subscriptionService, chatLinkRepository = mockk(relaxed = true), userRepository = mockk(relaxed = true), mapper = mapper)
     }
 
     private fun makeClub(

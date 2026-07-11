@@ -56,7 +56,21 @@ data class ClubDetailDto(
     val chatDoorEnabled: Boolean = false,
     // Door-ссылка для кнопки «Чат клуба» — ТОЛЬКО участникам с доступом (active / cancelled-в-периоде)
     // и владельцу; гостям/frozen/expired — null (least exposure, как paymentLink).
-    val chatInviteLink: String? = null
+    val chatInviteLink: String? = null,
+    // Имя владельца — только для посадочной инвайта (подпись «Приглашение от <имя>», club-invites).
+    // В остальных ответах null: не тянем лишний lookup пользователя.
+    val ownerFirstName: String? = null,
+    val ownerLastName: String? = null
+)
+
+/**
+ * Ответ POST /api/clubs/{id}/invite-share (club-invites): deep-link для «Скопировать ссылку»
+ * + id prepared message для нативного шаринга. preparedMessageId = null — Telegram не ответил,
+ * фронт оставляет в шите только копирование.
+ */
+data class InviteShareDto(
+    val inviteUrl: String,
+    val preparedMessageId: String?
 )
 
 data class CreateClubRequest(
@@ -80,7 +94,8 @@ data class CreateClubRequest(
     val district: String? = null,
 
     @field:NotNull(message = "Member limit is required")
-    @field:Min(value = 10, message = "Member limit must be at least 10")
+    // Минимум временно 1 (было 10) — тест заполняемости полного клуба (PO 2026-07-11, club-invites).
+    @field:Min(value = 1, message = "Member limit must be at least 1")
     @field:Max(value = 80, message = "Member limit must be at most 80")
     val memberLimit: Int,
 
@@ -110,7 +125,8 @@ data class UpdateClubRequest(
     val city: String? = null,
     val district: String? = null,
 
-    @field:Min(value = 10, message = "Member limit must be at least 10")
+    // Минимум временно 1 (было 10) — тест заполняемости полного клуба (PO 2026-07-11, club-invites).
+    @field:Min(value = 1, message = "Member limit must be at least 1")
     @field:Max(value = 80, message = "Member limit must be at most 80")
     val memberLimit: Int? = null,
 

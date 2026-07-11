@@ -62,7 +62,9 @@ class ApplicationMapper {
     fun toClubBrief(club: Club): ClubBriefDto = ClubBriefDto(
         id = club.id,
         name = club.name,
-        avatarUrl = club.avatarUrl
+        avatarUrl = club.avatarUrl,
+        memberCount = club.memberCount,
+        memberLimit = club.memberLimit
     )
 
     fun toPendingDto(

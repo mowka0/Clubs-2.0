@@ -3,6 +3,7 @@ import {
   approveApplication,
   cancelApplication,
   completeFreeMembership,
+  expandAndApprove,
   getMyApplications,
   getMyClubsActionCounts,
   getMyPendingApplications,
@@ -66,6 +67,34 @@ export function useApproveApplicationMutation() {
       // …и кросс-клубовый блок «Оплата вступления» на «Мои клубы» — новый frozen-участник должен
       // появиться и там, а не только в Управление → Участники (иначе там свой 60-сек staleTime).
       qc.invalidateQueries({ queryKey: queryKeys.organizer.awaitingDues });
+    },
+  });
+}
+
+interface ExpandAndApproveArgs {
+  clubId: string;
+  newMemberLimit: number;
+  applicationIds: string[];
+}
+
+/**
+ * «Расширить клуб и принять всех» (club-invites): те же инвалидции, что у одобрения,
+ * плюс детали клуба — у него вырос memberLimit, блок полного клуба в инбоксе должен рассыпаться.
+ */
+export function useExpandAndApproveMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, newMemberLimit, applicationIds }: ExpandAndApproveArgs) =>
+      expandAndApprove(clubId, newMemberLimit, applicationIds),
+    onSuccess: (_data, { clubId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.applications(clubId) });
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.applications(clubId, 'pending') });
+      qc.invalidateQueries({ queryKey: queryKeys.applications.mine() });
+      qc.invalidateQueries({ queryKey: queryKeys.applications.myPending });
+      qc.invalidateQueries({ queryKey: queryKeys.applications.myPendingActionCounts });
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.members(clubId) });
+      qc.invalidateQueries({ queryKey: queryKeys.organizer.awaitingDues });
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.detail(clubId) });
     },
   });
 }

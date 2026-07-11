@@ -1,6 +1,8 @@
 package com.clubs.application
 
+import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.Size
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -18,6 +20,20 @@ data class ApplicationDto(
 
 data class SubmitApplicationRequest(
     val answerText: String? = null
+)
+
+/**
+ * «Расширить клуб и принять всех» (club-invites): новый лимит участников + pending-заявки,
+ * которые организатор оставил в блоке полного клуба после отсева. Бизнес-валидации
+ * (лимит больше текущего и вмещает всех) — в ApplicationService.expandAndApproveAll.
+ */
+data class ExpandAndApproveRequest(
+    @field:Min(1)
+    val newMemberLimit: Int,
+
+    @field:NotEmpty
+    @field:Size(max = 50)
+    val applicationIds: List<UUID>
 )
 
 /**

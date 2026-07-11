@@ -54,7 +54,10 @@ class ApplicationService(
     fun submitApplication(clubId: UUID, userId: UUID, request: SubmitApplicationRequest): ApplicationDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
 
-        if (club.accessType != AccessType.closed) {
+        // club-invites: полный клуб принимает заявку («Попроситься») при ЛЮБОМ типе доступа —
+        // это просьба к организатору расширить лимит. Пока места есть, заявки принимает
+        // только closed-клуб (open вступает напрямую, private — по инвайт-ссылке).
+        if (club.accessType != AccessType.closed && !isClubFull(club)) {
             throw ValidationException("Club does not accept applications")
         }
 
@@ -114,7 +117,8 @@ class ApplicationService(
             notificationService.sendApplicationCreatedDM(
                 organizerTelegramId = organizer.telegramId,
                 applicantDisplayName = applicantName,
-                clubName = club.name
+                clubName = club.name,
+                clubFull = isClubFull(club)
             )
             log.info(
                 "DM dispatched for application-created: clubId={} organizerTelegramId={}",
@@ -130,6 +134,10 @@ class ApplicationService(
 
     private fun buildDisplayName(firstName: String, lastName: String?): String =
         if (lastName.isNullOrBlank()) firstName else "$firstName $lastName"
+
+    // Полный клуб = мест нет; лимит считает занятые места так же, как везде (active+frozen+expired).
+    private fun isClubFull(club: Club): Boolean =
+        membershipRepository.countActiveByClubId(club.id) >= club.memberLimit
 
     @Transactional
     fun approveApplication(applicationId: UUID, organizerId: UUID): ApplicationDto {
@@ -148,9 +156,17 @@ class ApplicationService(
         val activeCount = membershipRepository.countActiveByClubId(application.clubId)
         if (activeCount >= club.memberLimit) throw ValidationException("Club is full")
 
-        // De-Stars (Slice 2): approve сразу создаёт membership — без инвойса Stars. В платном клубе
-        // заявитель попадает в `frozen` (доступ закрыт, пока организатор не подтвердит офф-платформенный
-        // взнос через AccessGateService.markDuesPaid); в бесплатном клубе — сразу в `active`.
+        return approveInternal(application, club, organizerId)
+    }
+
+    /**
+     * Ядро одобрения — без проверок владельца/статуса/вместимости (их делает вызывающий:
+     * approveApplication проверяет всё, expandAndApproveAll гарантирует вместимость новым лимитом).
+     * De-Stars (Slice 2): approve сразу создаёт membership — без инвойса Stars. В платном клубе
+     * заявитель попадает в `frozen` (доступ закрыт, пока организатор не подтвердит офф-платформенный
+     * взнос через AccessGateService.markDuesPaid); в бесплатном клубе — сразу в `active`.
+     */
+    private fun approveInternal(application: Application, club: Club, organizerId: UUID): ApplicationDto {
         if (club.subscriptionPrice > 0) {
             membershipActivator.activateFrozen(application.userId, application.clubId)
         } else {
@@ -158,15 +174,52 @@ class ApplicationService(
         }
         log.info(
             "Membership created on application approve: applicationId={} clubId={} userId={} paid={}",
-            applicationId, application.clubId, application.userId, club.subscriptionPrice > 0
+            application.id, application.clubId, application.userId, club.subscriptionPrice > 0
         )
 
-        val updated = applicationRepository.updateStatus(applicationId, ApplicationStatus.approved)
-        log.info("Application approved: id={} clubId={} userId={} organizerId={}", applicationId, application.clubId, application.userId, organizerId)
+        val updated = applicationRepository.updateStatus(application.id, ApplicationStatus.approved)
+        log.info("Application approved: id={} clubId={} userId={} organizerId={}", application.id, application.clubId, application.userId, organizerId)
 
         dispatchApplicationApprovedDm(club, application.userId)
 
         return mapper.toDto(updated)
+    }
+
+    /**
+     * «Расширить клуб и принять всех» (club-invites, кадры H/I мокапа): атомарно поднять лимит
+     * участников и одобрить перечисленные pending-заявки. Одна транзакция — либо расширились
+     * и приняли всех, либо ничего (иначе сбой на середине списка оставил бы полупринятый блок).
+     * DM-ки одобрения best-effort (@Async), как в обычном approve.
+     */
+    @Transactional
+    fun expandAndApproveAll(clubId: UUID, organizerId: UUID, request: ExpandAndApproveRequest): List<ApplicationDto> {
+        val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
+        if (club.ownerId != organizerId) throw ForbiddenException("Forbidden")
+
+        val applications = request.applicationIds.distinct().map { id ->
+            applicationRepository.findById(id) ?: throw NotFoundException("Application not found: $id")
+        }
+        applications.forEach { application ->
+            if (application.clubId != clubId) throw ValidationException("Application does not belong to this club")
+            if (application.status != ApplicationStatus.pending) throw ValidationException("Application is not pending")
+        }
+
+        if (request.newMemberLimit <= club.memberLimit) {
+            throw ValidationException("New limit must be greater than the current one")
+        }
+        val activeCount = membershipRepository.countActiveByClubId(clubId)
+        if (request.newMemberLimit < activeCount + applications.size) {
+            throw ValidationException("New limit is not enough for all approved members")
+        }
+
+        clubRepository.updateMemberLimit(clubId, request.newMemberLimit)
+            ?: throw NotFoundException("Club not found")
+        log.info(
+            "Member limit expanded for batch approve: clubId={} {} -> {} by={}",
+            clubId, club.memberLimit, request.newMemberLimit, organizerId
+        )
+
+        return applications.map { approveInternal(it, club, organizerId) }
     }
 
     /**
