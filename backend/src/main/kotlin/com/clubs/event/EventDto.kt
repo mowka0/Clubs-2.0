@@ -65,6 +65,8 @@ data class MyEventListItemDto(
     val title: String,
     val eventDatetime: OffsetDateTime,
     val locationText: String?,
+    // Фото события — фон обложки карточки в табе «Активности»; null = фолбэк на аватар клуба.
+    val photoUrl: String?,
     val status: String,
     val clubId: UUID,
     val clubName: String,

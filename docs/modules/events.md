@@ -55,8 +55,14 @@ photo_url`). Зеркалит `skladchinas.photo_url`: у существующи
   Складчина переиспользует уже существовавшее `skladchinas.photo_url`.
 
 Фронт: `CreateEventPage` получил поле загрузки фото через компонент
-`AvatarUpload` → `CreateEventBody.photoUrl`. **Отображение (PO 2026-07-11): фото события —
-фон хиро на странице события (`EventPage`, `rd-hero-bg`); фолбэк — аватар клуба, как раньше.** (Левый thumbnail карточки
+`AvatarUpload` → `CreateEventBody.photoUrl`. **Отображение (PO 2026-07-11):**
+- фон хиро на странице события (`EventPage`, `rd-hero-bg`); фолбэк — аватар клуба;
+- обложка карточки в табе «Активности» (`EventCard`, `rd-act-cover`) с тёмным скримом
+  сверху вниз (`rd-act-photo`, зеркалит клубный `.rd-cover::after`); фолбэк — аватар клуба
+  (`MyEventListItemDto.photoUrl` добавлен для этого);
+- DM бота о новом событии уходит фото-сообщением (`SendPhoto`, caption = текст DM);
+  относительный `/uploads/…` превращается в абсолютный URL фронта (Telegram скачивает
+  сам); сбой фото деградирует до текстового DM. (Левый thumbnail карточки
 (`ActivityThumb`) убран в Banco-редизайне — карточка перешла на `rd-feature
 rd-glass` без тамбнейла; см. [`redesign-banco-style.md`](./redesign-banco-style.md).)
 

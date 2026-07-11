@@ -63,12 +63,15 @@ export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
   const badge = pickBadge(event);
   const clubInitials = getInitials(event.clubName);
   const meta = [event.locationText, `${currentCount(event)} идут`].filter(Boolean).join(' · ');
+  // Обложка: фото события (PO 2026-07-11), фолбэк — аватар клуба; с картинкой — тёмный
+  // скрим сверху вниз (rd-act-photo), как у клубных карточек.
+  const coverImage = event.photoUrl ?? event.clubAvatarUrl;
 
   return (
     <button type="button" className="rd-activity-card" onClick={onClick}>
       <div
-        className="rd-act-cover"
-        style={event.clubAvatarUrl ? { backgroundImage: `url(${event.clubAvatarUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+        className={coverImage ? 'rd-act-cover rd-act-photo' : 'rd-act-cover'}
+        style={coverImage ? { backgroundImage: `url(${coverImage})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
       >
         <span className="rd-type-badge">СОБЫТИЕ</span>
         <span className="rd-date-badge">{formatDateBadge(event.eventDatetime)}</span>

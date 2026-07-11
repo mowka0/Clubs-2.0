@@ -11,6 +11,7 @@ import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.time.OffsetDateTime
@@ -159,6 +160,50 @@ class NotificationServiceTest {
         assertTrue(markupUrls(msgSlot.captured.replyMarkup as InlineKeyboardMarkup).none { it.contains("yandex.ru/maps") })
     }
 
+    // ---- фото события в DM (PO 2026-07-11) ----
+
+    @Test
+    fun `событие с фото — DM уходит фото-сообщением с абсолютным URL и тем же текстом в caption`() {
+        val event = sampleEvent(photoUrl = "/uploads/cover.jpg")
+        every { membershipRepository.findMemberTelegramIds(event.clubId) } returns listOf(101L)
+        val photoSlot = slot<SendPhoto>()
+        every { telegramClient.execute(capture(photoSlot)) } returns mockk(relaxed = true)
+
+        service.sendEventCreated(event)
+
+        verify(exactly = 1) { telegramClient.execute(any<SendPhoto>()) }
+        verify(exactly = 0) { telegramClient.execute(any<SendMessage>()) }
+        // относительный /uploads/… превращается в абсолютный URL фронта — иначе Telegram не скачает
+        assertTrue(photoSlot.captured.photo.attachName == "https://app/uploads/cover.jpg")
+        assertTrue(photoSlot.captured.caption!!.contains("Событие"))
+    }
+
+    @Test
+    fun `фото + гео-точка — в фото-DM есть кнопка Яндекс_Карт`() {
+        val event = sampleEvent(lat = 55.761216, lon = 37.646488, photoUrl = "https://cdn.example.com/c.jpg")
+        every { membershipRepository.findMemberTelegramIds(event.clubId) } returns listOf(101L)
+        val photoSlot = slot<SendPhoto>()
+        every { telegramClient.execute(capture(photoSlot)) } returns mockk(relaxed = true)
+
+        service.sendEventCreated(event)
+
+        assertTrue(photoSlot.captured.photo.attachName == "https://cdn.example.com/c.jpg")
+        assertTrue(markupUrls(photoSlot.captured.replyMarkup as InlineKeyboardMarkup).any { it.contains("yandex.ru/maps") })
+    }
+
+    @Test
+    fun `сбой отправки фото деградирует до текстового DM`() {
+        val event = sampleEvent(photoUrl = "/uploads/cover.jpg")
+        every { membershipRepository.findMemberTelegramIds(event.clubId) } returns listOf(101L)
+        every { telegramClient.execute(any<SendPhoto>()) } throws RuntimeException("wrong file identifier")
+        every { telegramClient.execute(any<SendMessage>()) } returns mockk(relaxed = true)
+
+        service.sendEventCreated(event)
+
+        verify(exactly = 1) { telegramClient.execute(any<SendPhoto>()) }
+        verify(exactly = 1) { telegramClient.execute(any<SendMessage>()) }
+    }
+
     /** Все url-значения кнопок клавиатуры (webApp-кнопки дают null и отфильтровываются). */
     private fun markupUrls(markup: InlineKeyboardMarkup): List<String> =
         markup.keyboard.flatten().mapNotNull { it.url }
@@ -167,7 +212,8 @@ class NotificationServiceTest {
         lat: Double? = null,
         lon: Double? = null,
         locationText: String? = "Бар",
-        locationHint: String? = null
+        locationHint: String? = null,
+        photoUrl: String? = null
     ) = Event(
         id = UUID.randomUUID(),
         clubId = UUID.randomUUID(),
@@ -185,7 +231,7 @@ class NotificationServiceTest {
         stage2Triggered = true,
         attendanceMarked = false,
         attendanceFinalized = false,
-        photoUrl = null,
+        photoUrl = photoUrl,
         createdAt = OffsetDateTime.now(),
         updatedAt = OffsetDateTime.now()
     )

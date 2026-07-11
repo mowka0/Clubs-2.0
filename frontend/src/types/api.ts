@@ -679,6 +679,8 @@ export interface MyEventListItemDto {
   title: string;
   eventDatetime: string;
   locationText: string | null;
+  // Фото события — фон обложки карточки в «Активностях»; null = фолбэк на аватар клуба.
+  photoUrl: string | null;
   status: string;
   clubId: string;
   clubName: string;

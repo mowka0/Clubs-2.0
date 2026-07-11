@@ -755,16 +755,33 @@
   background: radial-gradient(circle at 70% 30%, rgba(255, 205, 168, 0.5), transparent 50%),
     linear-gradient(135deg, #F47B3C 0%, #5c2c12 60%, #1a0e04 100%);
 }
+/* Обложка с картинкой (фото события / аватар клуба): тёмный скрим сверху вниз — зеркалит
+   .rd-club-card .rd-cover::after, чтобы разномастные фото не пестрили и бейджи читались. */
+.rd-act-cover.rd-act-photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(11, 11, 14, 0.30) 0%,
+    rgba(11, 11, 14, 0.50) 55%,
+    rgba(11, 11, 14, 0.78) 100%
+  );
+}
 .rd-type-badge {
   position: absolute; top: 10px; left: 10px; padding: 4px 8px; border-radius: 6px;
   background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(20px);
   font-size: 9px; font-weight: 700; letter-spacing: 0.1em; color: #fff;
+  z-index: 2;
 }
 .rd-date-badge {
   position: absolute; top: 10px; right: 10px; padding: 4px 9px; border-radius: 6px;
   background: linear-gradient(135deg, #FFA070, #F47B3C);
   font-size: 10px; font-weight: 700; color: #2A0E04;
   box-shadow: 0 2px 6px var(--accent-shadow);
+  z-index: 2;
 }
 .rd-act-body { padding: 12px 14px 14px; }
 .rd-act-club-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 11px; color: var(--text-dim); }

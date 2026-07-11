@@ -76,6 +76,7 @@ class EventMapper(
             title = event.title,
             eventDatetime = event.eventDatetime,
             locationText = event.locationText,
+            photoUrl = event.photoUrl,
             status = event.status.literal,
             clubId = event.clubId,
             clubName = item.clubName,

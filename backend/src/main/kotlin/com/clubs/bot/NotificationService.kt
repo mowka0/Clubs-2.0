@@ -11,6 +11,8 @@ import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import org.telegram.telegrambots.meta.api.methods.message.SavePreparedInlineMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
+import org.telegram.telegrambots.meta.api.objects.InputFile
 import org.telegram.telegrambots.meta.api.objects.inlinequery.inputmessagecontent.InputTextMessageContent
 import org.telegram.telegrambots.meta.api.objects.inlinequery.result.InlineQueryResultArticle
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
@@ -87,33 +89,58 @@ class NotificationService(
     }
 
     /**
-     * DM о новом событии (event-geo): у события с гео-точкой под WebApp-кнопкой добавляется
-     * вторая строка — кнопка «Открыть в Яндекс.Картах» (бесключевой deep-link; фото статичной
-     * карты PO отклонил — оно требовало бы отдельного ключа без referer-ограничений).
-     * События без места/точки — обычный текстовый DM.
+     * DM о новом событии (event-geo + фото): у события с гео-точкой под WebApp-кнопкой —
+     * вторая строка «Открыть в Яндекс.Картах» (бесключевой deep-link); у события с фото
+     * DM уходит фото-сообщением (caption = тот же текст; Telegram скачивает картинку по
+     * абсолютному URL нашего фронта). Любой сбой деградирует до текстового DM —
+     * уведомление важнее оформления. Событие без всего — обычный текстовый DM.
      */
     private fun sendEventCreatedDm(chatId: String, text: String, webAppPath: String, event: Event) {
         val lat = event.locationLat
         val lon = event.locationLon
-        if (lat == null || lon == null) {
-            sendDm(chatId, text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
-            return
+        val markup = if (lat != null && lon != null) {
+            buildKeyboard(
+                "📅 Открыть событие",
+                webAppPath = webAppPath,
+                externalUrlButton = OPEN_IN_YANDEX_MAPS_BUTTON to openMapUrl(lat, lon)
+            )
+        } else {
+            buildKeyboard("📅 Открыть событие", webAppPath = webAppPath)
         }
-        val markup = buildKeyboard(
-            "📅 Открыть событие",
-            webAppPath = webAppPath,
-            externalUrlButton = OPEN_IN_YANDEX_MAPS_BUTTON to openMapUrl(lat, lon)
-        )
+        val photoUrl = event.photoUrl?.let(::absolutePhotoUrl)
+        if (photoUrl != null) {
+            try {
+                val photo = SendPhoto.builder()
+                    .chatId(chatId)
+                    .photo(InputFile(photoUrl))
+                    .caption(text)
+                    .replyMarkup(markup)
+                    .build()
+                telegramClient.execute(photo)
+                log.info("Event-created DM sent with event photo: chatId={}", chatId)
+                return
+            } catch (e: Exception) {
+                log.error("Failed to send event DM with photo to chat {}: {} ({})", chatId, e.message, e.javaClass.simpleName, e)
+            }
+        }
         try {
             val msg = SendMessage.builder().chatId(chatId).text(text).replyMarkup(markup).build()
             telegramClient.execute(msg)
-            log.info("Event-created DM sent with maps button: chatId={}", chatId)
+            log.info("Event-created DM sent: chatId={}", chatId)
         } catch (e: Exception) {
-            log.error("Failed to send event DM with maps button to chat {}: {} ({})", chatId, e.message, e.javaClass.simpleName, e)
-            // Фолбэк — стандартный DM с одной WebApp-кнопкой.
+            log.error("Failed to send event DM to chat {}: {} ({})", chatId, e.message, e.javaClass.simpleName, e)
+            // Последний фолбэк — стандартный DM с одной WebApp-кнопкой.
             sendDm(chatId, text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
         }
     }
+
+    /**
+     * Абсолютный URL фото для Telegram: photo_url хранится относительным («/uploads/…»,
+     * S3_BASE_URL не задан — фронтовый nginx проксирует на MinIO), а Telegram скачивает
+     * картинку своими серверами и относительный путь не поймёт.
+     */
+    private fun absolutePhotoUrl(photoUrl: String): String =
+        if (photoUrl.startsWith("http")) photoUrl else "$webAppBaseUrl$photoUrl"
 
     /**
      * Приглашает подтвердить участие при старте Этапа 2. Этап 2 открыт всем участникам клуба,
