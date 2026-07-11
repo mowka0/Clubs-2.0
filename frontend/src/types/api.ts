@@ -493,6 +493,12 @@ export interface EventDetailDto {
   title: string;
   description: string | null;
   locationText: string;
+  // Гео-точка места (WGS-84, event-geo): null у легаси-событий, созданных до фичи, —
+  // тогда место показывается текстом без карты. У новых событий оба значения заданы.
+  locationLat: number | null;
+  locationLon: number | null;
+  // Опциональное уточнение организатора к месту («Вход со двора, домофон 12»).
+  locationHint: string | null;
   eventDatetime: string;
   participantLimit: number;
   votingOpensDaysBefore: number;

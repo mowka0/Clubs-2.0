@@ -31,7 +31,10 @@ GET /api/events/{id}
 | Поле | Правило |
 |------|---------|
 | title | 1-255 символов, not blank |
-| locationText | 1-500 символов, not blank |
+| locationText | 1-500 символов, not blank (с фичи event-geo фронт заполняет адресом из обратного геокодера) |
+| locationLat | **обязательно** (`@NotNull`), ∈ [-90, 90] — гео-точка места, V57 (event-geo) |
+| locationLon | **обязательно** (`@NotNull`), ∈ [-180, 180] |
+| locationHint | опционально, ≤ 200 символов; пустое/пробельное схлопывается в null в `EventService` |
 | eventDatetime | ISO datetime, must be > now() |
 | participantLimit | > 0 |
 | votingOpensDaysBefore | 1-14, default 14 |
@@ -56,6 +59,16 @@ photo_url`). Зеркалит `skladchinas.photo_url`: у существующи
 (`ActivityThumb`) убран в Banco-редизайне — карточка перешла на `rd-feature
 rd-glass` без тамбнейла; см. [`redesign-banco-style.md`](./redesign-banco-style.md).)
 
+### Гео-точка места (`location_lat`/`location_lon`/`location_hint`, миграция V57, 2026-07-11)
+Место события — обязательная точка на Яндекс.Картах (fail-closed: без работающей карты
+событие не создаётся, текстового фолбэка нет). Колонки nullable только ради легаси-событий
+(NULL = создано до фичи, фронт показывает место текстом без карты); инвариант «оба NULL или
+оба заданы» закреплён CHECK-констрейнтом `chk_events_location_pair`. Участнику на странице
+события — статичная мини-карта + кнопки «🧭 Маршрут» / «Открыть в Картах». Координаты есть
+только в `EventDetailDto` — списковые DTO (`EventListItemDto`, `MyEventListItemDto`,
+`ActivityItemDto`) их **не получают** (YAGNI, карта только на странице события).
+Полная спека: [`event-geo.md`](./event-geo.md).
+
 ### EventDetailDto (TASK-013 scope — без vote counts из EventResponses)
 ```json
 {
@@ -64,6 +77,9 @@ rd-glass` без тамбнейла; см. [`redesign-banco-style.md`](./redesig
   "title": "string",
   "description": "string|null",
   "locationText": "string",
+  "locationLat": 55.751244,
+  "locationLon": 37.618423,
+  "locationHint": "string|null",
   "eventDatetime": "ISO datetime",
   "participantLimit": 15,
   "votingOpensDaysBefore": 14,
@@ -103,6 +119,8 @@ rd-glass` без тамбнейла; см. [`redesign-banco-style.md`](./redesig
 ### Corner Cases
 - POST от не-организатора → 403 FORBIDDEN
 - POST с датой в прошлом → 400 VALIDATION_ERROR "Event datetime must be in the future"
+- POST без `locationLat`/`locationLon` или с координатами вне диапазонов → 400 VALIDATION_ERROR
+- POST с `locationHint` > 200 символов → 400 VALIDATION_ERROR
 - GET /api/clubs/{id}/events от не-участника клуба → 403 FORBIDDEN "You must be an active member of this club"
 - GET /api/clubs/{unknownId}/events → 403 FORBIDDEN (privacy: existence клуба не раскрывается non-member'ам)
 - GET /api/events/{unknownId} → 404 NOT_FOUND

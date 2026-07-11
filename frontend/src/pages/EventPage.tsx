@@ -11,6 +11,7 @@ import { useMyReputationQuery } from '../queries/members';
 import { useEventSplitStateQuery } from '../queries/skladchina';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { Toast } from '../components/Toast';
+import { EventPlaceCard } from '../components/event/EventPlaceCard';
 import {
   useCastVoteMutation,
   useConfirmParticipationMutation,
@@ -424,8 +425,15 @@ export const EventPage: FC = () => {
         </button>
       )}
 
-      {/* Место проведения */}
-      {event.locationText && (
+      {/* Место проведения: с гео-точкой — мини-карта + маршрут (event-geo, кадр C);
+          легаси-события без координат — текст как раньше, без карты. */}
+      {event.locationLat != null && event.locationLon != null ? (
+        <EventPlaceCard
+          locationText={event.locationText}
+          locationHint={event.locationHint}
+          point={{ lat: event.locationLat, lon: event.locationLon }}
+        />
+      ) : event.locationText && (
         <div className="rd-glass" style={{ marginBottom: 14, overflow: 'hidden' }}>
           <div className="rd-mini-map" />
           <div className="rd-addr-body">

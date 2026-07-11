@@ -225,6 +225,27 @@ open class Events(
      */
     val CANCELLATION_REASON: TableField<EventsRecord, String?> = createField(DSL.name("cancellation_reason"), SQLDataType.CLOB, this, "Причина отмены, указанная организатором; показывается заинтересованным участникам в DM и на странице события (NULL = причина не указана).")
 
+    /**
+     * The column <code>public.events.location_lat</code>. Широта точки места
+     * события (WGS-84, [-90..90]). NULL = легаси-событие без гео-точки; иначе
+     * задана вместе с location_lon.
+     */
+    val LOCATION_LAT: TableField<EventsRecord, Double?> = createField(DSL.name("location_lat"), SQLDataType.DOUBLE, this, "Широта точки места события (WGS-84, [-90..90]). NULL = легаси-событие без гео-точки; иначе задана вместе с location_lon.")
+
+    /**
+     * The column <code>public.events.location_lon</code>. Долгота точки места
+     * события (WGS-84, [-180..180]). NULL = легаси-событие без гео-точки; иначе
+     * задана вместе с location_lat.
+     */
+    val LOCATION_LON: TableField<EventsRecord, Double?> = createField(DSL.name("location_lon"), SQLDataType.DOUBLE, this, "Долгота точки места события (WGS-84, [-180..180]). NULL = легаси-событие без гео-точки; иначе задана вместе с location_lat.")
+
+    /**
+     * The column <code>public.events.location_hint</code>. Опциональное
+     * уточнение организатора к месту («Вход со двора, домофон 12»), не входит в
+     * адрес. NULL = нет уточнения.
+     */
+    val LOCATION_HINT: TableField<EventsRecord, String?> = createField(DSL.name("location_hint"), SQLDataType.VARCHAR(200), this, "Опциональное уточнение организатора к месту («Вход со двора, домофон 12»), не входит в адрес. NULL = нет уточнения.")
+
     private constructor(alias: Name, aliased: Table<EventsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<EventsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<EventsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

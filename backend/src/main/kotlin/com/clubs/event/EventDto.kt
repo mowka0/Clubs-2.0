@@ -1,5 +1,7 @@
 package com.clubs.event
 
+import jakarta.validation.constraints.DecimalMax
+import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.Future
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
@@ -16,6 +18,12 @@ data class EventDetailDto(
     val title: String,
     val description: String?,
     val locationText: String,
+    // Гео-точка места (WGS-84). null у легаси-событий, созданных до фичи event-geo, —
+    // фронт показывает место текстом без карты. Для новых событий оба значения всегда заданы.
+    val locationLat: Double?,
+    val locationLon: Double?,
+    // Опциональное уточнение организатора к месту («Вход со двора, домофон 12»); null = нет.
+    val locationHint: String?,
     val eventDatetime: OffsetDateTime,
     val participantLimit: Int,
     val votingOpensDaysBefore: Int,
@@ -77,6 +85,22 @@ data class CreateEventRequest(
     @field:NotBlank(message = "Location is required")
     @field:Size(max = 500, message = "Location must be at most 500 characters")
     val locationText: String,
+
+    // Координаты обязательны (решение PO: fail-closed — событие без точки на карте создать
+    // нельзя). Nullable тип + @NotNull, чтобы отсутствие поля давало дружелюбный 400 от Bean
+    // Validation, а не ошибку десериализации Jackson.
+    @field:NotNull(message = "Location latitude is required")
+    @field:DecimalMin(value = "-90.0", message = "Latitude must be >= -90")
+    @field:DecimalMax(value = "90.0", message = "Latitude must be <= 90")
+    val locationLat: Double?,
+
+    @field:NotNull(message = "Location longitude is required")
+    @field:DecimalMin(value = "-180.0", message = "Longitude must be >= -180")
+    @field:DecimalMax(value = "180.0", message = "Longitude must be <= 180")
+    val locationLon: Double?,
+
+    @field:Size(max = 200, message = "Location hint must be at most 200 characters")
+    val locationHint: String? = null,
 
     @field:NotNull(message = "Event datetime is required")
     @field:Future(message = "Event datetime must be in the future")

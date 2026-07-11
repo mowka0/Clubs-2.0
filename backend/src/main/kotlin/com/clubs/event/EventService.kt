@@ -28,7 +28,9 @@ class EventService(
     fun createEvent(clubId: UUID, request: CreateEventRequest, userId: UUID): EventDetailDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club organizer can create events")
-        val event = eventRepository.create(request, clubId, userId)
+        // Пустое/пробельное уточнение к месту схлопывается в null — как cancellationReason в cancelEvent.
+        val normalizedRequest = request.copy(locationHint = request.locationHint?.trim()?.takeIf { it.isNotEmpty() })
+        val event = eventRepository.create(normalizedRequest, clubId, userId)
         log.info("Event created: id={} clubId={} title='{}' userId={}", event.id, clubId, event.title, userId)
         // DM участникам рассылает EventBotNotifier на AFTER_COMMIT. Публикация внутри
         // транзакции позволяет слушателю вовсе не сработать, если внешний

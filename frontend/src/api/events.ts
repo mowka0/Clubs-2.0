@@ -5,6 +5,12 @@ export interface CreateEventBody {
   title: string;
   description?: string;
   locationText: string;
+  // Гео-точка места обязательна (fail-closed, решение PO): бэкенд отвергает событие без
+  // координат. locationText — адрес из обратного геокодера по выбранной точке.
+  locationLat: number;
+  locationLon: number;
+  // Опциональное уточнение к месту (≤200 символов), отдельное от адреса.
+  locationHint?: string;
   eventDatetime: string;
   participantLimit: number;
   votingOpensDaysBefore?: number;

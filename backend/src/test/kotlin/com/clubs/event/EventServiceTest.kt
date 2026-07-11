@@ -11,7 +11,10 @@ import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.enums.EventStatus
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -54,6 +57,34 @@ class EventServiceTest {
         eventService.createEvent(clubId, request(), ownerId)
 
         verify(exactly = 1) { eventPublisher.publishEvent(EventCreatedEvent(event)) }
+    }
+
+    @Test
+    fun `createEvent normalizes a blank location hint to null`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        val requestSlot = slot<CreateEventRequest>()
+        every { eventRepository.create(capture(requestSlot), clubId, ownerId) } returns event
+
+        eventService.createEvent(clubId, request().copy(locationHint = "   "), ownerId)
+
+        assertNull(requestSlot.captured.locationHint)
+    }
+
+    @Test
+    fun `createEvent trims a meaningful location hint`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        val requestSlot = slot<CreateEventRequest>()
+        every { eventRepository.create(capture(requestSlot), clubId, ownerId) } returns event
+
+        eventService.createEvent(clubId, request().copy(locationHint = "  Вход со двора  "), ownerId)
+
+        assertEquals("Вход со двора", requestSlot.captured.locationHint)
     }
 
     @Test
@@ -156,6 +187,9 @@ class EventServiceTest {
         title = "Test event",
         description = null,
         locationText = "Bar 1",
+        locationLat = 55.761216,
+        locationLon = 37.646488,
+        locationHint = null,
         eventDatetime = OffsetDateTime.now().plusDays(7),
         participantLimit = 20,
         votingOpensDaysBefore = 14

@@ -120,6 +120,11 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # Публичные ключи Яндекс.Карт (event-geo) — Vite инлайнит их в бандл при сборке.
+        # Значения задаются в env приложения Coolify (staging и prod), не в репозитории.
+        VITE_YANDEX_MAPS_API_KEY: ${VITE_YANDEX_MAPS_API_KEY}
+        VITE_YANDEX_STATIC_API_KEY: ${VITE_YANDEX_STATIC_API_KEY}
     labels:
       - "traefik.docker.network=coolify"
       # Здесь намеренно нет явного лейбла traefik.http.services.*.loadbalancer.

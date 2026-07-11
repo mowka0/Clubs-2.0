@@ -355,6 +355,9 @@ interface EventDetailDto {
   title: string;
   description: string | null;
   locationText: string;
+  locationLat: number | null;         // гео-точка места (V57, event-geo); null = легаси-событие без точки
+  locationLon: number | null;         // оба null или оба заданы (CHECK chk_events_location_pair)
+  locationHint: string | null;        // опциональное уточнение к месту, ≤200
   eventDatetime: string;              // ISO-8601
   participantLimit: number;
   votingOpensDaysBefore: number;

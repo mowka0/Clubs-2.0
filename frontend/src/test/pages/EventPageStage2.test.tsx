@@ -48,6 +48,9 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     title: 'Событие',
     description: null,
     locationText: 'Бар',
+    locationLat: null,
+    locationLon: null,
+    locationHint: null,
     eventDatetime,
     participantLimit: 10,
     votingOpensDaysBefore: 14,
@@ -346,5 +349,36 @@ describe('EventPage — отмена события (F5-14)', () => {
 
     expect(await screen.findByText(/Предварительные голоса/)).toBeInTheDocument();
     expect(screen.queryByText(/Кто идёт/)).not.toBeInTheDocument();
+  });
+});
+
+describe('EventPage — блок места (event-geo, кадр C)', () => {
+  it('событие с координатами: карточка места с мини-картой, уточнением и кнопками маршрута', async () => {
+    mockEndpoints({
+      event: stage2Event({
+        eventDatetime: FUTURE,
+        locationText: 'ул. Покровка, 47/24с1, Москва',
+        locationLat: 55.761216,
+        locationLon: 37.646488,
+        locationHint: 'Вход со двора, домофон 12',
+      }),
+      myVote: 'going',
+    });
+    renderEventPage();
+
+    expect(await screen.findByText('ул. Покровка, 47/24с1, Москва')).toBeInTheDocument();
+    expect(screen.getByText('Вход со двора, домофон 12')).toBeInTheDocument();
+    expect(screen.getByAltText('Карта места события')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Маршрут/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Открыть в Картах' })).toBeInTheDocument();
+  });
+
+  it('легаси-событие без координат: место текстом, без карты и кнопок', async () => {
+    mockEndpoints({ event: stage2Event({ eventDatetime: FUTURE }), myVote: 'going' });
+    renderEventPage();
+
+    expect(await screen.findByText('Бар')).toBeInTheDocument();
+    expect(screen.queryByAltText('Карта места события')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Маршрут/ })).not.toBeInTheDocument();
   });
 });

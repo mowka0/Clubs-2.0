@@ -4,13 +4,24 @@ import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { BrandStepper } from '../components/BrandStepper';
 import { AvatarUpload } from '../components/AvatarUpload';
+import { LocationPickerSheet } from '../components/event/LocationPickerSheet';
 import { useCreateEventMutation } from '../queries/events';
 import type { CreateEventBody } from '../api/events';
+import type { GeoPoint } from '../utils/yandexMaps';
 
 const TITLE_MAX = 255;
+// Лимит адреса (location_text в БД); адрес приходит из геокодера, но подрезаем защитно.
 const LOCATION_MAX = 500;
+// Лимит поля «Уточнение к месту» — зеркалит @Size(max=200) на locationHint бэкенда.
+const LOCATION_HINT_MAX = 200;
 const PARTICIPANT_MIN = 1;
 const PARTICIPANT_MAX = 1000;
+
+// Выбранное в пикере место: точка на карте + адрес из обратного геокодера.
+interface PickedLocation {
+  point: GeoPoint;
+  address: string;
+}
 
 const CalendarIcon: FC = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -29,7 +40,9 @@ export const CreateEventPage: FC = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [locationText, setLocationText] = useState('');
+  const [location, setLocation] = useState<PickedLocation | null>(null);
+  const [locationHint, setLocationHint] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [eventDatetime, setEventDatetime] = useState('');
   const [participantLimit, setParticipantLimit] = useState(20);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -53,9 +66,10 @@ export const CreateEventPage: FC = () => {
     setSubmitError(null);
     if (!title.trim()) return fail('Укажите название');
     if (title.trim().length > TITLE_MAX) return fail(`Название: максимум ${TITLE_MAX} символов`);
-    if (!locationText.trim()) return fail('Укажите место');
-    if (locationText.trim().length > LOCATION_MAX) {
-      return fail(`Место: максимум ${LOCATION_MAX} символов`);
+    // Fail-closed (решение PO): место — только точка на карте, текстового фолбэка нет.
+    if (!location) return fail('Укажите место на карте');
+    if (locationHint.trim().length > LOCATION_HINT_MAX) {
+      return fail(`Уточнение к месту: максимум ${LOCATION_HINT_MAX} символов`);
     }
     if (!eventDatetime) return fail('Укажите дату и время');
     const eventDate = new Date(eventDatetime);
@@ -70,7 +84,10 @@ export const CreateEventPage: FC = () => {
     const body: CreateEventBody = {
       title: title.trim(),
       description: description.trim() || undefined,
-      locationText: locationText.trim(),
+      locationText: location.address.trim().slice(0, LOCATION_MAX),
+      locationLat: location.point.lat,
+      locationLon: location.point.lon,
+      locationHint: locationHint.trim() || undefined,
       eventDatetime: eventDate.toISOString(),
       participantLimit,
       photoUrl: photoUrl ?? undefined,
@@ -130,14 +147,47 @@ export const CreateEventPage: FC = () => {
           />
         </label>
 
-        <label className="rd-field">
+        <div className="rd-field">
           <span className="rd-label">Место <span className="rd-req">*</span></span>
+          {location ? (
+            <div className="rd-place-chip">
+              <span className="rd-place-ic" aria-hidden="true">📍</span>
+              <span className="rd-place-txt">
+                <b>{location.address}</b>
+                <span>точка уточнена на карте</span>
+              </span>
+              <button
+                type="button"
+                className="rd-place-edit"
+                onClick={() => { haptic.impact('light'); setPickerOpen(true); }}
+              >
+                Изменить
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="rd-invite-row"
+              style={{ marginBottom: 0 }}
+              onClick={() => { haptic.impact('light'); setPickerOpen(true); }}
+            >
+              <span className="rd-invite-plus" aria-hidden="true">📍</span>
+              <span className="rd-invite-txt">
+                <b>Добавить место</b>
+                <span>Найдите адрес и уточните точку на карте</span>
+              </span>
+            </button>
+          )}
+        </div>
+
+        <label className="rd-field">
+          <span className="rd-label">Уточнение к месту (необязательно)</span>
           <input
             className="rd-input"
-            value={locationText}
-            onChange={(e) => setLocationText(e.target.value)}
-            maxLength={LOCATION_MAX}
-            placeholder="Адрес или описание"
+            value={locationHint}
+            onChange={(e) => setLocationHint(e.target.value)}
+            maxLength={LOCATION_HINT_MAX}
+            placeholder="Вход со двора, домофон 12"
           />
         </label>
 
@@ -181,6 +231,17 @@ export const CreateEventPage: FC = () => {
           </button>
         </div>
       </div>
+
+      {pickerOpen && (
+        <LocationPickerSheet
+          initial={location?.point ?? null}
+          onSelect={(point, address) => {
+            setLocation({ point, address });
+            setPickerOpen(false);
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </div>
   );
 };

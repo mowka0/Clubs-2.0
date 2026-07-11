@@ -158,6 +158,9 @@ class EventControllerSecurityTest {
             {
               "title": "Photo Event",
               "locationText": "Park",
+              "locationLat": 55.761216,
+              "locationLon": 37.646488,
+              "locationHint": "Вход со двора, домофон 12",
               "eventDatetime": "$eventDatetime",
               "participantLimit": 20,
               "photoUrl": "$photoUrl"
@@ -172,6 +175,9 @@ class EventControllerSecurityTest {
         )
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.photoUrl").value(photoUrl))
+            .andExpect(jsonPath("$.locationLat").value(55.761216))
+            .andExpect(jsonPath("$.locationLon").value(37.646488))
+            .andExpect(jsonPath("$.locationHint").value("Вход со двора, домофон 12"))
 
         // List endpoint also carries it
         mockMvc.perform(
@@ -227,6 +233,8 @@ class EventControllerSecurityTest {
             {
               "title": "No Photo Event",
               "locationText": "Park",
+              "locationLat": 55.761216,
+              "locationLon": 37.646488,
               "eventDatetime": "$eventDatetime",
               "participantLimit": 20
             }
@@ -240,5 +248,27 @@ class EventControllerSecurityTest {
         )
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.photoUrl").value(nullValue()))
+            .andExpect(jsonPath("$.locationHint").value(nullValue()))
+    }
+
+    @Test
+    fun `POST event without coordinates should return 400 (fail-closed)`() {
+        val eventDatetime = OffsetDateTime.now().plusDays(10)
+        val body = """
+            {
+              "title": "Legacy-style Event",
+              "locationText": "Park",
+              "eventDatetime": "$eventDatetime",
+              "participantLimit": 20
+            }
+        """.trimIndent()
+
+        mockMvc.perform(
+            post("/api/clubs/$clubId/events")
+                .header("Authorization", "Bearer $organizerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+        )
+            .andExpect(status().isBadRequest)
     }
 }

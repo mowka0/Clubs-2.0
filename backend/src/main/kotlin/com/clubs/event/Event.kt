@@ -11,6 +11,13 @@ data class Event(
     val title: String,
     val description: String?,
     val locationText: String,
+    // Гео-точка места (WGS-84): null у легаси-событий без точки (созданы до фичи event-geo).
+    // Инвариант: оба null или оба заданы. Дефолты null, чтобы точечные выборки (findMyFeed),
+    // не показывающие карту, могли не читать колонки.
+    val locationLat: Double? = null,
+    val locationLon: Double? = null,
+    // Опциональное уточнение организатора к месту, отдельное от адреса; null = нет.
+    val locationHint: String? = null,
     val eventDatetime: OffsetDateTime,
     val participantLimit: Int,
     val votingOpensDaysBefore: Int,
