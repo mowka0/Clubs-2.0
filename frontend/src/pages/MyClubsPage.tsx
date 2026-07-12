@@ -24,6 +24,7 @@ import { LevelPill } from '../components/reputation/LevelPill';
 import { DonutRing } from '../components/reputation/DonutRing';
 import { trustTier, TRUST_TIER_COLOR } from '../components/reputation/trust-tier';
 import { getClub } from '../api/clubs';
+import { isActiveManagerMembership } from '../utils/membershipRole';
 import { reliabilityTier } from '../utils/reputationTier';
 import type {
   ClubDetailDto,
@@ -89,7 +90,8 @@ const PEOPLE_ICON = (
 interface MyClubCardProps {
   membership: MembershipDto;
   club: ClubDetailDto | undefined;
-  isOrganizer: boolean;
+  /** Менеджер клуба (co-organizers): владелец или со-организатор — 👑 и роль в мете. */
+  isManager: boolean;
   // Репутация вызывающего в этом клубе (activeClubs из /users/me/reputation); undefined = ещё грузится.
   rep: UserClubReputationDto | undefined;
   expanded: boolean;
@@ -127,7 +129,7 @@ const PathBackStep: FC<{ value: number; label: string }> = ({ value, label }) =>
  * встреча. Клик по шапке раскрывает; переход в клуб — строкой «Открыть клуб» внутри.
  */
 const MyClubCard: FC<MyClubCardProps> = ({
-  membership, club, isOrganizer, rep, expanded, onToggle, onOpenClub, onOpenEvent,
+  membership, club, isManager, rep, expanded, onToggle, onOpenClub, onOpenEvent,
 }) => {
   // Измеренная высота тела для плавного раскрытия: transition по max-height в px
   // (grid-template-rows 0fr→1fr в WebKit анимировался с просадкой кадров и не клипал паддинг).
@@ -135,8 +137,11 @@ const MyClubCard: FC<MyClubCardProps> = ({
   const name = club?.name ?? `Клуб ${membership.clubId.slice(0, 8)}…`;
   const category = club?.category ?? 'other';
   const initials = club ? getInitials(club.name) : '·';
+  // Со-организатор (co-organizers): менеджер, но не владелец — своя подпись роли, 👑 остаётся.
+  const isCoOrganizer = membership.role === 'co_organizer';
+  const crownTitle = isCoOrganizer ? 'Вы со-организатор' : 'Вы организатор';
   const meta = [
-    isOrganizer ? 'организатор' : 'участник',
+    isManager ? (isCoOrganizer ? 'со-организатор' : 'организатор') : 'участник',
     club ? (CATEGORY_LABELS[category] ?? category) : null,
     club ? `${club.memberCount} / ${club.memberLimit}` : null,
   ].filter(Boolean).join(' · ');
@@ -158,7 +163,7 @@ const MyClubCard: FC<MyClubCardProps> = ({
         <div className="rd-info">
           <div className="rd-ttl">
             {name}
-            {isOrganizer && <span aria-label="Вы организатор" title="Вы организатор"> 👑</span>}
+            {isManager && <span aria-label={crownTitle} title={crownTitle}> 👑</span>}
           </div>
           <div className="rd-met">{meta}</div>
         </div>
@@ -168,7 +173,9 @@ const MyClubCard: FC<MyClubCardProps> = ({
               <span className={`rd-v rd-${tier}`}>{rep?.trust}</span>
               <span className="rd-cap">надёжность</span>
             </>
-          ) : isOrganizer ? (
+          ) : isManager && !isCoOrganizer ? (
+            // Фолбэк «ваш клуб» — только владельцу (его trust в своём клубе скрыт по правилу);
+            // со-орг копит репутацию как обычный участник, при null честнее «Новичок».
             <>
               <span className="rd-v rd-new">Организатор</span>
               <span className="rd-cap">ваш клуб</span>
@@ -213,7 +220,8 @@ const MyClubCard: FC<MyClubCardProps> = ({
             </div>
           ) : (
             <div className="rd-cc-line">
-              {isOrganizer
+              {/* Организаторская подача — только владельцу: со-орг копит репутацию как участник. */}
+              {isManager && !isCoOrganizer
                 ? 'Здесь репутация начисляется за организаторские качества.'
                 : 'Статистика накопится после трёх посещений — подтверждайте участие и приходите на встречи.'}
             </div>
@@ -631,9 +639,10 @@ export const MyClubsPage: FC = () => {
   }, [reputationQuery.data?.activeClubs]);
   // Раскрытая карточка клуба (аккордеон: максимум одна за раз; повторный тап сворачивает).
   const [expandedClubId, setExpandedClubId] = useState<string | null>(null);
-  // Кросс-клубовые «Ждут оплаты»: запрашиваем только у владельцев клубов (иначе сервер вернёт []).
-  const isAnyOrganizer = myClubs.some((m) => m.role === 'organizer');
-  const awaitingDuesQuery = useOrganizerAwaitingDuesQuery({ enabled: isAnyOrganizer });
+  // Кросс-клубовые «Ждут оплаты»: запрашиваем только у менеджеров клубов — владельцев и активных
+  // со-организаторов (У-5: скоуп бэкенда расширен owned → managed; иначе сервер вернёт []).
+  const isAnyClubManager = myClubs.some((m) => isActiveManagerMembership(m));
+  const awaitingDuesQuery = useOrganizerAwaitingDuesQuery({ enabled: isAnyClubManager });
   const awaitingDues = awaitingDuesQuery.data ?? [];
 
   const inboxSectionRef = useRef<HTMLDivElement | null>(null);
@@ -999,13 +1008,13 @@ export const MyClubsPage: FC = () => {
           <div className="rd-glass rd-rep-panel rd-cc-panel">
             {activeMyClubs.map((m) => {
               const club = clubDetails[m.clubId];
-              const isOrganizer = m.role === 'organizer' || club?.ownerId === user?.id;
+              const isManager = isActiveManagerMembership(m) || club?.ownerId === user?.id;
               return (
                 <MyClubCard
                   key={m.id}
                   membership={m}
                   club={club}
-                  isOrganizer={isOrganizer}
+                  isManager={isManager}
                   rep={repByClub[m.clubId]}
                   expanded={expandedClubId === m.clubId}
                   onToggle={() => setExpandedClubId((cur) => (cur === m.clubId ? null : m.clubId))}
@@ -1065,6 +1074,8 @@ export const MyClubsPage: FC = () => {
           member={toAwaitingDuesMemberStub(duesMember)}
           clubId={duesMember.clubId}
           isOrganizer
+          // Секция смены роли — только владельцу клуба (со-орг в «Ждут оплаты» её не видит).
+          isOwner={myClubs.some((m) => m.clubId === duesMember.clubId && m.role === 'organizer')}
           onClose={() => setDuesMember(null)}
           onActionToast={setToastMessage}
         />

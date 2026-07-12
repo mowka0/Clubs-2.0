@@ -17,7 +17,8 @@ import java.util.UUID
 @Component
 class AuthorizationAspect(
     private val membershipRepository: MembershipRepository,
-    private val clubRepository: ClubRepository
+    private val clubRepository: ClubRepository,
+    private val clubManagerGuard: ClubManagerGuard
 ) {
 
     @Around("@annotation(requiresMembership)")
@@ -36,6 +37,16 @@ class AuthorizationAspect(
         val clubId = extractUUID(joinPoint, requiresOrganizer.clubIdParam)
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club organizer can perform this action")
+        return joinPoint.proceed()
+    }
+
+    // Менеджерский гейт (co-organizers): владелец ИЛИ активный со-организатор.
+    // Вся логика предиката — в ClubManagerGuard (единый механизм, без копипасты по слоям).
+    @Around("@annotation(requiresClubManager)")
+    fun checkClubManager(joinPoint: ProceedingJoinPoint, requiresClubManager: RequiresClubManager): Any? {
+        val userId = currentUserId()
+        val clubId = extractUUID(joinPoint, requiresClubManager.clubIdParam)
+        clubManagerGuard.requireClubManager(clubId, userId)
         return joinPoint.proceed()
     }
 

@@ -4,6 +4,7 @@ import com.clubs.bot.NotificationService
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
+import com.clubs.common.auth.ClubManagerGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
@@ -29,6 +30,9 @@ import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+
+// Сообщение единого менеджерского гейта (ClubManagerGuard) для 403-ассертов.
+private const val MANAGER_FORBIDDEN = "Управлять клубом может владелец или активный со-организатор"
 
 class ApplicationServiceTest {
 
@@ -70,7 +74,10 @@ class ApplicationServiceTest {
             interestRepository,
             membershipMapper,
             membershipActivator,
-            eventPublisher = mockk(relaxed = true)
+            eventPublisher = mockk(relaxed = true),
+            // Реальный guard поверх тех же моков: owner-путь не трогает membershipRepository,
+            // negative-тесты стабят findByUserAndClub(caller) -> null (не со-орг).
+            clubManagerGuard = ClubManagerGuard(clubRepository, membershipRepository)
         )
     }
 
@@ -424,12 +431,13 @@ class ApplicationServiceTest {
 
         every { applicationRepository.findById(applicationId) } returns application
         every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.findByUserAndClub(otherUserId, clubId) } returns null
 
         val exception = assertThrows<ForbiddenException> {
             applicationService.approveApplication(applicationId, otherUserId)
         }
 
-        assertEquals("Forbidden", exception.message)
+        assertEquals(MANAGER_FORBIDDEN, exception.message)
         verify(exactly = 0) { membershipActivator.activateFree(any(), any()) }
         verify(exactly = 0) { membershipActivator.activateFrozen(any(), any()) }
     }
@@ -499,12 +507,13 @@ class ApplicationServiceTest {
 
         every { applicationRepository.findById(applicationId) } returns application
         every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.findByUserAndClub(randomUserId, clubId) } returns null
 
         val exception = assertThrows<ForbiddenException> {
             applicationService.rejectApplication(applicationId, randomUserId, null)
         }
 
-        assertEquals("Forbidden", exception.message)
+        assertEquals(MANAGER_FORBIDDEN, exception.message)
     }
 
     @Test
@@ -513,8 +522,9 @@ class ApplicationServiceTest {
         val userId = UUID.randomUUID()
         val ownedClubIds = listOf(UUID.randomUUID(), UUID.randomUUID())
 
-        every { clubRepository.findIdsByOwnerId(userId) } returns ownedClubIds
+        every { clubRepository.findManagedIds(userId) } returns ownedClubIds
         every { applicationRepository.countPendingByClubIds(ownedClubIds) } returns 3
+        every { membershipRepository.countClaimedAwaitingDuesByManager(userId) } returns 0
 
         val result = applicationService.getMyClubsActionCounts(userId)
 
@@ -881,6 +891,7 @@ class ApplicationServiceTest {
     fun `expandAndApproveAll rejects a caller who is not the owner`() {
         val clubId = UUID.randomUUID()
         stubExpandScenario(clubId, ownerId = UUID.randomUUID())
+        every { membershipRepository.findByUserAndClub(any(), clubId) } returns null
 
         assertThrows<ForbiddenException> {
             applicationService.expandAndApproveAll(

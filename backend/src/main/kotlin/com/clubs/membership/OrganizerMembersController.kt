@@ -9,15 +9,15 @@ import org.springframework.web.bind.annotation.RestController
 
 /**
  * Кросс-клубовые представления организатора над membership (de-Stars, слой 2). Привязан к пользователю
- * (а не к конкретному клубу), поэтому живёт вне маппинга `/api/clubs` из MemberController. Владение
- * проверяется внутри запроса (фильтр по `clubs.owner_id` = вызывающий), так что не-владелец просто
- * получает пустой список — без 403.
+ * (а не к конкретному клубу), поэтому живёт вне маппинга `/api/clubs` из MemberController. Managed-скоуп
+ * (co-organizers У-5) проверяется внутри запроса (владелец ИЛИ активный со-орг клуба), так что
+ * не-менеджер просто получает пустой список — без 403.
  */
 @RestController
 @RequestMapping("/api/users/me/organizer")
 class OrganizerMembersController(private val memberService: MemberService) {
 
-    /** Кросс-клубовое «Ждут оплаты»: участники в статусе frozen по клубам вызывающего, ждущие подтверждения взноса. */
+    /** Кросс-клубовое «Ждут оплаты»: участники без доступа по managed-клубам вызывающего, ждущие подтверждения взноса. */
     @GetMapping("/awaiting-dues")
     fun awaitingDues(
         @AuthenticationPrincipal caller: AuthenticatedUser

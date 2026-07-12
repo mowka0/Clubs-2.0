@@ -1,5 +1,6 @@
 package com.clubs.membership
 
+import com.clubs.generated.jooq.enums.MembershipRole
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -12,18 +13,21 @@ interface MembershipRepository {
     fun findByUserId(userId: UUID): List<Membership>
     fun findClubMembersWithUserInfo(clubId: UUID, includeWithoutAccess: Boolean = false): List<ClubMemberInfo>
     fun findUserClubsWithReputation(userId: UUID): List<UserClubReputationInfo>
-    /** Кросс-клубовая лента «Ждут оплаты» по всем активным клубам [ownerId]: участники без доступа —
-     *  `frozen` (ждут первого взноса) и `expired` (просрочили продление) — плюс `active` С claim
-     *  (раннее продление: заявил оплату до истечения, ждёт «Взнос получен»). */
-    fun findAwaitingDuesMembersByOwner(ownerId: UUID): List<OrganizerDuesMember>
+    /** Кросс-клубовая лента «Ждут оплаты» по всем активным managed-клубам [managerId] (владение ИЛИ
+     *  активный со-орг — co-organizers У-5): участники без доступа — `frozen` (ждут первого взноса)
+     *  и `expired` (просрочили продление) — плюс `active` С claim (раннее продление: заявил оплату
+     *  до истечения, ждёт «Взнос получен»). */
+    fun findAwaitingDuesMembersByManager(managerId: UUID): List<OrganizerDuesMember>
     /** Участники, заявившие об оплате взноса (claim pending) — `frozen`/`expired`/`active` (раннее
-     *  продление) — по всем клубам [ownerId]; питает точку-индикатор на «Мои клубы», чтобы оплативший
-     *  и ждущий участник был замечен без захода в таб. */
-    fun countClaimedAwaitingDuesByOwner(ownerId: UUID): Int
+     *  продление) — по всем managed-клубам [managerId] (У-5); питает точку-индикатор на «Мои клубы»,
+     *  чтобы оплативший и ждущий участник был замечен без захода в таб. */
+    fun countClaimedAwaitingDuesByManager(managerId: UUID): Int
     fun findExpiryRefByUserAndClub(userId: UUID, clubId: UUID): MembershipExpiryRef?
 
     // Предикаты / счётчики
     fun isMember(userId: UUID, clubId: UUID): Boolean
+    /** Число со-организаторов клуба (role=co_organizer, membership не cancelled) — проверка лимита У-3. */
+    fun countCoOrganizers(clubId: UUID): Int
     fun isActiveMemberInActiveClub(userId: UUID, clubId: UUID): Boolean
     fun countActiveByClubId(clubId: UUID): Int
     /** Активные участники без организатора, по всем [clubIds] — карточка доверия организатора «доверяют N участников». */
@@ -60,6 +64,15 @@ interface MembershipRepository {
     fun setAccessUntil(membershipId: UUID, accessUntil: OffsetDateTime): Int
     /** Задаёт приватную заметку организатора (null = очищает её). */
     fun updateOrganizerNote(membershipId: UUID, note: String?): Int
+
+    // Смена роли (co-organizers): защищённый переход `WHERE role = expected` + rows-affected —
+    // 0 строк = конкурентная смена роли (сервис -> 409), тот же паттерн, что org-toggle складчины.
+    fun updateRole(membershipId: UUID, expectedRole: MembershipRole, newRole: MembershipRole): Int
+
+    /** Транзакционный advisory-lock смен ролей клуба (снимается сам на commit/rollback):
+     *  сериализует промоуты, чтобы конкурентные назначения не пробили лимит со-оргов (TOCTOU —
+     *  count и UPDATE иначе не атомарны). Брать ДО проверки countCoOrganizers. */
+    fun lockRoleChanges(clubId: UUID)
 
     // Жизненный цикл / планировщик (honor-system окно доступа)
     fun findExpiringWithin(now: OffsetDateTime, threshold: OffsetDateTime): List<ExpiringSubscriptionNotification>

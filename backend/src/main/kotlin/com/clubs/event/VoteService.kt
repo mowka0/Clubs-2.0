@@ -1,6 +1,7 @@
 package com.clubs.event
 
 import com.clubs.club.ClubRepository
+import com.clubs.common.auth.ClubManagerGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
@@ -19,6 +20,7 @@ class VoteService(
     private val eventResponseRepository: EventResponseRepository,
     private val membershipRepository: MembershipRepository,
     private val clubRepository: ClubRepository,
+    private val clubManagerGuard: ClubManagerGuard,
     private val eventPublisher: ApplicationEventPublisher
 ) {
 
@@ -86,10 +88,12 @@ class VoteService(
         }
 
         // F5-06 (A01): dispute_note — приватное сообщение, адресованное организатору: читать его
-        // может только владелец клуба, а не каждый участник. Ключ — club.ownerId (НЕ event.createdBy:
-        // создатель-невладелец видеть заметку не должен, а владелец, который разбирает споры, — должен).
+        // может только менеджер клуба (владелец или активный со-орг — тот, кто разбирает споры,
+        // co-organizers точка 27), а не каждый участник. Ключ — менеджерство в клубе (НЕ event.createdBy:
+        // создатель-невладелец без роли видеть заметку не должен).
         // Заметка остаётся в SQL-проекции; здесь мы зануляем её, чтобы участникам она не ушла по сети.
-        val isOwner = clubRepository.findById(event.clubId)?.ownerId == userId
+        val club = clubRepository.findById(event.clubId)
+        val isManager = club != null && clubManagerGuard.isManager(club, userId)
 
         return eventResponseRepository.findRespondersWithUsers(eventId).map { r ->
             EventResponderDto(
@@ -99,7 +103,7 @@ class VoteService(
                 avatarUrl = r.avatarUrl,
                 status = r.finalStatus?.literal ?: r.stage1Vote?.literal ?: "going",
                 attendance = r.attendance?.literal,
-                disputeNote = if (isOwner) r.disputeNote else null
+                disputeNote = if (isManager) r.disputeNote else null
             )
         }
     }

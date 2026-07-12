@@ -246,6 +246,17 @@ class JooqMembershipRepository(
             )
             .fetchOne(0, Int::class.java) ?: 0
 
+    // Лимит со-оргов (У-3): считаем строки role=co_organizer, ещё принадлежащие клубу (не cancelled).
+    // frozen/expired со-орг сохраняет роль (прав нет, но слот делегата занят) — учитывается.
+    override fun countCoOrganizers(clubId: UUID): Int =
+        dsl.selectCount().from(MEMBERSHIPS)
+            .where(
+                MEMBERSHIPS.CLUB_ID.eq(clubId)
+                    .and(MEMBERSHIPS.ROLE.eq(MembershipRole.co_organizer))
+                    .and(MEMBERSHIPS.STATUS.ne(MembershipStatus.cancelled))
+            )
+            .fetchOne(0, Int::class.java) ?: 0
+
     override fun countActiveNonOrganizerMembersInClubs(clubIds: Collection<UUID>): Int {
         if (clubIds.isEmpty()) return 0
         // active (= доступ есть прямо сейчас, реальный social proof) + role != organizer (владельца не считаем).
@@ -318,6 +329,9 @@ class JooqMembershipRepository(
         val now = OffsetDateTime.now()
         val record = dsl.update(MEMBERSHIPS)
             .set(MEMBERSHIPS.STATUS, status)
+            // Роль умирает вместе с membership (co-organizers): бывший со-орг, вернувшийся по
+            // инвайту/заявке, — обычный участник; повторное назначение — только руками владельца.
+            .set(MEMBERSHIPS.ROLE, MembershipRole.member)
             .set(MEMBERSHIPS.JOINED_AT, now)
             .setNull(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT)
             // Свежее вступление: очистить устаревшие метки взноса от предыдущего жизненного цикла;
@@ -483,6 +497,25 @@ class JooqMembershipRepository(
             .execute()
     }
 
+    // Лок в рамках транзакции: снимается автоматически при commit/rollback, поэтому unlock не нужен
+    // и не течёт при исключении. Тот же паттерн, что lockEventSlots / recompute; префикс ключа
+    // отделяет пространство локов ролей от остальных advisory-локов.
+    override fun lockRoleChanges(clubId: UUID) {
+        dsl.execute("SELECT pg_advisory_xact_lock(hashtext(?))", "club-roles:$clubId")
+    }
+
+    // Смена роли (co-organizers): guard `WHERE role = expected` защищает от конкурентной смены —
+    // 0 строк -> сервис отвечает 409. НЕ пишется в membership_history: смена роли — не событие
+    // оттока join/leave (участник остаётся в клубе).
+    override fun updateRole(membershipId: UUID, expectedRole: MembershipRole, newRole: MembershipRole): Int {
+        val now = OffsetDateTime.now()
+        return dsl.update(MEMBERSHIPS)
+            .set(MEMBERSHIPS.ROLE, newRole)
+            .set(MEMBERSHIPS.UPDATED_AT, now)
+            .where(MEMBERSHIPS.ID.eq(membershipId).and(MEMBERSHIPS.ROLE.eq(expectedRole)))
+            .execute()
+    }
+
     override fun updateOrganizerNote(membershipId: UUID, note: String?): Int {
         val now = OffsetDateTime.now()
         return dsl.update(MEMBERSHIPS)
@@ -559,11 +592,30 @@ class JooqMembershipRepository(
             )
             .fetch { MembershipAccessRef(clubId = it.get(MEMBERSHIPS.CLUB_ID)!!, userId = it.get(MEMBERSHIPS.USER_ID)!!) }
 
-    override fun countClaimedAwaitingDuesByOwner(ownerId: UUID): Int =
+    // Managed-скоуп (co-organizers У-5): клуб «под управлением» userId = владелец ИЛИ строка
+    // membership с role=co_organizer при СТРОГО active-статусе (fail-close — frozen/expired со-орг
+    // выпадает из скоупа сам). Алиас нужен, потому что основной MEMBERSHIPS в этих запросах — целевой
+    // участник, а не вызывающий.
+    private fun clubManagedBy(userId: UUID): org.jooq.Condition {
+        val callerMembership = MEMBERSHIPS.`as`("caller_membership")
+        return CLUBS.OWNER_ID.eq(userId).or(
+            DSL.exists(
+                DSL.selectOne().from(callerMembership)
+                    .where(
+                        callerMembership.CLUB_ID.eq(CLUBS.ID)
+                            .and(callerMembership.USER_ID.eq(userId))
+                            .and(callerMembership.ROLE.eq(MembershipRole.co_organizer))
+                            .and(callerMembership.STATUS.eq(MembershipStatus.active))
+                    )
+            )
+        )
+    }
+
+    override fun countClaimedAwaitingDuesByManager(managerId: UUID): Int =
         dsl.selectCount().from(MEMBERSHIPS)
             .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))
             .where(
-                CLUBS.OWNER_ID.eq(ownerId)
+                clubManagedBy(managerId)
                     .and(CLUBS.IS_ACTIVE.eq(true))
                     // active-claimed = раннее продление (membership-lifecycle.md §7) — тоже требует
                     // действия организатора «Взнос получен», поэтому считается наравне с frozen/expired.
@@ -576,7 +628,7 @@ class JooqMembershipRepository(
             )
             .fetchOne(0, Int::class.java) ?: 0
 
-    override fun findAwaitingDuesMembersByOwner(ownerId: UUID): List<OrganizerDuesMember> {
+    override fun findAwaitingDuesMembersByManager(managerId: UUID): List<OrganizerDuesMember> {
         return dsl.select(
             MEMBERSHIPS.USER_ID,
             USERS.FIRST_NAME,
@@ -596,7 +648,7 @@ class JooqMembershipRepository(
             .join(USERS).on(USERS.ID.eq(MEMBERSHIPS.USER_ID))
             .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))
             .where(
-                CLUBS.OWNER_ID.eq(ownerId)
+                clubManagedBy(managerId)
                     .and(CLUBS.IS_ACTIVE.eq(true))
                     .and(
                         // Без доступа (frozen/expired) — всегда; active — только с claim

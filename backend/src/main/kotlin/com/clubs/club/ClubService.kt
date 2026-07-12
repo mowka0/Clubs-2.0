@@ -6,6 +6,7 @@ import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.application.ApplicationRepository
+import com.clubs.common.auth.ClubManagerGuard
 import com.clubs.chatlink.ChatLinkRepository
 import com.clubs.event.EventRepository
 import com.clubs.generated.jooq.enums.AccessType
@@ -36,6 +37,7 @@ private val MEMBER_REQUISITE_STATUSES = setOf(
 class ClubService(
     private val clubRepository: ClubRepository,
     private val membershipRepository: MembershipRepository,
+    private val clubManagerGuard: ClubManagerGuard,
     private val eventRepository: EventRepository,
     private val skladchinaRepository: SkladchinaRepository,
     private val applicationRepository: ApplicationRepository,
@@ -116,7 +118,9 @@ class ClubService(
     @Transactional
     fun regenerateInviteLink(clubId: UUID, userId: UUID): ClubDetailDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        if (club.ownerId != userId) throw ForbiddenException("Only the club owner can regenerate invite link")
+        // У-4 (co-organizers): отзыв инвайт-ссылки — операционное управление каналом набора,
+        // доступно менеджеру клуба (владелец или активный со-орг), не только владельцу.
+        clubManagerGuard.requireManager(club, userId)
         val newCode = generateInviteCode()
         val updated = clubRepository.updateInviteCode(clubId, newCode) ?: throw NotFoundException("Club not found")
         log.info("Invite link regenerated: clubId={} userId={}", clubId, userId)
@@ -156,12 +160,27 @@ class ClubService(
     @Transactional
     fun updateClub(id: UUID, request: UpdateClubRequest, userId: UUID): ClubDetailDto {
         val club = clubRepository.findById(id) ?: throw NotFoundException("Club not found")
-        if (club.ownerId != userId) throw ForbiddenException("Only the club owner can update it")
+        // Настройки клуба доступны менеджеру (co-organizers, точка 32); удаление ниже — owner-only.
+        clubManagerGuard.requireManager(club, userId)
+
+        // СБП-реквизиты — владельческое (co-organizers, PO №2): деньги взносов идут владельцу,
+        // поэтому подмена paymentLink/paymentMethodNote со-оргом = увод взносов. Менеджерский PUT
+        // разрешает остальные настройки; «пытается изменить» = поле прислано И нормализованное
+        // значение (пустое -> null, конвенция репозитория) отличается от текущего — no-op сабмит
+        // с тем же значением не блокируется (фронт и так шлёт поле только при изменении).
+        val requisitesChanged =
+            (request.paymentLink != null && request.paymentLink.ifBlank { null } != club.paymentLink) ||
+            (request.paymentMethodNote != null && request.paymentMethodNote.ifBlank { null } != club.paymentMethodNote)
+        if (requisitesChanged && club.ownerId != userId) {
+            throw ForbiddenException("Реквизиты для взноса задаёт владелец клуба")
+        }
 
         // Превращение БЕСПЛАТНОГО клуба в ПЛАТНЫЙ расходует ёмкость плана — тот же пейволл,
         // что и при создании, иначе редактирование обходило бы потолок (payment-v2.md §3.6).
+        // Биллинг якорится на ВЛАДЕЛЬЦА (payment-v2.md: payer = владелец): ёмкость считаем по
+        // club.ownerId, а не по вызывающему — иначе со-орг с бесплатным планом обходил бы потолок.
         if (request.subscriptionPrice != null && request.subscriptionPrice > 0 && club.subscriptionPrice == 0) {
-            subscriptionService.requirePaidClubCapacity(userId, clubRepository.countPaidByOwnerId(userId))
+            subscriptionService.requirePaidClubCapacity(club.ownerId, clubRepository.countPaidByOwnerId(club.ownerId))
         }
 
         // Инвариант: платный клуб обязан сохранять реквизиты СБП. Вычисляем итоговое состояние

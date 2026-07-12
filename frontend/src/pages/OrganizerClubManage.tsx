@@ -7,6 +7,7 @@ import {
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
+import { useAuthStore } from '../store/useAuthStore';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { AvatarUpload } from '../components/AvatarUpload';
 import { Toast } from '../components/Toast';
@@ -22,7 +23,8 @@ type TabKey = 'stats' | 'finances' | 'chat' | 'settings';
 
 // Вкладки страницы управления клубом (порядок массива = порядок отображения).
 // «Чат» — привязка телеграм-группы (club-chat-link), решение PO 2026-07-05:
-// итоговые табы Статистика · Финансы · Чат · Настройки.
+// итоговые табы Статистика · Финансы · Чат · Настройки. Со-организатору (co-organizers, У-10)
+// таб «Чат» не показывается — GET /chat-link owner-only, таб с гарантированным 403 хуже скрытого.
 const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
   { key: 'stats', label: 'Статистика' },
   { key: 'finances', label: 'Финансы' },
@@ -98,10 +100,13 @@ const ACCESS_LABELS_RU: Record<string, string> = {
 
 interface SettingsTabProps {
   club: ClubDetailDto;
+  /** Вызывающий — владелец клуба. Со-организатору (co-organizers) скрыты владельческие секции:
+   *  СБП-реквизиты и «Опасная зона» с удалением клуба. Остальные настройки со-оргу доступны. */
+  isOwner: boolean;
   onDeleted: (clubName: string) => void;
 }
 
-const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
+const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
   const haptic = useHaptic();
   const updateMutation = useUpdateClubMutation();
   const deleteMutation = useDeleteClubMutation();
@@ -177,9 +182,15 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
     }
     // У платного клуба обязательно должны быть реквизиты СБП (зеркалит backend-инвариант). Блокирует
     // сохранение платного клуба с пустой ссылкой — включая переключение бесплатный→платный и
-    // legacy-клуб, у которого реквизитов никогда не было.
+    // legacy-клуб, у которого реквизитов никогда не было. Со-оргу поле реквизитов скрыто
+    // (владельческая секция), поэтому текст ошибки объясняет, что включить платность может владелец.
     if (price > 0 && !paymentLink.trim()) {
-      fail('paymentLink', 'Для платного клуба укажите реквизиты для взноса');
+      fail(
+        'paymentLink',
+        isOwner
+          ? 'Для платного клуба укажите реквизиты для взноса'
+          : 'Реквизиты СБП для платного клуба задаёт владелец клуба',
+      );
       return;
     }
     if (description.trim().length < 1 || description.trim().length > 500) {
@@ -316,7 +327,8 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
         )}
       </div>
 
-      {Number(subscriptionPrice) > 0 && (
+      {/* СБП-реквизиты — владельческая секция (PO №2): деньги идут владельцу, со-орг их не меняет. */}
+      {isOwner && Number(subscriptionPrice) > 0 && (
         <>
           <div className="rd-section-sub-h">Реквизиты для взноса (СБП)</div>
           <div className="rd-form" style={{ marginBottom: 14 }}>
@@ -368,48 +380,53 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, onDeleted }) => {
 
       {savedToast && <Toast message={savedToast} onClose={() => setSavedToast(null)} />}
 
-      <div className="rd-section-sub-h">Опасная зона</div>
-      <button
-        type="button"
-        className="rd-btn-outline"
-        onClick={() => { haptic.impact('light'); setShowDeleteModal(true); }}
-        disabled={saving || deleting}
-        style={{ color: 'var(--danger)' }}
-      >
-        Удалить клуб
-      </button>
+      {/* «Опасная зона» — только владельцу: удаление клуба владельческое (со-оргу бэкенд ответит 403). */}
+      {isOwner && (
+        <>
+          <div className="rd-section-sub-h">Опасная зона</div>
+          <button
+            type="button"
+            className="rd-btn-outline"
+            onClick={() => { haptic.impact('light'); setShowDeleteModal(true); }}
+            disabled={saving || deleting}
+            style={{ color: 'var(--danger)' }}
+          >
+            Удалить клуб
+          </button>
 
-      <Modal open={showDeleteModal} onOpenChange={(v) => !deleting && setShowDeleteModal(v)}>
-        <div className="rd-modal-form" style={{ padding: 16 }}>
-          <h3 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 10px' }}>
-            Удалить клуб «{club.name}»?
-          </h3>
-          <p style={{ fontSize: 13.5, color: 'var(--text-dim)', lineHeight: 1.55, margin: '0 0 16px' }}>
-            Клуб скроется из каталога и «Моих клубов». {club.memberCount} активных участников потеряют доступ.
-            Это действие необратимо.
-          </p>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              type="button"
-              className="rd-btn-outline"
-              style={{ flex: 1 }}
-              onClick={() => setShowDeleteModal(false)}
-              disabled={deleting}
-            >
-              Отмена
-            </button>
-            <button
-              type="button"
-              className="rd-btn-danger"
-              style={{ flex: 1 }}
-              onClick={handleDelete}
-              disabled={deleting}
-            >
-              {deleting ? <Spinner size="s" /> : 'Удалить'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+          <Modal open={showDeleteModal} onOpenChange={(v) => !deleting && setShowDeleteModal(v)}>
+            <div className="rd-modal-form" style={{ padding: 16 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 10px' }}>
+                Удалить клуб «{club.name}»?
+              </h3>
+              <p style={{ fontSize: 13.5, color: 'var(--text-dim)', lineHeight: 1.55, margin: '0 0 16px' }}>
+                Клуб скроется из каталога и «Моих клубов». {club.memberCount} активных участников потеряют доступ.
+                Это действие необратимо.
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  className="rd-btn-outline"
+                  style={{ flex: 1 }}
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={deleting}
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  className="rd-btn-danger"
+                  style={{ flex: 1 }}
+                  onClick={handleDelete}
+                  disabled={deleting}
+                >
+                  {deleting ? <Spinner size="s" /> : 'Удалить'}
+                </button>
+              </div>
+            </div>
+          </Modal>
+        </>
+      )}
     </>
   );
 };
@@ -462,8 +479,15 @@ export const OrganizerClubManage: FC = () => {
   const clubQuery = useClubQuery(clubId || undefined);
   const club = clubQuery.data;
 
+  // Владелец клуба видит все табы; со-организатору (co-organizers, У-10) таб «Чат» скрыт —
+  // привязка/настройка чата owner-only. Deep-link `?tab=chat` у со-орга откатывается на «Статистику».
+  const user = useAuthStore((s) => s.user);
+  const isOwner = !!club && club.ownerId === user?.id;
+  const visibleTabs = isOwner ? TABS : TABS.filter((t) => t.key !== 'chat');
+  const effectiveTab: TabKey = !isOwner && activeTab === 'chat' ? 'stats' : activeTab;
+
   const handleTabChange = (key: TabKey) => {
-    if (key === activeTab) return;
+    if (key === effectiveTab) return;
     haptic.select();
     setActiveTab(key);
   };
@@ -487,7 +511,7 @@ export const OrganizerClubManage: FC = () => {
   }
 
   const renderTab = () => {
-    switch (activeTab) {
+    switch (effectiveTab) {
       case 'stats':
         return <ClubStatsTab clubId={clubId} />;
       case 'finances':
@@ -498,6 +522,7 @@ export const OrganizerClubManage: FC = () => {
         return (
           <SettingsTab
             club={club}
+            isOwner={isOwner}
             onDeleted={(name) =>
               navigate('/my-clubs', {
                 replace: true,
@@ -517,13 +542,13 @@ export const OrganizerClubManage: FC = () => {
       />
 
       <div className="rd-tabs" role="tablist">
-        {TABS.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.key}
             type="button"
             role="tab"
-            aria-selected={tab.key === activeTab}
-            className={`rd-tab-link${tab.key === activeTab ? ' rd-active' : ''}`}
+            aria-selected={tab.key === effectiveTab}
+            className={`rd-tab-link${tab.key === effectiveTab ? ' rd-active' : ''}`}
             onClick={() => handleTabChange(tab.key)}
           >
             {tab.label}

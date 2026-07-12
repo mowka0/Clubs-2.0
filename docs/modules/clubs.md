@@ -62,7 +62,7 @@ DELETE /api/clubs/{id}     → 204 No Content        (soft delete)
 ### Бизнес-правила
 - `owner_id` берётся из JWT, никогда из тела запроса
 - Максимум 10 клубов на одного организатора → 409 CONFLICT (считаются только `is_active = true`)
-- Только owner может обновлять / удалять клуб → 403 FORBIDDEN
+- Обновлять клуб (`PUT /api/clubs/{id}`) может **менеджер** — владелец ИЛИ активный со-организатор (`role = co_organizer`, `status = active`); см. `co-organizers.md`. **Исключение:** СБП-реквизиты (`paymentLink`, `paymentMethodNote`) и перевод клуба в платный меняет только владелец → иначе 403. **Удалять** клуб может только owner → 403 FORBIDDEN. Регенерация инвайт-ссылки — тоже менеджер
 - При создании клуба автоматически создаётся membership с `role = organizer`, `status = active` для владельца — чтобы `/api/users/me/clubs` возвращал клуб в списке и фронтенд мог показывать кнопку управления
 - **`is_active = false` (soft-deleted) клубы скрыты для всех запросов** (`findById`, `findAll`, `findByInviteCode`) — возвращают 404. Запись остаётся в БД для audit trail; UI восстановления не предусмотрен в MVP
 
@@ -126,7 +126,7 @@ Backend явно не принимает category/accessType в `UpdateClubReque
 ### Corner Cases
 - `GET /api/clubs/{unknownId}` → 404 NOT_FOUND
 - `GET /api/clubs/{softDeletedId}` → 404 NOT_FOUND
-- `PUT /api/clubs/{id}` от не-owner → 403 FORBIDDEN
+- `PUT /api/clubs/{id}` от обычного участника/не-члена → 403 FORBIDDEN; от активного со-организатора → 200 (кроме СБП-полей и перехода в платный — там 403, см. `co-organizers.md`)
 - `PUT /api/clubs/{id}` с попыткой передать `category` / `accessType` — поля игнорируются (в DTO их нет)
 - `POST /api/clubs` когда уже 10 клубов (только active) → 409 CONFLICT "Maximum 10 clubs per organizer"
 - `PUT /api/clubs/{unknownId}` → 404 NOT_FOUND

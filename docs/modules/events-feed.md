@@ -8,7 +8,7 @@
 > pull-to-refresh на кнопку «Обновить»).
 >
 > **Update (итерация 4 `feature/unified-activity-creation`, 2026-05-24):** в шапку
-> `ActivitiesPage` добавлена hero-кнопка «+ Создать» (видна только организаторам,
+> `ActivitiesPage` добавлена hero-кнопка «+ Создать» (видна менеджерам — владелец / активный со-организатор,
 > `useOrganizerClubs().clubs.length > 0`) → flow создания события/сбора
 > (`CreateActivityFlow`). Это chrome поверх ленты, на сам feed-контракт
 > (`GET /api/users/me/events`) не влияет. Полная спека создания —

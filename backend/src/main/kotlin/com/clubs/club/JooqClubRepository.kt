@@ -4,6 +4,7 @@ import com.clubs.common.dto.PageResponse
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.enums.EventStatus
+import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.tables.references.CLUBS
@@ -138,6 +139,29 @@ class JooqClubRepository(
         dsl.select(CLUBS.ID)
             .from(CLUBS)
             .where(CLUBS.OWNER_ID.eq(ownerId).and(CLUBS.IS_ACTIVE.eq(true)))
+            .fetch(CLUBS.ID)
+            .filterNotNull()
+
+    // Managed-скоуп (co-organizers У-5): владение ИЛИ активная строка co_organizer. Строго
+    // status=active — frozen/expired со-орг выпадает из скоупа сам (fail-close).
+    override fun findManagedIds(userId: UUID): List<UUID> =
+        dsl.select(CLUBS.ID)
+            .from(CLUBS)
+            .where(
+                CLUBS.IS_ACTIVE.eq(true).and(
+                    CLUBS.OWNER_ID.eq(userId).or(
+                        DSL.exists(
+                            DSL.selectOne().from(MEMBERSHIPS)
+                                .where(
+                                    MEMBERSHIPS.CLUB_ID.eq(CLUBS.ID)
+                                        .and(MEMBERSHIPS.USER_ID.eq(userId))
+                                        .and(MEMBERSHIPS.ROLE.eq(MembershipRole.co_organizer))
+                                        .and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active))
+                                )
+                        )
+                    )
+                )
+            )
             .fetch(CLUBS.ID)
             .filterNotNull()
 

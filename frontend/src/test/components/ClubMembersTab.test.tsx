@@ -151,6 +151,19 @@ describe('ClubMembersTab — de-Stars dashboard', () => {
     expect(titles[titles.length - 1]).toContain('Мария'); // frozen member last
   });
 
+  it('maps role badges: owner «Организатор», co-org «Со-организатор», member — none (co-organizers, PO №4)', async () => {
+    const coOrganizer = member({ userId: 'co', firstName: 'Виктор', role: 'co_organizer' });
+    mockMembers([ORGANIZER, coOrganizer, FAR]);
+    renderWithProviders(<ClubMembersTab clubId={CLUB_ID} isOrganizer={false} />);
+
+    expect(await screen.findByText('Виктор')).toBeInTheDocument();
+    expect(screen.getByText('Со-организатор')).toBeInTheDocument();
+    // Точный текст: «Организатор» бейдж владельца не должен совпадать с «Со-организатор».
+    expect(screen.getByText('Организатор')).toBeInTheDocument();
+    // У обычного участника (Дмитрий) бейджа роли нет — в списке ровно по одному бейджу каждого типа.
+    expect(screen.getAllByText(/^(Со-)?[Оо]рганизатор$/)).toHaveLength(2);
+  });
+
   it('shows club-award chips on a member roster card (public, R3)', async () => {
     const decorated = member({
       userId: 'dec', firstName: 'Олег',

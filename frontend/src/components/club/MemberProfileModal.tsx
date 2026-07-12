@@ -11,11 +11,13 @@ import {
   useRevokeMemberAwardMutation,
   useSetMemberAccessUntilMutation,
   useUpdateMemberNoteMutation,
+  useUpdateMemberRoleMutation,
 } from '../../queries/members';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useAuthStore } from '../../store/useAuthStore';
 import { ApiError } from '../../api/apiClient';
 import { pluralRu } from '../../utils/formatters';
+import { membershipRoleLabel } from '../../utils/membershipRole';
 import { DonutRing } from '../reputation/DonutRing';
 import { ImageLightbox } from '../ImageLightbox';
 import { TRUST_TIER_COLOR, trustTier } from '../reputation/trust-tier';
@@ -31,8 +33,12 @@ const MAX_AWARD_LABEL = 16;
 interface MemberProfileModalProps {
   member: MemberListItemDto;
   clubId: string;
-  /** Вид организатора — открывает строку «Подписка активна до …» + dues-действия (de-Stars). */
+  /** Менеджерский вид (владелец ИЛИ активный со-организатор) — открывает строку
+   *  «Подписка активна до …» + dues-действия (de-Stars). */
   isOrganizer?: boolean;
+  /** Вызывающий — владелец клуба (co-organizers): открывает секцию смены роли и управление
+   *  со-организаторами. Со-орг — менеджер (isOrganizer), но управляет только role=member. */
+  isOwner?: boolean;
   onClose: () => void;
   /** Показать toast на уровне страницы после успешного gate-действия. */
   onActionToast?: (message: string) => void;
@@ -580,6 +586,113 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
   );
 };
 
+interface RoleGateProps {
+  clubId: string;
+  member: MemberListItemDto;
+  /** Toast на уровне страницы + закрытие карточки после успешной смены роли. */
+  onDone: (message: string) => void;
+}
+
+/**
+ * Секция «Роль в клубе» (co-organizers) — видна ТОЛЬКО владельцу и только по чужой
+ * не-владельческой строке (гейт в модалке). Промоут «Сделать со-организатором» требует активного
+ * доступа участника (У-9): для frozen/expired кнопка задизейблена с пояснением, бэкенд всё равно
+ * ответит 400. Демоут «Снять со-организатора» доступен при любом статусе. Лимит со-оргов (5, У-3)
+ * проверяет бэкенд — его 400 показывается текстом ошибки. Оба действия — через confirm-диалог;
+ * 409 (параллельная смена роли) закрывает карточку: кэш ростера уже инвалидирован.
+ */
+const RoleGate: FC<RoleGateProps> = ({ clubId, member, onDone }) => {
+  const haptic = useHaptic();
+  const updateRole = useUpdateMemberRoleMutation();
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isCoOrganizer = member.role === 'co_organizer';
+  // У-9: со-оргом можно сделать только участника с активным доступом. frozen (ждёт первого взноса)
+  // и expired (должник) — нельзя; null = поле не пришло (у владельца оно всегда заполнено).
+  const canPromote = member.accessStatus !== 'frozen' && member.accessStatus !== 'expired';
+  const busy = updateRole.isPending;
+
+  const handleConfirm = () => {
+    if (busy) return;
+    setError(null);
+    haptic.impact('medium');
+    updateRole.mutate(
+      { clubId, userId: member.userId, role: isCoOrganizer ? 'member' : 'co_organizer' },
+      {
+        onSuccess: () => {
+          haptic.notify('success');
+          onDone(isCoOrganizer
+            ? `${member.firstName} больше не со-организатор`
+            : `${member.firstName} — теперь со-организатор`);
+        },
+        onError: (e) => {
+          if (e instanceof ApiError && e.status === 409) { onDone('Роль участника уже изменилась'); return; }
+          haptic.notify('error');
+          setError(e instanceof Error ? e.message : 'Не удалось изменить роль');
+        },
+      },
+    );
+  };
+
+  return (
+    <div className="rd-mgmt">
+      <div className="rd-mgmt-h">🤝 Роль в клубе</div>
+      <div className="rd-mgmt-body">
+        <div className="rd-mgmt-claim-line">
+          <span aria-hidden="true">{isCoOrganizer ? '⭐' : '👤'}</span>
+          <span>
+            {isCoOrganizer
+              ? 'Со-организатор — ведёт клуб вместе с вами: заявки, события, складчины, участники'
+              : 'Участник'}
+          </span>
+        </div>
+        {!confirming ? (
+          <>
+            <div className="rd-mgmt-pair">
+              <button
+                type="button"
+                className={`rd-mgmt-pb${isCoOrganizer ? ' danger' : ' primary'}`}
+                disabled={busy || (!isCoOrganizer && !canPromote)}
+                onClick={() => { setError(null); haptic.impact('light'); setConfirming(true); }}
+              >
+                {isCoOrganizer ? 'Снять со-организатора' : 'Сделать со-организатором'}
+              </button>
+            </div>
+            {!isCoOrganizer && !canPromote && (
+              <div className="rd-claim-note">
+                Назначить со-организатором можно только участника с активным доступом.
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="rd-reject-confirm">
+            <div className="rd-reject-q">
+              {isCoOrganizer
+                ? `Снять с ${member.firstName} роль со-организатора? Управляющие экраны клуба станут недоступны.`
+                : `Сделать ${member.firstName} со-организатором? Появится доступ к заявкам, событиям, складчинам и участникам — кроме владельческих настроек.`}
+            </div>
+            <div className="rd-org-gate-acts">
+              <button type="button" className="rd-btn-outline" disabled={busy} onClick={() => setConfirming(false)}>
+                Отмена
+              </button>
+              <button
+                type="button"
+                className={`rd-btn-primary${isCoOrganizer ? ' rd-btn-danger' : ''}`}
+                disabled={busy}
+                onClick={handleConfirm}
+              >
+                {busy ? <Spinner size="s" /> : isCoOrganizer ? 'Снять роль' : 'Назначить'}
+              </button>
+            </div>
+          </div>
+        )}
+        {error && <div className="rd-error" style={{ textAlign: 'left' }}>{error}</div>}
+      </div>
+    </div>
+  );
+};
+
 /**
  * Кольца per-club репутации + футер спонтанность/роль. Надёжность (умный композит) показывается всегда;
  * Посещаемость (события) и Сборы (складчины, влияющие на репутацию) — только когда есть данные, чтобы
@@ -593,7 +706,8 @@ const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
   const skladchinaPaid = profile.skladchinaPaid ?? 0;
   const skladchinaTotal = profile.skladchinaTotal ?? 0;
   const skladchinaPct = skladchinaTotal > 0 ? Math.round((skladchinaPaid / skladchinaTotal) * 100) : 0;
-  const roleLabel = profile.role === 'organizer' ? 'Организатор' : 'Участник';
+  // Роль в футере (co-organizers): «Организатор» / «Со-организатор» / «Участник».
+  const roleLabel = membershipRoleLabel(profile.role);
 
   return (
     <>
@@ -657,6 +771,7 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
   member,
   clubId,
   isOrganizer = false,
+  isOwner = false,
   onClose,
   onActionToast,
 }) => {
@@ -680,9 +795,15 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
     || isOrganizer
     || isSelf;
 
-  // Админ-секция: организатор управляет любым участником-не-организатором (заметка + награды работают
-  // и в бесплатных клубах, S2). Никогда — своей строкой: бэкенд отклоняет управление организатором.
-  const isManageable = isOrganizer && member.role !== 'organizer';
+  // Админ-секция (per-target матрица co-organizers, зеркалит бэкенд): владелец управляет любым,
+  // кроме владельца (в т.ч. со-организаторами); со-орг (менеджерский вид без isOwner) — только
+  // участниками с ролью member (заморозка/кик/награды по владельцу или другому со-оргу → 403).
+  // Никогда — своей строкой.
+  const isManageable = !isSelf && (
+    isOwner ? member.role !== 'organizer' : isOrganizer && member.role === 'member'
+  );
+  // Секция смены роли (owner-only): «Сделать/Снять со-организатора» по чужой не-владельческой строке.
+  const showRoleGate = isOwner && !isSelf && member.role !== 'organizer';
   // Платный участник = есть окно доступа, либо статус без доступа (frozen — ждёт первого взноса,
   // expired — просрочил продление). Гейтит de-Stars-слой (строка подписки + dues-действия + своя
   // дата); бесплатному остаются только заметка + награды.
@@ -815,7 +936,13 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
             </div>
           )}
 
-          {/* Админ-секция организатора: de-Stars-гейт доступа (только платные) + всегда открытая заметка
+          {/* Роль в клубе (co-organizers) — только владельцу: назначение/снятие со-организатора.
+              Идёт перед админ-панелью, чтобы деструктивное «Удалить из клуба» осталось последним. */}
+          {showRoleGate && (
+            <RoleGate clubId={clubId} member={member} onDone={handleGateDone} />
+          )}
+
+          {/* Админ-секция менеджера: de-Stars-гейт доступа (только платные) + всегда открытая заметка
               (S1) + «Своя дата» за ✎. Награды (S2) обрабатываются выше, под интересами. */}
           {isManageable && (
             <OrganizerGate

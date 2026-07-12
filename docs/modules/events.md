@@ -342,9 +342,10 @@ Case A). 6-часовой grace ≪ 48-часового окна спора (PRD
 с финализацией репутации.
 
 ### Frontend — отметка посещаемости (`EventPage`)
-Секция «Отметить посещаемость» на `EventPage` (между «Кто идёт» и Stage 2). Видна организатору
-после события: `isOrganizer && event_datetime <= now && !attendanceMarked && !attendanceFinalized`
-(зеркалит серверный гейт `AttendanceService` — owner-only + время, **не статус**; `!attendanceFinalized`
+Секция «Отметить посещаемость» на `EventPage` (между «Кто идёт» и Stage 2). Видна менеджеру
+(владелец ИЛИ активный со-организатор, см. `co-organizers.md`)
+после события: `isManager && event_datetime <= now && !attendanceMarked && !attendanceFinalized`
+(зеркалит серверный гейт `AttendanceService` — менеджерский + время, **не статус**; `!attendanceFinalized`
 добавлен в Блоке 1 для EXP-2 — после нейтрального авто-закрытия отметка уже невозможна). Чеклист
 участников со статусом `confirmed` (toggle-кнопки, по умолчанию «пришёл»), submit →
 `POST /api/events/{id}/attendance` (`useMarkAttendanceMutation`). После отметки — read-only
@@ -822,10 +823,11 @@ penalty-флоу), а их страницы упираются в скрытый
   (`findRespondersWithUsers` селектит колонку); в блоке «Оспоренные отметки» на `EventPage` она
   показывается под именем оспорившего. Фронт: textarea «Комментарий организатору (необязательно)»
   в блоке «Ваша явка».
-- **Приватность заметки — только владельцу клуба (F5-06, `bugfix/attendance-dispute-integrity`).**
-  В `GET /api/events/{id}/responses` поле `disputeNote` теперь возвращается **только владельцу клуба**
-  (`VoteService.getEventResponders`: `disputeNote = if (isOwner) r.disputeNote else null`, где
-  `isOwner = clubRepository.findById(event.clubId)?.ownerId == userId`); остальным участникам поле
+- **Приватность заметки — только менеджеру клуба (F5-06, `bugfix/attendance-dispute-integrity`; расширено на со-орга в `co-organizers.md`).**
+  В `GET /api/events/{id}/responses` поле `disputeNote` возвращается **только менеджеру** — владельцу
+  ИЛИ активному со-организатору
+  (`VoteService.getEventResponders`: `disputeNote = if (isManager) r.disputeNote else null`, где
+  `isManager` = менеджер клуба через `ClubManagerGuard`); остальным участникам поле
   приходит `null`. Раньше нота уходила всем участникам, а скрытие было только клиентским. SQL
   по-прежнему селектит колонку (владельцу нота нужна), нуллится в маппинге; DTO без изменений.
 
@@ -929,8 +931,8 @@ newly-absent (F5-15.2) — см. § ATT-3 выше.
 - **AC-F5-04 (без членства):** GIVEN вышедший из клуба, есть `event_response`, `attendance='absent'`
   WHEN `GET /my-attendance` THEN `200` со своей строкой и `canDispute=true`; `POST /dispute` проходит;
   `GET /responses` тому же юзеру → `403` (роутер остаётся member-only).
-- **AC-F5-06 (owner-only нота):** GIVEN owner и non-owner-member читают `/responses` THEN
-  non-owner → `disputeNote=null`; owner → нота.
+- **AC-F5-06 (нота видна менеджеру):** GIVEN менеджер (владелец/активный со-организатор) и обычный
+  участник читают `/responses` THEN обычный участник → `disputeNote=null`; менеджер → нота. См. `co-organizers.md`.
 - **AC-F5-09 (mark × finalize):** GIVEN финалайзер закоммитил `finalized=true` между TOCTOU-read и
   `markAttendanceMarked` THEN `markAttendance` бросает `ValidationException`, `setAttendance`-записи
   откачены.
@@ -983,7 +985,7 @@ EventController ──┬─► EventService ────► EventRepository ─
 | `JooqEventResponseRepository.kt` | Реализация. Методы: `setAttendance` (только `final_status=confirmed`; `IS DISTINCT FROM 'disputed'` + `dispute_terminal=false` reset + durable `event NOT finalized`-подзапрос), `disputeAbsentAttendance` (`+ dispute_terminal=false` + `event NOT finalized`-подзапрос), `resolveDisputedAttendance`/`resolveExpiredDisputesToAbsent` (`+ dispute_terminal=true`), `findByEventAndUser` (F5-04), `findUnconfirmedVoterTelegramIds` |
 | `EventController.kt` | HTTP. Делегирует в 4 сервиса |
 | `EventService.kt` | CRUD событий, без extension `toDetailDto` (вынесено в Mapper) |
-| `VoteService.kt` | Stage 1 голосование + `getEventResponders` (ростер). Использует `MembershipRepository.isMember`; инжектит `ClubRepository` для owner-only `disputeNote` (F5-06) |
+| `VoteService.kt` | Stage 1 голосование + `getEventResponders` (ростер). Использует `MembershipRepository.isMember`; инжектит `ClubRepository` для менеджерской видимости `disputeNote` (F5-06; владелец/активный со-орг) |
 | `Stage2Service.kt` | Stage 2 переход + confirm/decline (гард `event_datetime <= now` — Bug B) + авто-истечение брони (Feature A). 2× `@Scheduled` (trigger 5 мин, expire `events.stage2-expire-poll-ms`) |
 | `AttendanceService.kt` | mark / dispute / resolve / finalize + `getMyAttendance` (F5-04, `GET /my-attendance`, без членства). `DSLContext` убран — все update через Repository. Окно оспаривания и период финализации — `@Value`/`fixedDelayString` (`events.dispute-window-minutes`, `events.finalize-poll-ms`). TOCTOU-гарды F5-09/F5-10 + терминальность спора F5-16 |
 | `JooqEventResponseRepository.kt` | + `expireUnconfirmedForStartedEvents(now)` — bulk-UPDATE `NULL → expired_no_confirm` |
@@ -1010,7 +1012,7 @@ EventController ──┬─► EventService ────► EventRepository ─
 **Как** организатор клуба, **я хочу** отменить предстоящее событие (с необязательным пояснением), **чтобы** участники узнали об отмене, и встреча не выжигала ничью репутацию.
 
 ### Правила (продуктовые решения 2026-06-25)
-- **Кто:** только владелец клуба-хоста (`club.ownerId == userId`), иначе 403.
+- **Кто:** менеджер клуба-хоста — владелец ИЛИ активный со-организатор (см. `co-organizers.md`), иначе 403.
 - **Когда (окно):** только **до начала события** — `status ∈ {upcoming, stage_1, stage_2}` И `event_datetime > now`. После наступления времени события отмена недоступна (организатор либо отмечает явку, либо событие авто-закрывается нейтрально через EXP-2). Невыполнение → **409 Conflict** «Событие нельзя отменить».
 - **Терминально:** отменённое событие не возвращается (как удаление клуба).
 - **Репутация — нейтральна для всех:** отмена идёт **через репозитории напрямую** (не через сервисы репутации), поэтому никто не получает `no_show`/`expired_no_confirm`/штраф и никто не получает явку. Все sweep'ы (`findEventsNeedingAttendanceReminder`, `finalizeAttendanceBefore`, `markPastEventsCompleted`, EXP-2-expirer) уже исключают `cancelled`.
@@ -1033,7 +1035,7 @@ Body (optional): { "reason"?: string }      // CancelEventRequest, @Size(max=500
 `EventDetailDto` дополнен `cancellationReason: String?` (домен `Event` + `EventMapper` несут поле из колонки).
 
 ### Frontend
-- `EventPage`: кнопка «Отменить событие» — только организатору, пока `!eventHappened` и `status ∉ {cancelled, completed}`. Тап → подтверждающая модалка с необязательным полем причины → `POST …/cancel`.
+- `EventPage`: кнопка «Отменить событие» — менеджеру (владелец/активный со-организатор), пока `!eventHappened` и `status ∉ {cancelled, completed}`. Тап → подтверждающая модалка с необязательным полем причины → `POST …/cancel`.
 - Отменённое состояние: баннер «Событие отменено» (+ «: причина»); блоки голосования/подтверждения/явки/«Кто идёт» скрыты.
 - `ActivityCard`/лента: отменённое (`isCompleted=true`, как `completed`) уже затемнено и уходит в «прошедшие»; добавляется метка «Отменено».
 

@@ -3,6 +3,7 @@ package com.clubs.event
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
+import com.clubs.common.auth.ClubManagerGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.skladchina.SkladchinaRepository
@@ -31,6 +32,7 @@ class EventServiceTest {
 
     private lateinit var eventRepository: EventRepository
     private lateinit var clubRepository: ClubRepository
+    private lateinit var guardMembershipRepository: com.clubs.membership.MembershipRepository
     private lateinit var eventMapper: EventMapper
     private lateinit var eventPublisher: ApplicationEventPublisher
     private lateinit var skladchinaRepository: SkladchinaRepository
@@ -40,10 +42,15 @@ class EventServiceTest {
     fun setUp() {
         eventRepository = mockk(relaxed = true)
         clubRepository = mockk(relaxed = true)
+        // Вызывающий по умолчанию не со-орг (null): owner-путь guard'а membership-репозиторий не трогает.
+        guardMembershipRepository = mockk { every { findByUserAndClub(any(), any()) } returns null }
         eventMapper = mockk(relaxed = true)
         eventPublisher = mockk(relaxed = true)
         skladchinaRepository = mockk(relaxed = true)
-        eventService = EventService(eventRepository, clubRepository, eventMapper, eventPublisher, skladchinaRepository)
+        eventService = EventService(
+            eventRepository, clubRepository, ClubManagerGuard(clubRepository, guardMembershipRepository),
+            eventMapper, eventPublisher, skladchinaRepository
+        )
     }
 
     @Test

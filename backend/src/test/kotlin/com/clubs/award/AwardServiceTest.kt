@@ -5,6 +5,7 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.membership.Membership
+import com.clubs.common.auth.ClubManagerGuard
 import com.clubs.membership.MembershipRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -22,6 +23,7 @@ class AwardServiceTest {
 
     private lateinit var awardRepository: AwardRepository
     private lateinit var membershipRepository: MembershipRepository
+    private lateinit var clubRepository: com.clubs.club.ClubRepository
     private lateinit var eventPublisher: ApplicationEventPublisher
     private lateinit var service: AwardService
 
@@ -33,13 +35,43 @@ class AwardServiceTest {
     fun setUp() {
         awardRepository = mockk(relaxed = true)
         membershipRepository = mockk(relaxed = true)
+        clubRepository = mockk(relaxed = true)
         eventPublisher = mockk(relaxed = true)
-        service = AwardService(awardRepository, membershipRepository, AwardMapper(), eventPublisher)
-        // Default: target is a member; the cap/dup checks return "room available" unless overridden.
+        service = AwardService(
+            awardRepository, membershipRepository, clubRepository,
+            ClubManagerGuard(clubRepository, membershipRepository), AwardMapper(), eventPublisher
+        )
+        // Default: target is a member; caller is the club owner; the cap/dup checks return
+        // "room available" unless overridden.
         every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns member()
+        every { clubRepository.findById(clubId) } returns ownedClub()
         every { awardRepository.countByMember(clubId, targetUserId) } returns 0
         every { awardRepository.existsByLabel(clubId, targetUserId, any()) } returns false
         every { awardRepository.insert(any()) } answers { firstArg() }
+    }
+
+    private fun ownedClub(): com.clubs.club.Club {
+        val now = OffsetDateTime.now()
+        return com.clubs.club.Club(
+            id = clubId,
+            ownerId = callerId,
+            name = "Club",
+            description = "d",
+            category = com.clubs.generated.jooq.enums.ClubCategory.sport,
+            accessType = com.clubs.generated.jooq.enums.AccessType.`open`,
+            city = "Moscow",
+            district = null,
+            memberLimit = 30,
+            subscriptionPrice = 0,
+            avatarUrl = null,
+            rules = null,
+            applicationQuestion = null,
+            inviteLink = null,
+            memberCount = 3,
+            isActive = true,
+            createdAt = now,
+            updatedAt = now
+        )
     }
 
     private fun member(): Membership {
@@ -185,5 +217,57 @@ class AwardServiceTest {
         assertEquals(2, result.size)
         assertEquals(listOf("Активист", "Душа клуба"), result[targetUserId]?.map { it.label })
         assertEquals(listOf("Новичок года"), result[otherUserId]?.map { it.label })
+    }
+
+    // --- target-матрица (co-organizers, точка 39) ---
+
+    private fun coOrgTarget() = member().copy(role = MembershipRole.co_organizer)
+
+    @Test
+    fun `owner can grant an award to a co-organizer`() {
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns coOrgTarget()
+
+        val dto = service.grant(clubId, targetUserId, "⭐", "Опора клуба", callerId)
+
+        assertEquals("Опора клуба", dto.label)
+    }
+
+    @Test
+    fun `owner cannot grant an award to the organizer row`() {
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns
+            member().copy(role = MembershipRole.organizer, userId = callerId)
+
+        assertThrows<ValidationException> { service.grant(clubId, targetUserId, "⭐", "Сам себе", callerId) }
+    }
+
+    @Test
+    fun `co-org caller cannot grant an award to another co-organizer (403)`() {
+        // Клуб принадлежит другому: вызывающий — со-орг, прошедший гейт контроллера.
+        every { clubRepository.findById(clubId) } returns ownedClub().copy(ownerId = UUID.randomUUID())
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns coOrgTarget()
+
+        assertThrows<com.clubs.common.exception.ForbiddenException> {
+            service.grant(clubId, targetUserId, "⭐", "Не положено", callerId)
+        }
+    }
+
+    @Test
+    fun `co-org caller cannot revoke an award of another co-organizer (403)`() {
+        every { clubRepository.findById(clubId) } returns ownedClub().copy(ownerId = UUID.randomUUID())
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns coOrgTarget()
+
+        assertThrows<com.clubs.common.exception.ForbiddenException> {
+            service.revoke(clubId, targetUserId, UUID.randomUUID(), callerId)
+        }
+    }
+
+    @Test
+    fun `co-org caller can grant an award to a plain member`() {
+        every { clubRepository.findById(clubId) } returns ownedClub().copy(ownerId = UUID.randomUUID())
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns member()
+
+        val dto = service.grant(clubId, targetUserId, "🔥", "Живчик", callerId)
+
+        assertEquals("Живчик", dto.label)
     }
 }

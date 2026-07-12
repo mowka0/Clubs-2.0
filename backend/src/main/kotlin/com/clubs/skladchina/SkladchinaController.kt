@@ -1,6 +1,6 @@
 package com.clubs.skladchina
 
-import com.clubs.common.auth.RequiresOrganizer
+import com.clubs.common.auth.RequiresClubManager
 import com.clubs.common.security.AuthenticatedUser
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
@@ -23,7 +23,7 @@ class SkladchinaController(
 ) {
     private val log = LoggerFactory.getLogger(SkladchinaController::class.java)
 
-    @RequiresOrganizer(clubIdParam = "clubId")
+    @RequiresClubManager(clubIdParam = "clubId")
     @GetMapping("/api/clubs/{clubId}/skladchinas/active")
     fun getClubActiveSkladchinas(
         @PathVariable clubId: UUID,
@@ -33,7 +33,7 @@ class SkladchinaController(
         return ResponseEntity.ok(list)
     }
 
-    @RequiresOrganizer(clubIdParam = "clubId")
+    @RequiresClubManager(clubIdParam = "clubId")
     @PostMapping("/api/clubs/{clubId}/skladchinas")
     fun create(
         @PathVariable clubId: UUID,

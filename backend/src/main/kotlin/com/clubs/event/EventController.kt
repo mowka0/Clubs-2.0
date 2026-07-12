@@ -1,7 +1,7 @@
 package com.clubs.event
 
 import com.clubs.common.auth.RequiresMembership
-import com.clubs.common.auth.RequiresOrganizer
+import com.clubs.common.auth.RequiresClubManager
 import com.clubs.common.dto.PageResponse
 import com.clubs.common.security.AuthenticatedUser
 import jakarta.validation.Valid
@@ -28,7 +28,7 @@ class EventController(
 
     private val log = LoggerFactory.getLogger(EventController::class.java)
 
-    @RequiresOrganizer
+    @RequiresClubManager
     @PostMapping("/api/clubs/{id}/events")
     fun createEvent(
         @PathVariable id: UUID,

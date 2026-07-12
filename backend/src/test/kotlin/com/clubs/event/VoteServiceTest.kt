@@ -2,6 +2,7 @@ package com.clubs.event
 
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
+import com.clubs.common.auth.ClubManagerGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AttendanceStatus
@@ -32,7 +33,10 @@ class VoteServiceTest {
     private val membershipRepository = mockk<MembershipRepository>()
     private val clubRepository = mockk<ClubRepository>()
     private val eventPublisher = mockk<org.springframework.context.ApplicationEventPublisher>(relaxed = true)
-    private val service = VoteService(eventRepository, eventResponseRepository, membershipRepository, clubRepository, eventPublisher)
+    private val service = VoteService(
+        eventRepository, eventResponseRepository, membershipRepository, clubRepository,
+        ClubManagerGuard(clubRepository, membershipRepository), eventPublisher
+    )
 
     private val eventId = UUID.randomUUID()
     private val userId = UUID.randomUUID()
@@ -145,7 +149,10 @@ class VoteServiceTest {
         every { membershipRepository.isMember(viewerId, clubId) } returns true
         val club = mockk<Club>()
         every { club.ownerId } returns ownerId
+        every { club.id } returns clubId
         every { clubRepository.findById(clubId) } returns club
+        // Смотрящий по умолчанию не со-орг: у guard'а нет membership-строки с ролью.
+        every { membershipRepository.findByUserAndClub(viewerId, clubId) } returns null
         every { eventResponseRepository.findRespondersWithUsers(eventId) } returns listOf(responderWithNote("был там"))
     }
 

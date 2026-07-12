@@ -165,17 +165,17 @@ class MembershipHistoryIntegrationTest {
         val claimedExpired = expiredMembership(claimedExpiredUser)                       // expired С claim — считается
         membershipRepository.claimDues(claimedExpired, "cash", null)
 
-        assertEquals(2, membershipRepository.countClaimedAwaitingDuesByOwner(ownerId))
+        assertEquals(2, membershipRepository.countClaimedAwaitingDuesByManager(ownerId))
 
         // «Взнос получен» открывает доступ и снимает claim — счётчик гаснет по одному.
         membershipRepository.markDuesPaid(claimedFrozen.id, ownerId, OffsetDateTime.now().plusDays(30))
-        assertEquals(1, membershipRepository.countClaimedAwaitingDuesByOwner(ownerId))
+        assertEquals(1, membershipRepository.countClaimedAwaitingDuesByManager(ownerId))
         membershipRepository.markDuesPaid(claimedExpired, ownerId, OffsetDateTime.now().plusDays(30))
-        assertEquals(0, membershipRepository.countClaimedAwaitingDuesByOwner(ownerId))
+        assertEquals(0, membershipRepository.countClaimedAwaitingDuesByManager(ownerId))
     }
 
     @Test
-    fun `findAwaitingDuesMembersByOwner lists frozen, expired and claimed-active members with their accessStatus`() {
+    fun `findAwaitingDuesMembersByManager lists frozen, expired and claimed-active members with their accessStatus`() {
         val frozenUser = newUser()
         val expiredUser = newUser()
         val renewingUser = newUser()   // active + claim (раннее продление) — в ленте
@@ -187,14 +187,14 @@ class MembershipHistoryIntegrationTest {
         membershipRepository.claimDues(renewing.id, "cash", null)
         membershipRepository.create(calmActiveUser, clubId)
 
-        val rows = membershipRepository.findAwaitingDuesMembersByOwner(ownerId)
+        val rows = membershipRepository.findAwaitingDuesMembersByManager(ownerId)
 
         assertEquals(
             mapOf(frozenUser to "frozen", expiredUser to "expired", renewingUser to "active"),
             rows.associate { it.userId to it.accessStatus }
         )
         // Claimed-active (раннее продление) зажигает и бейдж таб-бара.
-        assertEquals(1, membershipRepository.countClaimedAwaitingDuesByOwner(ownerId))
+        assertEquals(1, membershipRepository.countClaimedAwaitingDuesByManager(ownerId))
     }
 
     // ---- helpers ----

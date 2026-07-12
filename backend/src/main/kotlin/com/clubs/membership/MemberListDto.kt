@@ -118,3 +118,10 @@ data class SetAccessUntilRequest(
     @field:NotNull(message = "Укажите дату")
     val until: OffsetDateTime
 )
+
+/** Co-organizers — смена роли участника владельцем: "member" | "co_organizer" ("organizer" запрещён —
+ *  передача владения вне скоупа, club-leave PR-2). Значение валидирует MemberRoleService (400). */
+data class UpdateMemberRoleRequest(
+    @field:NotBlank(message = "Укажите роль")
+    val role: String
+)

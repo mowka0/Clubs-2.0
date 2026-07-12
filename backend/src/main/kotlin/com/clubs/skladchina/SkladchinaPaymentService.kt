@@ -1,6 +1,7 @@
 package com.clubs.skladchina
 
 import com.clubs.club.ClubRepository
+import com.clubs.common.auth.ClubManagerGuard
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
@@ -28,6 +29,7 @@ import java.util.UUID
 class SkladchinaPaymentService(
     private val skladchinaRepository: SkladchinaRepository,
     private val clubRepository: ClubRepository,
+    private val clubManagerGuard: ClubManagerGuard,
     private val templateRegistry: SkladchinaTemplateRegistry,
     private val queryService: SkladchinaQueryService,
     private val lifecycleService: SkladchinaLifecycleService,
@@ -285,12 +287,13 @@ class SkladchinaPaymentService(
         return queryService.getDetail(skladchinaId, callerId)
     }
 
-    /** Загружает складчину для мутации, доступной только организатору: должна существовать, вызывающий — создатель, статус — активна. */
+    /** Загружает складчину для орг-мутации (resolve-decline / mark-paid / unmark): должна существовать,
+     *  вызывающий — создатель ИЛИ менеджер клуба (У-1, co-organizers), статус — активна. */
     private fun requireActiveAsCreator(skladchinaId: UUID, callerId: UUID): Skladchina {
         val skladchina = skladchinaRepository.findById(skladchinaId)
             ?: throw NotFoundException("Skladchina not found")
-        if (skladchina.creatorId != callerId) {
-            throw ForbiddenException("Only the organizer can manage this skladchina")
+        if (skladchina.creatorId != callerId && !clubManagerGuard.isClubManager(skladchina.clubId, callerId)) {
+            throw ForbiddenException("Only the creator or a club manager can manage this skladchina")
         }
         if (skladchina.status != SkladchinaStatus.active) {
             throw ValidationException("Skladchina is not active")

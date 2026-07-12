@@ -1,6 +1,6 @@
 package com.clubs.club
 
-import com.clubs.common.exception.ForbiddenException
+import com.clubs.common.auth.ClubManagerGuard
 import com.clubs.common.exception.NotFoundException
 import com.clubs.membership.MembershipRepository
 import com.clubs.payment.TransactionRepository
@@ -15,13 +15,15 @@ private const val ORGANIZER_SHARE_PERCENT = 100 - PLATFORM_FEE_PERCENT
 @Service
 class FinancesService(
     private val clubRepository: ClubRepository,
+    private val clubManagerGuard: ClubManagerGuard,
     private val membershipRepository: MembershipRepository,
     private val transactionRepository: TransactionRepository
 ) {
 
     fun getFinances(clubId: UUID, userId: UUID): FinancesDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        if (club.ownerId != userId) throw ForbiddenException("Only the club organizer can view finances")
+        // Менеджерский гейт (co-organizers), синхронно с @RequiresClubManager на контроллере.
+        clubManagerGuard.requireManager(club, userId)
 
         val startOfMonth = OffsetDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0)
 

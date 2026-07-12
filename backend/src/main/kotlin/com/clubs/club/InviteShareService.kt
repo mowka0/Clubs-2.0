@@ -1,10 +1,8 @@
 package com.clubs.club
 
 import com.clubs.bot.NotificationService
-import com.clubs.common.exception.ForbiddenException
+import com.clubs.common.auth.ClubManagerGuard
 import com.clubs.common.exception.NotFoundException
-import com.clubs.generated.jooq.enums.MembershipRole
-import com.clubs.membership.MembershipRepository
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -21,7 +19,7 @@ import java.util.UUID
 class InviteShareService(
     private val clubService: ClubService,
     private val clubRepository: ClubRepository,
-    private val membershipRepository: MembershipRepository,
+    private val clubManagerGuard: ClubManagerGuard,
     private val userRepository: UserRepository,
     private val notificationService: NotificationService,
     // Username бота — основа deep-link'а t.me/<bot>?startapp=…
@@ -32,7 +30,10 @@ class InviteShareService(
 
     fun createShare(clubId: UUID, callerId: UUID): InviteShareDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        requireOwnerOrOrganizer(club, callerId)
+        // У-2 (co-organizers): приглашает менеджер клуба — владелец или со-орг СТРОГО при active-членстве.
+        // Ранее здесь был findActiveByUserAndClub (misnomer: включает frozen/expired) — для владельца
+        // это было недостижимо, для ролей стало бы дырой fail-open; единый гейт закрывает её.
+        clubManagerGuard.requireManager(club, callerId)
 
         val code = clubService.ensureInviteCode(clubId)
         val inviteUrl = "https://t.me/$botUsername?startapp=invite_$code"
@@ -63,15 +64,6 @@ class InviteShareService(
             clubId, callerId, preparedMessageId != null
         )
         return InviteShareDto(inviteUrl = inviteUrl, preparedMessageId = preparedMessageId)
-    }
-
-    // Приглашать может владелец и участник с ролью organizer (решение PO №5, club-invites.md).
-    private fun requireOwnerOrOrganizer(club: Club, callerId: UUID) {
-        if (club.ownerId == callerId) return
-        val membership = membershipRepository.findActiveByUserAndClub(callerId, club.id)
-        if (membership?.role != MembershipRole.organizer) {
-            throw ForbiddenException("Only the club owner or organizer can share invites")
-        }
     }
 
     // Русские подписи категорий для текста приглашения (enum club_category → подпись как на фронте).

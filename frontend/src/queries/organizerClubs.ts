@@ -3,6 +3,7 @@ import { useQueries } from '@tanstack/react-query';
 import { useMyClubsQuery } from './clubs';
 import { queryKeys } from './queryKeys';
 import { getClub } from '../api/clubs';
+import { isActiveManagerMembership } from '../utils/membershipRole';
 import type { ClubPickerOption } from '../components/manage/ClubPickerModal';
 
 interface OrganizerClubsResult {
@@ -12,7 +13,8 @@ interface OrganizerClubsResult {
 
 /**
  * Клубы, которыми управляет текущий пользователь, обогащённые именем/аватаром для глобального
- * потока создания. Источник истины — членство с ролью организатора (`role === 'organizer'`);
+ * потока создания. Источник истины — членство с менеджерской ролью (владелец ИЛИ со-организатор,
+ * co-organizers: «+» создания активностей и клуб-пикер работают у со-орга тоже);
  * детали клуба подгружаются по каждому клубу через общий кэш деталей.
  */
 export function useOrganizerClubs(): OrganizerClubsResult {
@@ -21,7 +23,7 @@ export function useOrganizerClubs(): OrganizerClubsResult {
   const organizerClubIds = useMemo(
     () =>
       (myClubsQuery.data ?? [])
-        .filter((m) => m.role === 'organizer')
+        .filter((m) => isActiveManagerMembership(m))
         .map((m) => m.clubId),
     [myClubsQuery.data],
   );

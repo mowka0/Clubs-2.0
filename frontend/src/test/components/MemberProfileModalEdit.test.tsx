@@ -33,10 +33,15 @@ const MEMBER: MemberListItemDto = {
   accessStatus: 'active', subscriptionExpiresAt: inDays(20),
 };
 
-function mockProfile(note: string | null, awards: AwardDto[] = [], applicationAnswer: string | null = null) {
+function mockProfile(
+  note: string | null,
+  awards: AwardDto[] = [],
+  applicationAnswer: string | null = null,
+  role: MemberProfileDto['role'] = 'member',
+) {
   const profile: MemberProfileDto = {
     userId: 'u-1', clubId: CLUB, firstName: 'Игорь', username: 'igor_s', avatarUrl: null,
-    bio: null, interests: [], awards, role: 'member', trust: 70, promiseFulfillmentPct: 90,
+    bio: null, interests: [], awards, role, trust: 70, promiseFulfillmentPct: 90,
     totalConfirmations: 4, totalAttendances: 3, spontaneityCount: 0, skladchinaPaid: null,
     skladchinaTotal: null, subscriptionExpiresAt: inDays(20), organizerNote: note,
     duesClaimedAt: null, duesClaimMethod: null, duesProofUrl: null, applicationAnswer,
@@ -167,6 +172,114 @@ describe('MemberProfileModal — remove member (kick)', () => {
     await user.click(screen.getByRole('button', { name: /Удалить из клуба/ }));
 
     await waitFor(() => expect(removeBody?.reason).toBe('нарушает правила клуба'));
+  });
+});
+
+describe('MemberProfileModal — role management (co-organizers)', () => {
+  const CO_ORG: MemberListItemDto = { ...MEMBER, role: 'co_organizer' };
+
+  it('owner sees «Сделать со-организатором» on an active member and promotes via PUT /role', async () => {
+    mockProfile(null);
+    let putBody: { role: string } | undefined;
+    server.use(
+      http.put(`*/api/clubs/${CLUB}/members/u-1/role`, async ({ request }) => {
+        putBody = (await request.json()) as { role: string };
+        return HttpResponse.json({
+          id: 'm-1', userId: 'u-1', clubId: CLUB, status: 'active', role: 'co_organizer',
+          joinedAt: MEMBER.joinedAt, subscriptionExpiresAt: MEMBER.subscriptionExpiresAt,
+        });
+      }),
+    );
+
+    const user = userEvent.setup();
+    renderWithProviders(
+      <MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer isOwner onClose={() => {}} />,
+    );
+
+    // Двухтаповый confirm: кнопка секции → диалог подтверждения → «Назначить».
+    await user.click(await screen.findByRole('button', { name: 'Сделать со-организатором' }));
+    await user.click(screen.getByRole('button', { name: 'Назначить' }));
+
+    await waitFor(() => expect(putBody?.role).toBe('co_organizer'));
+  });
+
+  it('owner sees «Снять со-организатора» on a co-organizer and demotes via PUT /role', async () => {
+    mockProfile(null, [], null, 'co_organizer');
+    let putBody: { role: string } | undefined;
+    server.use(
+      http.put(`*/api/clubs/${CLUB}/members/u-1/role`, async ({ request }) => {
+        putBody = (await request.json()) as { role: string };
+        return HttpResponse.json({
+          id: 'm-1', userId: 'u-1', clubId: CLUB, status: 'active', role: 'member',
+          joinedAt: MEMBER.joinedAt, subscriptionExpiresAt: MEMBER.subscriptionExpiresAt,
+        });
+      }),
+    );
+
+    const user = userEvent.setup();
+    renderWithProviders(
+      <MemberProfileModal member={CO_ORG} clubId={CLUB} isOrganizer isOwner onClose={() => {}} />,
+    );
+
+    // Владелец сохраняет админ-панель по со-оргу (per-target матрица: owner → co-org разрешено).
+    expect(await screen.findByRole('button', { name: /Удалить из клуба/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Снять со-организатора' }));
+    await user.click(screen.getByRole('button', { name: 'Снять роль' }));
+
+    await waitFor(() => expect(putBody?.role).toBe('member'));
+  });
+
+  it('promote is disabled for a frozen member with an explanation (У-9)', async () => {
+    mockProfile(null);
+    const frozen: MemberListItemDto = { ...MEMBER, accessStatus: 'frozen', subscriptionExpiresAt: null };
+    renderWithProviders(
+      <MemberProfileModal member={frozen} clubId={CLUB} isOrganizer isOwner onClose={() => {}} />,
+    );
+
+    const promote = await screen.findByRole('button', { name: 'Сделать со-организатором' });
+    expect(promote).toBeDisabled();
+    expect(screen.getByText(/только участника с активным доступом/)).toBeInTheDocument();
+  });
+
+  it('hides the role section from a co-organizer manager (isOrganizer without isOwner)', async () => {
+    mockProfile(null);
+    renderWithProviders(
+      <MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer onClose={() => {}} />,
+    );
+
+    await screen.findByText(/Репутация в этом клубе/i);
+    expect(screen.queryByRole('button', { name: 'Сделать со-организатором' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Роль в клубе/)).not.toBeInTheDocument();
+  });
+
+  it('co-organizer manager cannot manage another co-organizer (no admin panel, per-target 403 mirror)', async () => {
+    mockProfile(null, [], null, 'co_organizer');
+    renderWithProviders(
+      <MemberProfileModal member={CO_ORG} clubId={CLUB} isOrganizer onClose={() => {}} />,
+    );
+
+    await screen.findByText(/Репутация в этом клубе/i);
+    expect(screen.queryByText(/Управление участником/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Удалить из клуба/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the backend error text when promote hits the co-org limit (400, У-3)', async () => {
+    mockProfile(null);
+    server.use(
+      http.put(`*/api/clubs/${CLUB}/members/u-1/role`, () =>
+        HttpResponse.json({ error: 'VALIDATION', message: 'Co-organizer limit reached (5)' }, { status: 400 })),
+    );
+
+    const user = userEvent.setup();
+    renderWithProviders(
+      <MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer isOwner onClose={() => {}} />,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Сделать со-организатором' }));
+    await user.click(screen.getByRole('button', { name: 'Назначить' }));
+
+    expect(await screen.findByText(/Co-organizer limit reached/)).toBeInTheDocument();
   });
 });
 

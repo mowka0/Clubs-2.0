@@ -11,6 +11,13 @@ export interface ErrorResponse {
   message: string;
 }
 
+/**
+ * Роль в клубе (enum membership_role в БД): member — участник; organizer — владелец клуба
+ * (ровно один, зеркалит ClubDetailDto.ownerId); co_organizer — со-организатор, назначается
+ * владельцем из активных участников и ведёт клуб без владельческих прав (co-organizers).
+ */
+export type MembershipRole = 'member' | 'organizer' | 'co_organizer';
+
 export interface UserDto {
   id: string;
   telegramId: number;
@@ -56,7 +63,7 @@ export interface MemberListItemDto {
   firstName: string;
   lastName: string | null;
   avatarUrl: string | null;
-  role: string;
+  role: MembershipRole;
   joinedAt: string | null;
   // P1b Trust 0-100. null = «Новичок» (ещё нет трек-рекорда, либо владелец в своём клубе — по `role`
   // рендерится организаторская подача). При null весь блок репутации скрывается.
@@ -117,7 +124,7 @@ export interface MemberProfileDto {
   // Member admin S2 — клубные награды, видны ВСЕМ участникам (R3); чисто косметика (R4).
   awards: AwardDto[];
   // "organizer" = владелец клуба. Определяет организаторскую подачу, когда trust = null.
-  role: string;
+  role: MembershipRole;
   // P1b Trust 0-100. null = «Новичок»/скрыто (ещё нет трек-рекорда, либо владелец в своём клубе).
   trust: number | null;
   promiseFulfillmentPct: number | null;
@@ -176,7 +183,7 @@ export interface UserClubReputationDto {
   clubName: string;
   clubAvatarUrl: string | null;
   category: string;
-  role: string;
+  role: MembershipRole;
   joinedAt: string | null;
   // P1b Trust 0-100. null = «Новичок»/скрыто (ещё нет трек-рекорда, либо владелец в своём клубе —
   // `role` = "organizer" рендерит организаторскую подачу).
@@ -478,7 +485,7 @@ export interface MembershipDto {
   userId: string;
   clubId: string;
   status: string;
-  role: string;
+  role: MembershipRole;
   joinedAt: string | null;
   subscriptionExpiresAt: string | null;
   // Собственное заявление участника об оплате (de-Stars): когда заявил (null = не заявлял) + способ ("sbp"|"cash").

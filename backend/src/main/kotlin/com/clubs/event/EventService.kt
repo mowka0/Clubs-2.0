@@ -1,9 +1,9 @@
 package com.clubs.event
 
 import com.clubs.club.ClubRepository
+import com.clubs.common.auth.ClubManagerGuard
 import com.clubs.common.dto.PageResponse
 import com.clubs.common.exception.ConflictException
-import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.skladchina.SkladchinaRepository
@@ -17,6 +17,7 @@ import java.util.UUID
 class EventService(
     private val eventRepository: EventRepository,
     private val clubRepository: ClubRepository,
+    private val clubManagerGuard: ClubManagerGuard,
     private val eventMapper: EventMapper,
     private val eventPublisher: ApplicationEventPublisher,
     private val skladchinaRepository: SkladchinaRepository
@@ -27,7 +28,8 @@ class EventService(
     @Transactional
     fun createEvent(clubId: UUID, request: CreateEventRequest, userId: UUID): EventDetailDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        if (club.ownerId != userId) throw ForbiddenException("Only the club organizer can create events")
+        // Менеджерский гейт (co-organizers), синхронно с @RequiresClubManager на контроллере.
+        clubManagerGuard.requireManager(club, userId)
         // Пустые/пробельные адрес и уточнение схлопываются в null — как cancellationReason в cancelEvent.
         val normalizedRequest = request.copy(
             locationText = request.locationText?.trim()?.takeIf { it.isNotEmpty() },
@@ -74,7 +76,8 @@ class EventService(
     fun cancelEvent(eventId: UUID, userId: UUID, reason: String?): EventDetailDto {
         val event = eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
         val club = clubRepository.findById(event.clubId) ?: throw NotFoundException("Club not found")
-        if (club.ownerId != userId) throw ForbiddenException("Only the club organizer can cancel events")
+        // Менеджерский гейт (co-organizers): владелец или активный со-орг отменяет событие.
+        clubManagerGuard.requireManager(club, userId)
 
         val normalizedReason = reason?.trim()?.takeIf { it.isNotEmpty() }
         if (eventRepository.cancelEvent(eventId, normalizedReason) == 0) {

@@ -51,11 +51,16 @@ class SkladchinaMapper {
         clubName: String,
         clubAvatarUrl: String?,
         callerUserId: UUID,
+        // Вызывающий — менеджер клуба сбора (владелец или активный со-орг); вычисляет сервис,
+        // маппер репозитории не дёргает.
+        callerIsManager: Boolean,
         participants: List<SkladchinaParticipantInfo>,
         collectedKopecks: Long,
         declineRequiresApproval: Boolean
     ): SkladchinaDetailDto {
-        val isOrganizerView = skladchina.creatorId == callerUserId
+        // У-7: имя поля isOrganizerView сохранено при расширении семантики (creator ИЛИ manager) —
+        // минимизация фронт-диффа; гейтит орг-действия и список участников в DTO.
+        val isOrganizerView = skladchina.creatorId == callerUserId || callerIsManager
         val myParticipant = participants.firstOrNull { it.userId == callerUserId }
         val paidCount = participants.count { it.status.literal == "paid" }
         val pendingCount = participants.count { it.status.literal == "pending" }
@@ -96,8 +101,9 @@ class SkladchinaMapper {
         )
     }
 
-    fun toMyFeedItemDto(item: MySkladchinaFeedItem, callerUserId: UUID): MySkladchinaListItemDto {
-        val isOrganizerView = item.skladchina.creatorId == callerUserId
+    fun toMyFeedItemDto(item: MySkladchinaFeedItem, callerUserId: UUID, callerIsManager: Boolean): MySkladchinaListItemDto {
+        // У-7: creator ИЛИ manager (см. toDetailDto).
+        val isOrganizerView = item.skladchina.creatorId == callerUserId || callerIsManager
         val actionRequired = item.skladchina.status.literal == "active" &&
             item.myStatus?.literal == "pending"
 
