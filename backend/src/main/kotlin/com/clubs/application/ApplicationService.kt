@@ -1,7 +1,8 @@
 package com.clubs.application
 
 import com.clubs.bot.NotificationService
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubCapability
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
@@ -47,7 +48,7 @@ class ApplicationService(
     private val membershipMapper: MembershipMapper,
     private val membershipActivator: MembershipActivator,
     private val eventPublisher: ApplicationEventPublisher,
-    private val clubManagerGuard: ClubManagerGuard
+    private val clubRoleGuard: ClubRoleGuard
 ) {
 
     private val log = LoggerFactory.getLogger(ApplicationService::class.java)
@@ -149,7 +150,7 @@ class ApplicationService(
         val club = clubRepository.findById(application.clubId)
             ?: throw NotFoundException("Club not found")
 
-        clubManagerGuard.requireManager(club, organizerId)
+        clubRoleGuard.requireCapability(club, organizerId, ClubCapability.APPROVE_APPLICATIONS)
 
         if (application.status != ApplicationStatus.pending) {
             throw ValidationException("Application is not pending")
@@ -196,7 +197,7 @@ class ApplicationService(
     @Transactional
     fun expandAndApproveAll(clubId: UUID, organizerId: UUID, request: ExpandAndApproveRequest): List<ApplicationDto> {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        clubManagerGuard.requireManager(club, organizerId)
+        clubRoleGuard.requireCapability(club, organizerId, ClubCapability.APPROVE_APPLICATIONS)
 
         val applications = request.applicationIds.distinct().map { id ->
             applicationRepository.findById(id) ?: throw NotFoundException("Application not found: $id")
@@ -255,7 +256,7 @@ class ApplicationService(
         val club = clubRepository.findById(application.clubId)
             ?: throw NotFoundException("Club not found")
 
-        clubManagerGuard.requireManager(club, organizerId)
+        clubRoleGuard.requireCapability(club, organizerId, ClubCapability.APPROVE_APPLICATIONS)
 
         if (application.status != ApplicationStatus.pending) {
             throw ValidationException("Application is not pending")
@@ -303,7 +304,7 @@ class ApplicationService(
 
     fun getClubApplications(clubId: UUID, organizerId: UUID, status: String?): List<ApplicationDto> {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        clubManagerGuard.requireManager(club, organizerId)
+        clubRoleGuard.requireCapability(club, organizerId, ClubCapability.APPROVE_APPLICATIONS)
 
         val statusEnum = status?.let {
             ApplicationStatus.values().find { e -> e.literal == it }

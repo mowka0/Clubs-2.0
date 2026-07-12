@@ -1,6 +1,6 @@
 package com.clubs.membership
 
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
@@ -54,7 +54,7 @@ class AccessGateServiceTest {
             skladchinaRepository = skladchinaRepository,
             notificationService = notificationService,
             eventPublisher = eventPublisher,
-            clubManagerGuard = ClubManagerGuard(clubRepository, membershipRepository)
+            clubRoleGuard = ClubRoleGuard(clubRepository, membershipRepository)
         )
         // По умолчанию вызывающий — владелец клуба (target-матрица owner-пути); co-org-тесты переопределяют.
         every { clubRepository.findById(clubId) } returns club(ownerId = callerId)

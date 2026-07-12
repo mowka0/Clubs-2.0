@@ -1,7 +1,8 @@
 package com.clubs.skladchina
 
 import com.clubs.club.ClubRepository
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubCapability
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
@@ -21,7 +22,7 @@ import java.util.UUID
 class SkladchinaQueryService(
     private val skladchinaRepository: SkladchinaRepository,
     private val clubRepository: ClubRepository,
-    private val clubManagerGuard: ClubManagerGuard,
+    private val clubRoleGuard: ClubRoleGuard,
     private val mapper: SkladchinaMapper,
     private val templateRegistry: SkladchinaTemplateRegistry
 ) {
@@ -29,9 +30,9 @@ class SkladchinaQueryService(
     @Transactional(readOnly = true)
     fun getClubActiveSkladchinas(clubId: UUID, callerId: UUID): List<MySkladchinaListItemDto> {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        // Один расчёт на весь список: эндпоинт и так за @RequiresClubManager, но создатель-без-роли
-        // сюда не попадает, поэтому предикат честный, не константа.
-        val callerIsManager = clubManagerGuard.isManager(club, callerId)
+        // Один расчёт на весь список: эндпоинт и так за @RequiresCapability(MANAGE_SKLADCHINA), но
+        // создатель-без-роли сюда не попадает, поэтому предикат честный, не константа.
+        val callerIsManager = clubRoleGuard.hasCapability(club, callerId, ClubCapability.MANAGE_SKLADCHINA)
         val skladchinas = skladchinaRepository.findActiveByClub(clubId)
         return skladchinas.map { s ->
             val collected = skladchinaRepository.sumCollectedKopecks(s.id)
@@ -65,7 +66,7 @@ class SkladchinaQueryService(
         // со-орга и наоборот, даже не будучи участником).
         val isCreator = skladchina.creatorId == callerId
         val callerParticipant = skladchinaRepository.findParticipant(skladchinaId, callerId)
-        val callerIsManager = clubManagerGuard.isManager(club, callerId)
+        val callerIsManager = clubRoleGuard.hasCapability(club, callerId, ClubCapability.MANAGE_SKLADCHINA)
         if (!isCreator && callerParticipant == null && !callerIsManager) {
             throw ForbiddenException("Not allowed to view this skladchina")
         }

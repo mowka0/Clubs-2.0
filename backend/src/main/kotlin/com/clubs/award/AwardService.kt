@@ -1,7 +1,7 @@
 package com.clubs.award
 
 import com.clubs.club.ClubRepository
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.membership.MembershipRepository
@@ -18,7 +18,7 @@ import java.util.UUID
  * Награды публичны для всех участников (R3) и никогда не трогают репутацию/XP/ранг (R4) —
  * никаких хуков в ledger/репутацию здесь намеренно нет.
  *
- * Авторизация вызывающего (менеджер клуба) декларативна на контроллере (@RequiresClubManager);
+ * Авторизация вызывающего (менеджер клуба) декларативна на контроллере (@RequiresCapability(GRANT_AWARDS));
  * этот сервис проверяет бизнес-правила (цель должна быть участником, лимит на участника,
  * отсутствие дубля названия) и target-матрицу ролей (co-organizers, точка 39): со-орг награждает
  * только участников role=member, организатора не награждает никто.
@@ -28,7 +28,7 @@ class AwardService(
     private val awardRepository: AwardRepository,
     private val membershipRepository: MembershipRepository,
     private val clubRepository: ClubRepository,
-    private val clubManagerGuard: ClubManagerGuard,
+    private val clubRoleGuard: ClubRoleGuard,
     private val mapper: AwardMapper,
     private val eventPublisher: ApplicationEventPublisher
 ) {
@@ -113,7 +113,7 @@ class AwardService(
         val membership = membershipRepository.findByUserAndClub(targetUserId, clubId)
             ?: throw NotFoundException("Участник не найден в этом клубе")
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        clubManagerGuard.requireManageableTarget(club, membership, callerId)
+        clubRoleGuard.requireManageableTarget(club, membership, callerId)
     }
 
     companion object {

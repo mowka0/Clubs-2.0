@@ -22,20 +22,24 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Гейт-матрица единого предиката «менеджер клуба» (co-organizers, тест-план спеки):
- * owner ✅ / active co-org ✅ / frozen co-org ❌ / expired co-org ❌ / cancelled co-org ❌ /
- * member ❌ / не-член ❌ (fail-close) + target-матрица requireManageableTarget.
+ * Гейт-матрица капабилити-модели (club-roles): owner ✅ любое право / active co-org ✅ делегируемое,
+ * ❌ владельческое / frozen|expired|cancelled co-org ❌ / member ❌ / не-член ❌ (fail-close) +
+ * инвариант карты RoleCapabilities + target-матрица requireManageableTarget.
  */
-class ClubManagerGuardTest {
+class ClubRoleGuardTest {
 
     private val clubRepository = mockk<ClubRepository>()
     private val membershipRepository = mockk<MembershipRepository>()
-    private val guard = ClubManagerGuard(clubRepository, membershipRepository)
+    private val guard = ClubRoleGuard(clubRepository, membershipRepository)
 
     private val clubId = UUID.randomUUID()
     private val ownerId = UUID.randomUUID()
     private val callerId = UUID.randomUUID()
     private val club = club(clubId, ownerId)
+
+    // Пробы: делегируемое право (есть у co-org) и владельческое (у co-org его нет).
+    private val delegated = ClubCapability.APPROVE_APPLICATIONS
+    private val ownerOnly = ClubCapability.DELETE_CLUB
 
     private fun club(id: UUID, owner: UUID): Club {
         val now = OffsetDateTime.now()
@@ -64,73 +68,106 @@ class ClubManagerGuardTest {
         every { membershipRepository.findByUserAndClub(callerId, clubId) } returns m
     }
 
-    // --- isManager: гейт-матрица вызывающего ---
+    // --- hasCapability: гейт-матрица вызывающего ---
 
     @Test
-    fun `owner is a manager without touching memberships`() {
-        assertTrue(guard.isManager(club, ownerId))
+    fun `owner has any capability without touching memberships`() {
+        assertTrue(guard.hasCapability(club, ownerId, delegated))
+        assertTrue(guard.hasCapability(club, ownerId, ownerOnly))
     }
 
     @Test
-    fun `active co-organizer is a manager`() {
+    fun `active co-organizer has a delegated capability`() {
         stubCallerMembership(membership(MembershipRole.co_organizer, MembershipStatus.active))
-        assertTrue(guard.isManager(club, callerId))
+        assertTrue(guard.hasCapability(club, callerId, delegated))
     }
 
     @Test
-    fun `frozen co-organizer is NOT a manager (fail-close)`() {
+    fun `active co-organizer does NOT have an owner-only capability`() {
+        stubCallerMembership(membership(MembershipRole.co_organizer, MembershipStatus.active))
+        assertFalse(guard.hasCapability(club, callerId, ownerOnly))
+    }
+
+    @Test
+    fun `frozen co-organizer has no capability (fail-close)`() {
         stubCallerMembership(membership(MembershipRole.co_organizer, MembershipStatus.frozen))
-        assertFalse(guard.isManager(club, callerId))
+        assertFalse(guard.hasCapability(club, callerId, delegated))
     }
 
     @Test
-    fun `expired co-organizer is NOT a manager (fail-close)`() {
+    fun `expired co-organizer has no capability (fail-close)`() {
         stubCallerMembership(membership(MembershipRole.co_organizer, MembershipStatus.expired))
-        assertFalse(guard.isManager(club, callerId))
+        assertFalse(guard.hasCapability(club, callerId, delegated))
     }
 
     @Test
-    fun `cancelled co-organizer is NOT a manager`() {
+    fun `cancelled co-organizer has no capability`() {
         stubCallerMembership(membership(MembershipRole.co_organizer, MembershipStatus.cancelled))
-        assertFalse(guard.isManager(club, callerId))
+        assertFalse(guard.hasCapability(club, callerId, delegated))
     }
 
     @Test
-    fun `active plain member is NOT a manager`() {
+    fun `active plain member has no capability`() {
         stubCallerMembership(membership(MembershipRole.member, MembershipStatus.active))
-        assertFalse(guard.isManager(club, callerId))
+        assertFalse(guard.hasCapability(club, callerId, delegated))
     }
 
     @Test
-    fun `non-member is NOT a manager`() {
+    fun `non-member has no capability`() {
         stubCallerMembership(null)
-        assertFalse(guard.isManager(club, callerId))
+        assertFalse(guard.hasCapability(club, callerId, delegated))
     }
 
-    // --- require- варианты ---
+    // --- require варианты ---
 
     @Test
-    fun `requireManager throws Forbidden for a non-manager`() {
+    fun `requireCapability throws Forbidden for a caller without it`() {
         stubCallerMembership(null)
-        assertThrows<ForbiddenException> { guard.requireManager(club, callerId) }
+        assertThrows<ForbiddenException> { guard.requireCapability(club, callerId, delegated) }
     }
 
     @Test
-    fun `requireClubManager throws NotFound when the club is missing`() {
+    fun `requireCapability(clubId) throws NotFound when the club is missing`() {
         every { clubRepository.findById(clubId) } returns null
-        assertThrows<NotFoundException> { guard.requireClubManager(clubId, ownerId) }
+        assertThrows<NotFoundException> { guard.requireCapability(clubId, ownerId, delegated) }
     }
 
     @Test
-    fun `requireClubManager returns the club for the owner`() {
+    fun `requireCapability(clubId) returns the club for the owner`() {
         every { clubRepository.findById(clubId) } returns club
-        assertEquals(club, guard.requireClubManager(clubId, ownerId))
+        assertEquals(club, guard.requireCapability(clubId, ownerId, delegated))
     }
 
     @Test
-    fun `isClubManager is false when the club is missing`() {
+    fun `hasCapability(clubId) is false when the club is missing`() {
         every { clubRepository.findById(clubId) } returns null
-        assertFalse(guard.isClubManager(clubId, ownerId))
+        assertFalse(guard.hasCapability(clubId, ownerId, delegated))
+    }
+
+    // --- RoleCapabilities: инвариант владельческого бакета (PO №5) ---
+
+    @Test
+    fun `role capability classification is exhaustive and matches the PO matrix`() {
+        // Явная фиксация классификации: новое право в enum ClubCapability сломает этот тест, пока
+        // разработчик осознанно не отнесёт его к делегируемым ИЛИ владельческим. Рантайм-дефолт при
+        // этом fail-closed (неклассифицированное право уходит во владельческие), но тест форсит выбор.
+        val expectedDelegated = setOf(
+            ClubCapability.APPROVE_APPLICATIONS, ClubCapability.MANAGE_EVENTS, ClubCapability.MANAGE_SKLADCHINA,
+            ClubCapability.MANAGE_MEMBERS, ClubCapability.GRANT_AWARDS, ClubCapability.EDIT_CLUB_SETTINGS,
+            ClubCapability.VIEW_FINANCES, ClubCapability.VIEW_STATS, ClubCapability.SEND_INVITES
+        )
+        val expectedOwnerOnly = setOf(
+            ClubCapability.MANAGE_ROLES, ClubCapability.EDIT_PAYMENT_REQUISITES, ClubCapability.MANAGE_CHAT,
+            ClubCapability.MANAGE_BILLING, ClubCapability.DELETE_CLUB
+        )
+        // Разбиение полное и непересекающееся — ловит забытую при расширении enum capability.
+        assertEquals(ClubCapability.entries.toSet(), expectedDelegated + expectedOwnerOnly)
+        assertTrue((expectedDelegated intersect expectedOwnerOnly).isEmpty())
+        // Карта ролей соответствует классификации.
+        assertEquals(ClubCapability.entries.toSet(), RoleCapabilities.capabilitiesFor(MembershipRole.organizer))
+        assertEquals(expectedDelegated, RoleCapabilities.capabilitiesFor(MembershipRole.co_organizer))
+        assertEquals(expectedOwnerOnly, RoleCapabilities.OWNER_ONLY_CAPABILITIES)
+        assertTrue(RoleCapabilities.capabilitiesFor(MembershipRole.member).isEmpty())
     }
 
     // --- isActiveManagerMembership (для уже загруженной строки вызывающего) ---

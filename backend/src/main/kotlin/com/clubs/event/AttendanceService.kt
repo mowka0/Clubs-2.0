@@ -1,7 +1,8 @@
 package com.clubs.event
 
 import com.clubs.club.ClubRepository
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubCapability
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
@@ -19,7 +20,7 @@ class AttendanceService(
     private val eventRepository: EventRepository,
     private val eventResponseRepository: EventResponseRepository,
     private val clubRepository: ClubRepository,
-    private val clubManagerGuard: ClubManagerGuard,
+    private val clubRoleGuard: ClubRoleGuard,
     private val eventPublisher: ApplicationEventPublisher,
     // Окно спора (в минутах) до финализации посещаемости (PRD §4.4.3, дефолт 48ч = 2880).
     // Единица — минуты, чтобы на staging можно было выставить буквально 5 для сквозного теста репутации.
@@ -37,7 +38,7 @@ class AttendanceService(
 
         val club = clubRepository.findById(event.clubId) ?: throw NotFoundException("Club not found")
         // Менеджерский гейт (co-organizers): владелец или активный со-орг отмечает явку.
-        clubManagerGuard.requireManager(club, organizerId)
+        clubRoleGuard.requireCapability(club, organizerId, ClubCapability.MANAGE_EVENTS)
 
         // ATT-4: после финализации ростер заморожен и репутация посчитана; повторная отметка
         // молча рассинхронизировала бы отображаемую посещаемость с зафиксированным леджером
@@ -146,7 +147,7 @@ class AttendanceService(
         val event = eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
         val club = clubRepository.findById(event.clubId) ?: throw NotFoundException("Club not found")
         // Менеджерский гейт (co-organizers): владелец или активный со-орг разрешает споры.
-        clubManagerGuard.requireManager(club, organizerId)
+        clubRoleGuard.requireCapability(club, organizerId, ClubCapability.MANAGE_EVENTS)
 
         if (event.attendanceFinalized) {
             throw ValidationException("Attendance has been finalized")

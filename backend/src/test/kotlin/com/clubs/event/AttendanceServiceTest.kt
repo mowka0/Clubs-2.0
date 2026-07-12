@@ -2,7 +2,7 @@ package com.clubs.event
 
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
@@ -40,7 +40,7 @@ class AttendanceServiceTest {
     private val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
     private val service = AttendanceService(
         eventRepository, eventResponseRepository, clubRepository,
-        ClubManagerGuard(clubRepository, guardMembershipRepository), publisher, 2880L, 2880L
+        ClubRoleGuard(clubRepository, guardMembershipRepository), publisher, 2880L, 2880L
     )
 
     private val eventId = UUID.randomUUID()

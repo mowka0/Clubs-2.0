@@ -1,4 +1,5 @@
 import type { MembershipRole } from '../types/api';
+import type { AssignableMemberRole } from '../api/membership';
 
 // Русские подписи ролей клуба — бейджи ростера и карточки участника (PO №4: владелец остаётся
 // «Организатор», со-организатор помечается отдельным бейджем).
@@ -7,6 +8,21 @@ export const ROLE_LABELS: Record<MembershipRole, string> = {
   organizer: 'Организатор',
   co_organizer: 'Со-организатор',
 };
+
+// Русские описания ролей — подсказка «что роль даёт» в селекторе назначения (club-roles §3).
+// UI-пересказ; единый источник ИСТИНЫ о правах — карта RoleCapabilities на бэкенде.
+export const ROLE_DESCRIPTIONS: Record<MembershipRole, string> = {
+  member:
+    'Обычный участник клуба: посещает встречи, участвует в складчинах. Без доступа к управлению.',
+  co_organizer:
+    'Ведёт клуб вместе с вами: разбирает заявки, создаёт события и складчины, управляет участниками, видит финансы и статистику. Не может: менять роли, СБП-реквизиты, чат клуба, удалять клуб.',
+  organizer: 'Владелец клуба. Эту роль нельзя назначить или снять.',
+};
+
+// Роли, назначаемые владельцем в селекторе (упорядочены; club-roles §3). Без `organizer` —
+// передача владения вне скоупа co-organizers. Новая назначаемая роль = ещё одна строка здесь.
+// Зеркалит серверную карту назначаемых ролей (AssignableMemberRole).
+export const ASSIGNABLE_ROLES: readonly AssignableMemberRole[] = ['member', 'co_organizer'];
 
 /** Type guard: строка из API — валидная роль клуба. */
 export function isMembershipRole(role: string | null | undefined): role is MembershipRole {

@@ -1,7 +1,7 @@
 package com.clubs.skladchina
 
 import com.clubs.club.ClubRepository
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.generated.jooq.enums.SkladchinaMode
 import com.clubs.generated.jooq.enums.SkladchinaStatus
@@ -25,7 +25,7 @@ class SkladchinaLifecycleServiceTest {
 
     private lateinit var skladchinaRepository: SkladchinaRepository
     private lateinit var clubRepository: ClubRepository
-    private lateinit var clubManagerGuard: ClubManagerGuard
+    private lateinit var clubRoleGuard: ClubRoleGuard
     private lateinit var reputationService: ReputationService
     private lateinit var eventPublisher: ApplicationEventPublisher
     private lateinit var queryService: SkladchinaQueryService
@@ -39,15 +39,15 @@ class SkladchinaLifecycleServiceTest {
     fun setUp() {
         skladchinaRepository = mockk(relaxed = true)
         clubRepository = mockk(relaxed = true)
-        clubManagerGuard = mockk()
+        clubRoleGuard = mockk()
         reputationService = mockk(relaxed = true)
         eventPublisher = mockk(relaxed = true)
         queryService = mockk(relaxed = true)
         service = SkladchinaLifecycleService(
-            skladchinaRepository, clubRepository, clubManagerGuard, reputationService, eventPublisher, queryService
+            skladchinaRepository, clubRepository, clubRoleGuard, reputationService, eventPublisher, queryService
         )
         // По умолчанию вызывающий — не менеджер (fail-close); тесты переопределяют точечно.
-        every { clubManagerGuard.isClubManager(any(), any()) } returns false
+        every { clubRoleGuard.hasCapability(any<java.util.UUID>(), any<java.util.UUID>(), any<com.clubs.common.auth.ClubCapability>()) } returns false
         every { skladchinaRepository.findById(skladchinaId) } returns skladchina()
         // Конкурентный claim проигран -> closeInternal делает no-op; фокус теста — только гейт.
         every { skladchinaRepository.claimClose(any(), any(), any(), any()) } returns false
@@ -85,7 +85,7 @@ class SkladchinaLifecycleServiceTest {
     @Test
     fun `club manager who is not the creator can close manually (У-1)`() {
         val managerId = UUID.randomUUID()
-        every { clubManagerGuard.isClubManager(clubId, managerId) } returns true
+        every { clubRoleGuard.hasCapability(clubId, managerId, any()) } returns true
 
         service.closeManually(skladchinaId, managerId)
 

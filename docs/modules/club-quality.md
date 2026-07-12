@@ -348,7 +348,7 @@ ownership-проверки обязательны.
 
 ```
 GET /api/clubs/{clubId}/stats
-  Auth: JWT + @RequiresClubManager(clubIdParam = "clubId") — владелец ИЛИ активный со-организатор (co-organizers.md)
+  Auth: JWT + @RequiresCapability(ClubCapability.VIEW_STATS, clubIdParam = "clubId") — владелец ИЛИ активный со-организатор (club-roles.md — модель прав)
   200: ClubStatsDto
   403: "Only the club organizer can perform this action" (обычный участник / не-член / замороженный со-орг)
   404: "Club not found" (нет клуба) — оба из AuthorizationAspect, ДО тела
@@ -381,7 +381,7 @@ GET /api/clubs/{clubId}/stats
 
 ```
 GET /api/clubs/{clubId}/churned-members
-  Auth: JWT + @RequiresClubManager(clubIdParam = "clubId") — владелец ИЛИ активный со-организатор
+  Auth: JWT + @RequiresCapability(ClubCapability.VIEW_STATS, clubIdParam = "clubId") — владелец ИЛИ активный со-организатор
   200: List<ChurnedMemberDto>  // win-back ростер для нуджа «Верните N ушедших»
   403/404: как у /stats
 ```
@@ -402,9 +402,10 @@ clubquality/
 ├── ClubStatsService.kt       # @Transactional(readOnly); маппинг
 └── ClubStatsMapper.kt        # ClubStats -> ClubStatsDto
 ```
-Доступ — через `@RequiresClubManager` (shared `common.auth`; владелец ИЛИ активный со-организатор,
-см. `co-organizers.md`), не дублируем проверку в сервисе. «owner-only» / «только владелец» в §9 ниже
-после фичи со-организаторов читается как «менеджер клуба» (замороженный со-орг доступа не имеет).
+Доступ — через `@RequiresCapability(ClubCapability.VIEW_STATS)` (shared `common.auth`; владелец ИЛИ
+активный со-организатор; модель прав — `club-roles.md`, семантика — `co-organizers.md`), не дублируем
+проверку в сервисе. «owner-only» / «только владелец» в §9 ниже после фичи со-организаторов читается
+как «менеджер клуба» (замороженный со-орг доступа не имеет).
 Аспект уже кидает 404 (нет клуба) и 403 (не менеджер) до тела, поэтому `findClubStats` вызывается для существующего
 клуба владельцем; возвращает `ClubStats` всегда (не `null` на практике, но контракт `?` сохраняем как в
 `findClubFacts`).

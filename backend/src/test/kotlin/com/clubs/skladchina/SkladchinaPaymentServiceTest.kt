@@ -1,7 +1,7 @@
 package com.clubs.skladchina
 
 import com.clubs.club.ClubRepository
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.generated.jooq.enums.SkladchinaMode
 import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
 import com.clubs.generated.jooq.enums.SkladchinaStatus
@@ -26,7 +26,7 @@ class SkladchinaPaymentServiceTest {
 
     private lateinit var skladchinaRepository: SkladchinaRepository
     private lateinit var clubRepository: ClubRepository
-    private lateinit var clubManagerGuard: ClubManagerGuard
+    private lateinit var clubRoleGuard: ClubRoleGuard
     private lateinit var templateRegistry: SkladchinaTemplateRegistry
     private lateinit var queryService: SkladchinaQueryService
     private lateinit var lifecycleService: SkladchinaLifecycleService
@@ -89,12 +89,12 @@ class SkladchinaPaymentServiceTest {
         queryService = mockk()
         lifecycleService = mockk(relaxed = true)
         eventPublisher = mockk(relaxed = true)
-        clubManagerGuard = mockk()
+        clubRoleGuard = mockk()
         // По умолчанию вызывающий — НЕ менеджер клуба: creator-путь guard не трогает, а
         // не-создатель без роли должен получать 403 (fail-close).
-        every { clubManagerGuard.isClubManager(any(), any()) } returns false
+        every { clubRoleGuard.hasCapability(any<java.util.UUID>(), any<java.util.UUID>(), any<com.clubs.common.auth.ClubCapability>()) } returns false
         service = SkladchinaPaymentService(
-            skladchinaRepository, clubRepository, clubManagerGuard, templateRegistry, queryService,
+            skladchinaRepository, clubRepository, clubRoleGuard, templateRegistry, queryService,
             lifecycleService, eventPublisher
         )
         every { queryService.getDetail(any(), any()) } returns mockk()
@@ -210,7 +210,7 @@ class SkladchinaPaymentServiceTest {
         every { skladchinaRepository.findById(skladchinaId) } returns skladchina()
         every { skladchinaRepository.findParticipant(skladchinaId, participantId) } returns participant()
         every { skladchinaRepository.setParticipantPaid(skladchinaId, participantId, any(), any()) } returns 1
-        every { clubManagerGuard.isClubManager(any(), managerId) } returns true
+        every { clubRoleGuard.hasCapability(any<java.util.UUID>(), managerId, any<com.clubs.common.auth.ClubCapability>()) } returns true
 
         service.organizerMarkPaid(skladchinaId, managerId, participantId)
 
@@ -221,7 +221,7 @@ class SkladchinaPaymentServiceTest {
     fun `organizerMarkPaid отклоняет не-создателя без менеджерской роли (403, fail-close)`() {
         val strangerId = UUID.randomUUID()
         every { skladchinaRepository.findById(skladchinaId) } returns skladchina()
-        // setUp: clubManagerGuard.isClubManager(any(), any()) == false
+        // setUp: clubRoleGuard.hasCapability(any<java.util.UUID>(), any<java.util.UUID>(), any<com.clubs.common.auth.ClubCapability>()) == false
 
         org.junit.jupiter.api.assertThrows<com.clubs.common.exception.ForbiddenException> {
             service.organizerMarkPaid(skladchinaId, strangerId, participantId)
@@ -236,7 +236,7 @@ class SkladchinaPaymentServiceTest {
         every { skladchinaRepository.findParticipant(skladchinaId, participantId) } returns
             participant(declineRequestedAt = OffsetDateTime.now())
         every { skladchinaRepository.setParticipantDeclined(skladchinaId, participantId, any()) } returns 1
-        every { clubManagerGuard.isClubManager(any(), managerId) } returns true
+        every { clubRoleGuard.hasCapability(any<java.util.UUID>(), managerId, any<com.clubs.common.auth.ClubCapability>()) } returns true
 
         service.resolveDecline(skladchinaId, managerId, participantId, approve = true, rejectReason = null)
 

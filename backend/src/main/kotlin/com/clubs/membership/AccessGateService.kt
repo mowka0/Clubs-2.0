@@ -3,7 +3,7 @@ package com.clubs.membership
 import com.clubs.application.ApplicationRepository
 import com.clubs.bot.NotificationService
 import com.clubs.club.ClubRepository
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
@@ -29,7 +29,7 @@ import java.util.UUID
  * статус membership / отметки об оплате, но никогда не двигают деньги или репутацию.
  *
  * Проверка менеджера клуба (владелец или активный со-орг) объявлена декларативно на контроллере
- * (@RequiresClubManager); этот сервис защищает каждый переход статуса тем же паттерном
+ * (@RequiresCapability(MANAGE_MEMBERS)); этот сервис защищает каждый переход статуса тем же паттерном
  * `WHERE status = expected` + rows-affected, что и org-toggle складчины (0 строк → 409), и применяет
  * target-матрицу ролей (loadManageableMember): организатором не управляет никто, со-орг управляет
  * только участниками role=member.
@@ -50,7 +50,7 @@ class AccessGateService(
     private val skladchinaRepository: SkladchinaRepository,
     private val notificationService: NotificationService,
     private val eventPublisher: ApplicationEventPublisher,
-    private val clubManagerGuard: ClubManagerGuard
+    private val clubRoleGuard: ClubRoleGuard
 ) {
     private val log = LoggerFactory.getLogger(AccessGateService::class.java)
 
@@ -329,12 +329,12 @@ class AccessGateService(
 
     // Target-матрица (co-organizers, точка 38): владелец управляет всеми, кроме организатора (себя);
     // со-орг — только участниками role=member (владелец/другой со-орг → 403). Сама матрица — в
-    // ClubManagerGuard.requireManageableTarget (единый механизм с AwardService).
+    // ClubRoleGuard.requireManageableTarget (единый механизм с AwardService).
     private fun loadManageableMember(clubId: UUID, targetUserId: UUID, callerId: UUID): Membership {
         val membership = membershipRepository.findByUserAndClub(targetUserId, clubId)
             ?: throw NotFoundException("Участник не найден в этом клубе")
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        clubManagerGuard.requireManageableTarget(club, membership, callerId)
+        clubRoleGuard.requireManageableTarget(club, membership, callerId)
         return membership
     }
 

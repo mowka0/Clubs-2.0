@@ -1,7 +1,8 @@
 package com.clubs.skladchina
 
 import com.clubs.club.ClubRepository
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubCapability
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
@@ -29,7 +30,7 @@ import java.util.UUID
 class SkladchinaPaymentService(
     private val skladchinaRepository: SkladchinaRepository,
     private val clubRepository: ClubRepository,
-    private val clubManagerGuard: ClubManagerGuard,
+    private val clubRoleGuard: ClubRoleGuard,
     private val templateRegistry: SkladchinaTemplateRegistry,
     private val queryService: SkladchinaQueryService,
     private val lifecycleService: SkladchinaLifecycleService,
@@ -292,7 +293,7 @@ class SkladchinaPaymentService(
     private fun requireActiveAsCreator(skladchinaId: UUID, callerId: UUID): Skladchina {
         val skladchina = skladchinaRepository.findById(skladchinaId)
             ?: throw NotFoundException("Skladchina not found")
-        if (skladchina.creatorId != callerId && !clubManagerGuard.isClubManager(skladchina.clubId, callerId)) {
+        if (skladchina.creatorId != callerId && !clubRoleGuard.hasCapability(skladchina.clubId, callerId, ClubCapability.MANAGE_SKLADCHINA)) {
             throw ForbiddenException("Only the creator or a club manager can manage this skladchina")
         }
         if (skladchina.status != SkladchinaStatus.active) {

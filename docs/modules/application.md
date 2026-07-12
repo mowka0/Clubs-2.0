@@ -459,7 +459,7 @@ THEN ни UPDATE, ни decreaseActivityRatingSafely не вызваны
 - **Безопасность**:
   - `@Valid` на DTO: `@NotBlank @Size(min=5, max=500)` на `RejectApplicationRequest.reason`
   - Все endpoint'ы JWT-защищены (`AuthenticatedUser` через Spring Security)
-  - Менеджер-check у approve/reject/list — через `ClubManagerGuard` в Service (владелец ИЛИ активный со-организатор; см. `co-organizers.md`)
+  - Менеджер-check у approve/reject/list — через `ClubRoleGuard` (capability `APPROVE_APPLICATIONS`) в Service (владелец ИЛИ активный со-организатор; модель прав — `club-roles.md`, семантика — `co-organizers.md`)
   - Rate limit 5/day per user — защита от спама заявок
   - `answerText` не санитизируется на бекенде; вывод в Mini App рендерится React'ом (HTML-экранирование автоматически) — XSS не возможна
 - **Производительность**:

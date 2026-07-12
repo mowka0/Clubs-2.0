@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  ASSIGNABLE_ROLES,
+  ROLE_DESCRIPTIONS,
   isActiveManagerMembership,
   isManagerRole,
   membershipRoleLabel,
@@ -28,6 +30,21 @@ describe('membershipRoleLabel', () => {
   it('falls back to «Участник» for unknown/absent values', () => {
     expect(membershipRoleLabel('moderator')).toBe('Участник');
     expect(membershipRoleLabel(undefined)).toBe('Участник');
+  });
+});
+
+describe('ASSIGNABLE_ROLES / ROLE_DESCRIPTIONS (club-roles селектор)', () => {
+  it('exposes exactly the assignable roles in selector order, without organizer', () => {
+    expect([...ASSIGNABLE_ROLES]).toEqual(['member', 'co_organizer']);
+    expect(ASSIGNABLE_ROLES).not.toContain('organizer');
+  });
+
+  it('has a non-empty Russian description for every assignable role', () => {
+    for (const role of ASSIGNABLE_ROLES) {
+      expect(ROLE_DESCRIPTIONS[role].length).toBeGreaterThan(0);
+    }
+    // Co-organizer description enumerates the owner-only exclusions (spec §3).
+    expect(ROLE_DESCRIPTIONS.co_organizer).toMatch(/Не может/);
   });
 });
 

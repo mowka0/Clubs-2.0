@@ -3,7 +3,7 @@ package com.clubs.event
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.skladchina.SkladchinaRepository
@@ -48,7 +48,7 @@ class EventServiceTest {
         eventPublisher = mockk(relaxed = true)
         skladchinaRepository = mockk(relaxed = true)
         eventService = EventService(
-            eventRepository, clubRepository, ClubManagerGuard(clubRepository, guardMembershipRepository),
+            eventRepository, clubRepository, ClubRoleGuard(clubRepository, guardMembershipRepository),
             eventMapper, eventPublisher, skladchinaRepository
         )
     }

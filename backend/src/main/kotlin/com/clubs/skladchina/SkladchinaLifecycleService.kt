@@ -1,7 +1,8 @@
 package com.clubs.skladchina
 
 import com.clubs.club.ClubRepository
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubCapability
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
@@ -34,7 +35,7 @@ import java.util.UUID
 class SkladchinaLifecycleService(
     private val skladchinaRepository: SkladchinaRepository,
     private val clubRepository: ClubRepository,
-    private val clubManagerGuard: ClubManagerGuard,
+    private val clubRoleGuard: ClubRoleGuard,
     private val reputationService: ReputationService,
     private val eventPublisher: ApplicationEventPublisher,
     private val queryService: SkladchinaQueryService
@@ -81,7 +82,7 @@ class SkladchinaLifecycleService(
             ?: throw NotFoundException("Skladchina not found")
         // У-1 (co-organizers): закрыть сбор может создатель ИЛИ менеджер клуба (владелец /
         // активный со-орг ведут ЛЮБЫЕ сборы клуба, не только свои).
-        if (skladchina.creatorId != callerId && !clubManagerGuard.isClubManager(skladchina.clubId, callerId)) {
+        if (skladchina.creatorId != callerId && !clubRoleGuard.hasCapability(skladchina.clubId, callerId, ClubCapability.MANAGE_SKLADCHINA)) {
             throw ForbiddenException("Only the creator or a club manager can close skladchina")
         }
         if (skladchina.status != SkladchinaStatus.active) {

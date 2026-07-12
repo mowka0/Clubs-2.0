@@ -130,10 +130,17 @@ ALTER TYPE membership_role ADD VALUE IF NOT EXISTS 'co_organizer';
 
 ¹ Со-орг может назначать только Участник↔Модератор; повышать до Со-орга и трогать других Со-оргов — только Владелец.
 
-**Реализация прав (as-built 2026-07-12):** введена аннотация `@RequiresClubManager(clubIdParam)` +
-единый предикат `ClubManagerGuard` (владелец ИЛИ активный со-организатор) — проставлены на 45 точках
-авторизации (applications/events/skladchina/members/settings/finances/stats/invites). Роль — с
-реальными правами, не «ярлык». Полный реестр точек и матрица — `co-organizers.md`.
+**Реализация прав (as-built 2026-07-12):** авторизация на **капабилити-модели** — аннотация
+`@RequiresCapability(<ClubCapability>)` + единый предикат `ClubRoleGuard` (владелец через owner-bypass
+ИЛИ активная роль, чей набор прав содержит требуемое) — на 45 точках авторизации
+(applications/events/skladchina/members/settings/finances/stats/invites). Роль — с реальными правами
+(набор `ClubCapability`), не «ярлык»; новая роль (модератор и т.п.) встаёт одной записью в карте,
+гейты не трогаются. Модель прав (роль → capabilities, карта в коде) — `club-roles.md`; полный реестр
+точек и матрица `co_organizer` — `co-organizers.md`.
+
+> **Примечание к §4-матрице выше:** строки «Менять роли участников» с делегированием со-оргу
+> (Участник↔Модератор) — это исходный ЧЕРНОВИК. As-built смена ролей (`MANAGE_ROLES`) —
+> **владельческая**, со-орг роли не меняет; фактическая матрица прав — `co-organizers.md` / `club-roles.md`.
 
 ---
 

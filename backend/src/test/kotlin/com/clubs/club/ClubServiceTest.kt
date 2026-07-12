@@ -1,7 +1,7 @@
 package com.clubs.club
 
 import com.clubs.common.exception.ConflictException
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
@@ -42,7 +42,7 @@ class ClubServiceTest {
         applicationRepository = mockk(relaxed = true)
         subscriptionService = mockk(relaxed = true)
         mapper = ClubMapper()
-        clubService = ClubService(clubRepository, membershipRepository, ClubManagerGuard(clubRepository, membershipRepository), eventRepository, skladchinaRepository, applicationRepository, subscriptionService, chatLinkRepository = mockk(relaxed = true), userRepository = mockk(relaxed = true), mapper = mapper)
+        clubService = ClubService(clubRepository, membershipRepository, ClubRoleGuard(clubRepository, membershipRepository), eventRepository, skladchinaRepository, applicationRepository, subscriptionService, chatLinkRepository = mockk(relaxed = true), userRepository = mockk(relaxed = true), mapper = mapper)
     }
 
     private fun makeClub(
@@ -484,39 +484,41 @@ class ClubServiceTest {
     }
 
     @Test
-    fun `free-to-paid paywall is anchored on the club owner, not the caller (co-org)`() {
+    fun `co-org cannot flip a club free-to-paid (owner-only, 403)`() {
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
         val coOrgId = UUID.randomUUID()
-        // Легаси-реквизиты уже заданы владельцем: со-орг меняет только цену.
+        // Легаси-реквизиты уже заданы владельцем: со-орг пытается лишь поднять цену 0 -> >0.
         val club = makeClub(clubId = clubId, ownerId = ownerId, subscriptionPrice = 0).copy(paymentLink = "sbp://x")
         every { clubRepository.findById(clubId) } returns club
         every { membershipRepository.findByUserAndClub(coOrgId, clubId) } returns coOrgMembership(coOrgId, clubId)
-        every { clubRepository.countPaidByOwnerId(ownerId) } returns 3
-        every { clubRepository.update(clubId, any()) } returns club.copy(subscriptionPrice = 500)
 
-        clubService.updateClub(clubId, UpdateClubRequest(subscriptionPrice = 500), coOrgId)
+        val ex = assertThrows<ForbiddenException> {
+            clubService.updateClub(clubId, UpdateClubRequest(subscriptionPrice = 500), coOrgId)
+        }
 
-        // Ёмкость плана считается по ВЛАДЕЛЬЦУ клуба, не по вызывающему со-оргу.
-        verify(exactly = 1) { subscriptionService.requirePaidClubCapacity(ownerId, 3) }
-        verify(exactly = 0) { subscriptionService.requirePaidClubCapacity(coOrgId, any()) }
-        verify(exactly = 0) { clubRepository.countPaidByOwnerId(coOrgId) }
+        // Перевод в платный — владельческое (EDIT_PAYMENT_REQUISITES). Гейт бьёт ДО пейволла и апдейта.
+        assertEquals("Перевести клуб в платный может только владелец", ex.message)
+        verify(exactly = 0) { subscriptionService.requirePaidClubCapacity(any(), any()) }
+        verify(exactly = 0) { clubRepository.update(any(), any()) }
     }
 
     @Test
-    fun `free-to-paid flip returns 402 when the owner plan is exhausted, even for a co-org caller`() {
+    fun `owner flipping free-to-paid hits the plan paywall on the owner (402)`() {
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
-        val coOrgId = UUID.randomUUID()
         val club = makeClub(clubId = clubId, ownerId = ownerId, subscriptionPrice = 0).copy(paymentLink = "sbp://x")
         every { clubRepository.findById(clubId) } returns club
-        every { membershipRepository.findByUserAndClub(coOrgId, clubId) } returns coOrgMembership(coOrgId, clubId)
+        every { clubRepository.countPaidByOwnerId(ownerId) } returns 3
         every { subscriptionService.requirePaidClubCapacity(ownerId, any()) } throws
             com.clubs.common.exception.PaymentRequiredException("free", "start", 19900)
 
         assertThrows<com.clubs.common.exception.PaymentRequiredException> {
-            clubService.updateClub(clubId, UpdateClubRequest(subscriptionPrice = 500), coOrgId)
+            clubService.updateClub(clubId, UpdateClubRequest(subscriptionPrice = 500), ownerId)
         }
+
+        // Ёмкость плана считается по владельцу клуба.
+        verify(exactly = 1) { subscriptionService.requirePaidClubCapacity(ownerId, 3) }
         verify(exactly = 0) { clubRepository.update(any(), any()) }
     }
 }

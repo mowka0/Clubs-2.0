@@ -1,5 +1,22 @@
 # Со-организаторы клуба (co-organizers)
 
+> **⚠️ Эволюция → `docs/modules/club-roles.md` (2026-07-12, РЕАЛИЗОВАНО).** Бинарный
+> гейт «менеджер / не-менеджер» превращён в **движок ролей на капабилити-модели**
+> (роль = именованный набор `ClubCapability`; карта прав — в коде; назначение через
+> селектор роли, не одну кнопку). **`club-roles.md` — источник истины о МЕХАНИЗМЕ
+> авторизации.**
+>
+> **Этот файл остаётся as-built-записью СЕМАНТИКИ `co_organizer`** (матрица прав,
+> edge-cases, миграция V59, тест-план, уточнения У-1…У-10, реестр 45 точек) — она
+> сохранена 1:1: кто и что может, от рефактора не изменилось. **Но имена механизма
+> ниже устарели:** `ClubManagerGuard` / `@RequiresClubManager` / `isManager` /
+> `isClubManager` / `requireManager` **as-built заменены** на `ClubRoleGuard` /
+> `@RequiresCapability(<cap>)` / `hasCapability` / `requireCapability`
+> (`@RequiresOrganizer` больше ни на одном эндпоинте — владельческая точка PUT
+> `.../role` под `@RequiresCapability(MANAGE_ROLES)`). Карта «capability → точка» и
+> фактический механизм — в `club-roles.md`; здесь термины «manager-гейт» читать как
+> «есть нужная capability» (owner-bypass + активная роль с этим правом).
+>
 > Ветка: `feature/co-organizers`. Спека написана 2026-07-12 по свежему sweep'у кода
 > (обновляет impact-анализ `docs/backlog/member-admin-roles-S3-deferred.md` от 2026-06-27 —
 > с тех пор добавились chatlink слайсы 1–5, личные приглашения PR #107, теги V55,
@@ -65,7 +82,12 @@
   Реализовано: путь реактивации старой строки (`JooqMembershipRepository`,
   reactivate-UPDATE) явно выставляет `role = member` — бывший со-орг, вернувшийся
   по инвайту/заявке, всегда обычный участник.
-- **Единый механизм** (по S3-deferred, реализовано): двухслойная авторизация.
+- **Единый механизм** (по S3-deferred, реализовано). **[As-built: механизм заменён на
+  капабилити-модель — `ClubRoleGuard` + `@RequiresCapability(<cap>)` + ветка
+  `checkCapability`; описание ниже в терминах `ClubManagerGuard`/`@RequiresClubManager`
+  устарело по именам, семантика та же. Источник истины — `club-roles.md` § 4. Владельческий
+  role-эндпоинт теперь под `@RequiresCapability(MANAGE_ROLES)`, а не `@RequiresOrganizer`.]**
+  Двухслойная авторизация.
   Слой 1 — аннотация `@RequiresClubManager(clubIdParam)` (`common/auth/Annotations.kt`)
   + ветка `checkClubManager` в `AuthorizationAspect`; `@RequiresOrganizer` остался
   только на owner-only точках, включая новый role-эндпоинт. Слой 2 — компонент
@@ -263,7 +285,7 @@ COMMENT ON COLUMN memberships.role IS
 | `pages/EventPage.tsx` | `hostClub.ownerId === userId \|\| isActiveManagerMembership(myHostMembership)` — посещаемость/споры/отмена доступны активному со-оргу |
 | `pages/OrganizerClubManage.tsx` | со-оргу: таб «Чат» скрыт (owner-only, У-10); в «Настройках» скрыты **СБП-реквизиты** (владельческая секция, PO №2) и «Опасная зона» с удалением клуба; текст ошибки «включить платность» для со-орга объясняет, что реквизиты задаёт владелец |
 | `components/club/ClubMembersTab.tsx` | бейдж роли: `isManagerRole(member.role) ? membershipRoleLabel(...) : null` → «Организатор» / «Со-организатор» (PO №4) |
-| `components/club/MemberProfileModal.tsx` | roleLabel через `membershipRoleLabel`; `isManageable`: owner → target ≠ organizer; со-орг → target = member. Секция `RoleGate` «Роль в клубе» — только владельцу: «Сделать со-организатором» (кнопка задизейблена для `accessStatus` frozen/expired — У-9) / «Снять со-организатора», confirm-диалог; 409 закрывает карточку (кэш инвалидирован) |
+| `components/club/MemberProfileModal.tsx` | roleLabel через `membershipRoleLabel`; `isManageable`: owner → target ≠ organizer; со-орг → target = member. Секция `RoleGate` «Роль в клубе» — только владельцу. **As-built: не одиночная кнопка, а СЕЛЕКТОР ролей** (`ASSIGNABLE_ROLES`: Участник · Со-организатор, у каждой — описание `ROLE_DESCRIPTIONS`, текущая помечена «Сейчас») → инлайн-подтверждение (вопрос + Отмена/Назначить) → `PUT .../role`. Промоут frozen/expired задизейблен (У-9); 409 закрывает карточку (кэш инвалидирован). Полный дизайн селектора и UX-баги A/B — `club-roles.md` § 7 |
 | `components/subscription/SubscriptionCard.tsx` | НЕ менялся — биллинг owner-only, `co_organizer` сюда не входит |
 | `api/membership.ts` | `updateMemberRole(clubId, userId, role)` → PUT `.../role`; тип `AssignableMemberRole = 'member' \| 'co_organizer'` |
 | `queries/members.ts` | `useUpdateMemberRoleMutation` — инвалидация ростера + карточки профиля |

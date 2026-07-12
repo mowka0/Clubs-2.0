@@ -2,7 +2,7 @@ package com.clubs.membership
 
 import com.clubs.application.ApplicationRepository
 import com.clubs.award.AwardService
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.generated.jooq.enums.MembershipRole
@@ -27,7 +27,7 @@ class MemberService(
     private val awardService: AwardService,
     private val applicationRepository: ApplicationRepository,
     private val mapper: MembershipMapper,
-    private val clubManagerGuard: ClubManagerGuard
+    private val clubRoleGuard: ClubRoleGuard
 ) {
 
     fun getClubMembers(clubId: UUID, callerId: UUID): List<MemberListItemDto> {
@@ -39,7 +39,7 @@ class MemberService(
         if (caller == null || caller.status != MembershipStatus.active) {
             throw ForbiddenException("Not a member of this club")
         }
-        val forOrganizer = clubManagerGuard.isActiveManagerMembership(caller)
+        val forOrganizer = clubRoleGuard.isActiveManagerMembership(caller)
         // Trust всех участников — одним батч-чтением ledger.
         val trustByUser = trustService.trustForClubMembers(clubId)
         // Клубные награды для чипов в ростере (R3): один запрос с группировкой по участнику — без N+1.
@@ -88,7 +88,7 @@ class MemberService(
             throw ForbiddenException("Not a member of this club")
         }
         // Менеджер (владелец или активный со-орг — co-organizers, точка 41) видит орг-поля карточки.
-        val callerIsOrganizer = clubManagerGuard.isActiveManagerMembership(caller)
+        val callerIsOrganizer = clubRoleGuard.isActiveManagerMembership(caller)
         val user = userRepository.findById(userId) ?: throw NotFoundException("User not found")
         val membership = membershipRepository.findByUserAndClub(userId, clubId)
         val reputation = reputationRepository.findByUserAndClub(userId, clubId)

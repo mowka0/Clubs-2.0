@@ -1,7 +1,8 @@
 package com.clubs.event
 
 import com.clubs.club.ClubRepository
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubCapability
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.dto.PageResponse
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
@@ -17,7 +18,7 @@ import java.util.UUID
 class EventService(
     private val eventRepository: EventRepository,
     private val clubRepository: ClubRepository,
-    private val clubManagerGuard: ClubManagerGuard,
+    private val clubRoleGuard: ClubRoleGuard,
     private val eventMapper: EventMapper,
     private val eventPublisher: ApplicationEventPublisher,
     private val skladchinaRepository: SkladchinaRepository
@@ -28,8 +29,8 @@ class EventService(
     @Transactional
     fun createEvent(clubId: UUID, request: CreateEventRequest, userId: UUID): EventDetailDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        // Менеджерский гейт (co-organizers), синхронно с @RequiresClubManager на контроллере.
-        clubManagerGuard.requireManager(club, userId)
+        // Менеджерский гейт (co-organizers), синхронно с @RequiresCapability(MANAGE_EVENTS) на контроллере.
+        clubRoleGuard.requireCapability(club, userId, ClubCapability.MANAGE_EVENTS)
         // Пустые/пробельные адрес и уточнение схлопываются в null — как cancellationReason в cancelEvent.
         val normalizedRequest = request.copy(
             locationText = request.locationText?.trim()?.takeIf { it.isNotEmpty() },
@@ -77,7 +78,7 @@ class EventService(
         val event = eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
         val club = clubRepository.findById(event.clubId) ?: throw NotFoundException("Club not found")
         // Менеджерский гейт (co-organizers): владелец или активный со-орг отменяет событие.
-        clubManagerGuard.requireManager(club, userId)
+        clubRoleGuard.requireCapability(club, userId, ClubCapability.MANAGE_EVENTS)
 
         val normalizedReason = reason?.trim()?.takeIf { it.isNotEmpty() }
         if (eventRepository.cancelEvent(eventId, normalizedReason) == 0) {

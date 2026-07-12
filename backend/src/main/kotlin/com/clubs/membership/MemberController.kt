@@ -4,8 +4,8 @@ import com.clubs.award.AwardDto
 import com.clubs.award.AwardService
 import com.clubs.award.AwardSuggestionDto
 import com.clubs.award.GrantAwardRequest
-import com.clubs.common.auth.RequiresClubManager
-import com.clubs.common.auth.RequiresOrganizer
+import com.clubs.common.auth.ClubCapability
+import com.clubs.common.auth.RequiresCapability
 import com.clubs.common.security.AuthenticatedUser
 import com.clubs.user.MemberProfileDto
 import jakarta.validation.Valid
@@ -47,9 +47,9 @@ class MemberController(
         ResponseEntity.ok(memberService.getMemberProfile(clubId, userId, caller.userId))
 
     // Шлюз доступа (de-Stars, Slice 2). Менеджер клуба (владелец или активный со-орг) через
-    // @RequiresClubManager; сервис защищает переход статуса (409 при проигранной гонке) и применяет
-    // target-матрицу: со-орг управляет только участниками role=member, организатором не управляет никто.
-    @RequiresClubManager(clubIdParam = "clubId")
+    // @RequiresCapability(MANAGE_MEMBERS); сервис защищает переход статуса (409 при проигранной гонке) и
+    // применяет target-матрицу: со-орг управляет только участниками role=member, организатором не управляет никто.
+    @RequiresCapability(ClubCapability.MANAGE_MEMBERS, clubIdParam = "clubId")
     @PostMapping("/{clubId}/members/{userId}/freeze")
     fun freezeMember(
         @PathVariable clubId: UUID,
@@ -58,7 +58,7 @@ class MemberController(
     ): ResponseEntity<MembershipDto> =
         ResponseEntity.ok(accessGateService.freezeAccess(clubId, userId, caller.userId))
 
-    @RequiresClubManager(clubIdParam = "clubId")
+    @RequiresCapability(ClubCapability.MANAGE_MEMBERS, clubIdParam = "clubId")
     @PostMapping("/{clubId}/members/{userId}/unfreeze")
     fun unfreezeMember(
         @PathVariable clubId: UUID,
@@ -67,7 +67,7 @@ class MemberController(
     ): ResponseEntity<MembershipDto> =
         ResponseEntity.ok(accessGateService.unfreezeAccess(clubId, userId, caller.userId))
 
-    @RequiresClubManager(clubIdParam = "clubId")
+    @RequiresCapability(ClubCapability.MANAGE_MEMBERS, clubIdParam = "clubId")
     @PostMapping("/{clubId}/members/{userId}/dues-paid")
     fun markDuesPaid(
         @PathVariable clubId: UUID,
@@ -78,7 +78,7 @@ class MemberController(
 
     // De-Stars B+C: отклонить платное вступление (вместо «Взнос получен»). Менеджер клуба; удаляет frozen-
     // участника, возврат денег — офлайн-обязанность организатора. Причина опциональна.
-    @RequiresClubManager(clubIdParam = "clubId")
+    @RequiresCapability(ClubCapability.MANAGE_MEMBERS, clubIdParam = "clubId")
     @PostMapping("/{clubId}/members/{userId}/reject-dues")
     fun rejectMember(
         @PathVariable clubId: UUID,
@@ -90,7 +90,7 @@ class MemberController(
 
     // Кик: удалить участника из клуба за проступок (причина обязательна, уходит в DM участнику).
     // Менеджер клуба; отличается от «Закрыть доступ» (freeze) — здесь membership отменяется и доступ отзывается.
-    @RequiresClubManager(clubIdParam = "clubId")
+    @RequiresCapability(ClubCapability.MANAGE_MEMBERS, clubIdParam = "clubId")
     @PostMapping("/{clubId}/members/{userId}/remove")
     fun removeMember(
         @PathVariable clubId: UUID,
@@ -100,7 +100,7 @@ class MemberController(
     ): ResponseEntity<MembershipDto> =
         ResponseEntity.ok(accessGateService.removeMember(clubId, userId, caller.userId, request.reason))
 
-    @RequiresClubManager(clubIdParam = "clubId")
+    @RequiresCapability(ClubCapability.MANAGE_MEMBERS, clubIdParam = "clubId")
     @PostMapping("/{clubId}/members/{userId}/dues-unpaid")
     fun unmarkDues(
         @PathVariable clubId: UUID,
@@ -110,7 +110,7 @@ class MemberController(
         ResponseEntity.ok(accessGateService.unmarkDues(clubId, userId, caller.userId))
 
     // Member admin profile (Variant B, S1) — правки, доступные менеджеру клуба, сверх шлюза оплаты взносов.
-    @RequiresClubManager(clubIdParam = "clubId")
+    @RequiresCapability(ClubCapability.MANAGE_MEMBERS, clubIdParam = "clubId")
     @PostMapping("/{clubId}/members/{userId}/access-until")
     fun setAccessUntil(
         @PathVariable clubId: UUID,
@@ -120,7 +120,7 @@ class MemberController(
     ): ResponseEntity<MembershipDto> =
         ResponseEntity.ok(accessGateService.setAccessUntil(clubId, userId, request.until, caller.userId))
 
-    @RequiresClubManager(clubIdParam = "clubId")
+    @RequiresCapability(ClubCapability.MANAGE_MEMBERS, clubIdParam = "clubId")
     @PatchMapping("/{clubId}/members/{userId}/note")
     fun updateNote(
         @PathVariable clubId: UUID,
@@ -145,7 +145,7 @@ class MemberController(
     // Member admin profile (Variant B, S2) — награды локальные для клуба. Выдача/отзыв — менеджер клуба
     // (target-матрицу по роли цели применяет AwardService); сами награды публичны на карточке участника
     // (отдаются через MemberProfileDto, см. MemberService).
-    @RequiresClubManager(clubIdParam = "clubId")
+    @RequiresCapability(ClubCapability.GRANT_AWARDS, clubIdParam = "clubId")
     @PostMapping("/{clubId}/members/{userId}/awards")
     fun grantAward(
         @PathVariable clubId: UUID,
@@ -155,7 +155,7 @@ class MemberController(
     ): ResponseEntity<AwardDto> =
         ResponseEntity.ok(awardService.grant(clubId, userId, request.emoji, request.label, caller.userId))
 
-    @RequiresClubManager(clubIdParam = "clubId")
+    @RequiresCapability(ClubCapability.GRANT_AWARDS, clubIdParam = "clubId")
     @DeleteMapping("/{clubId}/members/{userId}/awards/{awardId}")
     fun revokeAward(
         @PathVariable clubId: UUID,
@@ -170,15 +170,15 @@ class MemberController(
     // Автодополнение для формы выдачи награды («как интересы»): уникальные прошлые награды в этом клубе.
     // Только менеджер клуба, поскольку до формы выдачи доходит только он (@RequiresMembership раскрыл бы
     // набор наград клуба всем участникам).
-    @RequiresClubManager(clubIdParam = "clubId")
+    @RequiresCapability(ClubCapability.GRANT_AWARDS, clubIdParam = "clubId")
     @GetMapping("/{clubId}/award-suggestions")
     fun awardSuggestions(@PathVariable clubId: UUID): ResponseEntity<List<AwardSuggestionDto>> =
         ResponseEntity.ok(awardService.getSuggestions(clubId))
 
-    // Смена роли участника (co-organizers): назначить/снять со-организатора. СТРОГО owner-only
-    // (@RequiresOrganizer) — со-орг менять роли не может, даже себе. Бизнес-правила (лимит,
-    // идемпотентность, только active-промоут, нельзя владельцу/себе) — в MemberRoleService.
-    @RequiresOrganizer(clubIdParam = "clubId")
+    // Смена роли участника (club-roles): назначить/снять со-организатора. Право MANAGE_ROLES —
+    // владельческое (owner-bypass; у co_organizer его нет → 403 даже на демоут себя). Бизнес-правила
+    // (лимит, идемпотентность, только active-промоут, нельзя владельцу/себе) — в MemberRoleService.
+    @RequiresCapability(ClubCapability.MANAGE_ROLES, clubIdParam = "clubId")
     @PutMapping("/{clubId}/members/{userId}/role")
     fun updateMemberRole(
         @PathVariable clubId: UUID,

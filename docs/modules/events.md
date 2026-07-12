@@ -827,7 +827,7 @@ penalty-флоу), а их страницы упираются в скрытый
   В `GET /api/events/{id}/responses` поле `disputeNote` возвращается **только менеджеру** — владельцу
   ИЛИ активному со-организатору
   (`VoteService.getEventResponders`: `disputeNote = if (isManager) r.disputeNote else null`, где
-  `isManager` = менеджер клуба через `ClubManagerGuard`); остальным участникам поле
+  `isManager` = менеджер клуба через `ClubRoleGuard` (capability `MANAGE_EVENTS`; модель прав — `club-roles.md`)); остальным участникам поле
   приходит `null`. Раньше нота уходила всем участникам, а скрытие было только клиентским. SQL
   по-прежнему селектит колонку (владельцу нота нужна), нуллится в маппинге; DTO без изменений.
 

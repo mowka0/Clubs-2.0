@@ -454,6 +454,26 @@
 .rd-mgmt-killconfirm { border-top: 1px solid var(--hairline); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
 .rd-btn-primary.rd-btn-danger { background: #E0574F; box-shadow: none; }
 
+/* Селектор роли (club-roles): список-пикер назначаемых ролей с описанием под каждой.
+   Текущая роль подсвечена рамкой-акцентом + бейджем «Сейчас». */
+.rd-role-picker { display: flex; flex-direction: column; gap: 8px; }
+.rd-role-opt {
+  display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left;
+  padding: 11px 13px; border-radius: 12px; font-family: inherit; cursor: pointer;
+  border: 1px solid var(--hairline-2); background: var(--surface-2); color: var(--text);
+}
+.rd-role-opt.sel { border-color: var(--accent); background: var(--accent-soft); }
+.rd-role-opt:disabled { opacity: 0.5; cursor: default; }
+.rd-role-opt-top { display: flex; align-items: center; gap: 8px; }
+.rd-role-opt-name { font-size: 14px; font-weight: 700; }
+.rd-role-opt.sel .rd-role-opt-name { color: var(--accent); }
+.rd-role-opt-badge {
+  margin-left: auto; flex-shrink: 0; font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--accent); background: var(--accent-soft);
+  padding: 2px 7px; border-radius: 6px;
+}
+.rd-role-opt-desc { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
+
 .rd-sub-strip {
   display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 14px; margin-bottom: 12px;
   background: var(--live-soft); border: 1px solid rgba(102, 212, 154, 0.28);
@@ -1226,7 +1246,11 @@
   background: var(--accent-soft); border: 1px solid transparent;
 }
 .rd-sheet-edit.on { border-color: var(--accent); }
-.rd-sheet-body { overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+/* flex:1 + min-height:0 обязательны, иначе флекс-ребёнок не сжимается ниже своей контентной высоты
+   и overflow-y не срабатывает: в нерастянутом окне длинная карточка обрезается нижней границей и до
+   секций внизу (роль/управление) не доскроллить (UX-баг A). С min-height:0 тело — настоящий
+   прокручиваемый контейнер в пределах max-height шита. */
+.rd-sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
 .rd-sheet-actions { display: flex; gap: 10px; margin-top: 16px; flex-shrink: 0; position: relative; }
 .rd-sheet-actions > .rd-btn-primary, .rd-sheet-actions > .rd-btn-outline { flex: 1; width: auto; }
 /* Подсказка прокрутки: мягкое затухание над прилипающей панелью действий, чтобы было понятно,

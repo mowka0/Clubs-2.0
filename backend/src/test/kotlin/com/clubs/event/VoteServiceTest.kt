@@ -2,7 +2,7 @@ package com.clubs.event
 
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AttendanceStatus
@@ -35,7 +35,7 @@ class VoteServiceTest {
     private val eventPublisher = mockk<org.springframework.context.ApplicationEventPublisher>(relaxed = true)
     private val service = VoteService(
         eventRepository, eventResponseRepository, membershipRepository, clubRepository,
-        ClubManagerGuard(clubRepository, membershipRepository), eventPublisher
+        ClubRoleGuard(clubRepository, membershipRepository), eventPublisher
     )
 
     private val eventId = UUID.randomUUID()

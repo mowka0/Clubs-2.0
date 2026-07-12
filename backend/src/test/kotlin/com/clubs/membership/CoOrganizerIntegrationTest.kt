@@ -33,7 +33,7 @@ import kotlin.test.assertEquals
 /**
  * Сквозные критерии co-organizers против реального Postgres + Spring Security:
  * PUT /role (owner-only, лимит, идемпотентность, промоут только active), менеджерский гейт
- * @RequiresClubManager (owner/active co-org 200; member/frozen co-org/не-член 403, fail-close),
+ * @RequiresCapability (owner/active co-org 200; member/frozen co-org/не-член 403, fail-close),
  * target-матрица через реальный HTTP, owner-only регресс (chat-link, delete), managed-скоупы
  * (awaiting-dues, pending-count), сброс роли при реактивации, инвариант «ровно один organizer».
  */
@@ -171,7 +171,7 @@ class CoOrganizerIntegrationTest {
             .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"))
     }
 
-    // ---- Менеджерский гейт (@RequiresClubManager), fail-close ----
+    // ---- Менеджерский гейт (@RequiresCapability), fail-close ----
 
     @Test
     fun `manager gate - owner and active co-org pass, member and frozen co-org get 403`() {

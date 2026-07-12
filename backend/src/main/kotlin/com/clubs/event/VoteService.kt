@@ -1,7 +1,8 @@
 package com.clubs.event
 
 import com.clubs.club.ClubRepository
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubCapability
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
@@ -20,7 +21,7 @@ class VoteService(
     private val eventResponseRepository: EventResponseRepository,
     private val membershipRepository: MembershipRepository,
     private val clubRepository: ClubRepository,
-    private val clubManagerGuard: ClubManagerGuard,
+    private val clubRoleGuard: ClubRoleGuard,
     private val eventPublisher: ApplicationEventPublisher
 ) {
 
@@ -93,7 +94,7 @@ class VoteService(
         // создатель-невладелец без роли видеть заметку не должен).
         // Заметка остаётся в SQL-проекции; здесь мы зануляем её, чтобы участникам она не ушла по сети.
         val club = clubRepository.findById(event.clubId)
-        val isManager = club != null && clubManagerGuard.isManager(club, userId)
+        val isManager = club != null && clubRoleGuard.hasCapability(club, userId, ClubCapability.MANAGE_EVENTS)
 
         return eventResponseRepository.findRespondersWithUsers(eventId).map { r ->
             EventResponderDto(

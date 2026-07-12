@@ -4,7 +4,7 @@ import com.clubs.bot.NotificationService
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
@@ -31,7 +31,7 @@ import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
-// Сообщение единого менеджерского гейта (ClubManagerGuard) для 403-ассертов.
+// Сообщение единого менеджерского гейта (ClubRoleGuard) для 403-ассертов.
 private const val MANAGER_FORBIDDEN = "Управлять клубом может владелец или активный со-организатор"
 
 class ApplicationServiceTest {
@@ -77,7 +77,7 @@ class ApplicationServiceTest {
             eventPublisher = mockk(relaxed = true),
             // Реальный guard поверх тех же моков: owner-путь не трогает membershipRepository,
             // negative-тесты стабят findByUserAndClub(caller) -> null (не со-орг).
-            clubManagerGuard = ClubManagerGuard(clubRepository, membershipRepository)
+            clubRoleGuard = ClubRoleGuard(clubRepository, membershipRepository)
         )
     }
 

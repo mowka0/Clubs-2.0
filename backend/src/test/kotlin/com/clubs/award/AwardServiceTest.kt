@@ -5,7 +5,7 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.membership.Membership
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.membership.MembershipRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -39,7 +39,7 @@ class AwardServiceTest {
         eventPublisher = mockk(relaxed = true)
         service = AwardService(
             awardRepository, membershipRepository, clubRepository,
-            ClubManagerGuard(clubRepository, membershipRepository), AwardMapper(), eventPublisher
+            ClubRoleGuard(clubRepository, membershipRepository), AwardMapper(), eventPublisher
         )
         // Default: target is a member; caller is the club owner; the cap/dup checks return
         // "room available" unless overridden.

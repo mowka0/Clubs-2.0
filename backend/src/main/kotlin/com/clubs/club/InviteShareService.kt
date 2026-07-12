@@ -1,7 +1,8 @@
 package com.clubs.club
 
 import com.clubs.bot.NotificationService
-import com.clubs.common.auth.ClubManagerGuard
+import com.clubs.common.auth.ClubCapability
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.NotFoundException
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
@@ -19,7 +20,7 @@ import java.util.UUID
 class InviteShareService(
     private val clubService: ClubService,
     private val clubRepository: ClubRepository,
-    private val clubManagerGuard: ClubManagerGuard,
+    private val clubRoleGuard: ClubRoleGuard,
     private val userRepository: UserRepository,
     private val notificationService: NotificationService,
     // Username бота — основа deep-link'а t.me/<bot>?startapp=…
@@ -33,7 +34,7 @@ class InviteShareService(
         // У-2 (co-organizers): приглашает менеджер клуба — владелец или со-орг СТРОГО при active-членстве.
         // Ранее здесь был findActiveByUserAndClub (misnomer: включает frozen/expired) — для владельца
         // это было недостижимо, для ролей стало бы дырой fail-open; единый гейт закрывает её.
-        clubManagerGuard.requireManager(club, callerId)
+        clubRoleGuard.requireCapability(club, callerId, ClubCapability.SEND_INVITES)
 
         val code = clubService.ensureInviteCode(clubId)
         val inviteUrl = "https://t.me/$botUsername?startapp=invite_$code"
