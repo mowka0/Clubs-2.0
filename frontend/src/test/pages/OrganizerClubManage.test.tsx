@@ -59,6 +59,7 @@ function setViewer(userId: string) {
     user: {
       id: userId, telegramId: 1, telegramUsername: 'viewer', firstName: 'Viewer',
       lastName: null, avatarUrl: null, city: null, country: null, bio: null,
+      onboardedAt: '2026-01-01T00:00:00Z',
     },
     isAuthenticated: true,
     isLoading: false,

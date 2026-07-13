@@ -1,17 +1,10 @@
 import { create } from 'zustand';
 import { apiClient } from '../api/apiClient';
+import type { UserDto } from '../types/api';
 
-export interface UserDto {
-  id: string;
-  telegramId: number;
-  telegramUsername: string | null;
-  firstName: string;
-  lastName: string | null;
-  avatarUrl: string | null;
-  city: string | null;
-  country: string | null;
-  bio: string | null;
-}
+// Тип профиля — один на всё приложение (types/api). Своей копии интерфейса здесь нет
+// намеренно: два описания одного ответа расходятся при первом же новом поле.
+export type { UserDto };
 
 interface AuthState {
   user: UserDto | null;

@@ -181,6 +181,12 @@ open class Users(
      */
     val BIO: TableField<UsersRecord, String?> = createField(DSL.name("bio"), SQLDataType.VARCHAR(280), this, "Короткое «о себе» из профиля, до 280 символов (NULL = не заполнено). Показывается на карточке участника.")
 
+    /**
+     * The column <code>public.users.onboarded_at</code>. Когда пользователь
+     * завершил онбординг; NULL — ещё не проходил
+     */
+    val ONBOARDED_AT: TableField<UsersRecord, OffsetDateTime?> = createField(DSL.name("onboarded_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда пользователь завершил онбординг; NULL — ещё не проходил")
+
     private constructor(alias: Name, aliased: Table<UsersRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<UsersRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<UsersRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

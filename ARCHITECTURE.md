@@ -18,6 +18,11 @@ GET /api/users/me
   Headers: Authorization: Bearer <JWT>
   Response 200: UserDto
 
+POST /api/users/me/onboarding
+  Body: { door: "MEMBER" | "ORGANIZER" }   # дверь, которой человек вышел из карусели
+  Response 200: UserDto                    # onboardedAt проставлен
+  Errors: 400 (неизвестная дверь), 409 (онбординг уже пройден)
+
 GET /api/users/me/clubs
   Response 200: MembershipDto[]
 
@@ -201,7 +206,9 @@ POST /api/upload
   "lastName": "Varlamov",
   "avatarUrl": "https://...",
   "city": "Москва",
-  "createdAt": "2026-03-20T12:00:00Z"
+  "country": "Россия",
+  "bio": "О себе",
+  "onboardedAt": "2026-07-13T12:00:00Z"
 }
 ```
 

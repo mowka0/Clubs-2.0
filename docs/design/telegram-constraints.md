@@ -1006,7 +1006,8 @@ state.
 ### UX-флоу
 - [ ] Permission-запросы (§26): для каждого — pre-context экран «зачем»
 - [ ] Deep-link entry (с `/clubs/:id` сразу, без стека): как выглядит «Назад»
-- [ ] Onboarding: первый запуск (проходит или нет) и `addToHomeScreen` prompt
+- [x] Onboarding: первый запуск — карусель-гейт, deep-link (`startParam`) её откладывает
+      ([`docs/modules/onboarding.md`](../modules/onboarding.md), 2026-07-13). `addToHomeScreen` prompt — ещё открыт
 - [ ] Keyboard-behaviors (§8): формы с клавиатурой в fullscreen и compact
 
 ---

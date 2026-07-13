@@ -160,4 +160,15 @@ open class UsersDao(configuration: Configuration?) : DAOImpl<UsersRecord, com.cl
      * Fetch records that have <code>bio IN (values)</code>
      */
     fun fetchByBio(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Users> = fetch(Users.USERS.BIO, *values)
+
+    /**
+     * Fetch records that have <code>onboarded_at BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfOnboardedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Users> = fetchRange(Users.USERS.ONBOARDED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>onboarded_at IN (values)</code>
+     */
+    fun fetchByOnboardedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Users> = fetch(Users.USERS.ONBOARDED_AT, *values)
 }

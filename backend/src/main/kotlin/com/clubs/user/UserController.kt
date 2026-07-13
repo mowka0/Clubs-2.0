@@ -19,6 +19,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -47,6 +48,17 @@ class UserController(
         @Valid @RequestBody request: UpdateMeRequest
     ): ResponseEntity<UserDto> =
         ResponseEntity.ok(userService.updateProfile(user.userId, request))
+
+    /**
+     * Завершает онбординг. Дверь (участник/организатор) определяется нажатой кнопкой слайда
+     * и уходит в лог как метрика намерения. Повторный вызов — 409.
+     */
+    @PostMapping("/me/onboarding")
+    fun completeOnboarding(
+        @AuthenticationPrincipal user: AuthenticatedUser,
+        @Valid @RequestBody request: CompleteOnboardingRequest
+    ): ResponseEntity<UserDto> =
+        ResponseEntity.ok(userService.completeOnboarding(user.userId, request.door))
 
     @GetMapping("/me/interests")
     fun getMyInterests(

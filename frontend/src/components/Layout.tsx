@@ -1,15 +1,17 @@
-import { FC, Suspense, useEffect, useState } from 'react';
+import { FC, Suspense, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { BottomTabBar, isTabBarRoute } from './BottomTabBar';
 import { DeepLinkHandler } from './DeepLinkHandler';
 import { Toast } from './Toast';
 import { CreateActivityFlow } from './manage/CreateActivityFlow';
+import { OnboardingFlow } from './onboarding/OnboardingFlow';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useClubContextStore } from '../store/useClubContextStore';
 import { useOrganizerClubs } from '../queries/organizerClubs';
+import { getStartParam } from '../telegram/sdk';
 
 /**
  * Спиннер-заглушка, показывается пока подгружаются lazy-загруженные страницы.
@@ -83,7 +85,13 @@ export const AppDock: FC = () => {
 export const Layout: FC = () => {
   const location = useLocation();
   const showTabBar = isTabBarRoute(location.pathname);
-  const { isAuthenticated, isLoading, error, login } = useAuthStore();
+  const { user, isAuthenticated, isLoading, error, login } = useAuthStore();
+
+  // Открыл приложение по deep-link (приглашение в клуб, событие, складчина) — он шёл
+  // к конкретным людям и к конкретной вещи, а не знакомиться с продуктом. Онбординг тогда
+  // ОТКЛАДЫВАЕТСЯ, а не отменяется: `onboardedAt` остаётся null, и карусель покажется
+  // при следующем обычном запуске. Значение за сессию не меняется — считаем один раз.
+  const hasStartParam = useMemo(() => getStartParam() !== null, []);
 
   // Инициализируем авторизацию один раз при старте приложения, чтобы токен был доступен
   // до того, как дочерние страницы начнут запрашивать данные
@@ -113,6 +121,18 @@ export const Layout: FC = () => {
       );
     }
     return <PageFallback />;
+  }
+
+  // Профиль ещё не доехал — спиннер, не онбординг. «Данные не пришли» ≠ «данных нет»:
+  // на производном признаке мы уже обжигались (F5-20), и карусель вылезала поверх
+  // обжитого аккаунта. Единственное основание показать её — явный факт onboardedAt = null.
+  if (!user) {
+    return <PageFallback />;
+  }
+
+  // Гейт, а не роут: онбординг рендерится ВМЕСТО приложения, иначе его обошли бы навигацией.
+  if (user.onboardedAt == null && !hasStartParam) {
+    return <OnboardingFlow />;
   }
 
   return (
