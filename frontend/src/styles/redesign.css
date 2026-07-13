@@ -1734,6 +1734,24 @@
 
 .ob-title { font-size: 25px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.14; text-align: center; margin: 0; }
 .ob-title em { font-style: normal; color: var(--accent); }
+
+/* Слоган со вшитым названием — длиннее прочих заголовков, поэтому кегль ниже:
+   при 25px он занимал бы четыре строки и выдавливал преимущества за экран. */
+.ob-title-brand { font-size: 21px; line-height: 1.25; }
+
+/* Название продукта внутри слогана. Каллиграфия читается как имя, а не как ещё одно слово,
+   поэтому ей не нужен ни жир, ни отрицательный трекинг остального заголовка. Кегль больше
+   базового: рукописный шрифт при равном размере выглядит мельче гротеска. */
+.ob-brand {
+  font-family: 'Allura', cursive;
+  color: var(--accent);
+  font-weight: 400;
+  font-size: 1.65em;
+  letter-spacing: 0;
+  /* Строчные Allura с длинными выносными: без этого хвосты режутся о соседнюю строку. */
+  line-height: 1;
+  padding: 0 0.04em;
+}
 .ob-sub { font-size: 13.5px; color: var(--text-dim); line-height: 1.45; margin: 8px 0 0; text-align: center; }
 .ob-sub b { font-weight: 700; color: var(--text); }
 

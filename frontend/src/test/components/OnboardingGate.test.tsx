@@ -1,7 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { http, HttpResponse } from 'msw';
 
 vi.mock('@telegram-apps/sdk-react', () => ({
   hapticFeedbackImpactOccurred: Object.assign(vi.fn(), { isAvailable: () => false }),
@@ -33,6 +35,7 @@ vi.mock('../../components/manage/CreateActivityFlow', () => ({
 
 import { Layout } from '../../components/Layout';
 import { useAuthStore } from '../../store/useAuthStore';
+import { server } from '../mocks/server';
 import type { UserDto } from '../../types/api';
 
 const makeUser = (onboardedAt: string | null): UserDto => ({
@@ -48,6 +51,13 @@ const makeUser = (onboardedAt: string | null): UserDto => ({
   onboardedAt,
 });
 
+/** Куда нас привела дверь и что попросили подсветить — читаем прямо из роутера. */
+const LandingProbe = ({ name }: { name: string }) => {
+  const location = useLocation();
+  const highlight = (location.state as { highlight?: string } | null)?.highlight ?? 'нет';
+  return <div>{`ПРИЗЕМЛИЛИСЬ: ${name}, подсветка: ${highlight}`}</div>;
+};
+
 function renderLayout() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -57,7 +67,8 @@ function renderLayout() {
       <MemoryRouter initialEntries={['/']}>
         <Routes>
           <Route element={<Layout />}>
-            <Route path="/" element={<div>СОДЕРЖИМОЕ ПРИЛОЖЕНИЯ</div>} />
+            <Route path="/" element={<LandingProbe name="каталог" />} />
+            <Route path="/my-clubs" element={<LandingProbe name="мои клубы" />} />
             <Route path="/invite/:code" element={<div>СТРАНИЦА ПРИГЛАШЕНИЯ</div>} />
           </Route>
         </Routes>
@@ -66,8 +77,12 @@ function renderLayout() {
   );
 }
 
-const carousel = () => screen.queryByText(/Найди своих для/i);
-const appContent = () => screen.queryByText('СОДЕРЖИМОЕ ПРИЛОЖЕНИЯ');
+const carousel = () => screen.queryByText(/Наполни свою жизнь активностями/i);
+const appContent = () => screen.queryByText(/ПРИЗЕМЛИЛИСЬ: каталог/);
+
+beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
 
 beforeEach(() => {
   getStartParamMock.mockReset();
@@ -124,5 +139,50 @@ describe('Онбординг — кому показываем карусель'
 
     expect(carousel()).toBeNull();
     expect(appContent()).toBeNull();
+  });
+});
+
+// Регресс (найден PO на staging 2026-07-13): обе двери приводили на главную, подсветка не работала.
+// Причина — порядок шагов: `setUser` открывал гейт и размонтировал карусель ДО того, как
+// TanStack успевал вызвать колбэки `mutate(...)`, а у наблюдателя без слушателей он их не вызывает
+// вовсе. Навигация терялась целиком, вместе с меткой подсветки.
+//
+// Ловится только через ГЕЙТ: карусель, отрендеренная напрямую, не размонтируется и потому здорова.
+describe('Онбординг — выход через дверь (гейт → страница назначения)', () => {
+  const onboardedUser = { ...makeUser('2026-07-13T12:00:00Z') };
+
+  beforeEach(() => {
+    server.use(
+      http.post('*/api/users/me/onboarding', () => HttpResponse.json(onboardedUser)),
+    );
+  });
+
+  it('дверь участника: уводит в каталог и доносит подсветку города', async () => {
+    const user = userEvent.setup();
+    useAuthStore.setState({ user: makeUser(null), isAuthenticated: true });
+    renderLayout();
+
+    await user.click(screen.getByRole('button', { name: 'Дальше' }));
+    await user.click(screen.getByRole('button', { name: /Найти клубы в своём городе/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText('ПРИЗЕМЛИЛИСЬ: каталог, подсветка: city')).toBeInTheDocument(),
+    );
+    expect(carousel()).toBeNull();
+  });
+
+  it('дверь организатора: уводит в «Мои клубы» (а НЕ на главную) и доносит подсветку «+ Клуб»', async () => {
+    const user = userEvent.setup();
+    useAuthStore.setState({ user: makeUser(null), isAuthenticated: true });
+    renderLayout();
+
+    await user.click(screen.getByRole('button', { name: 'Дальше' }));
+    await user.click(screen.getByRole('button', { name: /Хочу вести свой клуб/i }));
+    await user.click(screen.getByRole('button', { name: /Создать клуб и пригласить друзей/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText('ПРИЗЕМЛИЛИСЬ: мои клубы, подсветка: create-club')).toBeInTheDocument(),
+    );
+    expect(carousel()).toBeNull();
   });
 });

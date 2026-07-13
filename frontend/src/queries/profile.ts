@@ -42,11 +42,16 @@ export function useUpdateProfileMutation() {
 }
 
 /**
- * Завершение онбординга. Ответ кладём в стор — по `onboardedAt` в нём построен гейт в Layout,
- * поэтому карусель исчезает ровно тогда, когда сервер подтвердил факт, а не «оптимистично».
+ * Завершение онбординга. Возвращает свежий профиль, но **сама в стор его не кладёт** —
+ * это делает вызывающий, и делает НАМЕРЕННО ПОЗЖЕ навигации.
+ *
+ * Почему так: `onboardedAt` в сторе — это и есть гейт в `Layout`. Положи мы профиль здесь,
+ * в `onSuccess` мутации, гейт открылся бы сразу и размонтировал карусель — а колбэки,
+ * переданные в `mutate(...)`, TanStack уже не вызывает у наблюдателя без слушателей
+ * (`hasListeners()`). Навигация с подсветкой просто терялась, и человек оставался там,
+ * где стоял. Поэтому порядок обязан быть: дождались сервера → ушли на страницу → открыли гейт.
  */
 export function useCompleteOnboardingMutation() {
-  const setUser = useAuthStore((s) => s.setUser);
   return useMutation({
     mutationFn: async (door: OnboardingDoor) => {
       try {
@@ -59,6 +64,5 @@ export function useCompleteOnboardingMutation() {
         throw e;
       }
     },
-    onSuccess: (user) => setUser(user),
   });
 }

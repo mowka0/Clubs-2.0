@@ -27,13 +27,22 @@ export interface OnboardingDoorCta {
   highlight: HighlightTarget;
 }
 
+/**
+ * Кусок заголовка. Заголовок собран из сегментов, а не из «текст + хвост», потому что
+ * название продукта стоит В СЕРЕДИНЕ слогана и набирается другим шрифтом.
+ */
+export interface TitleSegment {
+  text: string;
+  /** Акцентная (оранжевая) часть заголовка. */
+  accent?: boolean;
+  /** Название продукта — набирается каллиграфией Allura, чтобы читалось как имя, а не как слово. */
+  brand?: boolean;
+}
+
 export interface OnboardingSlideData {
   /** Эмодзи-арт в круге-свечении. */
   art: string;
-  /** Заголовок до акцентной части. */
-  title: string;
-  /** Акцентная (оранжевая) часть заголовка. */
-  titleAccent: string;
+  title: TitleSegment[];
   subtitle: string;
   /** Хвост подзаголовка, набранный жирным. Есть только у слайда организатора. */
   subtitleStrong?: string;
@@ -51,8 +60,15 @@ export interface OnboardingSlideData {
 export const ONBOARDING_SLIDES: readonly OnboardingSlideData[] = [
   {
     art: '🙌',
-    title: 'Найди своих для ',
-    titleAccent: 'живых встреч!',
+    // Первый экран обязан назвать продукт: человек только что открыл незнакомое приложение.
+    // Имя вшито в сам слоган и набрано каллиграфией — так оно и представляется, и объясняет,
+    // зачем всё это, одной строкой.
+    title: [
+      { text: 'Объединяйтесь в ' },
+      { text: 'Clubs', brand: true },
+      { text: ' по интересам, чтобы встречаться ' },
+      { text: 'вживую!', accent: true },
+    ],
     subtitle: 'Наполни свою жизнь активностями!',
     perks: [
       {
@@ -79,8 +95,10 @@ export const ONBOARDING_SLIDES: readonly OnboardingSlideData[] = [
   },
   {
     art: '🎟',
-    title: 'Ходи на встречи, ',
-    titleAccent: 'которые готовят другие',
+    title: [
+      { text: 'Ходи на встречи, ' },
+      { text: 'которые готовят другие', accent: true },
+    ],
     subtitle: 'Вступил в клуб — приходишь. Организовывать ничего не нужно.',
     perks: [
       {
@@ -109,8 +127,10 @@ export const ONBOARDING_SLIDES: readonly OnboardingSlideData[] = [
   },
   {
     art: '🎪',
-    title: 'Или ',
-    titleAccent: 'веди свой клуб',
+    title: [
+      { text: 'Или ' },
+      { text: 'веди свой клуб', accent: true },
+    ],
     subtitle:
       'Душа компании и прирождённый организатор? Свои правила, свой состав, свой блэкджек — а платный клуб ещё и приносит доход: ',
     subtitleStrong: 'взносы участников идут напрямую тебе, комиссию мы не берём.',

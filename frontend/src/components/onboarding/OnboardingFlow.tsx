@@ -5,6 +5,7 @@ import { OnboardingSlide } from './OnboardingSlide';
 import { ONBOARDING_SLIDES, type OnboardingDoorCta } from './slides';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useCompleteOnboardingMutation } from '../../queries/profile';
+import { useAuthStore } from '../../store/useAuthStore';
 
 /** Насколько далеко нужно смахнуть, чтобы это считалось листанием, а не дрожанием пальца (px). */
 const SWIPE_THRESHOLD_PX = 50;
@@ -22,6 +23,7 @@ export const OnboardingFlow: FC = () => {
   const navigate = useNavigate();
   const haptic = useHaptic();
   const completeOnboarding = useCompleteOnboardingMutation();
+  const setUser = useAuthStore((s) => s.setUser);
 
   const [index, setIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
@@ -51,19 +53,31 @@ export const OnboardingFlow: FC = () => {
   if (!slide) return null;
   const { doorCta, secondary } = slide;
 
-  // Дверь: сначала подтверждение сервера, потом уход со страницы. Оптимистично гасить
-  // карусель нельзя — упавший запрос оставил бы человека с пустым `onboardedAt`,
-  // но уже внутри приложения.
-  const enterDoor = (cta: OnboardingDoorCta) => {
+  /**
+   * Дверь. Порядок шагов здесь — не стилистика, а единственный рабочий:
+   *
+   * 1. Ждём подтверждения сервера. Оптимистично гасить карусель нельзя: упавший запрос
+   *    оставил бы человека с пустым `onboardedAt`, но уже внутри приложения.
+   * 2. Навигируем. Гейт ещё закрыт (`onboardedAt` в сторе всё ещё null), поэтому Layout
+   *    продолжает рисовать карусель — смены экрана не видно, мигания нет.
+   * 3. И только теперь кладём профиль в стор: гейт открывается уже на нужной странице,
+   *    вместе с меткой подсветки в `location.state`.
+   *
+   * Обратный порядок (профиль → навигация) ломался: `setUser` открывал гейт, карусель
+   * размонтировалась, и навигация не выполнялась вовсе — человек оставался на главной,
+   * а подсветка не приезжала никуда.
+   */
+  const enterDoor = async (cta: OnboardingDoorCta) => {
     if (completeOnboarding.isPending) return;
     haptic.impact('medium');
-    completeOnboarding.mutate(cta.door, {
-      onSuccess: () => navigate(cta.to, { state: { highlight: cta.highlight } }),
-      onError: () => {
-        haptic.notify('error');
-        setError('Не удалось продолжить. Проверьте связь и попробуйте ещё раз.');
-      },
-    });
+    try {
+      const user = await completeOnboarding.mutateAsync(cta.door);
+      navigate(cta.to, { state: { highlight: cta.highlight } });
+      setUser(user);
+    } catch {
+      haptic.notify('error');
+      setError('Не удалось продолжить. Проверьте связь и попробуйте ещё раз.');
+    }
   };
 
   return (

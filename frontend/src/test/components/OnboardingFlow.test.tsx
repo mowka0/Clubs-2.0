@@ -66,7 +66,7 @@ describe('OnboardingFlow — карусель из трёх слайдов', () 
     renderFlow();
 
     // Слайд 1 — общий: дверей нет, только «Дальше».
-    expect(screen.getByText(/Найди своих для/i)).toBeInTheDocument();
+    expect(screen.getByText(/Наполни свою жизнь активностями/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Найти клубы в своём городе/i })).toBeNull();
 
     await user.click(screen.getByRole('button', { name: 'Дальше' }));
@@ -79,6 +79,17 @@ describe('OnboardingFlow — карусель из трёх слайдов', () 
     expect(screen.getByRole('button', { name: /Найти клубы в своём городе/i })).toBeInTheDocument();
   });
 
+  it('первый экран называет продукт: «Clubs» вшито в слоган и набрано каллиграфией', () => {
+    const { container } = renderFlow();
+
+    const brand = container.querySelector('.ob-brand');
+    expect(brand).toHaveTextContent('Clubs');
+    // Слоган — цельное предложение, имя стоит внутри него, а не отдельной надписью сверху.
+    expect(container.querySelector('.ob-title')).toHaveTextContent(
+      'Объединяйтесь в Clubs по интересам, чтобы встречаться вживую!',
+    );
+  });
+
   it('листается свайпом: сдвиг больше порога листает, дрожание пальца — нет (AC-2)', () => {
     const { container } = renderFlow();
     const root = container.querySelector('.ob-root')!;
@@ -89,7 +100,7 @@ describe('OnboardingFlow — карусель из трёх слайдов', () 
 
     // Короткий сдвиг (меньше SWIPE_THRESHOLD_PX = 50) — это не свайп, слайд остаётся.
     swipe(200, 180);
-    expect(screen.getByText(/Найди своих для/i)).toBeInTheDocument();
+    expect(screen.getByText(/Наполни свою жизнь активностями/i)).toBeInTheDocument();
 
     // Смахнули влево — вперёд, к слайду участника.
     swipe(200, 100);
@@ -97,7 +108,7 @@ describe('OnboardingFlow — карусель из трёх слайдов', () 
 
     // Смахнули вправо — назад, на первый слайд.
     swipe(100, 200);
-    expect(screen.getByText(/Найди своих для/i)).toBeInTheDocument();
+    expect(screen.getByText(/Наполни свою жизнь активностями/i)).toBeInTheDocument();
   });
 
   it('листается стрелками по краям (AC-2)', async () => {
