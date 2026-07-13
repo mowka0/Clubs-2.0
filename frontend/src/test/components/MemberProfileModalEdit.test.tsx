@@ -14,7 +14,7 @@ vi.mock('@telegram-apps/sdk-react', () => ({
   hapticFeedbackSelectionChanged: Object.assign(vi.fn(), { isAvailable: () => false }),
 }));
 vi.mock('@telegram-apps/telegram-ui', () => import('../mocks/telegramUi'));
-vi.mock('../../telegram/sdk', () => ({ initTelegramSdk: vi.fn(), getInitDataRaw: () => 'test', expandViewport: vi.fn() }));
+vi.mock('../../telegram/sdk', () => ({ initTelegramSdk: vi.fn(), getInitDataRaw: () => 'test' }));
 
 import { MemberProfileModal } from '../../components/club/MemberProfileModal';
 

@@ -42,18 +42,12 @@ function setupViewport(): void {
         .mount()
         .then(() => {
           if (viewport.expand.isAvailable()) viewport.expand();
-          // Биндим CSS-переменные Telegram (--tg-viewport-stable-height и др.). Без этого
-          // нижние шиты завязаны на `vh`, который на iOS переоценивает высоту (не учитывает
-          // динамические панели/шторку) — низ модалки уходит под фолд, и до секции роли не
-          // доскроллить без ручного растягивания. Переменная = реальная видимая высота хоста.
-          if (viewport.bindCssVars.isAvailable()) viewport.bindCssVars();
         })
         .catch(() => {
           // Mount отклонён (хост без поддержки viewport) — оставляем высоту по умолчанию
         });
     } else if (viewport.expand.isAvailable()) {
       viewport.expand();
-      if (viewport.bindCssVars.isAvailable()) viewport.bindCssVars();
     }
   } catch (_e) {
     // Viewport API недоступен — пропускаем
@@ -78,20 +72,6 @@ function setupSwipeBehavior(): void {
     }
   } catch (_e) {
     // Swipe behavior не поддерживается (Mini Apps < 7.7) — прокрутка остаётся стандартной
-  }
-}
-
-/**
- * Разворачивает Mini App на полную высоту по требованию — например, при открытии высокой
- * модалки (карточка участника). Startup-expand в setupViewport может не сработать на части
- * клиентов (гонка с mount) или откатиться при сворачивании; повторный вызов в контексте
- * действия юзера (открытие карточки) надёжнее. Идемпотентно и безопасно вне Telegram.
- */
-export function expandViewport(): void {
-  try {
-    if (viewport.expand.isAvailable()) viewport.expand();
-  } catch (_e) {
-    // Вне Telegram / API недоступен — no-op
   }
 }
 
