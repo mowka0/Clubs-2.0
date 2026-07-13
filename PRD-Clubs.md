@@ -570,6 +570,9 @@
 - last_name: varchar(255)
 - avatar_url: text
 - city: varchar(255)
+- country: varchar(255)
+- bio: text
+- onboarded_at: timestamptz — когда прошёл онбординг первого входа; NULL = ещё не проходил, показываем карусель вместо приложения (см. `docs/modules/onboarding.md`)
 - created_at: timestamp
 - updated_at: timestamp
 

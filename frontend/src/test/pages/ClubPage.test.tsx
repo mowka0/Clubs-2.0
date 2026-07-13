@@ -95,6 +95,7 @@ describe('ClubPage', () => {
         city: null,
         country: null,
         bio: null,
+        onboardedAt: '2026-01-01T00:00:00Z',
       },
       isAuthenticated: true,
       isLoading: false,
@@ -501,7 +502,7 @@ describe('ClubPage', () => {
   it('members tab (organizer viewer): shows «Новичок» for a genuine no-track-record member', async () => {
     // Владелец видит скоры честно: у него trust=null означает именно «нет истории» → «Новичок» уместен.
     useAuthStore.setState({
-      user: { id: 'owner-1', telegramId: 1, telegramUsername: null, firstName: 'O', lastName: null, avatarUrl: null, city: null, country: null, bio: null },
+      user: { id: 'owner-1', telegramId: 1, telegramUsername: null, firstName: 'O', lastName: null, avatarUrl: null, city: null, country: null, bio: null, onboardedAt: '2026-01-01T00:00:00Z' },
       isAuthenticated: true, isLoading: false, error: null,
     });
     server.use(
@@ -539,6 +540,7 @@ describe('ClubPage', () => {
         city: null,
         country: null,
         bio: null,
+        onboardedAt: '2026-01-01T00:00:00Z',
       },
       isAuthenticated: true,
       isLoading: false,
@@ -609,6 +611,7 @@ describe('ClubPage', () => {
         city: null,
         country: null,
         bio: null,
+        onboardedAt: '2026-01-01T00:00:00Z',
       },
       isAuthenticated: true,
       isLoading: false,

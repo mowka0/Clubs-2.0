@@ -28,8 +28,10 @@
 - Удаление per-club таба «Мой профиль» внутри карточки клуба (был `ClubProfileTab.tsx`, удалён).
 
 ### НЕ входит
-- Онбординг при первом запуске (`docs/backlog/onboarding-interests-and-recommendations.md` Part 2).
-- Recommendations клубов по интересам (там же Part 3 + `myclubs-recommended-clubs.md` V2).
+- Онбординг при первом запуске. **Upd 2026-07-13:** реализован отдельной фичей — карусель из 3 слайдов
+  **без вопросов об интересах** (`docs/modules/onboarding.md`). Сбор города/категорий/интересов в онбординге
+  осознанно отложен до появления клубов в системе.
+- Recommendations клубов по интересам (`docs/backlog/onboarding-interests-and-recommendations.md` Part 3 + `myclubs-recommended-clubs.md` V2).
 - Редактирование имени / аватара / @username — это TG-managed поля, перезаписываются при каждом auth через `UserRepository.upsert` (см. `frontend-core.md` § auth).
 - Распознавание опечаток в интересах (`pg_trgm`) — fallback, добавим если упрёмся.
 - Кросс-клубовый «топ-N надёжных» — рейтинги вне scope.
@@ -166,10 +168,14 @@ data class UserDto(
     val lastName: String?,
     val avatarUrl: String?,
     val city: String?,
-    val country: String?,   // код страны (например "RU")
-    val bio: String?        // ≤280 символов
+    val country: String?,             // код страны (например "RU")
+    val bio: String?,                 // ≤280 символов
+    val onboardedAt: OffsetDateTime?  // V60: когда прошёл онбординг; null — ещё не проходил
 )
 ```
+
+> `onboardedAt` добавлено 2026-07-13 (`feature/onboarding`, миграция V60). Профиль его не показывает
+> и не редактирует — поле питает гейт первого входа в `Layout`, см. [`onboarding.md`](./onboarding.md).
 
 `/api/auth/telegram` возвращает тот же `UserDto` в поле `user` — стор `useAuthStore.user` сразу получает новые поля без отдельного fetch.
 
@@ -431,4 +437,5 @@ AND на повторном старте (V16 уже применена) — exi
 - [`club-page-unified.md`](./club-page-unified.md) — устаревшее «Мой профиль» upd-блок наверху.
 - [`ui-pages.md`](./ui-pages.md) § «ProfilePage» — это место в общей навигации фронт-страниц.
 - [`frontend-stores.md`](./frontend-stores.md) § «Query-хуки» — расширение таблицы хуками этой итерации + `AuthStore.setUser`.
-- [`docs/backlog/onboarding-interests-and-recommendations.md`](../backlog/onboarding-interests-and-recommendations.md) — Part 1 (модель интересов + редактирование) частично закрыт этой спекой; Part 2 (онбординг) + Part 3 (recommendations) остаются open.
+- [`docs/backlog/onboarding-interests-and-recommendations.md`](../backlog/onboarding-interests-and-recommendations.md) — Part 1 (модель интересов + редактирование) частично закрыт этой спекой; Part 2 (онбординг) закрыт 2026-07-13 в другой форме — карусель без вопросов, см. [`onboarding.md`](./onboarding.md); сбор интересов при первом входе и Part 3 (recommendations) остаются open.
+- [`onboarding.md`](./onboarding.md) — первый вход: `UserDto.onboardedAt` (V60) и гейт карусели.

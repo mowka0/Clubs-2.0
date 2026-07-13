@@ -28,7 +28,12 @@ export interface UserDto {
   city: string | null;
   country: string | null;
   bio: string | null;
+  /** ISO-дата прохождения онбординга; null — ещё не проходил, показываем карусель вместо приложения. */
+  onboardedAt: string | null;
 }
+
+/** Дверь, через которую человек вышел из онбординга: её задаёт нажатая кнопка слайда. */
+export type OnboardingDoor = 'MEMBER' | 'ORGANIZER';
 
 export interface UpdateProfileBody {
   country: string | null;

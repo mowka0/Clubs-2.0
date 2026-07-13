@@ -1,10 +1,13 @@
 package com.clubs.user
 
+import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.generated.jooq.tables.records.UsersRecord
 import com.clubs.interest.InterestService
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.OffsetDateTime
 import java.util.UUID
 
 @Service
@@ -12,6 +15,7 @@ class UserService(
     private val userRepository: UserRepository,
     private val interestService: InterestService
 ) {
+    private val log = LoggerFactory.getLogger(this::class.java)
 
     fun getUserById(id: UUID): UserDto {
         val record = userRepository.findById(id)
@@ -33,6 +37,25 @@ class UserService(
 
     @Transactional(readOnly = true)
     fun getMyInterests(userId: UUID): List<String> = interestService.getUserInterests(userId)
+
+    /**
+     * Отмечает онбординг пройденным. Пройденным считается только выход через дверь —
+     * тап главной кнопки слайда; «Пропустить» в потоке нет.
+     *
+     * Дверь никуда не сохраняется, только в лог: это единственная метрика намерения,
+     * которая у нас есть, а колонка под неё была бы данными без потребителя.
+     */
+    @Transactional
+    fun completeOnboarding(userId: UUID, door: OnboardingDoor): UserDto {
+        if (!userRepository.markOnboarded(userId, OffsetDateTime.now())) {
+            // Строку не тронули по одной из двух причин — различаем их, чтобы не отвечать
+            // 409 «уже пройден» тому, кого вообще нет.
+            userRepository.findById(userId) ?: throw NotFoundException("User not found")
+            throw ConflictException("Onboarding already completed")
+        }
+        log.info("Onboarding completed: userId={} door={}", userId, door)
+        return getUserById(userId)
+    }
 }
 
 private fun String?.blankToNull(): String? = this?.trim()?.ifEmpty { null }
@@ -46,5 +69,6 @@ fun UsersRecord.toDto() = UserDto(
     avatarUrl = avatarUrl,
     city = city,
     country = country,
-    bio = bio
+    bio = bio,
+    onboardedAt = onboardedAt
 )

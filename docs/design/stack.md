@@ -236,9 +236,12 @@ frontend/
 | `isLoading` | `<PageFallback />` (спиннер на всю страницу) |
 | `error` | `<Placeholder>` «Не удалось авторизоваться. Откройте приложение через Telegram.» |
 | `!isAuthenticated && !loading && !error` | ничего (триггерится `login()`) |
+| `isAuthenticated`, но `user == null` | `<PageFallback />` — спиннер. «Данные не пришли» ≠ «данных нет» |
+| `isAuthenticated`, `user.onboardedAt == null`, нет `startParam` | `<OnboardingFlow />` — карусель первого входа **вместо** приложения (2026-07-13) |
 | `isAuthenticated` | `<Outlet />` — рендер маршрута |
 
-**Нет redirect'ов** — всё управляется условным рендером в `Layout`.
+**Нет redirect'ов** — всё управляется условным рендером в `Layout`. Онбординг — тоже **гейт, а не роут**:
+роут обошли бы навигацией. Подробности — [`docs/modules/onboarding.md`](../modules/onboarding.md).
 
 ### 401 retry в apiClient
 При 401 от backend — `apiClient` делает один повтор с fresh `initData`. Если
@@ -298,6 +301,9 @@ interface UserDto {
   lastName: string | null;
   avatarUrl: string | null;
   city: string | null;
+  country: string | null;      // 2026-05-30 (код страны, e.g. 'RU')
+  bio: string | null;          // 2026-05-30 (≤280 символов)
+  onboardedAt: string | null;  // 2026-07-13 (ISO-дата; null → карусель первого входа)
 }
 ```
 
@@ -1585,7 +1591,8 @@ ErrorBoundary, branded types, features-reorg — отдельно.
 ### UX-флоу
 - Permission-запросы (constraints §26): когда и как просим
 - Deep-link entry (с `/clubs/:id`, `/invite/:code`, `/events/:id` сразу)
-- Onboarding первого запуска + `addToHomeScreen` prompt
+- ~~Onboarding первого запуска~~ — решено 2026-07-13: карусель-гейт в `Layout`,
+  [`docs/modules/onboarding.md`](../modules/onboarding.md). Остаётся `addToHomeScreen` prompt
 - Wizard-rescue (unsaved changes → closingConfirmation)
 
 ---

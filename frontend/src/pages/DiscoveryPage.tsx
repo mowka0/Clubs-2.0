@@ -14,6 +14,7 @@ import {
   type PriceRange,
 } from '../components/PriceFilter';
 import { useHaptic } from '../hooks/useHaptic';
+import { useHighlight } from '../hooks/useHighlight';
 import type { ClubFilters } from '../api/clubs';
 
 const CATEGORY_CHIPS = [
@@ -70,6 +71,9 @@ const CHEVRON_DOWN = (
 export const DiscoveryPage: FC = () => {
   const [filters, setFilters] = useState<ClubFilters>({});
   const [cityChoice, setCityChoice] = useCityChoice();
+  // Пришёл сюда из онбординга по кнопке «Найти клубы в своём городе» — подсвечиваем
+  // селектор города: человек должен запомнить, где он живёт, и в следующий раз найти сам.
+  const cityHighlighted = useHighlight('city');
   const [priceRange, setPriceRange] = useState<PriceRange>({});
   const [pickerOpen, setPickerOpen] = useState(false);
   const [priceOpen, setPriceOpen] = useState(false);
@@ -169,7 +173,7 @@ export const DiscoveryPage: FC = () => {
         </div>
         <button
           type="button"
-          className="rd-city-pill"
+          className={cityHighlighted ? 'rd-city-pill rd-highlight-pulse' : 'rd-city-pill'}
           onClick={() => { haptic.select(); setPickerOpen(true); }}
           aria-label="Выбрать город"
         >

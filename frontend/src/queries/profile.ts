@@ -1,8 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getMyInterests, suggestInterests, updateMyProfile } from '../api/profile';
+import { ApiError } from '../api/apiClient';
+import { completeOnboarding, getMe, getMyInterests, suggestInterests, updateMyProfile } from '../api/profile';
 import { useAuthStore } from '../store/useAuthStore';
-import type { UpdateProfileBody } from '../types/api';
+import type { OnboardingDoor, UpdateProfileBody } from '../types/api';
 import { queryKeys } from './queryKeys';
+
+/** «Онбординг уже пройден» — для нас не ошибка, а подтверждение цели (см. useCompleteOnboardingMutation). */
+const HTTP_CONFLICT = 409;
 
 export function useMyInterestsQuery() {
   return useQuery({
@@ -34,5 +38,27 @@ export function useUpdateProfileMutation() {
       setUser(user);
       qc.invalidateQueries({ queryKey: queryKeys.clubs.myInterests() });
     },
+  });
+}
+
+/**
+ * Завершение онбординга. Ответ кладём в стор — по `onboardedAt` в нём построен гейт в Layout,
+ * поэтому карусель исчезает ровно тогда, когда сервер подтвердил факт, а не «оптимистично».
+ */
+export function useCompleteOnboardingMutation() {
+  const setUser = useAuthStore((s) => s.setUser);
+  return useMutation({
+    mutationFn: async (door: OnboardingDoor) => {
+      try {
+        return await completeOnboarding(door);
+      } catch (e) {
+        // 409 — «онбординг уже пройден»: наш профиль в сторе просто устарел (прошли с другого
+        // устройства, пока эта сессия висела открытой). Это не отказ, цель достигнута — забираем
+        // свежий профиль и идём дальше. Иначе человек остался бы заперт в карусели до перезапуска.
+        if (e instanceof ApiError && e.status === HTTP_CONFLICT) return await getMe();
+        throw e;
+      }
+    },
+    onSuccess: (user) => setUser(user),
   });
 }

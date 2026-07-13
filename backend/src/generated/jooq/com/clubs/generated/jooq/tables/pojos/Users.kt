@@ -25,7 +25,8 @@ data class Users(
     var createdAt: OffsetDateTime? = null,
     var updatedAt: OffsetDateTime? = null,
     var country: String? = null,
-    var bio: String? = null
+    var bio: String? = null,
+    var onboardedAt: OffsetDateTime? = null
 ): Serializable {
 
 
@@ -95,6 +96,12 @@ data class Users(
         }
         else if (this.bio != o.bio)
             return false
+        if (this.onboardedAt == null) {
+            if (o.onboardedAt != null)
+                return false
+        }
+        else if (this.onboardedAt != o.onboardedAt)
+            return false
         return true
     }
 
@@ -112,6 +119,7 @@ data class Users(
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
         result = prime * result + (if (this.country == null) 0 else this.country.hashCode())
         result = prime * result + (if (this.bio == null) 0 else this.bio.hashCode())
+        result = prime * result + (if (this.onboardedAt == null) 0 else this.onboardedAt.hashCode())
         return result
     }
 
@@ -129,6 +137,7 @@ data class Users(
         sb.append(", ").append(updatedAt)
         sb.append(", ").append(country)
         sb.append(", ").append(bio)
+        sb.append(", ").append(onboardedAt)
 
         sb.append(")")
         return sb.toString()

@@ -1680,3 +1680,102 @@
 .rd-geo-route .rd-btn-primary, .rd-geo-route .rd-btn-outline {
   flex: 1; width: auto; padding: 11px; font-size: 12.5px; border-radius: 11px;
 }
+
+/* ============================================================
+   ОНБОРДИНГ (первый вход) — карусель из 3 слайдов.
+   Рендерится вместо всего приложения, пока onboardedAt = null,
+   поэтому занимает весь экран и живёт без дока и шапки.
+   ============================================================ */
+.ob-root {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; flex-direction: column;
+  background: var(--bg); color: var(--text);
+  padding: 18px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  padding-top: calc(18px + env(safe-area-inset-top, 0px));
+}
+
+/* Точки-индикатор: активная вытягивается в «пилюлю» — видно и позицию, и что слайдов три. */
+.ob-dots { display: flex; gap: 5px; justify-content: center; height: 22px; flex-shrink: 0; align-items: center; }
+.ob-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--hairline-2); transition: width 0.2s ease, background-color 0.2s ease; }
+.ob-dot-on { width: 18px; border-radius: 3px; background: var(--accent); }
+
+/* Стрелки — подсказка «слайд листается», а не единственный способ листать (есть свайп).
+   Стоят на уровне арта: там пусто, текст не задевают. Правая акцентная и подрагивает. */
+.ob-arrow {
+  position: absolute; top: 96px; z-index: 3;
+  width: 28px; height: 40px; border-radius: 11px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); border: 1px solid var(--hairline-2);
+  color: var(--text-faint); font-size: 16px; font-family: inherit;
+  cursor: pointer; padding: 0;
+}
+.ob-arrow-l { left: 5px; }
+.ob-arrow-r {
+  right: 5px; color: var(--accent);
+  border-color: rgba(244, 123, 60, 0.35); background: var(--accent-soft);
+}
+.ob-arrow-pulse { animation: ob-nudge 1.4s ease-in-out infinite; }
+@keyframes ob-nudge {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(3px); }
+}
+
+/* Прокручивается только содержимое слайда — кнопка-дверь всегда остаётся на виду. */
+.ob-body { flex: 1; overflow-y: auto; padding-top: 10px; }
+.ob-body::-webkit-scrollbar { display: none; }
+.ob-slide { display: flex; flex-direction: column; }
+
+.ob-art { display: flex; align-items: center; justify-content: center; margin: 6px 0 10px; flex-shrink: 0; }
+.ob-art-ring {
+  width: 96px; height: 96px; border-radius: 50%; font-size: 52px;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle, rgba(244, 123, 60, 0.28), rgba(244, 123, 60, 0) 70%);
+}
+
+.ob-title { font-size: 25px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.14; text-align: center; margin: 0; }
+.ob-title em { font-style: normal; color: var(--accent); }
+.ob-sub { font-size: 13.5px; color: var(--text-dim); line-height: 1.45; margin: 8px 0 0; text-align: center; }
+.ob-sub b { font-weight: 700; color: var(--text); }
+
+.ob-perks { display: flex; flex-direction: column; gap: 7px; margin-top: 14px; }
+.ob-perk {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 9px 11px; border-radius: 13px;
+  background: var(--surface); border: 1px solid var(--hairline);
+}
+.ob-perk-ic {
+  width: 26px; height: 26px; border-radius: 9px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); font-size: 13px;
+}
+.ob-perk-t { font-size: 12.5px; font-weight: 700; line-height: 1.3; }
+.ob-perk-d { font-size: 11.5px; color: var(--text-faint); line-height: 1.4; margin-top: 2px; }
+
+/* Зона кнопок закреплена внизу — дверь не уезжает вместе с прокруткой списка. */
+.ob-cta { flex-shrink: 0; padding: 10px 0 6px; background: var(--bg); }
+.ob-ghost {
+  width: 100%; padding: 9px; margin-top: 2px;
+  border: 0; background: transparent; color: var(--text-dim);
+  font-family: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
+}
+.ob-ghost:disabled { opacity: 0.5; }
+
+/* ---------- Подсветка цели после онбординга ----------
+   Кнопка онбординга приводит на страницу и «показывает пальцем» на нужный элемент.
+   Кольцо пульсирует пару секунд и гаснет (таймер в useHighlight). */
+.rd-highlight-pulse {
+  animation: rd-highlight-ring 1.1s ease-out 2;
+  border-color: var(--accent) !important;
+}
+@keyframes rd-highlight-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(244, 123, 60, 0.55); }
+  70%  { box-shadow: 0 0 0 10px rgba(244, 123, 60, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(244, 123, 60, 0); }
+}
+
+/* Уважаем системную настройку «меньше движения»: подсказки не должны дёргаться у тех,
+   кому анимация мешает. Подсветка остаётся видимой — просто статичным кольцом. */
+@media (prefers-reduced-motion: reduce) {
+  .ob-arrow-pulse { animation: none; }
+  .rd-highlight-pulse { animation: none; box-shadow: 0 0 0 2px rgba(244, 123, 60, 0.55); }
+}

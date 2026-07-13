@@ -64,6 +64,10 @@ open class UsersRecord private constructor() : UpdatableRecordImpl<UsersRecord>(
         set(value): Unit = set(10, value)
         get(): String? = get(10) as String?
 
+    open var onboardedAt: OffsetDateTime?
+        set(value): Unit = set(11, value)
+        get(): OffsetDateTime? = get(11) as OffsetDateTime?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -73,7 +77,7 @@ open class UsersRecord private constructor() : UpdatableRecordImpl<UsersRecord>(
     /**
      * Create a detached, initialised UsersRecord
      */
-    constructor(id: UUID? = null, telegramId: Long, telegramUsername: String? = null, firstName: String, lastName: String? = null, avatarUrl: String? = null, city: String? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, country: String? = null, bio: String? = null): this() {
+    constructor(id: UUID? = null, telegramId: Long, telegramUsername: String? = null, firstName: String, lastName: String? = null, avatarUrl: String? = null, city: String? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, country: String? = null, bio: String? = null, onboardedAt: OffsetDateTime? = null): this() {
         this.id = id
         this.telegramId = telegramId
         this.telegramUsername = telegramUsername
@@ -85,6 +89,7 @@ open class UsersRecord private constructor() : UpdatableRecordImpl<UsersRecord>(
         this.updatedAt = updatedAt
         this.country = country
         this.bio = bio
+        this.onboardedAt = onboardedAt
         resetChangedOnNotNull()
     }
 
@@ -104,6 +109,7 @@ open class UsersRecord private constructor() : UpdatableRecordImpl<UsersRecord>(
             this.updatedAt = value.updatedAt
             this.country = value.country
             this.bio = value.bio
+            this.onboardedAt = value.onboardedAt
             resetChangedOnNotNull()
         }
     }
