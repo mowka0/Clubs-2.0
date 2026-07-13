@@ -42,12 +42,18 @@ function setupViewport(): void {
         .mount()
         .then(() => {
           if (viewport.expand.isAvailable()) viewport.expand();
+          // Биндим CSS-переменные Telegram (--tg-viewport-stable-height и др.). Без этого
+          // нижние шиты завязаны на `vh`, который на iOS переоценивает высоту (не учитывает
+          // динамические панели/шторку) — низ модалки уходит под фолд, и до секции роли не
+          // доскроллить без ручного растягивания. Переменная = реальная видимая высота хоста.
+          if (viewport.bindCssVars.isAvailable()) viewport.bindCssVars();
         })
         .catch(() => {
           // Mount отклонён (хост без поддержки viewport) — оставляем высоту по умолчанию
         });
     } else if (viewport.expand.isAvailable()) {
       viewport.expand();
+      if (viewport.bindCssVars.isAvailable()) viewport.bindCssVars();
     }
   } catch (_e) {
     // Viewport API недоступен — пропускаем
