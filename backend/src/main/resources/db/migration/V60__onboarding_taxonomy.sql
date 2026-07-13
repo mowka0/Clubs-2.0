@@ -44,8 +44,8 @@ COMMENT ON INDEX idx_club_interests_interest IS 'Обратный проход: 
 -- Явная колонка, а не производное «нет интересов → показать онбординг»: производный признак
 -- ломается при ошибке запроса (данные не пришли ≠ данных нет) и показывает онбординг поверх
 -- заполненного аккаунта. Заодно честная метрика воронки.
--- Существующим пользователям проставляется бэкфиллом в конце файла, если у них уже есть
--- город и интересы, — таких через онбординг не гоним (решение PO).
+-- Бэкфилла существующих пользователей нет намеренно (решение PO 2026-07-13): реальных людей
+-- в проде ещё нет, заботиться не о ком.
 ALTER TABLE users ADD COLUMN onboarded_at TIMESTAMPTZ;
 COMMENT ON COLUMN users.onboarded_at IS 'Когда пользователь завершил онбординг; NULL — ещё не проходил';
 
@@ -100,20 +100,3 @@ ON CONFLICT (name) DO UPDATE
     SET category = EXCLUDED.category
     WHERE interests.category IS NULL;
 
--- ── Щадящий бэкфилл для существующих пользователей (решение PO 2026-07-13) ───────────────
--- Онбординг обязателен, но гнать через него человека, который УЖЕ указал город и интересы,
--- — значит бить стеной по тем, кто и так всё заполнил. У кого данные есть, считаем онбординг
--- пройденным, а категории выводим из полок его интересов. Пустые профили пройдут поток.
-INSERT INTO user_categories (user_id, category)
-SELECT DISTINCT ui.user_id, i.category
-FROM user_interests ui
-JOIN interests i ON i.id = ui.interest_id
-JOIN users u ON u.id = ui.user_id
-WHERE i.category IS NOT NULL
-  AND u.city IS NOT NULL
-ON CONFLICT DO NOTHING;
-
-UPDATE users u
-SET onboarded_at = NOW()
-WHERE u.city IS NOT NULL
-  AND EXISTS (SELECT 1 FROM user_categories uc WHERE uc.user_id = u.id);
