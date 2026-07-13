@@ -225,6 +225,33 @@ describe('MemberProfileModal — role selector (club-roles)', () => {
     await waitFor(() => expect(putBody?.role).toBe('co_organizer'));
   });
 
+  it('tapping a role highlights it as picked, and tapping the current role cancels the pick', async () => {
+    mockProfile(null);
+    const user = userEvent.setup();
+    renderWithProviders(
+      <MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer isOwner onClose={() => {}} />,
+    );
+
+    const memberOpt = await screen.findByRole('radio', { name: 'Участник' });
+    const coOrgOpt = screen.getByRole('radio', { name: 'Со-организатор' });
+
+    // Тап по роли: пункт получает видимое состояние «выбрано» и забирает отметку radiogroup себе,
+    // текущая роль гаснет (акцент носит ровно один пункт).
+    await user.click(coOrgOpt);
+    expect(coOrgOpt).toHaveClass('pend');
+    expect(coOrgOpt).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('✓ Выбрано')).toBeInTheDocument();
+    expect(memberOpt).toHaveAttribute('aria-checked', 'false');
+    expect(memberOpt).not.toHaveClass('pend');
+
+    // Тап по текущей роли отменяет выбор: подтверждение исчезает, отметка возвращается к ней.
+    await user.click(memberOpt);
+    expect(coOrgOpt).not.toHaveClass('pend');
+    expect(screen.queryByText('✓ Выбрано')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Назначить' })).not.toBeInTheDocument();
+    expect(memberOpt).toHaveAttribute('aria-checked', 'true');
+  });
+
   it('owner demotes a co-organizer: select «Участник» → «Снять роль» → PUT /role', async () => {
     mockProfile(null, [], null, 'co_organizer');
     let putBody: { role: string } | undefined;

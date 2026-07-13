@@ -635,8 +635,12 @@ const RoleGate: FC<RoleGateProps> = ({ clubId, member, onDone }) => {
   }, [pendingRole]);
 
   const selectRole = (role: AssignableMemberRole) => {
-    // Тап по текущей роли или недоступному промоуту — no-op (пункт и так disabled, это страховка).
-    if (busy || role === currentRole || (role === 'co_organizer' && !canPromote)) return;
+    if (busy || (role === 'co_organizer' && !canPromote)) return;
+    // Тап по текущей роли отменяет выбор: селектор возвращается в покой (как кнопка «Отмена»).
+    if (role === currentRole) {
+      if (pendingRole) { haptic.impact('light'); setPendingRole(null); }
+      return;
+    }
     setError(null);
     haptic.impact('light');
     setPendingRole(role);
@@ -669,25 +673,32 @@ const RoleGate: FC<RoleGateProps> = ({ clubId, member, onDone }) => {
     <div className="rd-mgmt">
       <div className="rd-mgmt-h">🤝 Роль в клубе</div>
       <div className="rd-mgmt-body">
-        <div className="rd-role-picker" role="radiogroup" aria-label="Роль участника">
+        <div className={`rd-role-picker${pendingRole ? ' picking' : ''}`} role="radiogroup" aria-label="Роль участника">
           {ASSIGNABLE_ROLES.map((role) => {
             const selected = role === currentRole;
-            // Промоут frozen/expired недоступен (У-9); текущую роль не дизейблим — она просто «Сейчас».
+            // Выбрана тапом и ждёт подтверждения — пункт подсвечивается явно, иначе тап не давал
+            // никакой обратной связи и было непонятно, что роль вообще выбрана (PO 2026-07-13).
+            const pending = role === pendingRole;
+            // Пока выбор висит на подтверждении, «отмечен» именно он, а не текущая роль:
+            // radiogroup показывает намерение владельца, а бейдж «Сейчас» — фактическое состояние.
+            const checked = pendingRole ? pending : selected;
+            // Промоут frozen/expired недоступен (У-9); текущую роль не дизейблим — тап по ней отменяет выбор.
             const blocked = !selected && role === 'co_organizer' && !canPromote;
             return (
               <button
                 key={role}
                 type="button"
                 role="radio"
-                aria-checked={selected}
+                aria-checked={checked}
                 aria-label={ROLE_LABELS[role]}
-                className={`rd-role-opt${selected ? ' sel' : ''}`}
+                className={`rd-role-opt${selected ? ' sel' : ''}${pending ? ' pend' : ''}`}
                 disabled={busy || blocked}
                 onClick={() => selectRole(role)}
               >
                 <span className="rd-role-opt-top">
                   <span className="rd-role-opt-name">{ROLE_LABELS[role]}</span>
                   {selected && <span className="rd-role-opt-badge">Сейчас</span>}
+                  {pending && <span className="rd-role-opt-badge rd-role-opt-badge-pick">✓ Выбрано</span>}
                 </span>
                 <span className="rd-role-opt-desc">{ROLE_DESCRIPTIONS[role]}</span>
               </button>

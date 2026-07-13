@@ -472,6 +472,16 @@
   text-transform: uppercase; color: var(--accent); background: var(--accent-soft);
   padding: 2px 7px; border-radius: 6px;
 }
+/* Роль выбрана тапом и ждёт подтверждения: плотное кольцо + залитый бейдж «Выбрано». Без этого
+   состояния тап по пункту не давал обратной связи — было непонятно, что роль выбрана (PO 2026-07-13). */
+.rd-role-opt.pend { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent); }
+.rd-role-opt.pend .rd-role-opt-name { color: var(--accent); }
+.rd-role-opt-badge-pick { background: var(--accent); color: #1A0E04; }
+/* Пока выбор висит на подтверждении, текущая роль гасится до нейтральной: акцент носит ровно один
+   пункт — тот, что выбран, иначе подсвеченными выглядели бы оба и выбор снова читался бы неоднозначно. */
+.rd-role-picker.picking .rd-role-opt.sel:not(.pend) { border-color: var(--hairline-2); background: var(--surface-2); }
+.rd-role-picker.picking .rd-role-opt.sel:not(.pend) .rd-role-opt-name { color: var(--text); }
+.rd-role-picker.picking .rd-role-opt.sel:not(.pend) .rd-role-opt-badge { color: var(--text-dim); background: var(--surface); }
 .rd-role-opt-desc { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
 
 .rd-sub-strip {
