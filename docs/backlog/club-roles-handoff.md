@@ -1,24 +1,25 @@
-# Handoff: движок ролей клуба (co-organizers → capabilities) + нерешённый UI-баг
+# Handoff: движок ролей клуба (co-organizers → capabilities)
 
-> Точка входа для новой сессии. Ветка `feature/co-organizers`, НЕ смёржена. Обновлено 2026-07-13.
+> Архив сессии. Обновлено 2026-07-13. Фича ✅ **В ПРОДЕ** — PO протестировал на staging и дал добро.
+> Документ оставлен ради §2 (инфра-фиксы деплоя, действуют дальше) и §3 (разбор UI-бага — урок диагностики).
 
-## 1. Статус фичи — ГОТОВА, ждёт финального теста PO
+## 1. Статус фичи — ✅ В ПРОДЕ (смёржена в master, 2026-07-13)
 
-Движок ролей на капабилити-модели полностью реализован и на staging. Ветка `feature/co-organizers`,
-коммиты `ea5eab0` (первая версия co-organizers) → `4666f08` (рефактор в capabilities) → `047cd11`
-(heap-фикс) → `c50103b`/`d5db86c`/`a5657ea` (попытки фикса UI-бага, см. §3).
+Движок ролей на капабилити-модели. Ветка `feature/co-organizers`: `ea5eab0` (первая версия co-organizers)
+→ `4666f08` (рефактор в capabilities) → `047cd11` (heap-фикс) → `c50103b`/`d5db86c`/`a5657ea` (три
+ОШИБОЧНЫХ фикса UI-бага, откачены) → `03ad7ba` (настоящий фикс, см. §3) → `8976f7a` (подсветка выбора роли).
 
-- **Спека:** `docs/modules/club-roles.md` (модель прав), `docs/modules/co-organizers.md` (семантика co_organizer).
+- **Спека:** `docs/modules/club-roles.md` (модель прав), `docs/modules/co-organizers.md` (семантика co_organizer),
+  `docs/modules/club-roles-testplan.md` (ручной тест-план).
 - **Бэкенд:** `ClubCapability` (14 прав), `RoleCapabilities` (карта роль→набор, **fail-closed**), `ClubRoleGuard`
   (`hasCapability`, owner-bypass + строго active), `@RequiresCapability` на 45 точках. 793 теста зелёные
   (CoOrganizerIntegrationTest 12 — сквозной регресс co-org 1:1). Владельческие 5: MANAGE_ROLES,
   EDIT_PAYMENT_REQUISITES (СБП + free→paid), MANAGE_CHAT, MANAGE_BILLING, DELETE_CLUB.
-- **Фронт:** селектор роли с описаниями (заменил кнопку «Сделать со-организатором»). 277 тестов зелёные.
+- **Фронт:** селектор роли с описаниями + состояние «✓ Выбрано» до подтверждения. 278 тестов зелёные.
 - **Гейты:** Reviewer APPROVE, Security PASS (все owner-only пути эскалации закрыты). Analyst docs aligned.
-- **Деплой:** staging deploy 517 (`a5657ea`) — поднят, healthy. https://staging.77-42-23-177.sslip.io
 
-**Когда UI-баг (§3) будет решён и PO протестирует → «готово, запушь»:** PR в master через `gh pr merge --squash`
-(без --delete-branch). PRD §4.5.2 был переформулирован под движок ролей — PO может вето.
+**Хвост, не закрытый в этой итерации:** club-quality §9 «приватный нудж о надёжности организатора» теперь
+виден со-оргу (VIEW_STATS делегируемо) — уточнить у PO, ок ли. PRD §4.5.2 переформулирован под движок ролей.
 
 ## 2. Инфра-фиксы, применённые в ходе (ВАЖНО знать)
 
