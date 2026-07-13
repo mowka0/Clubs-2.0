@@ -1225,12 +1225,11 @@
 .rd-sheet {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 151;
   display: flex; flex-direction: column;
-  /* Высота шита = реальная видимая высота вьюпорта Telegram (bindCssVars в telegram/sdk.ts).
-     Прогрессивный фолбэк: старый vh → dvh (учитывает динамические панели) → tg-переменная.
-     На iOS 88vh переоценивал высоту, низ модалки (секция роли) уходил под фолд. */
+  /* dvh точнее vh (учитывает динамические панели iOS). Главный фикс видимости — принудительный
+     expand Mini App при открытии модалки (MemberProfileModal), т.к. в medium-режиме нижний шит
+     обрезается фолдом; в развёрнутом окне вся карточка помещается. */
   max-height: 88vh;
   max-height: 88dvh;
-  max-height: var(--tg-viewport-stable-height, 88dvh);
   background: var(--glass-strong-bg);
   backdrop-filter: blur(40px) saturate(180%); -webkit-backdrop-filter: blur(40px) saturate(180%);
   border-top: 1px solid var(--glass-strong-border);
@@ -1256,7 +1255,7 @@
    и overflow-y не срабатывает: в нерастянутом окне длинная карточка обрезается нижней границей и до
    секций внизу (роль/управление) не доскроллить (UX-баг A). С min-height:0 тело — настоящий
    прокручиваемый контейнер в пределах max-height шита. */
-.rd-sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.rd-sheet-body { flex: 1 1 0; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 14px; }
 .rd-sheet-actions { display: flex; gap: 10px; margin-top: 16px; flex-shrink: 0; position: relative; }
 .rd-sheet-actions > .rd-btn-primary, .rd-sheet-actions > .rd-btn-outline { flex: 1; width: auto; }
 /* Подсказка прокрутки: мягкое затухание над прилипающей панелью действий, чтобы было понятно,

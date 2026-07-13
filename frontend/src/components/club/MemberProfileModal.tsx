@@ -1,6 +1,7 @@
 import { FC, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
+import { expandViewport } from '../../telegram/sdk';
 import {
   useAwardSuggestionsQuery,
   useGrantMemberAwardMutation,
@@ -859,6 +860,9 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
 
   // Блокируем скролл фона, пока шторка открыта (как у остальных rd-шторок).
   useEffect(() => {
+    // Разворачиваем Mini App на полную высоту: карточка высокая, и в medium-режиме её низ
+    // (секция роли, управление) обрезается фолдом — приходилось растягивать окно вручную (bug A).
+    expandViewport();
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prev; };

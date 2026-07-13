@@ -82,6 +82,20 @@ function setupSwipeBehavior(): void {
 }
 
 /**
+ * Разворачивает Mini App на полную высоту по требованию — например, при открытии высокой
+ * модалки (карточка участника). Startup-expand в setupViewport может не сработать на части
+ * клиентов (гонка с mount) или откатиться при сворачивании; повторный вызов в контексте
+ * действия юзера (открытие карточки) надёжнее. Идемпотентно и безопасно вне Telegram.
+ */
+export function expandViewport(): void {
+  try {
+    if (viewport.expand.isAvailable()) viewport.expand();
+  } catch (_e) {
+    // Вне Telegram / API недоступен — no-op
+  }
+}
+
+/**
  * Возвращает deep-link параметр startapp (tgWebAppStartParam из Telegram), если юзер
  * открыл Mini App по ссылке t.me/bot/app?startapp=<value>.
  * Используется DeepLinkHandler для перехода, например, на /skladchina/<id>.
