@@ -16,7 +16,9 @@ import {
   setMemberAccessUntil,
   unmarkMemberDues,
   updateMemberNote,
+  updateMemberRole,
 } from '../api/membership';
+import type { AssignableMemberRole } from '../api/membership';
 import { queryKeys } from './queryKeys';
 
 /** Участники [clubId]. Организатор дополнительно получает замороженных участников + для каждого
@@ -120,6 +122,20 @@ export function useUpdateMemberNoteMutation() {
     mutationFn: ({ clubId, userId, note }: MemberGateArgs & { note: string | null }) =>
       updateMemberNote(clubId, userId, note),
     onSuccess: (_data, { clubId, userId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.memberProfile(clubId, userId) });
+    },
+  });
+}
+
+/** Смена роли участника (co-organizers), только владелец: рефетч ростера (бейдж роли) + карточки
+ *  профиля участника (подпись роли и секция управления ролью). */
+export function useUpdateMemberRoleMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clubId, userId, role }: MemberGateArgs & { role: AssignableMemberRole }) =>
+      updateMemberRole(clubId, userId, role),
+    onSuccess: (_data, { clubId, userId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.members(clubId) });
       qc.invalidateQueries({ queryKey: queryKeys.clubs.memberProfile(clubId, userId) });
     },
   });

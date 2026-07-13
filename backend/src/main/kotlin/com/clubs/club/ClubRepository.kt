@@ -27,6 +27,10 @@ interface ClubRepository {
     /** ID активных клубов, которыми владеет [ownerId]. Пустой список, если клубов нет. */
     fun findIdsByOwnerId(ownerId: UUID): List<UUID>
 
+    /** ID активных клубов «под управлением» [userId]: владение ИЛИ активное членство с ролью
+     *  co_organizer (co-organizers У-5 — кросс-клубовые организаторские скоупы owned -> managed). */
+    fun findManagedIds(userId: UUID): List<UUID>
+
     /** Батч-поиск активных клубов по ID. Пустой вход → пустой выход (без SQL-запроса). */
     fun findByIds(ids: Collection<UUID>): List<Club>
 

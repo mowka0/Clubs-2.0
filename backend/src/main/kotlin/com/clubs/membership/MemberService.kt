@@ -2,6 +2,7 @@ package com.clubs.membership
 
 import com.clubs.application.ApplicationRepository
 import com.clubs.award.AwardService
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.generated.jooq.enums.MembershipRole
@@ -25,18 +26,20 @@ class MemberService(
     private val interestRepository: InterestRepository,
     private val awardService: AwardService,
     private val applicationRepository: ApplicationRepository,
-    private val mapper: MembershipMapper
+    private val mapper: MembershipMapper,
+    private val clubRoleGuard: ClubRoleGuard
 ) {
 
     fun getClubMembers(clubId: UUID, callerId: UUID): List<MemberListItemDto> {
         // Один запрос даёт и гейт доступа, и роль смотрящего. status==active зеркалит
-        // MembershipAccess.hasAccess (frozen-смотрящий доступа не имеет). Организатор дополнительно
-        // видит состояние доступа каждого участника + дату «оплачено до» (de-Stars дашборд); обычные — нет.
+        // MembershipAccess.hasAccess (frozen-смотрящий доступа не имеет). Менеджер (владелец или
+        // активный со-орг — co-organizers, точка 40) дополнительно видит состояние доступа каждого
+        // участника + дату «оплачено до» (de-Stars дашборд); обычные — нет.
         val caller = membershipRepository.findByUserAndClub(callerId, clubId)
         if (caller == null || caller.status != MembershipStatus.active) {
             throw ForbiddenException("Not a member of this club")
         }
-        val forOrganizer = caller.role == MembershipRole.organizer
+        val forOrganizer = clubRoleGuard.isActiveManagerMembership(caller)
         // Trust всех участников — одним батч-чтением ledger.
         val trustByUser = trustService.trustForClubMembers(clubId)
         // Клубные награды для чипов в ростере (R3): один запрос с группировкой по участнику — без N+1.
@@ -57,11 +60,14 @@ class MemberService(
         // нейтральный порядок по давности вступления: публичного рейтинга («дна таблицы») больше нет.
         // Организатор клуба в обоих случаях первым (он не копит Trust в своём клубе — анти-фарм №1 —
         // и по чистому Trust ушёл бы в конец).
+        // Порядок ролей: владелец → со-орги → участники (co-organizers, вторичный ключ по роли).
         val order = if (forOrganizer) {
             compareByDescending<MemberListItemDto> { it.role == "organizer" }
+                .thenByDescending { it.role == "co_organizer" }
                 .thenByDescending { it.trust ?: Int.MIN_VALUE }
         } else {
             compareByDescending<MemberListItemDto> { it.role == "organizer" }
+                .thenByDescending { it.role == "co_organizer" }
                 .thenBy { it.joinedAt ?: OffsetDateTime.MAX }
         }
         return members.sortedWith(order)
@@ -69,19 +75,20 @@ class MemberService(
 
     /**
      * Кросс-клубовый список «Ждут оплаты» для [callerId]: все участники без доступа (`frozen` —
-     * первый взнос, `expired` — просрочка продления) по клубам в его владении — организатор
-     * подтверждает dues из «Мои клубы», не заходя в каждый клуб. Не-владелец получает пустой список
-     * (запрос фильтрует по `clubs.owner_id`), поэтому отдельный authz-гейт на эндпоинте не нужен.
+     * первый взнос, `expired` — просрочка продления) по managed-клубам (владение ИЛИ активный
+     * со-орг — co-organizers У-5). Не-менеджер получает пустой список (скоуп внутри запроса),
+     * поэтому отдельный authz-гейт на эндпоинте не нужен.
      */
     fun getOrganizerAwaitingDues(callerId: UUID): List<OrganizerDuesMemberDto> =
-        membershipRepository.findAwaitingDuesMembersByOwner(callerId).map(mapper::toOrganizerDuesDto)
+        membershipRepository.findAwaitingDuesMembersByManager(callerId).map(mapper::toOrganizerDuesDto)
 
     fun getMemberProfile(clubId: UUID, userId: UUID, callerId: UUID): MemberProfileDto {
         val caller = membershipRepository.findByUserAndClub(callerId, clubId)
         if (caller == null || caller.status != MembershipStatus.active) {
             throw ForbiddenException("Not a member of this club")
         }
-        val callerIsOrganizer = caller.role == MembershipRole.organizer
+        // Менеджер (владелец или активный со-орг — co-organizers, точка 41) видит орг-поля карточки.
+        val callerIsOrganizer = clubRoleGuard.isActiveManagerMembership(caller)
         val user = userRepository.findById(userId) ?: throw NotFoundException("User not found")
         val membership = membershipRepository.findByUserAndClub(userId, clubId)
         val reputation = reputationRepository.findByUserAndClub(userId, clubId)

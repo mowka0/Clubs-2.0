@@ -24,7 +24,7 @@ import kotlin.test.assertNull
  * (404) path. Acceptance criteria: docs/modules/club-quality.md §9.9.
  *
  * The default club is paid + closed so most levers apply; free/open clubs are inserted per-test.
- * Ownership (403) is enforced by `@RequiresOrganizer` at the controller and is out of scope here.
+ * Authorization (403) is enforced by `@RequiresCapability(VIEW_STATS)` at the controller and is out of scope here.
  */
 @SpringBootTest(
     properties = [

@@ -1,6 +1,8 @@
 package com.clubs.application
 
 import com.clubs.bot.NotificationService
+import com.clubs.common.auth.ClubCapability
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
@@ -45,7 +47,8 @@ class ApplicationService(
     private val interestRepository: InterestRepository,
     private val membershipMapper: MembershipMapper,
     private val membershipActivator: MembershipActivator,
-    private val eventPublisher: ApplicationEventPublisher
+    private val eventPublisher: ApplicationEventPublisher,
+    private val clubRoleGuard: ClubRoleGuard
 ) {
 
     private val log = LoggerFactory.getLogger(ApplicationService::class.java)
@@ -147,7 +150,7 @@ class ApplicationService(
         val club = clubRepository.findById(application.clubId)
             ?: throw NotFoundException("Club not found")
 
-        if (club.ownerId != organizerId) throw ForbiddenException("Forbidden")
+        clubRoleGuard.requireCapability(club, organizerId, ClubCapability.APPROVE_APPLICATIONS)
 
         if (application.status != ApplicationStatus.pending) {
             throw ValidationException("Application is not pending")
@@ -194,7 +197,7 @@ class ApplicationService(
     @Transactional
     fun expandAndApproveAll(clubId: UUID, organizerId: UUID, request: ExpandAndApproveRequest): List<ApplicationDto> {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        if (club.ownerId != organizerId) throw ForbiddenException("Forbidden")
+        clubRoleGuard.requireCapability(club, organizerId, ClubCapability.APPROVE_APPLICATIONS)
 
         val applications = request.applicationIds.distinct().map { id ->
             applicationRepository.findById(id) ?: throw NotFoundException("Application not found: $id")
@@ -253,7 +256,7 @@ class ApplicationService(
         val club = clubRepository.findById(application.clubId)
             ?: throw NotFoundException("Club not found")
 
-        if (club.ownerId != organizerId) throw ForbiddenException("Forbidden")
+        clubRoleGuard.requireCapability(club, organizerId, ClubCapability.APPROVE_APPLICATIONS)
 
         if (application.status != ApplicationStatus.pending) {
             throw ValidationException("Application is not pending")
@@ -301,7 +304,7 @@ class ApplicationService(
 
     fun getClubApplications(clubId: UUID, organizerId: UUID, status: String?): List<ApplicationDto> {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        if (club.ownerId != organizerId) throw ForbiddenException("Forbidden")
+        clubRoleGuard.requireCapability(club, organizerId, ClubCapability.APPROVE_APPLICATIONS)
 
         val statusEnum = status?.let {
             ApplicationStatus.values().find { e -> e.literal == it }
@@ -316,14 +319,17 @@ class ApplicationService(
 
     /**
      * Кросс-клубовый инбокс организатора: все pending-заявки по всем клубам, которыми
-     * владеет вызывающий, обогащённые данными заявителя + peer-stats + краткой инфой о клубе.
+     * вызывающий управляет (владелец или активный со-организатор — co-organizers У-5),
+     * обогащённые данными заявителя + peer-stats + краткой инфой о клубе.
      *
      * Контракт по производительности (docs/modules/applications-inbox.md § Non-functional):
      * ≤5 SQL-запросов независимо от числа заявок N.
      */
     @Transactional(readOnly = true)
     fun getMyPendingApplications(organizerId: UUID): List<PendingApplicationDto> {
-        val clubIds = clubRepository.findIdsByOwnerId(organizerId)
+        // Managed-скоуп (co-organizers У-5): владелец + клубы, где вызывающий — активный со-орг,
+        // иначе инбокс со-орга всегда пуст (роль без глаз).
+        val clubIds = clubRepository.findManagedIds(organizerId)
         if (clubIds.isEmpty()) return emptyList()
 
         val applications = applicationRepository.findPendingByClubIds(clubIds)
@@ -364,11 +370,12 @@ class ApplicationService(
      */
     @Transactional(readOnly = true)
     fun getMyClubsActionCounts(userId: UUID): PendingApplicationsCountDto {
-        val ownedClubIds = clubRepository.findIdsByOwnerId(userId)
-        val inboxCount = applicationRepository.countPendingByClubIds(ownedClubIds)
+        // Managed-скоуп (co-organizers У-5): owned + клубы активного со-орга.
+        val managedClubIds = clubRepository.findManagedIds(userId)
+        val inboxCount = applicationRepository.countPendingByClubIds(managedClubIds)
         // De-Stars: участники «оплатил и ждёт» (frozen/expired + взнос заявлен) тоже требуют решения
         // организатора, поэтому они тоже зажигают точку «Мои клубы» вместе с инбоксом заявок.
-        val awaitingDuesCount = membershipRepository.countClaimedAwaitingDuesByOwner(userId)
+        val awaitingDuesCount = membershipRepository.countClaimedAwaitingDuesByManager(userId)
         return PendingApplicationsCountDto(inboxCount = inboxCount, awaitingDuesCount = awaitingDuesCount)
     }
 

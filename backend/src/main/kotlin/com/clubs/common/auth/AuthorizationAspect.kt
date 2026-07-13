@@ -17,7 +17,8 @@ import java.util.UUID
 @Component
 class AuthorizationAspect(
     private val membershipRepository: MembershipRepository,
-    private val clubRepository: ClubRepository
+    private val clubRepository: ClubRepository,
+    private val clubRoleGuard: ClubRoleGuard
 ) {
 
     @Around("@annotation(requiresMembership)")
@@ -36,6 +37,16 @@ class AuthorizationAspect(
         val clubId = extractUUID(joinPoint, requiresOrganizer.clubIdParam)
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != userId) throw ForbiddenException("Only the club organizer can perform this action")
+        return joinPoint.proceed()
+    }
+
+    // Капабилити-гейт (club-roles): владелец ИЛИ активная роль, набор которой содержит требуемое право.
+    // Вся логика предиката — в ClubRoleGuard (единый механизм, без копипасты по слоям).
+    @Around("@annotation(requiresCapability)")
+    fun checkCapability(joinPoint: ProceedingJoinPoint, requiresCapability: RequiresCapability): Any? {
+        val userId = currentUserId()
+        val clubId = extractUUID(joinPoint, requiresCapability.clubIdParam)
+        clubRoleGuard.requireCapability(clubId, userId, requiresCapability.capability)
         return joinPoint.proceed()
     }
 

@@ -5,17 +5,23 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { ApiError } from '../../api/apiClient';
 import { Toast } from '../Toast';
 import { MemberProfileModal } from './MemberProfileModal';
+import { isManagerRole, membershipRoleLabel } from '../../utils/membershipRole';
 import { reliabilityTier } from '../../utils/reputationTier';
 import type { MemberListItemDto } from '../../types/api';
 
 interface ClubMembersTabProps {
   clubId: string;
   /**
-   * Является ли вызывающий организатором [clubId]. Включает организаторский вид строк участников
-   * (инфо о доступе + тап для управления). Обычные участники видят спокойный список только активных
-   * (поля доступа null).
+   * Является ли вызывающий менеджером [clubId] (владелец или активный со-организатор). Включает
+   * организаторский вид строк участников (инфо о доступе + тап для управления). Обычные участники
+   * видят спокойный список только активных (поля доступа null).
    */
   isOrganizer?: boolean;
+  /**
+   * Вызывающий — владелец клуба (co-organizers): открывает в карточке участника секцию смены роли
+   * («Сделать/Снять со-организатора»). Со-организатор — менеджер (isOrganizer), но не владелец.
+   */
+  isOwner?: boolean;
   /**
    * Организаторский дашборд-вид: рендерит attention-блоки «Скоро закончится» / «Оплата вступления».
    * Участники живут на вкладке «Участники» страницы клуба (без дубля в «Управлении»), поэтому там
@@ -182,6 +188,8 @@ interface CalmMemberRowProps {
 const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenProfile }) => {
   const haptic = useHaptic();
   const isOwner = member.role === 'organizer';
+  // Бейдж роли у имени (PO №4): владелец — «Организатор», со-орг — «Со-организатор», участник — без бейджа.
+  const roleBadge = isManagerRole(member.role) ? membershipRoleLabel(member.role) : null;
   // Без доступа: frozen (первый взнос не подтверждён) или expired (просрочил продление). Такие строки
   // видит только организатор (бэкенд скрывает их от обычных зрителей), так что «ледяное» оформление —
   // только у него.
@@ -224,8 +232,8 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
       <div className="rd-info">
         <div className="rd-ttl">
           {fullNameOf(member)}
-          {isOwner && (
-            <span className="rd-badge rd-rep" style={{ marginLeft: 8, fontSize: 10, padding: '2px 8px' }}>Орг</span>
+          {roleBadge && (
+            <span className="rd-badge rd-rep" style={{ marginLeft: 8, fontSize: 10, padding: '2px 8px' }}>{roleBadge}</span>
           )}
         </div>
         {/* Чипы наград идут сразу под именем (над очками надёжности). */}
@@ -262,7 +270,7 @@ const CalmMemberRow: FC<CalmMemberRowProps> = ({ member, forOrganizer, onOpenPro
   );
 };
 
-export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = false, managementView = false }) => {
+export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = false, isOwner = false, managementView = false }) => {
   const [selectedMember, setSelectedMember] = useState<MemberListItemDto | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const membersQuery = useClubMembersQuery(clubId);
@@ -388,6 +396,7 @@ export const ClubMembersTab: FC<ClubMembersTabProps> = ({ clubId, isOrganizer = 
           member={selectedMember}
           clubId={clubId}
           isOrganizer={isOrganizer}
+          isOwner={isOwner}
           onClose={() => setSelectedMember(null)}
           onActionToast={setToast}
         />

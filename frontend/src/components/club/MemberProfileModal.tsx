@@ -1,4 +1,4 @@
-import { FC, useEffect, useState } from 'react';
+import { FC, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import {
@@ -11,11 +11,19 @@ import {
   useRevokeMemberAwardMutation,
   useSetMemberAccessUntilMutation,
   useUpdateMemberNoteMutation,
+  useUpdateMemberRoleMutation,
 } from '../../queries/members';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useAuthStore } from '../../store/useAuthStore';
 import { ApiError } from '../../api/apiClient';
 import { pluralRu } from '../../utils/formatters';
+import {
+  ASSIGNABLE_ROLES,
+  ROLE_DESCRIPTIONS,
+  ROLE_LABELS,
+  membershipRoleLabel,
+} from '../../utils/membershipRole';
+import type { AssignableMemberRole } from '../../api/membership';
 import { DonutRing } from '../reputation/DonutRing';
 import { ImageLightbox } from '../ImageLightbox';
 import { TRUST_TIER_COLOR, trustTier } from '../reputation/trust-tier';
@@ -31,8 +39,12 @@ const MAX_AWARD_LABEL = 16;
 interface MemberProfileModalProps {
   member: MemberListItemDto;
   clubId: string;
-  /** Вид организатора — открывает строку «Подписка активна до …» + dues-действия (de-Stars). */
+  /** Менеджерский вид (владелец ИЛИ активный со-организатор) — открывает строку
+   *  «Подписка активна до …» + dues-действия (de-Stars). */
   isOrganizer?: boolean;
+  /** Вызывающий — владелец клуба (co-organizers): открывает секцию смены роли и управление
+   *  со-организаторами. Со-орг — менеджер (isOrganizer), но управляет только role=member. */
+  isOwner?: boolean;
   onClose: () => void;
   /** Показать toast на уровне страницы после успешного gate-действия. */
   onActionToast?: (message: string) => void;
@@ -580,6 +592,155 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
   );
 };
 
+interface RoleGateProps {
+  clubId: string;
+  member: MemberListItemDto;
+  /** Toast на уровне страницы + закрытие карточки после успешной смены роли. */
+  onDone: (message: string) => void;
+}
+
+/**
+ * Секция «Роль в клубе» (club-roles) — видна ТОЛЬКО владельцу и только по чужой не-владельческой
+ * строке (гейт в модалке). Вместо одиночной кнопки — СЕЛЕКТОР назначаемых ролей (ASSIGNABLE_ROLES:
+ * Участник · Со-организатор; будущая роль = ещё одна строка). У каждого пункта — описание
+ * (ROLE_DESCRIPTIONS). Текущая роль подсвечена бейджем «Сейчас». Выбор другой роли → инлайн-
+ * подтверждение (вопрос + Отмена/Назначить) → PUT .../role.
+ *
+ * Промоут в со-организатора требует активного доступа участника (У-9): для frozen/expired пункт
+ * задизейблен с пояснением, бэкенд всё равно ответит 400. Демоут в участника доступен при любом
+ * статусе. Лимит со-оргов (5, У-3) проверяет бэкенд — его 400 показывается текстом ошибки.
+ * 409 (параллельная смена роли) закрывает карточку: кэш ростера уже инвалидирован.
+ *
+ * UX-баг B (AC-10): при входе в подтверждение автоскроллим к блоку с обеими кнопками, чтобы в
+ * нерастянутом окне вопрос И кнопки Отмена/Назначить были видны одновременно, а не «текст без кнопок».
+ */
+const RoleGate: FC<RoleGateProps> = ({ clubId, member, onDone }) => {
+  const haptic = useHaptic();
+  const updateRole = useUpdateMemberRoleMutation();
+  // Выбранная в селекторе роль, ожидающая подтверждения (null = селектор в покое, текущая роль активна).
+  const [pendingRole, setPendingRole] = useState<AssignableMemberRole | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const confirmRef = useRef<HTMLDivElement>(null);
+
+  const currentRole = member.role;
+  // У-9: со-оргом можно сделать только участника с активным доступом. frozen (ждёт первого взноса)
+  // и expired (должник) — нельзя; null = поле не пришло (у владельца оно всегда заполнено).
+  const canPromote = member.accessStatus !== 'frozen' && member.accessStatus !== 'expired';
+  const busy = updateRole.isPending;
+
+  // AC-10: как только выбрана роль на подтверждение — скроллим блок с кнопками в зону видимости,
+  // чтобы Отмена/Назначить не оказались за фолдом в нерастянутом окне.
+  useEffect(() => {
+    if (pendingRole) confirmRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [pendingRole]);
+
+  const selectRole = (role: AssignableMemberRole) => {
+    if (busy || (role === 'co_organizer' && !canPromote)) return;
+    // Тап по текущей роли отменяет выбор: селектор возвращается в покой (как кнопка «Отмена»).
+    if (role === currentRole) {
+      if (pendingRole) { haptic.impact('light'); setPendingRole(null); }
+      return;
+    }
+    setError(null);
+    haptic.impact('light');
+    setPendingRole(role);
+  };
+
+  const handleConfirm = () => {
+    if (busy || !pendingRole) return;
+    const target = pendingRole;
+    setError(null);
+    haptic.impact('medium');
+    updateRole.mutate(
+      { clubId, userId: member.userId, role: target },
+      {
+        onSuccess: () => {
+          haptic.notify('success');
+          onDone(target === 'co_organizer'
+            ? `${member.firstName} — теперь со-организатор`
+            : `${member.firstName} больше не со-организатор`);
+        },
+        onError: (e) => {
+          if (e instanceof ApiError && e.status === 409) { onDone('Роль участника уже изменилась'); return; }
+          haptic.notify('error');
+          setError(e instanceof Error ? e.message : 'Не удалось изменить роль');
+        },
+      },
+    );
+  };
+
+  return (
+    <div className="rd-mgmt">
+      <div className="rd-mgmt-h">🤝 Роль в клубе</div>
+      <div className="rd-mgmt-body">
+        <div className={`rd-role-picker${pendingRole ? ' picking' : ''}`} role="radiogroup" aria-label="Роль участника">
+          {ASSIGNABLE_ROLES.map((role) => {
+            const selected = role === currentRole;
+            // Выбрана тапом и ждёт подтверждения — пункт подсвечивается явно, иначе тап не давал
+            // никакой обратной связи и было непонятно, что роль вообще выбрана (PO 2026-07-13).
+            const pending = role === pendingRole;
+            // Пока выбор висит на подтверждении, «отмечен» именно он, а не текущая роль:
+            // radiogroup показывает намерение владельца, а бейдж «Сейчас» — фактическое состояние.
+            const checked = pendingRole ? pending : selected;
+            // Промоут frozen/expired недоступен (У-9); текущую роль не дизейблим — тап по ней отменяет выбор.
+            const blocked = !selected && role === 'co_organizer' && !canPromote;
+            return (
+              <button
+                key={role}
+                type="button"
+                role="radio"
+                aria-checked={checked}
+                aria-label={ROLE_LABELS[role]}
+                className={`rd-role-opt${selected ? ' sel' : ''}${pending ? ' pend' : ''}`}
+                disabled={busy || blocked}
+                onClick={() => selectRole(role)}
+              >
+                <span className="rd-role-opt-top">
+                  <span className="rd-role-opt-name">{ROLE_LABELS[role]}</span>
+                  {selected && <span className="rd-role-opt-badge">Сейчас</span>}
+                  {pending && <span className="rd-role-opt-badge rd-role-opt-badge-pick">✓ Выбрано</span>}
+                </span>
+                <span className="rd-role-opt-desc">{ROLE_DESCRIPTIONS[role]}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* У-9: почему пункт «Со-организатор» недоступен — участник без активного доступа. */}
+        {currentRole !== 'co_organizer' && !canPromote && (
+          <div className="rd-claim-note">
+            Назначить со-организатором можно только участника с активным доступом.
+          </div>
+        )}
+
+        {pendingRole && (
+          <div className="rd-reject-confirm" ref={confirmRef}>
+            <div className="rd-reject-q">
+              {pendingRole === 'co_organizer'
+                ? `Сделать ${member.firstName} со-организатором? Появится доступ к заявкам, событиям, складчинам и участникам — кроме владельческих настроек.`
+                : `Снять с ${member.firstName} роль со-организатора? Управляющие экраны клуба станут недоступны.`}
+            </div>
+            <div className="rd-org-gate-acts">
+              <button type="button" className="rd-btn-outline" disabled={busy} onClick={() => setPendingRole(null)}>
+                Отмена
+              </button>
+              <button
+                type="button"
+                className={`rd-btn-primary${pendingRole === 'member' ? ' rd-btn-danger' : ''}`}
+                disabled={busy}
+                onClick={handleConfirm}
+              >
+                {busy ? <Spinner size="s" /> : pendingRole === 'co_organizer' ? 'Назначить' : 'Снять роль'}
+              </button>
+            </div>
+          </div>
+        )}
+        {error && <div className="rd-error" style={{ textAlign: 'left' }}>{error}</div>}
+      </div>
+    </div>
+  );
+};
+
 /**
  * Кольца per-club репутации + футер спонтанность/роль. Надёжность (умный композит) показывается всегда;
  * Посещаемость (события) и Сборы (складчины, влияющие на репутацию) — только когда есть данные, чтобы
@@ -593,7 +754,8 @@ const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
   const skladchinaPaid = profile.skladchinaPaid ?? 0;
   const skladchinaTotal = profile.skladchinaTotal ?? 0;
   const skladchinaPct = skladchinaTotal > 0 ? Math.round((skladchinaPaid / skladchinaTotal) * 100) : 0;
-  const roleLabel = profile.role === 'organizer' ? 'Организатор' : 'Участник';
+  // Роль в футере (co-organizers): «Организатор» / «Со-организатор» / «Участник».
+  const roleLabel = membershipRoleLabel(profile.role);
 
   return (
     <>
@@ -657,6 +819,7 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
   member,
   clubId,
   isOrganizer = false,
+  isOwner = false,
   onClose,
   onActionToast,
 }) => {
@@ -680,9 +843,15 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
     || isOrganizer
     || isSelf;
 
-  // Админ-секция: организатор управляет любым участником-не-организатором (заметка + награды работают
-  // и в бесплатных клубах, S2). Никогда — своей строкой: бэкенд отклоняет управление организатором.
-  const isManageable = isOrganizer && member.role !== 'organizer';
+  // Админ-секция (per-target матрица co-organizers, зеркалит бэкенд): владелец управляет любым,
+  // кроме владельца (в т.ч. со-организаторами); со-орг (менеджерский вид без isOwner) — только
+  // участниками с ролью member (заморозка/кик/награды по владельцу или другому со-оргу → 403).
+  // Никогда — своей строкой.
+  const isManageable = !isSelf && (
+    isOwner ? member.role !== 'organizer' : isOrganizer && member.role === 'member'
+  );
+  // Секция смены роли (owner-only): селектор назначаемых ролей по чужой не-владельческой строке.
+  const showRoleGate = isOwner && !isSelf && member.role !== 'organizer';
   // Платный участник = есть окно доступа, либо статус без доступа (frozen — ждёт первого взноса,
   // expired — просрочил продление). Гейтит de-Stars-слой (строка подписки + dues-действия + своя
   // дата); бесплатному остаются только заметка + награды.
@@ -815,7 +984,13 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
             </div>
           )}
 
-          {/* Админ-секция организатора: de-Stars-гейт доступа (только платные) + всегда открытая заметка
+          {/* Роль в клубе (co-organizers) — только владельцу: назначение/снятие со-организатора.
+              Идёт перед админ-панелью, чтобы деструктивное «Удалить из клуба» осталось последним. */}
+          {showRoleGate && (
+            <RoleGate clubId={clubId} member={member} onDone={handleGateDone} />
+          )}
+
+          {/* Админ-секция менеджера: de-Stars-гейт доступа (только платные) + всегда открытая заметка
               (S1) + «Своя дата» за ✎. Награды (S2) обрабатываются выше, под интересами. */}
           {isManageable && (
             <OrganizerGate

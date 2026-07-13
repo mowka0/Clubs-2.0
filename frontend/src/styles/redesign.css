@@ -454,6 +454,36 @@
 .rd-mgmt-killconfirm { border-top: 1px solid var(--hairline); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
 .rd-btn-primary.rd-btn-danger { background: #E0574F; box-shadow: none; }
 
+/* Селектор роли (club-roles): список-пикер назначаемых ролей с описанием под каждой.
+   Текущая роль подсвечена рамкой-акцентом + бейджем «Сейчас». */
+.rd-role-picker { display: flex; flex-direction: column; gap: 8px; }
+.rd-role-opt {
+  display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left;
+  padding: 11px 13px; border-radius: 12px; font-family: inherit; cursor: pointer;
+  border: 1px solid var(--hairline-2); background: var(--surface-2); color: var(--text);
+}
+.rd-role-opt.sel { border-color: var(--accent); background: var(--accent-soft); }
+.rd-role-opt:disabled { opacity: 0.5; cursor: default; }
+.rd-role-opt-top { display: flex; align-items: center; gap: 8px; }
+.rd-role-opt-name { font-size: 14px; font-weight: 700; }
+.rd-role-opt.sel .rd-role-opt-name { color: var(--accent); }
+.rd-role-opt-badge {
+  margin-left: auto; flex-shrink: 0; font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--accent); background: var(--accent-soft);
+  padding: 2px 7px; border-radius: 6px;
+}
+/* Роль выбрана тапом и ждёт подтверждения: плотное кольцо + залитый бейдж «Выбрано». Без этого
+   состояния тап по пункту не давал обратной связи — было непонятно, что роль выбрана (PO 2026-07-13). */
+.rd-role-opt.pend { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent); }
+.rd-role-opt.pend .rd-role-opt-name { color: var(--accent); }
+.rd-role-opt-badge-pick { background: var(--accent); color: #1A0E04; }
+/* Пока выбор висит на подтверждении, текущая роль гасится до нейтральной: акцент носит ровно один
+   пункт — тот, что выбран, иначе подсвеченными выглядели бы оба и выбор снова читался бы неоднозначно. */
+.rd-role-picker.picking .rd-role-opt.sel:not(.pend) { border-color: var(--hairline-2); background: var(--surface-2); }
+.rd-role-picker.picking .rd-role-opt.sel:not(.pend) .rd-role-opt-name { color: var(--text); }
+.rd-role-picker.picking .rd-role-opt.sel:not(.pend) .rd-role-opt-badge { color: var(--text-dim); background: var(--surface); }
+.rd-role-opt-desc { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
+
 .rd-sub-strip {
   display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 14px; margin-bottom: 12px;
   background: var(--live-soft); border: 1px solid rgba(102, 212, 154, 0.28);
@@ -1226,7 +1256,14 @@
   background: var(--accent-soft); border: 1px solid transparent;
 }
 .rd-sheet-edit.on { border-color: var(--accent); }
-.rd-sheet-body { overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.rd-sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+/* Тело шита — колоночный флекс, поэтому его дети по умолчанию СЖИМАЕМЫ (flex-shrink: 1). Обычно
+   флексбокс не жмёт элемент ниже его содержимого, но по спеке автоминимум равен НУЛЮ у элемента с
+   `overflow` ≠ visible. Секция роли и панель управления — это `.rd-mgmt` с `overflow: hidden` (ради
+   скруглённых углов), поэтому при переполнении именно их сплющивало почти в ноль вместо прокрутки:
+   секция «Роль в клубе» становилась невидимой полоской и «появлялась» лишь при растягивании окна.
+   flex-shrink: 0 запрещает сжатие — переполнение уходит в скролл тела, как и задумано. */
+.rd-sheet-body > * { flex-shrink: 0; }
 .rd-sheet-actions { display: flex; gap: 10px; margin-top: 16px; flex-shrink: 0; position: relative; }
 .rd-sheet-actions > .rd-btn-primary, .rd-sheet-actions > .rd-btn-outline { flex: 1; width: auto; }
 /* Подсказка прокрутки: мягкое затухание над прилипающей панелью действий, чтобы было понятно,

@@ -1,5 +1,7 @@
 package com.clubs.award
 
+import com.clubs.club.ClubRepository
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.membership.MembershipRepository
@@ -16,14 +18,17 @@ import java.util.UUID
  * Награды публичны для всех участников (R3) и никогда не трогают репутацию/XP/ранг (R4) —
  * никаких хуков в ledger/репутацию здесь намеренно нет.
  *
- * Авторизация вызывающего (организатор) декларативна на контроллере (@RequiresOrganizer);
- * этот сервис проверяет только бизнес-правила: цель должна быть участником, лимит на участника,
- * отсутствие дубля названия.
+ * Авторизация вызывающего (менеджер клуба) декларативна на контроллере (@RequiresCapability(GRANT_AWARDS));
+ * этот сервис проверяет бизнес-правила (цель должна быть участником, лимит на участника,
+ * отсутствие дубля названия) и target-матрицу ролей (co-organizers, точка 39): со-орг награждает
+ * только участников role=member, организатора не награждает никто.
  */
 @Service
 class AwardService(
     private val awardRepository: AwardRepository,
     private val membershipRepository: MembershipRepository,
+    private val clubRepository: ClubRepository,
+    private val clubRoleGuard: ClubRoleGuard,
     private val mapper: AwardMapper,
     private val eventPublisher: ApplicationEventPublisher
 ) {
@@ -54,9 +59,7 @@ class AwardService(
 
     @Transactional
     fun grant(clubId: UUID, targetUserId: UUID, emoji: String, label: String, callerId: UUID): AwardDto {
-        // Награда бессмысленна для не-участника — требуем существующий membership в этом клубе.
-        membershipRepository.findByUserAndClub(targetUserId, clubId)
-            ?: throw NotFoundException("Участник не найден в этом клубе")
+        requireManageableTarget(clubId, targetUserId, callerId)
 
         val cleanEmoji = emoji.trim()
         val cleanLabel = label.trim().replace(WHITESPACE, " ")
@@ -94,12 +97,23 @@ class AwardService(
 
     @Transactional
     fun revoke(clubId: UUID, targetUserId: UUID, awardId: UUID, callerId: UUID) {
+        requireManageableTarget(clubId, targetUserId, callerId)
         // Удаление в рамках scope (awardId должен принадлежать clubId+userId); 0 строк = не тот клуб/участник или уже удалено.
         val rows = awardRepository.delete(awardId, clubId, targetUserId)
         if (rows == 0) throw NotFoundException("Награда не найдена")
         log.info("Award revoked: clubId={} targetUserId={} by={} awardId={}", clubId, targetUserId, callerId, awardId)
         // Титул откатывается к предыдущей награде (или снимается, если наград не осталось).
         eventPublisher.publishEvent(AwardRevokedEvent(clubId, targetUserId))
+    }
+
+    // Награда бессмысленна для не-участника — требуем существующий membership в этом клубе;
+    // затем target-матрица (та же, что у шлюза доступа): со-орг → только role=member (403 иначе),
+    // организатор неприкосновенен (400).
+    private fun requireManageableTarget(clubId: UUID, targetUserId: UUID, callerId: UUID) {
+        val membership = membershipRepository.findByUserAndClub(targetUserId, clubId)
+            ?: throw NotFoundException("Участник не найден в этом клубе")
+        val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
+        clubRoleGuard.requireManageableTarget(club, membership, callerId)
     }
 
     companion object {

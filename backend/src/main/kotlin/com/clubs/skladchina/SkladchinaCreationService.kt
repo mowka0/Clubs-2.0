@@ -1,7 +1,8 @@
 package com.clubs.skladchina
 
 import com.clubs.club.ClubRepository
-import com.clubs.common.exception.ForbiddenException
+import com.clubs.common.auth.ClubCapability
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.SkladchinaMode
@@ -26,6 +27,7 @@ import java.util.UUID
 class SkladchinaCreationService(
     private val skladchinaRepository: SkladchinaRepository,
     private val clubRepository: ClubRepository,
+    private val clubRoleGuard: ClubRoleGuard,
     private val templateRegistry: SkladchinaTemplateRegistry,
     private val eventPublisher: ApplicationEventPublisher,
     private val queryService: SkladchinaQueryService
@@ -35,7 +37,8 @@ class SkladchinaCreationService(
     @Transactional
     fun createSkladchina(clubId: UUID, request: CreateSkladchinaRequest, creatorId: UUID): SkladchinaDetailDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
-        if (club.ownerId != creatorId) throw ForbiddenException("Only the club organizer can create skladchina")
+        // Менеджерский гейт (co-organizers), синхронно с @RequiresCapability(MANAGE_SKLADCHINA) на контроллере.
+        clubRoleGuard.requireCapability(club, creatorId, ClubCapability.MANAGE_SKLADCHINA)
 
         val templateType = SkladchinaTemplate.values().find { it.literal == request.template }
             ?: throw ValidationException("Invalid template: ${request.template}")

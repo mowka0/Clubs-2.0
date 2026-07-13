@@ -6,8 +6,9 @@ import { Spinner, Placeholder } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
-import { useClubQuery } from '../queries/clubs';
+import { useClubQuery, useMyClubsQuery } from '../queries/clubs';
 import { useMyReputationQuery } from '../queries/members';
+import { isActiveManagerMembership } from '../utils/membershipRole';
 import { useEventSplitStateQuery } from '../queries/skladchina';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { Toast } from '../components/Toast';
@@ -73,6 +74,9 @@ export const EventPage: FC = () => {
   const myVoteQuery = useMyVoteQuery(isAuthenticated ? id : undefined);
   // «Путь назад» вариант C: репутация вызывающего по клубам (общий кэш с Профилем/«Моими клубами»).
   const myReputationQuery = useMyReputationQuery();
+  // Роль вызывающего в клубе события (co-organizers): организаторские контролы (посещаемость,
+  // споры, отмена) доступны и активному со-организатору. Общий кэш «Моих клубов».
+  const myClubsQuery = useMyClubsQuery();
   const hostClubQuery = useClubQuery(eventQuery.data?.clubId);
   const respondersQuery = useEventRespondersQuery(isAuthenticated ? id : undefined);
   // Существующий сплит этого события — кнопка «Разделить счёт» открывает его / блокирует пересоздание.
@@ -346,7 +350,12 @@ export const EventPage: FC = () => {
   // кто подтвердил на Этапе 2»). Голосовавшие going/maybe, но не подтвердившие («забыли
   // подтвердить» → expired_no_confirm) в составе НЕ значатся — здесь они исключены,
   // и репутация их игнорирует (она читает только final_status=confirmed).
-  const isOrganizer = !!hostClubQuery.data && hostClubQuery.data.ownerId === userId;
+  // Менеджер клуба события: владелец ИЛИ активный со-организатор (fail-close — роль со-орга
+  // действует только при активном членстве, зеркалит серверный гейт AttendanceService/EventService).
+  const myHostMembership = myClubsQuery.data?.find((m) => m.clubId === event.clubId);
+  const isManager =
+    (!!hostClubQuery.data && hostClubQuery.data.ownerId === userId)
+    || isActiveManagerMembership(myHostMembership);
   const attendanceCandidates = (respondersQuery.data ?? []).filter(
     (r) => r.status === 'confirmed',
   );
@@ -355,10 +364,10 @@ export const EventPage: FC = () => {
   // EXP-2: нейтрально авто-закрытое событие finalized, но так и не marked. UI отметки в этом
   // состоянии обязан скрыться (бэкенд отклонит позднюю отметку с "Attendance has been finalized").
   const showAttendanceMarking =
-    isOrganizer && eventHappened && !event.attendanceMarked && !event.attendanceFinalized && !isCancelled;
-  const showAttendanceDone = isOrganizer && eventHappened && event.attendanceMarked;
+    isManager && eventHappened && !event.attendanceMarked && !event.attendanceFinalized && !isCancelled;
+  const showAttendanceDone = isManager && eventHappened && event.attendanceMarked;
   const showAttendanceExpired =
-    isOrganizer && eventHappened && !event.attendanceMarked && event.attendanceFinalized;
+    isManager && eventHappened && !event.attendanceMarked && event.attendanceFinalized;
   // Список на разрешение у организатора: подтверждённые участники с оспоренной сейчас отметкой.
   const disputedCandidates = attendanceCandidates.filter((r) => r.attendance === 'disputed');
   // F5-04: собственная явка участника берётся из /my-attendance (доступен и без членства),
@@ -868,7 +877,7 @@ export const EventPage: FC = () => {
       )}
 
       {/* Отмена события (F5-14) — только организатор, до начала события. */}
-      {isOrganizer && !isCancelled && !eventHappened && (
+      {isManager && !isCancelled && !eventHappened && (
         <div className="rd-cta-wrap" style={{ marginTop: 8 }}>
           <button
             type="button"

@@ -1,6 +1,8 @@
 package com.clubs.membership
 
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ConflictException
+import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.tables.records.UsersRecord
@@ -51,7 +53,34 @@ class AccessGateServiceTest {
             eventResponseRepository = eventResponseRepository,
             skladchinaRepository = skladchinaRepository,
             notificationService = notificationService,
-            eventPublisher = eventPublisher
+            eventPublisher = eventPublisher,
+            clubRoleGuard = ClubRoleGuard(clubRepository, membershipRepository)
+        )
+        // По умолчанию вызывающий — владелец клуба (target-матрица owner-пути); co-org-тесты переопределяют.
+        every { clubRepository.findById(clubId) } returns club(ownerId = callerId)
+    }
+
+    private fun club(ownerId: UUID): com.clubs.club.Club {
+        val now = OffsetDateTime.now()
+        return com.clubs.club.Club(
+            id = clubId,
+            ownerId = ownerId,
+            name = "Club",
+            description = "d",
+            category = com.clubs.generated.jooq.enums.ClubCategory.sport,
+            accessType = com.clubs.generated.jooq.enums.AccessType.`open`,
+            city = "Moscow",
+            district = null,
+            memberLimit = 30,
+            subscriptionPrice = 100,
+            avatarUrl = null,
+            rules = null,
+            applicationQuestion = null,
+            inviteLink = null,
+            memberCount = 3,
+            isActive = true,
+            createdAt = now,
+            updatedAt = now
         )
     }
 
@@ -134,6 +163,7 @@ class AccessGateServiceTest {
         every { membershipRepository.freezeAccess(m.id) } returns 1
         val club = mockk<com.clubs.club.Club>(relaxed = true)
         every { club.name } returns "Бег по утрам"
+        every { club.ownerId } returns callerId
         every { clubRepository.findById(clubId) } returns club
         val member = mockk<UsersRecord>(relaxed = true) { every { telegramId } returns 77L }
         every { userRepository.findById(targetUserId) } returns member
@@ -200,6 +230,7 @@ class AccessGateServiceTest {
         every { membershipRepository.markDuesPaid(m.id, callerId, any()) } returns 1
         val club = mockk<com.clubs.club.Club>(relaxed = true)
         every { club.name } returns "Бег по утрам"
+        every { club.ownerId } returns callerId
         every { clubRepository.findById(clubId) } returns club
         val member = mockk<UsersRecord>(relaxed = true) { every { telegramId } returns 77L }
         every { userRepository.findById(targetUserId) } returns member
@@ -216,6 +247,7 @@ class AccessGateServiceTest {
         every { membershipRepository.setAccessUntil(m.id, any()) } returns 1
         val club = mockk<com.clubs.club.Club>(relaxed = true)
         every { club.name } returns "Бег по утрам"
+        every { club.ownerId } returns callerId
         every { clubRepository.findById(clubId) } returns club
         val member = mockk<UsersRecord>(relaxed = true) { every { telegramId } returns 77L }
         every { userRepository.findById(targetUserId) } returns member
@@ -326,6 +358,7 @@ class AccessGateServiceTest {
         every { membershipRepository.remove(any()) } returns 1
         val club = mockk<com.clubs.club.Club>(relaxed = true)
         every { club.name } returns "Бег по утрам"
+        every { club.ownerId } returns callerId
         every { clubRepository.findById(clubId) } returns club
         val member = mockk<UsersRecord>(relaxed = true) { every { telegramId } returns 55L }
         every { userRepository.findById(targetUserId) } returns member
@@ -545,5 +578,52 @@ class AccessGateServiceTest {
 
         assertEquals("active", result.status)
         verify(exactly = 1) { membershipRepository.unmarkDues(m.id) }
+    }
+
+    // --- target-матрица (co-organizers): вызывающий со-орг, клуб принадлежит другому ---
+
+    @Test
+    fun `co-org caller can freeze a plain member`() {
+        val m = membership(MembershipStatus.active)
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns m
+        every { membershipRepository.freezeAccess(m.id) } returns 1
+        // Клуб принадлежит не вызывающему — caller прошёл менеджерский гейт как со-орг.
+        every { clubRepository.findById(clubId) } returns club(ownerId = UUID.randomUUID())
+
+        val result = service.freezeAccess(clubId, targetUserId, callerId)
+
+        assertEquals("frozen", result.status)
+    }
+
+    @Test
+    fun `co-org caller cannot freeze another co-organizer (403)`() {
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns
+            membership(MembershipStatus.active, role = MembershipRole.co_organizer)
+        every { clubRepository.findById(clubId) } returns club(ownerId = UUID.randomUUID())
+
+        assertThrows<ForbiddenException> { service.freezeAccess(clubId, targetUserId, callerId) }
+        verify(exactly = 0) { membershipRepository.freezeAccess(any()) }
+    }
+
+    @Test
+    fun `co-org caller cannot manage the owner (403)`() {
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns
+            membership(MembershipStatus.active, role = MembershipRole.organizer)
+        every { clubRepository.findById(clubId) } returns club(ownerId = UUID.randomUUID())
+
+        assertThrows<ForbiddenException> { service.removeMember(clubId, targetUserId, callerId, "за нарушение") }
+        verify(exactly = 0) { membershipRepository.remove(any()) }
+    }
+
+    @Test
+    fun `owner can freeze a co-organizer`() {
+        val m = membership(MembershipStatus.active, role = MembershipRole.co_organizer)
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns m
+        every { membershipRepository.freezeAccess(m.id) } returns 1
+        // setUp: клуб принадлежит callerId (владелец).
+
+        val result = service.freezeAccess(clubId, targetUserId, callerId)
+
+        assertEquals("frozen", result.status)
     }
 }

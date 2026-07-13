@@ -53,8 +53,8 @@ class JooqClubStatsRepository(private val dsl: DSLContext) : ClubStatsRepository
     private data class WindowValue(val value: Int, val hasBase: Boolean)
 
     override fun findClubStats(clubId: UUID): ClubStats? {
-        // Фильтр IS_ACTIVE зеркалит аспект @RequiresOrganizer (он отбивает неактивный клуб 404 ещё до
-        // этого кода) — репозиторий остаётся самосогласованным, если его вызовут в обход того гейта.
+        // Фильтр IS_ACTIVE зеркалит аспект @RequiresCapability(VIEW_STATS) (он отбивает неактивный клуб
+        // 404 ещё до этого кода) — репозиторий остаётся самосогласованным, если его вызовут в обход того гейта.
         val meta = dsl.select(CLUBS.SUBSCRIPTION_PRICE, CLUBS.ACCESS_TYPE)
             .from(CLUBS).where(CLUBS.ID.eq(clubId).and(CLUBS.IS_ACTIVE.isTrue)).fetchOne()
             ?: return null

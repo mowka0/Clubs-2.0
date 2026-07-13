@@ -162,6 +162,27 @@ export function getAwardSuggestions(clubId: string): Promise<AwardSuggestionDto[
   return apiClient.get<AwardSuggestionDto[]>(`/api/clubs/${clubId}/award-suggestions`);
 }
 
+/** Роль, которую владелец может назначить участнику: значение "organizer" запрещено бэкендом
+ *  (передача владения — вне скоупа co-organizers, см. club-leave PR-2). */
+export type AssignableMemberRole = 'member' | 'co_organizer';
+
+/**
+ * Смена роли участника (co-organizers) — ТОЛЬКО владелец клуба:
+ *  - `co_organizer` — промоут: требует активного membership у target'а (400 для frozen/expired),
+ *    лимит со-оргов на клуб — 5 (400 при превышении);
+ *  - `member` — демоут при любом статусе target'а.
+ * 400 — self/владелец-target/role=organizer; 403 — вызывающий не владелец (со-орг тоже);
+ * 404 — нет клуба/membership; 409 — параллельное изменение роли (кэш уже инвалидируется).
+ * Идемпотентно: повторный промоут/демоут → 200 no-op.
+ */
+export function updateMemberRole(
+  clubId: string,
+  userId: string,
+  role: AssignableMemberRole,
+): Promise<MembershipDto> {
+  return apiClient.put<MembershipDto>(`/api/clubs/${clubId}/members/${userId}/role`, { role });
+}
+
 /**
  * De-Stars: участник заявляет, что оплатил офлайн-взнос (самообслуживание участника, без гейта
  * владельца). method = 'sbp' (proofUrl = URL загруженного скриншота, обязателен) или 'cash'

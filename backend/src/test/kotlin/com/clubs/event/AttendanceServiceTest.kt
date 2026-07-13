@@ -2,6 +2,7 @@ package com.clubs.event
 
 import com.clubs.club.Club
 import com.clubs.club.ClubRepository
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
@@ -32,8 +33,15 @@ class AttendanceServiceTest {
     private val eventRepository = mockk<EventRepository>()
     private val eventResponseRepository = mockk<EventResponseRepository>(relaxed = true)
     private val clubRepository = mockk<ClubRepository>()
+    // Guard-мок membership-репозитория: вызывающий по умолчанию не со-орг (null), owner-путь его не трогает.
+    private val guardMembershipRepository = mockk<com.clubs.membership.MembershipRepository> {
+        every { findByUserAndClub(any(), any()) } returns null
+    }
     private val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
-    private val service = AttendanceService(eventRepository, eventResponseRepository, clubRepository, publisher, 2880L, 2880L)
+    private val service = AttendanceService(
+        eventRepository, eventResponseRepository, clubRepository,
+        ClubRoleGuard(clubRepository, guardMembershipRepository), publisher, 2880L, 2880L
+    )
 
     private val eventId = UUID.randomUUID()
     private val organizerId = UUID.randomUUID()
@@ -54,6 +62,7 @@ class AttendanceServiceTest {
     private fun stubClub(ownerId: UUID = organizerId) {
         val club = mockk<Club>()
         every { club.ownerId } returns ownerId
+        every { club.id } returns clubId
         every { clubRepository.findById(clubId) } returns club
     }
 

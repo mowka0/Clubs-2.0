@@ -126,7 +126,7 @@ Response 200: `ApplicationDto[]`
 
 Errors:
 - `400 VALIDATION_ERROR` — невалидное значение `status`
-- `403 FORBIDDEN` — caller не владелец клуба
+- `403 FORBIDDEN` — caller не менеджер клуба (владелец / активный со-организатор)
 - `404 NOT_FOUND` — клуб не найден
 
 ### POST /api/applications/{id}/approve
@@ -218,10 +218,13 @@ Response 200: `ApplicationDto[]`
 8. Логируется INFO с id заявки, clubId, userId
 9. **Async DM организатору** через `NotificationService.sendApplicationCreatedDM` (`@Async`, fail-isolated — ошибка Telegram API не откатывает транзакцию). Текст: `📥 Новая заявка от {applicantDisplayName} в клуб «{clubName}»`, inline web_app button «Открыть заявки» → `${webAppBaseUrl}/my-clubs?focus=inbox`. Лукапы (organizer / applicant / clubName) обёрнуты try-catch — при любом NPE / БД-промахе DM пропускается с WARN-логом, INSERT заявки уже произошёл. См. `docs/modules/applications-inbox.md` § «submitApplication — изменения».
 
+> **Авторизация approve/reject/list — менеджерская** (владелец ИЛИ активный со-организатор клуба заявки;
+> `club.owner_id = caller` в шагах ниже читается как «caller — менеджер клуба»). См. `co-organizers.md`.
+
 ### approveApplication
 1. Заявка существует → `404 Application not found`
 2. Клуб заявки существует → `404 Club not found`
-3. `club.owner_id = caller` → иначе `403 Forbidden`
+3. caller — менеджер клуба (владелец/активный со-орг) → иначе `403 Forbidden`
 4. `application.status = pending` → иначе `400 Application is not pending`
 5. `count(active memberships) < club.member_limit` → иначе `400 Club is full`
 6. **Платный клуб** (`subscription_price > 0`):
@@ -235,7 +238,7 @@ Response 200: `ApplicationDto[]`
 ### rejectApplication
 1. Заявка существует → `404 Application not found`
 2. Клуб заявки существует → `404 Club not found`
-3. `club.owner_id = caller` → иначе `403 Forbidden`
+3. caller — менеджер клуба (владелец/активный со-орг) → иначе `403 Forbidden`
 4. `application.status = pending` → иначе `400 Application is not pending`
 5. **`reason` обязателен ≥5 символов после `trim()`.** DTO-валидация (`@NotBlank @Size(min=5, max=500)`) отсекает большинство случаев до Service; Service делает повторную проверку post-trim (`"  ab "` проходит `@Size(min=5)`, но trim даёт 2 символа → `400 VALIDATION_ERROR "Reason must be at least 5 characters after trim"`). Параметр `reason: String?` остаётся nullable в сигнатуре Service для возможных future system-driven reject — если `null`, проверка trim пропускается (в `rejected_reason` пишется `null`). Из UI всегда приходит non-null строка ≥5 символов.
 6. `applications.status = rejected`, `rejected_reason = reason?.trim()?.ifEmpty { null }`, `resolved_at = now()`
@@ -243,7 +246,7 @@ Response 200: `ApplicationDto[]`
 
 ### getClubApplications
 1. Клуб существует → `404 Club not found`
-2. `club.owner_id = caller` → иначе `403 Forbidden`
+2. caller — менеджер клуба (владелец/активный со-орг) → иначе `403 Forbidden`
 3. Если `status` передан — должен быть валидным literal'ом `ApplicationStatus`, иначе `400 Invalid status: <value>`
 4. Возвращается список, сортировка `created_at DESC` (новые заявки сверху)
 
@@ -337,7 +340,7 @@ THEN 400 "Application is not pending"
 
 **AC-10: approve чужой заявки**
 ```
-GIVEN caller не владелец клуба заявки
+GIVEN caller — не менеджер клуба заявки (обычный участник / не-член; активный со-орг проходит)
 WHEN POST /api/applications/{id}/approve
 THEN 403 "Forbidden"
 ```
@@ -379,12 +382,14 @@ THEN 400 VALIDATION_ERROR (Bean Validation @Size(max=500))
 AND application.status НЕ меняется
 ```
 
-**AC-15: список — только организатор**
+**AC-15: список — только менеджер (владелец / активный со-организатор)**
 ```
-GIVEN caller — НЕ владелец клуба X
+GIVEN caller — обычный участник или не-член клуба X
 WHEN GET /api/clubs/X/applications
 THEN 403 "Forbidden"
 ```
+> Со-организатор с активным членством видит и обрабатывает заявки наравне с владельцем
+> (одобрить / отклонить / «расширить и принять всех»). См. `co-organizers.md`.
 
 **AC-16: фильтр по status**
 ```
@@ -454,7 +459,7 @@ THEN ни UPDATE, ни decreaseActivityRatingSafely не вызваны
 - **Безопасность**:
   - `@Valid` на DTO: `@NotBlank @Size(min=5, max=500)` на `RejectApplicationRequest.reason`
   - Все endpoint'ы JWT-защищены (`AuthenticatedUser` через Spring Security)
-  - Owner-check у approve/reject/list — через `club.owner_id == caller.userId` в Service
+  - Менеджер-check у approve/reject/list — через `ClubRoleGuard` (capability `APPROVE_APPLICATIONS`) в Service (владелец ИЛИ активный со-организатор; модель прав — `club-roles.md`, семантика — `co-organizers.md`)
   - Rate limit 5/day per user — защита от спама заявок
   - `answerText` не санитизируется на бекенде; вывод в Mini App рендерится React'ом (HTML-экранирование автоматически) — XSS не возможна
 - **Производительность**:

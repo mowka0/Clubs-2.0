@@ -19,6 +19,7 @@ import {
 } from '../queries/applications';
 import { ApiError } from '../api/apiClient';
 import { formatPrice } from '../utils/formatters';
+import { isActiveManagerMembership } from '../utils/membershipRole';
 import { openTmeLink } from '../utils/telegramLinks';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
@@ -117,7 +118,10 @@ export const ClubPage: FC = () => {
   const leavePreviewQuery = useLeavePreviewQuery(id, showLeaveModal && !hasActivePaidAccess);
 
   const isOwner = !!club && club.ownerId === user?.id;
-  const isOrganizer = isOwner || membership?.role === 'organizer';
+  // Менеджер клуба (co-organizers): владелец ИЛИ активный со-организатор — видит таб «Управление»,
+  // строку приглашений и организаторский вид ростера. Fail-close: у замороженного/просроченного
+  // со-орга роль в membership остаётся, но manager-UI скрывается (бэкенд в этом состоянии отдаёт 403).
+  const isManager = isOwner || isActiveManagerMembership(membership);
   // Active membership = полноценный участник; отменённое платное membership внутри своего
   // оплаченного периода = «всё ещё в клубе» — табы остаются видимыми, но вместо
   // «Выйти из клуба» в футере показывается read-only заметка «Подписка отменена».
@@ -383,14 +387,21 @@ export const ClubPage: FC = () => {
     ? formatExpiryDate(membership.subscriptionExpiresAt)
     : null;
 
-  const showTabs = isMember || isOrganizer;
-  const roleBadgeLabel = isOrganizer ? 'Вы организатор' : isMember ? 'Вы участник' : null;
+  const showTabs = isMember || isManager;
+  // Бейдж роли в шапке (PO №4): владелец — «Вы организатор», активный со-орг — «Вы со-организатор».
+  const roleBadgeLabel = isOwner || membership?.role === 'organizer'
+    ? 'Вы организатор'
+    : isManager
+      ? 'Вы со-организатор'
+      : isMember
+        ? 'Вы участник'
+        : null;
 
   const tabItems: TabItem[] = [
     { key: 'activities', label: 'Активности', selected: activeTab === 'activities' },
     { key: 'members', label: 'Участники', selected: activeTab === 'members' },
   ];
-  if (isOrganizer) {
+  if (isManager) {
     tabItems.push({ key: 'manage', label: 'Управление', selected: false });
   }
 
@@ -573,14 +584,14 @@ export const ClubPage: FC = () => {
           </div>
 
           {activeTab === 'activities' && <ClubActivitiesTab clubId={id} />}
-          {/* managementView={isOrganizer}: организатору здесь показываются attention-бакеты
+          {/* managementView={isManager}: менеджеру (владелец/со-орг) здесь показываются attention-бакеты
               «Скоро закончится» / «Оплата вступления» (раньше жили в дублирующем табе «Управление»,
               теперь участники только тут). Обычный участник видит плоский список — бакеты за гейтом. */}
           {activeTab === 'members' && (
             <>
-              {/* club-invites (кадр A): личные приглашения — вход там, где орг видит состав.
-                  Только владелец/organizer; обычному участнику строка не показывается. */}
-              {isOrganizer && (
+              {/* club-invites (кадр A): личные приглашения — вход там, где менеджер видит состав
+                  (У-2: со-орг тоже может приглашать); обычному участнику строка не показывается. */}
+              {isManager && (
                 <button
                   type="button"
                   className="rd-invite-row"
@@ -593,7 +604,7 @@ export const ClubPage: FC = () => {
                   </span>
                 </button>
               )}
-              <ClubMembersTab clubId={id} isOrganizer={isOrganizer} managementView={isOrganizer} />
+              <ClubMembersTab clubId={id} isOrganizer={isManager} isOwner={isOwner} managementView={isManager} />
             </>
           )}
         </>

@@ -1,6 +1,7 @@
 package com.clubs.skladchina
 
 import com.clubs.club.ClubRepository
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.generated.jooq.enums.SkladchinaMode
 import com.clubs.generated.jooq.enums.SkladchinaParticipantStatus
 import com.clubs.generated.jooq.enums.SkladchinaStatus
@@ -25,6 +26,7 @@ class SkladchinaPaymentServiceTest {
 
     private lateinit var skladchinaRepository: SkladchinaRepository
     private lateinit var clubRepository: ClubRepository
+    private lateinit var clubRoleGuard: ClubRoleGuard
     private lateinit var templateRegistry: SkladchinaTemplateRegistry
     private lateinit var queryService: SkladchinaQueryService
     private lateinit var lifecycleService: SkladchinaLifecycleService
@@ -87,8 +89,13 @@ class SkladchinaPaymentServiceTest {
         queryService = mockk()
         lifecycleService = mockk(relaxed = true)
         eventPublisher = mockk(relaxed = true)
+        clubRoleGuard = mockk()
+        // По умолчанию вызывающий — НЕ менеджер клуба: creator-путь guard не трогает, а
+        // не-создатель без роли должен получать 403 (fail-close).
+        every { clubRoleGuard.hasCapability(any<java.util.UUID>(), any<java.util.UUID>(), any<com.clubs.common.auth.ClubCapability>()) } returns false
         service = SkladchinaPaymentService(
-            skladchinaRepository, clubRepository, templateRegistry, queryService, lifecycleService, eventPublisher
+            skladchinaRepository, clubRepository, clubRoleGuard, templateRegistry, queryService,
+            lifecycleService, eventPublisher
         )
         every { queryService.getDetail(any(), any()) } returns mockk()
         every { templateRegistry.forType(any()) } returns mockk {
@@ -193,5 +200,46 @@ class SkladchinaPaymentServiceTest {
 
         // ofType, не any: этот путь легитимно публикует SkladchinaDeclineRequestedEvent.
         verify(exactly = 0) { eventPublisher.publishEvent(ofType<SkladchinaProgressChangedEvent>()) }
+    }
+
+    // --- creator | manager (У-1, co-organizers) ---
+
+    @Test
+    fun `organizerMarkPaid допускает менеджера клуба, который не создатель`() {
+        val managerId = UUID.randomUUID()
+        every { skladchinaRepository.findById(skladchinaId) } returns skladchina()
+        every { skladchinaRepository.findParticipant(skladchinaId, participantId) } returns participant()
+        every { skladchinaRepository.setParticipantPaid(skladchinaId, participantId, any(), any()) } returns 1
+        every { clubRoleGuard.hasCapability(any<java.util.UUID>(), managerId, any<com.clubs.common.auth.ClubCapability>()) } returns true
+
+        service.organizerMarkPaid(skladchinaId, managerId, participantId)
+
+        verify(exactly = 1) { skladchinaRepository.setParticipantPaid(skladchinaId, participantId, any(), any()) }
+    }
+
+    @Test
+    fun `organizerMarkPaid отклоняет не-создателя без менеджерской роли (403, fail-close)`() {
+        val strangerId = UUID.randomUUID()
+        every { skladchinaRepository.findById(skladchinaId) } returns skladchina()
+        // setUp: clubRoleGuard.hasCapability(any<java.util.UUID>(), any<java.util.UUID>(), any<com.clubs.common.auth.ClubCapability>()) == false
+
+        org.junit.jupiter.api.assertThrows<com.clubs.common.exception.ForbiddenException> {
+            service.organizerMarkPaid(skladchinaId, strangerId, participantId)
+        }
+        verify(exactly = 0) { skladchinaRepository.setParticipantPaid(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `resolveDecline допускает менеджера клуба, который не создатель`() {
+        val managerId = UUID.randomUUID()
+        every { skladchinaRepository.findById(skladchinaId) } returns skladchina()
+        every { skladchinaRepository.findParticipant(skladchinaId, participantId) } returns
+            participant(declineRequestedAt = OffsetDateTime.now())
+        every { skladchinaRepository.setParticipantDeclined(skladchinaId, participantId, any()) } returns 1
+        every { clubRoleGuard.hasCapability(any<java.util.UUID>(), managerId, any<com.clubs.common.auth.ClubCapability>()) } returns true
+
+        service.resolveDecline(skladchinaId, managerId, participantId, approve = true, rejectReason = null)
+
+        verify(exactly = 1) { skladchinaRepository.setParticipantDeclined(skladchinaId, participantId, any()) }
     }
 }

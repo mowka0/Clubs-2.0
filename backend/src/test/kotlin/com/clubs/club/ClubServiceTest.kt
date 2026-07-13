@@ -1,6 +1,7 @@
 package com.clubs.club
 
 import com.clubs.common.exception.ConflictException
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
@@ -41,7 +42,7 @@ class ClubServiceTest {
         applicationRepository = mockk(relaxed = true)
         subscriptionService = mockk(relaxed = true)
         mapper = ClubMapper()
-        clubService = ClubService(clubRepository, membershipRepository, eventRepository, skladchinaRepository, applicationRepository, subscriptionService, chatLinkRepository = mockk(relaxed = true), userRepository = mockk(relaxed = true), mapper = mapper)
+        clubService = ClubService(clubRepository, membershipRepository, ClubRoleGuard(clubRepository, membershipRepository), eventRepository, skladchinaRepository, applicationRepository, subscriptionService, chatLinkRepository = mockk(relaxed = true), userRepository = mockk(relaxed = true), mapper = mapper)
     }
 
     private fun makeClub(
@@ -323,6 +324,7 @@ class ClubServiceTest {
         val club = makeClub(clubId = clubId, ownerId = ownerId, name = "My Club")
 
         every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.findByUserAndClub(differentUserId, clubId) } returns null
 
         val updateRequest = UpdateClubRequest(name = "New Name")
 
@@ -330,7 +332,7 @@ class ClubServiceTest {
             clubService.updateClub(clubId, updateRequest, differentUserId)
         }
 
-        assertEquals("Only the club owner can update it", exception.message)
+        assertEquals("Управлять клубом может владелец или активный со-организатор", exception.message)
         verify(exactly = 0) { clubRepository.update(any(), any()) }
     }
 
@@ -401,5 +403,122 @@ class ClubServiceTest {
         verify(exactly = 0) { skladchinaRepository.cancelActiveByClub(any()) }
         verify(exactly = 0) { applicationRepository.deleteActiveByClub(any()) }
         verify(exactly = 0) { clubRepository.softDelete(any()) }
+    }
+
+    // --- co-organizers, Security-фиксы: СБП-реквизиты owner-only + пейволл по владельцу ---
+
+    private fun coOrgMembership(userId: UUID, clubId: UUID) = com.clubs.membership.Membership(
+        id = UUID.randomUUID(), userId = userId, clubId = clubId,
+        status = com.clubs.generated.jooq.enums.MembershipStatus.active,
+        role = com.clubs.generated.jooq.enums.MembershipRole.co_organizer,
+        joinedAt = OffsetDateTime.now(), subscriptionExpiresAt = null,
+        createdAt = OffsetDateTime.now(), updatedAt = OffsetDateTime.now()
+    )
+
+    @Test
+    fun `co-org cannot change the SBP requisites (403)`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val coOrgId = UUID.randomUUID()
+        val club = makeClub(clubId = clubId, ownerId = ownerId).copy(paymentLink = "sbp://old")
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.findByUserAndClub(coOrgId, clubId) } returns coOrgMembership(coOrgId, clubId)
+
+        val ex = assertThrows<ForbiddenException> {
+            clubService.updateClub(clubId, UpdateClubRequest(paymentLink = "sbp://new"), coOrgId)
+        }
+
+        assertEquals("Реквизиты для взноса задаёт владелец клуба", ex.message)
+        verify(exactly = 0) { clubRepository.update(any(), any()) }
+    }
+
+    @Test
+    fun `co-org cannot change the payment method note (403)`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val coOrgId = UUID.randomUUID()
+        val club = makeClub(clubId = clubId, ownerId = ownerId).copy(paymentMethodNote = "перевод по номеру телефона")
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.findByUserAndClub(coOrgId, clubId) } returns coOrgMembership(coOrgId, clubId)
+
+        // paymentMethodNote — второй независимый операнд requisitesChanged: регресс в его
+        // нормализации не должен пройти мимо тестов.
+        val ex = assertThrows<ForbiddenException> {
+            clubService.updateClub(clubId, UpdateClubRequest(paymentMethodNote = "на карту 1234"), coOrgId)
+        }
+
+        assertEquals("Реквизиты для взноса задаёт владелец клуба", ex.message)
+        verify(exactly = 0) { clubRepository.update(any(), any()) }
+    }
+
+    @Test
+    fun `co-org updates other settings, including a no-op requisites resubmit`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val coOrgId = UUID.randomUUID()
+        val club = makeClub(clubId = clubId, ownerId = ownerId).copy(paymentLink = "sbp://same")
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.findByUserAndClub(coOrgId, clubId) } returns coOrgMembership(coOrgId, clubId)
+        every { clubRepository.update(clubId, any()) } returns club.copy(name = "Renamed")
+
+        // Поле прислано, но значение то же — no-op сабмит не должен блокироваться.
+        val result = clubService.updateClub(
+            clubId, UpdateClubRequest(name = "Renamed", paymentLink = "sbp://same"), coOrgId
+        )
+
+        assertEquals("Renamed", result.name)
+        verify(exactly = 1) { clubRepository.update(clubId, any()) }
+    }
+
+    @Test
+    fun `owner updates the requisites freely`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val club = makeClub(clubId = clubId, ownerId = ownerId).copy(paymentLink = "sbp://old")
+        every { clubRepository.findById(clubId) } returns club
+        every { clubRepository.update(clubId, any()) } returns club.copy(paymentLink = "sbp://new")
+
+        clubService.updateClub(clubId, UpdateClubRequest(paymentLink = "sbp://new"), ownerId)
+
+        verify(exactly = 1) { clubRepository.update(clubId, any()) }
+    }
+
+    @Test
+    fun `co-org cannot flip a club free-to-paid (owner-only, 403)`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val coOrgId = UUID.randomUUID()
+        // Легаси-реквизиты уже заданы владельцем: со-орг пытается лишь поднять цену 0 -> >0.
+        val club = makeClub(clubId = clubId, ownerId = ownerId, subscriptionPrice = 0).copy(paymentLink = "sbp://x")
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.findByUserAndClub(coOrgId, clubId) } returns coOrgMembership(coOrgId, clubId)
+
+        val ex = assertThrows<ForbiddenException> {
+            clubService.updateClub(clubId, UpdateClubRequest(subscriptionPrice = 500), coOrgId)
+        }
+
+        // Перевод в платный — владельческое (EDIT_PAYMENT_REQUISITES). Гейт бьёт ДО пейволла и апдейта.
+        assertEquals("Перевести клуб в платный может только владелец", ex.message)
+        verify(exactly = 0) { subscriptionService.requirePaidClubCapacity(any(), any()) }
+        verify(exactly = 0) { clubRepository.update(any(), any()) }
+    }
+
+    @Test
+    fun `owner flipping free-to-paid hits the plan paywall on the owner (402)`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val club = makeClub(clubId = clubId, ownerId = ownerId, subscriptionPrice = 0).copy(paymentLink = "sbp://x")
+        every { clubRepository.findById(clubId) } returns club
+        every { clubRepository.countPaidByOwnerId(ownerId) } returns 3
+        every { subscriptionService.requirePaidClubCapacity(ownerId, any()) } throws
+            com.clubs.common.exception.PaymentRequiredException("free", "start", 19900)
+
+        assertThrows<com.clubs.common.exception.PaymentRequiredException> {
+            clubService.updateClub(clubId, UpdateClubRequest(subscriptionPrice = 500), ownerId)
+        }
+
+        // Ёмкость плана считается по владельцу клуба.
+        verify(exactly = 1) { subscriptionService.requirePaidClubCapacity(ownerId, 3) }
+        verify(exactly = 0) { clubRepository.update(any(), any()) }
     }
 }

@@ -121,11 +121,13 @@ open class Memberships(
     val STATUS: TableField<MembershipsRecord, MembershipStatus?> = createField(DSL.name("status"), SQLDataType.VARCHAR.nullable(false).defaultValue(DSL.field(DSL.raw("'active'::membership_status"), SQLDataType.VARCHAR)).asEnumDataType(MembershipStatus::class.java), this, "Жизненный цикл членства: active = состоит и есть доступ к контенту | frozen = новый платный участник ждёт первого взноса (доступ закрыт) | expired = продление просрочено — доступ был, окно истекло, участник-должник остаётся в клубе (шедулер переводит active → expired ежедневно) | cancelled = вышел из клуба / удалён | grace_period = МЁРТВОЕ легаси Stars-эпохи: не пишется и не читается кодом, строки флипнуты в expired (V46), значение не удалено из типа только потому, что Postgres не умеет DROP VALUE.")
 
     /**
-     * The column <code>public.memberships.role</code>. Роль в клубе (enum
-     * membership_role): member = обычный участник; organizer = владелец клуба
-     * (его собственная строка членства, создаётся вместе с клубом).
+     * The column <code>public.memberships.role</code>. Роль в клубе: member —
+     * участник; organizer — владелец (ровно один, зеркалит clubs.owner_id,
+     * создаётся при создании клуба); co_organizer — со-организатор, назначается
+     * владельцем из активных участников, права действуют только при status =
+     * active.
      */
-    val ROLE: TableField<MembershipsRecord, MembershipRole?> = createField(DSL.name("role"), SQLDataType.VARCHAR.nullable(false).defaultValue(DSL.field(DSL.raw("'member'::membership_role"), SQLDataType.VARCHAR)).asEnumDataType(MembershipRole::class.java), this, "Роль в клубе (enum membership_role): member = обычный участник; organizer = владелец клуба (его собственная строка членства, создаётся вместе с клубом).")
+    val ROLE: TableField<MembershipsRecord, MembershipRole?> = createField(DSL.name("role"), SQLDataType.VARCHAR.nullable(false).defaultValue(DSL.field(DSL.raw("'member'::membership_role"), SQLDataType.VARCHAR)).asEnumDataType(MembershipRole::class.java), this, "Роль в клубе: member — участник; organizer — владелец (ровно один, зеркалит clubs.owner_id, создаётся при создании клуба); co_organizer — со-организатор, назначается владельцем из активных участников, права действуют только при status = active.")
 
     /**
      * The column <code>public.memberships.joined_at</code>. Когда пользователь

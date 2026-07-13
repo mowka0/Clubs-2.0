@@ -17,7 +17,8 @@ import org.jooq.Schema
 @Suppress("UNCHECKED_CAST")
 enum class MembershipRole(@get:JvmName("literal") public val literal: String) : EnumType {
     member("member"),
-    organizer("organizer");
+    organizer("organizer"),
+    co_organizer("co_organizer");
     override fun getCatalog(): Catalog? = schema.catalog
     override fun getSchema(): Schema = Public.PUBLIC
     override fun getName(): String = "membership_role"

@@ -1,6 +1,7 @@
 package com.clubs.club
 
-import com.clubs.common.auth.RequiresOrganizer
+import com.clubs.common.auth.ClubCapability
+import com.clubs.common.auth.RequiresCapability
 import com.clubs.common.dto.PageResponse
 import com.clubs.common.security.AuthenticatedUser
 import jakarta.validation.Valid
@@ -89,7 +90,7 @@ class ClubController(
         return ResponseEntity.noContent().build()
     }
 
-    @RequiresOrganizer
+    @RequiresCapability(ClubCapability.VIEW_FINANCES)
     @GetMapping("/{id}/finances")
     fun getFinances(
         @PathVariable id: UUID,

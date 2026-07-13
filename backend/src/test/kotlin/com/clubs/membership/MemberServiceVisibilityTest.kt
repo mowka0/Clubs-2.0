@@ -2,6 +2,7 @@ package com.clubs.membership
 
 import com.clubs.application.ApplicationRepository
 import com.clubs.award.AwardService
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.tables.records.UsersRecord
@@ -54,7 +55,8 @@ class MemberServiceVisibilityTest {
         applicationRepository = mockk(relaxed = true)
         service = MemberService(
             membershipRepository, userRepository, reputationRepository, trustService,
-            interestRepository, awardService, applicationRepository, MembershipMapper()
+            interestRepository, awardService, applicationRepository, MembershipMapper(),
+            ClubRoleGuard(mockk(relaxed = true), membershipRepository)
         )
     }
 

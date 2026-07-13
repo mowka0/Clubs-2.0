@@ -3,13 +3,13 @@ package com.clubs.membership
 import com.clubs.application.ApplicationRepository
 import com.clubs.bot.NotificationService
 import com.clubs.club.ClubRepository
+import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.event.EventResponseRepository
 import com.clubs.event.EventRosterChangedEvent
 import com.clubs.event.WaitlistPromotedEvent
-import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.skladchina.SkladchinaProgressChangedEvent
 import com.clubs.skladchina.SkladchinaRepository
@@ -28,9 +28,11 @@ import java.util.UUID
  * идут участник→организатор вне платформы (honor-system, как в складчине) — эти действия меняют только
  * статус membership / отметки об оплате, но никогда не двигают деньги или репутацию.
  *
- * Проверка владельца объявлена декларативно на контроллере (@RequiresOrganizer); этот сервис защищает каждый
- * переход статуса тем же паттерном `WHERE status = expected` + rows-affected, что и org-toggle складчины
- * (0 строк → 409). Собственным membership организатора управлять нельзя.
+ * Проверка менеджера клуба (владелец или активный со-орг) объявлена декларативно на контроллере
+ * (@RequiresCapability(MANAGE_MEMBERS)); этот сервис защищает каждый переход статуса тем же паттерном
+ * `WHERE status = expected` + rows-affected, что и org-toggle складчины (0 строк → 409), и применяет
+ * target-матрицу ролей (loadManageableMember): организатором не управляет никто, со-орг управляет
+ * только участниками role=member.
  */
 @Service
 class AccessGateService(
@@ -47,13 +49,14 @@ class AccessGateService(
     private val eventResponseRepository: EventResponseRepository,
     private val skladchinaRepository: SkladchinaRepository,
     private val notificationService: NotificationService,
-    private val eventPublisher: ApplicationEventPublisher
+    private val eventPublisher: ApplicationEventPublisher,
+    private val clubRoleGuard: ClubRoleGuard
 ) {
     private val log = LoggerFactory.getLogger(AccessGateService::class.java)
 
     @Transactional
     fun freezeAccess(clubId: UUID, targetUserId: UUID, callerId: UUID): MembershipDto {
-        val membership = loadManageableMember(clubId, targetUserId)
+        val membership = loadManageableMember(clubId, targetUserId, callerId)
         if (membership.status == MembershipStatus.frozen) return mapper.toDto(membership) // идемпотентно
         if (membership.status != MembershipStatus.active) {
             throw ValidationException("Заморозить можно только активного участника")
@@ -92,7 +95,7 @@ class AccessGateService(
 
     @Transactional
     fun unfreezeAccess(clubId: UUID, targetUserId: UUID, callerId: UUID): MembershipDto {
-        val membership = loadManageableMember(clubId, targetUserId)
+        val membership = loadManageableMember(clubId, targetUserId, callerId)
         if (membership.status == MembershipStatus.active) return mapper.toDto(membership) // идемпотентно
         if (membership.status != MembershipStatus.frozen) {
             throw ValidationException("Разморозить можно только замороженного участника")
@@ -105,7 +108,7 @@ class AccessGateService(
 
     @Transactional
     fun markDuesPaid(clubId: UUID, targetUserId: UUID, callerId: UUID): MembershipDto {
-        val membership = loadManageableMember(clubId, targetUserId)
+        val membership = loadManageableMember(clubId, targetUserId, callerId)
         if (membership.status !in DUES_PAYABLE_STATUSES) {
             throw ValidationException("Отметить взнос можно только у действующего участника")
         }
@@ -130,7 +133,7 @@ class AccessGateService(
 
     @Transactional
     fun unmarkDues(clubId: UUID, targetUserId: UUID, callerId: UUID): MembershipDto {
-        val membership = loadManageableMember(clubId, targetUserId)
+        val membership = loadManageableMember(clubId, targetUserId, callerId)
         // Идемпотентно: 0 строк означает лишь то, что нечего было очищать — не гонка, а no-op.
         // Снятие отметки никогда не меняет статус доступа (симметрично со складчиной, где снятие
         // отметки не закрывает доступ автоматически).
@@ -142,7 +145,7 @@ class AccessGateService(
     // Member admin profile (S1): организатор вручную задаёт окончание окна доступа («своя дата»).
     @Transactional
     fun setAccessUntil(clubId: UUID, targetUserId: UUID, until: OffsetDateTime, callerId: UUID): MembershipDto {
-        val membership = loadManageableMember(clubId, targetUserId)
+        val membership = loadManageableMember(clubId, targetUserId, callerId)
         if (!until.isAfter(OffsetDateTime.now())) {
             throw ValidationException("Дата окончания доступа должна быть в будущем")
         }
@@ -158,7 +161,7 @@ class AccessGateService(
     // Member admin profile (S1): организатор задаёт/очищает приватную заметку. Пусто → null.
     @Transactional
     fun updateNote(clubId: UUID, targetUserId: UUID, note: String?, callerId: UUID): MembershipDto {
-        val membership = loadManageableMember(clubId, targetUserId)
+        val membership = loadManageableMember(clubId, targetUserId, callerId)
         val clean = note?.trim()?.takeIf { it.isNotEmpty() }
         membershipRepository.updateOrganizerNote(membership.id, clean)
         log.info("Organizer note updated: clubId={} targetUserId={} by={} present={}", clubId, targetUserId, callerId, clean != null)
@@ -233,7 +236,7 @@ class AccessGateService(
     // freeze, а не reject.
     @Transactional
     fun rejectMember(clubId: UUID, targetUserId: UUID, callerId: UUID, reason: String?): MembershipDto {
-        val membership = loadManageableMember(clubId, targetUserId)
+        val membership = loadManageableMember(clubId, targetUserId, callerId)
         if (membership.status != MembershipStatus.frozen) {
             throw ValidationException("Отклонить вступление можно только пока доступ не открыт")
         }
@@ -254,7 +257,7 @@ class AccessGateService(
     // офлайн-решение организатора, как и в reject — платформа вне денежного потока.
     @Transactional
     fun removeMember(clubId: UUID, targetUserId: UUID, callerId: UUID, reason: String): MembershipDto {
-        val membership = loadManageableMember(clubId, targetUserId)
+        val membership = loadManageableMember(clubId, targetUserId, callerId)
         if (membership.status == MembershipStatus.cancelled) {
             throw ValidationException("Участник уже не в клубе")
         }
@@ -324,12 +327,14 @@ class AccessGateService(
         }
     }
 
-    private fun loadManageableMember(clubId: UUID, targetUserId: UUID): Membership {
+    // Target-матрица (co-organizers, точка 38): владелец управляет всеми, кроме организатора (себя);
+    // со-орг — только участниками role=member (владелец/другой со-орг → 403). Сама матрица — в
+    // ClubRoleGuard.requireManageableTarget (единый механизм с AwardService).
+    private fun loadManageableMember(clubId: UUID, targetUserId: UUID, callerId: UUID): Membership {
         val membership = membershipRepository.findByUserAndClub(targetUserId, clubId)
             ?: throw NotFoundException("Участник не найден в этом клубе")
-        if (membership.role == MembershipRole.organizer) {
-            throw ValidationException("Нельзя управлять доступом организатора")
-        }
+        val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
+        clubRoleGuard.requireManageableTarget(club, membership, callerId)
         return membership
     }
 
