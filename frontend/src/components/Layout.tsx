@@ -10,6 +10,7 @@ import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useClubContextStore } from '../store/useClubContextStore';
+import { useCreateFlowStore } from '../store/useCreateFlowStore';
 import { useOrganizerClubs } from '../queries/organizerClubs';
 import { getStartParam } from '../telegram/sdk';
 
@@ -40,7 +41,11 @@ export const AppDock: FC = () => {
   const haptic = useHaptic();
   const { clubs: organizerClubs } = useOrganizerClubs();
   const canCreate = organizerClubs.length > 0;
-  const [createOpen, setCreateOpen] = useState(false);
+  // Открытие флоу — глобальный клиентский стейт: CTA пустых состояний открывают
+  // его из глубины страниц, не дублируя сам флоу и его guard'ы.
+  const createOpen = useCreateFlowStore((s) => s.isOpen);
+  const openCreateFlow = useCreateFlowStore((s) => s.open);
+  const closeCreateFlow = useCreateFlowStore((s) => s.close);
   const [toast, setToast] = useState<string | null>(null);
 
   // Если юзер сейчас смотрит клуб, которым он руководит, FAB заранее выбирает этот
@@ -53,7 +58,7 @@ export const AppDock: FC = () => {
   const handleCreate = () => {
     haptic.impact('light');
     if (canCreate) {
-      setCreateOpen(true);
+      openCreateFlow();
     } else {
       setToast('Создавать активности могут организаторы клубов');
     }
@@ -67,7 +72,7 @@ export const AppDock: FC = () => {
           open={createOpen}
           organizerClubs={organizerClubs}
           presetClubId={presetClubId}
-          onClose={() => setCreateOpen(false)}
+          onClose={closeCreateFlow}
         />
       )}
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}

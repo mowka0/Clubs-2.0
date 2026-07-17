@@ -1,7 +1,6 @@
 import { FC, ReactNode, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useHaptic } from '../hooks/useHaptic';
-import { useHighlight } from '../hooks/useHighlight';
 import { useMyClubsActionCountsQuery } from '../queries/applications';
 import { useSkladchinaActionRequiredCountQuery } from '../queries/skladchina';
 
@@ -80,8 +79,6 @@ export const BottomTabBar: FC<BottomTabBarProps> = ({ onCreate, scoped = false }
   const haptic = useHaptic();
 
   const { data: unpaidCount = 0 } = useSkladchinaActionRequiredCountQuery();
-  // «Показать пальцем» на FAB: CTA пустых состояний приводят сюда через location.state.
-  const createHighlighted = useHighlight('create-activity');
   // Организатору требуется действие на «Мои клубы»: заявки в ожидании (inbox) + платные участники,
   // ожидающие решения по взносу (de-Stars). Любое из них зажигает точку на «Клубы».
   const { data: myClubsActionCounts } = useMyClubsActionCountsQuery();
@@ -129,11 +126,7 @@ export const BottomTabBar: FC<BottomTabBarProps> = ({ onCreate, scoped = false }
       </div>
       <button
         type="button"
-        className={[
-          'rd-dock-action',
-          scoped ? 'rd-scoped' : '',
-          createHighlighted ? 'rd-highlight-pulse' : '',
-        ].filter(Boolean).join(' ')}
+        className={scoped ? 'rd-dock-action rd-scoped' : 'rd-dock-action'}
         onClick={onCreate}
         aria-label={scoped ? 'Создать активность в этом клубе' : 'Создать активность'}
       >

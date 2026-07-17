@@ -1,8 +1,9 @@
 import { FC, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Placeholder, Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useClubActivitiesQuery } from '../../queries/activities';
+import { useCreateFlowStore } from '../../store/useCreateFlowStore';
 import type { ActivityFilter, ActivityItemDto } from '../../api/activities';
 import { ActivityFilterChips } from '../manage/ActivityFilterChips';
 import { ActivityFeedList } from '../manage/ActivityFeedList';
@@ -16,8 +17,8 @@ interface ClubActivitiesTabProps {
 
 export const ClubActivitiesTab: FC<ClubActivitiesTabProps> = ({ clubId, isManager }) => {
   const navigate = useNavigate();
-  const location = useLocation();
   const haptic = useHaptic();
+  const openCreateFlow = useCreateFlowStore((s) => s.open);
 
   const [filter, setFilter] = useState<ActivityFilter>('all');
 
@@ -32,17 +33,12 @@ export const ClubActivitiesTab: FC<ClubActivitiesTabProps> = ({ clubId, isManage
   };
 
   /**
-   * CTA организатора не открывает флоу создания сам: единый флоу живёт в FAB дока
-   * (AppDock) и на странице своего клуба уже «заряжен» на него. Вместо дубля флоу
-   * подсвечиваем сам FAB — человек заодно запоминает, где создание живёт всегда.
-   * replace, чтобы подсветка не плодила лишний шаг в истории навигации.
+   * CTA открывает единый флоу создания (живёт в AppDock): на странице своего клуба
+   * он уже «заряжен» на текущий клуб — сразу выбор типа, без вопроса «какой клуб».
    */
   const handleCreateCta = () => {
     haptic.impact('light');
-    navigate(`${location.pathname}${location.search}`, {
-      replace: true,
-      state: { highlight: 'create-activity' },
-    });
+    openCreateFlow();
   };
 
   const feed = activitiesQuery.data;

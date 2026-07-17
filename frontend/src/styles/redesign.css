@@ -1822,7 +1822,7 @@
 }
 
 .rd-foxcafe-fox {
-  position: relative; display: block; width: min(232px, 62vw);
+  position: relative; display: block; width: min(162px, 44vw);
   padding: 0; border: 0; background: none; cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   animation: rd-foxcafe-breathe 3.4s ease-in-out infinite;
