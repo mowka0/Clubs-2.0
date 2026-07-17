@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>Енот или лис</title><style>
+:root{--accent:#F47B3C;--surface:rgba(255,255,255,.04);--hair:rgba(255,255,255,.08);--dim:rgba(244,244,246,.6);--faint:rgba(244,244,246,.45)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,-apple-system,system-ui,sans-serif;background:#17171b;color:#F4F4F6;padding:26px 20px 60px}
+h1{font-size:20px;font-weight:800;margin-bottom:6px}
+h2{font-size:14px;font-weight:800;margin:26px 0 12px;color:var(--accent)}
+p.doc{font-size:13px;color:var(--dim);max-width:980px;line-height:1.6;margin-bottom:8px}
+p.doc b{color:var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;max-width:1160px}
+.card{background:var(--surface);border:1px solid var(--hair);border-radius:16px;overflow:hidden}
+.card.win{border-color:var(--accent);box-shadow:0 0 0 3px rgba(244,123,60,.15)}
+.art{background:#fff;aspect-ratio:3/4}
+.art img{width:100%;height:100%;object-fit:contain}
+.meta{padding:10px 12px 13px}
+.t{font-size:12.5px;font-weight:800}
+.d{font-size:11px;color:var(--faint);margin-top:3px;min-height:28px}
+</style></head><body>
+<h1>Енот против лиса — один стиль, разные звери</h1>
+<p class="doc">Стиль тот самый (утиный, чистый — <b>без строчки</b>), очки на месте, цвет бренда держится. Меняется только герой.</p>
+<h2>Енот в оранжевом — читается как красная панда</h2><div class="grid">
+<div class="card"><div class="art"><img src="generated/racc-a-1.svg"></div><div class="meta"><div class="t">Очки на морде</div><div class="d">Милый, но это скорее панда</div></div></div>
+<div class="card"><div class="art"><img src="generated/racc-a-2.svg"></div><div class="meta"><div class="t">Крупные очки</div><div class="d">Маска+оранжевый = красная панда</div></div></div>
+<div class="card"><div class="art"><img src="generated/racc-b-1.svg"></div><div class="meta"><div class="t">Машет, поло</div><div class="d">Симпатичный, но снова панда</div></div></div>
+<div class="card"><div class="art"><img src="generated/racc-b-2.svg"></div><div class="meta"><div class="t">Машет</div><div class="d">Хвост полосатый, маска есть</div></div></div>
+</div>
+<h2>Енот натуральный — узнаётся мгновенно</h2><div class="grid">
+<div class="card win"><div class="art"><img src="generated/racc-grey-1.svg"></div><div class="meta"><div class="t">Серый + куртка</div><div class="d">Настоящий енот! Цвет бренда ушёл в одежду</div></div></div>
+<div class="card win"><div class="art"><img src="generated/racc-grey-2.svg"></div><div class="meta"><div class="t">Серый, очки</div><div class="d">Маска читается, полосатый хвост</div></div></div>
+</div>
+<h2>Лис — тот же рецепт, для сравнения</h2><div class="grid">
+<div class="card"><div class="art"><img src="generated/canon-a-1.svg"></div><div class="meta"><div class="t">Лис в очках</div><div class="d">Обрезан по пояс</div></div></div>
+<div class="card"><div class="art"><img src="generated/canon-b-2.svg"></div><div class="meta"><div class="t">Лис машет</div><div class="d">Тоже поясной кадр</div></div></div>
+</div>
+</body></html>

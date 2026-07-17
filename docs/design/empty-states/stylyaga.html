@@ -1,0 +1,30 @@
+<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>Стиляга</title><style>
+:root{--accent:#F47B3C;--surface:rgba(255,255,255,.04);--hair:rgba(255,255,255,.08);--dim:rgba(244,244,246,.6);--faint:rgba(244,244,246,.45);--danger:#E0574F}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,-apple-system,system-ui,sans-serif;background:#17171b;color:#F4F4F6;padding:26px 20px 60px}
+h1{font-size:20px;font-weight:800;margin-bottom:6px}
+p.doc{font-size:13px;color:var(--dim);max-width:980px;line-height:1.6;margin-bottom:22px}
+p.doc b{color:var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;max-width:1100px}
+.card{background:var(--surface);border:1px solid var(--hair);border-radius:18px;overflow:hidden}
+.card.win{border-color:var(--accent);box-shadow:0 0 0 3px rgba(244,123,60,.15)}
+.card.bad{opacity:.5}
+.art{background:#fff;aspect-ratio:3/4}
+.art img{width:100%;height:100%;object-fit:contain}
+.meta{padding:11px 13px 14px}
+.t{font-size:13px;font-weight:800}
+.d{font-size:11.5px;color:var(--faint);margin-top:3px;min-height:30px}
+.badge{display:inline-block;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;margin-top:6px;color:var(--accent);background:rgba(244,123,60,.14)}
+.badge.bad{color:var(--danger);background:rgba(224,87,79,.14)}
+</style></head><body>
+<h1>Лис-стиляга — детскость снята</h1>
+<p class="doc">Твоя идея сработала: <b>на двух лапах, в костюме и очках</b> — это персонаж с характером, а не детёныш. Вышли из утиного стиля — и <b>пунктирная строчка исчезла сама</b>, она жила именно в нём.
+Слева направо: три разных стиля отрисовки. Оранжевый бренда <b>#F47B3C</b> держится везде.</p>
+<div class="grid">
+<div class="card win"><div class="art"><img src="generated/stylyaga-editorial-1.svg"></div><div class="meta"><div class="t">editorial · 1</div><div class="d">Костюм, руки в боки, хвост — взрослый и уверенный</div><div class="badge">фаворит</div></div></div>
+<div class="card"><div class="art"><img src="generated/stylyaga-editorial-2.svg"></div><div class="meta"><div class="t">editorial · 2</div><div class="d">Расслабленный денди, руки в карманах</div></div></div>
+<div class="card bad"><div class="art"><img src="generated/stylyaga-bold-1.svg"></div><div class="meta"><div class="t">bold_stroke · 1</div><div class="d">Ретро-плакат, характер есть — но фон впечён в картинку</div><div class="badge bad">не годится</div></div></div>
+<div class="card bad"><div class="art"><img src="generated/stylyaga-bold-2.svg"></div><div class="meta"><div class="t">bold_stroke · 2</div><div class="d">То же: постер, а не персонаж на прозрачном</div><div class="badge bad">не годится</div></div></div>
+<div class="card bad"><div class="art"><img src="generated/stylyaga-utya-1.svg"></div><div class="meta"><div class="t">утиный стиль · 1</div><div class="d">Даже в очках — детский. Стиль тянет в kawaii</div><div class="badge bad">не годится</div></div></div>
+<div class="card bad"><div class="art"><img src="generated/stylyaga-utya-2.svg"></div><div class="meta"><div class="t">утиный стиль · 2</div><div class="d">И строчка на месте. Этот путь закрыт</div><div class="badge bad">не годится</div></div></div>
+</div></body></html>

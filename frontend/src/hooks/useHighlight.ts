@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 /**
- * Что подсветить на странице, куда привела дверь онбординга. Тип живёт здесь, а не в фиче:
- * общий хук не должен зависеть от `components/onboarding` — иначе стрелка зависимостей
- * развёрнута, и удаление фичи роняет shared-код.
+ * Что подсветить на странице, куда привёл CTA (дверь онбординга, кнопка пустого
+ * состояния). Тип живёт здесь, а не в фиче: общий хук не должен зависеть от
+ * `components/onboarding` — иначе стрелка зависимостей развёрнута, и удаление
+ * фичи роняет shared-код.
+ * `create-activity` — FAB «+» дока: его подсвечивает CTA пустого таба активностей клуба.
  */
-export type HighlightTarget = 'city' | 'create-club';
+export type HighlightTarget = 'city' | 'create-club' | 'create-activity';
 
 /**
  * Сколько держится подсветка (мс). Парное значение с CSS-анимацией `.rd-highlight-pulse`

@@ -1,0 +1,73 @@
+<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>Лис — канон и сцены v2</title><style>
+:root{--accent:#F47B3C;--surface:rgba(255,255,255,.04);--hair:rgba(255,255,255,.08);--dim:rgba(244,244,246,.6);--faint:rgba(244,244,246,.45);--danger:#E0574F}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,-apple-system,system-ui,sans-serif;background:#17171b;color:#F4F4F6;padding:26px 20px 60px}
+h1{font-size:20px;font-weight:800;margin-bottom:6px}
+h2{font-size:14px;font-weight:800;margin:26px 0 12px;color:var(--accent)}
+p.doc{font-size:13px;color:var(--dim);max-width:980px;line-height:1.6;margin-bottom:4px}
+p.doc b{color:var(--accent)}
+p.doc .warn{color:var(--danger);font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;max-width:1160px}
+.card{background:var(--surface);border:1px solid var(--hair);border-radius:16px;overflow:hidden}
+.card.win{border-color:var(--accent);box-shadow:0 0 0 3px rgba(244,123,60,.15)}
+.card.weak{opacity:.7}
+.art{background:#fff;aspect-ratio:1}
+.art img{width:100%;height:100%;object-fit:contain}
+.meta{padding:10px 12px 13px}
+.t{font-size:12.5px;font-weight:800}
+.d{font-size:11px;color:var(--faint);margin-top:3px;min-height:28px}
+</style></head><body>
+<h1>Наш лис: канон и сцены v2 — теперь это ОН</h1>
+<p class="doc">Прошлый заход провалился, потому что style_id переносит только манеру отрисовки, а тело и одежду модель выдумывала заново.
+Новый рецепт: <b>image-to-image от самого канона</b> (strength 0.55–0.65) + «паспорт героя» в каждом промпте + мелкие пропсы дорисованы прямо в SVG.
+Одежда меняется по сюжету, очки — везде: на морде или реквизитом.</p>
+<p class="doc"><span class="warn">Кредиты Recraft кончились (0 из 3360):</span> SVG-вывод стоит ~80 кр/картинка. Слабые сцены перегенерим после пополнения — помечены ниже.</p>
+
+<h2>Канон — исходник для i2i</h2><div class="grid">
+<div class="card win"><div class="art"><img src="generated/stylyaga-utya-2.svg"></div><div class="meta"><div class="t">Наш лис</div><div class="d">«Утиный стиль · 2»: очки, пиджак, машет</div></div></div>
+</div>
+
+<h2>1 · Каталог пуст — «высматривает» (два кандидата)</h2><div class="grid">
+<div class="card win"><div class="art"><img src="generated/mx-d-2.svg"></div><div class="meta"><div class="t">Вариант А</div><div class="d">Лапа у брови, смотрит вдаль, пиджак на месте</div></div></div>
+<div class="card win"><div class="art"><img src="generated/mx-i-2.svg"></div><div class="meta"><div class="t">Вариант Б</div><div class="d">Козырёк у виска, вторая лапа на бедре</div></div></div>
+</div>
+
+<h2>2 · Фильтры пусты — сыщик с лупой (тренч)</h2><div class="grid">
+<div class="card win"><div class="art"><img src="generated/sc2-filter-2.svg"></div><div class="meta"><div class="t">Вариант А</div><div class="d">Лупа поднята, тренч с воротником</div></div></div>
+<div class="card"><div class="art"><img src="generated/sc2-filter-1.svg"></div><div class="meta"><div class="t">Вариант Б</div><div class="d">Лупа поменьше, у уха</div></div></div>
+</div>
+
+<h2>3 · Ошибка сети — штекер</h2><div class="grid">
+<div class="card weak"><div class="art"><img src="generated/sc3b-error-2.svg"></div><div class="meta"><div class="t">Кандидат</div><div class="d">Штекер и провод есть, но морда грубее канона — перегенерить после топ-апа</div></div></div>
+</div>
+
+<h2>4 · Клуб владельца пуст — вешает гирлянду</h2><div class="grid">
+<div class="card win"><div class="art"><img src="generated/sc4b-owner-2.svg"></div><div class="meta"><div class="t">Вариант А</div><div class="d">Поправляет флажки, очки на месте</div></div></div>
+<div class="card"><div class="art"><img src="generated/sc4-owner-2.svg"></div><div class="meta"><div class="t">Вариант Б</div><div class="d">Машет под гирляндой</div></div></div>
+</div>
+
+<h2>5 · Участник ждёт — дремлет (очки сняты, висят на вороте)</h2><div class="grid">
+<div class="card win"><div class="art"><img src="generated/sc-sleep-fix2.svg"></div><div class="meta"><div class="t">Готово</div><div class="d">Глаза-дуги и очки на груди дорисованы в SVG руками</div></div></div>
+</div>
+
+<h2>6 · Организатор планирует — свитер, карандаш, календарь</h2><div class="grid">
+<div class="card"><div class="art"><img src="generated/sc6-plan-2.svg"></div><div class="meta"><div class="t">Вариант А</div><div class="d">Свитер, лист под мышкой, чешет затылок</div></div></div>
+<div class="card weak"><div class="art"><img src="generated/sc6-plan-1.svg"></div><div class="meta"><div class="t">Вариант Б</div><div class="d">Карандаш есть, но свитер как платье — перегенерить</div></div></div>
+</div>
+
+<h2>7 · Профиль без интересов — значки на пиджак</h2><div class="grid">
+<div class="card"><div class="art"><img src="generated/sc7-badges-fix.svg"></div><div class="meta"><div class="t">Кандидат</div><div class="d">Значки дорисованы в SVG; поза «прикалывает» — так себе, можно перегенерить</div></div></div>
+</div>
+
+<h2>8 · Статистика оживёт — показывает на график</h2><div class="grid">
+<div class="card win"><div class="art"><img src="generated/sc8-stats-fix.svg"></div><div class="meta"><div class="t">Готово</div><div class="d">Показывает пальцем на растущий график (график дорисован в SVG)</div></div></div>
+</div>
+
+<h2>9 · Приглашение недействительно — порванный билет</h2><div class="grid">
+<div class="card"><div class="art"><img src="generated/sc9-ticket-fix.svg"></div><div class="meta"><div class="t">Кандидат</div><div class="d">Смущённо чешет затылок, половинки билета на полу (дорисованы)</div></div></div>
+</div>
+
+<h2>10 · «Мои клубы» пусто</h2><div class="grid">
+<div class="card win"><div class="art"><img src="generated/stylyaga-utya-2.svg"></div><div class="meta"><div class="t">Канон как есть</div><div class="d">Приветственный жест — идеально для первого экрана</div></div></div>
+</div>
+</body></html>

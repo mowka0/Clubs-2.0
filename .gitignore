@@ -15,3 +15,9 @@ mockups/
 
 # Serena MCP (semantic code navigation) — personal dev tooling, not shared
 .serena/
+
+# Recraft-сгенерированные ассеты (сырые растр/вектор до отбора и оптимизации) — держим на диске
+docs/design/empty-states/generated/
+
+# Референсы стиля (чужие картинки) — только на диске
+docs/design/empty-states/ref/

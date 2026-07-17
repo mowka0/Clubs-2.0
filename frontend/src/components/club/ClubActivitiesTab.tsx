@@ -1,18 +1,22 @@
 import { FC, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Placeholder, Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useClubActivitiesQuery } from '../../queries/activities';
 import type { ActivityFilter, ActivityItemDto } from '../../api/activities';
 import { ActivityFilterChips } from '../manage/ActivityFilterChips';
 import { ActivityFeedList } from '../manage/ActivityFeedList';
+import { FoxCafeEmpty } from '../feed/FoxCafeEmpty';
 
 interface ClubActivitiesTabProps {
   clubId: string;
+  /** Владелец/со-организатор: пустое состояние получает CTA «Создать активность». */
+  isManager: boolean;
 }
 
-export const ClubActivitiesTab: FC<ClubActivitiesTabProps> = ({ clubId }) => {
+export const ClubActivitiesTab: FC<ClubActivitiesTabProps> = ({ clubId, isManager }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const haptic = useHaptic();
 
   const [filter, setFilter] = useState<ActivityFilter>('all');
@@ -25,6 +29,20 @@ export const ClubActivitiesTab: FC<ClubActivitiesTabProps> = ({ clubId }) => {
     haptic.impact('light');
     if (activity.type === 'event') navigate(`/events/${activity.id}`);
     else navigate(`/skladchina/${activity.id}`);
+  };
+
+  /**
+   * CTA организатора не открывает флоу создания сам: единый флоу живёт в FAB дока
+   * (AppDock) и на странице своего клуба уже «заряжен» на него. Вместо дубля флоу
+   * подсвечиваем сам FAB — человек заодно запоминает, где создание живёт всегда.
+   * replace, чтобы подсветка не плодила лишний шаг в истории навигации.
+   */
+  const handleCreateCta = () => {
+    haptic.impact('light');
+    navigate(`${location.pathname}${location.search}`, {
+      replace: true,
+      state: { highlight: 'create-activity' },
+    });
   };
 
   const feed = activitiesQuery.data;
@@ -58,7 +76,19 @@ export const ClubActivitiesTab: FC<ClubActivitiesTabProps> = ({ clubId }) => {
 
       {isEmpty && (
         <div style={{ padding: '0 20px' }}>
-          <Placeholder description="В клубе пока нет активностей." />
+          {isManager ? (
+            <FoxCafeEmpty
+              title="Пока ни одной активности"
+              description="Здесь появятся события и складчины клуба — участники увидят их сразу."
+              ctaLabel="Создать активность"
+              onCta={handleCreateCta}
+            />
+          ) : (
+            <FoxCafeEmpty
+              title="Активностей пока нет"
+              description="Организатор ещё не запланировал ни одного события. Как появится — увидишь здесь."
+            />
+          )}
         </div>
       )}
 
