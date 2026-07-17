@@ -44,12 +44,12 @@ export const ClubActivitiesTab: FC<ClubActivitiesTabProps> = ({ clubId, isManage
   const feed = activitiesQuery.data;
   const isInitialLoading = activitiesQuery.isPending;
   const isError = activitiesQuery.isError && !isInitialLoading;
-  const isEmpty =
-    !isInitialLoading &&
-    !isError &&
-    feed !== undefined &&
-    feed.upcoming.length === 0 &&
-    feed.past.length === 0;
+  // Лис показывается всегда, когда впереди пусто — даже если у клуба есть прошедшие
+  // встречи: без запланированного «продолжения» таб для новичка выглядит так же мёртво.
+  // История при этом не прячется: ActivityFeedList рендерит секцию «Прошедшие» под сценой.
+  const showEmptyScene =
+    !isInitialLoading && !isError && feed !== undefined && feed.upcoming.length === 0;
+  const hasPast = (feed?.past.length ?? 0) > 0;
 
   return (
     <>
@@ -70,25 +70,33 @@ export const ClubActivitiesTab: FC<ClubActivitiesTabProps> = ({ clubId, isManage
         </div>
       )}
 
-      {isEmpty && (
+      {showEmptyScene && (
         <div style={{ padding: '0 20px' }}>
           {isManager ? (
             <FoxCafeEmpty
-              title="Пока ни одной активности"
-              description="Здесь появятся события и складчины клуба — участники увидят их сразу."
+              title={hasPast ? 'Ничего не запланировано' : 'Пока ни одной активности'}
+              description={
+                hasPast
+                  ? 'Прошлые встречи на месте, а впереди пусто. Самое время позвать клуб на следующую.'
+                  : 'Здесь появятся события и складчины клуба — участники увидят их сразу.'
+              }
               ctaLabel="Создать активность"
               onCta={handleCreateCta}
             />
           ) : (
             <FoxCafeEmpty
-              title="Активностей пока нет"
-              description="Организатор ещё не запланировал ни одного события. Как появится — увидишь здесь."
+              title={hasPast ? 'Новых активностей пока нет' : 'Активностей пока нет'}
+              description={
+                hasPast
+                  ? 'Организатор ещё не запланировал следующую встречу. Как появится — увидишь здесь.'
+                  : 'Организатор ещё не запланировал ни одного события. Как появится — увидишь здесь.'
+              }
             />
           )}
         </div>
       )}
 
-      {!isInitialLoading && !isError && feed !== undefined && !isEmpty && (
+      {!isInitialLoading && !isError && feed !== undefined && (
         <ActivityFeedList feed={feed} onActivityClick={handleActivityClick} />
       )}
     </>
