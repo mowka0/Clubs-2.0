@@ -7,7 +7,8 @@ import { useCreateFlowStore } from '../../store/useCreateFlowStore';
 import type { ActivityFilter, ActivityItemDto } from '../../api/activities';
 import { ActivityFilterChips } from '../manage/ActivityFilterChips';
 import { ActivityFeedList } from '../manage/ActivityFeedList';
-import { FoxCafeEmpty } from '../feed/FoxCafeEmpty';
+import { FoxEmpty } from '../feed/FoxEmpty';
+import foxCafeArt from '../../assets/mascot/fox-cafe.png';
 
 interface ClubActivitiesTabProps {
   clubId: string;
@@ -73,18 +74,25 @@ export const ClubActivitiesTab: FC<ClubActivitiesTabProps> = ({ clubId, isManage
       {showEmptyScene && (
         <div style={{ padding: '0 20px' }}>
           {isManager ? (
-            <FoxCafeEmpty
+            <FoxEmpty
+              art={foxCafeArt}
+              artLabel="Лис ждёт за столиком"
+              cafeEffects
+              soonIcon="📅"
               title={hasPast ? 'Ничего не запланировано' : 'Пока ни одной активности'}
               description={
                 hasPast
                   ? 'Прошлые встречи на месте, а впереди пусто. Самое время позвать клуб на следующую.'
                   : 'Здесь появятся события и складчины клуба — участники увидят их сразу.'
               }
-              ctaLabel="Создать активность"
-              onCta={handleCreateCta}
+              primary={{ label: 'Создать активность', onClick: handleCreateCta }}
             />
           ) : (
-            <FoxCafeEmpty
+            <FoxEmpty
+              art={foxCafeArt}
+              artLabel="Лис ждёт за столиком"
+              cafeEffects
+              soonIcon="📅"
               title={hasPast ? 'Новых активностей пока нет' : 'Активностей пока нет'}
               description={
                 hasPast

@@ -4,7 +4,11 @@ import { Spinner } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useApplyToClubMutation, useClubByInviteQuery, useJoinByInviteMutation, useMyClubsQuery } from '../queries/clubs';
+import { ApiError } from '../api/apiClient';
 import { formatPrice } from '../utils/formatters';
+import { FoxEmpty } from '../components/feed/FoxEmpty';
+import foxInviteArt from '../assets/mascot/fox-invite.png';
+import foxErrorArt from '../assets/mascot/fox-error.png';
 
 const CATEGORY_LABELS: Record<string, string> = {
   sport: 'Спорт', creative: 'Творчество', food: 'Еда',
@@ -39,7 +43,6 @@ export const InvitePage: FC = () => {
 
   const club = clubQuery.data;
   const loading = clubQuery.isPending;
-  const loadError = clubQuery.error?.message;
   const joining = joinMutation.isPending || applyMutation.isPending;
 
   // club-invites (кадр G): в полный клуб прямое вступление невозможно — приглашение
@@ -102,18 +105,40 @@ export const InvitePage: FC = () => {
     );
   }
 
-  if (loadError && !club) {
+  // Сбой запроса — не то же, что битая ссылка: на несуществующий/отозванный код
+  // бэкенд отвечает 404, а сеть и 5xx — временные проблемы, лечатся повтором.
+  const isInviteNotFound = clubQuery.error instanceof ApiError && clubQuery.error.status === 404;
+
+  if (clubQuery.isError && !isInviteNotFound) {
     return (
       <div className="rd-page">
-        <div className="rd-glass rd-empty" style={{ marginTop: 40 }}>
-          <div className="rd-title">Ссылка недействительна</div>
-          <div className="rd-sub">Эта ссылка-приглашение устарела или не существует</div>
-        </div>
+        <FoxEmpty
+          art={foxErrorArt}
+          variant="error"
+          title="Не удалось открыть приглашение"
+          description="Проверь соединение и попробуй ещё раз."
+          primary={{ label: 'Повторить', onClick: () => { haptic.impact('light'); clubQuery.refetch(); } }}
+        />
       </div>
     );
   }
 
-  if (!club) return null;
+  // Лендинг приглашения — часто первый экран новичка в приложении: тупик с битой
+  // ссылкой обязан давать выход в каталог, иначе человек просто закроет Mini App.
+  const invalidInviteScene = (
+    <div className="rd-page">
+      <FoxEmpty
+        art={foxInviteArt}
+        title="Ссылка недействительна"
+        description="Возможно, приглашение устарело или его отозвали — попроси друга прислать новую ссылку"
+        primary={{ label: 'Найти клубы', onClick: () => navigate('/') }}
+      />
+    </div>
+  );
+
+  // Сюда доходят 404 (код не существует или отозван) и успешный ответ с пустым
+  // телом — без фолбэка страница осталась бы белым экраном.
+  if (!club) return invalidInviteScene;
 
   if (joined) {
     const isPaid = club.subscriptionPrice > 0;

@@ -3,25 +3,26 @@ import { useNavigate } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMyEventsQuery } from '../../queries/events';
+import { useOrganizerClubs } from '../../queries/organizerClubs';
+import { useCreateFlowStore } from '../../store/useCreateFlowStore';
 import { FeedSection } from '../feed/FeedSection';
 import { FeedSkeleton } from '../feed/FeedSkeleton';
-import { FeedEmpty } from '../feed/FeedEmpty';
+import { FoxEmpty } from '../feed/FoxEmpty';
 import { EventCard } from '../feed/EventCard';
 import { groupMyEvents } from '../../utils/feedGrouping';
-
-const CALENDAR_ICON = (
-  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="3" y="4" width="18" height="18" rx="2" />
-    <line x1="16" y1="2" x2="16" y2="6" />
-    <line x1="8" y1="2" x2="8" y2="6" />
-    <line x1="3" y1="10" x2="21" y2="10" />
-  </svg>
-);
+import foxPlanningArt from '../../assets/mascot/fox-planning.png';
+import foxCatalogArt from '../../assets/mascot/fox-catalog.png';
+import foxErrorArt from '../../assets/mascot/fox-error.png';
 
 export const EventsTab: FC = () => {
   const navigate = useNavigate();
   const haptic = useHaptic();
   const myEventsQuery = useMyEventsQuery();
+  // Роль-развилка пустого состояния: организатору бессмысленно предлагать Поиск —
+  // его путь к первому событию лежит через единый флоу создания.
+  const { clubs: organizerClubs, isLoading: isRoleLoading } = useOrganizerClubs();
+  const isOrganizer = organizerClubs.length > 0;
+  const openCreateFlow = useCreateFlowStore((s) => s.open);
 
   const events = useMemo(
     () => myEventsQuery.data?.pages.flatMap((p) => p.content) ?? [],
@@ -55,32 +56,49 @@ export const EventsTab: FC = () => {
     navigate('/');
   };
 
+  const handleCreateClick = () => {
+    haptic.impact('light');
+    openCreateFlow();
+  };
+
   const isLoadingInitial = myEventsQuery.isPending;
   const isError = myEventsQuery.isError && !myEventsQuery.isPending;
   const isEmpty = !isLoadingInitial && !isError && events.length === 0;
+  // Пока роль не определена, пустую сцену держим на скелетоне — иначе организатор
+  // на мгновение увидит участнический вариант с CTA «Перейти в Поиск».
+  const isEmptySceneResolving = isEmpty && isRoleLoading;
 
   return (
     <>
-      {isLoadingInitial && <FeedSkeleton count={3} />}
+      {(isLoadingInitial || isEmptySceneResolving) && <FeedSkeleton count={3} />}
 
       {isError && (
-        <FeedEmpty
-          icon={CALENDAR_ICON}
+        <FoxEmpty
+          art={foxErrorArt}
+          variant="error"
           title="Не удалось загрузить события"
-          description="Проверьте соединение и попробуйте снова."
-          ctaLabel="Повторить"
-          onCta={() => myEventsQuery.refetch()}
+          description="Проверь соединение и попробуй ещё раз."
+          primary={{ label: 'Повторить', onClick: () => { haptic.impact('light'); myEventsQuery.refetch(); } }}
         />
       )}
 
-      {isEmpty && (
-        <FeedEmpty
-          icon={CALENDAR_ICON}
-          title="Пока нет событий"
-          description="Найдите интересные клубы в Поиске — они появятся здесь, как только запланируют встречу."
-          ctaLabel="Перейти в Поиск"
-          onCta={handleSearchClick}
-        />
+      {isEmpty && !isEmptySceneResolving && (
+        isOrganizer ? (
+          <FoxEmpty
+            art={foxPlanningArt}
+            soonIcon="📅"
+            title="Пора запланировать встречу"
+            description="В твоём клубе ещё нет событий. Создай первое — участники увидят его здесь и смогут проголосовать за дату"
+            primary={{ label: 'Создать событие', onClick: handleCreateClick }}
+          />
+        ) : (
+          <FoxEmpty
+            art={foxCatalogArt}
+            title="Пока нет событий"
+            description="Найди интересные клубы в Поиске — они появятся здесь, как только запланируют встречу."
+            primary={{ label: 'Перейти в Поиск', onClick: handleSearchClick }}
+          />
+        )
       )}
 
       {!isLoadingInitial && !isError && sections.map((section) => (

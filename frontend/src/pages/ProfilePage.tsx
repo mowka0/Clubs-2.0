@@ -10,6 +10,8 @@ import { countryNameByCode } from '../components/CityPicker';
 import { ProfileEditModal } from '../components/profile/ProfileEditModal';
 import { GamificationPanel } from '../components/profile/GamificationPanel';
 import { SubscriptionCard } from '../components/subscription/SubscriptionCard';
+import { FoxEmpty } from '../components/feed/FoxEmpty';
+import foxInterestsArt from '../assets/mascot/fox-interests.png';
 import { tierWord, clubsPrepositional } from '../utils/reputationTier';
 
 const GearIcon: FC = () => (
@@ -133,7 +135,7 @@ export const ProfilePage: FC = () => {
 
       {user.bio && <div className="rd-bio">{user.bio}</div>}
 
-      {interests.length > 0 && (
+      {interests.length > 0 ? (
         <>
           <div className="rd-section-sub-h">Интересы</div>
           <div className="rd-tags">
@@ -142,7 +144,37 @@ export const ProfilePage: FC = () => {
             ))}
           </div>
         </>
-      )}
+      ) : interestsQuery.isError ? (
+        // Сбой загрузки нельзя выдавать за «интересов нет»: пустота зовёт добавить,
+        // а здесь честный ответ — ошибка и повтор. Ошибка фонового рефетча поверх
+        // устаревших данных сюда не попадает — ветка выше продолжает показывать теги.
+        <>
+          <div className="rd-section-sub-h">Интересы</div>
+          {/* role="alert" — скринридер озвучит сбой сразу при появлении плашки */}
+          <div className="rd-glass rd-empty" role="alert">
+            <div className="rd-title">Не удалось загрузить интересы</div>
+            <button
+              type="button"
+              className="rd-ghost-btn"
+              onClick={() => { haptic.impact('light'); interestsQuery.refetch(); }}
+            >
+              Повторить
+            </button>
+          </div>
+        </>
+      ) : interestsQuery.isSuccess ? (
+        // Приглашение — только при подтверждённой пустоте; во время загрузки секция скрыта.
+        <FoxEmpty
+          art={foxInterestsArt}
+          artLabel="Лис ждёт твои интересы"
+          title="Расскажи, что тебе интересно"
+          description="Добавь пару интересов — по ним проще находить близкие клубы, а организаторы видят, что тебе откликается."
+          primary={{
+            label: 'Добавить интересы',
+            onClick: () => { haptic.impact('light'); setEditOpen(true); },
+          }}
+        />
+      ) : null}
 
       {hasReputation && (
         <div className="rd-stats">

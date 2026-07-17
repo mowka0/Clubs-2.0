@@ -41,8 +41,17 @@ function pctTone(value: number): Tone {
   return 'neutral';
 }
 
+/**
+ * «Клуб ещё не жил»: ни одной встречи и никого, кроме владельца (владелец сам состоит
+ * в memberships, поэтому граница — 1). Нулевая вовлечённость тут — не тревога, а отсутствие
+ * истории: красный тон и подсказка «напомните о встрече» только пугали бы нового организатора.
+ */
+export function isPristineClub(s: ClubStatsDto, memberCount: number): boolean {
+  return s.totalMeetings === 0 && memberCount <= 1;
+}
+
 /** Рычаги роста, адаптированные под тип клуба (§9.3). Возвращаются только применимые. */
-export function buildLevers(s: ClubStatsDto): LeverVM[] {
+export function buildLevers(s: ClubStatsDto, isPristine: boolean = false): LeverVM[] {
   const levers: LeverVM[] = [];
 
   if (s.clubType === 'paid' && s.retentionPercent !== null) {
@@ -77,7 +86,8 @@ export function buildLevers(s: ClubStatsDto): LeverVM[] {
     key: 'engagement',
     label: 'Вовлечённость (голосуют/идут)',
     value: `${s.engagementPercent}%`,
-    tone: pctTone(s.engagementPercent),
+    // У не жившего клуба 0% — это «ещё нечего мерить», а не провал: не красим.
+    tone: isPristine ? 'neutral' : pctTone(s.engagementPercent),
     trend: s.engagementTrend,
   });
 
@@ -105,7 +115,7 @@ export function buildLevers(s: ClubStatsDto): LeverVM[] {
 }
 
 /** Действенные nudge'и, привязанные к рычагам — фиксированный whitelist (§9.5); возвращаются только сработавшие. */
-export function buildNudges(s: ClubStatsDto): NudgeVM[] {
+export function buildNudges(s: ClubStatsDto, isPristine: boolean = false): NudgeVM[] {
   const nudges: NudgeVM[] = [];
 
   const pending = s.pendingApplications ?? 0;
@@ -133,7 +143,8 @@ export function buildNudges(s: ClubStatsDto): NudgeVM[] {
     });
   }
 
-  if (s.engagementPercent < ENGAGEMENT_NUDGE_THRESHOLD) {
+  // Пока клуб не жил, «напомните о встрече» бессмысленно — напоминать не о чем и некому.
+  if (!isPristine && s.engagementPercent < ENGAGEMENT_NUDGE_THRESHOLD) {
     nudges.push({
       key: 'remind_engagement',
       icon: '📣',
