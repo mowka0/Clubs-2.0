@@ -86,6 +86,18 @@ no text, no letters, no words anywhere.
 - **8d. Ковровая дорожка:** `Scene: the fox unrolls a bright orange welcome carpet towards the viewer with a wide inviting gesture, the carpet unrolling from his paws to the front bottom edge, warm hospitable smile, sunglasses on.`
 - **8e. Компас:** `Scene: the fox holds a big round golden compass in one paw and points forward with the other paw, adventurous smile, tail up, one foot stepping forward as if starting a journey, sunglasses on.`
 
+## 9. Клуб создан (экран-поздравление после создания)
+Когда: организатор только что создал клуб (сейчас там эмодзи 🎉). Идея: маленький праздник.
+
+- **9a. Хлопушка:** `Scene: the fox joyfully fires a party popper cone held in one paw, orange and cream confetti and thin streamers bursting upward, his other paw raised in celebration, big happy open-mouth smile, tail up, sunglasses on.`
+
+## 10. Онбординг — три слайда карусели первого входа
+Тексты слайдов утверждены (docs/modules/onboarding.md) — лис их иллюстрирует, не дублирует.
+
+- **10a. Слайд 1 «Объединяйтесь в Clubs, чтобы встречаться вживую»:** канон-приветствие (`fox-hero-full.png`, машет) как есть — ноль работы; либо объятия: `Scene: the fox throws both paws wide open in a warm welcoming gesture, leaning slightly forward as if greeting an old friend, joyful open smile, tail swishing, sunglasses on.`
+- **10b. Слайд 2 «Ходи на встречи, которые готовят другие» (участник):** целый билет — намеренный контраст с порванным из сцены приглашения: `Scene: the fox happily holds up one big intact admission ticket with both paws, showing it to the viewer, excited smile, one foot stepping forward as if already heading to the event, sunglasses on.`
+- **10c. Слайд 3 «Или веди свой клуб» (организатор):** `Scene: the fox as a confident host speaking into a small megaphone raised in one paw, the other paw waving invitingly, chest out, proud warm smile, tail up, sunglasses on.`
+
 ---
 
 ## Технические напоминания
