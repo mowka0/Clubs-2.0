@@ -1,5 +1,8 @@
 import type { HighlightTarget } from '../../hooks/useHighlight';
 import type { OnboardingDoor } from '../../types/api';
+import foxWelcomeArt from '../../assets/mascot/fox-onb-1.png';
+import foxRideArt from '../../assets/mascot/fox-onb-2.png';
+import foxConductorArt from '../../assets/mascot/fox-onb-3.png';
 
 /**
  * Тексты онбординга. Утверждены PO построчно (docs/modules/onboarding.md § «Слайды») —
@@ -40,8 +43,8 @@ export interface TitleSegment {
 }
 
 export interface OnboardingSlideData {
-  /** Эмодзи-арт в круге-свечении. */
-  art: string;
+  /** Арт слайда — сцена с лисом-маскотом (import из assets/mascot). */
+  artSrc: string;
   title: TitleSegment[];
   subtitle: string;
   /** Хвост подзаголовка, набранный жирным. Есть только у слайда организатора. */
@@ -59,7 +62,8 @@ export interface OnboardingSlideData {
 
 export const ONBOARDING_SLIDES: readonly OnboardingSlideData[] = [
   {
-    art: '🙌',
+    // Лис приветственно машет со скамейки — «присаживайся, тут свои».
+    artSrc: foxWelcomeArt,
     // Первый экран обязан назвать продукт: человек только что открыл незнакомое приложение.
     // Имя вшито в сам слоган и набрано каллиграфией — так оно и представляется, и объясняет,
     // зачем всё это, одной строкой.
@@ -94,7 +98,8 @@ export const ONBOARDING_SLIDES: readonly OnboardingSlideData[] = [
     ],
   },
   {
-    art: '🎟',
+    // Лис мчится на самокате с флагом-приглашением — «на встречу!».
+    artSrc: foxRideArt,
     title: [
       { text: 'Ходи на встречи, ' },
       { text: 'которые готовят другие', accent: true },
@@ -126,7 +131,8 @@ export const ONBOARDING_SLIDES: readonly OnboardingSlideData[] = [
     secondary: { label: 'Хочу вести свой клуб →', step: 1 },
   },
   {
-    art: '🎪',
+    // Лис-дирижёр за пультом — организатор задаёт ритм всему клубу.
+    artSrc: foxConductorArt,
     title: [
       { text: 'Или ' },
       { text: 'веди свой клуб', accent: true },

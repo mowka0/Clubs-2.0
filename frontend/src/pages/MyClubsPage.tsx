@@ -808,11 +808,18 @@ export const MyClubsPage: FC = () => {
     organizerInboxCount === 0 &&
     historyClubs.length === 0;
 
-  // club-invites (кадр E): выбор сделан на экране «Клуб создан 🎉» внутри модалки —
+  // club-invites (кадр E): выбор сделан на экране «Клуб создан» внутри модалки —
   // «Пригласить участников» открывает клуб с шитом приглашения, «Позже» — просто клуб.
   const handleCreated = (id: string, openInvite: boolean) => {
     setShowCreateModal(false);
     navigate(`/clubs/${id}`, openInvite ? { state: { openInvite: true } } : undefined);
+  };
+
+  // «Привязать чат» с экрана успеха: сразу в Управление → Чат — привязка чата
+  // повышает выживаемость клуба, поэтому предлагаем её в момент максимальной мотивации.
+  const handleLinkChat = (id: string) => {
+    setShowCreateModal(false);
+    navigate(`/clubs/${id}/manage?tab=chat`);
   };
 
   const openCreate = () => {
@@ -1094,7 +1101,11 @@ export const MyClubsPage: FC = () => {
 
       {showCreateModal && (
         <Modal open onOpenChange={(open) => !open && setShowCreateModal(false)}>
-          <CreateClubModal onClose={() => setShowCreateModal(false)} onCreated={handleCreated} />
+          <CreateClubModal
+            onClose={() => setShowCreateModal(false)}
+            onCreated={handleCreated}
+            onLinkChat={handleLinkChat}
+          />
         </Modal>
       )}
 

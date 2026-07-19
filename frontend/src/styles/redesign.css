@@ -1726,10 +1726,11 @@
 .ob-slide { display: flex; flex-direction: column; }
 
 .ob-art { display: flex; align-items: center; justify-content: center; margin: 6px 0 10px; flex-shrink: 0; }
-.ob-art-ring {
-  width: 96px; height: 96px; border-radius: 50%; font-size: 52px;
-  display: flex; align-items: center; justify-content: center;
-  background: radial-gradient(circle, rgba(244, 123, 60, 0.28), rgba(244, 123, 60, 0) 70%);
+/* Лис-сцена вместо эмодзи-круга: высота близка к прежнему рингу, чтобы не выдавить
+   преимущества за экран; тёплое свечение сохранено дроп-тенью. */
+.ob-art-img {
+  height: 128px; width: auto; user-select: none; -webkit-user-drag: none;
+  filter: drop-shadow(0 0 26px rgba(244, 123, 60, 0.30));
 }
 
 .ob-title { font-size: 25px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.14; text-align: center; margin: 0; }
@@ -1963,9 +1964,16 @@
 .rd-foxcafe-soon-lines i { display: block; height: 11px; width: 64%; border-radius: 6px; background: var(--surface-2); }
 .rd-foxcafe-soon-lines i + i { height: 8px; width: 42%; margin-top: 9px; }
 
+/* Лис-ленточка на экране «Клуб создан» — входит той же пружиной, что и пустые сцены. */
+.rd-foxcreated-art {
+  display: block; height: 150px; width: auto; margin: 0 auto 12px;
+  animation: rd-foxcafe-pop 0.62s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
 /* «Меньше движения»: сцена замирает, декоративные слои прячем, тексты видимы сразу. */
 @media (prefers-reduced-motion: reduce) {
   .rd-foxcafe *, .rd-foxcafe *::after { animation: none !important; }
   .rd-foxcafe-title, .rd-foxcafe-sub, .rd-fox-actions, .rd-foxcafe-soon { opacity: 1; }
   .rd-foxcafe-dust, .rd-foxcafe-steam, .rd-foxcafe-glint { display: none; }
+  .rd-foxcreated-art { animation: none; }
 }

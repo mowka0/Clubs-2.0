@@ -48,7 +48,7 @@ no text, no letters, no words anywhere.
 Когда: у организатора есть клуб, но ни одного события. CTA «Создать событие».
 Идея: планирование — «возьми карандаш, назначь дату».
 
-- **4a. Карандаш и календарь:** `Scene: the fox in a cozy cream turtleneck sweater instead of the blazer, holding a huge orange pencil in one paw and a big blank paper calendar sheet in the other, inspired smile, sunglasses on his face.`
+- **4a v2. За письменным столом (сцена-диорама; v1 «стоя с карандашом» отвергнут PO — однотипная поза + модель дорисовала панели):** `Scene: the fox sits at a small wooden desk leaning over a big paper calendar, writing on it with an orange pencil, other paw scratching his chin in thought, a desk lamp and a coffee mug on the desk, one crumpled paper ball on the floor beside, sunglasses pushed up on his forehead, eyes focused down. The desk is the only scenery, plain white background, no wall, no room.`
 - **4b. Доска планов:** `Scene: the fox pins a blank sticky note onto a cork board with round pins, standing on his toes, tail up, focused happy expression, sunglasses on.`
 - **4c. Дирижёр:** `Scene: the fox stands like an orchestra conductor with a thin baton raised in one paw, in front of a few empty simple chairs arranged in a semicircle, confident smile — the show is about to start.`
 
@@ -89,14 +89,16 @@ no text, no letters, no words anywhere.
 ## 9. Клуб создан (экран-поздравление после создания)
 Когда: организатор только что создал клуб (сейчас там эмодзи 🎉). Идея: маленький праздник.
 
-- **9a. Хлопушка:** `Scene: the fox joyfully fires a party popper cone held in one paw, orange and cream confetti and thin streamers bursting upward, his other paw raised in celebration, big happy open-mouth smile, tail up, sunglasses on.`
+- **9a v2. Врывается в распахнутые двери (сцена; v1 «стоя с хлопушкой» отвергнут — однотипно):** `Scene: the fox bursts through double doors flinging them wide open from inside, mid-stride stepping out, confetti and streamers flying out around him with warm light, head thrown back laughing with joy, one paw still on a door handle, a welcome mat under his feet. The open doors are the only scenery, plain white background, no walls.`
 
 ## 10. Онбординг — три слайда карусели первого входа
 Тексты слайдов утверждены (docs/modules/onboarding.md) — лис их иллюстрирует, не дублирует.
 
-- **10a. Слайд 1 «Объединяйтесь в Clubs, чтобы встречаться вживую»:** канон-приветствие (`fox-hero-full.png`, машет) как есть — ноль работы; либо объятия: `Scene: the fox throws both paws wide open in a warm welcoming gesture, leaning slightly forward as if greeting an old friend, joyful open smile, tail swishing, sunglasses on.`
-- **10b. Слайд 2 «Ходи на встречи, которые готовят другие» (участник):** целый билет — намеренный контраст с порванным из сцены приглашения: `Scene: the fox happily holds up one big intact admission ticket with both paws, showing it to the viewer, excited smile, one foot stepping forward as if already heading to the event, sunglasses on.`
-- **10c. Слайд 3 «Или веди свой клуб» (организатор):** `Scene: the fox as a confident host speaking into a small megaphone raised in one paw, the other paw waving invitingly, chest out, proud warm smile, tail up, sunglasses on.`
+- **10a v2. Слайд 1 «Объединяйтесь в Clubs, чтобы встречаться вживую» — лисья нора:** `Scene: the fox pops out of a round burrow door built into a small grassy hill, leaning out with one paw waving hello and the other holding the round door open, warm inviting smile, a tiny lantern hanging by the door, sunglasses on. The hill with the burrow is the only scenery, plain white background.`
+- **10b v2. Слайд 2 «Ходи на встречи, которые готовят другие» — мчится на встречу:** `Scene: the fox rides a kick scooter leaning into the turn, scarf and tail streaming behind, holding up a big admission ticket in one paw like a flag, joyful wide grin, ears pressed back by the speed, small motion lines behind the wheels, sunglasses on. The scooter and a short strip of road are the only scenery, plain white background.`
+- **10c v3. Слайд 3 «Или веди свой клуб» — открытие своего места (сцена):** `Scene: grand opening of his own club — the fox cuts a wide orange ribbon stretched between two poles with big scissors, standing on a small welcome carpet, behind him an open door with a round spark-emblem sign above it, confetti in the air, proud delighted grin, tail up, sunglasses on. The poles, carpet and door are the only scenery, plain white background, emblem only, no letters.`
+  (v1 «мегафон» и v2 «прыжок с ножницами» отвергнуты PO: однотипные позы без сцены)
+  Запасные: вывеска: `Scene: the fox stands on a small wooden stool and proudly hangs a round wooden sign with an orange spark emblem above an open door, one paw steadying the sign, delighted smile, tail up, sunglasses on. Emblem only, no letters.` · капитан: `Scene: the fox as a captain confidently holds a big ship steering wheel with both paws, one ear tilted in the wind, adventurous grin, scarf fluttering behind, sunglasses on.` (мегафон-вариант отвергнут PO как дежурный)
 
 ---
 

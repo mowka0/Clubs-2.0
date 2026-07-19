@@ -7,6 +7,7 @@ import { useSubscribeMutation } from '../queries/subscription';
 import { paywallFromError, type PaywallInfo } from '../api/subscription';
 import { PaywallModal } from './subscription/PaywallModal';
 import { AvatarUpload } from './AvatarUpload';
+import foxClubCreatedArt from '../assets/mascot/fox-club-created.png';
 import type { CreateClubBody } from '../api/clubs';
 import type { ClubDetailDto } from '../types/api';
 
@@ -57,7 +58,9 @@ export const CreateClubModal: FC<{
   onClose: () => void;
   /** openInvite = true — «Пригласить участников» с экрана успеха (кадр E): клуб откроется с шитом. */
   onCreated: (id: string, openInvite: boolean) => void;
-}> = ({ onClose, onCreated }) => {
+  /** «Привязать чат» с экрана успеха — ведёт в Управление → Чат созданного клуба. */
+  onLinkChat: (id: string) => void;
+}> = ({ onClose, onCreated, onLinkChat }) => {
   const haptic = useHaptic();
   const createClubMutation = useCreateClubMutation();
   const subscribeMutation = useSubscribeMutation();
@@ -195,8 +198,8 @@ export const CreateClubModal: FC<{
   // «позвать своих» — следующее действие. «Позже» просто открывает клуб без шита.
   if (created) {
     return (
-      <div style={{ padding: '34px 24px 24px', textAlign: 'center' }}>
-        <div style={{ fontSize: 44, marginBottom: 12 }} aria-hidden="true">🎉</div>
+      <div style={{ padding: '26px 24px 24px', textAlign: 'center' }}>
+        <img src={foxClubCreatedArt} alt="" className="rd-foxcreated-art" draggable={false} />
         <h3 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 8px' }}>
           Клуб «{created.name}» создан
         </h3>
@@ -209,6 +212,14 @@ export const CreateClubModal: FC<{
           onClick={() => { haptic.impact('medium'); onCreated(created.id, true); }}
         >
           Пригласить участников
+        </button>
+        <button
+          type="button"
+          className="rd-btn-outline"
+          style={{ marginTop: 8 }}
+          onClick={() => { haptic.impact('light'); onLinkChat(created.id); }}
+        >
+          Привязать чат в Telegram
         </button>
         <button
           type="button"
