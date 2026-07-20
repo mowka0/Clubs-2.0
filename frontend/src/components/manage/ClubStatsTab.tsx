@@ -1,8 +1,13 @@
 import { FC } from 'react';
 import { Spinner, Placeholder } from '@telegram-apps/telegram-ui';
+import { useHaptic } from '../../hooks/useHaptic';
 import { useClubStatsQuery } from '../../queries/clubStats';
-import { buildAttention, buildLevers, buildNudges, type LeverVM } from './clubStats';
+import { useClubQuery } from '../../queries/clubs';
+import { useCreateFlowStore } from '../../store/useCreateFlowStore';
+import { buildAttention, buildLevers, buildNudges, isPristineClub, type LeverVM } from './clubStats';
 import { WinBackNudge } from './WinBackNudge';
+import { FoxEmpty } from '../feed/FoxEmpty';
+import foxStatsArt from '../../assets/mascot/fox-stats.png';
 import type { TrendDto } from '../../types/api';
 
 const TrendBadge: FC<{ trend: TrendDto | null }> = ({ trend }) => {
@@ -31,6 +36,11 @@ const Lever: FC<{ lever: LeverVM }> = ({ lever }) => (
  */
 export const ClubStatsTab: FC<{ clubId: string }> = ({ clubId }) => {
   const statsQuery = useClubStatsQuery(clubId);
+  // memberCount для признака «клуб ещё не жил»: ключ совпадает с запросом родительской
+  // страницы, поэтому данные приходят из кэша без лишнего сетевого вызова.
+  const clubQuery = useClubQuery(clubId);
+  const openCreateFlow = useCreateFlowStore((s) => s.open);
+  const haptic = useHaptic();
   const stats = statsQuery.data;
 
   if (statsQuery.isPending) {
@@ -45,12 +55,23 @@ export const ClubStatsTab: FC<{ clubId: string }> = ({ clubId }) => {
     return <Placeholder description="Не удалось загрузить статистику" />;
   }
 
-  const levers = buildLevers(stats);
-  const nudges = buildNudges(stats);
+  // Пока клуб не догрузился, считаем его «жившим» — зрелому клубу баннер не должен мигать.
+  const isPristine = clubQuery.data ? isPristineClub(stats, clubQuery.data.memberCount) : false;
+  const levers = buildLevers(stats, isPristine);
+  const nudges = buildNudges(stats, isPristine);
   const attention = buildAttention(stats);
 
   return (
     <>
+      {isPristine && (
+        <FoxEmpty
+          art={foxStatsArt}
+          title="Статистика оживёт после первой встречи"
+          description="Создай событие и позови участников — здесь появятся удержание, вовлечённость и точечные подсказки, что делать дальше"
+          primary={{ label: 'Создать событие', onClick: () => { haptic.impact('light'); openCreateFlow(); } }}
+        />
+      )}
+
       <div className="rd-section-sub-h">Рычаги роста</div>
       <div className="rd-glass rd-lever-group">
         {levers.map((lever) => (

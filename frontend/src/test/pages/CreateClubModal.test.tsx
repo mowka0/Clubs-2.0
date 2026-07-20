@@ -40,13 +40,14 @@ afterAll(() => server.close());
 function renderModal(props?: { onCreated?: (id: string) => void; onClose?: () => void }) {
   const onClose = props?.onClose ?? vi.fn();
   const onCreated = props?.onCreated ?? vi.fn();
+  const onLinkChat = vi.fn();
   const user = userEvent.setup();
 
   const result = renderWithProviders(
-    <CreateClubModal onClose={onClose} onCreated={onCreated} />,
+    <CreateClubModal onClose={onClose} onCreated={onCreated} onLinkChat={onLinkChat} />,
   );
 
-  return { ...result, user, onClose, onCreated };
+  return { ...result, user, onClose, onCreated, onLinkChat };
 }
 
 describe('CreateClubModal', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildLevers, buildNudges, buildAttention } from '../../components/manage/clubStats';
+import { buildLevers, buildNudges, buildAttention, isPristineClub } from '../../components/manage/clubStats';
 import type { ClubStatsDto } from '../../types/api';
 
 function stats(o: Partial<ClubStatsDto> = {}): ClubStatsDto {
@@ -22,6 +22,21 @@ function stats(o: Partial<ClubStatsDto> = {}): ClubStatsDto {
     ...o,
   };
 }
+
+describe('isPristineClub', () => {
+  it('true only with zero meetings and nobody but the owner', () => {
+    // Владелец сам состоит в memberships, поэтому граница «никого» — memberCount = 1.
+    expect(isPristineClub(stats({ totalMeetings: 0 }), 1)).toBe(true);
+  });
+
+  it('false once the club has held a meeting', () => {
+    expect(isPristineClub(stats({ totalMeetings: 1 }), 1)).toBe(false);
+  });
+
+  it('false once someone besides the owner has joined', () => {
+    expect(isPristineClub(stats({ totalMeetings: 0 }), 2)).toBe(false);
+  });
+});
 
 describe('buildLevers', () => {
   it('paid club shows retention + «Не продлили», hides rejoined', () => {
@@ -52,6 +67,13 @@ describe('buildLevers', () => {
     expect(buildLevers(stats({ engagementPercent: 90 })).find((l) => l.key === 'engagement')?.tone).toBe('ok');
     expect(buildLevers(stats({ engagementPercent: 40 })).find((l) => l.key === 'engagement')?.tone).toBe('bad');
   });
+
+  it('pristine club reads 0% engagement as neutral, not bad', () => {
+    // У не жившего клуба ноль — отсутствие истории, красный тон только пугал бы организатора.
+    const engagement = buildLevers(stats({ engagementPercent: 0 }), true).find((l) => l.key === 'engagement');
+    expect(engagement?.value).toBe('0%');
+    expect(engagement?.tone).toBe('neutral');
+  });
 });
 
 describe('buildNudges', () => {
@@ -72,6 +94,13 @@ describe('buildNudges', () => {
 
   it('no nudges when everything is healthy', () => {
     expect(buildNudges(stats({ engagementPercent: 85 }))).toEqual([]);
+  });
+
+  it('pristine club suppresses the engagement reminder', () => {
+    // Напоминать не о чем и некому: у того же ввода без pristine-флага nudge есть, с флагом — нет.
+    const input = stats({ engagementPercent: 0 });
+    expect(buildNudges(input).map((n) => n.key)).toContain('remind_engagement');
+    expect(buildNudges(input, true).map((n) => n.key)).not.toContain('remind_engagement');
   });
 });
 

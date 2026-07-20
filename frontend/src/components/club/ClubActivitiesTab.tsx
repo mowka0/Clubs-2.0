@@ -3,17 +3,23 @@ import { useNavigate } from 'react-router-dom';
 import { Placeholder, Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useClubActivitiesQuery } from '../../queries/activities';
+import { useCreateFlowStore } from '../../store/useCreateFlowStore';
 import type { ActivityFilter, ActivityItemDto } from '../../api/activities';
 import { ActivityFilterChips } from '../manage/ActivityFilterChips';
 import { ActivityFeedList } from '../manage/ActivityFeedList';
+import { FoxEmpty } from '../feed/FoxEmpty';
+import foxCafeArt from '../../assets/mascot/fox-cafe.png';
 
 interface ClubActivitiesTabProps {
   clubId: string;
+  /** Владелец/со-организатор: пустое состояние получает CTA «Создать активность». */
+  isManager: boolean;
 }
 
-export const ClubActivitiesTab: FC<ClubActivitiesTabProps> = ({ clubId }) => {
+export const ClubActivitiesTab: FC<ClubActivitiesTabProps> = ({ clubId, isManager }) => {
   const navigate = useNavigate();
   const haptic = useHaptic();
+  const openCreateFlow = useCreateFlowStore((s) => s.open);
 
   const [filter, setFilter] = useState<ActivityFilter>('all');
 
@@ -27,15 +33,24 @@ export const ClubActivitiesTab: FC<ClubActivitiesTabProps> = ({ clubId }) => {
     else navigate(`/skladchina/${activity.id}`);
   };
 
+  /**
+   * CTA открывает единый флоу создания (живёт в AppDock): на странице своего клуба
+   * он уже «заряжен» на текущий клуб — сразу выбор типа, без вопроса «какой клуб».
+   */
+  const handleCreateCta = () => {
+    haptic.impact('light');
+    openCreateFlow();
+  };
+
   const feed = activitiesQuery.data;
   const isInitialLoading = activitiesQuery.isPending;
   const isError = activitiesQuery.isError && !isInitialLoading;
-  const isEmpty =
-    !isInitialLoading &&
-    !isError &&
-    feed !== undefined &&
-    feed.upcoming.length === 0 &&
-    feed.past.length === 0;
+  // Лис показывается всегда, когда впереди пусто — даже если у клуба есть прошедшие
+  // встречи: без запланированного «продолжения» таб для новичка выглядит так же мёртво.
+  // История при этом не прячется: ActivityFeedList рендерит секцию «Прошедшие» под сценой.
+  const showEmptyScene =
+    !isInitialLoading && !isError && feed !== undefined && feed.upcoming.length === 0;
+  const hasPast = (feed?.past.length ?? 0) > 0;
 
   return (
     <>
@@ -56,13 +71,40 @@ export const ClubActivitiesTab: FC<ClubActivitiesTabProps> = ({ clubId }) => {
         </div>
       )}
 
-      {isEmpty && (
+      {showEmptyScene && (
         <div style={{ padding: '0 20px' }}>
-          <Placeholder description="В клубе пока нет активностей." />
+          {isManager ? (
+            <FoxEmpty
+              art={foxCafeArt}
+              artLabel="Лис ждёт за столиком"
+              cafeEffects
+              soonIcon="📅"
+              title={hasPast ? 'Ничего не запланировано' : 'Пока ни одной активности'}
+              description={
+                hasPast
+                  ? 'Прошлые встречи на месте, а впереди пусто. Самое время позвать клуб на следующую.'
+                  : 'Здесь появятся события и складчины клуба — участники увидят их сразу.'
+              }
+              primary={{ label: 'Создать активность', onClick: handleCreateCta }}
+            />
+          ) : (
+            <FoxEmpty
+              art={foxCafeArt}
+              artLabel="Лис ждёт за столиком"
+              cafeEffects
+              soonIcon="📅"
+              title={hasPast ? 'Новых активностей пока нет' : 'Активностей пока нет'}
+              description={
+                hasPast
+                  ? 'Организатор ещё не запланировал следующую встречу. Как появится — увидишь здесь.'
+                  : 'Организатор ещё не запланировал ни одного события. Как появится — увидишь здесь.'
+              }
+            />
+          )}
         </div>
       )}
 
-      {!isInitialLoading && !isError && feed !== undefined && !isEmpty && (
+      {!isInitialLoading && !isError && feed !== undefined && (
         <ActivityFeedList feed={feed} onActivityClick={handleActivityClick} />
       )}
     </>

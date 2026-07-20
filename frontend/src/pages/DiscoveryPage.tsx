@@ -1,4 +1,5 @@
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useClubsQuery } from '../queries/clubs';
 import { useClubCardFacts } from '../queries/clubQuality';
@@ -15,6 +16,10 @@ import {
 } from '../components/PriceFilter';
 import { useHaptic } from '../hooks/useHaptic';
 import { useHighlight } from '../hooks/useHighlight';
+import { FoxEmpty } from '../components/feed/FoxEmpty';
+import foxErrorArt from '../assets/mascot/fox-error.png';
+import foxCatalogArt from '../assets/mascot/fox-catalog.png';
+import foxFilterArt from '../assets/mascot/fox-filter.png';
 import type { ClubFilters } from '../api/clubs';
 
 const CATEGORY_CHIPS = [
@@ -80,6 +85,7 @@ export const DiscoveryPage: FC = () => {
   const debouncedFilters = useDebounce(filters, 300);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const haptic = useHaptic();
+  const navigate = useNavigate();
 
   const { user } = useAuthStore();
   const reputationQuery = useMyReputationQuery();
@@ -114,6 +120,7 @@ export const DiscoveryPage: FC = () => {
     isFetchingNextPage,
     fetchNextPage,
     hasNextPage,
+    refetch,
   } = useClubsQuery(queryFilters);
 
   const clubs = data?.pages.flatMap((p) => p.content) ?? [];
@@ -148,6 +155,11 @@ export const DiscoveryPage: FC = () => {
 
   const activeCategory = filters.category ?? '';
   const priceActive = presetIdFromRange(priceRange) !== 'any';
+  // Развилка пустых состояний: с активными фильтрами виноваты фильтры, без них — город.
+  // Считаем от debouncedFilters (по ним и построен запрос), иначе сцена перескакивает
+  // между «фильтры»/«город» на 300 мс дебаунса; цена дебаунса не имеет — берём текущую.
+  const hasActiveFilters =
+    Boolean(debouncedFilters.search) || Boolean(debouncedFilters.category) || priceActive;
 
   return (
     <div className="rd-page">
@@ -239,9 +251,29 @@ export const DiscoveryPage: FC = () => {
       </div>
 
       <div>
-        {error && (
-          <div className="rd-empty" role="alert">
-            <div className="rd-sub">{error.message}</div>
+        {error && clubs.length === 0 && (
+          // Сырой error.message юзеру не показываем — там технические детали HTTP-слоя.
+          <FoxEmpty
+            art={foxErrorArt}
+            variant="error"
+            title="Не удалось загрузить клубы"
+            description="Проверь соединение и попробуй ещё раз."
+            primary={{ label: 'Повторить', onClick: () => { haptic.impact('light'); refetch(); } }}
+          />
+        )}
+
+        {error && clubs.length > 0 && (
+          // Упал рефетч при уже показанном списке: полноэкранная ошибка стёрла бы
+          // рабочие данные — вместо этого компактная плашка, список ниже остаётся.
+          <div className="rd-glass rd-empty" role="alert">
+            <div className="rd-title">Не удалось обновить список</div>
+            <button
+              type="button"
+              className="rd-ghost-btn"
+              onClick={() => { haptic.impact('light'); refetch(); }}
+            >
+              Повторить
+            </button>
           </div>
         )}
 
@@ -250,10 +282,33 @@ export const DiscoveryPage: FC = () => {
         )}
 
         {!isPending && clubs.length === 0 && !error && (
-          <div className="rd-empty">
-            <div className="rd-title">Клубы не найдены</div>
-            <div className="rd-sub">Попробуйте изменить фильтры или город.</div>
-          </div>
+          hasActiveFilters ? (
+            <FoxEmpty
+              art={foxFilterArt}
+              title="Ничего не нашлось"
+              // Город здесь не интерполируем: он в именительном падеже, а фраза требует
+              // родительного («все клубы Твери») — «твоего города» обходит склонение.
+              description="Под выбранные фильтры клубов нет. Сбрось их — покажем все клубы твоего города."
+              primary={{
+                label: 'Сбросить фильтры',
+                // Город намеренно не трогаем: сбрасываются только поиск/категория/цена.
+                onClick: () => { haptic.impact('light'); setFilters({}); setPriceRange({}); },
+              }}
+            />
+          ) : (
+            <FoxEmpty
+              art={foxCatalogArt}
+              // «В твоём городе» вместо «В {city}»: город хранится в именительном падеже,
+              // а сам город и так виден в пилюле шапки.
+              title="В твоём городе пока нет клубов"
+              description="Клубы появляются, когда организаторы создают их здесь. Загляни позже — или стань первым и начни зарабатывать на ведении своего платного клуба (можешь создать бесплатный, если хочешь)."
+              primary={{
+                label: 'Создать свой клуб',
+                onClick: () => { haptic.impact('light'); navigate('/my-clubs', { state: { highlight: 'create-club' } }); },
+              }}
+              secondary={{ label: 'Сменить город', onClick: () => { haptic.impact('light'); setPickerOpen(true); } }}
+            />
+          )
         )}
 
         {clubs.map((club) => (

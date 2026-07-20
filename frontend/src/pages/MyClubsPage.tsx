@@ -20,6 +20,9 @@ import { ApplicationReviewModal } from '../components/applications/ApplicationRe
 import { FullClubBlock } from '../components/applications/FullClubBlock';
 import { MemberProfileModal } from '../components/club/MemberProfileModal';
 import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
+import { FoxEmpty } from '../components/feed/FoxEmpty';
+import foxErrorArt from '../assets/mascot/fox-error.png';
+import foxMyClubsArt from '../assets/mascot/fox-myclubs.png';
 import { formatPeerSignal } from '../features/applications-inbox/lib/peer-signal-format';
 import { LevelPill } from '../components/reputation/LevelPill';
 import { DonutRing } from '../components/reputation/DonutRing';
@@ -79,14 +82,6 @@ function summaryLine(clubs: number, apps: number): string {
   if (apps > 0) parts.push(`${apps} ${pluralRu(apps, ['заявка', 'заявки', 'заявок'])}`);
   return parts.join(' · ');
 }
-
-// SVG-иконка «человек» для пустого состояния страницы.
-const PEOPLE_ICON = (
-  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-    <circle cx="12" cy="7" r="4" />
-  </svg>
-);
 
 interface MyClubCardProps {
   membership: MembershipDto;
@@ -786,19 +781,45 @@ export const MyClubsPage: FC = () => {
     [pendingInbox],
   );
 
-  const loading = myClubsQuery.isPending || applicationsQuery.isPending;
+  // Гейт по всем четырём query: пока хоть один isPending — спиннер, иначе между
+  // спиннером и empty/error-заставкой мелькает пустой кадр.
+  const loading =
+    myClubsQuery.isPending ||
+    applicationsQuery.isPending ||
+    pendingInboxQuery.isPending ||
+    reputationQuery.isPending;
+  // Каскад ошибок: без первичных query (членства + свои заявки) экрану нечего показывать —
+  // полноэкранная ошибка. Падение только вторичных (инбокс организатора, репутация) при живом
+  // контенте — компактная плашка, секции не прячем: `data ?? []` при ошибке неотличим от
+  // пустого списка, и человек с клубами решил бы, что они пропали.
+  const primaryError = !loading && (myClubsQuery.isError || applicationsQuery.isError);
+  const secondaryError =
+    !loading && !primaryError && (pendingInboxQuery.isError || reputationQuery.isError);
+  // Секции контента показываем только когда экран не занят полноэкранной ошибкой.
+  const showSections = !loading && !primaryError;
+  // «Пока пусто» — только когда все питающие экран query успешно вернули пустые данные.
   const empty =
-    !loading &&
+    myClubsQuery.isSuccess &&
+    applicationsQuery.isSuccess &&
+    pendingInboxQuery.isSuccess &&
+    reputationQuery.isSuccess &&
     myClubs.length === 0 &&
     myApplicationsCount === 0 &&
     organizerInboxCount === 0 &&
     historyClubs.length === 0;
 
-  // club-invites (кадр E): выбор сделан на экране «Клуб создан 🎉» внутри модалки —
+  // club-invites (кадр E): выбор сделан на экране «Клуб создан» внутри модалки —
   // «Пригласить участников» открывает клуб с шитом приглашения, «Позже» — просто клуб.
   const handleCreated = (id: string, openInvite: boolean) => {
     setShowCreateModal(false);
     navigate(`/clubs/${id}`, openInvite ? { state: { openInvite: true } } : undefined);
+  };
+
+  // «Привязать чат» с экрана успеха: сразу в Управление → Чат — привязка чата
+  // повышает выживаемость клуба, поэтому предлагаем её в момент максимальной мотивации.
+  const handleLinkChat = (id: string) => {
+    setShowCreateModal(false);
+    navigate(`/clubs/${id}/manage?tab=chat`);
   };
 
   const openCreate = () => {
@@ -814,6 +835,15 @@ export const MyClubsPage: FC = () => {
   const handleSearchClick = () => {
     haptic.impact('light');
     navigate('/');
+  };
+
+  // Повторяем только упавшие запросы: данные успешных не сбрасываем и не перегружаем зря.
+  const retryFailedQueries = () => {
+    haptic.impact('light');
+    if (myClubsQuery.isError) myClubsQuery.refetch();
+    if (applicationsQuery.isError) applicationsQuery.refetch();
+    if (pendingInboxQuery.isError) pendingInboxQuery.refetch();
+    if (reputationQuery.isError) reputationQuery.refetch();
   };
 
   return (
@@ -850,20 +880,37 @@ export const MyClubsPage: FC = () => {
         </div>
       )}
 
-      {/* Пустое состояние */}
+      {/* Ошибка загрузки первичных данных — без них экран пуст, показываем только её */}
+      {primaryError && (
+        <FoxEmpty
+          art={foxErrorArt}
+          variant="error"
+          title="Не получилось загрузить твои клубы"
+          description="Проверь связь и попробуй ещё раз"
+          primary={{ label: 'Повторить', onClick: retryFailedQueries }}
+        />
+      )}
+
+      {/* Пустое состояние: обе «двери» (поиск и создание) сохранены как CTA сцены;
+          подсветка create-club из онбординга живёт на кнопке «+ Клуб» в шапке. */}
       {empty && (
-        <div className="rd-glass rd-empty">
-          <div style={{ color: 'var(--text-faint)', marginBottom: 8 }}>{PEOPLE_ICON}</div>
-          <div className="rd-title">Пока пусто</div>
-          <div className="rd-sub">
-            Найдите подходящий клуб в&nbsp;«Поиске» или создайте свой — будете звать единомышленников сами.
-          </div>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button type="button" className="rd-ghost-btn" onClick={handleSearchClick}>Открыть поиск</button>
-            <button type="button" className="rd-btn-primary" style={{ width: 'auto', padding: '10px 18px' }} onClick={openCreate}>
-              + Создать клуб
-            </button>
-          </div>
+        <FoxEmpty
+          art={foxMyClubsArt}
+          title="Пока пусто"
+          description={'Найди подходящий клуб в «Поиске» или создай свой — будешь звать единомышленников сам.'}
+          primary={{ label: '+ Создать клуб', onClick: openCreate }}
+          secondary={{ label: 'Открыть поиск', onClick: handleSearchClick }}
+        />
+      )}
+
+      {/* Частичный сбой: вторичные query упали, но контент жив — плашка вместо полного
+          экрана ошибки, загруженные секции остаются на месте. */}
+      {secondaryError && (
+        <div className="rd-glass rd-empty" role="alert">
+          <div className="rd-title">Не всё загрузилось</div>
+          <button type="button" className="rd-ghost-btn" onClick={retryFailedQueries}>
+            Повторить
+          </button>
         </div>
       )}
 
@@ -877,7 +924,7 @@ export const MyClubsPage: FC = () => {
       {/* 0. Мои членства без доступа (frozen — первый взнос, expired — истекла подписка) — «Доступ
             закрыт, оплатите взнос». Максимальная личная срочность, поэтому идёт первым. Тап →
             страница клуба, где «Оплатить взнос» заявляет оплату. */}
-      {!loading && lockedMyClubs.length > 0 && (
+      {showSections && lockedMyClubs.length > 0 && (
         <>
           <div className="rd-section-sub-h rd-attn-pay">
             🔒 Доступ закрыт — оплатите <span className="rd-count">· {lockedMyClubs.length}</span>
@@ -906,7 +953,7 @@ export const MyClubsPage: FC = () => {
 
       {/* 0b. Подписка истекает (member-side, раннее продление §7): active-членства в окне T-3.
              «Продлить подписку» → DuesPaymentSheet → claim → «Оплата на проверке». */}
-      {!loading && renewalMyClubs.length > 0 && (
+      {showSections && renewalMyClubs.length > 0 && (
         <>
           <div className="rd-section-sub-h rd-attn-pay">
             ⏳ Подписка истекает <span className="rd-count">· {renewalMyClubs.length}</span>
@@ -926,7 +973,7 @@ export const MyClubsPage: FC = () => {
       )}
 
       {/* 1. Мои заявки (исходящие) — ждут рассмотрения */}
-      {!loading && myApplicationsCount > 0 && (
+      {showSections && myApplicationsCount > 0 && (
         <>
           <div className="rd-section-sub-h">
             Мои заявки <span className="rd-count">· {myApplicationsCount}</span>
@@ -957,7 +1004,7 @@ export const MyClubsPage: FC = () => {
 
       {/* 2. Заявки в мои клубы (инбокс организатора) — ждут рассмотрения.
              Заявки полных клубов — блоками «Расширить клуб и принять всех» (club-invites). */}
-      {!loading && organizerInboxCount > 0 && (
+      {showSections && organizerInboxCount > 0 && (
         <>
           <div ref={inboxSectionRef} className="rd-section-sub-h">
             Заявки в мои клубы <span className="rd-count">· {organizerInboxCount}</span>
@@ -991,7 +1038,7 @@ export const MyClubsPage: FC = () => {
              «Вступить»/одобренной заявке, ждут первого взноса) и expired (подписка истекла, ждут
              продления). Организатор подтверждает внеплатформенный взнос — «Взнос получен». Зеркалит
              бакеты «Оплата вступления»/«Доступ истёк» внутри клуба (таб «Участники»). */}
-      {!loading && awaitingDues.length > 0 && (
+      {showSections && awaitingDues.length > 0 && (
         <>
           <div className="rd-section-sub-h rd-attn-pay">
             💸 Ждут оплаты <span className="rd-count">· {awaitingDues.length}</span>
@@ -1010,7 +1057,7 @@ export const MyClubsPage: FC = () => {
       )}
 
       {/* 3. Активные клубы (frozen/expired-члены показаны выше, в блоке «Доступ закрыт») */}
-      {!loading && activeMyClubs.length > 0 && (
+      {showSections && activeMyClubs.length > 0 && (
         <>
           <div className="rd-section-sub-h">
             Где я состою <span className="rd-count">· {activeMyClubs.length}</span>
@@ -1039,7 +1086,7 @@ export const MyClubsPage: FC = () => {
 
 
       {/* 4. История — клубы, которые пользователь покинул, но репутационный след остался */}
-      {!loading && historyClubs.length > 0 && (
+      {showSections && historyClubs.length > 0 && (
         <>
           <div className="rd-section-sub-h">
             История <span className="rd-count">· {historyClubs.length}</span>
@@ -1054,7 +1101,11 @@ export const MyClubsPage: FC = () => {
 
       {showCreateModal && (
         <Modal open onOpenChange={(open) => !open && setShowCreateModal(false)}>
-          <CreateClubModal onClose={() => setShowCreateModal(false)} onCreated={handleCreated} />
+          <CreateClubModal
+            onClose={() => setShowCreateModal(false)}
+            onCreated={handleCreated}
+            onLinkChat={handleLinkChat}
+          />
         </Modal>
       )}
 

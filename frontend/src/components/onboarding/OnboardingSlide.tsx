@@ -16,9 +16,7 @@ export const OnboardingSlide: FC<OnboardingSlideProps> = ({ slide }) => {
   return (
     <div className="ob-slide">
       <div className="ob-art">
-        <div className="ob-art-ring" aria-hidden="true">
-          {slide.art}
-        </div>
+        <img className="ob-art-img" src={slide.artSrc} alt="" draggable={false} />
       </div>
 
       {/* Слоган со вшитым названием длиннее обычных заголовков, поэтому у него свой кегль:
