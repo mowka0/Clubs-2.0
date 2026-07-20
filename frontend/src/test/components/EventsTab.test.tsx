@@ -206,17 +206,19 @@ describe('EventsTab — секция «История» (Итерация 5)', (
     expect(screen.queryByText('Предстоящих событий нет')).not.toBeInTheDocument();
   });
 
-  it('карточка истории: бейдж «Ты был», без «Подтверждён» и без счётчика «идут» (AC-H13)', async () => {
+  it('карточка истории: без бейджа вовсе и без счётчика «идут» (AC-H13)', async () => {
     mockEndpoints({
       clubs: [],
       eventsResponder: () => HttpResponse.json(feed([
-        historyEvent({ myParticipationStatus: 'confirmed', goingCount: 7, confirmedCount: 5 }),
+        historyEvent({ myParticipationStatus: 'confirmed', goingCount: 7, confirmedCount: 5, title: 'Прошедшая встреча' }),
       ])),
     });
     renderWithProviders(<EventsTab />);
 
-    expect(await screen.findByText('Ты был')).toBeInTheDocument();
-    // Хотя finalStatus = confirmed, «Подтверждён» перебит нейтральным «Ты был».
+    expect(await screen.findByText('Прошедшая встреча')).toBeInTheDocument();
+    // Бейджа у истории нет совсем (решение PO 2026-07-20): секция «История» и так означает
+    // «ты был» — бейдж дублировал бы заголовок. «Подтверждён» (finalStatus=confirmed) тоже перебит.
+    expect(screen.queryByText('Ты был')).not.toBeInTheDocument();
     expect(screen.queryByText('Подтверждён')).not.toBeInTheDocument();
     // Счётчик «N идут» (настоящее время) на прошедшем событии не показывается.
     expect(screen.queryByText(/идут/)).not.toBeInTheDocument();

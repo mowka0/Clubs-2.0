@@ -34,11 +34,12 @@ function getInitials(name: string): string {
 }
 
 function pickBadge(event: MyEventListItemDto): Badge | null {
-  // История — ПЕРВАЯ ветка. У каждой строки истории myParticipationStatus === 'confirmed'
-  // по конструкции (setAttendance требует final_status = 'confirmed'), поэтому без этой
-  // ветки бейдж выдал бы «Подтверждён» — обещание на будущее, на прошедшей встрече читается
-  // неверно. «Ты был» — нейтральная констатация факта.
-  if (event.isHistory) return { text: 'Ты был', accent: false };
+  // История — ПЕРВАЯ ветка, и бейджа у неё НЕТ (решение PO 2026-07-20): в секцию попадают
+  // только посещённые события, любой бейдж дублировал бы заголовок секции. Ранний return
+  // обязателен: у каждой строки истории myParticipationStatus === 'confirmed' по конструкции
+  // (setAttendance требует final_status = 'confirmed'), без него бейдж выдал бы «Подтверждён» —
+  // обещание на будущее, на прошедшей встрече читается неверно.
+  if (event.isHistory) return null;
   if (event.actionRequired) {
     if (event.status === 'stage_2') return { text: 'Подтверди участие', accent: true };
     return { text: 'Проголосуй', accent: true };
@@ -95,12 +96,12 @@ export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
         </div>
         <div className="rd-act-ttl">{event.title}</div>
         <div className="rd-act-meta">{meta}</div>
-        {/* Показываем accent-бейдж (call-to-action) и нейтральный «Ты был» истории. Остальные
+        {/* Показываем только accent-бейджи (call-to-action). Остальные
             нейтральные статусы (Подтверждён/Иду/…) карточка намеренно НЕ показывает ради
             снижения визуальной плотности — их поведение не трогаем. */}
-        {badge && (badge.accent || event.isHistory) && (
+        {badge && badge.accent && (
           <div className="rd-badges-row">
-            <span className={`rd-badge ${badge.accent ? 'rd-warn' : 'rd-neutral'}`}>{badge.text}</span>
+            <span className="rd-badge rd-warn">{badge.text}</span>
           </div>
         )}
       </div>
