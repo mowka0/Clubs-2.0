@@ -126,6 +126,21 @@ X = memberLimit * subscriptionPrice * 0.8
 
 > **Update (2026-05-30, `feature/profile-reputation-and-skladchina-badge`):** таб «Мой профиль» из member/organizer-видов удалён. Per-club self-view репутации перенесён в глобальную секцию «Моя репутация» на `/profile` (см. ниже § «ProfilePage»). Полные метрики (обещания % / подтверждения / посещения) остаются доступны через таб «Участники» → тап по самому себе → `MemberProfileModal`. Подробности — [`profile.md`](./profile.md).
 
+### Чат-блоки на странице (club-chat-link)
+
+Вне табов страница рендерит до трёх чат-элементов. Полная спецификация —
+[`club-chat-link.md`](./club-chat-link.md) (§ «Витрина на странице клуба» и § «Панель
+подключения чата на странице клуба»):
+
+| Элемент | Место на странице | Кому | Условие | Действие |
+|---|---|---|---|---|
+| **Панель «Подключи чат клуба»** (`ClubChatConnectBanner`, лис + 3 буллета) | под хиро, **до** секции «О клубе» | только **владельцу** (`isOwner`, не `isManager` — привязка владельческая) | `!club.chatLinked` И нет отметки `clubs:chat-banner-dismissed:<clubId>` в `localStorage` | «Подключить» → `/clubs/:id/manage?tab=chat`; «Позже в настройках» → скрыть навсегда для этого клуба |
+| **Кнопка «💬 Чат клуба»** | сразу под карточкой «О клубе» | участнику с доступом и владельцу | `showTabs && club.chatInviteLink` (т.е. чат привязан) | `openTmeLink(chatInviteLink)` |
+| **Чип «💬 У клуба есть чат…»** | в visitor-блоке CTA, рядом с кнопкой вступления | гостю / заявителю | `chatLinked && chatDoorEnabled` | — (информационный; хвост фразы зависит от `accessType`) |
+
+Панель и кнопка не пересекаются по построению: одна живёт при `chatLinked = false`, другая —
+при привязанном чате.
+
 ### Tab-компоненты
 
 Контент member/organizer-tabs вынесен в `frontend/src/components/club/`:

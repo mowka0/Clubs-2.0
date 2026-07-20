@@ -1984,3 +1984,62 @@
   .rd-foxcafe-dust, .rd-foxcafe-steam, .rd-foxcafe-glint { display: none; }
   .rd-foxcreated-art { animation: none; }
 }
+
+/* ============================================================
+   Панель подключения чата на странице клуба (club-chat-link)
+   Видит только владелец, пока чат не привязан. Раскладка: лис слева,
+   текстовый блок центрирован в оставшемся пространстве — зазор «арт → текст»
+   равен горизонтальному паддингу карточки, поэтому блок оптически стоит
+   по центру свободного места.
+   ============================================================ */
+.rd-chat-panel {
+  /* Единый зазор панели: граница→лис, лис→текст, текст→граница. */
+  --rd-chat-pad: 16px;
+  display: flex; align-items: center; gap: var(--rd-chat-pad);
+  padding: 14px var(--rd-chat-pad);
+  margin-bottom: 14px; overflow: hidden;
+}
+/* Лис уступает первым: при нехватке ширины сжимается он, а не заголовок.
+   flex-basis 124px — размер из мокапа, и на 390px+ он таким и остаётся (сжимать нечего).
+   min-width задаёт и пол сжатия, и отмену авто-минимума flex-элемента — без него
+   картинка упёрлась бы в собственную натуральную ширину и не дала себя ужать.
+   max-width не даёт лису доминировать на самых узких экранах. */
+.rd-chat-panel-fox { flex: 0 1 124px; min-width: 96px; max-width: 34vw; }
+.rd-chat-panel-fox img { width: 100%; display: block; }
+/* Колонка текста не сжимается ниже своего min-content, а у заголовка с nowrap
+   min-content равен полной ширине строки — поэтому «Подключи чат клуба» физически
+   не может обрезаться: дефицит ширины уходит в сжатие лиса (AC 53). */
+.rd-chat-panel-body { flex: 1 1 auto; min-width: min-content; text-align: center; }
+/* Заголовок держим одной строкой вместе с иконкой. */
+.rd-chat-panel-ttl {
+  font-size: 15px; font-weight: 700; line-height: 1.25; white-space: nowrap;
+  color: var(--text);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+/* Телеграм-самолётик (PNG из брендового логотипа — единый вид на всех платформах). */
+.rd-chat-panel-tg { width: 17px; height: auto; flex: none; }
+/* Буллеты: группа центрирована, текст внутри — по левому краю (иначе «рваная лесенка»). */
+.rd-chat-panel-perks {
+  display: inline-block; text-align: left;
+  margin: 9px 0 0; padding: 0; list-style: none;
+}
+.rd-chat-panel-li {
+  display: flex; gap: 7px; font-size: 12.5px; color: var(--text-dim);
+  line-height: 1.35; margin-top: 5px;
+}
+.rd-chat-panel-dot { color: var(--accent); flex: none; }
+.rd-chat-panel-acts { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
+/* Акцентная кнопка — общий rd-btn-primary, ужатый под тесную колонку панели. */
+.rd-chat-panel-acts .rd-btn-primary { padding: 10px 14px; }
+.rd-chat-panel-ghost {
+  width: 100%; padding: 8px 14px; border-radius: 12px;
+  background: transparent; border: 1px solid var(--glass-border);
+  color: var(--text-dim); font-size: 12.5px; font-family: inherit;
+  cursor: pointer;
+}
+
+/* Ниже 360px (AC 53 такие экраны не покрывает) строка не помещается даже при сжатом
+   до пола лисе — разрешаем перенос заголовка: перенос читается, срез нет. */
+@media (max-width: 359.98px) {
+  .rd-chat-panel-ttl { white-space: normal; }
+}

@@ -109,6 +109,22 @@ no text, no letters, no words anywhere.
 - **11b. Банка общего сбора:** `Scene: the fox hugs a big glass jar with a few golden coins at the bottom and an orange spark emblem sticker on the glass, tilting it slightly towards the viewer with a friendly hopeful smile, sunglasses on. Emblem only, no letters.`
 - **11c. Пирог на всех:** `Scene: the fox in a cream apron over his blazer carefully slices a round pie into equal pieces with a cake server, several small empty plates arranged around, generous happy smile, sunglasses pushed up on his forehead, eyes visible and warm. The pie and plates are the only scenery, plain white background.`
 
+## 12. Панель подключения чата на странице клуба (не пустое состояние)
+Когда: владелец открывает страницу своего клуба, у которого чат не привязан. Не заставка, а
+промо-карточка с CTA «Подключить» (спека — `docs/modules/club-chat-link.md` § «Панель
+подключения чата на странице клуба»; мокап — `docs/design/club-chat-banner/mockups/variant-c-fox-card.html`).
+Идея: лис-рассыльщик — чат как канал, по которому клуб живёт между встречами.
+
+В коде стоит `fox-chat.png` (nano banana, вырезан по пайплайну handoff §5). **Версия временная:**
+самолётики кремовые, PO ждёт голубые — перегенерить и подменить файл тем же именем, код не трогать.
+
+- **12a. Лис-рассыльщик (в проде).** Что на арте: лис сидит за столиком с ноутбуком и складывает
+  бумажные самолётики, готовые лежат перед ним; язык высунут от старания, очки на месте.
+  Промпт (реконструкция по факту арта — исходный не сохранён; при перегенерации приложить сам
+  `fox-chat.png` как референс позы): `Scene: the fox sits at a small wooden desk with an open laptop, focused on folding light blue paper planes with both paws, several finished paper planes lying on the desk ready to fly, tongue sticking out in concentration, tail curled behind, sunglasses on. Desk, laptop and paper planes are the only props, plain white background.`
+  **Ключевая правка для новой версии — `light blue paper planes`:** в текущем файле самолётики
+  кремовые и теряются на светлой карточке; PO ждёт голубые.
+
 ---
 
 ## Технические напоминания
