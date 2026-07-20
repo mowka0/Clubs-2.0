@@ -703,4 +703,9 @@ export interface MyEventListItemDto {
   confirmedCount: number;
   participantLimit: number;
   actionRequired: boolean;
+  // Прошедшее посещённое событие (организатор отметил явку). Бакет считает бэкенд.
+  // Единственный признак истории: status флипается кроном с лагом до ~7ч
+  // (COMPLETION_GRACE_HOURS), поэтому выводить историчность из status/eventDatetime
+  // на клиенте ЗАПРЕЩЕНО (см. events-feed.md, Итерация 5, AC-H14).
+  isHistory: boolean;
 }

@@ -34,6 +34,11 @@ function getInitials(name: string): string {
 }
 
 function pickBadge(event: MyEventListItemDto): Badge | null {
+  // История — ПЕРВАЯ ветка. У каждой строки истории myParticipationStatus === 'confirmed'
+  // по конструкции (setAttendance требует final_status = 'confirmed'), поэтому без этой
+  // ветки бейдж выдал бы «Подтверждён» — обещание на будущее, на прошедшей встрече читается
+  // неверно. «Ты был» — нейтральная констатация факта.
+  if (event.isHistory) return { text: 'Ты был', accent: false };
   if (event.actionRequired) {
     if (event.status === 'stage_2') return { text: 'Подтверди участие', accent: true };
     return { text: 'Проголосуй', accent: true };
@@ -62,7 +67,12 @@ function currentCount(event: MyEventListItemDto): number {
 export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
   const badge = pickBadge(event);
   const clubInitials = getInitials(event.clubName);
-  const meta = [event.locationText, `${currentCount(event)} идут`].filter(Boolean).join(' · ');
+  // На прошедшем событии честного числа пришедших в DTO нет (goingCount — голоса Этапа 1,
+  // confirmedCount — ростер, ни то ни другое не явка), поэтому в истории мета = только место,
+  // без «N идут» в настоящем времени. Точный attendedCount — в бэклоге.
+  const meta = event.isHistory
+    ? (event.locationText ?? '')
+    : [event.locationText, `${currentCount(event)} идут`].filter(Boolean).join(' · ');
   // Обложка: фото события (PO 2026-07-11), фолбэк — аватар клуба; с картинкой — тёмный
   // скрим сверху вниз (rd-act-photo), как у клубных карточек.
   const coverImage = event.photoUrl ?? event.clubAvatarUrl;
@@ -85,9 +95,12 @@ export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
         </div>
         <div className="rd-act-ttl">{event.title}</div>
         <div className="rd-act-meta">{meta}</div>
-        {badge?.accent && (
+        {/* Показываем accent-бейдж (call-to-action) и нейтральный «Ты был» истории. Остальные
+            нейтральные статусы (Подтверждён/Иду/…) карточка намеренно НЕ показывает ради
+            снижения визуальной плотности — их поведение не трогаем. */}
+        {badge && (badge.accent || event.isHistory) && (
           <div className="rd-badges-row">
-            <span className="rd-badge rd-warn">{badge.text}</span>
+            <span className={`rd-badge ${badge.accent ? 'rd-warn' : 'rd-neutral'}`}>{badge.text}</span>
           </div>
         )}
       </div>

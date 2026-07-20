@@ -128,6 +128,10 @@ class UserEventsControllerTest {
             .andExpect(jsonPath("$.content[*].clubId", org.hamcrest.Matchers.everyItem(
                 org.hamcrest.Matchers.`in`(listOf(clubAlphaId.toString(), clubBetaId.toString()))
             )))
+            // Предстоящие события всегда isHistory=false
+            .andExpect(jsonPath("$.content[*].isHistory", org.hamcrest.Matchers.everyItem(
+                org.hamcrest.Matchers.`is`(false)
+            )))
     }
 
     @Test
@@ -254,6 +258,257 @@ class UserEventsControllerTest {
             .andExpect(jsonPath("$.size").value(50))
     }
 
+    // ---- Итерация 5: секция «История» ----
+
+    @Test
+    fun `AC-H1 history section shows attended events after upcoming, most recent first`() {
+        // 2 upcoming
+        insertEvent(UUID.randomUUID(), clubAlphaId, "Upcoming Soon", future(1), status = "upcoming")
+        insertEvent(UUID.randomUUID(), clubBetaId, "Upcoming Later", future(4), status = "upcoming")
+        // 3 attended (history), different past dates
+        insertAttendedEvent(clubAlphaId, "Recent", past(1))
+        insertAttendedEvent(clubBetaId, "Middle", past(5))
+        insertAttendedEvent(clubAlphaId, "Oldest", past(10))
+
+        mockMvc.perform(
+            get("/api/users/me/events")
+                .header("Authorization", "Bearer $memberToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()").value(5))
+            .andExpect(jsonPath("$.totalElements").value(5))
+            // upcoming bucket first, isHistory=false
+            .andExpect(jsonPath("$.content[0].isHistory").value(false))
+            .andExpect(jsonPath("$.content[1].isHistory").value(false))
+            // history bucket last, isHistory=true, DESC by event date
+            .andExpect(jsonPath("$.content[2].isHistory").value(true))
+            .andExpect(jsonPath("$.content[2].title").value("Recent"))
+            .andExpect(jsonPath("$.content[3].title").value("Middle"))
+            .andExpect(jsonPath("$.content[4].title").value("Oldest"))
+    }
+
+    @Test
+    fun `AC-H2 only marked attendance lands in history`() {
+        // Voted going but attendance never marked → NOT in history
+        val votedPast = UUID.randomUUID()
+        insertEvent(votedPast, clubAlphaId, "Voted Not Marked", past(2), status = "completed")
+        insertEventResponse(votedPast, memberUserId, stage1Vote = "going")
+        // Attended → in history
+        insertAttendedEvent(clubAlphaId, "Attended", past(3))
+
+        mockMvc.perform(
+            get("/api/users/me/events")
+                .header("Authorization", "Bearer $memberToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].title").value("Attended"))
+            .andExpect(jsonPath("$.content[0].isHistory").value(true))
+    }
+
+    @Test
+    fun `AC-H3 absent attendance is not in history`() {
+        val eventId = UUID.randomUUID()
+        insertEvent(eventId, clubAlphaId, "Marked Absent", past(2), status = "completed")
+        insertEventResponse(eventId, memberUserId, stage1Vote = "going", finalStatus = "confirmed", attendance = "absent")
+
+        mockMvc.perform(
+            get("/api/users/me/events")
+                .header("Authorization", "Bearer $memberToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()").value(0))
+    }
+
+    @Test
+    fun `AC-H4 disputed attendance is hidden until resolved to attended`() {
+        val eventId = UUID.randomUUID()
+        insertEvent(eventId, clubAlphaId, "Disputed", past(2), status = "completed")
+        insertEventResponse(eventId, memberUserId, stage1Vote = "going", finalStatus = "confirmed", attendance = "disputed")
+
+        mockMvc.perform(
+            get("/api/users/me/events")
+                .header("Authorization", "Bearer $memberToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()").value(0))
+
+        // Organizer resolves the dispute in the member's favour
+        dsl.execute(
+            "UPDATE event_responses SET attendance = 'attended'::attendance_status " +
+                "WHERE event_id = '$eventId' AND user_id = '$memberUserId'"
+        )
+
+        mockMvc.perform(
+            get("/api/users/me/events")
+                .header("Authorization", "Bearer $memberToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].title").value("Disputed"))
+            .andExpect(jsonPath("$.content[0].isHistory").value(true))
+    }
+
+    @Test
+    fun `AC-H5 cancelled event is excluded from history even when attended`() {
+        val eventId = UUID.randomUUID()
+        insertEvent(eventId, clubAlphaId, "Cancelled After Attend", past(2), status = "cancelled")
+        insertEventResponse(eventId, memberUserId, stage1Vote = "going", finalStatus = "confirmed", attendance = "attended")
+
+        mockMvc.perform(
+            get("/api/users/me/events")
+                .header("Authorization", "Bearer $memberToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()").value(0))
+    }
+
+    @Test
+    fun `AC-H6 history survives leaving the club while upcoming disappears`() {
+        // Attended past event and an upcoming event, both in Alpha
+        insertAttendedEvent(clubAlphaId, "Attended Alpha", past(2))
+        insertEvent(UUID.randomUUID(), clubAlphaId, "Upcoming Alpha", future(3), status = "upcoming")
+
+        // User leaves Alpha (membership removed)
+        dsl.execute("DELETE FROM memberships WHERE user_id = '$memberUserId' AND club_id = '$clubAlphaId'")
+
+        mockMvc.perform(
+            get("/api/users/me/events")
+                .header("Authorization", "Bearer $memberToken")
+        )
+            .andExpect(status().isOk)
+            // history stays, upcoming of the left club is gone
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].title").value("Attended Alpha"))
+            .andExpect(jsonPath("$.content[0].isHistory").value(true))
+    }
+
+    @Test
+    fun `AC-H6 frozen membership keeps history but hides upcoming`() {
+        // Решение 2в, «побочный эффект»: frozen участник теряет ПРЕДСТОЯЩУЮ ленту клуба
+        // (MembershipAccess требует active), но продолжает видеть свою ИСТОРИЮ по этому клубу —
+        // история не гейтится членством. Вариант «membership есть, но не active» — отдельно от
+        // «membership удалён» выше.
+        val ownerId = UUID.randomUUID()
+        dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$ownerId', 2100, 'FrostOwner')")
+        val frozenClub = UUID.randomUUID()
+        insertClub(frozenClub, ownerId, "Frost", isActive = true)
+        insertMembership(memberUserId, frozenClub, status = "frozen")
+
+        insertAttendedEvent(frozenClub, "Attended While Member", past(2))
+        insertEvent(UUID.randomUUID(), frozenClub, "Upcoming Frozen", future(3), status = "upcoming")
+
+        mockMvc.perform(
+            get("/api/users/me/events")
+                .header("Authorization", "Bearer $memberToken")
+        )
+            .andExpect(status().isOk)
+            // history stays despite frozen; upcoming of the frozen club is hidden
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].title").value("Attended While Member"))
+            .andExpect(jsonPath("$.content[0].isHistory").value(true))
+    }
+
+    @Test
+    fun `AC-H7 soft-deleted club is excluded from history`() {
+        // Gamma is is_active=false; an attended event there must not appear
+        insertAttendedEvent(clubGammaInactiveId, "Attended Gamma", past(2))
+
+        mockMvc.perform(
+            get("/api/users/me/events")
+                .header("Authorization", "Bearer $memberToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()").value(0))
+    }
+
+    @Test
+    fun `AC-H8 another user's attended event never leaks`() {
+        // memberUser attended event E in Alpha; loneUser (no membership, no response) must not see it
+        val eventE = UUID.randomUUID()
+        insertEvent(eventE, clubAlphaId, "Members Private History", past(2), status = "completed")
+        insertEventResponse(eventE, memberUserId, stage1Vote = "going", finalStatus = "confirmed", attendance = "attended")
+
+        mockMvc.perform(
+            get("/api/users/me/events")
+                .header("Authorization", "Bearer $loneToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()").value(0))
+            .andExpect(jsonPath("$.content[?(@.id == '$eventE')]").doesNotExist())
+    }
+
+    @Test
+    fun `AC-H9 upcoming bucket always precedes history regardless of absolute dates`() {
+        insertEvent(UUID.randomUUID(), clubAlphaId, "Tomorrow", future(1), status = "upcoming")
+        insertAttendedEvent(clubAlphaId, "Yesterday", past(1))
+
+        mockMvc.perform(
+            get("/api/users/me/events")
+                .header("Authorization", "Bearer $memberToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()").value(2))
+            .andExpect(jsonPath("$.content[0].isHistory").value(false))
+            .andExpect(jsonPath("$.content[0].title").value("Tomorrow"))
+            .andExpect(jsonPath("$.content[1].isHistory").value(true))
+            .andExpect(jsonPath("$.content[1].title").value("Yesterday"))
+    }
+
+    @Test
+    fun `AC-H10 pagination counts the union and spills history into the next page`() {
+        // 2 upcoming fill page 0 (size=2); 3 attended land on later pages, all history
+        insertEvent(UUID.randomUUID(), clubAlphaId, "Up1", future(1), status = "upcoming")
+        insertEvent(UUID.randomUUID(), clubAlphaId, "Up2", future(2), status = "upcoming")
+        insertAttendedEvent(clubAlphaId, "Hist Recent", past(1))
+        insertAttendedEvent(clubAlphaId, "Hist Mid", past(3))
+        insertAttendedEvent(clubAlphaId, "Hist Old", past(6))
+
+        // Page 0 — only upcoming
+        mockMvc.perform(
+            get("/api/users/me/events?page=0&size=2")
+                .header("Authorization", "Bearer $memberToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.totalElements").value(5))
+            .andExpect(jsonPath("$.totalPages").value(3))
+            .andExpect(jsonPath("$.content.length()").value(2))
+            .andExpect(jsonPath("$.content[*].isHistory", org.hamcrest.Matchers.everyItem(
+                org.hamcrest.Matchers.`is`(false)
+            )))
+
+        // Page 1 — history spilling in, most recent first
+        mockMvc.perform(
+            get("/api/users/me/events?page=1&size=2")
+                .header("Authorization", "Bearer $memberToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()").value(2))
+            .andExpect(jsonPath("$.content[*].isHistory", org.hamcrest.Matchers.everyItem(
+                org.hamcrest.Matchers.`is`(true)
+            )))
+            .andExpect(jsonPath("$.content[0].title").value("Hist Recent"))
+            .andExpect(jsonPath("$.content[1].title").value("Hist Mid"))
+    }
+
+    @Test
+    fun `AC-H14 fresh attendance shows as history even while status is still stage_2`() {
+        // Cron lag: event happened 2h ago, status still stage_2, attendance just marked attended
+        val eventId = UUID.randomUUID()
+        insertEvent(eventId, clubAlphaId, "Cron Lag", OffsetDateTime.now().minusHours(2), status = "stage_2")
+        insertEventResponse(eventId, memberUserId, stage1Vote = "going", finalStatus = "confirmed", attendance = "attended")
+
+        mockMvc.perform(
+            get("/api/users/me/events")
+                .header("Authorization", "Bearer $memberToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].title").value("Cron Lag"))
+            .andExpect(jsonPath("$.content[0].isHistory").value(true))
+            .andExpect(jsonPath("$.content[0].status").value("stage_2"))
+    }
+
     // ---- helpers ----
 
     private fun insertClub(id: UUID, ownerId: UUID, name: String, isActive: Boolean) {
@@ -299,14 +554,41 @@ class UserEventsControllerTest {
         )
     }
 
-    private fun insertEventResponse(eventId: UUID, userId: UUID, stage1Vote: String) {
+    /**
+     * Прошедшее событие с личной отметкой явки memberUser'а — стандартная строка «Истории»:
+     * status=completed, event_datetime в прошлом, event_response(attendance='attended', final_status='confirmed').
+     */
+    private fun insertAttendedEvent(clubId: UUID, title: String, eventDatetime: OffsetDateTime) {
+        val eventId = UUID.randomUUID()
+        insertEvent(eventId, clubId, title, eventDatetime, status = "completed")
+        insertEventResponse(eventId, memberUserId, stage1Vote = "going", finalStatus = "confirmed", attendance = "attended")
+    }
+
+    private fun insertEventResponse(
+        eventId: UUID,
+        userId: UUID,
+        stage1Vote: String? = null,
+        finalStatus: String? = null,
+        attendance: String? = null
+    ) {
+        val columns = mutableListOf("event_id", "user_id")
+        val values = mutableListOf("'$eventId'", "'$userId'")
+        if (stage1Vote != null) {
+            columns += "stage_1_vote"; values += "'$stage1Vote'::stage_1_vote"
+            columns += "stage_1_timestamp"; values += "now()"
+        }
+        if (finalStatus != null) {
+            columns += "final_status"; values += "'$finalStatus'::final_status"
+        }
+        if (attendance != null) {
+            columns += "attendance"; values += "'$attendance'::attendance_status"
+        }
         dsl.execute(
-            """
-            INSERT INTO event_responses (event_id, user_id, stage_1_vote, stage_1_timestamp)
-            VALUES ('$eventId', '$userId', '$stage1Vote'::stage_1_vote, now())
-            """.trimIndent()
+            "INSERT INTO event_responses (${columns.joinToString(", ")}) VALUES (${values.joinToString(", ")})"
         )
     }
 
     private fun future(days: Long): OffsetDateTime = OffsetDateTime.now().plusDays(days)
+
+    private fun past(days: Long): OffsetDateTime = OffsetDateTime.now().minusDays(days)
 }

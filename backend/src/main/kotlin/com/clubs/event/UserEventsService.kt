@@ -17,7 +17,11 @@ class UserEventsService(
     @Transactional(readOnly = true)
     fun getMyEvents(userId: UUID, page: Int, size: Int): PageResponse<MyEventListItemDto> {
         val pageResult = eventRepository.findMyFeed(userId, page, size)
-        log.info("My events feed: userId={} page={} size={} returned={}", userId, page, size, pageResult.content.size)
+        val historyCount = pageResult.content.count { it.isHistory }
+        log.info(
+            "My events feed: userId={} page={} size={} returned={} history={}",
+            userId, page, size, pageResult.content.size, historyCount
+        )
         return PageResponse(
             content = pageResult.content.map(eventMapper::toMyFeedItemDto),
             totalElements = pageResult.totalElements,
