@@ -2009,18 +2009,21 @@
 /* Колонка текста не сжимается ниже своего min-content, а у заголовка с nowrap
    min-content равен полной ширине строки — поэтому «Подключи чат клуба» физически
    не может обрезаться: дефицит ширины уходит в сжатие лиса (AC 53). */
-.rd-chat-panel-body { flex: 1 1 auto; min-width: min-content; text-align: center; }
+/* Весь текст колонки — по левому краю: заголовок, буллеты и кнопки делят одну
+   вертикаль слева (решение PO 2026-07-20; центрированный заголовок над
+   левыми буллетами читался как рассинхрон). По центру свободного места
+   стоит сама колонка целиком — за это отвечают равные зазоры панели. */
+.rd-chat-panel-body { flex: 1 1 auto; min-width: min-content; text-align: left; }
 /* Заголовок держим одной строкой вместе с иконкой. */
 .rd-chat-panel-ttl {
   font-size: 15px; font-weight: 700; line-height: 1.25; white-space: nowrap;
   color: var(--text);
-  display: flex; align-items: center; justify-content: center; gap: 6px;
+  display: flex; align-items: center; justify-content: flex-start; gap: 6px;
 }
 /* Телеграм-самолётик (PNG из брендового логотипа — единый вид на всех платформах). */
 .rd-chat-panel-tg { width: 17px; height: auto; flex: none; }
-/* Буллеты: группа центрирована, текст внутри — по левому краю (иначе «рваная лесенка»). */
 .rd-chat-panel-perks {
-  display: inline-block; text-align: left;
+  display: block;
   margin: 9px 0 0; padding: 0; list-style: none;
 }
 .rd-chat-panel-li {
