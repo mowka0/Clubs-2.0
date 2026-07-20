@@ -34,6 +34,29 @@ const EMPTY_FEED: PageResponse<MySkladchinaListItemDto> = {
   size: 20,
 };
 
+/** Закрытый сбор для секции «История» (status ≠ active). */
+function closedSkladchina(): MySkladchinaListItemDto {
+  return {
+    id: 'sk-hist-1',
+    title: 'Аренда зала (июнь)',
+    clubId: CLUB_ID,
+    clubName: 'Шахматы',
+    clubAvatarUrl: null,
+    template: 'custom',
+    paymentMode: 'fixed_equal',
+    totalGoalKopecks: 500000,
+    collectedKopecks: 500000,
+    participantCount: 5,
+    paidCount: 5,
+    deadline: '2026-06-15T18:00:00Z',
+    status: 'closed_success',
+    isOrganizerView: true,
+    myStatus: null,
+    actionRequired: false,
+    affectsReputation: false,
+  };
+}
+
 function membership(over: Partial<MembershipDto> = {}): MembershipDto {
   return {
     id: 'm-1',
@@ -123,6 +146,27 @@ describe('SkladchinasTab — роль-развилка пустого состо
     expect(await screen.findByText('Сборов пока нет')).toBeInTheDocument();
     expect(await screen.findByText(/добавит тебя/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Создать сбор' })).not.toBeInTheDocument();
+  });
+
+  it('только закрытые сборы → сцена «Активных сборов нет» с CTA организатора + секция «История» под ней', async () => {
+    mockEndpoints({
+      clubs: [membership({ role: 'organizer' })],
+      skladchinasResponder: () => HttpResponse.json({
+        ...EMPTY_FEED,
+        content: [closedSkladchina()],
+        totalElements: 1,
+        totalPages: 1,
+      }),
+    });
+    renderTab();
+
+    // Закрытые сборы не прячут пустое состояние активных (решение PO 2026-07-20)
+    expect(await screen.findByText('Активных сборов нет')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Создать сбор' })).toBeInTheDocument();
+    expect(await screen.findByText('История')).toBeInTheDocument();
+    expect(await screen.findByText('Аренда зала (июнь)')).toBeInTheDocument();
+    // Карточка-тизер «скоро здесь» при непустой истории не рендерится
+    expect(screen.queryByText('скоро здесь')).not.toBeInTheDocument();
   });
 
   it('ошибка загрузки → error-сцена «Не удалось загрузить сборы» с «Повторить», НЕ пустая заставка', async () => {

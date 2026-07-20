@@ -79,7 +79,12 @@ export const SkladchinasTab: FC = () => {
 
   const isLoadingInitial = query.isPending;
   const isError = query.isError && !query.isPending;
-  const isEmpty = !isLoadingInitial && !isError && items.length === 0;
+  // Сцена лиса — при отсутствии АКТИВНЫХ сборов (решение PO 2026-07-20): закрытые
+  // и прошедшие живут в «Истории» и не должны прятать пустое состояние — иначе
+  // юзер с одной старой складчиной никогда не видит ни лиса, ни CTA «Создать сбор».
+  const hasActive = items.some((s) => s.status === 'active');
+  const hasHistory = items.some((s) => s.status !== 'active');
+  const isEmpty = !isLoadingInitial && !isError && !hasActive;
   // Пока роль не определена, пустую сцену держим на скелетоне — иначе организатор
   // на мгновение увидит участнический вариант без CTA «Создать сбор».
   const isEmptySceneResolving = isEmpty && isRoleLoading;
@@ -102,16 +107,16 @@ export const SkladchinasTab: FC = () => {
         isOrganizer ? (
           <FoxEmpty
             art={foxSkladchinaArt}
-            soonIcon="💰"
-            title="Сборов пока нет"
-            description="Собери на аренду, инвентарь или общий подарок — создай первый сбор, и участники увидят его здесь."
+            soonIcon={hasHistory ? undefined : '💰'}
+            title={hasHistory ? 'Активных сборов нет' : 'Сборов пока нет'}
+            description="Собери на аренду, инвентарь или общий подарок — создай сбор, и участники увидят его здесь."
             primary={{ label: 'Создать сбор', onClick: handleCreateClick }}
           />
         ) : (
           <FoxEmpty
             art={foxSkladchinaArt}
-            soonIcon="💰"
-            title="Сборов пока нет"
+            soonIcon={hasHistory ? undefined : '💰'}
+            title={hasHistory ? 'Активных сборов нет' : 'Сборов пока нет'}
             description="Когда организатор клуба создаст сбор и добавит тебя — он появится здесь."
           />
         )
