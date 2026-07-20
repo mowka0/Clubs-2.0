@@ -9,6 +9,7 @@ import com.clubs.application.ApplicationRepository
 import com.clubs.common.auth.ClubCapability
 import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.chatlink.ChatLinkRepository
+import com.clubs.chatlink.ChatLinkService
 import com.clubs.event.EventRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
@@ -44,6 +45,10 @@ class ClubService(
     private val applicationRepository: ApplicationRepository,
     private val subscriptionService: SubscriptionService,
     private val chatLinkRepository: ChatLinkRepository,
+    // Витрина чата на странице клуба (getClub) читает привязку напрямую; освобождение чата при
+    // удалении клуба идёт через сервис. Цикла нет: ChatLinkService зависит от ClubRepository,
+    // а не от ClubService.
+    private val chatLinkService: ChatLinkService,
     private val userRepository: UserRepository,
     private val mapper: ClubMapper
 ) {
@@ -224,10 +229,20 @@ class ClubService(
         val cancelledSkladchinas = skladchinaRepository.cancelActiveByClub(id)
         val deletedApplications = applicationRepository.deleteActiveByClub(id)
 
+        // Чат освобождаем ПОЛНОСТЬЮ (та же логика, что у владельческой отвязки): снимаем закрепы,
+        // мьюты, баны и теги, отзываем invite-ссылку, выводим бота, удаляем строку привязки. Без
+        // этого чат навсегда числился бы за скрытым клубом — отвязать его из приложения нечем
+        // (эндпоинты chat-link владельческие и ходят через findById, который скрытый клуб не
+        // видит), а повторная привязка упиралась бы в «Этот чат уже привязан к другому клубу».
+        // Порядок относительно каскадов выше значения не имеет (закрепы и статус-посты снимаются
+        // по chat_id, а не по статусу событий и сборов); до softDelete — чтобы освобождение
+        // работало на ещё видимом клубе.
+        val chatUnlinked = chatLinkService.releaseOnClubDeleted(id)
+
         clubRepository.softDelete(id)
         log.info(
-            "Club soft-deleted: id={} userId={} cancelledEvents={} cancelledSkladchinas={} deletedApplications={}",
-            id, userId, cancelledEvents, cancelledSkladchinas, deletedApplications
+            "Club soft-deleted: id={} userId={} cancelledEvents={} cancelledSkladchinas={} deletedApplications={} chatUnlinked={}",
+            id, userId, cancelledEvents, cancelledSkladchinas, deletedApplications, chatUnlinked
         )
     }
 

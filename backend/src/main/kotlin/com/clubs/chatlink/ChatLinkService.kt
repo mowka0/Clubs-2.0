@@ -267,14 +267,40 @@ class ChatLinkService(
     }
 
     /**
-     * Общий механизм отвязки (REST и DM-callback): снять живые закрепы (пока бот ещё в чате и
-     * может unpin), отозвать door-ссылку, выйти из чата, удалить строку. Telegram-шаги
-     * best-effort — запись у нас удаляется в любом случае, иначе мёртвая привязка блокировала
-     * бы повторную. Без чистки закрепов их строки остались бы «живыми» навсегда, а flush
-     * пытался бы редактировать сообщения в чате, из которого бот вышел.
+     * Полная отвязка (REST, DM-callback, удаление клуба): освободить чат И вывести бота.
+     * Единственная точка выхода бота из привязанного чата — дублировать её нельзя.
      */
     @Transactional
-    fun doUnlink(link: ChatLink) {
+    fun doUnlink(link: ChatLink) = releaseLink(link, leaveChat = true)
+
+    /**
+     * Освобождение чата при удалении клуба. Строку ищем здесь, а не у вызывающего: `ClubService`
+     * не должен знать устройство привязки, чтобы собрать аргумент для чужого сервиса.
+     * Возвращает, был ли чат привязан (для лога удаления клуба). Нет привязки — no-op.
+     */
+    @Transactional
+    fun releaseOnClubDeleted(clubId: UUID): Boolean {
+        val link = chatLinkRepository.findByClubId(clubId) ?: return false
+        releaseLink(link, leaveChat = true)
+        return true
+    }
+
+    /**
+     * Освободить чат, ОСТАВИВ бота в группе. Нужен ровно в одном месте — перехват чата с
+     * осиротевшей привязкой (клуб-владелец удалён): бот в этот момент только что добавлен
+     * ради НОВОЙ привязки, и выход из чата сорвал бы её.
+     */
+    @Transactional
+    fun releaseKeepingBotInChat(link: ChatLink) = releaseLink(link, leaveChat = false)
+
+    /**
+     * Общий механизм освобождения чата: снять живые закрепы (пока бот ещё в чате и может unpin),
+     * вернуть голос замьюченным, снять баны и теги, отозвать door-ссылку, при [leaveChat] вывести
+     * бота, удалить строку. Telegram-шаги best-effort — запись у нас удаляется в любом случае,
+     * иначе мёртвая привязка блокировала бы повторную. Без чистки закрепов их строки остались бы
+     * «живыми» навсегда, а flush пытался бы редактировать сообщения в чате, из которого бот вышел.
+     */
+    private fun releaseLink(link: ChatLink, leaveChat: Boolean) {
         livePinService.disableForClub(link)
         skladchinaChatStatusService.disableForClub(link)
         // Вернуть голос замьюченным должникам, пока бот ещё в чате — иначе мьюты
@@ -286,9 +312,9 @@ class ChatLinkService(
         // Снять теги наград, пока бот ещё в чате (учёт сам скажет, есть ли что снимать).
         memberTagService.disableForClub(link)
         link.doorInviteLink?.let { gateway.revokeInviteLink(link.chatId, it) }
-        gateway.leaveChat(link.chatId)
+        if (leaveChat) gateway.leaveChat(link.chatId)
         chatLinkRepository.delete(link.clubId)
-        log.info("Chat unlinked: clubId={} chatId={}", link.clubId, link.chatId)
+        log.info("Chat link released: clubId={} chatId={} botLeftChat={}", link.clubId, link.chatId, leaveChat)
     }
 
     /**

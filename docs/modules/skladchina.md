@@ -973,6 +973,12 @@ reputation-дельты (paid +10, expired −40) и разослал бы `Skla
 Каскад делает только статусные UPDATE'ы — **никаких ledger-строк и никаких DM**.
 Контекст и остаток (applications) — `docs/backlog/orphan-memberships-cleanup.md`.
 
+**Живые статус-посты сбора в чате клуба** снимает не этот каскад, а освобождение чата
+(`chatLinkService.releaseOnClubDeleted` в том же `deleteClub`, добавлено
+`bugfix/chat-link-deadlock` 2026-07-20): посты откручиваются по `chat_id`, независимо от
+статусов складчин, поэтому порядок двух каскадов не важен.
+См. `docs/modules/club-chat-link.md` § «Освобождение чата при удалении клуба».
+
 ### Reminder-DM за 24ч до дедлайна — internal (scheduler, 2026-06-12)
 
 `SkladchinaReminderScheduler` (модуль `bot`, по паттерну `EventReminderScheduler`),

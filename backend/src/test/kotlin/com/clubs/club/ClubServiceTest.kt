@@ -6,6 +6,8 @@ import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.application.ApplicationRepository
+import com.clubs.chatlink.ChatLinkRepository
+import com.clubs.chatlink.ChatLinkService
 import com.clubs.event.EventRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
@@ -15,6 +17,7 @@ import com.clubs.subscription.SubscriptionService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import io.mockk.verifyOrder
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -30,6 +33,8 @@ class ClubServiceTest {
     private lateinit var skladchinaRepository: SkladchinaRepository
     private lateinit var applicationRepository: ApplicationRepository
     private lateinit var subscriptionService: SubscriptionService
+    private lateinit var chatLinkRepository: ChatLinkRepository
+    private lateinit var chatLinkService: ChatLinkService
     private lateinit var mapper: ClubMapper
     private lateinit var clubService: ClubService
 
@@ -41,8 +46,11 @@ class ClubServiceTest {
         skladchinaRepository = mockk(relaxed = true)
         applicationRepository = mockk(relaxed = true)
         subscriptionService = mockk(relaxed = true)
+        chatLinkRepository = mockk(relaxed = true)
+        chatLinkService = mockk(relaxed = true)
         mapper = ClubMapper()
-        clubService = ClubService(clubRepository, membershipRepository, ClubRoleGuard(clubRepository, membershipRepository), eventRepository, skladchinaRepository, applicationRepository, subscriptionService, chatLinkRepository = mockk(relaxed = true), userRepository = mockk(relaxed = true), mapper = mapper)
+        clubService = ClubService(clubRepository, membershipRepository, ClubRoleGuard(clubRepository, membershipRepository), eventRepository, skladchinaRepository, applicationRepository, subscriptionService, chatLinkRepository = chatLinkRepository, chatLinkService = chatLinkService, userRepository = mockk(relaxed = true), mapper = mapper)
+        every { chatLinkService.releaseOnClubDeleted(any()) } returns false
     }
 
     private fun makeClub(
@@ -370,6 +378,37 @@ class ClubServiceTest {
     }
 
     @Test
+    fun `deleteClub освобождает чат ДО softDelete — иначе он навсегда числится за скрытым клубом`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        every { clubRepository.findById(clubId) } returns makeClub(clubId = clubId, ownerId = ownerId)
+        every { chatLinkService.releaseOnClubDeleted(clubId) } returns true
+
+        clubService.deleteClub(clubId, ownerId)
+
+        // Смысл правки — в позиции вызова, поэтому проверяем именно порядок: каскад → освобождение
+        // чата (бот выходит, ссылка отзывается, строка удаляется) → скрытие клуба.
+        verifyOrder {
+            skladchinaRepository.cancelActiveByClub(clubId)
+            chatLinkService.releaseOnClubDeleted(clubId)
+            clubRepository.softDelete(clubId)
+        }
+    }
+
+    @Test
+    fun `deleteClub без привязанного чата — освобождение это no-op, удаление идёт как обычно`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        every { clubRepository.findById(clubId) } returns makeClub(clubId = clubId, ownerId = ownerId)
+        every { chatLinkService.releaseOnClubDeleted(clubId) } returns false
+
+        clubService.deleteClub(clubId, ownerId)
+
+        verify(exactly = 1) { chatLinkService.releaseOnClubDeleted(clubId) }
+        verify(exactly = 1) { clubRepository.softDelete(clubId) }
+    }
+
+    @Test
     fun `deleteClub throws ForbiddenException when user is not owner`() {
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
@@ -381,6 +420,7 @@ class ClubServiceTest {
         }
 
         assertEquals("Only the club owner can delete it", exception.message)
+        verify(exactly = 0) { chatLinkService.releaseOnClubDeleted(any()) }
         // A non-owner triggers no cascade and no delete.
         verify(exactly = 0) { eventRepository.cancelActiveEventsByClub(any()) }
         verify(exactly = 0) { skladchinaRepository.cancelActiveByClub(any()) }

@@ -125,6 +125,16 @@ class ChatTelegramGateway(
         }
     }
 
+    /**
+     * Управляет ли пользователь этим чатом (creator/administrator в Telegram). Fail-closed:
+     * молчание Telegram = «не админ», потому что единственный потребитель — перехват чата с
+     * осиротевшей привязкой, и ошибиться там безопаснее в сторону отказа.
+     */
+    fun isChatAdmin(chatId: Long, userId: Long): Boolean {
+        val member = getChatMember(chatId, userId) ?: return false
+        return member.status == "creator" || member.status == "administrator"
+    }
+
     /** Снять бан (only_if_banned — состоящего в чате не кикнет). Нужно право «Блокировка пользователей». */
     fun unbanChatMember(chatId: Long, userId: Long): Boolean = try {
         telegramClient.execute(UnbanChatMember.builder().chatId(chatId).userId(userId).onlyIfBanned(true).build())
