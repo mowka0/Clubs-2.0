@@ -3,19 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMySkladchinasQuery } from '../../queries/skladchina';
+import { useOrganizerClubs } from '../../queries/organizerClubs';
+import { useCreateFlowStore } from '../../store/useCreateFlowStore';
 import { FeedSection } from '../feed/FeedSection';
 import { FeedSkeleton } from '../feed/FeedSkeleton';
-import { FeedEmpty } from '../feed/FeedEmpty';
+import { FoxEmpty } from '../feed/FoxEmpty';
 import { SkladchinaCard } from '../feed/SkladchinaCard';
+import foxSkladchinaArt from '../../assets/mascot/fox-skladchina.png';
+import foxErrorArt from '../../assets/mascot/fox-error.png';
 import type { MySkladchinaListItemDto } from '../../types/api';
-
-const COIN_ICON = (
-  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M9 9.5C9 8 10.3 7 12 7s3 1 3 2.5-1.3 2.5-3 2.5-3 1-3 2.5S10.3 17 12 17s3-1 3-2.5" />
-    <line x1="12" y1="6" x2="12" y2="18" />
-  </svg>
-);
 
 interface Group {
   key: 'action_required' | 'active' | 'history';
@@ -43,6 +39,11 @@ export const SkladchinasTab: FC = () => {
   const navigate = useNavigate();
   const haptic = useHaptic();
   const query = useMySkladchinasQuery();
+  // Роль-развилка пустого состояния (зеркало EventsTab): участнику складчины не создать —
+  // он ждёт, пока организатор его добавит; организатору предлагаем создать первый сбор.
+  const { clubs: organizerClubs, isLoading: isRoleLoading } = useOrganizerClubs();
+  const isOrganizer = organizerClubs.length > 0;
+  const openCreateFlow = useCreateFlowStore((s) => s.open);
 
   const items = useMemo(
     () => query.data?.pages.flatMap((p) => p.content) ?? [],
@@ -71,37 +72,54 @@ export const SkladchinasTab: FC = () => {
     navigate(`/skladchina/${id}`);
   };
 
-  const handleSearchClick = () => {
+  const handleCreateClick = () => {
     haptic.impact('light');
-    navigate('/');
+    openCreateFlow();
   };
 
   const isLoadingInitial = query.isPending;
   const isError = query.isError && !query.isPending;
-  const isEmpty = !isLoadingInitial && !isError && items.length === 0;
+  // Сцена лиса — при отсутствии АКТИВНЫХ сборов (решение PO 2026-07-20): закрытые
+  // и прошедшие живут в «Истории» и не должны прятать пустое состояние — иначе
+  // юзер с одной старой складчиной никогда не видит ни лиса, ни CTA «Создать сбор».
+  const hasActive = items.some((s) => s.status === 'active');
+  const hasHistory = items.some((s) => s.status !== 'active');
+  const isEmpty = !isLoadingInitial && !isError && !hasActive;
+  // Пока роль не определена, пустую сцену держим на скелетоне — иначе организатор
+  // на мгновение увидит участнический вариант без CTA «Создать сбор».
+  const isEmptySceneResolving = isEmpty && isRoleLoading;
 
   return (
     <>
-      {isLoadingInitial && <FeedSkeleton count={3} />}
+      {(isLoadingInitial || isEmptySceneResolving) && <FeedSkeleton count={3} />}
 
       {isError && (
-        <FeedEmpty
-          icon={COIN_ICON}
+        <FoxEmpty
+          art={foxErrorArt}
+          variant="error"
           title="Не удалось загрузить сборы"
-          description="Проверьте соединение и попробуйте снова."
-          ctaLabel="Повторить"
-          onCta={() => query.refetch()}
+          description="Проверь соединение и попробуй ещё раз."
+          primary={{ label: 'Повторить', onClick: () => { haptic.impact('light'); query.refetch(); } }}
         />
       )}
 
-      {isEmpty && (
-        <FeedEmpty
-          icon={COIN_ICON}
-          title="Активных сборов нет"
-          description="Когда организатор клуба создаст сбор и выберет вас участником — он появится здесь."
-          ctaLabel="Перейти в Поиск"
-          onCta={handleSearchClick}
-        />
+      {isEmpty && !isEmptySceneResolving && (
+        isOrganizer ? (
+          <FoxEmpty
+            art={foxSkladchinaArt}
+            soonIcon={hasHistory ? undefined : '💰'}
+            title={hasHistory ? 'Активных сборов нет' : 'Сборов пока нет'}
+            description="Собери на аренду, инвентарь или общий подарок — создай сбор, и участники увидят его здесь."
+            primary={{ label: 'Создать сбор', onClick: handleCreateClick }}
+          />
+        ) : (
+          <FoxEmpty
+            art={foxSkladchinaArt}
+            soonIcon={hasHistory ? undefined : '💰'}
+            title={hasHistory ? 'Активных сборов нет' : 'Сборов пока нет'}
+            description="Когда организатор клуба создаст сбор и добавит тебя — он появится здесь."
+          />
+        )
       )}
 
       {!isLoadingInitial && !isError && groups.map((group) => (

@@ -68,7 +68,7 @@
 ## Зависимости и связи
 
 - Этот backlog **заменяет/уточняет V2 секцию `myclubs-recommended-clubs.md`** (где было «collaborative-filtering lite по категориям клубов где user уже состоит»). После реализации онбординга — у user'а будут **явные** интересы, не косвенные
-- `EventsPage` (текущая разработка, feature/events-feed-page) — в v1 empty state остаётся **stub'ом** «Вы пока не состоите в клубах. Перейти в Поиск» (без recommendations). Этот backlog потом подменит stub на recommendations-block
+- `EventsPage` (текущая разработка, feature/events-feed-page) — в v1 empty state остаётся **stub'ом** «Вы пока не состоите в клубах. Перейти в Поиск» (без recommendations). Этот backlog потом подменит stub на recommendations-block. *(UPD 2026-07-20: stub уже заменён на `FoxEmpty` с роль-развилкой — empty-states волны 1–2, PR #111; recommendations-block по-прежнему актуален и подменит/дополнит лис-заставку.)*
 - Существующие HTML-моки — точка отсчёта для дизайна, но **переделать под brand** (navy+brass + BrandBackdrop)
 
 ## Что нужно сделать (примерный объём, ~1-2 недели solo)

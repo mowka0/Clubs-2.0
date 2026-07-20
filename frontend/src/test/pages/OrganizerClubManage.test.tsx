@@ -6,7 +6,7 @@ import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { mockClubDetail } from '../mocks/handlers';
 import { renderWithProviders } from '../utils/renderWithProviders';
-import type { ClubStatsDto } from '../../types/api';
+import type { ClubStatsDto, FinancesDto } from '../../types/api';
 
 // Мок Telegram SDK
 vi.mock('@telegram-apps/sdk-react', () => ({
@@ -77,6 +77,21 @@ function mockPaidClub() {
   );
 }
 
+// Мок GET /finances с нужным числом активных участников (остальные суммы для W3-08 неважны).
+function mockFinances(activeMembers: number) {
+  const finances: FinancesDto = {
+    activeMembers,
+    monthlyRevenue: 0,
+    organizerShare: 0,
+    platformFee: 0,
+    organizerSharePct: 0,
+    platformFeePct: 0,
+  };
+  server.use(
+    http.get(`*/api/clubs/${CLUB_ID}/finances`, () => HttpResponse.json(finances)),
+  );
+}
+
 function renderManage(entry: string = `/clubs/${CLUB_ID}/manage`) {
   const user = userEvent.setup();
   const result = renderWithProviders(
@@ -135,5 +150,70 @@ describe('OrganizerClubManage — набор табов и владельчес�
     const statsTab = await screen.findByRole('tab', { name: 'Статистика' });
     expect(statsTab).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('tab', { name: 'Чат' })).not.toBeInTheDocument();
+  });
+});
+
+describe('OrganizerClubManage — Финансы: честный хинт (W3-08)', () => {
+  beforeEach(() => {
+    server.resetHandlers();
+    server.use(http.get(`*/api/clubs/${CLUB_ID}/stats`, () => HttpResponse.json(EMPTY_STATS)));
+  });
+
+  it('бесплатный клуб: текст про бесплатный клуб + «Открыть настройки» переключает на таб «Настройки»', async () => {
+    // mockClubDetail по умолчанию бесплатный (subscriptionPrice 0). Членства неважны — приоритет
+    // у «бесплатный», поэтому здесь активные участники есть, а текст всё равно про бесплатный клуб.
+    setViewer(OWNER_ID);
+    mockFinances(3);
+    const { user } = renderManage();
+
+    await user.click(await screen.findByRole('tab', { name: 'Финансы' }));
+
+    expect(await screen.findByText(/Клуб бесплатный/)).toBeInTheDocument();
+    const cta = screen.getByRole('button', { name: 'Открыть настройки' });
+    await user.click(cta);
+
+    // Переключение внутритабовое: появляется форма «Настроек», таб «Настройки» активен.
+    expect(await screen.findByText('Название')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Настройки' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('платный клуб без активных участников: «Пока некому платить…», без CTA', async () => {
+    setViewer(OWNER_ID);
+    mockPaidClub();
+    mockFinances(0);
+    const { user } = renderManage();
+
+    await user.click(await screen.findByRole('tab', { name: 'Финансы' }));
+
+    expect(await screen.findByText(/Пока некому платить/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Открыть настройки' })).not.toBeInTheDocument();
+    // Не показываем ни текст бесплатного, ни текст «с участниками».
+    expect(screen.queryByText(/Клуб бесплатный/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/напрямую тебе/)).not.toBeInTheDocument();
+  });
+
+  it('платный клуб с участниками: хинт на «ты» про прямую оплату мимо платформы', async () => {
+    setViewer(OWNER_ID);
+    mockPaidClub();
+    mockFinances(5);
+    const { user } = renderManage();
+
+    await user.click(await screen.findByRole('tab', { name: 'Финансы' }));
+
+    expect(await screen.findByText(/напрямую тебе/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Открыть настройки' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Клуб бесплатный/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Пока некому платить/)).not.toBeInTheDocument();
+  });
+
+  it('со-организатор видит те же честные хинты (различий по вкладке нет): бесплатный клуб', async () => {
+    setViewer(CO_ORG_ID);
+    mockFinances(2);
+    const { user } = renderManage();
+
+    await user.click(await screen.findByRole('tab', { name: 'Финансы' }));
+
+    expect(await screen.findByText(/Клуб бесплатный/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Открыть настройки' })).toBeInTheDocument();
   });
 });

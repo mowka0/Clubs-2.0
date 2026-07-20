@@ -22,6 +22,7 @@ import { formatPrice } from '../utils/formatters';
 import { isActiveManagerMembership } from '../utils/membershipRole';
 import { openTmeLink } from '../utils/telegramLinks';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
+import { ClubChatConnectBanner } from '../components/club/ClubChatConnectBanner';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
 import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
@@ -445,6 +446,15 @@ export const ClubPage: FC = () => {
         <div className="rd-note" role="status">
           Подписка отменена · доступ до {formatExpiryDate(membership.subscriptionExpiresAt)}
         </div>
+      )}
+
+      {/* Панель подключения чата (club-chat-link): владельцу клуба без привязанного чата.
+         Именно isOwner, а не isManager — все эндпоинты привязки владельческие
+         (ChatLinkService.requireOwner), у со-организатора таба «Чат» нет вообще. */}
+      {isOwner && !club.chatLinked && (
+        // key={club.id}: страница не перемонтируется при переходе между клубами,
+        // ключ гарантирует свежее состояние скрытия для каждого клуба.
+        <ClubChatConnectBanner key={club.id} clubId={club.id} />
       )}
 
       {/* О клубе */}

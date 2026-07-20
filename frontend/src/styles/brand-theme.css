@@ -1936,10 +1936,11 @@ body::after {
 }
 
 /* ============================================================
-   Feed (EventsPage / будущая Skladchina)
-   Универсальные компоненты фида — FeedSection / FeedSkeleton /
-   FeedEmpty живут в components/feed и не зависят от того,
-   что именно они отображают. EventCard — специфичен для событий.
+   Feed (EventsPage / Skladchina)
+   Универсальные компоненты фида — FeedSection / FeedSkeleton —
+   живут в components/feed и не зависят от того, что именно они
+   отображают. EventCard — специфичен для событий. Пустые состояния
+   фида — общий примитив FoxEmpty (лис-маскот).
    ============================================================ */
 .feed-section-label {
   padding: 18px 20px 10px;
@@ -2135,39 +2136,6 @@ body::after {
 @keyframes feedShimmer {
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
-}
-
-/* Пустое состояние — переиспользуется и для «нет клубов», и для ошибки */
-.feed-empty {
-  margin: 40px 20px;
-  padding: 28px 20px;
-  background: var(--brand-navy-card);
-  border: 1px solid var(--brand-hairline);
-  border-radius: 14px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-.feed-empty .ico {
-  color: var(--brand-brass-2);
-  margin-bottom: 4px;
-  opacity: 0.85;
-}
-.feed-empty .title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--brand-ink);
-}
-.feed-empty .sub {
-  font-size: 13.5px;
-  color: var(--brand-ink-3);
-  line-height: 1.5;
-  max-width: 320px;
-}
-.feed-empty .actions {
-  margin-top: 8px;
 }
 
 /* ============================================================

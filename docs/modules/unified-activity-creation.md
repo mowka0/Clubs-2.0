@@ -13,6 +13,13 @@
 > теперь **3 таба (Участники/Финансы/Настройки)** после `feature/applications-inbox`
 > (2026-05-30, таб «Заявки» удалён в пользу кросс-клубового inbox на
 > `MyClubsPage`, см. [`applications-inbox.md`](./applications-inbox.md)).
+>
+> **UPD 2026-07-20:** `CreateActivityFlow` и его guard'ы живут в `AppDock`
+> (`components/Layout.tsx`), открытие — через `useCreateFlowStore.open()`.
+> Помимо «+» дока, флоу открывают CTA пустых состояний (см. `empty-states.md`):
+> EventsTab / ClubActivitiesTab / ClubStatsTab (волны 1–2) и SkladchinasTab
+> «Создать сбор» (волна 3; открывается с шага выбора типа — пресет типа
+> осознанно не делали, YAGNI).
 > `ActivitiesManageTab.tsx` удалён ещё в `feature/unified-activity-creation`.
 > Унифицированная лента активностей сохранилась только в **member-view**
 > на `ClubPage` (`ClubActivitiesTab`, read-only). Детали — § «Итерация 4» ниже и

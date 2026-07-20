@@ -100,6 +100,31 @@ no text, no letters, no words anywhere.
   (v1 «мегафон» и v2 «прыжок с ножницами» отвергнуты PO: однотипные позы без сцены)
   Запасные: вывеска: `Scene: the fox stands on a small wooden stool and proudly hangs a round wooden sign with an orange spark emblem above an open door, one paw steadying the sign, delighted smile, tail up, sunglasses on. Emblem only, no letters.` · капитан: `Scene: the fox as a captain confidently holds a big ship steering wheel with both paws, one ear tilted in the wind, adventurous grin, scarf fluttering behind, sunglasses on.` (мегафон-вариант отвергнут PO как дежурный)
 
+## 11. Активности · «Сборы»: сборов пока нет (P2, волна 3)
+Когда: таб «Сборы» пуст. Роль-развилка: организатору CTA «Создать сбор», участнику — «Когда организатор клуба создаст сбор и добавит тебя — он появится здесь.» (без CTA).
+Идея: складчина = скинуться на общее дело; тепло и по-товарищески, без «попрошайничества».
+В коде уже стоит плейсхолдер `fox-skladchina.png` (копия fox-planning) — заменить на выбранный арт тем же именем файла.
+
+- **11a. Шляпа по кругу (рекомендую):** `Scene: the fox warmly holds out an upturned cream hat with both paws towards the viewer like friends chipping in together, one big golden coin already lying inside the hat, inviting kind smile, tail up, sunglasses on. The hat is the only prop, plain white background.`
+- **11b. Банка общего сбора:** `Scene: the fox hugs a big glass jar with a few golden coins at the bottom and an orange spark emblem sticker on the glass, tilting it slightly towards the viewer with a friendly hopeful smile, sunglasses on. Emblem only, no letters.`
+- **11c. Пирог на всех:** `Scene: the fox in a cream apron over his blazer carefully slices a round pie into equal pieces with a cake server, several small empty plates arranged around, generous happy smile, sunglasses pushed up on his forehead, eyes visible and warm. The pie and plates are the only scenery, plain white background.`
+
+## 12. Панель подключения чата на странице клуба (не пустое состояние)
+Когда: владелец открывает страницу своего клуба, у которого чат не привязан. Не заставка, а
+промо-карточка с CTA «Подключить» (спека — `docs/modules/club-chat-link.md` § «Панель
+подключения чата на странице клуба»; мокап — `docs/design/club-chat-banner/mockups/variant-c-fox-card.html`).
+Идея: лис-рассыльщик — чат как канал, по которому клуб живёт между встречами.
+
+В коде стоит `fox-chat.png` (nano banana, вырезан по пайплайну handoff §5). **Версия временная:**
+самолётики кремовые, PO ждёт голубые — перегенерить и подменить файл тем же именем, код не трогать.
+
+- **12a. Лис-рассыльщик (в проде).** Что на арте: лис сидит за столиком с ноутбуком и складывает
+  бумажные самолётики, готовые лежат перед ним; язык высунут от старания, очки на месте.
+  Промпт (реконструкция по факту арта — исходный не сохранён; при перегенерации приложить сам
+  `fox-chat.png` как референс позы): `Scene: the fox sits at a small wooden desk with an open laptop, focused on folding light blue paper planes with both paws, several finished paper planes lying on the desk ready to fly, tongue sticking out in concentration, tail curled behind, sunglasses on. Desk, laptop and paper planes are the only props, plain white background.`
+  **Ключевая правка для новой версии — `light blue paper planes`:** в текущем файле самолётики
+  кремовые и теряются на светлой карточке; PO ждёт голубые.
+
 ---
 
 ## Технические напоминания

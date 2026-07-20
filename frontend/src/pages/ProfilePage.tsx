@@ -133,7 +133,18 @@ export const ProfilePage: FC = () => {
         {handleParts && <div className="rd-handle">{handleParts}</div>}
       </div>
 
-      {user.bio && <div className="rd-bio">{user.bio}</div>}
+      {user.bio ? (
+        <div className="rd-bio">{user.bio}</div>
+      ) : (
+        // Пустой bio раньше просто скрывал секцию — теперь мягкий нудж, открывающий редактор профиля.
+        <button
+          type="button"
+          className="rd-bio-nudge"
+          onClick={() => { haptic.impact('light'); setEditOpen(true); }}
+        >
+          Добавь пару слов о себе →
+        </button>
+      )}
 
       {interests.length > 0 ? (
         <>
@@ -191,12 +202,39 @@ export const ProfilePage: FC = () => {
         </div>
       )}
 
-      {gam && (gam.xp > 0 || gam.badges.length > 0) && (
+      {gam ? (
+        // Секцию «Уровень» показываем всегда при успешной загрузке: панель сама честно рендерит
+        // нулевой стейт (Гость, 0 XP, пустой прогресс-бар) — это и есть тизер-скелет для новичка.
+        // При ошибке фонового рефетча поверх устаревших данных остаёмся здесь, а не на плашке.
         <>
           <div className="rd-section-sub-h">Уровень</div>
           <GamificationPanel data={gam} />
+          {gam.xp === 0 && gam.badges.length === 0 && (
+            // Пояснение под нулевой панелью — откуда берётся XP и зачем уровни. Только на старте.
+            <div className="rd-cta-hint">
+              Это твой старт. XP начисляется за посещённые встречи и оплаченные
+              складчины&nbsp;— с ним растут уровни и открываются бейджи.
+            </div>
+          )}
         </>
-      )}
+      ) : gamificationQuery.isError ? (
+        // Сбой загрузки нельзя выдавать за «уровня нет»: честная плашка + повтор (F5-20), а не
+        // молчаливо скрытая секция. Зеркало паттерна «Интересов» выше.
+        <>
+          <div className="rd-section-sub-h">Уровень</div>
+          {/* role="alert" — скринридер озвучит сбой сразу при появлении плашки */}
+          <div className="rd-glass rd-empty" role="alert">
+            <div className="rd-title">Не удалось загрузить уровень</div>
+            <button
+              type="button"
+              className="rd-ghost-btn"
+              onClick={() => { haptic.impact('light'); gamificationQuery.refetch(); }}
+            >
+              Повторить
+            </button>
+          </div>
+        </>
+      ) : null}
 
       <SubscriptionCard />
 

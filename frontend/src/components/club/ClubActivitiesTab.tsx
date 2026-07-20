@@ -9,6 +9,7 @@ import { ActivityFilterChips } from '../manage/ActivityFilterChips';
 import { ActivityFeedList } from '../manage/ActivityFeedList';
 import { FoxEmpty } from '../feed/FoxEmpty';
 import foxCafeArt from '../../assets/mascot/fox-cafe.png';
+import foxFilterArt from '../../assets/mascot/fox-filter.png';
 
 interface ClubActivitiesTabProps {
   clubId: string;
@@ -42,14 +43,24 @@ export const ClubActivitiesTab: FC<ClubActivitiesTabProps> = ({ clubId, isManage
     openCreateFlow();
   };
 
+  // Сброс фильтра типа: возвращает в клуб честную ролевую сцену (или реальный список).
+  const handleShowAll = () => {
+    haptic.impact('light');
+    setFilter('all');
+  };
+
   const feed = activitiesQuery.data;
   const isInitialLoading = activitiesQuery.isPending;
   const isError = activitiesQuery.isError && !isInitialLoading;
-  // Лис показывается всегда, когда впереди пусто — даже если у клуба есть прошедшие
-  // встречи: без запланированного «продолжения» таб для новичка выглядит так же мёртво.
-  // История при этом не прячется: ActivityFeedList рендерит секцию «Прошедшие» под сценой.
-  const showEmptyScene =
+  const isUpcomingEmpty =
     !isInitialLoading && !isError && feed !== undefined && feed.upcoming.length === 0;
+  // Пустой upcoming под активным фильтром типа ≠ «клуб пуст»: ролевой лис-кафе тут врал бы
+  // («ни одной активности» + «Создать активность»). Показываем честный текст про фильтр,
+  // роль-развилка не нужна — создание в контексте фильтра не предлагаем.
+  const showFilteredEmpty = isUpcomingEmpty && filter !== 'all';
+  // Лис-кафе (ролевая сцена) — только при фильтре «Все». Если клуб реально пуст, после
+  // «Показать все» честно появится именно она.
+  const showEmptyScene = isUpcomingEmpty && filter === 'all';
   const hasPast = (feed?.past.length ?? 0) > 0;
 
   return (
@@ -67,6 +78,17 @@ export const ClubActivitiesTab: FC<ClubActivitiesTabProps> = ({ clubId, isManage
           <Placeholder
             header="Ошибка"
             description={activitiesQuery.error?.message ?? 'Не удалось загрузить активности'}
+          />
+        </div>
+      )}
+
+      {showFilteredEmpty && (
+        <div style={{ padding: '0 20px' }}>
+          <FoxEmpty
+            art={foxFilterArt}
+            title="Нет активностей этого типа"
+            description="Под выбранный фильтр ничего не попало. Сними его — увидишь всё, что есть в клубе."
+            primary={{ label: 'Показать все', onClick: handleShowAll }}
           />
         </div>
       )}

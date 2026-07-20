@@ -39,7 +39,9 @@
 - `backend/.../user/UserController.kt` — `GET /api/users/me/gamification` (self-only, JWT-principal).
 - Тесты: `XpPolicyTest.kt` (числа-локеры) + `ReputationLedgerIntegrationTest.kt` (2 теста: XP/diversity/уровень/бейджи + broken=0).
 - Фронт: `components/profile/GamificationPanel.tsx` (XP-бар + уровень + бейджи) на `pages/ProfilePage.tsx`
-  (секция «Уровень», скрыта пока `xp=0 && badges=0`); `api/membership.ts` (`getMyGamification`),
+  (секция «Уровень», скрыта пока `xp=0 && badges=0` — UPD 2026-07-20, empty-states W3-04:
+  гейт снят, секция видна всегда при данных, при xp=0 — тизер + строка-пояснение);
+  `api/membership.ts` (`getMyGamification`),
   `queries/members.ts` (`useMyGamificationQuery`), `queries/queryKeys.ts`, `types/api.ts`.
 
 **Гейты PR-c:** Reviewer clean / Security CLEAN / Analyst docs-aligned. Полный бэк + фронт-сборка зелёные.
