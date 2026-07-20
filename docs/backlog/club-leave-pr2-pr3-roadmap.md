@@ -117,6 +117,7 @@ fun transferOwnership(clubId: UUID, callerUserId: UUID, newOwnerUserId: UUID): C
 ### Scope
 **Входит:**
 - Backend: расширить существующий `ClubService.deleteClub` для free-клубов — добавить cascade (consistent c PR-1 leave-cascade): events → cancelled, skladchinas → cancelled, applications → удаление pending+approved.
+  > _Статус 2026-07-20:_ этот каскад **уже реализован** (`bugfix/club-delete-cascade` 2026-06-13), плюс к нему добавлено освобождение привязанного телеграм-чата (`chatLinkService.releaseOnClubDeleted`, `bugfix/chat-link-deadlock`). При отложенном удалении платного клуба `ClubDeletionProcessor` обязан вызывать **тот же** `deleteClub` — иначе чат останется за скрытым клубом и заново привязан быть не сможет. См. `docs/modules/clubs.md` § «DELETE /api/clubs/{id}».
 - Backend: для **платных** клубов — новое поведение:
   - Поле `clubs.scheduled_deletion_at` (Flyway-миграция).
   - `deleteClub` для paid: ставит `scheduled_deletion_at = now + 30 days`, оставляет `is_active=true`, рассылает DM всем active members.

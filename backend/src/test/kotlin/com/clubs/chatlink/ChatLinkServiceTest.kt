@@ -271,6 +271,40 @@ class ChatLinkServiceTest {
     }
 
     @Test
+    fun `releaseKeepingBotInChat — чат освобождён, но бот остаётся в группе`() {
+        // Перехват чата с осиротевшей привязкой: бот только что добавлен ради НОВОЙ привязки,
+        // выход из чата сорвал бы её.
+        val orphan = chatLinkFixture(clubId = clubId, doorEnabled = true, doorInviteLink = "https://t.me/+dead")
+
+        service.releaseKeepingBotInChat(orphan)
+
+        verify { chatLinkRepository.delete(clubId) }
+        verify { gateway.revokeInviteLink(orphan.chatId, "https://t.me/+dead") }
+        // Перехваченный чат не должен достаться новому клубу с чужим наследством: ни закрепов,
+        // ни статус-постов сборов, ни тегов, ни банов покойного клуба.
+        verify { livePinService.disableForClub(orphan) }
+        verify { skladchinaChatStatusService.disableForClub(orphan) }
+        verify { memberTagService.disableForClub(orphan) }
+        verify { strictModeService.liftBansForClub(orphan) }
+        verify(exactly = 0) { gateway.leaveChat(any()) }
+    }
+
+    @Test
+    fun `releaseOnClubDeleted — находит привязку сам и выводит бота, без привязки no-op`() {
+        val link = chatLinkFixture(clubId = clubId, doorInviteLink = "https://t.me/+abc")
+        every { chatLinkRepository.findByClubId(clubId) } returns link
+
+        assertTrue(service.releaseOnClubDeleted(clubId))
+        verify { gateway.leaveChat(link.chatId) }
+        verify { chatLinkRepository.delete(clubId) }
+
+        val other = UUID.randomUUID()
+        every { chatLinkRepository.findByClubId(other) } returns null
+        assertFalse(service.releaseOnClubDeleted(other))
+        verify(exactly = 0) { chatLinkRepository.delete(other) }
+    }
+
+    @Test
     fun `unlink без привязки — 404`() {
         every { chatLinkRepository.findByClubId(clubId) } returns null
         assertThrows(NotFoundException::class.java) { service.unlink(clubId, ownerId) }
