@@ -668,6 +668,12 @@
 .rd-pf-identity .rd-handle { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
 
 .rd-bio { font-size: 13px; color: var(--text-dim); line-height: 1.5; padding: 0 6px; margin-bottom: 18px; text-align: center; }
+/* Нудж пустого bio: dim-строка в духе .rd-bio, но интерактивная кнопка (акцентный цвет — сигнал «нажми и добавь»). */
+.rd-bio-nudge {
+  display: block; margin: 0 auto 18px; padding: 2px 6px;
+  background: none; border: 0; cursor: pointer; font-family: inherit;
+  font-size: 13px; line-height: 1.5; color: var(--accent); text-align: center;
+}
 
 /* ---------- Теги ---------- */
 .rd-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }

@@ -24,6 +24,14 @@
 > `useClubApplicationsQuery` + `getClubApplications` удалены в той же чистке,
 > backend-эндпоинт оставлен. Проверить при том же проходе.
 
+## RF-2: обёртка `FoxErrorState` над FoxEmpty (ревью волны 3, 2026-07-20)
+
+Рецепт error-сцены повторён в 5 местах (DiscoveryPage, MyClubsPage, EventsTab,
+SkladchinasTab, InvitePage): `fox-error.png` + `variant="error"` + title/description
++ «Повторить» с хаптикой и `refetch`. Порог DRY (3+) пройден — напрашивается
+`FoxErrorState({ title, description, onRetry })` в shared. Отложено по правилу
+«boilerplate-рефакторинг отдельным проходом, не во время фич».
+
 ## Прочие кандидаты из аудита (structure, не dead-code) — НЕ СЕЙЧАС
 
 - **DRY: пагинация.** Инвариант `(total + size - 1) / size` скопирован 4× — в

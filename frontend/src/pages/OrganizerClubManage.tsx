@@ -50,8 +50,15 @@ function resolveInitialTab(raw: string | null): TabKey {
 
 // ---- Вкладка «Финансы» ----
 
-const FinancesTab: FC<{ clubId: string }> = ({ clubId }) => {
-  const financesQuery = useClubFinancesQuery(clubId);
+interface FinancesTabProps {
+  club: ClubDetailDto;
+  /** Переключение на таб «Настройки» внутри страницы (не навигация) — CTA бесплатного клуба (W3-08). */
+  onOpenSettings: () => void;
+}
+
+const FinancesTab: FC<FinancesTabProps> = ({ club, onOpenSettings }) => {
+  const haptic = useHaptic();
+  const financesQuery = useClubFinancesQuery(club.id);
   const finances = financesQuery.data;
 
   if (financesQuery.isPending) {
@@ -66,6 +73,11 @@ const FinancesTab: FC<{ clubId: string }> = ({ clubId }) => {
     return <Placeholder description="Не удалось загрузить финансы" />;
   }
 
+  // Три честных состояния сводки взносов (empty-states W3-08): бесплатный клуб — взносов
+  // нет вообще; платный без участников — платить некому; платный с участниками — прежний
+  // смысл (деньги идут мимо платформы), тон переведён на «ты».
+  const isFree = club.subscriptionPrice === 0;
+
   return (
     <>
       <div className="rd-section-sub-h">Финансовая сводка</div>
@@ -75,12 +87,36 @@ const FinancesTab: FC<{ clubId: string }> = ({ clubId }) => {
           <div className="rd-stat-value rd-plain">{finances.activeMembers}</div>
         </div>
       </div>
-      {/* De-Stars: взносы идут напрямую участник→организатор, мимо платформы — платформа не берёт
-          комиссию и не отслеживает суммы. Полученные взносы подтверждаются во вкладке «Участники». */}
-      <div className="rd-cta-hint" style={{ textAlign: 'left', marginTop: 8 }}>
-        Оплата подписок идёт напрямую вам, мимо платформы — поэтому суммы здесь не считаются.
-        Подтверждайте полученные взносы во вкладке «Участники» кнопкой «Взнос получен».
-      </div>
+      {isFree ? (
+        <>
+          <div className="rd-cta-hint" style={{ textAlign: 'left', marginTop: 8 }}>
+            Клуб бесплатный — взносы не собираются, поэтому финансовой сводки нет.
+            Захочешь ввести платную подписку — это в «Настройках».
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <button
+              type="button"
+              className="rd-ghost-btn"
+              onClick={() => { haptic.impact('light'); onOpenSettings(); }}
+            >
+              Открыть настройки
+            </button>
+          </div>
+        </>
+      ) : finances.activeMembers === 0 ? (
+        <div className="rd-cta-hint" style={{ textAlign: 'left', marginTop: 8 }}>
+          Пока некому платить — активных участников ещё нет. Когда появятся, здесь будет
+          видно, кто оплатил взнос, а подтверждать оплату будешь во вкладке «Участники»
+          на странице клуба.
+        </div>
+      ) : (
+        /* De-Stars: взносы идут напрямую участник→организатор, мимо платформы — платформа не берёт
+           комиссию и не отслеживает суммы. Полученные взносы подтверждаются во вкладке «Участники». */
+        <div className="rd-cta-hint" style={{ textAlign: 'left', marginTop: 8 }}>
+          Оплата подписок идёт напрямую тебе, мимо платформы — поэтому суммы здесь не считаются.
+          Подтверждай полученные взносы во вкладке «Участники» кнопкой «Взнос получен».
+        </div>
+      )}
     </>
   );
 };
@@ -515,7 +551,7 @@ export const OrganizerClubManage: FC = () => {
       case 'stats':
         return <ClubStatsTab clubId={clubId} />;
       case 'finances':
-        return <FinancesTab clubId={clubId} />;
+        return <FinancesTab club={club} onOpenSettings={() => setActiveTab('settings')} />;
       case 'chat':
         return <ClubChatTab clubId={clubId} />;
       case 'settings':

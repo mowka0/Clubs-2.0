@@ -393,6 +393,12 @@ export const EventPage: FC = () => {
   // stage_1_timestamp ASC — тому же ключу, по которому продвигается очередь (findFirstWaitlisted),
   // поэтому фильтр сохраняет реальный порядок продвижения.
   const waitlist = finalComposition ? responders.filter((r) => r.status === 'waitlisted') : [];
+  // W3-09: свежее событие Этапа 1 без единого отклика — строка-намёк под блоком голосования вместо
+  // немой пустоты. Гейт isSuccess (урок F5-20/F5-22): при загрузке/ошибке responders строку НЕ
+  // показываем — ложная пустота недопустима. Исчезает сама после первого голоса: голосующий (в т.ч.
+  // сам вызывающий) появляется в responders → comingList становится непустым.
+  const showVoteRosterHint =
+    !isCancelled && showVoting && respondersQuery.isSuccess && comingList.length === 0;
 
   // Фон хиро: фото события (решение PO 2026-07-11 — прежде нигде не показывалось),
   // фолбэк — аватар клуба, как раньше.
@@ -555,6 +561,17 @@ export const EventPage: FC = () => {
         </>
       )}
 
+      {/* W3-09: Этап 1, ни одного отклика — role-aware строка-намёк в слоте ростера, под
+          голосованием. Без кнопок и без заголовка секции. Гейты: !isCancelled + showVoting +
+          responders.isSuccess (см. showVoteRosterHint). */}
+      {showVoteRosterHint && (
+        <div className="rd-cta-hint" style={{ textAlign: 'left', marginBottom: 14 }}>
+          {isManager
+            ? 'Голосов пока нет. Поделись событием в чате клуба — первые отклики появятся здесь.'
+            : 'Пока никто не откликнулся. Проголосуй первым — остальным будет проще решиться.'}
+        </div>
+      )}
+
       {/* Лист ожидания (Этап 2+): в порядке приоритета — освободится слот, войдёт первый в очереди. */}
       {!isCancelled && finalComposition && waitlist.length > 0 && (
         <>
@@ -606,7 +623,7 @@ export const EventPage: FC = () => {
           ) : attendanceCandidates.length === 0 ? (
             <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
               <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>
-                Нет подтверждённых участников для отметки.
+                Отмечать некого — никто не подтвердил участие в этом событии.
               </div>
             </div>
           ) : (

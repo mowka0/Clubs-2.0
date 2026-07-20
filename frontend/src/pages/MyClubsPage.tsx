@@ -807,6 +807,16 @@ export const MyClubsPage: FC = () => {
     myApplicationsCount === 0 &&
     organizerInboxCount === 0 &&
     historyClubs.length === 0;
+  // W3-02: «вернувшийся» (вышел из всех клубов, есть История) / «ждущий» (только pending-заявка).
+  // Членств нет вообще, но секции показываются — компактная плашка объясняет, что активных
+  // членств нет. Инвариант: organizerInboxCount > 0 без членств невозможен (менеджер всегда
+  // имеет строку membership), поэтому в триггер входят только свои заявки и История.
+  const showNoClubBanner =
+    showSections &&
+    !empty &&
+    myClubsQuery.isSuccess &&
+    myClubs.length === 0 &&
+    (myApplicationsCount > 0 || historyClubs.length > 0);
 
   // club-invites (кадр E): выбор сделан на экране «Клуб создан» внутри модалки —
   // «Пригласить участников» открывает клуб с шитом приглашения, «Позже» — просто клуб.
@@ -896,10 +906,11 @@ export const MyClubsPage: FC = () => {
       {empty && (
         <FoxEmpty
           art={foxMyClubsArt}
-          title="Пока пусто"
-          description={'Найди подходящий клуб в «Поиске» или создай свой — будешь звать единомышленников сам.'}
+          soonIcon="🤝"
+          title="Тут появятся твои клубы"
+          description="Найди подходящий клуб в Поиске или создай свой — будешь звать единомышленников сам."
           primary={{ label: '+ Создать клуб', onClick: openCreate }}
-          secondary={{ label: 'Открыть поиск', onClick: handleSearchClick }}
+          secondary={{ label: 'Открыть Поиск', onClick: handleSearchClick }}
         />
       )}
 
@@ -970,6 +981,22 @@ export const MyClubsPage: FC = () => {
             ))}
           </div>
         </>
+      )}
+
+      {/* W3-02. Плашка «не состоишь ни в одном клубе»: над живыми секциями (Заявки/История),
+            когда членств нет вообще. Не полноэкранный FoxEmpty — под ней живой контент. */}
+      {showNoClubBanner && (
+        <div className="rd-glass rd-empty">
+          <div className="rd-title">Ты сейчас не состоишь ни в одном клубе</div>
+          <div className="rd-sub">
+            {myApplicationsCount > 0
+              ? 'Заявка уже у организатора — осталось дождаться решения. А пока можно присмотреть ещё варианты в Поиске.'
+              : 'Твоя история и репутация сохранились. Загляни в Поиск — найдёшь новый клуб по душе.'}
+          </div>
+          <button type="button" className="rd-ghost-btn" onClick={handleSearchClick}>
+            Открыть Поиск
+          </button>
+        </div>
       )}
 
       {/* 1. Мои заявки (исходящие) — ждут рассмотрения */}

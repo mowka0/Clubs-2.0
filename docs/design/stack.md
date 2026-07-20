@@ -538,7 +538,9 @@ type UserVote = 'going' | 'maybe' | 'not_going' | 'confirmed' | 'waitlisted' | '
    справа от h1. Открывает `<Modal>` с `CreateClubModal`.
 3. **Empty state** — `mc-empty` brand-карточка с brass-icon + headline
    «Пока пусто» + sub + dual CTA («Открыть поиск» ghost + «+ Создать клуб»
-   brass). Рендерится только если `!loading && myClubs.length === 0 &&
+   brass). *(UPD 2026-07-20, empty-states волны 1–3: сцена теперь `FoxEmpty`
+   с лисом, title «Тут появятся твои клубы», secondary «Открыть Поиск» —
+   см. `docs/modules/empty-states.md` § W3-01.)* Рендерится только если `!loading && myClubs.length === 0 &&
    applications.length === 0`. Заменяет старый tgui Placeholder.
 4. `<div className="mc-section-label">` Активные · N (brass uppercase) +
    `<div className="mc-list">`:
@@ -608,11 +610,14 @@ type UserVote = 'going' | 'maybe' | 'not_going' | 'confirmed' | 'waitlisted' | '
 2. В каждой секции `<EventCard>` карточки; тап → `/events/:id`
 3. Infinite scroll через IntersectionObserver (`useInfiniteQuery`, page-based)
 4. Skeleton (3 placeholder) при initial load; `<FeedEmpty>` при error / 0 events
+   *(UPD 2026-07-20: `FeedEmpty` удалён — пустые/error-состояния теперь `FoxEmpty`
+   с роль-развилкой, см. `docs/modules/empty-states.md`)*
 
 **Footer:** BottomTabBar
 
 **Generic feed namespace:** `components/feed/` (FeedSection, FeedSkeleton,
-FeedEmpty) специально не-event-specific — переиспользуется для складчины,
+FeedEmpty — удалён 2026-07-20 в пользу FoxEmpty) специально не-event-specific —
+переиспользуется для складчины,
 когда придёт время (`docs/backlog/skladchina.md`).
 **API:** нет (статичный рендер).
 **Haptic:** только `select()` от `BottomTabBar` на смену таба; на самой

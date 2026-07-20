@@ -264,7 +264,9 @@ rd-sheet bottom-sheet (`createPortal`, как CityPicker/ProfileEditModal — б
 > [`unified-activity-creation.md`](./unified-activity-creation.md).
 
 #### Финансы (`FinancesTab`)
-- `GET /api/clubs/:id/finances` → активные участники, выручка за месяц, доля организатора, комиссия платформы
+- `GET /api/clubs/:id/finances` → в сводке только «Активных участников» (de-Stars: выручка/доля/комиссия удалены — деньги идут мимо платформы)
+- Проп — `club: ClubDetailDto` целиком + колбэк `onOpenSettings` (2026-07-20, empty-states W3-08)
+- Хинт под сводкой — три честных варианта (см. `empty-states.md` § W3-08): бесплатный клуб («взносы не собираются…» + ghost-CTA «Открыть настройки» → внутристраничное переключение на таб «Настройки»); платный без активных участников («Пока некому платить…»); платный с участниками — прежний de-Stars-смысл, тон на «ты»
 
 #### Настройки (`SettingsTab`)
 - **Аватар:** компонент `AvatarUpload` (загрузка/замена/удаление, JPEG/PNG до 5 МБ)
@@ -287,7 +289,8 @@ rd-sheet bottom-sheet (`createPortal`, как CityPicker/ProfileEditModal — б
 |---|---|---|
 | Hero `Твой профиль` + ⚙️ | всегда | static (шестерёнка disabled пока `useMyInterestsQuery.isPending`) |
 | `.pf-identity` (avatar + имя + @username + город/страна) | всегда | `useAuthStore.user` |
-| `.pf-bio` (свободный текст «о себе») | если `user.bio` задан | `useAuthStore.user.bio` |
+| `.rd-bio` (свободный текст «о себе») | если `user.bio` задан; при пустом bio — кнопка-нудж `.rd-bio-nudge` «Добавь пару слов о себе →» → открывает `ProfileEditModal` (2026-07-20, empty-states W3-05) | `useAuthStore.user.bio` |
+| Секция «Уровень» (`GamificationPanel` + строка-пояснение при xp=0/0 бейджей) | всегда при наличии данных (stale-while-error); при ошибке без кэша — плашка «Не удалось загрузить уровень» + «Повторить» (2026-07-20, empty-states W3-04) | `useMyGamificationQuery()` |
 | Секция «Интересы» (чипы `.pf-tag`) | если `interests.length > 0` | `useMyInterestsQuery()` |
 | Global-шапка «надёжен в N из M клубов» (плашка `.rd-empty` при пустоте/ошибке) | **всегда** | `useMyReputationQuery()` → `MyReputationDto` (только `global`) |
 | ~~Секции «Репутация» (активные) / «История»~~ — **ПЕРЕЕХАЛИ 2026-07-05**: per-club репутация теперь в «Моих клубах» (раскрывающиеся карточки клубов + «путь назад»), история — там же. См. reputation-path-back.md | — | — |

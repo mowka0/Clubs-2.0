@@ -69,7 +69,8 @@ pf-identity
  ├ имя + @username
  └ pf-identity .location    ← «Москва, Россия» если city+country заданы
 
-pf-bio (если user.bio задан)
+pf-bio (если user.bio задан; UPD 2026-07-20 empty-states W3-05: при пустом bio —
+        кнопка-нудж «Добавь пару слов о себе →», открывает редактор профиля)
 
 mc-section-label «Интересы»  (если interests.length > 0)
 pf-tags
