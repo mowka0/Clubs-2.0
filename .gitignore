@@ -21,3 +21,6 @@ docs/design/empty-states/generated/
 
 # Референсы стиля (чужие картинки) — только на диске
 docs/design/empty-states/ref/
+
+# Сырьё генераций nano banana (отбор PO, финалы уходят в ref/nano/cut и frontend/src/assets/mascot)
+fox/
