@@ -123,8 +123,10 @@ ASC (организатор клуба в обоих случаях первым
 репутацией только от складчин (`outcome_count ≥ 3`, но `total_confirmations = 0`) имеет `trust ≠ null`,
 но нулевой event-трек. Чтобы не показывать вводящее в заблуждение «Обещания 0%», `MemberListItemDto`
 несёт `totalConfirmations`; строка списка (`ClubMembersTab`) скрывает «Обещания X%» при
-`totalConfirmations === 0`, а `MemberProfileModal` скрывает «Спонтанных визитов» при
-`confirmations === 0`. Это паритет с `ProfilePage` (`hasActivity`-гард), где такие нули уже прятались.
+`totalConfirmations === 0`, а `MemberProfileModal` скрывает «Спонтанные визиты» при
+`confirmations === 0` (UPDATED 2026-07-21: строка спонтанности переехала из футера колец в блок
+«Активность в клубе» вместе с открытыми встречами — гейт F5-08 сохранён; см. events.md
+§ «Открытая встреча»). Это паритет с `ProfilePage` (`hasActivity`-гард), где такие нули уже прятались.
 
 ### Peer-signal в Applications Inbox
 

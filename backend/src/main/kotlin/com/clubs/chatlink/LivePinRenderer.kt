@@ -1,5 +1,6 @@
 package com.clubs.chatlink
 
+import com.clubs.common.util.EventFormatTexts
 import com.clubs.event.Event
 import com.clubs.event.locationDisplay
 import org.springframework.beans.factory.annotation.Value
@@ -41,20 +42,24 @@ class LivePinRenderer(
         "🗓 ${event.eventDatetime.format(fmt)}" +
             (event.locationDisplay?.let { " · 📍 $it" } ?: "")
 
-    /** Этап 1: набор — голоса и лимит мест. */
+    /** Этап 1: набор — голоса и лимит мест (у открытой встречи лимита нет — строка мест другая). */
     fun stage1Text(event: Event, going: Int, maybe: Int): String =
         "📅 ${event.title}\n" +
             "${dateLocationLine(event)}\n\n" +
             "✅ Идут — $going\n" +
             "🤔 Возможно — $maybe\n" +
-            "👥 Мест — ${event.participantLimit}"
+            (event.participantLimit?.let { "👥 Мест — $it" } ?: EventFormatTexts.OPEN_EVENT_NO_LIMIT_LINE)
 
-    /** Этап 2: гонка за места — подтверждённые, очередь, дедлайн (= старт события, граница окна на бэке). */
+    /**
+     * Этап 2: гонка за места — подтверждённые, очередь, дедлайн (= старт события, граница окна на бэке).
+     * Открытая встреча: гонки нет — счёт без знаменателя, строка очереди не рендерится (она всегда 0).
+     */
     fun stage2Text(event: Event, confirmed: Int, waitlisted: Int): String =
-        "🏁 ${event.title} — подтверждение мест\n" +
+        "🏁 ${event.title} — " +
+            (if (event.isOpenEvent) "подтверждение участия\n" else "подтверждение мест\n") +
             "${dateLocationLine(event)}\n\n" +
-            "✅ Подтвердили — $confirmed из ${event.participantLimit}\n" +
-            "📋 В очереди — $waitlisted\n" +
+            (event.participantLimit?.let { "✅ Подтвердили — $confirmed из $it\n📋 В очереди — $waitlisted\n" }
+                ?: "✅ Подтвердили — $confirmed\n") +
             "⏳ Подтвердить до — ${event.eventDatetime.format(fmt)}"
 
     /**
@@ -63,8 +68,9 @@ class LivePinRenderer(
      */
     fun closedText(event: Event, confirmed: Int): String =
         "📅 ${event.title} · ${event.eventDatetime.format(fmt)}\n" +
-            "Событие началось — подтвердили ${confirmed} из ${event.participantLimit}. " +
-            "Итог появится после отметки явки."
+            "Событие началось — подтвердили " +
+            (event.participantLimit?.let { "$confirmed из $it" } ?: "$confirmed") +
+            ". Итог появится после отметки явки."
 
     /** Финальный текст при отмене события. */
     fun cancelledText(event: Event, reason: String?): String {

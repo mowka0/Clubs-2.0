@@ -46,7 +46,10 @@ object TrustPolicy {
     fun classOf(kind: ReputationKind): TrustClass = when (kind) {
         ReputationKind.ironclad, ReputationKind.spontaneous, ReputationKind.skladchina_paid -> TrustClass.KEPT
         ReputationKind.no_show, ReputationKind.spectator, ReputationKind.skladchina_expired,
-        ReputationKind.abandoned_slot -> TrustClass.BROKE
+        ReputationKind.abandoned_slot,
+        // open_no_show ЗАРЕЗЕРВИРОВАН и сейчас не выдаётся (открытые встречи вне репутации,
+        // PO 2026-07-21); классификация BROKE — на случай будущего «строгого режима».
+        ReputationKind.open_no_show -> TrustClass.BROKE
         // confirmed_unresolved (disputed/unmarked) и исторический skladchina_declined нейтральны:
         // исключаются из знаменателя — это ни сдержанное, ни нарушенное обещание.
         ReputationKind.confirmed_unresolved, ReputationKind.skladchina_declined -> TrustClass.NEUTRAL

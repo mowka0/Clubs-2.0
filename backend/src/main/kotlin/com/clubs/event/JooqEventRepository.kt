@@ -263,7 +263,7 @@ class JooqEventRepository(
                 description = r.get(EVENTS.DESCRIPTION),
                 locationText = r.get(EVENTS.LOCATION_TEXT),
                 eventDatetime = r.get(EVENTS.EVENT_DATETIME)!!,
-                participantLimit = r.get(EVENTS.PARTICIPANT_LIMIT)!!,
+                participantLimit = r.get(EVENTS.PARTICIPANT_LIMIT),
                 votingOpensDaysBefore = r.get(EVENTS.VOTING_OPENS_DAYS_BEFORE) ?: EventMapper.DEFAULT_VOTING_OPENS_DAYS_BEFORE,
                 status = r.get(EVENTS.STATUS) ?: EventStatus.upcoming,
                 stage2Triggered = r.get(EVENTS.STAGE_2_TRIGGERED) ?: false,

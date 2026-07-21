@@ -50,18 +50,24 @@ const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => {
         {event.descriptionPreview !== null && (
           <div className="rd-ft-sub">{event.descriptionPreview}</div>
         )}
-        {event.status === 'cancelled' ? (
-          <div className="rd-badges-row">
+        {/* Бейдж типа встречи — всегда (PO 2026-07-21: карточка на странице клуба была без типа);
+            статусные чипы (Отменено / call-to-action) — рядом, в той же строке. */}
+        <div className="rd-badges-row">
+          <span className="rd-badge rd-neutral">
+            {event.participantLimit == null ? 'Открытая встреча' : 'С местами'}
+          </span>
+          {event.status === 'cancelled' ? (
             <span className="rd-badge rd-decline">Отменено</span>
-          </div>
-        ) : event.actionRequired ? (
-          <div className="rd-badges-row">
+          ) : event.actionRequired ? (
             <span className="rd-badge rd-warn">{actionLabel}</span>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
       <div className="rd-ft-stat">
-        <div className="rd-ft-stat-num">{count}/{event.participantLimit}</div>
+        {/* Открытая встреча (V62): лимита нет — счёт без знаменателя. */}
+        <div className="rd-ft-stat-num">
+          {event.participantLimit == null ? count : `${count}/${event.participantLimit}`}
+        </div>
         <div className="rd-ft-stat-cap">{countCaption}</div>
       </div>
     </>

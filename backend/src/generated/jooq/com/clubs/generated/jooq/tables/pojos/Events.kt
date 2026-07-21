@@ -25,7 +25,7 @@ data class Events(
     var description: String? = null,
     var locationText: String? = null,
     var eventDatetime: OffsetDateTime,
-    var participantLimit: Int,
+    var participantLimit: Int? = null,
     var votingOpensDaysBefore: Int? = null,
     var status: EventStatus? = null,
     var stage_2Triggered: Boolean? = null,
@@ -78,7 +78,11 @@ data class Events(
             return false
         if (this.eventDatetime != o.eventDatetime)
             return false
-        if (this.participantLimit != o.participantLimit)
+        if (this.participantLimit == null) {
+            if (o.participantLimit != null)
+                return false
+        }
+        else if (this.participantLimit != o.participantLimit)
             return false
         if (this.votingOpensDaysBefore == null) {
             if (o.votingOpensDaysBefore != null)
@@ -183,7 +187,7 @@ data class Events(
         result = prime * result + (if (this.description == null) 0 else this.description.hashCode())
         result = prime * result + (if (this.locationText == null) 0 else this.locationText.hashCode())
         result = prime * result + this.eventDatetime.hashCode()
-        result = prime * result + this.participantLimit.hashCode()
+        result = prime * result + (if (this.participantLimit == null) 0 else this.participantLimit.hashCode())
         result = prime * result + (if (this.votingOpensDaysBefore == null) 0 else this.votingOpensDaysBefore.hashCode())
         result = prime * result + (if (this.status == null) 0 else this.status.hashCode())
         result = prime * result + (if (this.stage_2Triggered == null) 0 else this.stage_2Triggered.hashCode())

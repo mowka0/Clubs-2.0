@@ -75,6 +75,13 @@ class ReputationPolicyTest {
         assertEquals(0, ReputationPolicy.pointsFor(ReputationKind.skladchina_declined))
     }
 
+    // open_no_show (V63) ЗАРЕЗЕРВИРОВАН и не выдаётся: открытые встречи вне репутации целиком
+    // (PO 2026-07-21, итерация 2). Величина сохранена под возможный «строгий режим».
+    @Test
+    fun `open_no_show is reserved - value kept for a potential strict mode`() {
+        assertEquals(-100, ReputationPolicy.pointsFor(ReputationKind.open_no_show))
+    }
+
     @Test
     fun `display threshold gates a newcomer until three outcomes`() {
         assertEquals(3, ReputationPolicy.MIN_OUTCOMES_FOR_DISPLAY)

@@ -1,5 +1,5 @@
 import { FC, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { BrandStepper } from '../components/BrandStepper';
@@ -33,6 +33,10 @@ const CalendarIcon: FC = () => (
 export const CreateEventPage: FC = () => {
   useBackButton(true);
   const { id: clubId } = useParams<{ id: string }>();
+  // Открытая встреча (V62, решение PO 2026-07-21): ?format=open из шага формата в пикере
+  // создания. Лимита нет (participantLimit = null на бэке) — степпер скрыт, заголовок другой.
+  const [searchParams] = useSearchParams();
+  const isOpenEvent = searchParams.get('format') === 'open';
   const navigate = useNavigate();
   const haptic = useHaptic();
   const createMut = useCreateEventMutation();
@@ -80,7 +84,7 @@ export const CreateEventPage: FC = () => {
     if (eventDate.getTime() <= Date.now()) {
       return fail('Дата события должна быть в будущем');
     }
-    if (!Number.isInteger(participantLimit) || participantLimit < PARTICIPANT_MIN) {
+    if (!isOpenEvent && (!Number.isInteger(participantLimit) || participantLimit < PARTICIPANT_MIN)) {
       return fail('Лимит участников: целое число больше нуля');
     }
 
@@ -92,7 +96,9 @@ export const CreateEventPage: FC = () => {
       locationLon: location?.point.lon,
       locationHint: locationHint.trim() || undefined,
       eventDatetime: eventDate.toISOString(),
-      participantLimit,
+      // Открытая встреча (V62): лимита нет + явный флаг формата — бэкенд валидирует их согласованность.
+      participantLimit: isOpenEvent ? null : participantLimit,
+      isOpenEvent,
       photoUrl: photoUrl ?? undefined,
     };
 
@@ -120,7 +126,15 @@ export const CreateEventPage: FC = () => {
   return (
     <div className="rd-page">
       <div className="rd-ft-eyebrow">Создание</div>
-      <h1 className="rd-page-h" style={{ marginBottom: 18 }}>Новое событие</h1>
+      <h1 className="rd-page-h" style={{ marginBottom: 18 }}>
+        {isOpenEvent ? 'Открытая встреча' : 'Новое событие'}
+      </h1>
+      {isOpenEvent && (
+        <div className="rd-hint" style={{ marginTop: -10, marginBottom: 14 }}>
+          Без лимита участников — приходят все, кто подтвердил. Репутация здесь не считается
+          совсем: ни плюсов за посещение, ни штрафов за отказ или неявку.
+        </div>
+      )}
 
       <div className="rd-form">
         <label className="rd-field">
@@ -214,16 +228,19 @@ export const CreateEventPage: FC = () => {
           </div>
         </label>
 
-        <div className="rd-field">
-          <span className="rd-label">Лимит участников <span className="rd-req">*</span></span>
-          <BrandStepper
-            value={participantLimit}
-            onChange={setParticipantLimit}
-            min={PARTICIPANT_MIN}
-            max={PARTICIPANT_MAX}
-            ariaLabel="Лимит участников"
-          />
-        </div>
+        {/* Открытая встреча: лимита нет — степпер не рендерится вовсе. */}
+        {!isOpenEvent && (
+          <div className="rd-field">
+            <span className="rd-label">Лимит участников <span className="rd-req">*</span></span>
+            <BrandStepper
+              value={participantLimit}
+              onChange={setParticipantLimit}
+              min={PARTICIPANT_MIN}
+              max={PARTICIPANT_MAX}
+              ariaLabel="Лимит участников"
+            />
+          </div>
+        )}
 
         {submitError && <div className="rd-error">{submitError}</div>}
 

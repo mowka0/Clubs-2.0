@@ -19,7 +19,9 @@ class CreateEventRequestValidationTest {
         locationText: String? = "ул. Покровка, 47/24с1, Москва",
         locationLat: Double? = 55.761216,
         locationLon: Double? = 37.646488,
-        locationHint: String? = null
+        locationHint: String? = null,
+        participantLimit: Int? = 20,
+        isOpenEvent: Boolean = false
     ) = CreateEventRequest(
         title = "Test event",
         description = null,
@@ -28,7 +30,8 @@ class CreateEventRequestValidationTest {
         locationLon = locationLon,
         locationHint = locationHint,
         eventDatetime = OffsetDateTime.now().plusDays(7),
-        participantLimit = 20,
+        participantLimit = participantLimit,
+        isOpenEvent = isOpenEvent,
         votingOpensDaysBefore = 14
     )
 
@@ -98,5 +101,31 @@ class CreateEventRequestValidationTest {
     fun `hint of exactly 200 characters is accepted`() {
         val violations = validator.validate(request(locationHint = "х".repeat(200)))
         assertTrue(violations.isEmpty(), "got: ${violations.map { "${it.propertyPath}: ${it.message}" }}")
+    }
+
+    // Открытая встреча (V62): формат заявляется ЯВНЫМ флагом + отсутствием лимита.
+    @Test
+    fun `open event - explicit flag with null limit passes`() {
+        val violations = validator.validate(request(participantLimit = null, isOpenEvent = true))
+        assertTrue(violations.isEmpty(), "got: ${violations.map { "${it.propertyPath}: ${it.message}" }}")
+    }
+
+    // Пропущенный лимит БЕЗ флага — это ошибка ввода (как до V62), а не молчаливая смена формата.
+    @Test
+    fun `missing limit without the open flag is rejected`() {
+        assertTrue("isParticipantLimitConsistent" in violatedProperties(request(participantLimit = null)))
+    }
+
+    // Противоречивый ввод: флаг открытой встречи вместе с лимитом.
+    @Test
+    fun `open flag combined with a limit is rejected`() {
+        assertTrue("isParticipantLimitConsistent" in violatedProperties(request(participantLimit = 20, isOpenEvent = true)))
+    }
+
+    // @Positive продолжает отсекать бессмысленные ненулевые значения.
+    @Test
+    fun `zero or negative participant limit is still rejected`() {
+        assertTrue("participantLimit" in violatedProperties(request(participantLimit = 0)))
+        assertTrue("participantLimit" in violatedProperties(request(participantLimit = -5)))
     }
 }

@@ -428,3 +428,100 @@ describe('EventPage — фото события как фон хиро', () => {
     expect(heroBg?.getAttribute('style') ?? '').not.toContain('background-image');
   });
 });
+
+describe('EventPage — открытая встреча (participantLimit = null, V62)', () => {
+  // Открытая встреча: дедлайн отказа с бэка = старт события (порога нет).
+  function openEvent(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
+    const eventDatetime = overrides.eventDatetime ?? FUTURE;
+    return stage2Event({
+      participantLimit: null,
+      eventDatetime,
+      confirmedDeclineDeadline: eventDatetime,
+      ...overrides,
+    });
+  }
+
+  it('бейдж хиро — «ОТКРЫТАЯ ВСТРЕЧА», счётчики без знаменателя', async () => {
+    mockEndpoints({ event: openEvent({ confirmedCount: 7 }), myVote: 'going' });
+    renderEventPage();
+
+    expect(await screen.findByText('ОТКРЫТАЯ ВСТРЕЧА')).toBeInTheDocument();
+    // «Состав · 7» без « / limit»
+    expect(screen.getByText('Состав · 7')).toBeInTheDocument();
+    expect(screen.queryByText(/Состав · 7 \//)).not.toBeInTheDocument();
+  });
+
+  it('подтверждённый за <4ч до старта ВСЁ ЕЩЁ может отказаться — порога нет', async () => {
+    // У события с лимитом при SOON кнопка скрыта (см. тест выше); у открытой встречи — видна,
+    // потому что бэкенд отдаёт дедлайн = старту события.
+    mockEndpoints({ event: openEvent({ eventDatetime: SOON }), myVote: 'confirmed' });
+    renderEventPage();
+
+    expect(await screen.findByRole('button', { name: 'Отказаться' })).toBeInTheDocument();
+  });
+
+  it('диалог отказа — «репутация не пострадает», без предупреждения о списании', async () => {
+    mockEndpoints({ event: openEvent(), myVote: 'confirmed', responders: [] });
+    const { user } = renderEventPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Отказаться' }));
+    expect(screen.getByText(/репутация не пострадает/)).toBeInTheDocument();
+    expect(screen.queryByText(/спишется 100 очков/)).not.toBeInTheDocument();
+    // Кнопка действия — «Отказаться», не «Освободить» (мест нет).
+    expect(screen.queryByRole('button', { name: 'Освободить' })).not.toBeInTheDocument();
+  });
+
+  it('«путь назад»: на открытой встрече строка-мотиватор скрыта (репутация за посещение не начисляется)', async () => {
+    mockEndpoints({ event: openEvent(), myVote: 'going' });
+    server.use(
+      http.get('*/api/users/me/reputation', () => HttpResponse.json({
+        global: { reliableClubs: 0, trackRecordClubs: 1, score: 60 },
+        activeClubs: [{
+          clubId: CLUB_ID, clubName: 'Клуб', clubAvatarUrl: null, category: 'sport', role: 'member',
+          joinedAt: null, trust: 60, promiseFulfillmentPct: 71, totalConfirmations: 9,
+          totalAttendances: 7, spontaneityCount: 0, projectedNext1: 66, projectedNext2: 70,
+          meetingsToReliable: 2, skladchinaPaid: 0, skladchinaTotal: 0, nearestEvent: null,
+        }],
+        historyClubs: [],
+      })),
+    );
+    renderEventPage();
+
+    expect(await screen.findByText('ОТКРЫТАЯ ВСТРЕЧА')).toBeInTheDocument();
+    expect(screen.queryByText(/надёжность вырастет/)).not.toBeInTheDocument();
+  });
+
+  it('отметка явки: орг видит пояснение, что отметка — только для истории (репутация не меняется)', async () => {
+    const responders: EventResponderDto[] = [
+      { userId: 'u1', firstName: 'Анна', lastName: null, avatarUrl: null, status: 'confirmed', attendance: null },
+    ];
+    mockEndpoints({
+      event: openEvent({ eventDatetime: PAST, status: 'stage_2' }),
+      myVote: 'confirmed',
+      responders,
+      ownerId: VIEWER_ID,
+    });
+    renderEventPage();
+
+    expect(await screen.findByText('Отметить посещаемость')).toBeInTheDocument();
+    expect(screen.getByText(/только для истории посещений/)).toBeInTheDocument();
+    // Итерация 2 (PO): списаний нет вообще — старое предупреждение о −100 исчезло.
+    expect(screen.queryByText(/спишется 100 очков/)).not.toBeInTheDocument();
+  });
+
+  it('у события с лимитом пояснения открытой встречи при отметке явки нет', async () => {
+    const responders: EventResponderDto[] = [
+      { userId: 'u1', firstName: 'Анна', lastName: null, avatarUrl: null, status: 'confirmed', attendance: null },
+    ];
+    mockEndpoints({
+      event: stage2Event({ eventDatetime: PAST }),
+      myVote: 'confirmed',
+      responders,
+      ownerId: VIEWER_ID,
+    });
+    renderEventPage();
+
+    expect(await screen.findByText('Отметить посещаемость')).toBeInTheDocument();
+    expect(screen.queryByText(/только для истории посещений/)).not.toBeInTheDocument();
+  });
+});

@@ -1,5 +1,6 @@
 package com.clubs.bot
 
+import com.clubs.common.util.EventFormatTexts
 import com.clubs.event.Event
 import com.clubs.event.EventResponseRepository
 import com.clubs.event.OPEN_IN_YANDEX_MAPS_BUTTON
@@ -78,7 +79,9 @@ class NotificationService(
         // Место опционально (V58): у события без места строка 📍 не рендерится вовсе;
         // уточнение организатора («Вход со двора») показывается в скобках после адреса.
         val locationLine = event.locationDisplay?.let { "📍 $it\n" } ?: ""
-        val text = "🆕 Новое событие в клубе!\n\n📌 ${event.title}\n$locationLine🗓 $dateStr\n👥 Лимит: ${event.participantLimit}\n\nГолосуйте в приложении:"
+        // Открытая встреча (V62): лимита нет — вместо числа сообщаем формат.
+        val limitLine = event.participantLimit?.let { "👥 Лимит: $it" } ?: EventFormatTexts.OPEN_EVENT_NO_LIMIT_LINE
+        val text = "🆕 Новое событие в клубе!\n\n📌 ${event.title}\n$locationLine🗓 $dateStr\n$limitLine\n\nГолосуйте в приложении:"
         // Диплинк сразу на страницу события, чтобы кнопка открывала голосование, а не
         // общую домашнюю страницу приложения. React Router рендерит EventPage на /events/:id.
         val webAppPath = "/events/${event.id}"
@@ -218,8 +221,14 @@ class NotificationService(
     @Async
     fun sendAttendanceReminder(event: Event, organizerTelegramId: Long) {
         log.info("Attendance reminder DM: eventId={} organizerTelegramId={}", event.id, organizerTelegramId)
-        val text = "📋 Событие «${event.title}» (${event.eventDatetime.format(fmt)}) прошло.\n\n" +
+        // Открытая встреча — вне репутации: мотивация отметки другая (история + статистика клуба),
+        // упоминание репутации было бы ложным (PO 2026-07-21).
+        val motivation = if (event.isOpenEvent) {
+            "Отметьте, кто пришёл — отметка пойдёт в историю участников и статистику клуба:"
+        } else {
             "Отметьте, кто пришёл — без этого репутация участников не начислится:"
+        }
+        val text = "📋 Событие «${event.title}» (${event.eventDatetime.format(fmt)}) прошло.\n\n$motivation"
         sendDm(organizerTelegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Отметить явку")
     }
 

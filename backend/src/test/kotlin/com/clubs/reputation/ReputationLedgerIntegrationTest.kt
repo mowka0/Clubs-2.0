@@ -71,6 +71,7 @@ class ReputationLedgerIntegrationTest {
     @Autowired lateinit var membershipService: MembershipService
     @Autowired lateinit var membershipRepository: MembershipRepository
     @Autowired lateinit var xpService: XpService
+    @Autowired lateinit var eventResponseRepository: com.clubs.event.EventResponseRepository
     @Autowired lateinit var dsl: DSLContext
 
     private lateinit var ownerId: UUID
@@ -118,6 +119,55 @@ class ReputationLedgerIntegrationTest {
         assertReputation(noShow, reliability = -200, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
         assertReputation(spontaneous, reliability = 100, conf = 1, att = 1, spont = 1, pct = "100.00", outcome = 1)
         assertReputation(spectator, reliability = -200, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
+    }
+
+    @Test
+    fun `open event is fully outside reputation - zero ledger rows for any outcome (AC-OPEN3)`() {
+        // Решение PO 2026-07-21 (итерация 2): открытая встреча ВНЕ репутации целиком.
+        // Ни посещение, ни молчаливая неявка, ни неотмеченная явка не создают строк.
+        val eventId = insertFinalizedEvent(participantLimit = null)
+        val attended = insertUser("Attended")
+        val absentGoing = insertUser("AbsentGoing")
+        val absentMaybe = insertUser("AbsentMaybe")
+        val unresolved = insertUser("Unresolved")
+        insertConfirmed(eventId, attended, "going", "attended")
+        insertConfirmed(eventId, absentGoing, "going", "absent")
+        insertConfirmed(eventId, absentMaybe, "maybe", "absent")
+        insertConfirmed(eventId, unresolved, "going", null)
+
+        reputationService.processFinalizedEvent(eventId)
+
+        listOf(attended, absentGoing, absentMaybe, unresolved).forEach { userId ->
+            assertNull(reputationRepository.findByUserAndClub(userId, clubId), "no cache row for $userId")
+            assertEquals(0, ledgerRows(userId, eventId), "no ledger row for $userId")
+        }
+        // Событие клеймится (конвейер к нему не вернётся), несмотря на пустой результат.
+        assertFalse(reputationRepository.claimEvent(eventId), "open event is claimed after processing")
+        assertFalse(eventId in reputationRepository.findPendingFinalizedEventIds())
+    }
+
+    @Test
+    fun `open event attendance counters for the member card count only resolved confirmations (AC-OPEN7)`() {
+        // «Активность в клубе» (мокап B1): пришёл X из Y, где Y — только confirmed-брони
+        // ОТКРЫТЫХ встреч с выясненной явкой. Всё остальное счётчики не трогает.
+        val member = insertUser("OpenVisitor")
+        val open1 = insertFinalizedEvent(participantLimit = null)
+        val open2 = insertFinalizedEvent(participantLimit = null)
+        val open3 = insertFinalizedEvent(participantLimit = null)
+        val open4 = insertFinalizedEvent(participantLimit = null)
+        val limited = insertFinalizedEvent(participantLimit = 10)
+
+        insertConfirmed(open1, member, "going", "attended")   // в числитель и знаменатель
+        insertConfirmed(open2, member, "maybe", "absent")     // только в знаменатель
+        insertConfirmed(open3, member, "going", null)          // явка не отмечена → не считается
+        insertConfirmed(open4, member, "going", "disputed")    // незакрытый спор → не считается
+        insertResponse(open1, insertUser("Declined"), "going", "declined", null) // не confirmed → мимо
+        insertConfirmed(limited, member, "going", "attended")  // событие с лимитом → мимо (кольца репутации)
+
+        val stats = eventResponseRepository.countOpenEventAttendance(member, clubId)
+
+        assertEquals(1, stats.attended)
+        assertEquals(2, stats.total)
     }
 
     @Test
@@ -642,7 +692,8 @@ class ReputationLedgerIntegrationTest {
         return id
     }
 
-    private fun insertFinalizedEvent(): UUID {
+    // participantLimit = null → открытая встреча (V62): в SQL уходит NULL.
+    private fun insertFinalizedEvent(participantLimit: Int? = 10): UUID {
         val id = UUID.randomUUID()
         val past = OffsetDateTime.now().minusDays(3)
         dsl.execute(
@@ -650,7 +701,7 @@ class ReputationLedgerIntegrationTest {
             INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime,
                                 participant_limit, voting_opens_days_before, status,
                                 attendance_marked, attendance_finalized)
-            VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$past', 10, 14, 'completed', true, true)
+            VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$past', ${participantLimit ?: "NULL"}, 14, 'completed', true, true)
             """.trimIndent()
         )
         return id

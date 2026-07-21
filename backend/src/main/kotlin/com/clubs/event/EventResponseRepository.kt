@@ -144,6 +144,22 @@ interface EventResponseRepository {
     fun findAttendedUserIds(eventId: UUID): List<UUID>
 
     /**
+     * Статистика ОТКРЫТЫХ ВСТРЕЧ (participant_limit IS NULL, V62) пользователя в клубе для
+     * карточки участника: пришёл X из Y подтверждённых с ВЫЯСНЕННОЙ явкой. В знаменатель входят
+     * только строки attended/absent — неотмеченная явка (NULL) и незакрытый спор (disputed) процент
+     * не портят, зеркаля confirmed_unresolved репутационной оси. Метрика вне репутации: считается
+     * из сырых отметок явки, в ledger открытые встречи не пишут ничего.
+     */
+    fun countOpenEventAttendance(userId: UUID, clubId: UUID): OpenEventAttendance
+
+    /**
+     * «Статистика» профиля (мокап P3, PO 2026-07-21): сырые посещения пользователя по ВСЕМ клубам —
+     * все attended-отметки (события с лимитом + открытые встречи) и отдельно открытые. Вне репутации,
+     * питает блок «Всего посетил событий» в профиле. Индекс V61 (user, attended) делает COUNT дешёвым.
+     */
+    fun countUserVisits(userId: UUID): UserVisits
+
+    /**
      * Имена (first_name) пришедших, для кого это событие — ПЕРВОЕ посещённое в клубе (других
      * attended-строк по событиям того же клуба нет). Питает «🎉 впервые на встрече клуба»
      * в посте-итоге живого закрепа. Порядок — по имени, чтобы текст был стабильным.
@@ -152,13 +168,34 @@ interface EventResponseRepository {
 }
 
 /**
+ * Счётчики открытых встреч пользователя в клубе: [attended] пришёл из [total] подтверждённых
+ * броней с выясненной явкой (attended + absent). total = 0 → истории открытых встреч нет,
+ * фронт кольцо не показывает.
+ */
+data class OpenEventAttendance(
+    val attended: Int,
+    val total: Int
+)
+
+/**
+ * Сырые посещения по всем клубам для «Статистики» профиля: [totalEventsAttended] — все
+ * attended-отметки, [openEventsAttended] — из них на открытых встречах (participant_limit IS NULL).
+ */
+data class UserVisits(
+    val totalEventsAttended: Int,
+    val openEventsAttended: Int
+)
+
+/**
  * Confirmed-бронь уходящего пользователя на активном событии: id события (source_id в леджере)
  * + его дата/время (occurred_at для no_show). Читается при выходе из клуба, чтобы штрафовать
- * брошенные обязательства.
+ * брошенные обязательства. [isOpenEvent] = открытая встреча (V62): такая бронь НЕ штрафуется
+ * (мест нет, отказ свободен), но событие всё равно участвует в каскаде/перерисовке закрепа.
  */
 data class EventObligation(
     val eventId: UUID,
-    val eventDatetime: OffsetDateTime
+    val eventDatetime: OffsetDateTime,
+    val isOpenEvent: Boolean = false
 )
 
 /** Строка репозитория: данные пользователя-респондента + сырые enum'ы голоса/финального статуса/посещаемости. */

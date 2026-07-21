@@ -25,7 +25,12 @@ const TWO_CLUBS: ClubPickerOption[] = [
 
 const LocationProbe = () => {
   const loc = useLocation();
-  return <div data-testid="location">{loc.pathname}</div>;
+  return (
+    <>
+      <div data-testid="location">{loc.pathname}</div>
+      <div data-testid="location-search">{loc.search}</div>
+    </>
+  );
 };
 
 function renderFlow(clubs: ClubPickerOption[]) {
@@ -60,8 +65,23 @@ describe('CreateActivityFlow', () => {
 
     await user.click(screen.getByText('Событие'));
 
+    // «Событие» разветвляется на шаг формата (с местами / открытая встреча, PO 2026-07-21).
+    expect(screen.getByText('Формат события')).toBeInTheDocument();
+    await user.click(screen.getByText('С местами'));
+
     // No club-selection step — straight to the per-club create route.
     expect(screen.getByTestId('location').textContent).toBe('/clubs/club-1/events/new');
+  });
+
+  it('Событие → «Открытая встреча» ведёт на форму с ?format=open', async () => {
+    const { user } = renderFlow(ONE_CLUB);
+
+    await user.click(screen.getByText('Событие'));
+    await user.click(screen.getByText('Открытая встреча'));
+
+    // Маршрут тот же, формат передаётся query-параметром — CreateEventPage прячет степпер лимита.
+    expect(screen.getByTestId('location').textContent).toBe('/clubs/club-1/events/new');
+    expect(screen.getByTestId('location-search').textContent).toBe('?format=open');
   });
 
   it('Сбор → template step → club picker → custom create route', async () => {

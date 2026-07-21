@@ -74,31 +74,73 @@ const subtitleStyle: React.CSSProperties = {
   color: 'var(--tgui--hint_color, rgba(255,255,255,0.6))',
 };
 
+interface PickerListOption<K extends string> {
+  key: K;
+  emoji: string;
+  title: string;
+  subtitle: string;
+}
+
 /**
- * Список типов активности — только контент (без обёртки Modal). Рендерится внутри
+ * Общий шаг-список flow создания — только контент (без обёртки Modal). Рендерится внутри
  * единственного Modal, которым владеет CreateActivityFlow — он же управляет переходами
- * между шагами и хаптикой. То, что этот компонент чисто презентационный, избавляет от
- * ситуации, когда каждый шаг владеет своим Modal — именно это вызывало баг с
- * разрушением/схлопыванием оверлея.
+ * между шагами и хаптикой. То, что шаги чисто презентационные, избавляет от ситуации,
+ * когда каждый шаг владеет своим Modal — именно это вызывало баг с разрушением/схлопыванием
+ * оверлея. Один компонент на все шаги (тип/шаблон сбора/формат события): правка разметки
+ * пункта меняет все шаги синхронно.
  */
+function PickerOptionList<K extends string>({ header, options, onPick }: {
+  header: string;
+  options: PickerListOption<K>[];
+  onPick: (key: K) => void;
+}) {
+  return (
+    <div style={{ paddingBottom: 8 }}>
+      <div style={headerStyle}>{header}</div>
+      {options.map((opt) => (
+        <button key={opt.key} type="button" style={optionStyle} onClick={() => onPick(opt.key)}>
+          <span style={emojiStyle} aria-hidden="true">{opt.emoji}</span>
+          <span style={textStyle}>
+            <span style={titleStyle}>{opt.title}</span>
+            <span style={subtitleStyle}>{opt.subtitle}</span>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export const ActivityTypeOptions: FC<ActivityTypeOptionsProps> = ({ onPick }) => (
-  <div style={{ paddingBottom: 8 }}>
-    <div style={headerStyle}>Создать активность</div>
-    {OPTIONS.map((opt) => (
-      <button
-        key={opt.key}
-        type="button"
-        style={optionStyle}
-        onClick={() => onPick(opt.key)}
-      >
-        <span style={emojiStyle} aria-hidden="true">{opt.emoji}</span>
-        <span style={textStyle}>
-          <span style={titleStyle}>{opt.title}</span>
-          <span style={subtitleStyle}>{opt.subtitle}</span>
-        </span>
-      </button>
-    ))}
-  </div>
+  <PickerOptionList header="Создать активность" options={OPTIONS} onPick={onPick} />
+);
+
+// Формат события (решение PO 2026-07-21): «с местами» — классика с лимитом, гонкой за места и
+// листом ожидания; «открытая встреча» — без лимита (participantLimit = null на бэке), приходят
+// все подтвердившие, формат целиком вне репутации. Тот же движок, разный контракт.
+export type EventFormatKey = 'limited' | 'open';
+
+const EVENT_FORMAT_OPTIONS: { key: EventFormatKey; emoji: string; title: string; subtitle: string }[] = [
+  {
+    key: 'limited',
+    emoji: '🎟',
+    title: 'С местами',
+    subtitle: 'Лимит участников, репутация и лист ожидания',
+  },
+  {
+    key: 'open',
+    emoji: '🌊',
+    title: 'Открытая встреча',
+    subtitle: 'Без лимита и вне репутации — приходят все желающие',
+  },
+];
+
+interface EventFormatOptionsProps {
+  onPick: (format: EventFormatKey) => void;
+}
+
+/** Выбор формата, показывается после «Событие» в flow создания (зеркалит шаг «Тип сбора»). */
+export const EventFormatOptions: FC<EventFormatOptionsProps> = ({ onPick }) => (
+  <PickerOptionList header="Формат события" options={EVENT_FORMAT_OPTIONS} onPick={onPick} />
 );
 
 // Показываются только уже реализованные шаблоны. По мере появления gear/booking/birthday — добавлять сюда.
@@ -125,16 +167,5 @@ const SKLADCHINA_OPTIONS: { key: SkladchinaTemplateKey; emoji: string; title: st
 
 /** Выбор шаблона, показывается после «Сбор» в flow создания. Только контент (без обёртки Modal). */
 export const SkladchinaTemplateOptions: FC<SkladchinaTemplateOptionsProps> = ({ onPick }) => (
-  <div style={{ paddingBottom: 8 }}>
-    <div style={headerStyle}>Тип сбора</div>
-    {SKLADCHINA_OPTIONS.map((opt) => (
-      <button key={opt.key} type="button" style={optionStyle} onClick={() => onPick(opt.key)}>
-        <span style={emojiStyle} aria-hidden="true">{opt.emoji}</span>
-        <span style={textStyle}>
-          <span style={titleStyle}>{opt.title}</span>
-          <span style={subtitleStyle}>{opt.subtitle}</span>
-        </span>
-      </button>
-    ))}
-  </div>
+  <PickerOptionList header="Тип сбора" options={SKLADCHINA_OPTIONS} onPick={onPick} />
 );

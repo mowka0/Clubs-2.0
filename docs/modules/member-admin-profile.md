@@ -96,6 +96,9 @@ ALTER TYPE membership_role ADD VALUE IF NOT EXISTS 'co_organizer';
 - `awards: AwardDto[]` (видны всем участникам — это публичное признание).
 - `organizerNote: string \| null` — **только менеджерам** (владелец / активный со-организатор, как `subscriptionExpiresAt`).
 - `role` — уже есть; принимает значение `co_organizer` (см. `co-organizers.md`).
+- `openEventsAttended / openEventsTotal: Int \| null` — открытые встречи (V62): пришёл / подтверждённых
+  с выясненной явкой в этом клубе. ВНЕ репутации; видимость — асимметрия AC-5 (орг и сам о себе,
+  чужому null). Питает блок «Активность в клубе» на карточке (events.md § «Открытая встреча»).
 
 `GET /api/clubs/{clubId}/members` (`MemberListItemDto[]`, ростер) дополняется (UPDATED 2026-06-28):
 - `awards: AwardDto[]` на каждом участнике (видны всем, R3) — для чипов на карточке в ростере. Сервис подтягивает их одним запросом (`AwardService.getClubAwardsByMember`, группировка по `user_id`) — без N+1.

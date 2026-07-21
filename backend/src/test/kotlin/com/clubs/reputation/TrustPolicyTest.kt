@@ -80,7 +80,8 @@ class TrustPolicyTest {
     fun `kind classification matches kept-broke-neutral`() {
         listOf(ReputationKind.ironclad, ReputationKind.spontaneous, ReputationKind.skladchina_paid)
             .forEach { assertEquals(TrustPolicy.TrustClass.KEPT, TrustPolicy.classOf(it), "$it") }
-        listOf(ReputationKind.no_show, ReputationKind.spectator, ReputationKind.skladchina_expired)
+        // open_no_show (V63): очков меньше (−100), но для Trust это такое же broke.
+        listOf(ReputationKind.no_show, ReputationKind.spectator, ReputationKind.skladchina_expired, ReputationKind.open_no_show)
             .forEach { assertEquals(TrustPolicy.TrustClass.BROKE, TrustPolicy.classOf(it), "$it") }
         listOf(ReputationKind.confirmed_unresolved, ReputationKind.skladchina_declined)
             .forEach { assertEquals(TrustPolicy.TrustClass.NEUTRAL, TrustPolicy.classOf(it), "$it") }

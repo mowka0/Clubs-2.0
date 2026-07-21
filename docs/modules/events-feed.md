@@ -29,10 +29,12 @@
    (переименование URL = breaking change без cause: складчина ещё не существует).
    Когда появится складчина — добавим segmented control «События / Сборы» внутри
    страницы, тогда же решим про URL.
-2. **Карточка содержит stats-счётчик числом** (`12/30` — confirmedCount для
-   `stage_2`, иначе goingCount, над participantLimit; без слова «идёт»/«подтверждено»,
-   чтобы не выходить за рамки карточки) **+ progress bar** под счётчиком
-   (доля участников, brass-заливка). _(round 5, 2026-05-24: убрали слово, добавили bar.)_
+2. **Карточка содержит stats-счётчик** — градиентная цифра справа от текста
+   (`rd-ft-stat`, тот же вид, что на карточке активностей страницы клуба; UPDATED
+   2026-07-21, PO: счётчик переехал из meta-строки «N идут»). `12/20` с подписью
+   «идёт» на наборе; после закрытия голосования (stage_2/completed) — confirmedCount
+   с подписью «подтв.» (F5-21). У открытой встречи (V62, `participantLimit = null`) —
+   счёт без знаменателя.
 3. **Без inline quick-actions в карточке.** Тап → `/events/:id`, действия там.
 4. **Pull-to-refresh — НЕ реализован в v1.** В ходе реализации оценили
    стоимость: TG WebView не имеет нативного pull-to-refresh, нужен custom
@@ -225,7 +227,7 @@
 
   goingCount: number,
   confirmedCount: number,
-  participantLimit: number,
+  participantLimit: number | null,   // null = открытая встреча (V62)
 
   actionRequired: boolean,      // computed на бэке, см. § «Action-required logic»
 
@@ -265,7 +267,7 @@
 - **Place** — место проведения
 - **Avatar клуба + название клуба** — subtle/secondary
 - **Status-badge** — если применимо (см. ниже)
-- **Stats-counter** — `12/30` числом (confirmedCount в `stage_2`, иначе goingCount / participantLimit), без слова. Под ним **progress bar** (доля участников, brass-заливка) — round 5
+- **Stats-counter** — градиентная цифра `12/20` справа (`rd-ft-stat`; confirmedCount в `stage_2`/`completed`, иначе goingCount / participantLimit; у открытой встречи V62 — без знаменателя) с подписью «идёт»/«подтв.» (UPDATED 2026-07-21 — раньше счёт жил текстом в meta-строке)
 
 ### Status-badge логика
 Вычисление (`pickBadge`, по приоритету):

@@ -61,7 +61,10 @@ class EventMapper(
         maybeCount = maybeCount,
         notGoingCount = notGoingCount,
         confirmedCount = confirmedCount,
-        confirmedDeclineDeadline = event.eventDatetime.minusMinutes(declineCutoffMinutes),
+        // Открытая встреча: порога отказа нет — дедлайн совпадает со стартом события (окно
+        // confirm/decline всё равно закрывается стартом, Bug B). Фронт различие не хардкодит.
+        confirmedDeclineDeadline = if (event.isOpenEvent) event.eventDatetime
+            else event.eventDatetime.minusMinutes(declineCutoffMinutes),
         attendanceMarked = event.attendanceMarked,
         attendanceFinalized = event.attendanceFinalized,
         cancellationReason = event.cancellationReason,

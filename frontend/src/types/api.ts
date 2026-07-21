@@ -141,6 +141,10 @@ export interface MemberProfileDto {
   // null, если скрыто; кольцо «Сборы» скрывается, когда skladchinaTotal === 0.
   skladchinaPaid: number | null;
   skladchinaTotal: number | null;
+  // Открытые встречи (V62) в этом клубе: пришёл / подтверждённых с выясненной явкой. ВНЕ репутации
+  // (сырые отметки явки). null для чужого зрителя (AC-5); строка скрыта при total === 0.
+  openEventsAttended: number | null;
+  openEventsTotal: number | null;
   // De-Stars Slice 2 — ТОЛЬКО ДЛЯ ОРГАНИЗАТОРА (null для обычных участников): когда заканчивается
   // оплаченный доступ этого участника. Также null для бесплатных членств. Показывается как
   // «Подписка активна до …» на карточке организатора.
@@ -220,12 +224,22 @@ export interface GlobalTrustDto {
   score: number | null;
 }
 
+/**
+ * «Статистика» профиля (P3): сырые посещения по всем клубам — ВНЕ репутации (отметки явки,
+ * не ledger). Блок скрывается при totalEventsAttended === 0.
+ */
+export interface MyVisitsDto {
+  totalEventsAttended: number;
+  openEventsAttended: number;
+}
+
 /** Обзор репутации авторизованного пользователя: глобальный агрегат + списки по клубам. */
 export interface MyReputationDto {
   global: GlobalTrustDto;
   activeClubs: UserClubReputationDto[];
   // Клубы, которые пользователь покинул, но трек-рекорд в них ещё сохраняется («История»).
   historyClubs: UserClubReputationDto[];
+  visits: MyVisitsDto;
 }
 
 /**
@@ -513,7 +527,8 @@ export interface EventDetailDto {
   // Опциональное уточнение организатора к месту («Вход со двора, домофон 12»).
   locationHint: string | null;
   eventDatetime: string;
-  participantLimit: number;
+  // null = открытая встреча (V62) — счёт показывается без знаменателя.
+  participantLimit: number | null;
   votingOpensDaysBefore: number;
   status: string;
   goingCount: number;
@@ -539,7 +554,8 @@ export interface EventListItemDto {
   title: string;
   eventDatetime: string;
   locationText: string | null;
-  participantLimit: number;
+  // null = открытая встреча (V62) — счёт показывается без знаменателя.
+  participantLimit: number | null;
   goingCount: number;
   status: string;
 }
@@ -701,7 +717,8 @@ export interface MyEventListItemDto {
   myParticipationStatus: 'confirmed' | 'waitlisted' | 'declined' | 'expired_no_confirm' | null;
   goingCount: number;
   confirmedCount: number;
-  participantLimit: number;
+  // null = открытая встреча (V62) — счёт показывается без знаменателя.
+  participantLimit: number | null;
   actionRequired: boolean;
   // Прошедшее посещённое событие (организатор отметил явку). Бакет считает бэкенд.
   // Единственный признак истории: status флипается кроном с лагом до ~7ч

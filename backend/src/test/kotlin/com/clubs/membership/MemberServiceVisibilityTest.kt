@@ -36,6 +36,7 @@ class MemberServiceVisibilityTest {
     private lateinit var interestRepository: InterestRepository
     private lateinit var awardService: AwardService
     private lateinit var applicationRepository: ApplicationRepository
+    private lateinit var eventResponseRepository: com.clubs.event.EventResponseRepository
     private lateinit var service: MemberService
 
     private val clubId = UUID.randomUUID()
@@ -53,10 +54,16 @@ class MemberServiceVisibilityTest {
         interestRepository = mockk(relaxed = true)
         awardService = mockk(relaxed = true)
         applicationRepository = mockk(relaxed = true)
+        eventResponseRepository = mockk(relaxed = true)
+        // relaxed-мок вернул бы OpenEventAttendance(0,0) сам, но фиксируем явно — на счётчики
+        // опирается кейс видимости открытых встреч ниже.
+        every { eventResponseRepository.countOpenEventAttendance(any(), any()) } returns
+            com.clubs.event.OpenEventAttendance(attended = 4, total = 5)
         service = MemberService(
             membershipRepository, userRepository, reputationRepository, trustService,
             interestRepository, awardService, applicationRepository, MembershipMapper(),
-            ClubRoleGuard(mockk(relaxed = true), membershipRepository)
+            ClubRoleGuard(mockk(relaxed = true), membershipRepository),
+            eventResponseRepository
         )
     }
 
@@ -147,6 +154,9 @@ class MemberServiceVisibilityTest {
         assertNull(profile.promiseFulfillmentPct)
         assertNull(profile.totalAttendances)
         assertNull(profile.skladchinaPaid)
+        // Открытые встречи — тоже оценочная метрика (AC-5): чужому зрителю null.
+        assertNull(profile.openEventsAttended)
+        assertNull(profile.openEventsTotal)
         assertEquals("Боб", profile.firstName)            // не-оценочное остаётся
     }
 
@@ -160,6 +170,9 @@ class MemberServiceVisibilityTest {
 
         assertEquals(60, profile.trust)
         assertEquals(3, profile.skladchinaPaid)
+        // Свои открытые встречи видны (вне репутации, но той же асимметричной видимости).
+        assertEquals(4, profile.openEventsAttended)
+        assertEquals(5, profile.openEventsTotal)
     }
 
     @Test

@@ -6,5 +6,6 @@ data class ConfirmResponseDto(
     val eventId: UUID,
     val status: String,
     val confirmedCount: Int,
-    val participantLimit: Int
+    // null = открытая встреча (V62): лимита нет, фронт показывает счёт без знаменателя.
+    val participantLimit: Int?
 )

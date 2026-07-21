@@ -164,7 +164,11 @@ class MembershipService(
                     it, trustByClub[it.clubId], nearestEvents[it.clubId], awardsByClub[it.clubId] ?: emptyList()
                 )
             },
-            historyClubs = history.map { mapper.toUserClubReputationDto(it, trustByClub[it.clubId]) }
+            historyClubs = history.map { mapper.toUserClubReputationDto(it, trustByClub[it.clubId]) },
+            // «Статистика»: сырые посещения по всем клубам (вне репутации), один дешёвый COUNT (V61).
+            visits = eventResponseRepository.countUserVisits(userId).let {
+                MyVisitsDto(totalEventsAttended = it.totalEventsAttended, openEventsAttended = it.openEventsAttended)
+            }
         )
     }
 
@@ -205,10 +209,11 @@ class MembershipService(
         // Сначала штрафы: подтверждённая бронь → no_show (−200), складчина с ожидающей репутацией →
         // skladchina_expired (−40). Идемпотентно через UNIQUE в ledger — более поздний естественный
         // исход для того же источника конфликтует, и строка выхода побеждает, так что двойной выход
-        // никогда не засчитывается дважды.
+        // никогда не засчитывается дважды. Открытые встречи (V62) из штрафов исключены — их бронь
+        // не дефицитна и отказ свободен, — но в каскаде/перерисовке закрепа ниже они участвуют.
         reputationService.penalizeExit(
             userId, clubId,
-            eventObligations.map { ExitObligation(it.eventId, it.eventDatetime) },
+            eventObligations.filterNot { it.isOpenEvent }.map { ExitObligation(it.eventId, it.eventDatetime) },
             skladchinaObligations.map { ExitObligation(it.skladchinaId, it.deadline) }
         )
 
@@ -266,7 +271,10 @@ class MembershipService(
         // по мягкой отмене (обязательства не нарушаются до истечения), поэтому превью — сплошные нули.
         if (hasActivePaidAccess(club, membership)) return LeavePreviewDto(0, 0, 0)
 
-        val events = eventResponseRepository.findConfirmedActiveEventObligations(userId, clubId).size
+        // Превью показывает только то, что БУДЕТ оштрафовано (см. док выше «потеряет надёжность»):
+        // бронь открытой встречи (V62) удаляется каскадом, но репутацию не трогает — в счёт не входит.
+        val events = eventResponseRepository.findConfirmedActiveEventObligations(userId, clubId)
+            .count { !it.isOpenEvent }
         val skladchinas = skladchinaRepository.findPendingReputationObligations(userId, clubId).size
         return LeavePreviewDto(
             eventObligations = events,

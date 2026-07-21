@@ -119,6 +119,50 @@ class Stage2ServiceTest {
     }
 
     @Test
+    fun `open event - confirm beyond any count is still confirmed, waitlist unreachable (AC-OPEN1)`() {
+        every { eventRepository.findById(eventId) } returns
+            event(eventDatetime = OffsetDateTime.now().plusHours(2), participantLimit = null)
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = null)
+        // Подтвердившихся уже 50 — у события с лимитом 10 это дало бы waitlisted.
+        every { eventResponseRepository.countConfirmed(eventId) } returnsMany listOf(50, 51)
+        every { eventResponseRepository.updateStage2Vote(any(), any(), any()) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+
+        val result = service.confirmParticipation(eventId, userId)
+
+        assertEquals("confirmed", result.status)
+        assertEquals(null, result.participantLimit)
+        verify(exactly = 1) {
+            eventResponseRepository.updateStage2Vote(any(), Stage_2Vote.confirmed, FinalStatus.confirmed)
+        }
+    }
+
+    @Test
+    fun `open event - confirmed decline inside cutoff window is allowed and penalty-free (AC-OPEN2)`() {
+        // Реальный порог 4ч; событие через 2ч. У события с лимитом это был бы отказ «не позже чем…»,
+        // у открытой встречи порога нет, штраф и промоут не существуют.
+        val strict = Stage2Service(
+            eventRepository, eventResponseRepository, membershipRepository, eventPublisher, reputationService,
+            declineCutoffMinutes = 240, stage2TriggerMinutesBefore = 1440
+        )
+        every { eventRepository.findById(eventId) } returns
+            event(eventDatetime = OffsetDateTime.now().plusHours(2), participantLimit = null)
+        every { membershipRepository.isMember(userId, clubId) } returns true
+        every { eventResponseRepository.findByEventAndUser(eventId, userId) } returns
+            response(stage1 = Stage_1Vote.going, stage2 = Stage_2Vote.confirmed)
+        every { eventResponseRepository.countConfirmed(eventId) } returns 5
+
+        val result = strict.declineParticipation(eventId, userId)
+
+        assertEquals("declined", result.status)
+        verify(exactly = 0) { reputationService.penalizeAbandonedSlot(any(), any(), any(), any()) }
+        // Промоут из очереди даже не запрашивается — waitlist у открытой встречи недостижим.
+        verify(exactly = 0) { eventResponseRepository.findFirstWaitlisted(any()) }
+    }
+
+    @Test
     fun `confirm still works before the event starts`() {
         every { eventRepository.findById(eventId) } returns event(eventDatetime = OffsetDateTime.now().plusHours(2))
         every { membershipRepository.isMember(userId, clubId) } returns true
@@ -333,7 +377,12 @@ class Stage2ServiceTest {
         verify(exactly = 1) { eventResponseRepository.expireUnconfirmedForStartedEvents(any()) }
     }
 
-    private fun event(eventDatetime: OffsetDateTime, status: EventStatus = EventStatus.stage_2) = Event(
+    private fun event(
+        eventDatetime: OffsetDateTime,
+        status: EventStatus = EventStatus.stage_2,
+        // null = открытая встреча (V62) — кейсы AC-OPEN1/2 передают null явно.
+        participantLimit: Int? = 10
+    ) = Event(
         id = eventId,
         clubId = clubId,
         createdBy = UUID.randomUUID(),
@@ -341,7 +390,7 @@ class Stage2ServiceTest {
         description = null,
         locationText = "Place",
         eventDatetime = eventDatetime,
-        participantLimit = 10,
+        participantLimit = participantLimit,
         votingOpensDaysBefore = 14,
         status = status,
         stage2Triggered = true,

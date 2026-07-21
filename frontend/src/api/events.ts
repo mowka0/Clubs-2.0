@@ -12,7 +12,11 @@ export interface CreateEventBody {
   // Уточнение к месту (≤200 символов), отдельное от адреса.
   locationHint?: string;
   eventDatetime: string;
-  participantLimit: number;
+  // null = открытая встреча (V62): без лимита участников, гонки за места и листа ожидания.
+  participantLimit: number | null;
+  // Явный флаг формата (бэкенд требует согласованности: open ⇔ participantLimit=null),
+  // чтобы случайно пропущенный лимит давал 400, а не молча создавал открытую встречу.
+  isOpenEvent?: boolean;
   votingOpensDaysBefore?: number;
   photoUrl?: string;
 }
@@ -71,11 +75,11 @@ export function getMyAttendance(eventId: string): Promise<MyAttendanceDto> {
   return apiClient.get(`/api/events/${eventId}/my-attendance`);
 }
 
-export function confirmParticipation(eventId: string): Promise<{ eventId: string; status: string; confirmedCount: number; participantLimit: number }> {
+export function confirmParticipation(eventId: string): Promise<{ eventId: string; status: string; confirmedCount: number; participantLimit: number | null }> {
   return apiClient.post(`/api/events/${eventId}/confirm`);
 }
 
-export function declineParticipation(eventId: string): Promise<{ eventId: string; status: string; confirmedCount: number; participantLimit: number }> {
+export function declineParticipation(eventId: string): Promise<{ eventId: string; status: string; confirmedCount: number; participantLimit: number | null }> {
   return apiClient.post(`/api/events/${eventId}/decline`);
 }
 

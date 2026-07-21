@@ -40,7 +40,10 @@ data class ExitObligation(
 data class EventReputationContext(
     val clubId: UUID,
     val ownerId: UUID,
-    val eventDatetime: OffsetDateTime
+    val eventDatetime: OffsetDateTime,
+    // Открытая встреча (participant_limit IS NULL, V62): вне репутации целиком — конвейер
+    // пропускает такое событие, не создавая ни одной ledger-строки (решение PO 2026-07-21).
+    val isOpenEvent: Boolean
 )
 
 /**
