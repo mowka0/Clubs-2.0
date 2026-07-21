@@ -73,7 +73,10 @@ export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
         className={coverImage ? 'rd-act-cover rd-act-photo' : 'rd-act-cover'}
         style={coverImage ? { backgroundImage: `url(${coverImage})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
       >
-        <span className="rd-type-badge">СОБЫТИЕ</span>
+        {/* Тип встречи вместо родового «СОБЫТИЕ» (PO 2026-07-21): формат виден прямо с карточки. */}
+        <span className="rd-type-badge">
+          {event.participantLimit == null ? 'ОТКРЫТАЯ ВСТРЕЧА' : 'С МЕСТАМИ'}
+        </span>
         <span className="rd-date-badge">{formatDateBadge(event.eventDatetime)}</span>
       </div>
       <div className="rd-act-body">

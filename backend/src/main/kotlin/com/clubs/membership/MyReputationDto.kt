@@ -9,7 +9,19 @@ package com.clubs.membership
 data class MyReputationDto(
     val global: GlobalTrustDto,
     val activeClubs: List<UserClubReputationDto>,
-    val historyClubs: List<UserClubReputationDto>
+    val historyClubs: List<UserClubReputationDto>,
+    // «Статистика» профиля (мокап P3, PO 2026-07-21): сырые посещения по всем клубам — вне репутации.
+    val visits: MyVisitsDto
+)
+
+/**
+ * Сырые посещения для блока «Статистика» в профиле: [totalEventsAttended] — все attended-отметки
+ * по всем клубам (события с лимитом + открытые встречи), [openEventsAttended] — из них открытые.
+ * Вне репутации: считается из отметок явки, а не из ledger. Фронт скрывает блок при нуле.
+ */
+data class MyVisitsDto(
+    val totalEventsAttended: Int,
+    val openEventsAttended: Int
 )
 
 /**

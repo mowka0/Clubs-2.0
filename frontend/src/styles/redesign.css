@@ -645,9 +645,10 @@
 .rd-ostat-row { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; background: rgba(255,255,255,0.035); }
 .rd-ostat-row + .rd-ostat-row { margin-top: 6px; }
 .rd-ostat-ico { flex: none; width: 30px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 15px; }
-/* Подложки иконок: «волна» открытых встреч и «искра» спонтанности */
+/* Подложки иконок: «волна» открытых встреч, «искра» спонтанности, «билет» всех посещений (профиль) */
 .rd-ostat-ico.rd-ost-wave { background: rgba(95, 168, 211, 0.14); }
 .rd-ostat-ico.rd-ost-spark { background: rgba(232, 192, 90, 0.13); }
+.rd-ostat-ico.rd-ost-ticket { background: rgba(176, 140, 219, 0.14); }
 .rd-ostat-lbl { font-size: 13px; color: var(--text); }
 .rd-ostat-sub { font-size: 10.5px; color: var(--text-faint); margin-top: 1px; }
 .rd-ostat-val { margin-left: auto; text-align: right; flex: none; }

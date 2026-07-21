@@ -124,7 +124,7 @@ const EVENT_FORMAT_OPTIONS: { key: EventFormatKey; emoji: string; title: string;
     key: 'limited',
     emoji: '🎟',
     title: 'С местами',
-    subtitle: 'Лимит участников, гонка за места и лист ожидания',
+    subtitle: 'Лимит участников, репутация и лист ожидания',
   },
   {
     key: 'open',

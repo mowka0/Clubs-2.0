@@ -164,7 +164,11 @@ class MembershipService(
                     it, trustByClub[it.clubId], nearestEvents[it.clubId], awardsByClub[it.clubId] ?: emptyList()
                 )
             },
-            historyClubs = history.map { mapper.toUserClubReputationDto(it, trustByClub[it.clubId]) }
+            historyClubs = history.map { mapper.toUserClubReputationDto(it, trustByClub[it.clubId]) },
+            // «Статистика»: сырые посещения по всем клубам (вне репутации), один дешёвый COUNT (V61).
+            visits = eventResponseRepository.countUserVisits(userId).let {
+                MyVisitsDto(totalEventsAttended = it.totalEventsAttended, openEventsAttended = it.openEventsAttended)
+            }
         )
     }
 

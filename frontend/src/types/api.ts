@@ -224,12 +224,22 @@ export interface GlobalTrustDto {
   score: number | null;
 }
 
+/**
+ * «Статистика» профиля (P3): сырые посещения по всем клубам — ВНЕ репутации (отметки явки,
+ * не ledger). Блок скрывается при totalEventsAttended === 0.
+ */
+export interface MyVisitsDto {
+  totalEventsAttended: number;
+  openEventsAttended: number;
+}
+
 /** Обзор репутации авторизованного пользователя: глобальный агрегат + списки по клубам. */
 export interface MyReputationDto {
   global: GlobalTrustDto;
   activeClubs: UserClubReputationDto[];
   // Клубы, которые пользователь покинул, но трек-рекорд в них ещё сохраняется («История»).
   historyClubs: UserClubReputationDto[];
+  visits: MyVisitsDto;
 }
 
 /**

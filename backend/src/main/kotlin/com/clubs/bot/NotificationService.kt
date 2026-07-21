@@ -221,8 +221,14 @@ class NotificationService(
     @Async
     fun sendAttendanceReminder(event: Event, organizerTelegramId: Long) {
         log.info("Attendance reminder DM: eventId={} organizerTelegramId={}", event.id, organizerTelegramId)
-        val text = "📋 Событие «${event.title}» (${event.eventDatetime.format(fmt)}) прошло.\n\n" +
+        // Открытая встреча — вне репутации: мотивация отметки другая (история + статистика клуба),
+        // упоминание репутации было бы ложным (PO 2026-07-21).
+        val motivation = if (event.isOpenEvent) {
+            "Отметьте, кто пришёл — отметка пойдёт в историю участников и статистику клуба:"
+        } else {
             "Отметьте, кто пришёл — без этого репутация участников не начислится:"
+        }
+        val text = "📋 Событие «${event.title}» (${event.eventDatetime.format(fmt)}) прошло.\n\n$motivation"
         sendDm(organizerTelegramId.toString(), text, webAppPath = "/events/${event.id}", buttonText = "Отметить явку")
     }
 

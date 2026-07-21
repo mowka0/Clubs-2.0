@@ -409,6 +409,21 @@ class JooqEventResponseRepository(
         return OpenEventAttendance(attended = row.value1(), total = row.value2())
     }
 
+    override fun countUserVisits(userId: UUID): UserVisits {
+        val row = dsl.select(
+            DSL.count(),
+            DSL.count().filterWhere(EVENTS.PARTICIPANT_LIMIT.isNull)
+        )
+            .from(EVENT_RESPONSES)
+            .join(EVENTS).on(EVENTS.ID.eq(EVENT_RESPONSES.EVENT_ID))
+            .where(
+                EVENT_RESPONSES.USER_ID.eq(userId)
+                    .and(EVENT_RESPONSES.ATTENDANCE.eq(AttendanceStatus.attended))
+            )
+            .fetchOne()!!
+        return UserVisits(totalEventsAttended = row.value1(), openEventsAttended = row.value2())
+    }
+
     override fun findFirstTimeAttendeeFirstNames(eventId: UUID, clubId: UUID): List<String> {
         // «Другие attended-строки в клубе»: коррелированный NOT EXISTS по событиям того же клуба.
         val other = EVENT_RESPONSES.`as`("other_responses")

@@ -153,6 +153,13 @@ interface EventResponseRepository {
     fun countOpenEventAttendance(userId: UUID, clubId: UUID): OpenEventAttendance
 
     /**
+     * «Статистика» профиля (мокап P3, PO 2026-07-21): сырые посещения пользователя по ВСЕМ клубам —
+     * все attended-отметки (события с лимитом + открытые встречи) и отдельно открытые. Вне репутации,
+     * питает блок «Всего посетил событий» в профиле. Индекс V61 (user, attended) делает COUNT дешёвым.
+     */
+    fun countUserVisits(userId: UUID): UserVisits
+
+    /**
      * Имена (first_name) пришедших, для кого это событие — ПЕРВОЕ посещённое в клубе (других
      * attended-строк по событиям того же клуба нет). Питает «🎉 впервые на встрече клуба»
      * в посте-итоге живого закрепа. Порядок — по имени, чтобы текст был стабильным.
@@ -168,6 +175,15 @@ interface EventResponseRepository {
 data class OpenEventAttendance(
     val attended: Int,
     val total: Int
+)
+
+/**
+ * Сырые посещения по всем клубам для «Статистики» профиля: [totalEventsAttended] — все
+ * attended-отметки, [openEventsAttended] — из них на открытых встречах (participant_limit IS NULL).
+ */
+data class UserVisits(
+    val totalEventsAttended: Int,
+    val openEventsAttended: Int
 )
 
 /**

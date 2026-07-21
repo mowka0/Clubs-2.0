@@ -799,8 +799,6 @@ const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
   const skladchinaPaid = profile.skladchinaPaid ?? 0;
   const skladchinaTotal = profile.skladchinaTotal ?? 0;
   const skladchinaPct = skladchinaTotal > 0 ? Math.round((skladchinaPaid / skladchinaTotal) * 100) : 0;
-  // Роль в футере (co-organizers): «Организатор» / «Со-организатор» / «Участник».
-  const roleLabel = membershipRoleLabel(profile.role);
 
   return (
     <>
@@ -848,7 +846,6 @@ const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
           </div>
         )}
       </div>
-      <div className="rd-rep-foot">Роль: {roleLabel}</div>
     </>
   );
 };
@@ -957,9 +954,10 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
               {profile?.username && (
                 <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>@{profile.username}</div>
               )}
-              {joinedAt && (
-                <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>в клубе с {joinedAt}</div>
-              )}
+              {/* Роль — в шапке (PO 2026-07-21: переехала из футера колец, где висела не к месту). */}
+              <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>
+                {membershipRoleLabel(member.role)}{joinedAt ? ` · в клубе с ${joinedAt}` : ''}
+              </div>
             </div>
           </div>
 

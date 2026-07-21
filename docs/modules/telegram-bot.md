@@ -126,7 +126,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
    🗓 {eventDatetime, dd.MM.yyyy HH:mm | "не указана"}
    ✅ Пойдут: {goingCount}
    🤔 Возможно: {maybeCount}
-   👥 Лимит: {participantLimit}   ← у открытой встречи (V62): «👥 Открытая встреча — без лимита мест»
+   👥 Лимит: {participantLimit}   ← у открытой встречи (V62): «👥 Открытая встреча — без репутации и лимита мест»
    ```
 
 **Inline-кнопка:** отсутствует `[GAP-008]`. PRD §4.6 AC требует «Все уведомления содержат inline-кнопку перехода в Mini App».
@@ -195,7 +195,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 📌 {title}
 📍 {locationText}
 🗓 {eventDatetime, dd.MM.yyyy HH:mm | "TBD"}
-👥 Лимит: {participantLimit}   ← у открытой встречи (V62): «👥 Открытая встреча — без лимита мест»
+👥 Лимит: {participantLimit}   ← у открытой встречи (V62): «👥 Открытая встреча — без репутации и лимита мест»
 
 Голосуйте в приложении:
 ```

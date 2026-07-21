@@ -70,7 +70,7 @@ class LivePinRendererTest {
         val open = event.copy(participantLimit = null)
 
         val stage1 = renderer.stage1Text(open, going = 9, maybe = 3)
-        assertTrue(stage1.contains("👥 Открытая встреча — без лимита мест"))
+        assertTrue(stage1.contains("👥 Открытая встреча — без репутации и лимита мест"))
         assertFalse(stage1.contains("Мест —"))
 
         val stage2 = renderer.stage2Text(open, confirmed = 12, waitlisted = 0)

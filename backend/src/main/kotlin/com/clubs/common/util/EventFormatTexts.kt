@@ -7,5 +7,5 @@ package com.clubs.common.util
  */
 object EventFormatTexts {
     // Заменяет строку «👥 Лимит: N» / «👥 Мест — N» у события без лимита участников.
-    const val OPEN_EVENT_NO_LIMIT_LINE = "👥 Открытая встреча — без лимита мест"
+    const val OPEN_EVENT_NO_LIMIT_LINE = "👥 Открытая встреча — без репутации и лимита мест"
 }
