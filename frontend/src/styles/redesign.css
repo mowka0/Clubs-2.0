@@ -838,6 +838,28 @@
 .rd-badge.rd-neutral { background: var(--surface); color: var(--text-dim); border: 1px solid var(--hairline); }
 .rd-badge.rd-rep { background: var(--accent-soft); color: var(--accent); }
 
+/* ---------- Компактная строка истории (вариант B мокапа history-visual-variants.html) ----------
+   Дата-плитка слева (число + месяц), справа название и подстрока «клуб · место/статус».
+   Заменяет полноразмерную карточку в секциях «История» обоих табов «Активностей». */
+.rd-hist-row {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px;
+  padding: 9px 12px; margin-bottom: 8px;
+  text-align: left; cursor: pointer; font-family: inherit; color: var(--text);
+}
+.rd-hist-date {
+  flex: none; width: 44px; text-align: center; border-right: 1px solid var(--hairline);
+  padding-right: 10px;
+}
+.rd-hist-day { font-size: 16px; font-weight: 800; line-height: 1.1; }
+.rd-hist-month { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; }
+.rd-hist-body { min-width: 0; }
+.rd-hist-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rd-hist-sub {
+  font-size: 11.5px; color: var(--text-faint); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
 /* сегментированный бейдж */
 .rd-seg-item { position: relative; }
 .rd-seg-badge {

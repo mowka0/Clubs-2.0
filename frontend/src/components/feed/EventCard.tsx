@@ -34,12 +34,6 @@ function getInitials(name: string): string {
 }
 
 function pickBadge(event: MyEventListItemDto): Badge | null {
-  // История — ПЕРВАЯ ветка, и бейджа у неё НЕТ (решение PO 2026-07-20): в секцию попадают
-  // только посещённые события, любой бейдж дублировал бы заголовок секции. Ранний return
-  // обязателен: у каждой строки истории myParticipationStatus === 'confirmed' по конструкции
-  // (setAttendance требует final_status = 'confirmed'), без него бейдж выдал бы «Подтверждён» —
-  // обещание на будущее, на прошедшей встрече читается неверно.
-  if (event.isHistory) return null;
   if (event.actionRequired) {
     if (event.status === 'stage_2') return { text: 'Подтверди участие', accent: true };
     return { text: 'Проголосуй', accent: true };
@@ -68,12 +62,7 @@ function currentCount(event: MyEventListItemDto): number {
 export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
   const badge = pickBadge(event);
   const clubInitials = getInitials(event.clubName);
-  // На прошедшем событии честного числа пришедших в DTO нет (goingCount — голоса Этапа 1,
-  // confirmedCount — ростер, ни то ни другое не явка), поэтому в истории мета = только место,
-  // без «N идут» в настоящем времени. Точный attendedCount — в бэклоге.
-  const meta = event.isHistory
-    ? (event.locationText ?? '')
-    : [event.locationText, `${currentCount(event)} идут`].filter(Boolean).join(' · ');
+  const meta = [event.locationText, `${currentCount(event)} идут`].filter(Boolean).join(' · ');
   // Обложка: фото события (PO 2026-07-11), фолбэк — аватар клуба; с картинкой — тёмный
   // скрим сверху вниз (rd-act-photo), как у клубных карточек.
   const coverImage = event.photoUrl ?? event.clubAvatarUrl;

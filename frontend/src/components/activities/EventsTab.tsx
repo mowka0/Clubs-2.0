@@ -9,6 +9,7 @@ import { FeedSection } from '../feed/FeedSection';
 import { FeedSkeleton } from '../feed/FeedSkeleton';
 import { FoxEmpty } from '../feed/FoxEmpty';
 import { EventCard } from '../feed/EventCard';
+import { HistoryCard } from '../feed/HistoryCard';
 import { groupMyEvents } from '../../utils/feedGrouping';
 import foxPlanningArt from '../../assets/mascot/fox-planning.png';
 import foxCatalogArt from '../../assets/mascot/fox-catalog.png';
@@ -114,11 +115,25 @@ export const EventsTab: FC = () => {
           accent={section.key === 'action_required'}
         >
           {section.events.map((event) => (
-            <EventCard
-              key={event.id}
-              event={event}
-              onClick={() => handleEventClick(event.id)}
-            />
+            // ИНВАРИАНТ: история рендерится ТОЛЬКО компактным HistoryCard, никогда EventCard
+            // (решение PO 2026-07-21, вариант B мокапа). После перевода истории на HistoryCard
+            // в EventCard больше нет ветки isHistory — попади история туда, показался бы бейдж
+            // «Подтверждён» (обещание на будущее, на прошедшей встрече читается неверно).
+            section.key === 'history' ? (
+              <HistoryCard
+                key={event.id}
+                dateISO={event.eventDatetime}
+                title={event.title}
+                subtitle={event.locationText ? `${event.clubName} · ${event.locationText}` : event.clubName}
+                onClick={() => handleEventClick(event.id)}
+              />
+            ) : (
+              <EventCard
+                key={event.id}
+                event={event}
+                onClick={() => handleEventClick(event.id)}
+              />
+            )
           ))}
         </FeedSection>
       ))}
