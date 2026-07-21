@@ -54,15 +54,22 @@ function pickBadge(event: MyEventListItemDto): Badge | null {
   return null;
 }
 
-/** Текущее число участников: confirmed после закрытия голосования (stage_2), иначе — "going". */
+/** Текущее число участников: confirmed после закрытия голосования (stage_2/completed, F5-21), иначе — "going". */
 function currentCount(event: MyEventListItemDto): number {
-  return event.status === 'stage_2' ? event.confirmedCount : event.goingCount;
+  return event.status === 'stage_2' || event.status === 'completed'
+    ? event.confirmedCount
+    : event.goingCount;
 }
 
 export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
   const badge = pickBadge(event);
   const clubInitials = getInitials(event.clubName);
-  const meta = [event.locationText, `${currentCount(event)} идут`].filter(Boolean).join(' · ');
+  // Счётчик идущих переехал из meta-строки в градиентную цифру справа (PO 2026-07-21) —
+  // тот же вид, что на карточке активностей страницы клуба (rd-ft-stat). Фаза как там (F5-21):
+  // после закрытия голосования — подтверждённые, у открытой встречи знаменателя нет.
+  const finalComposition = event.status === 'stage_2' || event.status === 'completed';
+  const countCaption = finalComposition ? 'подтв.' : 'идёт';
+  const meta = event.locationText ?? '';
   // Обложка: фото события (PO 2026-07-11), фолбэк — аватар клуба; с картинкой — тёмный
   // скрим сверху вниз (rd-act-photo), как у клубных карточек.
   const coverImage = event.photoUrl ?? event.clubAvatarUrl;
@@ -79,7 +86,8 @@ export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
         </span>
         <span className="rd-date-badge">{formatDateBadge(event.eventDatetime)}</span>
       </div>
-      <div className="rd-act-body">
+      <div className="rd-act-body rd-act-body-split">
+        <div className="rd-act-main">
         <div className="rd-act-club-row">
           <span className="rd-club-avt">
             {event.clubAvatarUrl ? <img src={event.clubAvatarUrl} alt="" /> : clubInitials}
@@ -87,7 +95,7 @@ export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
           <span>{event.clubName}</span>
         </div>
         <div className="rd-act-ttl">{event.title}</div>
-        <div className="rd-act-meta">{meta}</div>
+        {meta && <div className="rd-act-meta">{meta}</div>}
         {/* Показываем только accent-бейджи (call-to-action). Остальные
             нейтральные статусы (Подтверждён/Иду/…) карточка намеренно НЕ показывает ради
             снижения визуальной плотности — их поведение не трогаем. */}
@@ -96,6 +104,16 @@ export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
             <span className="rd-badge rd-warn">{badge.text}</span>
           </div>
         )}
+        </div>
+        {/* Градиентная цифра справа — как rd-ft-stat на карточке страницы клуба. */}
+        <div className="rd-ft-stat">
+          <div className="rd-ft-stat-num">
+            {event.participantLimit == null
+              ? currentCount(event)
+              : `${currentCount(event)}/${event.participantLimit}`}
+          </div>
+          <div className="rd-ft-stat-cap">{countCaption}</div>
+        </div>
       </div>
     </button>
   );

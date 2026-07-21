@@ -838,6 +838,9 @@
   z-index: 2;
 }
 .rd-act-body { padding: 12px 14px 14px; }
+/* Сплит тела карточки ленты: текст слева, градиентный счётчик идущих справа (как на карточке клуба). */
+.rd-act-body-split { display: flex; align-items: center; gap: 10px; }
+.rd-act-body-split .rd-act-main { flex: 1 1 auto; min-width: 0; }
 .rd-act-club-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 11px; color: var(--text-dim); }
 .rd-act-ttl { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
 .rd-act-meta { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
