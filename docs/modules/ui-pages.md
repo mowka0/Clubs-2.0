@@ -184,18 +184,24 @@ Tabs рендерятся условно (`{activeTab === 'X' && <Tab/>}`) — n
 1. **🔥 Требует действия** — voting открыт без vote, ИЛИ stage_2 без confirm
 2. **📅 Эта неделя** — events ≤ 7 дней
 3. **📆 Позже** — events > 7 дней
+4. **История** (итерация 5 `feature/events-history`, 2026-07-20) — прошедшие события
+   с личной отметкой явки (`attended`), недавние первыми; карточка с бейджем «Ты был»
 
 ### Privacy invariant
 
-События **только** из клубов где `MembershipStatus.active`. Не показывает events из:
+**Предстоящие** — только из клубов где `MembershipStatus.active`. Не показывает events из:
 - Клубов где user только подал application (pending)
 - Soft-deleted клубов
 - Публичные events (этого слоя в продукте нет — см. `project_clubs_over_events_rationale.md`)
 
+**История** скоупится иначе — строго личной отметкой (`event_responses.user_id = caller`,
+`attendance = 'attended'`) и намеренно переживает выход из клуба (soft-deleted клубы исключены
+и здесь). Обоснование — `events-feed.md` § «Итерация 5», Решение 2в.
+
 ### Реализация
 
-- Backend endpoint `GET /api/users/me/events` — реализован в `UserController` (page-based pagination, page+size, max size = 50)
-- Privacy: фильтр по `MEMBERSHIPS.STATUS = active` + `CLUBS.IS_ACTIVE = true` + `event_datetime > now` + `status IN (upcoming, stage_2)`
+- Backend endpoint `GET /api/users/me/events` — реализован в `UserController` (page-based pagination, page+size, max size = 50); с итерации 5 отдаёт и историю (поле `isHistory` в DTO, та же пагинация)
+- Privacy предстоящей половины: фильтр по `MEMBERSHIPS.STATUS = active` + `CLUBS.IS_ACTIVE = true` + `event_datetime > now` + `status IN (upcoming, stage_2)`
 - Зависимость по security (`club-events-membership-check`) закрыта в PR #32
 
 Полная спека (user-stories, AC, API контракт, анатомия event-card, frontend/backend план, post-flight decisions) — в `events-feed.md`.

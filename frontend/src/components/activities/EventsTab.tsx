@@ -9,6 +9,7 @@ import { FeedSection } from '../feed/FeedSection';
 import { FeedSkeleton } from '../feed/FeedSkeleton';
 import { FoxEmpty } from '../feed/FoxEmpty';
 import { EventCard } from '../feed/EventCard';
+import { HistoryCard } from '../feed/HistoryCard';
 import { groupMyEvents } from '../../utils/feedGrouping';
 import foxPlanningArt from '../../assets/mascot/fox-planning.png';
 import foxCatalogArt from '../../assets/mascot/fox-catalog.png';
@@ -63,7 +64,12 @@ export const EventsTab: FC = () => {
 
   const isLoadingInitial = myEventsQuery.isPending;
   const isError = myEventsQuery.isError && !myEventsQuery.isPending;
-  const isEmpty = !isLoadingInitial && !isError && events.length === 0;
+  // Сцена лиса — при отсутствии ПРЕДСТОЯЩИХ (зеркало SkladchinasTab.hasActive, W3-03a):
+  // прошедшие посещённые события живут в секции «История» ПОД сценой и не должны её прятать —
+  // иначе юзер с одним старым событием никогда не увидит ни лиса, ни CTA «Создать событие».
+  const hasUpcoming = events.some((e) => !e.isHistory);
+  const hasHistory = events.some((e) => e.isHistory);
+  const isEmpty = !isLoadingInitial && !isError && !hasUpcoming;
   // Пока роль не определена, пустую сцену держим на скелетоне — иначе организатор
   // на мгновение увидит участнический вариант с CTA «Перейти в Поиск».
   const isEmptySceneResolving = isEmpty && isRoleLoading;
@@ -86,15 +92,15 @@ export const EventsTab: FC = () => {
         isOrganizer ? (
           <FoxEmpty
             art={foxPlanningArt}
-            soonIcon="📅"
-            title="Пора запланировать встречу"
+            soonIcon={hasHistory ? undefined : '📅'}
+            title={hasHistory ? 'Предстоящих событий нет' : 'Событий пока нет'}
             description="В твоём клубе ещё нет событий. Создай первое — участники увидят его здесь и смогут проголосовать за дату"
             primary={{ label: 'Создать событие', onClick: handleCreateClick }}
           />
         ) : (
           <FoxEmpty
             art={foxCatalogArt}
-            title="Пока нет событий"
+            title={hasHistory ? 'Предстоящих событий нет' : 'Событий пока нет'}
             description="Найди интересные клубы в Поиске — они появятся здесь, как только запланируют встречу."
             primary={{ label: 'Перейти в Поиск', onClick: handleSearchClick }}
           />
@@ -109,11 +115,25 @@ export const EventsTab: FC = () => {
           accent={section.key === 'action_required'}
         >
           {section.events.map((event) => (
-            <EventCard
-              key={event.id}
-              event={event}
-              onClick={() => handleEventClick(event.id)}
-            />
+            // ИНВАРИАНТ: история рендерится ТОЛЬКО компактным HistoryCard, никогда EventCard
+            // (решение PO 2026-07-21, вариант B мокапа). После перевода истории на HistoryCard
+            // в EventCard больше нет ветки isHistory — попади история туда, показался бы бейдж
+            // «Подтверждён» (обещание на будущее, на прошедшей встрече читается неверно).
+            section.key === 'history' ? (
+              <HistoryCard
+                key={event.id}
+                dateISO={event.eventDatetime}
+                title={event.title}
+                subtitle={event.locationText ? `${event.clubName} · ${event.locationText}` : event.clubName}
+                onClick={() => handleEventClick(event.id)}
+              />
+            ) : (
+              <EventCard
+                key={event.id}
+                event={event}
+                onClick={() => handleEventClick(event.id)}
+              />
+            )
           ))}
         </FeedSection>
       ))}

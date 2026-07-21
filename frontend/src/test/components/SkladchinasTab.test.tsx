@@ -35,7 +35,7 @@ const EMPTY_FEED: PageResponse<MySkladchinaListItemDto> = {
 };
 
 /** Закрытый сбор для секции «История» (status ≠ active). */
-function closedSkladchina(): MySkladchinaListItemDto {
+function closedSkladchina(over: Partial<MySkladchinaListItemDto> = {}): MySkladchinaListItemDto {
   return {
     id: 'sk-hist-1',
     title: 'Аренда зала (июнь)',
@@ -54,6 +54,7 @@ function closedSkladchina(): MySkladchinaListItemDto {
     myStatus: null,
     actionRequired: false,
     affectsReputation: false,
+    ...over,
   };
 }
 
@@ -148,7 +149,7 @@ describe('SkladchinasTab — роль-развилка пустого состо
     expect(screen.queryByRole('button', { name: 'Создать сбор' })).not.toBeInTheDocument();
   });
 
-  it('только закрытые сборы → сцена «Активных сборов нет» с CTA организатора + секция «История» под ней', async () => {
+  it('только закрытые сборы → сцена «Активных сборов нет» с CTA организатора + «История» компактной строкой', async () => {
     mockEndpoints({
       clubs: [membership({ role: 'organizer' })],
       skladchinasResponder: () => HttpResponse.json({
@@ -158,15 +159,37 @@ describe('SkladchinasTab — роль-развилка пустого состо
         totalPages: 1,
       }),
     });
-    renderTab();
+    const { container } = renderTab();
 
     // Закрытые сборы не прячут пустое состояние активных (решение PO 2026-07-20)
     expect(await screen.findByText('Активных сборов нет')).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'Создать сбор' })).toBeInTheDocument();
     expect(await screen.findByText('История')).toBeInTheDocument();
+    // Компактная строка: название в .rd-hist-title, финальный статус «Завершён» в подстроке.
     expect(await screen.findByText('Аренда зала (июнь)')).toBeInTheDocument();
+    expect(container.querySelector('.rd-hist-title')?.textContent).toBe('Аренда зала (июнь)');
+    expect(screen.getByText(/Завершён/)).toBeInTheDocument();
+    // Строка компактная: нет полноразмерной обложки-монеты и прогресс-бара активного сбора.
+    expect(container.querySelector('.rd-act-cover')).toBeNull();
+    expect(container.querySelector('.rd-progress')).toBeNull();
     // Карточка-тизер «скоро здесь» при непустой истории не рендерится
     expect(screen.queryByText('скоро здесь')).not.toBeInTheDocument();
+  });
+
+  it('несобранный сбор в истории → подстрока содержит «Не собран»', async () => {
+    mockEndpoints({
+      clubs: [membership({ role: 'organizer' })],
+      skladchinasResponder: () => HttpResponse.json({
+        ...EMPTY_FEED,
+        content: [closedSkladchina({ id: 'sk-failed', title: 'Инвентарь', status: 'closed_failed' })],
+        totalElements: 1,
+        totalPages: 1,
+      }),
+    });
+    renderTab();
+
+    expect(await screen.findByText('Инвентарь')).toBeInTheDocument();
+    expect(screen.getByText(/Не собран/)).toBeInTheDocument();
   });
 
   it('ошибка загрузки → error-сцена «Не удалось загрузить сборы» с «Повторить», НЕ пустая заставка', async () => {

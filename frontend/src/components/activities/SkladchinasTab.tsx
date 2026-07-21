@@ -9,9 +9,10 @@ import { FeedSection } from '../feed/FeedSection';
 import { FeedSkeleton } from '../feed/FeedSkeleton';
 import { FoxEmpty } from '../feed/FoxEmpty';
 import { SkladchinaCard } from '../feed/SkladchinaCard';
+import { HistoryCard } from '../feed/HistoryCard';
 import foxSkladchinaArt from '../../assets/mascot/fox-skladchina.png';
 import foxErrorArt from '../../assets/mascot/fox-error.png';
-import type { MySkladchinaListItemDto } from '../../types/api';
+import type { MySkladchinaListItemDto, SkladchinaStatus } from '../../types/api';
 
 interface Group {
   key: 'action_required' | 'active' | 'history';
@@ -33,6 +34,18 @@ function groupSkladchinas(list: readonly MySkladchinaListItemDto[]): Group[] {
   if (active.length > 0) result.push({ key: 'active', title: 'Активные сборы', items: active });
   if (history.length > 0) result.push({ key: 'history', title: 'История', items: history });
   return result;
+}
+
+// Финальный статус закрытого сбора для подстроки истории (тексты синхронны pickBadge
+// в SkladchinaCard). В группу «История» попадают только не-active сборы, поэтому 'active'
+// сюда не приходит — на всякий случай отдаём пустую строку, чтобы switch был исчерпывающим.
+function finalStatusLabel(status: SkladchinaStatus): string {
+  switch (status) {
+    case 'closed_success': return 'Завершён';
+    case 'closed_failed':  return 'Не собран';
+    case 'cancelled':      return 'Отменён';
+    case 'active':         return '';
+  }
 }
 
 export const SkladchinasTab: FC = () => {
@@ -130,7 +143,23 @@ export const SkladchinasTab: FC = () => {
           accent={group.key === 'action_required'}
         >
           {group.items.map((s) => (
-            <SkladchinaCard key={s.id} skladchina={s} onClick={() => handleClick(s.id)} />
+            // История рендерится компактной строкой HistoryCard; активные и требующие оплаты —
+            // полноразмерным SkladchinaCard (решение PO 2026-07-21, вариант B мокапа).
+            group.key === 'history' ? (
+              <HistoryCard
+                key={s.id}
+                dateISO={s.deadline}
+                title={s.title}
+                subtitle={
+                  finalStatusLabel(s.status)
+                    ? `${s.clubName} · ${finalStatusLabel(s.status)}`
+                    : s.clubName
+                }
+                onClick={() => handleClick(s.id)}
+              />
+            ) : (
+              <SkladchinaCard key={s.id} skladchina={s} onClick={() => handleClick(s.id)} />
+            )
           ))}
         </FeedSection>
       ))}

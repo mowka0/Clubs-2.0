@@ -26,7 +26,7 @@
 Регулярка расширена с `/^\/clubs\/[^/]+(\/manage)?$/` до `/^\/(clubs|events)\/[^/]+(\/manage)?$/` (`BottomTabBar.tsx:29`). Причина: новый таб «События» ведёт на `/events`, и при тапе в карточку события (`/events/:id`) tab-bar должен оставаться видимым — иначе пользователь теряет контекст и не может вернуться в «События» одним тапом. Поведение симметрично уже существующему `/clubs/:id` (детальная страница клуба тоже сохраняет tab-bar). Найдено Reviewer'ом как [Blocker], исправлено в этом PR.
 
 ### НЕ входит (отдельный PR)
-- Реальная логика `EventsPage`: backend endpoint `GET /api/users/me/events?status=upcoming` + frontend список с RSVP — only placeholder сейчас.
+- Реальная логика `EventsPage` — на момент того PR только placeholder. _(Реализована позже в `feature/events-feed-page`; фактический контракт — `GET /api/users/me/events` **без** `?status`, см. `events-feed.md`.)_
 - Любые изменения backend (`getMyClubs()` уже возвращает `MembershipDto.role` — `frontend/src/types/api.ts:113`).
 - Изменения других страниц: `ClubPage`, `EventPage`, `OrganizerClubManage`, ~~`ClubInteriorPage`~~ (удалён в `feature/unified-club-page`, 2026-04-25), `DiscoveryPage`, `ProfilePage`.
 - Реструктуризация роутера за пределами этих 4 routes.

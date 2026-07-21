@@ -151,6 +151,11 @@ export function useMarkAttendanceMutation() {
       markAttendance(eventId, attendance),
     onSuccess: (_data, { eventId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
+      // markAttendance зовёт ОРГАНИЗАТОР — инвалидация срабатывает в ЕГО клиенте и обновляет
+      // ЕГО ленту /me/events (организатор тоже участник событий: если явку отметили и ему,
+      // строка появится в его «Истории»). На девайс отмеченного участника это не
+      // распространяется — свою «Историю» он увидит при следующем маунте ленты / рефетче.
+      qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });
     },
   });
 }
@@ -186,6 +191,10 @@ export function useResolveDisputeMutation() {
       resolveDispute(eventId, userId, attended),
     onSuccess: (_data, { eventId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
+      // resolveDispute тоже зовёт ОРГАНИЗАТОР — инвалидируется ЕГО лента /me/events (зеркало
+      // markAttendance). На устройство участника-заявителя не влияет: пуша нет, он подтянет
+      // обновлённую «Историю» сам при следующем маунте ленты / после истечения staleTime.
+      qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });
     },
   });
 }

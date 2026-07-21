@@ -85,7 +85,10 @@ export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
         </div>
         <div className="rd-act-ttl">{event.title}</div>
         <div className="rd-act-meta">{meta}</div>
-        {badge?.accent && (
+        {/* Показываем только accent-бейджи (call-to-action). Остальные
+            нейтральные статусы (Подтверждён/Иду/…) карточка намеренно НЕ показывает ради
+            снижения визуальной плотности — их поведение не трогаем. */}
+        {badge && badge.accent && (
           <div className="rd-badges-row">
             <span className="rd-badge rd-warn">{badge.text}</span>
           </div>

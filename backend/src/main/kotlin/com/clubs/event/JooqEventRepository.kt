@@ -1,6 +1,7 @@
 package com.clubs.event
 
 import com.clubs.common.dto.PageResponse
+import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
@@ -132,26 +133,51 @@ class JooqEventRepository(
     override fun findMyFeed(userId: UUID, page: Int, size: Int): PageResponse<MyFeedItem> {
         val now = OffsetDateTime.now()
 
-        // Доступ по membership должен совпадать с предикатом доступа к голосованию/DM, иначе участник
-        // сможет голосовать (и получать DM) по событию, которое никогда не появится в его ленте.
-        // Общий предикат MembershipAccess: доступ к контенту = статус `active` (участник `frozen`
-        // отсечён от всех трёх).
-        val baseCondition = EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_2)
+        // Лента — два набора, объединяемых по events.id:
+        // (A) ПРЕДСТОЯЩИЕ — без изменений семантики: активный клуб, активное членство
+        //     (MembershipAccess), статус upcoming/stage_2, event_datetime > now.
+        // (B) ИСТОРИЯ (новое): личная отметка явки (attendance='attended'), клуб активен,
+        //     событие не отменено, event_datetime <= now. JOIN с membership НЕ обязателен —
+        //     история переживает выход/исключение из клуба (Решение 2в спеки): строка выдаётся
+        //     строго по event_responses.user_id = :userId, это собственный факт пользователя,
+        //     не контент клуба.
+        // Дизъюнктность наборов — ПО ПОСТРОЕНИЮ через event_datetime (A: > now, B: <= now), а не
+        // через инвариант AttendanceService (отметка явки запрещена до старта): иначе появление
+        // переноса события дало бы экс-участнику будущее событие клуба, из которого он исключён.
+        val upcomingPredicate = EVENTS.STATUS.`in`(EventStatus.upcoming, EventStatus.stage_2)
             .and(EVENTS.EVENT_DATETIME.gt(now))
-            .and(CLUBS.IS_ACTIVE.eq(true))
-            .and(MEMBERSHIPS.USER_ID.eq(userId))
             .and(MembershipAccess.hasAccess())
+        val historyPredicate = EVENT_RESPONSES.ATTENDANCE.eq(AttendanceStatus.attended)
+            .and(EVENTS.STATUS.ne(EventStatus.cancelled))
+            .and(EVENTS.EVENT_DATETIME.le(now))
+        // is_active = true применяется к ОБЕИМ половинам: soft-deleted клуб исключён и из истории (AC-H7).
+        val baseCondition = CLUBS.IS_ACTIVE.eq(true)
+            .and(upcomingPredicate.or(historyPredicate))
 
+        // Джойны LEFT: membership может отсутствовать (пользователь вышел, но история жива),
+        // event_responses — собственный отклик вызывающего. user_id заведён в ON, а не в WHERE:
+        // в WHERE он деградировал бы LEFT до INNER и убил историю без активного членства.
         val total = dsl.select(DSL.countDistinct(EVENTS.ID))
             .from(EVENTS)
-            .join(MEMBERSHIPS).on(MEMBERSHIPS.CLUB_ID.eq(EVENTS.CLUB_ID))
             .join(CLUBS).on(CLUBS.ID.eq(EVENTS.CLUB_ID))
+            .leftJoin(MEMBERSHIPS).on(
+                MEMBERSHIPS.CLUB_ID.eq(EVENTS.CLUB_ID).and(MEMBERSHIPS.USER_ID.eq(userId))
+            )
+            .leftJoin(EVENT_RESPONSES).on(
+                EVENT_RESPONSES.EVENT_ID.eq(EVENTS.ID).and(EVENT_RESPONSES.USER_ID.eq(userId))
+            )
             .where(baseCondition)
             .fetchOne(0, Long::class.java) ?: 0L
 
-        // ORDER BY: сначала события, требующие действия (вычисляется inline через CASE),
-        // затем хронологически. Окно голосования открывается в момент
-        // event_datetime - voting_opens_days_before * 1 day.
+        // Бакет истории: 0 = предстоящее (набор A), 1 = история (набор B). Наборы дизъюнктны,
+        // поэтому «не A» ⇒ история.
+        val historyBucket = DSL.case_()
+            .`when`(upcomingPredicate, 0)
+            .otherwise(1)
+
+        // Внутри предстоящих: события, требующие действия, — сверху. Окно голосования открывается
+        // в момент event_datetime - voting_opens_days_before * 1 day. Для истории значение не важно
+        // (её отделяет уже historyBucket).
         val actionRequiredOrder = DSL.case_()
             .`when`(
                 EVENTS.STATUS.eq(EventStatus.upcoming)
@@ -174,6 +200,10 @@ class JooqEventRepository(
             )
             .otherwise(0)
 
+        // Условный ключ сортировки предстоящих: event_datetime для набора A, NULL для истории
+        // (implicit ELSE NULL). У истории порядок задаёт последний ключ event_datetime DESC.
+        val upcomingSort = DSL.`when`(upcomingPredicate, EVENTS.EVENT_DATETIME)
+
         val rows = dsl.select(
             EVENTS.ID,
             EVENTS.CLUB_ID,
@@ -195,16 +225,26 @@ class JooqEventRepository(
             CLUBS.AVATAR_URL.`as`("club_avatar_url"),
             EVENT_RESPONSES.STAGE_1_VOTE.`as`("my_vote"),
             EVENT_RESPONSES.FINAL_STATUS.`as`("my_final_status"),
+            historyBucket.`as`("history_bucket"),
         )
             .from(EVENTS)
-            .join(MEMBERSHIPS).on(MEMBERSHIPS.CLUB_ID.eq(EVENTS.CLUB_ID))
             .join(CLUBS).on(CLUBS.ID.eq(EVENTS.CLUB_ID))
+            .leftJoin(MEMBERSHIPS).on(
+                MEMBERSHIPS.CLUB_ID.eq(EVENTS.CLUB_ID).and(MEMBERSHIPS.USER_ID.eq(userId))
+            )
             .leftJoin(EVENT_RESPONSES).on(
-                EVENT_RESPONSES.EVENT_ID.eq(EVENTS.ID)
-                    .and(EVENT_RESPONSES.USER_ID.eq(userId))
+                EVENT_RESPONSES.EVENT_ID.eq(EVENTS.ID).and(EVENT_RESPONSES.USER_ID.eq(userId))
             )
             .where(baseCondition)
-            .orderBy(actionRequiredOrder.desc(), EVENTS.EVENT_DATETIME.asc())
+            .orderBy(
+                historyBucket.asc(),              // предстоящие (0) → история (1)
+                actionRequiredOrder.desc(),       // внутри предстоящих — action-required сверху
+                upcomingSort.asc().nullsLast(),   // предстоящие: ближайшее первым; история → NULL → в конец
+                EVENTS.EVENT_DATETIME.desc(),     // история: недавние первыми
+                EVENTS.ID.asc()                   // детерминированный тай-брейк: ни один ключ выше не уникален,
+                                                  // без него offset-пагинация могла бы менять местами
+                                                  // события с одинаковым datetime между страницами
+            )
             .limit(size)
             .offset(page * size)
             .fetch()
@@ -240,7 +280,9 @@ class JooqEventRepository(
                 myVote = r.get("my_vote", Stage_1Vote::class.java),
                 myFinalStatus = r.get("my_final_status", FinalStatus::class.java),
                 goingCount = goingCounts[eventId] ?: 0,
-                confirmedCount = confirmedCounts[eventId] ?: 0
+                confirmedCount = confirmedCounts[eventId] ?: 0,
+                // Бакет 1 ⇒ строка из набора истории (посещённое прошедшее событие).
+                isHistory = r.get("history_bucket", Int::class.java) == 1
             )
         }
 

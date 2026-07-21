@@ -76,7 +76,11 @@ data class MyEventListItemDto(
     val goingCount: Int,
     val confirmedCount: Int,
     val participantLimit: Int,
-    val actionRequired: Boolean
+    val actionRequired: Boolean,
+    // true = прошедшее посещённое событие (секция «История»). Считает бэкенд по бакету ORDER BY.
+    // Клиенту ЗАПРЕЩЕНО выводить историчность из status='completed' или eventDatetime<now:
+    // статус completed выставляется кроном с запасом 6ч, окно рассинхрона до ~7ч реально (AC-H14).
+    val isHistory: Boolean
 )
 
 data class CreateEventRequest(

@@ -86,11 +86,16 @@ class EventMapper(
             goingCount = item.goingCount,
             confirmedCount = item.confirmedCount,
             participantLimit = event.participantLimit,
-            actionRequired = computeActionRequired(item, now)
+            actionRequired = computeActionRequired(item, now),
+            isHistory = item.isHistory
         )
     }
 
     private fun computeActionRequired(item: MyFeedItem, now: OffsetDateTime): Boolean {
+        // История — прошедшее событие, никаких действий по нему уже не требуется. Отсекаем явно
+        // до всех прочих веток: у attended-строки final_status='confirmed' и так дал бы false,
+        // но инвариант «история никогда не actionRequired» делаем читаемым, а не выводимым.
+        if (item.isHistory) return false
         val event = item.event
         return when (event.status) {
             EventStatus.upcoming -> {
