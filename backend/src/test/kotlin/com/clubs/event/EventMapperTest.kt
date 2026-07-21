@@ -125,4 +125,12 @@ class EventMapperTest {
         )
         assertThat(limited.confirmedDeclineDeadline).isEqualTo(start.minusMinutes(240))
     }
+
+    // Величина штрафа за брошенный слот идёт с бэка (из ReputationPolicy), а не хардкодом фронта —
+    // тот же класс фикса, что confirmedDeclineDeadline (PO 2026-07-21).
+    @Test
+    fun `abandoned slot penalty is sourced from ReputationPolicy`() {
+        val dto = mapper.toDetailDto(event(EventStatus.stage_2, now.plusDays(2)), 0, 0, 0, 0)
+        assertThat(dto.abandonedSlotPenaltyPoints).isEqualTo(100)
+    }
 }

@@ -187,13 +187,12 @@ class JooqReputationRepository(
         // затухания, не пересканируя леджер целиком; сам Trust с учётом затухания вычисляется
         // на чтении из occurred_at.
         // neutral = outcome - kept - broke (confirmed_unresolved + исторический skladchina_declined).
-        val keptKinds = l.KIND.`in`(ReputationKind.ironclad, ReputationKind.spontaneous, ReputationKind.skladchina_paid)
-        val brokeKinds = l.KIND.`in`(
-            ReputationKind.no_show, ReputationKind.spectator, ReputationKind.skladchina_expired,
-            // open_no_show зарезервирован и сейчас не выдаётся (открытые встречи вне репутации,
-            // PO 2026-07-21); в бакете — чтобы будущий «строгий режим» не разошёлся с TrustPolicy.
-            ReputationKind.open_no_show
-        )
+        // Списки ВЫВОДЯТСЯ из TrustPolicy.classOf — единый источник классификации (фикс PO
+        // 2026-07-21): ручная копия здесь дважды расходилась с политикой (abandoned_slot не был
+        // добавлен при V45 — счётчик «нарушил» занижался; выровнено задним числом миграцией V65).
+        // Новый reputation_kind теперь достаточно классифицировать в одном месте — TrustPolicy.
+        val keptKinds = l.KIND.`in`(ReputationKind.entries.filter { TrustPolicy.classOf(it) == TrustPolicy.TrustClass.KEPT })
+        val brokeKinds = l.KIND.`in`(ReputationKind.entries.filter { TrustPolicy.classOf(it) == TrustPolicy.TrustClass.BROKE })
 
         val rec = dsl.select(
             DSL.sum(l.POINTS),

@@ -539,6 +539,9 @@ export interface EventDetailDto {
   // бэкендом из events.stage2-decline-cutoff-minutes — фронт не хранит копию порога, а прячет кнопку
   // «Отказаться» у confirmed, когда текущее время ≥ этого значения. Источник истины — бэкенд.
   confirmedDeclineDeadline: string;
+  // Сколько очков спишется за отказ от подтверждённого места без замены (abandoned_slot).
+  // Величина приходит с бэка (ReputationPolicy) — фронт число не хардкодит.
+  abandonedSlotPenaltyPoints: number;
   attendanceMarked: boolean;
   attendanceFinalized: boolean;
   // F5-14: необязательная причина отмены от организатора; null, если отменено без указания причины.
