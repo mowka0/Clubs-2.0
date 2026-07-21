@@ -886,7 +886,7 @@ export const EventPage: FC = () => {
                     : <>Освободить место?{' '}
                       {waitlistedCount > 0
                         ? 'Его сразу займёт первый из очереди.'
-                        : 'Замены пока нет — с вашей репутации спишется 100 очков.'}</>}
+                        : `Замены пока нет — с вашей репутации спишется ${event.abandonedSlotPenaltyPoints} очков.`}</>}
                 </div>
                 <div className="rd-org-gate-acts">
                   <button type="button" className="rd-btn-outline" disabled={voting} onClick={() => setConfirmingDecline(false)}>

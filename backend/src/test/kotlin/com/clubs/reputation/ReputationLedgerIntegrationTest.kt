@@ -302,8 +302,9 @@ class ReputationLedgerIntegrationTest {
     @Test
     fun `recompute fills kept-broke-neutral counts by kind, invariant outcome = kept + broke + neutral (AC-P1b-1)`() {
         // P1b PR-0: Trust 0-100 — байесовская доля СДЕРЖАННЫХ обещаний, классификация ПО KIND.
-        // kept = {ironclad, spontaneous, skladchina_paid}; broke = {no_show, spectator,
-        // skladchina_expired}; neutral = {confirmed_unresolved, skladchina_declined}.
+        // Списки kept/broke ВЫВОДЯТСЯ из TrustPolicy.classOf (фикс PO 2026-07-21): kept =
+        // {ironclad, spontaneous, skladchina_paid}; broke = {no_show, spectator, skladchina_expired,
+        // abandoned_slot, open_no_show}; neutral = {confirmed_unresolved, skladchina_declined}.
         val member = insertUser("Counted")
         val e1 = insertFinalizedEvent(); insertConfirmed(e1, member, "going", "attended") // ironclad -> kept
         val e2 = insertFinalizedEvent(); insertConfirmed(e2, member, "going", "absent")   // no_show  -> broke
@@ -317,10 +318,13 @@ class ReputationLedgerIntegrationTest {
                 financeEntry(member, ReputationKind.skladchina_expired) // broke
             )
         )
+        // Брошенный слот — тоже BROKE (V45-рассинхрон закрыт: раньше SQL-список его терял,
+        // и счётчик «нарушил» занижался при корректном Trust).
+        reputationService.penalizeAbandonedSlot(member, clubId, insertFinalizedEvent(), OffsetDateTime.now())
 
         val (kept, broke, neutral) = counts(member)
         assertEquals(2, kept, "kept_count (ironclad + skladchina_paid)")
-        assertEquals(2, broke, "broke_count (no_show + skladchina_expired)")
+        assertEquals(3, broke, "broke_count (no_show + skladchina_expired + abandoned_slot)")
         assertEquals(1, neutral, "neutral_count (confirmed_unresolved)")
         val outcome = reputationRepository.findByUserAndClub(member, clubId)!!.outcomeCount
         assertEquals(outcome, kept + broke + neutral, "invariant: outcome = kept + broke + neutral")

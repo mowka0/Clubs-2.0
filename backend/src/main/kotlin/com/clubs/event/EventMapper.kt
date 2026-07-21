@@ -1,8 +1,10 @@
 package com.clubs.event
 
 import com.clubs.generated.jooq.enums.EventStatus
+import com.clubs.generated.jooq.enums.ReputationKind
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.tables.records.EventsRecord
+import com.clubs.reputation.ReputationPolicy
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.time.OffsetDateTime
@@ -65,6 +67,9 @@ class EventMapper(
         // confirm/decline всё равно закрывается стартом, Bug B). Фронт различие не хардкодит.
         confirmedDeclineDeadline = if (event.isOpenEvent) event.eventDatetime
             else event.eventDatetime.minusMinutes(declineCutoffMinutes),
+        // Величина штрафа за брошенный слот — из политики репутации, чтобы текст диалога отказа
+        // на фронте никогда не разъехался с реальным списанием (фикс PO 2026-07-21).
+        abandonedSlotPenaltyPoints = -ReputationPolicy.pointsFor(ReputationKind.abandoned_slot),
         attendanceMarked = event.attendanceMarked,
         attendanceFinalized = event.attendanceFinalized,
         cancellationReason = event.cancellationReason,
