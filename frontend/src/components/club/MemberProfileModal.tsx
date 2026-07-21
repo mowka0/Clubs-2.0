@@ -742,9 +742,54 @@ const RoleGate: FC<RoleGateProps> = ({ clubId, member, onDone }) => {
 };
 
 /**
- * Кольца per-club репутации + футер спонтанность/роль. Надёжность (умный композит) показывается всегда;
+ * «Активность в клубе» (мокап B1, PO 2026-07-21): внерепутационные метрики отдельным блоком —
+ * открытые встречи (V62, сырые отметки явки) и спонтанные визиты (переехали из футера колец).
+ * Видимость данных решает бэкенд (AC-5): чужому зрителю поля приходят null → блок не рендерится.
+ * Расширяемо: будущая внерепутационная метрика = ещё одна строка здесь.
+ */
+const ClubActivityStats: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
+  const openTotal = profile.openEventsTotal ?? 0;
+  const openAttended = profile.openEventsAttended ?? 0;
+  const openPct = openTotal > 0 ? Math.round((openAttended / openTotal) * 100) : 0;
+  // Спонтанность — метрика посещаемости; для «финансового» участника (нет трека событий)
+  // скрываем, чтобы не показывать бессмысленное «0» (F5-08 — гейт прежнего футера сохранён).
+  const spontaneity = (profile.totalConfirmations ?? 0) > 0 ? (profile.spontaneityCount ?? 0) : null;
+  if (openTotal === 0 && spontaneity === null) return null;
+  return (
+    <div className="rd-glass rd-ostat">
+      <div className="rd-ostat-cap">Активность в клубе</div>
+      {openTotal > 0 && (
+        <div className="rd-ostat-row">
+          <span className="rd-ostat-ico rd-ost-wave" aria-hidden="true">🌊</span>
+          <span>
+            <span className="rd-ostat-lbl">Открытые встречи</span>
+            <div className="rd-ostat-sub">вне репутации — просто факт участия</div>
+          </span>
+          <span className="rd-ostat-val">
+            <b>{openAttended} из {openTotal}</b>
+            <span className="rd-ostat-pc">{openPct}% прихода</span>
+          </span>
+        </div>
+      )}
+      {spontaneity !== null && (
+        <div className="rd-ostat-row">
+          <span className="rd-ostat-ico rd-ost-spark" aria-hidden="true">⚡</span>
+          <span>
+            <span className="rd-ostat-lbl">Спонтанные визиты</span>
+            <div className="rd-ostat-sub">визит состоялся, хотя голос был лишь «возможно»</div>
+          </span>
+          <span className="rd-ostat-val"><b>{spontaneity}</b></span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/**
+ * Кольца per-club репутации + футер роли. Надёжность (умный композит) показывается всегда;
  * Посещаемость (события) и Сборы (складчины, влияющие на репутацию) — только когда есть данные, чтобы
- * участник с единственной осью не видел пустое кольцо «0/0».
+ * участник с единственной осью не видел пустое кольцо «0/0». Спонтанность переехала из футера
+ * в блок «Активность в клубе» (ClubActivityStats).
  */
 const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
   const trust = profile.trust ?? 0;
@@ -803,14 +848,7 @@ const ReputationRings: FC<{ profile: MemberProfileDto }> = ({ profile }) => {
           </div>
         )}
       </div>
-      <div className="rd-rep-foot">
-        {/* Спонтанность — метрика посещаемости; скрываем её для «финансового» участника (нет трека
-            событий), чтобы не показывать бессмысленное «Спонтанных визитов: 0» (F5-08). */}
-        {confirmations > 0 && (
-          <>Спонтанных визитов: <b>{profile.spontaneityCount ?? 0}</b> · </>
-        )}
-        Роль: {roleLabel}
-      </div>
+      <div className="rd-rep-foot">Роль: {roleLabel}</div>
     </>
   );
 };
@@ -969,17 +1007,25 @@ export const MemberProfileModal: FC<MemberProfileModalProps> = ({
               {loading ? (
                 <div className="rd-spinner-row" style={{ padding: '8px 0' }}><Spinner size="s" /></div>
               ) : profile && profile.trust !== null ? (
-                <ReputationRings profile={profile} />
+                <>
+                  <ReputationRings profile={profile} />
+                  <ClubActivityStats profile={profile} />
+                </>
               ) : (
-                <div className="rd-glass rd-rep-panel">
-                  <div className="rd-kv">
-                    <span>
-                      {profile?.role === 'organizer'
-                        ? 'Здесь репутация начисляется за организаторские качества'
-                        : 'Новичок — пока недостаточно данных'}
-                    </span>
+                <>
+                  <div className="rd-glass rd-rep-panel">
+                    <div className="rd-kv">
+                      <span>
+                        {profile?.role === 'organizer'
+                          ? 'Здесь репутация начисляется за организаторские качества'
+                          : 'Новичок — пока недостаточно данных'}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                  {/* Открытые встречи — вне репутации, поэтому видны и у «Новичка»: орг/сам могут
+                      видеть визиты даже без репутационного трек-рекорда. */}
+                  {profile && <ClubActivityStats profile={profile} />}
+                </>
               )}
             </div>
           )}

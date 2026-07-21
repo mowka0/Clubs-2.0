@@ -144,12 +144,31 @@ interface EventResponseRepository {
     fun findAttendedUserIds(eventId: UUID): List<UUID>
 
     /**
+     * Статистика ОТКРЫТЫХ ВСТРЕЧ (participant_limit IS NULL, V62) пользователя в клубе для
+     * карточки участника: пришёл X из Y подтверждённых с ВЫЯСНЕННОЙ явкой. В знаменатель входят
+     * только строки attended/absent — неотмеченная явка (NULL) и незакрытый спор (disputed) процент
+     * не портят, зеркаля confirmed_unresolved репутационной оси. Метрика вне репутации: считается
+     * из сырых отметок явки, в ledger открытые встречи не пишут ничего.
+     */
+    fun countOpenEventAttendance(userId: UUID, clubId: UUID): OpenEventAttendance
+
+    /**
      * Имена (first_name) пришедших, для кого это событие — ПЕРВОЕ посещённое в клубе (других
      * attended-строк по событиям того же клуба нет). Питает «🎉 впервые на встрече клуба»
      * в посте-итоге живого закрепа. Порядок — по имени, чтобы текст был стабильным.
      */
     fun findFirstTimeAttendeeFirstNames(eventId: UUID, clubId: UUID): List<String>
 }
+
+/**
+ * Счётчики открытых встреч пользователя в клубе: [attended] пришёл из [total] подтверждённых
+ * броней с выясненной явкой (attended + absent). total = 0 → истории открытых встреч нет,
+ * фронт кольцо не показывает.
+ */
+data class OpenEventAttendance(
+    val attended: Int,
+    val total: Int
+)
 
 /**
  * Confirmed-бронь уходящего пользователя на активном событии: id события (source_id в леджере)

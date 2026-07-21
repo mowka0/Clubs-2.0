@@ -141,6 +141,10 @@ export interface MemberProfileDto {
   // null, если скрыто; кольцо «Сборы» скрывается, когда skladchinaTotal === 0.
   skladchinaPaid: number | null;
   skladchinaTotal: number | null;
+  // Открытые встречи (V62) в этом клубе: пришёл / подтверждённых с выясненной явкой. ВНЕ репутации
+  // (сырые отметки явки). null для чужого зрителя (AC-5); строка скрыта при total === 0.
+  openEventsAttended: number | null;
+  openEventsTotal: number | null;
   // De-Stars Slice 2 — ТОЛЬКО ДЛЯ ОРГАНИЗАТОРА (null для обычных участников): когда заканчивается
   // оплаченный доступ этого участника. Также null для бесплатных членств. Показывается как
   // «Подписка активна до …» на карточке организатора.

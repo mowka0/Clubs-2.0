@@ -388,6 +388,27 @@ class JooqEventResponseRepository(
             .fetch()
             .mapNotNull { it.value1() }
 
+    override fun countOpenEventAttendance(userId: UUID, clubId: UUID): OpenEventAttendance {
+        val row = dsl.select(
+            DSL.count().filterWhere(EVENT_RESPONSES.ATTENDANCE.eq(AttendanceStatus.attended)),
+            DSL.count()
+        )
+            .from(EVENT_RESPONSES)
+            .join(EVENTS).on(EVENTS.ID.eq(EVENT_RESPONSES.EVENT_ID))
+            .where(
+                EVENT_RESPONSES.USER_ID.eq(userId)
+                    .and(EVENTS.CLUB_ID.eq(clubId))
+                    // Только открытые встречи (V62); события с лимитом живут в репутационных кольцах.
+                    .and(EVENTS.PARTICIPANT_LIMIT.isNull)
+                    .and(EVENT_RESPONSES.FINAL_STATUS.eq(FinalStatus.confirmed))
+                    // Знаменатель — только выясненная явка: NULL (не отмечено) и disputed
+                    // (незакрытый спор) процент не трогают, зеркаля confirmed_unresolved.
+                    .and(EVENT_RESPONSES.ATTENDANCE.`in`(AttendanceStatus.attended, AttendanceStatus.absent))
+            )
+            .fetchOne()!!
+        return OpenEventAttendance(attended = row.value1(), total = row.value2())
+    }
+
     override fun findFirstTimeAttendeeFirstNames(eventId: UUID, clubId: UUID): List<String> {
         // «Другие attended-строки в клубе»: коррелированный NOT EXISTS по событиям того же клуба.
         val other = EVENT_RESPONSES.`as`("other_responses")

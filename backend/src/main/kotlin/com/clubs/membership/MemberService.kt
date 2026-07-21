@@ -5,6 +5,7 @@ import com.clubs.award.AwardService
 import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
+import com.clubs.event.EventResponseRepository
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.interest.InterestRepository
@@ -27,7 +28,8 @@ class MemberService(
     private val awardService: AwardService,
     private val applicationRepository: ApplicationRepository,
     private val mapper: MembershipMapper,
-    private val clubRoleGuard: ClubRoleGuard
+    private val clubRoleGuard: ClubRoleGuard,
+    private val eventResponseRepository: EventResponseRepository
 ) {
 
     fun getClubMembers(clubId: UUID, callerId: UUID): List<MemberListItemDto> {
@@ -102,6 +104,10 @@ class MemberService(
         val show = canSeeScores && reputation != null && ReputationPolicy.isShown(reputation.outcomeCount)
         // Одно чтение ledger питает оба клубных кольца (Trust + складчина); ниже гейта — null.
         val summary = if (show) trustService.clubSummary(userId, clubId) else null
+        // «Активность в клубе»: открытые встречи (V62) — ВНЕ репутации (сырые отметки явки), поэтому
+        // порог «Новичка» не применяется, но асимметричная видимость (AC-5) та же, что у оценочных
+        // метрик: только орг и сам участник о себе. Чужому зрителю — null.
+        val openEvents = if (canSeeScores) eventResponseRepository.countOpenEventAttendance(userId, clubId) else null
         return MemberProfileDto(
             userId = userId,
             clubId = clubId,
@@ -120,6 +126,8 @@ class MemberService(
             spontaneityCount = if (show) reputation!!.spontaneityCount else null,
             skladchinaPaid = summary?.skladchinaPaid,
             skladchinaTotal = summary?.skladchinaTotal,
+            openEventsAttended = openEvents?.attended,
+            openEventsTotal = openEvents?.total,
             // Только организатору: конец оплаченного окна доступа участника. null для обычных смотрящих
             // и бесплатных membership'ов (нет истечения). Питает «Подписка активна до …» на карточке.
             subscriptionExpiresAt = if (callerIsOrganizer) membership?.subscriptionExpiresAt else null,

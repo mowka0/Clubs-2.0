@@ -38,12 +38,15 @@ function mockProfile(
   awards: AwardDto[] = [],
   applicationAnswer: string | null = null,
   role: MemberProfileDto['role'] = 'member',
+  // «Активность в клубе» (B1): счётчики открытых встреч; null = нет истории/скрыто.
+  openEvents: { attended: number; total: number } | null = null,
 ) {
   const profile: MemberProfileDto = {
     userId: 'u-1', clubId: CLUB, firstName: 'Игорь', username: 'igor_s', avatarUrl: null,
     bio: null, interests: [], awards, role, trust: 70, promiseFulfillmentPct: 90,
     totalConfirmations: 4, totalAttendances: 3, spontaneityCount: 0, skladchinaPaid: null,
-    skladchinaTotal: null, subscriptionExpiresAt: inDays(20), organizerNote: note,
+    skladchinaTotal: null, openEventsAttended: openEvents?.attended ?? null, openEventsTotal: openEvents?.total ?? null,
+    subscriptionExpiresAt: inDays(20), organizerNote: note,
     duesClaimedAt: null, duesClaimMethod: null, duesProofUrl: null, applicationAnswer,
   };
   server.use(http.get(`*/api/clubs/${CLUB}/members/u-1`, () => HttpResponse.json(profile)));
@@ -409,5 +412,32 @@ describe('MemberProfileModal — club awards (S2)', () => {
     await user.click(await screen.findByRole('button', { name: /Снять награду Активист/ }));
 
     await waitFor(() => expect(deleted).toBe(true));
+  });
+});
+
+describe('MemberProfileModal — «Активность в клубе» (B1, открытые встречи V62)', () => {
+  it('показывает строку открытых встреч с дробью и процентом, когда есть история', async () => {
+    mockProfile(null, [], null, 'member', { attended: 4, total: 5 });
+    renderWithProviders(
+      <MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer onClose={() => {}} />,
+    );
+
+    expect(await screen.findByText('Активность в клубе')).toBeInTheDocument();
+    expect(screen.getByText('Открытые встречи')).toBeInTheDocument();
+    expect(screen.getByText('4 из 5')).toBeInTheDocument();
+    expect(screen.getByText('80% прихода')).toBeInTheDocument();
+    // Спонтанность переехала из футера в этот же блок (totalConfirmations 4 > 0 в фикстуре).
+    expect(screen.getByText('Спонтанные визиты')).toBeInTheDocument();
+  });
+
+  it('без истории открытых встреч строки нет, но блок остаётся ради спонтанности', async () => {
+    mockProfile(null);
+    renderWithProviders(
+      <MemberProfileModal member={MEMBER} clubId={CLUB} isOrganizer onClose={() => {}} />,
+    );
+
+    expect(await screen.findByText('Активность в клубе')).toBeInTheDocument();
+    expect(screen.queryByText('Открытые встречи')).not.toBeInTheDocument();
+    expect(screen.getByText('Спонтанные визиты')).toBeInTheDocument();
   });
 });

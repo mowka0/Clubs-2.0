@@ -71,6 +71,7 @@ class ReputationLedgerIntegrationTest {
     @Autowired lateinit var membershipService: MembershipService
     @Autowired lateinit var membershipRepository: MembershipRepository
     @Autowired lateinit var xpService: XpService
+    @Autowired lateinit var eventResponseRepository: com.clubs.event.EventResponseRepository
     @Autowired lateinit var dsl: DSLContext
 
     private lateinit var ownerId: UUID
@@ -143,6 +144,30 @@ class ReputationLedgerIntegrationTest {
         // Событие клеймится (конвейер к нему не вернётся), несмотря на пустой результат.
         assertFalse(reputationRepository.claimEvent(eventId), "open event is claimed after processing")
         assertFalse(eventId in reputationRepository.findPendingFinalizedEventIds())
+    }
+
+    @Test
+    fun `open event attendance counters for the member card count only resolved confirmations (AC-OPEN7)`() {
+        // «Активность в клубе» (мокап B1): пришёл X из Y, где Y — только confirmed-брони
+        // ОТКРЫТЫХ встреч с выясненной явкой. Всё остальное счётчики не трогает.
+        val member = insertUser("OpenVisitor")
+        val open1 = insertFinalizedEvent(participantLimit = null)
+        val open2 = insertFinalizedEvent(participantLimit = null)
+        val open3 = insertFinalizedEvent(participantLimit = null)
+        val open4 = insertFinalizedEvent(participantLimit = null)
+        val limited = insertFinalizedEvent(participantLimit = 10)
+
+        insertConfirmed(open1, member, "going", "attended")   // в числитель и знаменатель
+        insertConfirmed(open2, member, "maybe", "absent")     // только в знаменатель
+        insertConfirmed(open3, member, "going", null)          // явка не отмечена → не считается
+        insertConfirmed(open4, member, "going", "disputed")    // незакрытый спор → не считается
+        insertResponse(open1, insertUser("Declined"), "going", "declined", null) // не confirmed → мимо
+        insertConfirmed(limited, member, "going", "attended")  // событие с лимитом → мимо (кольца репутации)
+
+        val stats = eventResponseRepository.countOpenEventAttendance(member, clubId)
+
+        assertEquals(1, stats.attended)
+        assertEquals(2, stats.total)
     }
 
     @Test

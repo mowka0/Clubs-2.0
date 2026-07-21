@@ -637,6 +637,23 @@
 .rd-rep-foot { font-size: 11px; color: var(--text-faint); margin-top: 10px; line-height: 1.4; text-align: center; }
 .rd-rep-foot b { color: var(--text-dim); }
 
+/* «Активность в клубе» (мокап B1, PO 2026-07-21): внерепутационные метрики карточки участника —
+   открытые встречи (V62) и спонтанные визиты. Холодные цвета подложек, чтобы блок визуально
+   не смешивался с репутационным оранжевым акцентом колец. */
+.rd-ostat { margin-top: 8px; padding: 4px 12px 12px; }
+.rd-ostat-cap { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); padding: 8px 4px; }
+.rd-ostat-row { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; background: rgba(255,255,255,0.035); }
+.rd-ostat-row + .rd-ostat-row { margin-top: 6px; }
+.rd-ostat-ico { flex: none; width: 30px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+/* Подложки иконок: «волна» открытых встреч и «искра» спонтанности */
+.rd-ostat-ico.rd-ost-wave { background: rgba(95, 168, 211, 0.14); }
+.rd-ostat-ico.rd-ost-spark { background: rgba(232, 192, 90, 0.13); }
+.rd-ostat-lbl { font-size: 13px; color: var(--text); }
+.rd-ostat-sub { font-size: 10.5px; color: var(--text-faint); margin-top: 1px; }
+.rd-ostat-val { margin-left: auto; text-align: right; flex: none; }
+.rd-ostat-val b { font-size: 15px; font-weight: 800; color: var(--text); }
+.rd-ostat-pc { display: block; font-size: 10.5px; color: var(--text-faint); font-weight: 600; }
+
 /* Карточка заявки: donut-строка «надёжен в N из M клубов». */
 .rd-activity { display: flex; align-items: center; gap: 16px; padding: 16px; }
 
