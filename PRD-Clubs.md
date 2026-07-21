@@ -637,7 +637,7 @@
 - location_lon: double precision — nullable (инвариант «оба NULL или оба заданы» — CHECK `chk_events_location_pair`)
 - location_hint: varchar(200) — nullable (опциональное уточнение организатора к месту)
 - event_datetime: timestamp (not null)
-- participant_limit: integer (nullable с V62: NULL = открытая встреча — событие без лимита; гонка за места/лист ожидания/штрафы отказа не действуют, репутация за посещение не начисляется, молчаливая неявка подтверждённого = −100)
+- participant_limit: integer (nullable с V62: NULL = открытая встреча — событие без лимита; гонка за места/лист ожидания/штрафы отказа не действуют, формат целиком вне репутации — ни начислений, ни списаний; отметка явки питает только историю и статистику клуба)
 - voting_opens_days_before: integer (default 14, 1≤x≤14) — поднят с 5 миграцией V13
 - stage_2_triggered: boolean (default false)
 - attendance_marked: boolean (default false)

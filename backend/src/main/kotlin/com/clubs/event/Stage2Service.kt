@@ -207,7 +207,7 @@ class Stage2Service(
         eventResponseRepository.updateStage2Vote(response.id, Stage_2Vote.declined, FinalStatus.declined)
 
         // Открытая встреча: промоут невозможен (waitlist недостижим), а отказ ничей слот не сжигает —
-        // ни повышения, ни штрафа abandoned_slot. Наказывается только молчаливая неявка (open_no_show).
+        // ни повышения, ни штрафа abandoned_slot (формат целиком вне репутации, PO 2026-07-21).
         if (heldScarceSlot) {
             val firstWaitlisted = eventResponseRepository.findFirstWaitlisted(eventId)
             if (firstWaitlisted != null) {

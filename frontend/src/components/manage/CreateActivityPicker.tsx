@@ -116,7 +116,7 @@ export const ActivityTypeOptions: FC<ActivityTypeOptionsProps> = ({ onPick }) =>
 
 // Формат события (решение PO 2026-07-21): «с местами» — классика с лимитом, гонкой за места и
 // листом ожидания; «открытая встреча» — без лимита (participantLimit = null на бэке), приходят
-// все подтвердившие, репутация за посещение не начисляется. Тот же движок, разный контракт.
+// все подтвердившие, формат целиком вне репутации. Тот же движок, разный контракт.
 export type EventFormatKey = 'limited' | 'open';
 
 const EVENT_FORMAT_OPTIONS: { key: EventFormatKey; emoji: string; title: string; subtitle: string }[] = [
@@ -130,7 +130,7 @@ const EVENT_FORMAT_OPTIONS: { key: EventFormatKey; emoji: string; title: string;
     key: 'open',
     emoji: '🌊',
     title: 'Открытая встреча',
-    subtitle: 'Без лимита — приходят все, кто подтвердил',
+    subtitle: 'Без лимита и вне репутации — приходят все желающие',
   },
 ];
 

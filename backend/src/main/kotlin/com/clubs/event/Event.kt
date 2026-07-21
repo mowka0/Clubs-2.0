@@ -21,7 +21,7 @@ data class Event(
     val locationHint: String? = null,
     val eventDatetime: OffsetDateTime,
     // Максимум подтверждённых участников; null = ОТКРЫТАЯ ВСТРЕЧА (V62): без гонки за
-    // места, листа ожидания, порога и штрафа отказа; репутация за посещение не начисляется.
+    // места, листа ожидания, порога и штрафа отказа; формат целиком вне репутации.
     val participantLimit: Int?,
     val votingOpensDaysBefore: Int,
     val status: EventStatus,

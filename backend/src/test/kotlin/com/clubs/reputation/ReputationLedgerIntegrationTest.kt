@@ -121,7 +121,9 @@ class ReputationLedgerIntegrationTest {
     }
 
     @Test
-    fun `open event - only silent absentees get open_no_show, attendance earns nothing (AC-OPEN3)`() {
+    fun `open event is fully outside reputation - zero ledger rows for any outcome (AC-OPEN3)`() {
+        // Решение PO 2026-07-21 (итерация 2): открытая встреча ВНЕ репутации целиком.
+        // Ни посещение, ни молчаливая неявка, ни неотмеченная явка не создают строк.
         val eventId = insertFinalizedEvent(participantLimit = null)
         val attended = insertUser("Attended")
         val absentGoing = insertUser("AbsentGoing")
@@ -134,19 +136,13 @@ class ReputationLedgerIntegrationTest {
 
         reputationService.processFinalizedEvent(eventId)
 
-        // Посещение открытой встречи репутацию НЕ приносит (анти-фарм) — ни строки, ни кэша.
-        assertNull(reputationRepository.findByUserAndClub(attended, clubId))
-        assertEquals(0, ledgerRows(attended, eventId))
-        assertNull(reputationRepository.findByUserAndClub(unresolved, clubId))
-        assertEquals(0, ledgerRows(unresolved, eventId))
-
-        // Молчаливая неявка подтверждённого — единственная строка: open_no_show, −100, broke.
-        assertReputation(absentGoing, reliability = -100, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
-        assertReputation(absentMaybe, reliability = -100, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
-        val kinds = dsl.fetch(
-            "SELECT kind FROM reputation_ledger WHERE source_id = '$eventId'"
-        ).map { it.get("kind").toString() }.toSet()
-        assertEquals(setOf("open_no_show"), kinds)
+        listOf(attended, absentGoing, absentMaybe, unresolved).forEach { userId ->
+            assertNull(reputationRepository.findByUserAndClub(userId, clubId), "no cache row for $userId")
+            assertEquals(0, ledgerRows(userId, eventId), "no ledger row for $userId")
+        }
+        // Событие клеймится (конвейер к нему не вернётся), несмотря на пустой результат.
+        assertFalse(reputationRepository.claimEvent(eventId), "open event is claimed after processing")
+        assertFalse(eventId in reputationRepository.findPendingFinalizedEventIds())
     }
 
     @Test

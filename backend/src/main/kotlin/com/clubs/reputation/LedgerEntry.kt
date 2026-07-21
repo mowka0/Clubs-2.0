@@ -41,8 +41,8 @@ data class EventReputationContext(
     val clubId: UUID,
     val ownerId: UUID,
     val eventDatetime: OffsetDateTime,
-    // Открытая встреча (participant_limit IS NULL, V62): за посещение репутация не начисляется,
-    // единственная возможная строка — open_no_show за молчаливую неявку подтверждённого.
+    // Открытая встреча (participant_limit IS NULL, V62): вне репутации целиком — конвейер
+    // пропускает такое событие, не создавая ни одной ledger-строки (решение PO 2026-07-21).
     val isOpenEvent: Boolean
 )
 

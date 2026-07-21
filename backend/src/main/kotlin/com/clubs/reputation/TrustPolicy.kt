@@ -47,8 +47,8 @@ object TrustPolicy {
         ReputationKind.ironclad, ReputationKind.spontaneous, ReputationKind.skladchina_paid -> TrustClass.KEPT
         ReputationKind.no_show, ReputationKind.spectator, ReputationKind.skladchina_expired,
         ReputationKind.abandoned_slot,
-        // Молчаливая неявка на открытую встречу: очков меньше (−100), но обещание нарушено
-        // так же — для Trust это полноценное broke.
+        // open_no_show ЗАРЕЗЕРВИРОВАН и сейчас не выдаётся (открытые встречи вне репутации,
+        // PO 2026-07-21); классификация BROKE — на случай будущего «строгого режима».
         ReputationKind.open_no_show -> TrustClass.BROKE
         // confirmed_unresolved (disputed/unmarked) и исторический skladchina_declined нейтральны:
         // исключаются из знаменателя — это ни сдержанное, ни нарушенное обещание.

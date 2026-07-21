@@ -36,16 +36,19 @@ class ReputationService(
         if (!repository.claimEvent(eventId)) return // уже обработано — ничего не делаем
 
         val ctx = repository.findEventContext(eventId) ?: return
+        // Открытая встреча (V62) — ВНЕ репутации целиком (решение PO 2026-07-21, итерация 2:
+        // первоначальный −100 за молчаливую неявку отменён до запуска — «наказание без награды»
+        // делало подтверждение невыгодным). Ни начислений, ни списаний; отметка явки питает только
+        // «Историю» и статистику клуба. Событие всё равно клеймится выше — поллер к нему не вернётся.
+        // Нужна обязательность — формат «С местами» с большим лимитом.
+        if (ctx.isOpenEvent) {
+            log.info("Reputation skipped: eventId={} is an open event (no ledger rows by design)", eventId)
+            return
+        }
         val entries = repository.findConfirmedResponses(eventId)
             .filter { it.userId != ctx.ownerId } // анти-фарм правило 1: владелец не копит репутацию в своём клубе
-            .mapNotNull { response ->
-                // Открытая встреча: посещение репутацию не даёт, пишется ТОЛЬКО молчаливая неявка
-                // (open_no_show, −100); attended/спор → null-строка не создаётся. См. ReputationPolicy.
-                val kind = if (ctx.isOpenEvent) {
-                    ReputationPolicy.openEventAttendanceKind(response.attendance) ?: return@mapNotNull null
-                } else {
-                    ReputationPolicy.attendanceKind(response.stage1Vote, response.attendance)
-                }
+            .map { response ->
+                val kind = ReputationPolicy.attendanceKind(response.stage1Vote, response.attendance)
                 LedgerEntry(
                     userId = response.userId,
                     clubId = ctx.clubId,

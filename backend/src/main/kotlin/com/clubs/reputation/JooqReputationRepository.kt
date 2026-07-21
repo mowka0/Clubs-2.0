@@ -190,7 +190,8 @@ class JooqReputationRepository(
         val keptKinds = l.KIND.`in`(ReputationKind.ironclad, ReputationKind.spontaneous, ReputationKind.skladchina_paid)
         val brokeKinds = l.KIND.`in`(
             ReputationKind.no_show, ReputationKind.spectator, ReputationKind.skladchina_expired,
-            // Молчаливая неявка на открытую встречу — broke наравне с no_show (TrustPolicy).
+            // open_no_show зарезервирован и сейчас не выдаётся (открытые встречи вне репутации,
+            // PO 2026-07-21); в бакете — чтобы будущий «строгий режим» не разошёлся с TrustPolicy.
             ReputationKind.open_no_show
         )
 

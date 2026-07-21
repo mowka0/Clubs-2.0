@@ -491,7 +491,7 @@ describe('EventPage — открытая встреча (participantLimit = null
     expect(screen.queryByText(/надёжность вырастет/)).not.toBeInTheDocument();
   });
 
-  it('отметка явки: орг видит пояснение о −100 за отметку «не пришёл»', async () => {
+  it('отметка явки: орг видит пояснение, что отметка — только для истории (репутация не меняется)', async () => {
     const responders: EventResponderDto[] = [
       { userId: 'u1', firstName: 'Анна', lastName: null, avatarUrl: null, status: 'confirmed', attendance: null },
     ];
@@ -504,10 +504,12 @@ describe('EventPage — открытая встреча (participantLimit = null
     renderEventPage();
 
     expect(await screen.findByText('Отметить посещаемость')).toBeInTheDocument();
-    expect(screen.getByText(/спишется 100 очков за молчаливую неявку/)).toBeInTheDocument();
+    expect(screen.getByText(/только для истории посещений/)).toBeInTheDocument();
+    // Итерация 2 (PO): списаний нет вообще — старое предупреждение о −100 исчезло.
+    expect(screen.queryByText(/спишется 100 очков/)).not.toBeInTheDocument();
   });
 
-  it('у события с лимитом пояснения про −100 при отметке явки нет', async () => {
+  it('у события с лимитом пояснения открытой встречи при отметке явки нет', async () => {
     const responders: EventResponderDto[] = [
       { userId: 'u1', firstName: 'Анна', lastName: null, avatarUrl: null, status: 'confirmed', attendance: null },
     ];
@@ -520,6 +522,6 @@ describe('EventPage — открытая встреча (participantLimit = null
     renderEventPage();
 
     expect(await screen.findByText('Отметить посещаемость')).toBeInTheDocument();
-    expect(screen.queryByText(/молчаливую неявку/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/только для истории посещений/)).not.toBeInTheDocument();
   });
 });
