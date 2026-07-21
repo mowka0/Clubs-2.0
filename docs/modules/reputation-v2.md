@@ -58,7 +58,8 @@ CREATE TYPE reputation_axis   AS ENUM ('attendance', 'finance');
 CREATE TYPE reputation_kind   AS ENUM (
   'ironclad', 'no_show', 'spontaneous', 'spectator', 'confirmed_unresolved',
   'skladchina_paid', 'skladchina_declined', 'skladchina_expired',
-  'abandoned_slot');  -- V45 (2026-07-05): отказ от подтверждённого места без замены, −100
+  'abandoned_slot',   -- V45 (2026-07-05): отказ от подтверждённого места без замены, −100
+  'open_no_show');    -- V63 (2026-07-21): молчаливая неявка подтверждённого на ОТКРЫТУЮ ВСТРЕЧУ, −100
 CREATE TYPE reputation_source AS ENUM ('event', 'skladchina');
 
 CREATE TABLE reputation_ledger (
@@ -162,6 +163,13 @@ disputed/null attendance.
 | **не-going** (maybe / not_going / NULL) | attended | `spontaneous` | +100 | 1 | 1 | 1 |
 | **не-going** (maybe / not_going / NULL) | absent | `spectator` | −200 | 1 | 0 | 0 |
 | (любой) | disputed **OR** null | `confirmed_unresolved` | 0 | 1 | 0 | 0 |
+
+> **ОТКРЫТАЯ ВСТРЕЧА (V62/V63, 2026-07-21)** — таблица выше действует только для событий
+> с лимитом. У открытой встречи (`events.participant_limit IS NULL`) репутация за посещение
+> **не начисляется вовсе** (анти-фарм): `ReputationPolicy.openEventAttendanceKind` даёт строку
+> ТОЛЬКО для `absent` → `open_no_show` (−100, Trust-класс BROKE) независимо от голоса Этапа 1;
+> attended/disputed/null → строки нет (не 0-строка — она раздувала бы outcome_count).
+> Exit-with-obligations открытые встречи тоже пропускает. См. events.md § «Открытая встреча».
 
 > **UPDATED 2026-07-05 — обязательство = ФАКТ подтверждения, не голос Этапа 1.** С фичей «Этап 2
 > открыт всем» подтвердиться может и `not_going`, и не голосовавший (`stage_1_vote NULL`). Поэтому

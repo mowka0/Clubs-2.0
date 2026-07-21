@@ -20,7 +20,9 @@ data class Event(
     // Опциональное уточнение организатора к месту, отдельное от адреса; null = нет.
     val locationHint: String? = null,
     val eventDatetime: OffsetDateTime,
-    val participantLimit: Int,
+    // Максимум подтверждённых участников; null = ОТКРЫТАЯ ВСТРЕЧА (V62): без гонки за
+    // места, листа ожидания, порога и штрафа отказа; репутация за посещение не начисляется.
+    val participantLimit: Int?,
     val votingOpensDaysBefore: Int,
     val status: EventStatus,
     val stage2Triggered: Boolean,
@@ -31,4 +33,8 @@ data class Event(
     val photoUrl: String?,
     val createdAt: OffsetDateTime?,
     val updatedAt: OffsetDateTime?
-)
+) {
+    // Открытая встреча (V62): продуктовый тип поверх того же движка, дискриминатор — отсутствие лимита.
+    val isOpenEvent: Boolean
+        get() = participantLimit == null
+}

@@ -4,7 +4,9 @@ import { Modal } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../../hooks/useHaptic';
 import {
   ActivityTypeOptions,
+  EventFormatOptions,
   SkladchinaTemplateOptions,
+  type EventFormatKey,
   type SkladchinaTemplateKey,
 } from './CreateActivityPicker';
 import { ClubPickerList, type ClubPickerOption } from './ClubPickerModal';
@@ -25,10 +27,16 @@ interface CreateActivityFlowProps {
   onClose: () => void;
 }
 
-type Step = 'type' | 'template' | 'club';
+type Step = 'type' | 'template' | 'event_format' | 'club';
 
-function createRoute(clubId: string, type: ActivityType, template: SkladchinaTemplateKey | null): string {
-  if (type === 'event') return `/clubs/${clubId}/events/new`;
+function createRoute(
+  clubId: string,
+  type: ActivityType,
+  template: SkladchinaTemplateKey | null,
+  eventFormat: EventFormatKey | null,
+): string {
+  // Открытая встреча (V62) — та же форма создания события, форма читает ?format=open и прячет степпер лимита.
+  if (type === 'event') return `/clubs/${clubId}/events/new${eventFormat === 'open' ? '?format=open' : ''}`;
   // У split_bill своя страница, не зависящая от точки входа (выбирает событие, делит счёт).
   if (template === 'split_bill') return `/clubs/${clubId}/skladchina/split`;
   return `/clubs/${clubId}/skladchina/new`;
@@ -57,57 +65,77 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   const [step, setStep] = useState<Step>('type');
   const [pendingType, setPendingType] = useState<ActivityType | null>(null);
   const [pendingTemplate, setPendingTemplate] = useState<SkladchinaTemplateKey | null>(null);
+  const [pendingEventFormat, setPendingEventFormat] = useState<EventFormatKey | null>(null);
 
-  const dismiss = () => {
+  // Единый сброс flow к первому шагу — используется и при закрытии, и перед навигацией на форму,
+  // чтобы повторное открытие «+» никогда не стартовало с призрачным состоянием прошлого прохода.
+  const resetFlow = () => {
     setStep('type');
     setPendingType(null);
     setPendingTemplate(null);
+    setPendingEventFormat(null);
     onClose();
   };
 
-  const goToCreate = (clubId: string, type: ActivityType, template: SkladchinaTemplateKey | null) => {
-    setStep('type');
-    setPendingType(null);
-    setPendingTemplate(null);
-    onClose();
-    navigate(createRoute(clubId, type, template));
+  const dismiss = resetFlow;
+
+  const goToCreate = (
+    clubId: string,
+    type: ActivityType,
+    template: SkladchinaTemplateKey | null,
+    eventFormat: EventFormatKey | null,
+  ) => {
+    resetFlow();
+    navigate(createRoute(clubId, type, template, eventFormat));
   };
 
-  // Определяем клуб для выбранной пары (тип, шаблон): если неоднозначности нет — пикер пропускаем.
-  const resolveClub = (type: ActivityType, template: SkladchinaTemplateKey | null) => {
+  // Определяем клуб для выбранной тройки (тип, шаблон, формат): если неоднозначности нет — пикер пропускаем.
+  const resolveClub = (
+    type: ActivityType,
+    template: SkladchinaTemplateKey | null,
+    eventFormat: EventFormatKey | null,
+  ) => {
     if (presetClubId) {
-      goToCreate(presetClubId, type, template);
+      goToCreate(presetClubId, type, template, eventFormat);
       return;
     }
     if (organizerClubs.length === 1) {
-      goToCreate(organizerClubs[0]!.id, type, template);
+      goToCreate(organizerClubs[0]!.id, type, template, eventFormat);
       return;
     }
     setPendingType(type);
     setPendingTemplate(template);
+    setPendingEventFormat(eventFormat);
     setStep('club');
   };
 
   const handlePickType = (type: ActivityType) => {
     haptic.impact('medium');
-    // «Сбор» сначала разветвляется на шаг выбора шаблона; «Событие» идёт сразу к выбору клуба.
+    // Оба типа разветвляются на промежуточный шаг: «Сбор» — выбор шаблона,
+    // «Событие» — выбор формата (с местами / открытая встреча, PO 2026-07-21).
     if (type === 'skladchina') {
       setPendingType(type);
       setStep('template');
       return;
     }
-    resolveClub(type, null);
+    setPendingType(type);
+    setStep('event_format');
   };
 
   const handlePickTemplate = (template: SkladchinaTemplateKey) => {
     haptic.impact('medium');
-    resolveClub('skladchina', template);
+    resolveClub('skladchina', template, null);
+  };
+
+  const handlePickEventFormat = (format: EventFormatKey) => {
+    haptic.impact('medium');
+    resolveClub('event', null, format);
   };
 
   const handlePickClub = (clubId: string) => {
     if (!pendingType) return;
     haptic.impact('medium');
-    goToCreate(clubId, pendingType, pendingTemplate);
+    goToCreate(clubId, pendingType, pendingTemplate, pendingEventFormat);
   };
 
   const handleOpenChange = (next: boolean) => {
@@ -121,6 +149,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
     <Modal open={open} onOpenChange={handleOpenChange}>
       {step === 'type' && <ActivityTypeOptions onPick={handlePickType} />}
       {step === 'template' && <SkladchinaTemplateOptions onPick={handlePickTemplate} />}
+      {step === 'event_format' && <EventFormatOptions onPick={handlePickEventFormat} />}
       {step === 'club' && <ClubPickerList clubs={organizerClubs} onPick={handlePickClub} />}
     </Modal>
   );

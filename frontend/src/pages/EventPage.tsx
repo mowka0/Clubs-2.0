@@ -298,10 +298,20 @@ export const EventPage: FC = () => {
   const finalComposition = event.status === 'stage_2' || event.status === 'completed';
   // F5-14: у отменённого события показывается только баннер — набор/состав/явка скрываются.
   const isCancelled = event.status === 'cancelled';
+  // Открытая встреча (V62): лимита нет — счётчики без знаменателя, отказ свободен (без штрафа
+  // и порога), лист ожидания недостижим. См. events.md § «Открытая встреча».
+  const isOpenEvent = event.participantLimit == null;
 
   // Пончик-диаграмма: Этап 1 = раскладка голосов (going / maybe / not going); Этап 2+ = занято vs свободно.
   const donutStyle: { background: string } = (() => {
     if (finalComposition) {
+      // Открытая встреча: понятия «занято/свободно» нет — кольцо целиком закрашено составом,
+      // а при нуле подтвердивших — нейтральное (как stage-1 без голосов), не «заполненное».
+      if (isOpenEvent) {
+        return event.confirmedCount > 0
+          ? { background: 'conic-gradient(var(--vote-go) 0 360deg)' }
+          : { background: 'var(--surface-2)' };
+      }
       const limit = event.participantLimit || 1;
       const filled = Math.min(event.confirmedCount, limit);
       const c = (filled / limit) * 360;
@@ -313,6 +323,9 @@ export const EventPage: FC = () => {
     const m = (event.maybeCount / voteTotal) * 360;
     return { background: `conic-gradient(var(--vote-go) 0 ${g}deg, var(--vote-maybe) ${g}deg ${g + m}deg, var(--vote-no) ${g + m}deg 360deg)` };
   })();
+
+  // Знаменатель счётчиков состава/набора; у открытой встречи его нет (лимит отсутствует).
+  const limitSuffix = isOpenEvent ? '' : ` / ${event.participantLimit}`;
 
   const eventHappened = new Date(event.eventDatetime).getTime() <= Date.now();
   // Подтверждённый может отказаться (освободить место) только пока не прошёл дедлайн отказа. Дедлайн
@@ -333,7 +346,10 @@ export const EventPage: FC = () => {
   // пообещал, declined/expired звать бессмысленно. Данные — из общего кэша /users/me/reputation.
   const myClubRep = myReputationQuery.data?.activeClubs.find((r) => r.clubId === event.clubId);
   const nudgeTerminal = myVote === 'confirmed' || myVote === 'declined' || myVote === 'expired_no_confirm';
-  const showPathBackNudge = myClubRep?.projectedNext1 != null && myClubRep?.trust != null && !nudgeTerminal;
+  // Открытая встреча репутацию за посещение НЕ начисляет (V62) — обещание «придёте — надёжность
+  // вырастет» здесь было бы ложным, нудж скрыт.
+  const showPathBackNudge =
+    !isOpenEvent && myClubRep?.projectedNext1 != null && myClubRep?.trust != null && !nudgeTerminal;
   const pathBackNudge = showPathBackNudge ? (
     <div className="rd-pb-nudge">
       <span className="rd-pb-up" aria-hidden="true">↗</span>
@@ -415,7 +431,7 @@ export const EventPage: FC = () => {
           style={heroImage ? { backgroundImage: `url(${heroImage})` } : undefined}
         />
         <div className="rd-hero-meta">
-          <div className="rd-hero-type-badge">СОБЫТИЕ</div>
+          <div className="rd-hero-type-badge">{isOpenEvent ? 'ОТКРЫТАЯ ВСТРЕЧА' : 'СОБЫТИЕ'}</div>
           <div className="rd-hero-ttl">{event.title}</div>
           <div className="rd-hero-eyebrow" style={{ marginTop: 6 }}>
             {formatEventDate(event.eventDatetime)}
@@ -489,8 +505,8 @@ export const EventPage: FC = () => {
       {/* Набор (Этап 1) / состав (Этап 2+) — пончик + голосование либо счётчики без действий */}
       <div className="rd-section-sub-h">
         {finalComposition
-          ? `Состав · ${event.confirmedCount} / ${event.participantLimit}`
-          : `Набор · ${event.goingCount} / ${event.participantLimit}`}
+          ? `Состав · ${event.confirmedCount}${limitSuffix}`
+          : `Набор · ${event.goingCount}${limitSuffix}`}
       </div>
       {/* Только ошибки голосования Этапа 1; ошибки confirm/decline Этапа 2 рендерятся в своём
           блоке ниже, так что actionError никогда не показывается дважды на этапе 2 (F5-23). */}
@@ -526,7 +542,9 @@ export const EventPage: FC = () => {
         <div className="rd-donut" style={donutStyle} aria-hidden="true">
           <div className="rd-donut-center">
             <span className="rd-donut-num">
-              <sup>{finalComposition ? event.confirmedCount : event.goingCount}</sup><span className="rd-sl">/</span><sub>{event.participantLimit}</sub>
+              <sup>{finalComposition ? event.confirmedCount : event.goingCount}</sup>
+              {/* Открытая встреча: знаменателя нет — только счёт. */}
+              {!isOpenEvent && <><span className="rd-sl">/</span><sub>{event.participantLimit}</sub></>}
             </span>
           </div>
         </div>
@@ -652,6 +670,14 @@ export const EventPage: FC = () => {
               <div className="rd-hint" style={{ marginBottom: 10 }}>
                 По умолчанию все отмечены как пришедшие — снимите галочку с тех, кто не пришёл.
               </div>
+              {/* Открытая встреча: репутация за неё не начисляется, поэтому оргу важно понимать
+                  единственное исключение — цену отметки «не пришёл» (open_no_show, −100). */}
+              {isOpenEvent && (
+                <div className="rd-hint" style={{ marginBottom: 10 }}>
+                  Это открытая встреча: репутация за посещение не начисляется. Но если отметить
+                  участника «не пришёл» — с его репутации спишется 100 очков за молчаливую неявку.
+                </div>
+              )}
               {attendanceError && <div className="rd-error">{attendanceError}</div>}
               <div className="rd-cta-wrap">
                 <button
@@ -854,10 +880,13 @@ export const EventPage: FC = () => {
             confirmingDecline ? (
               <div className="rd-reject-confirm">
                 <div className="rd-reject-q">
-                  Освободить место?{' '}
-                  {waitlistedCount > 0
-                    ? 'Его сразу займёт первый из очереди.'
-                    : 'Замены пока нет — с вашей репутации спишется 100 очков.'}
+                  {isOpenEvent
+                    // Открытая встреча: мест нет — отказ свободный, штрафа и очереди не существует.
+                    ? 'Отказаться от участия? Это открытая встреча — репутация не пострадает.'
+                    : <>Освободить место?{' '}
+                      {waitlistedCount > 0
+                        ? 'Его сразу займёт первый из очереди.'
+                        : 'Замены пока нет — с вашей репутации спишется 100 очков.'}</>}
                 </div>
                 <div className="rd-org-gate-acts">
                   <button type="button" className="rd-btn-outline" disabled={voting} onClick={() => setConfirmingDecline(false)}>
@@ -869,7 +898,7 @@ export const EventPage: FC = () => {
                     disabled={voting}
                     onClick={() => { setConfirmingDecline(false); handleDecline(); }}
                   >
-                    {voting ? <Spinner size="s" /> : 'Освободить'}
+                    {voting ? <Spinner size="s" /> : (isOpenEvent ? 'Отказаться' : 'Освободить')}
                   </button>
                 </div>
               </div>

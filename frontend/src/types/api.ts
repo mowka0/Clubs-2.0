@@ -513,7 +513,8 @@ export interface EventDetailDto {
   // Опциональное уточнение организатора к месту («Вход со двора, домофон 12»).
   locationHint: string | null;
   eventDatetime: string;
-  participantLimit: number;
+  // null = открытая встреча (V62) — счёт показывается без знаменателя.
+  participantLimit: number | null;
   votingOpensDaysBefore: number;
   status: string;
   goingCount: number;
@@ -539,7 +540,8 @@ export interface EventListItemDto {
   title: string;
   eventDatetime: string;
   locationText: string | null;
-  participantLimit: number;
+  // null = открытая встреча (V62) — счёт показывается без знаменателя.
+  participantLimit: number | null;
   goingCount: number;
   status: string;
 }
@@ -701,7 +703,8 @@ export interface MyEventListItemDto {
   myParticipationStatus: 'confirmed' | 'waitlisted' | 'declined' | 'expired_no_confirm' | null;
   goingCount: number;
   confirmedCount: number;
-  participantLimit: number;
+  // null = открытая встреча (V62) — счёт показывается без знаменателя.
+  participantLimit: number | null;
   actionRequired: boolean;
   // Прошедшее посещённое событие (организатор отметил явку). Бакет считает бэкенд.
   // Единственный признак истории: status флипается кроном с лагом до ~7ч

@@ -121,6 +121,35 @@ class ReputationLedgerIntegrationTest {
     }
 
     @Test
+    fun `open event - only silent absentees get open_no_show, attendance earns nothing (AC-OPEN3)`() {
+        val eventId = insertFinalizedEvent(participantLimit = null)
+        val attended = insertUser("Attended")
+        val absentGoing = insertUser("AbsentGoing")
+        val absentMaybe = insertUser("AbsentMaybe")
+        val unresolved = insertUser("Unresolved")
+        insertConfirmed(eventId, attended, "going", "attended")
+        insertConfirmed(eventId, absentGoing, "going", "absent")
+        insertConfirmed(eventId, absentMaybe, "maybe", "absent")
+        insertConfirmed(eventId, unresolved, "going", null)
+
+        reputationService.processFinalizedEvent(eventId)
+
+        // Посещение открытой встречи репутацию НЕ приносит (анти-фарм) — ни строки, ни кэша.
+        assertNull(reputationRepository.findByUserAndClub(attended, clubId))
+        assertEquals(0, ledgerRows(attended, eventId))
+        assertNull(reputationRepository.findByUserAndClub(unresolved, clubId))
+        assertEquals(0, ledgerRows(unresolved, eventId))
+
+        // Молчаливая неявка подтверждённого — единственная строка: open_no_show, −100, broke.
+        assertReputation(absentGoing, reliability = -100, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
+        assertReputation(absentMaybe, reliability = -100, conf = 1, att = 0, spont = 0, pct = "0.00", outcome = 1)
+        val kinds = dsl.fetch(
+            "SELECT kind FROM reputation_ledger WHERE source_id = '$eventId'"
+        ).map { it.get("kind").toString() }.toSet()
+        assertEquals(setOf("open_no_show"), kinds)
+    }
+
+    @Test
     fun `confirmed with null or disputed attendance is confirmed_unresolved`() {
         val eventId = insertFinalizedEvent()
         val unmarked = insertUser("Unmarked")
@@ -642,7 +671,8 @@ class ReputationLedgerIntegrationTest {
         return id
     }
 
-    private fun insertFinalizedEvent(): UUID {
+    // participantLimit = null → открытая встреча (V62): в SQL уходит NULL.
+    private fun insertFinalizedEvent(participantLimit: Int? = 10): UUID {
         val id = UUID.randomUUID()
         val past = OffsetDateTime.now().minusDays(3)
         dsl.execute(
@@ -650,7 +680,7 @@ class ReputationLedgerIntegrationTest {
             INSERT INTO events (id, club_id, created_by, title, location_text, event_datetime,
                                 participant_limit, voting_opens_days_before, status,
                                 attendance_marked, attendance_finalized)
-            VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$past', 10, 14, 'completed', true, true)
+            VALUES ('$id', '$clubId', '$ownerId', 'Event', 'Place', '$past', ${participantLimit ?: "NULL"}, 14, 'completed', true, true)
             """.trimIndent()
         )
         return id

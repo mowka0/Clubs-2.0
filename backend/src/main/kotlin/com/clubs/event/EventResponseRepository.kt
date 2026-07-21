@@ -154,11 +154,13 @@ interface EventResponseRepository {
 /**
  * Confirmed-бронь уходящего пользователя на активном событии: id события (source_id в леджере)
  * + его дата/время (occurred_at для no_show). Читается при выходе из клуба, чтобы штрафовать
- * брошенные обязательства.
+ * брошенные обязательства. [isOpenEvent] = открытая встреча (V62): такая бронь НЕ штрафуется
+ * (мест нет, отказ свободен), но событие всё равно участвует в каскаде/перерисовке закрепа.
  */
 data class EventObligation(
     val eventId: UUID,
-    val eventDatetime: OffsetDateTime
+    val eventDatetime: OffsetDateTime,
+    val isOpenEvent: Boolean = false
 )
 
 /** Строка репозитория: данные пользователя-респондента + сырые enum'ы голоса/финального статуса/посещаемости. */

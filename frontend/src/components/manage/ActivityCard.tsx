@@ -61,7 +61,10 @@ const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => {
         ) : null}
       </div>
       <div className="rd-ft-stat">
-        <div className="rd-ft-stat-num">{count}/{event.participantLimit}</div>
+        {/* Открытая встреча (V62): лимита нет — счёт без знаменателя. */}
+        <div className="rd-ft-stat-num">
+          {event.participantLimit == null ? count : `${count}/${event.participantLimit}`}
+        </div>
         <div className="rd-ft-stat-cap">{countCaption}</div>
       </div>
     </>

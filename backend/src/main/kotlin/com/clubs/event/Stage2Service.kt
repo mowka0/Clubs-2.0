@@ -135,9 +135,12 @@ class Stage2Service(
 
         val confirmedCount = eventResponseRepository.countConfirmed(eventId)
 
+        // Открытая встреча (participantLimit = null): дефицита мест нет — каждый подтвердивший
+        // сразу confirmed, ветка waitlisted недостижима. См. events.md § «Открытая встреча».
+        val limit = event.participantLimit
         val newStatus: Stage_2Vote
         val finalStatus: FinalStatus
-        if (confirmedCount < event.participantLimit) {
+        if (limit == null || confirmedCount < limit) {
             newStatus = Stage_2Vote.confirmed
             finalStatus = FinalStatus.confirmed
         } else {
@@ -186,11 +189,16 @@ class Stage2Service(
             return ConfirmResponseDto(eventId, "declined", count, event.participantLimit)
         }
 
-        val wasConfirmed = response.stage2Vote == Stage_2Vote.confirmed
+        // «Держал дефицитный слот» — единое бизнес-условие обоих гейтов ниже: и порога отказа,
+        // и промоута/штрафа. Открытая встреча слотов не имеет (V62): порога нет — замена не нужна,
+        // честный отказ доступен до самого старта (решение PO 2026-07-21).
+        val heldScarceSlot = response.stage2Vote == Stage_2Vote.confirmed && !event.isOpenEvent
         // Порог отказа: от УЖЕ ПОДТВЕРЖДЁННОГО места нельзя отказаться в последние declineCutoffMinutes
         // до старта — замене не хватит времени подготовиться. Waitlisted выходит из очереди свободно
-        // (он никого не держит), поэтому гейт только на wasConfirmed.
-        if (wasConfirmed && !event.eventDatetime.isAfter(OffsetDateTime.now().plusMinutes(declineCutoffMinutes))) {
+        // (он никого не держит), поэтому гейт только на подтверждённый дефицитный слот.
+        if (heldScarceSlot &&
+            !event.eventDatetime.isAfter(OffsetDateTime.now().plusMinutes(declineCutoffMinutes))
+        ) {
             throw ValidationException(
                 "Отказаться от подтверждённого участия можно не позже чем за " +
                     "${DurationFormatter.formatMinutes(declineCutoffMinutes)} до события"
@@ -198,7 +206,9 @@ class Stage2Service(
         }
         eventResponseRepository.updateStage2Vote(response.id, Stage_2Vote.declined, FinalStatus.declined)
 
-        if (wasConfirmed) {
+        // Открытая встреча: промоут невозможен (waitlist недостижим), а отказ ничей слот не сжигает —
+        // ни повышения, ни штрафа abandoned_slot. Наказывается только молчаливая неявка (open_no_show).
+        if (heldScarceSlot) {
             val firstWaitlisted = eventResponseRepository.findFirstWaitlisted(eventId)
             if (firstWaitlisted != null) {
                 // Есть замена → первый из очереди сразу занимает освободившийся слот; отказавшийся чист.

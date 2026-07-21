@@ -75,6 +75,19 @@ class ReputationPolicyTest {
         assertEquals(0, ReputationPolicy.pointsFor(ReputationKind.skladchina_declined))
     }
 
+    // Открытая встреча (V62/V63): единственная ledger-строка — молчаливая неявка подтверждённого.
+    // Посещение/спор/не выяснено → null (не 0-строка: она раздувала бы outcome_count).
+    @Test
+    fun `open event - only silent absence yields a ledger row (AC-OPEN3)`() {
+        assertEquals(ReputationKind.open_no_show, ReputationPolicy.openEventAttendanceKind(AttendanceStatus.absent))
+        assertNull(ReputationPolicy.openEventAttendanceKind(AttendanceStatus.attended))
+        assertNull(ReputationPolicy.openEventAttendanceKind(AttendanceStatus.disputed))
+        assertNull(ReputationPolicy.openEventAttendanceKind(null))
+
+        // −100 — вдвое мягче no_show (−200): слот не сгорел, но обещание нарушено молча.
+        assertEquals(-100, ReputationPolicy.pointsFor(ReputationKind.open_no_show))
+    }
+
     @Test
     fun `display threshold gates a newcomer until three outcomes`() {
         assertEquals(3, ReputationPolicy.MIN_OUTCOMES_FOR_DISPLAY)

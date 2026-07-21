@@ -36,7 +36,8 @@ sealed class ActivityItemDto {
         val eventDatetime: OffsetDateTime,
         // null = место не указано (опционально с V58).
         val locationText: String?,
-        val participantLimit: Int,
+        // null = открытая встреча (V62) — карточка показывает счёт без знаменателя.
+        val participantLimit: Int?,
         val goingCount: Int,
         // Размер подтверждённого ростера stage-2. Лента показывает `goingCount` во время stage 1
         // и переключается на `confirmedCount`, как только голосование закрывается (stage_2/completed),

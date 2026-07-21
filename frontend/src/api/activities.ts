@@ -24,7 +24,8 @@ export interface EventActivityDto extends ActivityBase {
   eventDatetime: string;
   // null = место не указано (опционально с V58).
   locationText: string | null;
-  participantLimit: number;
+  // null = открытая встреча (V62) — счёт показывается без знаменателя.
+  participantLimit: number | null;
   goingCount: number;
   // Размер подтверждённого ростера Этапа 2. Карточка показывает `goingCount` во время stage 1 и
   // переключается на `confirmedCount`, когда голосование закрывается (stage_2/completed), — так же,

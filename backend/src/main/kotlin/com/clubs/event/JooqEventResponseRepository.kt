@@ -327,7 +327,7 @@ class JooqEventResponseRepository(
             .where(EVENTS.ID.eq(eventId).and(EVENTS.ATTENDANCE_FINALIZED.isFalse))
 
     override fun findConfirmedActiveEventObligations(userId: UUID, clubId: UUID): List<EventObligation> =
-        dsl.select(EVENTS.ID, EVENTS.EVENT_DATETIME)
+        dsl.select(EVENTS.ID, EVENTS.EVENT_DATETIME, EVENTS.PARTICIPANT_LIMIT)
             .from(EVENT_RESPONSES)
             .join(EVENTS).on(EVENTS.ID.eq(EVENT_RESPONSES.EVENT_ID))
             .where(
@@ -339,7 +339,16 @@ class JooqEventResponseRepository(
                     .and(EVENTS.ATTENDANCE_FINALIZED.isFalse)
                     .and(EVENT_RESPONSES.FINAL_STATUS.eq(FinalStatus.confirmed))
             )
-            .fetch { r -> EventObligation(r.get(EVENTS.ID)!!, r.get(EVENTS.EVENT_DATETIME)!!) }
+            // Открытые встречи (participant_limit IS NULL, V62) НЕ фильтруются здесь: их брони не
+            // штрафуются при выходе (это решают вызывающие по isOpenEvent), но их строки удаляет тот же
+            // каскад — живой закреп должен перерисоваться и для них (EventRosterChangedEvent).
+            .fetch { r ->
+                EventObligation(
+                    eventId = r.get(EVENTS.ID)!!,
+                    eventDatetime = r.get(EVENTS.EVENT_DATETIME)!!,
+                    isOpenEvent = r.get(EVENTS.PARTICIPANT_LIMIT) == null
+                )
+            }
 
     override fun promoteFirstWaitlisted(eventId: UUID): UUID? {
         val first = findFirstWaitlisted(eventId) ?: return null

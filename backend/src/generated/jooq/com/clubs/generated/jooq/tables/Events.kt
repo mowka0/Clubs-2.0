@@ -137,11 +137,14 @@ open class Events(
     val EVENT_DATETIME: TableField<EventsRecord, OffsetDateTime?> = createField(DSL.name("event_datetime"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false), this, "Дата и время начала события.")
 
     /**
-     * The column <code>public.events.participant_limit</code>. Лимит участников
-     * (&gt; 0). На Этапе 2 подтвердившиеся сверх лимита попадают в лист
-     * ожидания (waitlisted).
+     * The column <code>public.events.participant_limit</code>. Максимум
+     * подтверждённых участников (Этап 2). NULL = открытая встреча: гонка за
+     * места и лист ожидания не действуют — каждый подтвердивший сразу
+     * confirmed; штраф abandoned_slot и порог отказа не применяются; репутация
+     * за посещение не начисляется (только open_no_show −100 за молчаливую
+     * неявку подтверждённого).
      */
-    val PARTICIPANT_LIMIT: TableField<EventsRecord, Int?> = createField(DSL.name("participant_limit"), SQLDataType.INTEGER.nullable(false), this, "Лимит участников (> 0). На Этапе 2 подтвердившиеся сверх лимита попадают в лист ожидания (waitlisted).")
+    val PARTICIPANT_LIMIT: TableField<EventsRecord, Int?> = createField(DSL.name("participant_limit"), SQLDataType.INTEGER, this, "Максимум подтверждённых участников (Этап 2). NULL = открытая встреча: гонка за места и лист ожидания не действуют — каждый подтвердивший сразу confirmed; штраф abandoned_slot и порог отказа не применяются; репутация за посещение не начисляется (только open_no_show −100 за молчаливую неявку подтверждённого).")
 
     /**
      * The column <code>public.events.voting_opens_days_before</code>. За

@@ -225,7 +225,9 @@ class LivePinService(
             renderer.stage2Text(
                 event,
                 confirmed = eventResponseRepository.countConfirmed(event.id),
-                waitlisted = eventResponseRepository.countWaitlisted(event.id)
+                // Открытая встреча (V62): waitlist недостижим, а рендерер строку очереди не выводит —
+                // не тратим COUNT-запрос на каждую перерисовку закрепа.
+                waitlisted = if (event.isOpenEvent) 0 else eventResponseRepository.countWaitlisted(event.id)
             )
         } else {
             val counts = eventResponseRepository.countByVote(event.id)

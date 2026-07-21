@@ -7,9 +7,10 @@
 > **больше НЕ в `OrganizerClubManage`**. Picker «+ Создать» (раньше — sticky-CTA
 > внутри manage-таба «Активности») теперь живёт **на глобальной странице
 > `/events` (`ActivitiesPage`)** как hero-кнопка «+ Создать», видимая только
-> организаторам (≥1 клуб в роли organizer). Flow: тип (Событие/Сбор) → клуб
+> организаторам (≥1 клуб в роли organizer). Flow: тип (Событие/Сбор) → подшаг
+> (Событие → формат «С местами»/«Открытая встреча», V62 2026-07-21; Сбор → шаблон) → клуб
 > (авто-выбор если 1 organizer-клуб, иначе `ClubPickerModal`) → существующие
-> create-routes. **Таб «Активности» из `OrganizerClubManage` УДАЛЁН** — manage-панель
+> create-routes (открытая встреча — тот же route с `?format=open`). **Таб «Активности» из `OrganizerClubManage` УДАЛЁН** — manage-панель
 > теперь **3 таба (Участники/Финансы/Настройки)** после `feature/applications-inbox`
 > (2026-05-30, таб «Заявки» удалён в пользу кросс-клубового inbox на
 > `MyClubsPage`, см. [`applications-inbox.md`](./applications-inbox.md)).

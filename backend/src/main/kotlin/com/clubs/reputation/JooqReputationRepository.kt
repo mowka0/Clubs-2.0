@@ -81,7 +81,7 @@ class JooqReputationRepository(
             .filterNotNull()
 
     override fun findEventContext(eventId: UUID): EventReputationContext? =
-        dsl.select(EVENTS.CLUB_ID, CLUBS.OWNER_ID, EVENTS.EVENT_DATETIME)
+        dsl.select(EVENTS.CLUB_ID, CLUBS.OWNER_ID, EVENTS.EVENT_DATETIME, EVENTS.PARTICIPANT_LIMIT)
             .from(EVENTS)
             .join(CLUBS).on(CLUBS.ID.eq(EVENTS.CLUB_ID))
             .where(EVENTS.ID.eq(eventId))
@@ -89,7 +89,8 @@ class JooqReputationRepository(
                 EventReputationContext(
                     clubId = r.get(EVENTS.CLUB_ID)!!,
                     ownerId = r.get(CLUBS.OWNER_ID)!!,
-                    eventDatetime = r.get(EVENTS.EVENT_DATETIME)!!
+                    eventDatetime = r.get(EVENTS.EVENT_DATETIME)!!,
+                    isOpenEvent = r.get(EVENTS.PARTICIPANT_LIMIT) == null
                 )
             }
 
@@ -187,7 +188,11 @@ class JooqReputationRepository(
         // на чтении из occurred_at.
         // neutral = outcome - kept - broke (confirmed_unresolved + исторический skladchina_declined).
         val keptKinds = l.KIND.`in`(ReputationKind.ironclad, ReputationKind.spontaneous, ReputationKind.skladchina_paid)
-        val brokeKinds = l.KIND.`in`(ReputationKind.no_show, ReputationKind.spectator, ReputationKind.skladchina_expired)
+        val brokeKinds = l.KIND.`in`(
+            ReputationKind.no_show, ReputationKind.spectator, ReputationKind.skladchina_expired,
+            // Молчаливая неявка на открытую встречу — broke наравне с no_show (TrustPolicy).
+            ReputationKind.open_no_show
+        )
 
         val rec = dsl.select(
             DSL.sum(l.POINTS),

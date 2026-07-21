@@ -389,6 +389,40 @@ class MembershipServiceTest {
     }
 
     @Test
+    fun `leaveClub free - open-event booking is not penalized but still frees the slot (AC-OPEN4)`() {
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val club = freeClubRecord(clubId, ownerId = ownerId)
+        val activeMembership = membership(userId, clubId)
+        val limitedEventId = UUID.randomUUID()
+        val openEventId = UUID.randomUUID()
+        val start = OffsetDateTime.now().plusDays(1)
+
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns activeMembership
+        every { clubRepository.findById(clubId) } returns club
+        every { eventResponseRepository.findConfirmedActiveEventObligations(userId, clubId) } returns listOf(
+            com.clubs.event.EventObligation(limitedEventId, start),
+            com.clubs.event.EventObligation(openEventId, start, isOpenEvent = true)
+        )
+
+        membershipService.leaveClub(clubId, userId)
+
+        // Штраф выхода — только за бронь события с лимитом; открытая встреча свободна (V62).
+        verify(exactly = 1) {
+            reputationService.penalizeExit(
+                userId, clubId,
+                listOf(com.clubs.reputation.ExitObligation(limitedEventId, start)),
+                emptyList()
+            )
+        }
+        // Каскад/лок слотов затрагивает ОБА события — живой закреп открытой встречи тоже перерисуется.
+        verify(exactly = 1) { eventResponseRepository.lockEventSlots(limitedEventId) }
+        verify(exactly = 1) { eventResponseRepository.lockEventSlots(openEventId) }
+        verify(exactly = 1) { eventResponseRepository.promoteFirstWaitlisted(openEventId) }
+    }
+
+    @Test
     fun `leaveClub paid cancels subscription without cascade (AC-2)`() {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()

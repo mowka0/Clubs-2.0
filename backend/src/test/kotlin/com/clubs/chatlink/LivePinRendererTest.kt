@@ -64,6 +64,25 @@ class LivePinRendererTest {
         assertTrue(text.contains("⏳ Подтвердить до — 12.07.2026 19:00 МСК"))
     }
 
+    // Открытая встреча (V62): лимита нет — строка мест без числа, счёт без знаменателя, очереди нет.
+    @Test
+    fun `открытая встреча — без лимита мест, счёт без знаменателя и без строки очереди`() {
+        val open = event.copy(participantLimit = null)
+
+        val stage1 = renderer.stage1Text(open, going = 9, maybe = 3)
+        assertTrue(stage1.contains("👥 Открытая встреча — без лимита мест"))
+        assertFalse(stage1.contains("Мест —"))
+
+        val stage2 = renderer.stage2Text(open, confirmed = 12, waitlisted = 0)
+        assertTrue(stage2.contains("подтверждение участия"))
+        assertTrue(stage2.contains("✅ Подтвердили — 12\n"))
+        assertFalse(stage2.contains("из"))
+        assertFalse(stage2.contains("В очереди"))
+
+        val closed = renderer.closedText(open, confirmed = 12)
+        assertTrue(closed.contains("подтвердили 12."))
+    }
+
     @Test
     fun `кнопка зависит от этапа`() {
         assertEquals("Проголосовать", renderer.buttonText(event))

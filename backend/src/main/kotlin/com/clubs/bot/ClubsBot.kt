@@ -2,6 +2,7 @@ package com.clubs.bot
 
 import com.clubs.chatlink.ChatDoorService
 import com.clubs.chatlink.ChatLinkBotService
+import com.clubs.common.util.EventFormatTexts
 import com.clubs.event.EventRepository
 import com.clubs.event.EventResponseRepository
 import com.clubs.event.locationDisplay
@@ -264,7 +265,8 @@ class ClubsBot(
             appendLine("\uD83D\uDDD3 $formattedDate")
             appendLine("\u2705 Пойдут: $goingCount")
             appendLine("\uD83E\uDD14 Возможно: $maybeCount")
-            append("\uD83D\uDC65 Лимит: ${event.participantLimit}")
+            // Открытая встреча (V62): лимита нет — вместо числа сообщаем формат.
+            append(event.participantLimit?.let { "\uD83D\uDC65 Лимит: $it" } ?: EventFormatTexts.OPEN_EVENT_NO_LIMIT_LINE)
         }
 
         val msg = SendMessage

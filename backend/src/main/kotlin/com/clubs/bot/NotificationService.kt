@@ -1,5 +1,6 @@
 package com.clubs.bot
 
+import com.clubs.common.util.EventFormatTexts
 import com.clubs.event.Event
 import com.clubs.event.EventResponseRepository
 import com.clubs.event.OPEN_IN_YANDEX_MAPS_BUTTON
@@ -78,7 +79,9 @@ class NotificationService(
         // Место опционально (V58): у события без места строка 📍 не рендерится вовсе;
         // уточнение организатора («Вход со двора») показывается в скобках после адреса.
         val locationLine = event.locationDisplay?.let { "📍 $it\n" } ?: ""
-        val text = "🆕 Новое событие в клубе!\n\n📌 ${event.title}\n$locationLine🗓 $dateStr\n👥 Лимит: ${event.participantLimit}\n\nГолосуйте в приложении:"
+        // Открытая встреча (V62): лимита нет — вместо числа сообщаем формат.
+        val limitLine = event.participantLimit?.let { "👥 Лимит: $it" } ?: EventFormatTexts.OPEN_EVENT_NO_LIMIT_LINE
+        val text = "🆕 Новое событие в клубе!\n\n📌 ${event.title}\n$locationLine🗓 $dateStr\n$limitLine\n\nГолосуйте в приложении:"
         // Диплинк сразу на страницу события, чтобы кнопка открывала голосование, а не
         // общую домашнюю страницу приложения. React Router рендерит EventPage на /events/:id.
         val webAppPath = "/events/${event.id}"

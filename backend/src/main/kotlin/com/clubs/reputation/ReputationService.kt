@@ -38,8 +38,14 @@ class ReputationService(
         val ctx = repository.findEventContext(eventId) ?: return
         val entries = repository.findConfirmedResponses(eventId)
             .filter { it.userId != ctx.ownerId } // анти-фарм правило 1: владелец не копит репутацию в своём клубе
-            .map { response ->
-                val kind = ReputationPolicy.attendanceKind(response.stage1Vote, response.attendance)
+            .mapNotNull { response ->
+                // Открытая встреча: посещение репутацию не даёт, пишется ТОЛЬКО молчаливая неявка
+                // (open_no_show, −100); attended/спор → null-строка не создаётся. См. ReputationPolicy.
+                val kind = if (ctx.isOpenEvent) {
+                    ReputationPolicy.openEventAttendanceKind(response.attendance) ?: return@mapNotNull null
+                } else {
+                    ReputationPolicy.attendanceKind(response.stage1Vote, response.attendance)
+                }
                 LedgerEntry(
                     userId = response.userId,
                     clubId = ctx.clubId,

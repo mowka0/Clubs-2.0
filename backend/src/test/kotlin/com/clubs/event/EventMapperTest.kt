@@ -21,7 +21,9 @@ class EventMapperTest {
     private fun event(
         status: EventStatus,
         eventDatetime: OffsetDateTime,
-        votingOpensDaysBefore: Int = 14
+        votingOpensDaysBefore: Int = 14,
+        // null = открытая встреча (V62) — кейс дедлайна отказа передаёт null явно.
+        participantLimit: Int? = 10
     ) = Event(
         id = UUID.randomUUID(),
         clubId = UUID.randomUUID(),
@@ -30,7 +32,7 @@ class EventMapperTest {
         description = null,
         locationText = "Place",
         eventDatetime = eventDatetime,
-        participantLimit = 10,
+        participantLimit = participantLimit,
         votingOpensDaysBefore = votingOpensDaysBefore,
         status = status,
         stage2Triggered = false,
@@ -104,5 +106,23 @@ class EventMapperTest {
         )
 
         assertThat(mapper.toMyFeedItemDto(item, now).actionRequired).isTrue()
+    }
+
+    // Открытая встреча (V62): порога отказа нет — дедлайн совпадает со стартом события,
+    // у события с лимитом он по-прежнему старт − cutoff (240 мин в этом мапере).
+    @Test
+    fun `confirmedDeclineDeadline is the event start for an open event and start minus cutoff otherwise`() {
+        val start = now.plusDays(2)
+
+        val open = mapper.toDetailDto(
+            event(EventStatus.stage_2, start, participantLimit = null), 0, 0, 0, 0
+        )
+        assertThat(open.confirmedDeclineDeadline).isEqualTo(start)
+        assertThat(open.participantLimit).isNull()
+
+        val limited = mapper.toDetailDto(
+            event(EventStatus.stage_2, start), 0, 0, 0, 0
+        )
+        assertThat(limited.confirmedDeclineDeadline).isEqualTo(start.minusMinutes(240))
     }
 }

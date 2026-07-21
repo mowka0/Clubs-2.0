@@ -50,9 +50,9 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
         set(value): Unit = set(6, value)
         get(): OffsetDateTime = get(6) as OffsetDateTime
 
-    open var participantLimit: Int
+    open var participantLimit: Int?
         set(value): Unit = set(7, value)
-        get(): Int = get(7) as Int
+        get(): Int? = get(7) as Int?
 
     open var votingOpensDaysBefore: Int?
         set(value): Unit = set(8, value)
@@ -123,7 +123,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
     /**
      * Create a detached, initialised EventsRecord
      */
-    constructor(id: UUID? = null, clubId: UUID, createdBy: UUID, title: String, description: String? = null, locationText: String? = null, eventDatetime: OffsetDateTime, participantLimit: Int, votingOpensDaysBefore: Int? = null, status: EventStatus? = null, stage_2Triggered: Boolean? = null, attendanceMarked: Boolean? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, photoUrl: String? = null, reputationProcessed: Boolean? = null, attendanceReminderSent: Boolean? = null, attendanceMarkedAt: OffsetDateTime? = null, cancellationReason: String? = null, locationLat: Double? = null, locationLon: Double? = null, locationHint: String? = null): this() {
+    constructor(id: UUID? = null, clubId: UUID, createdBy: UUID, title: String, description: String? = null, locationText: String? = null, eventDatetime: OffsetDateTime, participantLimit: Int? = null, votingOpensDaysBefore: Int? = null, status: EventStatus? = null, stage_2Triggered: Boolean? = null, attendanceMarked: Boolean? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, photoUrl: String? = null, reputationProcessed: Boolean? = null, attendanceReminderSent: Boolean? = null, attendanceMarkedAt: OffsetDateTime? = null, cancellationReason: String? = null, locationLat: Double? = null, locationLon: Double? = null, locationHint: String? = null): this() {
         this.id = id
         this.clubId = clubId
         this.createdBy = createdBy

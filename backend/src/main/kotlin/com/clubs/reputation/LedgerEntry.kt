@@ -40,7 +40,10 @@ data class ExitObligation(
 data class EventReputationContext(
     val clubId: UUID,
     val ownerId: UUID,
-    val eventDatetime: OffsetDateTime
+    val eventDatetime: OffsetDateTime,
+    // Открытая встреча (participant_limit IS NULL, V62): за посещение репутация не начисляется,
+    // единственная возможная строка — open_no_show за молчаливую неявку подтверждённого.
+    val isOpenEvent: Boolean
 )
 
 /**

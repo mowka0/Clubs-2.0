@@ -27,7 +27,8 @@ data class EventDetailDto(
     // Опциональное уточнение организатора к месту («Вход со двора, домофон 12»); null = нет.
     val locationHint: String?,
     val eventDatetime: OffsetDateTime,
-    val participantLimit: Int,
+    // null = открытая встреча (V62): без гонки за места и листа ожидания, фронт прячет знаменатель.
+    val participantLimit: Int?,
     val votingOpensDaysBefore: Int,
     val status: String,
     val goingCount: Int,
@@ -54,7 +55,8 @@ data class EventListItemDto(
     val title: String,
     val eventDatetime: OffsetDateTime,
     val locationText: String?,
-    val participantLimit: Int,
+    // null = открытая встреча (V62) — карточка показывает счёт без знаменателя.
+    val participantLimit: Int?,
     val goingCount: Int,
     val status: String,
     val photoUrl: String?
@@ -75,7 +77,8 @@ data class MyEventListItemDto(
     val myParticipationStatus: String?,
     val goingCount: Int,
     val confirmedCount: Int,
-    val participantLimit: Int,
+    // null = открытая встреча (V62) — карточка показывает счёт без знаменателя.
+    val participantLimit: Int?,
     val actionRequired: Boolean,
     // true = прошедшее посещённое событие (секция «История»). Считает бэкенд по бакету ORDER BY.
     // Клиенту ЗАПРЕЩЕНО выводить историчность из status='completed' или eventDatetime<now:
@@ -110,9 +113,16 @@ data class CreateEventRequest(
     @field:Future(message = "Event datetime must be in the future")
     val eventDatetime: OffsetDateTime,
 
-    @field:NotNull(message = "Participant limit is required")
+    // null = ОТКРЫТАЯ ВСТРЕЧА (V62): событие без лимита участников — отдельный продуктовый
+    // тип поверх того же движка. @Positive пропускает null по контракту Bean Validation,
+    // ненулевое значение валидируется как раньше. Инвариант пары с isOpenEvent — ниже.
     @field:Positive(message = "Participant limit must be positive")
-    val participantLimit: Int,
+    val participantLimit: Int? = null,
+
+    // Явный флаг формата: открытая встреча заявляется НАМЕРЕННО, а не отсутствием participantLimit.
+    // Без флага случайно пропущенное поле лимита молча создавало бы событие другого продуктового
+    // типа (без гонки за места и репутации за посещение) вместо прежнего 400.
+    val isOpenEvent: Boolean = false,
 
     @field:Min(value = 1, message = "Voting opens days before must be at least 1")
     @field:Max(value = 14, message = "Voting opens days before must be at most 14")
@@ -132,6 +142,13 @@ data class CreateEventRequest(
     @get:AssertTrue(message = "Either a map point or a location hint is required")
     val isSomeLocationProvided: Boolean
         get() = (locationLat != null && locationLon != null) || !locationHint.isNullOrBlank()
+
+    // Формат и лимит согласованы: открытая встреча — БЕЗ лимита, обычное событие — С лимитом.
+    // Ловит и старый баг-класс «забыли поле» (limit=null без флага → 400, как до V62), и
+    // противоречивый ввод (флаг + лимит одновременно).
+    @get:AssertTrue(message = "Open event must have no participant limit; a regular event requires one")
+    val isParticipantLimitConsistent: Boolean
+        get() = if (isOpenEvent) participantLimit == null else participantLimit != null
 }
 
 

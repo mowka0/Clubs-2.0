@@ -118,7 +118,7 @@ open class EventsDao(configuration: Configuration?) : DAOImpl<EventsRecord, com.
      * Fetch records that have <code>participant_limit BETWEEN lowerInclusive
      * AND upperInclusive</code>
      */
-    fun fetchRangeOfParticipantLimit(lowerInclusive: Int, upperInclusive: Int): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.PARTICIPANT_LIMIT, lowerInclusive, upperInclusive)
+    fun fetchRangeOfParticipantLimit(lowerInclusive: Int?, upperInclusive: Int?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.PARTICIPANT_LIMIT, lowerInclusive, upperInclusive)
 
     /**
      * Fetch records that have <code>participant_limit IN (values)</code>
