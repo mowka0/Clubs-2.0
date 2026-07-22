@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<script>if(new URLSearchParams(location.search).has('light'))document.documentElement.dataset.theme='light'</script>
+<title>Карточка 4 — иконки вместо подписей</title>
+<link rel="stylesheet" href="_shared.css">
+<style>
+/* Идея: подписи «дней/участника/вовлечены» съедают всю ширину. Заменяем их
+   иконками — метрики сжимаются в одну тесную строку без коробок и без полосы.
+   Адрес получает отдельную строку и может быть подробным. */
+.card {
+  margin: 0 16px 12px; border-radius: 18px; overflow: hidden;
+  background: var(--glass-bg); border: 1px solid var(--hairline);
+  backdrop-filter: blur(20px); box-shadow: var(--card-shadow); cursor: pointer;
+}
+.card .cov { height: 100px; position: relative; filter: saturate(0.9); }
+.card .cov::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(11,11,14,0.28) 0%, rgba(11,11,14,0.5) 55%, rgba(11,11,14,0.78) 100%); }
+.card .cov .price-chip { top: 10px; right: 12px; }
+.card .cov .date-badge { top: 10px; left: 12px; }
+.card .body { padding: 11px 14px 13px; display: flex; flex-direction: column; gap: 5px; }
+.card .body .rankpill { margin-bottom: 2px; align-self: flex-start; }
+.card .body .ttl { font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; }
+.card .body .loc { font-size: 12px; color: var(--text-dim); display: inline-flex; align-items: center; gap: 5px; }
+.card .body .loc svg { width: 12px; height: 12px; opacity: 0.7; flex-shrink: 0; }
+/* строка метрик с иконками */
+.imrow { display: flex; align-items: center; gap: 14px; margin-top: 3px; }
+.im { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.im svg { width: 14px; height: 14px; color: var(--text-faint); flex-shrink: 0; }
+.im.ok { color: var(--live); }
+.im.ok svg { color: var(--live); }
+</style>
+</head>
+<body>
+  <div class="statusbar"><span>9:41</span><span class="right">LTE&nbsp;&nbsp;▮▮▮▯</span></div>
+  <header class="hdr">
+    <div class="avt-user">ИВ</div>
+    <div class="who"><div class="nm">Иван <span class="star"></span></div><div class="sub">Состоишь в 6 клубах</div></div>
+    <button class="city">Москва <span class="chev">▾</span></button>
+  </header>
+  <h1 class="hero">Найди свой <span class="acc">клуб</span></h1>
+  <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Беговой клуб, книжный, дегустации</label>
+  <div class="chips"><span class="chip on">Все</span><span class="chip">Спорт</span><span class="chip">Творчество</span><span class="chip">Книги</span><span class="chip">Кулинария</span><span class="chip">Кино</span><span class="chip">Настолки</span></div>
+
+  <div class="today-shelf">
+    <div class="lbl">Встречаются сегодня</div>
+    <div class="today-rail">
+      <div class="today-mini"><div class="time">19:30<small>сегодня</small></div><div class="inf"><div class="n">Беговой клуб «Второе дыхание»</div><div class="s">Спорт · 24 участника</div></div></div>
+      <div class="today-mini"><div class="time">20:00<small>сегодня</small></div><div class="inf"><div class="n">«Настолки и мясо»</div><div class="s">Настолки · 41 участник</div></div></div>
+    </div>
+  </div>
+  <div class="list-lbl">Клубы в Москве</div>
+
+  <div class="card">
+    <div class="cov" data-cat="party"><span class="price-chip">бесплатно</span></div>
+    <div class="body">
+      <div class="ttl">Партия</div>
+      <div class="loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Москва · Пресня, Патриаршие</div>
+      <div class="imrow">
+        <span class="im"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>88 дн</span>
+        <span class="im"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><path d="M16 6a3 3 0 0 1 0 6"/></svg>3</span>
+        <span class="im ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>100%</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="cov" data-cat="sport"><span class="date-badge">встреча 19:30</span><span class="price-chip">1 200 ₽/мес</span></div>
+    <div class="body">
+      <div class="ttl">Беговой клуб «Второе дыхание»</div>
+      <div class="loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Москва · Хамовники, парк Горького</div>
+      <div class="imrow">
+        <span class="im"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>145 дн</span>
+        <span class="im"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><path d="M16 6a3 3 0 0 1 0 6"/></svg>24</span>
+        <span class="im ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>78%</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="cov" data-cat="food"><span class="price-chip">2 500 ₽/мес</span></div>
+    <div class="body">
+      <span class="rankpill">★ Топ-5 в категории</span>
+      <div class="ttl">Винный клуб «Декантер»</div>
+      <div class="loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Москва · Патриаршие пруды</div>
+      <div class="imrow">
+        <span class="im"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>210 дн</span>
+        <span class="im"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><path d="M16 6a3 3 0 0 1 0 6"/></svg>32</span>
+        <span class="im ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>84%</span>
+      </div>
+    </div>
+  </div>
+
+  <nav class="dock">
+    <span class="tab on"><span class="ic">◈</span>Клубы</span><span class="tab"><span class="ic">▤</span>Активности</span><span class="tab"><span class="ic">♡</span>Мои клубы</span><span class="tab"><span class="ic">◉</span>Профиль</span>
+  </nav>
+</body>
+</html>

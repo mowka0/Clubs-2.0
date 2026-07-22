@@ -1,0 +1,233 @@
+/* Мокапы: полиш ТЕКУЩЕГО главного экрана (Discovery).
+   Токены — Banco-Plata (frontend/src/styles/brand-theme.css), обе темы.
+   Тема переключается ?light в URL (скрипт в каждом html ставит data-theme).
+   Во всех вариантах: плитки «Репутация / В клубах» убраны (переезжают в профиль),
+   сравнивается решение тройки метрик на карточке клуба. */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:            #0B0B0E;
+  --text:          #F4F4F6;
+  --text-dim:      rgba(244, 244, 246, 0.6);
+  --text-faint:    rgba(244, 244, 246, 0.45);
+
+  --glass-bg:      linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.015) 100%);
+  --surface:       rgba(255, 255, 255, 0.04);
+  --surface-2:     rgba(255, 255, 255, 0.05);
+  --hairline:      rgba(255, 255, 255, 0.06);
+  --hairline-2:    rgba(255, 255, 255, 0.1);
+
+  --accent:        #F47B3C;
+  --accent-deep:   #D5611C;
+  --accent-soft:   rgba(244, 123, 60, 0.14);
+  --accent-grad:   linear-gradient(135deg, #FFA070 0%, #F47B3C 100%);
+  --on-accent:     #2A0E04;
+
+  --live:          #66D49A;
+  --live-soft:     rgba(79, 160, 120, 0.18);
+
+  --card-shadow:   inset 0 1px 0 rgba(255,255,255,0.06), 0 6px 20px rgba(0,0,0,0.2);
+  --dock-bg:       linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%), rgba(15, 15, 20, 0.72);
+  --grain-opacity: 0.08;
+}
+
+[data-theme="light"] {
+  --bg:            #F7F6F3;
+  --text:          #1A1A1A;
+  --text-dim:      #6B6B70;
+  --text-faint:    #8A8A8E;
+
+  --glass-bg:      linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(252,252,252,0.85) 100%);
+  --surface:       rgba(255, 255, 255, 0.85);
+  --surface-2:     #FFFFFF;
+  --hairline:      rgba(0, 0, 0, 0.06);
+  --hairline-2:    rgba(0, 0, 0, 0.1);
+
+  --accent-soft:   rgba(244, 123, 60, 0.12);
+  --accent-grad:   linear-gradient(135deg, #F47B3C 0%, #D5611C 100%);
+  --on-accent:     #FFFFFF;
+
+  --live:          #2E7D5A;
+  --live-soft:     rgba(46, 125, 90, 0.12);
+
+  --card-shadow:   inset 0 1px 0 rgba(255,255,255,1), 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.05);
+  --dock-bg:       rgba(255, 255, 255, 0.85);
+  --grain-opacity: 0;
+}
+
+html { width: 390px; }
+body {
+  width: 390px;
+  min-height: 900px;
+  position: relative;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  padding-bottom: 96px;
+}
+
+/* Плёночное зерно — только в тёмной теме (как в проде) */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: var(--grain-opacity);
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='2.2' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+/* ---------- статусбар ---------- */
+.statusbar {
+  height: 44px;
+  display: flex; align-items: flex-end; justify-content: space-between;
+  padding: 0 24px 6px;
+  font-size: 15px; font-weight: 600;
+}
+.statusbar .right { font-size: 12px; opacity: 0.9; }
+
+/* ---------- шапка (как в проде: аватар, имя+бейдж, город) ---------- */
+.hdr {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 20px 4px;
+}
+.hdr .avt-user {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: linear-gradient(160deg, #3A2E18, #1F1808);
+  color: var(--accent-deep);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700;
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  flex-shrink: 0;
+}
+.hdr .who { flex: 1; min-width: 0; }
+.hdr .nm {
+  font-size: 16px; font-weight: 700; letter-spacing: -0.01em;
+  display: flex; align-items: center; gap: 6px;
+}
+.hdr .nm .star {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--accent-grad); flex-shrink: 0;
+}
+.hdr .sub { font-size: 12.5px; color: var(--text-dim); margin-top: 1px; }
+.hdr .city {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 34px; padding: 0 13px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  color: var(--text-dim);
+  cursor: pointer; flex-shrink: 0;
+}
+.hdr .city .chev { font-size: 9px; opacity: 0.6; }
+
+.hero {
+  padding: 16px 20px 12px;
+  font-size: 28px; font-weight: 700;
+  letter-spacing: -0.024em; line-height: 1.1;
+}
+.hero .acc { color: var(--accent); }
+
+.search {
+  display: flex; align-items: center; gap: 10px;
+  margin: 0 20px 12px;
+  height: 46px; padding: 0 14px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  color: var(--text-faint); font-size: 14px;
+  backdrop-filter: blur(20px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.search svg { flex-shrink: 0; }
+
+.chips {
+  display: flex; gap: 8px;
+  padding: 0 20px 16px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex-shrink: 0;
+  padding: 8px 15px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--hairline);
+  font-size: 12.5px; font-weight: 600; color: var(--text-dim);
+  white-space: nowrap;
+}
+.chip.on {
+  background: var(--accent-grad); color: var(--on-accent);
+  border-color: transparent;
+  box-shadow: 0 2px 6px rgba(244, 123, 60, 0.30);
+}
+
+/* ---------- базовая карточка клуба (как rd-club-card в проде) ---------- */
+.card {
+  margin: 0 16px 12px;
+  border-radius: 18px; overflow: hidden;
+  background: var(--glass-bg);
+  border: 1px solid var(--hairline);
+  backdrop-filter: blur(20px);
+  box-shadow: var(--card-shadow);
+  cursor: pointer;
+}
+.card .ccover { height: 96px; position: relative; filter: saturate(0.9); }
+.card .ccover::after {
+  content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(180deg, rgba(11,11,14,0.30) 0%, rgba(11,11,14,0.50) 55%, rgba(11,11,14,0.78) 100%);
+}
+.card .price-chip {
+  position: absolute; top: 10px; right: 12px; z-index: 2;
+  font-size: 12px; font-weight: 700; color: #fff;
+  background: rgba(0,0,0,0.5); padding: 4px 10px; border-radius: 999px;
+  backdrop-filter: blur(8px);
+}
+.card .date-badge {
+  position: absolute; top: 10px; left: 12px; z-index: 2;
+  font-size: 11px; font-weight: 800; color: var(--on-accent);
+  background: var(--accent-grad); padding: 4px 9px; border-radius: 999px;
+}
+.card .rankpill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
+  background: linear-gradient(135deg, #FFD89B 0%, #E9A23C 100%); color: #2A1A04;
+  align-self: flex-start;
+}
+.card .body { padding: 10px 14px 14px; display: flex; flex-direction: column; gap: 5px; }
+.card .ttl { font-size: 15px; font-weight: 700; }
+.card .meta { font-size: 11.5px; color: var(--text-dim); }
+
+/* ---------- обложки по категориям (как в проде) + «Партия» ---------- */
+.ccover[data-cat="sport"]  { background: radial-gradient(circle at 70% 30%, rgba(255,232,200,0.5), transparent 50%), linear-gradient(135deg, #F47B3C 0%, #5a3f1f 60%, #1a1108 100%); }
+.ccover[data-cat="food"]   { background: radial-gradient(circle at 70% 30%, rgba(255,210,170,0.5), transparent 50%), linear-gradient(135deg, #E8932E 0%, #5a3a14 60%, #1a1006 100%); }
+.ccover[data-cat="party"]  { background: radial-gradient(circle at 75% 25%, rgba(255,200,180,0.35), transparent 55%), linear-gradient(135deg, #A6342A 0%, #6e1f18 55%, #260a08 100%); }
+.ccover[data-cat="education"] { background: radial-gradient(circle at 70% 30%, rgba(200,220,255,0.4), transparent 50%), linear-gradient(135deg, #6A82B9 0%, #2c3e57 60%, #0c1018 100%); }
+
+/* ---------- нижний док ---------- */
+.dock {
+  position: fixed;
+  left: 16px; right: 16px; bottom: 16px;
+  width: 358px;
+  background: var(--dock-bg);
+  backdrop-filter: blur(24px);
+  border: 1px solid var(--hairline-2);
+  border-radius: 22px;
+  padding: 8px 6px;
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  z-index: 5;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.25);
+}
+.dock .tab {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  font-size: 9.5px; font-weight: 600; color: var(--text-faint);
+  padding: 5px 2px; border-radius: 14px;
+}
+.dock .tab .ic { font-size: 17px; }
+.dock .tab.on { color: var(--accent); background: var(--accent-soft); }

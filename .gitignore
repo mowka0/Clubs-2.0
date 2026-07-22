@@ -24,3 +24,6 @@ docs/design/empty-states/ref/
 
 # Сырьё генераций nano banana (отбор PO, финалы уходят в ref/nano/cut и frontend/src/assets/mascot)
 fox/
+
+# Выброшенные стоковые фото (LoremFlickr) для локального просмотра мокапов discovery-card — в проде обложки с бэка
+docs/design/discovery-card/mockups/covers/

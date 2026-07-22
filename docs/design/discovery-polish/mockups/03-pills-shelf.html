@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<script>if(new URLSearchParams(location.search).has('light'))document.documentElement.dataset.theme='light'</script>
+<title>Полиш 3 — пилюли + полка «сегодня»</title>
+<link rel="stylesheet" href="_shared.css">
+<style>
+/* Полиш-вариант 3: два изменения поверх текущего экрана.
+   1) Тройка метрик → лёгкие стеклянные пилюли (hairline-рамка, без заливок-коробок).
+   2) Из «полок со смыслом» берётся ровно одна: узкая полка «Встречаются сегодня»
+      между чипами и списком. Появляется только когда такие клубы есть. */
+
+/* пилюли метрик */
+.pillrow { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 3px; }
+.pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 11px; border-radius: 999px;
+  border: 1px solid var(--hairline-2);
+  background: var(--surface);
+  font-size: 11px; color: var(--text-dim);
+}
+.pill b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.pill.ok { border-color: var(--live-soft); background: var(--live-soft); }
+.pill.ok b { color: var(--live); }
+
+/* полка «встречаются сегодня» */
+.today-shelf { margin-bottom: 14px; }
+.today-shelf .lbl {
+  display: flex; align-items: center; gap: 7px;
+  padding: 0 20px 9px;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--accent);
+}
+.today-shelf .lbl::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.today-rail {
+  display: flex; gap: 10px;
+  padding: 0 16px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.today-rail::-webkit-scrollbar { display: none; }
+.today-mini {
+  flex-shrink: 0; width: 200px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  background: var(--glass-bg);
+  border: 1px solid rgba(244, 123, 60, 0.30);
+  border-radius: 14px;
+  backdrop-filter: blur(20px);
+  box-shadow: var(--card-shadow);
+  cursor: pointer;
+}
+.today-mini .time {
+  flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 6px 9px; border-radius: 10px;
+  background: var(--accent-grad); color: var(--on-accent);
+  font-size: 13px; font-weight: 800; line-height: 1.1;
+}
+.today-mini .time small { font-size: 8px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.8; }
+.today-mini .inf { min-width: 0; }
+.today-mini .n {
+  font-size: 12.5px; font-weight: 700; line-height: 1.25;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.today-mini .s { font-size: 10.5px; color: var(--text-faint); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+  <div class="statusbar"><span>9:41</span><span class="right">LTE&nbsp;&nbsp;▮▮▮▯</span></div>
+  <header class="hdr">
+    <div class="avt-user">ИВ</div>
+    <div class="who">
+      <div class="nm">Иван <span class="star"></span></div>
+      <div class="sub">Состоишь в 6 клубах</div>
+    </div>
+    <button class="city">Москва <span class="chev">▾</span></button>
+  </header>
+
+  <h1 class="hero">Найди свой <span class="acc">клуб</span></h1>
+  <label class="search">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    Беговой клуб, книжный, дегустации
+  </label>
+  <div class="chips">
+    <span class="chip on">Все</span><span class="chip">Спорт</span><span class="chip">Творчество</span><span class="chip">Книги</span><span class="chip">Кулинария</span><span class="chip">Кино</span><span class="chip">Настолки</span>
+  </div>
+
+  <div class="today-shelf">
+    <div class="lbl">Встречаются сегодня</div>
+    <div class="today-rail">
+      <div class="today-mini">
+        <div class="time">19:30<small>сегодня</small></div>
+        <div class="inf">
+          <div class="n">Беговой клуб «Второе дыхание»</div>
+          <div class="s">Спорт · 24 участника</div>
+        </div>
+      </div>
+      <div class="today-mini">
+        <div class="time">20:00<small>сегодня</small></div>
+        <div class="inf">
+          <div class="n">«Настолки и мясо»</div>
+          <div class="s">Настолки · 41 участник</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ccover" data-cat="party"><span class="price-chip">бесплатно</span></div>
+    <div class="body">
+      <div class="ttl">Партия</div>
+      <div class="meta">Москва</div>
+      <div class="pillrow">
+        <span class="pill"><b>88</b> дней</span>
+        <span class="pill"><b>3</b> участника</span>
+        <span class="pill ok"><b>100%</b> вовлечены</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ccover" data-cat="sport"><span class="price-chip">1 200 ₽/мес</span></div>
+    <div class="body">
+      <div class="ttl">Беговой клуб «Второе дыхание»</div>
+      <div class="meta">Москва</div>
+      <div class="pillrow">
+        <span class="pill"><b>145</b> дней</span>
+        <span class="pill"><b>24</b> участника</span>
+        <span class="pill ok"><b>78%</b> вовлечены</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ccover" data-cat="food"><span class="price-chip">2 500 ₽/мес</span></div>
+    <div class="body">
+      <span class="rankpill">★ Топ-5 в категории</span>
+      <div class="ttl">Винный клуб «Декантер»</div>
+      <div class="meta">Москва</div>
+      <div class="pillrow">
+        <span class="pill"><b>210</b> дней</span>
+        <span class="pill"><b>32</b> участника</span>
+        <span class="pill ok"><b>84%</b> вовлечены</span>
+      </div>
+    </div>
+  </div>
+
+  <nav class="dock">
+    <span class="tab on"><span class="ic">◈</span>Клубы</span>
+    <span class="tab"><span class="ic">▤</span>Активности</span>
+    <span class="tab"><span class="ic">♡</span>Мои клубы</span>
+    <span class="tab"><span class="ic">◉</span>Профиль</span>
+  </nav>
+</body>
+</html>

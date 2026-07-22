@@ -1,21 +1,9 @@
 import { FC, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useHaptic } from '../hooks/useHaptic';
-import { pluralRu } from '../utils/formatters';
+import { formatTimeHM, isToday, isTomorrow } from '../utils/formatters';
+import { KNOWN_CATEGORIES } from '../utils/categoryLabels';
 import type { ClubCardFactsDto, ClubListItemDto } from '../types/api';
-
-const CATEGORY_LABELS: Record<string, string> = {
-  sport: 'Спорт',
-  creative: 'Творчество',
-  food: 'Еда',
-  board_games: 'Настолки',
-  cinema: 'Кино',
-  education: 'Образование',
-  travel: 'Путешествия',
-  other: 'Другое',
-};
-
-const KNOWN_CATEGORIES = new Set(Object.keys(CATEGORY_LABELS));
 
 /** Российский ₽ — бренд использует настоящую валюту, а не символ Telegram Stars */
 function formatPrice(price: number): string {
@@ -24,33 +12,39 @@ function formatPrice(price: number): string {
   return `${formatted} ₽/мес`;
 }
 
-function pluralizeMembers(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return 'участник';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'участника';
-  return 'участников';
-}
+/* Иконки полки метрик и пина города (мокап 11-chip-bare): stroke: currentColor,
+   цвет задаёт CSS (.rd-m svg / .rd-meta svg). */
+const ICON_CLOCK = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  </svg>
+);
 
-/** Определяет, наступит ли nearestEvent «сегодня» (< 24ч) — триггер выделенной карточки */
-function isHappeningSoon(iso: string | undefined | null): boolean {
-  if (!iso) return false;
-  const eventTime = new Date(iso).getTime();
-  if (Number.isNaN(eventTime)) return false;
-  const diff = eventTime - Date.now();
-  return diff > 0 && diff < 24 * 60 * 60 * 1000;
-}
+const ICON_PEOPLE = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+    <circle cx="9" cy="8" r="3.2" />
+    <path d="M3 20c0-3 2.7-5 6-5s6 2 6 5" />
+    <path d="M16 6a3 3 0 0 1 0 6" />
+  </svg>
+);
 
-function formatEventTime(iso: string): string {
-  const date = new Date(iso);
-  const hh = date.getHours().toString().padStart(2, '0');
-  const mm = date.getMinutes().toString().padStart(2, '0');
-  return `${hh}:${mm}`;
-}
+const ICON_BOLT = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M13 2 4 14h6l-1 8 9-12h-6z" />
+  </svg>
+);
+
+const ICON_PIN = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+    <circle cx="12" cy="10" r="3" />
+  </svg>
+);
 
 interface ClubCardProps {
   club: ClubListItemDto;
-  /** Факты о качестве (возраст + вовлечённость) для тройки метрик. Отсутствуют, пока не загрузится пакет. */
+  /** Факты о качестве (возраст + вовлечённость) для полки метрик. Отсутствуют, пока не загрузится пакет. */
   facts?: ClubCardFactsDto;
 }
 
@@ -58,9 +52,18 @@ export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
   const navigate = useNavigate();
   const haptic = useHaptic();
 
-  const featured = useMemo(() => isHappeningSoon(club.nearestEvent?.eventDatetime), [club.nearestEvent]);
+  // Слово дня для колонки расписания: «сегодня»/«завтра» по локальному календарю,
+  // послезавтра и дальше — колонки нет. Раньше был верхний бейдж на обложке с окном
+  // «<24ч»: он сталкивался с ценником на узких экранах. Теперь — колонка расписания
+  // в теле справа (вариант 17 мокапа 13-meeting-corner).
+  const meetingDay = useMemo(() => {
+    const iso = club.nearestEvent?.eventDatetime;
+    if (!iso) return null;
+    if (isToday(iso)) return 'сегодня';
+    if (isTomorrow(iso)) return 'завтра';
+    return null;
+  }, [club.nearestEvent]);
   const cat = KNOWN_CATEGORIES.has(club.category) ? club.category : 'other';
-  const memberLabel = pluralizeMembers(club.memberCount);
 
   return (
     <button
@@ -77,38 +80,38 @@ export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
         style={club.avatarUrl ? { backgroundImage: `url(${club.avatarUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
       >
         <span className="rd-price-chip">{formatPrice(club.subscriptionPrice)}</span>
-        {featured && club.nearestEvent && (
-          <span className="rd-date-badge" style={{ position: 'absolute', top: 10, left: 12, zIndex: 2 }}>
-            встреча {formatEventTime(club.nearestEvent.eventDatetime)}
-          </span>
+        {/* Полка метрик: возраст · участники · вовлечённость — уголок из материала карточки
+            в нижнем-левом углу обложки. Намеренно НЕ встреч/мес и НЕ ядро (это кольца на
+            странице клуба), чтобы карточка не дублировала страницу. */}
+        {facts && (
+          <div className="rd-shelf">
+            <span className="rd-m">{ICON_CLOCK}{facts.ageDays} дн</span>
+            <span className="rd-m">{ICON_PEOPLE}{club.memberCount}</span>
+            <span className="rd-m ok">{ICON_BOLT}{facts.engagementPercent}%</span>
+          </div>
         )}
       </div>
       <div className="rd-body">
         {/* Soft-rank L3 бейдж — единственный внешне видимый сигнал ранга (boolean; никогда не число).
             Над названием клуба. */}
         {facts?.topInCategory && <div><span className="rd-rankpill">★ Топ-5 в категории</span></div>}
-        <div className="rd-ttl">{club.name}</div>
-        <div className="rd-meta">
-          {facts ? club.city : `${club.city} · ${club.memberCount} ${memberLabel}`}
-        </div>
-        {/* Trio: возраст · участники · вовлечённость — намеренно НЕ встреч/мес и НЕ ядро
-            (это кольца на странице клуба), чтобы карточка не дублировала страницу. */}
-        {facts && (
-          <div className="rd-mrow">
-            <div className="rd-mstat">
-              <div className="rd-mv">{facts.ageDays}</div>
-              <div className="rd-ml">{pluralRu(facts.ageDays, ['день', 'дня', 'дней'])}</div>
-            </div>
-            <div className="rd-mstat">
-              <div className="rd-mv">{club.memberCount}</div>
-              <div className="rd-ml">{memberLabel}</div>
-            </div>
-            <div className="rd-mstat">
-              <div className="rd-mv ok">{facts.engagementPercent}%</div>
-              <div className="rd-ml">вовлечены</div>
-            </div>
+        {/* Левая колонка (название + город) ужимается многоточием — запас под будущий
+            район гарантирован конструкцией: колонка времени справа не двигается. */}
+        <div className="rd-brow">
+          <div className="rd-bl">
+            <div className="rd-ttl">{club.name}</div>
+            <div className="rd-meta">{ICON_PIN}<span className="rd-meta-city">{club.city}</span></div>
           </div>
-        )}
+          {meetingDay && club.nearestEvent && (
+            <div className="rd-meet">
+              <span className="rd-meet-bar" aria-hidden="true" />
+              <span className="rd-meet-tx">
+                <span className="rd-meet-d">{meetingDay}</span>
+                <span className="rd-meet-t">{formatTimeHM(club.nearestEvent.eventDatetime)}</span>
+              </span>
+            </div>
+          )}
+        </div>
       </div>
     </button>
   );

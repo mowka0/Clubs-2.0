@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<script>if(new URLSearchParams(location.search).has('light'))document.documentElement.dataset.theme='light'</script>
+<title>Карточка 5 — киноплакат</title>
+<link rel="stylesheet" href="_shared.css">
+<style>
+/* Идея: имя И метрики печатаются по нижней трети обложки, как титры на постере.
+   Тело карточки почти пустое — адрес + цена одной строкой. Метрики физически
+   на картинке (белый текст на скриме) → тема на них не влияет. Самый «журнальный». */
+.card {
+  margin: 0 16px 12px; border-radius: 18px; overflow: hidden;
+  background: var(--glass-bg); border: 1px solid var(--hairline);
+  backdrop-filter: blur(20px); box-shadow: var(--card-shadow); cursor: pointer;
+}
+.card .cov { height: 168px; position: relative; filter: saturate(0.95); }
+.card .cov::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(11,11,14,0.10) 0%, rgba(11,11,14,0.10) 38%, rgba(11,11,14,0.55) 66%, rgba(11,11,14,0.86) 100%); }
+.card .cov .price-chip { top: 12px; right: 12px; }
+.card .cov .date-badge { top: 12px; left: 12px; }
+.card .cov .rankpill { position: absolute; top: 12px; left: 12px; z-index: 2; }
+.overlay {
+  position: absolute; left: 14px; right: 14px; bottom: 11px; z-index: 2;
+}
+.overlay .ttl {
+  font-size: 18px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; color: #fff;
+  text-shadow: 0 1px 10px rgba(0,0,0,0.55);
+}
+.overlay .mline {
+  margin-top: 7px; display: flex; align-items: center; gap: 9px;
+  font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.82);
+}
+.overlay .mline b { font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; }
+.overlay .mline .sep { width: 1px; height: 11px; background: rgba(255,255,255,0.28); }
+.overlay .mline .ok b { color: #8CEBB8; }
+.card .foot {
+  padding: 10px 14px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.card .foot .loc { font-size: 12.5px; color: var(--text-dim); display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.card .foot .loc svg { width: 13px; height: 13px; opacity: 0.7; flex-shrink: 0; }
+.card .foot .loc span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .foot .price { flex-shrink: 0; font-size: 14px; font-weight: 800; letter-spacing: -0.01em; }
+.card .foot .price .per { font-size: 10.5px; font-weight: 600; color: var(--text-faint); }
+.card .foot .price.free { color: var(--text-dim); }
+</style>
+</head>
+<body>
+  <div class="statusbar"><span>9:41</span><span class="right">LTE&nbsp;&nbsp;▮▮▮▯</span></div>
+  <header class="hdr">
+    <div class="avt-user">ИВ</div>
+    <div class="who"><div class="nm">Иван <span class="star"></span></div><div class="sub">Состоишь в 6 клубах</div></div>
+    <button class="city">Москва <span class="chev">▾</span></button>
+  </header>
+  <h1 class="hero">Найди свой <span class="acc">клуб</span></h1>
+  <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Беговой клуб, книжный, дегустации</label>
+  <div class="chips"><span class="chip on">Все</span><span class="chip">Спорт</span><span class="chip">Творчество</span><span class="chip">Книги</span><span class="chip">Кулинария</span><span class="chip">Кино</span><span class="chip">Настолки</span></div>
+
+  <div class="today-shelf">
+    <div class="lbl">Встречаются сегодня</div>
+    <div class="today-rail">
+      <div class="today-mini"><div class="time">19:30<small>сегодня</small></div><div class="inf"><div class="n">Беговой клуб «Второе дыхание»</div><div class="s">Спорт · 24 участника</div></div></div>
+      <div class="today-mini"><div class="time">20:00<small>сегодня</small></div><div class="inf"><div class="n">«Настолки и мясо»</div><div class="s">Настолки · 41 участник</div></div></div>
+    </div>
+  </div>
+  <div class="list-lbl">Клубы в Москве</div>
+
+  <div class="card">
+    <div class="cov" data-cat="party">
+      <span class="price-chip">бесплатно</span>
+      <div class="overlay">
+        <div class="ttl">Партия</div>
+        <div class="mline"><span><b>88</b> дней</span><span class="sep"></span><span><b>3</b> участника</span><span class="sep"></span><span class="ok"><b>100%</b> вовлечены</span></div>
+      </div>
+    </div>
+    <div class="foot">
+      <span class="loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>Москва · Пресня</span></span>
+      <span class="price free">бесплатно</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="cov" data-cat="sport">
+      <span class="date-badge">встреча сегодня 19:30</span>
+      <div class="overlay">
+        <div class="ttl">Беговой клуб «Второе дыхание»</div>
+        <div class="mline"><span><b>145</b> дней</span><span class="sep"></span><span><b>24</b> участника</span><span class="sep"></span><span class="ok"><b>78%</b> вовлечены</span></div>
+      </div>
+    </div>
+    <div class="foot">
+      <span class="loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>Москва · Хамовники, парк Горького</span></span>
+      <span class="price">1 200 ₽<span class="per">/мес</span></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="cov" data-cat="food">
+      <span class="rankpill">★ Топ-5 в категории</span>
+      <div class="overlay">
+        <div class="ttl">Винный клуб «Декантер»</div>
+        <div class="mline"><span><b>210</b> дней</span><span class="sep"></span><span><b>32</b> участника</span><span class="sep"></span><span class="ok"><b>84%</b> вовлечены</span></div>
+      </div>
+    </div>
+    <div class="foot">
+      <span class="loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>Москва · Патриаршие пруды</span></span>
+      <span class="price">2 500 ₽<span class="per">/мес</span></span>
+    </div>
+  </div>
+
+  <nav class="dock">
+    <span class="tab on"><span class="ic">◈</span>Клубы</span><span class="tab"><span class="ic">▤</span>Активности</span><span class="tab"><span class="ic">♡</span>Мои клубы</span><span class="tab"><span class="ic">◉</span>Профиль</span>
+  </nav>
+</body>
+</html>

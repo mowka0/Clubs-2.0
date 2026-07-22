@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Discovery — 5 вариантов, весь экран</title>
+<style>
+:root {
+  --bg:#0B0B0E; --text:#F4F4F6; --text-dim:rgba(244,244,246,0.6); --text-faint:rgba(244,244,246,0.45);
+  --glass-bg:linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.015) 100%);
+  --surface:rgba(255,255,255,0.04); --surface-2:rgba(255,255,255,0.05);
+  --hairline:rgba(255,255,255,0.06); --hairline-2:rgba(255,255,255,0.1);
+  --accent:#F47B3C; --accent-deep:#D5611C; --accent-soft:rgba(244,123,60,0.14);
+  --accent-grad:linear-gradient(135deg,#FFA070 0%,#F47B3C 100%); --on-accent:#2A0E04;
+  --live:#66D49A; --live-soft:rgba(79,160,120,0.18);
+  --card-shadow:inset 0 1px 0 rgba(255,255,255,0.06), 0 6px 20px rgba(0,0,0,0.2);
+  --dock-bg:linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%), rgba(15, 15, 20, 0.72);
+  --grain-opacity:0.08;
+  --page:#141416;
+}
+[data-theme="light"] {
+  --bg:#F7F6F3; --text:#1A1A1A; --text-dim:#6B6B70; --text-faint:#8A8A8E;
+  --glass-bg:linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(252,252,252,0.85) 100%);
+  --surface:rgba(255,255,255,0.85); --surface-2:#FFFFFF;
+  --hairline:rgba(0,0,0,0.06); --hairline-2:rgba(0,0,0,0.1);
+  --accent-soft:rgba(244,123,60,0.12); --accent-grad:linear-gradient(135deg,#F47B3C 0%,#D5611C 100%); --on-accent:#FFFFFF;
+  --live:#2E7D5A; --live-soft:rgba(46,125,90,0.12);
+  --card-shadow:inset 0 1px 0 rgba(255,255,255,1), 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.05);
+  --dock-bg:rgba(255,255,255,0.85); --grain-opacity:0;
+  --page:#E9E7E2;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body {
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif;
+  background:var(--page); color:var(--text); -webkit-font-smoothing:antialiased;
+  transition:background .2s ease;
+}
+.topbar {
+  position:sticky; top:0; z-index:20; display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding:16px 28px; background:var(--page); border-bottom:1px solid var(--hairline);
+}
+.topbar h1 { font-size:18px; font-weight:800; letter-spacing:-0.02em; }
+.topbar .hint { font-size:12.5px; color:var(--text-dim); font-weight:500; margin-top:2px; }
+.toggle {
+  display:inline-flex; align-items:center; gap:8px; height:38px; padding:0 16px; border-radius:999px;
+  border:1px solid var(--hairline-2); background:var(--surface-2); color:var(--text);
+  font-family:inherit; font-size:13px; font-weight:700; cursor:pointer;
+}
+.rail { display:flex; gap:26px; padding:28px; overflow-x:auto; align-items:flex-start; }
+.stack { flex-shrink:0; }
+.stack .cap { display:flex; align-items:center; gap:9px; margin:0 4px 12px; }
+.stack .cap .num { width:26px; height:26px; border-radius:50%; background:var(--accent-grad); color:var(--on-accent); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800; }
+.stack .cap .t { font-size:14.5px; font-weight:800; letter-spacing:-0.01em; }
+
+/* ===== телефон-фрейм ===== */
+.phone {
+  width:390px; border-radius:34px; overflow:hidden; position:relative;
+  background:var(--bg); border:1px solid var(--hairline-2);
+  box-shadow:0 24px 60px rgba(0,0,0,0.4); padding-bottom:14px;
+}
+.phone::after {
+  content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+  opacity:var(--grain-opacity); mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='2.2' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+.phone > * { position:relative; z-index:1; }
+
+/* ===== общий каркас экрана ===== */
+.statusbar { height:44px; display:flex; align-items:flex-end; justify-content:space-between; padding:0 24px 6px; font-size:15px; font-weight:600; }
+.statusbar .right { font-size:12px; opacity:0.9; }
+.hdr { display:flex; align-items:center; gap:12px; padding:6px 20px 4px; }
+.hdr .avt-user { width:44px; height:44px; border-radius:50%; background:linear-gradient(160deg,#3A2E18,#1F1808); color:var(--accent-deep); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; box-shadow:0 0 0 2px var(--accent-soft); flex-shrink:0; }
+.hdr .who { flex:1; min-width:0; }
+.hdr .nm { font-size:16px; font-weight:700; letter-spacing:-0.01em; display:flex; align-items:center; gap:6px; }
+.hdr .nm .star { width:9px; height:9px; border-radius:50%; background:var(--accent-grad); flex-shrink:0; }
+.hdr .sub { font-size:12.5px; color:var(--text-dim); margin-top:1px; }
+.hdr .city { display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 13px; background:var(--surface-2); border:1px solid var(--hairline); border-radius:999px; font-size:13px; font-weight:500; color:var(--text-dim); flex-shrink:0; }
+.hdr .city .chev { font-size:9px; opacity:0.6; }
+.hero { padding:16px 20px 12px; font-size:28px; font-weight:700; letter-spacing:-0.024em; line-height:1.1; }
+.hero .acc { color:var(--accent); }
+.search { display:flex; align-items:center; gap:10px; margin:0 20px 12px; height:46px; padding:0 14px; background:var(--surface); border:1px solid var(--hairline); border-radius:14px; color:var(--text-faint); font-size:14px; }
+.search svg { flex-shrink:0; }
+.chips { display:flex; gap:8px; padding:0 20px 16px; overflow:hidden; }
+.chip { flex-shrink:0; padding:8px 15px; border-radius:999px; background:var(--surface); border:1px solid var(--hairline); font-size:12.5px; font-weight:600; color:var(--text-dim); white-space:nowrap; }
+.chip.on { background:var(--accent-grad); color:var(--on-accent); border-color:transparent; box-shadow:0 2px 6px rgba(244,123,60,0.30); }
+.today-shelf { margin-bottom:16px; }
+.today-shelf .lbl { display:flex; align-items:center; gap:7px; padding:0 20px 9px; font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--accent); }
+.today-shelf .lbl::before { content:''; width:6px; height:6px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+.today-rail { display:flex; gap:10px; padding:0 16px; overflow:hidden; }
+.today-mini { flex-shrink:0; width:200px; display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--glass-bg); border:1px solid rgba(244,123,60,0.30); border-radius:14px; box-shadow:var(--card-shadow); }
+.today-mini .time { flex-shrink:0; display:flex; flex-direction:column; align-items:center; padding:6px 9px; border-radius:10px; background:var(--accent-grad); color:var(--on-accent); font-size:13px; font-weight:800; line-height:1.1; }
+.today-mini .time small { font-size:8px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; opacity:0.8; }
+.today-mini .inf { min-width:0; }
+.today-mini .n { font-size:12.5px; font-weight:700; line-height:1.25; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.today-mini .s { font-size:10.5px; color:var(--text-faint); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.list-lbl { padding:0 20px 10px; font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--text-dim); }
+.dock { margin:16px 16px 0; background:var(--dock-bg); border:1px solid var(--hairline-2); border-radius:22px; padding:8px 6px; display:grid; grid-template-columns:repeat(4,1fr); box-shadow:0 12px 32px rgba(0,0,0,0.2); }
+.dock .tab { display:flex; flex-direction:column; align-items:center; gap:3px; font-size:9.5px; font-weight:600; color:var(--text-faint); padding:5px 2px; border-radius:14px; }
+.dock .tab .ic { font-size:17px; }
+.dock .tab.on { color:var(--accent); background:var(--accent-soft); }
+
+/* обложки + бейджи */
+.cov[data-cat="sport"] { background:radial-gradient(circle at 70% 30%, rgba(255,232,200,0.5), transparent 50%), linear-gradient(135deg,#F47B3C 0%,#5a3f1f 60%,#1a1108 100%); }
+.cov[data-cat="food"]  { background:radial-gradient(circle at 70% 30%, rgba(255,210,170,0.5), transparent 50%), linear-gradient(135deg,#E8932E 0%,#5a3a14 60%,#1a1006 100%); }
+.cov[data-cat="party"] { background:radial-gradient(circle at 75% 25%, rgba(255,200,180,0.35), transparent 55%), linear-gradient(135deg,#A6342A 0%,#6e1f18 55%,#260a08 100%); }
+.price-chip { position:absolute; z-index:2; font-size:12px; font-weight:700; color:#fff; background:rgba(0,0,0,0.5); padding:4px 10px; border-radius:999px; }
+.date-badge { position:absolute; z-index:2; font-size:11px; font-weight:800; color:var(--on-accent); background:var(--accent-grad); padding:4px 9px; border-radius:999px; }
+.rankpill { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:700; padding:3px 10px; border-radius:999px; background:linear-gradient(135deg,#FFD89B 0%,#E9A23C 100%); color:#2A1A04; }
+
+/* ===== v1 постер ===== */
+.v1 .card { margin:0 16px 12px; display:flex; align-items:stretch; background:var(--glass-bg); border:1px solid var(--hairline); border-radius:16px; overflow:hidden; box-shadow:var(--card-shadow); }
+.v1 .cov { position:relative; width:104px; flex-shrink:0; filter:saturate(0.9); }
+.v1 .cov::after { content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(11,11,14,0.15), rgba(11,11,14,0.55)); }
+.v1 .cov .price-chip { top:8px; left:8px; font-size:10.5px; padding:3px 8px; }
+.v1 .cov .date-badge { bottom:8px; left:8px; font-size:9.5px; padding:3px 7px; }
+.v1 .rt { flex:1; min-width:0; padding:12px 14px; display:flex; flex-direction:column; gap:4px; }
+.v1 .rt .rankpill { align-self:flex-start; font-size:10px; padding:2px 8px; margin-bottom:1px; }
+.v1 .ttl { font-size:15px; font-weight:700; letter-spacing:-0.01em; line-height:1.2; }
+.v1 .loc { font-size:11.5px; color:var(--text-dim); display:inline-flex; align-items:center; gap:4px; }
+.v1 .loc svg { width:11px; height:11px; opacity:0.7; flex-shrink:0; }
+.v1 .mrow { margin-top:auto; display:flex; align-items:center; gap:12px; padding-top:6px; }
+.v1 .m { display:inline-flex; align-items:baseline; gap:4px; font-size:11px; color:var(--text-faint); }
+.v1 .m b { font-size:13.5px; font-weight:800; letter-spacing:-0.02em; color:var(--text); font-variant-numeric:tabular-nums; }
+.v1 .m.ok b { color:var(--live); }
+
+/* ===== v2 плавающие чипы ===== */
+.v2 .card { margin:0 16px 12px; border-radius:18px; overflow:hidden; background:var(--glass-bg); border:1px solid var(--hairline); box-shadow:var(--card-shadow); }
+.v2 .cov { height:104px; position:relative; filter:saturate(0.9); }
+.v2 .cov::after { content:''; position:absolute; inset:0; z-index:1; background:linear-gradient(180deg, rgba(11,11,14,0.25) 0%, rgba(11,11,14,0.15) 45%, rgba(11,11,14,0.72) 100%); }
+.v2 .cov .price-chip { top:10px; right:12px; }
+.v2 .cov .date-badge { top:10px; left:12px; }
+.v2 .chip-row { position:absolute; left:10px; bottom:10px; z-index:2; display:flex; gap:6px; }
+.v2 .mchip { display:inline-flex; align-items:center; gap:4px; padding:3px 8px 3px 7px; border-radius:999px; background:rgba(0,0,0,0.42); border:1px solid rgba(255,255,255,0.16); font-size:11px; font-weight:700; color:#fff; white-space:nowrap; }
+.v2 .mchip svg { width:11px; height:11px; opacity:0.85; }
+.v2 .mchip.ok { color:#8CEBB8; }
+.v2 .body { padding:11px 14px 14px; }
+.v2 .ttl { font-size:15.5px; font-weight:700; letter-spacing:-0.01em; }
+.v2 .loc { margin-top:4px; font-size:12px; color:var(--text-dim); display:inline-flex; align-items:center; gap:5px; }
+.v2 .loc svg { width:12px; height:12px; opacity:0.7; flex-shrink:0; }
+.v2 .body .rankpill { margin-bottom:7px; }
+
+/* ===== v3 кольцо ===== */
+.v3 .card { margin:0 16px 12px; border-radius:18px; overflow:hidden; background:var(--glass-bg); border:1px solid var(--hairline); box-shadow:var(--card-shadow); }
+.v3 .cov { height:100px; position:relative; filter:saturate(0.9); }
+.v3 .cov::after { content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(11,11,14,0.28) 0%, rgba(11,11,14,0.5) 55%, rgba(11,11,14,0.78) 100%); }
+.v3 .cov .price-chip { top:10px; right:12px; }
+.v3 .cov .date-badge { top:10px; left:12px; }
+.v3 .body { padding:11px 14px 13px; display:flex; align-items:center; gap:12px; }
+.v3 .txt { flex:1; min-width:0; }
+.v3 .txt .rankpill { margin-bottom:6px; }
+.v3 .ttl { font-size:15.5px; font-weight:700; letter-spacing:-0.01em; line-height:1.25; }
+.v3 .sub { margin-top:4px; font-size:12px; color:var(--text-dim); display:flex; align-items:center; gap:5px; }
+.v3 .sub svg { width:12px; height:12px; opacity:0.7; flex-shrink:0; }
+.v3 .sub .dot { opacity:0.4; }
+.v3 .ring { flex-shrink:0; width:52px; height:52px; position:relative; }
+.v3 .ring svg { width:52px; height:52px; transform:rotate(-90deg); }
+.v3 .ring .track { stroke:var(--hairline-2); }
+.v3 .ring .val { stroke:var(--live); stroke-linecap:round; }
+.v3 .ring .lbl { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.v3 .ring .lbl b { font-size:14px; font-weight:800; letter-spacing:-0.03em; color:var(--live); line-height:1; font-variant-numeric:tabular-nums; }
+.v3 .ring .lbl small { font-size:7px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-faint); margin-top:2px; }
+
+/* ===== v4 иконки ===== */
+.v4 .card { margin:0 16px 12px; border-radius:18px; overflow:hidden; background:var(--glass-bg); border:1px solid var(--hairline); box-shadow:var(--card-shadow); }
+.v4 .cov { height:100px; position:relative; filter:saturate(0.9); }
+.v4 .cov::after { content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(11,11,14,0.28) 0%, rgba(11,11,14,0.5) 55%, rgba(11,11,14,0.78) 100%); }
+.v4 .cov .price-chip { top:10px; right:12px; }
+.v4 .cov .date-badge { top:10px; left:12px; }
+.v4 .body { padding:11px 14px 13px; display:flex; flex-direction:column; gap:5px; }
+.v4 .body .rankpill { margin-bottom:2px; align-self:flex-start; }
+.v4 .ttl { font-size:15.5px; font-weight:700; letter-spacing:-0.01em; }
+.v4 .loc { font-size:12px; color:var(--text-dim); display:inline-flex; align-items:center; gap:5px; }
+.v4 .loc svg { width:12px; height:12px; opacity:0.7; flex-shrink:0; }
+.v4 .imrow { display:flex; align-items:center; gap:14px; margin-top:3px; }
+.v4 .im { display:inline-flex; align-items:center; gap:5px; font-size:13px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-0.01em; }
+.v4 .im svg { width:14px; height:14px; color:var(--text-faint); flex-shrink:0; }
+.v4 .im.ok, .v4 .im.ok svg { color:var(--live); }
+
+/* ===== v5 киноплакат ===== */
+.v5 .card { margin:0 16px 12px; border-radius:18px; overflow:hidden; background:var(--glass-bg); border:1px solid var(--hairline); box-shadow:var(--card-shadow); }
+.v5 .cov { height:168px; position:relative; filter:saturate(0.95); }
+.v5 .cov::after { content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(11,11,14,0.10) 0%, rgba(11,11,14,0.10) 38%, rgba(11,11,14,0.55) 66%, rgba(11,11,14,0.86) 100%); }
+.v5 .cov .price-chip { top:12px; right:12px; }
+.v5 .cov .rankpill { position:absolute; top:12px; left:12px; z-index:2; }
+.v5 .cov .date-badge { top:12px; left:12px; }
+.v5 .overlay { position:absolute; left:14px; right:14px; bottom:11px; z-index:2; }
+.v5 .overlay .ttl { font-size:18px; font-weight:800; letter-spacing:-0.02em; line-height:1.15; color:#fff; text-shadow:0 1px 10px rgba(0,0,0,0.55); }
+.v5 .overlay .mline { margin-top:7px; display:flex; align-items:center; gap:9px; font-size:11.5px; font-weight:600; color:rgba(255,255,255,0.82); }
+.v5 .overlay .mline b { font-weight:800; color:#fff; font-variant-numeric:tabular-nums; }
+.v5 .overlay .mline .sep { width:1px; height:11px; background:rgba(255,255,255,0.28); }
+.v5 .overlay .mline .ok b { color:#8CEBB8; }
+.v5 .foot { padding:10px 14px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.v5 .foot .loc { font-size:12.5px; color:var(--text-dim); display:inline-flex; align-items:center; gap:5px; min-width:0; }
+.v5 .foot .loc svg { width:13px; height:13px; opacity:0.7; flex-shrink:0; }
+.v5 .foot .loc span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.v5 .foot .price { flex-shrink:0; font-size:14px; font-weight:800; letter-spacing:-0.01em; }
+.v5 .foot .price .per { font-size:10.5px; font-weight:600; color:var(--text-faint); }
+.v5 .foot .price.free { color:var(--text-dim); }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div>
+    <h1>Discovery — весь экран, 5 вариантов карточки</h1>
+    <div class="hint">Прокрути вправо → пять экранов целиком. Кнопка справа — переключить тему всем сразу.</div>
+  </div>
+  <button class="toggle" onclick="var h=document.documentElement; h.dataset.theme = h.dataset.theme==='light'?'':'light'; this.querySelector('.tx').textContent = h.dataset.theme==='light'?'Тёмная тема':'Светлая тема';">
+    <span>◐</span><span class="tx">Светлая тема</span>
+  </button>
+</div>
+
+<div class="rail" id="rail"></div>
+
+<script>
+/* Каркас экрана одинаков во всех — генерируем, подставляя разметку карточек варианта. */
+const CHROME_TOP = `
+  <div class="statusbar"><span>9:41</span><span class="right">LTE ▮▮▮▯</span></div>
+  <div class="hdr">
+    <div class="avt-user">ИВ</div>
+    <div class="who"><div class="nm">Иван <span class="star"></span></div><div class="sub">Состоишь в 6 клубах</div></div>
+    <button class="city">Москва <span class="chev">▾</span></button>
+  </div>
+  <h1 class="hero">Найди свой <span class="acc">клуб</span></h1>
+  <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Беговой клуб, книжный, дегустации</label>
+  <div class="chips"><span class="chip on">Все</span><span class="chip">Спорт</span><span class="chip">Творчество</span><span class="chip">Книги</span><span class="chip">Кулинария</span></div>
+  <div class="today-shelf">
+    <div class="lbl">Встречаются сегодня</div>
+    <div class="today-rail">
+      <div class="today-mini"><div class="time">19:30<small>сегодня</small></div><div class="inf"><div class="n">Беговой клуб «Второе дыхание»</div><div class="s">Спорт · 24 участника</div></div></div>
+      <div class="today-mini"><div class="time">20:00<small>сегодня</small></div><div class="inf"><div class="n">«Настолки и мясо»</div><div class="s">Настолки · 41</div></div></div>
+    </div>
+  </div>
+  <div class="list-lbl">Клубы в Москве</div>`;
+const DOCK = `<nav class="dock"><span class="tab on"><span class="ic">◈</span>Клубы</span><span class="tab"><span class="ic">▤</span>Активности</span><span class="tab"><span class="ic">♡</span>Мои клубы</span><span class="tab"><span class="ic">◉</span>Профиль</span></nav>`;
+const PIN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
+const CLK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`;
+const PPL = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><path d="M16 6a3 3 0 0 1 0 6"/></svg>`;
+const BLT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>`;
+function ring(pct){ const off=(138.2*(100-pct)/100).toFixed(1); return `<div class="ring"><svg viewBox="0 0 52 52"><circle class="track" cx="26" cy="26" r="22" fill="none" stroke-width="5"/><circle class="val" cx="26" cy="26" r="22" fill="none" stroke-width="5" stroke-dasharray="138.2" stroke-dashoffset="${off}"/></svg><div class="lbl"><b>${pct}</b><small>жив</small></div></div>`; }
+
+/* карточки каждого варианта: [party, sport, food] */
+const CARDS = {
+  1: `
+  <div class="card"><div class="cov" data-cat="party"><span class="price-chip">бесплатно</span></div><div class="rt"><div class="ttl">Партия</div><div class="loc">${PIN}Москва · Пресня</div><div class="mrow"><span class="m"><b>88</b> дн</span><span class="m"><b>3</b> чел</span><span class="m ok"><b>100%</b> живы</span></div></div></div>
+  <div class="card"><div class="cov" data-cat="sport"><span class="price-chip">1 200 ₽</span><span class="date-badge">19:30</span></div><div class="rt"><div class="ttl">Беговой клуб «Второе дыхание»</div><div class="loc">${PIN}Москва · Хамовники</div><div class="mrow"><span class="m"><b>145</b> дн</span><span class="m"><b>24</b> чел</span><span class="m ok"><b>78%</b> живы</span></div></div></div>
+  <div class="card"><div class="cov" data-cat="food"><span class="price-chip">2 500 ₽</span></div><div class="rt"><span class="rankpill">★ Топ-5</span><div class="ttl">Винный клуб «Декантер»</div><div class="loc">${PIN}Москва · Патрики</div><div class="mrow"><span class="m"><b>210</b> дн</span><span class="m"><b>32</b> чел</span><span class="m ok"><b>84%</b> живы</span></div></div></div>`,
+  2: `
+  <div class="card"><div class="cov" data-cat="party"><span class="price-chip">бесплатно</span><div class="chip-row"><span class="mchip">${CLK}88 дн</span><span class="mchip">${PPL}3</span><span class="mchip ok">${BLT}100%</span></div></div><div class="body"><div class="ttl">Партия</div><div class="loc">${PIN}Москва · Пресня</div></div></div>
+  <div class="card"><div class="cov" data-cat="sport"><span class="date-badge">встреча 19:30</span><span class="price-chip">1 200 ₽/мес</span><div class="chip-row"><span class="mchip">${CLK}145 дн</span><span class="mchip">${PPL}24</span><span class="mchip ok">${BLT}78%</span></div></div><div class="body"><div class="ttl">Беговой клуб «Второе дыхание»</div><div class="loc">${PIN}Москва · Хамовники, парк</div></div></div>
+  <div class="card"><div class="cov" data-cat="food"><span class="price-chip">2 500 ₽/мес</span><div class="chip-row"><span class="mchip">${CLK}210 дн</span><span class="mchip">${PPL}32</span><span class="mchip ok">${BLT}84%</span></div></div><div class="body"><span class="rankpill">★ Топ-5 в категории</span><div class="ttl">Винный клуб «Декантер»</div><div class="loc">${PIN}Москва · Патриаршие пруды</div></div></div>`,
+  3: `
+  <div class="card"><div class="cov" data-cat="party"><span class="price-chip">бесплатно</span></div><div class="body"><div class="txt"><div class="ttl">Партия</div><div class="sub">${PIN}Москва · Пресня <span class="dot">·</span> 3 <span class="dot">·</span> 88 дней</div></div>${ring(100)}</div></div>
+  <div class="card"><div class="cov" data-cat="sport"><span class="date-badge">встреча 19:30</span><span class="price-chip">1 200 ₽/мес</span></div><div class="body"><div class="txt"><div class="ttl">Беговой клуб «Второе дыхание»</div><div class="sub">${PIN}Москва · Хамовники <span class="dot">·</span> 24 <span class="dot">·</span> 145 дней</div></div>${ring(78)}</div></div>
+  <div class="card"><div class="cov" data-cat="food"><span class="price-chip">2 500 ₽/мес</span></div><div class="body"><div class="txt"><span class="rankpill">★ Топ-5 в категории</span><div class="ttl">Винный клуб «Декантер»</div><div class="sub">${PIN}Москва · Патрики <span class="dot">·</span> 32 <span class="dot">·</span> 210 дней</div></div>${ring(84)}</div></div>`,
+  4: `
+  <div class="card"><div class="cov" data-cat="party"><span class="price-chip">бесплатно</span></div><div class="body"><div class="ttl">Партия</div><div class="loc">${PIN}Москва · Пресня, Патриаршие</div><div class="imrow"><span class="im">${CLK}88 дн</span><span class="im">${PPL}3</span><span class="im ok">${BLT}100%</span></div></div></div>
+  <div class="card"><div class="cov" data-cat="sport"><span class="date-badge">встреча 19:30</span><span class="price-chip">1 200 ₽/мес</span></div><div class="body"><div class="ttl">Беговой клуб «Второе дыхание»</div><div class="loc">${PIN}Москва · Хамовники, парк Горького</div><div class="imrow"><span class="im">${CLK}145 дн</span><span class="im">${PPL}24</span><span class="im ok">${BLT}78%</span></div></div></div>
+  <div class="card"><div class="cov" data-cat="food"><span class="price-chip">2 500 ₽/мес</span></div><div class="body"><span class="rankpill">★ Топ-5 в категории</span><div class="ttl">Винный клуб «Декантер»</div><div class="loc">${PIN}Москва · Патриаршие пруды</div><div class="imrow"><span class="im">${CLK}210 дн</span><span class="im">${PPL}32</span><span class="im ok">${BLT}84%</span></div></div></div>`,
+  5: `
+  <div class="card"><div class="cov" data-cat="party"><span class="price-chip">бесплатно</span><div class="overlay"><div class="ttl">Партия</div><div class="mline"><span><b>88</b> дней</span><span class="sep"></span><span><b>3</b> участника</span><span class="sep"></span><span class="ok"><b>100%</b> вовлечены</span></div></div></div><div class="foot"><span class="loc">${PIN}<span>Москва · Пресня</span></span><span class="price free">бесплатно</span></div></div>
+  <div class="card"><div class="cov" data-cat="sport"><span class="date-badge">встреча сегодня 19:30</span><div class="overlay"><div class="ttl">Беговой клуб «Второе дыхание»</div><div class="mline"><span><b>145</b> дней</span><span class="sep"></span><span><b>24</b> участника</span><span class="sep"></span><span class="ok"><b>78%</b> вовлечены</span></div></div></div><div class="foot"><span class="loc">${PIN}<span>Москва · Хамовники, парк Горького</span></span><span class="price">1 200 ₽<span class="per">/мес</span></span></div></div>
+  <div class="card"><div class="cov" data-cat="food"><span class="rankpill">★ Топ-5 в категории</span><div class="overlay"><div class="ttl">Винный клуб «Декантер»</div><div class="mline"><span><b>210</b> дней</span><span class="sep"></span><span><b>32</b> участника</span><span class="sep"></span><span class="ok"><b>84%</b> вовлечены</span></div></div></div><div class="foot"><span class="loc">${PIN}<span>Москва · Патриаршие пруды</span></span><span class="price">2 500 ₽<span class="per">/мес</span></span></div></div>`,
+};
+const NAMES = {1:'Горизонтальный постер',2:'Плавающие чипы',3:'Кольцо живости',4:'Иконки вместо подписей',5:'Киноплакат'};
+const rail = document.getElementById('rail');
+[1,2,3,4,5].forEach(n => {
+  const stack = document.createElement('div');
+  stack.className = 'stack';
+  stack.innerHTML = `<div class="cap"><div class="num">${n}</div><div class="t">${NAMES[n]}</div></div><div class="phone v${n}">${CHROME_TOP}${CARDS[n]}${DOCK}</div>`;
+  rail.appendChild(stack);
+});
+</script>
+</body>
+</html>

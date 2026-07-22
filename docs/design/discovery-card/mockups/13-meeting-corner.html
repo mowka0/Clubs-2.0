@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Время встречи — правый нижний угол, 10 форм</title>
+<style>
+:root {
+  --bg:#0B0B0E; --card:#17171C;
+  --text:#F4F4F6; --text-dim:rgba(244,244,246,0.6); --text-faint:rgba(244,244,246,0.45);
+  --hairline:rgba(255,255,255,0.06); --hairline-2:rgba(255,255,255,0.1);
+  --accent:#F47B3C; --accent-grad:linear-gradient(135deg,#FFA070 0%,#F47B3C 100%); --on-accent:#2A0E04;
+  --live:#66D49A; --shelf-hl:rgba(255,255,255,0.12);
+}
+[data-theme="light"] {
+  --bg:#F7F6F3; --card:#FFFFFF;
+  --text:#1A1A1A; --text-dim:#6B6B70; --text-faint:#8A8A8E;
+  --hairline:rgba(0,0,0,0.06); --hairline-2:rgba(0,0,0,0.1);
+  --accent-grad:linear-gradient(135deg,#F47B3C 0%,#D5611C 100%); --on-accent:#FFFFFF;
+  --live:#2E7D5A; --shelf-hl:rgba(255,255,255,0.9);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif; background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased; }
+.topbar { position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 24px; background:var(--bg); border-bottom:1px solid var(--hairline); }
+.topbar h1 { font-size:16px; font-weight:800; letter-spacing:-0.02em; }
+.topbar .hint { font-size:12px; color:var(--text-dim); margin-top:2px; }
+.topbar .hint b { color:var(--accent); }
+.toggle { display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 15px; border-radius:999px; border:1px solid var(--hairline-2); background:var(--card); color:var(--text); font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; flex-shrink:0; }
+.grid { display:flex; flex-wrap:wrap; gap:26px 30px; padding:24px 28px 60px; }
+.col { width:300px; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.vname { font-size:13.5px; font-weight:800; letter-spacing:-0.01em; margin-bottom:2px; }
+.vname b { color:var(--accent); margin-right:6px; }
+.vname .zone { font-size:9px; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-faint); margin-left:7px; }
+.vhint { font-size:11px; color:var(--text-dim); line-height:1.4; margin-bottom:11px; min-height:44px; }
+.col.holding .vname::after { content:' — бейдж как сейчас'; color:var(--live); font-size:11px; }
+
+/* ---- карточка v2 как в проде (полка метрик слева) ---- */
+.card { position:relative; border-radius:18px; overflow:hidden; background:var(--card); margin-bottom:12px;
+        border:1px solid var(--hairline); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 6px 20px rgba(0,0,0,0.2); }
+.cov { height:112px; position:relative; background-size:cover; background-position:center; filter:saturate(0.9); }
+.price-chip { position:absolute; z-index:3; top:10px; right:12px; font-size:12px; font-weight:700; color:#fff; background:rgba(0,0,0,0.5); padding:4px 10px; border-radius:999px; backdrop-filter:blur(8px); }
+.old-badge { display:none; position:absolute; z-index:4; top:10px; left:12px; font-size:11px; font-weight:800; color:var(--on-accent); background:var(--accent-grad); padding:4px 9px; border-radius:999px; }
+.col.holding .old-badge { display:inline-block; }
+.col.holding .meet { display:none; }
+.shelf { position:absolute; left:0; bottom:0; z-index:2; display:flex; align-items:center; gap:12px;
+         padding:9px 12px 4px 12px; background:var(--card); border-top-right-radius:13px; box-shadow: inset 0 1px 0 var(--shelf-hl); }
+.cc { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:700; color:var(--text); white-space:nowrap; }
+.cc svg { width:11px; height:11px; flex-shrink:0; color:var(--text-faint); }
+.cc.ok, .cc.ok svg { color:var(--live); }
+.body { padding:5px 14px 14px; display:flex; flex-direction:column; gap:5px; }
+.body .ttl { font-size:14px; font-weight:700; }
+/* Мета-строка: город (с запасом под район, обрезается многоточием) слева + место под время справа */
+.metarow { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; }
+.loc { font-size:11px; color:var(--text-dim); display:inline-flex; align-items:center; gap:5px; min-width:0; }
+.loc svg { width:12px; height:12px; opacity:0.7; flex-shrink:0; }
+.loc .city { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* ============ формы времени встречи ============ */
+
+/* — НА ОБЛОЖКЕ, правый нижний угол — */
+
+/* 1. Зеркальный уголок — симметрия полке метрик, скруглён левый верхний угол */
+.m1 { position:absolute; right:0; bottom:0; z-index:2; display:inline-flex; align-items:center; gap:5px;
+      padding:9px 12px 4px 12px; background:var(--card); border-top-left-radius:13px;
+      box-shadow: inset 0 1px 0 var(--shelf-hl); font-size:11px; font-weight:700; }
+.m1 svg { width:11px; height:11px; color:var(--accent); }
+.m1 .t { color:var(--text); }
+.m1 .d { color:var(--text-faint); font-weight:600; }
+
+/* 2. Календарик-листок: цветная шапка «сегодня» + время на материале */
+.m2 { position:absolute; right:10px; bottom:10px; z-index:2; width:52px; border-radius:10px; overflow:hidden;
+      background:var(--card); border:1px solid var(--hairline-2); box-shadow:0 4px 14px rgba(0,0,0,0.35); text-align:center; }
+.m2 .hd { font-size:7px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; padding:3px 0 2px; background:var(--accent-grad); color:var(--on-accent); }
+.m2 .tm { font-size:13px; font-weight:800; letter-spacing:-0.02em; padding:4px 0 5px; color:var(--text); font-variant-numeric:tabular-nums; }
+
+/* 3. Аналоговые часики в уголке: циферблат со стрелками на реальное время */
+.m3 { position:absolute; right:0; bottom:0; z-index:2; display:inline-flex; align-items:center; gap:7px;
+      padding:7px 12px 5px 12px; background:var(--card); border-top-left-radius:13px; box-shadow: inset 0 1px 0 var(--shelf-hl); }
+.m3 .face { position:relative; width:22px; height:22px; border-radius:50%; border:1.5px solid var(--accent); flex-shrink:0; }
+.m3 .h, .m3 .m { position:absolute; left:50%; bottom:50%; transform-origin:50% 100%; background:var(--text); border-radius:2px; }
+.m3 .h { width:1.8px; height:5.5px; margin-left:-0.9px; }
+.m3 .m { width:1.4px; height:8px; margin-left:-0.7px; }
+.m3 .dot { position:absolute; left:50%; top:50%; width:3px; height:3px; margin:-1.5px 0 0 -1.5px; border-radius:50%; background:var(--accent); }
+.m3 .tx { display:flex; flex-direction:column; line-height:1.1; }
+.m3 .t { font-size:12px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; }
+.m3 .d { font-size:8px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-faint); }
+
+/* 4. Язычок-вкладка: торчит из нижней кромки с отступом от правого края */
+.m4 { position:absolute; right:12px; bottom:0; z-index:2; display:inline-flex; align-items:center; gap:5px;
+      padding:6px 12px 5px; background:var(--card); border-radius:11px 11px 0 0;
+      box-shadow: inset 0 1px 0 var(--shelf-hl); font-size:11px; font-weight:700; }
+.m4 svg { width:11px; height:11px; color:var(--accent); }
+.m4 .t { color:var(--text); }
+.m4 .d { color:var(--text-faint); font-weight:600; }
+
+/* 5. Стеклянная капля — материал ценника, но в нижнем углу */
+.m5 { position:absolute; right:12px; bottom:10px; z-index:2; display:inline-flex; align-items:center; gap:5px;
+      font-size:11.5px; font-weight:700; color:#fff; background:rgba(0,0,0,0.5); padding:4px 10px; border-radius:999px; backdrop-filter:blur(8px); }
+.m5 svg { width:11px; height:11px; color:#FFA070; }
+.m5 .d { opacity:0.65; font-weight:600; }
+
+/* 6. Кольцо-отсчёт: сколько дня прошло к встрече, время внутри */
+.m6 { position:absolute; right:10px; bottom:8px; z-index:2; width:46px; height:46px; border-radius:50%;
+      background:
+        radial-gradient(closest-side, var(--card) 78%, transparent 79% 100%),
+        conic-gradient(var(--accent) 0 81%, color-mix(in srgb, var(--accent) 18%, transparent) 81% 100%);
+      display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 4px 14px rgba(0,0,0,0.35); }
+.m6 .t { font-size:10.5px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; line-height:1; }
+.m6 .d { font-size:6.5px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-faint); margin-top:2px; }
+
+/* 7. Чистая типографика: время на фото, локальная тень-виньетка из угла */
+.m7 { position:absolute; right:0; bottom:0; z-index:2; padding:26px 14px 8px 30px; text-align:right;
+      background:radial-gradient(120% 130% at 100% 100%, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.35) 55%, transparent 100%); }
+.m7 .t { font-size:16px; font-weight:800; letter-spacing:-0.02em; color:#fff; line-height:1; font-variant-numeric:tabular-nums; }
+.m7 .d { font-size:8.5px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:rgba(255,255,255,0.75); margin-top:2px; }
+
+/* 11–13. Часы-кольцо: круглые часы, стрелки стоят на времени встречи (здесь 22:00) */
+.mclock { position:absolute; right:10px; bottom:8px; z-index:2; display:flex; flex-direction:column; align-items:center; gap:3px; }
+.mclock .face { position:relative; border-radius:50%; background:var(--card); box-shadow:0 4px 14px rgba(0,0,0,0.35); }
+.mclock .h, .mclock .m { position:absolute; left:50%; bottom:50%; transform-origin:50% 100%; border-radius:2px; }
+.mclock .dot { position:absolute; left:50%; top:50%; border-radius:50%; background:var(--accent); }
+.mclock .tk { position:absolute; left:50%; top:2.5px; width:1.5px; height:3.5px; margin-left:-0.75px; background:var(--text-faint); border-radius:1px; transform-origin:50% 999px; /* переопределяется inline */ }
+
+/* 11. Чистые: только стрелки и риски, ободок-кольцо акцентом */
+.m11 .face { width:46px; height:46px; border:2px solid var(--accent); }
+.m11 .h { width:2.2px; height:11px; margin-left:-1.1px; background:var(--text); }
+.m11 .m { width:1.8px; height:16px; margin-left:-0.9px; background:var(--text); }
+.m11 .dot { width:4px; height:4px; margin:-2px 0 0 -2px; }
+
+/* 12. Часы + цифровая подпись под кругом (страховка точного считывания) */
+.m12 .face { width:44px; height:44px; border:2px solid var(--accent); }
+.m12 .h { width:2.2px; height:10px; margin-left:-1.1px; background:var(--text); }
+.m12 .m { width:1.8px; height:15px; margin-left:-0.9px; background:var(--text); }
+.m12 .dot { width:4px; height:4px; margin:-2px 0 0 -2px; }
+.m12 .cap { font-size:8.5px; font-weight:800; color:var(--text); background:var(--card); padding:2px 7px; border-radius:7px; box-shadow:0 2px 8px rgba(0,0,0,0.3); font-variant-numeric:tabular-nums; letter-spacing:0.02em; }
+
+/* 13. Крупные с цифрами внутри (окошко-«дата» как у наручных) */
+.m13 .face { width:54px; height:54px; border:2px solid var(--accent); }
+.m13 .h { width:2.4px; height:12px; margin-left:-1.2px; background:var(--text); }
+.m13 .m { width:1.9px; height:18px; margin-left:-0.95px; background:var(--text); }
+.m13 .dot { width:4.5px; height:4.5px; margin:-2.25px 0 0 -2.25px; }
+.m13 .inls { position:absolute; left:0; right:0; bottom:7px; text-align:center; font-size:7.5px; font-weight:800; color:var(--text-dim); font-variant-numeric:tabular-nums; letter-spacing:0.02em; }
+
+/* — В ТЕЛЕ, правый нижний угол (напротив города; город с районом ужимается многоточием) — */
+
+/* 8. В строке города: тихий текст справа */
+.m8 { display:inline-flex; align-items:center; gap:4px; flex-shrink:0; font-size:11px; font-weight:700; }
+.m8 svg { width:11px; height:11px; color:var(--accent); }
+.m8 .t { color:var(--text); font-variant-numeric:tabular-nums; }
+.m8 .d { color:var(--text-faint); font-weight:600; }
+
+/* 9. Календарик в теле: мини-листок прижат к правому нижнему углу карточки */
+.m9 { flex-shrink:0; width:44px; border-radius:9px; overflow:hidden; background:var(--card);
+      border:1px solid var(--hairline-2); box-shadow:0 3px 10px rgba(0,0,0,0.25); text-align:center; }
+.m9 .hd { font-size:6.5px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; padding:2px 0 1px; background:var(--accent-grad); color:var(--on-accent); }
+.m9 .tm { font-size:11.5px; font-weight:800; padding:3px 0 4px; color:var(--text); font-variant-numeric:tabular-nums; }
+
+/* 10. Часики в теле: мини-циферблат + время в строке города */
+.m10 { display:inline-flex; align-items:center; gap:6px; flex-shrink:0; }
+.m10 .face { position:relative; width:18px; height:18px; border-radius:50%; border:1.5px solid var(--accent); flex-shrink:0; }
+.m10 .h, .m10 .m { position:absolute; left:50%; bottom:50%; transform-origin:50% 100%; background:var(--text); border-radius:2px; }
+.m10 .h { width:1.6px; height:4.5px; margin-left:-0.8px; }
+.m10 .m { width:1.3px; height:6.5px; margin-left:-0.65px; }
+.m10 .t { font-size:11px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; }
+
+/* Тело с высоким правым элементом: слева колонка название+город (ужимается), справа предмет */
+.brow { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; }
+.brow .bl { min-width:0; flex:1; display:flex; flex-direction:column; gap:5px; }
+
+/* 14. Часы в теле: крупный циферблат на высоту двух строк, стрелки на времени */
+.m14 { flex-shrink:0; }
+.m14 .face { position:relative; width:38px; height:38px; border-radius:50%; border:2px solid var(--accent); }
+.m14 .h, .m14 .m { position:absolute; left:50%; bottom:50%; transform-origin:50% 100%; background:var(--text); border-radius:2px; }
+.m14 .h { width:2px; height:9px; margin-left:-1px; }
+.m14 .m { width:1.6px; height:13px; margin-left:-0.8px; }
+.m14 .tk { position:absolute; left:50%; top:2.5px; width:1.5px; height:3.5px; margin-left:-0.75px; background:var(--text-faint); border-radius:1px; }
+.m14 .dot { position:absolute; left:50%; top:50%; width:3.5px; height:3.5px; margin:-1.75px 0 0 -1.75px; border-radius:50%; background:var(--accent); }
+
+/* 15. Типографский блок: крупное время + «сегодня» капсом, без подложек */
+.m15 { flex-shrink:0; text-align:right; line-height:1; }
+.m15 .t { font-size:15px; font-weight:800; letter-spacing:-0.02em; color:var(--text); font-variant-numeric:tabular-nums; }
+.m15 .d { display:block; font-size:7.5px; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:var(--accent); margin-top:3px; }
+
+/* 16. Мягкая капсула: подложка accent-soft (не «ссаный бейдж» на фото — тихая, в материале) */
+.m16 { flex-shrink:0; display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border-radius:999px;
+       background:var(--accent-soft); font-size:11px; font-weight:700; color:var(--accent); }
+.m16 svg { width:11px; height:11px; }
+.m16 .t { font-variant-numeric:tabular-nums; }
+
+/* 17. Колонка расписания: вертикальная акцент-черта + «сегодня» / время столбиком */
+.m17 { flex-shrink:0; display:flex; align-items:center; gap:8px; }
+.m17 .bar { width:2.5px; align-self:stretch; border-radius:2px; background:var(--accent-grad); }
+.m17 .tx { display:flex; flex-direction:column; line-height:1.1; }
+.m17 .d { font-size:7.5px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-faint); }
+.m17 .t { font-size:13px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; margin-top:1px; }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div>
+    <h1>Время встречи — правый нижний угол (10 форм)</h1>
+    <div class="hint">Верх обложки чист: цена одна. Город показан С РАЙОНОМ («Москва · Хамовники, парк») — проверка запаса справа. <b>Зажми колонку</b> — вернётся верхний бейдж «как сейчас». Кнопка — тема.</div>
+  </div>
+  <button class="toggle" onclick="var h=document.documentElement; h.dataset.theme = h.dataset.theme==='light'?'':'light'; this.querySelector('.tx').textContent = h.dataset.theme==='light'?'Тёмная тема':'Светлая тема';">
+    <span>◐</span><span class="tx">Светлая тема</span>
+  </button>
+</div>
+<div class="grid" id="grid"></div>
+<script>
+const CLK=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`;
+const PPL=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><path d="M16 6a3 3 0 0 1 0 6"/></svg>`;
+const BLT=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>`;
+const PIN=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
+
+/* Риски циферблата на 12/3/6/9 для часов-кольца диаметром d (с учётом 2px ободка) */
+function ticks(d){
+  const r = d/2 - 2;               // радиус до внутренней кромки ободка
+  return [0,90,180,270].map(a =>
+    `<span class="tk" style="transform-origin:50% ${r - 2.5}px; transform:rotate(${a}deg)"></span>`
+  ).join('');
+}
+
+/* Стрелки часов для 19:30: часовая (7.5/12)·360=225°, минутная 180° */
+const COVER_MEET = {
+  m1:`<span class="meet m1">${CLK}<span class="t">19:30</span><span class="d">сегодня</span></span>`,
+  m2:`<span class="meet m2"><span class="hd">сегодня</span><span class="tm">19:30</span></span>`,
+  m3:`<span class="meet m3"><span class="face"><span class="h" style="transform:rotate(225deg)"></span><span class="m" style="transform:rotate(180deg)"></span><span class="dot"></span></span><span class="tx"><span class="t">19:30</span><span class="d">сегодня</span></span></span>`,
+  m4:`<span class="meet m4">${CLK}<span class="t">19:30</span><span class="d">сегодня</span></span>`,
+  m5:`<span class="meet m5">${CLK}<span>19:30</span><span class="d">сегодня</span></span>`,
+  m6:`<span class="meet m6"><span class="t">19:30</span><span class="d">сегодня</span></span>`,
+  m7:`<span class="meet m7"><span class="t">19:30</span><span class="d">сегодня</span></span>`,
+  /* Часы-кольцо: 22:00 → часовая (10/12)·360=300°, минутная 0° (вверх). Риски на 12/3/6/9. */
+  m11:`<span class="meet mclock m11"><span class="face">${ticks(46)}<span class="h" style="transform:rotate(300deg)"></span><span class="m" style="transform:rotate(0deg)"></span><span class="dot"></span></span></span>`,
+  m12:`<span class="meet mclock m12"><span class="face">${ticks(44)}<span class="h" style="transform:rotate(300deg)"></span><span class="m" style="transform:rotate(0deg)"></span><span class="dot"></span></span><span class="cap">22:00</span></span>`,
+  m13:`<span class="meet mclock m13"><span class="face">${ticks(54)}<span class="h" style="transform:rotate(300deg)"></span><span class="m" style="transform:rotate(0deg)"></span><span class="dot"></span><span class="inls">22:00</span></span></span>`,
+};
+const BODY_MEET = {
+  m8:`<span class="meet m8">${CLK}<span class="t">19:30</span><span class="d">· сегодня</span></span>`,
+  m9:`<span class="meet m9"><span class="hd">сегодня</span><span class="tm">19:30</span></span>`,
+  m10:`<span class="meet m10"><span class="face"><span class="h" style="transform:rotate(225deg)"></span><span class="m" style="transform:rotate(180deg)"></span></span><span class="t">19:30</span></span>`,
+};
+/* Высокие правые элементы тела (на обе строки: название + город), время 22:00 */
+const TALL_MEET = {
+  m14:`<span class="meet m14"><span class="face">${ticks(38)}<span class="h" style="transform:rotate(300deg)"></span><span class="m" style="transform:rotate(0deg)"></span><span class="dot"></span></span></span>`,
+  m15:`<span class="meet m15"><span class="t">22:00</span><span class="d">сегодня</span></span>`,
+  m16:`<span class="meet m16">${CLK}<span class="t">сегодня · 22:00</span></span>`,
+  m17:`<span class="meet m17"><span class="bar"></span><span class="tx"><span class="d">сегодня</span><span class="t">22:00</span></span></span>`,
+};
+
+const VARIANTS = [
+  { k:'m1',  zone:'обложка', name:'Зеркальный уголок',  hint:'Симметрия полке метрик: тот же материал, скруглён левый верхний угол — у карточки два «ушка». Район в теле не задевает.' },
+  { k:'m2',  zone:'обложка', name:'Календарик',         hint:'Мини-листок отрывного календаря: цветная шапка «сегодня», ниже время. Плавает с отступом от углов.' },
+  { k:'m3',  zone:'обложка', name:'Аналоговые часики',  hint:'Циферблат со стрелками, реально показывающими 19:30, + цифры. В уголке-материале.' },
+  { k:'m4',  zone:'обложка', name:'Язычок-вкладка',     hint:'Торчит из нижней кромки, как закладка, с отступом от правого края — легче уголка.' },
+  { k:'m5',  zone:'обложка', name:'Стеклянная капля',   hint:'Материал ценника, но в нижнем углу — системная пара ему. Референс «бейдж, но не сверху».' },
+  { k:'m6',  zone:'обложка', name:'Кольцо-отсчёт',      hint:'Кольцо — сколько дня уже прошло к встрече (данные есть). Внутри время. Живой «тикающий» сигнал.' },
+  { k:'m7',  zone:'обложка', name:'Чистая типографика', hint:'Крупное время прямо на фото, только тень-виньетка из угла. Никаких плашек.' },
+  { k:'m11', zone:'обложка', name:'Часы-кольцо, чистые', hint:'Круглые часы: стрелки стоят на времени встречи (22:00), риски 12/3/6/9, акцентный ободок. Ноль цифр — чистый предмет.' },
+  { k:'m12', zone:'обложка', name:'Часы-кольцо + подпись', hint:'Те же часы, под ними маленькая цифровая подпись 22:00 — страховка точного считывания (21:55 vs 22:00 стрелками не отличить).' },
+  { k:'m13', zone:'обложка', name:'Часы-кольцо с цифрами внутри', hint:'Крупнее, цифровое время внутри циферблата — «окошко даты» как у наручных. Один предмет, оба языка.' },
+  { k:'m8',  zone:'тело',    name:'В строке города',    hint:'Правый край строки города. Город с районом ужимается многоточием — время не двигается, запас гарантирован.' },
+  { k:'m9',  zone:'тело',    name:'Календарик в теле',  hint:'Мини-листок в правом нижнем углу тела, напротив города. Самый «предметный» из телесных.' },
+  { k:'m10', zone:'тело',    name:'Часики в теле',      hint:'Мини-циферблат со стрелками + цифры на строке города. Тихо, но считывается мгновенно.' },
+  { k:'m14', zone:'тело',    name:'Часы в теле, крупные', hint:'Циферблат на высоту двух строк (название + город), стрелки на 22:00. Предмет, а не значок; цифр нет.' },
+  { k:'m15', zone:'тело',    name:'Типографский блок',  hint:'Крупное время + «СЕГОДНЯ» капсом акцентом. Ноль подложек и рамок — чистая типографика в правом углу.' },
+  { k:'m16', zone:'тело',    name:'Мягкая капсула',     hint:'Пилюля на мягкой оранжевой подложке (accent-soft) в материале тела — не бейдж на фото, а тихий чип.' },
+  { k:'m17', zone:'тело',    name:'Колонка расписания', hint:'Вертикальная акцент-черта + «сегодня»/время столбиком — как строка в афише. Строгий, редакторский.' },
+];
+
+const GRAD_CREATIVE = "radial-gradient(circle at 70% 30%, rgba(220,210,255,0.45), transparent 50%), linear-gradient(135deg,#7A5CF4 0%,#2f2a57 60%,#100e22 100%)";
+
+function chips(age, ppl, eng){ return `<span class="cc">${CLK}${age}</span><span class="cc">${PPL}${ppl}</span><span class="cc ok">${BLT}${eng}</span>`; }
+
+function metarow(bodyMeet){
+  return `<div class="metarow">
+    <span class="loc">${PIN}<span class="city">Москва · Хамовники, парк Горького</span></span>
+    ${bodyMeet ?? ''}
+  </div>`;
+}
+
+function bodyHtml(title, bodyMeet, tallMeet){
+  const loc = `<span class="loc">${PIN}<span class="city">Москва · Хамовники, парк Горького</span></span>`;
+  if (tallMeet) {
+    return `<div class="body"><div class="brow"><div class="bl"><div class="ttl">${title}</div>${loc}</div>${tallMeet}</div></div>`;
+  }
+  return `<div class="body"><div class="ttl">${title}</div>${metarow(bodyMeet)}</div>`;
+}
+
+function cardPhoto(coverMeet, bodyMeet, tallMeet){
+  return `<div class="card">
+    <div class="cov" style="background-image:url('covers/running.jpg')">
+      <span class="old-badge">встреча 19:30</span>
+      <span class="price-chip">1 200 ₽/мес</span>
+      <div class="shelf">${chips('145 дн','24','78%')}</div>
+      ${coverMeet ?? ''}
+    </div>
+    ${bodyHtml('Беговой клуб «Второе дыхание»', bodyMeet, tallMeet)}
+  </div>`;
+}
+function cardGrad(coverMeet, bodyMeet, tallMeet){
+  return `<div class="card">
+    <div class="cov" style="background:${GRAD_CREATIVE}">
+      <span class="old-badge">встреча 19:30</span>
+      <span class="price-chip">2 500 ₽/мес</span>
+      <div class="shelf">${chips('210 дн','32','84%')}</div>
+      ${coverMeet ?? ''}
+    </div>
+    ${bodyHtml('Винный клуб «Декантер»', bodyMeet, tallMeet)}
+  </div>`;
+}
+
+document.getElementById('grid').innerHTML = VARIANTS.map((v,i) =>
+  `<div class="col" data-v="${v.k}">
+    <div class="vname"><b>${i+1}</b>${v.name}<span class="zone">${v.zone}</span></div>
+    <div class="vhint">${v.hint}</div>
+    ${cardPhoto(COVER_MEET[v.k], BODY_MEET[v.k], TALL_MEET[v.k])}${cardGrad(COVER_MEET[v.k], BODY_MEET[v.k], TALL_MEET[v.k])}
+  </div>`
+).join('');
+
+/* Зажатие: скрыть новый элемент, показать верхний бейдж «как сейчас» */
+document.querySelectorAll('.col').forEach((col) => {
+  const press = () => col.classList.add('holding');
+  const release = () => col.classList.remove('holding');
+  col.addEventListener('mousedown', press);
+  col.addEventListener('mouseup', release);
+  col.addEventListener('mouseleave', release);
+  col.addEventListener('touchstart', press, { passive: true });
+  col.addEventListener('touchend', release);
+  col.addEventListener('touchcancel', release);
+});
+</script>
+</body>
+</html>

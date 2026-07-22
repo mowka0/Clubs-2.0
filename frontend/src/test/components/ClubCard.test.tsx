@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -34,30 +34,91 @@ function renderCard(props: { club?: ClubListItemDto; facts?: ClubCardFactsDto } 
   );
 }
 
-describe('ClubCard — Discovery metric trio', () => {
-  it('shows name + members in meta and no trio before facts load', () => {
+describe('ClubCard — карточка Discovery v2 (полка метрик на обложке)', () => {
+  it('до фактов: имя + город в meta без числа участников, полки метрик нет', () => {
     renderCard();
     expect(screen.getByText('Беговой клуб')).toBeInTheDocument();
-    expect(screen.getByText(/12 участников/)).toBeInTheDocument();
+    expect(screen.getByText('Москва')).toBeInTheDocument();
+    expect(screen.queryByText(/участник/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/дн/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+  });
+
+  it('с фактами: полка «возраст · участники · вовлечённость» голым текстом', () => {
+    renderCard({
+      club: club({ memberCount: 24 }),
+      facts: facts({ ageDays: 145, engagementPercent: 78 }),
+    });
+
+    expect(screen.getByText('145 дн')).toBeInTheDocument();
+    expect(screen.getByText('24')).toBeInTheDocument(); // участники из списка, не из facts
+    expect(screen.getByText('78%')).toBeInTheDocument();
+    // Старые словесные подписи трио ушли вместе с телом-сеткой
+    expect(screen.queryByText('дней')).not.toBeInTheDocument();
+    expect(screen.queryByText('участников')).not.toBeInTheDocument();
     expect(screen.queryByText('вовлечены')).not.toBeInTheDocument();
   });
 
-  it('renders the segmented trio возраст · участники · вовлечённость when facts arrive', () => {
-    renderCard({ facts: facts({ ageDays: 425, engagementPercent: 67 }) });
-
-    expect(screen.getByText('425')).toBeInTheDocument();
-    expect(screen.getByText('дней')).toBeInTheDocument();
-    expect(screen.getByText('12')).toBeInTheDocument();        // participants from the list, not facts
-    expect(screen.getByText('участников')).toBeInTheDocument();
-    expect(screen.getByText('67%')).toBeInTheDocument();
-    expect(screen.getByText('вовлечены')).toBeInTheDocument();
+  it('meta с фактами — только город, участники не дублируются', () => {
+    renderCard({ facts: facts({ ageDays: 10, engagementPercent: 50 }) });
+    expect(screen.getByText('Москва')).toBeInTheDocument();
+    expect(screen.queryByText(/Москва ·/)).not.toBeInTheDocument();
   });
 
-  it('pluralizes age correctly for a brand-new club', () => {
+  it('«дн» не склоняется даже для 1 дня', () => {
     renderCard({ facts: facts({ ageDays: 1, engagementPercent: 0 }) });
-    expect(screen.getByText('1')).toBeInTheDocument();
-    expect(screen.getByText('день')).toBeInTheDocument();
-    expect(screen.queryByText('дней')).not.toBeInTheDocument();
+    expect(screen.getByText('1 дн')).toBeInTheDocument();
+    expect(screen.queryByText('день')).not.toBeInTheDocument();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('событие сегодня → колонка расписания «сегодня · HH:MM» в теле', () => {
+    vi.useFakeTimers({ now: new Date('2026-07-22T12:00:00'), toFake: ['Date'] });
+    renderCard({
+      club: club({
+        nearestEvent: { id: 'e1', title: 'Встреча', eventDatetime: '2026-07-22T22:00:00', goingCount: 3 },
+      }),
+    });
+    expect(screen.getByText('сегодня')).toBeInTheDocument();
+    expect(screen.getByText('22:00')).toBeInTheDocument();
+  });
+
+  it('событие завтра → колонка «завтра · HH:MM» (календарно, даже если до него >24ч)', () => {
+    vi.useFakeTimers({ now: new Date('2026-07-22T08:00:00'), toFake: ['Date'] });
+    renderCard({
+      club: club({
+        nearestEvent: { id: 'e1', title: 'Встреча', eventDatetime: '2026-07-23T09:00:00', goingCount: 3 },
+      }),
+    });
+    expect(screen.getByText('завтра')).toBeInTheDocument();
+    expect(screen.getByText('09:00')).toBeInTheDocument();
+    expect(screen.queryByText('сегодня')).not.toBeInTheDocument();
+  });
+
+  it('событие послезавтра — колонки нет', () => {
+    vi.useFakeTimers({ now: new Date('2026-07-22T12:00:00'), toFake: ['Date'] });
+    renderCard({
+      club: club({
+        nearestEvent: { id: 'e1', title: 'Встреча', eventDatetime: '2026-07-24T09:00:00', goingCount: 3 },
+      }),
+    });
+    expect(screen.queryByText('сегодня')).not.toBeInTheDocument();
+    expect(screen.queryByText('завтра')).not.toBeInTheDocument();
+    expect(screen.queryByText('09:00')).not.toBeInTheDocument();
+  });
+
+  it('«завтра» через перекат месяца (31 июля → 1 августа)', () => {
+    vi.useFakeTimers({ now: new Date('2026-07-31T12:00:00'), toFake: ['Date'] });
+    renderCard({
+      club: club({
+        nearestEvent: { id: 'e1', title: 'Встреча', eventDatetime: '2026-08-01T19:00:00', goingCount: 3 },
+      }),
+    });
+    expect(screen.getByText('завтра')).toBeInTheDocument();
+    expect(screen.getByText('19:00')).toBeInTheDocument();
   });
 
   it('shows the "★ Топ-5 в категории" badge only when topInCategory is true', () => {

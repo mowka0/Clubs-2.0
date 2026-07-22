@@ -4,9 +4,10 @@ import { Spinner } from '@telegram-apps/telegram-ui';
 import { useClubsQuery } from '../queries/clubs';
 import { useClubCardFacts } from '../queries/clubQuality';
 import { useMyReputationQuery } from '../queries/members';
-import { tierWord, clubsPrepositional } from '../utils/reputationTier';
 import { useAuthStore } from '../store/useAuthStore';
 import { ClubCard } from '../components/ClubCard';
+import { WeekShelf } from '../components/WeekShelf';
+import { CategoryFilter, categoryPillLabel } from '../components/CategoryFilter';
 import { CityPicker, useCityChoice } from '../components/CityPicker';
 import {
   PriceFilter,
@@ -21,17 +22,6 @@ import foxErrorArt from '../assets/mascot/fox-error.png';
 import foxCatalogArt from '../assets/mascot/fox-catalog.png';
 import foxFilterArt from '../assets/mascot/fox-filter.png';
 import type { ClubFilters } from '../api/clubs';
-
-const CATEGORY_CHIPS = [
-  { value: '',            label: 'Все' },
-  { value: 'sport',       label: 'Спорт' },
-  { value: 'creative',    label: 'Творчество' },
-  { value: 'education',   label: 'Книги' },
-  { value: 'food',        label: 'Кулинария' },
-  { value: 'cinema',      label: 'Кино' },
-  { value: 'board_games', label: 'Настолки' },
-  { value: 'travel',      label: 'Путешествия' },
-] as const;
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -81,6 +71,7 @@ export const DiscoveryPage: FC = () => {
   const cityHighlighted = useHighlight('city');
   const [priceRange, setPriceRange] = useState<PriceRange>({});
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const [priceOpen, setPriceOpen] = useState(false);
   const debouncedFilters = useDebounce(filters, 300);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -88,17 +79,10 @@ export const DiscoveryPage: FC = () => {
   const navigate = useNavigate();
 
   const { user } = useAuthStore();
+  // Репутация здесь нужна только для подписи шапки «Состоишь в N клубах»
+  // (плитки «Репутация / В клубах» снесены — репутация живёт в Профиле).
   const reputationQuery = useMyReputationQuery();
-  const rep = reputationQuery.data;
-  const activeCount = rep?.activeClubs.length ?? 0;
-  const global = rep?.global;
-  const globalScore = global?.score ?? null;
-  // Score 0-100 + tier word + breadth ("опыт в N клубах"); the internal "N из M" feeds ranking.
-  const hasReputation = activeCount > 0 || (global?.trackRecordClubs ?? 0) > 0;
-  const reliablePhrase =
-    global && global.trackRecordClubs > 0 && globalScore !== null
-      ? `${tierWord(globalScore)} · опыт в ${global.trackRecordClubs} ${clubsPrepositional(global.trackRecordClubs)}`
-      : 'пока недостаточно истории';
+  const activeCount = reputationQuery.data?.activeClubs.length ?? 0;
 
   const fullName = user ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}` : '';
 
@@ -145,15 +129,6 @@ export const DiscoveryPage: FC = () => {
     return () => observer.disconnect();
   }, [handleObserver]);
 
-  const handleCategoryClick = useCallback(
-    (value: string) => {
-      haptic.select();
-      setFilters((prev) => ({ ...prev, category: value || undefined }));
-    },
-    [haptic],
-  );
-
-  const activeCategory = filters.category ?? '';
   const priceActive = presetIdFromRange(priceRange) !== 'any';
   // Развилка пустых состояний: с активными фильтрами виноваты фильтры, без них — город.
   // Считаем от debouncedFilters (по ним и построен запрос), иначе сцена перескакивает
@@ -194,61 +169,45 @@ export const DiscoveryPage: FC = () => {
         </button>
       </header>
 
-      {hasReputation && (
-        <div className="rd-stats">
-          <div className="rd-stat rd-glass">
-            <div className="rd-stat-label">Репутация</div>
-            <div className="rd-stat-value">{globalScore ?? '—'}</div>
-            <div className="rd-stat-foot">{reliablePhrase}</div>
-          </div>
-          <div className="rd-stat rd-glass">
-            <div className="rd-stat-label">В клубах</div>
-            <div className="rd-stat-value rd-plain">{activeCount}</div>
-            <div className="rd-stat-foot">активных участий</div>
-          </div>
-        </div>
-      )}
-
       <div className="rd-section-h">
         Найди свой <span className="rd-accent">клуб</span>
       </div>
 
-      <label className="rd-search">
-        {SEARCH_ICON}
-        <input
-          type="search"
-          placeholder="Беговой клуб, книжный, дегустации"
-          value={filters.search ?? ''}
-          onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value || undefined }))}
-          aria-label="Поиск клубов"
-        />
-      </label>
-
-      <div className="rd-cat-chips" role="tablist" aria-label="Категории">
-        {CATEGORY_CHIPS.map((chip) => {
-          const isActive = activeCategory === chip.value;
-          return (
-            <button
-              key={chip.value || 'all'}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              className={isActive ? 'rd-cat-chip rd-active' : 'rd-cat-chip'}
-              onClick={() => handleCategoryClick(chip.value)}
-            >
-              {chip.label}
-            </button>
-          );
-        })}
+      {/* Одна строка «поиск + фильтры» (выбор PO: вариант 4 мокапа 15-search-merge):
+          пилюли берут ширину по содержимому («Спорт», «до 1 000 ₽»), поиск —
+          флексом занимает остаток и ужимается под них. */}
+      <div className="rd-filter-row">
+        <label className="rd-search">
+          {SEARCH_ICON}
+          <input
+            type="search"
+            placeholder="Поиск клубов"
+            value={filters.search ?? ''}
+            onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value || undefined }))}
+            aria-label="Поиск клубов"
+          />
+        </label>
         <button
           type="button"
-          className={priceActive ? 'rd-cat-chip rd-active' : 'rd-cat-chip'}
+          className={filters.category ? 'rd-filter-pill rd-active' : 'rd-filter-pill'}
+          onClick={() => { haptic.select(); setCategoryOpen(true); }}
+          aria-label="Фильтр по категории"
+        >
+          {categoryPillLabel(filters.category)}
+          {CHEVRON_DOWN}
+        </button>
+        <button
+          type="button"
+          className={priceActive ? 'rd-filter-pill rd-active' : 'rd-filter-pill'}
           onClick={() => { haptic.select(); setPriceOpen(true); }}
           aria-label="Фильтр по стоимости подписки"
         >
           {pillLabelFromRange(priceRange)}
+          {CHEVRON_DOWN}
         </button>
       </div>
+
+      <WeekShelf clubs={clubs} />
 
       <div>
         {error && clubs.length === 0 && (
@@ -327,6 +286,14 @@ export const DiscoveryPage: FC = () => {
           value={cityChoice}
           onChange={setCityChoice}
           onClose={() => setPickerOpen(false)}
+        />
+      )}
+
+      {categoryOpen && (
+        <CategoryFilter
+          value={filters.category ?? ''}
+          onChange={(next) => setFilters((prev) => ({ ...prev, category: next || undefined }))}
+          onClose={() => setCategoryOpen(false)}
         />
       )}
 

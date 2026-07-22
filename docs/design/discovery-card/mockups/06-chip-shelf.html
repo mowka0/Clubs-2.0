@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Вариант 2 — чипы на загибающейся полке футера</title>
+<style>
+:root {
+  --bg:#0B0B0E; --text:#F4F4F6; --text-dim:rgba(244,244,246,0.6); --text-faint:rgba(244,244,246,0.45);
+  --panel:#17171C; --hairline:rgba(255,255,255,0.06); --hairline-2:rgba(255,255,255,0.1);
+  --chip-bg:rgba(255,255,255,0.06); --chip-bd:rgba(255,255,255,0.12);
+  --accent:#F47B3C; --accent-deep:#D5611C; --accent-soft:rgba(244,123,60,0.14);
+  --accent-grad:linear-gradient(135deg,#FFA070 0%,#F47B3C 100%); --on-accent:#2A0E04;
+  --live:#66D49A; --page:#141416;
+  --shelf-hl:rgba(255,255,255,0.10);
+}
+[data-theme="light"] {
+  --bg:#F7F6F3; --text:#1A1A1A; --text-dim:#6B6B70; --text-faint:#8A8A8E;
+  --panel:#FFFFFF; --hairline:rgba(0,0,0,0.06); --hairline-2:rgba(0,0,0,0.1);
+  --chip-bg:rgba(0,0,0,0.045); --chip-bd:rgba(0,0,0,0.09);
+  --accent-soft:rgba(244,123,60,0.12); --accent-grad:linear-gradient(135deg,#F47B3C 0%,#D5611C 100%); --on-accent:#FFFFFF;
+  --live:#2E7D5A; --page:#E9E7E2;
+  --shelf-hl:rgba(255,255,255,0.9);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif; background:var(--page); color:var(--text); -webkit-font-smoothing:antialiased; padding:0 0 40px; }
+.topbar { position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 24px; background:var(--page); border-bottom:1px solid var(--hairline); }
+.topbar h1 { font-size:17px; font-weight:800; letter-spacing:-0.02em; }
+.topbar .hint { font-size:12px; color:var(--text-dim); margin-top:2px; }
+.toggle { display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 15px; border-radius:999px; border:1px solid var(--hairline-2); background:var(--panel); color:var(--text); font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+.rail { display:flex; gap:36px; padding:32px 28px; overflow-x:auto; align-items:flex-start; }
+.col { width:390px; flex-shrink:0; }
+.col .cap { display:flex; align-items:flex-start; gap:9px; margin:0 4px 14px; }
+.col .cap .k { width:24px; height:24px; flex-shrink:0; border-radius:7px; background:var(--accent-grad); color:var(--on-accent); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800; }
+.col .cap .t { font-size:14px; font-weight:800; letter-spacing:-0.01em; }
+.col .cap .d { font-size:11.5px; color:var(--text-dim); margin-top:2px; line-height:1.35; }
+
+/* ---- карточка ---- */
+.card { position:relative; border-radius:18px; overflow:hidden; background:var(--panel); border:1px solid var(--hairline-2); box-shadow:0 8px 26px rgba(0,0,0,0.28); }
+.cov { height:118px; position:relative; }
+.cov[data-cat="party"] { background:radial-gradient(circle at 75% 25%, rgba(255,200,180,0.35), transparent 55%), linear-gradient(135deg,#A6342A 0%,#6e1f18 55%,#260a08 100%); }
+.cov[data-cat="sport"] { background:radial-gradient(circle at 70% 30%, rgba(255,232,200,0.5), transparent 50%), linear-gradient(135deg,#F47B3C 0%,#5a3f1f 60%,#1a1108 100%); }
+/* лёгкий скрим только сверху — под чипы цены/встречи */
+.cov::after { content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(11,11,14,0.34) 0%, rgba(11,11,14,0.05) 40%, transparent 60%); pointer-events:none; }
+.price-chip { position:absolute; z-index:3; top:12px; right:12px; font-size:12px; font-weight:700; color:#fff; background:rgba(0,0,0,0.5); padding:4px 10px; border-radius:999px; backdrop-filter:blur(8px); }
+.date-badge { position:absolute; z-index:3; top:12px; left:12px; font-size:11px; font-weight:800; color:var(--on-accent); background:var(--accent-grad); padding:4px 9px; border-radius:999px; }
+
+/* ---- полка футера, поднимающаяся на обложку ---- */
+.shelf {
+  position:absolute; left:0; right:0; bottom:0; height:54px; z-index:1;
+  background:var(--panel);
+}
+.shelf.hook  { clip-path:path('M0,54 L0,14 Q0,6 8,6 L214,6 C252,6 270,54 318,54 L390,54 L390,54 Z'); }
+.shelf.ledge { clip-path:path('M0,54 L0,16 Q0,6 11,6 L379,6 Q390,6 390,16 L390,54 Z'); }
+/* тонкий блик по верхней кромке полки */
+.shelf::before {
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(180deg, var(--shelf-hl) 0, transparent 3px);
+  opacity:0.7; pointer-events:none;
+}
+.shelf.hook::before  { clip-path:path('M0,54 L0,14 Q0,6 8,6 L214,6 C252,6 270,54 318,54 L390,54 L390,54 Z'); }
+.shelf.ledge::before { clip-path:path('M0,54 L0,16 Q0,6 11,6 L379,6 Q390,6 390,16 L390,54 Z'); }
+
+.chip-row { position:absolute; left:14px; bottom:14px; z-index:2; display:flex; gap:6px; }
+.chip2 { display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border-radius:999px; background:var(--chip-bg); border:1px solid var(--chip-bd); font-size:11.5px; font-weight:700; color:var(--text); white-space:nowrap; }
+.chip2 svg { width:12px; height:12px; color:var(--text-faint); flex-shrink:0; }
+.chip2.ok { color:var(--live); } .chip2.ok svg { color:var(--live); }
+
+.body { padding:8px 14px 14px; }
+.body .rankpill { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:700; padding:3px 10px; border-radius:999px; background:linear-gradient(135deg,#FFD89B 0%,#E9A23C 100%); color:#2A1A04; margin-bottom:7px; }
+.body .ttl { font-size:16px; font-weight:700; letter-spacing:-0.01em; }
+.body .loc { margin-top:4px; font-size:12.5px; color:var(--text-dim); display:inline-flex; align-items:center; gap:5px; }
+.body .loc svg { width:13px; height:13px; opacity:0.7; flex-shrink:0; }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div>
+    <h1>Чипы на полке футера — 2 формы загиба</h1>
+    <div class="hint">Полка — тот же материал, что тело карточки; поднимается на обложку и держит чипы. Кнопка справа — тема.</div>
+  </div>
+  <button class="toggle" onclick="var h=document.documentElement; h.dataset.theme = h.dataset.theme==='light'?'':'light'; this.querySelector('.tx').textContent = h.dataset.theme==='light'?'Тёмная тема':'Светлая тема';">
+    <span>◐</span><span class="tx">Светлая тема</span>
+  </button>
+</div>
+
+<div class="rail">
+
+  <!-- A: хвост вправо (как нарисовано) -->
+  <div class="col">
+    <div class="cap"><div class="k">A</div><div><div class="t">Загиб вправо (как ты нарисовал)</div><div class="d">Полка держит чипы слева и плавным хвостом спадает в футер справа.</div></div></div>
+
+    <div class="card">
+      <div class="cov" data-cat="party">
+        <span class="price-chip">бесплатно</span>
+        <div class="shelf hook"></div>
+        <div class="chip-row">
+          <span class="chip2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>88 дн</span>
+          <span class="chip2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><path d="M16 6a3 3 0 0 1 0 6"/></svg>3</span>
+          <span class="chip2 ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>100%</span>
+        </div>
+      </div>
+      <div class="body">
+        <div class="ttl">Партия</div>
+        <div class="loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Москва · Пресня</div>
+      </div>
+    </div>
+
+    <div style="height:14px"></div>
+
+    <div class="card">
+      <div class="cov" data-cat="sport">
+        <span class="date-badge">встреча 19:30</span>
+        <span class="price-chip">1 200 ₽/мес</span>
+        <div class="shelf hook"></div>
+        <div class="chip-row">
+          <span class="chip2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>145 дн</span>
+          <span class="chip2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><path d="M16 6a3 3 0 0 1 0 6"/></svg>24</span>
+          <span class="chip2 ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>78%</span>
+        </div>
+      </div>
+      <div class="body">
+        <div class="ttl">Беговой клуб «Второе дыхание»</div>
+        <div class="loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Москва · Хамовники, парк</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B: ровная полка со скруглением -->
+  <div class="col">
+    <div class="cap"><div class="k">B</div><div><div class="t">Ровная полка со скруглением</div><div class="d">Симметричная полка во всю ширину, оба верхних угла мягко скруглены.</div></div></div>
+
+    <div class="card">
+      <div class="cov" data-cat="party">
+        <span class="price-chip">бесплатно</span>
+        <div class="shelf ledge"></div>
+        <div class="chip-row">
+          <span class="chip2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>88 дн</span>
+          <span class="chip2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><path d="M16 6a3 3 0 0 1 0 6"/></svg>3</span>
+          <span class="chip2 ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>100%</span>
+        </div>
+      </div>
+      <div class="body">
+        <div class="ttl">Партия</div>
+        <div class="loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Москва · Пресня</div>
+      </div>
+    </div>
+
+    <div style="height:14px"></div>
+
+    <div class="card">
+      <div class="cov" data-cat="sport">
+        <span class="date-badge">встреча 19:30</span>
+        <span class="price-chip">1 200 ₽/мес</span>
+        <div class="shelf ledge"></div>
+        <div class="chip-row">
+          <span class="chip2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>145 дн</span>
+          <span class="chip2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><path d="M16 6a3 3 0 0 1 0 6"/></svg>24</span>
+          <span class="chip2 ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>78%</span>
+        </div>
+      </div>
+      <div class="body">
+        <div class="ttl">Беговой клуб «Второе дыхание»</div>
+        <div class="loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Москва · Хамовники, парк</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

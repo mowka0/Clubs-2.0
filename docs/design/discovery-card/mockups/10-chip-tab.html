@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Чипы на компактной полке (загиб справа)</title>
+<style>
+:root {
+  --bg:#0B0B0E; --text:#F4F4F6; --text-dim:rgba(244,244,246,0.6); --text-faint:rgba(244,244,246,0.45);
+  --panel:#17171C; --hairline:rgba(255,255,255,0.06); --hairline-2:rgba(255,255,255,0.1);
+  --chip-bg:rgba(255,255,255,0.07); --chip-bd:rgba(255,255,255,0.13);
+  --accent:#F47B3C; --accent-deep:#D5611C; --accent-soft:rgba(244,123,60,0.14);
+  --accent-grad:linear-gradient(135deg,#FFA070 0%,#F47B3C 100%); --on-accent:#2A0E04;
+  --live:#66D49A; --page:#141416; --shelf-hl:rgba(255,255,255,0.12);
+}
+[data-theme="light"] {
+  --bg:#F7F6F3; --text:#1A1A1A; --text-dim:#6B6B70; --text-faint:#8A8A8E;
+  --panel:#FFFFFF; --hairline:rgba(0,0,0,0.06); --hairline-2:rgba(0,0,0,0.1);
+  --chip-bg:rgba(0,0,0,0.05); --chip-bd:rgba(0,0,0,0.1);
+  --accent-soft:rgba(244,123,60,0.12); --accent-grad:linear-gradient(135deg,#F47B3C 0%,#D5611C 100%); --on-accent:#FFFFFF;
+  --live:#2E7D5A; --page:#E9E7E2; --shelf-hl:rgba(255,255,255,0.9);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif; background:var(--page); color:var(--text); -webkit-font-smoothing:antialiased; }
+.topbar { position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 24px; background:var(--page); border-bottom:1px solid var(--hairline); }
+.topbar h1 { font-size:17px; font-weight:800; letter-spacing:-0.02em; }
+.topbar .hint { font-size:12px; color:var(--text-dim); margin-top:2px; }
+.toggle { display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 15px; border-radius:999px; border:1px solid var(--hairline-2); background:var(--panel); color:var(--text); font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+.rail { display:flex; gap:34px; padding:30px 28px; overflow-x:auto; align-items:flex-start; }
+.col { width:360px; flex-shrink:0; }
+
+.card { position:relative; border-radius:18px; overflow:hidden; background:var(--panel); box-shadow:0 8px 26px rgba(0,0,0,0.28); margin-bottom:14px; }
+.cov { height:112px; position:relative; background-size:cover; background-position:center; }
+.price-chip { position:absolute; z-index:3; top:10px; right:12px; font-size:12px; font-weight:700; color:#fff; background:rgba(0,0,0,0.5); padding:4px 10px; border-radius:999px; backdrop-filter:blur(8px); }
+.date-badge { position:absolute; z-index:3; top:10px; left:12px; font-size:11px; font-weight:800; color:var(--on-accent); background:var(--accent-grad); padding:4px 9px; border-radius:999px; }
+.rankpill { position:absolute; z-index:3; top:10px; left:12px; display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:700; padding:3px 10px; border-radius:999px; background:linear-gradient(135deg,#FFD89B 0%,#E9A23C 100%); color:#2A1A04; }
+
+/* КОМПАКТНАЯ ПОЛКА: сам ряд чипов = панель, прижата в нижний-левый угол,
+   авто-ширина по чипам, скруглён только правый верхний угол.
+   Нижний паддинг 5px = отступ до кромки (был 10 → вдвое меньше). */
+.chip-row {
+  position:absolute; left:0; bottom:0; z-index:2;
+  display:flex; align-items:center; gap:6px;
+  padding:6px 13px 5px 13px;
+  background:var(--panel);
+  border-top-right-radius:15px;
+  box-shadow: inset 0 1px 0 var(--shelf-hl);
+}
+.cc { display:inline-flex; align-items:center; gap:5px; padding:4px 9px; border-radius:999px; font-size:11px; font-weight:700; white-space:nowrap; background:var(--chip-bg); border:1px solid var(--chip-bd); color:var(--text); }
+.cc svg { width:11px; height:11px; flex-shrink:0; color:var(--text-faint); }
+.cc.ok, .cc.ok svg { color:var(--live); }
+
+.body { padding:9px 14px 14px; }
+.body .ttl { font-size:15.5px; font-weight:700; letter-spacing:-0.01em; }
+.body .loc { margin-top:4px; font-size:12px; color:var(--text-dim); display:inline-flex; align-items:center; gap:5px; }
+.body .loc svg { width:12px; height:12px; opacity:0.7; flex-shrink:0; }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div>
+    <h1>Чипы на компактной полке — загиб справа, без градиента</h1>
+    <div class="hint">Полка только под чипами, правый угол скруглён, чипы придвинуты к кромке. Кнопка — тема.</div>
+  </div>
+  <button class="toggle" onclick="var h=document.documentElement; h.dataset.theme = h.dataset.theme==='light'?'':'light'; this.querySelector('.tx').textContent = h.dataset.theme==='light'?'Тёмная тема':'Светлая тема';">
+    <span>◐</span><span class="tx">Светлая тема</span>
+  </button>
+</div>
+<div class="rail" id="rail"></div>
+<script>
+const CLK=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`;
+const PPL=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><path d="M16 6a3 3 0 0 1 0 6"/></svg>`;
+const BLT=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>`;
+const PIN=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
+const CLUBS = [
+  { img:'covers/running.jpg', title:'Беговой клуб «Второе дыхание»', loc:'Москва · Хамовники, парк', price:'1 200 ₽/мес', top:'<span class="date-badge">встреча 19:30</span>', age:'145 дн', ppl:'24', eng:'78%' },
+  { img:'covers/wine.jpg', title:'Винный клуб «Декантер»', loc:'Москва · Патриаршие пруды', price:'2 500 ₽/мес', top:'<span class="rankpill">★ Топ-5</span>', age:'210 дн', ppl:'32', eng:'84%' },
+  { img:'covers/food.jpg', title:'Ужин-клуб «За столом»', loc:'Москва · Китай-город', price:'1 800 ₽/мес', top:'', age:'96 дн', ppl:'18', eng:'91%' },
+  { img:'covers/books.jpg', title:'«Книжный на Патриках»', loc:'Москва · Патрики', price:'800 ₽/мес', top:'', age:'145 дн', ppl:'18', eng:'67%' },
+];
+function chips(c){ return `<span class="cc">${CLK}${c.age}</span><span class="cc">${PPL}${c.ppl}</span><span class="cc ok">${BLT}${c.eng}</span>`; }
+function card(c){
+  return `<div class="card"><div class="cov" style="background-image:url('${c.img}')">${c.top}<span class="price-chip">${c.price}</span><div class="chip-row">${chips(c)}</div></div><div class="body"><div class="ttl">${c.title}</div><div class="loc">${PIN}${c.loc}</div></div></div>`;
+}
+document.getElementById('rail').innerHTML =
+  `<div class="col">`+CLUBS.slice(0,2).map(card).join('')+`</div>`+
+  `<div class="col">`+CLUBS.slice(2,4).map(card).join('')+`</div>`;
+</script>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>03 — Реестр (типографский индекс)</title>
+<link rel="stylesheet" href="_shared.css">
+<style>
+/* Вариант 3: «банковский реестр» — чистая типографика без обложек и аватаров.
+   Порядковый номер = место в выдаче, слева тонкий категорийный тик. Табличные цифры,
+   премиальная сдержанность в духе Banco-Plata. Самый лёгкий и самый плотный вариант. */
+.ledger { padding: 0 20px; }
+.lrow {
+  position: relative;
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 14px 0 13px 14px;
+  border-bottom: 1px solid var(--hairline);
+  cursor: pointer;
+}
+.lrow:last-child { border-bottom: 0; }
+/* категорийный тик — единственный цветовой маркер */
+.lrow::before {
+  content: '';
+  position: absolute; left: 0; top: 18px; bottom: 17px;
+  width: 3px; border-radius: 2px;
+  background: var(--tick, var(--hairline-2));
+}
+.lrow[data-cat="sport"]       { --tick: #E5A05C; }
+.lrow[data-cat="creative"]    { --tick: #8E5DFF; }
+.lrow[data-cat="education"]   { --tick: #6A82B9; }
+.lrow[data-cat="food"]        { --tick: #E8932E; }
+.lrow[data-cat="cinema"]      { --tick: #3F6FA0; }
+.lrow[data-cat="board_games"] { --tick: #2E9A6A; }
+.lrow[data-cat="travel"]      { --tick: #C44E7A; }
+.lrow .idx {
+  font-size: 12px; font-weight: 600;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  width: 22px; flex-shrink: 0;
+}
+.lrow .body { flex: 1; min-width: 0; }
+.lrow .name {
+  font-size: 16.5px; font-weight: 650; letter-spacing: -0.014em; line-height: 1.25;
+}
+.lrow .facts {
+  margin-top: 4px;
+  font-size: 12px; color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lrow .facts .hot { color: var(--live); font-weight: 600; }
+.lrow .money { flex-shrink: 0; text-align: right; }
+.lrow .money .val {
+  font-size: 15px; font-weight: 700; letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.lrow .money .per { font-size: 10px; color: var(--text-faint); }
+.lrow .money .val.free { color: var(--text-dim); font-weight: 600; font-size: 13.5px; }
+/* топ-клуб — латунный номер вместо пилюли */
+.lrow.top .idx { color: var(--accent); font-weight: 800; }
+.lrow.top .name::after {
+  content: ' ★'; font-size: 12px; color: var(--accent);
+}
+/* строка «встреча сегодня» */
+.lrow .today-line {
+  margin-top: 5px;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 600; color: var(--accent);
+}
+.lrow .today-line::before {
+  content: ''; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+}
+</style>
+</head>
+<body>
+  <div class="statusbar"><span>9:41</span><span class="right">LTE&nbsp;&nbsp;▮▮▮▯</span></div>
+  <header class="hdr">
+    <div class="avt-user">ИВ</div>
+    <div class="who"><div class="nm">Иван</div><div class="sub">Состоишь в 2 клубах</div></div>
+    <button class="city">Москва <span class="chev">▾</span></button>
+  </header>
+  <h1 class="hero">Найди свой <span class="acc">клуб</span></h1>
+  <label class="search">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    Беговой клуб, книжный, дегустации
+  </label>
+  <div class="chips">
+    <span class="chip on">Все</span><span class="chip">Спорт</span><span class="chip">Творчество</span><span class="chip">Книги</span><span class="chip">Кулинария</span><span class="chip">Кино</span><span class="chip">Настолки</span><span class="chip">₽ Цена</span>
+  </div>
+
+  <div class="count-row"><span class="n">24 клуба</span><span class="sort">по активности ▾</span></div>
+
+  <div class="ledger">
+    <div class="lrow" data-cat="sport">
+      <span class="idx">01</span>
+      <div class="body">
+        <div class="name">Беговой клуб «Второе дыхание»</div>
+        <div class="facts">Спорт · 24 участника · <span class="hot">78% вовлечены</span></div>
+        <div class="today-line">встреча сегодня в 19:30</div>
+      </div>
+      <div class="money"><div class="val">1 200 ₽</div><div class="per">/мес</div></div>
+    </div>
+    <div class="lrow top" data-cat="food">
+      <span class="idx">02</span>
+      <div class="body">
+        <div class="name">Винный клуб «Декантер»</div>
+        <div class="facts">Кулинария · 32 участника · <span class="hot">84% вовлечены</span></div>
+      </div>
+      <div class="money"><div class="val">2 500 ₽</div><div class="per">/мес</div></div>
+    </div>
+    <div class="lrow" data-cat="education">
+      <span class="idx">03</span>
+      <div class="body">
+        <div class="name">«Книжный на Патриках»</div>
+        <div class="facts">Книги · 18 участников · 67% вовлечены</div>
+      </div>
+      <div class="money"><div class="val">800 ₽</div><div class="per">/мес</div></div>
+    </div>
+    <div class="lrow" data-cat="board_games">
+      <span class="idx">04</span>
+      <div class="body">
+        <div class="name">«Настолки и мясо»</div>
+        <div class="facts">Настолки · 41 участник · 71% вовлечены</div>
+      </div>
+      <div class="money"><div class="val free">бесплатно</div></div>
+    </div>
+    <div class="lrow" data-cat="cinema">
+      <span class="idx">05</span>
+      <div class="body">
+        <div class="name">Киноклуб «Плёнка»</div>
+        <div class="facts">Кино · 15 участников · новый клуб</div>
+      </div>
+      <div class="money"><div class="val">500 ₽</div><div class="per">/мес</div></div>
+    </div>
+    <div class="lrow" data-cat="creative">
+      <span class="idx">06</span>
+      <div class="body">
+        <div class="name">«Акварель по субботам»</div>
+        <div class="facts">Творчество · 12 участников · <span class="hot">92% вовлечены</span></div>
+      </div>
+      <div class="money"><div class="val">1 500 ₽</div><div class="per">/мес</div></div>
+    </div>
+    <div class="lrow" data-cat="travel">
+      <span class="idx">07</span>
+      <div class="body">
+        <div class="name">Тревел-клуб «Легче на подъём»</div>
+        <div class="facts">Путешествия · 27 участников · 73% вовлечены</div>
+      </div>
+      <div class="money"><div class="val">900 ₽</div><div class="per">/мес</div></div>
+    </div>
+  </div>
+
+  <nav class="dock">
+    <span class="tab on"><span class="ic">◈</span>Клубы</span>
+    <span class="tab"><span class="ic">▤</span>Активности</span>
+    <span class="tab"><span class="ic">♡</span>Мои клубы</span>
+    <span class="tab"><span class="ic">◉</span>Профиль</span>
+  </nav>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<script>if(new URLSearchParams(location.search).has('light'))document.documentElement.dataset.theme='light'</script>
+<title>Полиш 1 — метрики строкой</title>
+<link rel="stylesheet" href="_shared.css">
+<style>
+/* Полиш-вариант 1: сетка метрик убрана совсем — факты становятся тихой meta-строкой
+   под названием. Никаких коробок: карточка = обложка + два спокойных ряда текста.
+   Самый лёгкий и самый «стеклянный» вариант, карточка ниже на ~40px. */
+.card .facts {
+  font-size: 12px; color: var(--text-faint);
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.card .facts b { color: var(--text-dim); font-weight: 600; }
+.card .facts .eng {
+  color: var(--live); font-weight: 700;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.card .facts .eng::before {
+  content: ''; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--live); box-shadow: 0 0 0 3px var(--live-soft);
+}
+</style>
+</head>
+<body>
+  <div class="statusbar"><span>9:41</span><span class="right">LTE&nbsp;&nbsp;▮▮▮▯</span></div>
+  <header class="hdr">
+    <div class="avt-user">ИВ</div>
+    <div class="who">
+      <div class="nm">Иван <span class="star"></span></div>
+      <div class="sub">Состоишь в 6 клубах</div>
+    </div>
+    <button class="city">Москва <span class="chev">▾</span></button>
+  </header>
+
+  <h1 class="hero">Найди свой <span class="acc">клуб</span></h1>
+  <label class="search">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    Беговой клуб, книжный, дегустации
+  </label>
+  <div class="chips">
+    <span class="chip on">Все</span><span class="chip">Спорт</span><span class="chip">Творчество</span><span class="chip">Книги</span><span class="chip">Кулинария</span><span class="chip">Кино</span><span class="chip">Настолки</span>
+  </div>
+
+  <div class="card">
+    <div class="ccover" data-cat="party"><span class="price-chip">бесплатно</span></div>
+    <div class="body">
+      <div class="ttl">Партия</div>
+      <div class="facts">Москва · <b>88 дней</b> · <b>3 участника</b> <span class="eng">100% вовлечены</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ccover" data-cat="sport">
+      <span class="date-badge">встреча 19:30</span>
+      <span class="price-chip">1 200 ₽/мес</span>
+    </div>
+    <div class="body">
+      <div class="ttl">Беговой клуб «Второе дыхание»</div>
+      <div class="facts">Москва · <b>145 дней</b> · <b>24 участника</b> <span class="eng">78% вовлечены</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ccover" data-cat="food"><span class="price-chip">2 500 ₽/мес</span></div>
+    <div class="body">
+      <span class="rankpill">★ Топ-5 в категории</span>
+      <div class="ttl">Винный клуб «Декантер»</div>
+      <div class="facts">Москва · <b>210 дней</b> · <b>32 участника</b> <span class="eng">84% вовлечены</span></div>
+    </div>
+  </div>
+
+  <nav class="dock">
+    <span class="tab on"><span class="ic">◈</span>Клубы</span>
+    <span class="tab"><span class="ic">▤</span>Активности</span>
+    <span class="tab"><span class="ic">♡</span>Мои клубы</span>
+    <span class="tab"><span class="ic">◉</span>Профиль</span>
+  </nav>
+</body>
+</html>

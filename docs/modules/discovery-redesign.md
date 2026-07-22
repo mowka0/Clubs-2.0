@@ -1,5 +1,9 @@
 # Discovery redesign
 
+> **Историческая спека** (первый branded-редизайн). Текущее состояние карточки клуба и
+> экрана Discovery (карточка v2, снос плиток статистики, полка «Встречаются сегодня») —
+> в `docs/modules/discovery-card.md` (PO 2026-07-22).
+
 Реализация финального дизайна Discovery (страница поиска клубов) в рамках feature-флоу
 `feature/discovery-redesign`. Brand identity — navy + brass геральдика для аудитории
 23-40 лет, see SESSION-NOTES в `docs/design/discovery-redesign/SESSION-NOTES.md`.

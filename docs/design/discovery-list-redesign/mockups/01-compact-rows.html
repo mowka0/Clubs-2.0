@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>01 — Компактные строки</title>
+<link rel="stylesheet" href="_shared.css">
+<style>
+/* Вариант 1: плотный список-реестр. Один стеклянный контейнер, строки с hairline-
+   разделителями. ~6 клубов на экран вместо ~2,5. Вся «жизнь» клуба — одной meta-строкой. */
+.panel {
+  margin: 0 16px;
+  background: var(--glass-bg);
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  backdrop-filter: blur(20px);
+  overflow: hidden;
+}
+.row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--hairline);
+  cursor: pointer;
+}
+.row:last-child { border-bottom: 0; }
+.row .cavt { width: 46px; height: 46px; border-radius: 12px; font-size: 13px; }
+.row .body { flex: 1; min-width: 0; }
+.row .name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.row .name {
+  font-size: 14.5px; font-weight: 600; letter-spacing: -0.008em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0;
+}
+.row .meta {
+  font-size: 11.5px; color: var(--text-faint); margin-top: 3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.row .meta > span { margin-right: 8px; }
+.row .meta .cat { color: var(--text-dim); font-weight: 500; }
+.row .price { flex-shrink: 0; text-align: right; }
+.row .price .val { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
+.row .price .per { font-size: 10px; color: var(--text-faint); font-weight: 500; }
+.row .price .val.free { color: var(--text-dim); font-weight: 600; font-size: 13px; }
+/* клуб со встречей сегодня — тёплая подсветка строки */
+.row.today {
+  background: linear-gradient(90deg, var(--accent-soft), transparent 55%);
+}
+.row.today .cavt { box-shadow: inset 0 0 0 1px rgba(244,123,60,0.35); }
+.rank {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+  background: linear-gradient(135deg, #FFD89B 0%, #E9A23C 100%); color: #2A1A04;
+  flex-shrink: 0;
+}
+</style>
+</head>
+<body>
+  <div class="statusbar"><span>9:41</span><span class="right">LTE&nbsp;&nbsp;▮▮▮▯</span></div>
+  <header class="hdr">
+    <div class="avt-user">ИВ</div>
+    <div class="who"><div class="nm">Иван</div><div class="sub">Состоишь в 2 клубах</div></div>
+    <button class="city">Москва <span class="chev">▾</span></button>
+  </header>
+  <h1 class="hero">Найди свой <span class="acc">клуб</span></h1>
+  <label class="search">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    Беговой клуб, книжный, дегустации
+  </label>
+  <div class="chips">
+    <span class="chip on">Все</span><span class="chip">Спорт</span><span class="chip">Творчество</span><span class="chip">Книги</span><span class="chip">Кулинария</span><span class="chip">Кино</span><span class="chip">Настолки</span><span class="chip">₽ Цена</span>
+  </div>
+
+  <div class="count-row"><span class="n">24 клуба</span><span class="sort">по активности ▾</span></div>
+
+  <div class="panel">
+    <div class="row today">
+      <div class="cavt" data-cat="sport">ВД</div>
+      <div class="body">
+        <div class="name-row"><span class="name">Беговой клуб «Второе дыхание»</span></div>
+        <div class="meta"><span class="cat">Спорт · 24 чел.</span><span class="live-sig">сегодня в 19:30</span></div>
+      </div>
+      <div class="price"><div class="val">1 200 ₽</div><div class="per">/мес</div></div>
+    </div>
+    <div class="row">
+      <div class="cavt" data-cat="food">ДК</div>
+      <div class="body">
+        <div class="name-row"><span class="name">Винный клуб «Декантер»</span><span class="rank">★ Топ-5</span></div>
+        <div class="meta"><span class="cat">Кулинария · 32 чел.</span><span>84% вовлечены</span></div>
+      </div>
+      <div class="price"><div class="val">2 500 ₽</div><div class="per">/мес</div></div>
+    </div>
+    <div class="row">
+      <div class="cavt" data-cat="education">КП</div>
+      <div class="body">
+        <div class="name-row"><span class="name">«Книжный на Патриках»</span></div>
+        <div class="meta"><span class="cat">Книги · 18 чел.</span><span>встреча в четверг</span></div>
+      </div>
+      <div class="price"><div class="val">800 ₽</div><div class="per">/мес</div></div>
+    </div>
+    <div class="row">
+      <div class="cavt" data-cat="board_games">НМ</div>
+      <div class="body">
+        <div class="name-row"><span class="name">«Настолки и мясо»</span></div>
+        <div class="meta"><span class="cat">Настолки · 41 чел.</span><span>71% вовлечены</span></div>
+      </div>
+      <div class="price"><div class="val free">бесплатно</div></div>
+    </div>
+    <div class="row">
+      <div class="cavt" data-cat="cinema">ПЛ</div>
+      <div class="body">
+        <div class="name-row"><span class="name">Киноклуб «Плёнка»</span></div>
+        <div class="meta"><span class="cat">Кино · 15 чел.</span><span>новый клуб</span></div>
+      </div>
+      <div class="price"><div class="val">500 ₽</div><div class="per">/мес</div></div>
+    </div>
+    <div class="row">
+      <div class="cavt" data-cat="creative">АС</div>
+      <div class="body">
+        <div class="name-row"><span class="name">«Акварель по субботам»</span></div>
+        <div class="meta"><span class="cat">Творчество · 12 чел.</span><span>92% вовлечены</span></div>
+      </div>
+      <div class="price"><div class="val">1 500 ₽</div><div class="per">/мес</div></div>
+    </div>
+    <div class="row">
+      <div class="cavt" data-cat="travel">ЛП</div>
+      <div class="body">
+        <div class="name-row"><span class="name">Тревел-клуб «Легче на подъём»</span></div>
+        <div class="meta"><span class="cat">Путешествия · 27 чел.</span><span>в субботу</span></div>
+      </div>
+      <div class="price"><div class="val">900 ₽</div><div class="per">/мес</div></div>
+    </div>
+  </div>
+
+  <nav class="dock">
+    <span class="tab on"><span class="ic">◈</span>Клубы</span>
+    <span class="tab"><span class="ic">▤</span>Активности</span>
+    <span class="tab"><span class="ic">♡</span>Мои клубы</span>
+    <span class="tab"><span class="ic">◉</span>Профиль</span>
+  </nav>
+</body>
+</html>

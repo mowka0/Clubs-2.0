@@ -30,11 +30,12 @@ export function presetIdFromRange(range: PriceRange): string {
   return found?.id ?? 'any';
 }
 
+/** Текст пилюли фильтра: «Цена», пока пресет не выбран, иначе короткий лейбл пресета
+    (без префикса — пилюля стоит в одной строке с поиском, каждое слово на счету). */
 export function pillLabelFromRange(range: PriceRange): string {
   const id = presetIdFromRange(range);
   if (id === 'any') return 'Цена';
-  const preset = PRESETS.find((p) => p.id === id)!;
-  return `Цена · ${preset.shortLabel}`;
+  return PRESETS.find((p) => p.id === id)!.shortLabel;
 }
 
 interface PriceFilterProps {
