@@ -768,6 +768,92 @@
   font-size: 13px; line-height: 1.5; color: var(--accent); text-align: center;
 }
 
+/* ---------- Профиль-квест «Прокачай профиль» (profile-quest.md, мокап 02-quest-card) ---------- */
+.rd-quest { padding: 16px; margin-bottom: 16px; }
+.rd-q-head { display: flex; align-items: center; gap: 12px; }
+.rd-q-donut { width: 46px; height: 46px; flex-shrink: 0; }
+.rd-q-titles { flex: 1; min-width: 0; }
+.rd-q-title { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); }
+.rd-q-sub { font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
+.rd-q-sub b { color: var(--accent); font-weight: 700; }
+.rd-q-fold {
+  width: 28px; height: 28px; flex-shrink: 0; border-radius: 999px;
+  border: 1px solid var(--hairline-2); background: var(--surface); color: var(--text-dim);
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+}
+/* Чеклист шагов: порядок = нумерация в кружках, done = зелёная галочка, next = подсветка + кнопка */
+.rd-q-steps { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.rd-q-step { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 16px; border: 1px solid transparent; }
+.rd-q-check {
+  width: 26px; height: 26px; flex-shrink: 0; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800;
+  border: 1.5px solid var(--hairline-2); color: var(--text-faint);
+}
+.rd-q-step-body { flex: 1; min-width: 0; }
+.rd-q-step-name { font-size: 13px; font-weight: 700; color: var(--text); }
+.rd-q-step-why { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+.rd-q-xp { flex-shrink: 0; padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; background: var(--accent-soft); color: var(--accent); }
+.rd-q-step.rd-done { opacity: 0.9; }
+.rd-q-step.rd-done .rd-q-check { background: var(--live-soft); border-color: transparent; color: var(--live); }
+.rd-q-step.rd-done .rd-q-step-name { color: var(--text-dim); }
+.rd-q-step.rd-done .rd-q-xp { background: var(--live-soft); color: var(--live); }
+.rd-q-step.rd-next { background: var(--accent-soft); border-color: var(--accent-glow); flex-wrap: wrap; /* кнопка уезжает вниз на всю ширину */ }
+.rd-q-step.rd-next .rd-q-check { border-color: var(--accent); color: var(--accent); }
+.rd-q-cta {
+  width: 100%; margin-top: 8px; height: 36px; border-radius: 999px; border: none; cursor: pointer;
+  background: var(--accent-grad); color: var(--on-accent);
+  font-family: inherit; font-size: 13px; font-weight: 800;
+  box-shadow: 0 4px 12px var(--accent-shadow);
+}
+/* Свёрнутый вид: пилюля-прогресс одной строкой */
+.rd-quest-pill {
+  width: 100%; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px; border-radius: 999px;
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%);
+  box-shadow: var(--glass-shadow);
+  font-family: inherit; color: var(--text); cursor: pointer; text-align: left;
+}
+.rd-qp-donut { width: 22px; height: 22px; flex-shrink: 0; }
+.rd-qp-text { font-size: 12px; font-weight: 700; white-space: nowrap; }
+.rd-qp-next { flex: 1; min-width: 0; font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rd-qp-next b { color: var(--accent); font-weight: 700; }
+.rd-quest-pill .chev { flex-shrink: 0; color: var(--text-faint); }
+/* Поздравление на месте карточки: бейдж-звезда, градиентный титул, CSS-конфетти */
+.rd-congrats { padding: 22px 16px 18px; margin-bottom: 16px; text-align: center; position: relative; overflow: hidden; }
+.rd-c-badge {
+  width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 12px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-grad-strong); color: var(--on-accent);
+  box-shadow: 0 6px 18px var(--accent-shadow), inset 0 2px 0 rgba(255, 255, 255, 0.35);
+  animation: rd-badge-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes rd-badge-pop { from { transform: scale(0.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.rd-c-title {
+  font-size: 18px; font-weight: 800; letter-spacing: -0.02em;
+  background: var(--grad-text);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.rd-c-text { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; margin: 8px auto 12px; max-width: 260px; }
+.rd-c-chips { display: flex; justify-content: center; gap: 8px; margin-bottom: 14px; }
+.rd-c-chip-badge { padding: 6px 12px; border-radius: 999px; background: var(--accent-soft); border: 1px solid var(--accent-glow); font-size: 12px; font-weight: 700; color: var(--accent); }
+.rd-c-chip-xp { padding: 6px 12px; border-radius: 999px; background: var(--live-soft); font-size: 12px; font-weight: 800; color: var(--live); }
+.rd-c-btn {
+  height: 38px; padding: 0 26px; border-radius: 999px; border: none; cursor: pointer;
+  background: var(--accent-grad); color: var(--on-accent);
+  font-family: inherit; font-size: 13px; font-weight: 800;
+  box-shadow: 0 4px 12px var(--accent-shadow);
+}
+.rd-cf { position: absolute; width: 6px; height: 6px; border-radius: 2px; opacity: 0; animation: rd-cf-fall 2.6s ease-in-out infinite; }
+@keyframes rd-cf-fall {
+  0%   { opacity: 0; transform: translateY(-6px) rotate(0deg); }
+  25%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(26px) rotate(200deg); }
+}
+
 /* ---------- Теги ---------- */
 .rd-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
 .rd-tag {

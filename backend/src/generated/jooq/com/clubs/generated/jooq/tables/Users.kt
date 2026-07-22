@@ -187,6 +187,27 @@ open class Users(
      */
     val ONBOARDED_AT: TableField<UsersRecord, OffsetDateTime?> = createField(DSL.name("onboarded_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда пользователь завершил онбординг; NULL — ещё не проходил")
 
+    /**
+     * The column <code>public.users.quest_city_at</code>. Веха профиль-квеста
+     * «Город» (+10 XP): когда город впервые заполнен. NULL = не достигнута.
+     * Одноразовая, не сбрасывается при очистке поля.
+     */
+    val QUEST_CITY_AT: TableField<UsersRecord, OffsetDateTime?> = createField(DSL.name("quest_city_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Веха профиль-квеста «Город» (+10 XP): когда город впервые заполнен. NULL = не достигнута. Одноразовая, не сбрасывается при очистке поля.")
+
+    /**
+     * The column <code>public.users.quest_interests_at</code>. Веха
+     * профиль-квеста «Интересы» (+25 XP): когда впервые появился ≥1 интерес.
+     * NULL = не достигнута. Одноразовая, не сбрасывается при очистке.
+     */
+    val QUEST_INTERESTS_AT: TableField<UsersRecord, OffsetDateTime?> = createField(DSL.name("quest_interests_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Веха профиль-квеста «Интересы» (+25 XP): когда впервые появился ≥1 интерес. NULL = не достигнута. Одноразовая, не сбрасывается при очистке.")
+
+    /**
+     * The column <code>public.users.quest_bio_at</code>. Веха профиль-квеста «О
+     * себе» (+15 XP): когда bio впервые заполнено. NULL = не достигнута.
+     * Одноразовая, не сбрасывается при очистке поля.
+     */
+    val QUEST_BIO_AT: TableField<UsersRecord, OffsetDateTime?> = createField(DSL.name("quest_bio_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Веха профиль-квеста «О себе» (+15 XP): когда bio впервые заполнено. NULL = не достигнута. Одноразовая, не сбрасывается при очистке поля.")
+
     private constructor(alias: Name, aliased: Table<UsersRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<UsersRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<UsersRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

@@ -48,6 +48,7 @@ const ZERO_GAMIFICATION: GamificationDto = {
   xpIntoLevel: 0,
   xpSpanToNext: 50,
   badges: [],
+  quest: { cityDone: false, interestsDone: false, bioDone: false, completed: false },
 };
 
 interface MockOptions {
@@ -111,7 +112,7 @@ describe('ProfilePage — W3-04: секция «Уровень»', () => {
     expect(screen.getByText(/0 XP · ур\. 1/)).toBeInTheDocument();
     expect(screen.getByText(/0 \/ 50 XP до «Свой»/)).toBeInTheDocument();
     // Пояснение-тизер про начисление XP.
-    expect(screen.getByText(/XP начисляется за посещённые встречи/)).toBeInTheDocument();
+    expect(screen.getByText(/XP начисляется за заполненный профиль/)).toBeInTheDocument();
   });
 
   it('xp>0: панель как раньше, строки-пояснения нет', async () => {
@@ -119,13 +120,14 @@ describe('ProfilePage — W3-04: секция «Уровень»', () => {
       gamification: {
         xp: 120, level: 2, levelName: 'Свой', nextLevelName: 'Завсегдатай',
         xpIntoLevel: 20, xpSpanToNext: 150, badges: [],
+        quest: { cityDone: true, interestsDone: true, bioDone: true, completed: true },
       },
     });
     renderPage();
 
     expect(await screen.findByText('Свой')).toBeInTheDocument();
     expect(screen.getByText(/120 XP · ур\. 2/)).toBeInTheDocument();
-    expect(screen.queryByText(/XP начисляется за посещённые встречи/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/XP начисляется за заполненный профиль/)).not.toBeInTheDocument();
   });
 
   it('isError: плашка «Не удалось загрузить уровень» + «Повторить» (role=alert, не «уровня нет»)', async () => {

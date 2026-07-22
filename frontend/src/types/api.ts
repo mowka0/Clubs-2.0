@@ -274,6 +274,20 @@ export interface GamificationDto {
   xpIntoLevel: number;
   xpSpanToNext: number | null;
   badges: BadgeDto[];
+  /** Профиль-квест (карточка «Прокачай профиль»): какие вехи достигнуты. См. profile-quest.md. */
+  quest: ProfileQuestDto;
+}
+
+/**
+ * Вехи профиль-квеста. Done-флаги — от одноразовых серверных меток (не от текущего
+ * содержимого полей): стёр bio после вехи — XP и галочка остаются.
+ */
+export interface ProfileQuestDto {
+  cityDone: boolean;
+  interestsDone: boolean;
+  bioDone: boolean;
+  /** Все три вехи достигнуты — карточка-квест скрывается, бейдж «Визитка» получен. */
+  completed: boolean;
 }
 
 export interface ActionRequiredCountDto {

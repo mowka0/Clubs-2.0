@@ -1,5 +1,6 @@
 package com.clubs.reputation
 
+import com.clubs.user.UserRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
@@ -20,7 +21,8 @@ import java.util.UUID
 class ApplicantSignalService(
     private val reputationRepository: ReputationRepository,
     private val trustService: TrustService,
-    private val xpService: XpService
+    private val xpService: XpService,
+    private val userRepository: UserRepository
 ) {
 
     @Transactional(readOnly = true)
@@ -30,10 +32,13 @@ class ApplicantSignalService(
     ): Map<UUID, ApplicantSignal> {
         if (userIds.isEmpty()) return emptyMap()
         val outcomesByUser = reputationRepository.findOutcomesByUserIds(userIds)
+        // Вехи профиль-квеста — батчем: уровень «для других» обязан учитывать профильный XP,
+        // иначе self-уровень 2 расходился бы с пилюлей, которую видит организатор (AC-6).
+        val questFlagsByUser = userRepository.findQuestFlagsByIds(userIds)
         return userIds.associateWith { userId ->
             val outcomes = outcomesByUser[userId].orEmpty()
             val global = trustService.globalForOutcomes(outcomes, now)
-            val level = xpService.levelForOutcomes(outcomes, now)
+            val level = xpService.levelForOutcomes(outcomes, xpService.questFor(questFlagsByUser[userId]), now)
             ApplicantSignal(
                 reliableClubs = global.reliableClubs,
                 trackRecordClubs = global.trackRecordClubs,

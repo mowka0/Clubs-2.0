@@ -37,6 +37,9 @@ export function useUpdateProfileMutation() {
     onSuccess: (user) => {
       setUser(user);
       qc.invalidateQueries({ queryKey: queryKeys.clubs.myInterests() });
+      // Профиль-квест: сохранение полей может закрыть вехи (+XP/бейдж) — панель «Уровень»
+      // и карточка-квеста должны увидеть свежие done-флаги без перезагрузки.
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.myGamification() });
     },
   });
 }

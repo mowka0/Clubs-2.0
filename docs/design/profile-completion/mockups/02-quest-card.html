@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Профиль-квест · Направление 2 «Карточка-квест»</title>
+<style>
+/* ============================================================
+   Дизайн-токены Banco-Plata — выписаны из frontend/src/styles/brand-theme.css
+   (боевые значения). :root = ТЁМНАЯ тема (дефолт),
+   [data-theme="light"] на <html> переопределяет.
+   ============================================================ */
+:root {
+  /* базовые фон/текст */
+  --bg:            #0B0B0E;
+  --text:          #F4F4F6;
+  --text-dim:      rgba(244, 244, 246, 0.6);
+  --text-faint:    rgba(244, 244, 246, 0.45);
+
+  /* «стекло» */
+  --glass-bg:      linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.015) 100%);
+  --glass-border:  rgba(255, 255, 255, 0.08);
+  --glass-shadow:  inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.25);
+  --glass-strong-bg:
+      linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.01) 100%),
+      rgba(20, 22, 32, 0.5);
+  --glass-strong-border: rgba(255, 255, 255, 0.09);
+  --glass-strong-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 12px 32px rgba(0,0,0,0.35);
+
+  /* поверхности и линии */
+  --surface:       rgba(255, 255, 255, 0.04);
+  --surface-2:     rgba(255, 255, 255, 0.05);
+  --hairline:      rgba(255, 255, 255, 0.06);
+  --hairline-2:    rgba(255, 255, 255, 0.1);
+  --card-solid:    #17171C;               /* непрозрачный материал карточки (полка на фото) */
+  --shelf-hl:      rgba(255, 255, 255, 0.12); /* блик верхней кромки полки метрик */
+
+  /* акцент (фирменный оранжевый) */
+  --accent:        #F47B3C;
+  --accent-deep:   #D5611C;
+  --accent-soft:   rgba(244, 123, 60, 0.14);
+  --accent-glow:   rgba(244, 123, 60, 0.4);
+  --accent-shadow:      rgba(244, 123, 60, 0.30);
+  --accent-shadow-soft: rgba(244, 123, 60, 0.15);
+  --accent-grad:        linear-gradient(135deg, #FFA070 0%, #F47B3C 100%);
+  --accent-grad-strong: linear-gradient(135deg, #FFCDA8 0%, #F47B3C 50%, #D5611C 100%);
+  --grad-text:     linear-gradient(90deg, #FF8A4A 0%, #E84C9A 50%, #8E5DFF 100%);
+  --grad-num:      linear-gradient(135deg, #FFE0B5 0%, #FF9B6E 35%, #E84C9A 70%, #6A3DCC 100%);
+  --on-accent:     #2A0E04;
+
+  /* статусные */
+  --live:          #66D49A;
+  --live-soft:     rgba(79, 160, 120, 0.18);
+  --danger:        #FF8B8B;
+  --danger-soft:   rgba(255, 139, 139, 0.14);
+  --ice:           #8FC7E8;
+  --ice-soft:      rgba(143, 199, 232, 0.10);
+
+  --grain-opacity: 0.08;
+}
+
+[data-theme="light"] {
+  --bg:            #F7F6F3;
+  --text:          #1A1A1A;
+  --text-dim:      #6B6B70;
+  --text-faint:    #8A8A8E;
+
+  --glass-bg:      linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(252,252,252,0.85) 100%);
+  --glass-border:  rgba(0, 0, 0, 0.05);
+  --glass-shadow:  inset 0 1px 0 rgba(255,255,255,1), 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.05);
+  --glass-strong-bg: linear-gradient(135deg, rgba(255,251,242,0.95) 0%, rgba(252,247,235,0.88) 100%);
+  --glass-strong-border: rgba(213, 97, 28, 0.14);
+  --glass-strong-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 1px 3px rgba(0,0,0,0.04), 0 12px 32px rgba(213,97,28,0.1);
+
+  --surface:       rgba(255, 255, 255, 0.85);
+  --surface-2:     #FFFFFF;
+  --hairline:      rgba(0, 0, 0, 0.06);
+  --hairline-2:    rgba(0, 0, 0, 0.1);
+  --card-solid:    #FFFFFF;
+  --shelf-hl:      rgba(255, 255, 255, 0.9);
+
+  --accent-soft:   rgba(244, 123, 60, 0.12);
+  --accent-glow:   rgba(213, 97, 28, 0.3);
+  --accent-shadow:      rgba(213, 97, 28, 0.24);
+  --accent-shadow-soft: rgba(213, 97, 28, 0.12);
+  --accent-grad:        linear-gradient(135deg, #F47B3C 0%, #D5611C 100%);
+  --accent-grad-strong: linear-gradient(135deg, #F47B3C 0%, #D5611C 100%);
+  --grad-text:     linear-gradient(90deg, #E97339 0%, #C4407A 50%, #7A4FD9 100%);
+  --grad-num:      linear-gradient(135deg, #E97339 0%, #C4407A 50%, #7A4FD9 100%);
+  --on-accent:     #FFFFFF;
+
+  --live:          #2E7D5A;
+  --live-soft:     rgba(46, 125, 90, 0.12);
+  --danger-soft:   rgba(216, 64, 64, 0.10);
+  --ice:           #3B82A6;
+  --ice-soft:      rgba(59, 130, 166, 0.08);
+
+  --grain-opacity: 0;
+}
+
+/* ===== Каркас мокапа ===== */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Topbar — липкая шапка мокапа: заголовок + hint + тумблер темы (паттерн проекта) */
+.topbar {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  padding: 14px 24px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--hairline);
+}
+.topbar h1 { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
+.topbar .hint { font-size: 12px; color: var(--text-dim); margin-top: 3px; max-width: 640px; }
+.topbar .hint b { color: var(--accent); font-weight: 700; }
+.toggle {
+  flex: none; height: 36px; padding: 0 16px;
+  border-radius: 999px; border: 1px solid var(--hairline-2);
+  background: var(--card-solid); color: var(--text);
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+
+/* Сетка вариантов */
+.grid { display: flex; flex-wrap: wrap; gap: 26px 30px; padding: 24px 28px 60px; }
+.col { width: 360px; }
+.vname { font-size: 13.5px; font-weight: 800; margin-bottom: 4px; }
+.vname b { color: var(--accent); }
+.vhint { font-size: 11px; color: var(--text-dim); line-height: 1.4; min-height: 46px; margin-bottom: 10px; }
+
+/* ===== Телефонный фрейм ===== */
+.phone {
+  width: 360px;
+  border-radius: 34px;
+  border: 1px solid var(--hairline-2);
+  background: var(--bg);
+  overflow: hidden;
+  box-shadow: 0 18px 44px rgba(0,0,0,0.35);
+}
+[data-theme="light"] .phone { box-shadow: 0 18px 44px rgba(0,0,0,0.10); }
+.sb { /* имитация статус-бара */
+  display: flex; justify-content: space-between;
+  padding: 10px 20px 2px; font-size: 11px; font-weight: 600; color: var(--text-dim);
+}
+.screen { padding: 6px 16px 0; } /* как .rd-page, низ обрезаем фейдом */
+.screen-fade { height: 40px; background: linear-gradient(to bottom, transparent, var(--bg)); margin-top: -40px; position: relative; }
+
+/* ===== Прод-подобные куски профиля (по мотивам redesign.css) ===== */
+
+/* Стеклянная карточка — боевой .rd-glass */
+.rd-glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 22px;
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+  box-shadow: var(--glass-shadow);
+}
+
+/* Правый верхний ряд кнопок: пилюля темы + шестерёнка (как в проде) */
+.pf-toprow { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 6px; }
+.rd-city-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 12px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  font-size: 12px; font-weight: 600; color: var(--text-dim);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.rd-icon-btn {
+  width: 32px; height: 32px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface); border: 1px solid var(--glass-border);
+  color: var(--text-dim); cursor: pointer;
+}
+
+/* Identity-блок: аватар, имя, хэндл */
+.rd-pf-identity { text-align: center; margin-bottom: 18px; }
+.rd-avt {
+  width: 88px; height: 88px; border-radius: 50%;
+  margin: 0 auto 12px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #FFCDA8 0%, #F47B3C 45%, #5C2C12 100%);
+  color: #1A0E04; font-size: 34px; font-weight: 700;
+  border: 1px solid rgba(255,255,255,0.15);
+  box-shadow: 0 4px 12px var(--accent-shadow), 0 8px 18px var(--accent-shadow-soft), inset 0 2px 0 rgba(255,255,255,0.2);
+}
+.rd-name {
+  font-size: 20px; font-weight: 700; letter-spacing: -0.01em; color: var(--text);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.rd-handle { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+.rd-bio { font-size: 13px; color: var(--text-dim); line-height: 1.5; text-align: center; margin-top: 10px; }
+/* Нудж bio из прода — оставлен как есть: PO убирает только лис-экран интересов */
+.rd-bio-nudge {
+  display: block; margin: 10px auto 0;
+  background: none; border: none; cursor: pointer;
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--accent);
+}
+
+/* Заголовок секции и теги интересов */
+.rd-section-sub-h { font-size: 13px; font-weight: 800; letter-spacing: -0.01em; margin: 4px 0 10px; }
+.rd-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.rd-tag {
+  padding: 6px 12px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--hairline-2);
+  font-size: 12px; font-weight: 600; color: var(--text);
+}
+
+/* Панель «Уровень» — реплика GamificationPanel (боевая: .rd-glass + inline-стили) */
+.lvl { padding: 16px; margin-bottom: 14px; }
+.lvl-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.lvl-name { font-size: 18px; font-weight: 700; }
+.lvl-meta { font-size: 12px; color: var(--text-dim); }
+.lvl-bar { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.lvl-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #ff8a3d, #ff5e8a); }
+.lvl-cap { font-size: 12px; color: var(--text-dim); margin-top: 8px; }
+.lvl-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+/* Призрак нижних секций (Подписка/Репутация) — без изменений, чтобы не выдумывать их вид */
+.ghost {
+  height: 62px; border-radius: 22px;
+  border: 1px dashed var(--hairline-2); background: var(--surface);
+  opacity: 0.55;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--text-faint);
+  margin-bottom: 14px;
+}
+
+/* ============================================================
+   НАПРАВЛЕНИЕ №2 — «Карточка-квест»
+   Лежит между identity-блоком и остальным контентом.
+   ============================================================ */
+
+/* Развёрнутая карточка */
+.quest { padding: 16px; margin-bottom: 16px; }
+.q-head { display: flex; align-items: center; gap: 12px; }
+.q-donut { width: 46px; height: 46px; flex: none; }
+.q-donut text { font-size: 10px; font-weight: 800; fill: var(--text); }
+.q-titles { flex: 1; min-width: 0; }
+.q-title { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; }
+.q-sub { font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
+.q-sub b { color: var(--accent); font-weight: 700; }
+.q-fold {
+  width: 28px; height: 28px; flex: none;
+  border-radius: 999px; border: 1px solid var(--hairline-2);
+  background: var(--surface); color: var(--text-dim); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* Чеклист шагов: порядок = нумерация в кружках, done = галочка */
+.q-steps { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.q-step {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 16px;
+  border: 1px solid transparent;
+}
+.q-check {
+  width: 26px; height: 26px; flex: none;
+  border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800;
+  border: 1.5px solid var(--hairline-2); color: var(--text-faint);
+}
+.q-step-body { flex: 1; min-width: 0; }
+.q-step-name { font-size: 13px; font-weight: 700; }
+.q-step-why { font-size: 11px; color: var(--text-dim); margin-top: 1px; } /* польза поля — одной строкой */
+.q-xp {
+  flex: none; padding: 4px 9px; border-radius: 999px;
+  font-size: 11px; font-weight: 800;
+  background: var(--accent-soft); color: var(--accent);
+}
+
+/* Сделанный шаг: зелёная галочка, приглушённое имя, XP «получен» */
+.q-step.done { opacity: 0.9; }
+.q-step.done .q-check { background: var(--live-soft); border-color: transparent; color: var(--live); }
+.q-step.done .q-step-name { color: var(--text-dim); }
+.q-step.done .q-xp { background: var(--live-soft); color: var(--live); }
+
+/* Текущий (следующий) шаг: подсветка + акцентная кнопка «Заполнить» */
+.q-step.next {
+  background: var(--accent-soft);
+  border-color: var(--accent-glow);
+  flex-wrap: wrap; /* кнопка уезжает на всю ширину вниз */
+}
+.q-step.next .q-check { border-color: var(--accent); color: var(--accent); }
+.q-cta {
+  width: 100%; margin-top: 8px;
+  height: 36px; border-radius: 999px; border: none; cursor: pointer;
+  background: var(--accent-grad); color: var(--on-accent);
+  font: inherit; font-size: 13px; font-weight: 800;
+  box-shadow: 0 4px 12px var(--accent-shadow);
+}
+
+/* ----- Свёрнутый вид: тонкая пилюля-прогресс ----- */
+/* Обёртка .qwrap хранит состояние: .folded → видна пилюля, иначе карточка */
+.qwrap.folded .quest { display: none; }
+.qwrap:not(.folded) .quest-pill { display: none; }
+.quest-pill {
+  width: 100%; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px; border-radius: 999px;
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+  box-shadow: var(--glass-shadow);
+  font: inherit; color: var(--text); cursor: pointer; text-align: left;
+}
+.qp-donut { width: 22px; height: 22px; flex: none; }
+.qp-text { font-size: 12px; font-weight: 700; white-space: nowrap; }
+.qp-next { flex: 1; font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qp-next b { color: var(--accent); font-weight: 700; }
+.quest-pill svg.chev { flex: none; color: var(--text-faint); }
+
+/* ----- Финал: карточка превращается в поздравление с бейджем ----- */
+.congrats { padding: 22px 16px 18px; margin-bottom: 16px; text-align: center; position: relative; overflow: hidden; }
+.c-badge {
+  width: 64px; height: 64px; border-radius: 50%;
+  margin: 0 auto 12px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-grad-strong); color: var(--on-accent);
+  box-shadow: 0 6px 18px var(--accent-shadow), inset 0 2px 0 rgba(255,255,255,0.35);
+  animation: badge-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes badge-pop { from { transform: scale(0.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.c-title {
+  font-size: 18px; font-weight: 800; letter-spacing: -0.02em;
+  background: var(--grad-text);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.c-text { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; margin: 8px auto 12px; max-width: 260px; }
+.c-chips { display: flex; justify-content: center; gap: 8px; margin-bottom: 14px; }
+.c-chip-badge {
+  padding: 6px 12px; border-radius: 999px;
+  background: var(--accent-soft); border: 1px solid var(--accent-glow);
+  font-size: 12px; font-weight: 700; color: var(--accent);
+}
+.c-chip-xp {
+  padding: 6px 12px; border-radius: 999px;
+  background: var(--live-soft); font-size: 12px; font-weight: 800; color: var(--live);
+}
+.c-btn {
+  height: 38px; padding: 0 26px;
+  border-radius: 999px; border: none; cursor: pointer;
+  background: var(--accent-grad); color: var(--on-accent);
+  font: inherit; font-size: 13px; font-weight: 800;
+  box-shadow: 0 4px 12px var(--accent-shadow);
+}
+/* Конфетти — чисто CSS, мерцающие точки в углах карточки */
+.cf { position: absolute; width: 6px; height: 6px; border-radius: 2px; opacity: 0; animation: cf-fall 2.6s ease-in-out infinite; }
+@keyframes cf-fall {
+  0%   { opacity: 0; transform: translateY(-6px) rotate(0deg); }
+  25%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(26px) rotate(200deg); }
+}
+</style>
+</head>
+<body>
+
+<!-- Общий градиент для донатов (тот же, что заливка XP-бара в GamificationPanel) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="gq" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff8a3d"/>
+      <stop offset="1" stop-color="#ff5e8a"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<div class="topbar">
+  <div>
+    <h1>Профиль-квест: заполни профиль → уровень 2</h1>
+    <div class="hint">Направление <b>№2 «Карточка-квест»</b> — между шапкой и контентом карточка с донатом и чеклистом полей (+XP за каждое, в сумме 50 = порог «Свой»). Сворачивается в пилюлю (тап по стрелке/пилюле — интерактивно). Финал — поздравление с бейджем. Лис-экрана интересов больше нет.</div>
+  </div>
+  <button class="toggle" onclick="var h=document.documentElement; h.dataset.theme = h.dataset.theme==='light' ? '' : 'light'; this.querySelector('.tx').textContent = h.dataset.theme==='light' ? 'Тёмная тема' : 'Светлая тема';">◐ <span class="tx">Светлая тема</span></button>
+</div>
+
+<div class="grid">
+
+  <!-- ================= ВАРИАНТ A: карточка развёрнута, профиль частично заполнен ================= -->
+  <div class="col">
+    <div class="vname"><b>A</b> · Квест развёрнут (10 / 50 XP)</div>
+    <div class="vhint">Город уже заполнен (+10 XP, зелёная галочка). Следующий шаг — интересы — подсвечен, с акцентной кнопкой «Заполнить». Порядок задан нумерацией кружков. Стрелка ▾ сворачивает карточку в пилюлю.</div>
+    <div class="phone">
+      <div class="sb"><span>14:20</span><span>LTE · 87%</span></div>
+      <div class="screen">
+
+        <div class="pf-toprow">
+          <span class="rd-city-pill">◐ Авто</span>
+          <button class="rd-icon-btn" title="Редактировать профиль">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </div>
+
+        <div class="rd-pf-identity">
+          <div class="rd-avt">МС</div>
+          <div class="rd-name">Мария Соколова
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 16.9 5.9 20.4l1.5-6.8L2.2 9l6.9-.7z"/></svg>
+          </div>
+          <!-- Шаг «Город» сделан → хэндл уже с городом, как в проде -->
+          <div class="rd-handle">@masha_s · Москва, Россия</div>
+          <!-- Прод-нудж bio остаётся: PO снял только лис-экран интересов -->
+          <button class="rd-bio-nudge">Добавь пару слов о себе →</button>
+        </div>
+
+        <!-- ===== КАРТОЧКА-КВЕСТ (развёрнута) ===== -->
+        <div class="qwrap">
+          <div class="quest rd-glass">
+            <div class="q-head">
+              <!-- Мини-донат: доля XP до порога 2 уровня. C = 2π·18 ≈ 113.1; 20% → 22.6 -->
+              <svg class="q-donut" viewBox="0 0 46 46">
+                <circle cx="23" cy="23" r="18" fill="none" stroke="var(--surface-2)" stroke-width="4.5"/>
+                <circle cx="23" cy="23" r="18" fill="none" stroke="url(#gq)" stroke-width="4.5"
+                        stroke-linecap="round" stroke-dasharray="22.6 113.1" transform="rotate(-90 23 23)"/>
+                <text x="23" y="27" text-anchor="middle">20%</text>
+              </svg>
+              <div class="q-titles">
+                <div class="q-title">Прокачай профиль</div>
+                <div class="q-sub"><b>10 / 50 XP</b> до уровня 2 «Свой»</div>
+              </div>
+              <button class="q-fold" title="Свернуть" onclick="this.closest('.qwrap').classList.toggle('folded')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 15l6-6 6 6"/></svg>
+              </button>
+            </div>
+
+            <div class="q-steps">
+              <!-- Шаг 1: сделан -->
+              <div class="q-step done">
+                <span class="q-check">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 12.5l5 5L20 6.5"/></svg>
+                </span>
+                <div class="q-step-body">
+                  <div class="q-step-name">Город</div>
+                  <div class="q-step-why">Найдём клубы рядом с тобой</div>
+                </div>
+                <span class="q-xp">+10 XP</span>
+              </div>
+
+              <!-- Шаг 2: следующий → подсветка + кнопка -->
+              <div class="q-step next">
+                <span class="q-check">2</span>
+                <div class="q-step-body">
+                  <div class="q-step-name">Интересы</div>
+                  <div class="q-step-why">По ним подберём клубы, которые твои</div>
+                </div>
+                <span class="q-xp">+25 XP</span>
+                <button class="q-cta">Заполнить</button>
+              </div>
+
+              <!-- Шаг 3: впереди -->
+              <div class="q-step">
+                <span class="q-check">3</span>
+                <div class="q-step-body">
+                  <div class="q-step-name">О себе</div>
+                  <div class="q-step-why">Организаторы поймут, кто к ним идёт</div>
+                </div>
+                <span class="q-xp">+15 XP</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Пилюля того же квеста (видна в свёрнутом состоянии) -->
+          <button class="quest-pill" onclick="this.closest('.qwrap').classList.toggle('folded')">
+            <svg class="qp-donut" viewBox="0 0 22 22">
+              <circle cx="11" cy="11" r="8" fill="none" stroke="var(--surface-2)" stroke-width="3"/>
+              <circle cx="11" cy="11" r="8" fill="none" stroke="url(#gq)" stroke-width="3"
+                      stroke-linecap="round" stroke-dasharray="10.1 50.3" transform="rotate(-90 11 11)"/>
+            </svg>
+            <span class="qp-text">10 / 50 XP</span>
+            <span class="qp-next">Дальше: <b>интересы +25</b></span>
+            <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+        </div>
+
+        <!-- Секция «Интересы» пуста и скрыта: лис ушёл, наводит теперь квест-карточка -->
+
+        <!-- Секция «Уровень» — реплика GamificationPanel: 10 XP, ур. 1 «Гость» -->
+        <div class="rd-section-sub-h">Уровень</div>
+        <div class="lvl rd-glass">
+          <div class="lvl-top">
+            <div class="lvl-name">Гость</div>
+            <div class="lvl-meta">10 XP · ур. 1</div>
+          </div>
+          <div class="lvl-bar"><div class="lvl-fill" style="width:20%"></div></div>
+          <div class="lvl-cap">10 / 50 XP до «Свой»</div>
+        </div>
+
+        <div class="ghost">Подписка · Репутация — без изменений</div>
+      </div>
+      <div class="screen-fade"></div>
+    </div>
+  </div>
+
+  <!-- ================= ВАРИАНТ B: карточка свёрнута в пилюлю ================= -->
+  <div class="col">
+    <div class="vname"><b>B</b> · Свёрнут в пилюлю-прогресс</div>
+    <div class="vhint">Тот же экран: квест сжат до одной строки — мини-донат, счёт XP и подсказка следующего шага. Профиль не загромождён, прогресс всегда на виду. Тап по пилюле разворачивает карточку обратно.</div>
+    <div class="phone">
+      <div class="sb"><span>14:20</span><span>LTE · 87%</span></div>
+      <div class="screen">
+
+        <div class="pf-toprow">
+          <span class="rd-city-pill">◐ Авто</span>
+          <button class="rd-icon-btn" title="Редактировать профиль">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </div>
+
+        <div class="rd-pf-identity">
+          <div class="rd-avt">МС</div>
+          <div class="rd-name">Мария Соколова
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 16.9 5.9 20.4l1.5-6.8L2.2 9l6.9-.7z"/></svg>
+          </div>
+          <div class="rd-handle">@masha_s · Москва, Россия</div>
+          <button class="rd-bio-nudge">Добавь пару слов о себе →</button>
+        </div>
+
+        <!-- Тот же qwrap, но стартует свёрнутым (.folded) -->
+        <div class="qwrap folded">
+          <div class="quest rd-glass">
+            <div class="q-head">
+              <svg class="q-donut" viewBox="0 0 46 46">
+                <circle cx="23" cy="23" r="18" fill="none" stroke="var(--surface-2)" stroke-width="4.5"/>
+                <circle cx="23" cy="23" r="18" fill="none" stroke="url(#gq)" stroke-width="4.5"
+                        stroke-linecap="round" stroke-dasharray="22.6 113.1" transform="rotate(-90 23 23)"/>
+                <text x="23" y="27" text-anchor="middle">20%</text>
+              </svg>
+              <div class="q-titles">
+                <div class="q-title">Прокачай профиль</div>
+                <div class="q-sub"><b>10 / 50 XP</b> до уровня 2 «Свой»</div>
+              </div>
+              <button class="q-fold" title="Свернуть" onclick="this.closest('.qwrap').classList.toggle('folded')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 15l6-6 6 6"/></svg>
+              </button>
+            </div>
+            <div class="q-steps">
+              <div class="q-step done">
+                <span class="q-check">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 12.5l5 5L20 6.5"/></svg>
+                </span>
+                <div class="q-step-body">
+                  <div class="q-step-name">Город</div>
+                  <div class="q-step-why">Найдём клубы рядом с тобой</div>
+                </div>
+                <span class="q-xp">+10 XP</span>
+              </div>
+              <div class="q-step next">
+                <span class="q-check">2</span>
+                <div class="q-step-body">
+                  <div class="q-step-name">Интересы</div>
+                  <div class="q-step-why">По ним подберём клубы, которые твои</div>
+                </div>
+                <span class="q-xp">+25 XP</span>
+                <button class="q-cta">Заполнить</button>
+              </div>
+              <div class="q-step">
+                <span class="q-check">3</span>
+                <div class="q-step-body">
+                  <div class="q-step-name">О себе</div>
+                  <div class="q-step-why">Организаторы поймут, кто к ним идёт</div>
+                </div>
+                <span class="q-xp">+15 XP</span>
+              </div>
+            </div>
+          </div>
+
+          <button class="quest-pill" onclick="this.closest('.qwrap').classList.toggle('folded')">
+            <svg class="qp-donut" viewBox="0 0 22 22">
+              <circle cx="11" cy="11" r="8" fill="none" stroke="var(--surface-2)" stroke-width="3"/>
+              <circle cx="11" cy="11" r="8" fill="none" stroke="url(#gq)" stroke-width="3"
+                      stroke-linecap="round" stroke-dasharray="10.1 50.3" transform="rotate(-90 11 11)"/>
+            </svg>
+            <span class="qp-text">10 / 50 XP</span>
+            <span class="qp-next">Дальше: <b>интересы +25</b></span>
+            <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+        </div>
+
+        <div class="rd-section-sub-h">Уровень</div>
+        <div class="lvl rd-glass">
+          <div class="lvl-top">
+            <div class="lvl-name">Гость</div>
+            <div class="lvl-meta">10 XP · ур. 1</div>
+          </div>
+          <div class="lvl-bar"><div class="lvl-fill" style="width:20%"></div></div>
+          <div class="lvl-cap">10 / 50 XP до «Свой»</div>
+        </div>
+
+        <div class="ghost">Подписка · Репутация — без изменений</div>
+      </div>
+      <div class="screen-fade"></div>
+    </div>
+  </div>
+
+  <!-- ================= ВАРИАНТ C: 2 уровень достигнут — поздравление с бейджем ================= -->
+  <div class="col">
+    <div class="vname"><b>C</b> · Уровень 2 достигнут</div>
+    <div class="vhint">Все три поля заполнены: 10+25+15 = 50 XP — ровно порог «Свой» (кривая 50·n²). Карточка-квест превратилась в поздравление с бейджем «Визитка». «Отлично» убирает карточку навсегда; бейдж остаётся в панели «Уровень».</div>
+    <div class="phone">
+      <div class="sb"><span>14:20</span><span>LTE · 87%</span></div>
+      <div class="screen">
+
+        <div class="pf-toprow">
+          <span class="rd-city-pill">◐ Авто</span>
+          <button class="rd-icon-btn" title="Редактировать профиль">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </div>
+
+        <div class="rd-pf-identity">
+          <div class="rd-avt">МС</div>
+          <div class="rd-name">Мария Соколова
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 16.9 5.9 20.4l1.5-6.8L2.2 9l6.9-.7z"/></svg>
+          </div>
+          <div class="rd-handle">@masha_s · Москва, Россия</div>
+          <!-- Bio заполнено — нудж исчез, показываем текст -->
+          <div class="rd-bio">Продакт, люблю настолки и вылазки за город. Ищу компанию на выходные.</div>
+        </div>
+
+        <!-- ===== Карточка-квест стала поздравлением ===== -->
+        <div class="congrats rd-glass">
+          <!-- Конфетти: цвета из палитры градиентов бренда -->
+          <span class="cf" style="left:14%; top:10px; background:#F47B3C;"></span>
+          <span class="cf" style="left:30%; top:4px;  background:#E84C9A; animation-delay:.5s;"></span>
+          <span class="cf" style="left:64%; top:8px;  background:#8E5DFF; animation-delay:.9s;"></span>
+          <span class="cf" style="left:82%; top:12px; background:#66D49A; animation-delay:1.4s;"></span>
+          <span class="cf" style="left:48%; top:2px;  background:#FFCDA8; animation-delay:1.9s;"></span>
+
+          <div class="c-badge">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 16.9 5.9 20.4l1.5-6.8L2.2 9l6.9-.7z"/></svg>
+          </div>
+          <div class="c-title">Уровень 2 — «Свой»!</div>
+          <div class="c-text">Профиль заполнен: город, интересы и пара слов о себе. Теперь клубы и организаторы видят, кто ты.</div>
+          <div class="c-chips">
+            <span class="c-chip-badge">Бейдж «Визитка»</span>
+            <span class="c-chip-xp">+50 XP</span>
+          </div>
+          <button class="c-btn">Отлично</button>
+        </div>
+
+        <!-- Интересы заполнены — обычные теги прода -->
+        <div class="rd-section-sub-h">Интересы</div>
+        <div class="rd-tags">
+          <span class="rd-tag">Настолки</span>
+          <span class="rd-tag">Походы</span>
+          <span class="rd-tag">Спешелти-кофе</span>
+        </div>
+
+        <!-- «Уровень»: 50 XP = ровно порог ур. 2 → xpIntoLevel 0, до «Участник» (200) осталось 150 -->
+        <div class="rd-section-sub-h">Уровень</div>
+        <div class="lvl rd-glass">
+          <div class="lvl-top">
+            <div class="lvl-name">Свой</div>
+            <div class="lvl-meta">50 XP · ур. 2</div>
+          </div>
+          <div class="lvl-bar"><div class="lvl-fill" style="width:0%"></div></div>
+          <div class="lvl-cap">0 / 150 XP до «Участник»</div>
+          <div class="lvl-badges">
+            <span class="rd-tag" title="Визитка">Визитка</span>
+          </div>
+        </div>
+
+        <div class="ghost">Подписка · Репутация — без изменений</div>
+      </div>
+      <div class="screen-fade"></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

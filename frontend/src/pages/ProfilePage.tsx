@@ -1,4 +1,4 @@
-import { FC, useEffect, useMemo, useState } from 'react';
+import { FC, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Spinner, Placeholder } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
@@ -9,9 +9,8 @@ import { useMyInterestsQuery } from '../queries/profile';
 import { countryNameByCode } from '../components/CityPicker';
 import { ProfileEditModal } from '../components/profile/ProfileEditModal';
 import { GamificationPanel } from '../components/profile/GamificationPanel';
+import { ProfileQuestCard, ProfileQuestCongrats } from '../components/profile/ProfileQuestCard';
 import { SubscriptionCard } from '../components/subscription/SubscriptionCard';
-import { FoxEmpty } from '../components/feed/FoxEmpty';
-import foxInterestsArt from '../assets/mascot/fox-interests.png';
 import { tierWord, clubsPrepositional } from '../utils/reputationTier';
 
 const GearIcon: FC = () => (
@@ -51,6 +50,18 @@ export const ProfilePage: FC = () => {
   const interests = useMemo(() => interestsQuery.data ?? [], [interestsQuery.data]);
 
   const [editOpen, setEditOpen] = useState(false);
+
+  // Поздравление профиль-квеста показываем ТОЛЬКО при переходе «не завершён → завершён»
+  // в текущей сессии (после сохранения профиля). Уже-завершённый квест при загрузке
+  // (старые пользователи, backfill V66) не поздравляем — карточки у них нет вовсе.
+  const questCompleted = gamificationQuery.data?.quest.completed;
+  const prevQuestCompleted = useRef<boolean | null>(null);
+  const [congratsOpen, setCongratsOpen] = useState(false);
+  useEffect(() => {
+    if (questCompleted === undefined) return;
+    if (prevQuestCompleted.current === false && questCompleted) setCongratsOpen(true);
+    prevQuestCompleted.current = questCompleted;
+  }, [questCompleted]);
 
   useEffect(() => {
     if (!user) login();
@@ -146,6 +157,23 @@ export const ProfilePage: FC = () => {
         </button>
       )}
 
+      {/* Карточка-квест «Прокачай профиль» — пока не завершён; на её месте поздравление
+          при завершении в этой сессии (profile-quest.md, мокап 02-quest-card). */}
+      {gam && !gam.quest.completed && (
+        <ProfileQuestCard
+          quest={gam.quest}
+          onFill={() => { haptic.impact('light'); setEditOpen(true); }}
+        />
+      )}
+      {congratsOpen && (
+        <ProfileQuestCongrats
+          // «Уровень 2!» — только если уровень взят именно квестом; при XP участия ≥ 50
+          // (xp − 50 профильных ≥ порога «Свой») уровень 2 был и до квеста — титул нейтральный.
+          title={gam && (gam.level > 2 || gam.xp >= 100) ? 'Профиль заполнен!' : 'Уровень 2 — «Свой»!'}
+          onAck={() => { haptic.impact('light'); setCongratsOpen(false); }}
+        />
+      )}
+
       {interests.length > 0 ? (
         <>
           <div className="rd-section-sub-h">Интересы</div>
@@ -173,19 +201,9 @@ export const ProfilePage: FC = () => {
             </button>
           </div>
         </>
-      ) : interestsQuery.isSuccess ? (
-        // Приглашение — только при подтверждённой пустоте; во время загрузки секция скрыта.
-        <FoxEmpty
-          art={foxInterestsArt}
-          artLabel="Лис ждёт твои интересы"
-          title="Расскажи, что тебе интересно"
-          description="Добавь пару интересов — по ним проще находить близкие клубы, а организаторы видят, что тебе откликается."
-          primary={{
-            label: 'Добавить интересы',
-            onClick: () => { haptic.impact('light'); setEditOpen(true); },
-          }}
-        />
       ) : null}
+      {/* Лис-экран пустых интересов снят (PO 2026-07-22): к заполнению теперь ведёт
+          карточка-квест выше — при подтверждённой пустоте секция просто скрыта. */}
 
       {hasReputation && (
         <div className="rd-stats">
@@ -240,8 +258,8 @@ export const ProfilePage: FC = () => {
           {gam.xp === 0 && gam.badges.length === 0 && (
             // Пояснение под нулевой панелью — откуда берётся XP и зачем уровни. Только на старте.
             <div className="rd-cta-hint">
-              Это твой старт. XP начисляется за посещённые встречи и оплаченные
-              складчины&nbsp;— с ним растут уровни и открываются бейджи.
+              Это твой старт. XP начисляется за заполненный профиль, посещённые встречи
+              и оплаченные складчины&nbsp;— с ним растут уровни и открываются бейджи.
             </div>
           )}
         </>
