@@ -15,13 +15,18 @@ export function pluralRu(n: number, forms: [string, string, string]): string {
   return forms[2];
 }
 
-/** Один и тот же локальный календарный день (Y/M/D)? */
-function isSameLocalDay(d: Date, ref: Date): boolean {
-  return (
-    d.getFullYear() === ref.getFullYear() &&
-    d.getMonth() === ref.getMonth() &&
-    d.getDate() === ref.getDate()
-  );
+/**
+ * Разница в целых локальных календарных днях между ISO-датой и «сегодня»:
+ * 0 = сегодня, 1 = завтра, отрицательное = в прошлом. null — невалидная дата.
+ * Считается от локальных полуночей (Math.round гасит возможный сдвиг DST).
+ */
+export function calendarDayDiff(iso: string): number | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  return Math.round((startOfDay(d) - startOfDay(now)) / MS_PER_DAY);
 }
 
 /**
@@ -29,18 +34,20 @@ function isSameLocalDay(d: Date, ref: Date): boolean {
  * «ближайшие 24 часа». Тесты детерминируют «сейчас» через fake timers.
  */
 export function isToday(iso: string): boolean {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return false;
-  return isSameLocalDay(d, new Date());
+  return calendarDayDiff(iso) === 0;
 }
 
-/** «Завтра» по локальному календарю; setDate корректно перекатывает месяц/год. */
+/** «Завтра» по локальному календарю (перекат месяца/года учтён в calendarDayDiff). */
 export function isTomorrow(iso: string): boolean {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return false;
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return isSameLocalDay(d, tomorrow);
+  return calendarDayDiff(iso) === 1;
+}
+
+/** Слово дня для бейджей недели: «сегодня» / «завтра» / короткий день недели («пт»). */
+export function formatNearDay(iso: string): string {
+  const diff = calendarDayDiff(iso);
+  if (diff === 0) return 'сегодня';
+  if (diff === 1) return 'завтра';
+  return new Date(iso).toLocaleDateString('ru-RU', { weekday: 'short' });
 }
 
 /** Время «HH:MM» для бейджей встречи (обложка карточки, полка «сегодня»). */

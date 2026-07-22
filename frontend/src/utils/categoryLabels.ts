@@ -1,6 +1,6 @@
 /**
  * Русские названия категорий клубов (ключи — значения enum с бэка).
- * Вынесено из ClubCard, чтобы переиспользовать в TodayShelf. В MyClubsPage /
+ * Вынесено из ClubCard, чтобы переиспользовать в WeekShelf. В MyClubsPage /
  * InvitePage / OrganizerClubManage живут свои локальные копии — консолидация
  * отложена в backlog рефакторинга (не в скоупе discovery-card-v2).
  */

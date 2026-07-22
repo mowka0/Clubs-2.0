@@ -6,7 +6,7 @@ import { useClubCardFacts } from '../queries/clubQuality';
 import { useMyReputationQuery } from '../queries/members';
 import { useAuthStore } from '../store/useAuthStore';
 import { ClubCard } from '../components/ClubCard';
-import { TodayShelf } from '../components/TodayShelf';
+import { WeekShelf } from '../components/WeekShelf';
 import { CityPicker, useCityChoice } from '../components/CityPicker';
 import {
   PriceFilter,
@@ -228,7 +228,7 @@ export const DiscoveryPage: FC = () => {
         </button>
       </div>
 
-      <TodayShelf clubs={clubs} />
+      <WeekShelf clubs={clubs} />
 
       <div>
         {error && clubs.length === 0 && (

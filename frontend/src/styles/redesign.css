@@ -316,27 +316,27 @@
 .rd-cover[data-cat="board_games"] { background: radial-gradient(circle at 70% 30%, rgba(170,235,200,0.4), transparent 50%), linear-gradient(135deg, #2E9A6A 0%, #144a32 60%, #061a10 100%); }
 .rd-cover[data-cat="travel"]      { background: radial-gradient(circle at 70% 30%, rgba(255,190,210,0.4), transparent 50%), linear-gradient(135deg, #C44E7A 0%, #5a2438 60%, #1a0a14 100%); }
 
-/* ---------- Полка «Встречаются сегодня» (Discovery) ---------- */
-.rd-today-shelf { margin-bottom: 14px; }
-.rd-today-lbl {
+/* ---------- Полка «Встречаются на неделе» (Discovery) ---------- */
+.rd-week-shelf { margin-bottom: 14px; }
+.rd-week-lbl {
   display: flex; align-items: center; gap: 7px;
   padding: 0 4px 9px;
   font-size: 11px; font-weight: 700;
   letter-spacing: 0.14em; text-transform: uppercase;
   color: var(--accent);
 }
-.rd-today-lbl::before {
+.rd-week-lbl::before {
   content: ''; width: 6px; height: 6px; border-radius: 50%;
   background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
 }
 /* Рельса выезжает за страничный паддинг 16px (full-bleed), чтобы скролл шёл от края до края. */
-.rd-today-rail {
+.rd-week-rail {
   display: flex; gap: 10px;
   margin: 0 -16px; padding: 0 16px;
   overflow-x: auto; scrollbar-width: none;
 }
-.rd-today-rail::-webkit-scrollbar { display: none; }
-.rd-today-mini {
+.rd-week-rail::-webkit-scrollbar { display: none; }
+.rd-week-mini {
   flex-shrink: 0; width: 200px;
   display: flex; align-items: center; gap: 10px;
   padding: 10px 12px;
@@ -346,20 +346,20 @@
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   color: var(--text); text-align: left; cursor: pointer; font-family: inherit;
 }
-.rd-today-time {
+.rd-week-time {
   flex-shrink: 0;
   display: flex; flex-direction: column; align-items: center;
   padding: 6px 9px; border-radius: 10px;
   background: var(--accent-grad); color: var(--on-accent);
   font-size: 13px; font-weight: 800; line-height: 1.1;
 }
-.rd-today-time small { font-size: 8px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.8; }
-.rd-today-inf { display: block; min-width: 0; }
-.rd-today-n {
+.rd-week-time small { font-size: 8px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.8; }
+.rd-week-inf { display: block; min-width: 0; }
+.rd-week-n {
   font-size: 12.5px; font-weight: 700; line-height: 1.25;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.rd-today-s {
+.rd-week-s {
   display: block; font-size: 10.5px; color: var(--text-faint); margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
