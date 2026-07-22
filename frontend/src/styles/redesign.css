@@ -728,6 +728,22 @@
 .rd-ostat-sub { font-size: 10.5px; color: var(--text-faint); margin-top: 1px; }
 .rd-ostat-val { margin-left: auto; text-align: right; flex: none; }
 .rd-ostat-val b { font-size: 15px; font-weight: 800; color: var(--text); }
+/* Надёжность — герой-строка статистики (PO 2026-07-22: самый важный показатель профиля):
+   акцентная подложка + градиентное число заметно крупнее остальных строк. */
+.rd-ostat-row.rd-ostat-hero {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-glow);
+  padding-top: 12px; padding-bottom: 12px;
+}
+.rd-ostat-hero .rd-ostat-lbl { font-weight: 800; }
+.rd-ostat-hero .rd-ostat-val b {
+  font-size: 24px; letter-spacing: -0.02em; line-height: 1.05;
+  background: var(--grad-text);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.rd-ostat-ico.rd-ost-shield { background: var(--accent-soft); }
+.rd-ostat-ico.rd-ost-clubs { background: rgba(102, 212, 154, 0.14); }
 .rd-ostat-pc { display: block; font-size: 10.5px; color: var(--text-faint); font-weight: 600; }
 
 /* Карточка заявки: donut-строка «надёжен в N из M клубов». */

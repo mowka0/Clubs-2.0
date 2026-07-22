@@ -205,49 +205,7 @@ export const ProfilePage: FC = () => {
       {/* Лис-экран пустых интересов снят (PO 2026-07-22): к заполнению теперь ведёт
           карточка-квест выше — при подтверждённой пустоте секция просто скрыта. */}
 
-      {hasReputation && (
-        <div className="rd-stats">
-          <div className="rd-stat rd-glass">
-            <div className="rd-stat-label">Надёжность</div>
-            <div className="rd-stat-value">{globalScore ?? '—'}</div>
-            <div className="rd-stat-foot">{reliablePhrase}</div>
-          </div>
-          <div className="rd-stat rd-glass">
-            <div className="rd-stat-label">В клубах</div>
-            <div className="rd-stat-value rd-plain">{activeClubs.length}</div>
-            <div className="rd-stat-foot">активных участий</div>
-          </div>
-        </div>
-      )}
-
-      {/* «Статистика» (мокап P3, PO 2026-07-21): сырые посещения по всем клубам — вне репутации
-          (в отличие от плиток выше, которые считаются из ledger). Скрыта, пока посещений нет. */}
-      {(rep?.visits?.totalEventsAttended ?? 0) > 0 && (
-        <>
-          <div className="rd-section-sub-h">Статистика</div>
-          <div className="rd-glass rd-ostat" style={{ marginTop: 0, marginBottom: 14 }}>
-            <div className="rd-ostat-row">
-              <span className="rd-ostat-ico rd-ost-ticket" aria-hidden="true">🎟</span>
-              <span>
-                <span className="rd-ostat-lbl">Всего посетил событий</span>
-                <div className="rd-ostat-sub">по всем клубам, включая открытые встречи</div>
-              </span>
-              <span className="rd-ostat-val"><b>{rep!.visits.totalEventsAttended}</b></span>
-            </div>
-            {rep!.visits.openEventsAttended > 0 && (
-              <div className="rd-ostat-row">
-                <span className="rd-ostat-ico rd-ost-wave" aria-hidden="true">🌊</span>
-                <span>
-                  <span className="rd-ostat-lbl">Из них открытых встреч</span>
-                  <div className="rd-ostat-sub">вне репутации — просто факт участия</div>
-                </span>
-                <span className="rd-ostat-val"><b>{rep!.visits.openEventsAttended}</b></span>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
+      {/* «Уровень» — над статистикой (решение PO 2026-07-22): XP-прогресс первым. */}
       {gam ? (
         // Секцию «Уровень» показываем всегда при успешной загрузке: панель сама честно рендерит
         // нулевой стейт (Гость, 0 XP, пустой прогресс-бар) — это и есть тизер-скелет для новичка.
@@ -281,6 +239,59 @@ export const ProfilePage: FC = () => {
           </div>
         </>
       ) : null}
+
+      {/* «Статистика»: главные показатели одной панелью (решение PO 2026-07-22 — плитки
+          слиты сюда). Надёжность — герой-строка: самый важный показатель профиля.
+          Строки репутации — из ledger; посещения — сырые факты вне репутации. */}
+      {(hasReputation || (rep?.visits?.totalEventsAttended ?? 0) > 0) && (
+        <>
+          <div className="rd-section-sub-h">Статистика</div>
+          <div className="rd-glass rd-ostat" style={{ marginTop: 0, marginBottom: 14 }}>
+            {hasReputation && (
+              <>
+                <div className="rd-ostat-row rd-ostat-hero">
+                  <span className="rd-ostat-ico rd-ost-shield" aria-hidden="true">🛡</span>
+                  <span>
+                    <span className="rd-ostat-lbl">Надёжность</span>
+                    <div className="rd-ostat-sub">{reliablePhrase}</div>
+                  </span>
+                  <span className="rd-ostat-val"><b>{globalScore ?? '—'}</b></span>
+                </div>
+                <div className="rd-ostat-row">
+                  <span className="rd-ostat-ico rd-ost-clubs" aria-hidden="true">🤝</span>
+                  <span>
+                    <span className="rd-ostat-lbl">В клубах</span>
+                    <div className="rd-ostat-sub">активных участий</div>
+                  </span>
+                  <span className="rd-ostat-val"><b>{activeClubs.length}</b></span>
+                </div>
+              </>
+            )}
+            {(rep?.visits?.totalEventsAttended ?? 0) > 0 && (
+              <>
+                <div className="rd-ostat-row">
+                  <span className="rd-ostat-ico rd-ost-ticket" aria-hidden="true">🎟</span>
+                  <span>
+                    <span className="rd-ostat-lbl">Всего посетил событий</span>
+                    <div className="rd-ostat-sub">по всем клубам, включая открытые встречи</div>
+                  </span>
+                  <span className="rd-ostat-val"><b>{rep!.visits.totalEventsAttended}</b></span>
+                </div>
+                {rep!.visits.openEventsAttended > 0 && (
+                  <div className="rd-ostat-row">
+                    <span className="rd-ostat-ico rd-ost-wave" aria-hidden="true">🌊</span>
+                    <span>
+                      <span className="rd-ostat-lbl">Из них открытых встреч</span>
+                      <div className="rd-ostat-sub">вне репутации — просто факт участия</div>
+                    </span>
+                    <span className="rd-ostat-val"><b>{rep!.visits.openEventsAttended}</b></span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </>
+      )}
 
       <SubscriptionCard />
 

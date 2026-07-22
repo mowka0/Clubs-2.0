@@ -148,6 +148,37 @@ describe('ProfilePage — W3-04: секция «Уровень»', () => {
   });
 });
 
+describe('ProfilePage — статистика одной панелью (PO 2026-07-22)', () => {
+  it('надёжность — герой-строка «Статистики», уровень выше статистики, плиток rd-stats нет', async () => {
+    server.use(
+      http.get('*/api/users/me/reputation', () => HttpResponse.json({
+        global: { reliableClubs: 1, trackRecordClubs: 2, score: 87 },
+        activeClubs: [{}, {}],
+        historyClubs: [],
+        visits: { totalEventsAttended: 5, openEventsAttended: 2 },
+      })),
+      http.get('*/api/users/me/interests', () => HttpResponse.json([])),
+      http.get('*/api/users/me/gamification', () => HttpResponse.json(ZERO_GAMIFICATION)),
+    );
+    renderPage();
+
+    // Надёжность — внутри панели статистики, с герой-модификатором
+    const hero = (await screen.findByText('Надёжность')).closest('.rd-ostat-row');
+    expect(hero?.className).toContain('rd-ostat-hero');
+    expect(screen.getByText('87')).toBeInTheDocument();
+    // Остальные строки панели: В клубах + посещения
+    expect(screen.getByText('активных участий')).toBeInTheDocument();
+    expect(screen.getByText('Всего посетил событий')).toBeInTheDocument();
+    // Старых плиток больше нет
+    expect(document.querySelector('.rd-stats')).toBeNull();
+    // «Уровень» стоит выше «Статистики»
+    const level = screen.getByText('Уровень');
+    const stats = screen.getByText('Статистика');
+    // eslint-disable-next-line no-bitwise
+    expect(level.compareDocumentPosition(stats) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
 describe('ProfilePage — W3-05: нудж «О себе»', () => {
   it('bio пуст: виден нудж «Добавь пару слов о себе →», тап открывает модалку', async () => {
     setUser(null);
