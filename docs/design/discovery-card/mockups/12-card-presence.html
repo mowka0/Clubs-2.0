@@ -22,15 +22,17 @@
 }
 * { box-sizing:border-box; margin:0; padding:0; }
 body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif; background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased; }
-.topbar { position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 24px; background:var(--bg); border-bottom:1px solid var(--hairline); }
-.topbar h1 { font-size:17px; font-weight:800; letter-spacing:-0.02em; }
+.topbar { position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 24px; background:var(--bg); border-bottom:1px solid var(--hairline); }
+.topbar h1 { font-size:16px; font-weight:800; letter-spacing:-0.02em; }
 .topbar .hint { font-size:12px; color:var(--text-dim); margin-top:2px; }
-.toggle { display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 15px; border-radius:999px; border:1px solid var(--hairline-2); background:var(--card); color:var(--text); font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; }
-.rail { display:flex; gap:34px; padding:30px 28px 50px; overflow-x:auto; align-items:flex-start; }
-.col { width:360px; flex-shrink:0; }
-.vname { font-size:14px; font-weight:800; letter-spacing:-0.01em; margin-bottom:3px; }
+.topbar .hint b { color:var(--accent); }
+.toggle { display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 15px; border-radius:999px; border:1px solid var(--hairline-2); background:var(--card); color:var(--text); font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; flex-shrink:0; }
+.grid { display:flex; flex-wrap:wrap; gap:26px 30px; padding:24px 28px 60px; }
+.col { width:300px; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.vname { font-size:13.5px; font-weight:800; letter-spacing:-0.01em; margin-bottom:2px; }
 .vname b { color:var(--accent); margin-right:6px; }
-.vhint { font-size:11.5px; color:var(--text-dim); line-height:1.45; margin-bottom:14px; min-height:48px; }
+.vhint { font-size:11px; color:var(--text-dim); line-height:1.4; margin-bottom:11px; min-height:44px; }
+.col.holding .vname::after { content:' — как сейчас'; color:var(--live); font-size:11px; }
 
 /* ---- карточка v2 (полка-уголок), как в проде ---- */
 .card { position:relative; border-radius:18px; overflow:hidden; background:var(--card); margin-bottom:12px; }
@@ -54,44 +56,46 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text',system
 .body .loc { font-size:11px; color:var(--text-dim); display:inline-flex; align-items:center; gap:5px; }
 .body .loc svg { width:12px; height:12px; opacity:0.7; flex-shrink:0; }
 
-/* ============ 10 вариантов видимости плитки ============ */
+/* ============ 10 вариантов видимости плитки ============
+   Значения НАРОЧНО усилены до явно различимых — на боевом почти чёрном фоне
+   тонкие тени неотличимы. Выбранный вариант калибруем вниз до вкуса. */
 
 /* 1. Как сейчас (прод): hairline-рамка + тень 6/20·0.2 + блик кромки */
 .v1 .card { border:1px solid var(--hairline); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 6px 20px rgba(0,0,0,0.2); }
 
-/* 2. Глубокая тень: «этажом выше», расплыв шире и темнее */
-.v2 .card { border:1px solid var(--hairline); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 36px rgba(0,0,0,0.42); }
-[data-theme="light"] .v2 .card { box-shadow: 0 14px 36px rgba(0,0,0,0.13); }
+/* 2. Глубокая тень: «этажом выше» */
+.v2 .card { border:1px solid var(--hairline); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 18px 48px rgba(0,0,0,0.7); }
+[data-theme="light"] .v2 .card { box-shadow: 0 18px 48px rgba(0,0,0,0.20); }
 
-/* 3. Contact + ambient: тонкая контактная тень у кромки + мягкий ореол */
-.v3 .card { border:1px solid var(--hairline); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 2px rgba(0,0,0,0.4), 0 12px 32px rgba(0,0,0,0.24); }
-[data-theme="light"] .v3 .card { box-shadow: 0 1px 2px rgba(0,0,0,0.10), 0 12px 32px rgba(0,0,0,0.07); }
+/* 3. Contact + ambient: контактная тень у кромки + широкий ореол */
+.v3 .card { border:1px solid var(--hairline); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 4px rgba(0,0,0,0.6), 0 16px 40px rgba(0,0,0,0.5); }
+[data-theme="light"] .v3 .card { box-shadow: 0 2px 4px rgba(0,0,0,0.14), 0 16px 40px rgba(0,0,0,0.11); }
 
-/* 4. Графичная рамка: контур заметнее (hairline-2), тень почти убрана */
-.v4 .card { border:1px solid var(--hairline-2); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 10px rgba(0,0,0,0.14); }
-[data-theme="light"] .v4 .card { box-shadow: 0 2px 10px rgba(0,0,0,0.04); }
+/* 4. Графичная рамка: контур заметно ярче, тени нет */
+.v4 .card { border:1px solid rgba(255,255,255,0.18); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06); }
+[data-theme="light"] .v4 .card { border-color:rgba(0,0,0,0.18); box-shadow:none; }
 
-/* 5. Рим-лайт: усиленный светлый блик верхней кромки, свет «сверху» */
-.v5 .card { border:1px solid var(--hairline); box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), inset 1px 0 0 rgba(255,255,255,0.06), inset -1px 0 0 rgba(255,255,255,0.06), 0 6px 20px rgba(0,0,0,0.25); }
-[data-theme="light"] .v5 .card { box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 6px 20px rgba(0,0,0,0.09); }
+/* 5. Рим-лайт: сильный светлый блик верхней кромки, свет «сверху» */
+.v5 .card { border:1px solid var(--hairline); box-shadow: inset 0 1px 0 rgba(255,255,255,0.32), inset 1px 0 0 rgba(255,255,255,0.10), inset -1px 0 0 rgba(255,255,255,0.10), 0 6px 20px rgba(0,0,0,0.35); }
+[data-theme="light"] .v5 .card { box-shadow: inset 0 1px 0 rgba(255,255,255,1), inset 1px 0 0 rgba(255,255,255,0.7), inset -1px 0 0 rgba(255,255,255,0.7), 0 6px 20px rgba(0,0,0,0.12); }
 
-/* 6. Тёплый ободок: рамка с каплей бренда вместо нейтральной */
-.v6 .card { border:1px solid rgba(244,123,60,0.22); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 6px 20px rgba(0,0,0,0.2); }
-[data-theme="light"] .v6 .card { border-color:rgba(213,97,28,0.28); box-shadow: 0 6px 20px rgba(0,0,0,0.07); }
+/* 6. Тёплый ободок: рамка бренда */
+.v6 .card { border:1px solid rgba(244,123,60,0.45); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 6px 20px rgba(0,0,0,0.2); }
+[data-theme="light"] .v6 .card { border-color:rgba(213,97,28,0.45); box-shadow: 0 6px 20px rgba(0,0,0,0.07); }
 
-/* 7. Брендовое свечение: вторая, едва тёплая тень поверх обычной */
-.v7 .card { border:1px solid var(--hairline); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 6px 20px rgba(0,0,0,0.2), 0 12px 30px rgba(244,123,60,0.12); }
-[data-theme="light"] .v7 .card { box-shadow: 0 6px 20px rgba(0,0,0,0.06), 0 12px 30px rgba(213,97,28,0.12); }
+/* 7. Брендовое свечение: тёплый ореол за карточкой */
+.v7 .card { border:1px solid var(--hairline); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 6px 20px rgba(0,0,0,0.2), 0 10px 36px rgba(244,123,60,0.30); }
+[data-theme="light"] .v7 .card { box-shadow: 0 6px 20px rgba(0,0,0,0.06), 0 10px 36px rgba(213,97,28,0.22); }
 
-/* 8. Светлее материал: карточка на ступень светлее фона (контраст поверхностей).
+/* 8. Светлее материал: карточка на ступень светлее фона.
       В светлой теме уже так (белый на #F7F6F3) — там без изменений. */
-.v8 { --card:#1D1D24; }
+.v8 { --card:#23232B; }
 [data-theme="light"] .v8 { --card:#FFFFFF; }
 .v8 .card { border:1px solid var(--hairline); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 6px 20px rgba(0,0,0,0.2); }
 
-/* 9. Бизель: тёмный шов + внешняя светлая линия — «огранка» ювелирки */
-.v9 .card { border:1px solid rgba(0,0,0,0.85); box-shadow: 0 0 0 1px rgba(255,255,255,0.10), inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.3); }
-[data-theme="light"] .v9 .card { border:1px solid rgba(0,0,0,0.10); box-shadow: inset 0 0 0 1px rgba(255,255,255,1), 0 8px 24px rgba(0,0,0,0.06); }
+/* 9. Бизель: тёмный шов + внешняя светлая линия — «огранка» */
+.v9 .card { border:1px solid rgba(0,0,0,1); box-shadow: 0 0 0 1px rgba(255,255,255,0.20), inset 0 1px 0 rgba(255,255,255,0.10), 0 8px 24px rgba(0,0,0,0.4); }
+[data-theme="light"] .v9 .card { border:1px solid rgba(0,0,0,0.14); box-shadow: inset 0 0 0 1px rgba(255,255,255,1), 0 8px 24px rgba(0,0,0,0.08); }
 
 /* 10. Флэт: ни тени, ни рамки — нижний полюс для сравнения */
 .v10 .card { border:none; box-shadow:none; }
@@ -100,14 +104,14 @@ body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text',system
 <body>
 <div class="topbar">
   <div>
-    <h1>Видимость плитки — 10 вариантов</h1>
-    <div class="hint">Карточка v2 как в проде; меняются только рамка/тень/материал. Фото — из covers/ (локально, не в git). Кнопка — тема.</div>
+    <h1>Видимость плитки — 10 вариантов (усиленные)</h1>
+    <div class="hint">Приёмы нарочно выкручены до различимых; выбранный откалибруем. <b>Зажми любую колонку</b> — она станет «как сейчас» (прямой A/B). Кнопка — тема.</div>
   </div>
   <button class="toggle" onclick="var h=document.documentElement; h.dataset.theme = h.dataset.theme==='light'?'':'light'; this.querySelector('.tx').textContent = h.dataset.theme==='light'?'Тёмная тема':'Светлая тема';">
     <span>◐</span><span class="tx">Светлая тема</span>
   </button>
 </div>
-<div class="rail" id="rail"></div>
+<div class="grid" id="grid"></div>
 <script>
 const CLK=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`;
 const PPL=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><path d="M16 6a3 3 0 0 1 0 6"/></svg>`;
@@ -115,16 +119,16 @@ const BLT=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-wid
 const PIN=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
 
 const VARIANTS = [
-  { cls:'v1',  name:'Как сейчас',          hint:'Прод-базовый для сравнения: hairline-рамка + мягкая тень (6/20 · 0.2) + тонкий блик верхней кромки.' },
-  { cls:'v2',  name:'Глубокая тень',       hint:'Тот же контур, но тень шире и глубже (14/36) — плитка «этажом выше», больше воздуха под ней.' },
-  { cls:'v3',  name:'Contact + ambient',   hint:'Двухслойная тень: тонкая контактная у самой кромки + широкий мягкий ореол. Самый «material» объём.' },
-  { cls:'v4',  name:'Графичная рамка',     hint:'Контур заметнее (hairline-2), тень почти убрана — плоско, чётко, «чертёжно». Полюс рамки.' },
-  { cls:'v5',  name:'Рим-лайт',            hint:'Усиленный светлый блик по верхней кромке + лёгкие боковые: свет «падает сверху», стеклянный характер.' },
-  { cls:'v6',  name:'Тёплый ободок',       hint:'Рамка с каплей бренда (оранжевая, ~22%) вместо нейтральной. Каждая плитка чуть «фирменная».' },
-  { cls:'v7',  name:'Брендовое свечение',  hint:'К обычной тени добавлен едва тёплый оранжевый ореол снизу — «лампа за карточкой», очень тихо.' },
-  { cls:'v8',  name:'Светлее материал',    hint:'Карточка на ступень светлее фона (#1D1D24) — контраст поверхностей вместо силы тени. В светлой теме уже так.' },
-  { cls:'v9',  name:'Бизель',              hint:'Тёмный шов по краю + внешняя светлая линия — «огранка», как у ювелирных панелей. Дорогой край.' },
-  { cls:'v10', name:'Флэт',                hint:'Ни тени, ни рамки — только материал и радиус. Нижний полюс: проверить, нужна ли тень вообще.' },
+  { cls:'v1',  name:'Как сейчас',          hint:'Прод-базовый: hairline-рамка + мягкая тень (6/20 · 0.2) + тонкий блик верхней кромки.' },
+  { cls:'v2',  name:'Глубокая тень',       hint:'Тот же контур, тень шире и глубже — плитка «этажом выше», воздух под ней.' },
+  { cls:'v3',  name:'Contact + ambient',   hint:'Двухслойная тень: контактная у самой кромки + широкий мягкий ореол. Самый «material» объём.' },
+  { cls:'v4',  name:'Графичная рамка',     hint:'Контур заметно ярче, тени нет — плоско, чётко, «чертёжно». Полюс рамки.' },
+  { cls:'v5',  name:'Рим-лайт',            hint:'Сильный светлый блик по верхней кромке + боковые: свет «падает сверху», стеклянный характер.' },
+  { cls:'v6',  name:'Тёплый ободок',       hint:'Рамка с брендовым оранжевым вместо нейтральной. Каждая плитка «фирменная».' },
+  { cls:'v7',  name:'Брендовое свечение',  hint:'К обычной тени добавлен тёплый оранжевый ореол — «лампа за карточкой».' },
+  { cls:'v8',  name:'Светлее материал',    hint:'Карточка на ступень светлее фона — контраст поверхностей вместо силы тени. В светлой теме уже так.' },
+  { cls:'v9',  name:'Бизель',              hint:'Тёмный шов по краю + внешняя светлая линия — «огранка», дорогой край.' },
+  { cls:'v10', name:'Флэт',                hint:'Ни тени, ни рамки — только материал и радиус. Нижний полюс: нужна ли тень вообще.' },
 ];
 
 const GRAD_CREATIVE = "radial-gradient(circle at 70% 30%, rgba(220,210,255,0.45), transparent 50%), linear-gradient(135deg,#7A5CF4 0%,#2f2a57 60%,#100e22 100%)";
@@ -151,13 +155,26 @@ function cardGrad(){
   </div>`;
 }
 
-document.getElementById('rail').innerHTML = VARIANTS.map((v,i) =>
-  `<div class="col ${v.cls}">
+document.getElementById('grid').innerHTML = VARIANTS.map((v,i) =>
+  `<div class="col ${v.cls}" data-v="${v.cls}">
     <div class="vname"><b>${i+1}</b>${v.name}</div>
     <div class="vhint">${v.hint}</div>
     ${cardPhoto()}${cardGrad()}
   </div>`
 ).join('');
+
+/* Зажатие колонки временно переключает её на прод-вид (v1) — прямое A/B-сравнение. */
+document.querySelectorAll('.col').forEach((col) => {
+  const v = col.dataset.v;
+  const press = () => { if (v !== 'v1') { col.classList.replace(v, 'v1'); col.classList.add('holding'); } };
+  const release = () => { if (v !== 'v1') { col.classList.replace('v1', v); col.classList.remove('holding'); } };
+  col.addEventListener('mousedown', press);
+  col.addEventListener('mouseup', release);
+  col.addEventListener('mouseleave', release);
+  col.addEventListener('touchstart', press, { passive: true });
+  col.addEventListener('touchend', release);
+  col.addEventListener('touchcancel', release);
+});
 </script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -69,6 +69,32 @@ describe('ClubCard — карточка Discovery v2 (полка метрик н
     renderCard({ facts: facts({ ageDays: 1, engagementPercent: 0 }) });
     expect(screen.getByText('1 дн')).toBeInTheDocument();
     expect(screen.queryByText('день')).not.toBeInTheDocument();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('событие сегодня → колонка расписания «сегодня · HH:MM» в теле', () => {
+    vi.useFakeTimers({ now: new Date('2026-07-22T12:00:00'), toFake: ['Date'] });
+    renderCard({
+      club: club({
+        nearestEvent: { id: 'e1', title: 'Встреча', eventDatetime: '2026-07-22T22:00:00', goingCount: 3 },
+      }),
+    });
+    expect(screen.getByText('сегодня')).toBeInTheDocument();
+    expect(screen.getByText('22:00')).toBeInTheDocument();
+  });
+
+  it('событие завтра утром (внутри 24ч-окна) — колонки нет: критерий календарный', () => {
+    vi.useFakeTimers({ now: new Date('2026-07-22T23:00:00'), toFake: ['Date'] });
+    renderCard({
+      club: club({
+        nearestEvent: { id: 'e1', title: 'Встреча', eventDatetime: '2026-07-23T09:00:00', goingCount: 3 },
+      }),
+    });
+    expect(screen.queryByText('сегодня')).not.toBeInTheDocument();
+    expect(screen.queryByText('09:00')).not.toBeInTheDocument();
   });
 
   it('shows the "★ Топ-5 в категории" badge only when topInCategory is true', () => {

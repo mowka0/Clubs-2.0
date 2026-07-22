@@ -273,8 +273,21 @@
 .rd-club-card .rd-meta {
   font-size: 11px; color: var(--text-dim);
   display: inline-flex; align-items: center; gap: 5px;
+  min-width: 0;
 }
 .rd-club-card .rd-meta svg { width: 12px; height: 12px; opacity: 0.7; flex-shrink: 0; }
+/* Город (позже — с районом) обрезается многоточием, не толкая колонку времени справа */
+.rd-club-card .rd-meta-city { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Нижний ряд тела: слева название+город (ужимаются), справа — колонка времени встречи */
+.rd-club-card .rd-brow { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.rd-club-card .rd-bl { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 5px; }
+/* «Колонка расписания» (вариант 17 мокапа 13-meeting-corner): вертикальная акцент-черта
+   + «сегодня»/время столбиком. Показывается при событии СЕГОДНЯ (календарно, как TodayShelf). */
+.rd-club-card .rd-meet { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+.rd-club-card .rd-meet-bar { width: 2.5px; align-self: stretch; border-radius: 2px; background: var(--accent-grad); }
+.rd-club-card .rd-meet-tx { display: flex; flex-direction: column; line-height: 1.1; }
+.rd-club-card .rd-meet-d { font-size: 7.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); }
+.rd-club-card .rd-meet-t { font-size: 13px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; margin-top: 1px; }
 
 /* Чип цены на баннере: своя тёмная полупрозрачная подложка (скрима на обложке больше нет) →
    фиксированный светлый текст в обеих темах (не var(--text)). */

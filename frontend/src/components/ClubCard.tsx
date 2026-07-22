@@ -1,7 +1,7 @@
 import { FC, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useHaptic } from '../hooks/useHaptic';
-import { formatTimeHM } from '../utils/formatters';
+import { formatTimeHM, isToday } from '../utils/formatters';
 import { KNOWN_CATEGORIES } from '../utils/categoryLabels';
 import type { ClubCardFactsDto, ClubListItemDto } from '../types/api';
 
@@ -10,16 +10,6 @@ function formatPrice(price: number): string {
   if (price === 0) return 'бесплатно';
   const formatted = new Intl.NumberFormat('ru-RU').format(price).replace(/\s/g, ' ');
   return `${formatted} ₽/мес`;
-}
-
-/** Определяет, наступит ли nearestEvent «скоро» (< 24ч) — триггер бейджа «встреча HH:MM».
-    Намеренно окно 24ч, а не календарное «сегодня» (это критерий полки TodayShelf). */
-function isHappeningSoon(iso: string | undefined | null): boolean {
-  if (!iso) return false;
-  const eventTime = new Date(iso).getTime();
-  if (Number.isNaN(eventTime)) return false;
-  const diff = eventTime - Date.now();
-  return diff > 0 && diff < 24 * 60 * 60 * 1000;
 }
 
 /* Иконки полки метрик и пина города (мокап 11-chip-bare): stroke: currentColor,
@@ -62,7 +52,14 @@ export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
   const navigate = useNavigate();
   const haptic = useHaptic();
 
-  const featured = useMemo(() => isHappeningSoon(club.nearestEvent?.eventDatetime), [club.nearestEvent]);
+  // «Сегодня» по локальному календарю — та же семантика, что у полки TodayShelf.
+  // Раньше был верхний бейдж на обложке с окном «<24ч»: он сталкивался с ценником
+  // на узких экранах и honestly показывал бы «встречу» для завтрашнего утра.
+  // Теперь — колонка расписания в теле справа (вариант 17 мокапа 13-meeting-corner).
+  const meetingToday = useMemo(
+    () => club.nearestEvent != null && isToday(club.nearestEvent.eventDatetime),
+    [club.nearestEvent],
+  );
   const cat = KNOWN_CATEGORIES.has(club.category) ? club.category : 'other';
 
   return (
@@ -80,11 +77,6 @@ export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
         style={club.avatarUrl ? { backgroundImage: `url(${club.avatarUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
       >
         <span className="rd-price-chip">{formatPrice(club.subscriptionPrice)}</span>
-        {featured && club.nearestEvent && (
-          <span className="rd-date-badge" style={{ position: 'absolute', top: 10, left: 12, zIndex: 2 }}>
-            встреча {formatTimeHM(club.nearestEvent.eventDatetime)}
-          </span>
-        )}
         {/* Полка метрик: возраст · участники · вовлечённость — уголок из материала карточки
             в нижнем-левом углу обложки. Намеренно НЕ встреч/мес и НЕ ядро (это кольца на
             странице клуба), чтобы карточка не дублировала страницу. */}
@@ -100,8 +92,23 @@ export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
         {/* Soft-rank L3 бейдж — единственный внешне видимый сигнал ранга (boolean; никогда не число).
             Над названием клуба. */}
         {facts?.topInCategory && <div><span className="rd-rankpill">★ Топ-5 в категории</span></div>}
-        <div className="rd-ttl">{club.name}</div>
-        <div className="rd-meta">{ICON_PIN}{club.city}</div>
+        {/* Левая колонка (название + город) ужимается многоточием — запас под будущий
+            район гарантирован конструкцией: колонка времени справа не двигается. */}
+        <div className="rd-brow">
+          <div className="rd-bl">
+            <div className="rd-ttl">{club.name}</div>
+            <div className="rd-meta">{ICON_PIN}<span className="rd-meta-city">{club.city}</span></div>
+          </div>
+          {meetingToday && club.nearestEvent && (
+            <div className="rd-meet">
+              <span className="rd-meet-bar" aria-hidden="true" />
+              <span className="rd-meet-tx">
+                <span className="rd-meet-d">сегодня</span>
+                <span className="rd-meet-t">{formatTimeHM(club.nearestEvent.eventDatetime)}</span>
+              </span>
+            </div>
+          )}
+        </div>
       </div>
     </button>
   );
