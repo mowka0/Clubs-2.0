@@ -1,0 +1,202 @@
+/* Мокапы: 5 вариантов списка клубов на главном экране (Discovery).
+   Токены — актуальный Banco-Plata (frontend/src/styles/brand-theme.css), тёмная тема.
+   Шапка (аватар, hero, поиск, чипы) одинаковая во всех вариантах —
+   сравнивается только зона списка. */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:            #0B0B0E;
+  --text:          #F4F4F6;
+  --text-dim:      rgba(244, 244, 246, 0.6);
+  --text-faint:    rgba(244, 244, 246, 0.45);
+
+  --glass-bg:      linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.015) 100%);
+  --surface:       rgba(255, 255, 255, 0.04);
+  --surface-2:     rgba(255, 255, 255, 0.05);
+  --hairline:      rgba(255, 255, 255, 0.06);
+  --hairline-2:    rgba(255, 255, 255, 0.1);
+
+  --accent:        #F47B3C;
+  --accent-deep:   #D5611C;
+  --accent-soft:   rgba(244, 123, 60, 0.14);
+  --accent-grad:   linear-gradient(135deg, #FFA070 0%, #F47B3C 100%);
+  --grad-text:     linear-gradient(90deg, #FF8A4A 0%, #E84C9A 50%, #8E5DFF 100%);
+  --on-accent:     #2A0E04;
+
+  --live:          #66D49A;
+  --live-soft:     rgba(79, 160, 120, 0.18);
+}
+
+html { width: 390px; }
+body {
+  width: 390px;
+  min-height: 900px;
+  position: relative;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  padding-bottom: 96px;
+}
+
+/* Плёночное зерно — как в проде (тёмная тема) */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.08;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='2.2' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+/* ---------- статусбар ---------- */
+.statusbar {
+  height: 44px;
+  display: flex; align-items: flex-end; justify-content: space-between;
+  padding: 0 24px 6px;
+  font-size: 15px; font-weight: 600;
+}
+.statusbar .right { display: flex; gap: 6px; align-items: center; font-size: 12px; opacity: 0.9; }
+
+/* ---------- шапка (общая для всех вариантов) ---------- */
+.hdr {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 20px 4px;
+}
+.hdr .avt-user {
+  width: 42px; height: 42px; border-radius: 50%;
+  background: linear-gradient(160deg, #3A2E18, #1F1808);
+  color: var(--accent-deep);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+  flex-shrink: 0;
+}
+.hdr .who { flex: 1; min-width: 0; }
+.hdr .nm { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.hdr .sub { font-size: 12px; color: var(--text-dim); margin-top: 1px; }
+.hdr .city {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  color: var(--text-dim);
+  cursor: pointer; flex-shrink: 0;
+}
+.hdr .city::before {
+  content: ''; width: 4px; height: 4px; border-radius: 50%;
+  background: var(--accent); flex-shrink: 0;
+}
+.hdr .city .chev { font-size: 9px; opacity: 0.6; }
+
+.hero {
+  padding: 14px 20px 12px;
+  font-size: 28px; font-weight: 700;
+  letter-spacing: -0.024em; line-height: 1.1;
+}
+.hero .acc { color: var(--accent); }
+
+.search {
+  display: flex; align-items: center; gap: 10px;
+  margin: 0 20px 12px;
+  height: 44px; padding: 0 14px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  color: var(--text-faint); font-size: 14px;
+  backdrop-filter: blur(20px);
+}
+.search svg { flex-shrink: 0; }
+
+.chips {
+  display: flex; gap: 8px;
+  padding: 0 20px 16px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex-shrink: 0;
+  padding: 7px 14px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--hairline);
+  font-size: 12px; font-weight: 600; color: var(--text-dim);
+  white-space: nowrap;
+}
+.chip.on {
+  background: var(--accent-grad); color: var(--on-accent);
+  border-color: transparent;
+  box-shadow: 0 2px 6px rgba(244, 123, 60, 0.30);
+}
+
+/* ---------- аватары клубов по категориям (как в проде) ---------- */
+.cavt {
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; letter-spacing: 0.03em;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+  flex-shrink: 0;
+}
+.cavt[data-cat="sport"]       { background: linear-gradient(160deg, #4F3825, #2E1F12); color: #E5C18C; }
+.cavt[data-cat="creative"]    { background: linear-gradient(160deg, #312F58, #1A1934); color: #BAB4EA; }
+.cavt[data-cat="food"]        { background: linear-gradient(160deg, #4F381A, #2C1F0E); color: #EBC57B; }
+.cavt[data-cat="board_games"] { background: linear-gradient(160deg, #1F4032, #0E2419); color: #6FBA92; }
+.cavt[data-cat="cinema"]      { background: linear-gradient(160deg, #1F3850, #0F1E2C); color: #93BED7; }
+.cavt[data-cat="travel"]      { background: linear-gradient(160deg, #1E3D3B, #0E2120); color: #82B7AD; }
+.cavt[data-cat="education"]   { background: linear-gradient(160deg, #3A2E18, #1F1808); color: #D5A45C; }
+
+/* ---------- обложки по категориям (как rd-cover в проде) ---------- */
+.ccover[data-cat="sport"]       { background: radial-gradient(circle at 70% 30%, rgba(255,232,200,0.5), transparent 50%), linear-gradient(135deg, #F47B3C 0%, #5a3f1f 60%, #1a1108 100%); }
+.ccover[data-cat="creative"]    { background: radial-gradient(circle at 70% 30%, rgba(220,210,255,0.45), transparent 50%), linear-gradient(135deg, #7A5CF4 0%, #2f2a57 60%, #100e22 100%); }
+.ccover[data-cat="education"]   { background: radial-gradient(circle at 70% 30%, rgba(200,220,255,0.4), transparent 50%), linear-gradient(135deg, #6A82B9 0%, #2c3e57 60%, #0c1018 100%); }
+.ccover[data-cat="food"]        { background: radial-gradient(circle at 70% 30%, rgba(255,210,170,0.5), transparent 50%), linear-gradient(135deg, #E8932E 0%, #5a3a14 60%, #1a1006 100%); }
+.ccover[data-cat="cinema"]      { background: radial-gradient(circle at 70% 30%, rgba(180,200,230,0.4), transparent 50%), linear-gradient(135deg, #3F6FA0 0%, #1f3550 60%, #0a141f 100%); }
+.ccover[data-cat="board_games"] { background: radial-gradient(circle at 70% 30%, rgba(170,235,200,0.4), transparent 50%), linear-gradient(135deg, #2E9A6A 0%, #144a32 60%, #061a10 100%); }
+.ccover[data-cat="travel"]      { background: radial-gradient(circle at 70% 30%, rgba(255,190,210,0.4), transparent 50%), linear-gradient(135deg, #C44E7A 0%, #5a2438 60%, #1a0a14 100%); }
+
+/* ---------- зелёный live-сигнал ---------- */
+.live-sig {
+  color: var(--live); font-weight: 600;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.live-sig::before {
+  content: ''; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--live);
+  box-shadow: 0 0 0 3px var(--live-soft);
+}
+
+/* ---------- счётчик над списком ---------- */
+.count-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 4px 20px 10px;
+}
+.count-row .n { font-size: 13px; font-weight: 700; }
+.count-row .sort { font-size: 12px; color: var(--text-faint); }
+
+/* ---------- нижний док (мок) ---------- */
+.dock {
+  position: fixed;
+  left: 16px; right: 16px; bottom: 16px;
+  width: 358px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%), rgba(15, 15, 20, 0.72);
+  backdrop-filter: blur(24px);
+  border: 1px solid var(--hairline-2);
+  border-radius: 22px;
+  padding: 8px 6px;
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  z-index: 5;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+}
+.dock .tab {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  font-size: 9.5px; font-weight: 600; color: var(--text-faint);
+  padding: 5px 2px; border-radius: 14px;
+}
+.dock .tab .ic { font-size: 17px; }
+.dock .tab.on { color: var(--accent); background: var(--accent-soft); }

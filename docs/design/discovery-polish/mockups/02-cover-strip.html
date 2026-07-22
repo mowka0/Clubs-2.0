@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<script>if(new URLSearchParams(location.search).has('light'))document.documentElement.dataset.theme='light'</script>
+<title>Полиш 2 — стеклянная полоса на обложке</title>
+<link rel="stylesheet" href="_shared.css">
+<style>
+/* Полиш-вариант 2: тройка метрик переезжает НА обложку — стеклянная полоса
+   с блюром по нижнему краю баннера. Она всегда лежит на тёмном скриме,
+   поэтому выглядит ОДИНАКОВО в обеих темах (прямой ответ на «в обеих темах
+   одинаково плохо»). Тело карточки — только имя и город. */
+.card .ccover.tall { height: 118px; }
+.stats-strip {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  display: flex;
+  background: rgba(11, 11, 14, 0.38);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+.stats-strip .s {
+  flex: 1; text-align: center; padding: 8px 4px 9px;
+  font-size: 10px; color: rgba(255, 255, 255, 0.72);
+  border-left: 1px solid rgba(255, 255, 255, 0.10);
+  white-space: nowrap;
+}
+.stats-strip .s:first-child { border-left: 0; }
+.stats-strip .s b {
+  display: block;
+  font-size: 14px; font-weight: 800; letter-spacing: -0.02em;
+  color: #fff; line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+.stats-strip .s.ok b { color: #7FE0AC; }
+</style>
+</head>
+<body>
+  <div class="statusbar"><span>9:41</span><span class="right">LTE&nbsp;&nbsp;▮▮▮▯</span></div>
+  <header class="hdr">
+    <div class="avt-user">ИВ</div>
+    <div class="who">
+      <div class="nm">Иван <span class="star"></span></div>
+      <div class="sub">Состоишь в 6 клубах</div>
+    </div>
+    <button class="city">Москва <span class="chev">▾</span></button>
+  </header>
+
+  <h1 class="hero">Найди свой <span class="acc">клуб</span></h1>
+  <label class="search">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    Беговой клуб, книжный, дегустации
+  </label>
+  <div class="chips">
+    <span class="chip on">Все</span><span class="chip">Спорт</span><span class="chip">Творчество</span><span class="chip">Книги</span><span class="chip">Кулинария</span><span class="chip">Кино</span><span class="chip">Настолки</span>
+  </div>
+
+  <div class="card">
+    <div class="ccover tall" data-cat="party">
+      <span class="price-chip">бесплатно</span>
+      <div class="stats-strip">
+        <div class="s"><b>88</b>дней</div>
+        <div class="s"><b>3</b>участника</div>
+        <div class="s ok"><b>100%</b>вовлечены</div>
+      </div>
+    </div>
+    <div class="body">
+      <div class="ttl">Партия</div>
+      <div class="meta">Москва</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ccover tall" data-cat="sport">
+      <span class="date-badge">встреча 19:30</span>
+      <span class="price-chip">1 200 ₽/мес</span>
+      <div class="stats-strip">
+        <div class="s"><b>145</b>дней</div>
+        <div class="s"><b>24</b>участника</div>
+        <div class="s ok"><b>78%</b>вовлечены</div>
+      </div>
+    </div>
+    <div class="body">
+      <div class="ttl">Беговой клуб «Второе дыхание»</div>
+      <div class="meta">Москва</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ccover tall" data-cat="food">
+      <span class="price-chip">2 500 ₽/мес</span>
+      <div class="stats-strip">
+        <div class="s"><b>210</b>дней</div>
+        <div class="s"><b>32</b>участника</div>
+        <div class="s ok"><b>84%</b>вовлечены</div>
+      </div>
+    </div>
+    <div class="body">
+      <span class="rankpill">★ Топ-5 в категории</span>
+      <div class="ttl">Винный клуб «Декантер»</div>
+      <div class="meta">Москва</div>
+    </div>
+  </div>
+
+  <nav class="dock">
+    <span class="tab on"><span class="ic">◈</span>Клубы</span>
+    <span class="tab"><span class="ic">▤</span>Активности</span>
+    <span class="tab"><span class="ic">♡</span>Мои клубы</span>
+    <span class="tab"><span class="ic">◉</span>Профиль</span>
+  </nav>
+</body>
+</html>

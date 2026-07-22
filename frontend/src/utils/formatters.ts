@@ -15,6 +15,29 @@ export function pluralRu(n: number, forms: [string, string, string]): string {
   return forms[2];
 }
 
+/**
+ * Совпадает ли ISO-дата с «сегодня» по локальному календарю (Y/M/D), а не окну
+ * «ближайшие 24 часа». Тесты детерминируют «сейчас» через fake timers.
+ */
+export function isToday(iso: string): boolean {
+  const now = new Date();
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
+
+/** Время «HH:MM» для бейджей встречи (обложка карточки, полка «сегодня»). */
+export function formatTimeHM(iso: string): string {
+  const date = new Date(iso);
+  const hh = date.getHours().toString().padStart(2, '0');
+  const mm = date.getMinutes().toString().padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
 export function formatDatetime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString('ru-RU', {

@@ -4,9 +4,9 @@ import { Spinner } from '@telegram-apps/telegram-ui';
 import { useClubsQuery } from '../queries/clubs';
 import { useClubCardFacts } from '../queries/clubQuality';
 import { useMyReputationQuery } from '../queries/members';
-import { tierWord, clubsPrepositional } from '../utils/reputationTier';
 import { useAuthStore } from '../store/useAuthStore';
 import { ClubCard } from '../components/ClubCard';
+import { TodayShelf } from '../components/TodayShelf';
 import { CityPicker, useCityChoice } from '../components/CityPicker';
 import {
   PriceFilter,
@@ -88,17 +88,10 @@ export const DiscoveryPage: FC = () => {
   const navigate = useNavigate();
 
   const { user } = useAuthStore();
+  // Репутация здесь нужна только для подписи шапки «Состоишь в N клубах»
+  // (плитки «Репутация / В клубах» снесены — репутация живёт в Профиле).
   const reputationQuery = useMyReputationQuery();
-  const rep = reputationQuery.data;
-  const activeCount = rep?.activeClubs.length ?? 0;
-  const global = rep?.global;
-  const globalScore = global?.score ?? null;
-  // Score 0-100 + tier word + breadth ("опыт в N клубах"); the internal "N из M" feeds ranking.
-  const hasReputation = activeCount > 0 || (global?.trackRecordClubs ?? 0) > 0;
-  const reliablePhrase =
-    global && global.trackRecordClubs > 0 && globalScore !== null
-      ? `${tierWord(globalScore)} · опыт в ${global.trackRecordClubs} ${clubsPrepositional(global.trackRecordClubs)}`
-      : 'пока недостаточно истории';
+  const activeCount = reputationQuery.data?.activeClubs.length ?? 0;
 
   const fullName = user ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}` : '';
 
@@ -194,21 +187,6 @@ export const DiscoveryPage: FC = () => {
         </button>
       </header>
 
-      {hasReputation && (
-        <div className="rd-stats">
-          <div className="rd-stat rd-glass">
-            <div className="rd-stat-label">Репутация</div>
-            <div className="rd-stat-value">{globalScore ?? '—'}</div>
-            <div className="rd-stat-foot">{reliablePhrase}</div>
-          </div>
-          <div className="rd-stat rd-glass">
-            <div className="rd-stat-label">В клубах</div>
-            <div className="rd-stat-value rd-plain">{activeCount}</div>
-            <div className="rd-stat-foot">активных участий</div>
-          </div>
-        </div>
-      )}
-
       <div className="rd-section-h">
         Найди свой <span className="rd-accent">клуб</span>
       </div>
@@ -249,6 +227,8 @@ export const DiscoveryPage: FC = () => {
           {pillLabelFromRange(priceRange)}
         </button>
       </div>
+
+      <TodayShelf clubs={clubs} />
 
       <div>
         {error && clubs.length === 0 && (
