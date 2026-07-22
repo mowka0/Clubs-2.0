@@ -1,7 +1,7 @@
 import { FC, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useHaptic } from '../hooks/useHaptic';
-import { formatTimeHM, isToday } from '../utils/formatters';
+import { formatTimeHM, isToday, isTomorrow } from '../utils/formatters';
 import { KNOWN_CATEGORIES } from '../utils/categoryLabels';
 import type { ClubCardFactsDto, ClubListItemDto } from '../types/api';
 
@@ -52,14 +52,17 @@ export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
   const navigate = useNavigate();
   const haptic = useHaptic();
 
-  // «Сегодня» по локальному календарю — та же семантика, что у полки TodayShelf.
-  // Раньше был верхний бейдж на обложке с окном «<24ч»: он сталкивался с ценником
-  // на узких экранах и honestly показывал бы «встречу» для завтрашнего утра.
-  // Теперь — колонка расписания в теле справа (вариант 17 мокапа 13-meeting-corner).
-  const meetingToday = useMemo(
-    () => club.nearestEvent != null && isToday(club.nearestEvent.eventDatetime),
-    [club.nearestEvent],
-  );
+  // Слово дня для колонки расписания: «сегодня»/«завтра» по локальному календарю,
+  // послезавтра и дальше — колонки нет. Раньше был верхний бейдж на обложке с окном
+  // «<24ч»: он сталкивался с ценником на узких экранах. Теперь — колонка расписания
+  // в теле справа (вариант 17 мокапа 13-meeting-corner).
+  const meetingDay = useMemo(() => {
+    const iso = club.nearestEvent?.eventDatetime;
+    if (!iso) return null;
+    if (isToday(iso)) return 'сегодня';
+    if (isTomorrow(iso)) return 'завтра';
+    return null;
+  }, [club.nearestEvent]);
   const cat = KNOWN_CATEGORIES.has(club.category) ? club.category : 'other';
 
   return (
@@ -99,11 +102,11 @@ export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
             <div className="rd-ttl">{club.name}</div>
             <div className="rd-meta">{ICON_PIN}<span className="rd-meta-city">{club.city}</span></div>
           </div>
-          {meetingToday && club.nearestEvent && (
+          {meetingDay && club.nearestEvent && (
             <div className="rd-meet">
               <span className="rd-meet-bar" aria-hidden="true" />
               <span className="rd-meet-tx">
-                <span className="rd-meet-d">сегодня</span>
+                <span className="rd-meet-d">{meetingDay}</span>
                 <span className="rd-meet-t">{formatTimeHM(club.nearestEvent.eventDatetime)}</span>
               </span>
             </div>

@@ -86,15 +86,39 @@ describe('ClubCard — карточка Discovery v2 (полка метрик н
     expect(screen.getByText('22:00')).toBeInTheDocument();
   });
 
-  it('событие завтра утром (внутри 24ч-окна) — колонки нет: критерий календарный', () => {
-    vi.useFakeTimers({ now: new Date('2026-07-22T23:00:00'), toFake: ['Date'] });
+  it('событие завтра → колонка «завтра · HH:MM» (календарно, даже если до него >24ч)', () => {
+    vi.useFakeTimers({ now: new Date('2026-07-22T08:00:00'), toFake: ['Date'] });
     renderCard({
       club: club({
         nearestEvent: { id: 'e1', title: 'Встреча', eventDatetime: '2026-07-23T09:00:00', goingCount: 3 },
       }),
     });
+    expect(screen.getByText('завтра')).toBeInTheDocument();
+    expect(screen.getByText('09:00')).toBeInTheDocument();
     expect(screen.queryByText('сегодня')).not.toBeInTheDocument();
+  });
+
+  it('событие послезавтра — колонки нет', () => {
+    vi.useFakeTimers({ now: new Date('2026-07-22T12:00:00'), toFake: ['Date'] });
+    renderCard({
+      club: club({
+        nearestEvent: { id: 'e1', title: 'Встреча', eventDatetime: '2026-07-24T09:00:00', goingCount: 3 },
+      }),
+    });
+    expect(screen.queryByText('сегодня')).not.toBeInTheDocument();
+    expect(screen.queryByText('завтра')).not.toBeInTheDocument();
     expect(screen.queryByText('09:00')).not.toBeInTheDocument();
+  });
+
+  it('«завтра» через перекат месяца (31 июля → 1 августа)', () => {
+    vi.useFakeTimers({ now: new Date('2026-07-31T12:00:00'), toFake: ['Date'] });
+    renderCard({
+      club: club({
+        nearestEvent: { id: 'e1', title: 'Встреча', eventDatetime: '2026-08-01T19:00:00', goingCount: 3 },
+      }),
+    });
+    expect(screen.getByText('завтра')).toBeInTheDocument();
+    expect(screen.getByText('19:00')).toBeInTheDocument();
   });
 
   it('shows the "★ Топ-5 в категории" badge only when topInCategory is true', () => {

@@ -15,19 +15,32 @@ export function pluralRu(n: number, forms: [string, string, string]): string {
   return forms[2];
 }
 
+/** Один и тот же локальный календарный день (Y/M/D)? */
+function isSameLocalDay(d: Date, ref: Date): boolean {
+  return (
+    d.getFullYear() === ref.getFullYear() &&
+    d.getMonth() === ref.getMonth() &&
+    d.getDate() === ref.getDate()
+  );
+}
+
 /**
  * Совпадает ли ISO-дата с «сегодня» по локальному календарю (Y/M/D), а не окну
  * «ближайшие 24 часа». Тесты детерминируют «сейчас» через fake timers.
  */
 export function isToday(iso: string): boolean {
-  const now = new Date();
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return false;
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  );
+  return isSameLocalDay(d, new Date());
+}
+
+/** «Завтра» по локальному календарю; setDate корректно перекатывает месяц/год. */
+export function isTomorrow(iso: string): boolean {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return isSameLocalDay(d, tomorrow);
 }
 
 /** Время «HH:MM» для бейджей встречи (обложка карточки, полка «сегодня»). */
