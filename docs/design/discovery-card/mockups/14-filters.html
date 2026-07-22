@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Фильтры Discovery — 7 структур</title>
+<style>
+:root {
+  --bg:#0B0B0E; --card:#17171C;
+  --text:#F4F4F6; --text-dim:rgba(244,244,246,0.6); --text-faint:rgba(244,244,246,0.45);
+  --hairline:rgba(255,255,255,0.06); --hairline-2:rgba(255,255,255,0.1);
+  --surface:rgba(255,255,255,0.04);
+  --accent:#F47B3C; --accent-soft:rgba(244,123,60,0.14);
+  --accent-grad:linear-gradient(135deg,#FFA070 0%,#F47B3C 100%); --on-accent:#2A0E04;
+  --live:#66D49A; --shelf-hl:rgba(255,255,255,0.12);
+}
+[data-theme="light"] {
+  --bg:#F7F6F3; --card:#FFFFFF;
+  --text:#1A1A1A; --text-dim:#6B6B70; --text-faint:#8A8A8E;
+  --hairline:rgba(0,0,0,0.06); --hairline-2:rgba(0,0,0,0.1);
+  --surface:rgba(255,255,255,0.85);
+  --accent-soft:rgba(244,123,60,0.12);
+  --accent-grad:linear-gradient(135deg,#F47B3C 0%,#D5611C 100%); --on-accent:#FFFFFF;
+  --live:#2E7D5A; --shelf-hl:rgba(255,255,255,0.9);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif; background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased; }
+.topbar { position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 24px; background:var(--bg); border-bottom:1px solid var(--hairline); }
+.topbar h1 { font-size:16px; font-weight:800; letter-spacing:-0.02em; }
+.topbar .hint { font-size:12px; color:var(--text-dim); margin-top:2px; }
+.toggle { display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 15px; border-radius:999px; border:1px solid var(--hairline-2); background:var(--card); color:var(--text); font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; flex-shrink:0; }
+.grid { display:flex; flex-wrap:wrap; gap:26px 30px; padding:24px 28px 60px; align-items:flex-start; }
+.col { width:344px; }
+.vname { font-size:13.5px; font-weight:800; margin-bottom:2px; }
+.vname b { color:var(--accent); margin-right:6px; }
+.vhint { font-size:11px; color:var(--text-dim); line-height:1.4; margin-bottom:11px; min-height:56px; }
+.phone { background:var(--bg); border:1px solid var(--hairline-2); border-radius:22px; padding:14px; }
+
+/* ---- общий контекст: поиск + карточка ---- */
+.search { display:flex; align-items:center; gap:9px; padding:11px 14px; border-radius:14px;
+          background:var(--card); border:1px solid var(--hairline); color:var(--text-faint); font-size:13px; margin-bottom:12px; }
+.search svg { width:15px; height:15px; flex-shrink:0; }
+.search .grow { flex:1; }
+.count { font-size:11px; color:var(--text-faint); }
+
+.card { position:relative; border-radius:18px; overflow:hidden; background:var(--card); margin-top:14px;
+        border:1px solid var(--hairline); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 6px 20px rgba(0,0,0,0.2); }
+.cov { height:84px; position:relative; background:radial-gradient(circle at 70% 30%, rgba(255,232,200,0.5), transparent 50%), linear-gradient(135deg,#F47B3C 0%,#5a3f1f 60%,#1a1108 100%); filter:saturate(0.9); }
+.price-chip { position:absolute; top:9px; right:11px; font-size:11px; font-weight:700; color:#fff; background:rgba(0,0,0,0.5); padding:3px 9px; border-radius:999px; }
+.body { padding:8px 13px 12px; }
+.body .ttl { font-size:13.5px; font-weight:700; }
+.body .loc { font-size:10.5px; color:var(--text-dim); margin-top:3px; }
+
+/* ---- элементы фильтров ---- */
+.chips { display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; }
+.chips::-webkit-scrollbar { display:none; }
+.chip { flex-shrink:0; padding:7px 14px; border-radius:999px; background:var(--surface); border:1px solid var(--hairline-2);
+        font-size:12px; font-weight:600; color:var(--text); white-space:nowrap; }
+.chip.on { background:var(--accent-grad); border-color:transparent; color:var(--on-accent); font-weight:700; }
+.chip.util { display:inline-flex; align-items:center; gap:5px; border-style:dashed; color:var(--text-dim); }
+
+/* 2. Роли разделены: строка утилит под категориями */
+.utilrow { display:flex; align-items:center; justify-content:space-between; margin-top:10px; }
+.utilrow .pills { display:flex; gap:8px; }
+.pill-out { display:inline-flex; align-items:center; gap:5px; padding:6px 12px; border-radius:999px;
+            border:1px solid var(--hairline-2); background:transparent; font-size:11.5px; font-weight:600; color:var(--text-dim); }
+.pill-out b { color:var(--text); font-weight:700; }
+.pill-out .chev { font-size:8px; opacity:0.6; }
+
+/* 3. Кнопка «Фильтры» у поиска */
+.fbtn { flex-shrink:0; position:relative; display:inline-flex; align-items:center; justify-content:center;
+        width:42px; height:42px; border-radius:14px; background:var(--card); border:1px solid var(--hairline-2); color:var(--text); }
+.fbtn svg { width:17px; height:17px; }
+.fbtn .n { position:absolute; top:-4px; right:-4px; min-width:16px; height:16px; border-radius:8px; background:var(--accent-grad);
+           color:var(--on-accent); font-size:9.5px; font-weight:800; display:flex; align-items:center; justify-content:center; padding:0 4px; }
+.srow { display:flex; gap:8px; margin-bottom:12px; }
+.srow .search { flex:1; margin-bottom:0; }
+
+/* 4. Иконки-категории */
+.cats { display:flex; gap:4px; overflow-x:auto; scrollbar-width:none; padding-bottom:2px; }
+.cats::-webkit-scrollbar { display:none; }
+.cat { flex-shrink:0; width:58px; display:flex; flex-direction:column; align-items:center; gap:5px; }
+.cat .ic { width:44px; height:44px; border-radius:50%; background:var(--surface); border:1px solid var(--hairline-2);
+           display:flex; align-items:center; justify-content:center; font-size:19px; }
+.cat.on .ic { border:2px solid var(--accent); background:var(--accent-soft); }
+.cat .lb { font-size:9.5px; font-weight:600; color:var(--text-dim); white-space:nowrap; }
+.cat.on .lb { color:var(--accent); font-weight:700; }
+
+/* 5. Пилюли-дропдауны */
+.drops { display:flex; gap:8px; }
+.drop { display:inline-flex; align-items:center; gap:6px; padding:8px 13px; border-radius:12px;
+        background:var(--card); border:1px solid var(--hairline-2); font-size:12px; color:var(--text-dim); }
+.drop b { color:var(--text); font-weight:700; }
+.drop.on { border-color:var(--accent); }
+.drop.on b { color:var(--accent); }
+.drop .chev { font-size:8px; opacity:0.6; }
+
+/* 6. Стеклянная панель */
+.panel { border-radius:16px; background:var(--card); border:1px solid var(--hairline); overflow:hidden; }
+.panel .search { margin:0; border:none; border-radius:0; background:transparent; border-bottom:1px solid var(--hairline); }
+.panel .chips { padding:10px 12px; }
+.panel .prow { display:flex; align-items:center; justify-content:space-between; padding:9px 14px; border-top:1px solid var(--hairline);
+               font-size:11.5px; color:var(--text-dim); }
+.panel .prow b { color:var(--text); }
+.panel .prow .chev { font-size:8px; opacity:0.6; }
+
+/* 7. Табы с подчёркиванием */
+.tabs { display:flex; gap:18px; overflow-x:auto; scrollbar-width:none; border-bottom:1px solid var(--hairline); }
+.tabs::-webkit-scrollbar { display:none; }
+.tab { flex-shrink:0; padding:8px 2px 9px; font-size:12.5px; font-weight:600; color:var(--text-dim); position:relative; white-space:nowrap; }
+.tab.on { color:var(--text); font-weight:700; }
+.tab.on::after { content:''; position:absolute; left:0; right:0; bottom:-1px; height:2.5px; border-radius:2px; background:var(--accent-grad); }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div>
+    <h1>Фильтры Discovery — 7 структур</h1>
+    <div class="hint">Проблема: категории (навигация) и цена (параметр со шторкой) смешаны в один ряд и выглядят одинаково. Кнопка — тема.</div>
+  </div>
+  <button class="toggle" onclick="var h=document.documentElement; h.dataset.theme = h.dataset.theme==='light'?'':'light'; this.querySelector('.tx').textContent = h.dataset.theme==='light'?'Тёмная тема':'Светлая тема';">
+    <span>◐</span><span class="tx">Светлая тема</span>
+  </button>
+</div>
+<div class="grid" id="grid"></div>
+<script>
+const SRCH=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>`;
+const SLIDERS=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h13M21 18h-1"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="19" cy="18" r="2"/></svg>`;
+
+const CATS = ['Все','Спорт','Творчество','Книги','Кулинария','Кино','Настолки','Путешествия'];
+const CAT_ICONS = { 'Все':'✨','Спорт':'⚽','Творчество':'🎨','Книги':'📚','Кулинария':'🍳','Кино':'🎬','Настолки':'🎲','Путешествия':'✈️' };
+
+const searchBox = `<label class="search">${SRCH}<span class="grow">Беговой клуб, книжный, дегустации</span></label>`;
+const ctxCard = `<div class="card"><div class="cov"><span class="price-chip">1 200 ₽/мес</span></div>
+  <div class="body"><div class="ttl">Беговой клуб «Второе дыхание»</div><div class="loc">📍 Москва</div></div></div>`;
+
+function chipsRow(activeIdx=1, withPrice=false){
+  return `<div class="chips">${CATS.map((c,i)=>`<span class="chip${i===activeIdx?' on':''}">${c}</span>`).join('')}${withPrice?`<span class="chip util">₽ Цена</span>`:''}</div>`;
+}
+
+const VARIANTS = [
+  { name:'Как сейчас', hint:'Один скролл-ряд: 8 категорий + пилюля цены в конце (та же форма, другая механика — открывает шторку). Базовый для сравнения.',
+    html:`${searchBox}${chipsRow(1,true)}${ctxCard}` },
+
+  { name:'Роли разделены', hint:'Категории — свой ряд. Под ним строка параметров: слева счётчик «Найдено 12», справа outline-пилюля «₽ до 2 000 ▾». Параметр перестал притворяться категорией.',
+    html:`${searchBox}${chipsRow(1)}<div class="utilrow"><span class="count">Найдено 12 клубов</span><span class="pills"><span class="pill-out">₽ <b>до 2 000</b> <span class="chev">▼</span></span></span></div>${ctxCard}` },
+
+  { name:'Кнопка «Фильтры» у поиска', hint:'Поиск + квадратная кнопка-слайдеры с бейджем активных (1). Цена и будущие параметры — в bottom-sheet. Ряд категорий остаётся чистым.',
+    html:`<div class="srow">${searchBox.replace('class="search"','class="search"')}<span class="fbtn">${SLIDERS}<span class="n">1</span></span></div>${chipsRow(1)}${ctxCard}` },
+
+  { name:'Иконки-категории', hint:'Категории — круглые иконки с подписями (как в маркетплейсах): выше плотность, весёлый вид, активная — акцентное кольцо. Цена — кнопкой у поиска.',
+    html:`<div class="srow">${searchBox}<span class="fbtn">${SLIDERS}</span></div><div class="cats">${CATS.map((c,i)=>`<span class="cat${i===1?' on':''}"><span class="ic">${CAT_ICONS[c]}</span><span class="lb">${c}</span></span>`).join('')}</div>${ctxCard}` },
+
+  { name:'Пилюли-дропдауны', hint:'Два компактных дропа: «Категория: Спорт ▾» и «Цена: любая ▾». Ничего не скроллится, выбранное всегда видно. Минус: категории спрятаны за тапом.',
+    html:`${searchBox}<div class="drops"><span class="drop on">Категория: <b>Спорт</b> <span class="chev">▼</span></span><span class="drop">Цена: <b>любая</b> <span class="chev">▼</span></span></div>${ctxCard}` },
+
+  { name:'Стеклянная панель', hint:'Поиск, категории и строка цены собраны в ОДИН блок с внутренними разделителями — «фильтры — единый инструмент». Дороже выглядит, выше сам блок.',
+    html:`<div class="panel">${searchBox}${chipsRow(1)}<div class="prow"><span>Стоимость подписки</span><span><b>до 2 000 ₽</b> <span class="chev">▼</span></span></div></div>${ctxCard}` },
+
+  { name:'Табы-подчёркивания', hint:'Категории — текстовые табы с акцентной линией (легче пилюль, меньше «пятен»). Цена — кнопкой у поиска. Строже и типографичнее.',
+    html:`<div class="srow">${searchBox}<span class="fbtn">${SLIDERS}<span class="n">1</span></span></div><div class="tabs">${CATS.map((c,i)=>`<span class="tab${i===1?' on':''}">${c}</span>`).join('')}</div>${ctxCard}` },
+];
+
+document.getElementById('grid').innerHTML = VARIANTS.map((v,i) =>
+  `<div class="col"><div class="vname"><b>${i+1}</b>${v.name}</div><div class="vhint">${v.hint}</div><div class="phone">${v.html}</div></div>`
+).join('');
+</script>
+</body>
+</html>
