@@ -246,11 +246,13 @@
 /* ---------- Карточка клуба (обложка) ---------- */
 /* Материал — сплошной --card-solid (не --glass-bg): полка метрик на обложке должна
    непрозрачно перекрывать фото тем же цветом, что тело карточки, — читается «футер
-   вырос вверх». Backdrop-blur при сплошном фоне бессмыслен — убран. */
+   вырос вверх». Backdrop-blur при сплошном фоне бессмыслен — убран.
+   Флэт (PO 2026-07-23, мокап 12-card-presence вариант 10): ни тени, ни рамки —
+   плитку отделяет от фона только материал и радиус. Пока ТОЛЬКО Discovery;
+   остальные экраны — после приёмки PO. */
 .rd-club-card {
   border-radius: 18px; overflow: hidden; margin-bottom: 12px;
-  background: var(--card-solid); border: 1px solid var(--hairline);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 6px 20px rgba(0, 0, 0, 0.2);
+  background: var(--card-solid);
   width: 100%; text-align: left; padding: 0; cursor: pointer; font-family: inherit;
   display: block;
 }
