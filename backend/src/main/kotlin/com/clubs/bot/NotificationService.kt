@@ -2,6 +2,7 @@ package com.clubs.bot
 
 import com.clubs.common.util.EventFormatTexts
 import com.clubs.event.Event
+import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.event.EventResponseRepository
 import com.clubs.event.OPEN_IN_YANDEX_MAPS_BUTTON
 import com.clubs.event.locationDisplay
@@ -81,7 +82,12 @@ class NotificationService(
         val locationLine = event.locationDisplay?.let { "📍 $it\n" } ?: ""
         // Открытая встреча (V62): лимита нет — вместо числа сообщаем формат.
         val limitLine = event.participantLimit?.let { "👥 Лимит: $it" } ?: EventFormatTexts.OPEN_EVENT_NO_LIMIT_LINE
-        val text = "🆕 Новое событие в клубе!\n\n📌 ${event.title}\n$locationLine🗓 $dateStr\n$limitLine\n\nГолосуйте в приложении:"
+        // Срочная встреча (PO 2026-07-23) рождается сразу в stage_2 — зовём подтверждать
+        // места, а не голосовать (Этапа 1 у неё нет).
+        val isUrgent = event.status == EventStatus.stage_2
+        val header = if (isUrgent) "⚡️ Срочная встреча в клубе!" else "🆕 Новое событие в клубе!"
+        val cta = if (isUrgent) "Подтверждайте участие в приложении:" else "Голосуйте в приложении:"
+        val text = "$header\n\n📌 ${event.title}\n$locationLine🗓 $dateStr\n$limitLine\n\n$cta"
         // Диплинк сразу на страницу события, чтобы кнопка открывала голосование, а не
         // общую домашнюю страницу приложения. React Router рендерит EventPage на /events/:id.
         val webAppPath = "/events/${event.id}"

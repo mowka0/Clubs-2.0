@@ -19,14 +19,14 @@ const PARTICIPANT_MIN = 1;
 const PARTICIPANT_MAX = 1000;
 
 // Пресеты интервала Этапа 2 (за сколько до старта открывается подтверждение мест), в минутах.
-// Значения зеркалят CHECK 360..2880 (V67) и @Min/@Max бэкенда; дефолт 1080 = 18 ч зеркалит
-// events.stage2-trigger-minutes-before. short — подпись насечки на шкале-таймлайне.
+// Значения зеркалят CHECK 1080..7200 (V68) и @Min/@Max бэкенда; дефолт 1080 = 18 ч зеркалит
+// events.stage2-trigger-minutes-before. Короче 18 часов не бывает — этот случай закрывает
+// формат «Срочная встреча». short — подпись насечки на шкале-таймлайне.
 const STAGE2_LEAD_PRESETS: { minutes: number; short: string }[] = [
-  { minutes: 360, short: '6 ч' },
-  { minutes: 720, short: '12 ч' },
   { minutes: 1080, short: '18 ч' },
-  { minutes: 1440, short: '24 ч' },
-  { minutes: 2880, short: '2 дня' },
+  { minutes: 2160, short: '36 ч' },
+  { minutes: 4320, short: '3 дня' },
+  { minutes: 7200, short: '5 дней' },
 ];
 const STAGE2_LEAD_DEFAULT = 1080;
 
@@ -46,10 +46,12 @@ const CalendarIcon: FC = () => (
 export const CreateEventPage: FC = () => {
   useBackButton(true);
   const { id: clubId } = useParams<{ id: string }>();
-  // Открытая встреча (V62, решение PO 2026-07-21): ?format=open из шага формата в пикере
-  // создания. Лимита нет (participantLimit = null на бэке) — степпер скрыт, заголовок другой.
-  const [searchParams] = useSearchParams();
+  // Формат из шага пикера «+»: open (V62) — без лимита, степпер скрыт; urgent (PO 2026-07-23) —
+  // сразу Этап 2, интервал подтверждения не настраивается. setSearchParams нужен кнопке
+  // «Сделать срочной» — переключение формата без размонтирования (введённые поля живут).
+  const [searchParams, setSearchParams] = useSearchParams();
   const isOpenEvent = searchParams.get('format') === 'open';
+  const isUrgentEvent = searchParams.get('format') === 'urgent';
   const navigate = useNavigate();
   const haptic = useHaptic();
   const createMut = useCreateEventMutation();
@@ -74,14 +76,22 @@ export const CreateEventPage: FC = () => {
   const effectiveStage2Lead = stage2LeadMinutes ?? STAGE2_LEAD_DEFAULT;
   const activeLeadIdx = Math.max(0, STAGE2_LEAD_PRESETS.findIndex((p) => p.minutes === effectiveStage2Lead));
 
-  // Встреча ближе выбранного интервала → Этап 2 стартует сразу после создания. Разрешаем
-  // осознанно (решение PO 2026-07-23), но честно предупреждаем прямо в форме.
   const eventTimeMs = eventDatetime ? new Date(eventDatetime).getTime() : null;
+  const msToEvent = eventTimeMs !== null && !Number.isNaN(eventTimeMs) ? eventTimeMs - Date.now() : null;
+  // Встреча ближе минимума (18 ч) — такому событию место в формате «срочная» (PO 2026-07-23):
+  // предлагаем переключиться кнопкой, не блокируя создание.
+  const suggestUrgent =
+    !isOpenEvent && !isUrgentEvent && msToEvent !== null && msToEvent < STAGE2_LEAD_DEFAULT * 60_000;
+  // Встреча дальше 18 ч, но ближе ВЫБРАННОГО интервала — Этап 2 стартует сразу после
+  // создания; предупреждаем и подсказываем отметку короче.
   const stage2StartsImmediately =
-    !isOpenEvent &&
-    eventTimeMs !== null &&
-    !Number.isNaN(eventTimeMs) &&
-    eventTimeMs - Date.now() <= effectiveStage2Lead * 60_000;
+    !isOpenEvent && !isUrgentEvent && !suggestUrgent &&
+    msToEvent !== null && msToEvent <= effectiveStage2Lead * 60_000;
+
+  const handleMakeUrgent = () => {
+    haptic.impact('medium');
+    setSearchParams({ format: 'urgent' }, { replace: true });
+  };
 
   if (!clubId) {
     return (
@@ -131,9 +141,11 @@ export const CreateEventPage: FC = () => {
       // Открытая встреча (V62): лимита нет + явный флаг формата — бэкенд валидирует их согласованность.
       participantLimit: isOpenEvent ? null : participantLimit,
       isOpenEvent,
-      // Интервал Этапа 2 — только у событий с местами и только при ЯВНОМ выборе организатора
-      // (null = серверный дефолт); открытая встреча вне двухэтапки.
-      stage2LeadMinutes: isOpenEvent || stage2LeadMinutes === null ? undefined : stage2LeadMinutes,
+      isUrgentEvent,
+      // Интервал Этапа 2 — только у обычных событий с местами и только при ЯВНОМ выборе
+      // организатора (null = серверный дефолт); open — вне двухэтапки, urgent — сразу в Этапе 2.
+      stage2LeadMinutes:
+        isOpenEvent || isUrgentEvent || stage2LeadMinutes === null ? undefined : stage2LeadMinutes,
       photoUrl: photoUrl ?? undefined,
     };
 
@@ -162,12 +174,18 @@ export const CreateEventPage: FC = () => {
     <div className="rd-page">
       <div className="rd-ft-eyebrow">Создание</div>
       <h1 className="rd-page-h" style={{ marginBottom: 18 }}>
-        {isOpenEvent ? 'Открытая встреча' : 'Новое событие'}
+        {isOpenEvent ? 'Открытая встреча' : isUrgentEvent ? 'Срочная встреча' : 'Новое событие'}
       </h1>
       {isOpenEvent && (
         <div className="rd-hint" style={{ marginTop: -10, marginBottom: 14 }}>
           Без лимита участников — приходят все, кто подтвердил. Репутация здесь не считается
           совсем: ни плюсов за посещение, ни штрафов за отказ или неявку.
+        </div>
+      )}
+      {isUrgentEvent && (
+        <div className="rd-hint" style={{ marginTop: -10, marginBottom: 14 }}>
+          Без этапа голосования — участники сразу подтверждают места, уведомление уйдёт
+          немедленно. Репутация работает как у обычного события с местами.
         </div>
       )}
 
@@ -250,7 +268,7 @@ export const CreateEventPage: FC = () => {
           />
         </label>
 
-        <label className="rd-field" style={!isOpenEvent ? { marginBottom: 0 } : undefined}>
+        <label className="rd-field" style={!isOpenEvent && !isUrgentEvent ? { marginBottom: 0 } : undefined}>
           <span className="rd-label">Дата и время <span className="rd-req">*</span></span>
           <div className="rd-datetime">
             <input
@@ -263,9 +281,10 @@ export const CreateEventPage: FC = () => {
           </div>
         </label>
 
-        {/* Интервал Этапа 2 (V67) — визуально привязан к дате; у открытой встречи Этапа 2 нет.
-            Свёрнуто: строка-факт. По «Изменить»: шкала-таймлайн с насечками-пресетами. */}
-        {!isOpenEvent && (
+        {/* Интервал Этапа 2 (V67/V68) — визуально привязан к дате; у открытой встречи Этапа 2
+            нет, у срочной он не настраивается (сразу stage_2). Свёрнуто: строка-факт.
+            По «Изменить»: шкала-таймлайн с насечками-пресетами. */}
+        {!isOpenEvent && !isUrgentEvent && (
           <div className="rd-field">
             <button
               type="button"
@@ -306,11 +325,20 @@ export const CreateEventPage: FC = () => {
                 </span>
               </div>
             )}
+            {suggestUrgent && (
+              <span className="rd-hint rd-s2-warn">
+                ⚡️ До встречи меньше 18 часов — такому событию лучше быть срочной встречей:
+                без голосования, сразу подтверждение мест.
+                <button type="button" className="rd-s2-switch" onClick={handleMakeUrgent}>
+                  Сделать срочной
+                </button>
+              </span>
+            )}
             {stage2StartsImmediately && (
               <span className="rd-hint rd-s2-warn">
                 ⚡️ До встречи меньше выбранного интервала — подтверждение мест начнётся сразу
                 после создания. Чтобы сначала прошло голосование, выберите отметку короче
-                времени до встречи (минимум — за 6 часов).
+                времени до встречи.
               </span>
             )}
           </div>

@@ -140,13 +140,18 @@ data class CreateEventRequest(
     val votingOpensDaysBefore: Int = 14,
 
     // За сколько МИНУТ до старта событие переходит в Этап 2 (подтверждение мест) — выбор
-    // организатора (V67, решение PO 2026-07-23). null = глобальный дефолт
-    // events.stage2-trigger-minutes-before (18 часов). Пресеты фронта: 6ч/12ч/18ч/24ч/2 дня.
-    // Если до события осталось меньше выбранного — Этап 2 начнётся сразу после создания
-    // (осознанно, форма предупреждает). Диапазон зеркалит CHECK chk_events_stage2_lead_minutes.
-    @field:Min(value = 360, message = "Stage 2 lead must be at least 360 minutes (6 hours)")
-    @field:Max(value = 2880, message = "Stage 2 lead must be at most 2880 minutes (2 days)")
+    // организатора (V67/V68, решения PO 2026-07-23). null = глобальный дефолт
+    // events.stage2-trigger-minutes-before (18 часов). Пресеты фронта: 18ч/36ч/3 дня/5 дней.
+    // Встречи «ближе 18 часов» закрывает формат «Срочная встреча» (isUrgentEvent), а не малый
+    // интервал. Диапазон зеркалит CHECK chk_events_stage2_lead_minutes (V68).
+    @field:Min(value = 1080, message = "Stage 2 lead must be at least 1080 minutes (18 hours)")
+    @field:Max(value = 7200, message = "Stage 2 lead must be at most 7200 minutes (5 days)")
     val stage2LeadMinutes: Int? = null,
+
+    // Срочная встреча (решение PO 2026-07-23): обычное событие с местами, но БЕЗ Этапа 1 —
+    // рождается сразу в stage_2, участники немедленно подтверждают места. Репутация работает
+    // как у обычного события. Явный флаг по тому же принципу, что isOpenEvent.
+    val isUrgentEvent: Boolean = false,
 
     @field:Size(max = 1024, message = "Photo URL must be at most 1024 characters")
     val photoUrl: String? = null
@@ -175,6 +180,12 @@ data class CreateEventRequest(
     @get:AssertTrue(message = "Open event has no stage 2; stage2LeadMinutes is not applicable")
     val isStage2LeadConsistent: Boolean
         get() = !isOpenEvent || stage2LeadMinutes == null
+
+    // Срочная встреча = событие с местами (не открытая) и без своего интервала: Этапа 1 нет,
+    // поэтому «за сколько до старта переходить в Этап 2» к ней неприменимо.
+    @get:AssertTrue(message = "Urgent event must be a limited event without a custom stage 2 lead")
+    val isUrgentConsistent: Boolean
+        get() = !isUrgentEvent || (!isOpenEvent && stage2LeadMinutes == null)
 }
 
 

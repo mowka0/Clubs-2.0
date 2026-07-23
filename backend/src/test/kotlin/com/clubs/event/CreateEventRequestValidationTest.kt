@@ -22,6 +22,7 @@ class CreateEventRequestValidationTest {
         locationHint: String? = null,
         participantLimit: Int? = 20,
         isOpenEvent: Boolean = false,
+        isUrgentEvent: Boolean = false,
         stage2LeadMinutes: Int? = null
     ) = CreateEventRequest(
         title = "Test event",
@@ -33,6 +34,7 @@ class CreateEventRequestValidationTest {
         eventDatetime = OffsetDateTime.now().plusDays(7),
         participantLimit = participantLimit,
         isOpenEvent = isOpenEvent,
+        isUrgentEvent = isUrgentEvent,
         votingOpensDaysBefore = 14,
         stage2LeadMinutes = stage2LeadMinutes
     )
@@ -60,30 +62,49 @@ class CreateEventRequestValidationTest {
         assertTrue("someLocationProvided" in violated)
     }
 
-    // --- Интервал Этапа 2 (V67): границы 360..2880 и несовместимость с открытой встречей ---
+    // --- Интервал Этапа 2 (V67/V68): границы 1080..7200 и несовместимость с open/urgent ---
 
     @Test
     fun `stage2 lead within bounds passes`() {
-        assertTrue(validator.validate(request(stage2LeadMinutes = 360)).isEmpty())
-        assertTrue(validator.validate(request(stage2LeadMinutes = 2880)).isEmpty())
+        assertTrue(validator.validate(request(stage2LeadMinutes = 1080)).isEmpty())
+        assertTrue(validator.validate(request(stage2LeadMinutes = 7200)).isEmpty())
     }
 
     @Test
-    fun `stage2 lead below 6 hours is rejected`() {
-        assertTrue("stage2LeadMinutes" in violatedProperties(request(stage2LeadMinutes = 359)))
+    fun `stage2 lead below 18 hours is rejected`() {
+        assertTrue("stage2LeadMinutes" in violatedProperties(request(stage2LeadMinutes = 1079)))
     }
 
     @Test
-    fun `stage2 lead above 2 days is rejected`() {
-        assertTrue("stage2LeadMinutes" in violatedProperties(request(stage2LeadMinutes = 2881)))
+    fun `stage2 lead above 5 days is rejected`() {
+        assertTrue("stage2LeadMinutes" in violatedProperties(request(stage2LeadMinutes = 7201)))
     }
 
     @Test
     fun `stage2 lead on an open event is rejected`() {
         val violated = violatedProperties(
-            request(participantLimit = null, isOpenEvent = true, stage2LeadMinutes = 720)
+            request(participantLimit = null, isOpenEvent = true, stage2LeadMinutes = 2160)
         )
         assertTrue("stage2LeadConsistent" in violated)
+    }
+
+    @Test
+    fun `urgent event with a limit passes`() {
+        assertTrue(validator.validate(request(isUrgentEvent = true)).isEmpty())
+    }
+
+    @Test
+    fun `urgent event cannot be open`() {
+        val violated = violatedProperties(
+            request(participantLimit = null, isOpenEvent = true, isUrgentEvent = true)
+        )
+        assertTrue("urgentConsistent" in violated)
+    }
+
+    @Test
+    fun `urgent event cannot carry a custom stage2 lead`() {
+        val violated = violatedProperties(request(isUrgentEvent = true, stage2LeadMinutes = 2160))
+        assertTrue("urgentConsistent" in violated)
     }
 
     @Test

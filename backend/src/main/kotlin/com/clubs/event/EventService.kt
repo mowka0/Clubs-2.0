@@ -36,8 +36,18 @@ class EventService(
             locationText = request.locationText?.trim()?.takeIf { it.isNotEmpty() },
             locationHint = request.locationHint?.trim()?.takeIf { it.isNotEmpty() }
         )
-        val event = eventRepository.create(normalizedRequest, clubId, userId)
-        log.info("Event created: id={} clubId={} title='{}' userId={}", event.id, clubId, event.title, userId)
+        val persisted = eventRepository.create(normalizedRequest, clubId, userId)
+        // Срочная встреча (решение PO 2026-07-23): Этапа 1 нет — событие рождается сразу в
+        // подтверждении мест, тем же transitionToStage2 и в той же транзакции. Уведомление
+        // одно (EventBotNotifier ниже): stage_2-событие зовёт подтверждать, а не голосовать.
+        val event = if (normalizedRequest.isUrgentEvent) {
+            eventRepository.transitionToStage2(persisted.id)
+            persisted.copy(status = EventStatus.stage_2, stage2Triggered = true)
+        } else persisted
+        log.info(
+            "Event created: id={} clubId={} title='{}' userId={} urgent={}",
+            event.id, clubId, event.title, userId, normalizedRequest.isUrgentEvent
+        )
         // DM участникам рассылает EventBotNotifier на AFTER_COMMIT. Публикация внутри
         // транзакции позволяет слушателю вовсе не сработать, если внешний
         // @Transactional откатится. По аналогии с PaymentService / SkladchinaService.

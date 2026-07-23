@@ -67,6 +67,39 @@ class EventServiceTest {
     }
 
     @Test
+    fun `createEvent for an urgent event flips it to stage 2 before publishing`() {
+        // Срочная встреча (PO 2026-07-23): Этапа 1 нет — событие рождается сразу в подтверждении
+        // мест, и уведомление (EventCreatedEvent) несёт уже stage_2-состояние.
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        every { eventRepository.create(any(), clubId, ownerId) } returns event
+
+        eventService.createEvent(clubId, request().copy(isUrgentEvent = true), ownerId)
+
+        verify(exactly = 1) { eventRepository.transitionToStage2(event.id) }
+        verify(exactly = 1) {
+            eventPublisher.publishEvent(
+                EventCreatedEvent(event.copy(status = EventStatus.stage_2, stage2Triggered = true))
+            )
+        }
+    }
+
+    @Test
+    fun `createEvent for a regular event does not touch stage 2`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        every { eventRepository.create(any(), clubId, ownerId) } returns event
+
+        eventService.createEvent(clubId, request(), ownerId)
+
+        verify(exactly = 0) { eventRepository.transitionToStage2(any()) }
+    }
+
+    @Test
     fun `createEvent normalizes a blank location hint to null`() {
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
