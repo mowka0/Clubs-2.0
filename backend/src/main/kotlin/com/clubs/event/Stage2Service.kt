@@ -32,7 +32,7 @@ class Stage2Service(
     // По умолчанию 24 ч. Единица «минуты» позволяет staging'у укоротить его для сквозного теста
     // двухэтапки: малое значение оставляет короткое окно голосования Этапа 1 до перехода
     // события в подтверждение.
-    @Value("\${events.stage2-trigger-minutes-before:1440}") private val stage2TriggerMinutesBefore: Long
+    @Value("\${events.stage2-trigger-minutes-before:1080}") private val stage2TriggerMinutesBefore: Long
 ) {
     private val log = LoggerFactory.getLogger(Stage2Service::class.java)
 

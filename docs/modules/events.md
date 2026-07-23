@@ -204,7 +204,8 @@ fun countByVote(eventId: UUID): Map<String, Int>   // going/maybe/not_going
   зачастую ПОСЛЕ старта события (окно = 0, участники получали DM «подтвердите» в никуда).
   Окно подтверждения = `lead − фаза тика`, поэтому тик обязан быть сильно мельче lead.
 - Ищет события: `status = upcoming AND stage_2_triggered = false AND event_datetime <= now() + lead`,
-  где `lead` = `events.stage2-trigger-minutes-before` (дефолт 1440 мин = 24ч; cutoff считается в
+  где `lead` = `events.stage2-trigger-minutes-before` (дефолт 1080 мин = 18ч, решение PO 2026-07-23,
+  ранее 24ч; cutoff считается в
   `Stage2Service`, передаётся в `findEventsToTriggerStage2(cutoff)`). На staging значение можно ужать
   (`STAGE2_TRIGGER_MINUTES_BEFORE`), чтобы протестировать полный поток голос → переход → подтверждение
 - Для каждого такого события: переводит в Stage 2
@@ -492,7 +493,7 @@ penalty-флоу), а их страницы упираются в скрытый
 | `events.dispute-window-minutes` | `ATTENDANCE_DISPUTE_WINDOW_MINUTES` | `2880` (48ч) | Окно оспаривания явки до финализации репутации |
 | `events.finalize-poll-ms` | `ATTENDANCE_FINALIZE_POLL_MS` | `3600000` (1ч) | Период `AttendanceService.finalizeAttendance` |
 | `events.stage2-expire-poll-ms` | `STAGE2_EXPIRE_POLL_MS` | `300000` (5мин) | Период авто-истечения брони |
-| `events.stage2-trigger-minutes-before` | `STAGE2_TRIGGER_MINUTES_BEFORE` | `1440` (24ч) | За сколько **минут** до старта `upcoming`-событие авто-переходит в `stage_2` |
+| `events.stage2-trigger-minutes-before` | `STAGE2_TRIGGER_MINUTES_BEFORE` | `1080` (18ч, PO 2026-07-23; ранее 24ч) | За сколько **минут** до старта `upcoming`-событие авто-переходит в `stage_2` |
 | `events.stage2-poll-ms` | `STAGE2_POLL_MS` | `60000` (1мин) | Период тика `triggerStage2ForReadyEvents`; окно подтверждения = trigger-lead − фаза тика, тик должен быть сильно мельче lead |
 | `events.stage2-decline-cutoff-minutes` | `STAGE2_DECLINE_CUTOFF_MINUTES` | `240` (4ч) | За сколько **минут** до старта закрывается отказ от УЖЕ ПОДТВЕРЖДЁННОГО места (замене нужно время). Фронт дублирует порог константой `CONFIRMED_DECLINE_CUTOFF_HOURS=4`; бэк — источник истины. Waitlisted порогом не гейтится |
 | `events.reminder-poll-ms` | `EVENT_REMINDER_POLL_MS` | `300000` (5мин) | Период `EventReminderScheduler` |

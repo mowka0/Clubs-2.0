@@ -101,8 +101,10 @@ subscription:
 
 membership:
   # De-Stars Slice 2: на какой срок один подтверждённый взнос участника («Взнос получен») даёт доступ
-  # к клубу. В днях, чтобы staging мог ужать его для теста авто-истечения → expired.
-  access-period-days: ${MEMBERSHIP_ACCESS_PERIOD_DAYS:30}
+  # к клубу. 0 (дефолт) = один КАЛЕНДАРНЫЙ месяц (решение PO 2026-07-23: «до 28 июня» + оплата →
+  # «до 28 июля»; 31 янв → последний день февраля). Положительное значение = ровно N дней —
+  # staging-ужимка для теста авто-истечения → expired (например MEMBERSHIP_ACCESS_PERIOD_DAYS=1).
+  access-period-days: ${MEMBERSHIP_ACCESS_PERIOD_DAYS:0}
   # Cron для SubscriptionScheduler.checkSubscriptions (DM «истекает через 3 дня» / «истёк» +
   # авто-флип active → expired). По умолчанию ежедневно 09:00 по времени сервера (UTC в Docker).
   # Конфигурируем, чтобы staging мог тикать каждые пару минут для теста уведомлений.
@@ -135,7 +137,8 @@ events:
   # Период опроса Stage2Service.expireUnconfirmedParticipants (мс). Дефолт 300000 = 5мин.
   stage2-expire-poll-ms: ${STAGE2_EXPIRE_POLL_MS:300000}
   # За сколько минут до старта события оно авто-переходит в Этап 2 (подтверждение).
-  # Дефолт 1440 = 24ч (PRD §4.4.2). В минутах, чтобы staging мог поставить малое значение
+  # Дефолт 1080 = 18ч (решение PO 2026-07-23; ранее 1440 = 24ч, PRD §4.4.2 обновлён).
+  # В минутах, чтобы staging мог поставить малое значение
   # и сохранить короткое окно голосования Этапа 1 перед переключением — так двухэтапный
   # флоу тестируется сквозняком. Env: STAGE2_TRIGGER_MINUTES_BEFORE
   stage2-trigger-minutes-before: ${STAGE2_TRIGGER_MINUTES_BEFORE:1440}
