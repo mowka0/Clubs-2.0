@@ -188,16 +188,20 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 
 **Назначение (по PRD §4.6.3):** при создании события — DM участникам клуба, имеющим доступ.
 **Получатели:** `membershipRepository.findMemberTelegramIds(event.clubId)` — telegram_id участников **с доступом к клубу**: только `active` (канонический предикат `MembershipAccess.hasAccess`). `frozen`/`expired`/`cancelled` исключены — у них нет доступа к событию, не должны получать о нём DM. `[GAP-010 ✅]`
-**Текст** (`NotificationService.kt:37`):
+**Текст** (`NotificationService.kt`; заголовок несёт признак формата — словарь бейджей карточек,
+PO 2026-07-23; срочность определяется по флагу `is_urgent` V69, не по статусу — обычное событие
+могло флипнуться в stage_2 до отправки async-DM):
 ```
-🆕 Новое событие в клубе!
+⚡ Срочная встреча в клубе!   ← is_urgent; CTA ниже: «Подтверждайте участие в приложении:»
+🌊 Открытая встреча в клубе!  ← participant_limit IS NULL
+🎟 Обычная встреча в клубе!   ← остальные
 
 📌 {title}
 📍 {locationText}
 🗓 {eventDatetime, dd.MM.yyyy HH:mm | "TBD"}
 👥 Лимит: {participantLimit}   ← у открытой встречи (V62): «👥 Открытая встреча — без репутации и лимита мест»
 
-Голосуйте в приложении:
+Голосуйте в приложении:        ← у срочной: «Подтверждайте участие в приложении:»
 ```
 **Inline-кнопка:** «📅 Открыть событие» с `WebAppInfo`, deep-link на `webAppPath=/events/{eventId}` — открывает страницу события (голосование) напрямую через React Router, а не корень Mini App.
 **Подключение:** `EventService.createEvent` (`@Transactional`) публикует `EventCreatedEvent` после `eventRepository.create()`; `EventBotNotifier.onEventCreated` (`@TransactionalEventListener`, фаза AFTER_COMMIT) вызывает `sendEventCreated` (`@Async` — не блокирует HTTP-ответ при массовой рассылке). Те же транзакционные гарантии, что у Payment/Skladchina DM: при rollback `createEvent` DM не уходят. Per-DM ошибки Telegram ловятся и логируются внутри `sendDm` (fire-and-forget — сбой бота не валит создание события). Пустой список получателей → `WARN` + return.
