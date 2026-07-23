@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Профиль: заполнение до уровня 2 — 01 «Бублик-хиро»</title>
+<style>
+  /* ================================================================
+     Дизайн-токены Banco-Plata — выписаны из frontend/src/styles/brand-theme.css
+     (боевые значения). :root = ТЁМНАЯ тема (дефолт), [data-theme="light"]
+     на <html> переопределяет.
+     ================================================================ */
+  :root {
+    /* базовые фон/текст */
+    --bg:            #0B0B0E;
+    --text:          #F4F4F6;
+    --text-dim:      rgba(244, 244, 246, 0.6);
+    --text-faint:    rgba(244, 244, 246, 0.45);
+
+    /* «стекло» */
+    --glass-bg:      linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.015) 100%);
+    --glass-border:  rgba(255, 255, 255, 0.08);
+    --glass-shadow:  inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.25);
+    --glass-strong-bg:
+        linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.01) 100%),
+        rgba(20, 22, 32, 0.5);
+    --glass-strong-border: rgba(255, 255, 255, 0.09);
+    --glass-strong-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 12px 32px rgba(0,0,0,0.35);
+
+    /* поверхности и линии */
+    --surface:       rgba(255, 255, 255, 0.04);
+    --surface-2:     rgba(255, 255, 255, 0.05);
+    --hairline:      rgba(255, 255, 255, 0.06);
+    --hairline-2:    rgba(255, 255, 255, 0.1);
+    --card-solid:    #17171C;               /* непрозрачный материал карточки (полка на фото) */
+    --shelf-hl:      rgba(255, 255, 255, 0.12); /* блик верхней кромки полки метрик */
+
+    /* акцент (фирменный оранжевый) */
+    --accent:        #F47B3C;
+    --accent-deep:   #D5611C;
+    --accent-soft:   rgba(244, 123, 60, 0.14);
+    --accent-glow:   rgba(244, 123, 60, 0.4);
+    --accent-shadow:      rgba(244, 123, 60, 0.30);
+    --accent-shadow-soft: rgba(244, 123, 60, 0.15);
+    --accent-grad:        linear-gradient(135deg, #FFA070 0%, #F47B3C 100%);
+    --accent-grad-strong: linear-gradient(135deg, #FFCDA8 0%, #F47B3C 50%, #D5611C 100%);
+    --grad-text:     linear-gradient(90deg, #FF8A4A 0%, #E84C9A 50%, #8E5DFF 100%);
+    --grad-num:      linear-gradient(135deg, #FFE0B5 0%, #FF9B6E 35%, #E84C9A 70%, #6A3DCC 100%);
+    --on-accent:     #2A0E04;
+
+    /* статусные */
+    --live:          #66D49A;
+    --live-soft:     rgba(79, 160, 120, 0.18);
+    --danger:        #FF8B8B;
+    --danger-soft:   rgba(255, 139, 139, 0.14);
+    --ice:           #8FC7E8;
+    --ice-soft:      rgba(143, 199, 232, 0.10);
+
+    --grain-opacity: 0.08;
+
+    /* алиас для паттерна мокапов (toggle/replay используют --card) */
+    --card: var(--card-solid);
+  }
+
+  [data-theme="light"] {
+    --bg:            #F7F6F3;
+    --text:          #1A1A1A;
+    --text-dim:      #6B6B70;
+    --text-faint:    #8A8A8E;
+
+    --glass-bg:      linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(252,252,252,0.85) 100%);
+    --glass-border:  rgba(0, 0, 0, 0.05);
+    --glass-shadow:  inset 0 1px 0 rgba(255,255,255,1), 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.05);
+    --glass-strong-bg: linear-gradient(135deg, rgba(255,251,242,0.95) 0%, rgba(252,247,235,0.88) 100%);
+    --glass-strong-border: rgba(213, 97, 28, 0.14);
+    --glass-strong-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 1px 3px rgba(0,0,0,0.04), 0 12px 32px rgba(213,97,28,0.1);
+
+    --surface:       rgba(255, 255, 255, 0.85);
+    --surface-2:     #FFFFFF;
+    --hairline:      rgba(0, 0, 0, 0.06);
+    --hairline-2:    rgba(0, 0, 0, 0.1);
+    --card-solid:    #FFFFFF;
+    --shelf-hl:      rgba(255, 255, 255, 0.9);
+
+    --accent-soft:   rgba(244, 123, 60, 0.12);
+    --accent-glow:   rgba(213, 97, 28, 0.3);
+    --accent-shadow:      rgba(213, 97, 28, 0.24);
+    --accent-shadow-soft: rgba(213, 97, 28, 0.12);
+    --accent-grad:        linear-gradient(135deg, #F47B3C 0%, #D5611C 100%);
+    --accent-grad-strong: linear-gradient(135deg, #F47B3C 0%, #D5611C 100%);
+    --grad-text:     linear-gradient(90deg, #E97339 0%, #C4407A 50%, #7A4FD9 100%);
+    --grad-num:      linear-gradient(135deg, #E97339 0%, #C4407A 50%, #7A4FD9 100%);
+    --on-accent:     #FFFFFF;
+
+    --live:          #2E7D5A;
+    --live-soft:     rgba(46, 125, 90, 0.12);
+    --danger-soft:   rgba(216, 64, 64, 0.10);
+    --ice:           #3B82A6;
+    --ice-soft:      rgba(59, 130, 166, 0.08);
+
+    --grain-opacity: 0;
+  }
+
+  /* ============ Каркас мокапа (паттерн проекта) ============ */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    padding: 14px 24px;
+    background: var(--bg); border-bottom: 1px solid var(--hairline);
+  }
+  .topbar h1 { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
+  .topbar .hint { font-size: 12px; color: var(--text-dim); margin-top: 3px; max-width: 720px; line-height: 1.45; }
+  .topbar .hint b { color: var(--accent); font-weight: 700; }
+  .toggle {
+    flex: none; height: 36px; padding: 0 14px; border-radius: 999px;
+    border: 1px solid var(--hairline-2); background: var(--card);
+    color: var(--text); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+
+  .grid { display: flex; flex-wrap: wrap; gap: 26px 30px; padding: 24px 28px 60px; }
+  .col { width: 360px; }
+  .vname { font-size: 13.5px; font-weight: 800; margin-bottom: 4px; }
+  .vname b { color: var(--accent); }
+  .vhint { font-size: 11px; color: var(--text-dim); line-height: 1.4; min-height: 46px; margin-bottom: 10px; }
+
+  /* ============ Телефонный фрейм ============ */
+  .phone {
+    position: relative; width: 360px; height: 736px;
+    border-radius: 34px; border: 1px solid var(--hairline-2);
+    background: var(--bg); overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.35);
+  }
+  [data-theme="light"] .phone { box-shadow: 0 24px 60px rgba(0,0,0,0.10); }
+  /* каркас экрана = .rd-page прода: плоский фон, паддинг 16 */
+  .screen { position: absolute; inset: 0; padding: 18px 16px 0; overflow: hidden; }
+  /* фейд внизу — намёк, что дальше по скроллу Подписка/Репутация как в проде */
+  .fade {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 52px;
+    background: linear-gradient(to top, var(--bg), transparent); pointer-events: none; z-index: 2;
+  }
+
+  /* ============ Прод-элементы профиля (сокращённые копии rd-классов) ============ */
+  .rd-glass {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 22px;
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    backdrop-filter: blur(30px) saturate(180%);
+    box-shadow: var(--glass-shadow);
+  }
+
+  /* (1) правый верхний ряд: пилюля темы + шестерёнка — как в проде, тут декоративные */
+  .rd-top-row { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .rd-city-pill {
+    height: 30px; padding: 0 12px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px;
+    background: var(--surface); border: 1px solid var(--glass-border);
+    -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+    font-size: 12px; font-weight: 600; color: var(--text-dim); cursor: default;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .rd-icon-btn {
+    width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--surface); border: 1px solid var(--glass-border);
+    color: var(--text-dim); font-size: 14px; cursor: default;
+  }
+
+  /* (2) identity-блок с ХИРО-донатом вокруг аватара */
+  .rd-pf-identity { text-align: center; margin-bottom: 16px; }
+  .ring-wrap { position: relative; width: 116px; height: 116px; margin: 0 auto 12px; }
+  .ring-wrap svg { position: absolute; inset: 0; display: block; }
+  .rd-avt {
+    position: absolute; inset: 14px; width: 88px; height: 88px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #FFCDA8 0%, #F47B3C 45%, #5C2C12 100%);
+    color: #1A0E04; font-size: 34px; font-weight: 700;
+    border: 1px solid rgba(255,255,255,0.15);
+    box-shadow: 0 4px 12px var(--accent-shadow), 0 8px 18px var(--accent-shadow-soft), inset 0 2px 0 rgba(255,255,255,0.2);
+  }
+  /* счётчик XP «на бублике»: висит на нижней кромке кольца */
+  .xp-pill {
+    position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%); z-index: 2;
+    padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+    background: var(--accent-soft); color: var(--accent);
+    border: 1px solid var(--accent-glow);
+    font-size: 11px; font-weight: 800; letter-spacing: 0.01em;
+  }
+  .xp-pill--done { background: var(--live-soft); color: var(--live); border-color: transparent; }
+  .rd-name { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); display: inline-flex; align-items: center; gap: 6px; }
+  .rd-badge-star { font-size: 13px; color: #E9A23C; }
+  .rd-handle { font-size: 13px; color: var(--text-dim); margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  /* галочка выполненного шага прямо у контента (шаг 1 — город) */
+  .ok-chip {
+    padding: 1px 7px; border-radius: 999px; background: var(--live-soft); color: var(--live);
+    font-size: 10px; font-weight: 800;
+  }
+  /* строка-мотиватор под именем: сколько осталось до уровня 2 */
+  .hero-sub { font-size: 12px; color: var(--text-faint); margin-top: 8px; }
+  .hero-sub b { color: var(--accent); font-weight: 700; }
+
+  /* (3)-(4) пустые секции = шаги-подсказки по месту */
+  .next-flag {
+    display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 6px 4px;
+  }
+  .step {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 14px; cursor: pointer;
+  }
+  .step + .step { margin-top: 10px; }
+  /* следующий рекомендуемый шаг — подсвечен акцентом */
+  .step--next { border-color: var(--accent-glow); box-shadow: var(--glass-shadow), 0 6px 20px var(--accent-shadow-soft); }
+  .step-num {
+    flex: none; width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--surface-2); border: 1px solid var(--hairline-2);
+    font-size: 12px; font-weight: 800; color: var(--text-faint);
+  }
+  .step--next .step-num { background: var(--accent-soft); border-color: var(--accent-glow); color: var(--accent); }
+  .step-body { flex: 1; min-width: 0; }
+  .step-title { font-size: 13.5px; font-weight: 700; color: var(--text); }
+  .step-why { font-size: 12px; color: var(--text-dim); line-height: 1.45; margin-top: 3px; }
+  .step-xp {
+    flex: none; padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+    background: var(--accent-soft); color: var(--accent);
+    font-size: 11px; font-weight: 800;
+  }
+
+  .rd-section-sub-h { font-size: 13px; font-weight: 700; color: var(--text); margin: 18px 0 10px; }
+  .rd-bio { font-size: 13px; color: var(--text-dim); line-height: 1.5; text-align: center; margin: 0 6px; }
+
+  .rd-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+  .rd-tag {
+    padding: 6px 12px; border-radius: 999px;
+    background: var(--surface); border: 1px solid var(--glass-border);
+    font-size: 12px; font-weight: 600; color: var(--text);
+  }
+
+  /* (7) секция «Уровень» — GamificationPanel как в проде (inline-стили → классы мокапа) */
+  .gp { padding: 16px; }
+  .gp-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .gp-name { font-size: 18px; font-weight: 700; }
+  .gp-meta { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+  .gp-bar { height: 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--hairline); overflow: hidden; margin: 12px 0 8px; }
+  .gp-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #ff8a3d, #ff5e8a); }
+  .gp-cap { font-size: 12px; color: var(--text-dim); }
+
+  /* (8) сливер «Подписка»: срезается кромкой телефона — контент продолжается по скроллу */
+  .more { margin-top: 14px; padding: 16px; }
+  .more-t { font-size: 13.5px; font-weight: 700; }
+  .more-s { font-size: 12px; color: var(--text-faint); margin-top: 4px; }
+
+  /* ============ Состояние B: вспышка кольца + поздравление ============ */
+  /* вспышка: дублирующее кольцо расширяется и гаснет (перезапуск через класс .play) */
+  .flash-ring { opacity: 0; }
+  .play .flash-ring { animation: ringFlash 1.1s ease 0.25s 2; }
+  @keyframes ringFlash {
+    0%   { opacity: 0; stroke-width: 6; }
+    35%  { opacity: 0.85; stroke-width: 12; }
+    100% { opacity: 0; stroke-width: 6; }
+  }
+  .play .avt-pop { animation: avPop 0.6s cubic-bezier(0.2, 1.4, 0.4, 1) 0.25s; }
+  @keyframes avPop { 0% { transform: scale(1); } 40% { transform: scale(1.08); } 100% { transform: scale(1); } }
+
+  .congrats {
+    position: absolute; inset: 0; z-index: 5;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(5, 5, 8, 0.55);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    opacity: 0; pointer-events: none;
+  }
+  .play .congrats { animation: scrimIn 0.4s ease 0.95s forwards; }
+  @keyframes scrimIn { to { opacity: 1; } }
+  .ccard {
+    width: 280px; text-align: center; padding: 26px 22px 20px; border-radius: 28px;
+    background: var(--glass-strong-bg); border: 1px solid var(--glass-strong-border);
+    box-shadow: var(--glass-strong-shadow);
+    transform: scale(0.85); opacity: 0;
+  }
+  .play .ccard { animation: cardPop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) 1.1s forwards; }
+  @keyframes cardPop { to { transform: scale(1); opacity: 1; } }
+  /* «поздравительный бейдж» уровня — медаль с номером */
+  .medal {
+    position: relative; width: 78px; height: 78px; border-radius: 50%; margin: 0 auto 12px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-grad-strong); color: var(--on-accent);
+    font-size: 32px; font-weight: 800;
+    box-shadow: 0 6px 18px var(--accent-shadow), 0 0 0 7px var(--accent-soft);
+  }
+  .medal::after { content: '✦'; position: absolute; top: -3px; right: -1px; font-size: 15px; color: #FFD89B; }
+  .medal-name {
+    display: inline-block; padding: 3px 12px; border-radius: 999px; margin-bottom: 10px;
+    background: var(--accent-soft); color: var(--accent);
+    font-size: 12px; font-weight: 800;
+  }
+  .ctitle { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+  .csub { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; margin: 7px 0 16px; }
+  .cbtn {
+    width: 100%; height: 42px; border: none; border-radius: 999px; cursor: pointer;
+    background: var(--accent-grad); color: var(--on-accent);
+    font: inherit; font-size: 14px; font-weight: 800;
+    box-shadow: 0 6px 16px var(--accent-shadow-soft);
+  }
+
+  /* конфетти: летит поверх экрана после появления карточки; цвета — из палитры бренда */
+  .confetti { position: absolute; inset: 0; z-index: 6; pointer-events: none; overflow: hidden; }
+  .confetti span {
+    position: absolute; top: -6%; left: var(--l);
+    width: var(--s, 7px); height: calc(var(--s, 7px) + 3px);
+    border-radius: 2px; background: var(--c); opacity: 0;
+  }
+  .play .confetti span { animation: fall 1.5s ease-in var(--d) forwards; }
+  @keyframes fall {
+    0%   { opacity: 0; transform: translateY(0) rotate(0deg); }
+    10%  { opacity: 1; }
+    85%  { opacity: 1; }
+    100% { opacity: 0; transform: translateY(780px) rotate(560deg); }
+  }
+
+  .replay {
+    margin-top: 12px; height: 36px; padding: 0 16px; border-radius: 999px;
+    border: 1px solid var(--hairline-2); background: var(--card);
+    color: var(--text); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+  <!-- Топбар мокапа: заголовок + короткий hint + тумблер темы (паттерн проекта) -->
+  <div class="topbar">
+    <div>
+      <h1>Заполни профиль → уровень 2 · направление <span style="color:var(--accent)">1</span> «Бублик-хиро»</h1>
+      <div class="hint">
+        Прогресс-донат <b>вокруг аватара</b>, сегменты = вес шагов. Пустые секции сами становятся
+        шагами-подсказками с «+XP» по месту, следующий подсвечен. Кривая боевая: порог уровня 2 «Свой» = <b>50 XP</b>
+        (город +10, о себе +15, интересы +25). Лис-экран интересов уходит — его роль у шага 3.
+      </div>
+    </div>
+    <button class="toggle" onclick="var h=document.documentElement; h.dataset.theme=h.dataset.theme==='light'?'':'light'; this.querySelector('.tx').textContent=h.dataset.theme==='light'?'Тёмная тема':'Светлая тема';">◐ <span class="tx">Светлая тема</span></button>
+  </div>
+
+  <!-- Общие SVG-градиенты (заливка сегментов доната = градиент прогресс-бара GamificationPanel) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <linearGradient id="gxp" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#ff8a3d"/>
+        <stop offset="100%" stop-color="#ff5e8a"/>
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <div class="grid">
+
+    <!-- ============================== СОСТОЯНИЕ A: частично заполнен ============================== -->
+    <div class="col">
+      <div class="vname"><b>A</b> · Частично заполнен — 10 / 50 XP</div>
+      <div class="vhint">
+        Шаг 1 (город) сделан → его сегмент кольца залит, у города галочка «+10».
+        Следующий шаг «О себе» подсвечен, порядок читается сверху вниз: город → о себе → интересы.
+      </div>
+
+      <div class="phone">
+        <div class="screen">
+
+          <!-- (1) правый верхний ряд как в проде -->
+          <div class="rd-top-row">
+            <span class="rd-city-pill" title="В проде переключает тему приложения — тут декорация">◐ Авто</span>
+            <span class="rd-icon-btn" title="Открывает редактор профиля">⚙</span>
+          </div>
+
+          <!-- (2) identity: аватар в прогресс-донате.
+               Геометрия кольца: r=52, C=326.7; зазоры 3×6px; длины сегментов
+               пропорциональны XP шагов: город 10 → 61.7, о себе 15 → 92.6, интересы 25 → 154.4 -->
+          <div class="rd-pf-identity">
+            <div class="ring-wrap">
+              <svg viewBox="0 0 116 116">
+                <!-- шаг 1 «город» — выполнен, залит XP-градиентом -->
+                <circle cx="58" cy="58" r="52" fill="none" stroke="url(#gxp)" stroke-width="6"
+                        stroke-linecap="round" stroke-dasharray="61.7 265.1" transform="rotate(-90 58 58)"/>
+                <!-- шаг 2 «о себе» — пуст -->
+                <circle cx="58" cy="58" r="52" fill="none" stroke-width="6" style="stroke:var(--hairline-2)"
+                        stroke-linecap="round" stroke-dasharray="92.6 234.1" transform="rotate(-15.4 58 58)"/>
+                <!-- шаг 3 «интересы» — пуст -->
+                <circle cx="58" cy="58" r="52" fill="none" stroke-width="6" style="stroke:var(--hairline-2)"
+                        stroke-linecap="round" stroke-dasharray="154.4 172.3" transform="rotate(93.3 58 58)"/>
+              </svg>
+              <div class="rd-avt">МК</div>
+              <div class="xp-pill">10 / 50 XP</div>
+            </div>
+            <div class="rd-name">Максим К. <span class="rd-badge-star">✦</span></div>
+            <div class="rd-handle">@maxim_k · Москва, Россия
+              <span class="ok-chip" title="Шаг 1 выполнен: город указан">✓ +10</span>
+            </div>
+            <div class="hero-sub">Ещё <b>40 XP</b> — и ты «Свой»</div>
+          </div>
+
+          <!-- (3) место bio: вместо нудж-строки — шаг с пользой и наградой -->
+          <div class="next-flag">Следующий шаг</div>
+          <div class="rd-glass step step--next" title="Открывает редактор профиля (поле «О себе»)">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <div class="step-title">Расскажи о себе</div>
+              <div class="step-why">Пара строк — организатор видит, кто ты, ещё до первой встречи</div>
+            </div>
+            <div class="step-xp">+15 XP</div>
+          </div>
+
+          <!-- (4) место интересов: третий шаг, пока не в фокусе. Лис-экрана больше нет -->
+          <div class="rd-section-sub-h">Интересы</div>
+          <div class="rd-glass step" title="Открывает редактор профиля (интересы)">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <div class="step-title">Добавь интересы</div>
+              <div class="step-why">По ним проще находить близкие клубы, а организаторы видят, что тебе откликается</div>
+            </div>
+            <div class="step-xp">+25 XP</div>
+          </div>
+
+          <!-- (5)(6) rd-stats и «Статистика» скрыты: у нового юзера нет репутации и посещений (как в проде) -->
+
+          <!-- (7) «Уровень»: GamificationPanel, цифры той же кривой 50·n² -->
+          <div class="rd-section-sub-h">Уровень</div>
+          <div class="rd-glass gp">
+            <div class="gp-row">
+              <div class="gp-name">Гость</div>
+              <div class="gp-meta">10 XP · ур. 1</div>
+            </div>
+            <div class="gp-bar"><div class="gp-fill" style="width:20%"></div></div>
+            <div class="gp-cap">10 / 50 XP до «Свой»</div>
+          </div>
+
+          <!-- (8) дальше по скроллу — Подписка (срезана кромкой, деталей не выдумываем) -->
+          <div class="rd-glass more">
+            <div class="more-t">Подписка</div>
+            <div class="more-s">…</div>
+          </div>
+        </div>
+        <div class="fade"></div>
+      </div>
+    </div>
+
+    <!-- ============================== СОСТОЯНИЕ B: уровень 2 достигнут ============================== -->
+    <div class="col">
+      <div class="vname"><b>B</b> · Момент достижения — 50 / 50 XP</div>
+      <div class="vhint">
+        Все три шага закрыты → кольцо полное и вспыхивает, поверх — поздравление с бейджем уровня 2 «Свой».
+        Профиль под сцримом уже заполнен. Кнопка ниже проигрывает момент заново.
+      </div>
+
+      <div class="phone play" id="phoneB">
+        <div class="screen">
+
+          <div class="rd-top-row">
+            <span class="rd-city-pill">◐ Авто</span>
+            <span class="rd-icon-btn">⚙</span>
+          </div>
+
+          <!-- identity: кольцо целиком залито, поверх него — вспышка -->
+          <div class="rd-pf-identity">
+            <div class="ring-wrap">
+              <svg viewBox="0 0 116 116">
+                <circle cx="58" cy="58" r="52" fill="none" stroke="url(#gxp)" stroke-width="6"/>
+                <!-- дублирующее кольцо вспышки (анимируется классом .play) -->
+                <circle class="flash-ring" cx="58" cy="58" r="52" fill="none" stroke="url(#gxp)" stroke-width="6"/>
+              </svg>
+              <div class="rd-avt avt-pop">МК</div>
+              <div class="xp-pill xp-pill--done">✓ 50 / 50 XP</div>
+            </div>
+            <div class="rd-name">Максим К. <span class="rd-badge-star">✦</span></div>
+            <div class="rd-handle">@maxim_k · Москва, Россия</div>
+          </div>
+
+          <!-- bio заполнено — обычный прод-вид -->
+          <div class="rd-bio">Продакт из Москвы. Люблю настолки, бег и странные документалки.</div>
+
+          <!-- интересы заполнены — теги как в проде -->
+          <div class="rd-section-sub-h">Интересы</div>
+          <div class="rd-tags">
+            <span class="rd-tag">Настолки</span>
+            <span class="rd-tag">Бег</span>
+            <span class="rd-tag">Кино</span>
+          </div>
+
+          <!-- «Уровень»: уже 2-й; следующий порог 200 → спан 150 (кривая 50·n²) -->
+          <div class="rd-section-sub-h">Уровень</div>
+          <div class="rd-glass gp">
+            <div class="gp-row">
+              <div class="gp-name">Свой</div>
+              <div class="gp-meta">50 XP · ур. 2</div>
+            </div>
+            <div class="gp-bar"><div class="gp-fill" style="width:0%"></div></div>
+            <div class="gp-cap">0 / 150 XP до «Участник»</div>
+          </div>
+
+          <div class="rd-glass more">
+            <div class="more-t">Подписка</div>
+            <div class="more-s">…</div>
+          </div>
+        </div>
+
+        <!-- Поздравление: сцрим + карточка с медалью уровня -->
+        <div class="congrats">
+          <div class="ccard">
+            <div class="medal">2</div>
+            <div class="medal-name">Свой</div>
+            <div class="ctitle">Уровень 2!</div>
+            <div class="csub">Профиль заполнен: организаторам проще узнать тебя, а поиску — подобрать клубы по интересам.</div>
+            <button class="cbtn">Отлично</button>
+          </div>
+        </div>
+
+        <!-- Конфетти в цветах бренда (accent / розовый / фиолетовый / live / золото) -->
+        <div class="confetti" aria-hidden="true">
+          <span style="--l:8%;  --c:#F47B3C; --d:1.15s; --s:7px"></span>
+          <span style="--l:18%; --c:#E84C9A; --d:1.30s; --s:6px"></span>
+          <span style="--l:28%; --c:#8E5DFF; --d:1.10s; --s:8px"></span>
+          <span style="--l:38%; --c:#FFD89B; --d:1.45s; --s:6px"></span>
+          <span style="--l:48%; --c:#66D49A; --d:1.20s; --s:7px"></span>
+          <span style="--l:58%; --c:#F47B3C; --d:1.40s; --s:6px"></span>
+          <span style="--l:68%; --c:#E84C9A; --d:1.12s; --s:8px"></span>
+          <span style="--l:78%; --c:#8E5DFF; --d:1.35s; --s:6px"></span>
+          <span style="--l:88%; --c:#FFD89B; --d:1.22s; --s:7px"></span>
+          <span style="--l:95%; --c:#66D49A; --d:1.50s; --s:6px"></span>
+        </div>
+
+        <div class="fade"></div>
+      </div>
+
+      <button class="replay" onclick="replayB()">Проиграть момент ещё раз</button>
+    </div>
+
+  </div>
+
+  <script>
+    // Перезапуск анимаций состояния B: снять класс, форсировать reflow, вернуть класс
+    function replayB() {
+      var p = document.getElementById('phoneB');
+      p.classList.remove('play');
+      void p.offsetWidth; // сброс таймлайнов CSS-анимаций
+      p.classList.add('play');
+    }
+  </script>
+
+</body>
+</html>

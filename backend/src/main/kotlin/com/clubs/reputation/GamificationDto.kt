@@ -17,7 +17,18 @@ data class GamificationDto(
     val xpIntoLevel: Int,
     /** Диапазон XP текущего уровня (следующий порог − текущий порог); null на максимальном уровне. */
     val xpSpanToNext: Int?,
-    val badges: List<BadgeDto>
+    val badges: List<BadgeDto>,
+    /** Профиль-квест (карточка «Прокачай профиль»): какие вехи достигнуты. См. profile-quest.md. */
+    val quest: ProfileQuestDto
+)
+
+/** Вехи профиль-квеста для карточки в профиле. Done-флаги — от одноразовых меток, не от текущего содержимого полей. */
+data class ProfileQuestDto(
+    val cityDone: Boolean,
+    val interestsDone: Boolean,
+    val bioDone: Boolean,
+    /** Все три вехи достигнуты — карточка-квест не показывается, бейдж «Визитка» получен. */
+    val completed: Boolean
 )
 
 data class BadgeDto(

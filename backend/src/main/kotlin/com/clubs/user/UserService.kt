@@ -32,6 +32,9 @@ class UserService(
             bio = request.bio.blankToNull()
         )
         interestService.replaceUserInterests(userId, request.interests)
+        // Профиль-квест: одноразовые вехи заполнения (+XP, кап 50) — после записи полей
+        // и интересов, в той же транзакции. Уже достигнутые вехи UPDATE не трогает.
+        userRepository.markQuestMilestones(userId)
         return getUserById(userId)
     }
 

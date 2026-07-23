@@ -70,7 +70,8 @@ near-black/off-white палитра + оранжево-розово-фиолет
 
 ### Профиль — `frontend/src/pages/ProfilePage.tsx`
 Тумблер темы + шестерёнка → `.rd-pf-identity` (аватар, имя + ★, `@handle · город`) → bio →
-stat-grid (Надёжность средняя+tier / В клубах) → интересы (теги) → репутация по клубам
+stat-grid (Надёжность средняя+tier / В клубах; ⚠️ 2026-07-22 слит в панель «Статистика»
+с герой-строкой Надёжности — см. profile.md) → интересы (теги) → репутация по клубам
 (`.rd-rep-row`, score-цвета high/mid/low). Пустое состояние — призыв найти клуб.
 
 ### `ClubCard` — `frontend/src/components/ClubCard.tsx`

@@ -26,7 +26,10 @@ data class Users(
     var updatedAt: OffsetDateTime? = null,
     var country: String? = null,
     var bio: String? = null,
-    var onboardedAt: OffsetDateTime? = null
+    var onboardedAt: OffsetDateTime? = null,
+    var questCityAt: OffsetDateTime? = null,
+    var questInterestsAt: OffsetDateTime? = null,
+    var questBioAt: OffsetDateTime? = null
 ): Serializable {
 
 
@@ -102,6 +105,24 @@ data class Users(
         }
         else if (this.onboardedAt != o.onboardedAt)
             return false
+        if (this.questCityAt == null) {
+            if (o.questCityAt != null)
+                return false
+        }
+        else if (this.questCityAt != o.questCityAt)
+            return false
+        if (this.questInterestsAt == null) {
+            if (o.questInterestsAt != null)
+                return false
+        }
+        else if (this.questInterestsAt != o.questInterestsAt)
+            return false
+        if (this.questBioAt == null) {
+            if (o.questBioAt != null)
+                return false
+        }
+        else if (this.questBioAt != o.questBioAt)
+            return false
         return true
     }
 
@@ -120,6 +141,9 @@ data class Users(
         result = prime * result + (if (this.country == null) 0 else this.country.hashCode())
         result = prime * result + (if (this.bio == null) 0 else this.bio.hashCode())
         result = prime * result + (if (this.onboardedAt == null) 0 else this.onboardedAt.hashCode())
+        result = prime * result + (if (this.questCityAt == null) 0 else this.questCityAt.hashCode())
+        result = prime * result + (if (this.questInterestsAt == null) 0 else this.questInterestsAt.hashCode())
+        result = prime * result + (if (this.questBioAt == null) 0 else this.questBioAt.hashCode())
         return result
     }
 
@@ -138,6 +162,9 @@ data class Users(
         sb.append(", ").append(country)
         sb.append(", ").append(bio)
         sb.append(", ").append(onboardedAt)
+        sb.append(", ").append(questCityAt)
+        sb.append(", ").append(questInterestsAt)
+        sb.append(", ").append(questBioAt)
 
         sb.append(")")
         return sb.toString()

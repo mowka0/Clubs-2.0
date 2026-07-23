@@ -9,7 +9,9 @@ import kotlin.math.roundToInt
  * счёт ЧЕЛОВЕКА на уровне аккаунта. Только накапливается (нарушенное обещание — 0 XP, никогда не
  * минус) и выводится ПРИ ЧТЕНИИ из того же ledger, что и Trust (без новой таблицы/запроса).
  *
- * XP награждает ТОЛЬКО УЧАСТИЕ (решение 2026-06-14): kept-виды плюс бонус за разнообразие. Старый
+ * XP награждает ТОЛЬКО УЧАСТИЕ (решение 2026-06-14) — с ЕДИНСТВЕННЫМ осознанным исключением
+ * (PO 2026-07-22): одноразовый профиль-квест с капом 50 XP (= порог уровня 2), отдельный канал
+ * [ProfileQuest] — см. docs/modules/profile-quest.md. В остальном: kept-виды плюс бонус за разнообразие. Старый
  * организаторский бонус (+15 событие / +8 складчина) убран — «результат организатора» — это сигнал
  * о МЕСТЕ, он живёт в треке качества клуба (ось «Надёжность организатора»), а не в личной
  * геймификации. Анти-фарм достаётся бесплатно: у владельца нет строк ledger в собственном клубе
@@ -30,6 +32,36 @@ object XpPolicy {
 
     /** Бонус за первый kept-исход в каждом НОВОМ клубе (уникальный club_id с ≥1 kept). */
     const val DIVERSITY_BONUS = 20
+
+    /* ---- Профиль-квест (PO 2026-07-22) — осознанное исключение из «XP только участие».
+       Вехи одноразовые (метки users.quest_*_at, V66), кап = сумма трёх = 50 = порог «Свой». ---- */
+
+    /** XP вехи «Город» профиль-квеста. */
+    const val QUEST_CITY_XP = 10
+    /** XP вехи «Интересы» профиль-квеста. */
+    const val QUEST_INTERESTS_XP = 25
+    /** XP вехи «О себе» профиль-квеста. Сумма трёх вех = ровно levelThreshold(1) = 50. */
+    const val QUEST_BIO_XP = 15
+
+    /**
+     * Достигнутые вехи профиль-квеста. Считаются от МЕТОК (users.quest_*_at), а не от текущего
+     * содержимого полей: веха одноразовая, XP не отзывается при последующей очистке поля —
+     * инвариант «XP не убывает» (AC-P1b-6) сохраняется.
+     */
+    data class ProfileQuest(val city: Boolean, val interests: Boolean, val bio: Boolean) {
+        val completed: Boolean get() = city && interests && bio
+
+        companion object {
+            /** Пустой квест: новый пользователь / вехи не найдены. */
+            val NONE = ProfileQuest(city = false, interests = false, bio = false)
+        }
+    }
+
+    /** Профильный XP: сумма достигнутых вех. Кап 50 обеспечен конструкцией — вех ровно три. */
+    fun profileXp(quest: ProfileQuest): Int =
+        (if (quest.city) QUEST_CITY_XP else 0) +
+            (if (quest.interests) QUEST_INTERESTS_XP else 0) +
+            (if (quest.bio) QUEST_BIO_XP else 0)
 
     /** Trust от этого значения и выше делает клуб (с track record) «надёжным» для trust-бейджей. */
     private const val RELIABLE_TRUST = TrustPolicy.RELIABLE_THRESHOLD // 70
@@ -63,14 +95,17 @@ object XpPolicy {
         val totalKept: Int get() = ironcladCount + spontaneousCount + skladchinaPaidCount
     }
 
-    /** Суммарный XP = Σ XP по kept-видам + бонус разнообразия за каждый уникальный kept-клуб. */
+    /** Суммарный XP УЧАСТИЯ = Σ XP по kept-видам + бонус разнообразия за каждый уникальный kept-клуб. */
     fun totalXp(stats: XpStats): Int =
         stats.ironcladCount * kindXp(ReputationKind.ironclad) +
             stats.spontaneousCount * kindXp(ReputationKind.spontaneous) +
             stats.skladchinaPaidCount * kindXp(ReputationKind.skladchina_paid) +
             stats.distinctKeptClubs * DIVERSITY_BONUS
 
-    enum class BadgeFamily { PARTICIPATION, DIVERSITY, TRUST }
+    /** Полный XP аккаунта = участие (ledger) + профиль-квест (одноразовые вехи). */
+    fun totalXp(stats: XpStats, quest: ProfileQuest): Int = totalXp(stats) + profileXp(quest)
+
+    enum class BadgeFamily { PARTICIPATION, DIVERSITY, TRUST, PROFILE }
 
     /** Бейдж = пройденный порог (не сырой счёт). Пороги поддаются калибровке. */
     data class Badge(
@@ -94,8 +129,16 @@ object XpPolicy {
         Badge("reliable_5", "Столп доверия", BadgeFamily.TRUST) { it.reliableClubs >= 5 }
     )
 
+    /** Бейдж «Визитка» — профиль-квест целиком. Предикат-заглушка: условие — от квеста,
+     *  не от статов участия, и живёт в [badgesFor] с двумя аргументами. */
+    val PROFILE_CARD = Badge("profile_card", "Визитка", BadgeFamily.PROFILE) { false }
+
     /** Заработанные бейджи для данных статов, в порядке объявления. */
     fun badgesFor(stats: XpStats): List<Badge> = BADGES.filter { it.earned(stats) }
+
+    /** Бейджи с учётом профиль-квеста: участие + «Визитка» при полностью заполненном профиле. */
+    fun badgesFor(stats: XpStats, quest: ProfileQuest): List<Badge> =
+        badgesFor(stats) + listOfNotNull(PROFILE_CARD.takeIf { quest.completed })
 
     fun isReliable(trust: Int): Boolean = trust >= RELIABLE_TRUST
 }

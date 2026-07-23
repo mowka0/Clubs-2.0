@@ -48,6 +48,7 @@ const ZERO_GAMIFICATION: GamificationDto = {
   xpIntoLevel: 0,
   xpSpanToNext: 50,
   badges: [],
+  quest: { cityDone: false, interestsDone: false, bioDone: false, completed: false },
 };
 
 interface MockOptions {
@@ -111,7 +112,7 @@ describe('ProfilePage — W3-04: секция «Уровень»', () => {
     expect(screen.getByText(/0 XP · ур\. 1/)).toBeInTheDocument();
     expect(screen.getByText(/0 \/ 50 XP до «Свой»/)).toBeInTheDocument();
     // Пояснение-тизер про начисление XP.
-    expect(screen.getByText(/XP начисляется за посещённые встречи/)).toBeInTheDocument();
+    expect(screen.getByText(/XP начисляется за заполненный профиль/)).toBeInTheDocument();
   });
 
   it('xp>0: панель как раньше, строки-пояснения нет', async () => {
@@ -119,13 +120,14 @@ describe('ProfilePage — W3-04: секция «Уровень»', () => {
       gamification: {
         xp: 120, level: 2, levelName: 'Свой', nextLevelName: 'Завсегдатай',
         xpIntoLevel: 20, xpSpanToNext: 150, badges: [],
+        quest: { cityDone: true, interestsDone: true, bioDone: true, completed: true },
       },
     });
     renderPage();
 
     expect(await screen.findByText('Свой')).toBeInTheDocument();
     expect(screen.getByText(/120 XP · ур\. 2/)).toBeInTheDocument();
-    expect(screen.queryByText(/XP начисляется за посещённые встречи/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/XP начисляется за заполненный профиль/)).not.toBeInTheDocument();
   });
 
   it('isError: плашка «Не удалось загрузить уровень» + «Повторить» (role=alert, не «уровня нет»)', async () => {
@@ -143,6 +145,37 @@ describe('ProfilePage — W3-04: секция «Уровень»', () => {
     expect(gamHits()).toBe(1);
     await user.click(screen.getByRole('button', { name: 'Повторить' }));
     await waitFor(() => expect(gamHits()).toBeGreaterThan(1));
+  });
+});
+
+describe('ProfilePage — статистика одной панелью (PO 2026-07-22)', () => {
+  it('надёжность — герой-строка «Статистики», уровень выше статистики, плиток rd-stats нет', async () => {
+    server.use(
+      http.get('*/api/users/me/reputation', () => HttpResponse.json({
+        global: { reliableClubs: 1, trackRecordClubs: 2, score: 87 },
+        activeClubs: [{}, {}],
+        historyClubs: [],
+        visits: { totalEventsAttended: 5, openEventsAttended: 2 },
+      })),
+      http.get('*/api/users/me/interests', () => HttpResponse.json([])),
+      http.get('*/api/users/me/gamification', () => HttpResponse.json(ZERO_GAMIFICATION)),
+    );
+    renderPage();
+
+    // Надёжность — внутри панели статистики, с герой-модификатором
+    const hero = (await screen.findByText('Надёжность')).closest('.rd-ostat-row');
+    expect(hero?.className).toContain('rd-ostat-hero');
+    expect(screen.getByText('87')).toBeInTheDocument();
+    // Остальные строки панели: В клубах + посещения
+    expect(screen.getByText('активных участий')).toBeInTheDocument();
+    expect(screen.getByText('Всего посетил событий')).toBeInTheDocument();
+    // Старых плиток больше нет
+    expect(document.querySelector('.rd-stats')).toBeNull();
+    // «Уровень» стоит выше «Статистики»
+    const level = screen.getByText('Уровень');
+    const stats = screen.getByText('Статистика');
+    // eslint-disable-next-line no-bitwise
+    expect(level.compareDocumentPosition(stats) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 

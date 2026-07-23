@@ -81,6 +81,49 @@ class XpPolicyTest {
         assertFalse("rock_solid" in midIds || "diverse_8" in midIds || "reliable_5" in midIds)
     }
 
+    @Test
+    fun `profile quest XP - one-time milestones capped at level-2 threshold`() {
+        // Веса шагов залочены мокапом 02-quest-card: город 10, интересы 25, о себе 15.
+        assertEquals(10, XpPolicy.QUEST_CITY_XP)
+        assertEquals(25, XpPolicy.QUEST_INTERESTS_XP)
+        assertEquals(15, XpPolicy.QUEST_BIO_XP)
+        // Кап = сумма трёх = ровно порог уровня 2 «Свой».
+        assertEquals(XpPolicy.levelThreshold(1), XpPolicy.profileXp(XpPolicy.ProfileQuest(true, true, true)))
+        assertEquals(0, XpPolicy.profileXp(XpPolicy.ProfileQuest.NONE))
+        assertEquals(35, XpPolicy.profileXp(XpPolicy.ProfileQuest(city = true, interests = true, bio = false)))
+    }
+
+    @Test
+    fun `full profile quest alone reaches exactly level 2 Свой`() {
+        val xp = XpPolicy.totalXp(statsOf(), XpPolicy.ProfileQuest(true, true, true))
+        assertEquals(50, xp)
+        assertEquals(1, XpPolicy.levelIndexFor(xp)) // «Свой»
+        assertEquals("Свой", XpPolicy.LEVEL_NAMES[1])
+    }
+
+    @Test
+    fun `totalXp with quest adds profile XP on top of participation`() {
+        // 89 XP участия (см. тест выше) + 35 профильных = 124
+        val stats = statsOf(ironclad = 3, spontaneous = 2, skladchinaPaid = 1, distinctKeptClubs = 2)
+        assertEquals(89 + 35, XpPolicy.totalXp(stats, XpPolicy.ProfileQuest(city = true, interests = true, bio = false)))
+    }
+
+    @Test
+    fun `Визитка badge appears only when the quest is fully completed`() {
+        val stats = statsOf()
+        assertEquals(emptyList(), XpPolicy.badgesFor(stats, XpPolicy.ProfileQuest.NONE).map { it.id })
+        assertEquals(
+            emptyList(),
+            XpPolicy.badgesFor(stats, XpPolicy.ProfileQuest(city = true, interests = true, bio = false)).map { it.id }
+        )
+        assertEquals(
+            listOf("profile_card"),
+            XpPolicy.badgesFor(stats, XpPolicy.ProfileQuest(true, true, true)).map { it.id }
+        )
+        assertEquals("PROFILE", XpPolicy.PROFILE_CARD.family.name)
+        assertEquals("Визитка", XpPolicy.PROFILE_CARD.name)
+    }
+
     private fun statsOf(
         ironclad: Int = 0,
         spontaneous: Int = 0,

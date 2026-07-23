@@ -171,4 +171,37 @@ open class UsersDao(configuration: Configuration?) : DAOImpl<UsersRecord, com.cl
      * Fetch records that have <code>onboarded_at IN (values)</code>
      */
     fun fetchByOnboardedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Users> = fetch(Users.USERS.ONBOARDED_AT, *values)
+
+    /**
+     * Fetch records that have <code>quest_city_at BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfQuestCityAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Users> = fetchRange(Users.USERS.QUEST_CITY_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>quest_city_at IN (values)</code>
+     */
+    fun fetchByQuestCityAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Users> = fetch(Users.USERS.QUEST_CITY_AT, *values)
+
+    /**
+     * Fetch records that have <code>quest_interests_at BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfQuestInterestsAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Users> = fetchRange(Users.USERS.QUEST_INTERESTS_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>quest_interests_at IN (values)</code>
+     */
+    fun fetchByQuestInterestsAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Users> = fetch(Users.USERS.QUEST_INTERESTS_AT, *values)
+
+    /**
+     * Fetch records that have <code>quest_bio_at BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfQuestBioAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Users> = fetchRange(Users.USERS.QUEST_BIO_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>quest_bio_at IN (values)</code>
+     */
+    fun fetchByQuestBioAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Users> = fetch(Users.USERS.QUEST_BIO_AT, *values)
 }

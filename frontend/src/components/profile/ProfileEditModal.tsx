@@ -1,11 +1,11 @@
-import { FC, useEffect, useState } from 'react';
+import { FC, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useUpdateProfileMutation } from '../../queries/profile';
 import { CityPicker, countryNameByCode, type CityChoice } from '../CityPicker';
-import { InterestsInput } from './InterestsInput';
+import { InterestsInput, type InterestsInputHandle } from './InterestsInput';
 
 // Максимальная длина поля «О себе» (символов) — совпадает с лимитом на бэкенде.
 const BIO_MAX = 280;
@@ -30,6 +30,7 @@ export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, 
   });
   const [bio, setBio] = useState(user?.bio ?? '');
   const [interests, setInterests] = useState<string[]>(initialInterests);
+  const interestsRef = useRef<InterestsInputHandle>(null);
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,12 +48,15 @@ export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, 
   const handleSave = () => {
     haptic.impact('medium');
     setError(null);
+    // Недобранный текст в поле интересов (без запятой/Enter) фиксируем прямо здесь —
+    // иначе первый интерес нового пользователя молча терялся при «Сохранить».
+    const finalInterests = interestsRef.current?.commitPending() ?? interests;
     updateMutation.mutate(
       {
         country: hasCity ? cityChoice.country : null,
         city: hasCity ? cityChoice.city : null,
         bio: bio.trim() || null,
-        interests,
+        interests: finalInterests,
       },
       {
         onSuccess: () => { haptic.notify('success'); onClose(); },
@@ -101,7 +105,7 @@ export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, 
 
           <div className="rd-field">
             <span className="rd-label">Интересы</span>
-            <InterestsInput value={interests} onChange={setInterests} />
+            <InterestsInput ref={interestsRef} value={interests} onChange={setInterests} />
           </div>
 
           {error && <div className="rd-error" style={{ textAlign: 'left' }}>{error}</div>}

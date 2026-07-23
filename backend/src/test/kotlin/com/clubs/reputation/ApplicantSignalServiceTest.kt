@@ -1,6 +1,8 @@
 package com.clubs.reputation
 
 import com.clubs.generated.jooq.enums.ReputationKind
+import com.clubs.user.QuestFlags
+import com.clubs.user.UserRepository
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -11,13 +13,18 @@ import java.util.UUID
 class ApplicantSignalServiceTest {
 
     private val reputationRepository: ReputationRepository = mockk()
+    private val userRepository: UserRepository = mockk {
+        // По умолчанию — без достигнутых вех профиль-квеста (переопределяется в тестах квеста).
+        every { findQuestFlagsByIds(any()) } returns emptyMap()
+    }
 
     // Real Trust/Xp policies — only findOutcomesByUserIds is stubbed; globalForOutcomes /
     // levelForOutcomes are pure and never touch the repository.
     private val service = ApplicantSignalService(
         reputationRepository,
         TrustService(reputationRepository),
-        XpService(reputationRepository)
+        XpService(reputationRepository, userRepository),
+        userRepository
     )
 
     private val now: OffsetDateTime = OffsetDateTime.parse("2026-06-14T12:00:00Z")
@@ -67,5 +74,23 @@ class ApplicantSignalServiceTest {
     @Test
     fun `empty input short-circuits without a query`() {
         assertEquals(emptyMap<UUID, ApplicantSignal>(), service.signalsFor(emptyList(), now))
+    }
+
+    @Test
+    fun `others-projection counts profile-quest XP - full quest alone shows level 2`() {
+        // AC-6 profile-quest.md: организатор видит уровень С УЧЁТОМ профильного XP —
+        // заявитель без единого ledger-исхода, но с заполненным профилем = «Свой», не «Гость».
+        val userId = UUID.randomUUID()
+        val at = now
+        every { reputationRepository.findOutcomesByUserIds(listOf(userId)) } returns emptyMap()
+        every { userRepository.findQuestFlagsByIds(listOf(userId)) } returns mapOf(
+            userId to QuestFlags(cityAt = at, interestsAt = at, bioAt = at)
+        )
+
+        val signal = service.signalsFor(listOf(userId), now).getValue(userId)
+
+        assertEquals(2, signal.level)
+        assertEquals("Свой", signal.levelName)
+        assertEquals(0, signal.trackRecordClubs, "профильный XP не создаёт track record")
     }
 }
