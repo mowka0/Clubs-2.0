@@ -1,9 +1,8 @@
-import { FC, Suspense, useEffect, useMemo, useState } from 'react';
+import { FC, Suspense, useEffect, useMemo } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { BottomTabBar, isTabBarRoute } from './BottomTabBar';
 import { DeepLinkHandler } from './DeepLinkHandler';
-import { Toast } from './Toast';
 import { CreateActivityFlow } from './manage/CreateActivityFlow';
 import { OnboardingFlow } from './onboarding/OnboardingFlow';
 import { useBackButton } from '../hooks/useBackButton';
@@ -34,8 +33,9 @@ const PageFallback: FC = () => (
  * Плавающий док + его FAB-flow «создать». Рендерится только при авторизации, чтобы
  * запрос organizer-clubs никогда не срабатывал раньше, чем появится токен.
  *
- * Экспортирован для unit-теста защиты FAB (организатор → открыть flow,
- * не-организатор → toast). Сама кнопка FAB показывается всегда.
+ * FAB открывает flow ВСЕМ: пункт «Сообщить о проблеме» общедоступен, а бывший
+ * тост-гардрейл «создавать могут организаторы» переехал в состав пунктов шита
+ * (не-организатор видит только обратную связь). Экспортирован для unit-теста.
  */
 export const AppDock: FC = () => {
   const haptic = useHaptic();
@@ -46,7 +46,6 @@ export const AppDock: FC = () => {
   const createOpen = useCreateFlowStore((s) => s.isOpen);
   const openCreateFlow = useCreateFlowStore((s) => s.open);
   const closeCreateFlow = useCreateFlowStore((s) => s.close);
-  const [toast, setToast] = useState<string | null>(null);
 
   // Если юзер сейчас смотрит клуб, которым он руководит, FAB заранее выбирает этот
   // клуб и пропускает выбор — создание сразу в текущий клуб. На любом другом экране
@@ -57,25 +56,19 @@ export const AppDock: FC = () => {
 
   const handleCreate = () => {
     haptic.impact('light');
-    if (canCreate) {
-      openCreateFlow();
-    } else {
-      setToast('Создавать активности могут организаторы клубов');
-    }
+    openCreateFlow();
   };
 
   return (
     <>
       <BottomTabBar onCreate={handleCreate} scoped={presetClubId !== null} />
-      {canCreate && (
-        <CreateActivityFlow
-          open={createOpen}
-          organizerClubs={organizerClubs}
-          presetClubId={presetClubId}
-          onClose={closeCreateFlow}
-        />
-      )}
-      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+      <CreateActivityFlow
+        open={createOpen}
+        canCreate={canCreate}
+        organizerClubs={organizerClubs}
+        presetClubId={presetClubId}
+        onClose={closeCreateFlow}
+      />
     </>
   );
 };

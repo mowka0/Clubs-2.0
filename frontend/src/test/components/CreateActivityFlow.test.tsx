@@ -41,7 +41,7 @@ function renderFlow(clubs: ClubPickerOption[]) {
         path="/"
         element={
           <>
-            <CreateActivityFlow open organizerClubs={clubs} onClose={vi.fn()} />
+            <CreateActivityFlow open canCreate organizerClubs={clubs} onClose={vi.fn()} />
             <LocationProbe />
           </>
         }
@@ -49,6 +49,7 @@ function renderFlow(clubs: ClubPickerOption[]) {
       <Route path="/clubs/:id/events/new" element={<LocationProbe />} />
       <Route path="/clubs/:id/skladchina/new" element={<LocationProbe />} />
       <Route path="/clubs/:id/skladchina/split" element={<LocationProbe />} />
+      <Route path="/feedback" element={<LocationProbe />} />
     </Routes>,
     { routerEntries: ['/'] },
   );
@@ -109,5 +110,13 @@ describe('CreateActivityFlow', () => {
     await user.click(screen.getByText('Beta Club'));
 
     expect(screen.getByTestId('location').textContent).toBe('/clubs/club-2/skladchina/split');
+  });
+
+  it('«Сообщить о проблеме» ведёт на форму обратной связи, минуя выбор клуба', async () => {
+    const { user } = renderFlow(TWO_CLUBS);
+
+    await user.click(screen.getByText('Сообщить о проблеме'));
+
+    expect(screen.getByTestId('location').textContent).toBe('/feedback');
   });
 });

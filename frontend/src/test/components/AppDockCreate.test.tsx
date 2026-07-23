@@ -10,42 +10,43 @@ vi.mock('@telegram-apps/sdk-react', () => ({
 
 vi.mock('@telegram-apps/telegram-ui', () => import('../mocks/telegramUi'));
 
-// Stub the heavy create-flow modal — we only assert whether it opens.
+// Тяжёлый модал флоу стабим — проверяем только, что он открылся и с каким canCreate.
 vi.mock('../../components/manage/CreateActivityFlow', () => ({
-  CreateActivityFlow: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="create-flow" /> : null,
+  CreateActivityFlow: ({ open, canCreate }: { open: boolean; canCreate: boolean }) =>
+    open ? <div data-testid="create-flow" data-can-create={String(canCreate)} /> : null,
 }));
 
-// Control organizer detection directly — the visibility rule is the unit under test.
+// Определение «организатора» контролируем напрямую — правило видимости и есть предмет теста.
 const useOrganizerClubsMock = vi.fn();
 vi.mock('../../queries/organizerClubs', () => ({
   useOrganizerClubs: () => useOrganizerClubsMock(),
 }));
 
 import { AppDock } from '../../components/Layout';
+import { useCreateFlowStore } from '../../store/useCreateFlowStore';
 import { renderWithProviders } from '../utils/renderWithProviders';
 
 beforeEach(() => {
   useOrganizerClubsMock.mockReset();
+  // Стор глобальный — сбрасываем, чтобы open-состояние не протекало между тестами.
+  useCreateFlowStore.setState({ isOpen: false });
 });
 
-// The Banco redesign moved the "create activity" entry point from an in-page
-// hero button on ActivitiesPage to the dock's always-visible FAB. The organizer
-// guardrail now lives in AppDock: organizers open the flow, everyone else gets
-// an explanatory toast.
-describe('AppDock — FAB "create activity" guardrail', () => {
-  it('shows a toast (and no create flow) when the user organizes no clubs', async () => {
+// Фича feedback: FAB «+» открывает flow ВСЕМ (пункт «Сообщить о проблеме» общедоступен).
+// Бывший тост-гардрейл «создавать могут организаторы» переехал в состав пунктов шита —
+// его проверяет CreateActivityPicker.test.tsx, здесь проверяем только canCreate-проброс.
+describe('AppDock — FAB «создать» открывает flow всем', () => {
+  it('не-организатор: flow открывается с canCreate=false (только обратная связь)', async () => {
     const user = userEvent.setup();
     useOrganizerClubsMock.mockReturnValue({ clubs: [], isLoading: false });
     renderWithProviders(<AppDock />, { routerEntries: ['/events'] });
 
     await user.click(screen.getByRole('button', { name: /создать/i }));
 
-    expect(screen.getByText(/организаторы клубов/i)).toBeInTheDocument();
-    expect(screen.queryByTestId('create-flow')).toBeNull();
+    expect(screen.getByTestId('create-flow')).toHaveAttribute('data-can-create', 'false');
   });
 
-  it('opens the create flow when the user organizes at least one club', async () => {
+  it('организатор: flow открывается с canCreate=true', async () => {
     const user = userEvent.setup();
     useOrganizerClubsMock.mockReturnValue({
       clubs: [{ id: 'club-1', name: 'Alpha', avatarUrl: null, category: 'sport' }],
@@ -55,6 +56,6 @@ describe('AppDock — FAB "create activity" guardrail', () => {
 
     await user.click(screen.getByRole('button', { name: /создать/i }));
 
-    expect(screen.getByTestId('create-flow')).toBeInTheDocument();
+    expect(screen.getByTestId('create-flow')).toHaveAttribute('data-can-create', 'true');
   });
 });

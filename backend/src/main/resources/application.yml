@@ -71,6 +71,14 @@ telegram:
   # frontend URL через WebAppInfo.
   # Prod: https://77-42-23-177.sslip.io, Staging: https://staging.77-42-23-177.sslip.io
   webapp-base-url: ${TELEGRAM_WEBAPP_BASE_URL:https://77-42-23-177.sslip.io}
+  # Username саппорт-аккаунта (без @) — сюда бот шлёт баг-репорты из формы «Сообщить о проблеме».
+  # Bot API не отправляет по @username, поэтому chat id резолвится через нашу таблицу users:
+  # аккаунт должен хотя бы раз открыть Mini App этого окружения, иначе POST /api/feedback → 503.
+  support-username: ${TELEGRAM_SUPPORT_USERNAME:clubs_tech_support}
+  # Числовой telegram chat id саппорта (узнать: @userinfobot). Если задан — шлём напрямую,
+  # без резолва по users: канал не перехватывается сменой/освобождением username.
+  # Пусто = резолв по support-username.
+  support-chat-id: ${TELEGRAM_SUPPORT_CHAT_ID:}
 
 # Хранилище загрузок (MinIO/S3): имя бакета и публичный базовый URL для ссылок на файлы.
 s3:

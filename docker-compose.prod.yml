@@ -83,6 +83,10 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-3600000}  # 1ч по security.md; frontend apiClient автоматически повторяет 401 со свежим initData
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      # Username саппорт-аккаунта (без @) для баг-репортов из формы «Сообщить о проблеме»
+      TELEGRAM_SUPPORT_USERNAME: ${TELEGRAM_SUPPORT_USERNAME:-clubs_tech_support}
+      # Числовой chat id саппорта (приоритетнее username; защита от угона канала сменой username)
+      TELEGRAM_SUPPORT_CHAT_ID: ${TELEGRAM_SUPPORT_CHAT_ID:-}
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
       S3_ENDPOINT_URL: http://minio:9000

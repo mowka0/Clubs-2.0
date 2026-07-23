@@ -21,34 +21,47 @@ class RateLimitFilter : OncePerRequestFilter() {
     // требует более жёстких лимитов, чем общий API (security.md: 5/мин на /api/auth/*).
     private val apiBuckets = ConcurrentHashMap<String, Bucket>()
     private val authBuckets = ConcurrentHashMap<String, Bucket>()
+    private val feedbackBuckets = ConcurrentHashMap<String, Bucket>()
 
     override fun doFilterInternal(
         request: HttpServletRequest,
         response: HttpServletResponse,
         filterChain: FilterChain
     ) {
-        if (request.requestURI == "/actuator/health") {
+        // Классификация по ДЕКОДИРОВАННОМУ пути (servletPath): Spring MVC роутит по нему же.
+        // Сырой requestURI позволял percent-encoding'ом (/api/%66eedback) проскользнуть мимо
+        // жёсткого бакета в общий 60/мин (security-ревью feedback).
+        val path = request.servletPath.takeUnless { it.isNullOrEmpty() } ?: request.requestURI
+
+        if (path == "/actuator/health") {
             filterChain.doFilter(request, response)
             return
         }
 
-        val isAuthEndpoint = request.requestURI.startsWith("/api/auth/")
+        val isAuthEndpoint = path.startsWith("/api/auth/")
+        val isFeedbackEndpoint = path == "/api/feedback"
         val key = resolveKey(request)
-        val bucket = if (isAuthEndpoint) {
-            authBuckets.computeIfAbsent(key) { createAuthBucket() }
-        } else {
-            apiBuckets.computeIfAbsent(key) { createApiBucket() }
+        val bucket = when {
+            isAuthEndpoint -> authBuckets.computeIfAbsent(key) { createAuthBucket() }
+            isFeedbackEndpoint -> feedbackBuckets.computeIfAbsent(key) { createFeedbackBucket() }
+            else -> apiBuckets.computeIfAbsent(key) { createApiBucket() }
         }
 
         if (bucket.tryConsume(1)) {
             filterChain.doFilter(request, response)
         } else {
-            val limit = if (isAuthEndpoint) AUTH_LIMIT_PER_MIN else API_LIMIT_PER_MIN
+            val limit = when {
+                isAuthEndpoint -> AUTH_LIMIT_PER_MIN
+                isFeedbackEndpoint -> FEEDBACK_LIMIT_PER_MIN
+                else -> API_LIMIT_PER_MIN
+            }
             logger.warn(
                 "Rate limit exceeded: key={} uri={} limit={}/min",
                 key, request.requestURI, limit
             )
             response.status = HttpStatus.TOO_MANY_REQUESTS.value()
+            // Окно refill — минута, поэтому честный Retry-After = 60 (security.md § Rate Limiting).
+            response.setHeader("Retry-After", "60")
             response.contentType = "application/json"
             response.writer.write("""{"error":"Too many requests. Limit: $limit per minute."}""")
         }
@@ -63,6 +76,7 @@ class RateLimitFilter : OncePerRequestFilter() {
     fun resetBuckets() {
         apiBuckets.clear()
         authBuckets.clear()
+        feedbackBuckets.clear()
     }
 
     private fun resolveKey(request: HttpServletRequest): String {
@@ -75,8 +89,11 @@ class RateLimitFilter : OncePerRequestFilter() {
     }
 
     private fun getClientIp(request: HttpServletRequest): String {
+        // Последний элемент X-Forwarded-For дописан доверенным Traefik и не подделывается;
+        // первый контролируется клиентом — ротация фейковых значений давала бы неограниченный
+        // запас свежих ключей `ip:*` и обход лимита (security-ревью feedback).
         val forwarded = request.getHeader("X-Forwarded-For")
-        return if (!forwarded.isNullOrBlank()) forwarded.split(",")[0].trim()
+        return if (!forwarded.isNullOrBlank()) forwarded.split(",").last().trim()
         else request.remoteAddr
     }
 
@@ -98,11 +115,23 @@ class RateLimitFilter : OncePerRequestFilter() {
         )
         .build()
 
+    private fun createFeedbackBucket(): Bucket = Bucket.builder()
+        .addLimit(
+            Bandwidth.builder()
+                .capacity(FEEDBACK_LIMIT_PER_MIN)
+                .refillGreedy(FEEDBACK_LIMIT_PER_MIN, Duration.ofMinutes(1))
+                .build()
+        )
+        .build()
+
     companion object {
         // Общий лимит на обычные API-запросы, в минуту на ключ (пользователь или IP).
         private const val API_LIMIT_PER_MIN = 60L
         // Жёсткий лимит для /api/auth/* — защита от брутфорса и подбора HMAC
         // (security.md: "агрессивно" — 5 попыток в минуту на IP/user).
         private const val AUTH_LIMIT_PER_MIN = 5L
+        // Жёсткий лимит для /api/feedback — каждый запрос превращается в DM саппорту,
+        // общий лимит 60/мин позволил бы заспамить личку техподдержки.
+        private const val FEEDBACK_LIMIT_PER_MIN = 3L
     }
 }

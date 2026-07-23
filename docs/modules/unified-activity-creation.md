@@ -15,6 +15,14 @@
 > (2026-05-30, таб «Заявки» удалён в пользу кросс-клубового inbox на
 > `MyClubsPage`, см. [`applications-inbox.md`](./applications-inbox.md)).
 >
+> **UPD 2026-07-23 (feedback):** FAB «+» открывает флоу **всем пользователям**,
+> не только организаторам — тост-гардрейл «Создавать активности могут организаторы
+> клубов» удалён. Состав пунктов шага «тип» зависит от пропа `canCreate`
+> (`CreateActivityFlow` → `ActivityTypeOptions`): организатор видит «Событие» /
+> «Сбор» / «🐞 Сообщить о проблеме», не-организатор — только пункт обратной связи
+> (заголовок шита — «Обратная связь»). Пункт ведёт на `/feedback` (`FeedbackPage`),
+> route открытия передаётся в `state.from`. Спека: [`feedback.md`](./feedback.md).
+>
 > **UPD 2026-07-20:** `CreateActivityFlow` и его guard'ы живут в `AppDock`
 > (`components/Layout.tsx`), открытие — через `useCreateFlowStore.open()`.
 > Помимо «+» дока, флоу открывают CTA пустых состояний (см. `empty-states.md`):
