@@ -30,6 +30,11 @@ data class EventDetailDto(
     // null = открытая встреча (V62): без гонки за места и листа ожидания, фронт прячет знаменатель.
     val participantLimit: Int?,
     val votingOpensDaysBefore: Int,
+    // Эффективный интервал Этапа 2 (минут до старта): свой у события или глобальный дефолт —
+    // фронт показывает «подтверждение мест за N ч», не хардкодя порог (урок confirmedDeclineDeadline).
+    // null = открытая встреча (гонки за места нет, интервал не настраивается; технический флип
+    // статуса у неё всё же происходит — по глобальному дефолту).
+    val stage2LeadMinutes: Int?,
     val status: String,
     val goingCount: Int,
     val maybeCount: Int,
@@ -134,6 +139,15 @@ data class CreateEventRequest(
     @field:Max(value = 14, message = "Voting opens days before must be at most 14")
     val votingOpensDaysBefore: Int = 14,
 
+    // За сколько МИНУТ до старта событие переходит в Этап 2 (подтверждение мест) — выбор
+    // организатора (V67, решение PO 2026-07-23). null = глобальный дефолт
+    // events.stage2-trigger-minutes-before (18 часов). Пресеты фронта: 6ч/12ч/18ч/24ч/2 дня.
+    // Если до события осталось меньше выбранного — Этап 2 начнётся сразу после создания
+    // (осознанно, форма предупреждает). Диапазон зеркалит CHECK chk_events_stage2_lead_minutes.
+    @field:Min(value = 360, message = "Stage 2 lead must be at least 360 minutes (6 hours)")
+    @field:Max(value = 2880, message = "Stage 2 lead must be at most 2880 minutes (2 days)")
+    val stage2LeadMinutes: Int? = null,
+
     @field:Size(max = 1024, message = "Photo URL must be at most 1024 characters")
     val photoUrl: String? = null
 ) {
@@ -155,6 +169,12 @@ data class CreateEventRequest(
     @get:AssertTrue(message = "Open event must have no participant limit; a regular event requires one")
     val isParticipantLimitConsistent: Boolean
         get() = if (isOpenEvent) participantLimit == null else participantLimit != null
+
+    // Открытая встреча целиком вне двухэтапки — свой lead Этапа 2 для неё бессмысленен и
+    // почти наверняка означает ошибку клиента, а не намерение.
+    @get:AssertTrue(message = "Open event has no stage 2; stage2LeadMinutes is not applicable")
+    val isStage2LeadConsistent: Boolean
+        get() = !isOpenEvent || stage2LeadMinutes == null
 }
 
 

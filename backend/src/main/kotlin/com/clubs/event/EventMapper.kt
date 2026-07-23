@@ -14,7 +14,10 @@ class EventMapper(
     // Порог отказа подтверждённого (минут до старта) — тот же yaml-ключ, что читает
     // Stage2Service.declineCutoffMinutes (единый источник значения на бэке). Нужен, чтобы отдать
     // фронту готовый дедлайн отказа в EventDetailDto вместо дублирования порога хардкодом на клиенте.
-    @Value("\${events.stage2-decline-cutoff-minutes:240}") private val declineCutoffMinutes: Long
+    @Value("\${events.stage2-decline-cutoff-minutes:240}") private val declineCutoffMinutes: Long,
+    // Глобальный дефолт интервала Этапа 2 — тот же yaml-ключ, что читает Stage2Service.
+    // Нужен для эффективного stage2LeadMinutes в EventDetailDto (у события без своего значения).
+    @Value("\${events.stage2-trigger-minutes-before:1080}") private val stage2TriggerMinutesBefore: Long
 ) {
 
     fun toDomain(record: EventsRecord): Event = Event(
@@ -30,6 +33,7 @@ class EventMapper(
         eventDatetime = record.eventDatetime,
         participantLimit = record.participantLimit,
         votingOpensDaysBefore = record.votingOpensDaysBefore ?: DEFAULT_VOTING_OPENS_DAYS_BEFORE,
+        stage2LeadMinutes = record.stage2LeadMinutes,
         status = record.status ?: EventStatus.upcoming,
         stage2Triggered = record.stage_2Triggered ?: false,
         attendanceMarked = record.attendanceMarked ?: false,
@@ -58,6 +62,9 @@ class EventMapper(
         eventDatetime = event.eventDatetime,
         participantLimit = event.participantLimit,
         votingOpensDaysBefore = event.votingOpensDaysBefore,
+        // Эффективное значение: своё у события или глобальный дефолт; у открытой встречи Этапа 2 нет.
+        stage2LeadMinutes = if (event.isOpenEvent) null
+            else event.stage2LeadMinutes ?: stage2TriggerMinutesBefore.toInt(),
         status = event.status.literal,
         goingCount = goingCount,
         maybeCount = maybeCount,

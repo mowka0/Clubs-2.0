@@ -252,6 +252,17 @@ open class Events(
      */
     val LOCATION_HINT: TableField<EventsRecord, String?> = createField(DSL.name("location_hint"), SQLDataType.VARCHAR(200), this, "Опциональное уточнение организатора к месту («Вход со двора, домофон 12»), не входит в адрес. NULL = нет уточнения.")
 
+    /**
+     * The column <code>public.events.stage2_lead_minutes</code>. За сколько
+     * МИНУТ до старта событие переходит в Этап 2 (подтверждение мест); задаёт
+     * организатор при создании. NULL = глобальный дефолт
+     * (events.stage2-trigger-minutes-before, 1080 = 18 часов). Диапазон
+     * 360–2880 (6 часов – 2 дня). Если при создании до события осталось меньше
+     * — Этап 2 начнётся сразу (осознанное поведение, форма предупреждает). Для
+     * открытых встреч (participant_limit IS NULL) не применяется.
+     */
+    val STAGE2_LEAD_MINUTES: TableField<EventsRecord, Int?> = createField(DSL.name("stage2_lead_minutes"), SQLDataType.INTEGER, this, "За сколько МИНУТ до старта событие переходит в Этап 2 (подтверждение мест); задаёт организатор при создании. NULL = глобальный дефолт (events.stage2-trigger-minutes-before, 1080 = 18 часов). Диапазон 360–2880 (6 часов – 2 дня). Если при создании до события осталось меньше — Этап 2 начнётся сразу (осознанное поведение, форма предупреждает). Для открытых встреч (participant_limit IS NULL) не применяется.")
+
     private constructor(alias: Name, aliased: Table<EventsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<EventsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<EventsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -367,6 +378,7 @@ open class Events(
         get(): SkladchinasPath = skladchinas()
     override fun getChecks(): List<Check<EventsRecord>> = listOf(
         Internal.createCheck(this, DSL.name("chk_events_location_pair"), "(((location_lat IS NULL) = (location_lon IS NULL)))", true),
+        Internal.createCheck(this, DSL.name("chk_events_stage2_lead_minutes"), "(((stage2_lead_minutes IS NULL) OR ((stage2_lead_minutes >= 360) AND (stage2_lead_minutes <= 2880))))", true),
         Internal.createCheck(this, DSL.name("events_participant_limit_check"), "((participant_limit > 0))", true),
         Internal.createCheck(this, DSL.name("events_voting_opens_days_before_check"), "(((voting_opens_days_before >= 1) AND (voting_opens_days_before <= 14)))", true)
     )

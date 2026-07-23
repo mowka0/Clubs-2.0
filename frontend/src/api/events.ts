@@ -18,6 +18,9 @@ export interface CreateEventBody {
   // чтобы случайно пропущенный лимит давал 400, а не молча создавал открытую встречу.
   isOpenEvent?: boolean;
   votingOpensDaysBefore?: number;
+  // За сколько минут до старта откроется подтверждение мест (Этап 2), 360..2880.
+  // Не задан = дефолт сервера (18 ч). Для открытой встречи не передаётся (бэкенд отдаст 400).
+  stage2LeadMinutes?: number;
   photoUrl?: string;
 }
 

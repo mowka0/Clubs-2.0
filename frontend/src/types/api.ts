@@ -544,6 +544,9 @@ export interface EventDetailDto {
   // null = открытая встреча (V62) — счёт показывается без знаменателя.
   participantLimit: number | null;
   votingOpensDaysBefore: number;
+  // Эффективный интервал Этапа 2 (минут до старта): свой у события или глобальный дефолт бэка —
+  // фронт порог не хардкодит (тот же урок, что confirmedDeclineDeadline). null = открытая встреча.
+  stage2LeadMinutes: number | null;
   status: string;
   goingCount: number;
   maybeCount: number;

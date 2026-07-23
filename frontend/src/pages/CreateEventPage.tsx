@@ -17,6 +17,18 @@ const LOCATION_HINT_MAX = 200;
 const PARTICIPANT_MIN = 1;
 const PARTICIPANT_MAX = 1000;
 
+// Пресеты интервала Этапа 2 (за сколько до старта открывается подтверждение мест), в минутах.
+// Значения зеркалят CHECK 360..2880 (V67) и @Min/@Max бэкенда; дефолт 1080 = 18 ч зеркалит
+// events.stage2-trigger-minutes-before.
+const STAGE2_LEAD_PRESETS: { minutes: number; label: string }[] = [
+  { minutes: 360, label: 'за 6 ч' },
+  { minutes: 720, label: 'за 12 ч' },
+  { minutes: 1080, label: 'за 18 ч' },
+  { minutes: 1440, label: 'за 24 ч' },
+  { minutes: 2880, label: 'за 2 дня' },
+];
+const STAGE2_LEAD_DEFAULT = 1080;
+
 // Выбранное в пикере место: точка на карте + адрес из обратного геокодера.
 interface PickedLocation {
   point: GeoPoint;
@@ -49,7 +61,23 @@ export const CreateEventPage: FC = () => {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [eventDatetime, setEventDatetime] = useState('');
   const [participantLimit, setParticipantLimit] = useState(20);
+  // null = организатор интервал не трогал → поле НЕ уходит в body, событие несёт NULL в БД и
+  // следует серверному дефолту (в т.ч. staging-ужимке STAGE2_TRIGGER_MINUTES_BEFORE — она жива
+  // только для NULL-событий). STAGE2_LEAD_DEFAULT здесь — лишь визуальный маркер активного чипа,
+  // фактический дефолт применяет бэкенд.
+  const [stage2LeadMinutes, setStage2LeadMinutes] = useState<number | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const effectiveStage2Lead = stage2LeadMinutes ?? STAGE2_LEAD_DEFAULT;
+
+  // Встреча ближе выбранного интервала → Этап 2 стартует сразу после создания. Разрешаем
+  // осознанно (решение PO 2026-07-23), но честно предупреждаем прямо в форме.
+  const eventTimeMs = eventDatetime ? new Date(eventDatetime).getTime() : null;
+  const stage2StartsImmediately =
+    !isOpenEvent &&
+    eventTimeMs !== null &&
+    !Number.isNaN(eventTimeMs) &&
+    eventTimeMs - Date.now() <= effectiveStage2Lead * 60_000;
 
   if (!clubId) {
     return (
@@ -99,6 +127,9 @@ export const CreateEventPage: FC = () => {
       // Открытая встреча (V62): лимита нет + явный флаг формата — бэкенд валидирует их согласованность.
       participantLimit: isOpenEvent ? null : participantLimit,
       isOpenEvent,
+      // Интервал Этапа 2 — только у событий с местами и только при ЯВНОМ выборе организатора
+      // (null = серверный дефолт); открытая встреча вне двухэтапки.
+      stage2LeadMinutes: isOpenEvent || stage2LeadMinutes === null ? undefined : stage2LeadMinutes,
       photoUrl: photoUrl ?? undefined,
     };
 
@@ -239,6 +270,37 @@ export const CreateEventPage: FC = () => {
               max={PARTICIPANT_MAX}
               ariaLabel="Лимит участников"
             />
+          </div>
+        )}
+
+        {/* Интервал Этапа 2 (V67): у открытой встречи подтверждения мест нет — контрол скрыт. */}
+        {!isOpenEvent && (
+          <div className="rd-field">
+            <span className="rd-label">Подтверждение мест</span>
+            <div className="rd-cat-chips" style={{ marginBottom: 0 }}>
+              {STAGE2_LEAD_PRESETS.map((p) => (
+                <button
+                  key={p.minutes}
+                  type="button"
+                  className={`rd-cat-chip${effectiveStage2Lead === p.minutes ? ' rd-active' : ''}`}
+                  onClick={() => { haptic.select(); setStage2LeadMinutes(p.minutes); }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            {stage2StartsImmediately ? (
+              <span className="rd-hint">
+                ⚠️ До встречи меньше выбранного интервала — подтверждение мест начнётся сразу
+                после создания. Чтобы сначала прошло голосование, выберите интервал короче
+                времени до встречи (минимум — за 6 часов).
+              </span>
+            ) : (
+              <span className="rd-hint">
+                До этого момента идёт голосование «Пойду / Возможно», затем участники
+                подтверждают свои места.
+              </span>
+            )}
           </div>
         )}
 

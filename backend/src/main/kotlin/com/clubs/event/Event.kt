@@ -24,6 +24,9 @@ data class Event(
     // места, листа ожидания, порога и штрафа отказа; формат целиком вне репутации.
     val participantLimit: Int?,
     val votingOpensDaysBefore: Int,
+    // Свой интервал Этапа 2 (минут до старта, V67); null = глобальный дефолт из конфига.
+    // Дефолт null — точечные выборки (findMyFeed) могут не читать колонку.
+    val stage2LeadMinutes: Int? = null,
     val status: EventStatus,
     val stage2Triggered: Boolean,
     val attendanceMarked: Boolean,

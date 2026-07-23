@@ -271,7 +271,7 @@ class Stage2ServiceTest {
         // S2T-2: without this publication nobody learns Stage 2 started and everyone
         // auto-expires at event start.
         val event = event(eventDatetime = OffsetDateTime.now().plusDays(1), status = EventStatus.stage_1)
-        every { eventRepository.findEventsToTriggerStage2(any()) } returns listOf(event)
+        every { eventRepository.findEventsToTriggerStage2(any(), any()) } returns listOf(event)
         justRun { eventRepository.transitionToStage2(eventId) }
 
         service.triggerStage2ForReadyEvents()
@@ -285,7 +285,7 @@ class Stage2ServiceTest {
         // transition — the expiry sweep and completion depend on it — but the confirm window is
         // already closed, so the «Подтвердите участие» DM would be a dead end.
         val event = event(eventDatetime = OffsetDateTime.now().minusMinutes(2), status = EventStatus.stage_1)
-        every { eventRepository.findEventsToTriggerStage2(any()) } returns listOf(event)
+        every { eventRepository.findEventsToTriggerStage2(any(), any()) } returns listOf(event)
         justRun { eventRepository.transitionToStage2(eventId) }
 
         service.triggerStage2ForReadyEvents()
@@ -299,7 +299,7 @@ class Stage2ServiceTest {
         // Этап 1 больше не резервирует места и не формирует очередь: при старте Этапа 2 никто не
         // помечается waitlisted, все места разыгрываются подтверждениями на Этапе 2 (гонка за места).
         val event = event(eventDatetime = OffsetDateTime.now().plusDays(1), status = EventStatus.stage_1)
-        every { eventRepository.findEventsToTriggerStage2(any()) } returns listOf(event)
+        every { eventRepository.findEventsToTriggerStage2(any(), any()) } returns listOf(event)
         justRun { eventRepository.transitionToStage2(eventId) }
 
         service.triggerStage2ForReadyEvents()

@@ -114,6 +114,10 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
         set(value): Unit = set(22, value)
         get(): String? = get(22) as String?
 
+    open var stage2LeadMinutes: Int?
+        set(value): Unit = set(23, value)
+        get(): Int? = get(23) as Int?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -123,7 +127,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
     /**
      * Create a detached, initialised EventsRecord
      */
-    constructor(id: UUID? = null, clubId: UUID, createdBy: UUID, title: String, description: String? = null, locationText: String? = null, eventDatetime: OffsetDateTime, participantLimit: Int? = null, votingOpensDaysBefore: Int? = null, status: EventStatus? = null, stage_2Triggered: Boolean? = null, attendanceMarked: Boolean? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, photoUrl: String? = null, reputationProcessed: Boolean? = null, attendanceReminderSent: Boolean? = null, attendanceMarkedAt: OffsetDateTime? = null, cancellationReason: String? = null, locationLat: Double? = null, locationLon: Double? = null, locationHint: String? = null): this() {
+    constructor(id: UUID? = null, clubId: UUID, createdBy: UUID, title: String, description: String? = null, locationText: String? = null, eventDatetime: OffsetDateTime, participantLimit: Int? = null, votingOpensDaysBefore: Int? = null, status: EventStatus? = null, stage_2Triggered: Boolean? = null, attendanceMarked: Boolean? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, photoUrl: String? = null, reputationProcessed: Boolean? = null, attendanceReminderSent: Boolean? = null, attendanceMarkedAt: OffsetDateTime? = null, cancellationReason: String? = null, locationLat: Double? = null, locationLon: Double? = null, locationHint: String? = null, stage2LeadMinutes: Int? = null): this() {
         this.id = id
         this.clubId = clubId
         this.createdBy = createdBy
@@ -147,6 +151,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
         this.locationLat = locationLat
         this.locationLon = locationLon
         this.locationHint = locationHint
+        this.stage2LeadMinutes = stage2LeadMinutes
         resetChangedOnNotNull()
     }
 
@@ -178,6 +183,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
             this.locationLat = value.locationLat
             this.locationLon = value.locationLon
             this.locationHint = value.locationHint
+            this.stage2LeadMinutes = value.stage2LeadMinutes
             resetChangedOnNotNull()
         }
     }

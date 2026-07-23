@@ -289,4 +289,15 @@ open class EventsDao(configuration: Configuration?) : DAOImpl<EventsRecord, com.
      * Fetch records that have <code>location_hint IN (values)</code>
      */
     fun fetchByLocationHint(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.LOCATION_HINT, *values)
+
+    /**
+     * Fetch records that have <code>stage2_lead_minutes BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfStage2LeadMinutes(lowerInclusive: Int?, upperInclusive: Int?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.STAGE2_LEAD_MINUTES, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>stage2_lead_minutes IN (values)</code>
+     */
+    fun fetchByStage2LeadMinutes(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.STAGE2_LEAD_MINUTES, *values.toTypedArray())
 }

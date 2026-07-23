@@ -33,12 +33,8 @@ interface EventRepository {
 
     fun getVoteCounts(eventId: UUID): Map<String, Int>
 
-    /**
-     * События, готовые перейти в Этап 2: всё ещё `upcoming`, ещё не запущены и начинаются в
-     * момент [cutoff] или раньше. Вызывающий код вычисляет cutoff из настраиваемого времени
-     * упреждения, чтобы staging мог сократить его для end-to-end тестирования двухэтапного флоу.
-     */
-    fun findEventsToTriggerStage2(cutoff: OffsetDateTime): List<Event>
+    /** События, готовые к Этапу 2: до старта ≤ их собственного lead (или [defaultLeadMinutes] при NULL). */
+    fun findEventsToTriggerStage2(now: OffsetDateTime, defaultLeadMinutes: Long): List<Event>
 
     fun findNextUpcomingEvent(now: OffsetDateTime): Event?
 

@@ -38,6 +38,7 @@ class JooqEventRepository(
             .set(EVENTS.EVENT_DATETIME, request.eventDatetime)
             .set(EVENTS.PARTICIPANT_LIMIT, request.participantLimit)
             .set(EVENTS.VOTING_OPENS_DAYS_BEFORE, request.votingOpensDaysBefore)
+            .set(EVENTS.STAGE2_LEAD_MINUTES, request.stage2LeadMinutes)
             .set(EVENTS.STATUS, EventStatus.upcoming)
             .set(EVENTS.STAGE_2_TRIGGERED, false)
             .set(EVENTS.ATTENDANCE_MARKED, false)
@@ -302,12 +303,22 @@ class JooqEventRepository(
         return mapOf("going" to going, "maybe" to maybe, "notGoing" to notGoing, "confirmed" to confirmed)
     }
 
-    override fun findEventsToTriggerStage2(cutoff: OffsetDateTime): List<Event> =
+    override fun findEventsToTriggerStage2(now: OffsetDateTime, defaultLeadMinutes: Long): List<Event> =
         dsl.selectFrom(EVENTS)
             .where(
                 EVENTS.STATUS.eq(EventStatus.upcoming)
                     .and(EVENTS.STAGE_2_TRIGGERED.eq(false))
-                    .and(EVENTS.EVENT_DATETIME.lessOrEqual(cutoff))
+                    // Пер-событийный интервал Этапа 2 (V67): событие «готово», когда до старта
+                    // осталось ≤ его собственного lead (или глобального дефолта при NULL).
+                    .and(
+                        DSL.condition(
+                            "{0} - (COALESCE({1}, {2}) * INTERVAL '1 minute') <= {3}",
+                            EVENTS.EVENT_DATETIME,
+                            EVENTS.STAGE2_LEAD_MINUTES,
+                            DSL.value(defaultLeadMinutes),
+                            DSL.value(now)
+                        )
+                    )
             )
             .fetch()
             .map(mapper::toDomain)

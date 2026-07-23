@@ -560,6 +560,10 @@ interface CreateActivityPickerProps {
   блокируется. Спека: [`event-geo.md`](./event-geo.md)
 - `eventDatetime` (datetime-local, required, future) — `<input type="datetime-local">` обёрнут в `.brand-datetime` (стилизованный wrapper + brass calendar icon; нативный picker сохранён)
 - `participantLimit` (int, required, > 0) — `BrandStepper` (`[− N +]`), не `<input type="number">` (итерация 2)
+- «Подтверждение мест» (V67, 2026-07-23) — чипы-пресеты интервала Этапа 2 («за 6 ч · 12 ч ·
+  18 ч · 24 ч · 2 дня», дефолт 18 ч) → `stage2LeadMinutes`; у открытой встречи скрыт. Если до
+  события меньше выбранного — форма предупреждает «подтверждение мест начнётся сразу» и
+  подсказывает интервал от 6 часов. Спека: [`events.md`](./events.md)
 - `votingOpensDaysBefore` — **НЕ показывается в UI вообще**. Backend всегда применяет default 14 (определён в `CreateEventRequest`). Решение: упрощение формы для organizer'а; кастомизация — за отдельной фичей, если когда-нибудь будет реальный запрос.
 
 **Submit:**

@@ -54,7 +54,7 @@ const mockEvent: EventDetailDto = {
   maybeCount: 0,
   notGoingCount: 0,
   confirmedCount: 0,
-  confirmedDeclineDeadline: '2026-05-01T14:00:00Z', abandonedSlotPenaltyPoints: 100,
+  confirmedDeclineDeadline: '2026-05-01T14:00:00Z', abandonedSlotPenaltyPoints: 100, stage2LeadMinutes: 1080,
   attendanceMarked: false,
   attendanceFinalized: false,
   cancellationReason: null,

@@ -21,7 +21,8 @@ class CreateEventRequestValidationTest {
         locationLon: Double? = 37.646488,
         locationHint: String? = null,
         participantLimit: Int? = 20,
-        isOpenEvent: Boolean = false
+        isOpenEvent: Boolean = false,
+        stage2LeadMinutes: Int? = null
     ) = CreateEventRequest(
         title = "Test event",
         description = null,
@@ -32,7 +33,8 @@ class CreateEventRequestValidationTest {
         eventDatetime = OffsetDateTime.now().plusDays(7),
         participantLimit = participantLimit,
         isOpenEvent = isOpenEvent,
-        votingOpensDaysBefore = 14
+        votingOpensDaysBefore = 14,
+        stage2LeadMinutes = stage2LeadMinutes
     )
 
     private fun violatedProperties(request: CreateEventRequest): Set<String> =
@@ -56,6 +58,32 @@ class CreateEventRequestValidationTest {
     fun `request without point AND without hint is rejected`() {
         val violated = violatedProperties(request(locationText = null, locationLat = null, locationLon = null))
         assertTrue("someLocationProvided" in violated)
+    }
+
+    // --- Интервал Этапа 2 (V67): границы 360..2880 и несовместимость с открытой встречей ---
+
+    @Test
+    fun `stage2 lead within bounds passes`() {
+        assertTrue(validator.validate(request(stage2LeadMinutes = 360)).isEmpty())
+        assertTrue(validator.validate(request(stage2LeadMinutes = 2880)).isEmpty())
+    }
+
+    @Test
+    fun `stage2 lead below 6 hours is rejected`() {
+        assertTrue("stage2LeadMinutes" in violatedProperties(request(stage2LeadMinutes = 359)))
+    }
+
+    @Test
+    fun `stage2 lead above 2 days is rejected`() {
+        assertTrue("stage2LeadMinutes" in violatedProperties(request(stage2LeadMinutes = 2881)))
+    }
+
+    @Test
+    fun `stage2 lead on an open event is rejected`() {
+        val violated = violatedProperties(
+            request(participantLimit = null, isOpenEvent = true, stage2LeadMinutes = 720)
+        )
+        assertTrue("stage2LeadConsistent" in violated)
     }
 
     @Test

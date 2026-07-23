@@ -43,8 +43,9 @@ class Stage2Service(
     @Scheduled(fixedDelayString = "\${events.stage2-poll-ms:60000}")
     @Transactional
     fun triggerStage2ForReadyEvents() {
-        val cutoff = OffsetDateTime.now().plusMinutes(stage2TriggerMinutesBefore)
-        val events = eventRepository.findEventsToTriggerStage2(cutoff)
+        // Интервал пер-событийный (V67): сравнение «пора ли» ушло в SQL (COALESCE со своим lead),
+        // конфиг отдаём как дефолт для событий без собственного значения.
+        val events = eventRepository.findEventsToTriggerStage2(OffsetDateTime.now(), stage2TriggerMinutesBefore)
         events.forEach { event ->
             try {
                 triggerStage2(event)
