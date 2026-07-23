@@ -59,6 +59,14 @@ export function cancelEvent(eventId: string, reason?: string): Promise<EventDeta
   return apiClient.post<EventDetailDto>(`/api/events/${eventId}/cancel`, reason ? { reason } : undefined);
 }
 
+/**
+ * Перенос даты/времени события организатором. Бэкенд разрешает только на Этапе 1
+ * (status=upcoming): с началом подтверждения мест — 409. eventDatetime — ISO-строка (UTC).
+ */
+export function rescheduleEvent(eventId: string, eventDatetime: string): Promise<EventDetailDto> {
+  return apiClient.post<EventDetailDto>(`/api/events/${eventId}/reschedule`, { eventDatetime });
+}
+
 export function castVote(eventId: string, vote: string): Promise<{ eventId: string; vote: string; goingCount: number; maybeCount: number; notGoingCount: number }> {
   return apiClient.post(`/api/events/${eventId}/vote`, { vote });
 }

@@ -16,7 +16,7 @@ vi.mock('../../telegram/sdk', () => ({
   getInitDataRaw: () => 'test-init-data',
 }));
 
-import { useCastVoteMutation, useEventQuery } from '../../queries/events';
+import { useCastVoteMutation, useEventQuery, useRescheduleEventMutation } from '../../queries/events';
 import { queryKeys } from '../../queries/queryKeys';
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
@@ -97,5 +97,51 @@ describe('useCastVoteMutation', () => {
 
     const state = client.getQueryState(queryKeys.events.detail('evt-1'));
     expect(state?.isInvalidated).toBe(true);
+  });
+});
+
+describe('useRescheduleEventMutation', () => {
+  it('posts the new datetime and invalidates event detail cache on success', async () => {
+    let sentBody: unknown = null;
+    server.use(
+      http.post('*/api/events/:id/reschedule', async ({ request }) => {
+        sentBody = await request.json();
+        return HttpResponse.json({ ...mockEvent, eventDatetime: '2026-05-03T18:00:00Z' });
+      }),
+    );
+
+    const client = makeClient();
+    client.setQueryData(queryKeys.events.detail('evt-1'), mockEvent);
+
+    const { result } = renderHook(() => useRescheduleEventMutation(), {
+      wrapper: makeWrapper(client),
+    });
+
+    result.current.mutate({ eventId: 'evt-1', clubId: 'club-1', eventDatetime: '2026-05-03T18:00:00Z' });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(sentBody).toEqual({ eventDatetime: '2026-05-03T18:00:00Z' });
+    const state = client.getQueryState(queryKeys.events.detail('evt-1'));
+    expect(state?.isInvalidated).toBe(true);
+  });
+
+  it('surfaces a 409 (stage 2 already started) as a mutation error', async () => {
+    server.use(
+      http.post('*/api/events/:id/reschedule', () =>
+        HttpResponse.json(
+          { message: 'Событие нельзя перенести: подтверждение мест уже началось, событие прошло или отменено' },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    const client = makeClient();
+    const { result } = renderHook(() => useRescheduleEventMutation(), {
+      wrapper: makeWrapper(client),
+    });
+
+    result.current.mutate({ eventId: 'evt-1', clubId: 'club-1', eventDatetime: '2026-05-03T18:00:00Z' });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toContain('подтверждение мест уже началось');
   });
 });

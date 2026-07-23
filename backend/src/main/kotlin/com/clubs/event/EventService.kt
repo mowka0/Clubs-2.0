@@ -100,4 +100,36 @@ class EventService(
         eventPublisher.publishEvent(EventCancelledEvent(event, normalizedReason))
         return getEvent(eventId)
     }
+
+    /**
+     * Перенос даты/времени события (решение PO 2026-07-23): только организатор/со-орг и только
+     * на Этапе 1 — с началом подтверждения мест (Этап 2) любое редактирование запрещено,
+     * подтвердившие обещали прийти в конкретное время. SQL-guard (status=upcoming AND
+     * stage_2_triggered=false AND event_datetime > now) даёт 0 строк ⇒ 409 для события
+     * в Этапе 2 / срочного / начавшегося / завершённого / отменённого. Дата ближе интервала
+     * Этапа 2 намеренно НЕ отклоняется — как при создании: событие просто перейдёт в Этап 2
+     * ближайшим тиком шедулера.
+     */
+    @Transactional
+    fun rescheduleEvent(eventId: UUID, userId: UUID, request: RescheduleEventRequest): EventDetailDto {
+        val event = eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
+        val club = clubRepository.findById(event.clubId) ?: throw NotFoundException("Club not found")
+        // Менеджерский гейт (co-organizers): владелец или активный со-орг переносит событие.
+        clubRoleGuard.requireCapability(club, userId, ClubCapability.MANAGE_EVENTS)
+
+        if (eventRepository.rescheduleEvent(eventId, request.eventDatetime) == 0) {
+            throw ConflictException("Событие нельзя перенести: подтверждение мест уже началось, событие прошло или отменено")
+        }
+
+        log.info(
+            "Event rescheduled: id={} userId={} from={} to={}",
+            eventId, userId, event.eventDatetime, request.eventDatetime
+        )
+        // AFTER_COMMIT-слушатель (EventRescheduledListener) шлёт пост в чат + DM. Публикация
+        // внутри транзакции — при откате уведомление не уходит (паттерн cancelEvent).
+        eventPublisher.publishEvent(
+            EventRescheduledEvent(event.copy(eventDatetime = request.eventDatetime), oldDatetime = event.eventDatetime)
+        )
+        return getEvent(eventId)
+    }
 }

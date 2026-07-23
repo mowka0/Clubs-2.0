@@ -196,3 +196,16 @@ data class CancelEventRequest(
     @field:Size(max = 500)
     val reason: String? = null
 )
+
+/**
+ * Перенос даты/времени события организатором (решение PO 2026-07-23): разрешён ТОЛЬКО на
+ * Этапе 1 (status=upcoming) — с началом подтверждения мест (Этап 2) любое редактирование
+ * запрещено, у срочной встречи (сразу stage_2) переноса нет вовсе. Прочие поля события
+ * не редактируются. Дата ближе интервала Этапа 2 не блокируется — как при создании,
+ * событие просто перейдёт в Этап 2 ближайшим тиком шедулера.
+ */
+data class RescheduleEventRequest(
+    @field:NotNull(message = "Event datetime is required")
+    @field:Future(message = "Event datetime must be in the future")
+    val eventDatetime: OffsetDateTime
+)

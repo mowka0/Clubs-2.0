@@ -225,6 +225,31 @@ class NotificationService(
     }
 
     /**
+     * Перенос даты события (только Этап 1). О переносе сообщаем ВСЕМ участникам клуба с доступом —
+     * симметрично sendEventCreated/sendEventCancelled: кто узнал о создании, узнаёт и о новой дате.
+     * [event] несёт уже новую дату; [oldDatetime] — прежняя, для строки «Было → Стало».
+     * [chatPostChatId] — чат, куда фактически вышел пост о переносе; его участникам DM не шлём.
+     */
+    fun sendEventRescheduled(event: Event, oldDatetime: java.time.OffsetDateTime, chatPostChatId: Long? = null) {
+        val recipientTelegramIds = chatAwareBroadcast.dmTargets(
+            chatPostChatId, membershipRepository.findMemberTelegramIds(event.clubId)
+        )
+        if (recipientTelegramIds.isEmpty()) {
+            log.info("Event-rescheduled DM SKIPPED — all covered by chat or no members, clubId={}", event.clubId)
+            return
+        }
+        log.info("Event-rescheduled DM: eventId={} clubId={} recipients={}", event.id, event.clubId, recipientTelegramIds.size)
+        val text = "📅 Встреча перенесена\n\n" +
+            "📌 ${event.title}\n" +
+            "Было: ${oldDatetime.format(fmt)}\n" +
+            "Стало: ${event.eventDatetime.format(fmt)}"
+        val webAppPath = "/events/${event.id}"
+        recipientTelegramIds.forEach { telegramId ->
+            sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
+        }
+    }
+
+    /**
      * Напоминание Feature B (~через 24ч после события): подталкивает организатора отметить явку.
      * Пока он это не сделает, репутация по событию не финализируется (см. events.md, EXP-2).
      */

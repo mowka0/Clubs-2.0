@@ -1027,13 +1027,14 @@ AwardService (AFTER_COMMIT, @Async, best-effort): пересчёт тега = la
 
 Реализация: `ChatAwareBroadcast.dmTargets(chatPostChatId?, telegramIds)`. Чат-пост и DM
 идут **последовательно в одном @Async-потоке** (оркестраторы `EventBotNotifier`,
-`EventCancelledListener`, `SkladchinaBotNotifier`) — два независимых листенера гонялись бы
-и давали двойной пинг.
+`EventCancelledListener`, `EventRescheduledListener`, `SkladchinaBotNotifier`) — два
+независимых листенера гонялись бы и давали двойной пинг.
 
 | Рассылка | Пост в чат (гейт) | DM |
 |---|---|---|
 | Событие создано | статус живого закрепа (`live_pin_enabled`) | только не-в-чате |
 | Событие отменено | громкий пост об отмене (`live_pin_enabled`) + тихая правка закрепа | только не-в-чате |
+| Дата перенесена (Этап 1) | громкий пост «было → стало» (`live_pin_enabled`) + dirty-флаг закрепа | только не-в-чате |
 | Складчина создана | живой статус сбора (`skladchina_status_enabled`) | только не-в-чате |
 | Складчина: напоминание T-24ч | пост с @-меншенами (`skladchina_status_enabled`) | только не-в-чате (и упомянутым сверх капа 15) |
 

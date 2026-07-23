@@ -223,6 +223,72 @@ class EventServiceTest {
         verify(exactly = 0) { eventPublisher.publishEvent(any()) }
     }
 
+    @Test
+    fun `rescheduleEvent updates the date and publishes EventRescheduledEvent with old and new datetime`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        val newDatetime = event.eventDatetime.plusDays(2)
+        every { eventRepository.findById(event.id) } returns event
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        every { eventRepository.rescheduleEvent(event.id, newDatetime) } returns 1
+
+        eventService.rescheduleEvent(event.id, ownerId, RescheduleEventRequest(newDatetime))
+
+        verify(exactly = 1) { eventRepository.rescheduleEvent(event.id, newDatetime) }
+        verify(exactly = 1) {
+            eventPublisher.publishEvent(
+                EventRescheduledEvent(event.copy(eventDatetime = newDatetime), oldDatetime = event.eventDatetime)
+            )
+        }
+    }
+
+    @Test
+    fun `rescheduleEvent throws Forbidden when caller is not the organizer`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { eventRepository.findById(event.id) } returns event
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+
+        assertThrows<ForbiddenException> {
+            eventService.rescheduleEvent(event.id, UUID.randomUUID(), RescheduleEventRequest(event.eventDatetime.plusDays(2)))
+        }
+
+        verify(exactly = 0) { eventRepository.rescheduleEvent(any(), any()) }
+        verify(exactly = 0) { eventPublisher.publishEvent(any()) }
+    }
+
+    @Test
+    fun `rescheduleEvent throws Conflict when the event is not reschedulable (guard yields 0 rows)`() {
+        // 0 строк от SQL-guard: событие в stage_2 (в т.ч. срочное), начавшееся, completed или cancelled.
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { eventRepository.findById(event.id) } returns event
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        every { eventRepository.rescheduleEvent(event.id, any()) } returns 0
+
+        assertThrows<ConflictException> {
+            eventService.rescheduleEvent(event.id, ownerId, RescheduleEventRequest(event.eventDatetime.plusDays(2)))
+        }
+
+        verify(exactly = 0) { eventPublisher.publishEvent(any()) }
+    }
+
+    @Test
+    fun `rescheduleEvent throws NotFound when the event is missing`() {
+        val eventId = UUID.randomUUID()
+        every { eventRepository.findById(eventId) } returns null
+
+        assertThrows<NotFoundException> {
+            eventService.rescheduleEvent(eventId, UUID.randomUUID(), RescheduleEventRequest(OffsetDateTime.now().plusDays(2)))
+        }
+
+        verify(exactly = 0) { eventRepository.rescheduleEvent(any(), any()) }
+        verify(exactly = 0) { eventPublisher.publishEvent(any()) }
+    }
+
     private fun request() = CreateEventRequest(
         title = "Test event",
         description = null,

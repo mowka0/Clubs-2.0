@@ -25,6 +25,7 @@ import {
   useMyAttendanceQuery,
   useMyVoteQuery,
   useCancelEventMutation,
+  useRescheduleEventMutation,
   useResolveDisputeMutation,
 } from '../queries/events';
 
@@ -61,6 +62,17 @@ function formatEventDate(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+/**
+ * ISO (UTC) → значение для input[type=datetime-local] в ЛОКАЛЬНОМ поясе устройства
+ * («YYYY-MM-DDTHH:mm»). toISOString() не подходит: он вернул бы UTC-время, и пикер
+ * показал бы организатору сдвинутые часы.
+ */
+function toDatetimeLocalValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export const EventPage: FC = () => {
@@ -116,6 +128,7 @@ export const EventPage: FC = () => {
   const disputeMutation = useDisputeAttendanceMutation();
   const resolveMutation = useResolveDisputeMutation();
   const cancelMutation = useCancelEventMutation();
+  const rescheduleMutation = useRescheduleEventMutation();
 
   // Два отдельных канала ошибок: actionError — для голоса/подтверждения/отказа, attendanceError —
   // для отметки явки. actionError рендерится ровно в одном слоте на фазу — блок голосования Этапа 1
@@ -132,6 +145,10 @@ export const EventPage: FC = () => {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelError, setCancelError] = useState<string | null>(null);
+  // Шторка переноса даты (только Этап 1): значение datetime-local и собственный слот ошибки.
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [rescheduleValue, setRescheduleValue] = useState('');
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
   // Инлайн-подтверждение отказа от подтверждённого места (защита от случайного клика).
   const [confirmingDecline, setConfirmingDecline] = useState(false);
 
@@ -278,6 +295,39 @@ export const EventPage: FC = () => {
     );
   };
 
+  // Перенос даты (только Этап 1). Открытие шторки предзаполняет пикер текущей датой события.
+  const openReschedule = () => {
+    if (!event) return;
+    haptic.impact('medium');
+    setRescheduleError(null);
+    setRescheduleValue(toDatetimeLocalValue(event.eventDatetime));
+    setRescheduleOpen(true);
+  };
+
+  const handleRescheduleEvent = () => {
+    if (!id || !event || rescheduleMutation.isPending) return;
+    setRescheduleError(null);
+    if (!rescheduleValue) { setRescheduleError('Укажите дату и время'); haptic.notify('error'); return; }
+    const newDate = new Date(rescheduleValue);
+    if (Number.isNaN(newDate.getTime())) { setRescheduleError('Некорректная дата'); haptic.notify('error'); return; }
+    if (newDate.getTime() <= Date.now()) { setRescheduleError('Дата события должна быть в будущем'); haptic.notify('error'); return; }
+    haptic.impact('medium');
+    rescheduleMutation.mutate(
+      { eventId: id, clubId: event.clubId, eventDatetime: newDate.toISOString() },
+      {
+        onSuccess: () => {
+          haptic.notify('success');
+          setRescheduleOpen(false);
+          setToastMessage('Встреча перенесена');
+        },
+        onError: (e) => {
+          setRescheduleError(e.message);
+          haptic.notify('error');
+        },
+      },
+    );
+  };
+
   if (loading) {
     return (
       <div className="rd-page" style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
@@ -342,6 +392,18 @@ export const EventPage: FC = () => {
   // до часового completion-прохода, поэтому гейтим ещё и по !eventHappened — зеркалит
   // бэкенд-гард `event_datetime > now` в Stage2Service. См. events.md.
   const showStage2 = event.status === 'stage_2' && !eventHappened;
+
+  // Перенос даты: новая дата ближе интервала Этапа 2 — не блокируем (паритет с созданием),
+  // но предупреждаем, что подтверждение мест начнётся сразу. stage2LeadMinutes с бэка уже
+  // эффективный (свой или дефолт); null = открытая встреча — предупреждение не нужно.
+  const rescheduleTimeMs = rescheduleValue ? new Date(rescheduleValue).getTime() : null;
+  const rescheduleStage2Immediate =
+    event.stage2LeadMinutes != null &&
+    rescheduleTimeMs !== null && !Number.isNaN(rescheduleTimeMs) &&
+    rescheduleTimeMs > Date.now() &&
+    rescheduleTimeMs - Date.now() <= event.stage2LeadMinutes * 60_000;
+  const rescheduleLeadLabel =
+    event.stage2LeadMinutes != null ? formatLeadInterval(event.stage2LeadMinutes) : null;
 
   // «Путь назад», вариант C (reputation-path-back.md AC-8): строка-мотиватор «придёте — надёжность
   // вырастет» при просадке Trust в клубе события. Скрыта у терминальных статусов: confirmed уже
@@ -930,9 +992,21 @@ export const EventPage: FC = () => {
         </>
       )}
 
-      {/* Отмена события (F5-14) — только организатор, до начала события. */}
+      {/* Организаторские действия до старта: перенос даты — только на Этапе 1 (с началом
+          подтверждения мест редактирование запрещено, гейт зеркалит бэкенд-гард
+          rescheduleEvent) — и отмена события (F5-14). */}
       {isManager && !isCancelled && !eventHappened && (
         <div className="rd-cta-wrap" style={{ marginTop: 8 }}>
+          {showVoting && (
+            <button
+              type="button"
+              className="rd-btn-outline"
+              style={{ marginBottom: 8 }}
+              onClick={openReschedule}
+            >
+              Перенести встречу
+            </button>
+          )}
           <button
             type="button"
             className="rd-btn-outline"
@@ -942,6 +1016,57 @@ export const EventPage: FC = () => {
             Отменить событие
           </button>
         </div>
+      )}
+
+      {rescheduleOpen && createPortal(
+        <>
+          <div className="rd-sheet-overlay" onClick={() => setRescheduleOpen(false)} aria-hidden="true" />
+          <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Перенос встречи">
+            <div className="rd-sheet-grabber" aria-hidden="true" />
+            <div className="rd-sheet-head">
+              <h2>Перенести встречу</h2>
+              <button type="button" className="rd-sheet-close" onClick={() => setRescheduleOpen(false)}>Закрыть</button>
+            </div>
+            <div className="rd-sheet-body">
+              <div className="rd-body-text" style={{ marginTop: 0 }}>
+                Участники получат уведомление о новой дате. Перенос возможен только до начала
+                подтверждения мест.
+              </div>
+              <label className="rd-field">
+                <span className="rd-label">Новая дата и время</span>
+                <div className="rd-datetime">
+                  <input
+                    className="rd-input"
+                    type="datetime-local"
+                    value={rescheduleValue}
+                    onChange={(e) => setRescheduleValue(e.target.value)}
+                  />
+                </div>
+              </label>
+              {rescheduleStage2Immediate && rescheduleLeadLabel && (
+                <div className="rd-body-text">
+                  ⚡️ До встречи меньше интервала подтверждения (за {rescheduleLeadLabel}) —
+                  подтверждение мест начнётся сразу после переноса.
+                </div>
+              )}
+              {rescheduleError && <div className="rd-error">{rescheduleError}</div>}
+              <div className="rd-cta-wrap">
+                <button
+                  type="button"
+                  className="rd-btn-primary"
+                  onClick={handleRescheduleEvent}
+                  disabled={rescheduleMutation.isPending}
+                >
+                  {rescheduleMutation.isPending ? <Spinner size="s" /> : 'Перенести'}
+                </button>
+                <button type="button" className="rd-btn-outline" style={{ marginTop: 8 }} onClick={() => setRescheduleOpen(false)}>
+                  Назад
+                </button>
+              </div>
+            </div>
+          </div>
+        </>,
+        document.body,
       )}
 
       {cancelOpen && createPortal(

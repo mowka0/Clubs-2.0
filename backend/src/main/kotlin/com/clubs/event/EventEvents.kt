@@ -1,5 +1,6 @@
 package com.clubs.event
 
+import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
@@ -17,6 +18,14 @@ data class EventCreatedEvent(val event: Event)
  * Несёт только идентификаторы — слушатель дозапросит событие и telegram id по закоммиченному состоянию.
  */
 data class WaitlistPromotedEvent(val eventId: UUID, val promotedUserId: UUID)
+
+/**
+ * Публикуется при переносе даты/времени события (разрешён только на Этапе 1).
+ * [event] несёт уже НОВУЮ дату; [oldDatetime] — прежняя, для текста «было → стало».
+ * Слушатель (EventRescheduledListener) на AFTER_COMMIT: громкий пост в чат + DM участникам,
+ * которых пост не покрыл, + dirty-флаг закрепа (дата в нём перерисуется flush-проходом).
+ */
+data class EventRescheduledEvent(val event: Event, val oldDatetime: OffsetDateTime)
 
 /**
  * Публикуется при любом изменении ростера события, видимом в «живом закрепе» чата:

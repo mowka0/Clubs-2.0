@@ -414,6 +414,24 @@ class JooqEventRepository(
             )
             .execute()
 
+    override fun rescheduleEvent(eventId: UUID, newDatetime: OffsetDateTime): Int =
+        dsl.update(EVENTS)
+            .set(EVENTS.EVENT_DATETIME, newDatetime)
+            .set(EVENTS.UPDATED_AT, OffsetDateTime.now())
+            .where(
+                EVENTS.ID.eq(eventId)
+                    // Только Этап 1: с началом подтверждения мест перенос запрещён. Условие по
+                    // stage_2_triggered закрывает гонку с шедулером Stage2Service: его flip
+                    // в параллельной транзакции даёт здесь 0 строк ⇒ 409, а не тихий сдвиг
+                    // даты уже открытого подтверждения.
+                    .and(EVENTS.STATUS.eq(EventStatus.upcoming))
+                    .and(EVENTS.STAGE_2_TRIGGERED.eq(false))
+                    // Начавшееся (но ещё не completed по крону) событие не переносится задним
+                    // числом — зеркалит guard cancelEvent.
+                    .and(EVENTS.EVENT_DATETIME.greaterThan(OffsetDateTime.now()))
+            )
+            .execute()
+
     override fun markAttendanceMarked(id: UUID): Int =
         dsl.update(EVENTS)
             .set(EVENTS.ATTENDANCE_MARKED, true)

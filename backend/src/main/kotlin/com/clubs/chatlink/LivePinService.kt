@@ -88,6 +88,25 @@ class LivePinService(
     }
 
     /**
+     * Перенос даты (только Этап 1): громкий пост «было → стало» + dirty-флаг закрепа
+     * (дата в нём перерисуется flush-проходом; правки закрепа Telegram не уведомляют,
+     * так что пост — единственный пинг участников чата). Возвращает chatId, когда пост
+     * фактически вышел, — для DM-фоллбека маршрутизатора (как onEventCancelled).
+     */
+    @Transactional
+    fun onEventRescheduled(event: Event, oldDatetime: OffsetDateTime): Long? {
+        markDirty(event.id)
+        val link = liveLinkFor(event.clubId) ?: return null
+        val messageId = gateway.sendGroupMessageWithUrlButton(
+            chatId = link.chatId,
+            text = renderer.rescheduledText(event, oldDatetime),
+            buttonText = null,
+            url = null
+        )
+        return if (messageId != null) link.chatId else null
+    }
+
+    /**
      * Первая отметка явки: пост-итог (кадр C мокапа) — ровно один раз на событие
      * (атомарный claim в event_chat_pins защищает от дублей при повторных отметках).
      */

@@ -67,6 +67,20 @@ class EventController(
         return ResponseEntity.ok(eventService.cancelEvent(id, user.userId, request?.reason))
     }
 
+    /**
+     * Перенос даты/времени события — только на Этапе 1. Капабилити-гейт (MANAGE_EVENTS)
+     * проверяет сервис: в URL нет clubId для аннотации @RequiresCapability (как у /cancel).
+     */
+    @PostMapping("/api/events/{id}/reschedule")
+    fun rescheduleEvent(
+        @PathVariable id: UUID,
+        @RequestBody @Valid request: RescheduleEventRequest,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<EventDetailDto> {
+        log.info("Reschedule event: eventId={} userId={}", id, user.userId)
+        return ResponseEntity.ok(eventService.rescheduleEvent(id, user.userId, request))
+    }
+
     @PostMapping("/api/events/{id}/vote")
     fun castVote(
         @PathVariable id: UUID,

@@ -13,6 +13,7 @@ import {
   getMyEvents,
   getMyVote,
   markAttendance,
+  rescheduleEvent,
   resolveDispute,
 } from '../api/events';
 import type { CreateEventBody } from '../api/events';
@@ -214,6 +215,26 @@ export function useCancelEventMutation() {
       qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
       qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });
       // Лента активностей клуба тоже отображает состояние «отменено».
+      qc.invalidateQueries({ queryKey: queryKeys.activities.byClubAll(clubId) });
+    },
+  });
+}
+
+interface RescheduleEventArgs {
+  eventId: string;
+  clubId: string;
+  /** Новая дата/время в ISO (UTC). */
+  eventDatetime: string;
+}
+
+export function useRescheduleEventMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ eventId, eventDatetime }: RescheduleEventArgs) => rescheduleEvent(eventId, eventDatetime),
+    onSuccess: (_data, { eventId, clubId }) => {
+      // Тот же набор, что у отмены: дата видна в деталях, ленте «Активности» и ленте клуба.
+      qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
+      qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });
       qc.invalidateQueries({ queryKey: queryKeys.activities.byClubAll(clubId) });
     },
   });

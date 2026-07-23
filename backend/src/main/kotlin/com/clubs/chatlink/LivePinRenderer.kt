@@ -5,6 +5,7 @@ import com.clubs.event.Event
 import com.clubs.event.locationDisplay
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
+import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -71,6 +72,12 @@ class LivePinRenderer(
             "Событие началось — подтвердили " +
             (event.participantLimit?.let { "$confirmed из $it" } ?: "$confirmed") +
             ". Итог появится после отметки явки."
+
+    /** Громкий пост о переносе даты (только Этап 1): «было → стало»; [event] несёт уже новую дату. */
+    fun rescheduledText(event: Event, oldDatetime: OffsetDateTime): String =
+        "📅 ${event.title} — встреча перенесена\n" +
+            "Было: ${oldDatetime.format(fmt)}\n" +
+            "Стало: ${event.eventDatetime.format(fmt)}"
 
     /** Финальный текст при отмене события. */
     fun cancelledText(event: Event, reason: String?): String {
