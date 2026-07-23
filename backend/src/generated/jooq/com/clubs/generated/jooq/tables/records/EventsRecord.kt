@@ -118,6 +118,12 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
         set(value): Unit = set(23, value)
         get(): Int? = get(23) as Int?
 
+    @Suppress("INAPPLICABLE_JVM_NAME")
+    @set:JvmName("setIsUrgent")
+    open var isUrgent: Boolean?
+        set(value): Unit = set(24, value)
+        get(): Boolean? = get(24) as Boolean?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -127,7 +133,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
     /**
      * Create a detached, initialised EventsRecord
      */
-    constructor(id: UUID? = null, clubId: UUID, createdBy: UUID, title: String, description: String? = null, locationText: String? = null, eventDatetime: OffsetDateTime, participantLimit: Int? = null, votingOpensDaysBefore: Int? = null, status: EventStatus? = null, stage_2Triggered: Boolean? = null, attendanceMarked: Boolean? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, photoUrl: String? = null, reputationProcessed: Boolean? = null, attendanceReminderSent: Boolean? = null, attendanceMarkedAt: OffsetDateTime? = null, cancellationReason: String? = null, locationLat: Double? = null, locationLon: Double? = null, locationHint: String? = null, stage2LeadMinutes: Int? = null): this() {
+    constructor(id: UUID? = null, clubId: UUID, createdBy: UUID, title: String, description: String? = null, locationText: String? = null, eventDatetime: OffsetDateTime, participantLimit: Int? = null, votingOpensDaysBefore: Int? = null, status: EventStatus? = null, stage_2Triggered: Boolean? = null, attendanceMarked: Boolean? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, photoUrl: String? = null, reputationProcessed: Boolean? = null, attendanceReminderSent: Boolean? = null, attendanceMarkedAt: OffsetDateTime? = null, cancellationReason: String? = null, locationLat: Double? = null, locationLon: Double? = null, locationHint: String? = null, stage2LeadMinutes: Int? = null, isUrgent: Boolean? = null): this() {
         this.id = id
         this.clubId = clubId
         this.createdBy = createdBy
@@ -152,6 +158,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
         this.locationLon = locationLon
         this.locationHint = locationHint
         this.stage2LeadMinutes = stage2LeadMinutes
+        this.isUrgent = isUrgent
         resetChangedOnNotNull()
     }
 
@@ -184,6 +191,7 @@ open class EventsRecord private constructor() : UpdatableRecordImpl<EventsRecord
             this.locationLon = value.locationLon
             this.locationHint = value.locationHint
             this.stage2LeadMinutes = value.stage2LeadMinutes
+            this.isUrgent = value.isUrgent
             resetChangedOnNotNull()
         }
     }

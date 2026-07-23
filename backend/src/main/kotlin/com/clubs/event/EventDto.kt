@@ -90,6 +90,8 @@ data class MyEventListItemDto(
     val confirmedCount: Int,
     // null = открытая встреча (V62) — карточка показывает счёт без знаменателя.
     val participantLimit: Int?,
+    // Срочная встреча (V69) — карточка показывает бейдж «⚡ срочная» вместо «🎟 обычная».
+    val isUrgent: Boolean,
     val actionRequired: Boolean,
     // true = прошедшее посещённое событие (секция «История»). Считает бэкенд по бакету ORDER BY.
     // Клиенту ЗАПРЕЩЕНО выводить историчность из status='completed' или eventDatetime<now:

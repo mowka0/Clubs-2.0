@@ -50,11 +50,12 @@ const EventCardBody: FC<{ event: EventActivityDto }> = ({ event }) => {
         {event.descriptionPreview !== null && (
           <div className="rd-ft-sub">{event.descriptionPreview}</div>
         )}
-        {/* Бейдж типа встречи — всегда (PO 2026-07-21: карточка на странице клуба была без типа);
-            статусные чипы (Отменено / call-to-action) — рядом, в той же строке. */}
+        {/* Бейдж типа встречи — всегда (PO 2026-07-21: карточка на странице клуба была без типа;
+            ярлыки срочная/обычная/открытая с эмодзи пикера — PO 2026-07-23); статусные чипы
+            (Отменено / call-to-action) — рядом, в той же строке. */}
         <div className="rd-badges-row">
           <span className="rd-badge rd-neutral">
-            {event.participantLimit == null ? 'Открытая встреча' : 'С местами'}
+            {event.isUrgent ? '⚡ Срочная' : event.participantLimit == null ? '🌊 Открытая' : '🎟 Обычная'}
           </span>
           {event.status === 'cancelled' ? (
             <span className="rd-badge rd-decline">Отменено</span>

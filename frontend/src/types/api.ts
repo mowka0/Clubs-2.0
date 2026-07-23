@@ -739,6 +739,8 @@ export interface MyEventListItemDto {
   confirmedCount: number;
   // null = открытая встреча (V62) — счёт показывается без знаменателя.
   participantLimit: number | null;
+  // Срочная встреча (V69) — бейдж «⚡ СРОЧНАЯ» вместо «🎟 ОБЫЧНАЯ».
+  isUrgent: boolean;
   actionRequired: boolean;
   // Прошедшее посещённое событие (организатор отметил явку). Бакет считает бэкенд.
   // Единственный признак истории: status флипается кроном с лагом до ~7ч

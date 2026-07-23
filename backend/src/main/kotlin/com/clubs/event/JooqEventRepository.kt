@@ -39,6 +39,7 @@ class JooqEventRepository(
             .set(EVENTS.PARTICIPANT_LIMIT, request.participantLimit)
             .set(EVENTS.VOTING_OPENS_DAYS_BEFORE, request.votingOpensDaysBefore)
             .set(EVENTS.STAGE2_LEAD_MINUTES, request.stage2LeadMinutes)
+            .set(EVENTS.IS_URGENT, request.isUrgentEvent)
             .set(EVENTS.STATUS, EventStatus.upcoming)
             .set(EVENTS.STAGE_2_TRIGGERED, false)
             .set(EVENTS.ATTENDANCE_MARKED, false)
@@ -215,6 +216,7 @@ class JooqEventRepository(
             EVENTS.EVENT_DATETIME,
             EVENTS.PARTICIPANT_LIMIT,
             EVENTS.VOTING_OPENS_DAYS_BEFORE,
+            EVENTS.IS_URGENT,
             EVENTS.STATUS,
             EVENTS.STAGE_2_TRIGGERED,
             EVENTS.ATTENDANCE_MARKED,
@@ -266,6 +268,7 @@ class JooqEventRepository(
                 eventDatetime = r.get(EVENTS.EVENT_DATETIME)!!,
                 participantLimit = r.get(EVENTS.PARTICIPANT_LIMIT),
                 votingOpensDaysBefore = r.get(EVENTS.VOTING_OPENS_DAYS_BEFORE) ?: EventMapper.DEFAULT_VOTING_OPENS_DAYS_BEFORE,
+                isUrgent = r.get(EVENTS.IS_URGENT) ?: false,
                 status = r.get(EVENTS.STATUS) ?: EventStatus.upcoming,
                 stage2Triggered = r.get(EVENTS.STAGE_2_TRIGGERED) ?: false,
                 attendanceMarked = r.get(EVENTS.ATTENDANCE_MARKED) ?: false,

@@ -27,6 +27,9 @@ data class Event(
     // Свой интервал Этапа 2 (минут до старта, V67); null = глобальный дефолт из конфига.
     // Дефолт null — точечные выборки (findMyFeed) могут не читать колонку.
     val stage2LeadMinutes: Int? = null,
+    // Срочная встреча (V69): создана без Этапа 1, сразу в stage_2. Только подача (бейдж
+    // «⚡ срочная»), механика как у обычного события с местами.
+    val isUrgent: Boolean = false,
     val status: EventStatus,
     val stage2Triggered: Boolean,
     val attendanceMarked: Boolean,

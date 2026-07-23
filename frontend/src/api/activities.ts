@@ -26,6 +26,8 @@ export interface EventActivityDto extends ActivityBase {
   locationText: string | null;
   // null = открытая встреча (V62) — счёт показывается без знаменателя.
   participantLimit: number | null;
+  // Срочная встреча (V69) — бейдж «⚡ Срочная» вместо «🎟 Обычная».
+  isUrgent: boolean;
   goingCount: number;
   // Размер подтверждённого ростера Этапа 2. Карточка показывает `goingCount` во время stage 1 и
   // переключается на `confirmedCount`, когда голосование закрывается (stage_2/completed), — так же,

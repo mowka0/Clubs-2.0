@@ -34,6 +34,7 @@ class EventMapper(
         participantLimit = record.participantLimit,
         votingOpensDaysBefore = record.votingOpensDaysBefore ?: DEFAULT_VOTING_OPENS_DAYS_BEFORE,
         stage2LeadMinutes = record.stage2LeadMinutes,
+        isUrgent = record.isUrgent ?: false,
         status = record.status ?: EventStatus.upcoming,
         stage2Triggered = record.stage_2Triggered ?: false,
         attendanceMarked = record.attendanceMarked ?: false,
@@ -101,6 +102,7 @@ class EventMapper(
             goingCount = item.goingCount,
             confirmedCount = item.confirmedCount,
             participantLimit = event.participantLimit,
+            isUrgent = event.isUrgent,
             actionRequired = computeActionRequired(item, now),
             isHistory = item.isHistory
         )
