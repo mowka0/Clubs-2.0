@@ -2267,3 +2267,59 @@
 @media (max-width: 359.98px) {
   .rd-chat-panel-ttl { white-space: normal; }
 }
+
+/* ---------- Интервал Этапа 2 в форме события (V67, дизайн PO 2026-07-23) ----------
+   Свёрнуто: тихая строка-факт под датой («Подтверждение мест / за 18 часов · Изменить»).
+   По «Изменить» раскрывается шкала-таймлайн с насечками-пресетами (6 ч → 2 дня):
+   выбор времени показан как время, а не как ряд кнопок. */
+.rd-s2-note {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  margin-top: 2px; padding: 10px 12px;
+  background: var(--surface); border: 1px dashed var(--hairline-2);
+  border-radius: 12px; cursor: pointer; font-family: inherit; text-align: left;
+  color: var(--text-dim); font-size: 12.5px;
+  transition: border-color .2s ease;
+}
+.rd-s2-note:active { border-color: var(--accent); }
+.rd-s2-dot {
+  width: 28px; height: 28px; border-radius: 50%; flex: 0 0 auto;
+  display: grid; place-items: center; font-size: 13px;
+  background: var(--accent-grad); color: var(--on-accent);
+  box-shadow: 0 3px 8px var(--accent-shadow);
+}
+.rd-s2-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.rd-s2-txt b { color: var(--text); font-size: 13.5px; font-weight: 700; }
+.rd-s2-edit { margin-left: auto; color: var(--accent); font-weight: 700; font-size: 12px; white-space: nowrap; }
+
+.rd-s2-timeline { margin-top: 12px; animation: rd-s2-drop .3s cubic-bezier(.2, .9, .3, 1.1); }
+@keyframes rd-s2-drop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.rd-s2-track {
+  position: relative; height: 4px; border-radius: 2px;
+  background: var(--hairline-2); margin: 18px 10px 0;
+}
+.rd-s2-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px;
+  background: var(--accent-grad); box-shadow: 0 0 10px var(--accent-glow);
+  transition: width .25s ease;
+}
+.rd-s2-ticks { display: flex; justify-content: space-between; margin: 0 -2px; }
+.rd-s2-tick {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  min-width: 52px; padding: 0 2px 2px; border: none; background: none; cursor: pointer;
+  font-family: inherit; font-size: 11.5px; font-weight: 600; color: var(--text-faint);
+}
+.rd-s2-knob {
+  width: 14px; height: 14px; border-radius: 50%; margin-top: -9px;
+  background: var(--card-solid); border: 2px solid var(--hairline-2);
+  transition: transform .2s ease, border-color .2s ease;
+}
+.rd-s2-tick.rd-active { color: var(--accent); font-weight: 800; }
+.rd-s2-tick.rd-active .rd-s2-knob {
+  background: var(--accent-grad); border-color: transparent;
+  transform: scale(1.3);
+  box-shadow: 0 0 0 5px var(--accent-soft), 0 4px 10px var(--accent-shadow);
+}
+.rd-s2-warn {
+  display: block; margin-top: 10px; padding: 9px 11px; border-radius: 10px;
+  background: var(--danger-soft); color: var(--danger); line-height: 1.5;
+}

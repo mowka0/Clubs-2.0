@@ -6,6 +6,7 @@ import { BrandStepper } from '../components/BrandStepper';
 import { AvatarUpload } from '../components/AvatarUpload';
 import { LocationPickerSheet } from '../components/event/LocationPickerSheet';
 import { useCreateEventMutation } from '../queries/events';
+import { formatLeadInterval } from '../utils/formatters';
 import type { CreateEventBody } from '../api/events';
 import type { GeoPoint } from '../utils/yandexMaps';
 
@@ -19,13 +20,13 @@ const PARTICIPANT_MAX = 1000;
 
 // Пресеты интервала Этапа 2 (за сколько до старта открывается подтверждение мест), в минутах.
 // Значения зеркалят CHECK 360..2880 (V67) и @Min/@Max бэкенда; дефолт 1080 = 18 ч зеркалит
-// events.stage2-trigger-minutes-before.
-const STAGE2_LEAD_PRESETS: { minutes: number; label: string }[] = [
-  { minutes: 360, label: 'за 6 ч' },
-  { minutes: 720, label: 'за 12 ч' },
-  { minutes: 1080, label: 'за 18 ч' },
-  { minutes: 1440, label: 'за 24 ч' },
-  { minutes: 2880, label: 'за 2 дня' },
+// events.stage2-trigger-minutes-before. short — подпись насечки на шкале-таймлайне.
+const STAGE2_LEAD_PRESETS: { minutes: number; short: string }[] = [
+  { minutes: 360, short: '6 ч' },
+  { minutes: 720, short: '12 ч' },
+  { minutes: 1080, short: '18 ч' },
+  { minutes: 1440, short: '24 ч' },
+  { minutes: 2880, short: '2 дня' },
 ];
 const STAGE2_LEAD_DEFAULT = 1080;
 
@@ -66,9 +67,12 @@ export const CreateEventPage: FC = () => {
   // только для NULL-событий). STAGE2_LEAD_DEFAULT здесь — лишь визуальный маркер активного чипа,
   // фактический дефолт применяет бэкенд.
   const [stage2LeadMinutes, setStage2LeadMinutes] = useState<number | null>(null);
+  // Раскрыта ли шкала выбора интервала (дизайн PO 2026-07-23: свёрнутая строка-факт под датой).
+  const [leadEditorOpen, setLeadEditorOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const effectiveStage2Lead = stage2LeadMinutes ?? STAGE2_LEAD_DEFAULT;
+  const activeLeadIdx = Math.max(0, STAGE2_LEAD_PRESETS.findIndex((p) => p.minutes === effectiveStage2Lead));
 
   // Встреча ближе выбранного интервала → Этап 2 стартует сразу после создания. Разрешаем
   // осознанно (решение PO 2026-07-23), но честно предупреждаем прямо в форме.
@@ -246,7 +250,7 @@ export const CreateEventPage: FC = () => {
           />
         </label>
 
-        <label className="rd-field">
+        <label className="rd-field" style={!isOpenEvent ? { marginBottom: 0 } : undefined}>
           <span className="rd-label">Дата и время <span className="rd-req">*</span></span>
           <div className="rd-datetime">
             <input
@@ -258,6 +262,59 @@ export const CreateEventPage: FC = () => {
             <span className="rd-dt-ico" aria-hidden="true"><CalendarIcon /></span>
           </div>
         </label>
+
+        {/* Интервал Этапа 2 (V67) — визуально привязан к дате; у открытой встречи Этапа 2 нет.
+            Свёрнуто: строка-факт. По «Изменить»: шкала-таймлайн с насечками-пресетами. */}
+        {!isOpenEvent && (
+          <div className="rd-field">
+            <button
+              type="button"
+              className="rd-s2-note"
+              onClick={() => { haptic.impact('light'); setLeadEditorOpen((v) => !v); }}
+            >
+              <span className="rd-s2-dot" aria-hidden="true">🎟</span>
+              <span className="rd-s2-txt">
+                <span>Подтверждение мест</span>
+                <b>за {formatLeadInterval(effectiveStage2Lead)}</b>
+              </span>
+              <span className="rd-s2-edit">{leadEditorOpen ? 'Скрыть' : 'Изменить'}</span>
+            </button>
+            {leadEditorOpen && (
+              <div className="rd-s2-timeline">
+                <div className="rd-s2-track">
+                  <span
+                    className="rd-s2-fill"
+                    style={{ width: `${(activeLeadIdx / (STAGE2_LEAD_PRESETS.length - 1)) * 100}%` }}
+                  />
+                </div>
+                <div className="rd-s2-ticks">
+                  {STAGE2_LEAD_PRESETS.map((p) => (
+                    <button
+                      key={p.minutes}
+                      type="button"
+                      className={`rd-s2-tick${effectiveStage2Lead === p.minutes ? ' rd-active' : ''}`}
+                      onClick={() => { haptic.select(); setStage2LeadMinutes(p.minutes); }}
+                    >
+                      <span className="rd-s2-knob" aria-hidden="true" />
+                      <span>{p.short}</span>
+                    </button>
+                  ))}
+                </div>
+                <span className="rd-hint">
+                  До этого момента идёт голосование «Пойду / Возможно», затем участники
+                  подтверждают свои места.
+                </span>
+              </div>
+            )}
+            {stage2StartsImmediately && (
+              <span className="rd-hint rd-s2-warn">
+                ⚡️ До встречи меньше выбранного интервала — подтверждение мест начнётся сразу
+                после создания. Чтобы сначала прошло голосование, выберите отметку короче
+                времени до встречи (минимум — за 6 часов).
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Открытая встреча: лимита нет — степпер не рендерится вовсе. */}
         {!isOpenEvent && (
@@ -273,36 +330,6 @@ export const CreateEventPage: FC = () => {
           </div>
         )}
 
-        {/* Интервал Этапа 2 (V67): у открытой встречи подтверждения мест нет — контрол скрыт. */}
-        {!isOpenEvent && (
-          <div className="rd-field">
-            <span className="rd-label">Подтверждение мест</span>
-            <div className="rd-cat-chips" style={{ marginBottom: 0 }}>
-              {STAGE2_LEAD_PRESETS.map((p) => (
-                <button
-                  key={p.minutes}
-                  type="button"
-                  className={`rd-cat-chip${effectiveStage2Lead === p.minutes ? ' rd-active' : ''}`}
-                  onClick={() => { haptic.select(); setStage2LeadMinutes(p.minutes); }}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-            {stage2StartsImmediately ? (
-              <span className="rd-hint">
-                ⚠️ До встречи меньше выбранного интервала — подтверждение мест начнётся сразу
-                после создания. Чтобы сначала прошло голосование, выберите интервал короче
-                времени до встречи (минимум — за 6 часов).
-              </span>
-            ) : (
-              <span className="rd-hint">
-                До этого момента идёт голосование «Пойду / Возможно», затем участники
-                подтверждают свои места.
-              </span>
-            )}
-          </div>
-        )}
 
         {submitError && <div className="rd-error">{submitError}</div>}
 

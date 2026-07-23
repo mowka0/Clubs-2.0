@@ -9,7 +9,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useClubQuery, useMyClubsQuery } from '../queries/clubs';
 import { useMyReputationQuery } from '../queries/members';
 import { isActiveManagerMembership } from '../utils/membershipRole';
-import { pluralRu } from '../utils/formatters';
+import { formatLeadInterval } from '../utils/formatters';
 import { useEventSplitStateQuery } from '../queries/skladchina';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { Toast } from '../components/Toast';
@@ -33,19 +33,6 @@ function getInitials(name: string): string {
     .map((w) => w.charAt(0).toUpperCase()).join('');
 }
 
-/**
- * Человекочитаемый интервал Этапа 2 (значение эффективное, с бэка — фронт порог не хардкодит).
- * Кратные суткам значения от 2 дней читаются днями («2 дня»), остальное — часами («18 ч»);
- * ужатый staging-дефолт меньше часа не превращается в «0 ч».
- */
-function formatStage2Lead(minutes: number): string {
-  if (minutes < 60) return `${minutes} мин`;
-  if (minutes >= 2880 && minutes % 1440 === 0) {
-    const days = minutes / 1440;
-    return `${days} ${pluralRu(days, ['день', 'дня', 'дней'])}`;
-  }
-  return `${Math.round(minutes / 60)} ч`;
-}
 
 /** Маппит статус откликнувшегося в класс цвета точки (go / maybe / expired / no). */
 function statusDotClass(status: string): string {
@@ -572,7 +559,7 @@ export const EventPage: FC = () => {
       {/* Интервал Этапа 2 (V67): когда откроется подтверждение мест — свой у события или дефолт. */}
       {showVoting && !isOpenEvent && event.stage2LeadMinutes != null && (
         <div className="rd-hint" style={{ marginBottom: 14 }}>
-          Подтверждение мест откроется за {formatStage2Lead(event.stage2LeadMinutes)} до начала
+          Подтверждение мест откроется за {formatLeadInterval(event.stage2LeadMinutes)} до начала
         </div>
       )}
       {showVoting && pathBackNudge}

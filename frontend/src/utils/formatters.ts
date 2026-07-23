@@ -16,6 +16,22 @@ export function pluralRu(n: number, forms: [string, string, string]): string {
 }
 
 /**
+ * Интервал «за сколько до старта» (Этап 2, V67) полными словами для фразы «за …»:
+ * «18 часов», «24 часа», «2 дня». Кратные суткам значения от 2 дней читаются днями;
+ * меньше часа (ужатый staging-дефолт с бэка) — минутами, не «0 часов». Формы —
+ * винительный падеж («за минуту/час/день»).
+ */
+export function formatLeadInterval(minutes: number): string {
+  if (minutes < 60) return `${minutes} ${pluralRu(minutes, ['минуту', 'минуты', 'минут'])}`;
+  if (minutes >= 2880 && minutes % 1440 === 0) {
+    const days = minutes / 1440;
+    return `${days} ${pluralRu(days, ['день', 'дня', 'дней'])}`;
+  }
+  const hours = Math.round(minutes / 60);
+  return `${hours} ${pluralRu(hours, ['час', 'часа', 'часов'])}`;
+}
+
+/**
  * Разница в целых локальных календарных днях между ISO-датой и «сегодня»:
  * 0 = сегодня, 1 = завтра, отрицательное = в прошлом. null — невалидная дата.
  * Считается от локальных полуночей (Math.round гасит возможный сдвиг DST).
