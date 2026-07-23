@@ -120,7 +120,11 @@ class EventMapper(
                 !now.isBefore(votingOpensAt) && item.myVote == null
             }
             EventStatus.stage_2 -> {
-                item.myVote in setOf(Stage_1Vote.going, Stage_1Vote.maybe) && item.myFinalStatus == null
+                // Этап 2 открыт всем участникам (PR #92), поэтому и действие требуется от КАЖДОГО,
+                // кто ещё не решил на самом Этапе 2 (решение PO 2026-07-23): голос Этапа 1 — в том
+                // числе «Не пойду» — не финален, планы меняются, а у срочной встречи (V69) голосов
+                // не бывает вовсе. Финальны только confirmed/waitlisted/declined/expired.
+                item.myFinalStatus == null
             }
             else -> false
         }

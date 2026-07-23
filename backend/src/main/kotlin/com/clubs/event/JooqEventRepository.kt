@@ -114,9 +114,10 @@ class JooqEventRepository(
                     DSL.value(now)
                 )
             )
-        // Подтверждение Stage-2 ещё не отдано: проголосовал going/maybe на stage 1, но ещё не подтвердил/отказался.
+        // Подтверждение Stage-2 ещё не отдано. Этап 2 открыт всем участникам (PR #92), поэтому
+        // действие требуется от каждого без решения на САМОМ Этапе 2 (решение PO 2026-07-23):
+        // голос Этапа 1 (включая «Не пойду») не финален, у срочной встречи (V69) его нет вовсе.
         val stage2Pending = EVENTS.STATUS.eq(EventStatus.stage_2)
-            .and(EVENT_RESPONSES.STAGE_1_VOTE.`in`(Stage_1Vote.going, Stage_1Vote.maybe))
             .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull)
 
         return dsl.select(EVENTS.ID)
@@ -195,8 +196,9 @@ class JooqEventRepository(
                 1
             )
             .`when`(
+                // То же правило, что в findActionRequiredEventIds (PO 2026-07-23): Этап 2 открыт
+                // всем — подтверждение ждём от каждого участника без решения на самом Этапе 2.
                 EVENTS.STATUS.eq(EventStatus.stage_2)
-                    .and(EVENT_RESPONSES.STAGE_1_VOTE.`in`(Stage_1Vote.going, Stage_1Vote.maybe))
                     .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull),
                 1
             )

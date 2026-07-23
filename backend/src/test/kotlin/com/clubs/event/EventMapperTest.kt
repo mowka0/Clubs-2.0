@@ -129,6 +129,44 @@ class EventMapperTest {
         assertThat(limited.confirmedDeclineDeadline).isEqualTo(start.minusMinutes(240))
     }
 
+    // Этап 2 требует действия от КАЖДОГО без решения на самом Этапе 2 (PO 2026-07-23):
+    // голос Этапа 1 не финален (даже «Не пойду» может передумать), у срочной (V69) его нет вовсе.
+    @Test
+    fun `stage_2 with no vote (urgent case) and no final status is actionRequired`() {
+        val item = feedItem(
+            event(EventStatus.stage_2, now.plusHours(5)).copy(isUrgent = true),
+            myVote = null,
+            myFinalStatus = null,
+            isHistory = false
+        )
+
+        assertThat(mapper.toMyFeedItemDto(item, now).actionRequired).isTrue()
+    }
+
+    @Test
+    fun `stage_2 with a not_going stage-1 vote is still actionRequired`() {
+        val item = feedItem(
+            event(EventStatus.stage_2, now.plusHours(5)),
+            myVote = Stage_1Vote.not_going,
+            myFinalStatus = null,
+            isHistory = false
+        )
+
+        assertThat(mapper.toMyFeedItemDto(item, now).actionRequired).isTrue()
+    }
+
+    @Test
+    fun `stage_2 stops being actionRequired once the user decided on stage 2`() {
+        val item = feedItem(
+            event(EventStatus.stage_2, now.plusHours(5)).copy(isUrgent = true),
+            myVote = null,
+            myFinalStatus = FinalStatus.confirmed,
+            isHistory = false
+        )
+
+        assertThat(mapper.toMyFeedItemDto(item, now).actionRequired).isFalse()
+    }
+
     // Эффективный интервал Этапа 2 (V67): свой → свой, NULL → глобальный дефолт мапера (1080),
     // открытая встреча → null (интервал не настраивается) — фронт порог не хардкодит.
     @Test
