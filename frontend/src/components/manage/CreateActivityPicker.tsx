@@ -4,6 +4,10 @@ import type { ActivityType } from '../../api/activities';
 interface ActivityTypeOptionsProps {
   /** Вызывается с выбранным типом активности. Побочных эффектов здесь нет — шаг/хаптику владеет родительский flow. */
   onPick: (type: ActivityType) => void;
+  /** Пункт «Сообщить о проблеме» — единственный, доступный и не-организаторам. */
+  onPickFeedback: () => void;
+  /** Организует ли пользователь хотя бы один клуб — без этого пункты создания скрыты. */
+  canCreate: boolean;
 }
 
 interface PickerOption {
@@ -110,9 +114,29 @@ function PickerOptionList<K extends string>({ header, options, onPick }: {
   );
 }
 
-export const ActivityTypeOptions: FC<ActivityTypeOptionsProps> = ({ onPick }) => (
-  <PickerOptionList header="Создать активность" options={OPTIONS} onPick={onPick} />
-);
+type TypePickKey = ActivityType | 'feedback';
+
+// Обратная связь живёт в том же шите «+», но это не активность: пункт ведёт на форму
+// баг-репорта (/feedback), а не в flow создания. Доступен всем пользователям.
+const FEEDBACK_OPTION: PickerListOption<TypePickKey> = {
+  key: 'feedback',
+  emoji: '🐞',
+  title: 'Сообщить о проблеме',
+  subtitle: 'Баг или идея — сообщение уйдёт команде Clubs',
+};
+
+export const ActivityTypeOptions: FC<ActivityTypeOptionsProps> = ({ onPick, onPickFeedback, canCreate }) => {
+  // Не-организатору создание недоступно (роль бывшего тоста-гардрейла теперь у состава
+  // пунктов): шит вырождается в один пункт обратной связи с честным заголовком.
+  const options: PickerListOption<TypePickKey>[] = canCreate ? [...OPTIONS, FEEDBACK_OPTION] : [FEEDBACK_OPTION];
+  return (
+    <PickerOptionList
+      header={canCreate ? 'Создать активность' : 'Обратная связь'}
+      options={options}
+      onPick={(key) => (key === 'feedback' ? onPickFeedback() : onPick(key))}
+    />
+  );
+};
 
 // Формат события (решение PO 2026-07-21): «с местами» — классика с лимитом, гонкой за места и
 // листом ожидания; «открытая встреча» — без лимита (participantLimit = null на бэке), приходят

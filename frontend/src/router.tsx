@@ -33,6 +33,9 @@ const InvitePage = lazy(() =>
 const OrganizerClubManage = lazy(() =>
   import('./pages/OrganizerClubManage').then((m) => ({ default: m.OrganizerClubManage })),
 );
+const FeedbackPage = lazy(() =>
+  import('./pages/FeedbackPage').then((m) => ({ default: m.FeedbackPage })),
+);
 
 // Старый /clubs/:id/interior объединён в единый /clubs/:id.
 // Сохраняем :id в редиректе, чтобы старые закладки / deep-link'и не давали 404.
@@ -114,6 +117,11 @@ export const router = createBrowserRouter([
       {
         path: '/invite/:code',
         element: <InvitePage />,
+      },
+      {
+        // Форма обратной связи — открывается из шита «+» («Сообщить о проблеме»).
+        path: '/feedback',
+        element: <FeedbackPage />,
       },
     ],
   },

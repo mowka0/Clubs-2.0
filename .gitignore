@@ -27,3 +27,4 @@ fox/
 
 # Выброшенные стоковые фото (LoremFlickr) для локального просмотра мокапов discovery-card — в проде обложки с бэка
 docs/design/discovery-card/mockups/covers/
+backend/.kotlin/

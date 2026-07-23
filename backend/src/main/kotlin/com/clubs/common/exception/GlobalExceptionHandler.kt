@@ -75,6 +75,13 @@ class GlobalExceptionHandler {
             .body(ErrorResponse("FORBIDDEN", "Access denied"))
     }
 
+    @ExceptionHandler(FeedbackDeliveryException::class)
+    fun handleFeedbackDelivery(ex: FeedbackDeliveryException): ResponseEntity<ErrorResponse> {
+        logger.error("Feedback delivery failed: {}", ex.message)
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+            .body(ErrorResponse("FEEDBACK_UNAVAILABLE", ex.message ?: "Feedback delivery failed"))
+    }
+
     @ExceptionHandler(RateLimitException::class)
     fun handleRateLimit(ex: RateLimitException): ResponseEntity<ErrorResponse> {
         logger.warn("Rate limit exception: {}", ex.message)

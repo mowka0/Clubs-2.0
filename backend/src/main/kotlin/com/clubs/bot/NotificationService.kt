@@ -284,6 +284,20 @@ class NotificationService(
     }
 
     /**
+     * Синхронная отправка DM с результатом — в отличие от best-effort [sendDm], вызывающему
+     * важен факт доставки (feedback: 204 = «сообщение реально в Telegram»). Без inline-кнопок
+     * и фолбэков; ошибка Telegram логируется и возвращается как false.
+     */
+    fun trySendDirectMessage(telegramId: Long, text: String): Boolean = try {
+        telegramClient.execute(SendMessage.builder().chatId(telegramId.toString()).text(text).build())
+        log.info("Sync DM sent: chatId={}", telegramId)
+        true
+    } catch (e: Exception) {
+        log.error("Failed to send sync DM to chat {}: {} ({})", telegramId, e.message, e.javaClass.simpleName)
+        false
+    }
+
+    /**
      * Уведомляет организатора платного клуба о том, что участник заявил об оплате взноса
      * вне платформы (de-Stars) и ждёт подтверждения. Best-effort fire-and-forget как и другие
      * DM; диплинк на «Мои клубы», где список «Ждут оплаты» даёт организатору подтвердить

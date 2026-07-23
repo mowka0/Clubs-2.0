@@ -29,6 +29,19 @@ class UserRepository(private val dsl: DSLContext) {
             .where(USERS.ID.eq(id))
             .fetchOne()
 
+    /**
+     * Пользователь по telegram username (без @, регистронезависимо) — резолв саппорт-аккаунта
+     * для feedback. Уникальности на колонке нет (username мог смениться и достаться другому,
+     * а у нас остаться устаревшим), поэтому при коллизии берём запись с самым свежим
+     * updated_at — её username синхронизирован из Telegram последним.
+     */
+    fun findByTelegramUsername(username: String): UsersRecord? =
+        dsl.selectFrom(USERS)
+            .where(USERS.TELEGRAM_USERNAME.equalIgnoreCase(username))
+            .orderBy(USERS.UPDATED_AT.desc())
+            .limit(1)
+            .fetchOne()
+
     /** Обновляет только редактируемые пользователем скаляры профиля; синхронизируемые из TG поля не трогает. */
     fun updateProfileFields(userId: UUID, country: String?, city: String?, bio: String?) {
         dsl.update(USERS)

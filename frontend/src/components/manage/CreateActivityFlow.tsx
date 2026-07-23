@@ -1,5 +1,5 @@
 import { FC, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Modal } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../../hooks/useHaptic';
 import {
@@ -15,6 +15,11 @@ import type { ActivityType } from '../../api/activities';
 interface CreateActivityFlowProps {
   /** Открыт ли флоу создания. */
   open: boolean;
+  /**
+   * Организует ли пользователь хотя бы один клуб. Флоу открывается всем (пункт
+   * «Сообщить о проблеме» общедоступен), но пункты создания видят только организаторы.
+   */
+  canCreate: boolean;
   /** Клубы, которыми пользователь управляет — флоу навигирует только внутри них. */
   organizerClubs: ClubPickerOption[];
   /**
@@ -56,11 +61,13 @@ function createRoute(
  */
 export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   open,
+  canCreate,
   organizerClubs,
   presetClubId,
   onClose,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const haptic = useHaptic();
   const [step, setStep] = useState<Step>('type');
   const [pendingType, setPendingType] = useState<ActivityType | null>(null);
@@ -122,6 +129,14 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
     setStep('event_format');
   };
 
+  const handlePickFeedback = () => {
+    haptic.impact('medium');
+    // Путь запоминаем ДО resetFlow: форма кладёт его в репорт как «где воспроизвелось».
+    const from = location.pathname;
+    resetFlow();
+    navigate('/feedback', { state: { from } });
+  };
+
   const handlePickTemplate = (template: SkladchinaTemplateKey) => {
     haptic.impact('medium');
     resolveClub('skladchina', template, null);
@@ -147,7 +162,9 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
 
   return (
     <Modal open={open} onOpenChange={handleOpenChange}>
-      {step === 'type' && <ActivityTypeOptions onPick={handlePickType} />}
+      {step === 'type' && (
+        <ActivityTypeOptions onPick={handlePickType} onPickFeedback={handlePickFeedback} canCreate={canCreate} />
+      )}
       {step === 'template' && <SkladchinaTemplateOptions onPick={handlePickTemplate} />}
       {step === 'event_format' && <EventFormatOptions onPick={handlePickEventFormat} />}
       {step === 'club' && <ClubPickerList clubs={organizerClubs} onPick={handlePickClub} />}

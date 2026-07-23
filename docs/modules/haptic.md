@@ -21,7 +21,7 @@ Pre-design подготовка фронта: единая обёртка над
 
 ### Входит
 - Хук `frontend/src/hooks/useHaptic.ts` с silent no-op fallback
-- Вызовы хука в: `BottomTabBar`, `ClubCard`, `AvatarUpload`, `ClubPage` (включая role-aware tabs), `EventPage`, `CreateClubModal`, `OrganizerClubManage`, `InvitePage`, `components/club/ClubActivitiesTab` (после `feature/unified-activity-creation` 2026-05-24, заменил `ClubEventsTab`), `components/manage/{ActivityCard,ActivityFilterChips,CreateActivityPicker,ClubPickerModal}` (после итерации 4 `feature/unified-activity-creation`: `ActivitiesManageTab` удалён, добавлен `ClubPickerModal`; `CreateActivityFlow` haptic не вызывает напрямую — делегирует picker'ам), `ActivitiesPage` (hero «+ Создать» → impact light), `ProfilePage`, `MyClubsPage`, `DiscoveryPage` (chip-выбор категории — встроенно после удаления `ClubFilters` в `feature/discovery-redesign`), `useBackButton`. **`ClubInteriorPage` удалён** в `feature/unified-club-page` — точки кода переехали в unified `ClubPage` + три tab-компонента (см. `club-page-unified.md`).
+- Вызовы хука в: `BottomTabBar`, `ClubCard`, `AvatarUpload`, `ClubPage` (включая role-aware tabs), `EventPage`, `CreateClubModal`, `OrganizerClubManage`, `InvitePage`, `components/club/ClubActivitiesTab` (после `feature/unified-activity-creation` 2026-05-24, заменил `ClubEventsTab`), `components/manage/{ActivityCard,ActivityFilterChips,CreateActivityPicker,ClubPickerModal}` (после итерации 4 `feature/unified-activity-creation`: `ActivitiesManageTab` удалён, добавлен `ClubPickerModal`; `CreateActivityFlow` владеет хаптикой шагов — picker'ы чисто презентационные; с фичи feedback 2026-07-23 туда добавлен `handlePickFeedback` → impact medium), `ActivitiesPage` (hero «+ Создать» → impact light), `pages/FeedbackPage` (submit medium / success / error, отмена — light), `ProfilePage`, `MyClubsPage`, `DiscoveryPage` (chip-выбор категории — встроенно после удаления `ClubFilters` в `feature/discovery-redesign`), `useBackButton`. **`ClubInteriorPage` удалён** в `feature/unified-club-page` — точки кода переехали в unified `ClubPage` + три tab-компонента (см. `club-page-unified.md`).
 - Unit-тест хука (mock SDK, проверка no-op при `isAvailable() === false`)
 
 ### НЕ входит
@@ -120,6 +120,7 @@ const onTabClick = (path: string) => {
 | `pages/ClubPage.tsx` | `handleApply` (строки 112-137) — заявка в закрытый клуб | `impact('medium')` | `notify('success')` | `notify('error')` |
 | `pages/ClubPage.tsx` | open apply modal через «Хочу вступить» (строка 201) | `impact('light')` (open) / no haptic (close через X или «Отмена», строка 336) | — | — |
 | `pages/InvitePage.tsx` | `handleJoin` (строка 35) — вступление по invite | `impact('medium')` | `notify('success')` | `notify('error')` |
+| `pages/FeedbackPage.tsx` (feedback 2026-07-23) | `handleSubmit` — отправка обратной связи; «Отмена» → `impact('light')` | `impact('medium')` | `notify('success')` | `notify('error')` |
 | `pages/EventPage.tsx` | `handleVote('going' / 'maybe' / 'not_going')` (строка 88) | `select()` (выбор RSVP-опции) | `notify('success')` | `notify('error')` |
 | `pages/EventPage.tsx` | `handleConfirm` (строка 109) — подтверждение участия | `impact('medium')` | `notify('success')` | `notify('error')` |
 | `pages/EventPage.tsx` | `handleDecline` (строка 130) — отказ | `impact('medium')` | `notify('warning')` | `notify('error')` |
