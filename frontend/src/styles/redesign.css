@@ -1999,6 +1999,43 @@
 
 /* Зона кнопок закреплена внизу — дверь не уезжает вместе с прокруткой списка. */
 .ob-cta { flex-shrink: 0; padding: 10px 0 6px; background: var(--bg); }
+
+/* ── Велком-сцена новичка в клубе (онбординг, срез 3; мокап welcome-scene.html, кадры A–C) ── */
+/* Эмодзи-арт в тёплом свечении — как ринг мокапа; PNG-артов у сцены нет намеренно. */
+.wsc-ring {
+  width: 96px; height: 96px; border-radius: 50%; font-size: 52px;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle, rgba(244, 123, 60, 0.28), rgba(244, 123, 60, 0) 70%);
+}
+.wsc-club-chip { display: flex; align-items: center; gap: 10px; justify-content: center; margin-top: 12px; }
+.wsc-club-ava {
+  width: 34px; height: 34px; border-radius: 11px; flex-shrink: 0; overflow: hidden;
+  background: var(--accent-soft); color: var(--accent);
+  display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800;
+}
+.wsc-club-ava img { width: 100%; height: 100%; object-fit: cover; }
+.wsc-club-nm { display: block; font-size: 13.5px; font-weight: 700; }
+.wsc-club-ct { display: block; font-size: 11px; color: var(--text-faint); }
+/* Номер шага — тот же квадратик, что иконка перка, но жирной цифрой акцентного цвета. */
+.wsc-step-n { color: var(--accent); font-weight: 800; }
+/* Плашка-факт: нейтральная (надёжность) / оранжевая pay (взнос) / зелёная wait (заявка ушла). */
+.wsc-fact {
+  margin-top: 14px; padding: 12px 13px; border-radius: 14px;
+  background: var(--surface); border: 1px solid var(--hairline);
+  font-size: 12.5px; color: var(--text-dim); line-height: 1.5; text-align: center;
+}
+.wsc-fact b { color: var(--text); }
+.wsc-fact-pay {
+  background: linear-gradient(135deg, rgba(244, 123, 60, 0.10), rgba(244, 123, 60, 0.02));
+  border-color: rgba(244, 123, 60, 0.3);
+}
+.wsc-fact-pay b { color: var(--accent); }
+.wsc-fact-wait {
+  background: linear-gradient(135deg, rgba(102, 212, 154, 0.10), rgba(102, 212, 154, 0.02));
+  border-color: rgba(102, 212, 154, 0.3);
+}
+.wsc-fact-wait b { color: var(--live); }
+.wsc-hint { font-size: 11.5px; color: var(--text-faint); text-align: center; margin-top: 8px; line-height: 1.4; }
 .ob-ghost {
   width: 100%; padding: 9px; margin-top: 2px;
   border: 0; background: transparent; color: var(--text-dim);
