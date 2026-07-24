@@ -43,6 +43,8 @@ export const queryKeys = {
     byClub: (clubId: string, params?: EventListParams) =>
       ['events', 'by-club', clubId, params ?? {}] as const,
     byClubAll: (clubId: string) => ['events', 'by-club', clubId] as const,
+    /** Тизер-афиша клуба для смотрящего без доступа (гость / frozen / expired). */
+    teaser: (clubId: string) => ['events', 'teaser', clubId] as const,
     detail: (id: string) => ['events', 'detail', id] as const,
     myVote: (id: string) => ['events', 'detail', id, 'my-vote'] as const,
     myFeed: ['events', 'my-feed'] as const,

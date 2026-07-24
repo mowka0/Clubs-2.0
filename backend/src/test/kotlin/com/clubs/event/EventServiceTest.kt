@@ -289,6 +289,67 @@ class EventServiceTest {
         verify(exactly = 0) { eventPublisher.publishEvent(any()) }
     }
 
+    // Тизер-тесты строят сервис с НАСТОЯЩИМ маппером: относительный порядок и содержимое
+    // проекции — часть контракта, relaxed-мок вернул бы неразличимые заглушки.
+    private fun teaserService() = EventService(
+        eventRepository, clubRepository, ClubRoleGuard(clubRepository, guardMembershipRepository),
+        EventMapper(240L, 1080L), eventPublisher, skladchinaRepository
+    )
+
+    @Test
+    fun `getClubEventsTeaser splits by time, drops cancelled and applies limits`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val now = OffsetDateTime.now()
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        val events = buildList {
+            // 4 будущих (лимит 3), 4 прошедших (лимит 3), 1 отменённое будущее (должно выпасть)
+            repeat(4) { i ->
+                add(EventWithGoingCount(
+                    sampleEvent(clubId, ownerId).copy(id = UUID.randomUUID(), eventDatetime = now.plusDays(i + 1L)),
+                    goingCount = i, confirmedCount = 0
+                ))
+            }
+            repeat(4) { i ->
+                add(EventWithGoingCount(
+                    sampleEvent(clubId, ownerId).copy(
+                        id = UUID.randomUUID(),
+                        eventDatetime = now.minusDays(i + 1L),
+                        status = EventStatus.completed
+                    ),
+                    goingCount = 0, confirmedCount = 5
+                ))
+            }
+            add(EventWithGoingCount(
+                sampleEvent(clubId, ownerId).copy(id = UUID.randomUUID(), eventDatetime = now.plusDays(9), status = EventStatus.cancelled),
+                goingCount = 0, confirmedCount = 0
+            ))
+        }
+        every { eventRepository.findAllByClubWithGoingCount(clubId) } returns events
+        every { eventRepository.countPastEvents(clubId, any()) } returns 4
+
+        val teaser = teaserService().getClubEventsTeaser(clubId)
+
+        assertEquals(3, teaser.upcoming.size)
+        assertEquals(3, teaser.past.size)
+        assertEquals(4, teaser.totalPastCount)
+        // Ближайшее будущее — первым; недавнее прошедшее — первым.
+        assertEquals(events[0].event.id, teaser.upcoming.first().id)
+        assertEquals(events[4].event.id, teaser.past.first().id)
+    }
+
+    @Test
+    fun `getClubEventsTeaser throws NotFound for a missing or soft-deleted club`() {
+        val missingClubId = UUID.randomUUID()
+        every { clubRepository.findById(missingClubId) } returns null
+        assertThrows<NotFoundException> { teaserService().getClubEventsTeaser(missingClubId) }
+
+        val inactiveClubId = UUID.randomUUID()
+        every { clubRepository.findById(inactiveClubId) } returns
+            club(inactiveClubId, UUID.randomUUID()).copy(isActive = false)
+        assertThrows<NotFoundException> { teaserService().getClubEventsTeaser(inactiveClubId) }
+    }
+
     private fun request() = CreateEventRequest(
         title = "Test event",
         description = null,

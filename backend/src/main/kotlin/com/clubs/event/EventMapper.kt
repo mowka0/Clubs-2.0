@@ -130,6 +130,18 @@ class EventMapper(
         }
     }
 
+    // Тизер-афиша: проекция БЕЗ места/фото/лимита — приватное не попадает в DTO по построению.
+    fun toTeaserDto(item: EventWithGoingCount) = TeaserEventDto(
+        id = item.event.id,
+        title = item.event.title,
+        eventDatetime = item.event.eventDatetime,
+        status = item.event.status.literal,
+        isUrgent = item.event.isUrgent,
+        isOpenEvent = item.event.isOpenEvent,
+        goingCount = item.goingCount,
+        confirmedCount = item.confirmedCount
+    )
+
     fun toListItemDto(event: Event, goingCount: Int) = EventListItemDto(
         id = event.id,
         title = event.title,

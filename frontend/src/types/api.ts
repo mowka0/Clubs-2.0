@@ -580,6 +580,29 @@ export interface EventListItemDto {
   status: string;
 }
 
+/**
+ * Тизер-афиша клуба — урезанная проекция событий для смотрящего без доступа (гость /
+ * frozen / expired). По построению не содержит места, фото и состава участников.
+ */
+export interface TeaserEventDto {
+  id: string;
+  title: string;
+  eventDatetime: string;
+  status: string;
+  // Формат для бейджа «⚡ срочная / 🎟 обычная / 🌊 открытая», как на карточках ленты.
+  isUrgent: boolean;
+  isOpenEvent: boolean;
+  // До Этапа 2 показываем «идут N» (голоса), после — «подтвердили N».
+  goingCount: number;
+  confirmedCount: number;
+}
+
+export interface ClubEventsTeaserDto {
+  upcoming: TeaserEventDto[];
+  past: TeaserEventDto[];
+  totalPastCount: number;
+}
+
 export interface EventResponderDto {
   userId: string;
   firstName: string;

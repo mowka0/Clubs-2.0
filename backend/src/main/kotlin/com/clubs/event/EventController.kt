@@ -56,6 +56,15 @@ class EventController(
     fun getEvent(@PathVariable id: UUID): ResponseEntity<EventDetailDto> =
         ResponseEntity.ok(eventService.getEvent(id))
 
+    /**
+     * Тизер-афиша клуба — НАМЕРЕННО без @RequiresMembership (единственный событийный эндпоинт
+     * клуба, открытый не-участнику): урезанная проекция без места/фото/состава, чтобы гость
+     * или участник без взноса видел, что клуб живой. См. EventService.getClubEventsTeaser.
+     */
+    @GetMapping("/api/clubs/{id}/events/teaser")
+    fun getClubEventsTeaser(@PathVariable id: UUID): ResponseEntity<ClubEventsTeaserDto> =
+        ResponseEntity.ok(eventService.getClubEventsTeaser(id))
+
 
     @PostMapping("/api/events/{id}/cancel")
     fun cancelEvent(

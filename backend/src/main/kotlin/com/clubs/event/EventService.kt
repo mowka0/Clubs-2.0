@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.OffsetDateTime
 import java.util.UUID
 
 @Service
@@ -23,6 +24,13 @@ class EventService(
     private val eventPublisher: ApplicationEventPublisher,
     private val skladchinaRepository: SkladchinaRepository
 ) {
+
+    companion object {
+        // Сколько ближайших встреч показывает тизер-афиша смотрящему без доступа
+        const val TEASER_UPCOMING_LIMIT = 3
+        // Сколько последних прошедших встреч показывает тизер-афиша
+        const val TEASER_PAST_LIMIT = 3
+    }
 
     private val log = LoggerFactory.getLogger(EventService::class.java)
 
@@ -62,6 +70,36 @@ class EventService(
             catch (e: IllegalArgumentException) { null }
         }
         return eventRepository.findByClubId(clubId, status, page, size)
+    }
+
+    /**
+     * Тизер-афиша (решение PO 2026-07-24): урезанная афиша встреч для смотрящего БЕЗ доступа
+     * к контенту клуба — гостя или участника без взноса (frozen/expired). Намеренно ДОСТУПНА
+     * без членства (в отличие от getClubEvents под @RequiresMembership): человек должен видеть,
+     * что клуб живой, прежде чем платить. Приватное (место, фото, состав) в проекцию не входит
+     * по построению — см. ClubEventsTeaserDto.
+     */
+    fun getClubEventsTeaser(clubId: UUID): ClubEventsTeaserDto {
+        val club = clubRepository.findById(clubId)
+        // Мягко удалённый клуб не существует для читателя (как в Discovery), не 200 с пустотой.
+        if (club == null || !club.isActive) throw NotFoundException("Club not found")
+
+        val now = OffsetDateTime.now()
+        val visible = eventRepository.findAllByClubWithGoingCount(clubId)
+            .filter { it.event.status != EventStatus.cancelled }
+        val upcoming = visible
+            .filter { it.event.eventDatetime.isAfter(now) }
+            .sortedBy { it.event.eventDatetime }
+            .take(TEASER_UPCOMING_LIMIT)
+        val past = visible
+            .filter { !it.event.eventDatetime.isAfter(now) }
+            .sortedByDescending { it.event.eventDatetime }
+            .take(TEASER_PAST_LIMIT)
+        return ClubEventsTeaserDto(
+            upcoming = upcoming.map(eventMapper::toTeaserDto),
+            past = past.map(eventMapper::toTeaserDto),
+            totalPastCount = eventRepository.countPastEvents(clubId, now)
+        )
     }
 
     fun getEvent(id: UUID): EventDetailDto {

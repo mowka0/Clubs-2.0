@@ -7,6 +7,7 @@ import {
   declineParticipation,
   disputeAttendance,
   getClubEvents,
+  getClubEventsTeaser,
   getEvent,
   getEventResponders,
   getMyAttendance,
@@ -24,6 +25,15 @@ export function useClubEventsQuery(clubId: string | undefined, params?: EventLis
     queryKey: queryKeys.events.byClub(clubId ?? '', params),
     queryFn: () => getClubEvents(clubId!, params),
     enabled: Boolean(clubId),
+  });
+}
+
+/** Тизер-афиша клуба: включается только у смотрящего БЕЗ доступа (гость / frozen / expired). */
+export function useClubEventsTeaserQuery(clubId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.events.teaser(clubId ?? ''),
+    queryFn: () => getClubEventsTeaser(clubId!),
+    enabled: Boolean(clubId) && enabled,
   });
 }
 

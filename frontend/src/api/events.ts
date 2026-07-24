@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import type { EventDetailDto, EventListItemDto, EventResponderDto, MyAttendanceDto, MyEventListItemDto, PageResponse } from '../types/api';
+import type { ClubEventsTeaserDto, EventDetailDto, EventListItemDto, EventResponderDto, MyAttendanceDto, MyEventListItemDto, PageResponse } from '../types/api';
 
 export interface CreateEventBody {
   title: string;
@@ -48,6 +48,14 @@ export function getMyEvents(
 
 export function getEvent(id: string): Promise<EventDetailDto> {
   return apiClient.get<EventDetailDto>(`/api/events/${id}`);
+}
+
+/**
+ * Тизер-афиша клуба — единственный событийный эндпоинт, доступный БЕЗ членства:
+ * урезанная проекция (без места/фото/состава) для гостя и участника без взноса.
+ */
+export function getClubEventsTeaser(clubId: string): Promise<ClubEventsTeaserDto> {
+  return apiClient.get<ClubEventsTeaserDto>(`/api/clubs/${clubId}/events/teaser`);
 }
 
 export function createEvent(clubId: string, body: CreateEventBody): Promise<EventDetailDto> {

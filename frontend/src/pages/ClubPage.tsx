@@ -23,6 +23,7 @@ import { isActiveManagerMembership } from '../utils/membershipRole';
 import { openTmeLink } from '../utils/telegramLinks';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
 import { ClubChatConnectBanner } from '../components/club/ClubChatConnectBanner';
+import { ClubEventsTeaser } from '../components/club/ClubEventsTeaser';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
 import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
@@ -514,6 +515,13 @@ export const ClubPage: FC = () => {
             </div>
           </div>
 
+          {/* Тизер-афиша (PO 2026-07-24): участник без взноса видит, что клуб живой, —
+              главный аргумент передать взнос. Урезанная проекция без места/фото/состава. */}
+          <ClubEventsTeaser
+            clubId={club.id}
+            lockHint="Место встреч, голосование и участие откроются после взноса"
+          />
+
           {membership?.duesClaimedAt ? (
             <div className="rd-glass rd-dues-pending">
               <span aria-hidden="true">⏳</span>
@@ -557,6 +565,16 @@ export const ClubPage: FC = () => {
               Содержимое клуба открывается после вступления.
             </div>
           </div>
+
+          {/* Тизер-афиша (PO 2026-07-24): гость видит ритм жизни клуба до вступления/оплаты. */}
+          <ClubEventsTeaser
+            clubId={club.id}
+            lockHint={
+              club.subscriptionPrice > 0
+                ? 'Место встреч, голосование и участие откроются после вступления и взноса'
+                : 'Место встреч, голосование и участие откроются после вступления'
+            }
+          />
 
           {/* Чат и клуб — одно целое (club-chat-link): гость видит, что вход в чат
               лежит через вступление (мокап 02-C). */}
