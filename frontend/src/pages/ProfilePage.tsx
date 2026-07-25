@@ -9,7 +9,12 @@ import { useMyInterestsQuery } from '../queries/profile';
 import { countryNameByCode } from '../components/CityPicker';
 import { ProfileEditModal } from '../components/profile/ProfileEditModal';
 import { GamificationPanel } from '../components/profile/GamificationPanel';
-import { ProfileQuestCard, ProfileQuestCongrats } from '../components/profile/ProfileQuestCard';
+import {
+  ProfileQuestCard,
+  ProfileQuestCongrats,
+  QUEST_FOLDED_KEY,
+  type QuestStepKey,
+} from '../components/profile/ProfileQuestCard';
 import { SubscriptionCard } from '../components/subscription/SubscriptionCard';
 import { tierWord, clubsPrepositional } from '../utils/reputationTier';
 
@@ -50,6 +55,22 @@ export const ProfilePage: FC = () => {
   const interests = useMemo(() => interestsQuery.data ?? [], [interestsQuery.data]);
 
   const [editOpen, setEditOpen] = useState(false);
+  // Вход из шага квеста: какое поле редактора подсветить (null = обычное открытие шестерёнкой).
+  const [editHighlight, setEditHighlight] = useState<QuestStepKey | null>(null);
+  // Свёрнутость квеста живёт здесь (не в карточке): от неё зависит затенение остальных панелей —
+  // свёрнутый в пилюлю квест затенять профиль не должен.
+  const [questFolded, setQuestFolded] = useState(() => localStorage.getItem(QUEST_FOLDED_KEY) === '1');
+  const toggleQuestFold = () => {
+    const next = !questFolded;
+    localStorage.setItem(QUEST_FOLDED_KEY, next ? '1' : '0');
+    setQuestFolded(next);
+  };
+
+  const openEditor = (highlight: QuestStepKey | null) => {
+    haptic.impact('light');
+    setEditHighlight(highlight);
+    setEditOpen(true);
+  };
 
   // Поздравление профиль-квеста показываем ТОЛЬКО при переходе «не завершён → завершён»
   // в текущей сессии (после сохранения профиля). Уже-завершённый квест при загрузке
@@ -125,7 +146,7 @@ export const ProfilePage: FC = () => {
         <button
           type="button"
           className="rd-icon-btn"
-          onClick={() => { haptic.impact('light'); setEditOpen(true); }}
+          onClick={() => openEditor(null)}
           disabled={interestsQuery.isPending}
           aria-label="Редактировать профиль"
         >
@@ -147,22 +168,27 @@ export const ProfilePage: FC = () => {
       {user.bio ? (
         <div className="rd-bio">{user.bio}</div>
       ) : (
-        // Пустой bio раньше просто скрывал секцию — теперь мягкий нудж, открывающий редактор профиля.
+        // Пустой bio раньше просто скрывал секцию — теперь мягкий нудж, открывающий редактор
+        // сразу с подсвеченным полем «О себе» (тот же вход, что шаг квеста).
         <button
           type="button"
           className="rd-bio-nudge"
-          onClick={() => { haptic.impact('light'); setEditOpen(true); }}
+          onClick={() => openEditor('bio')}
         >
           Добавь пару слов о себе →
         </button>
       )}
 
-      {/* Карточка-квест «Прокачай профиль» — пока не завершён; на её месте поздравление
-          при завершении в этой сессии (profile-quest.md, мокап 02-quest-card). */}
+      {/* Карточка-квест «Прокачай профиль» v2 — карусель «один экран = один шаг», пока не
+          завершён; на её месте поздравление при завершении в этой сессии
+          (profile-quest.md, мокап 04-quest-carousel). */}
       {gam && !gam.quest.completed && (
         <ProfileQuestCard
           quest={gam.quest}
-          onFill={() => { haptic.impact('light'); setEditOpen(true); }}
+          doneValues={{ city: user.city ?? null, bio: user.bio ?? null, interests }}
+          folded={questFolded}
+          onToggleFold={toggleQuestFold}
+          onFill={(step) => openEditor(step)}
         />
       )}
       {congratsOpen && (
@@ -173,6 +199,11 @@ export const ProfilePage: FC = () => {
           onAck={() => { haptic.impact('light'); setCongratsOpen(false); }}
         />
       )}
+
+      {/* Затенение (мокап 04, PO 2026-07-25): пока квест не завершён и не свёрнут в пилюлю,
+          остальные панели притенены — фокус новичка на пульсирующем квесте. Панели остаются
+          интерактивными (в т.ч. лупа «В клубах» → каталог). */}
+      <div className={!!gam && !gam.quest.completed && !questFolded ? 'rd-profile-dim' : undefined}>
 
       {interests.length > 0 ? (
         <>
@@ -242,31 +273,45 @@ export const ProfilePage: FC = () => {
 
       {/* «Статистика»: главные показатели одной панелью (решение PO 2026-07-22 — плитки
           слиты сюда). Надёжность — герой-строка: самый важный показатель профиля.
-          Строки репутации — из ledger; посещения — сырые факты вне репутации. */}
-      {(hasReputation || (rep?.visits?.totalEventsAttended ?? 0) > 0) && (
-        <>
+          Строки репутации — из ledger; посещения — сырые факты вне репутации.
+          С 2026-07-25 панель видна ВСЕГДА (раньше пряталась без репутации): строка
+          «В клубах» — кнопка-переход, у новичка с лупой вместо нуля → каталог. */}
+      <>
           <div className="rd-section-sub-h">Статистика</div>
           <div className="rd-glass rd-ostat" style={{ marginTop: 0, marginBottom: 14 }}>
             {hasReputation && (
-              <>
-                <div className="rd-ostat-row rd-ostat-hero">
-                  <span className="rd-ostat-ico rd-ost-shield" aria-hidden="true">🛡</span>
-                  <span>
-                    <span className="rd-ostat-lbl">Надёжность</span>
-                    <div className="rd-ostat-sub">{reliablePhrase}</div>
-                  </span>
-                  <span className="rd-ostat-val"><b>{globalScore ?? '—'}</b></span>
-                </div>
-                <div className="rd-ostat-row">
-                  <span className="rd-ostat-ico rd-ost-clubs" aria-hidden="true">🤝</span>
-                  <span>
-                    <span className="rd-ostat-lbl">В клубах</span>
-                    <div className="rd-ostat-sub">активных участий</div>
-                  </span>
-                  <span className="rd-ostat-val"><b>{activeClubs.length}</b></span>
-                </div>
-              </>
+              <div className="rd-ostat-row rd-ostat-hero">
+                <span className="rd-ostat-ico rd-ost-shield" aria-hidden="true">🛡</span>
+                <span>
+                  <span className="rd-ostat-lbl">Надёжность</span>
+                  <div className="rd-ostat-sub">{reliablePhrase}</div>
+                </span>
+                <span className="rd-ostat-val"><b>{globalScore ?? '—'}</b></span>
+              </div>
             )}
+            {/* Лупа вместо нуля (PO 2026-07-25): пустая строка клубов сама зовёт в каталог;
+                с клубами — обычное число, тап ведёт в таб «Мои клубы». */}
+            <button
+              type="button"
+              className="rd-ostat-row rd-ostat-link"
+              onClick={() => {
+                haptic.impact('light');
+                navigate(activeClubs.length > 0 ? '/my-clubs' : '/');
+              }}
+            >
+              <span className="rd-ostat-ico rd-ost-clubs" aria-hidden="true">🤝</span>
+              <span>
+                <span className="rd-ostat-lbl">В клубах</span>
+                <div className="rd-ostat-sub">
+                  {activeClubs.length > 0 ? 'активных участий' : 'пока пусто — найди свой в каталоге'}
+                </div>
+              </span>
+              <span className="rd-ostat-val">
+                {activeClubs.length > 0
+                  ? <b>{activeClubs.length}</b>
+                  : <span className="rd-ostat-lupa" aria-label="Найти клубы">🔍</span>}
+              </span>
+            </button>
             {(rep?.visits?.totalEventsAttended ?? 0) > 0 && (
               <>
                 <div className="rd-ostat-row">
@@ -290,8 +335,7 @@ export const ProfilePage: FC = () => {
               </>
             )}
           </div>
-        </>
-      )}
+      </>
 
       <SubscriptionCard />
 
@@ -335,8 +379,14 @@ export const ProfilePage: FC = () => {
       {/* Per-club список репутации переехал в «Мои клубы» (раскрывающиеся карточки клубов) —
           reputation-path-back.md. Здесь остаётся только глобальный блок (rd-stats выше). */}
 
+      </div>{/* конец rd-profile-dim-обёртки */}
+
       {editOpen && (
-        <ProfileEditModal initialInterests={interests} onClose={() => setEditOpen(false)} />
+        <ProfileEditModal
+          initialInterests={interests}
+          highlightField={editHighlight}
+          onClose={() => { setEditOpen(false); setEditHighlight(null); }}
+        />
       )}
     </div>
   );

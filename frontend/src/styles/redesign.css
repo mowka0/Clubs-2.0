@@ -822,6 +822,82 @@
   font-family: inherit; font-size: 13px; font-weight: 800;
   box-shadow: 0 4px 12px var(--accent-shadow);
 }
+/* ── Квест v2: карусель «один экран = один шаг» (мокап 04-quest-carousel, PO 2026-07-25) ── */
+/* Пульс карточки — парный к затенению .rd-profile-dim остальных панелей профиля. */
+.rd-q-pulse { border-color: var(--accent); animation: rd-q-glow 1.6s ease-in-out infinite; }
+@keyframes rd-q-glow {
+  0%, 100% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 18px var(--accent-glow); }
+  50%      { box-shadow: 0 0 0 5px var(--accent-soft), 0 0 26px var(--accent-glow); }
+}
+/* Затенение остальных панелей профиля, пока квест не завершён и не свёрнут в пилюлю. */
+.rd-profile-dim { opacity: 0.45; filter: saturate(0.6); transition: opacity 0.3s ease; }
+
+.rd-q-motiv { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+.rd-qc-xp {
+  flex-shrink: 0; font-size: 11.5px; font-weight: 800;
+  background: linear-gradient(135deg, #ff8a3d, #ff5e8a);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.rd-qc-viewport { position: relative; margin-top: 10px; }
+.rd-qc-slide {
+  width: 100%; display: flex; align-items: center; gap: 13px; text-align: left;
+  padding: 6px 18px 6px 20px; border: 0; background: transparent;
+  font-family: inherit; color: var(--text); cursor: pointer;
+}
+.rd-qc-ic {
+  width: 52px; height: 52px; border-radius: 16px; flex-shrink: 0;
+  background: var(--accent-soft); display: flex; align-items: center; justify-content: center; font-size: 24px;
+}
+/* Жёлтое «готово» (в обеих темах золото читается как выполненность). */
+.rd-qc-ic-done { background: rgba(255, 201, 61, 0.16); }
+.rd-qc-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rd-qc-name { font-size: 15px; font-weight: 800; }
+.rd-qc-why { font-size: 11.5px; color: var(--text-dim); line-height: 1.35; }
+.rd-qc-cta-col { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.rd-qc-xp-chip { font-size: 11px; font-weight: 800; color: var(--accent); background: var(--accent-soft); padding: 3px 8px; border-radius: 8px; }
+.rd-qc-btn {
+  display: inline-block; font-size: 12px; font-weight: 700; color: var(--on-accent);
+  background: var(--accent-grad); border-radius: 999px; padding: 7px 13px;
+  box-shadow: 0 4px 12px var(--accent-shadow);
+}
+.rd-qc-done-chip { font-size: 11px; font-weight: 800; color: #FFC93D; background: rgba(255, 201, 61, 0.16); padding: 3px 8px; border-radius: 8px; }
+.rd-qc-arr {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 2;
+  width: 20px; height: 34px; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; color: var(--text-faint); font-size: 15px; font-family: inherit; cursor: pointer;
+}
+.rd-qc-arr-l { left: -4px; }
+.rd-qc-arr-r { right: -4px; color: var(--accent); }
+/* Точки прогресса: серая = не заполнено, ЖЁЛТАЯ = заполнено, вытянутая = текущий экран. */
+.rd-qc-dots { display: flex; gap: 6px; justify-content: center; padding-top: 8px; }
+.rd-qc-dot {
+  width: 6px; height: 6px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--hairline-2); cursor: pointer; transition: all 0.2s ease;
+}
+.rd-qc-dot.rd-on { width: 18px; border-radius: 3px; background: var(--accent); }
+.rd-qc-dot.rd-gold { background: #FFC93D; box-shadow: 0 0 6px rgba(255, 201, 61, 0.45); }
+
+/* Подсветка поля в редакторе профиля (вход из шага квеста) + притенение остальных полей. */
+.rd-field-dim { opacity: 0.4; filter: saturate(0.6); }
+.rd-field-hl .rd-label { color: var(--accent); }
+.rd-field-hl .rd-input,
+.rd-field-hl .rd-textarea,
+.rd-field-hl .pf-chips {
+  border-color: var(--accent);
+  animation: rd-field-glow 1.6s ease-in-out infinite;
+}
+@keyframes rd-field-glow {
+  0%, 100% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 18px var(--accent-glow); }
+  50%      { box-shadow: 0 0 0 5px var(--accent-soft), 0 0 26px var(--accent-glow); }
+}
+
+/* Строка «В клубах» в «Статистике» — кнопка-переход: пусто → каталог (лупа), с клубами → «Мои клубы». */
+.rd-ostat-link {
+  width: 100%; border: 0; background: transparent; font-family: inherit; color: inherit;
+  text-align: left; cursor: pointer;
+}
+.rd-ostat-lupa { font-size: 15px; }
+
 /* Свёрнутый вид: пилюля-прогресс одной строкой */
 .rd-quest-pill {
   width: 100%; margin-bottom: 16px;

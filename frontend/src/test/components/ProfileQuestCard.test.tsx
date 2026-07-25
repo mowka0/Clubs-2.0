@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { ProfileQuestCard, ProfileQuestCongrats } from '../../components/profile/ProfileQuestCard';
@@ -8,59 +8,94 @@ function quest(o: Partial<ProfileQuestDto> = {}): ProfileQuestDto {
   return { cityDone: false, interestsDone: false, bioDone: false, completed: false, ...o };
 }
 
-describe('ProfileQuestCard — карточка «Прокачай профиль»', () => {
-  beforeEach(() => {
-    localStorage.clear();
-  });
+const DONE_VALUES = { city: 'Москва', bio: 'Бегаю и играю в шахматы', interests: ['бег', 'шахматы'] };
 
-  it('пустой квест: три шага по порядку с «зачем» и XP, первый подсвечен с кнопкой', () => {
-    const onFill = vi.fn();
-    render(<ProfileQuestCard quest={quest()} onFill={onFill} />);
+function renderCard(q: ProfileQuestDto, overrides: Partial<Parameters<typeof ProfileQuestCard>[0]> = {}) {
+  const onFill = vi.fn();
+  const onToggleFold = vi.fn();
+  render(
+    <ProfileQuestCard
+      quest={q}
+      doneValues={DONE_VALUES}
+      folded={false}
+      onToggleFold={onToggleFold}
+      onFill={onFill}
+      {...overrides}
+    />,
+  );
+  return { onFill, onToggleFold };
+}
+
+describe('ProfileQuestCard v2 — карусель «один экран = один шаг»', () => {
+  it('пустой квест: виден ТОЛЬКО первый шаг (город), другие шаги не пугают с порога', () => {
+    const { onFill } = renderCard(quest());
 
     expect(screen.getByText('Прокачай профиль')).toBeInTheDocument();
+    expect(screen.getByText('чтобы лучше подбирать клубы')).toBeInTheDocument();
     expect(screen.getByText(/0 \/ 50 XP/)).toBeInTheDocument();
-    // Шаги и их «зачем»
-    expect(screen.getByText('Город')).toBeInTheDocument();
+    // Один слайд: город. Био и интересы НЕ отрендерены — суть редизайна.
+    expect(screen.getByText('Укажи город')).toBeInTheDocument();
     expect(screen.getByText('Найдём клубы рядом с тобой')).toBeInTheDocument();
-    expect(screen.getByText('Интересы')).toBeInTheDocument();
-    expect(screen.getByText('По ним подберём клубы, которые твои')).toBeInTheDocument();
-    expect(screen.getByText('О себе')).toBeInTheDocument();
-    expect(screen.getByText('Организаторы поймут, кто к ним идёт')).toBeInTheDocument();
-    // XP шагов (сумма = 50, порог «Свой»)
-    expect(screen.getByText('+10 XP')).toBeInTheDocument();
-    expect(screen.getByText('+25 XP')).toBeInTheDocument();
-    expect(screen.getByText('+15 XP')).toBeInTheDocument();
-    // Кнопка «Заполнить» одна — на следующем (первом незавершённом) шаге
-    fireEvent.click(screen.getByRole('button', { name: 'Заполнить' }));
-    expect(onFill).toHaveBeenCalledOnce();
+    expect(screen.queryByText('Пару слов о себе')).not.toBeInTheDocument();
+    expect(screen.queryByText('Добавь интересы')).not.toBeInTheDocument();
+
+    // Тап по слайду (клик по тексту всплывает до кнопки-слайда) — редактор с подсветкой города.
+    fireEvent.click(screen.getByText('Укажи город'));
+    expect(onFill).toHaveBeenCalledWith('city');
   });
 
-  it('город сделан: 10/50, шаг помечен, следующий — интересы', () => {
-    render(<ProfileQuestCard quest={quest({ cityDone: true })} onFill={vi.fn()} />);
+  it('город заполнен: автопозиция на «О себе» (новый порядок), первая точка жёлтая', () => {
+    renderCard(quest({ cityDone: true }));
 
     expect(screen.getByText(/10 \/ 50 XP/)).toBeInTheDocument();
-    expect(screen.getByText('20%')).toBeInTheDocument();
-    const citystep = screen.getByText('Город').closest('.rd-q-step');
-    expect(citystep?.className).toContain('rd-done');
-    const interestsStep = screen.getByText('Интересы').closest('.rd-q-step');
-    expect(interestsStep?.className).toContain('rd-next');
+    // Порядок v2: город → о себе → интересы (PO 2026-07-25).
+    expect(screen.getByText('Пару слов о себе')).toBeInTheDocument();
+    expect(screen.getByText('Чем увлекаешься?)')).toBeInTheDocument();
+
+    const cityDot = screen.getByRole('button', { name: 'Шаг «Укажи город» — заполнен' });
+    expect(cityDot.className).toContain('rd-gold');
+    const bioDot = screen.getByRole('button', { name: 'Шаг «Пару слов о себе»' });
+    expect(bioDot.className).toContain('rd-on');
   });
 
-  it('сворачивается в пилюлю с подсказкой следующего шага и разворачивается обратно', () => {
-    render(<ProfileQuestCard quest={quest({ cityDone: true })} onFill={vi.fn()} />);
+  it('свайп назад: заполненный шаг показывает «готово» и значение вместо кнопки', () => {
+    renderCard(quest({ cityDone: true }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Свернуть квест профиля' }));
-    // Пилюля: счёт XP + «Дальше: интересы +25»
+    // Листаем со слайда «О себе» назад стрелкой.
+    fireEvent.click(screen.getByRole('button', { name: 'Предыдущий шаг' }));
+
+    expect(screen.getByText('Город — готово')).toBeInTheDocument();
+    expect(screen.getByText('Москва')).toBeInTheDocument();
+    expect(screen.getByText('✓ +10 XP')).toBeInTheDocument();
+    expect(screen.queryByText('Заполнить')).not.toBeInTheDocument();
+  });
+
+  it('точки кликабельны: тап по третьей ведёт на «Интересы»', () => {
+    renderCard(quest());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Шаг «Добавь интересы»' }));
+
+    expect(screen.getByText('Добавь интересы')).toBeInTheDocument();
+    expect(screen.getByText('Подберём интересные клубы')).toBeInTheDocument();
+  });
+
+  it('folded: пилюля с XP и следующим шагом, тап зовёт onToggleFold', () => {
+    const { onToggleFold } = renderCard(quest({ cityDone: true }), { folded: true });
+
     const pill = screen.getByRole('button', { name: /Развернуть квест профиля/ });
     expect(pill).toHaveTextContent('10 / 50 XP');
-    expect(pill).toHaveTextContent('Дальше: интересы +25');
+    expect(pill).toHaveTextContent('Дальше: пару слов о себе +15');
     expect(screen.queryByText('Прокачай профиль')).not.toBeInTheDocument();
-    // Fold переживает перезаход (localStorage)
-    expect(localStorage.getItem('profileQuestFolded')).toBe('1');
 
     fireEvent.click(pill);
-    expect(screen.getByText('Прокачай профиль')).toBeInTheDocument();
-    expect(localStorage.getItem('profileQuestFolded')).toBe('0');
+    expect(onToggleFold).toHaveBeenCalledOnce();
+  });
+
+  it('кнопка сворачивания на развёрнутой карточке зовёт onToggleFold', () => {
+    const { onToggleFold } = renderCard(quest());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Свернуть квест профиля' }));
+    expect(onToggleFold).toHaveBeenCalledOnce();
   });
 });
 
