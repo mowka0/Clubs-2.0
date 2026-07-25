@@ -141,7 +141,7 @@ events:
   # В минутах, чтобы staging мог поставить малое значение
   # и сохранить короткое окно голосования Этапа 1 перед переключением — так двухэтапный
   # флоу тестируется сквозняком. Env: STAGE2_TRIGGER_MINUTES_BEFORE
-  stage2-trigger-minutes-before: ${STAGE2_TRIGGER_MINUTES_BEFORE:1440}
+  stage2-trigger-minutes-before: ${STAGE2_TRIGGER_MINUTES_BEFORE:1080}
   # Период опроса Stage2Service.triggerStage2ForReadyEvents (мс). Окно подтверждения =
   # stage2-trigger-minutes-before МИНУС фаза шедулера, поэтому тик должен быть сильно мельче
   # lead-времени триггера — старый захардкоженный тик 5мин съедал короткий lead целиком
