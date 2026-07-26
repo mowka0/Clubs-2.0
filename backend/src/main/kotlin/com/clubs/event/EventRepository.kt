@@ -77,13 +77,14 @@ interface EventRepository {
     fun cancelEvent(eventId: UUID, reason: String?): Int
 
     /**
-     * Переносит дату/время события на [newDatetime], но ТОЛЬКО пока оно на Этапе 1
-     * (status=upcoming, stage_2_triggered=false) и ещё не началось (`event_datetime > now`).
-     * С Этапа 2 редактирование запрещено (решение PO 2026-07-23) — подтвердившие обещали
-     * прийти в конкретное время, и сдвиг даты обесценил бы их подтверждения. Возвращает число
-     * затронутых строк (0 ⇒ переносить нельзя → вызывающий возвращает 409).
+     * Редактирует встречу (все поля из [edit], включая дату), но ТОЛЬКО пока она на Этапе 1
+     * (status=upcoming, stage_2_triggered=false) и ещё не началась (`event_datetime > now`).
+     * С Этапа 2 правки запрещены (решения PO 2026-07-23 и 2026-07-26) — подтвердившие обещали
+     * прийти в конкретное место и время, и правка обесценила бы их подтверждения.
+     * PUT-семантика: null в [edit] = очистить поле. Возвращает число затронутых строк
+     * (0 ⇒ редактировать нельзя → вызывающий возвращает 409).
      */
-    fun rescheduleEvent(eventId: UUID, newDatetime: OffsetDateTime): Int
+    fun updateEvent(eventId: UUID, edit: EventEdit): Int
 
     /**
      * Помечает событие как attendance-marked и проставляет attendance_marked_at = now() (решение (б):

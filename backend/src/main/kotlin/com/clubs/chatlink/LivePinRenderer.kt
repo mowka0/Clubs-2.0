@@ -2,7 +2,9 @@ package com.clubs.chatlink
 
 import com.clubs.common.util.EventFormatTexts
 import com.clubs.event.Event
+import com.clubs.event.EventEditedEvent
 import com.clubs.event.locationDisplay
+import com.clubs.event.locationDisplayOrDash
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.time.OffsetDateTime
@@ -73,11 +75,31 @@ class LivePinRenderer(
             (event.participantLimit?.let { "$confirmed из $it" } ?: "$confirmed") +
             ". Итог появится после отметки явки."
 
-    /** Громкий пост о переносе даты (только Этап 1): «было → стало»; [event] несёт уже новую дату. */
-    fun rescheduledText(event: Event, oldDatetime: OffsetDateTime): String =
-        "📅 ${event.title} — встреча перенесена\n" +
-            "Было: ${oldDatetime.format(fmt)}\n" +
+    /**
+     * Громкий пост о правке встречи (только Этап 1): «было → стало» по тому, что реально
+     * изменилось. Три формулировки вместо одной общей — участник должен понять суть из первой
+     * строки, не вчитываясь: сдвиг времени и переезд требуют разных действий.
+     * [edited] несёт и новое состояние, и прежнее.
+     */
+    fun editedText(edited: EventEditedEvent): String {
+        val event = edited.event
+        val old = edited.oldEvent
+        val datetimeLines = "Было: ${old.eventDatetime.format(fmt)}\n" +
             "Стало: ${event.eventDatetime.format(fmt)}"
+        val locationLines = "Было: ${old.locationDisplayOrDash}\n" +
+            "Стало: ${event.locationDisplayOrDash}"
+        return when {
+            edited.isDatetimeChanged && edited.isLocationChanged ->
+                "📝 ${event.title} — встреча изменилась\n" +
+                    "🕐 $datetimeLines\n" +
+                    "📍 $locationLines"
+
+            edited.isLocationChanged ->
+                "📍 ${event.title} — встреча меняет место\n$locationLines"
+
+            else -> "📅 ${event.title} — встреча перенесена\n$datetimeLines"
+        }
+    }
 
     /** Финальный текст при отмене события. */
     fun cancelledText(event: Event, reason: String?): String {

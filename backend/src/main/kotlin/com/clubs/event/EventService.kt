@@ -6,6 +6,7 @@ import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.dto.PageResponse
 import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
+import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.skladchina.SkladchinaRepository
 import org.slf4j.LoggerFactory
@@ -140,34 +141,85 @@ class EventService(
     }
 
     /**
-     * Перенос даты/времени события (решение PO 2026-07-23): только организатор/со-орг и только
-     * на Этапе 1 — с началом подтверждения мест (Этап 2) любое редактирование запрещено,
-     * подтвердившие обещали прийти в конкретное время. SQL-guard (status=upcoming AND
-     * stage_2_triggered=false AND event_datetime > now) даёт 0 строк ⇒ 409 для события
-     * в Этапе 2 / срочного / начавшегося / завершённого / отменённого. Дата ближе интервала
-     * Этапа 2 намеренно НЕ отклоняется — как при создании: событие просто перейдёт в Этап 2
-     * ближайшим тиком шедулера.
+     * Редактирование встречи, включая перенос даты (решения PO 2026-07-23 и 2026-07-26):
+     * только организатор/со-орг и только на Этапе 1 — с началом подтверждения мест правки
+     * запрещены, подтвердившие обещали прийти в конкретное место и время. SQL-guard
+     * (status=upcoming AND stage_2_triggered=false AND event_datetime > now) даёт 0 строк
+     * ⇒ 409 для события в Этапе 2 / срочного / начавшегося / завершённого / отменённого.
+     *
+     * Дата ближе интервала Этапа 2 намеренно НЕ отклоняется — как при создании: событие
+     * просто перейдёт в Этап 2 ближайшим тиком шедулера.
+     *
+     * Формат встречи неизменяем, поэтому зависящие от него инварианты проверяются здесь,
+     * а не в DTO: там формат неизвестен. Уведомление уходит только при критичных изменениях
+     * («где» и «когда») — остальное правится молча.
      */
     @Transactional
-    fun rescheduleEvent(eventId: UUID, userId: UUID, request: RescheduleEventRequest): EventDetailDto {
+    fun updateEvent(eventId: UUID, userId: UUID, request: UpdateEventRequest): EventDetailDto {
         val event = eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
         val club = clubRepository.findById(event.clubId) ?: throw NotFoundException("Club not found")
-        // Менеджерский гейт (co-organizers): владелец или активный со-орг переносит событие.
+        // Менеджерский гейт (co-organizers): владелец или активный со-орг редактирует встречу.
         clubRoleGuard.requireCapability(club, userId, ClubCapability.MANAGE_EVENTS)
 
-        if (eventRepository.rescheduleEvent(eventId, request.eventDatetime) == 0) {
-            throw ConflictException("Событие нельзя перенести: подтверждение мест уже началось, событие прошло или отменено")
+        validateFormatInvariants(event, request)
+
+        val edit = EventEdit(
+            title = request.title,
+            description = request.description,
+            locationText = request.locationText,
+            locationLat = request.locationLat,
+            locationLon = request.locationLon,
+            locationHint = request.locationHint,
+            eventDatetime = request.eventDatetime,
+            participantLimit = request.participantLimit,
+            stage2LeadMinutes = request.stage2LeadMinutes,
+            photoUrl = request.photoUrl
+        )
+        if (eventRepository.updateEvent(eventId, edit) == 0) {
+            throw ConflictException("Встречу нельзя изменить: подтверждение мест уже началось, событие прошло или отменено")
         }
 
+        val updated = event.copy(
+            title = edit.title,
+            description = edit.description,
+            locationText = edit.locationText,
+            locationLat = edit.locationLat,
+            locationLon = edit.locationLon,
+            locationHint = edit.locationHint,
+            eventDatetime = edit.eventDatetime,
+            participantLimit = edit.participantLimit,
+            stage2LeadMinutes = edit.stage2LeadMinutes,
+            photoUrl = edit.photoUrl
+        )
+        val edited = EventEditedEvent(updated, oldEvent = event)
         log.info(
-            "Event rescheduled: id={} userId={} from={} to={}",
-            eventId, userId, event.eventDatetime, request.eventDatetime
+            "Event updated: id={} userId={} datetimeChanged={} locationChanged={}",
+            eventId, userId, edited.isDatetimeChanged, edited.isLocationChanged
         )
-        // AFTER_COMMIT-слушатель (EventRescheduledListener) шлёт пост в чат + DM. Публикация
-        // внутри транзакции — при откате уведомление не уходит (паттерн cancelEvent).
-        eventPublisher.publishEvent(
-            EventRescheduledEvent(event.copy(eventDatetime = request.eventDatetime), oldDatetime = event.eventDatetime)
-        )
+        // Молчим, когда поменялось некритичное (название, описание, фото, лимит, интервал):
+        // рассылка на весь клуб из-за правки заголовка обесценивает уведомления как канал.
+        if (edited.hasCriticalChanges) {
+            eventPublisher.publishEvent(edited)
+        }
         return getEvent(eventId)
+    }
+
+    /**
+     * Инварианты, завязанные на неизменяемый формат встречи (зеркалят проверки
+     * CreateEventRequest, но формат берётся из самого события, а не из запроса).
+     */
+    private fun validateFormatInvariants(event: Event, request: UpdateEventRequest) {
+        if (event.isOpenEvent && request.participantLimit != null) {
+            throw ValidationException("Открытая встреча не имеет лимита участников")
+        }
+        if (!event.isOpenEvent && request.participantLimit == null) {
+            throw ValidationException("Для встречи с местами нужен лимит участников")
+        }
+        if (event.isOpenEvent && request.stage2LeadMinutes != null) {
+            throw ValidationException("У открытой встречи нет Этапа 2 — интервал подтверждения неприменим")
+        }
+        if (event.isUrgent && request.stage2LeadMinutes != null) {
+            throw ValidationException("У срочной встречи нет Этапа 1 — интервал подтверждения неприменим")
+        }
     }
 }

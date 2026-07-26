@@ -14,10 +14,10 @@ import {
   getMyEvents,
   getMyVote,
   markAttendance,
-  rescheduleEvent,
   resolveDispute,
+  updateEvent,
 } from '../api/events';
-import type { CreateEventBody } from '../api/events';
+import type { CreateEventBody, UpdateEventBody } from '../api/events';
 import { queryKeys, type EventListParams } from './queryKeys';
 
 export function useClubEventsQuery(clubId: string | undefined, params?: EventListParams) {
@@ -230,19 +230,18 @@ export function useCancelEventMutation() {
   });
 }
 
-interface RescheduleEventArgs {
+interface UpdateEventArgs {
   eventId: string;
   clubId: string;
-  /** Новая дата/время в ISO (UTC). */
-  eventDatetime: string;
+  body: UpdateEventBody;
 }
 
-export function useRescheduleEventMutation() {
+export function useUpdateEventMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ eventId, eventDatetime }: RescheduleEventArgs) => rescheduleEvent(eventId, eventDatetime),
+    mutationFn: ({ eventId, body }: UpdateEventArgs) => updateEvent(eventId, body),
     onSuccess: (_data, { eventId, clubId }) => {
-      // Тот же набор, что у отмены: дата видна в деталях, ленте «Активности» и ленте клуба.
+      // Тот же набор, что у отмены: правки видны в деталях, ленте «Активности» и ленте клуба.
       qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
       qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });
       qc.invalidateQueries({ queryKey: queryKeys.activities.byClubAll(clubId) });

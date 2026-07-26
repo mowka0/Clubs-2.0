@@ -13,6 +13,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -77,17 +78,18 @@ class EventController(
     }
 
     /**
-     * Перенос даты/времени события — только на Этапе 1. Капабилити-гейт (MANAGE_EVENTS)
-     * проверяет сервис: в URL нет clubId для аннотации @RequiresCapability (как у /cancel).
+     * Редактирование встречи (включая перенос даты) — только на Этапе 1. PUT: клиент присылает
+     * весь набор редактируемых полей, null = очистить. Капабилити-гейт (MANAGE_EVENTS) проверяет
+     * сервис — в URL нет clubId для аннотации @RequiresCapability (как у /cancel).
      */
-    @PostMapping("/api/events/{id}/reschedule")
-    fun rescheduleEvent(
+    @PutMapping("/api/events/{id}")
+    fun updateEvent(
         @PathVariable id: UUID,
-        @RequestBody @Valid request: RescheduleEventRequest,
+        @RequestBody @Valid request: UpdateEventRequest,
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<EventDetailDto> {
-        log.info("Reschedule event: eventId={} userId={}", id, user.userId)
-        return ResponseEntity.ok(eventService.rescheduleEvent(id, user.userId, request))
+        log.info("Update event: eventId={} userId={}", id, user.userId)
+        return ResponseEntity.ok(eventService.updateEvent(id, user.userId, request))
     }
 
     @PostMapping("/api/events/{id}/vote")

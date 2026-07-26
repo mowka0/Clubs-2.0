@@ -2,9 +2,11 @@ package com.clubs.bot
 
 import com.clubs.common.util.EventFormatTexts
 import com.clubs.event.Event
+import com.clubs.event.EventEditedEvent
 import com.clubs.event.EventResponseRepository
 import com.clubs.event.OPEN_IN_YANDEX_MAPS_BUTTON
 import com.clubs.event.locationDisplay
+import com.clubs.event.locationDisplayOrDash
 import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -225,27 +227,49 @@ class NotificationService(
     }
 
     /**
-     * Перенос даты события (только Этап 1). О переносе сообщаем ВСЕМ участникам клуба с доступом —
-     * симметрично sendEventCreated/sendEventCancelled: кто узнал о создании, узнаёт и о новой дате.
-     * [event] несёт уже новую дату; [oldDatetime] — прежняя, для строки «Было → Стало».
-     * [chatPostChatId] — чат, куда фактически вышел пост о переносе; его участникам DM не шлём.
+     * Правка встречи на Этапе 1 — перенос даты и/или смена места. Сообщаем ВСЕМ участникам клуба
+     * с доступом — симметрично sendEventCreated/sendEventCancelled: кто узнал о создании, узнаёт
+     * и о том, что «где/когда» изменилось. Некритичные правки (название, описание, фото, лимит,
+     * интервал Этапа 2) сюда не доходят — событие для них не публикуется (PO 2026-07-26).
+     * [chatPostChatId] — чат, куда фактически вышел пост о правке; его участникам DM не шлём.
      */
-    fun sendEventRescheduled(event: Event, oldDatetime: java.time.OffsetDateTime, chatPostChatId: Long? = null) {
+    fun sendEventEdited(edited: EventEditedEvent, chatPostChatId: Long? = null) {
+        val event = edited.event
         val recipientTelegramIds = chatAwareBroadcast.dmTargets(
             chatPostChatId, membershipRepository.findMemberTelegramIds(event.clubId)
         )
         if (recipientTelegramIds.isEmpty()) {
-            log.info("Event-rescheduled DM SKIPPED — all covered by chat or no members, clubId={}", event.clubId)
+            log.info("Event-edited DM SKIPPED — all covered by chat or no members, clubId={}", event.clubId)
             return
         }
-        log.info("Event-rescheduled DM: eventId={} clubId={} recipients={}", event.id, event.clubId, recipientTelegramIds.size)
-        val text = "📅 Встреча перенесена\n\n" +
-            "📌 ${event.title}\n" +
-            "Было: ${oldDatetime.format(fmt)}\n" +
-            "Стало: ${event.eventDatetime.format(fmt)}"
+        log.info("Event-edited DM: eventId={} clubId={} recipients={}", event.id, event.clubId, recipientTelegramIds.size)
+        val text = renderEditedDm(edited)
         val webAppPath = "/events/${event.id}"
         recipientTelegramIds.forEach { telegramId ->
             sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
+        }
+    }
+
+    /**
+     * Текст DM о правке: заголовок называет суть изменения, дальше только изменившиеся строки.
+     * Разные заголовки для переноса и переезда — из первой строки должно быть понятно, что
+     * поменялось, без вчитывания в «было/стало».
+     */
+    private fun renderEditedDm(edited: EventEditedEvent): String {
+        val event = edited.event
+        val old = edited.oldEvent
+        val datetimeLines = "Было: ${old.eventDatetime.format(fmt)}\n" +
+            "Стало: ${event.eventDatetime.format(fmt)}"
+        val locationLines = "Было: ${old.locationDisplayOrDash}\n" +
+            "Стало: ${event.locationDisplayOrDash}"
+        return when {
+            edited.isDatetimeChanged && edited.isLocationChanged ->
+                "📝 Встреча изменилась\n\n📌 ${event.title}\n\n🕐 $datetimeLines\n\n📍 $locationLines"
+
+            edited.isLocationChanged ->
+                "📍 Встреча меняет место\n\n📌 ${event.title}\n$locationLines"
+
+            else -> "📅 Встреча перенесена\n\n📌 ${event.title}\n$datetimeLines"
         }
     }
 

@@ -228,14 +228,67 @@ data class TeaserEventDto(
 )
 
 /**
- * Перенос даты/времени события организатором (решение PO 2026-07-23): разрешён ТОЛЬКО на
- * Этапе 1 (status=upcoming) — с началом подтверждения мест (Этап 2) любое редактирование
- * запрещено, у срочной встречи (сразу stage_2) переноса нет вовсе. Прочие поля события
- * не редактируются. Дата ближе интервала Этапа 2 не блокируется — как при создании,
- * событие просто перейдёт в Этап 2 ближайшим тиком шедулера.
+ * Полное редактирование встречи организатором (решение PO 2026-07-26). Окно то же, что у
+ * переноса: ТОЛЬКО Этап 1 — с началом подтверждения мест правки запрещены, подтвердившие
+ * обещали прийти в конкретное место и время.
+ *
+ * Семантика PUT: клиент присылает ПОЛНЫЙ набор редактируемых полей (форма редактирования
+ * загружает текущие значения), поэтому null означает «очистить», а не «не менять». Это
+ * избавляет от трёхзначной логики partial-update, где null неотличим от «поле не прислали».
+ *
+ * НЕ редактируется:
+ * - формат встречи (обычная/открытая/срочная) — он определяет механику мест и репутации,
+ *   смена формата на лету переписала бы правила уже идущего голосования;
+ * - `votingOpensDaysBefore` — окно Этапа 1 уже открыто, менять его задним числом бессмысленно.
+ *
+ * Инварианты, зависящие от формата (лимит у открытой, свой интервал Этапа 2 у открытой и
+ * срочной), проверяются в [EventService.updateEvent]: здесь формат неизвестен, он берётся
+ * из самого события.
  */
-data class RescheduleEventRequest(
+data class UpdateEventRequest(
+    @field:NotBlank(message = "Title is required")
+    @field:Size(max = 255, message = "Title must be at most 255 characters")
+    val title: String,
+
+    val description: String? = null,
+
+    @field:Size(max = 500, message = "Location must be at most 500 characters")
+    val locationText: String? = null,
+
+    @field:DecimalMin(value = "-90.0", message = "Latitude must be >= -90")
+    @field:DecimalMax(value = "90.0", message = "Latitude must be <= 90")
+    val locationLat: Double? = null,
+
+    @field:DecimalMin(value = "-180.0", message = "Longitude must be >= -180")
+    @field:DecimalMax(value = "180.0", message = "Longitude must be <= 180")
+    val locationLon: Double? = null,
+
+    @field:Size(max = 200, message = "Location hint must be at most 200 characters")
+    val locationHint: String? = null,
+
     @field:NotNull(message = "Event datetime is required")
     @field:Future(message = "Event datetime must be in the future")
-    val eventDatetime: OffsetDateTime
-)
+    val eventDatetime: OffsetDateTime,
+
+    // null = открытая встреча (формат события неизменяем, поэтому согласованность с ним
+    // проверяет Service). Для события с местами лимит обязателен и положителен.
+    @field:Positive(message = "Participant limit must be positive")
+    val participantLimit: Int? = null,
+
+    // Диапазон зеркалит CHECK chk_events_stage2_lead_minutes (V68); null = глобальный дефолт.
+    @field:Min(value = 1080, message = "Stage 2 lead must be at least 1080 minutes (18 hours)")
+    @field:Max(value = 7200, message = "Stage 2 lead must be at most 7200 minutes (5 days)")
+    val stage2LeadMinutes: Int? = null,
+
+    @field:Size(max = 1024, message = "Photo URL must be at most 1024 characters")
+    val photoUrl: String? = null
+) {
+    // Те же инварианты места, что при создании (зеркалят CHECK chk_events_location_pair).
+    @get:AssertTrue(message = "Latitude and longitude must be provided together")
+    val isLocationPairConsistent: Boolean
+        get() = (locationLat == null) == (locationLon == null)
+
+    @get:AssertTrue(message = "Either a map point or a location hint is required")
+    val isSomeLocationProvided: Boolean
+        get() = (locationLat != null && locationLon != null) || !locationHint.isNullOrBlank()
+}

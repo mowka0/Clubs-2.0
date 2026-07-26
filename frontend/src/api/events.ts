@@ -68,11 +68,31 @@ export function cancelEvent(eventId: string, reason?: string): Promise<EventDeta
 }
 
 /**
- * Перенос даты/времени события организатором. Бэкенд разрешает только на Этапе 1
- * (status=upcoming): с началом подтверждения мест — 409. eventDatetime — ISO-строка (UTC).
+ * Полный набор редактируемых полей встречи. PUT-семантика: присылаем ВСЁ, что можно менять,
+ * null = очистить поле. Формат встречи (обычная/открытая/срочная) неизменяем и сюда не входит.
  */
-export function rescheduleEvent(eventId: string, eventDatetime: string): Promise<EventDetailDto> {
-  return apiClient.post<EventDetailDto>(`/api/events/${eventId}/reschedule`, { eventDatetime });
+export interface UpdateEventBody {
+  title: string;
+  description?: string | null;
+  locationText?: string | null;
+  locationLat?: number | null;
+  locationLon?: number | null;
+  locationHint?: string | null;
+  /** ISO-строка (UTC). */
+  eventDatetime: string;
+  /** null у открытой встречи; для встречи с местами обязателен. */
+  participantLimit?: number | null;
+  stage2LeadMinutes?: number | null;
+  photoUrl?: string | null;
+}
+
+/**
+ * Редактирование встречи организатором, включая перенос даты. Бэкенд разрешает только на
+ * Этапе 1 (status=upcoming): с началом подтверждения мест — 409. Уведомление участникам
+ * уходит только при изменении места или времени — остальное правится молча.
+ */
+export function updateEvent(eventId: string, body: UpdateEventBody): Promise<EventDetailDto> {
+  return apiClient.put<EventDetailDto>(`/api/events/${eventId}`, body);
 }
 
 export function castVote(eventId: string, vote: string): Promise<{ eventId: string; vote: string; goingCount: number; maybeCount: number; notGoingCount: number }> {

@@ -2,6 +2,7 @@ package com.clubs.chatlink
 
 import com.clubs.bot.ChatTelegramGateway
 import com.clubs.event.Event
+import com.clubs.event.EventEditedEvent
 import com.clubs.event.EventRepository
 import com.clubs.event.EventResponseRepository
 import com.clubs.event.OPEN_IN_YANDEX_MAPS_BUTTON
@@ -88,18 +89,18 @@ class LivePinService(
     }
 
     /**
-     * Перенос даты (только Этап 1): громкий пост «было → стало» + dirty-флаг закрепа
-     * (дата в нём перерисуется flush-проходом; правки закрепа Telegram не уведомляют,
+     * Правка встречи на Этапе 1 (дата и/или место): громкий пост «было → стало» + dirty-флаг
+     * закрепа (данные в нём перерисуются flush-проходом; правки закрепа Telegram не уведомляют,
      * так что пост — единственный пинг участников чата). Возвращает chatId, когда пост
      * фактически вышел, — для DM-фоллбека маршрутизатора (как onEventCancelled).
      */
     @Transactional
-    fun onEventRescheduled(event: Event, oldDatetime: OffsetDateTime): Long? {
-        markDirty(event.id)
-        val link = liveLinkFor(event.clubId) ?: return null
+    fun onEventEdited(edited: EventEditedEvent): Long? {
+        markDirty(edited.event.id)
+        val link = liveLinkFor(edited.event.clubId) ?: return null
         val messageId = gateway.sendGroupMessageWithUrlButton(
             chatId = link.chatId,
-            text = renderer.rescheduledText(event, oldDatetime),
+            text = renderer.editedText(edited),
             buttonText = null,
             url = null
         )

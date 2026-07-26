@@ -14,6 +14,7 @@ import { useEventSplitStateQuery } from '../queries/skladchina';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { Toast } from '../components/Toast';
 import { EventPlaceCard } from '../components/event/EventPlaceCard';
+import { LocationPickerSheet } from '../components/event/LocationPickerSheet';
 import {
   useCastVoteMutation,
   useConfirmParticipationMutation,
@@ -25,7 +26,7 @@ import {
   useMyAttendanceQuery,
   useMyVoteQuery,
   useCancelEventMutation,
-  useRescheduleEventMutation,
+  useUpdateEventMutation,
   useResolveDisputeMutation,
 } from '../queries/events';
 
@@ -128,7 +129,7 @@ export const EventPage: FC = () => {
   const disputeMutation = useDisputeAttendanceMutation();
   const resolveMutation = useResolveDisputeMutation();
   const cancelMutation = useCancelEventMutation();
-  const rescheduleMutation = useRescheduleEventMutation();
+  const updateMutation = useUpdateEventMutation();
 
   // Два отдельных канала ошибок: actionError — для голоса/подтверждения/отказа, attendanceError —
   // для отметки явки. actionError рендерится ровно в одном слоте на фазу — блок голосования Этапа 1
@@ -145,10 +146,19 @@ export const EventPage: FC = () => {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelError, setCancelError] = useState<string | null>(null);
-  // Шторка переноса даты (только Этап 1): значение datetime-local и собственный слот ошибки.
-  const [rescheduleOpen, setRescheduleOpen] = useState(false);
-  const [rescheduleValue, setRescheduleValue] = useState('');
-  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
+  // Шторка редактирования встречи (только Этап 1). Поля держим отдельными строками, а не
+  // копией DTO: форма правит текст, а собирается payload уже при сохранении.
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editLocation, setEditLocation] = useState<{ text: string | null; lat: number | null; lon: number | null }>(
+    { text: null, lat: null, lon: null },
+  );
+  const [editHint, setEditHint] = useState('');
+  const [editDatetime, setEditDatetime] = useState('');
+  const [editLimit, setEditLimit] = useState('');
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editPickerOpen, setEditPickerOpen] = useState(false);
   // Инлайн-подтверждение отказа от подтверждённого места (защита от случайного клика).
   const [confirmingDecline, setConfirmingDecline] = useState(false);
 
@@ -295,33 +305,83 @@ export const EventPage: FC = () => {
     );
   };
 
-  // Перенос даты (только Этап 1). Открытие шторки предзаполняет пикер текущей датой события.
-  const openReschedule = () => {
+  // Редактирование встречи (только Этап 1). Открытие шторки предзаполняет ВСЕ поля текущими
+  // значениями: у PUT нет частичных правок, клиент присылает полный набор.
+  const openEdit = () => {
     if (!event) return;
     haptic.impact('medium');
-    setRescheduleError(null);
-    setRescheduleValue(toDatetimeLocalValue(event.eventDatetime));
-    setRescheduleOpen(true);
+    setEditError(null);
+    setEditTitle(event.title);
+    setEditDescription(event.description ?? '');
+    setEditLocation({
+      text: event.locationText ?? null,
+      lat: event.locationLat ?? null,
+      lon: event.locationLon ?? null,
+    });
+    setEditHint(event.locationHint ?? '');
+    setEditDatetime(toDatetimeLocalValue(event.eventDatetime));
+    setEditLimit(event.participantLimit != null ? String(event.participantLimit) : '');
+    setEditOpen(true);
   };
 
-  const handleRescheduleEvent = () => {
-    if (!id || !event || rescheduleMutation.isPending) return;
-    setRescheduleError(null);
-    if (!rescheduleValue) { setRescheduleError('Укажите дату и время'); haptic.notify('error'); return; }
-    const newDate = new Date(rescheduleValue);
-    if (Number.isNaN(newDate.getTime())) { setRescheduleError('Некорректная дата'); haptic.notify('error'); return; }
-    if (newDate.getTime() <= Date.now()) { setRescheduleError('Дата события должна быть в будущем'); haptic.notify('error'); return; }
+  const handleUpdateEvent = () => {
+    if (!id || !event || updateMutation.isPending) return;
+    setEditError(null);
+
+    const title = editTitle.trim();
+    if (!title) { setEditError('Укажите название'); haptic.notify('error'); return; }
+    if (!editDatetime) { setEditError('Укажите дату и время'); haptic.notify('error'); return; }
+    const newDate = new Date(editDatetime);
+    if (Number.isNaN(newDate.getTime())) { setEditError('Некорректная дата'); haptic.notify('error'); return; }
+    if (newDate.getTime() <= Date.now()) { setEditError('Дата события должна быть в будущем'); haptic.notify('error'); return; }
+
+    const hint = editHint.trim();
+    // Тот же инвариант, что на бэкенде: у встречи должно остаться хоть какое-то указание места.
+    const hasPoint = editLocation.lat != null && editLocation.lon != null;
+    if (!hasPoint && !hint) {
+      setEditError('Укажите место на карте или добавьте уточнение');
+      haptic.notify('error');
+      return;
+    }
+
+    // Формат неизменяем: лимит правим только у встречи с местами, у открытой его нет вовсе.
+    let participantLimit: number | null = null;
+    if (!isOpenEvent) {
+      const parsed = Number(editLimit);
+      if (!Number.isInteger(parsed) || parsed < 1) {
+        setEditError('Лимит участников — целое число от 1');
+        haptic.notify('error');
+        return;
+      }
+      participantLimit = parsed;
+    }
+
     haptic.impact('medium');
-    rescheduleMutation.mutate(
-      { eventId: id, clubId: event.clubId, eventDatetime: newDate.toISOString() },
+    updateMutation.mutate(
+      {
+        eventId: id,
+        clubId: event.clubId,
+        body: {
+          title,
+          description: editDescription.trim() || null,
+          locationText: editLocation.text,
+          locationLat: editLocation.lat,
+          locationLon: editLocation.lon,
+          locationHint: hint || null,
+          eventDatetime: newDate.toISOString(),
+          participantLimit,
+          stage2LeadMinutes: event.stage2LeadMinutes ?? null,
+          photoUrl: event.photoUrl ?? null,
+        },
+      },
       {
         onSuccess: () => {
           haptic.notify('success');
-          setRescheduleOpen(false);
-          setToastMessage('Встреча перенесена');
+          setEditOpen(false);
+          setToastMessage('Изменения сохранены');
         },
-        onError: (e) => {
-          setRescheduleError(e.message);
+        onError: (e: Error) => {
+          setEditError(e.message);
           haptic.notify('error');
         },
       },
@@ -396,13 +456,13 @@ export const EventPage: FC = () => {
   // Перенос даты: новая дата ближе интервала Этапа 2 — не блокируем (паритет с созданием),
   // но предупреждаем, что подтверждение мест начнётся сразу. stage2LeadMinutes с бэка уже
   // эффективный (свой или дефолт); null = открытая встреча — предупреждение не нужно.
-  const rescheduleTimeMs = rescheduleValue ? new Date(rescheduleValue).getTime() : null;
-  const rescheduleStage2Immediate =
+  const editTimeMs = editDatetime ? new Date(editDatetime).getTime() : null;
+  const editStage2Immediate =
     event.stage2LeadMinutes != null &&
-    rescheduleTimeMs !== null && !Number.isNaN(rescheduleTimeMs) &&
-    rescheduleTimeMs > Date.now() &&
-    rescheduleTimeMs - Date.now() <= event.stage2LeadMinutes * 60_000;
-  const rescheduleLeadLabel =
+    editTimeMs !== null && !Number.isNaN(editTimeMs) &&
+    editTimeMs > Date.now() &&
+    editTimeMs - Date.now() <= event.stage2LeadMinutes * 60_000;
+  const editLeadLabel =
     event.stage2LeadMinutes != null ? formatLeadInterval(event.stage2LeadMinutes) : null;
 
   // «Путь назад», вариант C (reputation-path-back.md AC-8): строка-мотиватор «придёте — надёжность
@@ -992,9 +1052,9 @@ export const EventPage: FC = () => {
         </>
       )}
 
-      {/* Организаторские действия до старта: перенос даты — только на Этапе 1 (с началом
-          подтверждения мест редактирование запрещено, гейт зеркалит бэкенд-гард
-          rescheduleEvent) — и отмена события (F5-14). */}
+      {/* Организаторские действия до старта: редактирование (включая перенос даты) — только на
+          Этапе 1, с началом подтверждения мест правки запрещены; гейт зеркалит бэкенд-гард
+          updateEvent — и отмена события (F5-14). */}
       {isManager && !isCancelled && !eventHappened && (
         <div className="rd-cta-wrap" style={{ marginTop: 8 }}>
           {showVoting && (
@@ -1002,9 +1062,9 @@ export const EventPage: FC = () => {
               type="button"
               className="rd-btn-outline"
               style={{ marginBottom: 8 }}
-              onClick={openReschedule}
+              onClick={openEdit}
             >
-              Перенести встречу
+              Редактировать встречу
             </button>
           )}
           <button
@@ -1018,48 +1078,108 @@ export const EventPage: FC = () => {
         </div>
       )}
 
-      {rescheduleOpen && createPortal(
+      {editOpen && createPortal(
         <>
-          <div className="rd-sheet-overlay" onClick={() => setRescheduleOpen(false)} aria-hidden="true" />
-          <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Перенос встречи">
+          <div className="rd-sheet-overlay" onClick={() => setEditOpen(false)} aria-hidden="true" />
+          <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Редактирование встречи">
             <div className="rd-sheet-grabber" aria-hidden="true" />
             <div className="rd-sheet-head">
-              <h2>Перенести встречу</h2>
-              <button type="button" className="rd-sheet-close" onClick={() => setRescheduleOpen(false)}>Закрыть</button>
+              <h2>Редактировать встречу</h2>
+              <button type="button" className="rd-sheet-close" onClick={() => setEditOpen(false)}>Закрыть</button>
             </div>
             <div className="rd-sheet-body">
               <div className="rd-body-text" style={{ marginTop: 0 }}>
-                Участники получат уведомление о новой дате. Перенос возможен только до начала
-                подтверждения мест.
+                Участники получат уведомление, только если поменяется место или время. Правки
+                возможны до начала подтверждения мест.
               </div>
+
               <label className="rd-field">
-                <span className="rd-label">Новая дата и время</span>
+                <span className="rd-label">Название</span>
+                <input
+                  className="rd-input"
+                  type="text"
+                  maxLength={255}
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                />
+              </label>
+
+              <label className="rd-field">
+                <span className="rd-label">Описание</span>
+                <textarea
+                  className="rd-input"
+                  rows={3}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                />
+              </label>
+
+              <div className="rd-field">
+                <span className="rd-label">Место</span>
+                <button
+                  type="button"
+                  className="rd-btn-outline"
+                  onClick={() => { haptic.impact('light'); setEditPickerOpen(true); }}
+                >
+                  {editLocation.text ?? (editLocation.lat != null ? 'Точка на карте' : 'Выбрать на карте')}
+                </button>
+              </div>
+
+              <label className="rd-field">
+                <span className="rd-label">Уточнение к месту</span>
+                <input
+                  className="rd-input"
+                  type="text"
+                  maxLength={200}
+                  placeholder="Вход со двора, домофон 12"
+                  value={editHint}
+                  onChange={(e) => setEditHint(e.target.value)}
+                />
+              </label>
+
+              <label className="rd-field">
+                <span className="rd-label">Дата и время</span>
                 <div className="rd-datetime">
                   <input
                     className="rd-input"
                     type="datetime-local"
-                    value={rescheduleValue}
-                    onChange={(e) => setRescheduleValue(e.target.value)}
+                    value={editDatetime}
+                    onChange={(e) => setEditDatetime(e.target.value)}
                   />
                 </div>
               </label>
-              {rescheduleStage2Immediate && rescheduleLeadLabel && (
+
+              {/* У открытой встречи лимита нет вовсе — формат неизменяем, поле не показываем. */}
+              {!isOpenEvent && (
+                <label className="rd-field">
+                  <span className="rd-label">Лимит участников</span>
+                  <input
+                    className="rd-input"
+                    type="number"
+                    min={1}
+                    value={editLimit}
+                    onChange={(e) => setEditLimit(e.target.value)}
+                  />
+                </label>
+              )}
+
+              {editStage2Immediate && editLeadLabel && (
                 <div className="rd-body-text">
-                  ⚡️ До встречи меньше интервала подтверждения (за {rescheduleLeadLabel}) —
-                  подтверждение мест начнётся сразу после переноса.
+                  ⚡️ До встречи меньше интервала подтверждения (за {editLeadLabel}) —
+                  подтверждение мест начнётся сразу после сохранения.
                 </div>
               )}
-              {rescheduleError && <div className="rd-error">{rescheduleError}</div>}
+              {editError && <div className="rd-error">{editError}</div>}
               <div className="rd-cta-wrap">
                 <button
                   type="button"
                   className="rd-btn-primary"
-                  onClick={handleRescheduleEvent}
-                  disabled={rescheduleMutation.isPending}
+                  onClick={handleUpdateEvent}
+                  disabled={updateMutation.isPending}
                 >
-                  {rescheduleMutation.isPending ? <Spinner size="s" /> : 'Перенести'}
+                  {updateMutation.isPending ? <Spinner size="s" /> : 'Сохранить'}
                 </button>
-                <button type="button" className="rd-btn-outline" style={{ marginTop: 8 }} onClick={() => setRescheduleOpen(false)}>
+                <button type="button" className="rd-btn-outline" style={{ marginTop: 8 }} onClick={() => setEditOpen(false)}>
                   Назад
                 </button>
               </div>
@@ -1067,6 +1187,21 @@ export const EventPage: FC = () => {
           </div>
         </>,
         document.body,
+      )}
+
+      {editPickerOpen && (
+        <LocationPickerSheet
+          initial={
+            editLocation.lat != null && editLocation.lon != null
+              ? { lat: editLocation.lat, lon: editLocation.lon }
+              : null
+          }
+          onSelect={(point, address) => {
+            setEditLocation({ text: address || null, lat: point.lat, lon: point.lon });
+            setEditPickerOpen(false);
+          }}
+          onClose={() => setEditPickerOpen(false)}
+        />
       )}
 
       {cancelOpen && createPortal(

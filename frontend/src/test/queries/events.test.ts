@@ -16,7 +16,7 @@ vi.mock('../../telegram/sdk', () => ({
   getInitDataRaw: () => 'test-init-data',
 }));
 
-import { useCastVoteMutation, useEventQuery, useRescheduleEventMutation } from '../../queries/events';
+import { useCastVoteMutation, useEventQuery, useUpdateEventMutation } from '../../queries/events';
 import { queryKeys } from '../../queries/queryKeys';
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
@@ -100,11 +100,11 @@ describe('useCastVoteMutation', () => {
   });
 });
 
-describe('useRescheduleEventMutation', () => {
-  it('posts the new datetime and invalidates event detail cache on success', async () => {
+describe('useUpdateEventMutation', () => {
+  it('sends the full payload and invalidates event detail cache on success', async () => {
     let sentBody: unknown = null;
     server.use(
-      http.post('*/api/events/:id/reschedule', async ({ request }) => {
+      http.put('*/api/events/:id', async ({ request }) => {
         sentBody = await request.json();
         return HttpResponse.json({ ...mockEvent, eventDatetime: '2026-05-03T18:00:00Z' });
       }),
@@ -113,34 +113,34 @@ describe('useRescheduleEventMutation', () => {
     const client = makeClient();
     client.setQueryData(queryKeys.events.detail('evt-1'), mockEvent);
 
-    const { result } = renderHook(() => useRescheduleEventMutation(), {
+    const { result } = renderHook(() => useUpdateEventMutation(), {
       wrapper: makeWrapper(client),
     });
 
-    result.current.mutate({ eventId: 'evt-1', clubId: 'club-1', eventDatetime: '2026-05-03T18:00:00Z' });
+    result.current.mutate({ eventId: 'evt-1', clubId: 'club-1', body: { title: 'Тест', locationHint: 'у входа', eventDatetime: '2026-05-03T18:00:00Z', participantLimit: 20 } });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(sentBody).toEqual({ eventDatetime: '2026-05-03T18:00:00Z' });
+    expect(sentBody).toEqual({ title: 'Тест', locationHint: 'у входа', eventDatetime: '2026-05-03T18:00:00Z', participantLimit: 20 });
     const state = client.getQueryState(queryKeys.events.detail('evt-1'));
     expect(state?.isInvalidated).toBe(true);
   });
 
   it('surfaces a 409 (stage 2 already started) as a mutation error', async () => {
     server.use(
-      http.post('*/api/events/:id/reschedule', () =>
+      http.put('*/api/events/:id', () =>
         HttpResponse.json(
-          { message: 'Событие нельзя перенести: подтверждение мест уже началось, событие прошло или отменено' },
+          { message: 'Встречу нельзя изменить: подтверждение мест уже началось, событие прошло или отменено' },
           { status: 409 },
         ),
       ),
     );
 
     const client = makeClient();
-    const { result } = renderHook(() => useRescheduleEventMutation(), {
+    const { result } = renderHook(() => useUpdateEventMutation(), {
       wrapper: makeWrapper(client),
     });
 
-    result.current.mutate({ eventId: 'evt-1', clubId: 'club-1', eventDatetime: '2026-05-03T18:00:00Z' });
+    result.current.mutate({ eventId: 'evt-1', clubId: 'club-1', body: { title: 'Тест', locationHint: 'у входа', eventDatetime: '2026-05-03T18:00:00Z', participantLimit: 20 } });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.error?.message).toContain('подтверждение мест уже началось');
   });
