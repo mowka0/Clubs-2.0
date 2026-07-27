@@ -1,6 +1,7 @@
 package com.clubs.chatlink
 
 import com.clubs.bot.ChatTelegramGateway
+import com.clubs.bot.PARSE_MODE_HTML
 import com.clubs.event.Event
 import com.clubs.event.EventEditedEvent
 import com.clubs.event.EventRepository
@@ -72,7 +73,7 @@ class LivePinService(
     fun onEventCancelled(event: Event, reason: String?): Long? {
         pinRepository.findByEventId(event.id)?.takeIf { it.closedAt == null }?.let { pin ->
             pin.messageId?.let { messageId ->
-                gateway.editGroupMessage(pin.chatId, messageId, renderer.cancelledText(event, reason), null, null)
+                gateway.editGroupMessage(pin.chatId, messageId, renderer.cancelledText(event, reason), null, null, PARSE_MODE_HTML)
                 gateway.unpinChatMessage(pin.chatId, messageId)
             }
             pinRepository.markClosed(event.id)
@@ -83,7 +84,8 @@ class LivePinService(
             chatId = link.chatId,
             text = renderer.cancelledText(event, reason),
             buttonText = null,
-            url = null
+            url = null,
+            parseMode = PARSE_MODE_HTML
         )
         return if (messageId != null) link.chatId else null
     }
@@ -102,7 +104,8 @@ class LivePinService(
             chatId = link.chatId,
             text = renderer.editedText(edited),
             buttonText = null,
-            url = null
+            url = null,
+            parseMode = PARSE_MODE_HTML
         )
         return if (messageId != null) link.chatId else null
     }
@@ -193,6 +196,7 @@ class LivePinService(
             text = renderStatus(event),
             buttonText = renderer.buttonText(event),
             url = renderer.eventUrl(event.id),
+            parseMode = PARSE_MODE_HTML,
             secondaryButton = mapsButton(event)
         )
         if (messageId == null) {
@@ -221,6 +225,7 @@ class LivePinService(
             text = renderStatus(event),
             buttonText = renderer.buttonText(event),
             url = renderer.eventUrl(event.id),
+            parseMode = PARSE_MODE_HTML,
             secondaryButton = mapsButton(event)
         )
     }
@@ -232,7 +237,7 @@ class LivePinService(
     private fun closePin(pin: EventChatPin, event: Event) {
         pin.messageId?.let { messageId ->
             val confirmed = eventResponseRepository.countConfirmed(event.id)
-            gateway.editGroupMessage(pin.chatId, messageId, renderer.closedText(event, confirmed), null, null)
+            gateway.editGroupMessage(pin.chatId, messageId, renderer.closedText(event, confirmed), null, null, PARSE_MODE_HTML)
             gateway.unpinChatMessage(pin.chatId, messageId)
         }
         // Закрываем даже при сбое edit/unpin — иначе мёртвое сообщение ретраилось бы вечно.

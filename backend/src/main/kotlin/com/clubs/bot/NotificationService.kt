@@ -3,6 +3,7 @@ package com.clubs.bot
 import com.clubs.common.util.EventFormatTexts
 import com.clubs.event.Event
 import com.clubs.event.EventEditedEvent
+import com.clubs.event.EventMessageTemplate
 import com.clubs.event.EventResponseRepository
 import com.clubs.event.OPEN_IN_YANDEX_MAPS_BUTTON
 import com.clubs.event.locationDisplay
@@ -77,23 +78,17 @@ class NotificationService(
             return
         }
         log.info("Event-created DM: eventId={} clubId={} recipients={}", event.id, event.clubId, memberTelegramIds.size)
-        val dateStr = event.eventDatetime.format(fmt)
-        // Место опционально (V58): у события без места строка 📍 не рендерится вовсе;
-        // уточнение организатора («Вход со двора») показывается в скобках после адреса.
-        val locationLine = event.locationDisplay?.let { "📍 $it\n" } ?: ""
-        // Открытая встреча (V62): лимита нет — вместо числа сообщаем формат.
-        val limitLine = event.participantLimit?.let { "👥 Лимит: $it" } ?: EventFormatTexts.OPEN_EVENT_NO_LIMIT_LINE
-        // Признак формата в заголовке DM (PO 2026-07-23) — тем же словарём, что бейджи карточек
-        // (⚡/🎟/🌊). Срочность — по флагу V69, НЕ по статусу: обычное событие, созданное близко
-        // к старту, могло флипнуться в stage_2 до отправки async-DM и ошибочно назваться срочной.
-        // Срочная рождается сразу в stage_2 — зовём подтверждать места, Этапа 1 у неё нет.
-        val header = when {
-            event.isUrgent -> "⚡ Срочная встреча в клубе!"
-            event.isOpenEvent -> "🌊 Открытая встреча в клубе!"
-            else -> "🎟 Обычная встреча в клубе!"
+        // Единый шаблон (PO 2026-07-26): формат встречи жирным заголовком, затем что/когда/где
+        // и счётчики по фазе. Срочность берём по флагу V69, а НЕ по статусу: обычное событие,
+        // созданное близко к старту, могло флипнуться в stage_2 до отправки async-DM и
+        // ошибочно назваться срочной.
+        // Срочная рождается сразу в Этапе 2 — у неё блок подтверждения, у остальных голосование.
+        val stats = if (event.isUrgent) {
+            EventMessageTemplate.stage2Stats(event, confirmed = 0, waitlisted = 0, fmt = fmt)
+        } else {
+            EventMessageTemplate.stage1Stats(event, going = 0, maybe = 0)
         }
-        val cta = if (event.isUrgent) "Подтверждайте участие в приложении:" else "Голосуйте в приложении:"
-        val text = "$header\n\n📌 ${event.title}\n$locationLine🗓 $dateStr\n$limitLine\n\n$cta"
+        val text = "${EventMessageTemplate.head(event, fmt)}\n\n$stats"
         // Диплинк сразу на страницу события, чтобы кнопка открывала голосование, а не
         // общую домашнюю страницу приложения. React Router рендерит EventPage на /events/:id.
         val webAppPath = "/events/${event.id}"
@@ -129,6 +124,7 @@ class NotificationService(
                     .chatId(chatId)
                     .photo(InputFile(photoUrl))
                     .caption(text)
+                    .parseMode(PARSE_MODE_HTML)
                     .replyMarkup(markup)
                     .build()
                 telegramClient.execute(photo)
@@ -139,7 +135,8 @@ class NotificationService(
             }
         }
         try {
-            val msg = SendMessage.builder().chatId(chatId).text(text).replyMarkup(markup).build()
+            val msg = SendMessage.builder().chatId(chatId).text(text)
+                .parseMode(PARSE_MODE_HTML).replyMarkup(markup).build()
             telegramClient.execute(msg)
             log.info("Event-created DM sent: chatId={}", chatId)
         } catch (e: Exception) {
@@ -246,7 +243,10 @@ class NotificationService(
         val text = renderEditedDm(edited)
         val webAppPath = "/events/${event.id}"
         recipientTelegramIds.forEach { telegramId ->
-            sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
+            sendDm(
+                telegramId.toString(), text, webAppPath = webAppPath,
+                buttonText = "📅 Открыть событие", parseMode = PARSE_MODE_HTML
+            )
         }
     }
 
@@ -258,19 +258,27 @@ class NotificationService(
     private fun renderEditedDm(edited: EventEditedEvent): String {
         val event = edited.event
         val old = edited.oldEvent
-        val datetimeLines = "Было: ${old.eventDatetime.format(fmt)}\n" +
-            "Стало: ${event.eventDatetime.format(fmt)}"
-        val locationLines = "Было: ${old.locationDisplayOrDash}\n" +
-            "Стало: ${event.locationDisplayOrDash}"
-        return when {
-            edited.isDatetimeChanged && edited.isLocationChanged ->
-                "📝 Встреча изменилась\n\n📌 ${event.title}\n\n🕐 $datetimeLines\n\n📍 $locationLines"
-
-            edited.isLocationChanged ->
-                "📍 Встреча меняет место\n\n📌 ${event.title}\n$locationLines"
-
-            else -> "📅 Встреча перенесена\n\n📌 ${event.title}\n$datetimeLines"
+        val esc = EventMessageTemplate::escapeHtml
+        val what = when {
+            edited.isDatetimeChanged && edited.isLocationChanged -> "изменилась"
+            edited.isLocationChanged -> "меняет место"
+            else -> "перенесена"
         }
+        val sb = StringBuilder("<b>${esc(EventMessageTemplate.formatName(event))} $what</b>\n\n")
+        sb.append(esc(event.title)).append("\n")
+        if (edited.isDatetimeChanged) {
+            sb.append("\nкогда было: ${old.eventDatetime.format(fmt)}\n")
+            sb.append("когда стало: ${event.eventDatetime.format(fmt)}\n")
+        } else {
+            sb.append("когда: ${event.eventDatetime.format(fmt)}\n")
+        }
+        if (edited.isLocationChanged) {
+            sb.append("\nгде было: ${esc(old.locationDisplayOrDash)}\n")
+            sb.append("где стало: ${esc(event.locationDisplayOrDash)}")
+        } else {
+            event.locationDisplay?.let { sb.append("где: ${esc(it)}") }
+        }
+        return sb.toString().trimEnd()
     }
 
     /**
@@ -501,7 +509,10 @@ class NotificationService(
         chatId: String,
         text: String,
         webAppPath: String? = null,
-        buttonText: String = DEFAULT_BUTTON_TEXT
+        buttonText: String = DEFAULT_BUTTON_TEXT,
+        // HTML нужен сообщениям по общему шаблону встречи (жирный заголовок формата);
+        // остальные DM остаются plain text, как раньше.
+        parseMode: String? = null
     ) {
         log.info("Sending DM to chatId={} webAppPath={}", chatId, webAppPath)
         try {
@@ -509,6 +520,7 @@ class NotificationService(
             val msg = SendMessage.builder()
                 .chatId(chatId)
                 .text(text)
+                .apply { parseMode?.let { parseMode(it) } }
                 .replyMarkup(markup)
                 .build()
             telegramClient.execute(msg)
@@ -519,7 +531,8 @@ class NotificationService(
         }
         // Fallback — обычный текст без inline-кнопки.
         try {
-            val msg = SendMessage.builder().chatId(chatId).text(text).build()
+            val msg = SendMessage.builder().chatId(chatId).text(text)
+                .apply { parseMode?.let { parseMode(it) } }.build()
             telegramClient.execute(msg)
             log.info("DM sent without inline button (fallback): chatId={}", chatId)
         } catch (e: Exception) {

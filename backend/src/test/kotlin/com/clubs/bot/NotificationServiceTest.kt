@@ -144,7 +144,7 @@ class NotificationServiceTest {
 
         service.sendEventCreated(event)
 
-        assertTrue(msgSlot.captured.text.contains("📍 Бар (Вход со двора)"))
+        assertTrue(msgSlot.captured.text.contains("где: Бар (Вход со двора)"))
     }
 
     @Test
@@ -156,7 +156,7 @@ class NotificationServiceTest {
 
         service.sendEventCreated(event)
 
-        assertTrue(msgSlot.captured.text.contains("📍 Встречаемся в зуме"))
+        assertTrue(msgSlot.captured.text.contains("где: Встречаемся в зуме"))
         assertTrue(markupUrls(msgSlot.captured.replyMarkup as InlineKeyboardMarkup).none { it.contains("yandex.ru/maps") })
     }
 
