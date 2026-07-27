@@ -370,7 +370,9 @@ export const EventPage: FC = () => {
           locationHint: hint || null,
           eventDatetime: newDate.toISOString(),
           participantLimit,
-          stage2LeadMinutes: event.stage2LeadMinutes ?? null,
+          // Именно override, а не эффективное значение: иначе подставленный бэком дефолт
+          // стал бы собственным интервалом события.
+          stage2LeadMinutes: event.stage2LeadMinutesOverride ?? null,
           photoUrl: event.photoUrl ?? null,
         },
       },

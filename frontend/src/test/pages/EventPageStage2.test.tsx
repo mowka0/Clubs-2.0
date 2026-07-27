@@ -63,6 +63,7 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     // видна), при SOON — уже в прошлом (кнопка скрыта). Тест может переопределить явно.
     confirmedDeclineDeadline: new Date(new Date(eventDatetime).getTime() - DECLINE_CUTOFF_MS).toISOString(),
     stage2LeadMinutes: 1080,
+    stage2LeadMinutesOverride: null,
     abandonedSlotPenaltyPoints: 100,
     attendanceMarked: false,
     attendanceFinalized: false,

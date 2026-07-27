@@ -547,6 +547,11 @@ export interface EventDetailDto {
   // Эффективный интервал Этапа 2 (минут до старта): свой у события или глобальный дефолт бэка —
   // фронт порог не хардкодит (тот же урок, что confirmedDeclineDeadline). null = открытая встреча.
   stage2LeadMinutes: number | null;
+  // Собственный интервал события; null = «используется глобальный дефолт». Для ПОКАЗА берём
+  // stage2LeadMinutes выше, а в PUT возвращаем это поле: отправка эффективного значения
+  // превратила бы подставленный дефолт в собственный интервал события (и упиралась бы
+  // в @Min(1080), когда дефолт на окружении ужат).
+  stage2LeadMinutesOverride: number | null;
   status: string;
   goingCount: number;
   maybeCount: number;

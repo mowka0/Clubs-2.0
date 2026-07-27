@@ -66,6 +66,11 @@ class EventMapper(
         // Эффективное значение: своё у события или глобальный дефолт; у открытой встречи Этапа 2 нет.
         stage2LeadMinutes = if (event.isOpenEvent) null
             else event.stage2LeadMinutes ?: stage2TriggerMinutesBefore.toInt(),
+        // Хранимое значение (null = «глобальный дефолт»). Отдаётся ОТДЕЛЬНО от эффективного,
+        // потому что форма редактирования возвращает его обратно в PUT: если слать эффективное,
+        // подставленный дефолт станет собственным значением события — а при ужатом дефолте
+        // (staging: 5 минут) он ещё и не пройдёт валидацию @Min(1080) и заблокирует любую правку.
+        stage2LeadMinutesOverride = event.stage2LeadMinutes,
         status = event.status.literal,
         goingCount = goingCount,
         maybeCount = maybeCount,
