@@ -16,8 +16,11 @@ import org.springframework.transaction.event.TransactionalEventListener
  * зависит от факта выхода поста. AFTER_COMMIT — DM/пост читают уже закоммиченное состояние.
  * Best-effort: ошибки доставки глотаются внутри шлюза/sendDm. Зеркалит EventCancelledListener.
  *
- * Событие публикуется только при критичных изменениях («где»/«когда»), поэтому здесь
- * дополнительная фильтрация не нужна — см. [EventEditedEvent.hasCriticalChanges].
+ * Событие приходит на ЛЮБУЮ правку, а громкость выбирается здесь:
+ * - **всегда** — тихая перерисовка живого закрепа (в нём висят название, дата и место, поэтому
+ *   он обязан догонять даже переименование; правки закрепа Telegram не уведомляют — тот же
+ *   механизм дебаунса, что у голосов через [LivePinService.markDirty]);
+ * - **только при критичных изменениях** («где»/«когда») — громкий пост в чат и DM.
  */
 @Component
 class EventEditedListener(
@@ -30,6 +33,12 @@ class EventEditedListener(
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun onEventEdited(event: EventEditedEvent) {
+        if (!event.hasCriticalChanges) {
+            // Тихий путь: закреп догонит правку flush-проходом, никто не получает пуш.
+            livePinService.markDirty(event.event.id)
+            log.info("Event {} edited quietly — live pin refresh only", event.event.id)
+            return
+        }
         val chatPostChatId = livePinService.onEventEdited(event)
         log.info(
             "Event {} edited — notifying members, chatPost={} datetimeChanged={} locationChanged={}",

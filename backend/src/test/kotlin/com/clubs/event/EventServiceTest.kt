@@ -263,9 +263,10 @@ class EventServiceTest {
     }
 
     @Test
-    fun `updateEvent stays silent when only non-critical fields change`() {
-        // Решение PO 2026-07-26: правка названия/описания/фото/лимита не дёргает весь клуб —
-        // рассылка из-за опечатки в заголовке обесценила бы уведомления как канал.
+    fun `updateEvent marks non-critical changes as quiet`() {
+        // Решение PO 2026-07-26: правка названия/описания/фото/лимита не дёргает весь клуб
+        // звуком, но событие всё равно публикуется — по нему слушатель тихо перерисовывает
+        // живой закреп в чате (в нём висит и название).
         val clubId = UUID.randomUUID()
         val ownerId = UUID.randomUUID()
         val event = sampleEvent(clubId, ownerId)
@@ -280,7 +281,11 @@ class EventServiceTest {
         )
 
         verify(exactly = 1) { eventRepository.updateEvent(event.id, any()) }
-        verify(exactly = 0) { eventPublisher.publishEvent(any()) }
+        verify(exactly = 1) {
+            eventPublisher.publishEvent(
+                match<EventEditedEvent> { !it.hasCriticalChanges && !it.isDatetimeChanged && !it.isLocationChanged }
+            )
+        }
     }
 
     @Test

@@ -196,11 +196,10 @@ class EventService(
             "Event updated: id={} userId={} datetimeChanged={} locationChanged={}",
             eventId, userId, edited.isDatetimeChanged, edited.isLocationChanged
         )
-        // Молчим, когда поменялось некритичное (название, описание, фото, лимит, интервал):
-        // рассылка на весь клуб из-за правки заголовка обесценивает уведомления как канал.
-        if (edited.hasCriticalChanges) {
-            eventPublisher.publishEvent(edited)
-        }
+        // Публикуем ВСЕГДА: даже некритичная правка должна тихо перерисовать живой закреп в чате
+        // (там висят название, дата и место). Кого дёргать звуком, решает слушатель —
+        // громкий пост и DM уходят только при критичных изменениях.
+        eventPublisher.publishEvent(edited)
         return getEvent(eventId)
     }
 
