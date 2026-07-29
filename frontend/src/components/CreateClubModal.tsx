@@ -270,7 +270,7 @@ export const CreateClubModal: FC<{
   }
 
   return (
-    <div className="rd-modal-form" style={{ padding: 16 }}>
+    <div className="rd-modal-form rd-wizard" style={{ padding: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>Шаг {step + 1} из {STEP_TITLES.length}: {STEP_TITLES[step]}</span>
         <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text)' }}>&#x2715;</button>

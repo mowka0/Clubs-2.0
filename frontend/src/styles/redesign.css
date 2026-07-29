@@ -1426,6 +1426,16 @@
    достаётся page-level сброс border-box — задаём его здесь локально. */
 .rd-modal-form, .rd-modal-form * { box-sizing: border-box; }
 
+/* Многошаговый wizard в модалке telegram-ui (сейчас один — создание клуба).
+   Drawer telegram-ui считает высоту по содержимому, а у шагов она разная: «Основное» —
+   три коротких поля, «Описание» — аватар и две textarea. Из-за этого модалка прыгала от
+   шага к шагу и на коротких шагах ужималась до нечитаемого (замерено: 360px → 280px → 120px
+   на экране 844px, баг PO 2026-07-29). Держим стабильный «пол» высоты: Drawer растёт по нему,
+   а не по текущему шагу. Класс отдельный, НЕ `.rd-modal-form`: тот же класс носят короткие
+   подтверждения (заявка в клуб, удаление клуба) — их раздувать нельзя.
+   Выше `max-height` Drawer'а «пол» не поднимется — переполнение уйдёт в скролл. */
+.rd-wizard { min-height: 68vh; }
+
 .rd-form { display: flex; flex-direction: column; gap: 16px; }
 .rd-field { display: flex; flex-direction: column; gap: 7px; }
 .rd-field > .rd-label { font-size: 12px; font-weight: 600; color: var(--text-dim); padding-left: 2px; }
