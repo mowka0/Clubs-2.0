@@ -24,17 +24,13 @@ export function initTelegramSdk(): void {
 }
 
 /**
- * Монтирует viewport, разворачивает Mini App на всю доступную высоту и публикует
- * геометрию хоста в CSS-переменные.
+ * Монтирует viewport, разворачивает Mini App на всю доступную высоту, включает
+ * полноэкранный режим и публикует геометрию хоста в CSS-переменные.
  *
  * `viewport.mount()` асинхронен (резолвится, когда хост сообщит свою геометрию);
- * expand и bindCssVars выполняются после промиса mount, чтобы гарантировать, что хост
- * их принял. Каждый вызов защищён `.isAvailable()` и изолирован в своём catch, чтобы сбой
- * здесь никогда не прерывал инициализацию SDK и не ломал fallback вне Telegram
- * (локальная разработка).
- *
- * Примечание: `requestFullscreen()` отсюда не вызывается — полноэкранный режим включён
- * настройкой самого приложения в Telegram, а наша задача лишь корректно под него разложиться.
+ * всё остальное выполняется после промиса mount, чтобы гарантировать, что хост это принял.
+ * Каждый вызов защищён `.isAvailable()` и изолирован в своём catch, чтобы сбой здесь никогда
+ * не прерывал инициализацию SDK и не ломал fallback вне Telegram (локальная разработка).
  */
 function setupViewport(): void {
   try {
@@ -44,6 +40,7 @@ function setupViewport(): void {
         .then(() => {
           if (viewport.expand.isAvailable()) viewport.expand();
           bindViewportCssVars();
+          enterFullscreen();
         })
         .catch(() => {
           // Mount отклонён (хост без поддержки viewport) — оставляем высоту по умолчанию
@@ -51,9 +48,36 @@ function setupViewport(): void {
     } else {
       if (viewport.expand.isAvailable()) viewport.expand();
       bindViewportCssVars();
+      enterFullscreen();
     }
   } catch (_e) {
     // Viewport API недоступен — пропускаем
+  }
+}
+
+/**
+ * Включает полноэкранный режим, если хост уже не открыл нас в нём.
+ *
+ * Зачем вообще: стартовый режим решает НЕ приложение, а точка входа — Telegram присылает его
+ * в launch-параметре `tgWebAppFullscreen`, из которого `viewport.mount()` инициализирует
+ * `isFullscreen`. Прямая ссылка на Mini App (наши приглашения в клуб) приходила с
+ * полноэкранным флагом, а menu-button у бота — без него, и одно и то же приложение
+ * открывалось по-разному (баг PO 2026-07-29). Запрашиваем режим сами — тогда он одинаков
+ * из любой точки входа и не зависит от настроек конкретной ссылки на стороне Telegram.
+ *
+ * Запрос одноразовый, на старте: если пользователь потом сам выйдет из полноэкранного
+ * режима кнопкой Telegram, мы его обратно не загоняем.
+ */
+function enterFullscreen(): void {
+  try {
+    if (viewport.isFullscreen()) return;
+    if (!viewport.requestFullscreen.isAvailable()) return;
+    viewport.requestFullscreen().catch(() => {
+      // UNSUPPORTED (клиент < Bot API 8.0) / ALREADY_FULLSCREEN — остаёмся как есть,
+      // вёрстка корректна в обоих режимах (врезки тогда просто нулевые).
+    });
+  } catch (_e) {
+    // Fullscreen API недоступен — пропускаем
   }
 }
 

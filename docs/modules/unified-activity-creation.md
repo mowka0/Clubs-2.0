@@ -1568,9 +1568,11 @@ curl -s -H "Authorization: Bearer $JWT_MEMBER" \
 `initTelegramSdk()` (`frontend/src/telegram/sdk.ts`) при инициализации SDK:
 
 - **`viewport.expand()`** — разворачивает Mini App на всю доступную высоту
-  (после `viewport.mount()`, который async). `requestFullscreen()` из кода не
-  вызывается: полноэкранный режим включён настройкой приложения на стороне Telegram
-  (решение PO 2026-07-29).
+  (после `viewport.mount()`, который async).
+- **`viewport.requestFullscreen()`** — включает полноэкранный режим (решение PO
+  2026-07-29). Зовём сами, потому что стартовый режим иначе диктует точка входа
+  (launch-параметр `tgWebAppFullscreen`): по прямой ссылке-приглашению приложение
+  открывалось на весь экран, по menu-button бота — нет.
 - **`viewport.bindCssVars()`** — публикует геометрию хоста в `--tg-viewport-*`
   (высоты + системная и content safe-area). Из них собирается общий токен верхнего
   отступа `--app-inset-top`, которым живут `.rd-page`, `.ob-root`, `.rd-sheet` и
