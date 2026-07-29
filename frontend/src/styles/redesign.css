@@ -2442,3 +2442,57 @@
   font-size: 12.5px; font-weight: 800; cursor: pointer; font-family: inherit;
   box-shadow: 0 3px 8px var(--accent-shadow);
 }
+
+/* ============================================================
+   Жестовая навигация — свайпы «назад/вперёд» от кромок экрана.
+   Разметку даёт SwipeNavigator, значения трансформаций пишет
+   useSwipeNavigation прямо в style (кадры жеста идут мимо React).
+   ============================================================ */
+
+/* Уехавшая за край страница не должна расширять область прокрутки вправо.
+   Именно `clip`, а не `hidden`: `overflow-x: hidden` превратил бы хост в скролл-контейнер
+   по вертикали и сломал бы прокрутку документа и sticky-элементы внутри страниц.
+   Фиксированные слои (затемнение, док, шторки) не клипаются — хост им не containing block. */
+.rd-swipe-host { overflow-x: clip; }
+
+/* Затемнение под уезжающей страницей — «глубина» открывающегося экрана.
+   Уходит за контент отрицательным z-index, а НЕ поднятием страницы над собой:
+   иначе обёртка стала бы stacking-контекстом и заперла бы внутри себя лайтбокс
+   (z 9999), который тогда ушёл бы под док. Включается только на время жеста. */
+.rd-swipe-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  display: none;
+  pointer-events: none;
+  background: #000;
+  opacity: 0;
+}
+.rd-swipe-scrim.rd-swipe-scrim-on { display: block; }
+
+/* Собственный фон обязателен: страница едет поверх затемнения и должна его перекрывать. */
+.rd-swipe-page {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+/* Тень падает на ту кромку, из-под которой выезжает следующий экран. */
+.rd-swipe-page.rd-swipe-back { will-change: transform; box-shadow: -14px 0 34px rgba(0, 0, 0, 0.42); }
+.rd-swipe-page.rd-swipe-forward { will-change: transform; box-shadow: 14px 0 34px rgba(0, 0, 0, 0.42); }
+
+/* Ввод нового экрана встречным движением — переход читается как одно действие. */
+.rd-swipe-enter-back { animation: rd-swipe-in-back 190ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+.rd-swipe-enter-forward { animation: rd-swipe-in-forward 190ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+@keyframes rd-swipe-in-back {
+  from { transform: translate3d(-16%, 0, 0); opacity: 0.6; }
+  to { transform: translate3d(0, 0, 0); opacity: 1; }
+}
+@keyframes rd-swipe-in-forward {
+  from { transform: translate3d(16%, 0, 0); opacity: 0.6; }
+  to { transform: translate3d(0, 0, 0); opacity: 1; }
+}
+
+/* Сам жест остаётся (это прямое управление пальцем), гасим только доигрывание. */
+@media (prefers-reduced-motion: reduce) {
+  .rd-swipe-enter-back, .rd-swipe-enter-forward { animation: none; }
+}

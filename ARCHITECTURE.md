@@ -601,6 +601,8 @@ frontend/src/
 │   └── InvitePage.tsx                     # /invite/:code — private club join
 └── hooks/
     ├── useBackButton.ts                   # Telegram BackButton show/hide
+    ├── useSwipeNavigation.ts              # Edge-swipe back/forward gesture
+    ├── useHistoryPosition.ts              # Can we go back / forward in history
     ├── useMainButton.ts                   # Telegram MainButton helper
     └── usePagination.ts                   # Infinite scroll helper
 ```

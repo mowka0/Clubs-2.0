@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { BottomTabBar, isTabBarRoute } from './BottomTabBar';
 import { DeepLinkHandler } from './DeepLinkHandler';
+import { SwipeNavigator } from './SwipeNavigator';
 import { CreateActivityFlow } from './manage/CreateActivityFlow';
 import { OnboardingFlow } from './onboarding/OnboardingFlow';
 import { useBackButton } from '../hooks/useBackButton';
@@ -77,6 +78,7 @@ export const AppDock: FC = () => {
  * Корневой компонент layout.
  *
  * - Рендерит Telegram BackButton на вложенных (не-таб) страницах.
+ * - Даёт всему приложению свайпы «назад/вперёд» от кромок экрана (SwipeNavigator).
  * - Оборачивает дочерние роуты в React Suspense для code-split lazy loading.
  * - Рендерит плавающий док (с его create-flow) после авторизации.
  */
@@ -136,17 +138,21 @@ export const Layout: FC = () => {
   return (
     <>
       <DeepLinkHandler />
-      <Suspense fallback={<PageFallback />}>
-        <div
-          style={{
-            paddingBottom: showTabBar
-              ? 'calc(96px + env(safe-area-inset-bottom, 0px) + 12px)'
-              : 0,
-          }}
-        >
-          <Outlet />
-        </div>
-      </Suspense>
+      {/* Suspense внутри навигатора, а не снаружи: при lazy-загрузке страницы
+          обёртка жеста не должна размонтироваться вместе с содержимым. */}
+      <SwipeNavigator>
+        <Suspense fallback={<PageFallback />}>
+          <div
+            style={{
+              paddingBottom: showTabBar
+                ? 'calc(96px + env(safe-area-inset-bottom, 0px) + 12px)'
+                : 0,
+            }}
+          >
+            <Outlet />
+          </div>
+        </Suspense>
+      </SwipeNavigator>
       <AppDock />
     </>
   );
