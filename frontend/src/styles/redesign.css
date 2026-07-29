@@ -43,7 +43,7 @@
   overflow-x: hidden;
   /* Плоский однородный фон — одинаковый на каждом экране, как в макете. */
   background: var(--bg);
-  padding: 16px 16px calc(110px + env(safe-area-inset-bottom, 0px));
+  padding: calc(16px + var(--app-inset-top, 0px)) 16px calc(110px + env(safe-area-inset-bottom, 0px));
 }
 
 /* ---------- Шапка (главная) ---------- */
@@ -1537,7 +1537,10 @@
 .rd-sheet, .rd-sheet * { box-sizing: border-box; }
 .rd-sheet {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 151;
-  display: flex; flex-direction: column; max-height: 88vh;
+  display: flex; flex-direction: column;
+  /* 88vh оставляет сверху область «тапни, чтобы закрыть». В полноэкранном режиме эта область
+     приходится на статус-бар и контролы Telegram, поэтому дополнительно вычитаем врезку. */
+  max-height: calc(88vh - var(--app-inset-top, 0px));
   background: var(--glass-strong-bg);
   backdrop-filter: blur(40px) saturate(180%); -webkit-backdrop-filter: blur(40px) saturate(180%);
   border-top: 1px solid var(--glass-strong-border);
@@ -1994,7 +1997,7 @@
   display: flex; flex-direction: column;
   background: var(--bg); color: var(--text);
   padding: 18px 16px calc(12px + env(safe-area-inset-bottom, 0px));
-  padding-top: calc(18px + env(safe-area-inset-top, 0px));
+  padding-top: calc(18px + var(--app-inset-top, 0px));
 }
 
 /* Точки-индикатор: активная вытягивается в «пилюлю» — видно и позицию, и что слайдов три. */

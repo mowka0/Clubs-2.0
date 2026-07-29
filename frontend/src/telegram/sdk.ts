@@ -24,16 +24,17 @@ export function initTelegramSdk(): void {
 }
 
 /**
- * Монтирует viewport и разворачивает Mini App на всю доступную высоту.
+ * Монтирует viewport, разворачивает Mini App на всю доступную высоту и публикует
+ * геометрию хоста в CSS-переменные.
  *
  * `viewport.mount()` асинхронен (резолвится, когда хост сообщит свою геометрию);
- * expand выполняется после промиса mount, чтобы гарантировать, что хост его принял.
- * Каждый вызов защищён `.isAvailable()` и изолирован в своём catch, чтобы сбой здесь
- * никогда не прерывал инициализацию SDK и не ломал fallback вне Telegram (локальная разработка).
+ * expand и bindCssVars выполняются после промиса mount, чтобы гарантировать, что хост
+ * их принял. Каждый вызов защищён `.isAvailable()` и изолирован в своём catch, чтобы сбой
+ * здесь никогда не прерывал инициализацию SDK и не ломал fallback вне Telegram
+ * (локальная разработка).
  *
- * Примечание: есть `requestFullscreen()` для более агрессивного режима, перекрывающего
- * шапку Telegram — намеренно не используется здесь; нужна только полная высота плюс
- * отключённое сворачивание свайпом.
+ * Примечание: `requestFullscreen()` отсюда не вызывается — полноэкранный режим включён
+ * настройкой самого приложения в Telegram, а наша задача лишь корректно под него разложиться.
  */
 function setupViewport(): void {
   try {
@@ -42,15 +43,38 @@ function setupViewport(): void {
         .mount()
         .then(() => {
           if (viewport.expand.isAvailable()) viewport.expand();
+          bindViewportCssVars();
         })
         .catch(() => {
           // Mount отклонён (хост без поддержки viewport) — оставляем высоту по умолчанию
         });
-    } else if (viewport.expand.isAvailable()) {
-      viewport.expand();
+    } else {
+      if (viewport.expand.isAvailable()) viewport.expand();
+      bindViewportCssVars();
     }
   } catch (_e) {
     // Viewport API недоступен — пропускаем
+  }
+}
+
+/**
+ * Публикует геометрию хоста в CSS-переменные `--tg-viewport-*` на `:root` и держит их
+ * в актуальном состоянии (SDK переподписывается сам при смене ориентации/режима).
+ *
+ * Нужны две верхние врезки, и складывать их надо вместе:
+ *  - `--tg-viewport-safe-area-inset-top` — системная зона устройства (статус-бар, чёлка);
+ *  - `--tg-viewport-content-safe-area-inset-top` — зона, занятая плавающими контролами
+ *    самого Telegram («Назад», ⌄, ⋯), которые в полноэкранном режиме лежат ПОВЕРХ страницы.
+ * Сумма живёт в CSS-токене `--app-inset-top` (`brand-theme.css`); в обычном (не полноэкранном)
+ * режиме обе врезки равны нулю, поэтому вёрстка не меняется.
+ */
+function bindViewportCssVars(): void {
+  try {
+    if (!viewport.isCssVarsBound() && viewport.bindCssVars.isAvailable()) {
+      viewport.bindCssVars();
+    }
+  } catch (_e) {
+    // Хост не поддерживает — остаётся фолбэк на env(safe-area-inset-top)
   }
 }
 

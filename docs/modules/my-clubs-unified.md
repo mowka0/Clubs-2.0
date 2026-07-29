@@ -240,7 +240,7 @@ THEN `navigate('/clubs/B')` + `haptic.impact('light')`.
 ### AC-7: «+ Создать клуб» доступен на `/my-clubs`
 GIVEN user на `/my-clubs`
 WHEN тапает Section-кнопку «+ Создать клуб» (в верхней `<Section>` страницы)
-THEN открывается `<Modal>` с `CreateClubModal` (5-шаговый wizard, идентично прежнему OrganizerPage до этого PR)
+THEN открывается `<Modal>` с `CreateClubModal` (4-шаговый wizard; на момент этого PR был 5-шаговым — шаг «Заявка» убран 2026-07-29)
 AND поведение модалки (валидация, submit, haptic, redirect на `/clubs/:id/manage` после создания) — без изменений.
 
 ### AC-8: empty state когда нет ни клубов, ни заявок

@@ -1568,8 +1568,13 @@ curl -s -H "Authorization: Bearer $JWT_MEMBER" \
 `initTelegramSdk()` (`frontend/src/telegram/sdk.ts`) при инициализации SDK:
 
 - **`viewport.expand()`** — разворачивает Mini App на всю доступную высоту
-  (после `viewport.mount()`, который async). `requestFullscreen()` намеренно
-  **не** используется — нужна только полная высота, не перекрытие хедера.
+  (после `viewport.mount()`, который async). `requestFullscreen()` из кода не
+  вызывается: полноэкранный режим включён настройкой приложения на стороне Telegram
+  (решение PO 2026-07-29).
+- **`viewport.bindCssVars()`** — публикует геометрию хоста в `--tg-viewport-*`
+  (высоты + системная и content safe-area). Из них собирается общий токен верхнего
+  отступа `--app-inset-top`, которым живут `.rd-page`, `.ob-root`, `.rd-sheet` и
+  крестик лайтбокса. Подробности — `docs/design/telegram-constraints.md` § 6–7.
 - **`swipeBehavior.disableVertical()`** — отключает сворачивание приложения при
   вертикальном swipe по контенту. Раньше скролл ленты активностей сворачивал
   Mini App. Свернуть всё ещё можно перетаскиванием хедера Telegram.

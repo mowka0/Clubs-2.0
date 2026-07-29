@@ -261,25 +261,39 @@ Bot API **8.0+** вводит **два уровня** отступов — об�
 
 | Переменная | Что это |
 |---|---|
-| `--tg-safe-area-inset-top/bottom/left/right` | системные (notch, dynamic island, home-indicator) |
-| `--tg-content-safe-area-inset-top/bottom/left/right` | отступы от Telegram-UI (header, swipe-handle внизу) |
+| `--tg-viewport-safe-area-inset-top/bottom/left/right` | системные (notch, dynamic island, home-indicator) |
+| `--tg-viewport-content-safe-area-inset-top/bottom/left/right` | отступы от Telegram-UI (шапка, плавающие контролы «Назад»/⌄/⋯) |
 
 **События:** `safeAreaChanged`, `contentSafeAreaChanged`.
 
-**Правила Clubs 2.0:**
-- Корневой `Layout`:
-  `padding-top: max(var(--tg-content-safe-area-inset-top), 0px)`.
-- Контент-страница (под header Telegram): учитывает
-  `--tg-content-safe-area-inset-*`.
-- BottomTabBar (наш нижний бар): сидит поверх **system** safe-area
-  (`--tg-safe-area-inset-bottom`) — мы сами являемся нижней UI-панелью, content
-  safe-area не нужна.
+> **Имена переменных.** Bot API документирует их как `--tg-safe-area-inset-*`, но
+> в проекте они приходят от `viewport.bindCssVars()` из `@telegram-apps/sdk`, а тот
+> вешает **свой** префикс `--tg-viewport-`. В коде используем имена из таблицы выше
+> (со сверкой по `node_modules/@telegram-apps/sdk`), не «сырые» из Bot API.
+
+**Как это устроено у нас (as-built 2026-07-29):**
+- `telegram/sdk.ts` → `setupViewport()` после `viewport.mount()` зовёт
+  `viewport.bindCssVars()`. SDK сам держит переменные в актуальном состоянии при смене
+  ориентации/режима — ручных подписок на события нет.
+- `brand-theme.css` определяет один токен на всё приложение:
+  `--app-inset-top = safe-area-inset-top + content-safe-area-inset-top`, с фолбэком на
+  `env(safe-area-inset-top)` вне Telegram. Складывать обе врезки обязательно: системная
+  даёт статус-бар, content — плавающие контролы Telegram поверх страницы.
+- Потребители токена: `.rd-page` (`padding-top`, все страницы во всех ветках рендера),
+  `.ob-root` (онбординг), `.rd-sheet` (`max-height: calc(88vh - var(--app-inset-top))`,
+  чтобы высокая шторка не залезала под контролы), `[vaul-drawer]` (модалки telegram-ui —
+  `max-height: calc(96% - var(--app-inset-top))`), крестик `ImageLightbox`.
+- Селектор для модалок telegram-ui — атрибут `vaul-drawer`, а НЕ хешированный класс
+  (`tgui-cc76354712c6e8d9`): хеш меняется от версии к версии пакета.
+- В обычном (не полноэкранном) режиме обе врезки = 0 → вёрстка идентична прежней.
+- Низ: док и `.rd-page` по-прежнему на `env(safe-area-inset-bottom)` — там ничего
+  не менялось, Telegram-UI снизу нам не мешает.
 - Horizontal insets — актуальны для iPhone в landscape. У нас portrait-only,
   игнорируем.
 
 ---
 
-## 7. Fullscreen mode (Bot API 8.0+) 🚫
+## 7. Fullscreen mode (Bot API 8.0+) ⚡
 
 `requestFullscreen()` / `exitFullscreen()`, события `fullscreenChanged`,
 `fullscreenFailed` (`UNSUPPORTED` / `ALREADY_FULLSCREEN`).
@@ -288,7 +302,10 @@ Bot API **8.0+** вводит **два уровня** отступов — об�
   (обязательно `setHeaderColor` для контраста status bar).
 - `lockOrientation()` / `unlockOrientation()` + `isOrientationLocked`.
 
-**Для Clubs:** 🚫 не используем — фиды и формы, landscape не нужен.
+**Для Clubs (решение PO 2026-07-29): используем.** Раньше здесь стояло «не используем»;
+режим включён настройкой приложения на стороне Telegram, `requestFullscreen()` из кода
+мы не зовём. Следствие для вёрстки: страница рисуется под статус-баром и под плавающими
+контролами Telegram, поэтому весь верхний отступ идёт через `--app-inset-top` — см. § 6.
 
 ---
 

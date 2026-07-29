@@ -190,7 +190,7 @@ stat-grid (Надёжность средняя+tier / В клубах; ⚠️ 20
 - **CreateEventPage / CreateSkladchinaPage**: `rd-page` + eyebrow/`rd-page-h` + `rd-form`. Режимы сбора —
   `rd-mode-option`, чекбокс репутации — `rd-check`, пикер участников — `rd-pick-toggle`. `BrandStepper`
   (лимит участников) оставлен (recolor). Кнопки — `rd-btn-*`.
-- **CreateClubModal** (5-шаговый wizard): telegram-ui `Input/Select/Textarea/Section/Cell/Button` →
+- **CreateClubModal** (4-шаговый wizard; на момент редизайна — 5-шаговый): telegram-ui `Input/Select/Textarea/Section/Cell/Button` →
   rd-form примитивы; `register` напрямую на нативных полях (без `Controller`). Логика/валидация/шаги
   сохранены. См. [`create-club-form.md`](./create-club-form.md).
 - `BrandBackdrop` удалён (последний пользователь ушёл на `rd-page`). Легаси `sklad-*`/`field`/

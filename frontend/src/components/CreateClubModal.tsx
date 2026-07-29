@@ -22,7 +22,7 @@ const CATEGORIES = [
   { value: 'other', label: 'Другое' },
 ];
 
-const STEP_TITLES = ['Основное', 'Категория', 'Участники', 'Описание', 'Заявка'];
+const STEP_TITLES = ['Основное', 'Категория', 'Участники', 'Описание'];
 
 interface ClubFormValues {
   name: string;
@@ -41,10 +41,9 @@ interface ClubFormValues {
 
 const STEP_FIELDS: Array<Array<keyof ClubFormValues>> = [
   ['name', 'city'],
-  ['category', 'accessType'],
+  ['category', 'accessType', 'applicationQuestion'],
   ['memberLimit', 'subscriptionPrice', 'paymentLink'],
   ['description'],
-  [],
 ];
 
 const FieldError: FC<{ message?: string }> = ({ message }) =>
@@ -346,6 +345,23 @@ export const CreateClubModal: FC<{
               </div>
             </label>
           </div>
+          {/* Вопрос к заявке имеет смысл только у закрытого клуба — показываем сразу после выбора типа,
+              чтобы решение «закрытый» и его настройка жили на одном шаге. */}
+          {accessType === 'closed' && (
+            <label className="rd-field">
+              <span className="rd-label">Вопрос для вступления (необязательно)</span>
+              <input
+                className={`rd-input${errors.applicationQuestion ? ' rd-invalid' : ''}`}
+                placeholder="Почему вы хотите вступить?"
+                {...register('applicationQuestion', {
+                  validate: (v) =>
+                    // 200 — ширина колонки clubs.application_question (V2); длиннее не влезет в БД.
+                    v.trim().length <= 200 || 'Вопрос: максимум 200 символов',
+                })}
+              />
+              <FieldError message={errors.applicationQuestion?.message} />
+            </label>
+          )}
         </div>
       )}
 
@@ -454,19 +470,6 @@ export const CreateClubModal: FC<{
             <span className="rd-label">Правила (необязательно)</span>
             <textarea className="rd-textarea" rows={3} placeholder="Правила сообщества" {...register('rules')} />
           </label>
-        </div>
-      )}
-
-      {step === 4 && (
-        <div className="rd-form">
-          {accessType === 'closed' ? (
-            <label className="rd-field">
-              <span className="rd-label">Вопрос для вступления (необязательно)</span>
-              <input className="rd-input" placeholder="Почему вы хотите вступить?" {...register('applicationQuestion')} />
-            </label>
-          ) : (
-            <div className="rd-hint">Для открытого клуба вопрос при вступлении не нужен</div>
-          )}
         </div>
       )}
 
