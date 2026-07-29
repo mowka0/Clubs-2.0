@@ -360,13 +360,21 @@ export const useBackButton = (): void => {
 const Layout: FC = () => { ... };
 ```
 
-**Структура рендеринга:**
+**Структура рендеринга** (as-built; исходная спека TASK-025 была без Suspense и жестов):
 ```
-<div style={{ paddingBottom: isTabPage ? '56px' : '0' }}>
-  <Outlet />        ← сюда рендерится активный child route
-</div>
-<BottomTabBar />    ← внутри BottomTabBar сам решает показываться или нет
+<DeepLinkHandler />
+<SwipeNavigator>                    ← свайпы «назад/вперёд» от кромок экрана
+  <Suspense fallback={<PageFallback />}>
+    <div style={{ paddingBottom: isTabPage ? 'док + safe-area' : 0 }}>
+      <Outlet />                    ← сюда рендерится активный child route
+    </div>
+  </Suspense>
+</SwipeNavigator>
+<AppDock />                         ← BottomTabBar + FAB, сам решает показываться или нет
 ```
+Suspense стоит **внутри** `SwipeNavigator`: при lazy-загрузке страницы обёртка жеста
+не должна размонтироваться вместе с содержимым. Подробности —
+`docs/modules/swipe-navigation.md`.
 
 **Импорты в Layout:**
 ```tsx

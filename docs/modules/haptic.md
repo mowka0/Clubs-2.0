@@ -21,7 +21,7 @@ Pre-design подготовка фронта: единая обёртка над
 
 ### Входит
 - Хук `frontend/src/hooks/useHaptic.ts` с silent no-op fallback
-- Вызовы хука в: `BottomTabBar`, `ClubCard`, `AvatarUpload`, `ClubPage` (включая role-aware tabs), `EventPage`, `CreateClubModal`, `OrganizerClubManage`, `InvitePage`, `components/club/ClubActivitiesTab` (после `feature/unified-activity-creation` 2026-05-24, заменил `ClubEventsTab`), `components/manage/{ActivityCard,ActivityFilterChips,CreateActivityPicker,ClubPickerModal}` (после итерации 4 `feature/unified-activity-creation`: `ActivitiesManageTab` удалён, добавлен `ClubPickerModal`; `CreateActivityFlow` владеет хаптикой шагов — picker'ы чисто презентационные; с фичи feedback 2026-07-23 туда добавлен `handlePickFeedback` → impact medium), `ActivitiesPage` (hero «+ Создать» → impact light), `pages/FeedbackPage` (submit medium / success / error, отмена — light), `ProfilePage`, `MyClubsPage`, `DiscoveryPage` (chip-выбор категории — встроенно после удаления `ClubFilters` в `feature/discovery-redesign`), `useBackButton`. **`ClubInteriorPage` удалён** в `feature/unified-club-page` — точки кода переехали в unified `ClubPage` + три tab-компонента (см. `club-page-unified.md`).
+- Вызовы хука в: `BottomTabBar`, `ClubCard`, `AvatarUpload`, `ClubPage` (включая role-aware tabs), `EventPage`, `CreateClubModal`, `OrganizerClubManage`, `InvitePage`, `components/club/ClubActivitiesTab` (после `feature/unified-activity-creation` 2026-05-24, заменил `ClubEventsTab`), `components/manage/{ActivityCard,ActivityFilterChips,CreateActivityPicker,ClubPickerModal}` (после итерации 4 `feature/unified-activity-creation`: `ActivitiesManageTab` удалён, добавлен `ClubPickerModal`; `CreateActivityFlow` владеет хаптикой шагов — picker'ы чисто презентационные; с фичи feedback 2026-07-23 туда добавлен `handlePickFeedback` → impact medium), `ActivitiesPage` (hero «+ Создать» → impact light), `pages/FeedbackPage` (submit medium / success / error, отмена — light), `ProfilePage`, `MyClubsPage`, `DiscoveryPage` (chip-выбор категории — встроенно после удаления `ClubFilters` в `feature/discovery-redesign`), `useBackButton`, `useSwipeNavigation` (свайпы «назад/вперёд» от кромок, 2026-07-29). **`ClubInteriorPage` удалён** в `feature/unified-club-page` — точки кода переехали в unified `ClubPage` + три tab-компонента (см. `club-page-unified.md`).
 - Unit-тест хука (mock SDK, проверка no-op при `isAvailable() === false`)
 
 ### НЕ входит
@@ -87,6 +87,7 @@ const onTabClick = (path: string) => {
 | Файл | Событие | Метод | Reason |
 |---|---|---|---|
 | `hooks/useBackButton.ts` | callback нативной Telegram BackButton (внутри `onBackButtonClick`, до `navigate(-1)`) | `impact('light')` | Telegram не генерит haptic на back-tap надёжно — добавляем явно для консистентности с in-app навигацией |
+| `hooks/useSwipeNavigation.ts` | жест от кромки добрал порог (`commit`, до доигрывания и `navigate(±1)`) | `impact('light')` | Тот же переход, что у BackButton, — тот же отклик; момент отклика = точка невозврата жеста, не отпускание пальца. Спека: `swipe-navigation.md` |
 
 ### Списки и навигация в детали
 
