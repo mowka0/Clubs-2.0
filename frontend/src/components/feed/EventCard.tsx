@@ -80,9 +80,10 @@ export const EventCard: FC<EventCardProps> = ({ event, onClick }) => {
         className={coverImage ? 'rd-act-cover rd-act-photo' : 'rd-act-cover'}
         style={coverImage ? { backgroundImage: `url(${coverImage})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
       >
-        {/* Тип встречи вместо родового «СОБЫТИЕ» (PO 2026-07-21): формат виден прямо с карточки. */}
+        {/* Тип встречи вместо родового «СОБЫТИЕ» (PO 2026-07-21, ярлыки PO 2026-07-23):
+            формат виден прямо с карточки — срочная/обычная/открытая, эмодзи как в пикере. */}
         <span className="rd-type-badge">
-          {event.participantLimit == null ? 'ОТКРЫТАЯ ВСТРЕЧА' : 'С МЕСТАМИ'}
+          {event.isUrgent ? '⚡ СРОЧНАЯ' : event.participantLimit == null ? '🌊 ОТКРЫТАЯ' : '🎟 ОБЫЧНАЯ'}
         </span>
         <span className="rd-date-badge">{formatDateBadge(event.eventDatetime)}</span>
       </div>

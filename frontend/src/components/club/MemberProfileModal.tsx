@@ -52,8 +52,6 @@ interface MemberProfileModalProps {
 
 // Миллисекунд в сутках.
 const MS_PER_DAY = 86_400_000;
-// Зеркалит honor-system-период бэкенда (membership.access-period-days) для превью «продлить до …».
-const ACCESS_PERIOD_DAYS = 30;
 
 function formatDateFull(iso: string): string {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
@@ -70,10 +68,18 @@ function relativeUntil(iso: string): string {
   return `через ${days} ${pluralRu(days, ['день', 'дня', 'дней'])}`;
 }
 
-/** Дата окончания после «Взнос получен» — бэкенд продлевает на +30 дн от max(сейчас, текущее окончание). */
+/**
+ * Дата окончания после «Взнос получен» — бэкенд продлевает на КАЛЕНДАРНЫЙ месяц от
+ * max(сейчас, текущее окончание) (AccessGateService, решение PO 2026-07-23). Зеркалим
+ * семантику plusMonths: JS setMonth переполняет короткий месяц (31 янв → 3 мар), поэтому
+ * откатываем на последний день месяца (setDate(0)), как это делает бэкенд.
+ */
 function extendedEndLabel(iso: string | null): string {
-  const base = iso ? Math.max(Date.now(), new Date(iso).getTime()) : Date.now();
-  return formatDateFull(new Date(base + ACCESS_PERIOD_DAYS * MS_PER_DAY).toISOString());
+  const base = new Date(iso ? Math.max(Date.now(), new Date(iso).getTime()) : Date.now());
+  const dayOfMonth = base.getDate();
+  base.setMonth(base.getMonth() + 1);
+  if (base.getDate() !== dayOfMonth) base.setDate(0);
+  return formatDateFull(base.toISOString());
 }
 
 interface AwardEditorProps {
@@ -453,7 +459,7 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
 
         {/* EXPIRED платный участник: подписка истекла (шедулер закрыл доступ). Сводка честная —
             «Доступ истёк», claim-линия как у frozen (должник тоже заявляет оплату), «Взнос получен»
-            открывает доступ на +30 дн. «Отказать · вернуть» здесь нет — это про первое вступление. */}
+            открывает доступ на месяц. «Отказать · вернуть» здесь нет — это про первое вступление. */}
         {isPaidMember && expired && (
           <div className="rd-mgmt-body">
             <div className="rd-mgmt-sum rd-soon">
@@ -481,7 +487,7 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
             ) : null}
             <div className="rd-mgmt-pair">
               <button type="button" className="rd-mgmt-pb primary" disabled={busy} onClick={() => run(markPaid, `Доступ ${member.firstName} открыт`)}>
-                {markPaid.isPending ? <Spinner size="s" /> : <>Взнос получен · открыть доступ<small>+30 дн · до {extendedEndLabel(expiresAt)}</small></>}
+                {markPaid.isPending ? <Spinner size="s" /> : <>Взнос получен · открыть доступ<small>+1 мес · до {extendedEndLabel(expiresAt)}</small></>}
               </button>
             </div>
           </div>
@@ -519,8 +525,8 @@ const OrganizerGate: FC<OrganizerGateProps> = ({ clubId, member, organizerNote, 
               </>
             )}
             <div className="rd-mgmt-pair">
-              <button type="button" className="rd-mgmt-pb primary" disabled={busy} onClick={() => run(markPaid, `Доступ ${member.firstName} продлён на 30 дней`)}>
-                {markPaid.isPending ? <Spinner size="s" /> : <>Взнос получен<small>+30 дн · до {extendedEndLabel(expiresAt)}</small></>}
+              <button type="button" className="rd-mgmt-pb primary" disabled={busy} onClick={() => run(markPaid, `Доступ ${member.firstName} продлён на месяц`)}>
+                {markPaid.isPending ? <Spinner size="s" /> : <>Взнос получен<small>+1 мес · до {extendedEndLabel(expiresAt)}</small></>}
               </button>
             </div>
           </div>

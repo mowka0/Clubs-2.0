@@ -33,12 +33,8 @@ interface EventRepository {
 
     fun getVoteCounts(eventId: UUID): Map<String, Int>
 
-    /**
-     * События, готовые перейти в Этап 2: всё ещё `upcoming`, ещё не запущены и начинаются в
-     * момент [cutoff] или раньше. Вызывающий код вычисляет cutoff из настраиваемого времени
-     * упреждения, чтобы staging мог сократить его для end-to-end тестирования двухэтапного флоу.
-     */
-    fun findEventsToTriggerStage2(cutoff: OffsetDateTime): List<Event>
+    /** События, готовые к Этапу 2: до старта ≤ их собственного lead (или [defaultLeadMinutes] при NULL). */
+    fun findEventsToTriggerStage2(now: OffsetDateTime, defaultLeadMinutes: Long): List<Event>
 
     fun findNextUpcomingEvent(now: OffsetDateTime): Event?
 
@@ -79,6 +75,16 @@ interface EventRepository {
      * затронутых строк (0 ⇒ не отменяемо → вызывающий возвращает 409).
      */
     fun cancelEvent(eventId: UUID, reason: String?): Int
+
+    /**
+     * Редактирует встречу (все поля из [edit], включая дату), но ТОЛЬКО пока она на Этапе 1
+     * (status=upcoming, stage_2_triggered=false) и ещё не началась (`event_datetime > now`).
+     * С Этапа 2 правки запрещены (решения PO 2026-07-23 и 2026-07-26) — подтвердившие обещали
+     * прийти в конкретное место и время, и правка обесценила бы их подтверждения.
+     * PUT-семантика: null в [edit] = очистить поле. Возвращает число затронутых строк
+     * (0 ⇒ редактировать нельзя → вызывающий возвращает 409).
+     */
+    fun updateEvent(eventId: UUID, edit: EventEdit): Int
 
     /**
      * Помечает событие как attendance-marked и проставляет attendance_marked_at = now() (решение (б):

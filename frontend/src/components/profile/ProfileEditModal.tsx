@@ -6,20 +6,32 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { useUpdateProfileMutation } from '../../queries/profile';
 import { CityPicker, countryNameByCode, type CityChoice } from '../CityPicker';
 import { InterestsInput, type InterestsInputHandle } from './InterestsInput';
+import type { QuestStepKey } from './ProfileQuestCard';
 
 // Максимальная длина поля «О себе» (символов) — совпадает с лимитом на бэкенде.
 const BIO_MAX = 280;
 
 interface ProfileEditModalProps {
   initialInterests: string[];
+  /**
+   * Вход из шага профиль-квеста: это поле подсвечивается пульсом, остальные притеняются
+   * (мокап 04-quest-carousel, кадр D). null/не задано — обычный редактор без акцентов.
+   */
+  highlightField?: QuestStepKey | null;
   onClose: () => void;
+}
+
+/** Классы поля с учётом подсветки квеста: целевое — пульс, прочие — притенены. */
+function fieldClass(field: QuestStepKey, highlight: QuestStepKey | null | undefined): string {
+  if (!highlight) return 'rd-field';
+  return highlight === field ? 'rd-field rd-field-hl' : 'rd-field rd-field-dim';
 }
 
 /**
  * Собственный portal-шит (не TGUI Modal): портал CityPicker живёт на z-index 200,
  * поэтому этот остаётся ниже (150), и пикер чисто открывается поверх.
  */
-export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, onClose }) => {
+export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, highlightField = null, onClose }) => {
   const haptic = useHaptic();
   const user = useAuthStore((s) => s.user);
   const updateMutation = useUpdateProfileMutation();
@@ -31,6 +43,7 @@ export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, 
   const [bio, setBio] = useState(user?.bio ?? '');
   const [interests, setInterests] = useState<string[]>(initialInterests);
   const interestsRef = useRef<InterestsInputHandle>(null);
+  const bioRef = useRef<HTMLTextAreaElement>(null);
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,6 +52,12 @@ export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, 
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prev; };
   }, []);
+
+  // Вход из шага «О себе»: подсвеченное поле сразу в фокусе — человек пишет, а не ищет.
+  // Городу фокус не нужен (там пикер по тапу), интересам — свой инпут внутри компонента.
+  useEffect(() => {
+    if (highlightField === 'bio') bioRef.current?.focus();
+  }, [highlightField]);
 
   const hasCity = Boolean(cityChoice.city);
   const locationLabel = hasCity
@@ -78,7 +97,7 @@ export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, 
         </div>
 
         <div className="rd-sheet-body">
-          <div className="rd-field">
+          <div className={fieldClass('city', highlightField)}>
             <span className="rd-label">Город</span>
             <button
               type="button"
@@ -90,20 +109,21 @@ export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, 
             </button>
           </div>
 
-          <div className="rd-field">
+          <div className={fieldClass('bio', highlightField)}>
             <span className="rd-label">О себе</span>
             <textarea
+              ref={bioRef}
               className="rd-textarea"
               value={bio}
               maxLength={BIO_MAX}
               rows={3}
               onChange={(e) => setBio(e.target.value)}
-              placeholder="Коротко о себе"
+              placeholder="Чем увлекаешься?)"
             />
             <div className="rd-hint" style={{ textAlign: 'right' }}>{bio.length}/{BIO_MAX}</div>
           </div>
 
-          <div className="rd-field">
+          <div className={fieldClass('interests', highlightField)}>
             <span className="rd-label">Интересы</span>
             <InterestsInput ref={interestsRef} value={interests} onChange={setInterests} />
           </div>

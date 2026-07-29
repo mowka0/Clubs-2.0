@@ -39,6 +39,7 @@ class ActivityMapper {
             eventDatetime = event.eventDatetime,
             locationText = event.locationText,
             participantLimit = event.participantLimit,
+            isUrgent = event.isUrgent,
             goingCount = goingCount,
             confirmedCount = confirmedCount,
             status = event.status.literal,

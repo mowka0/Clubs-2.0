@@ -1,5 +1,25 @@
 import { describe, it, expect } from 'vitest';
-import { formatPrice, formatDatetime, pluralRu } from '../../utils/formatters';
+import { formatPrice, formatDatetime, pluralRu, formatLeadInterval } from '../../utils/formatters';
+
+// Интервал Этапа 2 полными словами (V67/V68): часы до кратных суток, дни от 2 дней,
+// staging-минуты не превращаются в «0 часов».
+describe('formatLeadInterval', () => {
+  it('часы с падежами', () => {
+    expect(formatLeadInterval(1080)).toBe('18 часов');
+    expect(formatLeadInterval(2160)).toBe('36 часов');
+    expect(formatLeadInterval(1440)).toBe('24 часа');
+  });
+
+  it('кратные суткам значения от 2 дней — днями', () => {
+    expect(formatLeadInterval(2880)).toBe('2 дня');
+    expect(formatLeadInterval(4320)).toBe('3 дня');
+    expect(formatLeadInterval(7200)).toBe('5 дней');
+  });
+
+  it('меньше часа (staging-ужимка) — минутами', () => {
+    expect(formatLeadInterval(3)).toBe('3 минуты');
+  });
+});
 
 describe('pluralRu', () => {
   const months: [string, string, string] = ['месяц', 'месяца', 'месяцев'];

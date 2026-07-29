@@ -25,6 +25,7 @@ function buildEvent(overrides: Partial<EventActivityDto> = {}): EventActivityDto
     eventDatetime: '2026-05-30T11:00:00Z',
     locationText: 'Park',
     participantLimit: 20,
+    isUrgent: false,
     goingCount: 5,
     confirmedCount: 0,
     status: 'upcoming',

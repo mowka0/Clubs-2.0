@@ -9,10 +9,12 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useClubQuery, useMyClubsQuery } from '../queries/clubs';
 import { useMyReputationQuery } from '../queries/members';
 import { isActiveManagerMembership } from '../utils/membershipRole';
+import { formatLeadInterval } from '../utils/formatters';
 import { useEventSplitStateQuery } from '../queries/skladchina';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { Toast } from '../components/Toast';
 import { EventPlaceCard } from '../components/event/EventPlaceCard';
+import { LocationPickerSheet } from '../components/event/LocationPickerSheet';
 import {
   useCastVoteMutation,
   useConfirmParticipationMutation,
@@ -24,6 +26,7 @@ import {
   useMyAttendanceQuery,
   useMyVoteQuery,
   useCancelEventMutation,
+  useUpdateEventMutation,
   useResolveDisputeMutation,
 } from '../queries/events';
 
@@ -31,6 +34,7 @@ function getInitials(name: string): string {
   return name.replace(/[«»"']/g, '').split(/\s+/).filter(Boolean).slice(0, 2)
     .map((w) => w.charAt(0).toUpperCase()).join('');
 }
+
 
 /** Маппит статус откликнувшегося в класс цвета точки (go / maybe / expired / no). */
 function statusDotClass(status: string): string {
@@ -59,6 +63,17 @@ function formatEventDate(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+/**
+ * ISO (UTC) → значение для input[type=datetime-local] в ЛОКАЛЬНОМ поясе устройства
+ * («YYYY-MM-DDTHH:mm»). toISOString() не подходит: он вернул бы UTC-время, и пикер
+ * показал бы организатору сдвинутые часы.
+ */
+function toDatetimeLocalValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export const EventPage: FC = () => {
@@ -114,6 +129,7 @@ export const EventPage: FC = () => {
   const disputeMutation = useDisputeAttendanceMutation();
   const resolveMutation = useResolveDisputeMutation();
   const cancelMutation = useCancelEventMutation();
+  const updateMutation = useUpdateEventMutation();
 
   // Два отдельных канала ошибок: actionError — для голоса/подтверждения/отказа, attendanceError —
   // для отметки явки. actionError рендерится ровно в одном слоте на фазу — блок голосования Этапа 1
@@ -130,6 +146,19 @@ export const EventPage: FC = () => {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelError, setCancelError] = useState<string | null>(null);
+  // Шторка редактирования встречи (только Этап 1). Поля держим отдельными строками, а не
+  // копией DTO: форма правит текст, а собирается payload уже при сохранении.
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editLocation, setEditLocation] = useState<{ text: string | null; lat: number | null; lon: number | null }>(
+    { text: null, lat: null, lon: null },
+  );
+  const [editHint, setEditHint] = useState('');
+  const [editDatetime, setEditDatetime] = useState('');
+  const [editLimit, setEditLimit] = useState('');
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editPickerOpen, setEditPickerOpen] = useState(false);
   // Инлайн-подтверждение отказа от подтверждённого места (защита от случайного клика).
   const [confirmingDecline, setConfirmingDecline] = useState(false);
 
@@ -276,6 +305,91 @@ export const EventPage: FC = () => {
     );
   };
 
+  // Редактирование встречи (только Этап 1). Открытие шторки предзаполняет ВСЕ поля текущими
+  // значениями: у PUT нет частичных правок, клиент присылает полный набор.
+  const openEdit = () => {
+    if (!event) return;
+    haptic.impact('medium');
+    setEditError(null);
+    setEditTitle(event.title);
+    setEditDescription(event.description ?? '');
+    setEditLocation({
+      text: event.locationText ?? null,
+      lat: event.locationLat ?? null,
+      lon: event.locationLon ?? null,
+    });
+    setEditHint(event.locationHint ?? '');
+    setEditDatetime(toDatetimeLocalValue(event.eventDatetime));
+    setEditLimit(event.participantLimit != null ? String(event.participantLimit) : '');
+    setEditOpen(true);
+  };
+
+  const handleUpdateEvent = () => {
+    if (!id || !event || updateMutation.isPending) return;
+    setEditError(null);
+
+    const title = editTitle.trim();
+    if (!title) { setEditError('Укажите название'); haptic.notify('error'); return; }
+    if (!editDatetime) { setEditError('Укажите дату и время'); haptic.notify('error'); return; }
+    const newDate = new Date(editDatetime);
+    if (Number.isNaN(newDate.getTime())) { setEditError('Некорректная дата'); haptic.notify('error'); return; }
+    if (newDate.getTime() <= Date.now()) { setEditError('Дата события должна быть в будущем'); haptic.notify('error'); return; }
+
+    const hint = editHint.trim();
+    // Тот же инвариант, что на бэкенде: у встречи должно остаться хоть какое-то указание места.
+    const hasPoint = editLocation.lat != null && editLocation.lon != null;
+    if (!hasPoint && !hint) {
+      setEditError('Укажите место на карте или добавьте уточнение');
+      haptic.notify('error');
+      return;
+    }
+
+    // Формат неизменяем: лимит правим только у встречи с местами, у открытой его нет вовсе.
+    let participantLimit: number | null = null;
+    if (!isOpenEvent) {
+      const parsed = Number(editLimit);
+      if (!Number.isInteger(parsed) || parsed < 1) {
+        setEditError('Лимит участников — целое число от 1');
+        haptic.notify('error');
+        return;
+      }
+      participantLimit = parsed;
+    }
+
+    haptic.impact('medium');
+    updateMutation.mutate(
+      {
+        eventId: id,
+        clubId: event.clubId,
+        body: {
+          title,
+          description: editDescription.trim() || null,
+          locationText: editLocation.text,
+          locationLat: editLocation.lat,
+          locationLon: editLocation.lon,
+          locationHint: hint || null,
+          eventDatetime: newDate.toISOString(),
+          participantLimit,
+          // Именно override, а не эффективное значение: иначе подставленный бэком дефолт
+          // стал бы собственным интервалом события.
+          stage2LeadMinutes: event.stage2LeadMinutesOverride ?? null,
+          photoUrl: event.photoUrl ?? null,
+        },
+      },
+      {
+        onSuccess: () => {
+          haptic.notify('success');
+          setEditOpen(false);
+          setToastMessage('Изменения сохранены');
+        },
+        onError: (e: Error) => {
+          setEditError(e.message);
+          haptic.notify('error');
+        },
+      },
+    );
+  };
+
   if (loading) {
     return (
       <div className="rd-page" style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
@@ -340,6 +454,18 @@ export const EventPage: FC = () => {
   // до часового completion-прохода, поэтому гейтим ещё и по !eventHappened — зеркалит
   // бэкенд-гард `event_datetime > now` в Stage2Service. См. events.md.
   const showStage2 = event.status === 'stage_2' && !eventHappened;
+
+  // Перенос даты: новая дата ближе интервала Этапа 2 — не блокируем (паритет с созданием),
+  // но предупреждаем, что подтверждение мест начнётся сразу. stage2LeadMinutes с бэка уже
+  // эффективный (свой или дефолт); null = открытая встреча — предупреждение не нужно.
+  const editTimeMs = editDatetime ? new Date(editDatetime).getTime() : null;
+  const editStage2Immediate =
+    event.stage2LeadMinutes != null &&
+    editTimeMs !== null && !Number.isNaN(editTimeMs) &&
+    editTimeMs > Date.now() &&
+    editTimeMs - Date.now() <= event.stage2LeadMinutes * 60_000;
+  const editLeadLabel =
+    event.stage2LeadMinutes != null ? formatLeadInterval(event.stage2LeadMinutes) : null;
 
   // «Путь назад», вариант C (reputation-path-back.md AC-8): строка-мотиватор «придёте — надёжность
   // вырастет» при просадке Trust в клубе события. Скрыта у терминальных статусов: confirmed уже
@@ -552,6 +678,12 @@ export const EventPage: FC = () => {
       {showVoting && myVote && (
         <div style={{ marginBottom: 14 }}>
           <span className="rd-badge rd-going">Ваш голос: {VOTE_LABELS[myVote] ?? myVote}</span>
+        </div>
+      )}
+      {/* Интервал Этапа 2 (V67): когда откроется подтверждение мест — свой у события или дефолт. */}
+      {showVoting && !isOpenEvent && event.stage2LeadMinutes != null && (
+        <div className="rd-hint" style={{ marginBottom: 14 }}>
+          Подтверждение мест откроется за {formatLeadInterval(event.stage2LeadMinutes)} до начала
         </div>
       )}
       {showVoting && pathBackNudge}
@@ -922,9 +1054,21 @@ export const EventPage: FC = () => {
         </>
       )}
 
-      {/* Отмена события (F5-14) — только организатор, до начала события. */}
+      {/* Организаторские действия до старта: редактирование (включая перенос даты) — только на
+          Этапе 1, с началом подтверждения мест правки запрещены; гейт зеркалит бэкенд-гард
+          updateEvent — и отмена события (F5-14). */}
       {isManager && !isCancelled && !eventHappened && (
         <div className="rd-cta-wrap" style={{ marginTop: 8 }}>
+          {showVoting && (
+            <button
+              type="button"
+              className="rd-btn-outline"
+              style={{ marginBottom: 8 }}
+              onClick={openEdit}
+            >
+              Редактировать встречу
+            </button>
+          )}
           <button
             type="button"
             className="rd-btn-outline"
@@ -934,6 +1078,132 @@ export const EventPage: FC = () => {
             Отменить событие
           </button>
         </div>
+      )}
+
+      {editOpen && createPortal(
+        <>
+          <div className="rd-sheet-overlay" onClick={() => setEditOpen(false)} aria-hidden="true" />
+          <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Редактирование встречи">
+            <div className="rd-sheet-grabber" aria-hidden="true" />
+            <div className="rd-sheet-head">
+              <h2>Редактировать встречу</h2>
+              <button type="button" className="rd-sheet-close" onClick={() => setEditOpen(false)}>Закрыть</button>
+            </div>
+            <div className="rd-sheet-body">
+              <div className="rd-body-text" style={{ marginTop: 0 }}>
+                Участники получат уведомление, только если поменяется место или время. Правки
+                возможны до начала подтверждения мест.
+              </div>
+
+              <label className="rd-field">
+                <span className="rd-label">Название</span>
+                <input
+                  className="rd-input"
+                  type="text"
+                  maxLength={255}
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                />
+              </label>
+
+              <label className="rd-field">
+                <span className="rd-label">Описание</span>
+                <textarea
+                  className="rd-input"
+                  rows={3}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                />
+              </label>
+
+              <div className="rd-field">
+                <span className="rd-label">Место</span>
+                <button
+                  type="button"
+                  className="rd-btn-outline"
+                  onClick={() => { haptic.impact('light'); setEditPickerOpen(true); }}
+                >
+                  {editLocation.text ?? (editLocation.lat != null ? 'Точка на карте' : 'Выбрать на карте')}
+                </button>
+              </div>
+
+              <label className="rd-field">
+                <span className="rd-label">Уточнение к месту</span>
+                <input
+                  className="rd-input"
+                  type="text"
+                  maxLength={200}
+                  placeholder="Вход со двора, домофон 12"
+                  value={editHint}
+                  onChange={(e) => setEditHint(e.target.value)}
+                />
+              </label>
+
+              <label className="rd-field">
+                <span className="rd-label">Дата и время</span>
+                <div className="rd-datetime">
+                  <input
+                    className="rd-input"
+                    type="datetime-local"
+                    value={editDatetime}
+                    onChange={(e) => setEditDatetime(e.target.value)}
+                  />
+                </div>
+              </label>
+
+              {/* У открытой встречи лимита нет вовсе — формат неизменяем, поле не показываем. */}
+              {!isOpenEvent && (
+                <label className="rd-field">
+                  <span className="rd-label">Лимит участников</span>
+                  <input
+                    className="rd-input"
+                    type="number"
+                    min={1}
+                    value={editLimit}
+                    onChange={(e) => setEditLimit(e.target.value)}
+                  />
+                </label>
+              )}
+
+              {editStage2Immediate && editLeadLabel && (
+                <div className="rd-body-text">
+                  ⚡️ До встречи меньше интервала подтверждения (за {editLeadLabel}) —
+                  подтверждение мест начнётся сразу после сохранения.
+                </div>
+              )}
+              {editError && <div className="rd-error">{editError}</div>}
+              <div className="rd-cta-wrap">
+                <button
+                  type="button"
+                  className="rd-btn-primary"
+                  onClick={handleUpdateEvent}
+                  disabled={updateMutation.isPending}
+                >
+                  {updateMutation.isPending ? <Spinner size="s" /> : 'Сохранить'}
+                </button>
+                <button type="button" className="rd-btn-outline" style={{ marginTop: 8 }} onClick={() => setEditOpen(false)}>
+                  Назад
+                </button>
+              </div>
+            </div>
+          </div>
+        </>,
+        document.body,
+      )}
+
+      {editPickerOpen && (
+        <LocationPickerSheet
+          initial={
+            editLocation.lat != null && editLocation.lon != null
+              ? { lat: editLocation.lat, lon: editLocation.lon }
+              : null
+          }
+          onSelect={(point, address) => {
+            setEditLocation({ text: address || null, lat: point.lat, lon: point.lon });
+            setEditPickerOpen(false);
+          }}
+          onClose={() => setEditPickerOpen(false)}
+        />
       )}
 
       {cancelOpen && createPortal(

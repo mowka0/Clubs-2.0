@@ -23,6 +23,9 @@ import { isActiveManagerMembership } from '../utils/membershipRole';
 import { openTmeLink } from '../utils/telegramLinks';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
 import { ClubChatConnectBanner } from '../components/club/ClubChatConnectBanner';
+import { ClubEventsTeaser } from '../components/club/ClubEventsTeaser';
+import { WelcomeScene, memberCountCaption } from '../components/onboarding/WelcomeScene';
+import { useCompleteOnboardingMutation } from '../queries/profile';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
 import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
@@ -71,7 +74,7 @@ export const ClubPage: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const haptic = useHaptic();
-  const { user } = useAuthStore();
+  const { user, setUser } = useAuthStore();
   useSetClubContext(id);
 
   // club-invites (кадр E, momentum): после создания клуба MyClubsPage ведёт сюда с
@@ -86,6 +89,7 @@ export const ClubPage: FC = () => {
   const applyMutation = useApplyToClubMutation();
   const completeFreeMutation = useCompleteFreeMembershipMutation();
   const leaveMutation = useLeaveClubMutation();
+  const completeOnboarding = useCompleteOnboardingMutation();
 
   const [joinError, setJoinError] = useState<string | null>(null);
   const [showApplyModal, setShowApplyModal] = useState(false);
@@ -95,6 +99,9 @@ export const ClubPage: FC = () => {
   // (нет доступа, пока организатор не подтвердит офлайн-взнос); в бесплатном — сразу `active`.
   // Запоминаем статус из результата мутации, чтобы CTA среагировал раньше, чем придёт рефетч membership.
   const [joinedStatus, setJoinedStatus] = useState<string | null>(null);
+  // Велком-сцена (онбординг, срез 3): оверлей после первого вступления новичка. Точка входа
+  // любая (deep-link события → клуб → «Вступить», каталог) — сцена одна на первый клуб.
+  const [showWelcome, setShowWelcome] = useState(false);
   const [showDuesSheet, setShowDuesSheet] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>(openInviteOnMount ? 'members' : 'activities');
   const [showLeaveModal, setShowLeaveModal] = useState(false);
@@ -167,6 +174,8 @@ export const ClubPage: FC = () => {
       onSuccess: (membership) => {
         setJoinedStatus(membership.status);
         haptic.notify('success');
+        // Первое вступление новичка (onboardedAt пуст) → велком-сцена вместо голой страницы.
+        if (user?.onboardedAt == null) setShowWelcome(true);
       },
       onError: (e) => {
         // 409 — тихое восстановление: кэш уже инвалидирован, UI был просто устаревшим.
@@ -175,6 +184,24 @@ export const ClubPage: FC = () => {
         haptic.notify('error');
       },
     });
+  };
+
+  // CTA велком-сцены: помечаем онбординг (дверь MEMBER) и закрываем оверлей — мы уже на
+  // странице клуба, навигация не нужна. mutateAsync ждём до setUser: упавший запрос не должен
+  // молча оставить onboardedAt пустым (иначе при следующем входе вылезла бы карусель).
+  const handleWelcomeCta = async () => {
+    if (completeOnboarding.isPending) return;
+    haptic.impact('medium');
+    try {
+      const freshUser = await completeOnboarding.mutateAsync('MEMBER');
+      setUser(freshUser);
+      setShowWelcome(false);
+    } catch {
+      haptic.notify('error');
+      // Не запираем человека на сцене из-за сети: клуб уже открыт под оверлеем, закрываем.
+      // onboardedAt остался пустым — сцену/карусель он увидит ещё раз, это честнее тупика.
+      setShowWelcome(false);
+    }
   };
 
   const handleApply = () => {
@@ -514,6 +541,13 @@ export const ClubPage: FC = () => {
             </div>
           </div>
 
+          {/* Тизер-афиша (PO 2026-07-24): участник без взноса видит, что клуб живой, —
+              главный аргумент передать взнос. Урезанная проекция без места/фото/состава. */}
+          <ClubEventsTeaser
+            clubId={club.id}
+            lockHint="Место встреч, голосование и участие откроются после взноса"
+          />
+
           {membership?.duesClaimedAt ? (
             <div className="rd-glass rd-dues-pending">
               <span aria-hidden="true">⏳</span>
@@ -557,6 +591,16 @@ export const ClubPage: FC = () => {
               Содержимое клуба открывается после вступления.
             </div>
           </div>
+
+          {/* Тизер-афиша (PO 2026-07-24): гость видит ритм жизни клуба до вступления/оплаты. */}
+          <ClubEventsTeaser
+            clubId={club.id}
+            lockHint={
+              club.subscriptionPrice > 0
+                ? 'Место встреч, голосование и участие откроются после вступления и взноса'
+                : 'Место встреч, голосование и участие откроются после вступления'
+            }
+          />
 
           {/* Чат и клуб — одно целое (club-chat-link): гость видит, что вход в чат
               лежит через вступление (мокап 02-C). */}
@@ -682,6 +726,19 @@ export const ClubPage: FC = () => {
           setLeaveError(null);
         }}
       />
+
+      {/* Велком-сцена новичка (онбординг, срез 3): полноэкранный оверлей после первого
+          вступления. CTA помечает онбординг и закрывает сцену — страница клуба уже под ней. */}
+      {showWelcome && (
+        <WelcomeScene
+          variant={club.subscriptionPrice > 0 ? 'paid' : 'free'}
+          clubName={club.name}
+          clubCaption={`${club.city} · ${club.subscriptionPrice > 0 ? formatPrice(club.subscriptionPrice) : memberCountCaption(club.memberCount)}`}
+          clubAvatarUrl={club.avatarUrl}
+          ctaPending={completeOnboarding.isPending}
+          onCta={handleWelcomeCta}
+        />
+      )}
     </div>
   );
 };

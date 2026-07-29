@@ -1,7 +1,9 @@
 package com.clubs.chatlink
 
 import com.clubs.bot.ChatTelegramGateway
+import com.clubs.bot.PARSE_MODE_HTML
 import com.clubs.event.Event
+import com.clubs.event.EventEditedEvent
 import com.clubs.event.EventRepository
 import com.clubs.event.EventResponseRepository
 import com.clubs.event.OPEN_IN_YANDEX_MAPS_BUTTON
@@ -71,7 +73,7 @@ class LivePinService(
     fun onEventCancelled(event: Event, reason: String?): Long? {
         pinRepository.findByEventId(event.id)?.takeIf { it.closedAt == null }?.let { pin ->
             pin.messageId?.let { messageId ->
-                gateway.editGroupMessage(pin.chatId, messageId, renderer.cancelledText(event, reason), null, null)
+                gateway.editGroupMessage(pin.chatId, messageId, renderer.cancelledText(event, reason), null, null, PARSE_MODE_HTML)
                 gateway.unpinChatMessage(pin.chatId, messageId)
             }
             pinRepository.markClosed(event.id)
@@ -82,7 +84,28 @@ class LivePinService(
             chatId = link.chatId,
             text = renderer.cancelledText(event, reason),
             buttonText = null,
-            url = null
+            url = null,
+            parseMode = PARSE_MODE_HTML
+        )
+        return if (messageId != null) link.chatId else null
+    }
+
+    /**
+     * Правка встречи на Этапе 1 (дата и/или место): громкий пост «было → стало» + dirty-флаг
+     * закрепа (данные в нём перерисуются flush-проходом; правки закрепа Telegram не уведомляют,
+     * так что пост — единственный пинг участников чата). Возвращает chatId, когда пост
+     * фактически вышел, — для DM-фоллбека маршрутизатора (как onEventCancelled).
+     */
+    @Transactional
+    fun onEventEdited(edited: EventEditedEvent): Long? {
+        markDirty(edited.event.id)
+        val link = liveLinkFor(edited.event.clubId) ?: return null
+        val messageId = gateway.sendGroupMessageWithUrlButton(
+            chatId = link.chatId,
+            text = renderer.editedText(edited),
+            buttonText = null,
+            url = null,
+            parseMode = PARSE_MODE_HTML
         )
         return if (messageId != null) link.chatId else null
     }
@@ -173,6 +196,7 @@ class LivePinService(
             text = renderStatus(event),
             buttonText = renderer.buttonText(event),
             url = renderer.eventUrl(event.id),
+            parseMode = PARSE_MODE_HTML,
             secondaryButton = mapsButton(event)
         )
         if (messageId == null) {
@@ -201,6 +225,7 @@ class LivePinService(
             text = renderStatus(event),
             buttonText = renderer.buttonText(event),
             url = renderer.eventUrl(event.id),
+            parseMode = PARSE_MODE_HTML,
             secondaryButton = mapsButton(event)
         )
     }
@@ -212,7 +237,7 @@ class LivePinService(
     private fun closePin(pin: EventChatPin, event: Event) {
         pin.messageId?.let { messageId ->
             val confirmed = eventResponseRepository.countConfirmed(event.id)
-            gateway.editGroupMessage(pin.chatId, messageId, renderer.closedText(event, confirmed), null, null)
+            gateway.editGroupMessage(pin.chatId, messageId, renderer.closedText(event, confirmed), null, null, PARSE_MODE_HTML)
             gateway.unpinChatMessage(pin.chatId, messageId)
         }
         // Закрываем даже при сбое edit/unpin — иначе мёртвое сообщение ретраилось бы вечно.

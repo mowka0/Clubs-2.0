@@ -71,7 +71,7 @@ class LivePinServiceTest {
     fun `onEventCreated постит статус, закрепляет и сохраняет строку`() {
         val event = livePinEvent(clubId = clubId)
         every { pinRepository.findByEventId(event.id) } returns null
-        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any()) } returns 777L
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any(), any(), any(), any()) } returns 777L
 
         service.onEventCreated(event)
 
@@ -80,7 +80,8 @@ class LivePinServiceTest {
                 chatId,
                 match { it.contains("Поход в баню") && it.contains("Идут — 3") },
                 "Проголосовать",
-                "https://t.me/clubs_test_bot?startapp=event_${event.id}"
+                "https://t.me/clubs_test_bot?startapp=event_${event.id}",
+                any(), any(), any()
             )
         }
         verify { pinRepository.insert(match { it.eventId == event.id && it.messageId == 777L }) }
@@ -93,7 +94,7 @@ class LivePinServiceTest {
 
         service.onEventCreated(livePinEvent(clubId = clubId))
 
-        verify(exactly = 0) { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any()) }
+        verify(exactly = 0) { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -102,7 +103,7 @@ class LivePinServiceTest {
 
         service.onEventCreated(livePinEvent(clubId = clubId))
 
-        verify(exactly = 0) { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any()) }
+        verify(exactly = 0) { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -110,7 +111,7 @@ class LivePinServiceTest {
         every { chatLinkRepository.findByClubId(clubId) } returns link.copy(canPinMessages = false)
         val event = livePinEvent(clubId = clubId)
         every { pinRepository.findByEventId(event.id) } returns null
-        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any()) } returns 777L
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any(), any(), any(), any()) } returns 777L
 
         service.onEventCreated(event)
 
@@ -122,7 +123,7 @@ class LivePinServiceTest {
     fun `onEventCreated не создаёт строку при сбое отправки`() {
         val event = livePinEvent(clubId = clubId)
         every { pinRepository.findByEventId(event.id) } returns null
-        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any()) } returns null
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any(), any(), any(), any()) } returns null
 
         service.onEventCreated(event)
 
@@ -145,15 +146,15 @@ class LivePinServiceTest {
         verify {
             gateway.editGroupMessage(
                 chatId, 777L,
-                match { it.contains("подтверждение мест") && it.contains("12 из 15") && it.contains("В очереди — 2") },
+                match { it.contains("<b>Обычная встреча</b>") && it.contains("12 из 15") && it.contains("В очереди — 2") },
                 "Подтвердить участие",
-                any()
+                any(), any(), any()
             )
         }
 
         // Флаг снят: повторный flush ничего не редактирует
         service.flush()
-        verify(exactly = 1) { gateway.editGroupMessage(any(), any(), any(), any(), any()) }
+        verify(exactly = 1) { gateway.editGroupMessage(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -166,7 +167,7 @@ class LivePinServiceTest {
 
         service.flush()
 
-        verify { gateway.editGroupMessage(chatId, 777L, match { it.contains("Событие началось") }, null, null) }
+        verify { gateway.editGroupMessage(chatId, 777L, match { it.contains("началась") }, null, null, any(), any()) }
         verify { gateway.unpinChatMessage(chatId, 777L) }
         verify { pinRepository.markClosed(event.id) }
     }
@@ -182,8 +183,8 @@ class LivePinServiceTest {
         verify {
             gateway.editGroupMessage(
                 chatId, 777L,
-                match { it.contains("отменено") && it.contains("все заболели") },
-                null, null
+                match { it.contains("отменена") && it.contains("все заболели") },
+                null, null, any(), any()
             )
         }
         verify { gateway.unpinChatMessage(chatId, 777L) }
@@ -195,12 +196,12 @@ class LivePinServiceTest {
         val event = livePinEvent(clubId = clubId)
         every { pinRepository.findByEventId(event.id) } returns
             EventChatPin(event.id, chatId, 777L, closedAt = null, summaryMessageId = null)
-        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), null, null) } returns 999L
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), null, null, any(), any(), any()) } returns 999L
 
         val postedChatId = service.onEventCancelled(event, "все заболели")
 
         // Правки беззвучны — пост отмены единственный пинг чата, DM уйдёт только не-в-чате.
-        verify { gateway.sendGroupMessageWithUrlButton(chatId, match { it.contains("отменено") }, null, null) }
+        verify { gateway.sendGroupMessageWithUrlButton(chatId, match { it.contains("отменена") }, null, null, any(), any(), any()) }
         org.junit.jupiter.api.Assertions.assertEquals(chatId, postedChatId)
     }
 
@@ -208,7 +209,7 @@ class LivePinServiceTest {
     fun `onEventCancelled — пост отмены не вышел (Telegram молчит) — null, DM всем`() {
         val event = livePinEvent(clubId = clubId)
         every { pinRepository.findByEventId(event.id) } returns null
-        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), null, null) } returns null
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), null, null, any(), any(), any()) } returns null
 
         org.junit.jupiter.api.Assertions.assertNull(service.onEventCancelled(event, null))
     }
@@ -217,7 +218,7 @@ class LivePinServiceTest {
     fun `onEventCreated возвращает chatId вышедшего поста (маршрутизатор)`() {
         val event = livePinEvent(clubId = clubId)
         every { pinRepository.findByEventId(event.id) } returns null
-        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any()) } returns 777L
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any(), any(), any(), any()) } returns 777L
 
         org.junit.jupiter.api.Assertions.assertEquals(chatId, service.onEventCreated(event))
     }
@@ -294,11 +295,11 @@ class LivePinServiceTest {
         every { pinRepository.findByEventId(withPin.id) } returns
             EventChatPin(withPin.id, chatId, 111L, closedAt = null, summaryMessageId = null)
         every { pinRepository.findByEventId(withoutPin.id) } returns null
-        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any()) } returns 222L
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any(), any(), any(), any()) } returns 222L
 
         service.backfillForClub(clubId)
 
-        verify(exactly = 1) { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any()) }
+        verify(exactly = 1) { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any(), any(), any(), any()) }
         verify { pinRepository.insert(match { it.eventId == withoutPin.id }) }
     }
 

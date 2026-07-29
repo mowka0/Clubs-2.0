@@ -40,8 +40,12 @@ function createRoute(
   template: SkladchinaTemplateKey | null,
   eventFormat: EventFormatKey | null,
 ): string {
-  // Открытая встреча (V62) — та же форма создания события, форма читает ?format=open и прячет степпер лимита.
-  if (type === 'event') return `/clubs/${clubId}/events/new${eventFormat === 'open' ? '?format=open' : ''}`;
+  // Открытая (V62) и срочная (PO 2026-07-23) встречи — та же форма создания события: она читает
+  // ?format и адаптирует поля (open — без лимита; urgent — без интервала Этапа 2, сразу stage_2).
+  if (type === 'event') {
+    const suffix = eventFormat === 'open' ? '?format=open' : eventFormat === 'urgent' ? '?format=urgent' : '';
+    return `/clubs/${clubId}/events/new${suffix}`;
+  }
   // У split_bill своя страница, не зависящая от точки входа (выбирает событие, делит счёт).
   if (template === 'split_bill') return `/clubs/${clubId}/skladchina/split`;
   return `/clubs/${clubId}/skladchina/new`;

@@ -85,6 +85,17 @@ describe('CreateActivityFlow', () => {
     expect(screen.getByTestId('location-search').textContent).toBe('?format=open');
   });
 
+  it('Событие → «Срочная встреча» ведёт на форму с ?format=urgent', async () => {
+    const { user } = renderFlow(ONE_CLUB);
+
+    await user.click(screen.getByText('Событие'));
+    await user.click(screen.getByText('Срочная встреча'));
+
+    // Тот же маршрут: форма читает ?format=urgent — без интервала Этапа 2, событие сразу в stage_2.
+    expect(screen.getByTestId('location').textContent).toBe('/clubs/club-1/events/new');
+    expect(screen.getByTestId('location-search').textContent).toBe('?format=urgent');
+  });
+
   it('Сбор → template step → club picker → custom create route', async () => {
     const { user } = renderFlow(TWO_CLUBS);
 

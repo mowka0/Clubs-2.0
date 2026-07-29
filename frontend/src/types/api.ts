@@ -544,6 +544,14 @@ export interface EventDetailDto {
   // null = открытая встреча (V62) — счёт показывается без знаменателя.
   participantLimit: number | null;
   votingOpensDaysBefore: number;
+  // Эффективный интервал Этапа 2 (минут до старта): свой у события или глобальный дефолт бэка —
+  // фронт порог не хардкодит (тот же урок, что confirmedDeclineDeadline). null = открытая встреча.
+  stage2LeadMinutes: number | null;
+  // Собственный интервал события; null = «используется глобальный дефолт». Для ПОКАЗА берём
+  // stage2LeadMinutes выше, а в PUT возвращаем это поле: отправка эффективного значения
+  // превратила бы подставленный дефолт в собственный интервал события (и упиралась бы
+  // в @Min(1080), когда дефолт на окружении ужат).
+  stage2LeadMinutesOverride: number | null;
   status: string;
   goingCount: number;
   maybeCount: number;
@@ -575,6 +583,29 @@ export interface EventListItemDto {
   participantLimit: number | null;
   goingCount: number;
   status: string;
+}
+
+/**
+ * Тизер-афиша клуба — урезанная проекция событий для смотрящего без доступа (гость /
+ * frozen / expired). По построению не содержит места, фото и состава участников.
+ */
+export interface TeaserEventDto {
+  id: string;
+  title: string;
+  eventDatetime: string;
+  status: string;
+  // Формат для бейджа «⚡ срочная / 🎟 обычная / 🌊 открытая», как на карточках ленты.
+  isUrgent: boolean;
+  isOpenEvent: boolean;
+  // До Этапа 2 показываем «идут N» (голоса), после — «подтвердили N».
+  goingCount: number;
+  confirmedCount: number;
+}
+
+export interface ClubEventsTeaserDto {
+  upcoming: TeaserEventDto[];
+  past: TeaserEventDto[];
+  totalPastCount: number;
 }
 
 export interface EventResponderDto {
@@ -736,6 +767,8 @@ export interface MyEventListItemDto {
   confirmedCount: number;
   // null = открытая встреча (V62) — счёт показывается без знаменателя.
   participantLimit: number | null;
+  // Срочная встреча (V69) — бейдж «⚡ СРОЧНАЯ» вместо «🎟 ОБЫЧНАЯ».
+  isUrgent: boolean;
   actionRequired: boolean;
   // Прошедшее посещённое событие (организатор отметил явку). Бакет считает бэкенд.
   // Единственный признак истории: status флипается кроном с лагом до ~7ч

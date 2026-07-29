@@ -128,7 +128,7 @@ interface DuesActionRowProps {
 
 /**
  * Строка «Скоро закончится» / «Ждут оплаты»: тап по участнику открывает карточку профиля; кнопка
- * «Взнос получен» открывает доступ и продлевает оплаченное окно на +30 дней. Строка — div (не button),
+ * «Взнос получен» открывает доступ и продлевает оплаченное окно на календарный месяц. Строка — div (не button),
  * чтобы два тап-таргета не вкладывались друг в друга. 409 (проигранная гонка) глотается — кэш списка
  * уже обновлён.
  */
@@ -144,7 +144,7 @@ const DuesActionRow: FC<DuesActionRowProps> = ({ clubId, member, metaText, onOpe
       {
         onSuccess: () => {
           haptic.notify('success');
-          onFeedback(`Взнос принят — доступ ${member.firstName} продлён на 30 дней`);
+          onFeedback(`Взнос принят — доступ ${member.firstName} продлён на месяц`);
         },
         onError: (e) => {
           if (e instanceof ApiError && e.status === 409) return;

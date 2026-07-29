@@ -38,6 +38,8 @@ class JooqEventRepository(
             .set(EVENTS.EVENT_DATETIME, request.eventDatetime)
             .set(EVENTS.PARTICIPANT_LIMIT, request.participantLimit)
             .set(EVENTS.VOTING_OPENS_DAYS_BEFORE, request.votingOpensDaysBefore)
+            .set(EVENTS.STAGE2_LEAD_MINUTES, request.stage2LeadMinutes)
+            .set(EVENTS.IS_URGENT, request.isUrgentEvent)
             .set(EVENTS.STATUS, EventStatus.upcoming)
             .set(EVENTS.STAGE_2_TRIGGERED, false)
             .set(EVENTS.ATTENDANCE_MARKED, false)
@@ -112,9 +114,10 @@ class JooqEventRepository(
                     DSL.value(now)
                 )
             )
-        // Подтверждение Stage-2 ещё не отдано: проголосовал going/maybe на stage 1, но ещё не подтвердил/отказался.
+        // Подтверждение Stage-2 ещё не отдано. Этап 2 открыт всем участникам (PR #92), поэтому
+        // действие требуется от каждого без решения на САМОМ Этапе 2 (решение PO 2026-07-23):
+        // голос Этапа 1 (включая «Не пойду») не финален, у срочной встречи (V69) его нет вовсе.
         val stage2Pending = EVENTS.STATUS.eq(EventStatus.stage_2)
-            .and(EVENT_RESPONSES.STAGE_1_VOTE.`in`(Stage_1Vote.going, Stage_1Vote.maybe))
             .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull)
 
         return dsl.select(EVENTS.ID)
@@ -193,8 +196,9 @@ class JooqEventRepository(
                 1
             )
             .`when`(
+                // То же правило, что в findActionRequiredEventIds (PO 2026-07-23): Этап 2 открыт
+                // всем — подтверждение ждём от каждого участника без решения на самом Этапе 2.
                 EVENTS.STATUS.eq(EventStatus.stage_2)
-                    .and(EVENT_RESPONSES.STAGE_1_VOTE.`in`(Stage_1Vote.going, Stage_1Vote.maybe))
                     .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull),
                 1
             )
@@ -214,6 +218,7 @@ class JooqEventRepository(
             EVENTS.EVENT_DATETIME,
             EVENTS.PARTICIPANT_LIMIT,
             EVENTS.VOTING_OPENS_DAYS_BEFORE,
+            EVENTS.IS_URGENT,
             EVENTS.STATUS,
             EVENTS.STAGE_2_TRIGGERED,
             EVENTS.ATTENDANCE_MARKED,
@@ -265,6 +270,7 @@ class JooqEventRepository(
                 eventDatetime = r.get(EVENTS.EVENT_DATETIME)!!,
                 participantLimit = r.get(EVENTS.PARTICIPANT_LIMIT),
                 votingOpensDaysBefore = r.get(EVENTS.VOTING_OPENS_DAYS_BEFORE) ?: EventMapper.DEFAULT_VOTING_OPENS_DAYS_BEFORE,
+                isUrgent = r.get(EVENTS.IS_URGENT) ?: false,
                 status = r.get(EVENTS.STATUS) ?: EventStatus.upcoming,
                 stage2Triggered = r.get(EVENTS.STAGE_2_TRIGGERED) ?: false,
                 attendanceMarked = r.get(EVENTS.ATTENDANCE_MARKED) ?: false,
@@ -302,12 +308,22 @@ class JooqEventRepository(
         return mapOf("going" to going, "maybe" to maybe, "notGoing" to notGoing, "confirmed" to confirmed)
     }
 
-    override fun findEventsToTriggerStage2(cutoff: OffsetDateTime): List<Event> =
+    override fun findEventsToTriggerStage2(now: OffsetDateTime, defaultLeadMinutes: Long): List<Event> =
         dsl.selectFrom(EVENTS)
             .where(
                 EVENTS.STATUS.eq(EventStatus.upcoming)
                     .and(EVENTS.STAGE_2_TRIGGERED.eq(false))
-                    .and(EVENTS.EVENT_DATETIME.lessOrEqual(cutoff))
+                    // Пер-событийный интервал Этапа 2 (V67): событие «готово», когда до старта
+                    // осталось ≤ его собственного lead (или глобального дефолта при NULL).
+                    .and(
+                        DSL.condition(
+                            "{0} - (COALESCE({1}, {2}) * INTERVAL '1 minute') <= {3}",
+                            EVENTS.EVENT_DATETIME,
+                            EVENTS.STAGE2_LEAD_MINUTES,
+                            DSL.value(defaultLeadMinutes),
+                            DSL.value(now)
+                        )
+                    )
             )
             .fetch()
             .map(mapper::toDomain)
@@ -394,6 +410,33 @@ class JooqEventRepository(
                     // Только до начала события: event_datetime > now ⇒ посещаемость ещё не может быть
                     // отмечена или финализирована, поэтому отмена никогда не стирает легитимную
                     // посещаемость/репутацию.
+                    .and(EVENTS.EVENT_DATETIME.greaterThan(OffsetDateTime.now()))
+            )
+            .execute()
+
+    override fun updateEvent(eventId: UUID, edit: EventEdit): Int =
+        dsl.update(EVENTS)
+            .set(EVENTS.TITLE, edit.title)
+            .set(EVENTS.DESCRIPTION, edit.description)
+            .set(EVENTS.LOCATION_TEXT, edit.locationText)
+            .set(EVENTS.LOCATION_LAT, edit.locationLat)
+            .set(EVENTS.LOCATION_LON, edit.locationLon)
+            .set(EVENTS.LOCATION_HINT, edit.locationHint)
+            .set(EVENTS.EVENT_DATETIME, edit.eventDatetime)
+            .set(EVENTS.PARTICIPANT_LIMIT, edit.participantLimit)
+            .set(EVENTS.STAGE2_LEAD_MINUTES, edit.stage2LeadMinutes)
+            .set(EVENTS.PHOTO_URL, edit.photoUrl)
+            .set(EVENTS.UPDATED_AT, OffsetDateTime.now())
+            .where(
+                EVENTS.ID.eq(eventId)
+                    // Только Этап 1: с началом подтверждения мест правки запрещены. Условие по
+                    // stage_2_triggered закрывает гонку с шедулером Stage2Service — его flip
+                    // в параллельной транзакции даёт здесь 0 строк ⇒ 409, а не тихую правку
+                    // уже открытого подтверждения мест.
+                    // Начавшееся (но ещё не completed по крону) событие не правится задним
+                    // числом — зеркалит guard cancelEvent.
+                    .and(EVENTS.STATUS.eq(EventStatus.upcoming))
+                    .and(EVENTS.STAGE_2_TRIGGERED.eq(false))
                     .and(EVENTS.EVENT_DATETIME.greaterThan(OffsetDateTime.now()))
             )
             .execute()

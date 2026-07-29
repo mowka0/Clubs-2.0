@@ -38,6 +38,8 @@ sealed class ActivityItemDto {
         val locationText: String?,
         // null = открытая встреча (V62) — карточка показывает счёт без знаменателя.
         val participantLimit: Int?,
+        // Срочная встреча (V69) — карточка показывает бейдж «⚡ Срочная» вместо «🎟 Обычная».
+        val isUrgent: Boolean,
         val goingCount: Int,
         // Размер подтверждённого ростера stage-2. Лента показывает `goingCount` во время stage 1
         // и переключается на `confirmedCount`, как только голосование закрывается (stage_2/completed),

@@ -289,4 +289,26 @@ open class EventsDao(configuration: Configuration?) : DAOImpl<EventsRecord, com.
      * Fetch records that have <code>location_hint IN (values)</code>
      */
     fun fetchByLocationHint(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.LOCATION_HINT, *values)
+
+    /**
+     * Fetch records that have <code>stage2_lead_minutes BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfStage2LeadMinutes(lowerInclusive: Int?, upperInclusive: Int?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.STAGE2_LEAD_MINUTES, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>stage2_lead_minutes IN (values)</code>
+     */
+    fun fetchByStage2LeadMinutes(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.STAGE2_LEAD_MINUTES, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>is_urgent BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfIsUrgent(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.Events> = fetchRange(Events.EVENTS.IS_URGENT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>is_urgent IN (values)</code>
+     */
+    fun fetchByIsUrgent(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.Events> = fetch(Events.EVENTS.IS_URGENT, *values.toTypedArray())
 }

@@ -32,7 +32,7 @@ class Stage2Service(
     // По умолчанию 24 ч. Единица «минуты» позволяет staging'у укоротить его для сквозного теста
     // двухэтапки: малое значение оставляет короткое окно голосования Этапа 1 до перехода
     // события в подтверждение.
-    @Value("\${events.stage2-trigger-minutes-before:1440}") private val stage2TriggerMinutesBefore: Long
+    @Value("\${events.stage2-trigger-minutes-before:1080}") private val stage2TriggerMinutesBefore: Long
 ) {
     private val log = LoggerFactory.getLogger(Stage2Service::class.java)
 
@@ -43,8 +43,9 @@ class Stage2Service(
     @Scheduled(fixedDelayString = "\${events.stage2-poll-ms:60000}")
     @Transactional
     fun triggerStage2ForReadyEvents() {
-        val cutoff = OffsetDateTime.now().plusMinutes(stage2TriggerMinutesBefore)
-        val events = eventRepository.findEventsToTriggerStage2(cutoff)
+        // Интервал пер-событийный (V67): сравнение «пора ли» ушло в SQL (COALESCE со своим lead),
+        // конфиг отдаём как дефолт для событий без собственного значения.
+        val events = eventRepository.findEventsToTriggerStage2(OffsetDateTime.now(), stage2TriggerMinutesBefore)
         events.forEach { event ->
             try {
                 triggerStage2(event)

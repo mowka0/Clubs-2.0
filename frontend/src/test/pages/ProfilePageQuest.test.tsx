@@ -87,8 +87,10 @@ describe('ProfilePage — профиль-квест', () => {
     renderPage();
 
     expect(await screen.findByText('Прокачай профиль')).toBeInTheDocument();
-    // «10 / 50 XP» есть и в панели «Уровень» — квестовый сабтайтл уточняем по «до уровня 2»
-    expect(screen.getByText(/до уровня 2/)).toBeInTheDocument();
+    // Мотивация v2 под заголовком — маркер именно квест-карточки (не панели «Уровень»)
+    expect(screen.getByText('чтобы лучше подбирать клубы')).toBeInTheDocument();
+    // Карусель: город заполнен → автопозиция на «О себе» (порядок v2)
+    expect(screen.getByText('Пару слов о себе')).toBeInTheDocument();
     // Лис-экран интересов снят: при пустых интересах нет ни заголовка секции, ни призыва лиса
     expect(screen.queryByText('Расскажи, что тебе интересно')).not.toBeInTheDocument();
     expect(screen.queryByText('Лис ждёт твои интересы')).not.toBeInTheDocument();

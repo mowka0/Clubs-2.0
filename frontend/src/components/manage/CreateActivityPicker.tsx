@@ -138,10 +138,11 @@ export const ActivityTypeOptions: FC<ActivityTypeOptionsProps> = ({ onPick, onPi
   );
 };
 
-// Формат события (решение PO 2026-07-21): «с местами» — классика с лимитом, гонкой за места и
-// листом ожидания; «открытая встреча» — без лимита (participantLimit = null на бэке), приходят
-// все подтвердившие, формат целиком вне репутации. Тот же движок, разный контракт.
-export type EventFormatKey = 'limited' | 'open';
+// Формат события (решения PO 2026-07-21 и 2026-07-23): «с местами» — классика с лимитом,
+// гонкой за места и листом ожидания; «срочная» — то же с местами, но БЕЗ Этапа 1 (рождается
+// сразу в подтверждении мест, для встреч в ближайшие часы); «открытая встреча» — без лимита
+// (participantLimit = null на бэке), целиком вне репутации. Один движок, разные контракты.
+export type EventFormatKey = 'limited' | 'open' | 'urgent';
 
 const EVENT_FORMAT_OPTIONS: { key: EventFormatKey; emoji: string; title: string; subtitle: string }[] = [
   {
@@ -149,6 +150,12 @@ const EVENT_FORMAT_OPTIONS: { key: EventFormatKey; emoji: string; title: string;
     emoji: '🎟',
     title: 'С местами',
     subtitle: 'Лимит участников, репутация и лист ожидания',
+  },
+  {
+    key: 'urgent',
+    emoji: '⚡️',
+    title: 'Срочная встреча',
+    subtitle: 'В ближайшие часы: без голосования — сразу подтверждение мест',
   },
   {
     key: 'open',

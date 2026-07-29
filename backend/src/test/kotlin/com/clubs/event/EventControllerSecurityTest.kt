@@ -215,6 +215,33 @@ class EventControllerSecurityTest {
             .andExpect(status().isBadRequest)
     }
 
+    @Test
+    fun `GET events teaser as non-member returns 200 without private fields`() {
+        // Тизер-афиша (PO 2026-07-24) — единственный событийный эндпоинт клуба БЕЗ членства:
+        // не-участник видит название/дату/счётчик, но ни места, ни фото в ответе нет вовсе.
+        insertEvent(OffsetDateTime.now().plusDays(3), status = "upcoming")
+        insertEvent(OffsetDateTime.now().minusDays(2), status = "completed")
+        insertEvent(OffsetDateTime.now().plusDays(5), status = "cancelled")
+
+        mockMvc.perform(
+            get("/api/clubs/$clubId/events/teaser")
+                .header("Authorization", "Bearer $nonMemberToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.upcoming.length()").value(1))
+            .andExpect(jsonPath("$.upcoming[0].title").value("Att Event"))
+            .andExpect(jsonPath("$.upcoming[0].locationText").doesNotExist())
+            .andExpect(jsonPath("$.upcoming[0].photoUrl").doesNotExist())
+            .andExpect(jsonPath("$.past.length()").value(1))
+            .andExpect(jsonPath("$.totalPastCount").value(1))
+    }
+
+    @Test
+    fun `GET events teaser without token should return 401`() {
+        mockMvc.perform(get("/api/clubs/$clubId/events/teaser"))
+            .andExpect(status().isUnauthorized)
+    }
+
     private fun insertEvent(eventDatetime: OffsetDateTime, status: String): UUID {
         val eventId = UUID.randomUUID()
         dsl.execute(

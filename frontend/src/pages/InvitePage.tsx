@@ -4,9 +4,13 @@ import { Spinner } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useApplyToClubMutation, useClubByInviteQuery, useJoinByInviteMutation, useMyClubsQuery } from '../queries/clubs';
+import { useCompleteOnboardingMutation } from '../queries/profile';
+import { useAuthStore } from '../store/useAuthStore';
 import { ApiError } from '../api/apiClient';
 import { formatPrice } from '../utils/formatters';
 import { FoxEmpty } from '../components/feed/FoxEmpty';
+import { WelcomeScene, memberCountCaption } from '../components/onboarding/WelcomeScene';
+import { Toast } from '../components/Toast';
 import foxInviteArt from '../assets/mascot/fox-invite.png';
 import foxErrorArt from '../assets/mascot/fox-error.png';
 
@@ -35,11 +39,19 @@ export const InvitePage: FC = () => {
   const myClubsQuery = useMyClubsQuery();
   const joinMutation = useJoinByInviteMutation();
   const applyMutation = useApplyToClubMutation();
+  const completeOnboarding = useCompleteOnboardingMutation();
+  const user = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
   const [applied, setApplied] = useState(false);
   const [answerText, setAnswerText] = useState('');
+  const [welcomeError, setWelcomeError] = useState<string | null>(null);
+
+  // Велком-сцена (онбординг, срез 3): инвайт — главная точка входа новичка, карусель ему
+  // отложена deep-link'ом (Layout), поэтому продукт рассказывает сцена ПОСЛЕ вступления.
+  const isNewbie = !!user && user.onboardedAt == null;
 
   const club = clubQuery.data;
   const loading = clubQuery.isPending;
@@ -140,8 +152,41 @@ export const InvitePage: FC = () => {
   // телом — без фолбэка страница осталась бы белым экраном.
   if (!club) return invalidInviteScene;
 
+  // Велком-CTA «Перейти в клуб»: порядок ЖЁСТКИЙ — ответ сервера → навигация → setUser
+  // (ловушка среза 1: профиль в сторе = гейт Layout; см. useCompleteOnboardingMutation).
+  // Здесь гейт закрыт startParam'ом, но порядок сохраняем — он единственный корректный везде.
+  const handleWelcomeCta = async () => {
+    if (completeOnboarding.isPending) return;
+    haptic.impact('medium');
+    try {
+      const freshUser = await completeOnboarding.mutateAsync('MEMBER');
+      navigate(`/clubs/${club.id}`);
+      setUser(freshUser);
+    } catch {
+      haptic.notify('error');
+      setWelcomeError('Не удалось продолжить. Проверьте связь и попробуйте ещё раз.');
+    }
+  };
+
   if (joined) {
     const isPaid = club.subscriptionPrice > 0;
+    // Новичок: вместо сухого «Добро пожаловать» — велком-сцена (кадр A/B). CTA помечает
+    // онбординг дверью MEMBER — карусель с дверями такому человеку больше не показывается.
+    if (isNewbie) {
+      return (
+        <>
+          <WelcomeScene
+            variant={isPaid ? 'paid' : 'free'}
+            clubName={club.name}
+            clubCaption={`${club.city} · ${isPaid ? formatPrice(club.subscriptionPrice) : memberCountCaption(club.memberCount)}`}
+            clubAvatarUrl={club.avatarUrl}
+            ctaPending={completeOnboarding.isPending}
+            onCta={handleWelcomeCta}
+          />
+          {welcomeError && <Toast message={welcomeError} onClose={() => setWelcomeError(null)} />}
+        </>
+      );
+    }
     return (
       <div className="rd-page">
         <div className="rd-glass rd-empty" style={{ marginTop: 40 }}>
@@ -164,6 +209,21 @@ export const InvitePage: FC = () => {
   }
 
   if (applied) {
+    // Новичок остался БЕЗ клуба (мест не было, ушла заявка) — кадр C: мини-рассказ о продукте
+    // + «Посмотреть другие клубы». Онбординг НЕ помечаем: при следующем обычном входе без
+    // клуба ему честно показать карусель с дверями.
+    if (isNewbie) {
+      return (
+        <WelcomeScene
+          variant="applied"
+          clubName={club.name}
+          clubCaption={`${club.city} · мест пока нет`}
+          clubAvatarUrl={club.avatarUrl}
+          ctaPending={false}
+          onCta={() => { haptic.impact('light'); navigate('/', { replace: true }); }}
+        />
+      );
+    }
     return (
       <div className="rd-page">
         <div className="rd-glass rd-empty" style={{ marginTop: 40 }}>

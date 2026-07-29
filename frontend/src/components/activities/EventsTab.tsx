@@ -112,7 +112,6 @@ export const EventsTab: FC = () => {
           key={section.key}
           title={section.title}
           count={section.events.length}
-          accent={section.key === 'action_required'}
         >
           {section.events.map((event) => (
             // ИНВАРИАНТ: история рендерится ТОЛЬКО компактным HistoryCard, никогда EventCard

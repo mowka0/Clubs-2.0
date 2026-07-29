@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import type { EventDetailDto, EventListItemDto, EventResponderDto, MyAttendanceDto, MyEventListItemDto, PageResponse } from '../types/api';
+import type { ClubEventsTeaserDto, EventDetailDto, EventListItemDto, EventResponderDto, MyAttendanceDto, MyEventListItemDto, PageResponse } from '../types/api';
 
 export interface CreateEventBody {
   title: string;
@@ -18,6 +18,11 @@ export interface CreateEventBody {
   // чтобы случайно пропущенный лимит давал 400, а не молча создавал открытую встречу.
   isOpenEvent?: boolean;
   votingOpensDaysBefore?: number;
+  // За сколько минут до старта откроется подтверждение мест (Этап 2), 1080..7200 (V68).
+  // Не задан = дефолт сервера (18 ч). Для открытой и срочной встречи не передаётся (400).
+  stage2LeadMinutes?: number;
+  // Срочная встреча (PO 2026-07-23): без Этапа 1, событие рождается сразу в подтверждении мест.
+  isUrgentEvent?: boolean;
   photoUrl?: string;
 }
 
@@ -45,6 +50,14 @@ export function getEvent(id: string): Promise<EventDetailDto> {
   return apiClient.get<EventDetailDto>(`/api/events/${id}`);
 }
 
+/**
+ * Тизер-афиша клуба — единственный событийный эндпоинт, доступный БЕЗ членства:
+ * урезанная проекция (без места/фото/состава) для гостя и участника без взноса.
+ */
+export function getClubEventsTeaser(clubId: string): Promise<ClubEventsTeaserDto> {
+  return apiClient.get<ClubEventsTeaserDto>(`/api/clubs/${clubId}/events/teaser`);
+}
+
 export function createEvent(clubId: string, body: CreateEventBody): Promise<EventDetailDto> {
   return apiClient.post<EventDetailDto>(`/api/clubs/${clubId}/events`, body);
 }
@@ -52,6 +65,34 @@ export function createEvent(clubId: string, body: CreateEventBody): Promise<Even
 /** F5-14: организатор отменяет ещё не начавшееся событие, с опциональной причиной (≤500 символов). */
 export function cancelEvent(eventId: string, reason?: string): Promise<EventDetailDto> {
   return apiClient.post<EventDetailDto>(`/api/events/${eventId}/cancel`, reason ? { reason } : undefined);
+}
+
+/**
+ * Полный набор редактируемых полей встречи. PUT-семантика: присылаем ВСЁ, что можно менять,
+ * null = очистить поле. Формат встречи (обычная/открытая/срочная) неизменяем и сюда не входит.
+ */
+export interface UpdateEventBody {
+  title: string;
+  description?: string | null;
+  locationText?: string | null;
+  locationLat?: number | null;
+  locationLon?: number | null;
+  locationHint?: string | null;
+  /** ISO-строка (UTC). */
+  eventDatetime: string;
+  /** null у открытой встречи; для встречи с местами обязателен. */
+  participantLimit?: number | null;
+  stage2LeadMinutes?: number | null;
+  photoUrl?: string | null;
+}
+
+/**
+ * Редактирование встречи организатором, включая перенос даты. Бэкенд разрешает только на
+ * Этапе 1 (status=upcoming): с началом подтверждения мест — 409. Уведомление участникам
+ * уходит только при изменении места или времени — остальное правится молча.
+ */
+export function updateEvent(eventId: string, body: UpdateEventBody): Promise<EventDetailDto> {
+  return apiClient.put<EventDetailDto>(`/api/events/${eventId}`, body);
 }
 
 export function castVote(eventId: string, vote: string): Promise<{ eventId: string; vote: string; goingCount: number; maybeCount: number; notGoingCount: number }> {

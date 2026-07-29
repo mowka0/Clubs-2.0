@@ -252,6 +252,25 @@ open class Events(
      */
     val LOCATION_HINT: TableField<EventsRecord, String?> = createField(DSL.name("location_hint"), SQLDataType.VARCHAR(200), this, "Опциональное уточнение организатора к месту («Вход со двора, домофон 12»), не входит в адрес. NULL = нет уточнения.")
 
+    /**
+     * The column <code>public.events.stage2_lead_minutes</code>. За сколько
+     * МИНУТ до старта событие переходит в Этап 2 (подтверждение мест); задаёт
+     * организатор при создании. NULL = глобальный дефолт
+     * (events.stage2-trigger-minutes-before, 1080 = 18 часов). Диапазон
+     * 1080–7200 (18 часов – 5 дней, V68). Встречи «ближе 18 часов» создаются
+     * форматом «Срочная встреча» — событие рождается сразу в stage_2 без Этапа
+     * 1. Для открытых встреч (participant_limit IS NULL) не применяется.
+     */
+    val STAGE2_LEAD_MINUTES: TableField<EventsRecord, Int?> = createField(DSL.name("stage2_lead_minutes"), SQLDataType.INTEGER, this, "За сколько МИНУТ до старта событие переходит в Этап 2 (подтверждение мест); задаёт организатор при создании. NULL = глобальный дефолт (events.stage2-trigger-minutes-before, 1080 = 18 часов). Диапазон 1080–7200 (18 часов – 5 дней, V68). Встречи «ближе 18 часов» создаются форматом «Срочная встреча» — событие рождается сразу в stage_2 без Этапа 1. Для открытых встреч (participant_limit IS NULL) не применяется.")
+
+    /**
+     * The column <code>public.events.is_urgent</code>. Срочная встреча (формат
+     * PO 2026-07-23): создана без Этапа 1, сразу в stage_2. Только подача
+     * (бейдж «⚡ срочная» на карточках); механика и репутация как у обычного
+     * события с местами. У открытых встреч всегда FALSE.
+     */
+    val IS_URGENT: TableField<EventsRecord, Boolean?> = createField(DSL.name("is_urgent"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Срочная встреча (формат PO 2026-07-23): создана без Этапа 1, сразу в stage_2. Только подача (бейдж «⚡ срочная» на карточках); механика и репутация как у обычного события с местами. У открытых встреч всегда FALSE.")
+
     private constructor(alias: Name, aliased: Table<EventsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<EventsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<EventsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -367,6 +386,7 @@ open class Events(
         get(): SkladchinasPath = skladchinas()
     override fun getChecks(): List<Check<EventsRecord>> = listOf(
         Internal.createCheck(this, DSL.name("chk_events_location_pair"), "(((location_lat IS NULL) = (location_lon IS NULL)))", true),
+        Internal.createCheck(this, DSL.name("chk_events_stage2_lead_minutes"), "(((stage2_lead_minutes IS NULL) OR ((stage2_lead_minutes >= 1080) AND (stage2_lead_minutes <= 7200))))", true),
         Internal.createCheck(this, DSL.name("events_participant_limit_check"), "((participant_limit > 0))", true),
         Internal.createCheck(this, DSL.name("events_voting_opens_days_before_check"), "(((voting_opens_days_before >= 1) AND (voting_opens_days_before <= 14)))", true)
     )

@@ -37,28 +37,42 @@ class LivePinRendererTest {
     @Test
     fun `stage1 — голоса, места, время в МСК`() {
         val text = renderer.stage1Text(event, going = 9, maybe = 3)
-        assertTrue(text.contains("📅 Поход в баню"))
-        assertTrue(text.contains("12.07.2026 19:00 МСК"))
+        // Общий шаблон (PO 2026-07-26): формат встречи жирным заголовком, затем что/когда/где.
+        assertTrue(text.contains("<b>Обычная встреча</b>"))
+        assertTrue(text.contains("Поход в баню"))
+        assertTrue(text.contains("когда: 12.07.2026 19:00 МСК"))
         assertTrue(text.contains("✅ Идут — 9"))
         assertTrue(text.contains("🤔 Возможно — 3"))
         assertTrue(text.contains("👥 Мест — 15"))
     }
 
     @Test
-    fun `место в закрепе — уточнение в скобках после адреса, у события без места строки 📍 нет`() {
-        assertTrue(renderer.stage1Text(event, going = 1, maybe = 0).contains("📍 Сандуны"))
+    fun `место в закрепе — уточнение в скобках после адреса, у события без места строки где нет`() {
+        assertTrue(renderer.stage1Text(event, going = 1, maybe = 0).contains("где: Сандуны"))
         val withHint = renderer.stage1Text(event.copy(locationHint = "3-й этаж"), going = 1, maybe = 0)
-        assertTrue(withHint.contains("📍 Сандуны (3-й этаж)"))
+        assertTrue(withHint.contains("где: Сандуны (3-й этаж)"))
         val hintOnly = renderer.stage1Text(event.copy(locationText = null, locationHint = "В зуме"), going = 1, maybe = 0)
-        assertTrue(hintOnly.contains("📍 В зуме"))
+        assertTrue(hintOnly.contains("где: В зуме"))
         val noLocation = renderer.stage1Text(event.copy(locationText = null), going = 1, maybe = 0)
-        assertTrue(!noLocation.contains("📍"))
+        assertFalse(noLocation.contains("где:"))
+    }
+
+    // HTML parse_mode: пользовательский ввод обязан экранироваться, иначе `<` ломает
+    // разметку всего сообщения и Telegram молча его не доставляет.
+    @Test
+    fun `спецсимволы в названии и месте экранируются`() {
+        val nasty = event.copy(title = "Баня <b>&", locationText = "Дом & сад", locationHint = null)
+        val text = renderer.stage1Text(nasty, going = 1, maybe = 0)
+        assertTrue(text.contains("Баня &lt;b&gt;&amp;"))
+        assertTrue(text.contains("где: Дом &amp; сад"))
+        // Заголовок формата — единственный настоящий тег в сообщении.
+        assertEquals(1, Regex("<b>").findAll(text).count())
     }
 
     @Test
     fun `stage2 — подтверждённые, очередь и дедлайн = старт события`() {
         val text = renderer.stage2Text(event, confirmed = 12, waitlisted = 2)
-        assertTrue(text.contains("подтверждение мест"))
+        assertTrue(text.contains("<b>Обычная встреча</b>"))
         assertTrue(text.contains("✅ Подтвердили — 12 из 15"))
         assertTrue(text.contains("📋 В очереди — 2"))
         assertTrue(text.contains("⏳ Подтвердить до — 12.07.2026 19:00 МСК"))
@@ -70,17 +84,18 @@ class LivePinRendererTest {
         val open = event.copy(participantLimit = null)
 
         val stage1 = renderer.stage1Text(open, going = 9, maybe = 3)
-        assertTrue(stage1.contains("👥 Открытая встреча — без репутации и лимита мест"))
+        assertTrue(stage1.contains("<b>Открытая встреча</b>"))
+        assertTrue(stage1.contains("👥 Без лимита мест — приходят все желающие"))
         assertFalse(stage1.contains("Мест —"))
 
         val stage2 = renderer.stage2Text(open, confirmed = 12, waitlisted = 0)
-        assertTrue(stage2.contains("подтверждение участия"))
+        assertTrue(stage2.contains("<b>Открытая встреча</b>"))
         assertTrue(stage2.contains("✅ Подтвердили — 12\n"))
-        assertFalse(stage2.contains("из"))
+        assertFalse(stage2.contains("Подтвердили — 12 из"))
         assertFalse(stage2.contains("В очереди"))
 
         val closed = renderer.closedText(open, confirmed = 12)
-        assertTrue(closed.contains("подтвердили 12."))
+        assertTrue(closed.contains("✅ Подтвердили — 12"))
     }
 
     @Test
@@ -127,14 +142,17 @@ class LivePinRendererTest {
 
     @Test
     fun `отмена — причина опциональна`() {
-        assertTrue(renderer.cancelledText(event, "все заболели").contains("Причина: все заболели"))
-        assertFalse(renderer.cancelledText(event, null).contains("Причина"))
+        val withReason = renderer.cancelledText(event, "все заболели")
+        assertTrue(withReason.contains("<b>Обычная встреча отменена</b>"))
+        assertTrue(withReason.contains("причина: все заболели"))
+        assertFalse(renderer.cancelledText(event, null).contains("причина"))
     }
 
     @Test
     fun `финал при старте — «Событие началось», не «Сбор закрыт» (сбор = складчина, путало PO)`() {
         val text = renderer.closedText(event, confirmed = 12)
-        assertTrue(text.contains("Событие началось — подтвердили 12 из 15"))
+        assertTrue(text.contains("<b>Обычная встреча началась</b>"))
+        assertTrue(text.contains("✅ Подтвердили — 12 из 15"))
         assertTrue(text.contains("Итог появится после отметки явки"))
     }
 }

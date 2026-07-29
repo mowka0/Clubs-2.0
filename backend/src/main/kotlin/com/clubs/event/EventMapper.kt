@@ -14,7 +14,10 @@ class EventMapper(
     // Порог отказа подтверждённого (минут до старта) — тот же yaml-ключ, что читает
     // Stage2Service.declineCutoffMinutes (единый источник значения на бэке). Нужен, чтобы отдать
     // фронту готовый дедлайн отказа в EventDetailDto вместо дублирования порога хардкодом на клиенте.
-    @Value("\${events.stage2-decline-cutoff-minutes:240}") private val declineCutoffMinutes: Long
+    @Value("\${events.stage2-decline-cutoff-minutes:240}") private val declineCutoffMinutes: Long,
+    // Глобальный дефолт интервала Этапа 2 — тот же yaml-ключ, что читает Stage2Service.
+    // Нужен для эффективного stage2LeadMinutes в EventDetailDto (у события без своего значения).
+    @Value("\${events.stage2-trigger-minutes-before:1080}") private val stage2TriggerMinutesBefore: Long
 ) {
 
     fun toDomain(record: EventsRecord): Event = Event(
@@ -30,6 +33,8 @@ class EventMapper(
         eventDatetime = record.eventDatetime,
         participantLimit = record.participantLimit,
         votingOpensDaysBefore = record.votingOpensDaysBefore ?: DEFAULT_VOTING_OPENS_DAYS_BEFORE,
+        stage2LeadMinutes = record.stage2LeadMinutes,
+        isUrgent = record.isUrgent ?: false,
         status = record.status ?: EventStatus.upcoming,
         stage2Triggered = record.stage_2Triggered ?: false,
         attendanceMarked = record.attendanceMarked ?: false,
@@ -58,6 +63,14 @@ class EventMapper(
         eventDatetime = event.eventDatetime,
         participantLimit = event.participantLimit,
         votingOpensDaysBefore = event.votingOpensDaysBefore,
+        // Эффективное значение: своё у события или глобальный дефолт; у открытой встречи Этапа 2 нет.
+        stage2LeadMinutes = if (event.isOpenEvent) null
+            else event.stage2LeadMinutes ?: stage2TriggerMinutesBefore.toInt(),
+        // Хранимое значение (null = «глобальный дефолт»). Отдаётся ОТДЕЛЬНО от эффективного,
+        // потому что форма редактирования возвращает его обратно в PUT: если слать эффективное,
+        // подставленный дефолт станет собственным значением события — а при ужатом дефолте
+        // (staging: 5 минут) он ещё и не пройдёт валидацию @Min(1080) и заблокирует любую правку.
+        stage2LeadMinutesOverride = event.stage2LeadMinutes,
         status = event.status.literal,
         goingCount = goingCount,
         maybeCount = maybeCount,
@@ -94,6 +107,7 @@ class EventMapper(
             goingCount = item.goingCount,
             confirmedCount = item.confirmedCount,
             participantLimit = event.participantLimit,
+            isUrgent = event.isUrgent,
             actionRequired = computeActionRequired(item, now),
             isHistory = item.isHistory
         )
@@ -111,11 +125,27 @@ class EventMapper(
                 !now.isBefore(votingOpensAt) && item.myVote == null
             }
             EventStatus.stage_2 -> {
-                item.myVote in setOf(Stage_1Vote.going, Stage_1Vote.maybe) && item.myFinalStatus == null
+                // Этап 2 открыт всем участникам (PR #92), поэтому и действие требуется от КАЖДОГО,
+                // кто ещё не решил на самом Этапе 2 (решение PO 2026-07-23): голос Этапа 1 — в том
+                // числе «Не пойду» — не финален, планы меняются, а у срочной встречи (V69) голосов
+                // не бывает вовсе. Финальны только confirmed/waitlisted/declined/expired.
+                item.myFinalStatus == null
             }
             else -> false
         }
     }
+
+    // Тизер-афиша: проекция БЕЗ места/фото/лимита — приватное не попадает в DTO по построению.
+    fun toTeaserDto(item: EventWithGoingCount) = TeaserEventDto(
+        id = item.event.id,
+        title = item.event.title,
+        eventDatetime = item.event.eventDatetime,
+        status = item.event.status.literal,
+        isUrgent = item.event.isUrgent,
+        isOpenEvent = item.event.isOpenEvent,
+        goingCount = item.goingCount,
+        confirmedCount = item.confirmedCount
+    )
 
     fun toListItemDto(event: Event, goingCount: Int) = EventListItemDto(
         id = event.id,

@@ -30,6 +30,16 @@ data class EventDetailDto(
     // null = открытая встреча (V62): без гонки за места и листа ожидания, фронт прячет знаменатель.
     val participantLimit: Int?,
     val votingOpensDaysBefore: Int,
+    // Эффективный интервал Этапа 2 (минут до старта): свой у события или глобальный дефолт —
+    // фронт показывает «подтверждение мест за N ч», не хардкодя порог (урок confirmedDeclineDeadline).
+    // null = открытая встреча (гонки за места нет, интервал не настраивается; технический флип
+    // статуса у неё всё же происходит — по глобальному дефолту).
+    val stage2LeadMinutes: Int?,
+    // СОБСТВЕННЫЙ интервал события: null = «используется глобальный дефолт». В отличие от
+    // stage2LeadMinutes выше (эффективного, с подставленным дефолтом) это то, что реально
+    // лежит в БД, — форма редактирования шлёт обратно именно его, иначе подставленный дефолт
+    // молча стал бы собственным значением события.
+    val stage2LeadMinutesOverride: Int?,
     val status: String,
     val goingCount: Int,
     val maybeCount: Int,
@@ -85,6 +95,8 @@ data class MyEventListItemDto(
     val confirmedCount: Int,
     // null = открытая встреча (V62) — карточка показывает счёт без знаменателя.
     val participantLimit: Int?,
+    // Срочная встреча (V69) — карточка показывает бейдж «⚡ срочная» вместо «🎟 обычная».
+    val isUrgent: Boolean,
     val actionRequired: Boolean,
     // true = прошедшее посещённое событие (секция «История»). Считает бэкенд по бакету ORDER BY.
     // Клиенту ЗАПРЕЩЕНО выводить историчность из status='completed' или eventDatetime<now:
@@ -134,6 +146,20 @@ data class CreateEventRequest(
     @field:Max(value = 14, message = "Voting opens days before must be at most 14")
     val votingOpensDaysBefore: Int = 14,
 
+    // За сколько МИНУТ до старта событие переходит в Этап 2 (подтверждение мест) — выбор
+    // организатора (V67/V68, решения PO 2026-07-23). null = глобальный дефолт
+    // events.stage2-trigger-minutes-before (18 часов). Пресеты фронта: 18ч/36ч/3 дня/5 дней.
+    // Встречи «ближе 18 часов» закрывает формат «Срочная встреча» (isUrgentEvent), а не малый
+    // интервал. Диапазон зеркалит CHECK chk_events_stage2_lead_minutes (V68).
+    @field:Min(value = 1080, message = "Stage 2 lead must be at least 1080 minutes (18 hours)")
+    @field:Max(value = 7200, message = "Stage 2 lead must be at most 7200 minutes (5 days)")
+    val stage2LeadMinutes: Int? = null,
+
+    // Срочная встреча (решение PO 2026-07-23): обычное событие с местами, но БЕЗ Этапа 1 —
+    // рождается сразу в stage_2, участники немедленно подтверждают места. Репутация работает
+    // как у обычного события. Явный флаг по тому же принципу, что isOpenEvent.
+    val isUrgentEvent: Boolean = false,
+
     @field:Size(max = 1024, message = "Photo URL must be at most 1024 characters")
     val photoUrl: String? = null
 ) {
@@ -155,6 +181,18 @@ data class CreateEventRequest(
     @get:AssertTrue(message = "Open event must have no participant limit; a regular event requires one")
     val isParticipantLimitConsistent: Boolean
         get() = if (isOpenEvent) participantLimit == null else participantLimit != null
+
+    // Открытая встреча целиком вне двухэтапки — свой lead Этапа 2 для неё бессмысленен и
+    // почти наверняка означает ошибку клиента, а не намерение.
+    @get:AssertTrue(message = "Open event has no stage 2; stage2LeadMinutes is not applicable")
+    val isStage2LeadConsistent: Boolean
+        get() = !isOpenEvent || stage2LeadMinutes == null
+
+    // Срочная встреча = событие с местами (не открытая) и без своего интервала: Этапа 1 нет,
+    // поэтому «за сколько до старта переходить в Этап 2» к ней неприменимо.
+    @get:AssertTrue(message = "Urgent event must be a limited event without a custom stage 2 lead")
+    val isUrgentConsistent: Boolean
+        get() = !isUrgentEvent || (!isOpenEvent && stage2LeadMinutes == null)
 }
 
 
@@ -163,3 +201,99 @@ data class CancelEventRequest(
     @field:Size(max = 500)
     val reason: String? = null
 )
+
+/**
+ * Тизер-афиша клуба (решение PO 2026-07-24): урезанная проекция событий для смотрящего БЕЗ
+ * доступа к контенту (гость или участник без взноса — frozen/expired). Показывает, что клуб
+ * живой, — главный аргумент вступить/оплатить. ПО ПОСТРОЕНИЮ не содержит приватного:
+ * ни места (locationText/lat/lon/hint), ни фото, ни состава участников — только название,
+ * дата, формат и счётчик. Ограничение видимости места — решение PO «Discovery только по
+ * клубам» (safety): место встречи не светится никому без доступа.
+ */
+data class ClubEventsTeaserDto(
+    // Ближайшие встречи (будущие, не отменённые), ближайшая первой.
+    val upcoming: List<TeaserEventDto>,
+    // Последние прошедшие (не отменённые), недавняя первой.
+    val past: List<TeaserEventDto>,
+    // Сколько встреч клуб провёл за всё время (та же семантика, что «Встреча №N» в чат-итоге).
+    val totalPastCount: Int
+)
+
+data class TeaserEventDto(
+    val id: UUID,
+    val title: String,
+    val eventDatetime: OffsetDateTime,
+    val status: String,
+    // Формат для бейджа «⚡ срочная / 🎟 обычная / 🌊 открытая» — как на карточках ленты.
+    val isUrgent: Boolean,
+    val isOpenEvent: Boolean,
+    // Раскладка фазы для счётчика: до Этапа 2 — «идут N» (голоса), после — «подтвердили N».
+    val goingCount: Int,
+    val confirmedCount: Int
+)
+
+/**
+ * Полное редактирование встречи организатором (решение PO 2026-07-26). Окно то же, что у
+ * переноса: ТОЛЬКО Этап 1 — с началом подтверждения мест правки запрещены, подтвердившие
+ * обещали прийти в конкретное место и время.
+ *
+ * Семантика PUT: клиент присылает ПОЛНЫЙ набор редактируемых полей (форма редактирования
+ * загружает текущие значения), поэтому null означает «очистить», а не «не менять». Это
+ * избавляет от трёхзначной логики partial-update, где null неотличим от «поле не прислали».
+ *
+ * НЕ редактируется:
+ * - формат встречи (обычная/открытая/срочная) — он определяет механику мест и репутации,
+ *   смена формата на лету переписала бы правила уже идущего голосования;
+ * - `votingOpensDaysBefore` — окно Этапа 1 уже открыто, менять его задним числом бессмысленно.
+ *
+ * Инварианты, зависящие от формата (лимит у открытой, свой интервал Этапа 2 у открытой и
+ * срочной), проверяются в [EventService.updateEvent]: здесь формат неизвестен, он берётся
+ * из самого события.
+ */
+data class UpdateEventRequest(
+    @field:NotBlank(message = "Title is required")
+    @field:Size(max = 255, message = "Title must be at most 255 characters")
+    val title: String,
+
+    val description: String? = null,
+
+    @field:Size(max = 500, message = "Location must be at most 500 characters")
+    val locationText: String? = null,
+
+    @field:DecimalMin(value = "-90.0", message = "Latitude must be >= -90")
+    @field:DecimalMax(value = "90.0", message = "Latitude must be <= 90")
+    val locationLat: Double? = null,
+
+    @field:DecimalMin(value = "-180.0", message = "Longitude must be >= -180")
+    @field:DecimalMax(value = "180.0", message = "Longitude must be <= 180")
+    val locationLon: Double? = null,
+
+    @field:Size(max = 200, message = "Location hint must be at most 200 characters")
+    val locationHint: String? = null,
+
+    @field:NotNull(message = "Event datetime is required")
+    @field:Future(message = "Event datetime must be in the future")
+    val eventDatetime: OffsetDateTime,
+
+    // null = открытая встреча (формат события неизменяем, поэтому согласованность с ним
+    // проверяет Service). Для события с местами лимит обязателен и положителен.
+    @field:Positive(message = "Participant limit must be positive")
+    val participantLimit: Int? = null,
+
+    // Диапазон зеркалит CHECK chk_events_stage2_lead_minutes (V68); null = глобальный дефолт.
+    @field:Min(value = 1080, message = "Stage 2 lead must be at least 1080 minutes (18 hours)")
+    @field:Max(value = 7200, message = "Stage 2 lead must be at most 7200 minutes (5 days)")
+    val stage2LeadMinutes: Int? = null,
+
+    @field:Size(max = 1024, message = "Photo URL must be at most 1024 characters")
+    val photoUrl: String? = null
+) {
+    // Те же инварианты места, что при создании (зеркалят CHECK chk_events_location_pair).
+    @get:AssertTrue(message = "Latitude and longitude must be provided together")
+    val isLocationPairConsistent: Boolean
+        get() = (locationLat == null) == (locationLon == null)
+
+    @get:AssertTrue(message = "Either a map point or a location hint is required")
+    val isSomeLocationProvided: Boolean
+        get() = (locationLat != null && locationLon != null) || !locationHint.isNullOrBlank()
+}

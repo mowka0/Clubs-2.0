@@ -7,6 +7,7 @@ import {
   declineParticipation,
   disputeAttendance,
   getClubEvents,
+  getClubEventsTeaser,
   getEvent,
   getEventResponders,
   getMyAttendance,
@@ -14,8 +15,9 @@ import {
   getMyVote,
   markAttendance,
   resolveDispute,
+  updateEvent,
 } from '../api/events';
-import type { CreateEventBody } from '../api/events';
+import type { CreateEventBody, UpdateEventBody } from '../api/events';
 import { queryKeys, type EventListParams } from './queryKeys';
 
 export function useClubEventsQuery(clubId: string | undefined, params?: EventListParams) {
@@ -23,6 +25,15 @@ export function useClubEventsQuery(clubId: string | undefined, params?: EventLis
     queryKey: queryKeys.events.byClub(clubId ?? '', params),
     queryFn: () => getClubEvents(clubId!, params),
     enabled: Boolean(clubId),
+  });
+}
+
+/** Тизер-афиша клуба: включается только у смотрящего БЕЗ доступа (гость / frozen / expired). */
+export function useClubEventsTeaserQuery(clubId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.events.teaser(clubId ?? ''),
+    queryFn: () => getClubEventsTeaser(clubId!),
+    enabled: Boolean(clubId) && enabled,
   });
 }
 
@@ -214,6 +225,25 @@ export function useCancelEventMutation() {
       qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
       qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });
       // Лента активностей клуба тоже отображает состояние «отменено».
+      qc.invalidateQueries({ queryKey: queryKeys.activities.byClubAll(clubId) });
+    },
+  });
+}
+
+interface UpdateEventArgs {
+  eventId: string;
+  clubId: string;
+  body: UpdateEventBody;
+}
+
+export function useUpdateEventMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ eventId, body }: UpdateEventArgs) => updateEvent(eventId, body),
+    onSuccess: (_data, { eventId, clubId }) => {
+      // Тот же набор, что у отмены: правки видны в деталях, ленте «Активности» и ленте клуба.
+      qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
+      qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });
       qc.invalidateQueries({ queryKey: queryKeys.activities.byClubAll(clubId) });
     },
   });

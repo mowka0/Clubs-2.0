@@ -16,7 +16,7 @@ vi.mock('../../telegram/sdk', () => ({
   getInitDataRaw: () => 'test-init-data',
 }));
 
-import { useCastVoteMutation, useEventQuery } from '../../queries/events';
+import { useCastVoteMutation, useEventQuery, useUpdateEventMutation } from '../../queries/events';
 import { queryKeys } from '../../queries/queryKeys';
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
@@ -54,7 +54,7 @@ const mockEvent: EventDetailDto = {
   maybeCount: 0,
   notGoingCount: 0,
   confirmedCount: 0,
-  confirmedDeclineDeadline: '2026-05-01T14:00:00Z', abandonedSlotPenaltyPoints: 100,
+  confirmedDeclineDeadline: '2026-05-01T14:00:00Z', abandonedSlotPenaltyPoints: 100, stage2LeadMinutes: 1080, stage2LeadMinutesOverride: null,
   attendanceMarked: false,
   attendanceFinalized: false,
   cancellationReason: null,
@@ -97,5 +97,51 @@ describe('useCastVoteMutation', () => {
 
     const state = client.getQueryState(queryKeys.events.detail('evt-1'));
     expect(state?.isInvalidated).toBe(true);
+  });
+});
+
+describe('useUpdateEventMutation', () => {
+  it('sends the full payload and invalidates event detail cache on success', async () => {
+    let sentBody: unknown = null;
+    server.use(
+      http.put('*/api/events/:id', async ({ request }) => {
+        sentBody = await request.json();
+        return HttpResponse.json({ ...mockEvent, eventDatetime: '2026-05-03T18:00:00Z' });
+      }),
+    );
+
+    const client = makeClient();
+    client.setQueryData(queryKeys.events.detail('evt-1'), mockEvent);
+
+    const { result } = renderHook(() => useUpdateEventMutation(), {
+      wrapper: makeWrapper(client),
+    });
+
+    result.current.mutate({ eventId: 'evt-1', clubId: 'club-1', body: { title: 'Тест', locationHint: 'у входа', eventDatetime: '2026-05-03T18:00:00Z', participantLimit: 20 } });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(sentBody).toEqual({ title: 'Тест', locationHint: 'у входа', eventDatetime: '2026-05-03T18:00:00Z', participantLimit: 20 });
+    const state = client.getQueryState(queryKeys.events.detail('evt-1'));
+    expect(state?.isInvalidated).toBe(true);
+  });
+
+  it('surfaces a 409 (stage 2 already started) as a mutation error', async () => {
+    server.use(
+      http.put('*/api/events/:id', () =>
+        HttpResponse.json(
+          { message: 'Встречу нельзя изменить: подтверждение мест уже началось, событие прошло или отменено' },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    const client = makeClient();
+    const { result } = renderHook(() => useUpdateEventMutation(), {
+      wrapper: makeWrapper(client),
+    });
+
+    result.current.mutate({ eventId: 'evt-1', clubId: 'club-1', body: { title: 'Тест', locationHint: 'у входа', eventDatetime: '2026-05-03T18:00:00Z', participantLimit: 20 } });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toContain('подтверждение мест уже началось');
   });
 });

@@ -46,8 +46,9 @@ class AccessGateServiceTest {
         notificationService = mockk(relaxed = true)
         eventPublisher = mockk(relaxed = true)
         // Empty base-url mirrors production (uploader returns root-relative "/uploads/...").
+        // accessPeriodDays = 0 — прод-дефолт «календарный месяц»; staging-режим N дней покрыт отдельным тестом.
         service = AccessGateService(
-            membershipRepository, MembershipMapper(), accessPeriodDays = 30, storageBaseUrl = "",
+            membershipRepository, MembershipMapper(), accessPeriodDays = 0, storageBaseUrl = "",
             userRepository = userRepository, clubRepository = clubRepository,
             applicationRepository = applicationRepository,
             eventResponseRepository = eventResponseRepository,
@@ -200,6 +201,29 @@ class AccessGateServiceTest {
     // --- markDuesPaid ---
 
     @Test
+    fun `markDuesPaid uses fixed days when the staging override is set`() {
+        val daysService = AccessGateService(
+            membershipRepository, MembershipMapper(), accessPeriodDays = 7, storageBaseUrl = "",
+            userRepository = userRepository, clubRepository = clubRepository,
+            applicationRepository = applicationRepository,
+            eventResponseRepository = eventResponseRepository,
+            skladchinaRepository = skladchinaRepository,
+            notificationService = notificationService,
+            eventPublisher = eventPublisher,
+            clubRoleGuard = ClubRoleGuard(clubRepository, membershipRepository)
+        )
+        val futureExpiry = OffsetDateTime.now().plusDays(10)
+        val m = membership(MembershipStatus.active).copy(subscriptionExpiresAt = futureExpiry)
+        every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns m
+        val until = slot<OffsetDateTime>()
+        every { membershipRepository.markDuesPaid(m.id, callerId, capture(until)) } returns 1
+
+        daysService.markDuesPaid(clubId, targetUserId, callerId)
+
+        assertEquals(futureExpiry.plusDays(7), until.captured)
+    }
+
+    @Test
     fun `markDuesPaid grants access to a frozen member`() {
         val m = membership(MembershipStatus.frozen)
         every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns m
@@ -269,6 +293,7 @@ class AccessGateServiceTest {
     @Test
     fun `markDuesPaid extends access by one period from the current future expiry (no lost days)`() {
         // Option B: a member who pays early keeps their remaining days — extend from the current expiry.
+        // Период = календарный месяц (PO 2026-07-23): «до 28 июня» + оплата → «до 28 июля».
         val currentExpiry = OffsetDateTime.now().plusDays(5)
         val m = membership(MembershipStatus.active).copy(subscriptionExpiresAt = currentExpiry)
         every { membershipRepository.findByUserAndClub(targetUserId, clubId) } returns m
@@ -277,7 +302,7 @@ class AccessGateServiceTest {
 
         service.markDuesPaid(clubId, targetUserId, callerId)
 
-        assertEquals(currentExpiry.plusDays(30), captured.captured)
+        assertEquals(currentExpiry.plusMonths(1), captured.captured)
     }
 
     @Test
@@ -290,9 +315,9 @@ class AccessGateServiceTest {
 
         service.markDuesPaid(clubId, targetUserId, callerId)
 
-        // ~30 days from now (no future expiry to extend from).
-        assert(captured.captured.isAfter(before.plusDays(29)))
-        assert(captured.captured.isBefore(before.plusDays(31)))
+        // ~календарный месяц от «сейчас» (28–31 день в зависимости от месяца; прежнего срока нет).
+        assert(captured.captured.isAfter(before.plusDays(27)))
+        assert(captured.captured.isBefore(before.plusDays(32)))
     }
 
     // --- claimDues (member-initiated) ---

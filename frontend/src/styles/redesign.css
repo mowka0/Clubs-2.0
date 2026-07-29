@@ -822,6 +822,82 @@
   font-family: inherit; font-size: 13px; font-weight: 800;
   box-shadow: 0 4px 12px var(--accent-shadow);
 }
+/* ── Квест v2: карусель «один экран = один шаг» (мокап 04-quest-carousel, PO 2026-07-25) ── */
+/* Пульс карточки — парный к затенению .rd-profile-dim остальных панелей профиля. */
+.rd-q-pulse { border-color: var(--accent); animation: rd-q-glow 1.6s ease-in-out infinite; }
+@keyframes rd-q-glow {
+  0%, 100% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 18px var(--accent-glow); }
+  50%      { box-shadow: 0 0 0 5px var(--accent-soft), 0 0 26px var(--accent-glow); }
+}
+/* Затенение остальных панелей профиля, пока квест не завершён и не свёрнут в пилюлю. */
+.rd-profile-dim { opacity: 0.45; filter: saturate(0.6); transition: opacity 0.3s ease; }
+
+.rd-q-motiv { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+.rd-qc-xp {
+  flex-shrink: 0; font-size: 11.5px; font-weight: 800;
+  background: linear-gradient(135deg, #ff8a3d, #ff5e8a);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.rd-qc-viewport { position: relative; margin-top: 10px; }
+.rd-qc-slide {
+  width: 100%; display: flex; align-items: center; gap: 13px; text-align: left;
+  padding: 6px 18px 6px 20px; border: 0; background: transparent;
+  font-family: inherit; color: var(--text); cursor: pointer;
+}
+.rd-qc-ic {
+  width: 52px; height: 52px; border-radius: 16px; flex-shrink: 0;
+  background: var(--accent-soft); display: flex; align-items: center; justify-content: center; font-size: 24px;
+}
+/* Жёлтое «готово» (в обеих темах золото читается как выполненность). */
+.rd-qc-ic-done { background: rgba(255, 201, 61, 0.16); }
+.rd-qc-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rd-qc-name { font-size: 15px; font-weight: 800; }
+.rd-qc-why { font-size: 11.5px; color: var(--text-dim); line-height: 1.35; }
+.rd-qc-cta-col { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.rd-qc-xp-chip { font-size: 11px; font-weight: 800; color: var(--accent); background: var(--accent-soft); padding: 3px 8px; border-radius: 8px; }
+.rd-qc-btn {
+  display: inline-block; font-size: 12px; font-weight: 700; color: var(--on-accent);
+  background: var(--accent-grad); border-radius: 999px; padding: 7px 13px;
+  box-shadow: 0 4px 12px var(--accent-shadow);
+}
+.rd-qc-done-chip { font-size: 11px; font-weight: 800; color: #FFC93D; background: rgba(255, 201, 61, 0.16); padding: 3px 8px; border-radius: 8px; }
+.rd-qc-arr {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 2;
+  width: 20px; height: 34px; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; color: var(--text-faint); font-size: 15px; font-family: inherit; cursor: pointer;
+}
+.rd-qc-arr-l { left: -4px; }
+.rd-qc-arr-r { right: -4px; color: var(--accent); }
+/* Точки прогресса: серая = не заполнено, ЖЁЛТАЯ = заполнено, вытянутая = текущий экран. */
+.rd-qc-dots { display: flex; gap: 6px; justify-content: center; padding-top: 8px; }
+.rd-qc-dot {
+  width: 6px; height: 6px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--hairline-2); cursor: pointer; transition: all 0.2s ease;
+}
+.rd-qc-dot.rd-on { width: 18px; border-radius: 3px; background: var(--accent); }
+.rd-qc-dot.rd-gold { background: #FFC93D; box-shadow: 0 0 6px rgba(255, 201, 61, 0.45); }
+
+/* Подсветка поля в редакторе профиля (вход из шага квеста) + притенение остальных полей. */
+.rd-field-dim { opacity: 0.4; filter: saturate(0.6); }
+.rd-field-hl .rd-label { color: var(--accent); }
+.rd-field-hl .rd-input,
+.rd-field-hl .rd-textarea,
+.rd-field-hl .pf-chips {
+  border-color: var(--accent);
+  animation: rd-field-glow 1.6s ease-in-out infinite;
+}
+@keyframes rd-field-glow {
+  0%, 100% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 18px var(--accent-glow); }
+  50%      { box-shadow: 0 0 0 5px var(--accent-soft), 0 0 26px var(--accent-glow); }
+}
+
+/* Строка «В клубах» в «Статистике» — кнопка-переход: пусто → каталог (лупа), с клубами → «Мои клубы». */
+.rd-ostat-link {
+  width: 100%; border: 0; background: transparent; font-family: inherit; color: inherit;
+  text-align: left; cursor: pointer;
+}
+.rd-ostat-lupa { font-size: 15px; }
+
 /* Свёрнутый вид: пилюля-прогресс одной строкой */
 .rd-quest-pill {
   width: 100%; margin-bottom: 16px;
@@ -1999,6 +2075,43 @@
 
 /* Зона кнопок закреплена внизу — дверь не уезжает вместе с прокруткой списка. */
 .ob-cta { flex-shrink: 0; padding: 10px 0 6px; background: var(--bg); }
+
+/* ── Велком-сцена новичка в клубе (онбординг, срез 3; мокап welcome-scene.html, кадры A–C) ── */
+/* Эмодзи-арт в тёплом свечении — как ринг мокапа; PNG-артов у сцены нет намеренно. */
+.wsc-ring {
+  width: 96px; height: 96px; border-radius: 50%; font-size: 52px;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle, rgba(244, 123, 60, 0.28), rgba(244, 123, 60, 0) 70%);
+}
+.wsc-club-chip { display: flex; align-items: center; gap: 10px; justify-content: center; margin-top: 12px; }
+.wsc-club-ava {
+  width: 34px; height: 34px; border-radius: 11px; flex-shrink: 0; overflow: hidden;
+  background: var(--accent-soft); color: var(--accent);
+  display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800;
+}
+.wsc-club-ava img { width: 100%; height: 100%; object-fit: cover; }
+.wsc-club-nm { display: block; font-size: 13.5px; font-weight: 700; }
+.wsc-club-ct { display: block; font-size: 11px; color: var(--text-faint); }
+/* Номер шага — тот же квадратик, что иконка перка, но жирной цифрой акцентного цвета. */
+.wsc-step-n { color: var(--accent); font-weight: 800; }
+/* Плашка-факт: нейтральная (надёжность) / оранжевая pay (взнос) / зелёная wait (заявка ушла). */
+.wsc-fact {
+  margin-top: 14px; padding: 12px 13px; border-radius: 14px;
+  background: var(--surface); border: 1px solid var(--hairline);
+  font-size: 12.5px; color: var(--text-dim); line-height: 1.5; text-align: center;
+}
+.wsc-fact b { color: var(--text); }
+.wsc-fact-pay {
+  background: linear-gradient(135deg, rgba(244, 123, 60, 0.10), rgba(244, 123, 60, 0.02));
+  border-color: rgba(244, 123, 60, 0.3);
+}
+.wsc-fact-pay b { color: var(--accent); }
+.wsc-fact-wait {
+  background: linear-gradient(135deg, rgba(102, 212, 154, 0.10), rgba(102, 212, 154, 0.02));
+  border-color: rgba(102, 212, 154, 0.3);
+}
+.wsc-fact-wait b { color: var(--live); }
+.wsc-hint { font-size: 11.5px; color: var(--text-faint); text-align: center; margin-top: 8px; line-height: 1.4; }
 .ob-ghost {
   width: 100%; padding: 9px; margin-top: 2px;
   border: 0; background: transparent; color: var(--text-dim);
@@ -2266,4 +2379,66 @@
    до пола лисе — разрешаем перенос заголовка: перенос читается, срез нет. */
 @media (max-width: 359.98px) {
   .rd-chat-panel-ttl { white-space: normal; }
+}
+
+/* ---------- Интервал Этапа 2 в форме события (V67, дизайн PO 2026-07-23) ----------
+   Свёрнуто: тихая строка-факт под датой («Подтверждение мест / за 18 часов · Изменить»).
+   По «Изменить» раскрывается шкала-таймлайн с насечками-пресетами (6 ч → 2 дня):
+   выбор времени показан как время, а не как ряд кнопок. */
+.rd-s2-note {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  margin-top: 2px; padding: 10px 12px;
+  background: var(--surface); border: 1px dashed var(--hairline-2);
+  border-radius: 12px; cursor: pointer; font-family: inherit; text-align: left;
+  color: var(--text-dim); font-size: 12.5px;
+  transition: border-color .2s ease;
+}
+.rd-s2-note:active { border-color: var(--accent); }
+.rd-s2-dot {
+  width: 28px; height: 28px; border-radius: 50%; flex: 0 0 auto;
+  display: grid; place-items: center; font-size: 13px;
+  background: var(--accent-grad); color: var(--on-accent);
+  box-shadow: 0 3px 8px var(--accent-shadow);
+}
+.rd-s2-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.rd-s2-txt b { color: var(--text); font-size: 13.5px; font-weight: 700; }
+.rd-s2-edit { margin-left: auto; color: var(--accent); font-weight: 700; font-size: 12px; white-space: nowrap; }
+
+.rd-s2-timeline { margin-top: 12px; animation: rd-s2-drop .3s cubic-bezier(.2, .9, .3, 1.1); }
+@keyframes rd-s2-drop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.rd-s2-track {
+  position: relative; height: 4px; border-radius: 2px;
+  background: var(--hairline-2); margin: 18px 10px 0;
+}
+.rd-s2-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px;
+  background: var(--accent-grad); box-shadow: 0 0 10px var(--accent-glow);
+  transition: width .25s ease;
+}
+.rd-s2-ticks { display: flex; justify-content: space-between; margin: 0 -2px; }
+.rd-s2-tick {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  min-width: 52px; padding: 0 2px 2px; border: none; background: none; cursor: pointer;
+  font-family: inherit; font-size: 11.5px; font-weight: 600; color: var(--text-faint);
+}
+.rd-s2-knob {
+  width: 14px; height: 14px; border-radius: 50%; margin-top: -9px;
+  background: var(--card-solid); border: 2px solid var(--hairline-2);
+  transition: transform .2s ease, border-color .2s ease;
+}
+.rd-s2-tick.rd-active { color: var(--accent); font-weight: 800; }
+.rd-s2-tick.rd-active .rd-s2-knob {
+  background: var(--accent-grad); border-color: transparent;
+  transform: scale(1.3);
+  box-shadow: 0 0 0 5px var(--accent-soft), 0 4px 10px var(--accent-shadow);
+}
+.rd-s2-warn {
+  display: block; margin-top: 10px; padding: 9px 11px; border-radius: 10px;
+  background: var(--danger-soft); color: var(--danger); line-height: 1.5;
+}
+.rd-s2-switch {
+  display: block; margin-top: 8px; padding: 8px 12px; border: none; border-radius: 10px;
+  background: var(--accent-grad); color: var(--on-accent);
+  font-size: 12.5px; font-weight: 800; cursor: pointer; font-family: inherit;
+  box-shadow: 0 3px 8px var(--accent-shadow);
 }

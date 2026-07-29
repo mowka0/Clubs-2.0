@@ -140,7 +140,6 @@ export const SkladchinasTab: FC = () => {
           key={group.key}
           title={group.title}
           count={group.items.length}
-          accent={group.key === 'action_required'}
         >
           {group.items.map((s) => (
             // История рендерится компактной строкой HistoryCard; активные и требующие оплаты —

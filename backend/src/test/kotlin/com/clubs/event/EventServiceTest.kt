@@ -6,6 +6,7 @@ import com.clubs.common.exception.ConflictException
 import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
+import com.clubs.common.exception.ValidationException
 import com.clubs.skladchina.SkladchinaRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
@@ -64,6 +65,39 @@ class EventServiceTest {
         eventService.createEvent(clubId, request(), ownerId)
 
         verify(exactly = 1) { eventPublisher.publishEvent(EventCreatedEvent(event)) }
+    }
+
+    @Test
+    fun `createEvent for an urgent event flips it to stage 2 before publishing`() {
+        // Срочная встреча (PO 2026-07-23): Этапа 1 нет — событие рождается сразу в подтверждении
+        // мест, и уведомление (EventCreatedEvent) несёт уже stage_2-состояние.
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        every { eventRepository.create(any(), clubId, ownerId) } returns event
+
+        eventService.createEvent(clubId, request().copy(isUrgentEvent = true), ownerId)
+
+        verify(exactly = 1) { eventRepository.transitionToStage2(event.id) }
+        verify(exactly = 1) {
+            eventPublisher.publishEvent(
+                EventCreatedEvent(event.copy(status = EventStatus.stage_2, stage2Triggered = true))
+            )
+        }
+    }
+
+    @Test
+    fun `createEvent for a regular event does not touch stage 2`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        every { eventRepository.create(any(), clubId, ownerId) } returns event
+
+        eventService.createEvent(clubId, request(), ownerId)
+
+        verify(exactly = 0) { eventRepository.transitionToStage2(any()) }
     }
 
     @Test
@@ -188,6 +222,259 @@ class EventServiceTest {
         assertThrows<NotFoundException> { eventService.cancelEvent(eventId, UUID.randomUUID(), null) }
 
         verify(exactly = 0) { eventPublisher.publishEvent(any()) }
+    }
+
+    @Test
+    fun `updateEvent moving the date publishes EventEditedEvent with old and new state`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        val newDatetime = event.eventDatetime.plusDays(2)
+        every { eventRepository.findById(event.id) } returns event
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        every { eventRepository.updateEvent(event.id, any()) } returns 1
+
+        eventService.updateEvent(event.id, ownerId, editRequest(event, eventDatetime = newDatetime))
+
+        verify(exactly = 1) { eventRepository.updateEvent(event.id, match { it.eventDatetime == newDatetime }) }
+        verify(exactly = 1) {
+            eventPublisher.publishEvent(
+                EventEditedEvent(event.copy(eventDatetime = newDatetime), oldEvent = event)
+            )
+        }
+    }
+
+    @Test
+    fun `updateEvent changing the location notifies members`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { eventRepository.findById(event.id) } returns event
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        every { eventRepository.updateEvent(event.id, any()) } returns 1
+
+        eventService.updateEvent(event.id, ownerId, editRequest(event, locationText = "Bar 2"))
+
+        verify(exactly = 1) {
+            eventPublisher.publishEvent(
+                match<EventEditedEvent> { it.isLocationChanged && !it.isDatetimeChanged }
+            )
+        }
+    }
+
+    @Test
+    fun `updateEvent marks non-critical changes as quiet`() {
+        // Решение PO 2026-07-26: правка названия/описания/фото/лимита не дёргает весь клуб
+        // звуком, но событие всё равно публикуется — по нему слушатель тихо перерисовывает
+        // живой закреп в чате (в нём висит и название).
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { eventRepository.findById(event.id) } returns event
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        every { eventRepository.updateEvent(event.id, any()) } returns 1
+
+        eventService.updateEvent(
+            event.id,
+            ownerId,
+            editRequest(event, title = "Другое название", description = "новое описание", participantLimit = 30)
+        )
+
+        verify(exactly = 1) { eventRepository.updateEvent(event.id, any()) }
+        verify(exactly = 1) {
+            eventPublisher.publishEvent(
+                match<EventEditedEvent> { !it.hasCriticalChanges && !it.isDatetimeChanged && !it.isLocationChanged }
+            )
+        }
+    }
+
+    @Test
+    fun `updateEvent throws Forbidden when caller is not the organizer`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { eventRepository.findById(event.id) } returns event
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+
+        assertThrows<ForbiddenException> {
+            eventService.updateEvent(event.id, UUID.randomUUID(), editRequest(event, title = "Взлом"))
+        }
+
+        verify(exactly = 0) { eventRepository.updateEvent(any(), any()) }
+        verify(exactly = 0) { eventPublisher.publishEvent(any()) }
+    }
+
+    @Test
+    fun `updateEvent throws Conflict when the event is not editable (guard yields 0 rows)`() {
+        // 0 строк от SQL-guard: событие в stage_2 (в т.ч. срочное), начавшееся, completed или cancelled.
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { eventRepository.findById(event.id) } returns event
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        every { eventRepository.updateEvent(event.id, any()) } returns 0
+
+        assertThrows<ConflictException> {
+            eventService.updateEvent(event.id, ownerId, editRequest(event, title = "Поздно"))
+        }
+
+        verify(exactly = 0) { eventPublisher.publishEvent(any()) }
+    }
+
+    @Test
+    fun `updateEvent throws NotFound when the event is missing`() {
+        val eventId = UUID.randomUUID()
+        every { eventRepository.findById(eventId) } returns null
+
+        assertThrows<NotFoundException> {
+            eventService.updateEvent(
+                eventId,
+                UUID.randomUUID(),
+                UpdateEventRequest(
+                    title = "Нет такого",
+                    locationHint = "у входа",
+                    eventDatetime = OffsetDateTime.now().plusDays(2),
+                    participantLimit = 20
+                )
+            )
+        }
+
+        verify(exactly = 0) { eventRepository.updateEvent(any(), any()) }
+        verify(exactly = 0) { eventPublisher.publishEvent(any()) }
+    }
+
+    @Test
+    fun `updateEvent rejects a participant limit on an open event`() {
+        // Формат неизменяем: лимит у открытой встречи означал бы смену продуктового типа.
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val openEvent = sampleEvent(clubId, ownerId).copy(participantLimit = null)
+        every { eventRepository.findById(openEvent.id) } returns openEvent
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+
+        assertThrows<ValidationException> {
+            eventService.updateEvent(openEvent.id, ownerId, editRequest(openEvent, participantLimit = 10))
+        }
+
+        verify(exactly = 0) { eventRepository.updateEvent(any(), any()) }
+    }
+
+    @Test
+    fun `updateEvent rejects dropping the limit of a seated event`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val event = sampleEvent(clubId, ownerId)
+        every { eventRepository.findById(event.id) } returns event
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+
+        assertThrows<ValidationException> {
+            eventService.updateEvent(event.id, ownerId, editRequest(event, participantLimit = null))
+        }
+
+        verify(exactly = 0) { eventRepository.updateEvent(any(), any()) }
+    }
+
+    @Test
+    fun `updateEvent rejects a stage 2 lead on an urgent event`() {
+        // У срочной нет Этапа 1, поэтому «за сколько до старта открыть подтверждение» бессмысленно.
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val urgent = sampleEvent(clubId, ownerId).copy(isUrgent = true)
+        every { eventRepository.findById(urgent.id) } returns urgent
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+
+        assertThrows<ValidationException> {
+            eventService.updateEvent(urgent.id, ownerId, editRequest(urgent, stage2LeadMinutes = 2160))
+        }
+
+        verify(exactly = 0) { eventRepository.updateEvent(any(), any()) }
+    }
+
+    /**
+     * Запрос-правка «всё как у события, кроме перечисленного»: PUT требует полный набор полей,
+     * а в тестах интересна ровно одна изменённая величина.
+     */
+    private fun editRequest(
+        event: Event,
+        title: String = event.title,
+        description: String? = event.description,
+        locationText: String? = event.locationText,
+        locationHint: String? = event.locationHint,
+        eventDatetime: OffsetDateTime = event.eventDatetime,
+        participantLimit: Int? = event.participantLimit,
+        stage2LeadMinutes: Int? = event.stage2LeadMinutes
+    ) = UpdateEventRequest(
+        title = title,
+        description = description,
+        locationText = locationText,
+        locationLat = event.locationLat,
+        locationLon = event.locationLon,
+        locationHint = locationHint,
+        eventDatetime = eventDatetime,
+        participantLimit = participantLimit,
+        stage2LeadMinutes = stage2LeadMinutes,
+        photoUrl = event.photoUrl
+    )
+
+    // Тизер-тесты строят сервис с НАСТОЯЩИМ маппером: относительный порядок и содержимое
+    // проекции — часть контракта, relaxed-мок вернул бы неразличимые заглушки.
+    private fun teaserService() = EventService(
+        eventRepository, clubRepository, ClubRoleGuard(clubRepository, guardMembershipRepository),
+        EventMapper(240L, 1080L), eventPublisher, skladchinaRepository
+    )
+
+    @Test
+    fun `getClubEventsTeaser splits by time, drops cancelled and applies limits`() {
+        val clubId = UUID.randomUUID()
+        val ownerId = UUID.randomUUID()
+        val now = OffsetDateTime.now()
+        every { clubRepository.findById(clubId) } returns club(clubId, ownerId)
+        val events = buildList {
+            // 4 будущих (лимит 3), 4 прошедших (лимит 3), 1 отменённое будущее (должно выпасть)
+            repeat(4) { i ->
+                add(EventWithGoingCount(
+                    sampleEvent(clubId, ownerId).copy(id = UUID.randomUUID(), eventDatetime = now.plusDays(i + 1L)),
+                    goingCount = i, confirmedCount = 0
+                ))
+            }
+            repeat(4) { i ->
+                add(EventWithGoingCount(
+                    sampleEvent(clubId, ownerId).copy(
+                        id = UUID.randomUUID(),
+                        eventDatetime = now.minusDays(i + 1L),
+                        status = EventStatus.completed
+                    ),
+                    goingCount = 0, confirmedCount = 5
+                ))
+            }
+            add(EventWithGoingCount(
+                sampleEvent(clubId, ownerId).copy(id = UUID.randomUUID(), eventDatetime = now.plusDays(9), status = EventStatus.cancelled),
+                goingCount = 0, confirmedCount = 0
+            ))
+        }
+        every { eventRepository.findAllByClubWithGoingCount(clubId) } returns events
+        every { eventRepository.countPastEvents(clubId, any()) } returns 4
+
+        val teaser = teaserService().getClubEventsTeaser(clubId)
+
+        assertEquals(3, teaser.upcoming.size)
+        assertEquals(3, teaser.past.size)
+        assertEquals(4, teaser.totalPastCount)
+        // Ближайшее будущее — первым; недавнее прошедшее — первым.
+        assertEquals(events[0].event.id, teaser.upcoming.first().id)
+        assertEquals(events[4].event.id, teaser.past.first().id)
+    }
+
+    @Test
+    fun `getClubEventsTeaser throws NotFound for a missing or soft-deleted club`() {
+        val missingClubId = UUID.randomUUID()
+        every { clubRepository.findById(missingClubId) } returns null
+        assertThrows<NotFoundException> { teaserService().getClubEventsTeaser(missingClubId) }
+
+        val inactiveClubId = UUID.randomUUID()
+        every { clubRepository.findById(inactiveClubId) } returns
+            club(inactiveClubId, UUID.randomUUID()).copy(isActive = false)
+        assertThrows<NotFoundException> { teaserService().getClubEventsTeaser(inactiveClubId) }
     }
 
     private fun request() = CreateEventRequest(

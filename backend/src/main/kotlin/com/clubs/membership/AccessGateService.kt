@@ -38,8 +38,11 @@ import java.util.UUID
 class AccessGateService(
     private val membershipRepository: MembershipRepository,
     private val mapper: MembershipMapper,
-    // На сколько один подтверждённый взнос открывает доступ (honor-system, помесячное членство, по умолчанию 30 дней).
-    @Value("\${membership.access-period-days:30}") private val accessPeriodDays: Long,
+    // На сколько один подтверждённый взнос открывает доступ (honor-system, помесячное членство).
+    // 0 (дефолт) = один КАЛЕНДАРНЫЙ месяц (решение PO 2026-07-23: «до 28 июня» → «до 28 июля»;
+    // 31 янв → последний день февраля, семантика plusMonths). Положительное значение = ровно N дней —
+    // staging-ужимка для сквозного теста авто-истечения (MEMBERSHIP_ACCESS_PERIOD_DAYS=1).
+    @Value("\${membership.access-period-days:0}") private val accessPeriodDays: Long,
     // Origin хранилища, который наш загрузчик добавляет к скриншотам ("{base}/uploads/..."); в проде пусто → URL
     // возвращаются root-relative ("/uploads/..."). Используется для проверки, что доказательство оплаты — НАША загрузка.
     @Value("\${s3.base-url:}") private val storageBaseUrl: String,
@@ -113,12 +116,13 @@ class AccessGateService(
             throw ValidationException("Отметить взнос можно только у действующего участника")
         }
         // Honor-system помесячное членство: подтверждение оплаты взноса открывает доступ и продлевает его на
-        // один период. Продлеваем от ТЕКУЩЕГО срока истечения (или от текущего момента, что позже), чтобы ранняя
-        // оплата никогда не теряла уже оплаченные дни — например, «до 28 июня» + оплата → «до 28 июля». Планировщик
-        // позже сам переводит просроченный доступ в `expired`, поэтому дата здесь — единственный источник истины.
+        // один период (календарный месяц — см. accessPeriodDays). Продлеваем от ТЕКУЩЕГО срока истечения (или от
+        // текущего момента, что позже), чтобы ранняя оплата никогда не теряла уже оплаченные дни — например,
+        // «до 28 июня» + оплата → «до 28 июля». Планировщик позже сам переводит просроченный доступ в `expired`,
+        // поэтому дата здесь — единственный источник истины.
         val now = OffsetDateTime.now()
         val base = membership.subscriptionExpiresAt?.takeIf { it.isAfter(now) } ?: now
-        val newExpiresAt = base.plusDays(accessPeriodDays)
+        val newExpiresAt = if (accessPeriodDays > 0) base.plusDays(accessPeriodDays) else base.plusMonths(1)
         guardApplied(membershipRepository.markDuesPaid(membership.id, callerId, newExpiresAt))
         log.info("Dues marked paid: clubId={} targetUserId={} by={} accessUntil={}", clubId, targetUserId, callerId, newExpiresAt)
         // Взнос после frozen/expired = доступ ОТКРЫЛСЯ (DM уместен даже сидящему в чате);

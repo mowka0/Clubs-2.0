@@ -51,6 +51,7 @@ function baseEvent(over: Partial<MyEventListItemDto> = {}): MyEventListItemDto {
     goingCount: 0,
     confirmedCount: 0,
     participantLimit: 10,
+    isUrgent: false,
     actionRequired: false,
     isHistory: false,
     ...over,

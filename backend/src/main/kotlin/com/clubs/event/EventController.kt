@@ -13,6 +13,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -56,6 +57,15 @@ class EventController(
     fun getEvent(@PathVariable id: UUID): ResponseEntity<EventDetailDto> =
         ResponseEntity.ok(eventService.getEvent(id))
 
+    /**
+     * Тизер-афиша клуба — НАМЕРЕННО без @RequiresMembership (единственный событийный эндпоинт
+     * клуба, открытый не-участнику): урезанная проекция без места/фото/состава, чтобы гость
+     * или участник без взноса видел, что клуб живой. См. EventService.getClubEventsTeaser.
+     */
+    @GetMapping("/api/clubs/{id}/events/teaser")
+    fun getClubEventsTeaser(@PathVariable id: UUID): ResponseEntity<ClubEventsTeaserDto> =
+        ResponseEntity.ok(eventService.getClubEventsTeaser(id))
+
 
     @PostMapping("/api/events/{id}/cancel")
     fun cancelEvent(
@@ -65,6 +75,21 @@ class EventController(
     ): ResponseEntity<EventDetailDto> {
         log.info("Cancel event: eventId={} userId={}", id, user.userId)
         return ResponseEntity.ok(eventService.cancelEvent(id, user.userId, request?.reason))
+    }
+
+    /**
+     * Редактирование встречи (включая перенос даты) — только на Этапе 1. PUT: клиент присылает
+     * весь набор редактируемых полей, null = очистить. Капабилити-гейт (MANAGE_EVENTS) проверяет
+     * сервис — в URL нет clubId для аннотации @RequiresCapability (как у /cancel).
+     */
+    @PutMapping("/api/events/{id}")
+    fun updateEvent(
+        @PathVariable id: UUID,
+        @RequestBody @Valid request: UpdateEventRequest,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<EventDetailDto> {
+        log.info("Update event: eventId={} userId={}", id, user.userId)
+        return ResponseEntity.ok(eventService.updateEvent(id, user.userId, request))
     }
 
     @PostMapping("/api/events/{id}/vote")

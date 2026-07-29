@@ -40,7 +40,11 @@ data class Events(
     var cancellationReason: String? = null,
     var locationLat: Double? = null,
     var locationLon: Double? = null,
-    var locationHint: String? = null
+    var locationHint: String? = null,
+    var stage2LeadMinutes: Int? = null,
+    @Suppress("INAPPLICABLE_JVM_NAME")
+    @set:JvmName("setIsUrgent")
+    var isUrgent: Boolean? = null
 ): Serializable {
 
 
@@ -174,6 +178,18 @@ data class Events(
         }
         else if (this.locationHint != o.locationHint)
             return false
+        if (this.stage2LeadMinutes == null) {
+            if (o.stage2LeadMinutes != null)
+                return false
+        }
+        else if (this.stage2LeadMinutes != o.stage2LeadMinutes)
+            return false
+        if (this.isUrgent == null) {
+            if (o.isUrgent != null)
+                return false
+        }
+        else if (this.isUrgent != o.isUrgent)
+            return false
         return true
     }
 
@@ -203,6 +219,8 @@ data class Events(
         result = prime * result + (if (this.locationLat == null) 0 else this.locationLat.hashCode())
         result = prime * result + (if (this.locationLon == null) 0 else this.locationLon.hashCode())
         result = prime * result + (if (this.locationHint == null) 0 else this.locationHint.hashCode())
+        result = prime * result + (if (this.stage2LeadMinutes == null) 0 else this.stage2LeadMinutes.hashCode())
+        result = prime * result + (if (this.isUrgent == null) 0 else this.isUrgent.hashCode())
         return result
     }
 
@@ -232,6 +250,8 @@ data class Events(
         sb.append(", ").append(locationLat)
         sb.append(", ").append(locationLon)
         sb.append(", ").append(locationHint)
+        sb.append(", ").append(stage2LeadMinutes)
+        sb.append(", ").append(isUrgent)
 
         sb.append(")")
         return sb.toString()

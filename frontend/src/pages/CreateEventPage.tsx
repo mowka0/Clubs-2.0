@@ -6,6 +6,7 @@ import { BrandStepper } from '../components/BrandStepper';
 import { AvatarUpload } from '../components/AvatarUpload';
 import { LocationPickerSheet } from '../components/event/LocationPickerSheet';
 import { useCreateEventMutation } from '../queries/events';
+import { formatLeadInterval } from '../utils/formatters';
 import type { CreateEventBody } from '../api/events';
 import type { GeoPoint } from '../utils/yandexMaps';
 
@@ -16,6 +17,18 @@ const LOCATION_MAX = 500;
 const LOCATION_HINT_MAX = 200;
 const PARTICIPANT_MIN = 1;
 const PARTICIPANT_MAX = 1000;
+
+// Пресеты интервала Этапа 2 (за сколько до старта открывается подтверждение мест), в минутах.
+// Значения зеркалят CHECK 1080..7200 (V68) и @Min/@Max бэкенда; дефолт 1080 = 18 ч зеркалит
+// events.stage2-trigger-minutes-before. Короче 18 часов не бывает — этот случай закрывает
+// формат «Срочная встреча». short — подпись насечки на шкале-таймлайне.
+const STAGE2_LEAD_PRESETS: { minutes: number; short: string }[] = [
+  { minutes: 1080, short: '18 ч' },
+  { minutes: 2160, short: '36 ч' },
+  { minutes: 4320, short: '3 дня' },
+  { minutes: 7200, short: '5 дней' },
+];
+const STAGE2_LEAD_DEFAULT = 1080;
 
 // Выбранное в пикере место: точка на карте + адрес из обратного геокодера.
 interface PickedLocation {
@@ -33,10 +46,12 @@ const CalendarIcon: FC = () => (
 export const CreateEventPage: FC = () => {
   useBackButton(true);
   const { id: clubId } = useParams<{ id: string }>();
-  // Открытая встреча (V62, решение PO 2026-07-21): ?format=open из шага формата в пикере
-  // создания. Лимита нет (participantLimit = null на бэке) — степпер скрыт, заголовок другой.
-  const [searchParams] = useSearchParams();
+  // Формат из шага пикера «+»: open (V62) — без лимита, степпер скрыт; urgent (PO 2026-07-23) —
+  // сразу Этап 2, интервал подтверждения не настраивается. setSearchParams нужен кнопке
+  // «Сделать срочной» — переключение формата без размонтирования (введённые поля живут).
+  const [searchParams, setSearchParams] = useSearchParams();
   const isOpenEvent = searchParams.get('format') === 'open';
+  const isUrgentEvent = searchParams.get('format') === 'urgent';
   const navigate = useNavigate();
   const haptic = useHaptic();
   const createMut = useCreateEventMutation();
@@ -49,7 +64,34 @@ export const CreateEventPage: FC = () => {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [eventDatetime, setEventDatetime] = useState('');
   const [participantLimit, setParticipantLimit] = useState(20);
+  // null = организатор интервал не трогал → поле НЕ уходит в body, событие несёт NULL в БД и
+  // следует серверному дефолту (в т.ч. staging-ужимке STAGE2_TRIGGER_MINUTES_BEFORE — она жива
+  // только для NULL-событий). STAGE2_LEAD_DEFAULT здесь — лишь визуальный маркер активного чипа,
+  // фактический дефолт применяет бэкенд.
+  const [stage2LeadMinutes, setStage2LeadMinutes] = useState<number | null>(null);
+  // Раскрыта ли шкала выбора интервала (дизайн PO 2026-07-23: свёрнутая строка-факт под датой).
+  const [leadEditorOpen, setLeadEditorOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const effectiveStage2Lead = stage2LeadMinutes ?? STAGE2_LEAD_DEFAULT;
+  const activeLeadIdx = Math.max(0, STAGE2_LEAD_PRESETS.findIndex((p) => p.minutes === effectiveStage2Lead));
+
+  const eventTimeMs = eventDatetime ? new Date(eventDatetime).getTime() : null;
+  const msToEvent = eventTimeMs !== null && !Number.isNaN(eventTimeMs) ? eventTimeMs - Date.now() : null;
+  // Встреча ближе минимума (18 ч) — такому событию место в формате «срочная» (PO 2026-07-23):
+  // предлагаем переключиться кнопкой, не блокируя создание.
+  const suggestUrgent =
+    !isOpenEvent && !isUrgentEvent && msToEvent !== null && msToEvent < STAGE2_LEAD_DEFAULT * 60_000;
+  // Встреча дальше 18 ч, но ближе ВЫБРАННОГО интервала — Этап 2 стартует сразу после
+  // создания; предупреждаем и подсказываем отметку короче.
+  const stage2StartsImmediately =
+    !isOpenEvent && !isUrgentEvent && !suggestUrgent &&
+    msToEvent !== null && msToEvent <= effectiveStage2Lead * 60_000;
+
+  const handleMakeUrgent = () => {
+    haptic.impact('medium');
+    setSearchParams({ format: 'urgent' }, { replace: true });
+  };
 
   if (!clubId) {
     return (
@@ -99,6 +141,11 @@ export const CreateEventPage: FC = () => {
       // Открытая встреча (V62): лимита нет + явный флаг формата — бэкенд валидирует их согласованность.
       participantLimit: isOpenEvent ? null : participantLimit,
       isOpenEvent,
+      isUrgentEvent,
+      // Интервал Этапа 2 — только у обычных событий с местами и только при ЯВНОМ выборе
+      // организатора (null = серверный дефолт); open — вне двухэтапки, urgent — сразу в Этапе 2.
+      stage2LeadMinutes:
+        isOpenEvent || isUrgentEvent || stage2LeadMinutes === null ? undefined : stage2LeadMinutes,
       photoUrl: photoUrl ?? undefined,
     };
 
@@ -127,12 +174,18 @@ export const CreateEventPage: FC = () => {
     <div className="rd-page">
       <div className="rd-ft-eyebrow">Создание</div>
       <h1 className="rd-page-h" style={{ marginBottom: 18 }}>
-        {isOpenEvent ? 'Открытая встреча' : 'Новое событие'}
+        {isOpenEvent ? 'Открытая встреча' : isUrgentEvent ? 'Срочная встреча' : 'Новое событие'}
       </h1>
       {isOpenEvent && (
         <div className="rd-hint" style={{ marginTop: -10, marginBottom: 14 }}>
           Без лимита участников — приходят все, кто подтвердил. Репутация здесь не считается
           совсем: ни плюсов за посещение, ни штрафов за отказ или неявку.
+        </div>
+      )}
+      {isUrgentEvent && (
+        <div className="rd-hint" style={{ marginTop: -10, marginBottom: 14 }}>
+          Без этапа голосования — участники сразу подтверждают места, уведомление уйдёт
+          немедленно. Репутация работает как у обычного события с местами.
         </div>
       )}
 
@@ -215,7 +268,7 @@ export const CreateEventPage: FC = () => {
           />
         </label>
 
-        <label className="rd-field">
+        <label className="rd-field" style={!isOpenEvent && !isUrgentEvent ? { marginBottom: 0 } : undefined}>
           <span className="rd-label">Дата и время <span className="rd-req">*</span></span>
           <div className="rd-datetime">
             <input
@@ -227,6 +280,69 @@ export const CreateEventPage: FC = () => {
             <span className="rd-dt-ico" aria-hidden="true"><CalendarIcon /></span>
           </div>
         </label>
+
+        {/* Интервал Этапа 2 (V67/V68) — визуально привязан к дате; у открытой встречи Этапа 2
+            нет, у срочной он не настраивается (сразу stage_2). Свёрнуто: строка-факт.
+            По «Изменить»: шкала-таймлайн с насечками-пресетами. */}
+        {!isOpenEvent && !isUrgentEvent && (
+          <div className="rd-field">
+            <button
+              type="button"
+              className="rd-s2-note"
+              onClick={() => { haptic.impact('light'); setLeadEditorOpen((v) => !v); }}
+            >
+              <span className="rd-s2-dot" aria-hidden="true">🎟</span>
+              <span className="rd-s2-txt">
+                <span>Подтверждение мест</span>
+                <b>за {formatLeadInterval(effectiveStage2Lead)}</b>
+              </span>
+              <span className="rd-s2-edit">{leadEditorOpen ? 'Скрыть' : 'Изменить'}</span>
+            </button>
+            {leadEditorOpen && (
+              <div className="rd-s2-timeline">
+                <div className="rd-s2-track">
+                  <span
+                    className="rd-s2-fill"
+                    style={{ width: `${(activeLeadIdx / (STAGE2_LEAD_PRESETS.length - 1)) * 100}%` }}
+                  />
+                </div>
+                <div className="rd-s2-ticks">
+                  {STAGE2_LEAD_PRESETS.map((p) => (
+                    <button
+                      key={p.minutes}
+                      type="button"
+                      className={`rd-s2-tick${effectiveStage2Lead === p.minutes ? ' rd-active' : ''}`}
+                      onClick={() => { haptic.select(); setStage2LeadMinutes(p.minutes); }}
+                    >
+                      <span className="rd-s2-knob" aria-hidden="true" />
+                      <span>{p.short}</span>
+                    </button>
+                  ))}
+                </div>
+                <span className="rd-hint">
+                  До этого момента идёт голосование «Пойду / Возможно», затем участники
+                  подтверждают свои места.
+                </span>
+              </div>
+            )}
+            {suggestUrgent && (
+              <span className="rd-hint rd-s2-warn">
+                ⚡️ До встречи меньше 18 часов — такому событию лучше быть срочной встречей:
+                без голосования, сразу подтверждение мест.
+                <button type="button" className="rd-s2-switch" onClick={handleMakeUrgent}>
+                  Сделать срочной
+                </button>
+              </span>
+            )}
+            {stage2StartsImmediately && (
+              <span className="rd-hint rd-s2-warn">
+                ⚡️ До встречи меньше выбранного интервала — подтверждение мест начнётся сразу
+                после создания. Чтобы сначала прошло голосование, выберите отметку короче
+                времени до встречи.
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Открытая встреча: лимита нет — степпер не рендерится вовсе. */}
         {!isOpenEvent && (
@@ -241,6 +357,7 @@ export const CreateEventPage: FC = () => {
             />
           </div>
         )}
+
 
         {submitError && <div className="rd-error">{submitError}</div>}
 

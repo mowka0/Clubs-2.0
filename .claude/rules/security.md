@@ -34,7 +34,7 @@
 - Debug эндпоинты (/actuator) закрыты в prod или за auth
 - Error messages не светят stacktrace пользователю
 - CORS настроен явно (whitelist origins), не `*`
-- HTTP security headers: CSP, X-Frame-Options, X-Content-Type-Options
+- HTTP security headers: CSP (включая `frame-ancestors` вместо `X-Frame-Options` — см. § "Security Headers"), X-Content-Type-Options
 
 ### A06. Vulnerable and Outdated Components
 - Base images: pinned версии, regular updates
@@ -218,11 +218,28 @@ log.info("Received token: ${token.take(6)}...${token.takeLast(4)}")
 
 ```
 Content-Security-Policy: default-src 'self'; script-src 'self'
-X-Frame-Options: DENY
+Content-Security-Policy: frame-ancestors 'self' https://web.telegram.org https://webk.telegram.org https://webz.telegram.org
 X-Content-Type-Options: nosniff
 Strict-Transport-Security: max-age=31536000
 Referrer-Policy: strict-origin-when-cross-origin
 ```
+
+### Кликджекинг: почему НЕ `X-Frame-Options: DENY`
+
+Для Mini App `X-Frame-Options` (`DENY` или `SAMEORIGIN`) применять **нельзя** — это
+ломает продукт. Telegram Web открывает приложение во фрейме с `web.telegram.org`, и при
+любом из этих значений браузер отказывается рендерить фрейм: пользователь видит белый
+экран, до загрузки приложения дело не доходит. Нативные клиенты (iOS/Android/Desktop)
+работают через WebView и заголовок игнорируют, поэтому баг незаметен при обычном
+тестировании с телефона — именно так он и прожил до 2026-07-26 в проде.
+
+Whitelist доменов `X-Frame-Options` не поддерживает (`ALLOW-FROM` мёртв в современных
+браузерах), поэтому единственный корректный инструмент — CSP `frame-ancestors`.
+Защита при этом сохраняется: встраивание разрешено только доменам Telegram, с любого
+постороннего сайта кликджекинг по-прежнему невозможен.
+
+Реализация — `frontend/nginx.conf`, заголовок повторяется в каждом `location`
+(`add_header` внутри `location` заменяет, а не дополняет внешние заголовки).
 
 ---
 

@@ -2,9 +2,13 @@ package com.clubs.chatlink
 
 import com.clubs.common.util.EventFormatTexts
 import com.clubs.event.Event
+import com.clubs.event.EventMessageTemplate
+import com.clubs.event.EventEditedEvent
 import com.clubs.event.locationDisplay
+import com.clubs.event.locationDisplayOrDash
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
+import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -12,7 +16,9 @@ import java.util.UUID
 /**
  * Тексты сообщений «живого закрепа» (мокап 03-live-pin-and-summary): статус Этапа 1 / Этапа 2,
  * финал при старте/отмене и пост-итог после явки. Только форматирование — данные приносит
- * [LivePinService]. Plain text, как все сообщения бота.
+ * [LivePinService]. HTML parse_mode — как и DM, тексты идут по общему шаблону
+ * [EventMessageTemplate] с жирным заголовком формата встречи; пользовательский ввод
+ * экранируется там же.
  */
 @Component
 class LivePinRenderer(
@@ -37,45 +43,70 @@ class LivePinRenderer(
     fun buttonText(event: Event): String =
         if (event.stage2Triggered) "Подтвердить участие" else "Проголосовать"
 
-    /** Строка «дата · 📍 адрес (уточнение)»; у события без места (V58) — только дата. */
-    private fun dateLocationLine(event: Event): String =
-        "🗓 ${event.eventDatetime.format(fmt)}" +
-            (event.locationDisplay?.let { " · 📍 $it" } ?: "")
-
-    /** Этап 1: набор — голоса и лимит мест (у открытой встречи лимита нет — строка мест другая). */
+    /**
+     * Этап 1 (идёт голосование) — общий шаблон встречи: формат жирным, что/когда/где, голоса.
+     */
     fun stage1Text(event: Event, going: Int, maybe: Int): String =
-        "📅 ${event.title}\n" +
-            "${dateLocationLine(event)}\n\n" +
-            "✅ Идут — $going\n" +
-            "🤔 Возможно — $maybe\n" +
-            (event.participantLimit?.let { "👥 Мест — $it" } ?: EventFormatTexts.OPEN_EVENT_NO_LIMIT_LINE)
+        "${EventMessageTemplate.head(event, fmt)}\n\n" +
+            EventMessageTemplate.stage1Stats(event, going, maybe)
 
     /**
-     * Этап 2: гонка за места — подтверждённые, очередь, дедлайн (= старт события, граница окна на бэке).
-     * Открытая встреча: гонки нет — счёт без знаменателя, строка очереди не рендерится (она всегда 0).
+     * Этап 2 (гонка за места) — тот же шаблон, но со счётчиком подтверждений и дедлайном
+     * (= старт события, граница окна на бэке).
      */
     fun stage2Text(event: Event, confirmed: Int, waitlisted: Int): String =
-        "🏁 ${event.title} — " +
-            (if (event.isOpenEvent) "подтверждение участия\n" else "подтверждение мест\n") +
-            "${dateLocationLine(event)}\n\n" +
-            (event.participantLimit?.let { "✅ Подтвердили — $confirmed из $it\n📋 В очереди — $waitlisted\n" }
-                ?: "✅ Подтвердили — $confirmed\n") +
-            "⏳ Подтвердить до — ${event.eventDatetime.format(fmt)}"
+        "${EventMessageTemplate.head(event, fmt)}\n\n" +
+            EventMessageTemplate.stage2Stats(event, confirmed, waitlisted, fmt)
 
     /**
      * Финальный текст при старте события (закреп гаснет, итог придёт после отметки явки).
      * Не «Сбор закрыт» — слово «сбор» у нас занято складчиной и путало (фидбек PO 2026-07-08).
      */
     fun closedText(event: Event, confirmed: Int): String =
-        "📅 ${event.title} · ${event.eventDatetime.format(fmt)}\n" +
-            "Событие началось — подтвердили " +
+        "<b>${esc(EventMessageTemplate.formatName(event))} началась</b>\n\n" +
+            "${esc(event.title)}\n" +
+            "когда: ${event.eventDatetime.format(fmt)}\n\n" +
+            "✅ Подтвердили — " +
             (event.participantLimit?.let { "$confirmed из $it" } ?: "$confirmed") +
-            ". Итог появится после отметки явки."
+            "\nИтог появится после отметки явки."
+
+    /**
+     * Громкий пост о правке встречи (только Этап 1): «было → стало» по тому, что реально
+     * изменилось. Три формулировки вместо одной общей — участник должен понять суть из первой
+     * строки, не вчитываясь: сдвиг времени и переезд требуют разных действий.
+     * [edited] несёт и новое состояние, и прежнее.
+     */
+    fun editedText(edited: EventEditedEvent): String {
+        val event = edited.event
+        val old = edited.oldEvent
+        val what = when {
+            edited.isDatetimeChanged && edited.isLocationChanged -> "изменилась"
+            edited.isLocationChanged -> "меняет место"
+            else -> "перенесена"
+        }
+        val sb = StringBuilder("<b>${esc(EventMessageTemplate.formatName(event))} $what</b>\n\n")
+        sb.append(esc(event.title)).append("\n")
+        if (edited.isDatetimeChanged) {
+            sb.append("\nкогда было: ${old.eventDatetime.format(fmt)}\n")
+            sb.append("когда стало: ${event.eventDatetime.format(fmt)}\n")
+        } else {
+            sb.append("когда: ${event.eventDatetime.format(fmt)}\n")
+        }
+        if (edited.isLocationChanged) {
+            sb.append("\nгде было: ${esc(old.locationDisplayOrDash)}\n")
+            sb.append("где стало: ${esc(event.locationDisplayOrDash)}")
+        } else {
+            event.locationDisplay?.let { sb.append("где: ${esc(it)}") }
+        }
+        return sb.toString().trimEnd()
+    }
 
     /** Финальный текст при отмене события. */
     fun cancelledText(event: Event, reason: String?): String {
-        val reasonLine = reason?.let { "\nПричина: $it" } ?: ""
-        return "❌ ${event.title} · ${event.eventDatetime.format(fmt)} — событие отменено$reasonLine"
+        val reasonLine = reason?.let { "\nпричина: ${esc(it)}" } ?: ""
+        return "<b>${esc(EventMessageTemplate.formatName(event))} отменена</b>\n\n" +
+            "${esc(event.title)}\n" +
+            "когда: ${event.eventDatetime.format(fmt)}$reasonLine"
     }
 
     /**
@@ -114,6 +145,9 @@ class LivePinRenderer(
         }
         return "🎉 $listed — впервые на встрече клуба"
     }
+
+    /** Короткий алиас общего экранирования — тексты закрепа идут с HTML parse_mode. */
+    private fun esc(s: String): String = EventMessageTemplate.escapeHtml(s)
 
     companion object {
         // Сколько имён «впервые» показываем в итоге до схлопывания в «и ещё k»
