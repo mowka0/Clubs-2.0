@@ -21,6 +21,22 @@
    (Discovery, ClubPage, MyClubsPage, будущие) наследовали его единообразно.
    Дочерние элементы подхватывают его через `font-family: inherit`. */
 html, body, #root { margin: 0; padding: 0; }
+
+/* Верхняя врезка приложения — сколько сверху нельзя занимать контентом.
+   В полноэкранном режиме Mini App страница рисуется под системным статус-баром И под
+   плавающими контролами Telegram («Назад», ⌄, ⋯), поэтому складываем обе врезки:
+     --tg-viewport-safe-area-inset-top          — системная зона устройства (статус-бар, чёлка);
+     --tg-viewport-content-safe-area-inset-top  — зона контролов Telegram поверх страницы.
+   Обе публикует `viewport.bindCssVars()` (см. `telegram/sdk.ts`); вне Telegram и до
+   привязки работает фолбэк на `env(safe-area-inset-top)`. В обычном (не полноэкранном)
+   режиме обе врезки равны нулю — вёрстка остаётся прежней. */
+:root {
+  --app-inset-top: calc(
+    var(--tg-viewport-safe-area-inset-top, env(safe-area-inset-top, 0px))
+    + var(--tg-viewport-content-safe-area-inset-top, 0px)
+  );
+}
+
 html, body {
   background: var(--bg);
   min-height: 100vh;

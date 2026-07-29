@@ -134,7 +134,9 @@ export const ImageLightbox: FC<Props> = ({ src, alt = '', onClose }) => {
         onClick={(e) => { e.stopPropagation(); close(); }}
         style={{
           position: 'fixed',
-          top: 'max(12px, env(safe-area-inset-top))',
+          // В полноэкранном режиме сверху лежат статус-бар и контролы Telegram — крестик
+          // уводим под них общим токеном врезки (см. --app-inset-top в brand-theme.css).
+          top: 'max(12px, var(--app-inset-top, 0px))',
           right: 16,
           width: 40,
           height: 40,
