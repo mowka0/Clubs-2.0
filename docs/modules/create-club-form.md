@@ -2,7 +2,7 @@
 
 ## Цель
 
-`CreateClubModal` (5-шаговый wizard) на момент написания этой спеки жил inline в `OrganizerPage` и держал 10 полей формы в одном `useState<FormData>`-объекте, валидируя через ручной `validateStep(step, form)` из `utils/validators.ts`. После RHF-миграции (PR #26) и переезда в `frontend/src/components/CreateClubModal.tsx` (PR `feature/restructure-bottom-tabs`, 2026-04-25) — открывается из `MyClubsPage` через `<Modal>`. Анти-паттерн, который решала эта спека (см. `frontend.md` § «Формы»):
+`CreateClubModal` (тогда 5-шаговый wizard; с 2026-07-29 — 4 шага) на момент написания этой спеки жил inline в `OrganizerPage` и держал 10 полей формы в одном `useState<FormData>`-объекте, валидируя через ручной `validateStep(step, form)` из `utils/validators.ts`. После RHF-миграции (PR #26) и переезда в `frontend/src/components/CreateClubModal.tsx` (PR `feature/restructure-bottom-tabs`, 2026-04-25) — открывается из `MyClubsPage` через `<Modal>`. Анти-паттерн, который решала эта спека (см. `frontend.md` § «Формы»):
 
 - ререндер всего модала на каждое нажатие клавиши
 - валидация императивная, дублирует то что RHF делает декларативно
@@ -57,12 +57,17 @@ Pattern: перед `setStep(s + 1)` вызвать `await trigger([...fields_of
 | Step | Поля | Rules |
 |---|---|---|
 | 0 | `name`, `city`, `district` | `name`: `required`, `minLength: 3`, `maxLength: 60` (с trim). `city`: `required`. `district`: optional. |
-| 1 | `category`, `accessType` | `category`: `required`, `defaultValue: 'other'` (нейтральный дефолт — пользователь явно выбирает категорию на шаге 1, не получая случайный «Спорт»). `accessType`: `required`, `defaultValue: 'open'`. |
+| 1 | `category`, `accessType`, `applicationQuestion` | `category`: `required`, `defaultValue: 'other'` (нейтральный дефолт — пользователь явно выбирает категорию на шаге 1, не получая случайный «Спорт»). `accessType`: `required`, `defaultValue: 'open'`. `applicationQuestion`: optional, `maxLength: 200` (ширина колонки `clubs.application_question`); поле рендерится только при `accessType === 'closed'`. |
 | 2 | `memberLimit`, `subscriptionPrice` | `memberLimit`: `required`, `min: 10`, `max: 80`, integer (validate) — синхронизировано с backend Bean Validation `@Min(10) @Max(80)` в `CreateClubRequest.kt`. `subscriptionPrice`: `required`, `min: 0`, integer (validate). |
 | 3 | `description`, `rules` | `description`: `required`, `minLength: 10`, `maxLength: 500` (с trim). `rules`: optional. |
-| 4 | `applicationQuestion` | optional; поле и шаг рендерятся только при `accessType === 'closed'`. |
 
-Сообщения об ошибках (русский, UX не меняется): «Название: минимум 3 символа», «Название: максимум 60 символов», «Укажите город», «Лимит участников: 1–80», «Укажите корректную цену», «Цена должна быть целым числом», «Описание: минимум 10 символов», «Описание: максимум 500 символов».
+> **Изменение 2026-07-29 (screens-polish):** шаг 4 «Заявка» удалён — вопрос к заявке
+> переехал на шаг 1 и раскрывается прямо под выбором «Закрытый клуб». Wizard стал
+> 4-шаговым, шаг «Описание» теперь последний (CTA «Создать клуб»). Причина: отдельный
+> шаг был пустым для открытых клубов (показывал только подсказку «вопрос не нужен»),
+> а настройка закрытости логически принадлежит тому же экрану, где закрытость выбирают.
+
+Сообщения об ошибках (русский, UX не меняется): «Название: минимум 3 символа», «Название: максимум 60 символов», «Укажите город», «Вопрос: максимум 200 символов», «Лимит участников: 1–80», «Укажите корректную цену», «Цена должна быть целым числом», «Описание: минимум 10 символов», «Описание: максимум 500 символов».
 
 ## Submit
 

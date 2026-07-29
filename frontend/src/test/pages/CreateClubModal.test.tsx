@@ -95,10 +95,61 @@ describe('CreateClubModal', () => {
 
     const descInput = screen.getByLabelText(/описание клуба/i);
     await user.type(descInput, 'This is a valid description for the club.');
+
+    // «Описание» — последний шаг: вопрос к заявке переехал на шаг «Категория».
+    expect(screen.getByText(/шаг 4 из 4/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /создать клуб/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /далее/i })).not.toBeInTheDocument();
+  });
+
+  it('shows the application question on the access-type step only for a closed club', async () => {
+    const { user } = renderModal();
+
+    await user.type(screen.getByLabelText(/название клуба/i), 'Закрытый клуб');
+    await user.type(screen.getByLabelText(/город/i), 'Москва');
+    await user.click(screen.getByRole('button', { name: /далее/i })); // → шаг 2 «Категория»
+
+    // Открытый клуб выбран по умолчанию — вопроса нет.
+    expect(screen.queryByLabelText(/вопрос для вступления/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: /закрытый клуб/i }));
+    expect(screen.getByLabelText(/вопрос для вступления/i)).toBeInTheDocument();
+
+    // Возврат к «открытому» снова прячет поле.
+    await user.click(screen.getByRole('radio', { name: /открытый клуб/i }));
+    expect(screen.queryByLabelText(/вопрос для вступления/i)).not.toBeInTheDocument();
+  });
+
+  it('sends the application question typed on the access-type step', async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+
+    server.use(
+      http.post('*/api/clubs', async ({ request }) => {
+        capturedBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: 'closed-club-id', name: 'Закрытый клуб' }, { status: 201 });
+      }),
+    );
+
+    const { user } = renderModal();
+
+    await user.type(screen.getByLabelText(/название клуба/i), 'Закрытый клуб');
+    await user.type(screen.getByLabelText(/город/i), 'Москва');
     await user.click(screen.getByRole('button', { name: /далее/i }));
 
-    expect(screen.getByText(/шаг 5/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /создать клуб/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: /закрытый клуб/i }));
+    await user.type(screen.getByLabelText(/вопрос для вступления/i), 'Почему вам интересен клуб?');
+    await user.click(screen.getByRole('button', { name: /далее/i }));
+
+    await user.click(screen.getByRole('button', { name: /далее/i }));
+    await user.type(
+      screen.getByLabelText(/описание клуба/i),
+      'Описание закрытого клуба длиной больше десяти символов.',
+    );
+    await user.click(screen.getByRole('button', { name: /создать клуб/i }));
+
+    await waitFor(() => expect(capturedBody).not.toBeNull());
+    expect(capturedBody!.accessType).toBe('closed');
+    expect(capturedBody!.applicationQuestion).toBe('Почему вам интересен клуб?');
   });
 
   it('"Создать клуб" button calls API with correct payload and triggers onCreated', async () => {
@@ -148,7 +199,6 @@ describe('CreateClubModal', () => {
       screen.getByLabelText(/описание клуба/i),
       'Description for API test club verification.',
     );
-    await user.click(screen.getByRole('button', { name: /далее/i }));
 
     const submitButton = screen.getByRole('button', { name: /создать клуб/i });
     await user.click(submitButton);
@@ -215,7 +265,6 @@ describe('CreateClubModal', () => {
     await user.click(screen.getByRole('button', { name: /далее/i }));
     await user.click(screen.getByRole('button', { name: /далее/i }));
     await user.type(screen.getByLabelText(/описание клуба/i), 'A description that is long enough.');
-    await user.click(screen.getByRole('button', { name: /далее/i }));
 
     await user.click(screen.getByRole('button', { name: /создать клуб/i }));
 

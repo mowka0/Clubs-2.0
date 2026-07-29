@@ -18,7 +18,7 @@
 5. Conditional navigation (BottomTabBar / BackButton)
 6. Data models (TypeScript shapes)
 7. Page anatomy (все 8 страниц top→bottom)
-8. OrganizerPage wizard — 5 шагов детально
+8. OrganizerPage wizard — 4 шага детально
 9. Custom-компоненты
 10. tgui v2 — используемые компоненты
 11. Telegram SDK — что используем, что не
@@ -73,7 +73,7 @@ frontend/
     │   ├── CityPicker.tsx         — bottom-sheet country+city picker, persist в `localStorage` (хук `useCityChoice`)
     │   ├── PriceFilter.tsx        — bottom-sheet preset-picker по стоимости подписки (min/max → query-params)
     │   ├── AvatarUpload.tsx
-    │   ├── CreateClubModal.tsx — 5-шаговый wizard на RHF, открывается из MyClubsPage
+    │   ├── CreateClubModal.tsx — 4-шаговый wizard на RHF, открывается из MyClubsPage
     │   ├── Toast.tsx
     │   ├── RootErrorFallback.tsx
     │   └── club/                 — tab-content для unified ClubPage
@@ -814,7 +814,7 @@ Tabs условно (`{activeTab === X && <Tab/>}`) — only active mounts → o
 
 ---
 
-## 8. CreateClubModal wizard — 5 шагов создания клуба
+## 8. CreateClubModal wizard — 4 шага создания клуба
 
 > **Файл:** `frontend/src/components/CreateClubModal.tsx` (вынесен из удалённого
 > `OrganizerPage` в PR `feature/restructure-bottom-tabs`, 2026-04-25). Открывается
@@ -824,7 +824,7 @@ State хранится локально в компоненте через `reac
 с `mode: 'onTouched'`), валидация — RHF rules + `await trigger([...stepFields])`
 перед `setStep`. Подробности — `docs/modules/create-club-form.md`.
 
-Заголовок модала: «Шаг {X} из 5: {STEP_TITLES[X]}». Кнопка-крестик ✕ в углу.
+Заголовок модала: «Шаг {X} из 4: {STEP_TITLES[X]}». Кнопка-крестик ✕ в углу.
 
 ### Step 0 — «Основное»
 
@@ -844,6 +844,9 @@ State хранится локально в компоненте через `reac
 - Radio-группа:
   - «Открытый клуб» (default) — подпись «Любой желающий может вступить»
   - «Закрытый клуб» — подпись «Вступление по заявке (организатор одобряет)»
+- Только при `accessType === 'closed'` — `<Input>` «Вопрос для вступления
+  (необязательно)», placeholder «Почему вы хотите вступить?», максимум 200
+  символов (ширина колонки `clubs.application_question`).
 
 **CTA:** «Далее»
 
@@ -868,24 +871,19 @@ Cell «Доход организатора»:
   своём клубе (10–500 символов)»
 - `<Textarea>` «Правила (необязательно)» — placeholder «Правила сообщества»
 
-**CTA:** «Далее»
+**CTA:** «Создать клуб» (submit, последний шаг) — `createClub(body)`, при сабмите
+кнопка показывает `<Spinner>`.
 
-### Step 4 — «Заявка»
-
-Зависит от `accessType`:
-- Если `closed`: `<Input>` «Вопрос для вступления (необязательно)» —
-  placeholder «Почему вы хотите вступить?»
-- Если `open`: `<Placeholder>` «Для открытого клуба вопрос при вступлении не
-  нужен»
-
-**CTA:** «Создать клуб» (submit) — `createClub(body)`, при сабмите кнопка
-показывает `<Spinner>`.
+> **Изменение 2026-07-29 (screens-polish):** отдельный шаг 4 «Заявка» удалён.
+> Вопрос для вступления переехал на Step 1 и раскрывается прямо под выбором
+> «Закрытый клуб»; для открытого клуба поля (и былой заглушки «Для открытого
+> клуба вопрос при вступлении не нужен») больше нет.
 
 ### Навигация wizard'а
 
 - `step > 0` — кнопка «Назад» (outline)
-- `step < 4` — primary «Далее»
-- `step === 4` — primary «Создать клуб» (submit)
+- `step < 3` — primary «Далее»
+- `step === 3` — primary «Создать клуб» (submit)
 
 Валидация на каждый «Далее» — `await trigger([...stepFields])` (react-hook-form).
 Если возвращает `false` — переход не происходит, `formState.errors` рендерятся
@@ -1111,7 +1109,7 @@ useEffect(() => {
 ```
 
 **Где используется:**
-1. MyClubsPage → `<CreateClubModal>` (5-шаговый wizard, файл
+1. MyClubsPage → `<CreateClubModal>` (4-шаговый wizard, файл
    `components/CreateClubModal.tsx`)
 2. ClubPage → ApplyModal (заявка в закрытый клуб)
 3. OrganizerClubManage → `<MemberProfileModal>`, `<EventDetailModal>`,
@@ -1470,7 +1468,7 @@ QueryClient defaults: `staleTime: 30s`, `gcTime: 5min`, `retry: 1`,
    Section внизу вместо Telegram MainButton (который автоматически живёт над
    клавиатурой и с safe-area).
 10. **Нет closing-confirmation** в `CreateClubModal` wizard'е — юзер может
-    потерять 5 шагов данных.
+    потерять 4 шага данных.
 11. **Нет брендинга** — ни логотипа, ни accent-цвета, ни визуального
     характера.
 12. **«Discovery» по-английски** в tab-label посреди русского UI — разорвать.
@@ -1578,7 +1576,7 @@ ErrorBoundary, branded types, features-reorg — отдельно.
 - Nested — с учётом места под Telegram MainButton
 
 ### Spec-детализации
-- `CreateClubModal` wizard (открывается из MyClubsPage) — 5 шагов с иллюстрациями перехода
+- `CreateClubModal` wizard (открывается из MyClubsPage) — 4 шага с иллюстрациями перехода
 - OrganizerClubManage — 5 табов + все модалки (Member / Event / Attendance /
   Delete)
 - ClubPage — CTA-логика (8 вариантов)
