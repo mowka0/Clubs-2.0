@@ -279,9 +279,12 @@ Bot API **8.0+** вводит **два уровня** отступов — об�
   `--app-inset-top = safe-area-inset-top + content-safe-area-inset-top`, с фолбэком на
   `env(safe-area-inset-top)` вне Telegram. Складывать обе врезки обязательно: системная
   даёт статус-бар, content — плавающие контролы Telegram поверх страницы.
-- Потребители токена: `.rd-page` (`padding-top`), `.ob-root` (онбординг),
-  `.rd-sheet` (`max-height: calc(88vh - var(--app-inset-top))`, чтобы высокая шторка не
-  залезала под контролы), крестик `ImageLightbox`.
+- Потребители токена: `.rd-page` (`padding-top`, все страницы во всех ветках рендера),
+  `.ob-root` (онбординг), `.rd-sheet` (`max-height: calc(88vh - var(--app-inset-top))`,
+  чтобы высокая шторка не залезала под контролы), `[vaul-drawer]` (модалки telegram-ui —
+  `max-height: calc(96% - var(--app-inset-top))`), крестик `ImageLightbox`.
+- Селектор для модалок telegram-ui — атрибут `vaul-drawer`, а НЕ хешированный класс
+  (`tgui-cc76354712c6e8d9`): хеш меняется от версии к версии пакета.
 - В обычном (не полноэкранном) режиме обе врезки = 0 → вёрстка идентична прежней.
 - Низ: док и `.rd-page` по-прежнему на `env(safe-area-inset-bottom)` — там ничего
   не менялось, Telegram-UI снизу нам не мешает.
