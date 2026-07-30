@@ -22,8 +22,9 @@ import { formatPrice } from '../utils/formatters';
 import { isActiveManagerMembership } from '../utils/membershipRole';
 import { openTmeLink } from '../utils/telegramLinks';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
-import { ClubAvatarButton } from '../components/club/ClubAvatarButton';
 import { ClubCoverButton } from '../components/club/ClubCoverButton';
+import { ClubIdentityHeader } from '../components/club/ClubIdentityHeader';
+import { ClubLockedNotice } from '../components/club/ClubLockedNotice';
 import { ClubChatConnectBanner } from '../components/club/ClubChatConnectBanner';
 import { ClubEventsTeaser } from '../components/club/ClubEventsTeaser';
 import { WelcomeScene, memberCountCaption } from '../components/onboarding/WelcomeScene';
@@ -33,10 +34,6 @@ import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
 import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
 import { InviteSheet } from '../components/club/InviteSheet';
 import { LeaveClubModal } from '../components/club/LeaveClubModal';
-
-const ACCESS_LABELS: Record<string, string> = {
-  open: 'Открытый', closed: 'По заявке', private: 'Приватный',
-};
 
 type TabId = 'activities' | 'members';
 
@@ -53,13 +50,6 @@ function formatExpiryDate(iso: string): string {
     year: 'numeric',
   });
 }
-
-const LockIcon: FC = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="4" y="11" width="16" height="11" rx="2.5" />
-    <path d="M8 11V7a4 4 0 1 1 8 0v4" />
-  </svg>
-);
 
 const LeaveIcon: FC = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -430,75 +420,43 @@ export const ClubPage: FC = () => {
     { key: 'members', label: 'Участники', selected: activeTab === 'members' },
   ];
 
-  const isPaid = club.subscriptionPrice > 0;
-
   return (
     <div className="rd-page">
-      {/* Обложка (hero) — чистая: название и параметры клуба живут на странице, не на картинке.
-          Картинка берётся из coverUrl (V70): аватар клуба — отдельное поле, и смена одного
-          больше не меняет другое. Нет обложки — рисуется градиент по категории. */}
-      <div className="rd-hero rd-compact rd-club-cover">
-        <div
-          className="rd-hero-bg"
-          data-cat={club.category}
-          style={club.coverUrl ? { backgroundImage: `url(${club.coverUrl})` } : undefined}
-        />
-        <div className="rd-hero-acts">
-          {/* Менеджеру — смена обложки; аватар меняется тапом по самому кружку ниже. */}
-          {isManager && <ClubCoverButton clubId={club.id} hasCover={!!club.coverUrl} />}
-          {/* Одно место под роль: менеджеру — вход в «Управление», участнику — выход из клуба.
-              Обе роли одновременно невозможны (владелец из клуба не выходит), поэтому кнопка одна. */}
-          {isManager ? (
-            <button
-              type="button"
-              className="rd-hero-btn"
-              onClick={handleOpenManage}
-              aria-label="Управление клубом"
-              title="Управление клубом"
-            >
-              <ManageIcon />
-            </button>
-          ) : showLeaveIcon ? (
-            <button
-              type="button"
-              className="rd-hero-btn"
-              onClick={handleOpenLeaveModal}
-              aria-label="Выйти из клуба"
-              title="Выйти из клуба"
-            >
-              <LeaveIcon />
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      {/* Аватар наезжает на стык обложки и страницы; менеджеру кружок кликабелен — тап меняет
-          картинку клуба (снять её можно в «Управление → Настройки»). */}
-      <ClubAvatarButton
-        clubId={club.id}
-        clubName={club.name}
-        avatarUrl={club.avatarUrl ?? null}
-        editable={isManager}
+      {/* Шапка (обложка → аватар → название → чипы) общая с посадочной приглашения —
+          см. ClubIdentityHeader. Здесь в угол обложки уезжают кнопки роли. */}
+      <ClubIdentityHeader
+        club={club}
+        avatarEditable={isManager}
+        coverActions={
+          <>
+            {/* Менеджеру — смена обложки; аватар меняется тапом по самому кружку ниже. */}
+            {isManager && <ClubCoverButton clubId={club.id} hasCover={!!club.coverUrl} />}
+            {/* Одно место под роль: менеджеру — вход в «Управление», участнику — выход из клуба.
+                Обе роли одновременно невозможны (владелец из клуба не выходит), поэтому кнопка одна. */}
+            {isManager ? (
+              <button
+                type="button"
+                className="rd-hero-btn"
+                onClick={handleOpenManage}
+                aria-label="Управление клубом"
+                title="Управление клубом"
+              >
+                <ManageIcon />
+              </button>
+            ) : showLeaveIcon ? (
+              <button
+                type="button"
+                className="rd-hero-btn"
+                onClick={handleOpenLeaveModal}
+                aria-label="Выйти из клуба"
+                title="Выйти из клуба"
+              >
+                <LeaveIcon />
+              </button>
+            ) : null}
+          </>
+        }
       />
-
-      <div className="rd-club-name">{club.name}</div>
-
-      {/* Параметры клуба одной строкой чипов: доступ · город · состав · взнос. */}
-      <div className="rd-club-facts">
-        <span className="rd-club-fact">
-          <b>{ACCESS_LABELS[club.accessType] ?? club.accessType}</b>
-        </span>
-        <span className="rd-club-fact rd-shrink">
-          <span aria-hidden="true">📍</span>
-          <b>{club.city}</b>
-        </span>
-        <span className="rd-club-fact">
-          <b>{club.memberCount} / {club.memberLimit}</b>
-        </span>
-        <span className={`rd-club-fact ${isPaid ? 'rd-pay' : 'rd-free'}`}>
-          <b>{formatPrice(club.subscriptionPrice)}</b>
-        </span>
-      </div>
 
       {showCancelledNote && membership?.subscriptionExpiresAt && (
         <div className="rd-note" role="status">
@@ -553,22 +511,14 @@ export const ClubPage: FC = () => {
           (подписка истекла — должник по продлению). Один claim-флоу, разные тексты. */}
       {!showTabs && (isFrozenMember || isExpiredMember) && (
         <>
-          <div className="rd-glass rd-locked">
-            <div className="rd-lock-ico"><LockIcon /></div>
-            <div className="rd-text">
-              {isExpiredMember ? (
-                <>
-                  <strong>Подписка истекла</strong>
-                  Доступ к активностям закрыт. Продлите взнос организатору — и он снова откроет доступ.
-                </>
-              ) : (
-                <>
-                  <strong>Вы вступили в клуб</strong>
-                  Доступ к активностям откроет организатор после того, как вы передадите ему взнос.
-                </>
-              )}
-            </div>
-          </div>
+          <ClubLockedNotice
+            title={isExpiredMember ? 'Подписка истекла' : 'Вы вступили в клуб'}
+            description={
+              isExpiredMember
+                ? 'Доступ к активностям закрыт. Продлите взнос организатору — и он снова откроет доступ.'
+                : 'Доступ к активностям откроет организатор после того, как вы передадите ему взнос.'
+            }
+          />
 
           {/* Тизер-афиша (PO 2026-07-24): участник без взноса видит, что клуб живой, —
               главный аргумент передать взнос. Урезанная проекция без места/фото/состава. */}
@@ -613,13 +563,10 @@ export const ClubPage: FC = () => {
       {/* Гость: заглушка с замком + CTA */}
       {!showTabs && !isFrozenMember && !isExpiredMember && (
         <>
-          <div className="rd-glass rd-locked">
-            <div className="rd-lock-ico"><LockIcon /></div>
-            <div className="rd-text">
-              <strong>Активности клуба доступны участникам</strong>
-              Содержимое клуба открывается после вступления.
-            </div>
-          </div>
+          <ClubLockedNotice
+            title="Активности клуба доступны участникам"
+            description="Содержимое клуба открывается после вступления."
+          />
 
           {/* Тизер-афиша (PO 2026-07-24): гость видит ритм жизни клуба до вступления/оплаты. */}
           <ClubEventsTeaser

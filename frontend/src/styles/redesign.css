@@ -1987,6 +1987,68 @@
   background: var(--surface); border: 1px solid var(--hairline); border-radius: 11px;
   padding: 9px 12px; font-size: 12px; color: var(--text-dim); margin-bottom: 14px;
 }
+/* Акцентный вариант — для чипа, который не поясняет, а обещает («вы будете одним из первых»). */
+.rd-cl-chip.rd-accent {
+  background: var(--accent-soft); border-color: rgba(244, 123, 60, 0.3); color: var(--text);
+}
+
+/* ---------- Посадочная приглашения ----------
+   Шапка, «О клубе», кольца и афиша здесь общие со страницей клуба; своего у приглашения
+   ровно два элемента — метка на обложке и строка организатора. */
+
+/* Метка садится в тот же угол обложки, где у менеджера кнопки роли: у приглашённого роли
+   ещё нет, и угол свободен. */
+.rd-invite-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: 999px;
+  background: rgba(0, 0, 0, 0.42); border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  color: #fff; font-size: 9.5px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+}
+
+/* Строка организатора: единственный якорь доверия на экране, где клуб человеку незнаком. */
+.rd-invite-org {
+  display: flex; align-items: center; gap: 11px;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px;
+  padding: 10px 12px; margin-top: 14px;
+}
+.rd-invite-org-ava {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg, #ff7b4a, #c43a2a);
+}
+.rd-invite-org-tx { min-width: 0; line-height: 1.3; }
+.rd-invite-org-tx b { display: block; font-size: 13px; font-weight: 700; color: var(--text); }
+.rd-invite-org-tx span { font-size: 11px; color: var(--text-faint); }
+
+/* Подсказка над пилюлей «В чат»: на приглашении пилюля ведёт не в чат, а сюда — дверь
+   открывает вступление. Всплывает НАД пилюлей (`bottom: 100%`), потому что сама пилюля
+   прижата к нижнему краю блока «О клубе» и место под ней занято следующей секцией. */
+.rd-club-chatrow { position: relative; }
+.rd-chathint-veil { position: fixed; inset: 0; z-index: 40; }
+.rd-chathint {
+  position: absolute; z-index: 41; right: 0; bottom: calc(100% + 10px);
+  width: max-content; max-width: 250px;
+  padding: 13px 14px 14px;
+  background: var(--surface-2); border: 1px solid var(--hairline-2); border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+}
+/* Хвостик к пилюле: квадрат под 45°, у которого видны только две «нижние» стороны рамки. */
+.rd-chathint::after {
+  content: ''; position: absolute; right: 26px; bottom: -6px;
+  width: 11px; height: 11px; transform: rotate(45deg);
+  background: var(--surface-2);
+  border-right: 1px solid var(--hairline-2); border-bottom: 1px solid var(--hairline-2);
+}
+.rd-chathint-tx { font-size: 12.5px; line-height: 1.4; color: var(--text-dim); }
+.rd-chathint-cta {
+  width: 100%; margin-top: 11px;
+  background: var(--accent-grad); color: var(--on-accent);
+  border: 0; border-radius: 11px; padding: 10px 14px;
+  font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
 
 /* club-invites: строка «Пригласить в клуб» над ростером (только владелец/organizer, кадр A) */
 .rd-invite-row {

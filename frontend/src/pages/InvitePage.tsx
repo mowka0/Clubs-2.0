@@ -1,33 +1,30 @@
-import { FC, useState } from 'react';
+import { FC, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useApplyToClubMutation, useClubByInviteQuery, useJoinByInviteMutation, useMyClubsQuery } from '../queries/clubs';
+import { useClubQualityQuery } from '../queries/clubQuality';
 import { useCompleteOnboardingMutation } from '../queries/profile';
 import { useAuthStore } from '../store/useAuthStore';
 import { ApiError } from '../api/apiClient';
 import { formatPrice } from '../utils/formatters';
+import { openTmeLink } from '../utils/telegramLinks';
+import { ClubEventsTeaser } from '../components/club/ClubEventsTeaser';
+import { ClubIdentityHeader } from '../components/club/ClubIdentityHeader';
+import { ClubLockedNotice } from '../components/club/ClubLockedNotice';
+import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
 import { FoxEmpty } from '../components/feed/FoxEmpty';
 import { WelcomeScene, memberCountCaption } from '../components/onboarding/WelcomeScene';
 import { Toast } from '../components/Toast';
 import foxInviteArt from '../assets/mascot/fox-invite.png';
 import foxErrorArt from '../assets/mascot/fox-error.png';
 
-const CATEGORY_LABELS: Record<string, string> = {
-  sport: 'Спорт', creative: 'Творчество', food: 'Еда',
-  board_games: 'Настолки', cinema: 'Кино', education: 'Образование',
-  travel: 'Путешествия', other: 'Другое',
-};
-
-function getClubInitials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w.charAt(0).toUpperCase())
-    .join('');
-}
+/**
+ * До скольки участников клуб ещё «только собирается»: при таком составе И полном отсутствии
+ * встреч приглашённому честно обещать, что он будет одним из первых.
+ */
+const FIRST_MEMBERS_THRESHOLD = 5;
 
 export const InvitePage: FC = () => {
   useBackButton(true);
@@ -48,6 +45,9 @@ export const InvitePage: FC = () => {
   const [applied, setApplied] = useState(false);
   const [answerText, setAnswerText] = useState('');
   const [welcomeError, setWelcomeError] = useState<string | null>(null);
+  const [showChatHint, setShowChatHint] = useState(false);
+  // Кнопка «В чат» стоит вверху экрана, а форма заявки — внизу: подсказке нужно к ней прокрутить.
+  const ctaRef = useRef<HTMLDivElement>(null);
 
   // Велком-сцена (онбординг, срез 3): инвайт — главная точка входа новичка, карусель ему
   // отложена deep-link'ом (Layout), поэтому продукт рассказывает сцена ПОСЛЕ вступления.
@@ -72,6 +72,14 @@ export const InvitePage: FC = () => {
   // страхуемся на посадочной; бэкенд повторное вступление и так отбивает (409).
   const myMembership = myClubsQuery.data?.find((m) => m.clubId === club?.id);
   const isAlreadyMember = !!myMembership && ['active', 'frozen', 'expired'].includes(myMembership.status);
+
+  // Клуб только собирается: блоки качества и афиши у него молчат (fail-soft), и без этой
+  // строки экран схлопнулся бы к голому описанию. Запрос тот же, что грузит ClubQualityFacts
+  // ниже, — react-query отдаёт его из кэша, второго обращения к сети нет.
+  const qualityQuery = useClubQualityQuery(club?.id);
+  const isJustStarting = !!club
+    && qualityQuery.data?.totalMeetings === 0
+    && club.memberCount <= FIRST_MEMBERS_THRESHOLD;
 
   const handleJoin = () => {
     if (!code) return;
@@ -173,8 +181,9 @@ export const InvitePage: FC = () => {
     }
   };
 
+  const isPaid = club.subscriptionPrice > 0;
+
   if (joined) {
-    const isPaid = club.subscriptionPrice > 0;
     // Новичок: вместо сухого «Добро пожаловать» — велком-сцена (кадр A/B). CTA помечает
     // онбординг дверью MEMBER — карусель с дверями такому человеку больше не показывается.
     if (isNewbie) {
@@ -251,55 +260,139 @@ export const InvitePage: FC = () => {
     );
   }
 
+  const hasAbout = !!club.description || !!club.rules;
+  // Чат показываем той же пилюлей, что и на странице клуба, но она ведёт не в чат, а к подсказке:
+  // дверь в чат открывает вступление. Условие то же, что было у снятого чипа — без включённой
+  // двери бот в чат не впустит, и обещать вход нельзя.
+  const showChatPill = club.chatLinked && club.chatDoorEnabled;
+  const joinCtaLabel = isClubFull ? 'Попроситься в клуб' : needsApplication ? 'Отправить заявку' : 'Вступить в клуб';
+
+  // Пилюля чата у того, кто уже в клубе, ведёт прямо в чат; остальным — подсказка с кнопкой вступления.
+  const handleChatPill = () => {
+    haptic.impact('light');
+    if (isAlreadyMember && club.chatInviteLink) {
+      openTmeLink(club.chatInviteLink);
+      return;
+    }
+    setShowChatHint((shown) => !shown);
+  };
+
+  // Кнопка из подсказки: прямое вступление делаем сразу, а заявку — только доведя человека
+  // до формы внизу, иначе он не увидит ни вопроса организатора, ни ошибки о пустом ответе.
+  const handleChatHintCta = () => {
+    setShowChatHint(false);
+    haptic.impact('light');
+    // Уже в клубе, но ссылки на чат нет — это frozen/expired (доступа нет, ссылка не выдаётся):
+    // звать его вступать нельзя, бэкенд ответит 409. Ведём в клуб, там ждёт claim-флоу взноса.
+    if (isAlreadyMember) {
+      navigate(`/clubs/${club.id}`, { replace: true });
+      return;
+    }
+    if (needsApplication) {
+      ctaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    handleJoin();
+  };
+
   return (
     <div className="rd-page">
-      <div className="rd-ft-eyebrow">Приглашение в клуб</div>
+      {/* Приглашение показывает тот же клуб, что и его страница, поэтому и шапка та же
+          (ClubIdentityHeader): человек, вступив, попадает на визуально знакомый экран.
+          В углу обложки — метка вместо кнопок роли: у приглашённого роли ещё нет. */}
+      <ClubIdentityHeader
+        club={club}
+        avatarEditable={false}
+        coverActions={<span className="rd-invite-badge">✉ Приглашение</span>}
+      />
 
-      <div style={{ display: 'flex', gap: 14, alignItems: 'center', margin: '6px 0 18px' }}>
-        <span className="rd-avatar" style={{ width: 64, height: 64, borderRadius: 16, fontSize: 24 }}>
-          {club.avatarUrl ? <img src={club.avatarUrl} alt="" /> : getClubInitials(club.name)}
-        </span>
-        <div style={{ minWidth: 0 }}>
-          <div className="rd-page-h" style={{ fontSize: 22 }}>{club.name}</div>
-          <div style={{ marginTop: 6 }}>
-            <span className="rd-badge rd-neutral2">{CATEGORY_LABELS[club.category] ?? club.category}</span>
+      {/* Кто зовёт — сразу под параметрами клуба, а не сноской под кнопкой: клуб человеку
+          незнаком, и доверять на этом экране пока можно только человеку.
+          В ответе лежит имя ВЛАДЕЛЬЦА (ClubService.getClubByInviteCode), а ссылку мог прислать
+          любой участник — код общий на клуб и отправителя не знает, поэтому подпись говорит
+          «организатор», а не «вас зовёт». */}
+      {club.ownerFirstName && (
+        <div className="rd-invite-org">
+          <span className="rd-invite-org-ava" aria-hidden="true">{club.ownerFirstName.charAt(0).toUpperCase()}</span>
+          <span className="rd-invite-org-tx">
+            <b>Организатор — {club.ownerFirstName}{club.ownerLastName ? ` ${club.ownerLastName}` : ''}</b>
+            <span>{isPaid ? 'взнос вы передаёте напрямую, минуя платформу' : 'отвечает за клуб и встречи'}</span>
+          </span>
+        </div>
+      )}
+
+      {isJustStarting && (
+        <div className="rd-cl-chip rd-accent">
+          <span aria-hidden="true">🌱</span>
+          <span>Клуб только собирается — вы будете одним из первых</span>
+        </div>
+      )}
+
+      {(hasAbout || showChatPill) && (
+        <>
+          <div className="rd-section-sub-h">О клубе</div>
+          <div className="rd-club-about">
+            {club.description && <div className="rd-txt">{club.description}</div>}
+            {club.rules && (
+              <>
+                <div className="rd-rules-h">Правила</div>
+                <div className="rd-txt">{club.rules}</div>
+              </>
+            )}
+            {showChatPill && (
+              <div className="rd-club-chatrow">
+                <button
+                  type="button"
+                  className="rd-club-chatpill"
+                  onClick={handleChatPill}
+                  aria-expanded={showChatHint}
+                >
+                  <span aria-hidden="true">💬</span>
+                  В чат
+                </button>
+                {showChatHint && (
+                  <>
+                    {/* Завеса на весь экран: тап мимо подсказки закрывает её — на телефоне это
+                        единственный привычный способ выйти, клавиши Esc там нет. */}
+                    <div className="rd-chathint-veil" onClick={() => setShowChatHint(false)} />
+                    {/* Без role="dialog": глобальное правило brand-theme.css прибивает всё с этой
+                        ролью к низу экрана через !important (там живут боттом-шиты). Раскрытие
+                        и так объявлено через aria-expanded на самой пилюле. */}
+                    <div className="rd-chathint">
+                      <div className="rd-chathint-tx">
+                        {isAlreadyMember
+                          ? 'Чат откроется вместе с доступом в клуб — его открывает организатор.'
+                          : 'Чат клуба открыт участникам. Вступите — и бот впустит вас туда.'}
+                      </div>
+                      <button type="button" className="rd-chathint-cta" onClick={handleChatHintCta}>
+                        {isAlreadyMember ? 'Перейти в клуб' : joinCtaLabel}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
-        </div>
-      </div>
+        </>
+      )}
 
-      <div className="rd-glass rd-rep-panel" style={{ marginBottom: 14 }}>
-        <div className="rd-kv"><span>Город</span><span className="rd-v">{club.city}</span></div>
-        <div className="rd-kv">
-          <span>Участники</span>
-          <span className="rd-v">{club.memberCount} / {club.memberLimit}{isClubFull ? ' · мест нет' : ''}</span>
-        </div>
-        {club.subscriptionPrice > 0 && (
-          <div className="rd-kv"><span>Подписка</span><span className="rd-v">{formatPrice(club.subscriptionPrice)}</span></div>
-        )}
-      </div>
+      {/* Жизнь клуба и афиша — те же публичные блоки, что видит гость на странице клуба.
+          Оба fail-soft: у молодого клуба просто не рендерятся. Строку-замок афише не даём:
+          то же самое говорит плашка сразу под ней. */}
+      <ClubQualityFacts clubId={club.id} memberCount={club.memberCount} />
+
+      <ClubEventsTeaser clubId={club.id} />
+
+      <ClubLockedNotice
+        title="Активности клуба доступны участникам"
+        description="Содержимое клуба открывается после вступления."
+      />
 
       {!isAlreadyMember && isClubFull && (
         <div className="rd-cl-chip">
           <span aria-hidden="true">👥</span>
           <span>В клубе кончились места — вы всё равно можете попроситься, организатор может расширить клуб</span>
         </div>
-      )}
-
-      {/* Клуб принимает по заявке: приглашение не даёт войти сразу — решает организатор. */}
-      {!isAlreadyMember && !isClubFull && club.inviteRequiresApplication && (
-        <div className="rd-cl-chip">
-          <span aria-hidden="true">✋</span>
-          <span>Клуб принимает по заявке — организатор посмотрит её и откроет доступ</span>
-        </div>
-      )}
-
-      {club.description && (
-        <>
-          <div className="rd-section-sub-h">О клубе</div>
-          <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
-            <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{club.description}</div>
-          </div>
-        </>
       )}
 
       {/* Заявка + вопрос организатора: ответ обязателен — поле в общем стиле форм. */}
@@ -317,7 +410,7 @@ export const InvitePage: FC = () => {
 
       {actionError && <div className="rd-error">{actionError}</div>}
 
-      <div className="rd-cta-wrap">
+      <div className="rd-cta-wrap" ref={ctaRef}>
         {isAlreadyMember ? (
           <>
             <div className="rd-cl-chip">
@@ -333,18 +426,29 @@ export const InvitePage: FC = () => {
             </button>
           </>
         ) : needsApplication ? (
-          <button type="button" className="rd-btn-primary" onClick={handleApply} disabled={joining}>
-            {joining ? <Spinner size="s" /> : isClubFull ? 'Попроситься в клуб' : 'Отправить заявку'}
-          </button>
+          <>
+            <button type="button" className="rd-btn-primary" onClick={handleApply} disabled={joining}>
+              {joining ? <Spinner size="s" /> : joinCtaLabel}
+            </button>
+            <div className="rd-cta-hint">
+              {isClubFull
+                ? 'Заявка попадёт к организатору — он решает, расширять ли клуб'
+                : 'Организатор посмотрит заявку и откроет доступ'}
+            </div>
+          </>
         ) : (
-          <button type="button" className="rd-btn-primary" onClick={handleJoin} disabled={joining}>
-            {joining ? <Spinner size="s" /> : 'Вступить в клуб'}
-          </button>
-        )}
-        {!isAlreadyMember && club.ownerFirstName && (
-          <div className="rd-cta-hint">
-            Приглашение от {club.ownerFirstName}{club.ownerLastName ? ` ${club.ownerLastName}` : ''}
-          </div>
+          <>
+            <button type="button" className="rd-btn-primary" onClick={handleJoin} disabled={joining}>
+              {joining ? <Spinner size="s" /> : joinCtaLabel}
+            </button>
+            {/* Главный страх на платном приглашении: «Вступить» читается как «заплатить». */}
+            {isPaid && (
+              <div className="rd-cta-hint">
+                Кнопка ничего не списывает. Взнос вы передаёте организатору напрямую после
+                вступления — платформа денег не касается.
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
