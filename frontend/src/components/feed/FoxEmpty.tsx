@@ -10,6 +10,7 @@ import foxInviteArt from '../../assets/mascot/fox-invite.png';
 import foxPlanningArt from '../../assets/mascot/fox-planning.png';
 import foxErrorArt from '../../assets/mascot/fox-error.png';
 import foxSkladchinaArt from '../../assets/mascot/fox-skladchina.png';
+import foxFinancesArt from '../../assets/mascot/fox-finances.png';
 
 interface FoxEmptyCta {
   label: string;
@@ -62,6 +63,8 @@ const ART_WIDTHS_PX: ReadonlyMap<string, number> = new Map([
   [foxPlanningArt, 176],
   [foxErrorArt, 176],
   [foxSkladchinaArt, 178],
+  // Голова занимает 0.719 ширины кадра — практически как у складчины (0.725), потому и ширина та же.
+  [foxFinancesArt, 178],
 ]);
 
 /**

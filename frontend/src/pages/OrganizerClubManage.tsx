@@ -11,7 +11,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { AvatarUpload } from '../components/AvatarUpload';
 import { FoxEmpty } from '../components/feed/FoxEmpty';
-import foxSkladchinaArt from '../assets/mascot/fox-skladchina.png';
+import foxFinancesArt from '../assets/mascot/fox-finances.png';
 import { Toast } from '../components/Toast';
 import { ManageHeader } from '../components/manage/ManageHeader';
 import { ClubStatsTab } from '../components/manage/ClubStatsTab';
@@ -81,7 +81,7 @@ const FinancesTab: FC<FinancesTabProps> = ({ club, onOpenSettings }) => {
   if (club.subscriptionPrice === 0) {
     return (
       <FoxEmpty
-        art={foxSkladchinaArt}
+        art={foxFinancesArt}
         title="Клуб бесплатный"
         description="Взносы не собираются, поэтому и считать нечего. Захочешь брать за участие — включи подписку в настройках клуба, и сводка появится здесь."
         primary={{ label: 'Открыть настройки', onClick: () => { haptic.impact('light'); onOpenSettings(); } }}
