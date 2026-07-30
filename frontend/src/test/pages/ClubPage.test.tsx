@@ -146,7 +146,7 @@ describe('ClubPage', () => {
     expect(screen.queryByRole('button', { name: /^мой профиль$/i })).not.toBeInTheDocument();
   });
 
-  it('click "Вступить" calls joinClub API, then shows "Вы участник" badge', async () => {
+  it('click "Вступить" calls joinClub API, then opens member tabs', async () => {
     let joinCalled = false;
 
     server.use(
@@ -197,8 +197,9 @@ describe('ClubPage', () => {
     await user.click(joinButton);
 
     await waitFor(() => {
-      expect(screen.getByText(/вы участник/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^активности$/i })).toBeInTheDocument();
     });
+    expect(screen.queryByRole('button', { name: /^вступить$/i })).not.toBeInTheDocument();
 
     expect(joinCalled).toBe(true);
   });
@@ -457,7 +458,8 @@ describe('ClubPage', () => {
     // Таб «Мой профиль» убран — per-club репутация теперь живёт в глобальном Профиле.
     expect(screen.queryByRole('button', { name: /^мой профиль$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^управление$/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/вы участник/i)).toBeInTheDocument();
+    // Бейдж роли с обложки снят (решение PO 2026-07-30).
+    expect(screen.queryByText(/вы участник/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^вступить$/i })).not.toBeInTheDocument();
   });
 
@@ -528,7 +530,7 @@ describe('ClubPage', () => {
     expect(await screen.findByText('Новичок')).toBeInTheDocument();
   });
 
-  it('organizer sees extra "Управление" tab when ownerId matches user id', async () => {
+  it('organizer sees the manage gear in the hero when ownerId matches user id', async () => {
     useAuthStore.setState({
       user: {
         id: 'owner-456',
@@ -563,12 +565,14 @@ describe('ClubPage', () => {
     renderClubPage();
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /^управление$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /управление клубом/i })).toBeInTheDocument();
     });
-    expect(screen.getByText(/вы организатор/i)).toBeInTheDocument();
+    // Бейдж роли с обложки снят (решение PO 2026-07-30) — на шапке остаётся только шестерёнка.
+    expect(screen.queryByText(/вы организатор/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^управление$/i })).not.toBeInTheDocument();
   });
 
-  it('organizer sees "Управление" tab when they have organizer membership role', async () => {
+  it('organizer sees the manage gear when they have organizer membership role', async () => {
     server.use(
       http.get('*/api/clubs/:id', () => {
         return HttpResponse.json({
@@ -595,11 +599,11 @@ describe('ClubPage', () => {
     renderClubPage();
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /^управление$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /управление клубом/i })).toBeInTheDocument();
     });
   });
 
-  it('organizer tap on "Управление" tab navigates to /clubs/:id/manage', async () => {
+  it('tap on the manage gear navigates to /clubs/:id/manage', async () => {
     useAuthStore.setState({
       user: {
         id: 'owner-456',
@@ -631,11 +635,11 @@ describe('ClubPage', () => {
 
     const { user } = renderClubPage();
 
-    const manageTab = await waitFor(() => {
-      return screen.getByRole('button', { name: /^управление$/i });
+    const manageGear = await waitFor(() => {
+      return screen.getByRole('button', { name: /управление клубом/i });
     });
 
-    await user.click(manageTab);
+    await user.click(manageGear);
 
     await waitFor(() => {
       expect(screen.getByText('Manage Page')).toBeInTheDocument();

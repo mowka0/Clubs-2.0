@@ -37,10 +37,9 @@ const ACCESS_LABELS: Record<string, string> = {
 };
 
 type TabId = 'activities' | 'members';
-type TabKey = TabId | 'manage';
 
 interface TabItem {
-  key: TabKey;
+  key: TabId;
   label: string;
   selected: boolean;
 }
@@ -65,6 +64,14 @@ const LeaveIcon: FC = () => (
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
     <path d="M16 17l5-5-5-5" />
     <path d="M21 12H9" />
+  </svg>
+);
+
+/** Шестерёнка в шапке — вход менеджера в «Управление» (занимает место кнопки выхода у участника). */
+const ManageIcon: FC = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
   </svg>
 );
 
@@ -285,16 +292,15 @@ export const ClubPage: FC = () => {
     });
   };
 
-  // Таб «Управление» — это ссылка-переход, а не переключатель состояния: тап вызывает haptic
-  // impact (не select) и ведёт на /manage. activeTab никогда не содержит 'manage'.
-  const handleTabClick = (tab: TabKey) => {
-    if (tab === 'manage') {
-      haptic.impact('light');
-      navigate(`/clubs/${id}/manage`);
-      return;
-    }
+  const handleTabClick = (tab: TabId) => {
     haptic.select();
     setActiveTab(tab);
+  };
+
+  /** «Управление» переехало из таба в шестерёнку шапки (решение PO 2026-07-30). */
+  const handleOpenManage = () => {
+    haptic.impact('light');
+    navigate(`/clubs/${id}/manage`);
   };
 
   const renderCta = () => {
@@ -416,22 +422,11 @@ export const ClubPage: FC = () => {
     : null;
 
   const showTabs = isMember || isManager;
-  // Бейдж роли в шапке (PO №4): владелец — «Вы организатор», активный со-орг — «Вы со-организатор».
-  const roleBadgeLabel = isOwner || membership?.role === 'organizer'
-    ? 'Вы организатор'
-    : isManager
-      ? 'Вы со-организатор'
-      : isMember
-        ? 'Вы участник'
-        : null;
 
   const tabItems: TabItem[] = [
     { key: 'activities', label: 'Активности', selected: activeTab === 'activities' },
     { key: 'members', label: 'Участники', selected: activeTab === 'members' },
   ];
-  if (isManager) {
-    tabItems.push({ key: 'manage', label: 'Управление', selected: false });
-  }
 
   const heroMeta = [
     ACCESS_LABELS[club.accessType] ?? club.accessType,
@@ -449,7 +444,19 @@ export const ClubPage: FC = () => {
           data-cat={club.category}
           style={club.avatarUrl ? { backgroundImage: `url(${club.avatarUrl})` } : undefined}
         />
-        {showLeaveIcon && (
+        {/* Одно место в шапке под роль: менеджеру — вход в «Управление», участнику — выход из клуба.
+            Обе роли одновременно невозможны (владелец из клуба не выходит), поэтому кнопка одна. */}
+        {isManager ? (
+          <button
+            type="button"
+            className="rd-hero-btn rd-right"
+            onClick={handleOpenManage}
+            aria-label="Управление клубом"
+            title="Управление клубом"
+          >
+            <ManageIcon />
+          </button>
+        ) : showLeaveIcon ? (
           <button
             type="button"
             className="rd-hero-btn rd-right"
@@ -459,11 +466,8 @@ export const ClubPage: FC = () => {
           >
             <LeaveIcon />
           </button>
-        )}
+        ) : null}
         <div className="rd-hero-meta">
-          {roleBadgeLabel && (
-            <div className="rd-hero-type-badge">{roleBadgeLabel.toUpperCase()}</div>
-          )}
           <div className="rd-hero-ttl">{club.name}</div>
           <div className="rd-hero-eyebrow" style={{ marginTop: 6 }}>{heroMeta}</div>
         </div>
