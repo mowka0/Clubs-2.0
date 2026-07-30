@@ -126,7 +126,7 @@ class ClubService(
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         // У-4 (co-organizers): отзыв инвайт-ссылки — операционное управление каналом набора,
         // доступно менеджеру клуба (владелец или активный со-орг), не только владельцу.
-        clubRoleGuard.requireCapability(club, userId, ClubCapability.SEND_INVITES)
+        clubRoleGuard.requireCapability(club, userId, ClubCapability.MANAGE_INVITE_LINK)
         val newCode = generateInviteCode()
         val updated = clubRepository.updateInviteCode(clubId, newCode) ?: throw NotFoundException("Club not found")
         log.info("Invite link regenerated: clubId={} userId={}", clubId, userId)

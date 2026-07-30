@@ -675,21 +675,20 @@ export const ClubPage: FC = () => {
               теперь участники только тут). Обычный участник видит плоский список — бакеты за гейтом. */}
           {activeTab === 'members' && (
             <>
-              {/* club-invites (кадр A): личные приглашения — вход там, где менеджер видит состав
-                  (У-2: со-орг тоже может приглашать); обычному участнику строка не показывается. */}
-              {isManager && (
-                <button
-                  type="button"
-                  className="rd-invite-row"
-                  onClick={() => { haptic.impact('light'); setShowInviteSheet(true); }}
-                >
-                  <span className="rd-invite-plus" aria-hidden="true">＋</span>
-                  <span className="rd-invite-txt">
-                    <b>Пригласить в клуб</b>
-                    <span>Отправьте приглашение от своего имени</span>
-                  </span>
-                </button>
-              )}
+              {/* club-invites (кадр A): личные приглашения — вход там, где виден состав клуба.
+                  С 2026-07-30 зовёт ЛЮБОЙ участник, не только менеджер (решение PO): гейт на
+                  бэкенде — членство, поэтому отдельной ролевой проверки здесь нет. */}
+              <button
+                type="button"
+                className="rd-invite-row"
+                onClick={() => { haptic.impact('light'); setShowInviteSheet(true); }}
+              >
+                <span className="rd-invite-plus" aria-hidden="true">＋</span>
+                <span className="rd-invite-txt">
+                  <b>Пригласить в клуб</b>
+                  <span>Отправьте приглашение от своего имени</span>
+                </span>
+              </button>
               <ClubMembersTab clubId={id} isOrganizer={isManager} isOwner={isOwner} managementView={isManager} />
             </>
           )}

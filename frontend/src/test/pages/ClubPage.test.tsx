@@ -499,6 +499,9 @@ describe('ClubPage', () => {
     expect(screen.queryByText('Новичок')).not.toBeInTheDocument();
     // Ролевая подача организатора — не скор, видна всем.
     expect(screen.getByText(/репутация за организаторские качества/i)).toBeInTheDocument();
+    // Приглашения открыты всем участникам, не только менеджеру (решение PO 2026-07-30):
+    // смотрящий здесь — обычный участник, и строка «Пригласить в клуб» ему доступна.
+    expect(screen.getByRole('button', { name: /пригласить в клуб/i })).toBeInTheDocument();
   });
 
   it('members tab (organizer viewer): shows «Новичок» for a genuine no-track-record member', async () => {

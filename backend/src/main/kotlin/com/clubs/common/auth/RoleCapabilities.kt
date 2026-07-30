@@ -35,7 +35,7 @@ object RoleCapabilities {
         ClubCapability.EDIT_CLUB_SETTINGS,
         ClubCapability.VIEW_FINANCES,
         ClubCapability.VIEW_STATS,
-        ClubCapability.SEND_INVITES
+        ClubCapability.MANAGE_INVITE_LINK
     )
 
     /**
