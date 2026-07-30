@@ -186,10 +186,11 @@ open class Clubs(
     val SUBSCRIPTION_PRICE: TableField<ClubsRecord, Int?> = createField(DSL.name("subscription_price"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("0"), SQLDataType.INTEGER)), this, "Месячный членский взнос в рублях (0 = бесплатный клуб). После de-Stars деньги идут участник -> организатор мимо платформы (СБП-реквизиты в payment_link); поле задаёт размер взноса и признак «платный клуб» (влияет на ёмкость организаторского плана).")
 
     /**
-     * The column <code>public.clubs.avatar_url</code>. URL аватара/обложки
-     * клуба (NULL = нет).
+     * The column <code>public.clubs.avatar_url</code>. URL аватара клуба —
+     * кружок в шапке, карточках каталога и лентах (NULL = монограмма из
+     * названия).
      */
-    val AVATAR_URL: TableField<ClubsRecord, String?> = createField(DSL.name("avatar_url"), SQLDataType.CLOB, this, "URL аватара/обложки клуба (NULL = нет).")
+    val AVATAR_URL: TableField<ClubsRecord, String?> = createField(DSL.name("avatar_url"), SQLDataType.CLOB, this, "URL аватара клуба — кружок в шапке, карточках каталога и лентах (NULL = монограмма из названия).")
 
     /**
      * The column <code>public.clubs.rules</code>. Правила клуба, свободный
@@ -241,6 +242,12 @@ open class Clubs(
      * реквизитам (например «Тинькофф, СБП по номеру…»). NULL = нет.
      */
     val PAYMENT_METHOD_NOTE: TableField<ClubsRecord, String?> = createField(DSL.name("payment_method_note"), SQLDataType.CLOB, this, "Подсказка к реквизитам (например «Тинькофф, СБП по номеру…»). NULL = нет.")
+
+    /**
+     * The column <code>public.clubs.cover_url</code>. URL обложки в шапке
+     * страницы клуба (NULL = рисуем градиент по категории).
+     */
+    val COVER_URL: TableField<ClubsRecord, String?> = createField(DSL.name("cover_url"), SQLDataType.CLOB, this, "URL обложки в шапке страницы клуба (NULL = рисуем градиент по категории).")
 
     private constructor(alias: Name, aliased: Table<ClubsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<ClubsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)

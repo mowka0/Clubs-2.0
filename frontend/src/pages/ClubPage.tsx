@@ -23,6 +23,7 @@ import { isActiveManagerMembership } from '../utils/membershipRole';
 import { openTmeLink } from '../utils/telegramLinks';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
 import { ClubAvatarButton } from '../components/club/ClubAvatarButton';
+import { ClubCoverButton } from '../components/club/ClubCoverButton';
 import { ClubChatConnectBanner } from '../components/club/ClubChatConnectBanner';
 import { ClubEventsTeaser } from '../components/club/ClubEventsTeaser';
 import { WelcomeScene, memberCountCaption } from '../components/onboarding/WelcomeScene';
@@ -433,36 +434,42 @@ export const ClubPage: FC = () => {
 
   return (
     <div className="rd-page">
-      {/* Обложка (hero) — чистая: название и параметры клуба живут на странице, не на картинке. */}
+      {/* Обложка (hero) — чистая: название и параметры клуба живут на странице, не на картинке.
+          Картинка берётся из coverUrl (V70): аватар клуба — отдельное поле, и смена одного
+          больше не меняет другое. Нет обложки — рисуется градиент по категории. */}
       <div className="rd-hero rd-compact rd-club-cover">
         <div
           className="rd-hero-bg"
           data-cat={club.category}
-          style={club.avatarUrl ? { backgroundImage: `url(${club.avatarUrl})` } : undefined}
+          style={club.coverUrl ? { backgroundImage: `url(${club.coverUrl})` } : undefined}
         />
-        {/* Одно место в шапке под роль: менеджеру — вход в «Управление», участнику — выход из клуба.
-            Обе роли одновременно невозможны (владелец из клуба не выходит), поэтому кнопка одна. */}
-        {isManager ? (
-          <button
-            type="button"
-            className="rd-hero-btn rd-right"
-            onClick={handleOpenManage}
-            aria-label="Управление клубом"
-            title="Управление клубом"
-          >
-            <ManageIcon />
-          </button>
-        ) : showLeaveIcon ? (
-          <button
-            type="button"
-            className="rd-hero-btn rd-right"
-            onClick={handleOpenLeaveModal}
-            aria-label="Выйти из клуба"
-            title="Выйти из клуба"
-          >
-            <LeaveIcon />
-          </button>
-        ) : null}
+        <div className="rd-hero-acts">
+          {/* Менеджеру — смена обложки; аватар меняется тапом по самому кружку ниже. */}
+          {isManager && <ClubCoverButton clubId={club.id} hasCover={!!club.coverUrl} />}
+          {/* Одно место под роль: менеджеру — вход в «Управление», участнику — выход из клуба.
+              Обе роли одновременно невозможны (владелец из клуба не выходит), поэтому кнопка одна. */}
+          {isManager ? (
+            <button
+              type="button"
+              className="rd-hero-btn"
+              onClick={handleOpenManage}
+              aria-label="Управление клубом"
+              title="Управление клубом"
+            >
+              <ManageIcon />
+            </button>
+          ) : showLeaveIcon ? (
+            <button
+              type="button"
+              className="rd-hero-btn"
+              onClick={handleOpenLeaveModal}
+              aria-label="Выйти из клуба"
+              title="Выйти из клуба"
+            >
+              <LeaveIcon />
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {/* Аватар наезжает на стык обложки и страницы; менеджеру кружок кликабелен — тап меняет

@@ -1,9 +1,6 @@
-import { FC, useRef, useState } from 'react';
+import { FC } from 'react';
 import { Spinner } from '@telegram-apps/telegram-ui';
-import { useHaptic } from '../../hooks/useHaptic';
-import { uploadImage } from '../../api/clubs';
-import { useUpdateClubMutation } from '../../queries/clubs';
-import { validateImageFile } from '../../utils/imageUpload';
+import { useClubImageUpload } from '../../hooks/useClubImageUpload';
 
 /** Камера в углу аватара — единственный намёк, что кружок кликабельный. */
 const CameraIcon: FC = () => (
@@ -24,16 +21,13 @@ interface ClubAvatarButtonProps {
 
 /**
  * Аватар клуба на стыке обложки и страницы. Менеджеру — точка входа в смену картинки:
- * тап открывает выбор файла, загрузка идёт в `/api/upload`, ссылка сохраняется через
- * `PUT /api/clubs/{id}`. Снять аватар можно в «Управление → Настройки» — здесь только
- * добавление и замена, чтобы тап по кружку не требовал промежуточного меню.
+ * тап открывает выбор файла, загрузка идёт в `/api/upload`, ссылка сохраняется в поле
+ * `avatarUrl` (обложка живёт в отдельном `coverUrl` и не меняется). Снять аватар можно
+ * в «Управление → Настройки» — здесь только добавление и замена, чтобы тап по кружку
+ * не требовал промежуточного меню.
  */
 export const ClubAvatarButton: FC<ClubAvatarButtonProps> = ({ clubId, clubName, avatarUrl, editable }) => {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const haptic = useHaptic();
-  const updateClub = useUpdateClubMutation();
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { inputRef, pick, handleFile, busy, error } = useClubImageUpload(clubId, 'avatarUrl');
 
   const face = avatarUrl
     ? <img src={avatarUrl} alt="" draggable={false} />
@@ -46,43 +40,6 @@ export const ClubAvatarButton: FC<ClubAvatarButtonProps> = ({ clubId, clubName, 
       </div>
     );
   }
-
-  const busy = uploading || updateClub.isPending;
-
-  const pick = () => {
-    if (busy) return;
-    haptic.impact('light');
-    inputRef.current?.click();
-  };
-
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    // Сбрасываем input сразу: иначе повторный выбор того же файла не даёт события change.
-    e.target.value = '';
-    if (!file) return;
-
-    setError(null);
-    const invalid = validateImageFile(file);
-    if (invalid) {
-      setError(invalid);
-      haptic.notify('error');
-      return;
-    }
-
-    setUploading(true);
-    try {
-      const url = await uploadImage(file);
-      // В запросе только аватар: по контракту бэкенда null-поля означают «оставить как есть»,
-      // поэтому остальные настройки клуба тронуты не будут.
-      await updateClub.mutateAsync({ id: clubId, body: { avatarUrl: url } });
-      haptic.notify('success');
-    } catch (err) {
-      setError((err as Error).message || 'Не удалось сохранить аватар');
-      haptic.notify('error');
-    } finally {
-      setUploading(false);
-    }
-  };
 
   return (
     <div className="rd-club-avatar-wrap">

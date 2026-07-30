@@ -18,7 +18,7 @@ export const ManageHeader: FC<ManageHeaderProps> = ({ club }) => (
     <div
       className="rd-hero-bg"
       data-cat={club.category}
-      style={club.avatarUrl ? { backgroundImage: `url(${club.avatarUrl})` } : undefined}
+      style={club.coverUrl ? { backgroundImage: `url(${club.coverUrl})` } : undefined}
     />
     <div className="rd-hero-meta">
       <div className="rd-hero-ttl">{club.name}</div>

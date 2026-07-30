@@ -16,6 +16,7 @@ import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.testcontainers.containers.PostgreSQLContainer
@@ -251,6 +252,74 @@ class ClubIntegrationTest {
             .andExpect(jsonPath("$.applicationQuestion").value("Why join?"))
             .andExpect(jsonPath("$.memberCount").isNumber)
             .andExpect(jsonPath("$.isActive").value(true))
+    }
+
+    @Test
+    fun `PUT api clubs id edits cover and avatar independently (V70)`() {
+        // Регрессия на причину появления cover_url: до V70 обложка страницы клуба рисовалась из
+        // avatar_url, поэтому смена аватара молча меняла и обложку. Теперь поля независимы.
+        val createResult = mockMvc.perform(
+            post("/api/clubs")
+                .header("Authorization", "Bearer $testToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        CreateClubRequest(
+                            name = "Cover Test Club",
+                            description = "Testing cover and avatar separation",
+                            category = "sport",
+                            accessType = "open",
+                            city = "Moscow",
+                            memberLimit = 30,
+                            subscriptionPrice = 0,
+                            avatarUrl = "https://cdn.example/avatar-1.png"
+                        )
+                    )
+                )
+        )
+            .andExpect(status().isCreated)
+            .andReturn()
+
+        val clubId = objectMapper.readTree(createResult.response.contentAsString).get("id").asText()
+
+        // Свежесозданный клуб обложки не имеет — фронтенд рисует градиент по категории.
+        mockMvc.perform(get("/api/clubs/$clubId").header("Authorization", "Bearer $testToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.avatarUrl").value("https://cdn.example/avatar-1.png"))
+            .andExpect(jsonPath("$.coverUrl").doesNotExist())
+
+        // Ставим обложку — аватар обязан остаться прежним.
+        mockMvc.perform(
+            put("/api/clubs/$clubId")
+                .header("Authorization", "Bearer $testToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(UpdateClubRequest(coverUrl = "https://cdn.example/cover.png")))
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.coverUrl").value("https://cdn.example/cover.png"))
+            .andExpect(jsonPath("$.avatarUrl").value("https://cdn.example/avatar-1.png"))
+
+        // Меняем аватар — обложка обязана остаться прежней.
+        mockMvc.perform(
+            put("/api/clubs/$clubId")
+                .header("Authorization", "Bearer $testToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(UpdateClubRequest(avatarUrl = "https://cdn.example/avatar-2.png")))
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.avatarUrl").value("https://cdn.example/avatar-2.png"))
+            .andExpect(jsonPath("$.coverUrl").value("https://cdn.example/cover.png"))
+
+        // Пустая строка очищает обложку в NULL (конвенция nullable-полей), аватар снова не задет.
+        mockMvc.perform(
+            put("/api/clubs/$clubId")
+                .header("Authorization", "Bearer $testToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(UpdateClubRequest(coverUrl = "")))
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.coverUrl").doesNotExist())
+            .andExpect(jsonPath("$.avatarUrl").value("https://cdn.example/avatar-2.png"))
     }
 
     @Test

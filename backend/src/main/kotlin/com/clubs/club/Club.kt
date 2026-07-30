@@ -17,6 +17,9 @@ data class Club(
     val memberLimit: Int,
     val subscriptionPrice: Int,
     val avatarUrl: String?,
+    // Обложка шапки страницы клуба — отдельная картинка от аватара (V70). Дефолт null, чтобы
+    // не переписывать существующие тестовые билдеры Club(...); NULL = градиент по категории.
+    val coverUrl: String? = null,
     val rules: String?,
     val applicationQuestion: String?,
     val inviteLink: String?,

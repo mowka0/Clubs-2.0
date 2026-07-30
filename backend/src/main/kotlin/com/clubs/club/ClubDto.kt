@@ -25,6 +25,9 @@ data class ClubListItemDto(
     val memberCount: Int,
     val memberLimit: Int,
     val avatarUrl: String?,
+    // Обложка карточки каталога: с V70 у клуба своя картинка обложки, аватар остаётся кружком.
+    // Фолбэк на avatarUrl держит фронтенд — у клубов, созданных до разделения, обложки нет.
+    val coverUrl: String? = null,
     val nearestEvent: NearestEventDto?,
     val tags: List<String> = emptyList()
 )
@@ -41,6 +44,8 @@ data class ClubDetailDto(
     val memberLimit: Int,
     val subscriptionPrice: Int,
     val avatarUrl: String?,
+    // Обложка шапки страницы клуба (V70). NULL = фронтенд рисует градиент по категории.
+    val coverUrl: String? = null,
     val rules: String?,
     val applicationQuestion: String?,
     val inviteLink: String?,
@@ -134,6 +139,9 @@ data class UpdateClubRequest(
     val subscriptionPrice: Int? = null,
 
     val avatarUrl: String? = null,
+    // Обложка шапки страницы клуба (V70) — та же конвенция nullable-поля: null = оставить как есть,
+    // пустая строка = очистить в NULL (тогда рисуется градиент по категории).
+    val coverUrl: String? = null,
     val rules: String? = null,
     val applicationQuestion: String? = null,
 

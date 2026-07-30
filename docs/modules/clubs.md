@@ -79,9 +79,9 @@ DELETE /api/clubs/{id}     → 204 No Content        (soft delete)
 
 ### UpdateClubRequest (PUT /api/clubs/{id})
 Все поля nullable (частичное обновление). Набор редактируемых полей **уже**, чем CreateClubRequest:
-`name`, `description`, `city`, `district`, `memberLimit`, `subscriptionPrice`, `avatarUrl`, `rules`, `applicationQuestion`.
+`name`, `description`, `city`, `district`, `memberLimit`, `subscriptionPrice`, `avatarUrl`, `coverUrl`, `rules`, `applicationQuestion`.
 
-**Семантика null vs пустой строки** (для nullable-в-БД полей `district`, `avatarUrl`, `rules`, `applicationQuestion`):
+**Семантика null vs пустой строки** (для nullable-в-БД полей `district`, `avatarUrl`, `coverUrl`, `rules`, `applicationQuestion`):
 - **ключ отсутствует в JSON** → поле не трогается
 - **значение `""` (blank)** → поле очищается в `NULL` в БД (пользователь удалил аватар / стёр правила)
 - **значение non-blank** → поле обновляется
@@ -194,6 +194,25 @@ AND upload не запускается
 WHEN файл не jpeg/png
 THEN frontend валидация "Только JPEG и PNG"
 ```
+> Ограничения зеркалят backend `StorageController` и на фронтенде живут в одном месте —
+> `frontend/src/utils/imageUpload.ts` (используется аватаром клуба, обложкой и фото активностей).
+
+**AC-2a: Обложка и аватар редактируются независимо (V70)**
+```
+GIVEN у клуба заданы и аватар, и обложка
+WHEN менеджер меняет обложку (тап по кнопке-камере на обложке или блок «Обложка» в настройках)
+THEN clubs.cover_url обновлён
+AND clubs.avatar_url не изменился
+
+WHEN менеджер меняет аватар (тап по кружку на странице клуба или блок «Аватар» в настройках)
+THEN clubs.avatar_url обновлён
+AND clubs.cover_url не изменился
+```
+> До V70 обложка страницы рисовалась из `avatar_url`, поэтому смена аватара молча меняла
+> и обложку. Регрессия закрыта интеграционным тестом
+> `ClubIntegrationTest.PUT api clubs id edits cover and avatar independently (V70)`.
+> Снять картинку (очистить в NULL пустой строкой) можно только в «Управление → Настройки»:
+> тап по картинке на странице клуба добавляет и заменяет, но не удаляет.
 
 **AC-4: Non-owner НЕ видит Settings tab**
 ```
@@ -289,6 +308,7 @@ GET /api/clubs
   "memberCount": 25,
   "memberLimit": 40,
   "avatarUrl": "string|null",
+  "coverUrl": "string|null",
   "nearestEvent": {
     "id": "uuid",
     "title": "string",

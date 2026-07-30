@@ -38,7 +38,8 @@ data class Clubs(
     var createdAt: OffsetDateTime? = null,
     var updatedAt: OffsetDateTime? = null,
     var paymentLink: String? = null,
-    var paymentMethodNote: String? = null
+    var paymentMethodNote: String? = null,
+    var coverUrl: String? = null
 ): Serializable {
 
 
@@ -140,6 +141,12 @@ data class Clubs(
         }
         else if (this.paymentMethodNote != o.paymentMethodNote)
             return false
+        if (this.coverUrl == null) {
+            if (o.coverUrl != null)
+                return false
+        }
+        else if (this.coverUrl != o.coverUrl)
+            return false
         return true
     }
 
@@ -165,6 +172,7 @@ data class Clubs(
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
         result = prime * result + (if (this.paymentLink == null) 0 else this.paymentLink.hashCode())
         result = prime * result + (if (this.paymentMethodNote == null) 0 else this.paymentMethodNote.hashCode())
+        result = prime * result + (if (this.coverUrl == null) 0 else this.coverUrl.hashCode())
         return result
     }
 
@@ -190,6 +198,7 @@ data class Clubs(
         sb.append(", ").append(updatedAt)
         sb.append(", ").append(paymentLink)
         sb.append(", ").append(paymentMethodNote)
+        sb.append(", ").append(coverUrl)
 
         sb.append(")")
         return sb.toString()

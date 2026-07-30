@@ -170,6 +170,7 @@ describe('CreateClubModal', () => {
           memberLimit: capturedBody.memberLimit as number,
           subscriptionPrice: capturedBody.subscriptionPrice as number,
           avatarUrl: null,
+          coverUrl: null,
           rules: null,
           applicationQuestion: null,
           inviteLink: null,

@@ -242,8 +242,8 @@ UPD 2026-07-23 (feedback): FAB открывает шит **всем** (тост-
 ### Banco-редизайн (rd-, `feature/redesign-club-manage`)
 Страница переведена на rd-дизайн-систему (`frontend/src/styles/redesign.css`):
 - Обёртка `rd-page` (плоский `var(--bg)`); `BrandBackdrop` убран
-- Шапка — full-bleed `rd-hero rd-compact` (`components/manage/ManageHeader.tsx`): обложка по
-  `data-cat`/аватар клуба, заголовок, eyebrow `N/limit участников · город`. **Своих кнопок нет**
+- Шапка — full-bleed `rd-hero rd-compact` (`components/manage/ManageHeader.tsx`): обложка клуба
+  (`coverUrl`, фолбэк — градиент по `data-cat`), заголовок, eyebrow `N/limit участников · город`. **Своих кнопок нет**
   (решение PO 2026-07-30): назад ведут нативный BackButton Telegram и свайп от кромки, поэтому
   back-стрелка на обложке была избыточной — снята вместе с бейджем «УПРАВЛЕНИЕ» (экран и без него
   подписан заголовком таба). Заодно удалён осиротевший CSS-класс `.rd-hero-btn.rd-left`.
@@ -299,6 +299,8 @@ rd-sheet bottom-sheet (`createPortal`, как CityPicker/ProfileEditModal — б
   заменить аватар можно и **прямо на странице клуба** — тап по кружку у менеджера
   (`ClubAvatarButton`, с 2026-07-30); снятие аватара осталось только здесь. Лимиты загрузки для
   обоих входов — `utils/imageUpload.ts`
+- **Обложка:** тот же `AvatarUpload` на поле `coverUrl` — **отдельная от аватара картинка** (V70).
+  На странице клуба меняется кнопкой-камерой на самой обложке (`ClubCoverButton`); снятие — здесь
 - **Основное:** Input'ы Название / Город / Район / Лимит участников / Цена подписки
 - **Описание и правила:** `<Textarea>` Описание / Правила; `<Input>` «Вопрос для заявки» (только если `accessType === 'closed'`)
 - **Нельзя изменить:** read-only блок с категорией и типом доступа

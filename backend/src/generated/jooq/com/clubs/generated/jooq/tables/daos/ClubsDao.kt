@@ -250,4 +250,15 @@ open class ClubsDao(configuration: Configuration?) : DAOImpl<ClubsRecord, com.cl
      * Fetch records that have <code>payment_method_note IN (values)</code>
      */
     fun fetchByPaymentMethodNote(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Clubs> = fetch(Clubs.CLUBS.PAYMENT_METHOD_NOTE, *values)
+
+    /**
+     * Fetch records that have <code>cover_url BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfCoverUrl(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.Clubs> = fetchRange(Clubs.CLUBS.COVER_URL, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>cover_url IN (values)</code>
+     */
+    fun fetchByCoverUrl(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Clubs> = fetch(Clubs.CLUBS.COVER_URL, *values)
 }

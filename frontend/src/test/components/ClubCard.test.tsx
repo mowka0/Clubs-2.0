@@ -16,6 +16,7 @@ function club(o: Partial<ClubListItemDto> = {}): ClubListItemDto {
     memberCount: 12,
     memberLimit: 30,
     avatarUrl: null,
+    coverUrl: null,
     nearestEvent: null,
     tags: [],
     ...o,

@@ -158,6 +158,8 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
   const [paymentLink, setPaymentLink] = useState(club.paymentLink ?? '');
   const [paymentMethodNote, setPaymentMethodNote] = useState(club.paymentMethodNote ?? '');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(club.avatarUrl ?? null);
+  // Обложка — отдельная от аватара картинка (V70): кружок и баннер шапки больше не одно и то же.
+  const [coverUrl, setCoverUrl] = useState<string | null>(club.coverUrl ?? null);
 
   const [error, setError] = useState<string | null>(null);
   // Хранит, какой Input рендерить в состоянии ошибки. Тот же паттерн, что RHF
@@ -182,7 +184,8 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
     applicationQuestion !== (club.applicationQuestion ?? '') ||
     paymentLink !== (club.paymentLink ?? '') ||
     paymentMethodNote !== (club.paymentMethodNote ?? '') ||
-    avatarUrl !== (club.avatarUrl ?? null);
+    avatarUrl !== (club.avatarUrl ?? null) ||
+    coverUrl !== (club.coverUrl ?? null);
 
   const handleSave = () => {
     setError(null);
@@ -251,6 +254,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
     if (paymentLink !== (club.paymentLink ?? '')) payload.paymentLink = paymentLink.trim();
     if (paymentMethodNote !== (club.paymentMethodNote ?? '')) payload.paymentMethodNote = paymentMethodNote.trim();
     if (avatarUrl !== (club.avatarUrl ?? null)) payload.avatarUrl = avatarUrl ?? '';
+    if (coverUrl !== (club.coverUrl ?? null)) payload.coverUrl = coverUrl ?? '';
 
     haptic.impact('medium');
     updateMutation.mutate(
@@ -287,6 +291,13 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
       <div className="rd-section-sub-h">Аватар</div>
       <div className="rd-glass" style={{ padding: 16, marginBottom: 14, display: 'flex', justifyContent: 'center' }}>
         <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} disabled={saving || deleting} />
+      </div>
+
+      {/* Обложка — картинка шапки страницы клуба, отдельная от аватара (V70). Здесь её можно
+          и снять; на самой странице клуба тап по обложке только добавляет и заменяет. */}
+      <div className="rd-section-sub-h">Обложка</div>
+      <div className="rd-glass" style={{ padding: 16, marginBottom: 14, display: 'flex', justifyContent: 'center' }}>
+        <AvatarUpload value={coverUrl} onChange={setCoverUrl} disabled={saving || deleting} />
       </div>
 
       <div className="rd-section-sub-h">Основное</div>
