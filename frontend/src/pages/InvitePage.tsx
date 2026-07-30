@@ -3,12 +3,19 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
-import { useApplyToClubMutation, useClubByInviteQuery, useJoinByInviteMutation, useMyClubsQuery } from '../queries/clubs';
+import {
+  useApplyToClubMutation,
+  useClubByInviteQuery,
+  useClubQuery,
+  useJoinByInviteMutation,
+  useMyClubsQuery,
+} from '../queries/clubs';
 import { useClubQualityQuery } from '../queries/clubQuality';
 import { useCompleteOnboardingMutation } from '../queries/profile';
 import { useAuthStore } from '../store/useAuthStore';
 import { ApiError } from '../api/apiClient';
 import { formatPrice } from '../utils/formatters';
+import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
 import { ClubEventsTeaser } from '../components/club/ClubEventsTeaser';
 import { ClubIdentityHeader } from '../components/club/ClubIdentityHeader';
 import { ClubLockedNotice } from '../components/club/ClubLockedNotice';
@@ -45,6 +52,14 @@ export const InvitePage: FC = () => {
   const [answerText, setAnswerText] = useState('');
   const [welcomeError, setWelcomeError] = useState<string | null>(null);
   const [showChatHint, setShowChatHint] = useState(false);
+  /**
+   * Оплата взноса сразу после вступления в платный клуб — вместо двух пересадок
+   * («Добро пожаловать» → страница клуба) ради одной кнопки (решение PO 2026-07-30).
+   * sheet — шит открыт · deferred — закрыт без оплаты (человек уже участник) · claimed — заявил.
+   */
+  const [duesStage, setDuesStage] = useState<'none' | 'sheet' | 'deferred' | 'claimed'>('none');
+  /** Тот же шит, но для должника, который открыл приглашение в клуб, где уже состоит. */
+  const [showDebtorSheet, setShowDebtorSheet] = useState(false);
   // Кнопка «В чат» стоит вверху экрана, а форма заявки — внизу: подсказке нужно к ней прокрутить.
   const ctaRef = useRef<HTMLDivElement>(null);
 
@@ -71,6 +86,15 @@ export const InvitePage: FC = () => {
   // страхуемся на посадочной; бэкенд повторное вступление и так отбивает (409).
   const myMembership = myClubsQuery.data?.find((m) => m.clubId === club?.id);
   const isAlreadyMember = !!myMembership && ['active', 'frozen', 'expired'].includes(myMembership.status);
+  // Должник: место в клубе занято, но доступа нет — frozen (не передал первый взнос) или
+  // expired (не продлил). Ему на посадочной нужна не дверь в клуб, а оплата.
+  const isDebtor = myMembership?.status === 'frozen' || myMembership?.status === 'expired';
+
+  // Реквизиты СБП приходят ТОЛЬКО участнику (ClubService.getClub: includeRequisites), поэтому
+  // берём их отдельным запросом и лишь когда шит оплаты реально нужен: сразу после вступления
+  // в платный клуб или должнику, открывшему приглашение.
+  const needsRequisites = duesStage !== 'none' || showDebtorSheet;
+  const clubWithRequisites = useClubQuery(needsRequisites ? club?.id : undefined).data;
 
   // Клуб только собирается: блоки качества и афиши у него молчат (fail-soft), и без этой
   // строки экран схлопнулся бы к голому описанию. Запрос тот же, что грузит ClubQualityFacts
@@ -86,8 +110,22 @@ export const InvitePage: FC = () => {
     setActionError(null);
     joinMutation.mutate(code, {
       onSuccess: () => {
-        setJoined(true);
         haptic.notify('success');
+        const joinedClub = clubQuery.data;
+        // Платный клуб: взнос предлагаем здесь же — раньше человека вели на страницу клуба
+        // ради одной кнопки «Оплатить взнос».
+        if (joinedClub && joinedClub.subscriptionPrice > 0) {
+          setJoined(true);
+          setDuesStage('sheet');
+          return;
+        }
+        // Бесплатный клуб знакомому пользователю: подтверждать нечего — ведём прямо в клуб.
+        // Новичку вместо этого показывается велком-сцена (его первое знакомство с продуктом).
+        if (joinedClub && !isNewbie) {
+          navigate(`/clubs/${joinedClub.id}`, { replace: true });
+          return;
+        }
+        setJoined(true);
       },
       onError: (e) => {
         setActionError(e.message);
@@ -182,7 +220,75 @@ export const InvitePage: FC = () => {
 
   const isPaid = club.subscriptionPrice > 0;
 
+  /** Шит взноса: реквизиты подгружены — открываем, ещё грузятся — держим спиннер вместо него. */
+  const renderDuesSheet = (onClose: () => void, onClaimed: () => void) => {
+    if (!clubWithRequisites) {
+      return (
+        <div className="rd-spinner-row" style={{ paddingTop: 24 }}>
+          <Spinner size="m" />
+        </div>
+      );
+    }
+    return (
+      <DuesPaymentSheet
+        clubId={club.id}
+        price={club.subscriptionPrice}
+        paymentLink={clubWithRequisites.paymentLink}
+        paymentMethodNote={clubWithRequisites.paymentMethodNote}
+        onClose={onClose}
+        onClaimed={onClaimed}
+      />
+    );
+  };
+
   if (joined) {
+    // Платный клуб: вступление и взнос — один экран. Пока шит открыт (или человек закрыл его,
+    // не заплатив), под ним стоит короткий итог; велком-сцена новичку показывается ПОСЛЕ денег,
+    // чтобы рассказ про продукт не вклинивался между решением и оплатой (решение PO 2026-07-30).
+    if (isPaid && duesStage === 'sheet') {
+      return (
+        <div className="rd-page">
+          <div className="rd-glass rd-empty" style={{ marginTop: 40 }}>
+            <div className="rd-title">Вы вступили в клуб</div>
+            <div className="rd-sub">Осталось передать взнос организатору.</div>
+          </div>
+          {renderDuesSheet(() => setDuesStage('deferred'), () => setDuesStage('claimed'))}
+        </div>
+      );
+    }
+    if (isPaid && duesStage !== 'none' && !isNewbie) {
+      const claimed = duesStage === 'claimed';
+      return (
+        <div className="rd-page">
+          <div className="rd-glass rd-empty" style={{ marginTop: 40 }}>
+            <div className="rd-title">{claimed ? 'Оплата на проверке' : 'Вы вступили в клуб'}</div>
+            <div className="rd-sub">
+              {claimed
+                ? 'Организатор проверит взнос и откроет доступ — мы сообщим.'
+                : 'Взнос можно передать позже: доступ к активностям организатор откроет после него.'}
+            </div>
+            {!claimed && (
+              <button
+                type="button"
+                className="rd-btn-primary"
+                onClick={() => { haptic.impact('medium'); setDuesStage('sheet'); }}
+                style={{ maxWidth: 240, margin: '0 auto 8px' }}
+              >
+                Оплатить взнос
+              </button>
+            )}
+            <button
+              type="button"
+              className={claimed ? 'rd-btn-primary' : 'rd-btn-outline'}
+              onClick={() => { haptic.impact('light'); navigate(`/clubs/${club.id}`); }}
+              style={{ maxWidth: 240, margin: '0 auto' }}
+            >
+              Перейти в клуб
+            </button>
+          </div>
+        </div>
+      );
+    }
     // Новичок: вместо сухого «Добро пожаловать» — велком-сцена (кадр A/B). CTA помечает
     // онбординг дверью MEMBER — карусель с дверями такому человеку больше не показывается.
     if (isNewbie) {
@@ -264,7 +370,15 @@ export const InvitePage: FC = () => {
   // дверь в чат открывает вступление. Достаточно самого факта привязки — без включённой «двери»
   // чат у клуба всё равно есть, меняется только текст подсказки (обещать авто-впуск ботом нельзя).
   const showChatPill = club.chatLinked;
-  const joinCtaLabel = isClubFull ? 'Попроситься в клуб' : needsApplication ? 'Отправить заявку' : 'Вступить в клуб';
+  // В платном клубе кнопка сразу называет оба шага: тап вступает и открывает выбор способа
+  // оплаты здесь же. Раньше между ними лежали два экрана, на которых нечего было решать.
+  const joinCtaLabel = isClubFull
+    ? 'Попроситься в клуб'
+    : needsApplication
+      ? 'Отправить заявку'
+      : isPaid
+        ? 'Вступить и оплатить взнос'
+        : 'Вступить в клуб';
 
   const chatHintText = isAlreadyMember
     ? 'Чат клуба живёт внутри — откройте клуб и заходите.'
@@ -405,12 +519,28 @@ export const InvitePage: FC = () => {
         {isAlreadyMember ? (
           <>
             <div className="rd-cl-chip">
-              <span aria-hidden="true">✓</span>
-              <span>Вы уже состоите в этом клубе</span>
+              <span aria-hidden="true">{isDebtor ? '💸' : '✓'}</span>
+              <span>
+                {isDebtor
+                  ? 'Вы уже в этом клубе — остался взнос, после него организатор откроет доступ'
+                  : 'Вы уже состоите в этом клубе'}
+              </span>
             </div>
+            {/* Должник пришёл по ссылке в клуб, где уже состоит: ему нужна не дверь в клуб,
+                а оплата — предлагаем её здесь же, а не через две пересадки. */}
+            {isDebtor && (
+              <button
+                type="button"
+                className="rd-btn-primary"
+                onClick={() => { haptic.impact('medium'); setShowDebtorSheet(true); }}
+                style={{ marginBottom: 8 }}
+              >
+                Оплатить взнос
+              </button>
+            )}
             <button
               type="button"
-              className="rd-btn-primary"
+              className={isDebtor ? 'rd-btn-outline' : 'rd-btn-primary'}
               onClick={() => { haptic.impact('light'); navigate(`/clubs/${club.id}`, { replace: true }); }}
             >
               Перейти в клуб
@@ -432,16 +562,24 @@ export const InvitePage: FC = () => {
             <button type="button" className="rd-btn-primary" onClick={handleJoin} disabled={joining}>
               {joining ? <Spinner size="s" /> : joinCtaLabel}
             </button>
-            {/* Главный страх на платном приглашении: «Вступить» читается как «заплатить». */}
+            {/* Кнопка обещает и вступление, и оплату — подпись объясняет, что за ней будет:
+                выбор способа, деньги мимо платформы, ничего не списывается автоматически. */}
             {isPaid && (
               <div className="rd-cta-hint">
-                Кнопка ничего не списывает. Взнос вы передаёте организатору напрямую после
-                вступления — платформа денег не касается.
+                Дальше выберете способ — СБП или наличными. Взнос вы передаёте организатору
+                напрямую, платформа денег не касается и ничего не списывает.
               </div>
             )}
           </>
         )}
       </div>
+
+      {/* Должник открыл приглашение в свой же клуб: шит оплаты прямо здесь. После заявления
+          об оплате ведём в клуб — там висит «Оплата на проверке». */}
+      {showDebtorSheet && renderDuesSheet(
+        () => setShowDebtorSheet(false),
+        () => { setShowDebtorSheet(false); navigate(`/clubs/${club.id}`, { replace: true }); },
+      )}
     </div>
   );
 };

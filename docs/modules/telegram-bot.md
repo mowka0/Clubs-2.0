@@ -24,9 +24,9 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
   - `sendDirectMessage(telegramId, text)` — generic DM (используется `PaymentNotificationHandler`, `SubscriptionScheduler`)
   - `sendDirectMessageWithDeepLink(telegramId, text, webAppPath, buttonText)` — DM с inline web_app button на конкретный путь Mini App (используется Skladchina, Applications Inbox)
   - `sendApplicationCreatedDM(organizerTelegramId, applicantDisplayName, clubName)` — organizer-DM при подаче новой заявки в закрытый клуб `[подключено к ApplicationService.submitApplication]`
-  - `sendApplicationApprovedDM(applicantTelegramId, clubName, clubId, paid)` — applicant-DM при одобрении заявки, deep-link на клуб (платный → «Оплатить взнос», бесплатный → «Открыть клуб») `[подключено: ApplicationService.approveApplication, сессия 2]`
+  - `sendApplicationApprovedDM(applicantTelegramId, clubName, clubId, paid)` — applicant-DM при одобрении заявки, deep-link на клуб (платный → «Оплатить взнос» на `/clubs/{id}?pay=1` — шит взноса открывается сам, бесплатный → «Открыть клуб» на `/clubs/{id}`) `[подключено: ApplicationService.approveApplication, сессия 2]`
   - `sendDuesClaimedDM(organizerTelegramId, memberName, clubName, method)` — organizer-DM, когда участник заявил об оплате взноса (de-Stars) `[подключено: AccessGateService.claimDues]`
-  - `sendAccessFrozenDM(memberTelegramId, clubName, clubId)` — member-DM, когда организатор закрыл доступ («Закрыть доступ» → frozen): deep-link на клуб, кнопка «Оплатить взнос» `[подключено: AccessGateService.freezeAccess, сессия 4]` `[2026-07-06: UI-кнопка «Закрыть доступ» удалена; эндпоинт/DM живы без UI-вызова — см. docs/backlog/freeze-flow-rethink.md]`
+  - `sendAccessFrozenDM(memberTelegramId, clubName, clubId)` — member-DM, когда организатор закрыл доступ («Закрыть доступ» → frozen): deep-link `/clubs/{id}?pay=1` (шит взноса открывается сам), кнопка «Оплатить взнос» `[подключено: AccessGateService.freezeAccess, сессия 4]` `[2026-07-06: UI-кнопка «Закрыть доступ» удалена; эндпоинт/DM живы без UI-вызова — см. docs/backlog/freeze-flow-rethink.md]`
   - `sendAccessExtendedDM(memberTelegramId, clubName, clubId, until)` — member-DM «организатор продлил вашу подписку — доступ открыт до DD.MM.YYYY» (дата по МСК), кнопка на клуб `[подключено: AccessGateService.markDuesPaid («Взнос получен») и setAccessUntil («своя дата»), фидбек PO 2026-07-08 — раньше в клубе без чата продление проходило без уведомления]`
   - `sendEventCreated(event)` — анонс нового события участникам клуба `[подключено: EventBotNotifier @TransactionalEventListener ← EventService.createEvent, GAP-003 ✅ / GAP-010 ✅]`
   - `sendStage2Started(event)` — DM «Этап 2 начался — подтвердите участие» going/maybe-воутерам `[подключено: Stage2StartedListener @TransactionalEventListener ← Stage2Service.triggerStage2, GAP-004 ✅ / GAP-009 ✅ / S2T-2 ✅, 2026-06-13]`
@@ -167,7 +167,13 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 **Получатель:** один `telegramId`.
 **Caller'ы (реальные):**
 - `PaymentNotificationHandler.onPaymentConfirmed` — welcome DM после успешной оплаты (`@TransactionalEventListener`, AFTER_COMMIT).
-- `SubscriptionScheduler.checkSubscriptions` — оба варианта через `sendDirectMessageWithDeepLink`: «истекает через 3 дня» с кнопкой «Продлить подписку» → `/my-clubs` (раннее продление, membership-lifecycle.md §7) и «подписка истекла» с кнопкой «Оплатить взнос» → `/clubs/{id}`.
+- `SubscriptionScheduler.checkSubscriptions` — оба варианта через `sendDirectMessageWithDeepLink`: «истекает через 3 дня» с кнопкой «Продлить подписку» → `/my-clubs` (раннее продление, membership-lifecycle.md §7) и «подписка истекла» с кнопкой «Оплатить взнос» → `/clubs/{id}?pay=1` (шит взноса открывается сам, 2026-07-30).
+
+> **Правило `?pay=1` (PO 2026-07-30):** если кнопка DM называется «Оплатить взнос», её ссылка обязана
+> открывать шит оплаты, а не страницу, на которой кнопку надо найти заново. Параметр читает `ClubPage`
+> и гасит его сразу после открытия (одноразовый — иначе сработает при возврате назад). Кнопка —
+> WebApp с прямым URL фронтенда, поэтому query-параметр доходит как есть. Не покрыт «истекает через
+> 3 дня»: он ведёт на список клубов, где сначала выбирают клуб.
 **Текст:** формируется caller'ом.
 **Inline-кнопка:** «📱 Открыть Clubs» → корень Mini App.
 

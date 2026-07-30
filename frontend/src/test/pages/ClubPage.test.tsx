@@ -356,6 +356,49 @@ describe('ClubPage', () => {
     expect(screen.queryByText(/вы участник/i)).not.toBeInTheDocument();
   });
 
+  it('?pay=1 из DM: шит взноса открывается сам, параметр гасится', async () => {
+    // Кнопка «Оплатить взнос» в DM обязана давать оплату, а не экран, где её надо найти заново
+    // (решение PO 2026-07-30). Параметр одноразовый — иначе сработает снова при возврате назад.
+    server.use(
+      http.get('*/api/clubs/:id', () => HttpResponse.json({
+        ...mockClubDetail, accessType: 'open', ownerId: 'other-owner', subscriptionPrice: 500,
+        paymentLink: 'https://sbp.example/pay', paymentMethodNote: 'Сбербанк',
+      })),
+      http.get('*/api/users/me/clubs', () => HttpResponse.json([{
+        id: 'm-1', userId: 'user-1', clubId: 'club-123', status: 'frozen',
+        role: 'member', joinedAt: '2025-01-01T00:00:00Z', subscriptionExpiresAt: null,
+      }] as MembershipDto[])),
+    );
+    mockEmptyTabData();
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/clubs/:id" element={<ClubPage />} />
+      </Routes>,
+      { routerEntries: ['/clubs/club-123?pay=1'] },
+    );
+
+    expect(await screen.findByRole('button', { name: /подтвердить оплату/i })).toBeInTheDocument();
+  });
+
+  it('без ?pay=1 шит сам не открывается', async () => {
+    server.use(
+      http.get('*/api/clubs/:id', () => HttpResponse.json({
+        ...mockClubDetail, accessType: 'open', ownerId: 'other-owner', subscriptionPrice: 500,
+      })),
+      http.get('*/api/users/me/clubs', () => HttpResponse.json([{
+        id: 'm-1', userId: 'user-1', clubId: 'club-123', status: 'frozen',
+        role: 'member', joinedAt: '2025-01-01T00:00:00Z', subscriptionExpiresAt: null,
+      }] as MembershipDto[])),
+    );
+    mockEmptyTabData();
+
+    renderClubPage();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /оплатить взнос/i })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /подтвердить оплату/i })).not.toBeInTheDocument();
+  });
+
   it('expired member with a pending claim: shows «Оплата на проверке» instead of the pay CTA', async () => {
     server.use(
       http.get('*/api/clubs/:id', () => {

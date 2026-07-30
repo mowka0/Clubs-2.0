@@ -1,5 +1,5 @@
-import { FC, useState } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { FC, useEffect, useRef, useState } from 'react';
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Spinner, Placeholder, Modal } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
@@ -148,6 +148,23 @@ export const ClubPage: FC = () => {
   const myApplication = applications.find((a) => a.clubId === id) ?? null;
 
   const joining = joinMutation.isPending || applyMutation.isPending || completeFreeMutation.isPending;
+
+  // `?pay=1` — приход по кнопке «Оплатить взнос» из DM: она обязана давать оплату, а не экран,
+  // на котором её надо ещё раз найти. Шит открываем, как только стало известно, что человек
+  // действительно должник (membership грузится асинхронно), и ровно один раз — параметр гасим,
+  // иначе он снова сработает при возврате назад.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const duesParamHandled = useRef(false);
+  useEffect(() => {
+    if (duesParamHandled.current || searchParams.get('pay') !== '1') return;
+    if (myClubsQuery.isPending) return;
+    duesParamHandled.current = true;
+    setSearchParams({}, { replace: true });
+    if ((isFrozenMember || isExpiredMember) && !membership?.duesClaimedAt) setShowDuesSheet(true);
+  }, [
+    searchParams, setSearchParams, myClubsQuery.isPending,
+    isFrozenMember, isExpiredMember, membership?.duesClaimedAt,
+  ]);
 
   if (clubQuery.isPending) {
     return (

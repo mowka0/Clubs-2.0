@@ -80,10 +80,36 @@ function mockInvite(club: Partial<ClubDetailDto>, facts: ClubFactsDto = livingCl
   );
 }
 
+/** Членство вызывающего в этом клубе — для веток «уже участник» и «должник». */
+function mockMyMembership(status: string, clubId = mockClubDetail.id) {
+  server.use(
+    http.get('*/api/users/me/clubs', () => HttpResponse.json([{
+      id: 'mem-1', userId: 'user-1', clubId, status,
+      role: 'member', joinedAt: '2026-01-01T00:00:00Z', subscriptionExpiresAt: null,
+    }])),
+  );
+}
+
+/** Успешное вступление + детали клуба с реквизитами (их шит взноса берёт отдельным запросом). */
+function mockJoinAndRequisites(club: Partial<ClubDetailDto> = {}) {
+  const detail: ClubDetailDto = { ...mockClubDetail, ...club };
+  server.use(
+    http.post('*/api/invite/:code/join', () => HttpResponse.json({
+      id: 'mem-new', userId: 'user-1', clubId: detail.id,
+      status: detail.subscriptionPrice > 0 ? 'frozen' : 'active',
+      role: 'member', joinedAt: '2026-07-30T00:00:00Z', subscriptionExpiresAt: null,
+    }, { status: 201 })),
+    http.get(`*/api/clubs/${detail.id}`, () => HttpResponse.json({
+      ...detail, paymentLink: 'https://sbp.example/pay', paymentMethodNote: 'Сбербанк',
+    })),
+  );
+}
+
 function renderInvite() {
   return renderWithProviders(
     <Routes>
       <Route path="/invite/:code" element={<InvitePage />} />
+      <Route path="/clubs/:id" element={<div>Страница клуба</div>} />
     </Routes>,
     { routerEntries: ['/invite/abc123'] },
   );
@@ -117,7 +143,7 @@ describe('InvitePage — посадочная в языке страницы к�
     mockInvite({ subscriptionPrice: 1500 });
     renderInvite();
 
-    expect(await screen.findByText(/Кнопка ничего не списывает/)).toBeInTheDocument();
+    expect(await screen.findByText(/платформа денег не касается и ничего не списывает/)).toBeInTheDocument();
     expect(screen.getByText(/взнос вы передаёте напрямую, минуя платформу/)).toBeInTheDocument();
   });
 
@@ -174,6 +200,51 @@ describe('InvitePage — посадочная в языке страницы к�
     await user.click(await screen.findByRole('button', { name: /В чат/ }));
     expect(screen.getByText(/Организатор позовёт вас туда после вступления/)).toBeInTheDocument();
     expect(screen.queryByText(/бот впустит вас туда/)).not.toBeInTheDocument();
+  });
+
+  it('платный клуб: вступление и оплата — один экран, без пересадок', async () => {
+    const user = userEvent.setup();
+    mockInvite({ subscriptionPrice: 1500 });
+    mockJoinAndRequisites({ subscriptionPrice: 1500 });
+    renderInvite();
+
+    await user.click(await screen.findByRole('button', { name: 'Вступить и оплатить взнос' }));
+
+    // Сразу шит оплаты — ни «Добро пожаловать», ни страницы клуба между ними.
+    expect(await screen.findByRole('button', { name: /Подтвердить оплату/ })).toBeInTheDocument();
+    expect(screen.queryByText('Добро пожаловать!')).not.toBeInTheDocument();
+    expect(screen.queryByText('Страница клуба')).not.toBeInTheDocument();
+  });
+
+  it('бесплатный клуб знакомому пользователю: сразу в клуб, без экрана-пересадки', async () => {
+    const user = userEvent.setup();
+    mockInvite({ subscriptionPrice: 0 });
+    mockJoinAndRequisites({ subscriptionPrice: 0 });
+    renderInvite();
+
+    await user.click(await screen.findByRole('button', { name: 'Вступить в клуб' }));
+
+    expect(await screen.findByText('Страница клуба')).toBeInTheDocument();
+    expect(screen.queryByText('Добро пожаловать!')).not.toBeInTheDocument();
+  });
+
+  it('должнику предлагают оплату, а не только дверь в клуб', async () => {
+    mockInvite({ subscriptionPrice: 1500 });
+    mockMyMembership('frozen');
+    renderInvite();
+
+    expect(await screen.findByRole('button', { name: 'Оплатить взнос' })).toBeInTheDocument();
+    expect(screen.getByText(/остался взнос/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Перейти в клуб' })).toBeInTheDocument();
+  });
+
+  it('участнику с доступом — только дверь в клуб', async () => {
+    mockInvite({});
+    mockMyMembership('active');
+    renderInvite();
+
+    expect(await screen.findByRole('button', { name: 'Перейти в клуб' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Оплатить взнос' })).not.toBeInTheDocument();
   });
 
   it('снятые дубли на экран не возвращаются', async () => {
