@@ -4,6 +4,7 @@ import com.clubs.bot.NotificationService
 import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
 import com.clubs.common.exception.NotFoundException
+import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.membership.MembershipRepository
 import com.clubs.user.UserRepository
@@ -50,8 +51,18 @@ class InviteShareService(
         // Текст приглашения зависит от роли: у менеджера клуб «мой», у обычного участника «наш».
         val fromManager = isOwner || clubRoleGuard.isActiveManagerMembership(callerMembership)
 
-        val code = clubService.ensureInviteCode(clubId)
-        val inviteUrl = "https://t.me/$botUsername?startapp=invite_$code"
+        // Две разные ссылки (V71), и какая из них копируется — зависит от роли.
+        //  - «Отправить в Telegram» ВСЕГДА уходит ЗАЯВОЧНОЙ ссылкой: в клубе «по заявке»
+        //    приглашённый попадает на одобрение организатора, а не сразу в состав.
+        //  - «Скопировать ссылку» даёт ПРЯМУЮ ссылку (вход мимо заявки) только менеджеру —
+        //    это его осознанный обход, и в шите он подписан явно. Обычный участник копирует
+        //    ту же заявочную: раздавать вход в обход одобрения он не может (решение PO).
+        // Разные коды, а не флаг в одной ссылке: иначе получатель стёр бы флаг и вошёл напрямую.
+        val applyCode = clubService.ensureApplyInviteCode(clubId)
+        val shareUrl = inviteUrl(applyCode)
+        val copyUrl = if (fromManager) inviteUrl(clubService.ensureInviteCode(clubId)) else shareUrl
+        // Подписывать копирование как обход стоит только там, где одобрение вообще есть.
+        val bypassesApproval = fromManager && club.accessType == AccessType.closed
 
         val caller = userRepository.findById(callerId) ?: throw NotFoundException("User not found")
 
@@ -72,14 +83,20 @@ class InviteShareService(
             sharerTelegramId = caller.telegramId,
             messageHtml = messageHtml,
             buttonText = "Открыть клуб",
-            buttonUrl = inviteUrl
+            buttonUrl = shareUrl
         )
         log.info(
             "Invite share created: clubId={} callerId={} prepared={}",
             clubId, callerId, preparedMessageId != null
         )
-        return InviteShareDto(inviteUrl = inviteUrl, preparedMessageId = preparedMessageId)
+        return InviteShareDto(
+            inviteUrl = copyUrl,
+            preparedMessageId = preparedMessageId,
+            linkBypassesApproval = bypassesApproval
+        )
     }
+
+    private fun inviteUrl(code: String): String = "https://t.me/$botUsername?startapp=invite_$code"
 
     // Русские подписи категорий для текста приглашения (enum club_category → подпись как на фронте).
     private fun categoryRu(literal: String): String = when (literal) {

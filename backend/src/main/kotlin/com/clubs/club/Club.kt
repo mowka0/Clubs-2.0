@@ -23,6 +23,9 @@ data class Club(
     val rules: String?,
     val applicationQuestion: String?,
     val inviteLink: String?,
+    // Второй инвайт-код — «через заявку» (V71): по нему приглашение из Telegram в закрытом клубе
+    // ведёт на одобрение организатором. Дефолт null, чтобы не переписывать тестовые билдеры Club(...).
+    val applyInviteCode: String? = null,
     val memberCount: Int,
     val isActive: Boolean,
     // Реквизиты СБП для взносов (платёжные данные организатора вне платформы). Видны только участникам.

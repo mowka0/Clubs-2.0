@@ -72,6 +72,7 @@ val CLUB_AWARDS_PKEY: UniqueKey<ClubAwardsRecord> = Internal.createUniqueKey(Clu
 val CLUB_CHAT_LINKS_CHAT_ID_KEY: UniqueKey<ClubChatLinksRecord> = Internal.createUniqueKey(ClubChatLinks.CLUB_CHAT_LINKS, DSL.name("club_chat_links_chat_id_key"), arrayOf(ClubChatLinks.CLUB_CHAT_LINKS.CHAT_ID), true)
 val CLUB_CHAT_LINKS_PKEY: UniqueKey<ClubChatLinksRecord> = Internal.createUniqueKey(ClubChatLinks.CLUB_CHAT_LINKS, DSL.name("club_chat_links_pkey"), arrayOf(ClubChatLinks.CLUB_CHAT_LINKS.CLUB_ID), true)
 val CLUB_RANK_PKEY: UniqueKey<ClubRankRecord> = Internal.createUniqueKey(ClubRank.CLUB_RANK, DSL.name("club_rank_pkey"), arrayOf(ClubRank.CLUB_RANK.CLUB_ID), true)
+val CLUBS_APPLY_INVITE_CODE_KEY: UniqueKey<ClubsRecord> = Internal.createUniqueKey(Clubs.CLUBS, DSL.name("clubs_apply_invite_code_key"), arrayOf(Clubs.CLUBS.APPLY_INVITE_CODE), true)
 val CLUBS_INVITE_LINK_KEY: UniqueKey<ClubsRecord> = Internal.createUniqueKey(Clubs.CLUBS, DSL.name("clubs_invite_link_key"), arrayOf(Clubs.CLUBS.INVITE_LINK), true)
 val CLUBS_PKEY: UniqueKey<ClubsRecord> = Internal.createUniqueKey(Clubs.CLUBS, DSL.name("clubs_pkey"), arrayOf(Clubs.CLUBS.ID), true)
 val EVENT_CHAT_PINS_PKEY: UniqueKey<EventChatPinsRecord> = Internal.createUniqueKey(EventChatPins.EVENT_CHAT_PINS, DSL.name("event_chat_pins_pkey"), arrayOf(EventChatPins.EVENT_CHAT_PINS.EVENT_ID), true)

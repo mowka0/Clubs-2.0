@@ -3,6 +3,7 @@ package com.clubs.club
 import com.clubs.bot.NotificationService
 import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.common.exception.ForbiddenException
+import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.tables.records.UsersRecord
@@ -17,11 +18,14 @@ import org.junit.jupiter.api.assertThrows
 import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Гейт личных приглашений. Ключевое поведение (решение PO 2026-07-30): звать может ЛЮБОЙ участник
- * клуба, а не только владелец / со-организатор. Роль при этом влияет на текст приглашения.
+ * Личные приглашения. Два поведения, оба — решения PO 2026-07-30:
+ *  - звать может ЛЮБОЙ участник клуба, не только владелец / со-организатор;
+ *  - приглашение из Telegram ведёт на ЗАЯВКУ (заявочный код), а прямую ссылку «мимо заявки»
+ *    копирует только менеджер.
  */
 class InviteShareServiceTest {
 
@@ -37,14 +41,31 @@ class InviteShareServiceTest {
 
     private val clubId = UUID.randomUUID()
     private val ownerId = UUID.randomUUID()
+    private val directUrl = "https://t.me/clubs_admin_bot?startapp=invite_direct1"
+    private val applyUrl = "https://t.me/clubs_admin_bot?startapp=invite_apply1"
 
-    private fun club(): Club = mockk(relaxed = true) {
-        every { id } returns clubId
-        every { ownerId } returns this@InviteShareServiceTest.ownerId
-        every { name } returns "Партия"
-        every { city } returns "Москва"
-        every { description } returns "Партия сильных"
-        every { memberCount } returns 4
+    /** Кнопка prepared message — сюда попадает ссылка, которая реально уходит приглашённому. */
+    private val buttonUrl = slot<String>()
+    private val messageHtml = slot<String>()
+
+    private fun arrange(accessType: AccessType = AccessType.closed) {
+        every { clubRepository.findById(clubId) } returns mockk(relaxed = true) {
+            every { id } returns clubId
+            every { ownerId } returns this@InviteShareServiceTest.ownerId
+            every { name } returns "Партия"
+            every { city } returns "Москва"
+            every { description } returns "Партия сильных"
+            every { memberCount } returns 4
+            every { this@mockk.accessType } returns accessType
+        }
+        every { clubService.ensureInviteCode(clubId) } returns "direct1"
+        every { clubService.ensureApplyInviteCode(clubId) } returns "apply1"
+        every { userRepository.findById(any()) } returns mockk<UsersRecord>(relaxed = true) {
+            every { telegramId } returns 777L
+        }
+        every {
+            notificationService.savePreparedInviteMessage(any(), capture(messageHtml), any(), capture(buttonUrl))
+        } returns "prepared-1"
     }
 
     private fun membership(userId: UUID, role: MembershipRole, status: MembershipStatus) = Membership(
@@ -53,58 +74,63 @@ class InviteShareServiceTest {
         createdAt = OffsetDateTime.now(), updatedAt = OffsetDateTime.now(),
     )
 
-    private fun user(): UsersRecord = mockk(relaxed = true) { every { telegramId } returns 777L }
-
-    private fun arrangeCommon() {
-        every { clubRepository.findById(clubId) } returns club()
-        every { clubService.ensureInviteCode(clubId) } returns "abc123"
-        every { userRepository.findById(any()) } returns user()
-    }
-
     @Test
-    fun `обычный участник может пригласить`() {
-        arrangeCommon()
+    fun `обычный участник закрытого клуба копирует заявочную ссылку, обхода ему не дают`() {
+        arrange()
         val memberId = UUID.randomUUID()
         every { membershipRepository.findByUserAndClub(memberId, clubId) } returns
             membership(memberId, MembershipRole.member, MembershipStatus.active)
-        val html = slot<String>()
-        every { notificationService.savePreparedInviteMessage(any(), capture(html), any(), any()) } returns "prepared-1"
 
         val share = service.createShare(clubId, memberId)
 
-        assertEquals("https://t.me/clubs_admin_bot?startapp=invite_abc123", share.inviteUrl)
-        assertEquals("prepared-1", share.preparedMessageId)
+        assertEquals(applyUrl, share.inviteUrl, "участнику копируется заявочная ссылка")
+        assertFalse(share.linkBypassesApproval, "обхода одобрения у участника быть не может")
+        assertEquals(applyUrl, buttonUrl.captured, "в Telegram уходит заявочная ссылка")
         // У обычного участника клуб «наш», не «мой» — он не организатор.
-        assertTrue(html.captured.contains("в наш клуб"), "текст: ${html.captured}")
+        assertTrue(messageHtml.captured.contains("в наш клуб"), "текст: ${messageHtml.captured}")
     }
 
     @Test
-    fun `владелец приглашает и текст от первого лица`() {
-        arrangeCommon()
+    fun `менеджер закрытого клуба копирует прямую ссылку и получает предупреждение`() {
+        arrange()
         every { membershipRepository.findByUserAndClub(ownerId, clubId) } returns
             membership(ownerId, MembershipRole.organizer, MembershipStatus.active)
-        val html = slot<String>()
-        every { notificationService.savePreparedInviteMessage(any(), capture(html), any(), any()) } returns "prepared-1"
 
-        service.createShare(clubId, ownerId)
+        val share = service.createShare(clubId, ownerId)
 
-        assertTrue(html.captured.contains("в мой клуб"), "текст: ${html.captured}")
+        assertEquals(directUrl, share.inviteUrl, "менеджеру копируется прямая ссылка")
+        assertTrue(share.linkBypassesApproval, "по прямой ссылке вход идёт мимо заявки — надо подписать")
+        // Само приглашение в Telegram всё равно заявочное: одобрение остаётся за организатором.
+        assertEquals(applyUrl, buttonUrl.captured)
+        assertTrue(messageHtml.captured.contains("в мой клуб"), "текст: ${messageHtml.captured}")
+    }
+
+    @Test
+    fun `в открытом клубе подписывать нечего — одобрения там нет`() {
+        arrange(accessType = AccessType.`open`)
+        every { membershipRepository.findByUserAndClub(ownerId, clubId) } returns
+            membership(ownerId, MembershipRole.organizer, MembershipStatus.active)
+
+        val share = service.createShare(clubId, ownerId)
+
+        assertEquals(directUrl, share.inviteUrl)
+        assertFalse(share.linkBypassesApproval)
     }
 
     @Test
     fun `владелец легаси-клуба без строки membership всё равно приглашает`() {
-        arrangeCommon()
+        arrange()
         every { membershipRepository.findByUserAndClub(ownerId, clubId) } returns null
-        every { notificationService.savePreparedInviteMessage(any(), any(), any(), any()) } returns "prepared-1"
 
         val share = service.createShare(clubId, ownerId)
 
         assertEquals("prepared-1", share.preparedMessageId)
+        assertEquals(directUrl, share.inviteUrl, "владелец — менеджер и без строки membership")
     }
 
     @Test
     fun `не-участник получает 403`() {
-        arrangeCommon()
+        arrange()
         val strangerId = UUID.randomUUID()
         every { membershipRepository.findByUserAndClub(strangerId, clubId) } returns null
 
@@ -113,7 +139,7 @@ class InviteShareServiceTest {
 
     @Test
     fun `должник без доступа пригласить не может`() {
-        arrangeCommon()
+        arrange()
         val debtorId = UUID.randomUUID()
         every { membershipRepository.findByUserAndClub(debtorId, clubId) } returns
             membership(debtorId, MembershipRole.member, MembershipStatus.frozen)

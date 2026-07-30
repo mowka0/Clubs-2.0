@@ -280,7 +280,8 @@ capability. Все пути от `backend/src/main/kotlin/com/clubs/`.
 | 32 | `club/ClubService.kt:159` | updateClub (настройки) | `EDIT_CLUB_SETTINGS` (+ полевой owner-гейт: СБП/free→paid = `EDIT_PAYMENT_REQUISITES`) |
 | 33 | `club/ClubService.kt:186` | deleteClub | `DELETE_CLUB` (owner-only) |
 | 34 | `club/ClubService.kt:119` | regenerateInviteLink | `MANAGE_INVITE_LINK` (У-4) |
-| 35 | `club/InviteShareService.kt` | личные приглашения (PR #107) | **без капабилити** с 2026-07-30: любой участник клуба со `status = active`, владелец — всегда (решение PO; было `SEND_INVITES`) |
+| 35 | `club/InviteShareService.kt` | личные приглашения (PR #107) | **без капабилити** с 2026-07-30: любой участник клуба со `status = active`, владелец — всегда (решение PO; было `SEND_INVITES`). Роль решает только, какая ссылка копируется: прямая (мимо заявки) — менеджеру, заявочная — участнику |
+| 35a | `club/ClubService.kt` getClub | прямой инвайт-код в `ClubDetailDto.inviteLink` | `MANAGE_INVITE_LINK` — иначе участник прочитал бы код и раздал вход в обход заявки (V71) |
 | 36 | `chatlink/ChatLinkService.kt:51,58,97,134,168,200,234,305` | get/refresh/update/unlink чат-линка | `MANAGE_CHAT` (owner-only) |
 | 37 | `chatlink/ChatLinkBotService.kt:44,185` | `/link` привязка/отвязка из чата | `MANAGE_CHAT` (owner-only) |
 | 38 | `membership/AccessGateService.kt:327-334` | loadManageableMember | `MANAGE_MEMBERS` + target-матрица |

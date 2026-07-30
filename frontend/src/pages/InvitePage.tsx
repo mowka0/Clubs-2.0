@@ -61,6 +61,11 @@ export const InvitePage: FC = () => {
   // деградирует в обычную заявку, организатор может расширить клуб из инбокса.
   const isClubFull = !!club && club.memberCount >= club.memberLimit;
 
+  // Приглашение из Telegram в клуб «по заявке» ведёт на ОДОБРЕНИЕ, а не сразу в состав
+  // (решение PO 2026-07-30; бэкенд отдаёт признак по коду ссылки и сам отбивает прямое
+  // вступление по ней). Прямая ссылка «Скопировать» приходит с false — по ней вступают сразу.
+  const needsApplication = !!club && (club.inviteRequiresApplication || isClubFull);
+
   // Приглашение открыл человек, который уже в клубе (active / frozen / expired — место
   // занято): вместо CTA вступления — «Перейти в клуб». Отфильтровать его в нативном
   // пикере Telegram нельзя (пикер не сообщает и не ограничивает выбор), поэтому
@@ -217,7 +222,7 @@ export const InvitePage: FC = () => {
         <WelcomeScene
           variant="applied"
           clubName={club.name}
-          clubCaption={`${club.city} · мест пока нет`}
+          clubCaption={`${club.city} · ${isClubFull ? 'мест пока нет' : 'ждём одобрения'}`}
           clubAvatarUrl={club.avatarUrl}
           ctaPending={false}
           onCta={() => { haptic.impact('light'); navigate('/', { replace: true }); }}
@@ -229,8 +234,9 @@ export const InvitePage: FC = () => {
         <div className="rd-glass rd-empty" style={{ marginTop: 40 }}>
           <div className="rd-title">Заявка отправлена</div>
           <div className="rd-sub">
-            В клубе «{club.name}» сейчас нет мест. Организатор увидит вашу заявку и может
-            расширить клуб — мы сообщим о решении.
+            {isClubFull
+              ? `В клубе «${club.name}» сейчас нет мест. Организатор увидит вашу заявку и может расширить клуб — мы сообщим о решении.`
+              : `Клуб «${club.name}» принимает по заявке. Организатор посмотрит её и откроет доступ — мы сообщим о решении.`}
           </div>
           <button
             type="button"
@@ -279,6 +285,14 @@ export const InvitePage: FC = () => {
         </div>
       )}
 
+      {/* Клуб принимает по заявке: приглашение не даёт войти сразу — решает организатор. */}
+      {!isAlreadyMember && !isClubFull && club.inviteRequiresApplication && (
+        <div className="rd-cl-chip">
+          <span aria-hidden="true">✋</span>
+          <span>Клуб принимает по заявке — организатор посмотрит её и откроет доступ</span>
+        </div>
+      )}
+
       {club.description && (
         <>
           <div className="rd-section-sub-h">О клубе</div>
@@ -288,8 +302,8 @@ export const InvitePage: FC = () => {
         </>
       )}
 
-      {/* Полный клуб + вопрос организатора: заявка требует ответа — поле в общем стиле форм. */}
-      {!isAlreadyMember && isClubFull && club.applicationQuestion && (
+      {/* Заявка + вопрос организатора: ответ обязателен — поле в общем стиле форм. */}
+      {!isAlreadyMember && needsApplication && club.applicationQuestion && (
         <label className="rd-field" style={{ marginBottom: 14 }}>
           <span className="rd-label">{club.applicationQuestion}</span>
           <input
@@ -318,9 +332,9 @@ export const InvitePage: FC = () => {
               Перейти в клуб
             </button>
           </>
-        ) : isClubFull ? (
+        ) : needsApplication ? (
           <button type="button" className="rd-btn-primary" onClick={handleApply} disabled={joining}>
-            {joining ? <Spinner size="s" /> : 'Попроситься в клуб'}
+            {joining ? <Spinner size="s" /> : isClubFull ? 'Попроситься в клуб' : 'Отправить заявку'}
           </button>
         ) : (
           <button type="button" className="rd-btn-primary" onClick={handleJoin} disabled={joining}>

@@ -261,4 +261,20 @@ open class ClubsDao(configuration: Configuration?) : DAOImpl<ClubsRecord, com.cl
      * Fetch records that have <code>cover_url IN (values)</code>
      */
     fun fetchByCoverUrl(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Clubs> = fetch(Clubs.CLUBS.COVER_URL, *values)
+
+    /**
+     * Fetch records that have <code>apply_invite_code BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfApplyInviteCode(lowerInclusive: String?, upperInclusive: String?): List<com.clubs.generated.jooq.tables.pojos.Clubs> = fetchRange(Clubs.CLUBS.APPLY_INVITE_CODE, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>apply_invite_code IN (values)</code>
+     */
+    fun fetchByApplyInviteCode(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Clubs> = fetch(Clubs.CLUBS.APPLY_INVITE_CODE, *values)
+
+    /**
+     * Fetch a unique record that has <code>apply_invite_code = value</code>
+     */
+    fun fetchOneByApplyInviteCode(value: String): com.clubs.generated.jooq.tables.pojos.Clubs? = fetchOne(Clubs.CLUBS.APPLY_INVITE_CODE, value)
 }

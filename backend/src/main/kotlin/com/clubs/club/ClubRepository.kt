@@ -11,7 +11,12 @@ interface ClubRepository {
 
     fun findByInviteCode(code: String): Club?
 
+    /** Поиск по «заявочному» коду (V71) — приглашения из Telegram. */
+    fun findByApplyInviteCode(code: String): Club?
+
     fun updateInviteCode(id: UUID, code: String): Club?
+
+    fun updateApplyInviteCode(id: UUID, code: String): Club?
 
     /** Точечное поднятие лимита участников («Расширить клуб и принять всех», club-invites). */
     fun updateMemberLimit(id: UUID, memberLimit: Int): Club?

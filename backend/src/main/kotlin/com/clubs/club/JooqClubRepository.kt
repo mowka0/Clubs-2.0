@@ -98,6 +98,21 @@ class JooqClubRepository(
             ?.let(mapper::toDomain)
             ?.let { it.copy(memberCount = countLiveMembers(it.id)) }
 
+    override fun findByApplyInviteCode(code: String): Club? =
+        dsl.selectFrom(CLUBS)
+            .where(CLUBS.APPLY_INVITE_CODE.eq(code).and(CLUBS.IS_ACTIVE.eq(true)))
+            .fetchOne()
+            ?.let(mapper::toDomain)
+            ?.let { it.copy(memberCount = countLiveMembers(it.id)) }
+
+    override fun updateApplyInviteCode(id: UUID, code: String): Club? {
+        dsl.update(CLUBS)
+            .set(CLUBS.APPLY_INVITE_CODE, code)
+            .where(CLUBS.ID.eq(id))
+            .execute()
+        return findById(id)
+    }
+
     override fun updateInviteCode(id: UUID, code: String): Club? {
         dsl.update(CLUBS)
             .set(CLUBS.INVITE_LINK, code)
