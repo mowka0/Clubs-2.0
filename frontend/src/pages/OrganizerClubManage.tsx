@@ -572,10 +572,7 @@ export const OrganizerClubManage: FC = () => {
 
   return (
     <div className="rd-page">
-      <ManageHeader
-        club={club}
-        onBack={() => { haptic.impact('light'); navigate(`/clubs/${clubId}`); }}
-      />
+      <ManageHeader club={club} />
 
       <div className="rd-tabs" role="tablist">
         {visibleTabs.map((tab) => (

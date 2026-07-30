@@ -42,7 +42,10 @@ export const ClubEventsTeaser: FC<ClubEventsTeaserProps> = ({ clubId, lockHint }
 
   return (
     <>
-      <div className="rd-section-sub-h">Афиша клуба</div>
+      <div className="rd-sec-h">
+        <span className="rd-k">Афиша клуба</span>
+        <span className="rd-line" />
+      </div>
       <div className="rd-glass" style={{ padding: '8px 16px', marginBottom: 8 }}>
         {data.upcoming.map((event) => (
           <div

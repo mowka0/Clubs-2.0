@@ -428,17 +428,12 @@ export const ClubPage: FC = () => {
     { key: 'members', label: 'Участники', selected: activeTab === 'members' },
   ];
 
-  const heroMeta = [
-    ACCESS_LABELS[club.accessType] ?? club.accessType,
-    club.city,
-    `${club.memberCount} / ${club.memberLimit}`,
-    formatPrice(club.subscriptionPrice),
-  ].filter(Boolean).join(' · ');
+  const isPaid = club.subscriptionPrice > 0;
 
   return (
     <div className="rd-page">
-      {/* Обложка (hero) */}
-      <div className="rd-hero rd-compact">
+      {/* Обложка (hero) — чистая: название и параметры клуба живут на странице, не на картинке. */}
+      <div className="rd-hero rd-compact rd-club-cover">
         <div
           className="rd-hero-bg"
           data-cat={club.category}
@@ -467,10 +462,32 @@ export const ClubPage: FC = () => {
             <LeaveIcon />
           </button>
         ) : null}
-        <div className="rd-hero-meta">
-          <div className="rd-hero-ttl">{club.name}</div>
-          <div className="rd-hero-eyebrow" style={{ marginTop: 6 }}>{heroMeta}</div>
-        </div>
+      </div>
+
+      {/* Аватар наезжает на стык обложки и страницы; без картинки — первая буква названия. */}
+      <div className="rd-club-avatar">
+        {club.avatarUrl
+          ? <img src={club.avatarUrl} alt="" />
+          : club.name.charAt(0).toUpperCase()}
+      </div>
+
+      <div className="rd-club-name">{club.name}</div>
+
+      {/* Параметры клуба одной строкой чипов: доступ · город · состав · взнос. */}
+      <div className="rd-club-facts">
+        <span className="rd-club-fact">
+          <b>{ACCESS_LABELS[club.accessType] ?? club.accessType}</b>
+        </span>
+        <span className="rd-club-fact rd-shrink">
+          <span aria-hidden="true">📍</span>
+          <b>{club.city}</b>
+        </span>
+        <span className="rd-club-fact">
+          <b>{club.memberCount} / {club.memberLimit}</b>
+        </span>
+        <span className={`rd-club-fact ${isPaid ? 'rd-pay' : 'rd-free'}`}>
+          <b>{formatPrice(club.subscriptionPrice)}</b>
+        </span>
       </div>
 
       {showCancelledNote && membership?.subscriptionExpiresAt && (
@@ -488,41 +505,42 @@ export const ClubPage: FC = () => {
         <ClubChatConnectBanner key={club.id} clubId={club.id} />
       )}
 
-      {/* О клубе */}
-      <div className="rd-section-sub-h">О клубе</div>
-      <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
-        <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{club.description}</div>
+      {/* О клубе — описание, правила и вход в чат одним блоком (решение PO 2026-07-30):
+          отдельные секции «Правила» и широкая кнопка чата упразднены. */}
+      <div className="rd-sec-h">
+        <span className="rd-k">О клубе</span>
+        <span className="rd-line" />
+      </div>
+      <div className="rd-club-about">
+        <div className="rd-txt">{club.description}</div>
+        {club.rules && (
+          <>
+            <div className="rd-rules-h">Правила</div>
+            <div className="rd-txt">{club.rules}</div>
+          </>
+        )}
+        {/* Вход в чат по door-ссылке (club-chat-link): участник уже в чате → Telegram просто
+            откроет его; ещё нет → заявка и авто-впуск ботом. */}
+        {showTabs && club.chatInviteLink && (
+          <div className="rd-club-chatrow">
+            <button
+              type="button"
+              className="rd-club-chatpill"
+              onClick={() => {
+                if (!club.chatInviteLink) return;
+                haptic.impact('light');
+                openTmeLink(club.chatInviteLink);
+              }}
+            >
+              <span aria-hidden="true">💬</span>
+              В чат
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Чат клуба (club-chat-link): участнику с доступом — кнопка входа по door-ссылке
-          (уже в чате → Telegram просто откроет чат; ещё нет → заявка + авто-впуск ботом). */}
-      {showTabs && club.chatInviteLink && (
-        <button
-          type="button"
-          className="rd-btn-outline"
-          style={{ marginBottom: 14 }}
-          onClick={() => {
-            if (!club.chatInviteLink) return;
-            haptic.impact('light');
-            openTmeLink(club.chatInviteLink);
-          }}
-        >
-          💬 Чат клуба
-        </button>
-      )}
-
-      {/* Качество клуба — единый публичный блок (кольца + подпись возраст/активность), виден всем */}
+      {/* Жизнь клуба — кольца качества + подпись возраст/активность, видны всем */}
       {id && <ClubQualityFacts clubId={id} memberCount={club.memberCount} />}
-
-      {/* Правила (опционально) */}
-      {club.rules && (
-        <>
-          <div className="rd-section-sub-h">Правила</div>
-          <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
-            <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{club.rules}</div>
-          </div>
-        </>
-      )}
 
       {/* Участник без доступа: frozen (вступил, ждёт подтверждения первого взноса) или expired
           (подписка истекла — должник по продлению). Один claim-флоу, разные тексты. */}
@@ -628,12 +646,12 @@ export const ClubPage: FC = () => {
       {/* Участник / Организатор: табы с учётом роли */}
       {showTabs && id && (
         <>
-          <div className="rd-tabs" role="tablist">
+          <div className="rd-seg" role="tablist">
             {tabItems.map((item) => (
               <button
                 key={item.key}
                 type="button"
-                className={`rd-tab-link${item.selected ? ' rd-active' : ''}`}
+                className={`rd-seg-btn${item.selected ? ' rd-active' : ''}`}
                 onClick={() => handleTabClick(item.key)}
               >
                 {item.label}

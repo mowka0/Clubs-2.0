@@ -1199,10 +1199,14 @@
    и статус-бар: страничная врезка `--app-inset-top` гасится отрицательным margin, а её высота
    возвращается в `height`, чтобы видимая часть картинки не съедалась. Остальные экраны
    (без обложки) врезку по-прежнему уважают — там контент под контролы не лезет. */
+/* Скругление снизу: обложка загибается в сторону контента (решение PO 2026-07-30).
+   overflow:hidden обязателен — фон лежит абсолютом inset:0 и без обрезки торчал бы углами. */
 .rd-hero {
   margin: calc(-16px - var(--app-inset-top, 0px)) -16px 16px;
   position: relative;
   height: calc(240px + var(--app-inset-top, 0px));
+  border-radius: 0 0 30px 30px;
+  overflow: hidden;
 }
 .rd-hero.rd-compact { height: calc(200px + var(--app-inset-top, 0px)); }
 /* Полоса врезки затемняется, иначе белые контролы Telegram и статус-бар теряются на светлой
@@ -1244,11 +1248,107 @@
   color: #fff; z-index: 3; cursor: pointer; font-family: inherit;
 }
 .rd-hero-btn.rd-right { right: 16px; }
-.rd-hero-btn.rd-left { left: 16px; }
 .rd-hero-type-badge {
   display: inline-block; padding: 4px 9px; border-radius: 6px;
   background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(20px);
   font-size: 9px; font-weight: 700; letter-spacing: 0.12em; margin-bottom: 10px;
+}
+
+/* ---------- Шапка страницы клуба ----------
+   Обложка чистая: ни названия, ни характеристик поверх картинки (решение PO 2026-07-30).
+   Название, параметры и описание живут на странице, на стык наезжает аватар клуба. */
+
+/* Обложка клуба не отбивается снизу — отступ дал бы разрыв под наезжающим аватаром. */
+.rd-hero.rd-club-cover { margin-bottom: 0; }
+
+/* Аватар на стыке обложки и страницы, с оконтовкой цветом фона по периметру.
+   Имя полное (не `ava`/`avt`): рядом уже живут `.rd-cl-ava` (аватар привязанного чата)
+   и `.rd-club-avt` (аватар клуба в строках активностей) — их легко перепутать. */
+.rd-club-avatar {
+  position: relative; z-index: 6;
+  width: 70px; height: 70px; margin-top: -34px;
+  border-radius: 50%; overflow: hidden;
+  border: 4px solid var(--bg);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+  background: var(--accent-grad);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 25px; font-weight: 800; letter-spacing: -0.03em; color: var(--on-accent);
+}
+.rd-club-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.rd-club-name {
+  font-size: 30px; font-weight: 800; letter-spacing: -0.04em; line-height: 1;
+  color: var(--text); margin-top: 12px;
+}
+
+/* Параметры клуба одной строкой. Перенос запрещён; сжимаемый только чип города, поэтому
+   длинный «Санкт-Петербург» обрезается многоточием, а не ломает строку. */
+.rd-club-facts { display: flex; gap: 5px; flex-wrap: nowrap; overflow: hidden; margin-top: 11px; }
+.rd-club-fact {
+  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+  padding: 5px 8px; border-radius: 9px;
+  background: var(--surface); border: 1px solid var(--hairline);
+  font-size: 10px; font-weight: 700; letter-spacing: -0.005em; color: var(--text-dim);
+  white-space: nowrap;
+}
+.rd-club-fact b { color: var(--text); font-weight: 800; }
+.rd-club-fact.rd-shrink { flex: 0 1 auto; min-width: 0; }
+.rd-club-fact.rd-shrink b { overflow: hidden; text-overflow: ellipsis; }
+/* Цена и «Бесплатно» цветные: цвет здесь несёт смысл, а не оформление. */
+.rd-club-fact.rd-pay b { color: var(--accent); }
+.rd-club-fact.rd-free b { color: var(--live); }
+
+/* Заголовок секции: капс-ярлык + волосяная линейка. Ритм задают линейки, не рамки. */
+.rd-sec-h { display: flex; align-items: baseline; gap: 11px; margin: 20px 0 8px; }
+.rd-sec-h .rd-k {
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.19em;
+  text-transform: uppercase; color: var(--text-faint);
+}
+.rd-sec-h .rd-line { flex: 1; height: 1px; background: var(--hairline-2); }
+
+/* Блок «О клубе»: описание и правила в одном контейнере, высота строго по содержимому. */
+.rd-club-about {
+  background: var(--surface); border: 1px solid var(--hairline);
+  border-radius: 22px; padding: 16px 17px; margin-bottom: 14px;
+}
+.rd-club-about .rd-txt {
+  font-size: 13.5px; line-height: 1.45; letter-spacing: -0.012em; color: var(--text-dim);
+}
+.rd-club-about .rd-rules-h {
+  font-size: 8.5px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--text-faint); margin: 14px 0 6px;
+  padding-top: 13px; border-top: 1px solid var(--hairline);
+}
+/* Пилюля чата прижата к нижнему правому углу границы блока: отрицательные отступы гасят
+   собственные поля карточки (17 справа, 16 снизу), а margin-top и есть требуемый зазор
+   от текста до кнопки. Высота блока при этом остаётся по содержимому. */
+.rd-club-chatrow { display: flex; justify-content: flex-end; margin: 20px -17px -16px 0; }
+.rd-club-chatpill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 18px; border: 1px solid var(--hairline-2);
+  /* Капсула: при высоте 40px её радиус (20px) почти совпадает с внутренним радиусом угла
+     карточки (21px), поэтому в прижатом углу дуги сливаются и просвета не остаётся. */
+  border-radius: 999px;
+  background: var(--bg); color: var(--text);
+  font-family: inherit; font-size: 12.5px; font-weight: 800; letter-spacing: 0.07em;
+  text-transform: uppercase; cursor: pointer;
+}
+
+/* Сегментный переключатель табов — второе и последнее место с неоморфизмом (первое —
+   круглые кнопки на обложке). Дорожка вдавлена, активный сегмент выпуклый. */
+.rd-seg {
+  display: flex; gap: 5px; padding: 5px; margin: 20px 0 12px;
+  border-radius: 16px; background: var(--surface);
+  box-shadow: inset 2px 2px 6px var(--neu-hi), inset -2px -2px 6px var(--neu-lo);
+}
+.rd-seg-btn {
+  flex: 1; padding: 9px; border: 0; border-radius: 12px; background: transparent;
+  font-family: inherit; font-size: 12.5px; font-weight: 700; letter-spacing: -0.01em;
+  color: var(--text-dim); cursor: pointer;
+}
+.rd-seg-btn.rd-active {
+  color: var(--text); background: var(--bg);
+  box-shadow: -3px -3px 8px var(--neu-lo), 4px 4px 10px var(--neu-hi);
 }
 
 /* ---------- Инлайн-кнопки действий ---------- */
