@@ -127,6 +127,37 @@ no text, no letters, no words anywhere.
 
 ---
 
+## 13. Управление → «Финансы» у бесплатного клуба (в проде временно на `fox-skladchina`)
+
+Когда: менеджер открывает «Управление → Финансы», а клуб бесплатный (`subscriptionPrice = 0`).
+Считать нечего, но таб НЕ прячем — отсюда лежит путь к включению платной подписки.
+Тексты: заголовок «Клуб бесплатный», подпись «Взносы не собираются, поэтому и считать нечего.
+Захочешь брать за участие — включи подписку в настройках клуба, и сводка появится здесь.»,
+CTA «Открыть настройки».
+
+Идея экрана: **не «пусто», а «касса закрыта, потому что вход свободный»** — лис не растерян
+и не грустит, он спокойно показывает, что денег тут не берут. Мимика — приветливая,
+не извиняющаяся: бесплатный клуб это нормальное состояние, а не недоделка.
+
+- **13a. Открытая дверь (рекомендую):** `Scene: the fox stands beside a simple wooden turnstile
+  or small gate that is swung wide open, gesturing through it with one welcoming paw, an empty
+  cash tray tucked under his other arm, relaxed friendly smile, nothing to pay, free entrance.`
+- **13b. Пустая касса:** `Scene: the fox stands behind a small cartoon cash register with its
+  empty drawer popped open, one paw resting casually on the register, shrugging with a light
+  amused smile, a single unused coin slot visible, no coins anywhere.`
+- **13c. Ценник с нулём:** `Scene: the fox holds up a small blank price tag on a string in one
+  paw and points at it with the other, playful confident smile, the tag is completely blank
+  with no symbols, no text.`
+
+> Вариант 13a ближе к смыслу «вход свободный» и не читается как «денег не заработал»
+> (13b рискует прочитаться как неудача). 13c — самый компактный кадр, если нужен узкий арт.
+
+**Временно в коде:** пока арт не сгенерирован, сцена использует `fox-skladchina.png`
+(лис с монетой на подносе). Смысл близкий, но кадр про сбор денег, а не про их отсутствие —
+заменить при первой генерации.
+
+---
+
 ## Технические напоминания
 
 - Один персонаж, полный рост, белый фон — префикс это уже требует; следить в выдаче.

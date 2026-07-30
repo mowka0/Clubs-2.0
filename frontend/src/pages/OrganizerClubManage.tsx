@@ -10,6 +10,8 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { AvatarUpload } from '../components/AvatarUpload';
+import { FoxEmpty } from '../components/feed/FoxEmpty';
+import foxSkladchinaArt from '../assets/mascot/fox-skladchina.png';
 import { Toast } from '../components/Toast';
 import { ManageHeader } from '../components/manage/ManageHeader';
 import { ClubStatsTab } from '../components/manage/ClubStatsTab';
@@ -52,10 +54,12 @@ function resolveInitialTab(raw: string | null): TabKey {
 
 interface FinancesTabProps {
   club: ClubDetailDto;
+  /** Переключение на таб «Настройки» внутри страницы (не навигация) — CTA бесплатного клуба. */
+  onOpenSettings: () => void;
 }
 
-/** Вкладка живёт только у платного клуба — у бесплатного её нет в наборе табов. */
-const FinancesTab: FC<FinancesTabProps> = ({ club }) => {
+const FinancesTab: FC<FinancesTabProps> = ({ club, onOpenSettings }) => {
+  const haptic = useHaptic();
   const financesQuery = useClubFinancesQuery(club.id);
   const finances = financesQuery.data;
 
@@ -71,9 +75,22 @@ const FinancesTab: FC<FinancesTabProps> = ({ club }) => {
     return <Placeholder description="Не удалось загрузить финансы" />;
   }
 
-  // Два честных состояния сводки взносов (empty-states W3-08): платный клуб без участников —
-  // платить некому; платный с участниками — деньги идут мимо платформы. Третье состояние
-  // («клуб бесплатный») исчезло вместе с самим табом у бесплатных клубов.
+  // Бесплатный клуб: считать нечего, но и прятать таб нельзя — отсюда лежит путь к платной
+  // подписке. Поэтому вместо пустой сводки целая сцена с лисом и кнопкой в настройки
+  // (решение PO 2026-07-30; было — плоский хинт с ghost-CTA).
+  if (club.subscriptionPrice === 0) {
+    return (
+      <FoxEmpty
+        art={foxSkladchinaArt}
+        title="Клуб бесплатный"
+        description="Взносы не собираются, поэтому и считать нечего. Захочешь брать за участие — включи подписку в настройках клуба, и сводка появится здесь."
+        primary={{ label: 'Открыть настройки', onClick: () => { haptic.impact('light'); onOpenSettings(); } }}
+      />
+    );
+  }
+
+  // Два честных состояния сводки платного клуба (empty-states W3-08): без участников —
+  // платить некому; с участниками — деньги идут мимо платформы.
 
   return (
     <>
@@ -511,16 +528,11 @@ export const OrganizerClubManage: FC = () => {
   // привязка/настройка чата owner-only. Deep-link `?tab=chat` у со-орга откатывается на «Статистику».
   const user = useAuthStore((s) => s.user);
   const isOwner = !!club && club.ownerId === user?.id;
-  // В бесплатном клубе взносов нет вообще — таб «Финансы» показывал бы пустую сводку
-  // и объяснение, почему она пустая (решение PO 2026-07-30: не показывать вовсе).
-  const isFreeClub = !!club && club.subscriptionPrice === 0;
-  const visibleTabs = TABS.filter((tab) => {
-    if (tab.key === 'chat' && !isOwner) return false;
-    if (tab.key === 'finances' && isFreeClub) return false;
-    return true;
-  });
-  // Скрытый таб недостижим ничем — ни deep-link'ом `?tab=`, ни залипшим состоянием после
-  // того, как клуб стал бесплатным прямо в настройках: откатываемся на «Статистику».
+  // Таб «Финансы» виден и у бесплатного клуба: бесплатный можно перевести в платный, и путь
+  // к этому решению лежит именно отсюда — спрятать таб значило бы спрятать саму возможность.
+  // Внутри у бесплатного клуба сцена с лисом и кнопкой в настройки (см. FinancesTab).
+  const visibleTabs = TABS.filter((tab) => tab.key !== 'chat' || isOwner);
+  // Недостижимый таб (deep-link `?tab=chat` у со-организатора) откатывается на «Статистику».
   const effectiveTab: TabKey = visibleTabs.some((t) => t.key === activeTab) ? activeTab : 'stats';
 
   const handleTabChange = (key: TabKey) => {
@@ -552,7 +564,7 @@ export const OrganizerClubManage: FC = () => {
       case 'stats':
         return <ClubStatsTab clubId={clubId} />;
       case 'finances':
-        return <FinancesTab club={club} />;
+        return <FinancesTab club={club} onOpenSettings={() => setActiveTab('settings')} />;
       case 'chat':
         return <ClubChatTab clubId={clubId} />;
       case 'settings':
