@@ -23,6 +23,7 @@ class ClubMapper {
         rules = record.rules,
         applicationQuestion = record.applicationQuestion,
         inviteLink = record.inviteLink,
+        applyInviteCode = record.applyInviteCode,
         // Живой счётчик заполняют read-пути репозитория (findById/findByInviteCode/findByIds)
         // через copy(memberCount = countLiveMembers(...)). У только что созданного клуба 0 живых участников.
         memberCount = 0,
@@ -45,7 +46,16 @@ class ClubMapper {
         chatInviteLink: String? = null,
         // Имя владельца заполняет только посадочная инвайта (club-invites) — см. ClubDetailDto.
         ownerFirstName: String? = null,
-        ownerLastName: String? = null
+        ownerLastName: String? = null,
+        // Тоже только посадочная инвайта: по ЭТОЙ ссылке нужна заявка, а не прямое вступление.
+        inviteRequiresApplication: Boolean = false,
+        /**
+         * Прямой инвайт-код (`invite_link`) — только менеджеру. По нему вход в клуб «по заявке»
+         * идёт МИМО одобрения, поэтому обычному участнику, заявителю и гостю он не показывается:
+         * иначе правило «обычный участник не может дать ссылку в обход заявки» обходилось бы
+         * чтением кода из ответа `GET /api/clubs/{id}`.
+         */
+        includeInviteLink: Boolean = false
     ): ClubDetailDto = ClubDetailDto(
         id = club.id,
         ownerId = club.ownerId,
@@ -61,7 +71,7 @@ class ClubMapper {
         coverUrl = club.coverUrl,
         rules = club.rules,
         applicationQuestion = club.applicationQuestion,
-        inviteLink = club.inviteLink,
+        inviteLink = if (includeInviteLink) club.inviteLink else null,
         memberCount = club.memberCount,
         isActive = club.isActive,
         paymentLink = if (includeRequisites) club.paymentLink else null,
@@ -70,6 +80,7 @@ class ClubMapper {
         chatDoorEnabled = chatDoorEnabled,
         chatInviteLink = chatInviteLink,
         ownerFirstName = ownerFirstName,
-        ownerLastName = ownerLastName
+        ownerLastName = ownerLastName,
+        inviteRequiresApplication = inviteRequiresApplication
     )
 }

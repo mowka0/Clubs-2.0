@@ -306,7 +306,9 @@ class MembershipServiceTest {
 
     @Test
     fun `joinByInviteCode throws NotFoundException for unknown code`() {
+        // Кодов два (V71): не найден ни прямой, ни заявочный — только тогда 404.
         every { clubRepository.findByInviteCode("bad") } returns null
+        every { clubRepository.findByApplyInviteCode("bad") } returns null
 
         val exception = assertThrows<NotFoundException> {
             membershipService.joinByInviteCode("bad", UUID.randomUUID())

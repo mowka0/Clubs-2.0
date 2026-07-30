@@ -101,10 +101,23 @@ class ClubService(
     }
 
     fun getClubByInviteCode(code: String): ClubDetailDto {
-        val club = clubRepository.findByInviteCode(code) ?: throw NotFoundException("Invite link not found")
+        // Кодов у клуба два (V71): прямой (invite_link — «Скопировать ссылку») и заявочный
+        // (apply_invite_code — приглашение из Telegram). По заявочному вход в клуб «по заявке»
+        // идёт через одобрение организатора; в open/private одобрения не существует, поэтому
+        // там обе ссылки ведут себя одинаково.
+        val direct = clubRepository.findByInviteCode(code)
+        val club = direct
+            ?: clubRepository.findByApplyInviteCode(code)
+            ?: throw NotFoundException("Invite link not found")
+        val requiresApplication = direct == null && club.accessType == AccessType.closed
         // Имя владельца — для подписи «Приглашение от <имя>» на посадочной (club-invites, кадр D).
         val owner = userRepository.findById(club.ownerId)
-        return mapper.toDetailDto(club, ownerFirstName = owner?.firstName, ownerLastName = owner?.lastName)
+        return mapper.toDetailDto(
+            club,
+            ownerFirstName = owner?.firstName,
+            ownerLastName = owner?.lastName,
+            inviteRequiresApplication = requiresApplication
+        )
     }
 
     /**
@@ -121,16 +134,32 @@ class ClubService(
         return code
     }
 
+    /**
+     * «Заявочный» инвайт-код (V71) с той же ленивой генерацией: нужен приглашениям из Telegram,
+     * чтобы в клубе «по заявке» вход шёл через одобрение организатора. Отдельный код, а не флаг
+     * в ссылке — иначе получатель обошёл бы одобрение, стерев флаг.
+     */
+    @Transactional
+    fun ensureApplyInviteCode(clubId: UUID): String {
+        val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
+        club.applyInviteCode?.let { return it }
+        val code = generateInviteCode()
+        clubRepository.updateApplyInviteCode(clubId, code)
+        log.info("Apply-invite code lazily generated: clubId={}", clubId)
+        return code
+    }
+
     @Transactional
     fun regenerateInviteLink(clubId: UUID, userId: UUID): ClubDetailDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         // У-4 (co-organizers): отзыв инвайт-ссылки — операционное управление каналом набора,
         // доступно менеджеру клуба (владелец или активный со-орг), не только владельцу.
-        clubRoleGuard.requireCapability(club, userId, ClubCapability.SEND_INVITES)
+        clubRoleGuard.requireCapability(club, userId, ClubCapability.MANAGE_INVITE_LINK)
         val newCode = generateInviteCode()
         val updated = clubRepository.updateInviteCode(clubId, newCode) ?: throw NotFoundException("Club not found")
         log.info("Invite link regenerated: clubId={} userId={}", clubId, userId)
-        return mapper.toDetailDto(updated, includeRequisites = true)
+        // Вызвать сюда мог только менеджер (гейт выше) — новый код ему и возвращаем.
+        return mapper.toDetailDto(updated, includeRequisites = true, includeInviteLink = true)
     }
 
     fun getClub(id: UUID, callerId: UUID): ClubDetailDto {
@@ -159,7 +188,10 @@ class ClubService(
             includeRequisites = isMember,
             chatLinked = chatLinked,
             chatDoorEnabled = chatDoorEnabled,
-            chatInviteLink = if (chatLinked && hasChatAccess) chatLink?.doorInviteLink else null
+            chatInviteLink = if (chatLinked && hasChatAccess) chatLink?.doorInviteLink else null,
+            // Прямой инвайт-код (вход мимо заявки) — только менеджеру: обычный участник не должен
+            // иметь возможности раздать ссылку в обход одобрения (решение PO 2026-07-30).
+            includeInviteLink = clubRoleGuard.hasCapability(club, callerId, ClubCapability.MANAGE_INVITE_LINK)
         )
     }
 

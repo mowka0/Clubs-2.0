@@ -95,6 +95,18 @@ DELETE /api/clubs/{id}     → 204 No Content        (soft delete)
 
 Backend явно не принимает category/accessType в `UpdateClubRequest`. Frontend показывает их в Settings-tab как read-only.
 
+### Инвайт-коды клуба (два, V71)
+
+| Колонка | Роль | Кто получает |
+|---|---|---|
+| `invite_link` | **прямой** код: вход по ссылке МИМО заявки | только менеджер (`ClubDetailDto.inviteLink` пуст для остальных) |
+| `apply_invite_code` | **заявочный** код: в `closed`-клубе вход через одобрение организатора | уходит в приглашениях из Telegram всем; обычный участник копирует тоже его |
+
+Оба генерируются лениво (`ensureInviteCode` / `ensureApplyInviteCode`), оба уникальны, оба
+резолвятся в `GET /api/invite/{code}`. `POST /api/invite/{applyCode}/join` в `closed`-клубе →
+**400**: по этой ссылке положено отправить заявку. Полная механика и таблица «кто что копирует» —
+[`club-invites.md`](./club-invites.md) § «Два инвайт-кода».
+
 ### DELETE /api/clubs/{id} — soft delete
 - Проверка owner по JWT → 403 иначе
 - **Каскад перед soft-delete (в одной `@Transactional`, добавлен `bugfix/club-delete-cascade` 2026-06-13):**

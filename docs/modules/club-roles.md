@@ -80,7 +80,7 @@
 | `EDIT_CLUB_SETTINGS` | Настройки клуба: название, описание, город, правила, лимит участников, аватар. БЕЗ СБП-реквизитов и БЕЗ перехода в платный (это `EDIT_PAYMENT_REQUISITES`). |
 | `VIEW_FINANCES` | Просмотр финансов клуба (`GET /finances`). |
 | `VIEW_STATS` | Просмотр статистики/аналитики клуба и списка ушедших (`stats`, `churned-members`). |
-| `SEND_INVITES` | Личные приглашения (invite-share, prepared message) и перегенерация инвайт-ссылки. |
+| `MANAGE_INVITE_LINK` | Инвайт-ссылка клуба как канал набора: перегенерация (отзыв старой ссылки). **Сами приглашения права не требуют** — с 2026-07-30 звать может любой участник клуба, гейт в `InviteShareService` стоит по членству (см. `club-invites.md`). До переименования называлась `SEND_INVITES`. |
 
 ### Владельческие (только у `organizer`, НЕ делегируются)
 
@@ -118,7 +118,7 @@ owner-bypass (`club.ownerId == caller`) = «все capabilities»; для чис
 organizer     → ВСЕ 14 capabilities (owner-bypass; в карте — полный набор)
 co_organizer  → { APPROVE_APPLICATIONS, MANAGE_EVENTS, MANAGE_SKLADCHINA,
                   MANAGE_MEMBERS, GRANT_AWARDS, EDIT_CLUB_SETTINGS,
-                  VIEW_FINANCES, VIEW_STATS, SEND_INVITES }         // 9 делегируемых
+                  VIEW_FINANCES, VIEW_STATS, MANAGE_INVITE_LINK }  // 9 делегируемых
 member        → {} (пусто)
 ```
 
@@ -279,8 +279,9 @@ capability. Все пути от `backend/src/main/kotlin/com/clubs/`.
 | 31 | `skladchina/SkladchinaMapper.kt:58` | `isOrganizerView = creatorId == caller` | `MANAGE_SKLADCHINA` (creator ИЛИ право; имя поля не менять, У-7) |
 | 32 | `club/ClubService.kt:159` | updateClub (настройки) | `EDIT_CLUB_SETTINGS` (+ полевой owner-гейт: СБП/free→paid = `EDIT_PAYMENT_REQUISITES`) |
 | 33 | `club/ClubService.kt:186` | deleteClub | `DELETE_CLUB` (owner-only) |
-| 34 | `club/ClubService.kt:119` | regenerateInviteLink | `SEND_INVITES` (У-4) |
-| 35 | `club/InviteShareService.kt:70` | личные приглашения (PR #107) | `SEND_INVITES` (только `status = active`, У-2) |
+| 34 | `club/ClubService.kt:119` | regenerateInviteLink | `MANAGE_INVITE_LINK` (У-4) |
+| 35 | `club/InviteShareService.kt` | личные приглашения (PR #107) | **без капабилити** с 2026-07-30: любой участник клуба со `status = active`, владелец — всегда (решение PO; было `SEND_INVITES`). Роль решает только, какая ссылка копируется: прямая (мимо заявки) — менеджеру, заявочная — участнику |
+| 35a | `club/ClubService.kt` getClub | прямой инвайт-код в `ClubDetailDto.inviteLink` | `MANAGE_INVITE_LINK` — иначе участник прочитал бы код и раздал вход в обход заявки (V71) |
 | 36 | `chatlink/ChatLinkService.kt:51,58,97,134,168,200,234,305` | get/refresh/update/unlink чат-линка | `MANAGE_CHAT` (owner-only) |
 | 37 | `chatlink/ChatLinkBotService.kt:44,185` | `/link` привязка/отвязка из чата | `MANAGE_CHAT` (owner-only) |
 | 38 | `membership/AccessGateService.kt:327-334` | loadManageableMember | `MANAGE_MEMBERS` + target-матрица |

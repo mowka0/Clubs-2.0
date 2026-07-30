@@ -14,6 +14,7 @@ import com.clubs.generated.jooq.indexes.IDX_CLUBS_OWNER_ID
 import com.clubs.generated.jooq.keys.APPLICATIONS__APPLICATIONS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.CHAT_AWARD_TAGS__CHAT_AWARD_TITLES_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.CHAT_STRICT_BANS__CHAT_STRICT_BANS_CLUB_ID_FKEY
+import com.clubs.generated.jooq.keys.CLUBS_APPLY_INVITE_CODE_KEY
 import com.clubs.generated.jooq.keys.CLUBS_INVITE_LINK_KEY
 import com.clubs.generated.jooq.keys.CLUBS_PKEY
 import com.clubs.generated.jooq.keys.CLUBS__CLUBS_OWNER_ID_FKEY
@@ -249,6 +250,15 @@ open class Clubs(
      */
     val COVER_URL: TableField<ClubsRecord, String?> = createField(DSL.name("cover_url"), SQLDataType.CLOB, this, "URL обложки в шапке страницы клуба (NULL = рисуем градиент по категории).")
 
+    /**
+     * The column <code>public.clubs.apply_invite_code</code>. Инвайт-код «через
+     * заявку» для приглашений из Telegram (NULL = ещё не сгенерирован,
+     * генерируется лениво). В клубе с access_type=closed вход по нему требует
+     * одобрения организатора; в open/private ведёт себя как invite_link — там
+     * одобрения не существует.
+     */
+    val APPLY_INVITE_CODE: TableField<ClubsRecord, String?> = createField(DSL.name("apply_invite_code"), SQLDataType.VARCHAR(255), this, "Инвайт-код «через заявку» для приглашений из Telegram (NULL = ещё не сгенерирован, генерируется лениво). В клубе с access_type=closed вход по нему требует одобрения организатора; в open/private ведёт себя как invite_link — там одобрения не существует.")
+
     private constructor(alias: Name, aliased: Table<ClubsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<ClubsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<ClubsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -283,7 +293,7 @@ open class Clubs(
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
     override fun getIndexes(): List<Index> = listOf(IDX_CLUBS_ACCESS_TYPE, IDX_CLUBS_CATEGORY, IDX_CLUBS_CITY, IDX_CLUBS_OWNER_ID)
     override fun getPrimaryKey(): UniqueKey<ClubsRecord> = CLUBS_PKEY
-    override fun getUniqueKeys(): List<UniqueKey<ClubsRecord>> = listOf(CLUBS_INVITE_LINK_KEY)
+    override fun getUniqueKeys(): List<UniqueKey<ClubsRecord>> = listOf(CLUBS_APPLY_INVITE_CODE_KEY, CLUBS_INVITE_LINK_KEY)
     override fun getReferences(): List<ForeignKey<ClubsRecord, *>> = listOf(CLUBS__CLUBS_OWNER_ID_FKEY)
 
     private lateinit var _users: UsersPath

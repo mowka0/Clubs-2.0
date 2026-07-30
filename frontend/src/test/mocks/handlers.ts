@@ -18,6 +18,7 @@ export const mockClubDetail: ClubDetailDto = {
   rules: null,
   applicationQuestion: null,
   inviteLink: null,
+  inviteRequiresApplication: false,
   memberCount: 10,
   isActive: true,
   paymentLink: null,

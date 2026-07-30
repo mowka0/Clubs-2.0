@@ -174,6 +174,7 @@ describe('CreateClubModal', () => {
           rules: null,
           applicationQuestion: null,
           inviteLink: null,
+          inviteRequiresApplication: false,
           memberCount: 0,
           isActive: true,
           paymentLink: null,

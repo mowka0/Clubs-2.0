@@ -391,7 +391,13 @@ export interface ClubDetailDto {
   coverUrl: string | null;
   rules: string | null;
   applicationQuestion: string | null;
+  /** Прямой инвайт-код (вход мимо заявки) — приходит ТОЛЬКО менеджеру клуба, остальным null. */
   inviteLink: string | null;
+  /**
+   * Посадочная приглашения: по ЭТОЙ ссылке нужна заявка, а не прямое вступление
+   * (приглашение из Telegram в клуб «по заявке»). Заполняется только в ответе `GET /api/invite/{code}`.
+   */
+  inviteRequiresApplication: boolean;
   memberCount: number;
   isActive: boolean;
   // Реквизиты для оплаты взноса по СБП — заполнены только для участников клуба (active/frozen) + владельца;
@@ -417,8 +423,11 @@ export interface ClubDetailDto {
  * ответил, шит оставляет только «Скопировать ссылку».
  */
 export interface InviteShareDto {
+  /** Ссылка для копирования: у менеджера — прямая (мимо заявки), у обычного участника — заявочная. */
   inviteUrl: string;
   preparedMessageId: string | null;
+  /** Вход по `inviteUrl` идёт мимо одобрения организатора — только у менеджера клуба «по заявке». */
+  linkBypassesApproval: boolean;
 }
 
 /**

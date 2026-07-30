@@ -600,7 +600,8 @@
 - rules: varchar(2000)
 - application_question: varchar(200)
 - ~~telegram_group_id~~ — V47: вынесено в таблицу `club_chat_links` (привязка чата с верификацией владельца, см. `docs/modules/club-chat-link.md`)
-- invite_link: varchar(255)
+- invite_link: varchar(255) — прямой инвайт-код: вход по ссылке МИМО заявки (виден только менеджеру клуба)
+- apply_invite_code: varchar(255) — V71: инвайт-код «через заявку», уходит в приглашениях из Telegram; в клубе «по заявке» вход по нему требует одобрения организатора
 - is_active: boolean (default true)
 - created_at: timestamp
 - updated_at: timestamp

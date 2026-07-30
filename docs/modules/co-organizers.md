@@ -112,7 +112,9 @@
 | Складчины: создать / отметить оплату / resolve-decline / закрыть (любые сборы клуба) | — | ✅ | ✅ |
 | Участники-`member`: freeze/unfreeze, взнос, reject-dues, кик, access-until, заметка, награды | — | ✅ | ✅ |
 | Управление владельцем / другим со-оргом | — | — | ✅ (кроме себя) |
-| Личные приглашения (invite-share) + regenerate invite-link | — | ✅ | ✅ |
+| Личные приглашения (invite-share) | ✅ (с 2026-07-30, `club-invites.md`) | ✅ | ✅ |
+| Ссылка в обход заявки (прямой инвайт-код) | — | ✅ | ✅ |
+| Перегенерация invite-link (отзыв ссылки) | — | ✅ | ✅ |
 | Настройки клуба (PUT /api/clubs/{id})² | — | ✅ | ✅ |
 | Финансы / статистика / churned / awaiting-dues / инбокс заявок и счётчики | — | ✅ | ✅ |
 | Смена ролей (PUT .../role) | — | — | ✅ |
@@ -174,7 +176,7 @@
 | 32 | `club/ClubService.kt:159` | updateClub (настройки клуба) | manager |
 | 33 | `club/ClubService.kt:186` | deleteClub | **owner** (не меняется) |
 | 34 | `club/ClubService.kt:119` | regenerateInviteLink | manager (У-4) |
-| 35 | `club/InviteShareService.kt:70` | requireOwnerOrOrganizer (личные приглашения PR #107) | owner / role `organizer` / role `co_organizer` — только `status = active` (У-2) |
+| 35 | `club/InviteShareService.kt` | личные приглашения (PR #107) | **пересмотрено 2026-07-30:** капабилити снята, приглашает любой участник клуба со `status = active` (владелец — всегда). Ролевой гейт остался только у перегенерации ссылки |
 | 36 | `chatlink/ChatLinkService.kt:51,58,97,134,168,200,234,305` | requireOwner — get/refresh/update/unlink чат-линка | **owner** (не меняется) |
 | 37 | `chatlink/ChatLinkBotService.kt:44,185` | привязка `/link` и отвязка из чата (бот-сторона) | **owner** (не меняется) |
 | 38 | `membership/AccessGateService.kt:327-334` | loadManageableMember («Нельзя управлять доступом организатора») | расширить target-матрицу: caller-owner → любой target кроме `organizer`; caller-co-org → только target `role = 'member'` (403 иначе) |
@@ -343,6 +345,12 @@ attention-бакеты и admin-панель карточки участника
   расширяется на `co_organizer` и ужесточается до `status = active` (сейчас
   внутри `findActiveByUserAndClub`, который пропускает frozen/expired — для
   владельца это было недостижимо, для ролей стало бы дырой fail-open).
+  > **Пересмотрено 2026-07-30 (решение PO):** ролевой гейт с самих приглашений снят —
+  > звать может любой участник клуба (требование `status = active` осталось: должник
+  > и вышедший приглашать не могут). Но **ссылку в обход заявки даёт только менеджер**:
+  > приглашение из Telegram у всех ведёт на заявку, а прямую ссылку копирует лишь менеджер
+  > (V71, два инвайт-кода — `club-invites.md`). Ролевым осталось и `MANAGE_INVITE_LINK`
+  > (перегенерация ссылки).
 - **У-3. Лимит со-оргов: 5 на клуб** (константа `CO_ORGANIZER_LIMIT = 5` с
   русским комментарием). Обоснование: офлайн-клубы — десятки людей; >5
   делегатов — признак деградации ролей («все — начальники»), а лимит держит

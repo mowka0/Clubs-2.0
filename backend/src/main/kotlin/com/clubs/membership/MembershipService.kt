@@ -120,7 +120,16 @@ class MembershipService(
 
     @Transactional
     fun joinByInviteCode(code: String, userId: UUID): MembershipDto {
-        val club = clubRepository.findByInviteCode(code) ?: throw NotFoundException("Invite link not found")
+        // Два кода (V71): прямой — сразу в клуб; заявочный (приглашение из Telegram) — в клубе
+        // «по заявке» только через одобрение организатора. Проверка обязана быть здесь, а не
+        // только на посадочной: иначе правило обходилось бы прямым вызовом эндпоинта.
+        val direct = clubRepository.findByInviteCode(code)
+        val club = direct
+            ?: clubRepository.findByApplyInviteCode(code)
+            ?: throw NotFoundException("Invite link not found")
+        if (direct == null && club.accessType == AccessType.closed) {
+            throw ValidationException("По этому приглашению нужно отправить заявку — организатор её одобрит")
+        }
         val clubId = club.id
 
         val existing = membershipRepository.findActiveByUserAndClub(userId, clubId)

@@ -62,6 +62,12 @@ data class ClubDetailDto(
     // Door-ссылка для кнопки «Чат клуба» — ТОЛЬКО участникам с доступом (active / cancelled-в-периоде)
     // и владельцу; гостям/frozen/expired — null (least exposure, как paymentLink).
     val chatInviteLink: String? = null,
+    /**
+     * Посадочная приглашения: по ЭТОЙ ссылке нужна заявка, а не прямое вступление (V71 — приглашение
+     * из Telegram в клуб «по заявке»). Заполняется ТОЛЬКО в ответе `GET /api/invite/{code}`;
+     * на остальных путях всегда false.
+     */
+    val inviteRequiresApplication: Boolean = false,
     // Имя владельца — только для посадочной инвайта (подпись «Приглашение от <имя>», club-invites).
     // В остальных ответах null: не тянем лишний lookup пользователя.
     val ownerFirstName: String? = null,
@@ -74,8 +80,18 @@ data class ClubDetailDto(
  * фронт оставляет в шите только копирование.
  */
 data class InviteShareDto(
+    /**
+     * Ссылка для «Скопировать ссылку». У менеджера это ПРЯМОЙ код (вход мимо заявки), у обычного
+     * участника — заявочный: раздать ссылку в обход одобрения он не может (решение PO 2026-07-30).
+     */
     val inviteUrl: String,
-    val preparedMessageId: String?
+    val preparedMessageId: String?,
+    /**
+     * Вход по [inviteUrl] проходит МИМО одобрения организатора — true только у менеджера клуба
+     * «по заявке». Фронтенд подписывает этим кнопку копирования; в open/private одобрения не
+     * существует, поэтому там false и подписывать нечего.
+     */
+    val linkBypassesApproval: Boolean = false
 )
 
 data class CreateClubRequest(

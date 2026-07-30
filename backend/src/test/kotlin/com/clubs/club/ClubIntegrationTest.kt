@@ -255,6 +255,82 @@ class ClubIntegrationTest {
     }
 
     @Test
+    fun `invite from Telegram needs an application in a closed club, copied link does not (V71)`() {
+        // Причина фичи: приглашение в клуб «по заявке» пускало сразу в состав, минуя одобрение.
+        // Теперь у клуба два кода: заявочный (уходит в prepared message) и прямой (копирует
+        // менеджер). Проверяем оба на живой БД, включая то, что прямой код НЕ виден участнику.
+        val createResult = mockMvc.perform(
+            post("/api/clubs")
+                .header("Authorization", "Bearer $testToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        CreateClubRequest(
+                            name = "Closed Invite Club",
+                            description = "Принимаем по заявке",
+                            category = "sport",
+                            accessType = "closed",
+                            city = "Moscow",
+                            memberLimit = 30,
+                            subscriptionPrice = 0
+                        )
+                    )
+                )
+        )
+            .andExpect(status().isCreated)
+            .andReturn()
+        val clubId = objectMapper.readTree(createResult.response.contentAsString).get("id").asText()
+
+        // Коды сеем напрямую: сам invite-share дергал бы Telegram, а нас интересует поведение входа.
+        dsl.execute(
+            "UPDATE clubs SET invite_link = 'direct-code-1', apply_invite_code = 'apply-code-1' WHERE id = '$clubId'"
+        )
+
+        val inviteeId = UUID.randomUUID()
+        dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$inviteeId', 555001, 'Invitee')")
+        val inviteeToken = jwtService.generateToken(inviteeId, 555001)
+
+        // Заявочная ссылка честно говорит посадочной: нужна заявка. Прямой код в ответе не светится.
+        mockMvc.perform(
+            get("/api/invite/apply-code-1").header("Authorization", "Bearer $inviteeToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.inviteRequiresApplication").value(true))
+            .andExpect(jsonPath("$.inviteLink").doesNotExist())
+
+        // И прямое вступление по ней невозможно — иначе правило обходилось бы вызовом эндпоинта.
+        mockMvc.perform(
+            post("/api/invite/apply-code-1/join").header("Authorization", "Bearer $inviteeToken")
+        )
+            .andExpect(status().isBadRequest)
+
+        // Штатный путь по этой ссылке — заявка.
+        mockMvc.perform(
+            post("/api/clubs/$clubId/apply")
+                .header("Authorization", "Bearer $inviteeToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"answerText":""}""")
+        )
+            .andExpect(status().is2xxSuccessful)
+
+        // Прямая ссылка (её копирует только менеджер) пускает сразу — осознанный обход.
+        val directJoinerId = UUID.randomUUID()
+        dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$directJoinerId', 555002, 'Direct')")
+        val directToken = jwtService.generateToken(directJoinerId, 555002)
+
+        mockMvc.perform(
+            get("/api/invite/direct-code-1").header("Authorization", "Bearer $directToken")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.inviteRequiresApplication").value(false))
+
+        mockMvc.perform(
+            post("/api/invite/direct-code-1/join").header("Authorization", "Bearer $directToken")
+        )
+            .andExpect(status().isCreated)
+    }
+
+    @Test
     fun `PUT api clubs id edits cover and avatar independently (V70)`() {
         // Регрессия на причину появления cover_url: до V70 обложка страницы клуба рисовалась из
         // avatar_url, поэтому смена аватара молча меняла и обложку. Теперь поля независимы.

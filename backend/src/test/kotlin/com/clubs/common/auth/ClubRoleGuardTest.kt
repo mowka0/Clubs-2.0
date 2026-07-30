@@ -154,7 +154,7 @@ class ClubRoleGuardTest {
         val expectedDelegated = setOf(
             ClubCapability.APPROVE_APPLICATIONS, ClubCapability.MANAGE_EVENTS, ClubCapability.MANAGE_SKLADCHINA,
             ClubCapability.MANAGE_MEMBERS, ClubCapability.GRANT_AWARDS, ClubCapability.EDIT_CLUB_SETTINGS,
-            ClubCapability.VIEW_FINANCES, ClubCapability.VIEW_STATS, ClubCapability.SEND_INVITES
+            ClubCapability.VIEW_FINANCES, ClubCapability.VIEW_STATS, ClubCapability.MANAGE_INVITE_LINK
         )
         val expectedOwnerOnly = setOf(
             ClubCapability.MANAGE_ROLES, ClubCapability.EDIT_PAYMENT_REQUISITES, ClubCapability.MANAGE_CHAT,
