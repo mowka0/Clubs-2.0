@@ -22,6 +22,8 @@ import { formatPrice } from '../utils/formatters';
 import { isActiveManagerMembership } from '../utils/membershipRole';
 import { openTmeLink } from '../utils/telegramLinks';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
+import { ClubAvatarButton } from '../components/club/ClubAvatarButton';
+import { ClubCoverButton } from '../components/club/ClubCoverButton';
 import { ClubChatConnectBanner } from '../components/club/ClubChatConnectBanner';
 import { ClubEventsTeaser } from '../components/club/ClubEventsTeaser';
 import { WelcomeScene, memberCountCaption } from '../components/onboarding/WelcomeScene';
@@ -37,10 +39,9 @@ const ACCESS_LABELS: Record<string, string> = {
 };
 
 type TabId = 'activities' | 'members';
-type TabKey = TabId | 'manage';
 
 interface TabItem {
-  key: TabKey;
+  key: TabId;
   label: string;
   selected: boolean;
 }
@@ -65,6 +66,14 @@ const LeaveIcon: FC = () => (
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
     <path d="M16 17l5-5-5-5" />
     <path d="M21 12H9" />
+  </svg>
+);
+
+/** Шестерёнка в шапке — вход менеджера в «Управление» (занимает место кнопки выхода у участника). */
+const ManageIcon: FC = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
   </svg>
 );
 
@@ -285,16 +294,15 @@ export const ClubPage: FC = () => {
     });
   };
 
-  // Таб «Управление» — это ссылка-переход, а не переключатель состояния: тап вызывает haptic
-  // impact (не select) и ведёт на /manage. activeTab никогда не содержит 'manage'.
-  const handleTabClick = (tab: TabKey) => {
-    if (tab === 'manage') {
-      haptic.impact('light');
-      navigate(`/clubs/${id}/manage`);
-      return;
-    }
+  const handleTabClick = (tab: TabId) => {
     haptic.select();
     setActiveTab(tab);
+  };
+
+  /** «Управление» переехало из таба в шестерёнку шапки (решение PO 2026-07-30). */
+  const handleOpenManage = () => {
+    haptic.impact('light');
+    navigate(`/clubs/${id}/manage`);
   };
 
   const renderCta = () => {
@@ -416,57 +424,80 @@ export const ClubPage: FC = () => {
     : null;
 
   const showTabs = isMember || isManager;
-  // Бейдж роли в шапке (PO №4): владелец — «Вы организатор», активный со-орг — «Вы со-организатор».
-  const roleBadgeLabel = isOwner || membership?.role === 'organizer'
-    ? 'Вы организатор'
-    : isManager
-      ? 'Вы со-организатор'
-      : isMember
-        ? 'Вы участник'
-        : null;
 
   const tabItems: TabItem[] = [
     { key: 'activities', label: 'Активности', selected: activeTab === 'activities' },
     { key: 'members', label: 'Участники', selected: activeTab === 'members' },
   ];
-  if (isManager) {
-    tabItems.push({ key: 'manage', label: 'Управление', selected: false });
-  }
 
-  const heroMeta = [
-    ACCESS_LABELS[club.accessType] ?? club.accessType,
-    club.city,
-    `${club.memberCount} / ${club.memberLimit}`,
-    formatPrice(club.subscriptionPrice),
-  ].filter(Boolean).join(' · ');
+  const isPaid = club.subscriptionPrice > 0;
 
   return (
     <div className="rd-page">
-      {/* Обложка (hero) */}
-      <div className="rd-hero rd-compact">
+      {/* Обложка (hero) — чистая: название и параметры клуба живут на странице, не на картинке.
+          Картинка берётся из coverUrl (V70): аватар клуба — отдельное поле, и смена одного
+          больше не меняет другое. Нет обложки — рисуется градиент по категории. */}
+      <div className="rd-hero rd-compact rd-club-cover">
         <div
           className="rd-hero-bg"
           data-cat={club.category}
-          style={club.avatarUrl ? { backgroundImage: `url(${club.avatarUrl})` } : undefined}
+          style={club.coverUrl ? { backgroundImage: `url(${club.coverUrl})` } : undefined}
         />
-        {showLeaveIcon && (
-          <button
-            type="button"
-            className="rd-hero-btn rd-right"
-            onClick={handleOpenLeaveModal}
-            aria-label="Выйти из клуба"
-            title="Выйти из клуба"
-          >
-            <LeaveIcon />
-          </button>
-        )}
-        <div className="rd-hero-meta">
-          {roleBadgeLabel && (
-            <div className="rd-hero-type-badge">{roleBadgeLabel.toUpperCase()}</div>
-          )}
-          <div className="rd-hero-ttl">{club.name}</div>
-          <div className="rd-hero-eyebrow" style={{ marginTop: 6 }}>{heroMeta}</div>
+        <div className="rd-hero-acts">
+          {/* Менеджеру — смена обложки; аватар меняется тапом по самому кружку ниже. */}
+          {isManager && <ClubCoverButton clubId={club.id} hasCover={!!club.coverUrl} />}
+          {/* Одно место под роль: менеджеру — вход в «Управление», участнику — выход из клуба.
+              Обе роли одновременно невозможны (владелец из клуба не выходит), поэтому кнопка одна. */}
+          {isManager ? (
+            <button
+              type="button"
+              className="rd-hero-btn"
+              onClick={handleOpenManage}
+              aria-label="Управление клубом"
+              title="Управление клубом"
+            >
+              <ManageIcon />
+            </button>
+          ) : showLeaveIcon ? (
+            <button
+              type="button"
+              className="rd-hero-btn"
+              onClick={handleOpenLeaveModal}
+              aria-label="Выйти из клуба"
+              title="Выйти из клуба"
+            >
+              <LeaveIcon />
+            </button>
+          ) : null}
         </div>
+      </div>
+
+      {/* Аватар наезжает на стык обложки и страницы; менеджеру кружок кликабелен — тап меняет
+          картинку клуба (снять её можно в «Управление → Настройки»). */}
+      <ClubAvatarButton
+        clubId={club.id}
+        clubName={club.name}
+        avatarUrl={club.avatarUrl ?? null}
+        editable={isManager}
+      />
+
+      <div className="rd-club-name">{club.name}</div>
+
+      {/* Параметры клуба одной строкой чипов: доступ · город · состав · взнос. */}
+      <div className="rd-club-facts">
+        <span className="rd-club-fact">
+          <b>{ACCESS_LABELS[club.accessType] ?? club.accessType}</b>
+        </span>
+        <span className="rd-club-fact rd-shrink">
+          <span aria-hidden="true">📍</span>
+          <b>{club.city}</b>
+        </span>
+        <span className="rd-club-fact">
+          <b>{club.memberCount} / {club.memberLimit}</b>
+        </span>
+        <span className={`rd-club-fact ${isPaid ? 'rd-pay' : 'rd-free'}`}>
+          <b>{formatPrice(club.subscriptionPrice)}</b>
+        </span>
       </div>
 
       {showCancelledNote && membership?.subscriptionExpiresAt && (
@@ -484,41 +515,42 @@ export const ClubPage: FC = () => {
         <ClubChatConnectBanner key={club.id} clubId={club.id} />
       )}
 
-      {/* О клубе */}
-      <div className="rd-section-sub-h">О клубе</div>
-      <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
-        <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{club.description}</div>
+      {/* О клубе — описание, правила и вход в чат одним блоком (решение PO 2026-07-30):
+          отдельные секции «Правила» и широкая кнопка чата упразднены. */}
+      <div className="rd-sec-h">
+        <span className="rd-k">О клубе</span>
+        <span className="rd-line" />
+      </div>
+      <div className="rd-club-about">
+        <div className="rd-txt">{club.description}</div>
+        {club.rules && (
+          <>
+            <div className="rd-rules-h">Правила</div>
+            <div className="rd-txt">{club.rules}</div>
+          </>
+        )}
+        {/* Вход в чат по door-ссылке (club-chat-link): участник уже в чате → Telegram просто
+            откроет его; ещё нет → заявка и авто-впуск ботом. */}
+        {showTabs && club.chatInviteLink && (
+          <div className="rd-club-chatrow">
+            <button
+              type="button"
+              className="rd-club-chatpill"
+              onClick={() => {
+                if (!club.chatInviteLink) return;
+                haptic.impact('light');
+                openTmeLink(club.chatInviteLink);
+              }}
+            >
+              <span aria-hidden="true">💬</span>
+              В чат
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Чат клуба (club-chat-link): участнику с доступом — кнопка входа по door-ссылке
-          (уже в чате → Telegram просто откроет чат; ещё нет → заявка + авто-впуск ботом). */}
-      {showTabs && club.chatInviteLink && (
-        <button
-          type="button"
-          className="rd-btn-outline"
-          style={{ marginBottom: 14 }}
-          onClick={() => {
-            if (!club.chatInviteLink) return;
-            haptic.impact('light');
-            openTmeLink(club.chatInviteLink);
-          }}
-        >
-          💬 Чат клуба
-        </button>
-      )}
-
-      {/* Качество клуба — единый публичный блок (кольца + подпись возраст/активность), виден всем */}
+      {/* Жизнь клуба — кольца качества + подпись возраст/активность, видны всем */}
       {id && <ClubQualityFacts clubId={id} memberCount={club.memberCount} />}
-
-      {/* Правила (опционально) */}
-      {club.rules && (
-        <>
-          <div className="rd-section-sub-h">Правила</div>
-          <div className="rd-glass" style={{ padding: '14px 16px', marginBottom: 14 }}>
-            <div className="rd-body-text" style={{ margin: 0, padding: 0 }}>{club.rules}</div>
-          </div>
-        </>
-      )}
 
       {/* Участник без доступа: frozen (вступил, ждёт подтверждения первого взноса) или expired
           (подписка истекла — должник по продлению). Один claim-флоу, разные тексты. */}
@@ -624,12 +656,12 @@ export const ClubPage: FC = () => {
       {/* Участник / Организатор: табы с учётом роли */}
       {showTabs && id && (
         <>
-          <div className="rd-tabs" role="tablist">
+          <div className="rd-seg" role="tablist">
             {tabItems.map((item) => (
               <button
                 key={item.key}
                 type="button"
-                className={`rd-tab-link${item.selected ? ' rd-active' : ''}`}
+                className={`rd-seg-btn${item.selected ? ' rd-active' : ''}`}
                 onClick={() => handleTabClick(item.key)}
               >
                 {item.label}

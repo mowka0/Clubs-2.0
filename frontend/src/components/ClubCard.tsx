@@ -64,6 +64,9 @@ export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
     return null;
   }, [club.nearestEvent]);
   const cat = KNOWN_CATEGORIES.has(club.category) ? club.category : 'other';
+  // Обложка карточки: с V70 у клуба своё поле обложки, аватар остаётся кружком. Фолбэк на аватар
+  // нужен клубам, созданным до разделения полей — иначе их карточки разом потеряли бы картинку.
+  const cardCover = club.coverUrl ?? club.avatarUrl;
 
   return (
     <button
@@ -77,7 +80,7 @@ export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
       <div
         className="rd-cover"
         data-cat={cat}
-        style={club.avatarUrl ? { backgroundImage: `url(${club.avatarUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+        style={cardCover ? { backgroundImage: `url(${cardCover})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
       >
         <span className="rd-price-chip">{formatPrice(club.subscriptionPrice)}</span>
         {/* Полка метрик: возраст · участники · вовлечённость — уголок из материала карточки

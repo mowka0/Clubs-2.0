@@ -262,6 +262,7 @@ class JooqClubRepository(
                 memberCount = memberCount,
                 memberLimit = memberLimit,
                 avatarUrl = club.avatarUrl,
+                coverUrl = club.coverUrl,
                 nearestEvent = nearestEvents[club.id],
                 tags = tags
             )
@@ -344,6 +345,7 @@ class JooqClubRepository(
         // а отсутствующий ключ в JSON-теле по-прежнему означает «не трогать».
         request.district?.let { step.set(CLUBS.DISTRICT, it.ifBlank { null }) }
         request.avatarUrl?.let { step.set(CLUBS.AVATAR_URL, it.ifBlank { null }) }
+        request.coverUrl?.let { step.set(CLUBS.COVER_URL, it.ifBlank { null }) }
         request.rules?.let { step.set(CLUBS.RULES, it.ifBlank { null }) }
         request.applicationQuestion?.let { step.set(CLUBS.APPLICATION_QUESTION, it.ifBlank { null }) }
         request.paymentLink?.let { step.set(CLUBS.PAYMENT_LINK, it.ifBlank { null }) }

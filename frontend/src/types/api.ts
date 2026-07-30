@@ -59,6 +59,8 @@ export interface ClubListItemDto {
   memberCount: number;
   memberLimit: number;
   avatarUrl: string | null;
+  /** Обложка карточки (V70). null у клубов, созданных до разделения обложки и аватара — фолбэк на avatarUrl. */
+  coverUrl: string | null;
   nearestEvent: NearestEventDto | null;
   tags: string[];
 }
@@ -385,6 +387,8 @@ export interface ClubDetailDto {
   memberLimit: number;
   subscriptionPrice: number;
   avatarUrl: string | null;
+  /** Обложка шапки страницы клуба (V70) — отдельная картинка от аватара. null = градиент по категории. */
+  coverUrl: string | null;
   rules: string | null;
   applicationQuestion: string | null;
   inviteLink: string | null;

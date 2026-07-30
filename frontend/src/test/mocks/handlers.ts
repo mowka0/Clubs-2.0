@@ -14,6 +14,7 @@ export const mockClubDetail: ClubDetailDto = {
   memberLimit: 50,
   subscriptionPrice: 0,
   avatarUrl: null,
+  coverUrl: null,
   rules: null,
   applicationQuestion: null,
   inviteLink: null,

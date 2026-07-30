@@ -70,6 +70,8 @@ export interface UpdateClubBody {
   memberLimit?: number;
   subscriptionPrice?: number;
   avatarUrl?: string | null;
+  // Обложка шапки страницы клуба (V70). Пустая строка очищает значение, как rules/district.
+  coverUrl?: string | null;
   rules?: string | null;
   applicationQuestion?: string | null;
   // Реквизиты СБП для взносов (пустая строка очищает значение, как rules/district).
