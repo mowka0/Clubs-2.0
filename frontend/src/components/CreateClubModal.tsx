@@ -79,12 +79,32 @@ export const CreateClubModal: FC<{
   // Drawer telegram-ui (vaul) при появлении клавиатуры прописывает СЕБЕ inline-высоту в пикселях,
   // чтобы форма поместилась над ней, а при закрытии восстанавливает ровно эту же величину, а не
   // пересчитывает под содержимое. Для многошаговой формы это значит, что высота, снятая на вводе
-  // названия, остаётся на всех следующих шагах: форма ужимается и уходит в скролл (баг PO
-  // 2026-07-29; замерено — 300px вместо 574px на шагах 2–4). Снимаем пин при каждой смене шага,
-  // чтобы модалка пересчиталась под новый шаг и снова заработал `min-height` из `.rd-wizard`.
+  // названия на первом шаге, остаётся на всех следующих: у «Участников» с платным клубом или у
+  // «Описания» полей больше, и они уже не влезают (баг PO 2026-07-29).
+  //
+  // Снимаем пин в двух местах, и оба нужны: на смене шага — чтобы модалка пересчиталась под новый
+  // набор полей; на закрытии клавиатуры — потому что именно там vaul возвращает своё запомненное
+  // значение и перетирает наш сброс. Пока клавиатура открыта, пин НЕ трогаем: ужатие под неё —
+  // правильное поведение, иначе поле ввода уедет под клавиатуру.
   useEffect(() => {
     const drawer = rootRef.current?.closest<HTMLElement>('[vaul-drawer]');
-    if (drawer) drawer.style.height = '';
+    if (!drawer) return;
+    const releaseHeight = () => { drawer.style.height = ''; };
+    releaseHeight();
+
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    // Порог в 120px отделяет клавиатуру от мелких изменений вьюпорта (панели подсказок,
+    // адресная строка): ниже него считаем, что клавиатуры нет.
+    const KEYBOARD_MIN_HEIGHT = 120;
+    const onViewportResize = () => {
+      // vaul пишет высоту в своём обработчике того же события — ждём кадр, чтобы снять её после него.
+      requestAnimationFrame(() => {
+        if (window.innerHeight - viewport.height < KEYBOARD_MIN_HEIGHT) releaseHeight();
+      });
+    };
+    viewport.addEventListener('resize', onViewportResize);
+    return () => viewport.removeEventListener('resize', onViewportResize);
   }, [step]);
 
   const {
@@ -283,11 +303,15 @@ export const CreateClubModal: FC<{
 
   return (
     <div className="rd-modal-form rd-wizard" ref={rootRef} style={{ padding: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div className="rd-wizard-head">
         <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>Шаг {step + 1} из {STEP_TITLES.length}: {STEP_TITLES[step]}</span>
         <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text)' }}>&#x2715;</button>
       </div>
 
+      {/* Прокручивается только область полей: шапка с номером шага и кнопки закреплены,
+          поэтому форма остаётся пригодной при любой высоте — в том числе когда Drawer
+          ужат открытой клавиатурой. */}
+      <div className="rd-wizard-body">
       {error && (
         <div className="rd-error" style={{ textAlign: 'left', marginBottom: 12 }}>
           {error}
@@ -484,6 +508,7 @@ export const CreateClubModal: FC<{
           </label>
         </div>
       )}
+      </div>
 
       <div className="rd-form-actions">
         {step > 0 && (
