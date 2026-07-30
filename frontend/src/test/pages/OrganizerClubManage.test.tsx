@@ -169,7 +169,7 @@ describe('OrganizerClubManage — Финансы: честный хинт (W3-08
     await user.click(await screen.findByRole('tab', { name: 'Финансы' }));
 
     expect(await screen.findByText('Клуб бесплатный')).toBeInTheDocument();
-    expect(screen.getByText(/Взносы не собираются/)).toBeInTheDocument();
+    expect(screen.getByText(/можешь сделать клуб платным/)).toBeInTheDocument();
     // Сводки платного клуба быть не должно — сцена показывается вместо неё.
     expect(screen.queryByText('Активных участников')).not.toBeInTheDocument();
 

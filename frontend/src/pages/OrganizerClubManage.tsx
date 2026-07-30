@@ -83,7 +83,7 @@ const FinancesTab: FC<FinancesTabProps> = ({ club, onOpenSettings }) => {
       <FoxEmpty
         art={foxFinancesArt}
         title="Клуб бесплатный"
-        description="Взносы не собираются, поэтому и считать нечего. Захочешь брать за участие — включи подписку в настройках клуба, и сводка появится здесь."
+        description="Поэтому ничего не считается. Если хочешь — можешь сделать клуб платным и получать за его ведение деньги, а статистика будет вестись здесь."
         primary={{ label: 'Открыть настройки', onClick: () => { haptic.impact('light'); onOpenSettings(); } }}
       />
     );
