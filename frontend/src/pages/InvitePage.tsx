@@ -9,7 +9,6 @@ import { useCompleteOnboardingMutation } from '../queries/profile';
 import { useAuthStore } from '../store/useAuthStore';
 import { ApiError } from '../api/apiClient';
 import { formatPrice } from '../utils/formatters';
-import { openTmeLink } from '../utils/telegramLinks';
 import { ClubEventsTeaser } from '../components/club/ClubEventsTeaser';
 import { ClubIdentityHeader } from '../components/club/ClubIdentityHeader';
 import { ClubLockedNotice } from '../components/club/ClubLockedNotice';
@@ -262,20 +261,16 @@ export const InvitePage: FC = () => {
 
   const hasAbout = !!club.description || !!club.rules;
   // Чат показываем той же пилюлей, что и на странице клуба, но она ведёт не в чат, а к подсказке:
-  // дверь в чат открывает вступление. Условие то же, что было у снятого чипа — без включённой
-  // двери бот в чат не впустит, и обещать вход нельзя.
-  const showChatPill = club.chatLinked && club.chatDoorEnabled;
+  // дверь в чат открывает вступление. Достаточно самого факта привязки — без включённой «двери»
+  // чат у клуба всё равно есть, меняется только текст подсказки (обещать авто-впуск ботом нельзя).
+  const showChatPill = club.chatLinked;
   const joinCtaLabel = isClubFull ? 'Попроситься в клуб' : needsApplication ? 'Отправить заявку' : 'Вступить в клуб';
 
-  // Пилюля чата у того, кто уже в клубе, ведёт прямо в чат; остальным — подсказка с кнопкой вступления.
-  const handleChatPill = () => {
-    haptic.impact('light');
-    if (isAlreadyMember && club.chatInviteLink) {
-      openTmeLink(club.chatInviteLink);
-      return;
-    }
-    setShowChatHint((shown) => !shown);
-  };
+  const chatHintText = isAlreadyMember
+    ? 'Чат клуба живёт внутри — откройте клуб и заходите.'
+    : club.chatDoorEnabled
+      ? 'Чат клуба открыт участникам. Вступите — и бот впустит вас туда.'
+      : 'У клуба есть чат. Организатор позовёт вас туда после вступления.';
 
   // Кнопка из подсказки: прямое вступление делаем сразу, а заявку — только доведя человека
   // до формы внизу, иначе он не увидит ни вопроса организатора, ни ошибки о пустом ответе.
@@ -344,7 +339,7 @@ export const InvitePage: FC = () => {
                 <button
                   type="button"
                   className="rd-club-chatpill"
-                  onClick={handleChatPill}
+                  onClick={() => { haptic.impact('light'); setShowChatHint((shown) => !shown); }}
                   aria-expanded={showChatHint}
                 >
                   <span aria-hidden="true">💬</span>
@@ -359,11 +354,7 @@ export const InvitePage: FC = () => {
                         ролью к низу экрана через !important (там живут боттом-шиты). Раскрытие
                         и так объявлено через aria-expanded на самой пилюле. */}
                     <div className="rd-chathint">
-                      <div className="rd-chathint-tx">
-                        {isAlreadyMember
-                          ? 'Чат откроется вместе с доступом в клуб — его открывает организатор.'
-                          : 'Чат клуба открыт участникам. Вступите — и бот впустит вас туда.'}
-                      </div>
+                      <div className="rd-chathint-tx">{chatHintText}</div>
                       <button type="button" className="rd-chathint-cta" onClick={handleChatHintCta}>
                         {isAlreadyMember ? 'Перейти в клуб' : joinCtaLabel}
                       </button>

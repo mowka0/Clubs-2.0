@@ -166,6 +166,16 @@ describe('InvitePage — посадочная в языке страницы к�
     expect(screen.queryByText(/Чат клуба открыт участникам/)).not.toBeInTheDocument();
   });
 
+  it('чат без включённой двери — пилюля есть, авто-впуск не обещается', async () => {
+    const user = userEvent.setup();
+    mockInvite({ chatLinked: true, chatDoorEnabled: false });
+    renderInvite();
+
+    await user.click(await screen.findByRole('button', { name: /В чат/ }));
+    expect(screen.getByText(/Организатор позовёт вас туда после вступления/)).toBeInTheDocument();
+    expect(screen.queryByText(/бот впустит вас туда/)).not.toBeInTheDocument();
+  });
+
   it('снятые дубли на экран не возвращаются', async () => {
     mockInvite({ chatLinked: true, chatDoorEnabled: true, inviteRequiresApplication: true, accessType: 'closed' });
     renderInvite();
