@@ -1,4 +1,4 @@
-import { FC, useState } from 'react';
+import { FC, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
@@ -74,6 +74,18 @@ export const CreateClubModal: FC<{
   const [pendingBody, setPendingBody] = useState<CreateClubBody | null>(null);
   const [paywallError, setPaywallError] = useState<string | null>(null);
   const [submittingPlan, setSubmittingPlan] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Drawer telegram-ui (vaul) при появлении клавиатуры прописывает СЕБЕ inline-высоту в пикселях,
+  // чтобы форма поместилась над ней, а при закрытии восстанавливает ровно эту же величину, а не
+  // пересчитывает под содержимое. Для многошаговой формы это значит, что высота, снятая на вводе
+  // названия, остаётся на всех следующих шагах: форма ужимается и уходит в скролл (баг PO
+  // 2026-07-29; замерено — 300px вместо 574px на шагах 2–4). Снимаем пин при каждой смене шага,
+  // чтобы модалка пересчиталась под новый шаг и снова заработал `min-height` из `.rd-wizard`.
+  useEffect(() => {
+    const drawer = rootRef.current?.closest<HTMLElement>('[vaul-drawer]');
+    if (drawer) drawer.style.height = '';
+  }, [step]);
 
   const {
     register,
@@ -270,7 +282,7 @@ export const CreateClubModal: FC<{
   }
 
   return (
-    <div className="rd-modal-form rd-wizard" style={{ padding: 16 }}>
+    <div className="rd-modal-form rd-wizard" ref={rootRef} style={{ padding: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>Шаг {step + 1} из {STEP_TITLES.length}: {STEP_TITLES[step]}</span>
         <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text)' }}>&#x2715;</button>
