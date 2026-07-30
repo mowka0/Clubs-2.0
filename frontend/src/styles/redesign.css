@@ -1195,8 +1195,24 @@
 }
 
 /* ---------- Hero-баннер (клуб / событие) ---------- */
-.rd-hero { margin: -16px -16px 16px; position: relative; height: 240px; }
-.rd-hero.rd-compact { height: 200px; }
+/* Обложка — единственный блок, который уходит ПОД плавающие контролы Telegram («Назад», ⌄, ⋯)
+   и статус-бар: страничная врезка `--app-inset-top` гасится отрицательным margin, а её высота
+   возвращается в `height`, чтобы видимая часть картинки не съедалась. Остальные экраны
+   (без обложки) врезку по-прежнему уважают — там контент под контролы не лезет. */
+.rd-hero {
+  margin: calc(-16px - var(--app-inset-top, 0px)) -16px 16px;
+  position: relative;
+  height: calc(240px + var(--app-inset-top, 0px));
+}
+.rd-hero.rd-compact { height: calc(200px + var(--app-inset-top, 0px)); }
+/* Полоса врезки затемняется, иначе белые контролы Telegram и статус-бар теряются на светлой
+   обложке. Высота кратна врезке — в обычном режиме она равна нулю, и градиента нет вовсе. */
+.rd-hero::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 0;
+  height: calc(var(--app-inset-top, 0px) * 1.35);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.4), transparent);
+  z-index: 1; pointer-events: none;
+}
 .rd-hero .rd-hero-bg {
   position: absolute; inset: 0;
   background: radial-gradient(circle at 70% 30%, rgba(255, 205, 168, 0.45), transparent 50%),
@@ -1217,8 +1233,11 @@
 .rd-hero-bg[data-cat="cinema"]      { background-image: radial-gradient(circle at 70% 30%, rgba(180,200,230,0.4), transparent 50%), linear-gradient(135deg, #3F6FA0 0%, #1f3550 55%, #0a0a0e 100%); }
 .rd-hero-bg[data-cat="board_games"] { background-image: radial-gradient(circle at 70% 30%, rgba(170,235,200,0.4), transparent 50%), linear-gradient(135deg, #2E9A6A 0%, #144a32 55%, #0a0a0e 100%); }
 .rd-hero-bg[data-cat="travel"]      { background-image: radial-gradient(circle at 70% 30%, rgba(255,190,210,0.4), transparent 50%), linear-gradient(135deg, #C44E7A 0%, #5a2438 55%, #0a0a0e 100%); }
+/* Кнопки внутри обложки опускаются на ту же врезку: сама картинка лежит под контролами
+   Telegram, а кликабельное — строго ниже них. */
 .rd-hero-btn {
-  position: absolute; top: 16px; width: 36px; height: 36px; border-radius: 50%;
+  position: absolute; top: calc(16px + var(--app-inset-top, 0px));
+  width: 36px; height: 36px; border-radius: 50%;
   background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.15);
   display: flex; align-items: center; justify-content: center;
