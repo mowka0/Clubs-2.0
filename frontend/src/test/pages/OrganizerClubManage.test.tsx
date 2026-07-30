@@ -159,22 +159,28 @@ describe('OrganizerClubManage — Финансы: честный хинт (W3-08
     server.use(http.get(`*/api/clubs/${CLUB_ID}/stats`, () => HttpResponse.json(EMPTY_STATS)));
   });
 
-  it('бесплатный клуб: текст про бесплатный клуб + «Открыть настройки» переключает на таб «Настройки»', async () => {
-    // mockClubDetail по умолчанию бесплатный (subscriptionPrice 0). Членства неважны — приоритет
-    // у «бесплатный», поэтому здесь активные участники есть, а текст всё равно про бесплатный клуб.
+  it('бесплатный клуб: таба «Финансы» нет вовсе (решение PO 2026-07-30)', async () => {
+    // mockClubDetail по умолчанию бесплатный (subscriptionPrice 0): взносов нет — показывать
+    // нечего, поэтому таб не показывается совсем, а не открывает пустую сводку с объяснением.
     setViewer(OWNER_ID);
     mockFinances(3);
-    const { user } = renderManage();
+    renderManage();
 
-    await user.click(await screen.findByRole('tab', { name: 'Финансы' }));
+    expect(await screen.findByRole('tab', { name: 'Статистика' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Финансы' })).not.toBeInTheDocument();
+    // Остальные табы владельца на месте.
+    expect(screen.getByRole('tab', { name: 'Чат' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Настройки' })).toBeInTheDocument();
+  });
 
-    expect(await screen.findByText(/Клуб бесплатный/)).toBeInTheDocument();
-    const cta = screen.getByRole('button', { name: 'Открыть настройки' });
-    await user.click(cta);
+  it('бесплатный клуб: deep-link ?tab=finances откатывается на «Статистику»', async () => {
+    setViewer(OWNER_ID);
+    mockFinances(3);
+    renderManage(`/clubs/${CLUB_ID}/manage?tab=finances`);
 
-    // Переключение внутритабовое: появляется форма «Настроек», таб «Настройки» активен.
-    expect(await screen.findByText('Название')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Настройки' })).toHaveAttribute('aria-selected', 'true');
+    const statsTab = await screen.findByRole('tab', { name: 'Статистика' });
+    expect(statsTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', { name: 'Финансы' })).not.toBeInTheDocument();
   });
 
   it('платный клуб без активных участников: «Пока некому платить…», без CTA', async () => {
@@ -206,14 +212,23 @@ describe('OrganizerClubManage — Финансы: честный хинт (W3-08
     expect(screen.queryByText(/Пока некому платить/)).not.toBeInTheDocument();
   });
 
-  it('со-организатор видит те же честные хинты (различий по вкладке нет): бесплатный клуб', async () => {
+  it('со-организатор: правило про бесплатный клуб то же — таба «Финансы» нет и у него', async () => {
     setViewer(CO_ORG_ID);
+    mockFinances(2);
+    renderManage();
+
+    expect(await screen.findByRole('tab', { name: 'Статистика' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Финансы' })).not.toBeInTheDocument();
+  });
+
+  it('со-организатор платного клуба видит те же честные хинты, что владелец', async () => {
+    setViewer(CO_ORG_ID);
+    mockPaidClub();
     mockFinances(2);
     const { user } = renderManage();
 
     await user.click(await screen.findByRole('tab', { name: 'Финансы' }));
 
-    expect(await screen.findByText(/Клуб бесплатный/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Открыть настройки' })).toBeInTheDocument();
+    expect(await screen.findByText(/напрямую тебе/)).toBeInTheDocument();
   });
 });

@@ -52,12 +52,10 @@ function resolveInitialTab(raw: string | null): TabKey {
 
 interface FinancesTabProps {
   club: ClubDetailDto;
-  /** Переключение на таб «Настройки» внутри страницы (не навигация) — CTA бесплатного клуба (W3-08). */
-  onOpenSettings: () => void;
 }
 
-const FinancesTab: FC<FinancesTabProps> = ({ club, onOpenSettings }) => {
-  const haptic = useHaptic();
+/** Вкладка живёт только у платного клуба — у бесплатного её нет в наборе табов. */
+const FinancesTab: FC<FinancesTabProps> = ({ club }) => {
   const financesQuery = useClubFinancesQuery(club.id);
   const finances = financesQuery.data;
 
@@ -73,10 +71,9 @@ const FinancesTab: FC<FinancesTabProps> = ({ club, onOpenSettings }) => {
     return <Placeholder description="Не удалось загрузить финансы" />;
   }
 
-  // Три честных состояния сводки взносов (empty-states W3-08): бесплатный клуб — взносов
-  // нет вообще; платный без участников — платить некому; платный с участниками — прежний
-  // смысл (деньги идут мимо платформы), тон переведён на «ты».
-  const isFree = club.subscriptionPrice === 0;
+  // Два честных состояния сводки взносов (empty-states W3-08): платный клуб без участников —
+  // платить некому; платный с участниками — деньги идут мимо платформы. Третье состояние
+  // («клуб бесплатный») исчезло вместе с самим табом у бесплатных клубов.
 
   return (
     <>
@@ -87,23 +84,7 @@ const FinancesTab: FC<FinancesTabProps> = ({ club, onOpenSettings }) => {
           <div className="rd-stat-value rd-plain">{finances.activeMembers}</div>
         </div>
       </div>
-      {isFree ? (
-        <>
-          <div className="rd-cta-hint" style={{ textAlign: 'left', marginTop: 8 }}>
-            Клуб бесплатный — взносы не собираются, поэтому финансовой сводки нет.
-            Захочешь ввести платную подписку — это в «Настройках».
-          </div>
-          <div style={{ marginTop: 10 }}>
-            <button
-              type="button"
-              className="rd-ghost-btn"
-              onClick={() => { haptic.impact('light'); onOpenSettings(); }}
-            >
-              Открыть настройки
-            </button>
-          </div>
-        </>
-      ) : finances.activeMembers === 0 ? (
+      {finances.activeMembers === 0 ? (
         <div className="rd-cta-hint" style={{ textAlign: 'left', marginTop: 8 }}>
           Пока некому платить — активных участников ещё нет. Когда появятся, здесь будет
           видно, кто оплатил взнос, а подтверждать оплату будешь во вкладке «Участники»
@@ -530,8 +511,17 @@ export const OrganizerClubManage: FC = () => {
   // привязка/настройка чата owner-only. Deep-link `?tab=chat` у со-орга откатывается на «Статистику».
   const user = useAuthStore((s) => s.user);
   const isOwner = !!club && club.ownerId === user?.id;
-  const visibleTabs = isOwner ? TABS : TABS.filter((t) => t.key !== 'chat');
-  const effectiveTab: TabKey = !isOwner && activeTab === 'chat' ? 'stats' : activeTab;
+  // В бесплатном клубе взносов нет вообще — таб «Финансы» показывал бы пустую сводку
+  // и объяснение, почему она пустая (решение PO 2026-07-30: не показывать вовсе).
+  const isFreeClub = !!club && club.subscriptionPrice === 0;
+  const visibleTabs = TABS.filter((tab) => {
+    if (tab.key === 'chat' && !isOwner) return false;
+    if (tab.key === 'finances' && isFreeClub) return false;
+    return true;
+  });
+  // Скрытый таб недостижим ничем — ни deep-link'ом `?tab=`, ни залипшим состоянием после
+  // того, как клуб стал бесплатным прямо в настройках: откатываемся на «Статистику».
+  const effectiveTab: TabKey = visibleTabs.some((t) => t.key === activeTab) ? activeTab : 'stats';
 
   const handleTabChange = (key: TabKey) => {
     if (key === effectiveTab) return;
@@ -562,7 +552,7 @@ export const OrganizerClubManage: FC = () => {
       case 'stats':
         return <ClubStatsTab clubId={clubId} />;
       case 'finances':
-        return <FinancesTab club={club} onOpenSettings={() => setActiveTab('settings')} />;
+        return <FinancesTab club={club} />;
       case 'chat':
         return <ClubChatTab clubId={clubId} />;
       case 'settings':
