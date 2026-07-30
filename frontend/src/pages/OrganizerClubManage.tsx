@@ -10,6 +10,8 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { AvatarUpload } from '../components/AvatarUpload';
+import { FoxEmpty } from '../components/feed/FoxEmpty';
+import foxFinancesArt from '../assets/mascot/fox-finances.png';
 import { Toast } from '../components/Toast';
 import { ManageHeader } from '../components/manage/ManageHeader';
 import { ClubStatsTab } from '../components/manage/ClubStatsTab';
@@ -52,7 +54,7 @@ function resolveInitialTab(raw: string | null): TabKey {
 
 interface FinancesTabProps {
   club: ClubDetailDto;
-  /** Переключение на таб «Настройки» внутри страницы (не навигация) — CTA бесплатного клуба (W3-08). */
+  /** Переключение на таб «Настройки» внутри страницы (не навигация) — CTA бесплатного клуба. */
   onOpenSettings: () => void;
 }
 
@@ -73,10 +75,22 @@ const FinancesTab: FC<FinancesTabProps> = ({ club, onOpenSettings }) => {
     return <Placeholder description="Не удалось загрузить финансы" />;
   }
 
-  // Три честных состояния сводки взносов (empty-states W3-08): бесплатный клуб — взносов
-  // нет вообще; платный без участников — платить некому; платный с участниками — прежний
-  // смысл (деньги идут мимо платформы), тон переведён на «ты».
-  const isFree = club.subscriptionPrice === 0;
+  // Бесплатный клуб: считать нечего, но и прятать таб нельзя — отсюда лежит путь к платной
+  // подписке. Поэтому вместо пустой сводки целая сцена с лисом и кнопкой в настройки
+  // (решение PO 2026-07-30; было — плоский хинт с ghost-CTA).
+  if (club.subscriptionPrice === 0) {
+    return (
+      <FoxEmpty
+        art={foxFinancesArt}
+        title="Клуб бесплатный"
+        description="Поэтому ничего не считается. Если хочешь — можешь сделать клуб платным и получать за его ведение деньги, а статистика будет вестись здесь."
+        primary={{ label: 'Открыть настройки', onClick: () => { haptic.impact('light'); onOpenSettings(); } }}
+      />
+    );
+  }
+
+  // Два честных состояния сводки платного клуба (empty-states W3-08): без участников —
+  // платить некому; с участниками — деньги идут мимо платформы.
 
   return (
     <>
@@ -87,23 +101,7 @@ const FinancesTab: FC<FinancesTabProps> = ({ club, onOpenSettings }) => {
           <div className="rd-stat-value rd-plain">{finances.activeMembers}</div>
         </div>
       </div>
-      {isFree ? (
-        <>
-          <div className="rd-cta-hint" style={{ textAlign: 'left', marginTop: 8 }}>
-            Клуб бесплатный — взносы не собираются, поэтому финансовой сводки нет.
-            Захочешь ввести платную подписку — это в «Настройках».
-          </div>
-          <div style={{ marginTop: 10 }}>
-            <button
-              type="button"
-              className="rd-ghost-btn"
-              onClick={() => { haptic.impact('light'); onOpenSettings(); }}
-            >
-              Открыть настройки
-            </button>
-          </div>
-        </>
-      ) : finances.activeMembers === 0 ? (
+      {finances.activeMembers === 0 ? (
         <div className="rd-cta-hint" style={{ textAlign: 'left', marginTop: 8 }}>
           Пока некому платить — активных участников ещё нет. Когда появятся, здесь будет
           видно, кто оплатил взнос, а подтверждать оплату будешь во вкладке «Участники»
@@ -530,8 +528,12 @@ export const OrganizerClubManage: FC = () => {
   // привязка/настройка чата owner-only. Deep-link `?tab=chat` у со-орга откатывается на «Статистику».
   const user = useAuthStore((s) => s.user);
   const isOwner = !!club && club.ownerId === user?.id;
-  const visibleTabs = isOwner ? TABS : TABS.filter((t) => t.key !== 'chat');
-  const effectiveTab: TabKey = !isOwner && activeTab === 'chat' ? 'stats' : activeTab;
+  // Таб «Финансы» виден и у бесплатного клуба: бесплатный можно перевести в платный, и путь
+  // к этому решению лежит именно отсюда — спрятать таб значило бы спрятать саму возможность.
+  // Внутри у бесплатного клуба сцена с лисом и кнопкой в настройки (см. FinancesTab).
+  const visibleTabs = TABS.filter((tab) => tab.key !== 'chat' || isOwner);
+  // Недостижимый таб (deep-link `?tab=chat` у со-организатора) откатывается на «Статистику».
+  const effectiveTab: TabKey = visibleTabs.some((t) => t.key === activeTab) ? activeTab : 'stats';
 
   const handleTabChange = (key: TabKey) => {
     if (key === effectiveTab) return;
@@ -585,14 +587,17 @@ export const OrganizerClubManage: FC = () => {
     <div className="rd-page">
       <ManageHeader club={club} />
 
-      <div className="rd-tabs" role="tablist">
+      {/* Тот же сегментный переключатель, что на странице клуба и в «Активностях» —
+          переключатель в приложении один (решение PO 2026-07-30). Четыре сегмента влезают
+          в 390px без переноса; у со-организатора их и вовсе три. */}
+      <div className="rd-seg" role="tablist">
         {visibleTabs.map((tab) => (
           <button
             key={tab.key}
             type="button"
             role="tab"
             aria-selected={tab.key === effectiveTab}
-            className={`rd-tab-link${tab.key === effectiveTab ? ' rd-active' : ''}`}
+            className={`rd-seg-btn${tab.key === effectiveTab ? ' rd-active' : ''}`}
             onClick={() => handleTabChange(tab.key)}
           >
             {tab.label}

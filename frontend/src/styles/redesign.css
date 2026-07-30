@@ -186,11 +186,21 @@
 /* ---------- Заголовки секций ---------- */
 .rd-section-h { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin: 18px 0 12px; color: var(--text); }
 .rd-section-h .rd-accent { color: var(--accent); }
+/* Заголовок секции — ЕДИНЫЙ на всё приложение: капс-ярлык + волосяная линейка до правого края.
+   Линейка нарисована псевдоэлементом в цвете самого ярлыка (currentColor с прозрачностью),
+   поэтому цветные варианты (`rd-attn-*`) получают её автоматически, без отдельных правил,
+   а разметка остаётся простой — `<div class="rd-section-sub-h">Правила</div>`. */
 .rd-section-sub-h {
-  font-size: 11px; color: var(--text-faint); letter-spacing: 0.1em;
-  text-transform: uppercase; margin: 18px 0 10px; font-weight: 600;
+  display: flex; align-items: baseline; gap: 11px;
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.19em;
+  text-transform: uppercase; color: var(--text-faint);
+  margin: 20px 0 8px;
 }
-.rd-section-sub-h .rd-count { color: var(--text-faint); }
+.rd-section-sub-h::after {
+  content: ''; flex: 1; height: 1px; background: currentColor; opacity: 0.22;
+}
+/* Счётчик рядом с ярлыком («УЧАСТНИКИ · 12») — тот же цвет, чуть бледнее. */
+.rd-section-sub-h .rd-count { color: inherit; opacity: 0.75; }
 .rd-page-h { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; color: var(--text); }
 
 /* ---------- Поиск ---------- */
@@ -1139,18 +1149,6 @@
 .rd-skeleton .rd-sk-line.rd-short { width: 45%; }
 @keyframes rd-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
-/* ---------- Табы с подчёркиванием ---------- */
-.rd-tabs { display: flex; gap: 20px; padding: 0 4px; margin-bottom: 16px; border-bottom: 1px solid var(--hairline); }
-.rd-tab-link {
-  padding: 8px 0 11px; font-size: 13px; font-weight: 600; color: var(--text-dim);
-  position: relative; background: transparent; border: 0; cursor: pointer; font-family: inherit;
-}
-.rd-tab-link.rd-active { color: var(--text); }
-.rd-tab-link.rd-active::after {
-  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
-  background: var(--accent-grad); border-radius: 2px;
-}
-
 /* ---------- Полоска аватаров участников ---------- */
 .rd-member-strip { display: flex; align-items: center; margin-bottom: 16px; }
 .rd-m-avt {
@@ -1312,14 +1310,6 @@
 /* Цена и «Бесплатно» цветные: цвет здесь несёт смысл, а не оформление. */
 .rd-club-fact.rd-pay b { color: var(--accent); }
 .rd-club-fact.rd-free b { color: var(--live); }
-
-/* Заголовок секции: капс-ярлык + волосяная линейка. Ритм задают линейки, не рамки. */
-.rd-sec-h { display: flex; align-items: baseline; gap: 11px; margin: 20px 0 8px; }
-.rd-sec-h .rd-k {
-  font-size: 9.5px; font-weight: 800; letter-spacing: 0.19em;
-  text-transform: uppercase; color: var(--text-faint);
-}
-.rd-sec-h .rd-line { flex: 1; height: 1px; background: var(--hairline-2); }
 
 /* Блок «О клубе»: описание и правила в одном контейнере, высота строго по содержимому. */
 .rd-club-about {

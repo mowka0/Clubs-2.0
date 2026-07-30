@@ -122,10 +122,10 @@ frontend/src/
   {owner, чат не привязан}            ← панель «Подключи чат клуба» (club-chat-link.md);
                                         сверху тот же шаг 20px, что у заголовков секций
 
-  .rd-sec-h «О клубе»                 ← ярлык секции + волосяная линейка
+  .rd-section-sub-h «О клубе»         ← ярлык секции + волосяная линейка
   .rd-club-about                      ← описание + правила + пилюля «В чат» в углу блока
 
-  {all viewers}                       ← .rd-sec-h «Жизнь клуба» + кольца качества (club-quality.md)
+  {all viewers}                       ← .rd-section-sub-h «Жизнь клуба» + кольца (club-quality.md)
 
   {visitor-only}                      ← замок «Активности доступны участникам» + тизер-афиша
                                         + чип про чат + CTA («Вступить» / «Хочу вступить»)
@@ -277,8 +277,10 @@ distinct-абсолют): **основа клуба** (ядро) · **часто
 сегмент выпуклый. Это одно из двух мест, где применён неоморфизм (второе — круглые кнопки на
 обложке); оба источника света живут в токенах `--neu-lo` / `--neu-hi` и переопределены для светлой
 темы, где блик должен быть чистым белым. Стили — `frontend/src/styles/redesign.css`
-§ «Сегментный переключатель табов». Прежние underline-табы (`rd-tabs` / `rd-tab-link`) остались
-у `OrganizerClubManage`. Таба «Управление» на странице клуба больше нет (см. § Organizer tabs).
+§ «Сегментный переключатель». **Переключатель в приложении один** (2026-07-30): те же классы
+в «Активностях» (События/Сборы), шторке взноса (СБП/Наличными) и «Управлении клубом»
+(4 таба — влезают в 390px без переноса). Underline-табы `rd-tabs` / `rd-tab-link` удалены
+как класс. Таба «Управление» на странице клуба больше нет (см. § Organizer tabs).
 См. [`ui-pages.md`](./ui-pages.md) § OrganizerClubManage и [`redesign-banco-style.md`](./redesign-banco-style.md) Этап 4.
 
 Аналогично header, about, rules, locked, CTA, events, members, profile — вынесены из telegram-ui-компонентов (`List/Section/Cell/Badge/Placeholder/Button`) в brand-классы `.cp-*` для единства с DiscoveryPage (PR #33). `Modal/Input/Spinner` для apply-modal — остались.

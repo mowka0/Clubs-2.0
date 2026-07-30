@@ -41,10 +41,7 @@ export const ClubQualityFacts: FC<ClubQualityFactsProps> = ({ clubId, memberCoun
     <>
       {/* Заголовок живёт внутри компонента: блок сам скрывается при пустом ответе (fail-soft),
           и в родителе ярлык остался бы висеть над пустотой. */}
-      <div className="rd-sec-h">
-        <span className="rd-k">Жизнь клуба</span>
-        <span className="rd-line" />
-      </div>
+      <div className="rd-section-sub-h">Жизнь клуба</div>
       <div className="rd-glass" style={{ padding: '18px 16px', marginBottom: 14 }}>
         {hasActivity && (
           <>
