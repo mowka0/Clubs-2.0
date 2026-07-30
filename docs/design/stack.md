@@ -801,16 +801,21 @@ Tabs условно (`{activeTab === X && <Tab/>}`) — only active mounts → o
    - `<Placeholder>` «Добро пожаловать!» + description «Вы вступили в клуб
      "{name}"»
    - `<Button>` «Перейти в клуб» → `/clubs/{id}`
-4. Иначе:
-   - `<Section header="Приглашение в клуб">` — Avatar 64×64 + название +
-     category-badge
-   - Info-секция: Город · Участники X/Y · Подписка (если > 0)
-   - `<Section header="О клубе">` (если description)
+4. Иначе (с 2026-07-30 — композиция гостевой страницы клуба, решение PO):
+   - `ClubIdentityHeader` — обложка (метка «✉ Приглашение» в углу) + аватар на стыке +
+     название + чипы «доступ · город · состав · взнос»
+   - Строка организатора `.rd-invite-org`; чип «🌱 Клуб только собирается» у молодого клуба
+   - «О клубе»: описание + правила + пилюля «💬 В чат» с подсказкой (если чат привязан)
+   - `ClubQualityFacts` («Жизнь клуба») + `ClubEventsTeaser` («Афиша клуба», без строки-замка)
+   - `ClubLockedNotice` «Активности клуба доступны участникам»
    - Join-error
-   - `<Button>` «Вступить в клуб»
+   - CTA: «Вступить в клуб» / «Отправить заявку» / «Попроситься в клуб» / «Перейти в клуб»
+     (уже участник); в платном клубе — подпись «Кнопка ничего не списывает…»
 
 **Footer:** BottomTabBar
-**API:** `getClubByInvite(code)`, `joinByInviteCode(code)`
+**API:** `getClubByInvite(code)`, `joinByInviteCode(code)`, `submitApplication(clubId)`,
+`getClubQuality(clubId)`, `getClubEventsTeaser(clubId)`
+**Детали:** [`docs/modules/club-invites.md`](../modules/club-invites.md) § «Посадочная приглашённого»
 
 ---
 

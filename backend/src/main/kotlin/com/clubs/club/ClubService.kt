@@ -110,10 +110,17 @@ class ClubService(
             ?: clubRepository.findByApplyInviteCode(code)
             ?: throw NotFoundException("Invite link not found")
         val requiresApplication = direct == null && club.accessType == AccessType.closed
-        // Имя владельца — для подписи «Приглашение от <имя>» на посадочной (club-invites, кадр D).
+        // Имя владельца — для строки организатора на посадочной (club-invites, кадр D).
         val owner = userRepository.findById(club.ownerId)
+        // Факт привязки чата и включённой «двери» публичен (как в getClub) — посадочная показывает
+        // пилюлю «В чат» с подсказкой. Саму invite-ссылку сюда не отдаём: эндпоинт приглашения
+        // не знает вызывающего, а значит и не может проверить его право на вход в чат.
+        val chatLink = chatLinkRepository.findByClubId(club.id)
+        val chatLinked = chatLink?.botStatus?.isInChat == true
         return mapper.toDetailDto(
             club,
+            chatLinked = chatLinked,
+            chatDoorEnabled = chatLinked && chatLink?.doorEnabled == true,
             ownerFirstName = owner?.firstName,
             ownerLastName = owner?.lastName,
             inviteRequiresApplication = requiresApplication

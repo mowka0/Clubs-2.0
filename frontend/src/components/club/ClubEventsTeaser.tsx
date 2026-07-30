@@ -24,8 +24,12 @@ function countLabel(event: TeaserEventDto): string {
 
 interface ClubEventsTeaserProps {
   clubId: string;
-  /** Строка под афишей: что именно откроет доступ (вступление / взнос) — текст зависит от зрителя. */
-  lockHint: string;
+  /**
+   * Строка под афишей: что именно откроет доступ (вступление / взнос) — текст зависит от зрителя.
+   * Не передан — строки нет: на посадочной приглашения ровно то же говорит плашка сразу под афишей,
+   * и две подряд читались бы как повтор.
+   */
+  lockHint?: string;
 }
 
 /**
@@ -43,7 +47,8 @@ export const ClubEventsTeaser: FC<ClubEventsTeaserProps> = ({ clubId, lockHint }
   return (
     <>
       <div className="rd-section-sub-h">Афиша клуба</div>
-      <div className="rd-glass" style={{ padding: '8px 16px', marginBottom: 8 }}>
+      {/* Без строки-замка карточка сама держит отбивку до следующего блока — иначе её давала строка. */}
+      <div className="rd-glass" style={{ padding: '8px 16px', marginBottom: lockHint ? 8 : 14 }}>
         {data.upcoming.map((event) => (
           <div
             key={event.id}
@@ -83,9 +88,11 @@ export const ClubEventsTeaser: FC<ClubEventsTeaserProps> = ({ clubId, lockHint }
           </>
         )}
       </div>
-      <div style={{ fontSize: 12, color: 'var(--text-dim)', margin: '0 4px 14px' }}>
-        🔒 {lockHint}
-      </div>
+      {lockHint && (
+        <div style={{ fontSize: 12, color: 'var(--text-dim)', margin: '0 4px 14px' }}>
+          🔒 {lockHint}
+        </div>
+      )}
     </>
   );
 };

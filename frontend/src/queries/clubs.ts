@@ -193,8 +193,12 @@ export function useJoinByInviteMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (code: string) => joinByInviteCode(code),
-    onSuccess: () => {
+    onSuccess: (membership) => {
       qc.invalidateQueries({ queryKey: queryKeys.clubs.my() });
+      // Детали клуба сбрасываем намеренно: до вступления ответ приходил БЕЗ реквизитов СБП
+      // (их видит только участник), а сразу после — посадочная открывает шит оплаты и берёт
+      // их отсюда. Без сброса шит получил бы гостевой кэш с пустым paymentLink.
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.detail(membership.clubId) });
     },
   });
 }

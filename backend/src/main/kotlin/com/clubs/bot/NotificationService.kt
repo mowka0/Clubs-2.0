@@ -458,33 +458,42 @@ class NotificationService(
      * Уведомляет заявителя о том, что организатор одобрил его заявку на вступление. Для ПЛАТНОГО
      * клуба одобрение переводит его в `frozen` — DM подталкивает оплатить взнос, чтобы открыть
      * доступ; для БЕСПЛАТНОГО клуба он уже внутри, поэтому это просто приветствие. Best-effort
-     * fire-and-forget; диплинк на страницу клуба (где frozen-участник нажимает «Оплатить взнос»).
+     * fire-and-forget.
      */
     @Async
     fun sendApplicationApprovedDM(applicantTelegramId: Long, clubName: String, clubId: UUID, paid: Boolean) {
         val text: String
         val button: String
+        val path: String
         if (paid) {
             text = "✅ Вашу заявку в клуб «$clubName» одобрили — оплатите вступление, чтобы получить доступ."
             button = "Оплатить взнос"
+            path = clubPathWithDuesSheet(clubId)
         } else {
             text = "✅ Вашу заявку в клуб «$clubName» одобрили. Добро пожаловать!"
             button = "Открыть клуб"
+            path = "/clubs/$clubId"
         }
-        sendDm(applicantTelegramId.toString(), text, webAppPath = "/clubs/$clubId", buttonText = button)
+        sendDm(applicantTelegramId.toString(), text, webAppPath = path, buttonText = button)
     }
 
     /**
      * Best-effort DM платному участнику, которому организатор только что закрыл доступ
-     * («Закрыть доступ» → frozen). Диплинк на страницу клуба, где frozen-участник нажимает
-     * «Оплатить взнос», чтобы заявить об оплате и вернуть доступ. Fire-and-forget — никогда
-     * не блокирует действие заморозки.
+     * («Закрыть доступ» → frozen), чтобы он заявил об оплате и вернул доступ. Fire-and-forget —
+     * никогда не блокирует действие заморозки.
      */
     @Async
     fun sendAccessFrozenDM(memberTelegramId: Long, clubName: String, clubId: UUID) {
         val text = "🔒 Организатор клуба «$clubName» закрыл вам доступ. Чтобы вернуть его, оплатите взнос."
-        sendDm(memberTelegramId.toString(), text, webAppPath = "/clubs/$clubId", buttonText = "Оплатить взнос")
+        sendDm(memberTelegramId.toString(), text, webAppPath = clubPathWithDuesSheet(clubId), buttonText = "Оплатить взнос")
     }
+
+    /**
+     * Путь на страницу клуба с сразу открытым шитом взноса. Кнопка DM называется «Оплатить взнос»
+     * и обязана давать оплату, а не экран, на котором её надо ещё раз найти (решение PO 2026-07-30).
+     * Кнопка — WebApp с прямым URL фронтенда, поэтому query-параметр доходит как есть.
+     */
+    private fun clubPathWithDuesSheet(clubId: UUID): String = "/clubs/$clubId?pay=1"
 
     /**
      * DM с инлайн-кнопкой-диплинком, открывающей Mini App на конкретном
