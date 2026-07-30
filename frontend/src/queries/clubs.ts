@@ -100,6 +100,9 @@ export function useUpdateClubMutation() {
     onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: queryKeys.clubs.detail(id) });
       qc.invalidateQueries({ queryKey: queryKeys.clubs.all });
+      // «Мои клубы» показывают аватар и название клуба — без сброса список оставался
+      // со старой картинкой после смены аватара со страницы клуба или из настроек.
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.my() });
     },
   });
 }

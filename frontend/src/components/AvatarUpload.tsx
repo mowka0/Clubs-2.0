@@ -2,9 +2,7 @@ import { FC, useRef, useState } from 'react';
 import { Button, Spinner, Text } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { uploadImage } from '../api/clubs';
-
-const MAX_BYTES = 5 * 1024 * 1024;
-const ALLOWED_MIMES = new Set(['image/jpeg', 'image/png']);
+import { validateImageFile } from '../utils/imageUpload';
 
 interface Props {
   value: string | null;
@@ -29,13 +27,9 @@ export const AvatarUpload: FC<Props> = ({ value, onChange, disabled }) => {
     if (!file) return;
 
     setError(null);
-    if (!ALLOWED_MIMES.has(file.type)) {
-      setError('Только JPEG и PNG');
-      haptic.notify('error');
-      return;
-    }
-    if (file.size > MAX_BYTES) {
-      setError('Файл больше 5 МБ');
+    const invalid = validateImageFile(file);
+    if (invalid) {
+      setError(invalid);
       haptic.notify('error');
       return;
     }

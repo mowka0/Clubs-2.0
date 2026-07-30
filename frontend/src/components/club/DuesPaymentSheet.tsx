@@ -213,12 +213,12 @@ export const DuesPaymentSheet: FC<DuesPaymentSheetProps> = ({
           {/* Переключатель метода — только когда доступны оба (реквизиты заданы + организатору можно
               написать). */}
           {sbpAllowed && (
-            <div className="rd-seg-control" role="tablist">
+            <div className="rd-seg rd-seg-flush" role="tablist">
               <button
                 type="button"
                 role="tab"
                 aria-selected={method === 'sbp'}
-                className={`rd-seg-item${method === 'sbp' ? ' rd-active' : ''}`}
+                className={`rd-seg-btn${method === 'sbp' ? ' rd-active' : ''}`}
                 onClick={() => { setMethod('sbp'); setError(null); }}
               >
                 По СБП
@@ -227,7 +227,7 @@ export const DuesPaymentSheet: FC<DuesPaymentSheetProps> = ({
                 type="button"
                 role="tab"
                 aria-selected={method === 'cash'}
-                className={`rd-seg-item${method === 'cash' ? ' rd-active' : ''}`}
+                className={`rd-seg-btn${method === 'cash' ? ' rd-active' : ''}`}
                 onClick={() => { setMethod('cash'); setError(null); }}
               >
                 Наличными

@@ -22,6 +22,7 @@ import { formatPrice } from '../utils/formatters';
 import { isActiveManagerMembership } from '../utils/membershipRole';
 import { openTmeLink } from '../utils/telegramLinks';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
+import { ClubAvatarButton } from '../components/club/ClubAvatarButton';
 import { ClubChatConnectBanner } from '../components/club/ClubChatConnectBanner';
 import { ClubEventsTeaser } from '../components/club/ClubEventsTeaser';
 import { WelcomeScene, memberCountCaption } from '../components/onboarding/WelcomeScene';
@@ -464,12 +465,14 @@ export const ClubPage: FC = () => {
         ) : null}
       </div>
 
-      {/* Аватар наезжает на стык обложки и страницы; без картинки — первая буква названия. */}
-      <div className="rd-club-avatar">
-        {club.avatarUrl
-          ? <img src={club.avatarUrl} alt="" />
-          : club.name.charAt(0).toUpperCase()}
-      </div>
+      {/* Аватар наезжает на стык обложки и страницы; менеджеру кружок кликабелен — тап меняет
+          картинку клуба (снять её можно в «Управление → Настройки»). */}
+      <ClubAvatarButton
+        clubId={club.id}
+        clubName={club.name}
+        avatarUrl={club.avatarUrl ?? null}
+        editable={isManager}
+      />
 
       <div className="rd-club-name">{club.name}</div>
 
