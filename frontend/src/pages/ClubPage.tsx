@@ -517,10 +517,7 @@ export const ClubPage: FC = () => {
 
       {/* О клубе — описание, правила и вход в чат одним блоком (решение PO 2026-07-30):
           отдельные секции «Правила» и широкая кнопка чата упразднены. */}
-      <div className="rd-sec-h">
-        <span className="rd-k">О клубе</span>
-        <span className="rd-line" />
-      </div>
+      <div className="rd-section-sub-h">О клубе</div>
       <div className="rd-club-about">
         <div className="rd-txt">{club.description}</div>
         {club.rules && (

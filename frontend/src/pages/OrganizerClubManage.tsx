@@ -585,14 +585,17 @@ export const OrganizerClubManage: FC = () => {
     <div className="rd-page">
       <ManageHeader club={club} />
 
-      <div className="rd-tabs" role="tablist">
+      {/* Тот же сегментный переключатель, что на странице клуба и в «Активностях» —
+          переключатель в приложении один (решение PO 2026-07-30). Четыре сегмента влезают
+          в 390px без переноса; у со-организатора их и вовсе три. */}
+      <div className="rd-seg" role="tablist">
         {visibleTabs.map((tab) => (
           <button
             key={tab.key}
             type="button"
             role="tab"
             aria-selected={tab.key === effectiveTab}
-            className={`rd-tab-link${tab.key === effectiveTab ? ' rd-active' : ''}`}
+            className={`rd-seg-btn${tab.key === effectiveTab ? ' rd-active' : ''}`}
             onClick={() => handleTabChange(tab.key)}
           >
             {tab.label}
