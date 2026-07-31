@@ -95,7 +95,7 @@ afterEach(() => {
 });
 
 describe('SwipeNavigator', () => {
-  it('свайп от левой кромки возвращает на предыдущий экран', async () => {
+  it('свайп вправо от кромки возвращает на предыдущий экран', async () => {
     renderNavigator();
     expect(screen.getByText('ВТОРОЙ ЭКРАН')).toBeInTheDocument();
 
@@ -104,10 +104,25 @@ describe('SwipeNavigator', () => {
     await waitFor(() => expect(screen.getByText('ПЕРВЫЙ ЭКРАН')).toBeInTheDocument());
   });
 
-  it('свайп из середины экрана не считается навигацией', async () => {
+  it('свайп из СЕРЕДИНЫ экрана тоже возвращает назад — зоны кромки больше нет', async () => {
+    // Раньше жест ловился только в 28px от края. Интро учит свайпу как единому жесту
+    // приложения, и обещание должно работать в любой точке экрана (решение PO 2026-07-31).
     renderNavigator();
 
     swipe(host(), 200, 380);
+
+    await waitFor(() => expect(screen.getByText('ПЕРВЫЙ ЭКРАН')).toBeInTheDocument());
+  });
+
+  it('вертикальная прокрутка из середины экрана переходом не становится', async () => {
+    // Защита, на которой всё держится после снятия зоны кромки: горизонталь обязана
+    // опережать вертикаль, иначе обычный скролл списка уводил бы со страницы.
+    renderNavigator();
+
+    dispatchTouch(host(), 'touchstart', [{ x: 200, y: 300 }], 0);
+    dispatchTouch(host(), 'touchmove', [{ x: 208, y: 200 }], 100);
+    dispatchTouch(host(), 'touchmove', [{ x: 214, y: 90 }], 200);
+    dispatchTouch(host(), 'touchend', [], 300);
 
     await settle();
     expect(screen.getByText('ВТОРОЙ ЭКРАН')).toBeInTheDocument();

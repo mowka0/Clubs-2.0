@@ -5,7 +5,7 @@ import { FC, ReactNode } from 'react';
  * paid — платный, membership в frozen до взноса (кадр B), applied — мест не было,
  * ушла заявка (кадр C).
  */
-export type WelcomeSceneVariant = 'free' | 'paid' | 'applied';
+export type WelcomeSceneVariant = 'free' | 'paid' | 'paidClaimed' | 'applied';
 
 /** «14 участников» — русская плюрализация для чипа клуба. */
 export function memberCountCaption(count: number): string {
@@ -109,6 +109,46 @@ const CONTENT: Record<WelcomeSceneVariant, VariantContent> = {
     ctaLabel: 'Перейти в клуб',
     ctaHint: 'Оплатить взнос можно на странице клуба',
   },
+  /**
+   * Взнос уже заявлен прямо на приглашении — доступа всё ещё нет, его открывает организатор.
+   * Отдельный вариант, а не тот же `paid`: поздравлять «Ты в клубе!» человека, который ждёт
+   * подтверждения оплаты, — враньё, и подсказка «оплатить можно на странице клуба» ему уже
+   * не нужна (баг PO 2026-07-31).
+   */
+  paidClaimed: {
+    art: '⏳',
+    title: 'Оплата на проверке',
+    subtitle: (
+      <>
+        Организатор подтвердит взнос — и клуб откроется целиком. <b>Мы сообщим.</b>
+      </>
+    ),
+    steps: [
+      {
+        icon: '1',
+        title: 'Организатор создаёт встречи',
+        text: 'Афишу клуба ты уже можешь посмотреть.',
+      },
+      {
+        icon: '2',
+        title: 'Голосуй и подтверждай место',
+        text: 'Откроется, как только организатор подтвердит взнос.',
+      },
+      {
+        icon: '3',
+        title: 'Приходи вживую',
+        text: 'Каждая встреча растит твою надёжность в клубе.',
+      },
+    ],
+    fact: (
+      <>
+        <b>Деньги идут напрямую организатору</b> — платформа их не касается. Если он долго
+        не подтверждает, напиши ему в личку.
+      </>
+    ),
+    factTone: 'wait',
+    ctaLabel: 'Перейти в клуб',
+  },
   applied: {
     art: '✉️',
     title: 'Заявка у организатора',
@@ -160,15 +200,15 @@ interface WelcomeSceneProps {
 }
 
 /**
- * Велком-сцена новичка в клубе — «сюжет 2» онбординга (срез 3): показывается ОДИН раз, сразу
- * после первого вступления (`onboardedAt == null`), вместо сухого «Добро пожаловать». Кто прошёл
- * карусель среза 1 — сцену не видит, и наоборот: free/paid-CTA помечает онбординг (дверь MEMBER),
- * так что карусель с дверями «Найти/Создать» такому человеку больше не показывается. Вариант
- * applied онбординг НЕ помечает — человек остался без клуба, при следующем обычном входе ему
- * честно показать карусель. Завершение — забота вызывающего (onCta): порядок «сервер → навигация →
- * setUser» обязателен, см. useCompleteOnboardingMutation.
+ * Велком-сцена новичка в клубе: показывается ОДИН раз за жизнь аккаунта, сразу после самого
+ * первого вступления, вместо сухого «Добро пожаловать». Это момент награды, а не подсказки,
+ * поэтому у неё свой ключ `WELCOME` — отдельный от тура `CLUB`, который идёт следом уже на
+ * странице клуба. Вариант applied тур НЕ помечает: человек остался без клуба, вступления
+ * не случилось, и сцену он честно увидит при первом настоящем. Завершение — забота
+ * вызывающего (onCta): порядок «сервер → навигация → setUser» обязателен,
+ * см. useCompleteTourMutation.
  *
- * Полноэкранная сцена в стиле карусели (ob-* классы) — решение PO 2026-07-24: кадры A–C,
+ * Полноэкранная сцена со своими `wsc-*` классами — решение PO 2026-07-24: кадры A–C,
  * альтернатива-шторка (кадр D) отклонена.
  */
 export const WelcomeScene: FC<WelcomeSceneProps> = ({
@@ -182,13 +222,13 @@ export const WelcomeScene: FC<WelcomeSceneProps> = ({
   const content = CONTENT[variant];
 
   return (
-    <div className="ob-root">
-      <div className="ob-body">
-        <div className="ob-art">
+    <div className="wsc-root">
+      <div className="wsc-body">
+        <div className="wsc-art">
           <div className="wsc-ring" aria-hidden="true">{content.art}</div>
         </div>
 
-        <h2 className="ob-title">{content.title}</h2>
+        <h2 className="wsc-title">{content.title}</h2>
 
         <div className="wsc-club-chip">
           <span className="wsc-club-ava">
@@ -200,15 +240,15 @@ export const WelcomeScene: FC<WelcomeSceneProps> = ({
           </span>
         </div>
 
-        <p className="ob-sub">{content.subtitle}</p>
+        <p className="wsc-sub">{content.subtitle}</p>
 
-        <div className="ob-perks">
+        <div className="wsc-steps">
           {content.steps.map((step) => (
-            <div className="ob-perk" key={step.title}>
-              <div className="ob-perk-ic wsc-step-n" aria-hidden="true">{step.icon}</div>
+            <div className="wsc-step" key={step.title}>
+              <div className="wsc-step-ic wsc-step-n" aria-hidden="true">{step.icon}</div>
               <div>
-                <div className="ob-perk-t">{step.title}</div>
-                {step.text && <div className="ob-perk-d">{step.text}</div>}
+                <div className="wsc-step-t">{step.title}</div>
+                {step.text && <div className="wsc-step-d">{step.text}</div>}
               </div>
             </div>
           ))}
@@ -217,7 +257,7 @@ export const WelcomeScene: FC<WelcomeSceneProps> = ({
         <div className={`wsc-fact wsc-fact-${content.factTone}`}>{content.fact}</div>
       </div>
 
-      <div className="ob-cta">
+      <div className="wsc-cta">
         {/* «Секунду…» вместо TGUI-спиннера — как дверь карусели среза 1 (OnboardingFlow). */}
         <button type="button" className="rd-btn-primary" onClick={onCta} disabled={ctaPending}>
           {ctaPending ? 'Секунду…' : content.ctaLabel}

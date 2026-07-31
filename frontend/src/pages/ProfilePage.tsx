@@ -17,6 +17,7 @@ import {
 } from '../components/profile/ProfileQuestCard';
 import { SubscriptionCard } from '../components/subscription/SubscriptionCard';
 import { tierWord, clubsPrepositional } from '../utils/reputationTier';
+import { CoachTour } from '../components/onboarding/CoachTour';
 
 const GearIcon: FC = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -183,6 +184,7 @@ export const ProfilePage: FC = () => {
           завершён; на её месте поздравление при завершении в этой сессии
           (profile-quest.md, мокап 04-quest-carousel). */}
       {gam && !gam.quest.completed && (
+        <div data-coach="profile-quest">
         <ProfileQuestCard
           quest={gam.quest}
           doneValues={{ city: user.city ?? null, bio: user.bio ?? null, interests }}
@@ -190,6 +192,7 @@ export const ProfilePage: FC = () => {
           onToggleFold={toggleQuestFold}
           onFill={(step) => openEditor(step)}
         />
+        </div>
       )}
       {congratsOpen && (
         <ProfileQuestCongrats
@@ -243,7 +246,9 @@ export const ProfilePage: FC = () => {
         // При ошибке фонового рефетча поверх устаревших данных остаёмся здесь, а не на плашке.
         <>
           <div className="rd-section-sub-h">Уровень</div>
-          <GamificationPanel data={gam} />
+          <div data-coach="profile-level">
+            <GamificationPanel data={gam} />
+          </div>
           {gam.xp === 0 && gam.badges.length === 0 && (
             // Пояснение под нулевой панелью — откуда берётся XP и зачем уровни. Только на старте.
             <div className="rd-cta-hint">
@@ -278,9 +283,14 @@ export const ProfilePage: FC = () => {
           «В клубах» — кнопка-переход, у новичка с лупой вместо нуля → каталог. */}
       <>
           <div className="rd-section-sub-h">Статистика</div>
-          <div className="rd-glass rd-ostat" style={{ marginTop: 0, marginBottom: 14 }}>
+          {/* Якорь коуч-марки: шаг «остальная статистика» подсвечивает панель целиком, но с
+              вырезом под строку надёжности — про неё был отдельный шаг до этого. */}
+          <div className="rd-glass rd-ostat" data-coach="profile-stats-panel" style={{ marginTop: 0, marginBottom: 14 }}>
             {hasReputation && (
-              <div className="rd-ostat-row rd-ostat-hero">
+              // Отдельный якорь: про надёжность тур говорит одной подсказкой и подсвечивает
+              // ровно эту строку, а не всю панель. Строки нет (новичок без репутации) —
+              // шаг падает на запасную цель, всю панель, чтобы рассказ не пропал.
+              <div className="rd-ostat-row rd-ostat-hero" data-coach="profile-reliability">
                 <span className="rd-ostat-ico rd-ost-shield" aria-hidden="true">🛡</span>
                 <span>
                   <span className="rd-ostat-lbl">Надёжность</span>
@@ -388,6 +398,15 @@ export const ProfilePage: FC = () => {
           onClose={() => { setEditOpen(false); setEditHighlight(null); }}
         />
       )}
+
+      {/* Тур профиля — первый после интро: сюда приводит «Погнали!». Ждём геймификацию:
+          подсказка про квест не должна прилететь раньше самой карточки квеста. */}
+      {/* Шаг «заполни профиль» открывается закрытым квестом — тремя вехами (город, интересы,
+          «о себе»), а НЕ вторым уровнем. Совпадение «50 XP квеста = порог уровня 2» верно
+          только у аккаунта без участия: активный человек добирает уровень встречами и с пустым
+          профилем прошёл бы шаг мимо (поймано на реальном аккаунте staging: профиль пуст,
+          уровень 3). Данные уже загружены этой страницей — коуч-марка своих запросов не заводит. */}
+      <CoachTour tour="PROFILE" ready={gam !== undefined} gateSatisfied={gam?.quest.completed ?? false} />
     </div>
   );
 };

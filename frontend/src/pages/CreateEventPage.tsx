@@ -1,4 +1,4 @@
-import { FC, useState } from 'react';
+import { FC, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
@@ -75,6 +75,38 @@ export const CreateEventPage: FC = () => {
 
   const effectiveStage2Lead = stage2LeadMinutes ?? STAGE2_LEAD_DEFAULT;
   const activeLeadIdx = Math.max(0, STAGE2_LEAD_PRESETS.findIndex((p) => p.minutes === effectiveStage2Lead));
+
+  // Ряд насечек — по нему считается ближайшая к пальцу отметка. Мерим именно насечки, а не
+  // дорожку: у ряда `justify-content: space-between`, поэтому центры насечек не совпадают
+  // с процентами дорожки, и счёт «по ширине трека» промахивался бы на краях.
+  const leadTicksRef = useRef<HTMLDivElement>(null);
+  // Тянут прямо сейчас — на время протяжки гасим плавность заливки, иначе она догоняет палец.
+  const [leadDragging, setLeadDragging] = useState(false);
+
+  /** Индекс отметки, ближайшей к точке X (координата viewport). */
+  const leadIndexAtX = (clientX: number): number => {
+    const row = leadTicksRef.current;
+    if (row === null) return activeLeadIdx;
+    let nearest = 0;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    Array.from(row.children).forEach((tick, i) => {
+      const box = tick.getBoundingClientRect();
+      const distance = Math.abs(clientX - (box.left + box.width / 2));
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = i;
+      }
+    });
+    return nearest;
+  };
+
+  /** Ставит отметку по индексу. Тик отдаём только при смене значения — иначе протяжка тарахтит. */
+  const applyLeadIndex = (index: number) => {
+    const preset = STAGE2_LEAD_PRESETS[index];
+    if (preset === undefined || preset.minutes === effectiveStage2Lead) return;
+    haptic.select();
+    setStage2LeadMinutes(preset.minutes);
+  };
 
   const eventTimeMs = eventDatetime ? new Date(eventDatetime).getTime() : null;
   const msToEvent = eventTimeMs !== null && !Number.isNaN(eventTimeMs) ? eventTimeMs - Date.now() : null;
@@ -300,24 +332,58 @@ export const CreateEventPage: FC = () => {
             </button>
             {leadEditorOpen && (
               <div className="rd-s2-timeline">
-                <div className="rd-s2-track">
-                  <span
-                    className="rd-s2-fill"
-                    style={{ width: `${(activeLeadIdx / (STAGE2_LEAD_PRESETS.length - 1)) * 100}%` }}
-                  />
-                </div>
-                <div className="rd-s2-ticks">
-                  {STAGE2_LEAD_PRESETS.map((p) => (
-                    <button
-                      key={p.minutes}
-                      type="button"
-                      className={`rd-s2-tick${effectiveStage2Lead === p.minutes ? ' rd-active' : ''}`}
-                      onClick={() => { haptic.select(); setStage2LeadMinutes(p.minutes); }}
-                    >
-                      <span className="rd-s2-knob" aria-hidden="true" />
-                      <span>{p.short}</span>
-                    </button>
-                  ))}
+                {/*
+                  Полоса тянется пальцем и прилипает к ближайшей отметке. Жест снят только с самой
+                  шкалы, не со всего блока: подпись под ней прокручивает страницу как обычный текст.
+
+                  `data-swipe-nav="off"` обязателен — навигационный свайп ловится со всего экрана,
+                  и без пометки протяжка по шкале уносила бы со страницы создания вместе с уже
+                  введённой формой. `touch-action: none` (в CSS) глушит вертикальную прокрутку
+                  под пальцем, иначе браузер перехватывает жест и значение прыгает.
+                */}
+                <div
+                  className={leadDragging ? 'rd-s2-scale rd-s2-dragging' : 'rd-s2-scale'}
+                  data-swipe-nav="off"
+                  onPointerDown={(e) => {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    setLeadDragging(true);
+                    applyLeadIndex(leadIndexAtX(e.clientX));
+                  }}
+                  // Признак «палец ещё на шкале» берём у захвата указателя, а не из состояния:
+                  // setLeadDragging применяется асинхронно, и первое движение после нажатия
+                  // читало бы ещё false — начало протяжки терялось бы.
+                  onPointerMove={(e) => {
+                    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+                    applyLeadIndex(leadIndexAtX(e.clientX));
+                  }}
+                  onPointerUp={(e) => {
+                    e.currentTarget.releasePointerCapture(e.pointerId);
+                    setLeadDragging(false);
+                  }}
+                  onPointerCancel={() => setLeadDragging(false)}
+                >
+                  <div className="rd-s2-track">
+                    <span
+                      className="rd-s2-fill"
+                      style={{ width: `${(activeLeadIdx / (STAGE2_LEAD_PRESETS.length - 1)) * 100}%` }}
+                    />
+                  </div>
+                  <div className="rd-s2-ticks" ref={leadTicksRef}>
+                    {STAGE2_LEAD_PRESETS.map((p, i) => (
+                      <button
+                        key={p.minutes}
+                        type="button"
+                        className={`rd-s2-tick${effectiveStage2Lead === p.minutes ? ' rd-active' : ''}`}
+                        // Тап по насечке остаётся отдельным обработчиком ради клавиатуры: указателем
+                        // значение уже поставил onPointerDown выше, и повторный вызов гасится
+                        // проверкой «значение не изменилось» внутри applyLeadIndex.
+                        onClick={() => applyLeadIndex(i)}
+                      >
+                        <span className="rd-s2-knob" aria-hidden="true" />
+                        <span>{p.short}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <span className="rd-hint">
                   До этого момента идёт голосование «Пойду / Возможно», затем участники

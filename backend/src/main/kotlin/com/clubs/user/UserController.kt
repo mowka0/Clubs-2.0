@@ -19,6 +19,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
@@ -50,15 +51,20 @@ class UserController(
         ResponseEntity.ok(userService.updateProfile(user.userId, request))
 
     /**
-     * Завершает онбординг. Дверь (участник/организатор) определяется нажатой кнопкой слайда
-     * и уходит в лог как метрика намерения. Повторный вызов — 409.
+     * Отмечает тур онбординга пройденным. Туры независимы — по одному на экран.
+     *
+     * Ключ принимаем строкой, а не сразу `OnboardingTour`: Spring на неизвестном значении
+     * enum бросает MethodArgumentTypeMismatchException, а он в GlobalExceptionHandler не
+     * разобран и уехал бы в 500. Разбор внутри сервиса даёт честный 400.
+     *
+     * Повторный вызов — 200, не 409: отметка идемпотентна.
      */
-    @PostMapping("/me/onboarding")
-    fun completeOnboarding(
+    @PostMapping("/me/onboarding/{tour}")
+    fun completeOnboardingTour(
         @AuthenticationPrincipal user: AuthenticatedUser,
-        @Valid @RequestBody request: CompleteOnboardingRequest
+        @PathVariable tour: String
     ): ResponseEntity<UserDto> =
-        ResponseEntity.ok(userService.completeOnboarding(user.userId, request.door))
+        ResponseEntity.ok(userService.completeTour(user.userId, tour))
 
     @GetMapping("/me/interests")
     fun getMyInterests(

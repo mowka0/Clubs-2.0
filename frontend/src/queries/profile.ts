@@ -1,12 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ApiError } from '../api/apiClient';
-import { completeOnboarding, getMe, getMyInterests, suggestInterests, updateMyProfile } from '../api/profile';
+import { completeTour, getMyInterests, suggestInterests, updateMyProfile } from '../api/profile';
 import { useAuthStore } from '../store/useAuthStore';
-import type { OnboardingDoor, UpdateProfileBody } from '../types/api';
+import type { OnboardingTour, UpdateProfileBody } from '../types/api';
 import { queryKeys } from './queryKeys';
-
-/** «Онбординг уже пройден» — для нас не ошибка, а подтверждение цели (см. useCompleteOnboardingMutation). */
-const HTTP_CONFLICT = 409;
 
 export function useMyInterestsQuery() {
   return useQuery({
@@ -45,27 +41,19 @@ export function useUpdateProfileMutation() {
 }
 
 /**
- * Завершение онбординга. Возвращает свежий профиль, но **сама в стор его не кладёт** —
+ * Отметка тура пройденным. Возвращает свежий профиль, но **сама в стор его не кладёт** —
  * это делает вызывающий, и делает НАМЕРЕННО ПОЗЖЕ навигации.
  *
- * Почему так: `onboardedAt` в сторе — это и есть гейт в `Layout`. Положи мы профиль здесь,
- * в `onSuccess` мутации, гейт открылся бы сразу и размонтировал карусель — а колбэки,
+ * Почему так: список туров в сторе — это и есть гейт в `Layout`. Положи мы профиль здесь,
+ * в `onSuccess` мутации, гейт открылся бы сразу и размонтировал интро — а колбэки,
  * переданные в `mutate(...)`, TanStack уже не вызывает у наблюдателя без слушателей
- * (`hasListeners()`). Навигация с подсветкой просто терялась, и человек оставался там,
- * где стоял. Поэтому порядок обязан быть: дождались сервера → ушли на страницу → открыли гейт.
+ * (`hasListeners()`). Навигация просто терялась, и человек оставался там, где стоял.
+ * Поэтому порядок обязан быть: дождались сервера → ушли на страницу → открыли гейт.
+ *
+ * Обработки 409 больше нет: эндпоинт стал идемпотентным, повтор отдаёт 200 (V72).
  */
-export function useCompleteOnboardingMutation() {
+export function useCompleteTourMutation() {
   return useMutation({
-    mutationFn: async (door: OnboardingDoor) => {
-      try {
-        return await completeOnboarding(door);
-      } catch (e) {
-        // 409 — «онбординг уже пройден»: наш профиль в сторе просто устарел (прошли с другого
-        // устройства, пока эта сессия висела открытой). Это не отказ, цель достигнута — забираем
-        // свежий профиль и идём дальше. Иначе человек остался бы заперт в карусели до перезапуска.
-        if (e instanceof ApiError && e.status === HTTP_CONFLICT) return await getMe();
-        throw e;
-      }
-    },
+    mutationFn: (tour: OnboardingTour) => completeTour(tour),
   });
 }

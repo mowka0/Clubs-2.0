@@ -237,7 +237,7 @@ frontend/
 | `error` | `<Placeholder>` «Не удалось авторизоваться. Откройте приложение через Telegram.» |
 | `!isAuthenticated && !loading && !error` | ничего (триггерится `login()`) |
 | `isAuthenticated`, но `user == null` | `<PageFallback />` — спиннер. «Данные не пришли» ≠ «данных нет» |
-| `isAuthenticated`, `user.onboardedAt == null`, нет `startParam` | `<OnboardingFlow />` — карусель первого входа **вместо** приложения (2026-07-13) |
+| `isAuthenticated`, `user.onboardingTours` пуст, нет `startParam` | `<OnboardingFlow />` — интро первого входа **вместо** приложения (v2, 2026-07-31) |
 | `isAuthenticated` | `<Outlet />` — рендер маршрута |
 
 **Нет redirect'ов** — всё управляется условным рендером в `Layout`. Онбординг — тоже **гейт, а не роут**:
@@ -303,7 +303,7 @@ interface UserDto {
   city: string | null;
   country: string | null;      // 2026-05-30 (код страны, e.g. 'RU')
   bio: string | null;          // 2026-05-30 (≤280 символов)
-  onboardedAt: string | null;  // 2026-07-13 (ISO-дата; null → карусель первого входа)
+  onboardingTours: OnboardingTour[];  // 2026-07-31 (V72; пустой массив → интро первого входа)
 }
 ```
 

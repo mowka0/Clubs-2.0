@@ -96,7 +96,7 @@ describe('ProfilePage — профиль-квест', () => {
     expect(screen.queryByText('Лис ждёт твои интересы')).not.toBeInTheDocument();
   });
 
-  it('AC-3: переход «не завершён → завершён» в сессии — поздравление; «Отлично» убирает', async () => {
+  it('AC-3: переход «не завершён → завершён» в сессии — поздравление; «Забрать!» убирает', async () => {
     // Хендлер с замыканием: сначала квест не завершён, после «сохранения профиля» — завершён.
     let completed = false;
     server.use(
@@ -122,7 +122,7 @@ describe('ProfilePage — профиль-квест', () => {
     expect(screen.getByText('Бейдж «Визитка»')).toBeInTheDocument();
     expect(screen.queryByText('Прокачай профиль')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Отлично' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Забрать!' }));
     await waitFor(() =>
       expect(screen.queryByText('Уровень 2 — «Свой»!')).not.toBeInTheDocument(),
     );
@@ -138,7 +138,7 @@ describe('ProfilePage — профиль-квест', () => {
     // Страница загрузилась (панель уровня на месте)
     expect(await screen.findByText('Уровень')).toBeInTheDocument();
     expect(screen.queryByText('Прокачай профиль')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Отлично' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Забрать!' })).not.toBeInTheDocument();
     // Бейдж «Визитка» — чипом в панели уровня
     expect(screen.getByText('Визитка')).toBeInTheDocument();
   });

@@ -11,7 +11,7 @@ import {
   useMyClubsQuery,
 } from '../queries/clubs';
 import { useClubQualityQuery } from '../queries/clubQuality';
-import { useCompleteOnboardingMutation } from '../queries/profile';
+import { useCompleteTourMutation } from '../queries/profile';
 import { useAuthStore } from '../store/useAuthStore';
 import { ApiError } from '../api/apiClient';
 import { formatPrice } from '../utils/formatters';
@@ -25,6 +25,7 @@ import { WelcomeScene, memberCountCaption } from '../components/onboarding/Welco
 import { Toast } from '../components/Toast';
 import foxInviteArt from '../assets/mascot/fox-invite.png';
 import foxErrorArt from '../assets/mascot/fox-error.png';
+import { ClubChatPill } from '../components/club/ClubChatPill';
 
 /**
  * До скольки участников клуб ещё «только собирается»: при таком составе И полном отсутствии
@@ -42,7 +43,7 @@ export const InvitePage: FC = () => {
   const myClubsQuery = useMyClubsQuery();
   const joinMutation = useJoinByInviteMutation();
   const applyMutation = useApplyToClubMutation();
-  const completeOnboarding = useCompleteOnboardingMutation();
+  const completeWelcome = useCompleteTourMutation();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
 
@@ -51,7 +52,6 @@ export const InvitePage: FC = () => {
   const [applied, setApplied] = useState(false);
   const [answerText, setAnswerText] = useState('');
   const [welcomeError, setWelcomeError] = useState<string | null>(null);
-  const [showChatHint, setShowChatHint] = useState(false);
   /**
    * Оплата взноса сразу после вступления в платный клуб — вместо двух пересадок
    * («Добро пожаловать» → страница клуба) ради одной кнопки (решение PO 2026-07-30).
@@ -63,9 +63,9 @@ export const InvitePage: FC = () => {
   // Кнопка «В чат» стоит вверху экрана, а форма заявки — внизу: подсказке нужно к ней прокрутить.
   const ctaRef = useRef<HTMLDivElement>(null);
 
-  // Велком-сцена (онбординг, срез 3): инвайт — главная точка входа новичка, карусель ему
-  // отложена deep-link'ом (Layout), поэтому продукт рассказывает сцена ПОСЛЕ вступления.
-  const isNewbie = !!user && user.onboardedAt == null;
+  // Велком-сцена: инвайт — главная точка входа новичка, интро ему не показывается вовсе
+  // (deep-link), поэтому продукт рассказывает сцена ПОСЛЕ вступления. Один раз за аккаунт.
+  const isNewbie = !!user && !user.onboardingTours.includes('WELCOME');
 
   const club = clubQuery.data;
   const loading = clubQuery.isPending;
@@ -203,13 +203,13 @@ export const InvitePage: FC = () => {
   if (!club) return invalidInviteScene;
 
   // Велком-CTA «Перейти в клуб»: порядок ЖЁСТКИЙ — ответ сервера → навигация → setUser
-  // (ловушка среза 1: профиль в сторе = гейт Layout; см. useCompleteOnboardingMutation).
+  // (ловушка среза 1: профиль в сторе = гейт Layout; см. useCompleteTourMutation).
   // Здесь гейт закрыт startParam'ом, но порядок сохраняем — он единственный корректный везде.
   const handleWelcomeCta = async () => {
-    if (completeOnboarding.isPending) return;
+    if (completeWelcome.isPending) return;
     haptic.impact('medium');
     try {
-      const freshUser = await completeOnboarding.mutateAsync('MEMBER');
+      const freshUser = await completeWelcome.mutateAsync('WELCOME');
       navigate(`/clubs/${club.id}`);
       setUser(freshUser);
     } catch {
@@ -291,15 +291,17 @@ export const InvitePage: FC = () => {
     }
     // Новичок: вместо сухого «Добро пожаловать» — велком-сцена (кадр A/B). CTA помечает
     // онбординг дверью MEMBER — карусель с дверями такому человеку больше не показывается.
+    // Взнос уже заявлен → отдельный вариант сцены: доступа ещё нет, поздравлять «Ты в клубе!»
+    // и советовать оплату (она сделана) — врать человеку.
     if (isNewbie) {
       return (
         <>
           <WelcomeScene
-            variant={isPaid ? 'paid' : 'free'}
+            variant={isPaid ? (duesStage === 'claimed' ? 'paidClaimed' : 'paid') : 'free'}
             clubName={club.name}
             clubCaption={`${club.city} · ${isPaid ? formatPrice(club.subscriptionPrice) : memberCountCaption(club.memberCount)}`}
             clubAvatarUrl={club.avatarUrl}
-            ctaPending={completeOnboarding.isPending}
+            ctaPending={completeWelcome.isPending}
             onCta={handleWelcomeCta}
           />
           {welcomeError && <Toast message={welcomeError} onClose={() => setWelcomeError(null)} />}
@@ -389,7 +391,7 @@ export const InvitePage: FC = () => {
   // Кнопка из подсказки: прямое вступление делаем сразу, а заявку — только доведя человека
   // до формы внизу, иначе он не увидит ни вопроса организатора, ни ошибки о пустом ответе.
   const handleChatHintCta = () => {
-    setShowChatHint(false);
+    // Подсказку закрывает сама пилюля — здесь остаётся только переход.
     haptic.impact('light');
     // Уже в клубе, но ссылки на чат нет — это frozen/expired (доступа нет, ссылка не выдаётся):
     // звать его вступать нельзя, бэкенд ответит 409. Ведём в клуб, там ждёт claim-флоу взноса.
@@ -449,33 +451,12 @@ export const InvitePage: FC = () => {
               </>
             )}
             {showChatPill && (
-              <div className="rd-club-chatrow">
-                <button
-                  type="button"
-                  className="rd-club-chatpill"
-                  onClick={() => { haptic.impact('light'); setShowChatHint((shown) => !shown); }}
-                  aria-expanded={showChatHint}
-                >
-                  <span aria-hidden="true">💬</span>
-                  В чат
-                </button>
-                {showChatHint && (
-                  <>
-                    {/* Завеса на весь экран: тап мимо подсказки закрывает её — на телефоне это
-                        единственный привычный способ выйти, клавиши Esc там нет. */}
-                    <div className="rd-chathint-veil" onClick={() => setShowChatHint(false)} />
-                    {/* Без role="dialog": глобальное правило brand-theme.css прибивает всё с этой
-                        ролью к низу экрана через !important (там живут боттом-шиты). Раскрытие
-                        и так объявлено через aria-expanded на самой пилюле. */}
-                    <div className="rd-chathint">
-                      <div className="rd-chathint-tx">{chatHintText}</div>
-                      <button type="button" className="rd-chathint-cta" onClick={handleChatHintCta}>
-                        {isAlreadyMember ? 'Перейти в клуб' : joinCtaLabel}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+              <ClubChatPill
+                mode="hint"
+                hintText={chatHintText}
+                ctaLabel={isAlreadyMember ? 'Перейти в клуб' : joinCtaLabel}
+                onCta={handleChatHintCta}
+              />
             )}
           </div>
         </>

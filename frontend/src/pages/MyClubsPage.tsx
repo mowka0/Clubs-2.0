@@ -3,7 +3,6 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
 import { Modal, Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
-import { useHighlight } from '../hooks/useHighlight';
 import { useAuthStore } from '../store/useAuthStore';
 import { useLeaveClubMutation, useMyClubsQuery } from '../queries/clubs';
 import { useMyReputationQuery, useOrganizerAwaitingDuesQuery } from '../queries/members';
@@ -39,6 +38,7 @@ import type {
   UserClubReputationDto,
 } from '../types/api';
 import type { ApplicationDto } from '../api/membership';
+import { CoachTour } from '../components/onboarding/CoachTour';
 
 interface MyClubsLocationState {
   toast?: string;
@@ -646,10 +646,6 @@ export const MyClubsPage: FC = () => {
   // на маунт, даже когда Vite HMR перезапускает эффект.
   const focusInboxHandledRef = useRef(false);
 
-  // Пришёл из онбординга по кнопке «Создать клуб и пригласить друзей» — подсвечиваем «+ Клуб»,
-  // чтобы человек запомнил, где живёт создание клуба, а не искал его во второй раз.
-  const createClubHighlighted = useHighlight('create-club');
-
   const navState = location.state as MyClubsLocationState | null;
   const [toastMessage, setToastMessage] = useState<string | null>(navState?.toast ?? null);
   useEffect(() => {
@@ -875,7 +871,8 @@ export const MyClubsPage: FC = () => {
         </div>
         <button
           type="button"
-          className={createClubHighlighted ? 'rd-city-pill rd-highlight-pulse' : 'rd-city-pill'}
+          className="rd-city-pill"
+          data-coach="create-club"
           onClick={openCreate}
           aria-label="Создать клуб"
         >
@@ -1170,6 +1167,8 @@ export const MyClubsPage: FC = () => {
       )}
 
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
+
+      <CoachTour tour="MY_CLUBS" />
     </div>
   );
 };

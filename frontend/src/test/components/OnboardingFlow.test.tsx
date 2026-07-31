@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeAll, afterAll, afterEach, beforeEach } 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 
 vi.mock('@telegram-apps/sdk-react', () => ({
@@ -15,12 +15,10 @@ import { OnboardingFlow } from '../../components/onboarding/OnboardingFlow';
 import { useAuthStore } from '../../store/useAuthStore';
 import { server } from '../mocks/server';
 
-/** Куда нас привела дверь и что попросили подсветить — читаем прямо из роутера. */
-const LandingProbe = ({ name }: { name: string }) => {
-  const location = useLocation();
-  const highlight = (location.state as { highlight?: string } | null)?.highlight ?? 'нет';
-  return <div>{`ПРИЗЕМЛИЛИСЬ: ${name}, подсветка: ${highlight}`}</div>;
-};
+/** Ширина вьюпорта: в jsdom раскладки нет, а от неё зависит порог свайпа. */
+const VIEWPORT_WIDTH = 320;
+
+const LandingProbe = ({ name }: { name: string }) => <div>{`ПРИЗЕМЛИЛИСЬ: ${name}`}</div>;
 
 function renderFlow() {
   const queryClient = new QueryClient({
@@ -31,15 +29,14 @@ function renderFlow() {
       <MemoryRouter initialEntries={['/onboarding']}>
         <Routes>
           <Route path="/onboarding" element={<OnboardingFlow />} />
-          <Route path="/" element={<LandingProbe name="каталог" />} />
-          <Route path="/my-clubs" element={<LandingProbe name="мои клубы" />} />
+          <Route path="/profile" element={<LandingProbe name="профиль" />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
 }
 
-const onboardedResponse = {
+const introDoneUser = {
   id: 'user-1',
   telegramId: 1,
   telegramUsername: null,
@@ -49,10 +46,21 @@ const onboardedResponse = {
   city: null,
   country: null,
   bio: null,
-  onboardedAt: '2026-07-13T12:00:00Z',
+  onboardingTours: ['INTRO'],
 };
 
-beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
+/** Слайды опознаём по микро-строкам — единственному тексту под заголовком. */
+const slide1 = () => screen.queryByText(/Знакомства, встречи, активности/i);
+const slide2 = () => screen.queryByText(/В чате болтаем/i);
+const slide3 = () => screen.queryByText(/Подключи чат, разошли инвайты/i);
+
+beforeAll(() => {
+  server.listen({ onUnhandledRequest: 'bypass' });
+  Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+    configurable: true,
+    value: VIEWPORT_WIDTH,
+  });
+});
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
@@ -60,153 +68,98 @@ beforeEach(() => {
   useAuthStore.setState({ user: null, isAuthenticated: true, isLoading: false, error: null });
 });
 
-describe('OnboardingFlow — карусель из трёх слайдов', () => {
-  it('листается кнопками: «Дальше» ведёт к участнику, оттуда — к организатору и обратно', async () => {
+describe('Интро — три слайда без стены текста', () => {
+  it('листается кнопкой «Дальше», на последнем слайде она становится «Погнали!»', async () => {
     const user = userEvent.setup();
     renderFlow();
 
-    // Слайд 1 — общий: дверей нет, только «Дальше».
-    expect(screen.getByText(/Наполни свою жизнь активностями/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Найти клубы в своём городе/i })).toBeNull();
+    expect(slide1()).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Погнали!' })).toBeNull();
 
     await user.click(screen.getByRole('button', { name: 'Дальше' }));
-    expect(screen.getByRole('button', { name: /Найти клубы в своём городе/i })).toBeInTheDocument();
+    expect(slide2()).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Хочу вести свой клуб/i }));
-    expect(screen.getByRole('button', { name: /Создать клуб и пригласить друзей/i })).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /Сначала посмотрю клубы/i }));
-    expect(screen.getByRole('button', { name: /Найти клубы в своём городе/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Дальше' }));
+    expect(slide3()).toBeInTheDocument();
+    // Выбора роли на последнем слайде нет — одна кнопка ведёт всех в профиль.
+    expect(screen.getByRole('button', { name: 'Погнали!' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Дальше' })).toBeNull();
   });
 
-  it('первый экран называет продукт: «Clubs» вшито в слоган и набрано каллиграфией', () => {
+  it('на слайде нет списка преимуществ — только заголовок и одна микро-строка', () => {
     const { container } = renderFlow();
 
-    const brand = container.querySelector('.ob-brand');
-    expect(brand).toHaveTextContent('Clubs');
-    // Слоган — цельное предложение, имя стоит внутри него, а не отдельной надписью сверху.
-    expect(container.querySelector('.ob-title')).toHaveTextContent(
-      'Объединяйтесь в Clubs по интересам, чтобы встречаться вживую!',
-    );
+    // Ровно та стена текста, из-за которой интро переделывали: четыре абзаца на первом экране.
+    expect(container.querySelectorAll('.ob-perk')).toHaveLength(0);
+    expect(container.querySelectorAll('.ob-micro')).toHaveLength(3);
   });
 
-  it('листается свайпом: сдвиг больше порога листает, дрожание пальца — нет (AC-2)', () => {
+  it('листается свайпом: дрожание пальца — нет, уверенный сдвиг — да', () => {
     const { container } = renderFlow();
-    const root = container.querySelector('.ob-root')!;
+    const viewport = container.querySelector('.ob-viewport')!;
     const swipe = (fromX: number, toX: number) => {
-      fireEvent.touchStart(root, { changedTouches: [{ clientX: fromX }] });
-      fireEvent.touchEnd(root, { changedTouches: [{ clientX: toX }] });
+      fireEvent.touchStart(viewport, { changedTouches: [{ clientX: fromX }] });
+      fireEvent.touchEnd(viewport, { changedTouches: [{ clientX: toX }] });
     };
 
-    // Короткий сдвиг (меньше SWIPE_THRESHOLD_PX = 50) — это не свайп, слайд остаётся.
-    swipe(200, 180);
-    expect(screen.getByText(/Наполни свою жизнь активностями/i)).toBeInTheDocument();
+    // Меньше 22% ширины — это дрожание, лента возвращается на место.
+    swipe(200, 190);
+    expect(slide1()).toBeInTheDocument();
 
-    // Смахнули влево — вперёд, к слайду участника.
-    swipe(200, 100);
-    expect(screen.getByRole('button', { name: /Найти клубы в своём городе/i })).toBeInTheDocument();
+    // Смахнули влево — вперёд.
+    swipe(280, 60);
+    expect(slide2()).toBeInTheDocument();
 
-    // Смахнули вправо — назад, на первый слайд.
-    swipe(100, 200);
-    expect(screen.getByText(/Наполни свою жизнь активностями/i)).toBeInTheDocument();
+    // Смахнули вправо — назад.
+    swipe(60, 280);
+    expect(slide1()).toBeInTheDocument();
   });
 
-  it('листается стрелками по краям (AC-2)', async () => {
-    const user = userEvent.setup();
-    renderFlow();
+  it('за первым слайдом назад не листает — дальше ничего нет', () => {
+    const { container } = renderFlow();
+    const viewport = container.querySelector('.ob-viewport')!;
 
-    // На первом слайде назад листать некуда — левой стрелки нет.
-    expect(screen.queryByRole('button', { name: 'Предыдущий слайд' })).toBeNull();
+    fireEvent.touchStart(viewport, { changedTouches: [{ clientX: 60 }] });
+    fireEvent.touchEnd(viewport, { changedTouches: [{ clientX: 300 }] });
 
-    await user.click(screen.getByRole('button', { name: 'Следующий слайд' }));
-    expect(screen.getByRole('button', { name: /Найти клубы в своём городе/i })).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Следующий слайд' }));
-    expect(screen.getByRole('button', { name: /Создать клуб и пригласить друзей/i })).toBeInTheDocument();
-
-    // Последний слайд — вперёд листать некуда.
-    expect(screen.queryByRole('button', { name: 'Следующий слайд' })).toBeNull();
-
-    await user.click(screen.getByRole('button', { name: 'Предыдущий слайд' }));
-    expect(screen.getByRole('button', { name: /Найти клубы в своём городе/i })).toBeInTheDocument();
+    expect(slide1()).toBeInTheDocument();
   });
 
-  it('дверь участника: помечает онбординг пройденным (door=MEMBER) и ведёт в каталог с подсветкой города', async () => {
+  it('«Погнали!» отмечает тур INTRO и уводит в профиль', async () => {
     const user = userEvent.setup();
-    let sentBody: unknown = null;
+    let calledPath: string | null = null;
     server.use(
-      http.post('*/api/users/me/onboarding', async ({ request }) => {
-        sentBody = await request.json();
-        return HttpResponse.json(onboardedResponse);
+      http.post('*/api/users/me/onboarding/:tour', ({ request }) => {
+        calledPath = new URL(request.url).pathname;
+        return HttpResponse.json(introDoneUser);
       }),
     );
     renderFlow();
 
     await user.click(screen.getByRole('button', { name: 'Дальше' }));
-    await user.click(screen.getByRole('button', { name: /Найти клубы в своём городе/i }));
-
-    await waitFor(() =>
-      expect(screen.getByText('ПРИЗЕМЛИЛИСЬ: каталог, подсветка: city')).toBeInTheDocument(),
-    );
-    expect(sentBody).toEqual({ door: 'MEMBER' });
-    // Профиль в сторе обновлён — гейт в Layout больше карусель не покажет.
-    expect(useAuthStore.getState().user?.onboardedAt).toBe('2026-07-13T12:00:00Z');
-  });
-
-  it('дверь организатора: door=ORGANIZER, ведёт в «Мои клубы» с подсветкой создания клуба', async () => {
-    const user = userEvent.setup();
-    let sentBody: unknown = null;
-    server.use(
-      http.post('*/api/users/me/onboarding', async ({ request }) => {
-        sentBody = await request.json();
-        return HttpResponse.json(onboardedResponse);
-      }),
-    );
-    renderFlow();
-
     await user.click(screen.getByRole('button', { name: 'Дальше' }));
-    await user.click(screen.getByRole('button', { name: /Хочу вести свой клуб/i }));
-    await user.click(screen.getByRole('button', { name: /Создать клуб и пригласить друзей/i }));
+    await user.click(screen.getByRole('button', { name: 'Погнали!' }));
 
-    await waitFor(() =>
-      expect(screen.getByText('ПРИЗЕМЛИЛИСЬ: мои клубы, подсветка: create-club')).toBeInTheDocument(),
-    );
-    expect(sentBody).toEqual({ door: 'ORGANIZER' });
+    await waitFor(() => expect(screen.getByText('ПРИЗЕМЛИЛИСЬ: профиль')).toBeInTheDocument());
+    expect(calledPath).toBe('/api/users/me/onboarding/INTRO');
+    // Профиль в сторе обновлён — гейт в Layout больше интро не покажет.
+    expect(useAuthStore.getState().user?.onboardingTours).toEqual(['INTRO']);
   });
 
-  it('409 «уже пройден» — не отказ: перечитывает профиль и пропускает дальше, а не запирает в карусели', async () => {
+  it('запрос упал — человек остаётся в интро и видит ошибку, а не пустое приложение', async () => {
     const user = userEvent.setup();
     server.use(
-      // Онбординг успели пройти на другом устройстве — профиль в этой сессии устарел.
-      http.post('*/api/users/me/onboarding', () =>
-        HttpResponse.json({ message: 'Onboarding already completed' }, { status: 409 })),
-      http.get('*/api/users/me', () => HttpResponse.json(onboardedResponse)),
-    );
-    renderFlow();
-
-    await user.click(screen.getByRole('button', { name: 'Дальше' }));
-    await user.click(screen.getByRole('button', { name: /Найти клубы в своём городе/i }));
-
-    await waitFor(() =>
-      expect(screen.getByText('ПРИЗЕМЛИЛИСЬ: каталог, подсветка: city')).toBeInTheDocument(),
-    );
-    expect(useAuthStore.getState().user?.onboardedAt).toBe('2026-07-13T12:00:00Z');
-    expect(screen.queryByText(/Не удалось продолжить/i)).toBeNull();
-  });
-
-  it('запрос упал — человек остаётся в карусели и видит ошибку, а не пустое приложение', async () => {
-    const user = userEvent.setup();
-    server.use(
-      http.post('*/api/users/me/onboarding', () =>
+      http.post('*/api/users/me/onboarding/:tour', () =>
         HttpResponse.json({ message: 'boom' }, { status: 500 })),
     );
     renderFlow();
 
     await user.click(screen.getByRole('button', { name: 'Дальше' }));
-    await user.click(screen.getByRole('button', { name: /Найти клубы в своём городе/i }));
+    await user.click(screen.getByRole('button', { name: 'Дальше' }));
+    await user.click(screen.getByRole('button', { name: 'Погнали!' }));
 
     await waitFor(() => expect(screen.getByText(/Не удалось продолжить/i)).toBeInTheDocument());
     expect(screen.queryByText(/ПРИЗЕМЛИЛИСЬ/)).toBeNull();
-    expect(useAuthStore.getState().user?.onboardedAt).toBeUndefined();
+    expect(useAuthStore.getState().user).toBeNull();
   });
 });

@@ -20,7 +20,6 @@ import {
 import { ApiError } from '../api/apiClient';
 import { formatPrice } from '../utils/formatters';
 import { isActiveManagerMembership } from '../utils/membershipRole';
-import { openTmeLink } from '../utils/telegramLinks';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
 import { ClubCoverButton } from '../components/club/ClubCoverButton';
 import { ClubIdentityHeader } from '../components/club/ClubIdentityHeader';
@@ -28,12 +27,14 @@ import { ClubLockedNotice } from '../components/club/ClubLockedNotice';
 import { ClubChatConnectBanner } from '../components/club/ClubChatConnectBanner';
 import { ClubEventsTeaser } from '../components/club/ClubEventsTeaser';
 import { WelcomeScene, memberCountCaption } from '../components/onboarding/WelcomeScene';
-import { useCompleteOnboardingMutation } from '../queries/profile';
+import { useCompleteTourMutation } from '../queries/profile';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
 import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
 import { InviteSheet } from '../components/club/InviteSheet';
 import { LeaveClubModal } from '../components/club/LeaveClubModal';
+import { CoachTour } from '../components/onboarding/CoachTour';
+import { ClubChatPill } from '../components/club/ClubChatPill';
 
 type TabId = 'activities' | 'members';
 
@@ -88,7 +89,7 @@ export const ClubPage: FC = () => {
   const applyMutation = useApplyToClubMutation();
   const completeFreeMutation = useCompleteFreeMembershipMutation();
   const leaveMutation = useLeaveClubMutation();
-  const completeOnboarding = useCompleteOnboardingMutation();
+  const completeWelcome = useCompleteTourMutation();
 
   const [joinError, setJoinError] = useState<string | null>(null);
   const [showApplyModal, setShowApplyModal] = useState(false);
@@ -190,8 +191,8 @@ export const ClubPage: FC = () => {
       onSuccess: (membership) => {
         setJoinedStatus(membership.status);
         haptic.notify('success');
-        // Первое вступление новичка (onboardedAt пуст) → велком-сцена вместо голой страницы.
-        if (user?.onboardedAt == null) setShowWelcome(true);
+        // Самое первое вступление в жизни аккаунта → велком-сцена вместо голой страницы.
+        if (user !== null && !user.onboardingTours.includes('WELCOME')) setShowWelcome(true);
       },
       onError: (e) => {
         // 409 — тихое восстановление: кэш уже инвалидирован, UI был просто устаревшим.
@@ -202,20 +203,20 @@ export const ClubPage: FC = () => {
     });
   };
 
-  // CTA велком-сцены: помечаем онбординг (дверь MEMBER) и закрываем оверлей — мы уже на
-  // странице клуба, навигация не нужна. mutateAsync ждём до setUser: упавший запрос не должен
-  // молча оставить onboardedAt пустым (иначе при следующем входе вылезла бы карусель).
+  // CTA велком-сцены: помечаем тур WELCOME и закрываем оверлей — мы уже на странице клуба,
+  // навигация не нужна. mutateAsync ждём до setUser: упавший запрос не должен молча оставить
+  // тур неотмеченным (иначе сцена вылезла бы при следующем вступлении).
   const handleWelcomeCta = async () => {
-    if (completeOnboarding.isPending) return;
+    if (completeWelcome.isPending) return;
     haptic.impact('medium');
     try {
-      const freshUser = await completeOnboarding.mutateAsync('MEMBER');
+      const freshUser = await completeWelcome.mutateAsync('WELCOME');
       setUser(freshUser);
       setShowWelcome(false);
     } catch {
       haptic.notify('error');
       // Не запираем человека на сцене из-за сети: клуб уже открыт под оверлеем, закрываем.
-      // onboardedAt остался пустым — сцену/карусель он увидит ещё раз, это честнее тупика.
+      // Тур остался неотмеченным — сцену он увидит ещё раз, это честнее тупика.
       setShowWelcome(false);
     }
   };
@@ -422,6 +423,20 @@ export const ClubPage: FC = () => {
     return null;
   };
 
+  /**
+   * Кнопка из подсказки чата у гостя: ведёт туда же, куда основная кнопка вступления —
+   * закрытый клуб через форму заявки, открытый вступает сразу. Дублировать здесь логику
+   * CTA нельзя: разойдутся при первом же изменении правил вступления.
+   */
+  const handleChatHintCta = () => {
+    haptic.impact('light');
+    if (club.accessType === 'closed') {
+      setShowApplyModal(true);
+      return;
+    }
+    handleJoin();
+  };
+
   const showLeaveIcon = !isOwner && isActiveMember;
   const showCancelledNote = !isOwner && isCancelledInPeriod && membership?.subscriptionExpiresAt;
 
@@ -441,6 +456,7 @@ export const ClubPage: FC = () => {
     <div className="rd-page">
       {/* Шапка (обложка → аватар → название → чипы) общая с посадочной приглашения —
           см. ClubIdentityHeader. Здесь в угол обложки уезжают кнопки роли. */}
+      <div data-coach="club-identity">
       <ClubIdentityHeader
         club={club}
         avatarEditable={isManager}
@@ -454,6 +470,7 @@ export const ClubPage: FC = () => {
               <button
                 type="button"
                 className="rd-hero-btn"
+                data-coach="club-manage"
                 onClick={handleOpenManage}
                 aria-label="Управление клубом"
                 title="Управление клубом"
@@ -474,6 +491,7 @@ export const ClubPage: FC = () => {
           </>
         }
       />
+      </div>
 
       {showCancelledNote && membership?.subscriptionExpiresAt && (
         <div className="rd-note" role="status">
@@ -493,7 +511,7 @@ export const ClubPage: FC = () => {
       {/* О клубе — описание, правила и вход в чат одним блоком (решение PO 2026-07-30):
           отдельные секции «Правила» и широкая кнопка чата упразднены. */}
       <div className="rd-section-sub-h">О клубе</div>
-      <div className="rd-club-about">
+      <div className="rd-club-about" data-coach="club-about">
         <div className="rd-txt">{club.description}</div>
         {club.rules && (
           <>
@@ -502,27 +520,32 @@ export const ClubPage: FC = () => {
           </>
         )}
         {/* Вход в чат по door-ссылке (club-chat-link): участник уже в чате → Telegram просто
-            откроет его; ещё нет → заявка и авто-впуск ботом. */}
+            откроет его. Гость видит ту же пилюлю, но она ведёт к подсказке: двери у него ещё
+            нет, а сам факт чата — довод вступить (решение PO 2026-07-31; раньше гостю
+            доставалась лишь пассивная строчка у кнопки вступления). */}
         {showTabs && club.chatInviteLink && (
-          <div className="rd-club-chatrow">
-            <button
-              type="button"
-              className="rd-club-chatpill"
-              onClick={() => {
-                if (!club.chatInviteLink) return;
-                haptic.impact('light');
-                openTmeLink(club.chatInviteLink);
-              }}
-            >
-              <span aria-hidden="true">💬</span>
-              В чат
-            </button>
-          </div>
+          <ClubChatPill mode="open" inviteLink={club.chatInviteLink} />
+        )}
+        {!showTabs && club.chatLinked && (
+          <ClubChatPill
+            mode="hint"
+            hintText={
+              club.chatDoorEnabled
+                ? 'Чат клуба открыт участникам. Вступите — и бот впустит вас туда.'
+                : 'У клуба есть чат. Организатор позовёт вас туда после вступления.'
+            }
+            ctaLabel={club.accessType === 'closed' ? 'Хочу вступить' : 'Вступить в клуб'}
+            onCta={handleChatHintCta}
+          />
         )}
       </div>
 
       {/* Жизнь клуба — кольца качества + подпись возраст/активность, видны всем */}
-      {id && <ClubQualityFacts clubId={id} memberCount={club.memberCount} />}
+      {id && (
+        <div data-coach="club-life">
+          <ClubQualityFacts clubId={id} memberCount={club.memberCount} />
+        </div>
+      )}
 
       {/* Участник без доступа: frozen (вступил, ждёт подтверждения первого взноса) или expired
           (подписка истекла — должник по продлению). Один claim-флоу, разные тексты. */}
@@ -595,17 +618,6 @@ export const ClubPage: FC = () => {
             }
           />
 
-          {/* Чат и клуб — одно целое (club-chat-link): гость видит, что вход в чат
-              лежит через вступление (мокап 02-C). */}
-          {club.chatLinked && club.chatDoorEnabled && (
-            <div className="rd-cl-chip">
-              <span aria-hidden="true">💬</span>
-              <span>
-                У клуба есть чат — вход откроется после {club.accessType === 'closed' ? 'одобрения заявки' : 'вступления'}
-              </span>
-            </div>
-          )}
-
           {joinError && <div className="rd-error">{joinError}</div>}
 
           <div className="rd-cta-wrap">
@@ -623,6 +635,7 @@ export const ClubPage: FC = () => {
                 key={item.key}
                 type="button"
                 className={`rd-seg-btn${item.selected ? ' rd-active' : ''}`}
+                data-coach={item.key === 'activities' ? 'club-tab-activities' : 'club-tab-members'}
                 onClick={() => handleTabClick(item.key)}
               >
                 {item.label}
@@ -727,10 +740,16 @@ export const ClubPage: FC = () => {
           clubName={club.name}
           clubCaption={`${club.city} · ${club.subscriptionPrice > 0 ? formatPrice(club.subscriptionPrice) : memberCountCaption(club.memberCount)}`}
           clubAvatarUrl={club.avatarUrl}
-          ctaPending={completeOnboarding.isPending}
+          ctaPending={completeWelcome.isPending}
           onCta={handleWelcomeCta}
         />
       )}
+
+      {/* Тур клуба. Владельцу — свой, более подробный (те же блоки плюс вход в настройки):
+          он только что создал клуб, и ему нужно донастроить своё, а не осмотреться в чужом.
+          Рендерится ровно один — у двух одновременных туров подрались бы затемнения.
+          Пока висит велком-сцена, подсказки не лезут: она перекрывает страницу целиком. */}
+      <CoachTour tour={isOwner ? 'CLUB_OWNER' : 'CLUB'} ready={!showWelcome} />
     </div>
   );
 };

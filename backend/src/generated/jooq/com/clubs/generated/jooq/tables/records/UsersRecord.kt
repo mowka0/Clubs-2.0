@@ -64,21 +64,17 @@ open class UsersRecord private constructor() : UpdatableRecordImpl<UsersRecord>(
         set(value): Unit = set(10, value)
         get(): String? = get(10) as String?
 
-    open var onboardedAt: OffsetDateTime?
+    open var questCityAt: OffsetDateTime?
         set(value): Unit = set(11, value)
         get(): OffsetDateTime? = get(11) as OffsetDateTime?
 
-    open var questCityAt: OffsetDateTime?
+    open var questInterestsAt: OffsetDateTime?
         set(value): Unit = set(12, value)
         get(): OffsetDateTime? = get(12) as OffsetDateTime?
 
-    open var questInterestsAt: OffsetDateTime?
+    open var questBioAt: OffsetDateTime?
         set(value): Unit = set(13, value)
         get(): OffsetDateTime? = get(13) as OffsetDateTime?
-
-    open var questBioAt: OffsetDateTime?
-        set(value): Unit = set(14, value)
-        get(): OffsetDateTime? = get(14) as OffsetDateTime?
 
     // -------------------------------------------------------------------------
     // Primary key information
@@ -89,7 +85,7 @@ open class UsersRecord private constructor() : UpdatableRecordImpl<UsersRecord>(
     /**
      * Create a detached, initialised UsersRecord
      */
-    constructor(id: UUID? = null, telegramId: Long, telegramUsername: String? = null, firstName: String, lastName: String? = null, avatarUrl: String? = null, city: String? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, country: String? = null, bio: String? = null, onboardedAt: OffsetDateTime? = null, questCityAt: OffsetDateTime? = null, questInterestsAt: OffsetDateTime? = null, questBioAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, telegramId: Long, telegramUsername: String? = null, firstName: String, lastName: String? = null, avatarUrl: String? = null, city: String? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, country: String? = null, bio: String? = null, questCityAt: OffsetDateTime? = null, questInterestsAt: OffsetDateTime? = null, questBioAt: OffsetDateTime? = null): this() {
         this.id = id
         this.telegramId = telegramId
         this.telegramUsername = telegramUsername
@@ -101,7 +97,6 @@ open class UsersRecord private constructor() : UpdatableRecordImpl<UsersRecord>(
         this.updatedAt = updatedAt
         this.country = country
         this.bio = bio
-        this.onboardedAt = onboardedAt
         this.questCityAt = questCityAt
         this.questInterestsAt = questInterestsAt
         this.questBioAt = questBioAt
@@ -124,7 +119,6 @@ open class UsersRecord private constructor() : UpdatableRecordImpl<UsersRecord>(
             this.updatedAt = value.updatedAt
             this.country = value.country
             this.bio = value.bio
-            this.onboardedAt = value.onboardedAt
             this.questCityAt = value.questCityAt
             this.questInterestsAt = value.questInterestsAt
             this.questBioAt = value.questBioAt

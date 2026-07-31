@@ -22,7 +22,7 @@ import { useAuthStore } from '../../store/useAuthStore';
 
 const USER_RESPONSE = {
   id: 'u1', telegramId: 1, telegramUsername: 'v', firstName: 'V', lastName: null,
-  avatarUrl: null, city: null, country: null, bio: null, onboardedAt: null,
+  avatarUrl: null, city: null, country: null, bio: null, onboardingTours: [],
 };
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));

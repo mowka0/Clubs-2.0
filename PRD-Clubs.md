@@ -581,7 +581,7 @@
 - city: varchar(255)
 - country: varchar(255)
 - bio: text
-- onboarded_at: timestamptz — когда прошёл онбординг первого входа; NULL = ещё не проходил, показываем карусель вместо приложения (см. `docs/modules/onboarding.md`)
+- пройденные туры онбординга живут в отдельной таблице `user_onboarding_tours` (V72: user_id + tour_key + completed_at); прохождение считается по каждому экрану отдельно, пустой набор = новичок, показываем интро вместо приложения (см. `docs/modules/onboarding.md`)
 - created_at: timestamp
 - updated_at: timestamp
 

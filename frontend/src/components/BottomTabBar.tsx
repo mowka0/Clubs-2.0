@@ -113,6 +113,8 @@ export const BottomTabBar: FC<BottomTabBarProps> = ({ onCreate, scoped = false }
             <button
               key={tab.path}
               type="button"
+              // Якорь коуч-марки: тур профиля заканчивается указанием на «Главную».
+              data-coach={tab.path === '/' ? 'tab-discovery' : undefined}
               className={isActive ? 'rd-dock-item rd-active' : 'rd-dock-item'}
               onClick={() => handleTabClick(tab.path)}
               aria-current={isActive ? 'page' : undefined}
@@ -126,6 +128,8 @@ export const BottomTabBar: FC<BottomTabBarProps> = ({ onCreate, scoped = false }
       </div>
       <button
         type="button"
+        // Якорь коуч-марки: владельческий тур объясняет, что встречи и сборы создаются отсюда.
+        data-coach="dock-create"
         className={scoped ? 'rd-dock-action rd-scoped' : 'rd-dock-action'}
         onClick={onCreate}
         aria-label={scoped ? 'Создать активность в этом клубе' : 'Создать активность'}

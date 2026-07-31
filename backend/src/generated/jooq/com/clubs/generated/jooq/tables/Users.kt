@@ -26,6 +26,7 @@ import com.clubs.generated.jooq.keys.USERS_PKEY
 import com.clubs.generated.jooq.keys.USERS_TELEGRAM_ID_KEY
 import com.clubs.generated.jooq.keys.USER_CLUB_REPUTATION__USER_CLUB_REPUTATION_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.USER_INTERESTS__USER_INTERESTS_USER_ID_FKEY
+import com.clubs.generated.jooq.keys.USER_ONBOARDING_TOURS__USER_ONBOARDING_TOURS_USER_ID_FKEY
 import com.clubs.generated.jooq.tables.Applications.ApplicationsPath
 import com.clubs.generated.jooq.tables.ClubAwards.ClubAwardsPath
 import com.clubs.generated.jooq.tables.ClubChatLinks.ClubChatLinksPath
@@ -43,6 +44,7 @@ import com.clubs.generated.jooq.tables.Skladchinas.SkladchinasPath
 import com.clubs.generated.jooq.tables.Transactions.TransactionsPath
 import com.clubs.generated.jooq.tables.UserClubReputation.UserClubReputationPath
 import com.clubs.generated.jooq.tables.UserInterests.UserInterestsPath
+import com.clubs.generated.jooq.tables.UserOnboardingTours.UserOnboardingToursPath
 import com.clubs.generated.jooq.tables.records.UsersRecord
 
 import java.time.OffsetDateTime
@@ -180,12 +182,6 @@ open class Users(
      * участника.
      */
     val BIO: TableField<UsersRecord, String?> = createField(DSL.name("bio"), SQLDataType.VARCHAR(280), this, "Короткое «о себе» из профиля, до 280 символов (NULL = не заполнено). Показывается на карточке участника.")
-
-    /**
-     * The column <code>public.users.onboarded_at</code>. Когда пользователь
-     * завершил онбординг; NULL — ещё не проходил
-     */
-    val ONBOARDED_AT: TableField<UsersRecord, OffsetDateTime?> = createField(DSL.name("onboarded_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда пользователь завершил онбординг; NULL — ещё не проходил")
 
     /**
      * The column <code>public.users.quest_city_at</code>. Веха профиль-квеста
@@ -545,6 +541,22 @@ open class Users(
 
     val userInterests: UserInterestsPath
         get(): UserInterestsPath = userInterests()
+
+    private lateinit var _userOnboardingTours: UserOnboardingToursPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.user_onboarding_tours</code> table
+     */
+    fun userOnboardingTours(): UserOnboardingToursPath {
+        if (!this::_userOnboardingTours.isInitialized)
+            _userOnboardingTours = UserOnboardingToursPath(this, null, USER_ONBOARDING_TOURS__USER_ONBOARDING_TOURS_USER_ID_FKEY.inverseKey)
+
+        return _userOnboardingTours;
+    }
+
+    val userOnboardingTours: UserOnboardingToursPath
+        get(): UserOnboardingToursPath = userOnboardingTours()
 
     /**
      * Get the implicit many-to-many join path to the <code>public.clubs</code>

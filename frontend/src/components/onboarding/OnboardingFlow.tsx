@@ -1,37 +1,82 @@
-import { FC, useState } from 'react';
+import { FC, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Toast } from '../Toast';
 import { OnboardingSlide } from './OnboardingSlide';
-import { ONBOARDING_SLIDES, type OnboardingDoorCta } from './slides';
+import { ONBOARDING_FINAL_CTA, ONBOARDING_SLIDES } from './slides';
 import { useHaptic } from '../../hooks/useHaptic';
-import { useCompleteOnboardingMutation } from '../../queries/profile';
+import { useCompleteTourMutation } from '../../queries/profile';
 import { useAuthStore } from '../../store/useAuthStore';
 
-/** Насколько далеко нужно смахнуть, чтобы это считалось листанием, а не дрожанием пальца (px). */
-const SWIPE_THRESHOLD_PX = 50;
+/** Доля ширины экрана, после которой отпускание пальца засчитывается как листание. */
+const SWIPE_COMMIT_RATIO = 0.22;
+/** Скорость (px/ms), при которой короткий флик листает, не добрав дистанцию. */
+const SWIPE_COMMIT_VELOCITY = 0.4;
+/** Во сколько раз ослабляется сдвиг за крайними слайдами — упор пальцем в «стенку». */
+const EDGE_RESISTANCE = 3;
+/** Сколько лента доезжает до места после отпускания (мс). */
+const SETTLE_MS = 260;
+/** Сколько ждём бездействия, прежде чем показать жест призрачной рукой (мс). */
+const HAND_HINT_DELAY_MS = 2500;
 
 /**
- * Карусель первого входа: три слайда, вопросов нет. Показывается вместо всего приложения,
- * пока `user.onboardedAt == null` (гейт в Layout) — не роут, иначе её обошли бы навигацией.
+ * Интро первого входа: три слайда, по одной мысли на каждом. Показывается вместо всего
+ * приложения, пока человек не прошёл ни одного тура (гейт в Layout) — не роут, иначе его
+ * обошли бы навигацией.
  *
- * Пройденным онбординг считается только по тапу главной кнопки слайда — «двери».
- * Кнопки «Пропустить» нет: бросивший на середине увидит карусель снова, он ведь так
- * и не узнал, что здесь можно. Дверь не открывает форму, а приводит на страницу, где та
- * живёт, и подсвечивает её — чтобы во второй раз человек нашёл её сам.
+ * Свайпу здесь НЕ учат словами: лента едет за пальцем, и это тот же самый жест, которым
+ * человек будет ходить назад-вперёд по всему приложению. Если он две с половиной секунды
+ * ничего не делает, движение показывает призрачная рука.
+ *
+ * Пройденным интро считается только по тапу «Погнали!» на последнем слайде. Кнопки
+ * «Пропустить» нет: бросивший на середине увидит интро снова — он ведь так и не узнал,
+ * что здесь можно.
  */
 export const OnboardingFlow: FC = () => {
   const navigate = useNavigate();
   const haptic = useHaptic();
-  const completeOnboarding = useCompleteOnboardingMutation();
+  const completeTour = useCompleteTourMutation();
   const setUser = useAuthStore((s) => s.setUser);
 
-  const [index, setIndex] = useState(0);
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
 
-  const slide = ONBOARDING_SLIDES[index];
-  const isFirst = index === 0;
+  const [index, setIndex] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  /** Человек уже листал сам — подсказку рукой больше не показываем. */
+  const [hasSwiped, setHasSwiped] = useState(false);
+  const [handHintOn, setHandHintOn] = useState(false);
+
   const isLast = index === ONBOARDING_SLIDES.length - 1;
+
+  // Жест держим в ref, а не в состоянии: он меняется на каждый кадр касания, и ререндер
+  // на каждое движение пальца ленту бы дёргал.
+  const gestureRef = useRef<{ startX: number; lastX: number; lastTime: number; velocity: number } | null>(null);
+
+  /** Ставит ленту в положение слайда `at`, сдвинутое на `shift` пикселей за пальцем. */
+  const paint = (at: number, shift: number, animated: boolean) => {
+    const track = trackRef.current;
+    const width = viewportRef.current?.clientWidth ?? 0;
+    if (track === null) return;
+    track.style.transition = animated ? `transform ${SETTLE_MS}ms cubic-bezier(.22,.61,.36,1)` : '';
+    track.style.transform = `translate3d(${-at * width + shift}px, 0, 0)`;
+  };
+
+  // Держим ленту на месте при смене слайда и при повороте экрана: положение считается
+  // от ширины вьюпорта, а она переживает ресайз.
+  useEffect(() => {
+    paint(index, 0, true);
+    const onResize = () => paint(index, 0, false);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index]);
+
+  // Подсказка рукой — только пока человек ни разу не листал сам.
+  useEffect(() => {
+    if (hasSwiped) return;
+    const timer = window.setTimeout(() => setHandHintOn(true), HAND_HINT_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [hasSwiped, index]);
 
   const goTo = (next: number) => {
     if (next < 0 || next >= ONBOARDING_SLIDES.length) return;
@@ -39,40 +84,73 @@ export const OnboardingFlow: FC = () => {
     setIndex(next);
   };
 
-  const handleTouchEnd = (endX: number | undefined) => {
-    const startX = touchStartX;
-    setTouchStartX(null);
-    // Координаты нет — значит, свайпа и не было. Подставлять сюда 0 нельзя: это прочиталось бы
-    // как «палец уехал в левый край» и безусловно листало бы вперёд.
-    if (startX === null || endX === undefined) return;
-    const shift = endX - startX;
-    if (Math.abs(shift) < SWIPE_THRESHOLD_PX) return;
-    goTo(shift < 0 ? index + 1 : index - 1);
+  const handleTouchStart = (clientX: number) => {
+    gestureRef.current = { startX: clientX, lastX: clientX, lastTime: Date.now(), velocity: 0 };
   };
 
-  if (!slide) return null;
-  const { doorCta, secondary } = slide;
+  const handleTouchMove = (clientX: number) => {
+    const gesture = gestureRef.current;
+    if (gesture === null) return;
+    const now = Date.now();
+    const elapsed = now - gesture.lastTime;
+    if (elapsed > 0) gesture.velocity = (clientX - gesture.lastX) / elapsed;
+    gesture.lastX = clientX;
+    gesture.lastTime = now;
+
+    let shift = clientX - gesture.startX;
+    // За первым и последним слайдом лента идёт туго: видно, что дальше ничего нет.
+    const pullsBeyondStart = index === 0 && shift > 0;
+    const pullsBeyondEnd = isLast && shift < 0;
+    if (pullsBeyondStart || pullsBeyondEnd) shift /= EDGE_RESISTANCE;
+    paint(index, shift, false);
+  };
+
+  const handleTouchEnd = (clientX: number | undefined) => {
+    const gesture = gestureRef.current;
+    gestureRef.current = null;
+    // Координаты нет — значит, и жеста не было. Подставлять 0 нельзя: это прочиталось бы
+    // как «палец уехал в левый край» и безусловно листало бы вперёд.
+    if (gesture === null || clientX === undefined) return;
+
+    const shift = clientX - gesture.startX;
+    const width = viewportRef.current?.clientWidth ?? 0;
+    const farEnough = width > 0 && Math.abs(shift) > width * SWIPE_COMMIT_RATIO;
+    const fastEnough = Math.abs(gesture.velocity) > SWIPE_COMMIT_VELOCITY;
+
+    if (!farEnough && !fastEnough) {
+      paint(index, 0, true);
+      return;
+    }
+
+    const next = index + (shift < 0 ? 1 : -1);
+    if (next < 0 || next >= ONBOARDING_SLIDES.length) {
+      paint(index, 0, true);
+      return;
+    }
+    setHasSwiped(true);
+    setHandHintOn(false);
+    goTo(next);
+  };
 
   /**
-   * Дверь. Порядок шагов здесь — не стилистика, а единственный рабочий:
+   * «Погнали!» — единственный выход из интро, ведёт всех в профиль. Порядок шагов здесь
+   * не стилистика, а единственный рабочий:
    *
-   * 1. Ждём подтверждения сервера. Оптимистично гасить карусель нельзя: упавший запрос
-   *    оставил бы человека с пустым `onboardedAt`, но уже внутри приложения.
-   * 2. Навигируем. Гейт ещё закрыт (`onboardedAt` в сторе всё ещё null), поэтому Layout
-   *    продолжает рисовать карусель — смены экрана не видно, мигания нет.
-   * 3. И только теперь кладём профиль в стор: гейт открывается уже на нужной странице,
-   *    вместе с меткой подсветки в `location.state`.
+   * 1. Ждём подтверждения сервера. Оптимистично гасить интро нельзя: упавший запрос
+   *    оставил бы человека без отметки, но уже внутри приложения.
+   * 2. Навигируем. Гейт ещё закрыт (в сторе туров всё ещё нет), поэтому Layout продолжает
+   *    рисовать интро — смены экрана не видно, мигания нет.
+   * 3. И только теперь кладём профиль в стор: гейт открывается уже на нужной странице.
    *
-   * Обратный порядок (профиль → навигация) ломался: `setUser` открывал гейт, карусель
-   * размонтировалась, и навигация не выполнялась вовсе — человек оставался на главной,
-   * а подсветка не приезжала никуда.
+   * Обратный порядок ломался: `setUser` открывал гейт, интро размонтировалось, и навигация
+   * не выполнялась вовсе — человек оставался на главной.
    */
-  const enterDoor = async (cta: OnboardingDoorCta) => {
-    if (completeOnboarding.isPending) return;
+  const enter = async () => {
+    if (completeTour.isPending) return;
     haptic.impact('medium');
     try {
-      const user = await completeOnboarding.mutateAsync(cta.door);
-      navigate(cta.to, { state: { highlight: cta.highlight } });
+      const user = await completeTour.mutateAsync('INTRO');
+      navigate('/profile');
       setUser(user);
     } catch {
       haptic.notify('error');
@@ -81,71 +159,56 @@ export const OnboardingFlow: FC = () => {
   };
 
   return (
-    <div
-      className="ob-root"
-      onTouchStart={(e) => setTouchStartX(e.changedTouches[0]?.clientX ?? null)}
-      onTouchEnd={(e) => handleTouchEnd(e.changedTouches[0]?.clientX)}
-    >
-      {!isFirst && (
-        <button
-          type="button"
-          className="ob-arrow ob-arrow-l"
-          onClick={() => goTo(index - 1)}
-          aria-label="Предыдущий слайд"
-        >
-          ‹
-        </button>
-      )}
-      {!isLast && (
-        <button
-          type="button"
-          className="ob-arrow ob-arrow-r ob-arrow-pulse"
-          onClick={() => goTo(index + 1)}
-          aria-label="Следующий слайд"
-        >
-          ›
-        </button>
-      )}
+    <div className="ob-root">
+      {/* Градиентный меш: четыре размытых пятна, дрейфуют через transform. */}
+      <div className="ob-mesh" aria-hidden="true">
+        <i className="ob-mesh-1" />
+        <i className="ob-mesh-2" />
+        <i className="ob-mesh-3" />
+        <i className="ob-mesh-4" />
+      </div>
+      <div className="ob-veil" aria-hidden="true" />
 
       <div className="ob-dots">
-        {ONBOARDING_SLIDES.map((_, i) => (
-          <span key={i} className={i === index ? 'ob-dot ob-dot-on' : 'ob-dot'} />
+        {ONBOARDING_SLIDES.map((slide, i) => (
+          <span key={slide.micro} className={i === index ? 'ob-dot ob-dot-on' : 'ob-dot'} />
         ))}
       </div>
 
-      <div className="ob-body">
-        <OnboardingSlide slide={slide} />
+      <div
+        className="ob-viewport"
+        ref={viewportRef}
+        onTouchStart={(e) => handleTouchStart(e.changedTouches[0]?.clientX ?? 0)}
+        onTouchMove={(e) => handleTouchMove(e.changedTouches[0]?.clientX ?? 0)}
+        onTouchEnd={(e) => handleTouchEnd(e.changedTouches[0]?.clientX)}
+        onTouchCancel={() => {
+          gestureRef.current = null;
+          paint(index, 0, true);
+        }}
+      >
+        <div className="ob-track" ref={trackRef}>
+          {ONBOARDING_SLIDES.map((slide) => (
+            <div className="ob-cell" key={slide.micro}>
+              <OnboardingSlide slide={slide} />
+            </div>
+          ))}
+        </div>
+        {handHintOn && !isLast && <span className="ob-hand" aria-hidden="true" />}
       </div>
 
       <div className="ob-cta">
-        {doorCta ? (
-          <button
-            type="button"
-            className="rd-btn-primary"
-            onClick={() => enterDoor(doorCta)}
-            disabled={completeOnboarding.isPending}
-          >
-            {completeOnboarding.isPending ? 'Секунду…' : doorCta.label}
+        {isLast ? (
+          <button type="button" className="rd-btn-primary" onClick={enter} disabled={completeTour.isPending}>
+            {completeTour.isPending ? 'Секунду…' : ONBOARDING_FINAL_CTA}
           </button>
         ) : (
           <button type="button" className="rd-btn-primary" onClick={() => goTo(index + 1)}>
             Дальше
           </button>
         )}
-
-        {secondary && (
-          <button
-            type="button"
-            className="ob-ghost"
-            onClick={() => goTo(index + secondary.step)}
-            disabled={completeOnboarding.isPending}
-          >
-            {secondary.label}
-          </button>
-        )}
       </div>
 
-      {error && <Toast message={error} onClose={() => setError(null)} />}
+      {error !== null && <Toast message={error} onClose={() => setError(null)} />}
     </div>
   );
 };

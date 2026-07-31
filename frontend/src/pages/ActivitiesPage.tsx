@@ -5,6 +5,7 @@ import { Toast } from '../components/Toast';
 import { EventsTab } from '../components/activities/EventsTab';
 import { SkladchinasTab } from '../components/activities/SkladchinasTab';
 import { useSkladchinaActionRequiredCountQuery } from '../queries/skladchina';
+import { CoachTour } from '../components/onboarding/CoachTour';
 
 type SegmentKey = 'events' | 'skladchina';
 
@@ -62,6 +63,7 @@ export const ActivitiesPage: FC = () => {
           role="tab"
           aria-selected={segment === 'events'}
           className={segment === 'events' ? 'rd-seg-btn rd-active' : 'rd-seg-btn'}
+          data-coach="activities-tab-events"
           onClick={() => handleSelect('events')}
         >
           События
@@ -71,6 +73,7 @@ export const ActivitiesPage: FC = () => {
           role="tab"
           aria-selected={segment === 'skladchina'}
           className={segment === 'skladchina' ? 'rd-seg-btn rd-active' : 'rd-seg-btn'}
+          data-coach="activities-tab-skladchina"
           onClick={() => handleSelect('skladchina')}
         >
           Сборы
@@ -85,6 +88,8 @@ export const ActivitiesPage: FC = () => {
       {segment === 'events' ? <EventsTab /> : <SkladchinasTab />}
 
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
+
+      <CoachTour tour="ACTIVITIES" />
     </div>
   );
 };

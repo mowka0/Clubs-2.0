@@ -100,7 +100,7 @@ describe('ProfileQuestCard v2 — карусель «один экран = од�
 });
 
 describe('ProfileQuestCongrats — поздравление с уровнем 2', () => {
-  it('рендерит титул, бейдж «Визитка», +50 XP; «Отлично» вызывает onAck', () => {
+  it('рендерит титул, бейдж «Визитка», +50 XP; «Забрать!» вызывает onAck', () => {
     const onAck = vi.fn();
     render(<ProfileQuestCongrats title="Уровень 2 — «Свой»!" onAck={onAck} />);
 
@@ -108,7 +108,7 @@ describe('ProfileQuestCongrats — поздравление с уровнем 2'
     expect(screen.getByText('Бейдж «Визитка»')).toBeInTheDocument();
     expect(screen.getByText('+50 XP')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Отлично' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Забрать!' }));
     expect(onAck).toHaveBeenCalledOnce();
   });
 });

@@ -1,6 +1,5 @@
 package com.clubs.user
 
-import java.time.OffsetDateTime
 import java.util.UUID
 
 data class UserDto(
@@ -13,6 +12,10 @@ data class UserDto(
     val city: String?,
     val country: String?,
     val bio: String?,
-    /** Когда прошёл онбординг; null — ещё не проходил, фронт показывает карусель вместо приложения. */
-    val onboardedAt: OffsetDateTime?
+    /**
+     * Туры онбординга, пройденные этим пользователем. Едет прямо в профиле, а не отдельным
+     * запросом: гейт интро и все подсказки нужны фронту сразу на старте, а туров единицы.
+     * Пустое множество — новичок, не видевший ещё ничего.
+     */
+    val onboardingTours: Set<OnboardingTour>
 )

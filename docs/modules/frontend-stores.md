@@ -192,7 +192,7 @@ const clubs = data?.pages.flatMap(p => p.content) ?? [];
 | `useCreateEventMutation()` | `createEvent(clubId, body)` | `queryKeys.events.byClubAll(clubId)` (prefix-match по всем фильтрам/пагинации клубных списков) + `queryKeys.activities.byClubAll(clubId)` (unified-feed клуба) + **`queryKeys.events.myFeed`** (глобальная лента `Активности → События`). Последний добавлен в `feature/profile-reputation-and-skladchina-badge` (2026-05-30) — без него после `CreateEventPage` `navigate('/events')` лента оставалась stale и нового события не было видно (зеркалит `useCreateSkladchinaMutation` который уже корректно инвалидировал `skladchinas.myFeed`). |
 | `useMarkAttendanceMutation()` | `markAttendance(eventId, list)` | `queryKeys.events.detail(eventId)` |
 | `useUpdateProfileMutation()` | `updateMyProfile(body)` | callback: `setUser(updatedUser)` в `useAuthStore` + invalidate `queryKeys.clubs.myInterests()`. Контракт PATCH `/api/users/me` см. [`profile.md`](./profile.md). |
-| `useCompleteOnboardingMutation()` | `completeOnboarding(door)` — `door: 'MEMBER' \| 'ORGANIZER'` | callback: `setUser(updatedUser)` в `useAuthStore` (гасит гейт карусели). Query-кэш не инвалидируется — данных, зависящих от `onboardedAt`, нет. **409 перехвачен внутри `mutationFn`** и трактуется как успех: «уже пройден» = цель достигнута (прошли с другого устройства) → `getMe()` и дальше, иначе человек заперт в карусели до перезапуска мини-аппа. Контракт — [`onboarding.md`](./onboarding.md). |
+| `useCompleteTourMutation()` | `completeTour(tour)` — ключ экрана (`INTRO`, `WELCOME`, `PROFILE`, `DISCOVERY`, `CLUB`, `MY_CLUBS`, `ACTIVITIES`) | callback: `setUser(updatedUser)` в `useAuthStore` (гасит гейт интро). Query-кэш не инвалидируется — данных, зависящих от списка туров, нет. Обработки 409 нет: эндпоинт идемпотентен, повтор отдаёт 200 (V72). Контракт — [`onboarding.md`](./onboarding.md). |
 
 **Сигнатура (каноническая):**
 ```ts
@@ -276,13 +276,13 @@ interface UserDto {
   city: string | null;
   country: string | null;      // добавлено 2026-05-30 (код страны, e.g. 'RU')
   bio: string | null;          // добавлено 2026-05-30 (≤280 символов)
-  onboardedAt: string | null;  // добавлено 2026-07-13 (ISO-дата; null — карусель первого входа)
+  onboardingTours: OnboardingTour[];  // V72 (2026-07-31): пройденные туры; пустой массив — новичок
 }
 ```
 
-Поля `country`, `bio` и `onboardedAt` приходят из `/api/auth/telegram` (auth-response через `userRecord.toDto()`) и из `GET /api/users/me`. Имя / `lastName` / `avatarUrl` / `telegramUsername` синхронизируются из Telegram при каждом auth через `UserRepository.upsert` и **переписывают** локальные значения — поэтому в `ProfileEditModal` они не редактируются. `city`/`country`/`bio`/`onboarded_at` НЕ участвуют в `upsert` и переживают синхронизацию. Полная спека редактирования — [`profile.md`](./profile.md).
+Поля `country`, `bio` и `onboardingTours` приходят из `/api/auth/telegram` (auth-response через `userRecord.toDto()`) и из `GET /api/users/me`. Имя / `lastName` / `avatarUrl` / `telegramUsername` синхронизируются из Telegram при каждом auth через `UserRepository.upsert` и **переписывают** локальные значения — поэтому в `ProfileEditModal` они не редактируются. `city`/`country`/`bio` НЕ участвуют в `upsert` и переживают синхронизацию; туры лежат в отдельной таблице и синхронизацией не затрагиваются. Полная спека редактирования — [`profile.md`](./profile.md).
 
-`setUser` вызывают двое: `useUpdateProfileMutation` (после `PATCH /api/users/me`) и `useCompleteOnboardingMutation` (после `POST /api/users/me/onboarding`). Второй важен структурно: на `user.onboardedAt` из этого стора построен **гейт первого входа** в `Layout` — карусель гаснет ровно тогда, когда сервер подтвердил факт, а не «оптимистично» ([`onboarding.md`](./onboarding.md)).
+`setUser` вызывают двое: `useUpdateProfileMutation` (после `PATCH /api/users/me`) и `useCompleteTourMutation` (после `POST /api/users/me/onboarding/{tour}`). Второй важен структурно: на `user.onboardingTours` из этого стора построен **гейт первого входа** в `Layout` — интро гаснет ровно тогда, когда сервер подтвердил факт, а не «оптимистично» ([`onboarding.md`](./onboarding.md)).
 
 > **Спорный момент** (для будущего): `user` сам по себе — server state (приходит от backend'а на /api/auth/telegram). Можно вынести в `useMeQuery()`. Не делаем, потому что:
 > 1. login flow императивный (init SDK → POST initData → setToken → setUser в одной транзакции), это плохо ложится на декларативный `useQuery`
