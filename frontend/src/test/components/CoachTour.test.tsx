@@ -140,6 +140,19 @@ describe('CoachTour — движок подсказок', () => {
     expect(document.querySelector('.ct-root-open')).toBeNull();
   });
 
+  it('нет точной цели — шаг падает на запасную, а не пропадает', async () => {
+    useAuthStore.setState({ user: makeUser([]) });
+    // Строки надёжности нет (новичок без репутации) — рассказ обязан состояться на панели.
+    renderTour('PROFILE', ['profile-quest', 'profile-level', 'profile-stats-panel'], true);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Далее' })).toBeInTheDocument());
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Далее' }));
+    // Совпадение — по куску ОДНОГО текстового узла: акцент внутри фразы обёрнут в <em>.
+    await waitFor(() => expect(screen.getByText(/профиль, встречи, сборы/)).toBeInTheDocument());
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Далее' }));
+    await waitFor(() => expect(screen.getByText(/главное, что видят организаторы/)).toBeInTheDocument());
+  });
+
   it('профиль без списка туров подсказок не рисует и страницу не роняет', () => {
     // Fail-closed: компонент висит на каждом экране, белый экран из-за него недопустим.
     useAuthStore.setState({ user: { ...makeUser([]), onboardingTours: undefined as never } });

@@ -143,7 +143,10 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true, gateSatisfie
 
     const tick = () => {
       if (cancelled) return;
-      const target = document.querySelector(step.target);
+      // Запасная цель — там, где точная условна (строки надёжности нет без репутации).
+      // Проверяется в том же тике: обе живут в одной панели и рендерятся вместе.
+      const target = document.querySelector(step.target)
+        ?? (step.fallbackTarget === undefined ? null : document.querySelector(step.fallbackTarget));
       if (target !== null) {
         target.scrollIntoView({ block: 'center', behavior: 'auto' });
         // Вырез необязателен: нет его на экране — просто подсвечиваем блок целиком.
@@ -188,16 +191,17 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true, gateSatisfie
   }, [stepIndex, steps.length, alreadyDone, finished, tour]);
 
   // Пока тур идёт — страница под ним не прокручивается: «дырка» посчитана от текущей
-  // раскладки, и уехавший скролл увёл бы подсветку с цели. Исключение — шаг-задание:
-  // там человек обязан дотянуться до элемента, и запирать страницу нельзя.
+  // раскладки, и уехавший скролл увёл бы подсветку с цели. Шаг-задание не исключение
+  // (баг PO 2026-07-31: рамка уезжала от элемента): цель уже доведена до центра экрана
+  // через scrollIntoView, а тапы к ней пропускает `ct-root-open` — двигать страницу незачем.
   useEffect(() => {
-    if (!active || locked) return;
+    if (!active) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [active, locked]);
+  }, [active]);
 
   if (!active || placement === null || step === undefined) return null;
 

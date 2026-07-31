@@ -246,7 +246,7 @@ export const ProfilePage: FC = () => {
         // При ошибке фонового рефетча поверх устаревших данных остаёмся здесь, а не на плашке.
         <>
           <div className="rd-section-sub-h">Уровень</div>
-          <div data-coach="profile-stats">
+          <div data-coach="profile-level">
             <GamificationPanel data={gam} />
           </div>
           {gam.xp === 0 && gam.badges.length === 0 && (
@@ -283,12 +283,14 @@ export const ProfilePage: FC = () => {
           «В клубах» — кнопка-переход, у новичка с лупой вместо нуля → каталог. */}
       <>
           <div className="rd-section-sub-h">Статистика</div>
-          {/* Якорь коуч-марки: тур профиля объясняет надёжность на этой панели. Цель — вся
-              панель, а не строка-герой: у новичка репутации ещё нет и строки тоже, а
-              рассказать про надёжность нужно именно ему. */}
-          <div className="rd-glass rd-ostat" data-coach="profile-reliability" style={{ marginTop: 0, marginBottom: 14 }}>
+          {/* Якорь коуч-марки: шаг «остальная статистика» подсвечивает панель целиком, но с
+              вырезом под строку надёжности — про неё был отдельный шаг до этого. */}
+          <div className="rd-glass rd-ostat" data-coach="profile-stats-panel" style={{ marginTop: 0, marginBottom: 14 }}>
             {hasReputation && (
-              <div className="rd-ostat-row rd-ostat-hero">
+              // Отдельный якорь: про надёжность тур говорит одной подсказкой и подсвечивает
+              // ровно эту строку, а не всю панель. Строки нет (новичок без репутации) —
+              // шаг падает на запасную цель, всю панель, чтобы рассказ не пропал.
+              <div className="rd-ostat-row rd-ostat-hero" data-coach="profile-reliability">
                 <span className="rd-ostat-ico rd-ost-shield" aria-hidden="true">🛡</span>
                 <span>
                   <span className="rd-ostat-lbl">Надёжность</span>
