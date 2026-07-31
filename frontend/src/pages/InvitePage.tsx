@@ -291,11 +291,13 @@ export const InvitePage: FC = () => {
     }
     // Новичок: вместо сухого «Добро пожаловать» — велком-сцена (кадр A/B). CTA помечает
     // онбординг дверью MEMBER — карусель с дверями такому человеку больше не показывается.
+    // Взнос уже заявлен → отдельный вариант сцены: доступа ещё нет, поздравлять «Ты в клубе!»
+    // и советовать оплату (она сделана) — врать человеку.
     if (isNewbie) {
       return (
         <>
           <WelcomeScene
-            variant={isPaid ? 'paid' : 'free'}
+            variant={isPaid ? (duesStage === 'claimed' ? 'paidClaimed' : 'paid') : 'free'}
             clubName={club.name}
             clubCaption={`${club.city} · ${isPaid ? formatPrice(club.subscriptionPrice) : memberCountCaption(club.memberCount)}`}
             clubAvatarUrl={club.avatarUrl}

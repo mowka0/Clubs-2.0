@@ -32,7 +32,7 @@ const makeUser = (onboardingTours: OnboardingTour[]): UserDto => ({
  * Реальные цели тура ACTIVITIES: тур короткий (два шага) и оба его якоря — простые кнопки.
  * Рисуем их сами, чтобы тест проверял движок, а не вёрстку страницы «Активности».
  */
-function renderTour(tour: OnboardingTour, targets: string[]) {
+function renderTour(tour: OnboardingTour, targets: string[], gateSatisfied = false) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -43,7 +43,7 @@ function renderTour(tour: OnboardingTour, targets: string[]) {
           {name}
         </div>
       ))}
-      <CoachTour tour={tour} />
+      <CoachTour tour={tour} gateSatisfied={gateSatisfied} />
     </QueryClientProvider>,
   );
 }
@@ -117,6 +117,28 @@ describe('CoachTour — движок подсказок', () => {
     await new Promise((resolve) => setTimeout(resolve, 4200));
     expect(called).toBe(false);
   }, 10_000);
+
+  it('шаг-задание не даёт «Далее», пока условие не выполнено', async () => {
+    useAuthStore.setState({ user: makeUser([]) });
+    const { unmount } = renderTour('PROFILE', ['profile-quest'], false);
+
+    await waitFor(() => expect(screen.getByText(/визитная карточка/)).toBeInTheDocument());
+    // Вместо кнопки — что нужно сделать; иначе тур можно было бы промотать мимо задания.
+    expect(screen.getByText('Заполни профиль — и продолжим')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Далее' })).toBeNull();
+    // Затемнение обязано пропускать тапы: сама цель под ним, и до неё нужно дотянуться.
+    expect(document.querySelector('.ct-root-open')).not.toBeNull();
+    unmount();
+  });
+
+  it('выполненное условие возвращает кнопку на место', async () => {
+    useAuthStore.setState({ user: makeUser([]) });
+    renderTour('PROFILE', ['profile-quest'], true);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Далее' })).toBeInTheDocument());
+    expect(screen.queryByText('Заполни профиль — и продолжим')).toBeNull();
+    expect(document.querySelector('.ct-root-open')).toBeNull();
+  });
 
   it('профиль без списка туров подсказок не рисует и страницу не роняет', () => {
     // Fail-closed: компонент висит на каждом экране, белый экран из-за него недопустим.

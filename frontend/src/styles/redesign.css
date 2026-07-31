@@ -2218,6 +2218,11 @@
    Рендерится вместо всего приложения, пока onboardedAt = null,
    поэтому занимает весь экран и живёт без дока и шапки.
    ============================================================ */
+/* Интро живёт вне `.rd-page`, а глобальный сброс box-sizing ограничен ею и доком — поэтому
+   свой, как у шторок (`.rd-sheet *`). Без него любой элемент с шириной 100% И паддингом
+   становится шире родителя; на ленте слайдов это стоило 40px смещения на каждый слайд. */
+.ob-root, .ob-root * { box-sizing: border-box; }
+
 .ob-root {
   position: fixed; inset: 0; z-index: 60;
   display: flex; flex-direction: column;
@@ -2287,6 +2292,8 @@
    именно этим интро и учит жесту, без единого слова про него. */
 .ob-viewport { position: relative; z-index: 2; flex: 1; min-height: 0; overflow: hidden; touch-action: pan-y; }
 .ob-track { display: flex; height: 100%; will-change: transform; }
+/* Ширина ячейки обязана совпадать с вьюпортом: лента едет ровно на `clientWidth` вьюпорта
+   за слайд, и любое расхождение копится от слайда к слайду. Держится на border-box выше. */
 .ob-cell { flex: 0 0 100%; width: 100%; height: 100%; padding: 0 20px; }
 
 .ob-slide { display: flex; flex-direction: column; height: 100%; }
@@ -2782,6 +2789,10 @@
    кнопкой подтверждения (решение PO 2026-07-31).
    ============================================================ */
 .ct-root { position: fixed; inset: 0; z-index: 90; }
+/* Шаг-задание: слой перестаёт ловить тапы, кликабельной остаётся только сама подсказка.
+   Без этого «сначала заполни профиль» невыполнимо — затемнение накрывает и цель тоже. */
+.ct-root-open { pointer-events: none; }
+.ct-root-open .ct-bubble { pointer-events: auto; }
 
 /* Затемнение целиком рисует SVG: маска умеет и «дырку», и ВЫРЕЗ внутри неё (шаг «О клубе»
    подсвечивает блок, но оставляет плашку чата затемнённой). box-shadow-распорка так не умеет —
@@ -2821,8 +2832,10 @@
   border-left: 1px solid rgba(244, 123, 60, 0.3);
   border-top: 1px solid rgba(244, 123, 60, 0.3);
 }
-.ct-tail-up { top: -7px; left: 26px; transform: rotate(45deg); }
-.ct-tail-down { bottom: -7px; left: 26px; transform: rotate(225deg); }
+/* `left` приходит инлайном из CoachTour: хвостик наводится на центр цели, потому что сам
+   пузырь у кромки экрана съезжает от неё. Здесь — только вертикаль и поворот клина. */
+.ct-tail-up { top: -7px; transform: rotate(45deg); }
+.ct-tail-down { bottom: -7px; transform: rotate(225deg); }
 
 .ct-text { font-size: 14.5px; font-weight: 650; line-height: 1.35; letter-spacing: -0.015em; }
 .ct-text em { font-style: normal; color: var(--accent); }
@@ -2836,3 +2849,6 @@
   padding: 8px 15px; border-radius: 11px; cursor: pointer;
   background: var(--accent); color: var(--on-accent);
 }
+/* Место кнопки на шаге-задании: не серая «выключенная» кнопка (её жмут и злятся), а строка
+   с тем, что нужно сделать. Кнопка появится сама, когда условие выполнится. */
+.ct-gate { font-size: 12px; font-weight: 600; color: var(--accent); text-align: right; max-width: 160px; line-height: 1.3; }

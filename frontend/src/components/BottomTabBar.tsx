@@ -128,6 +128,8 @@ export const BottomTabBar: FC<BottomTabBarProps> = ({ onCreate, scoped = false }
       </div>
       <button
         type="button"
+        // Якорь коуч-марки: владельческий тур объясняет, что встречи и сборы создаются отсюда.
+        data-coach="dock-create"
         className={scoped ? 'rd-dock-action rd-scoped' : 'rd-dock-action'}
         onClick={onCreate}
         aria-label={scoped ? 'Создать активность в этом клубе' : 'Создать активность'}

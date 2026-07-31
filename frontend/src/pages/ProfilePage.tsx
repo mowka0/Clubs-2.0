@@ -26,6 +26,12 @@ const GearIcon: FC = () => (
   </svg>
 );
 
+/**
+ * Уровень, с которого тур профиля считает карточку заполненной и открывает «Далее».
+ * Второй уровень («Свой») даёт ровно заполненный профиль — 50 XP за него и есть веха.
+ */
+const PROFILE_TOUR_MIN_LEVEL = 2;
+
 const THEME_META: Record<'system' | 'light' | 'dark', { label: string; glyph: string }> = {
   system: { label: 'Авто', glyph: '◐' },
   light: { label: 'Светлая', glyph: '☀' },
@@ -283,7 +289,10 @@ export const ProfilePage: FC = () => {
           «В клубах» — кнопка-переход, у новичка с лупой вместо нуля → каталог. */}
       <>
           <div className="rd-section-sub-h">Статистика</div>
-          <div className="rd-glass rd-ostat" style={{ marginTop: 0, marginBottom: 14 }}>
+          {/* Якорь коуч-марки: тур профиля объясняет надёжность на этой панели. Цель — вся
+              панель, а не строка-герой: у новичка репутации ещё нет и строки тоже, а
+              рассказать про надёжность нужно именно ему. */}
+          <div className="rd-glass rd-ostat" data-coach="profile-reliability" style={{ marginTop: 0, marginBottom: 14 }}>
             {hasReputation && (
               <div className="rd-ostat-row rd-ostat-hero">
                 <span className="rd-ostat-ico rd-ost-shield" aria-hidden="true">🛡</span>
@@ -396,7 +405,14 @@ export const ProfilePage: FC = () => {
 
       {/* Тур профиля — первый после интро: сюда приводит «Погнали!». Ждём геймификацию:
           подсказка про квест не должна прилететь раньше самой карточки квеста. */}
-      <CoachTour tour="PROFILE" ready={gam !== undefined} />
+      {/* Шаг «заполни профиль» открывается вторым уровнем: он и означает заполненную
+          карточку (50 XP за профиль → «Свой»). Уровень уже загружен этой страницей —
+          коуч-марка своих запросов не заводит. */}
+      <CoachTour
+        tour="PROFILE"
+        ready={gam !== undefined}
+        gateSatisfied={(gam?.level ?? 0) >= PROFILE_TOUR_MIN_LEVEL}
+      />
     </div>
   );
 };

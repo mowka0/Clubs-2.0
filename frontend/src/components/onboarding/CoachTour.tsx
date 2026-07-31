@@ -17,6 +17,10 @@ const BUBBLE_SPACE_PX = 190;
 const BUBBLE_MARGIN_PX = 12;
 /** Ширина пузыря (px). Парное значение с `.ct-bubble` в CSS. */
 const BUBBLE_WIDTH_PX = 262;
+/** Половина клина-хвостика (px). Парное значение с `.ct-tail` в CSS (13px). */
+const TAIL_HALF_PX = 6.5;
+/** Насколько близко к кромке пузыря пускаем хвостик — дальше начинается скругление угла (px). */
+const TAIL_EDGE_INSET_PX = 16;
 
 interface Rect { top: number; left: number; width: number; height: number }
 
@@ -26,6 +30,8 @@ interface Placement {
   cutout: Rect | null;
   bubbleTop: number;
   bubbleLeft: number;
+  /** Смещение хвостика ВНУТРИ пузыря: он обязан смотреть на центр цели, а не в свой угол. */
+  tailLeft: number;
   /** Пузырь под целью — хвостик смотрит вверх; иначе вниз. */
   below: boolean;
 }
@@ -38,6 +44,12 @@ interface CoachTourProps {
    * прилетевшая на пустой экран, показывает пальцем в никуда.
    */
   ready?: boolean;
+  /**
+   * Выполнено ли условие шага-задания (у шага задан `gateHint`). Считает СТРАНИЦА: данные,
+   * от которых зависит условие, у неё уже есть, и компонент, висящий на каждом экране,
+   * не должен ради этого заводить собственные запросы.
+   */
+  gateSatisfied?: boolean;
 }
 
 /**
@@ -49,7 +61,7 @@ interface CoachTourProps {
  * компонент монтируется вместе со страницей. Пройденным считается ПО ЭТОМУ экрану —
  * закрытый тур клуба ничего не говорит про тур профиля.
  */
-export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true }) => {
+export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true, gateSatisfied = false }) => {
   const haptic = useHaptic();
   const completeTour = useCompleteTourMutation();
   const user = useAuthStore((s) => s.user);
@@ -71,6 +83,11 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true }) => {
   const step: CoachStep | undefined = steps[stepIndex];
   const active = !alreadyDone && ready && !finished && step !== undefined;
 
+  // Шаг-задание («заполни профиль»): пока условие не выполнено, кнопки «Далее» нет.
+  // Условие считает страница и передаёт готовым флагом — по умолчанию НЕ выполнено:
+  // показать «Далее» раньше времени хуже, чем показать позже.
+  const locked = step?.gateHint !== undefined && !gateSatisfied;
+
   /** Считает, где нарисовать дырку, вырез и пузырь для цели. */
   const measure = useCallback((target: Element, cutoutTarget: Element | null): Placement => {
     const box = target.getBoundingClientRect();
@@ -91,12 +108,22 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true }) => {
     };
     const below = window.innerHeight - box.bottom > BUBBLE_SPACE_PX;
     const maxLeft = window.innerWidth - BUBBLE_WIDTH_PX - BUBBLE_MARGIN_PX;
+    const bubbleLeft = Math.min(Math.max(box.left, BUBBLE_MARGIN_PX), Math.max(maxLeft, BUBBLE_MARGIN_PX));
+    // Хвостик считается ОТ ЦЕЛИ, а не от угла пузыря: у цели справа экрана пузырь упирается
+    // в кромку и уезжает влево от неё — прибитый к углу хвостик показывал бы в пустоту.
+    // По краям пузыря оставляем запас, иначе клин вылезает за его скругление.
+    const targetCenter = box.left + box.width / 2;
+    const tailLeft = Math.min(
+      Math.max(targetCenter - bubbleLeft - TAIL_HALF_PX, TAIL_EDGE_INSET_PX),
+      BUBBLE_WIDTH_PX - TAIL_EDGE_INSET_PX - TAIL_HALF_PX * 2,
+    );
     return {
       hole,
       cutout,
       below,
       bubbleTop: below ? hole.top + hole.height + 12 : hole.top - 12,
-      bubbleLeft: Math.min(Math.max(box.left, BUBBLE_MARGIN_PX), Math.max(maxLeft, BUBBLE_MARGIN_PX)),
+      bubbleLeft,
+      tailLeft,
     };
   }, []);
 
@@ -161,15 +188,16 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true }) => {
   }, [stepIndex, steps.length, alreadyDone, finished, tour]);
 
   // Пока тур идёт — страница под ним не прокручивается: «дырка» посчитана от текущей
-  // раскладки, и уехавший скролл увёл бы подсветку с цели.
+  // раскладки, и уехавший скролл увёл бы подсветку с цели. Исключение — шаг-задание:
+  // там человек обязан дотянуться до элемента, и запирать страницу нельзя.
   useEffect(() => {
-    if (!active) return;
+    if (!active || locked) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [active]);
+  }, [active, locked]);
 
   if (!active || placement === null || step === undefined) return null;
 
@@ -177,7 +205,9 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true }) => {
 
   return (
     // `data-swipe-nav="off"` — под затемнением не должен срабатывать навигационный свайп.
-    <div className="ct-root" data-swipe-nav="off">
+    // На шаге-задании затемнение пропускает тапы насквозь (`ct-root-open`): человеку нужно
+    // дотянуться до самого элемента, иначе условие «сначала заполни» невыполнимо.
+    <div className={locked ? 'ct-root ct-root-open' : 'ct-root'} data-swipe-nav="off">
       {/* Затемнение с дыркой — SVG-маска, а не box-shadow: тень умеет ровно одну область,
           а шагу нужен ещё и ВЫРЕЗ внутри подсветки (белый прямоугольник поверх чёрного
           возвращает затемнение). Скруглённые углы выреза и дают тот самый изгиб. */}
@@ -229,25 +259,32 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true }) => {
         className={placement.below ? 'ct-bubble' : 'ct-bubble ct-bubble-above'}
         style={{ top: placement.bubbleTop, left: placement.bubbleLeft }}
       >
-        <span className={placement.below ? 'ct-tail ct-tail-up' : 'ct-tail ct-tail-down'} />
+        <span
+          className={placement.below ? 'ct-tail ct-tail-up' : 'ct-tail ct-tail-down'}
+          style={{ left: placement.tailLeft }}
+        />
         <div className="ct-text">{renderWithAccent(step)}</div>
         <div className="ct-foot">
           <div className="ct-prog">
             {steps.map((s, i) => (
-              <i key={s.target} className={i === stepIndex ? 'ct-prog-on' : undefined} />
+              <i key={`${s.target}-${i}`} className={i === stepIndex ? 'ct-prog-on' : undefined} />
             ))}
           </div>
-          <button
-            type="button"
-            className="ct-next"
-            onClick={() => {
-              haptic.impact('light');
-              setPlacement(null);
-              setStepIndex((i) => i + 1);
-            }}
-          >
-            {isLastStep ? 'Понятно' : 'Далее'}
-          </button>
+          {locked ? (
+            <span className="ct-gate">{step.gateHint}</span>
+          ) : (
+            <button
+              type="button"
+              className="ct-next"
+              onClick={() => {
+                haptic.impact('light');
+                setPlacement(null);
+                setStepIndex((i) => i + 1);
+              }}
+            >
+              {isLastStep ? 'Понятно' : 'Далее'}
+            </button>
+          )}
         </div>
       </div>
     </div>
