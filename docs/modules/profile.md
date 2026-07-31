@@ -183,11 +183,12 @@ data class UserDto(
     val city: String?,
     val country: String?,             // код страны (например "RU")
     val bio: String?,                 // ≤280 символов
-    val onboardedAt: OffsetDateTime?  // V60: когда прошёл онбординг; null — ещё не проходил
+    val onboardingTours: Set<OnboardingTour>  // V72: пройденные туры онбординга; пусто — новичок
 )
 ```
 
-> `onboardedAt` добавлено 2026-07-13 (`feature/onboarding`, миграция V60). Профиль его не показывает
+> `onboardingTours` заменило `onboardedAt` 2026-07-31 (`feature/onboarding-v2`, миграция V72: колонка
+> `users.onboarded_at` перелита в таблицу `user_onboarding_tours` как тур `INTRO` и удалена). Профиль их не показывает
 > и не редактирует — поле питает гейт первого входа в `Layout`, см. [`onboarding.md`](./onboarding.md).
 
 `/api/auth/telegram` возвращает тот же `UserDto` в поле `user` — стор `useAuthStore.user` сразу получает новые поля без отдельного fetch.
@@ -451,4 +452,4 @@ AND на повторном старте (V16 уже применена) — exi
 - [`ui-pages.md`](./ui-pages.md) § «ProfilePage» — это место в общей навигации фронт-страниц.
 - [`frontend-stores.md`](./frontend-stores.md) § «Query-хуки» — расширение таблицы хуками этой итерации + `AuthStore.setUser`.
 - [`docs/backlog/onboarding-interests-and-recommendations.md`](../backlog/onboarding-interests-and-recommendations.md) — Part 1 (модель интересов + редактирование) частично закрыт этой спекой; Part 2 (онбординг) закрыт 2026-07-13 в другой форме — карусель без вопросов, см. [`onboarding.md`](./onboarding.md); сбор интересов при первом входе и Part 3 (recommendations) остаются open.
-- [`onboarding.md`](./onboarding.md) — первый вход: `UserDto.onboardedAt` (V60) и гейт карусели.
+- [`onboarding.md`](./onboarding.md) — первый вход: `UserDto.onboardingTours` (V72) и гейт интро.
