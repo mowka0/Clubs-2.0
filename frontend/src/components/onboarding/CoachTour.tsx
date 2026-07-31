@@ -140,6 +140,30 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true, gateSatisfie
 
     let waited = 0;
     let cancelled = false;
+    /** Снятие наблюдателей за целью; ставится, когда цель нашлась. */
+    let observers: (() => void) | null = null;
+
+    // Подсветка следит за целью, а не замирает в первом замере: на шаге-задании человек
+    // прямо под ней заполняет профиль, карточка квеста ужимается с каждым закрытым пунктом —
+    // и рамка уезжала от блока (баг PO 2026-07-31). Наблюдаем и саму цель (меняется её
+    // размер), и body (усохшее выше сдвигает цель вверх).
+    const track = (target: Element, cutoutTarget: Element | null) => {
+      const remeasure = () => {
+        if (cancelled) return;
+        const next = measure(target, cutoutTarget);
+        // Сравнение до записи в состояние: наблюдатели срабатывают пачками, а лишний
+        // setState здесь — лишний ререндер оверлея на каждый кадр раскладки.
+        setPlacement((prev) => (prev !== null && samePlacement(prev, next) ? prev : next));
+      };
+      const observer = new ResizeObserver(remeasure);
+      observer.observe(target);
+      observer.observe(document.body);
+      window.addEventListener('resize', remeasure);
+      observers = () => {
+        observer.disconnect();
+        window.removeEventListener('resize', remeasure);
+      };
+    };
 
     const tick = () => {
       if (cancelled) return;
@@ -152,6 +176,7 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true, gateSatisfie
         // Вырез необязателен: нет его на экране — просто подсвечиваем блок целиком.
         const cutoutTarget = step.cutout === undefined ? null : document.querySelector(step.cutout);
         setPlacement(measure(target, cutoutTarget));
+        track(target, cutoutTarget);
         shownAnyRef.current = true;
         haptic.impact('light');
         return;
@@ -170,6 +195,7 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true, gateSatisfie
     return () => {
       cancelled = true;
       window.cancelAnimationFrame(raf);
+      observers?.();
     };
     // haptic пересоздаётся каждый рендер и в зависимости не годится — шаг перезапускался бы вечно.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -209,9 +235,24 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true, gateSatisfie
 
   return (
     // `data-swipe-nav="off"` — под затемнением не должен срабатывать навигационный свайп.
-    // На шаге-задании затемнение пропускает тапы насквозь (`ct-root-open`): человеку нужно
-    // дотянуться до самого элемента, иначе условие «сначала заполни» невыполнимо.
+    // На шаге-задании тапы проходят ТОЛЬКО в дырку — к самой цели. Остальной экран
+    // перекрыт четырьмя полосами вокруг неё: пропускать весь слой (как было сначала)
+    // значит разрешить тыкать во всё подряд посреди задания (баг PO 2026-07-31).
     <div className={locked ? 'ct-root ct-root-open' : 'ct-root'} data-swipe-nav="off">
+      {locked && (
+        <>
+          <div className="ct-block" style={{ top: 0, left: 0, right: 0, height: Math.max(placement.hole.top, 0) }} />
+          <div
+            className="ct-block"
+            style={{ top: placement.hole.top, left: 0, width: Math.max(placement.hole.left, 0), height: placement.hole.height }}
+          />
+          <div
+            className="ct-block"
+            style={{ top: placement.hole.top, left: placement.hole.left + placement.hole.width, right: 0, height: placement.hole.height }}
+          />
+          <div className="ct-block" style={{ top: placement.hole.top + placement.hole.height, left: 0, right: 0, bottom: 0 }} />
+        </>
+      )}
       {/* Затемнение с дыркой — SVG-маска, а не box-shadow: тень умеет ровно одну область,
           а шагу нужен ещё и ВЫРЕЗ внутри подсветки (белый прямоугольник поверх чёрного
           возвращает затемнение). Скруглённые углы выреза и дают тот самый изгиб. */}
@@ -294,6 +335,23 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true, gateSatisfie
     </div>
   );
 };
+
+/** Совпадают ли замеры с точностью до пикселя — чтобы не писать в состояние одно и то же. */
+function samePlacement(a: Placement, b: Placement): boolean {
+  const sameRect = (x: Rect | null, y: Rect | null): boolean =>
+    x === null || y === null
+      ? x === y
+      : Math.round(x.top) === Math.round(y.top)
+        && Math.round(x.left) === Math.round(y.left)
+        && Math.round(x.width) === Math.round(y.width)
+        && Math.round(x.height) === Math.round(y.height);
+  return sameRect(a.hole, b.hole)
+    && sameRect(a.cutout, b.cutout)
+    && a.below === b.below
+    && Math.round(a.bubbleTop) === Math.round(b.bubbleTop)
+    && Math.round(a.bubbleLeft) === Math.round(b.bubbleLeft)
+    && Math.round(a.tailLeft) === Math.round(b.tailLeft);
+}
 
 /** Подсвечивает акцентный кусок фразы, не разрывая её на данные в двух полях. */
 function renderWithAccent(step: CoachStep) {

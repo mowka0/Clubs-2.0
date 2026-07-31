@@ -126,8 +126,9 @@ describe('CoachTour — движок подсказок', () => {
     // Вместо кнопки — что нужно сделать; иначе тур можно было бы промотать мимо задания.
     expect(screen.getByText('Заполни профиль — и продолжим')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Далее' })).toBeNull();
-    // Затемнение обязано пропускать тапы: сама цель под ним, и до неё нужно дотянуться.
+    // Тапы проходят только в дырку: слой сквозной, но вокруг цели стоят четыре заглушки.
     expect(document.querySelector('.ct-root-open')).not.toBeNull();
+    expect(document.querySelectorAll('.ct-block')).toHaveLength(4);
     unmount();
   });
 
@@ -137,7 +138,29 @@ describe('CoachTour — движок подсказок', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Далее' })).toBeInTheDocument());
     expect(screen.queryByText('Заполни профиль — и продолжим')).toBeNull();
+    // Обычный шаг перекрывает экран целиком — отдельные заглушки ему не нужны.
     expect(document.querySelector('.ct-root-open')).toBeNull();
+    expect(document.querySelectorAll('.ct-block')).toHaveLength(0);
+  });
+
+  it('подсветка едет за целью, когда та меняет размер', async () => {
+    useAuthStore.setState({ user: makeUser([]) });
+    renderTour('PROFILE', ['profile-quest'], false);
+    await waitFor(() => expect(screen.getByText(/визитная карточка/)).toBeInTheDocument());
+
+    // jsdom не считает раскладку, поэтому подменяем бокс цели и дёргаем наблюдателя вручную:
+    // проверяем, что перезамер вообще подключён, а не что jsdom умеет верстать.
+    const target = document.querySelector('[data-coach="profile-quest"]') as HTMLElement;
+    target.getBoundingClientRect = () => ({
+      top: 400, left: 20, width: 300, height: 120, right: 320, bottom: 520, x: 20, y: 400, toJSON: () => ({}),
+    }) as DOMRect;
+    window.dispatchEvent(new Event('resize'));
+
+    await waitFor(() => {
+      const bands = [...document.querySelectorAll('.ct-block')] as HTMLElement[];
+      // Верхняя полоса кончается там, где начинается дырка: 400 − 6px воздуха.
+      expect(bands[0]?.style.height).toBe('394px');
+    });
   });
 
   it('нет точной цели — шаг падает на запасную, а не пропадает', async () => {
