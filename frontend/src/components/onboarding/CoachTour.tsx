@@ -21,6 +21,11 @@ const BUBBLE_WIDTH_PX = 262;
 const TAIL_HALF_PX = 6.5;
 /** Насколько близко к кромке пузыря пускаем хвостик — дальше начинается скругление угла (px). */
 const TAIL_EDGE_INSET_PX = 16;
+/**
+ * На сколько дырка полноширинного блока вылезает за кромки экрана (px). Ровно ширины экрана
+ * мало: скругления углов встали бы прямо на кромке и читались бы как обрезанная подсветка.
+ */
+const FULL_BLEED_OVERHANG_PX = 24;
 
 interface Rect { top: number; left: number; width: number; height: number }
 
@@ -75,6 +80,13 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true, gateSatisfie
 
   const [stepIndex, setStepIndex] = useState(0);
   const [placement, setPlacement] = useState<Placement | null>(null);
+  /**
+   * Счётчик перепоиска цели. Растёт, когда отслеживаемый элемент ушёл из DOM: у карточки
+   * профиль-квеста это штатный конец жизни (закрыл квест — карточка сменилась поздравлением),
+   * и мерить отсоединённый узел нельзя — он отдаёт нули, дырка схлопывается в угол экрана,
+   * а пузырь улетает под шапку (баг PO 2026-07-31).
+   */
+  const [resolveNonce, setResolveNonce] = useState(0);
   /** Хоть один шаг реально показали — только тогда есть что засчитывать. */
   const shownAnyRef = useRef(false);
   /** Тур доигран (или оказался непоказуемым) — больше не рисуем. */
@@ -89,14 +101,25 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true, gateSatisfie
   const locked = step?.gateHint !== undefined && !gateSatisfied;
 
   /** Считает, где нарисовать дырку, вырез и пузырь для цели. */
-  const measure = useCallback((target: Element, cutoutTarget: Element | null): Placement => {
+  const measure = useCallback((target: Element, cutoutTarget: Element | null, fullBleed: boolean): Placement => {
     const box = target.getBoundingClientRect();
-    const hole = {
-      top: box.top - HOLE_PADDING_PX,
-      left: box.left - HOLE_PADDING_PX,
-      width: box.width + HOLE_PADDING_PX * 2,
-      height: box.height + HOLE_PADDING_PX * 2,
-    };
+    // Полноширинный блок (обложка клуба) меряется по кромкам экрана, а не по обёртке:
+    // обёртка живёт внутри страничных отступов, а её содержимое вылезает негативными
+    // полями — по обёртке дырка обрезала бы обложку по бокам (баг PO 2026-07-31).
+    const bleed = fullBleed ? bleedBounds(target) : null;
+    const hole = bleed !== null
+      ? {
+          top: bleed.top,
+          left: -FULL_BLEED_OVERHANG_PX,
+          width: window.innerWidth + FULL_BLEED_OVERHANG_PX * 2,
+          height: bleed.height + HOLE_PADDING_PX,
+        }
+      : {
+          top: box.top - HOLE_PADDING_PX,
+          left: box.left - HOLE_PADDING_PX,
+          width: box.width + HOLE_PADDING_PX * 2,
+          height: box.height + HOLE_PADDING_PX * 2,
+        };
     // Вырез рисуется ВПРИТЫК к элементу, без воздуха: он должен читаться как аккуратная
     // выемка в подсвеченном блоке, а не как вторая дырка рядом.
     const cutoutBox = cutoutTarget?.getBoundingClientRect() ?? null;
@@ -106,13 +129,18 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true, gateSatisfie
       width: cutoutBox.width + 8,
       height: cutoutBox.height + 8,
     };
-    const below = window.innerHeight - box.bottom > BUBBLE_SPACE_PX;
+    // Пузырь ставим под целью, когда там есть место; иначе — над, но только если сверху
+    // места действительно больше. Прежнее «нет места снизу → всегда сверху» задирало пузырь
+    // за верхнюю кромку у целей, приклеенных к шапке.
+    const spaceBelow = window.innerHeight - box.bottom;
+    const below = spaceBelow > BUBBLE_SPACE_PX || spaceBelow >= box.top;
     const maxLeft = window.innerWidth - BUBBLE_WIDTH_PX - BUBBLE_MARGIN_PX;
-    const bubbleLeft = Math.min(Math.max(box.left, BUBBLE_MARGIN_PX), Math.max(maxLeft, BUBBLE_MARGIN_PX));
+    const anchorLeft = fullBleed ? BUBBLE_MARGIN_PX : box.left;
+    const bubbleLeft = Math.min(Math.max(anchorLeft, BUBBLE_MARGIN_PX), Math.max(maxLeft, BUBBLE_MARGIN_PX));
     // Хвостик считается ОТ ЦЕЛИ, а не от угла пузыря: у цели справа экрана пузырь упирается
     // в кромку и уезжает влево от неё — прибитый к углу хвостик показывал бы в пустоту.
     // По краям пузыря оставляем запас, иначе клин вылезает за его скругление.
-    const targetCenter = box.left + box.width / 2;
+    const targetCenter = fullBleed ? window.innerWidth / 2 : box.left + box.width / 2;
     const tailLeft = Math.min(
       Math.max(targetCenter - bubbleLeft - TAIL_HALF_PX, TAIL_EDGE_INSET_PX),
       BUBBLE_WIDTH_PX - TAIL_EDGE_INSET_PX - TAIL_HALF_PX * 2,
@@ -150,7 +178,14 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true, gateSatisfie
     const track = (target: Element, cutoutTarget: Element | null) => {
       const remeasure = () => {
         if (cancelled) return;
-        const next = measure(target, cutoutTarget);
+        // Цель исчезла со страницы — ищем её заново вместо замера нулей. Найдётся (или
+        // найдётся запасная) — шаг переедет на неё; не найдётся — тур честно пропустит шаг.
+        if (!target.isConnected) {
+          setPlacement(null);
+          setResolveNonce((n) => n + 1);
+          return;
+        }
+        const next = measure(target, cutoutTarget, step.fullBleed === true);
         // Сравнение до записи в состояние: наблюдатели срабатывают пачками, а лишний
         // setState здесь — лишний ререндер оверлея на каждый кадр раскладки.
         setPlacement((prev) => (prev !== null && samePlacement(prev, next) ? prev : next));
@@ -175,7 +210,7 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true, gateSatisfie
         target.scrollIntoView({ block: 'center', behavior: 'auto' });
         // Вырез необязателен: нет его на экране — просто подсвечиваем блок целиком.
         const cutoutTarget = step.cutout === undefined ? null : document.querySelector(step.cutout);
-        setPlacement(measure(target, cutoutTarget));
+        setPlacement(measure(target, cutoutTarget, step.fullBleed === true));
         track(target, cutoutTarget);
         shownAnyRef.current = true;
         haptic.impact('light');
@@ -199,7 +234,7 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true, gateSatisfie
     };
     // haptic пересоздаётся каждый рендер и в зависимости не годится — шаг перезапускался бы вечно.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, step, measure]);
+  }, [active, step, measure, resolveNonce]);
 
   // Шаги кончились. Засчитываем тур, только если человек реально что-то увидел: иначе
   // экран без целей молча сжёг бы тур, ничего не показав.
@@ -351,6 +386,26 @@ function samePlacement(a: Placement, b: Placement): boolean {
     && Math.round(a.bubbleTop) === Math.round(b.bubbleTop)
     && Math.round(a.bubbleLeft) === Math.round(b.bubbleLeft)
     && Math.round(a.tailLeft) === Math.round(b.tailLeft);
+}
+
+/**
+ * Истинные вертикальные границы полноширинного блока. Обложка клуба вылезает за свою обёртку
+ * негативными полями (`.rd-hero` — сверху на величину врезки, по бокам на страничный отступ),
+ * поэтому бокс обёртки её обрезает. Ширину для таких блоков берём от кромок экрана, а верх
+ * и высоту — по самому содержимому.
+ */
+function bleedBounds(target: Element): { top: number; height: number } {
+  const own = target.getBoundingClientRect();
+  let top = own.top;
+  let bottom = own.bottom;
+  target.querySelectorAll('*').forEach((child) => {
+    const box = child.getBoundingClientRect();
+    // Схлопнутые узлы (скрытые, ещё не отрисованные) границ не задают.
+    if (box.width === 0 && box.height === 0) return;
+    top = Math.min(top, box.top);
+    bottom = Math.max(bottom, box.bottom);
+  });
+  return { top, height: bottom - top };
 }
 
 /** Подсвечивает акцентный кусок фразы, не разрывая её на данные в двух полях. */

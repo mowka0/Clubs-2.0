@@ -163,6 +163,38 @@ describe('CoachTour — движок подсказок', () => {
     });
   });
 
+  it('цель исчезла со страницы — шаг переезжает дальше, а не улетает в угол', async () => {
+    useAuthStore.setState({ user: makeUser([]) });
+    // Ровно сценарий закрытого профиль-квеста: карточка сменяется поздравлением и уходит
+    // из DOM. Мерить отсоединённый узел нельзя — он отдаёт нули, дырка схлопывается
+    // в (0,0), а пузырь улетает под шапку (баг PO 2026-07-31).
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const harness = (targets: string[]) => (
+      <QueryClientProvider client={queryClient}>
+        {targets.map((name) => (
+          <div key={name} data-coach={name}>
+            {name}
+          </div>
+        ))}
+        <CoachTour tour="PROFILE" gateSatisfied />
+      </QueryClientProvider>
+    );
+
+    const { rerender } = render(harness(['profile-quest', 'profile-level']));
+    await waitFor(() => expect(screen.getByText(/визитная карточка/)).toBeInTheDocument());
+
+    // Убираем цель ререндером, а не руками: вручную вырванный узел ломает размонтирование React.
+    rerender(harness(['profile-level']));
+    window.dispatchEvent(new Event('resize'));
+
+    // Матчим кусок ОДНОГО текстового узла: акцент («XP») обёрнут в <em> и рвёт фразу.
+    await waitFor(() => expect(screen.getByText(/Уровень растёт от/)).toBeInTheDocument(), {
+      timeout: 4000,
+    });
+  }, 10_000);
+
   it('нет точной цели — шаг падает на запасную, а не пропадает', async () => {
     useAuthStore.setState({ user: makeUser([]) });
     // Строки надёжности нет (новичок без репутации) — рассказ обязан состояться на панели.
