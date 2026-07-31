@@ -77,4 +77,8 @@ export const queryKeys = {
     status: ['subscription', 'status'] as const,
     plans: ['subscription', 'plans'] as const,
   },
+  cities: {
+    // Справочник меняется только с релизом миграции, поэтому ключ без параметров.
+    all: ['cities'] as const,
+  },
 } as const;

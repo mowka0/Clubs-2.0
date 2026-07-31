@@ -47,6 +47,7 @@ const makeUser = (onboardingTours: UserDto['onboardingTours']): UserDto => ({
   avatarUrl: null,
   city: null,
   country: null,
+  cityId: null,
   bio: null,
   onboardingTours,
 });

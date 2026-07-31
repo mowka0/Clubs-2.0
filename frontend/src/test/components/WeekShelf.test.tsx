@@ -31,6 +31,7 @@ function club(o: Partial<ClubListItemDto> = {}): ClubListItemDto {
     category: 'sport',
     accessType: 'open',
     city: 'Москва',
+    cityId: null,
     subscriptionPrice: 0,
     memberCount: 24,
     memberLimit: 30,

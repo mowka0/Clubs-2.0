@@ -1,5 +1,6 @@
 package com.clubs.user
 
+import com.clubs.city.City
 import com.clubs.generated.jooq.tables.references.USERS
 import com.clubs.generated.jooq.tables.references.USER_INTERESTS
 import com.clubs.generated.jooq.tables.records.UsersRecord
@@ -42,11 +43,16 @@ class UserRepository(private val dsl: DSLContext) {
             .limit(1)
             .fetchOne()
 
-    /** Обновляет только редактируемые пользователем скаляры профиля; синхронизируемые из TG поля не трогает. */
-    fun updateProfileFields(userId: UUID, country: String?, city: String?, bio: String?) {
+    /**
+     * Обновляет только редактируемые пользователем скаляры профиля; синхронизируемые из TG поля
+     * не трогает. Город приходит парой (FK + имя) из справочника, страна — оттуда же: клиент
+     * ни имени города, ни страны не присылает, поэтому разъехаться они не могут.
+     */
+    fun updateProfileFields(userId: UUID, city: City?, bio: String?) {
         dsl.update(USERS)
-            .set(USERS.COUNTRY, country)
-            .set(USERS.CITY, city)
+            .set(USERS.COUNTRY, city?.countryCode)
+            .set(USERS.CITY, city?.name)
+            .set(USERS.CITY_ID, city?.id)
             .set(USERS.BIO, bio)
             .set(USERS.UPDATED_AT, OffsetDateTime.now())
             .where(USERS.ID.eq(userId))

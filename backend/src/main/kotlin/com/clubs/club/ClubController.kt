@@ -40,7 +40,7 @@ class ClubController(
     @GetMapping
     fun getClubs(
         @RequestParam(required = false) category: String?,
-        @RequestParam(required = false) city: String?,
+        @RequestParam(required = false) cityId: UUID?,
         @RequestParam(required = false) accessType: String?,
         @RequestParam(required = false) minPrice: Int?,
         @RequestParam(required = false) maxPrice: Int?,
@@ -48,7 +48,7 @@ class ClubController(
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int
     ): ResponseEntity<PageResponse<ClubListItemDto>> {
-        val filters = ClubFilterParams(category, city, accessType, minPrice, maxPrice, search, page, size)
+        val filters = ClubFilterParams(category, cityId, accessType, minPrice, maxPrice, search, page, size)
         return ResponseEntity.ok(clubService.getClubs(filters))
     }
 

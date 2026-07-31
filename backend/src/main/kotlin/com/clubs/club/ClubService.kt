@@ -10,6 +10,7 @@ import com.clubs.common.auth.ClubCapability
 import com.clubs.common.auth.ClubRoleGuard
 import com.clubs.chatlink.ChatLinkRepository
 import com.clubs.chatlink.ChatLinkService
+import com.clubs.city.CityService
 import com.clubs.event.EventRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
@@ -50,6 +51,8 @@ class ClubService(
     // а не от ClubService.
     private val chatLinkService: ChatLinkService,
     private val userRepository: UserRepository,
+    // Резолвит cityId в город справочника: клиент присылает только id, имя города берётся отсюда.
+    private val cityService: CityService,
     private val mapper: ClubMapper
 ) {
 
@@ -68,6 +71,8 @@ class ClubService(
     fun createClub(request: CreateClubRequest, ownerId: UUID): ClubDetailDto {
         validateCategory(request.category)
         validateAccessType(request.accessType)
+        // Город обязан быть из справочника — иначе клуб не найдётся в каталоге (city-dictionary.md).
+        val city = cityService.requireCity(request.cityId)
         // Платный клуб обязан иметь реквизиты СБП, чтобы участники знали, как платить
         // (de-Stars honor-system).
         if (request.subscriptionPrice > 0 && request.paymentLink.isNullOrBlank()) {
@@ -86,7 +91,7 @@ class ClubService(
         }
 
         val inviteCode = if (request.accessType == "private") generateInviteCode() else null
-        val club = clubRepository.create(request, ownerId, inviteCode)
+        val club = clubRepository.create(request, ownerId, inviteCode, city)
         log.info("Club created: id={} name='{}' category={} accessType={} ownerId={}", club.id, club.name, request.category, request.accessType, ownerId)
 
         // Автосоздание organizer-членства для владельца.
@@ -245,7 +250,9 @@ class ClubService(
             throw ValidationException("Для платного клуба укажите реквизиты для взноса (СБП)")
         }
 
-        val updated = clubRepository.update(id, request) ?: throw NotFoundException("Club not found after update")
+        // Город меняется только на существующий из справочника; не прислали cityId — не трогаем.
+        val city = request.cityId?.let { cityService.requireCity(it) }
+        val updated = clubRepository.update(id, request, city) ?: throw NotFoundException("Club not found after update")
         log.info("Club updated: id={} userId={}", id, userId)
         return mapper.toDetailDto(updated, includeRequisites = true)
     }

@@ -73,6 +73,9 @@ class ClubIntegrationTest {
     private lateinit var testUserId: UUID
     private lateinit var testToken: String
 
+    /** Город из справочника, засеянного миграцией V74: клуб создаётся только по существующему id. */
+    private lateinit var moscowId: UUID
+
     @BeforeEach
     fun setUp() {
         // Clean up test data in reverse dependency order
@@ -94,6 +97,10 @@ class ClubIntegrationTest {
         )
 
         testToken = jwtService.generateToken(testUserId, telegramId)
+
+        moscowId = dsl.fetchValue(
+            "SELECT id FROM cities WHERE country_code = 'RU' AND normalized_name = 'москва'"
+        ) as UUID
     }
 
     @Test
@@ -103,7 +110,7 @@ class ClubIntegrationTest {
             description = "A club created during integration test",
             category = "sport",
             accessType = "open",
-            city = "Moscow",
+            cityId = moscowId,
             memberLimit = 30,
             subscriptionPrice = 100,
             paymentLink = "https://sbp.example/pay" // paid club requires SBP requisites
@@ -119,7 +126,7 @@ class ClubIntegrationTest {
             .andExpect(jsonPath("$.name").value("Integration Test Club"))
             .andExpect(jsonPath("$.category").value("sport"))
             .andExpect(jsonPath("$.accessType").value("open"))
-            .andExpect(jsonPath("$.city").value("Moscow"))
+            .andExpect(jsonPath("$.city").value("Москва"))
             .andExpect(jsonPath("$.memberLimit").value(30))
             .andExpect(jsonPath("$.subscriptionPrice").value(100))
             .andExpect(jsonPath("$.id").exists())
@@ -140,7 +147,7 @@ class ClubIntegrationTest {
             description = "Should fail",
             category = "sport",
             accessType = "open",
-            city = "Moscow",
+            cityId = moscowId,
             memberLimit = 30,
             subscriptionPrice = 0
         )
@@ -155,7 +162,7 @@ class ClubIntegrationTest {
 
     @Test
     fun `POST api clubs with invalid body should return 400 with error JSON`() {
-        // Missing required fields: name, description, category, accessType, city
+        // Missing required fields: name, description, category, accessType, cityId
         val invalidBody = """{"memberLimit": 30, "subscriptionPrice": 0}"""
 
         mockMvc.perform(
@@ -176,7 +183,7 @@ class ClubIntegrationTest {
             description = "Testing organizer membership auto-creation",
             category = "creative",
             accessType = "open",
-            city = "SPb",
+            cityId = moscowId,
             memberLimit = 20,
             subscriptionPrice = 50,
             paymentLink = "https://sbp.example/pay" // paid club requires SBP requisites
@@ -211,7 +218,7 @@ class ClubIntegrationTest {
             description = "Testing GET endpoint",
             category = "food",
             accessType = "closed",
-            city = "Kazan",
+            cityId = moscowId,
             district = "Center",
             memberLimit = 40,
             subscriptionPrice = 200,
@@ -244,7 +251,7 @@ class ClubIntegrationTest {
             .andExpect(jsonPath("$.description").value("Testing GET endpoint"))
             .andExpect(jsonPath("$.category").value("food"))
             .andExpect(jsonPath("$.accessType").value("closed"))
-            .andExpect(jsonPath("$.city").value("Kazan"))
+            .andExpect(jsonPath("$.city").value("Москва"))
             .andExpect(jsonPath("$.district").value("Center"))
             .andExpect(jsonPath("$.memberLimit").value(40))
             .andExpect(jsonPath("$.subscriptionPrice").value(200))
@@ -270,7 +277,7 @@ class ClubIntegrationTest {
                             description = "Принимаем по заявке",
                             category = "sport",
                             accessType = "closed",
-                            city = "Moscow",
+                            cityId = moscowId,
                             memberLimit = 30,
                             subscriptionPrice = 0
                         )
@@ -345,7 +352,7 @@ class ClubIntegrationTest {
                             description = "Testing cover and avatar separation",
                             category = "sport",
                             accessType = "open",
-                            city = "Moscow",
+                            cityId = moscowId,
                             memberLimit = 30,
                             subscriptionPrice = 0,
                             avatarUrl = "https://cdn.example/avatar-1.png"
@@ -418,7 +425,7 @@ class ClubIntegrationTest {
             "description" to "Bad category",
             "category" to "nonexistent_category",
             "accessType" to "open",
-            "city" to "Moscow",
+            "cityId" to moscowId.toString(),
             "memberLimit" to 30,
             "subscriptionPrice" to 0
         )
@@ -532,6 +539,62 @@ class ClubIntegrationTest {
                 "participant_limit, status) VALUES ('$clubId', '$testUserId', 'Event', 'Somewhere', " +
                 "NOW() - INTERVAL '1 day', 10, 'completed')"
         )
+    }
+
+    @Test
+    fun `city filter finds a club regardless of how its city text was written`() {
+        // Клуб с «правильным» городом и клуб-легаси, чей текст города написан иначе. Раньше
+        // фильтр сравнивал строки (equalIgnoreCase), и второй клуб не находился НИКОГДА.
+        val proper = UUID.randomUUID()
+        val legacyText = UUID.randomUUID()
+        insertClub(proper, "Proper Club", 0)
+        insertClub(legacyText, "Legacy Text Club", 0)
+        dsl.execute("UPDATE clubs SET city_id = '$moscowId' WHERE id = '$proper'")
+        dsl.execute("UPDATE clubs SET city_id = '$moscowId', city = 'мск' WHERE id = '$legacyText'")
+
+        val result = mockMvc.perform(
+            get("/api/clubs").param("cityId", moscowId.toString())
+                .header("Authorization", "Bearer $testToken")
+        )
+            .andExpect(status().isOk)
+            .andReturn()
+
+        val ids = objectMapper.readTree(result.response.contentAsString)
+            .get("content").map { it.get("id").asText() }
+        assertTrue(ids.contains(proper.toString()), "клуб с городом из справочника должен находиться")
+        assertTrue(
+            ids.contains(legacyText.toString()),
+            "клуб находится по FK, а не по написанию города — иначе он невидим в каталоге",
+        )
+    }
+
+    @Test
+    fun `city filter excludes clubs from other cities`() {
+        val spbId = dsl.fetchValue(
+            "SELECT id FROM cities WHERE country_code = 'RU' AND normalized_name = 'санкт-петербург'"
+        ) as UUID
+        val moscowClub = UUID.randomUUID()
+        insertClub(moscowClub, "Moscow Club", 0)
+        dsl.execute("UPDATE clubs SET city_id = '$moscowId' WHERE id = '$moscowClub'")
+
+        val result = mockMvc.perform(
+            get("/api/clubs").param("cityId", spbId.toString())
+                .header("Authorization", "Bearer $testToken")
+        )
+            .andExpect(status().isOk)
+            .andReturn()
+
+        val ids = objectMapper.readTree(result.response.contentAsString)
+            .get("content").map { it.get("id").asText() }
+        assertTrue(ids.isEmpty(), "в Петербурге клубов нет — выдача должна быть пустой")
+    }
+
+    @Test
+    fun `GET api cities returns the seeded dictionary`() {
+        mockMvc.perform(get("/api/cities").header("Authorization", "Bearer $testToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$[0].id").exists())
+            .andExpect(jsonPath("$[0].name").exists())
     }
 
     /** Discovery list as an ordered map of clubId → tags (insertion order = response order). */

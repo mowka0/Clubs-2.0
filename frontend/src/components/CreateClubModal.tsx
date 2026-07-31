@@ -7,6 +7,8 @@ import { useSubscribeMutation } from '../queries/subscription';
 import { paywallFromError, type PaywallInfo } from '../api/subscription';
 import { PaywallModal } from './subscription/PaywallModal';
 import { AvatarUpload } from './AvatarUpload';
+import { CityPicker } from './CityPicker';
+import { useCities } from '../queries/cities';
 import foxClubCreatedArt from '../assets/mascot/fox-club-created.png';
 import type { CreateClubBody } from '../api/clubs';
 import type { ClubDetailDto } from '../types/api';
@@ -26,7 +28,8 @@ const STEP_TITLES = ['Основное', 'Категория', 'Участник
 
 interface ClubFormValues {
   name: string;
-  city: string;
+  /** id города из справочника. Свободного ввода города в форме больше нет. */
+  cityId: string;
   district: string;
   category: string;
   accessType: 'open' | 'closed';
@@ -40,7 +43,7 @@ interface ClubFormValues {
 }
 
 const STEP_FIELDS: Array<Array<keyof ClubFormValues>> = [
-  ['name', 'city'],
+  ['name', 'cityId'],
   ['category', 'accessType', 'applicationQuestion'],
   ['memberLimit', 'subscriptionPrice', 'paymentLink'],
   ['description'],
@@ -112,12 +115,13 @@ export const CreateClubModal: FC<{
     handleSubmit,
     trigger,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<ClubFormValues>({
     mode: 'onTouched',
     defaultValues: {
       name: '',
-      city: '',
+      cityId: '',
       district: '',
       category: 'other',
       accessType: 'open',
@@ -132,6 +136,12 @@ export const CreateClubModal: FC<{
   });
 
   const submitting = createClubMutation.isPending;
+
+  // Город: форма хранит id, отображаемое имя берём из справочника — единственный источник правды.
+  const { data: cities } = useCities();
+  const [cityPickerOpen, setCityPickerOpen] = useState(false);
+  const cityId = watch('cityId');
+  const selectedCity = cityId ? cities?.find((c) => c.id === cityId) ?? null : null;
 
   const memberLimit = watch('memberLimit');
   const subscriptionPrice = watch('subscriptionPrice');
@@ -165,7 +175,7 @@ export const CreateClubModal: FC<{
       description: data.description.trim(),
       category: data.category,
       accessType: data.accessType,
-      city: data.city.trim(),
+      cityId: data.cityId,
       district: data.district.trim() || undefined,
       memberLimit: Number(data.memberLimit),
       subscriptionPrice: Number(data.subscriptionPrice),
@@ -336,17 +346,26 @@ export const CreateClubModal: FC<{
             />
             <FieldError message={errors.name?.message} />
           </label>
-          <label className="rd-field">
+          <div className="rd-field">
             <span className="rd-label">Город <span className="rd-req">*</span></span>
+            <button
+              type="button"
+              className={`rd-input rd-field-btn${errors.cityId ? ' rd-invalid' : ''}`}
+              onClick={() => { haptic.select(); setCityPickerOpen(true); }}
+            >
+              <span className={selectedCity ? '' : 'rd-placeholder'}>
+                {selectedCity ? selectedCity.name : 'Выберите город'}
+              </span>
+              <span className="rd-chev" aria-hidden="true">›</span>
+            </button>
             <input
-              className={`rd-input${errors.city ? ' rd-invalid' : ''}`}
-              placeholder="Москва"
-              {...register('city', {
-                validate: (v) => v.trim().length > 0 || 'Укажите город',
+              type="hidden"
+              {...register('cityId', {
+                validate: (v) => v.trim().length > 0 || 'Выберите город из списка',
               })}
             />
-            <FieldError message={errors.city?.message} />
-          </label>
+            <FieldError message={errors.cityId?.message} />
+          </div>
           <label className="rd-field">
             <span className="rd-label">Район (необязательно)</span>
             <input className="rd-input" placeholder="Центральный" {...register('district')} />
@@ -526,6 +545,14 @@ export const CreateClubModal: FC<{
           </button>
         )}
       </div>
+
+      {cityPickerOpen && (
+        <CityPicker
+          value={selectedCity}
+          onChange={(next) => setValue('cityId', next.id, { shouldValidate: true })}
+          onClose={() => setCityPickerOpen(false)}
+        />
+      )}
     </div>
   );
 };

@@ -58,7 +58,7 @@ function setViewer(userId: string) {
   useAuthStore.setState({
     user: {
       id: userId, telegramId: 1, telegramUsername: 'viewer', firstName: 'Viewer',
-      lastName: null, avatarUrl: null, city: null, country: null, bio: null,
+      lastName: null, avatarUrl: null, city: null, country: null, cityId: null, bio: null,
       onboardingTours: ['INTRO', 'WELCOME'],
     },
     isAuthenticated: true,

@@ -76,6 +76,10 @@ open class UsersRecord private constructor() : UpdatableRecordImpl<UsersRecord>(
         set(value): Unit = set(13, value)
         get(): OffsetDateTime? = get(13) as OffsetDateTime?
 
+    open var cityId: UUID?
+        set(value): Unit = set(14, value)
+        get(): UUID? = get(14) as UUID?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -85,7 +89,7 @@ open class UsersRecord private constructor() : UpdatableRecordImpl<UsersRecord>(
     /**
      * Create a detached, initialised UsersRecord
      */
-    constructor(id: UUID? = null, telegramId: Long, telegramUsername: String? = null, firstName: String, lastName: String? = null, avatarUrl: String? = null, city: String? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, country: String? = null, bio: String? = null, questCityAt: OffsetDateTime? = null, questInterestsAt: OffsetDateTime? = null, questBioAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, telegramId: Long, telegramUsername: String? = null, firstName: String, lastName: String? = null, avatarUrl: String? = null, city: String? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, country: String? = null, bio: String? = null, questCityAt: OffsetDateTime? = null, questInterestsAt: OffsetDateTime? = null, questBioAt: OffsetDateTime? = null, cityId: UUID? = null): this() {
         this.id = id
         this.telegramId = telegramId
         this.telegramUsername = telegramUsername
@@ -100,6 +104,7 @@ open class UsersRecord private constructor() : UpdatableRecordImpl<UsersRecord>(
         this.questCityAt = questCityAt
         this.questInterestsAt = questInterestsAt
         this.questBioAt = questBioAt
+        this.cityId = cityId
         resetChangedOnNotNull()
     }
 
@@ -122,6 +127,7 @@ open class UsersRecord private constructor() : UpdatableRecordImpl<UsersRecord>(
             this.questCityAt = value.questCityAt
             this.questInterestsAt = value.questInterestsAt
             this.questBioAt = value.questBioAt
+            this.cityId = value.cityId
             resetChangedOnNotNull()
         }
     }

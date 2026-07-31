@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 
 vi.mock('@telegram-apps/sdk-react', () => ({
   hapticFeedbackImpactOccurred: Object.assign(vi.fn(), { isAvailable: () => false }),
@@ -7,21 +9,37 @@ vi.mock('@telegram-apps/sdk-react', () => ({
   hapticFeedbackSelectionChanged: Object.assign(vi.fn(), { isAvailable: () => false }),
 }));
 
+vi.mock('../../api/cities', () => ({
+  getCities: vi.fn(async () => CITIES),
+}));
+
 import { useCityChoice } from '../../components/CityPicker';
 import { useAuthStore } from '../../store/useAuthStore';
-import type { UserDto } from '../../types/api';
+import type { CityDto, UserDto } from '../../types/api';
 
-const STORAGE_KEY = 'clubs.cityChoice';
+const STORAGE_KEY = 'clubs.cityId';
 
-const makeUser = (city: string | null, country: string | null): UserDto => ({
+const city = (id: string, name: string, isFeatured = false): CityDto => ({
+  id, name, region: null, needsRegion: false, countryCode: 'RU', isFeatured, hasClubs: false,
+});
+
+// Москва первой и featured — она же дефолт, когда о человеке ничего не известно.
+const CITIES: CityDto[] = [
+  city('id-msk', 'Москва', true),
+  city('id-kzn', 'Казань'),
+  city('id-sochi', 'Сочи'),
+];
+
+const makeUser = (cityId: string | null): UserDto => ({
   id: 'user-1',
   telegramId: 1,
   telegramUsername: null,
   firstName: 'Аня',
   lastName: null,
   avatarUrl: null,
-  city,
-  country,
+  city: null,
+  country: null,
+  cityId,
   bio: null,
   onboardingTours: ['INTRO'],
 });
@@ -31,13 +49,21 @@ const Probe = () => {
   const [choice, setChoice] = useCityChoice();
   return (
     <>
-      <span data-testid="choice">{`${choice.country}/${choice.city}`}</span>
-      <button type="button" onClick={() => setChoice({ country: 'RU', city: 'Казань' })}>
+      <span data-testid="choice">{choice?.name ?? '—'}</span>
+      <button type="button" onClick={() => setChoice(CITIES[1]!)}>
         сменить
       </button>
     </>
   );
 };
+
+function renderProbe() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  return render(<Probe />, { wrapper });
+}
 
 const choice = () => screen.getByTestId('choice').textContent;
 
@@ -47,43 +73,43 @@ beforeEach(() => {
 });
 
 describe('useCityChoice — город каталога', () => {
-  it('без профиля и без выбора — Москва', () => {
-    render(<Probe />);
-    expect(choice()).toBe('RU/Москва');
+  it('без профиля и без выбора — первый featured-город справочника', async () => {
+    renderProbe();
+    await waitFor(() => expect(choice()).toBe('Москва'));
   });
 
-  it('город берётся из профиля, пока человек не выбрал свой', () => {
-    useAuthStore.setState({ user: makeUser('Казань', 'RU') });
-    render(<Probe />);
+  it('город берётся из профиля, пока человек не выбрал свой', async () => {
+    useAuthStore.setState({ user: makeUser('id-sochi') });
+    renderProbe();
     // Человек уже сказал, где живёт, — спрашивать второй раз незачем.
-    expect(choice()).toBe('RU/Казань');
+    await waitFor(() => expect(choice()).toBe('Сочи'));
   });
 
-  it('страна восстанавливается по городу, если в профиле её нет', () => {
-    useAuthStore.setState({ user: makeUser('Алматы', null) });
-    render(<Probe />);
-    // Иначе пикер открылся бы на вкладке чужой страны.
-    expect(choice()).toBe('KZ/Алматы');
+  it('пустой город в профиле игнорируется', async () => {
+    useAuthStore.setState({ user: makeUser(null) });
+    renderProbe();
+    await waitFor(() => expect(choice()).toBe('Москва'));
   });
 
-  it('пустой город в профиле игнорируется', () => {
-    useAuthStore.setState({ user: makeUser('   ', 'RU') });
-    render(<Probe />);
-    expect(choice()).toBe('RU/Москва');
+  it('город из профиля, которого нет в справочнике, не ломает выбор', async () => {
+    // Легаси-профиль: FK указывает на запись, которой в текущем сиде нет.
+    useAuthStore.setState({ user: makeUser('id-удалён') });
+    renderProbe();
+    await waitFor(() => expect(choice()).toBe('Москва'));
   });
 
-  it('явный выбор сильнее профиля и переживает перезапуск', () => {
-    useAuthStore.setState({ user: makeUser('Сочи', 'RU') });
-    const { unmount } = render(<Probe />);
-    expect(choice()).toBe('RU/Сочи');
+  it('явный выбор сильнее профиля и переживает перезапуск', async () => {
+    useAuthStore.setState({ user: makeUser('id-sochi') });
+    const { unmount } = renderProbe();
+    await waitFor(() => expect(choice()).toBe('Сочи'));
 
     act(() => screen.getByRole('button', { name: 'сменить' }).click());
-    expect(choice()).toBe('RU/Казань');
+    await waitFor(() => expect(choice()).toBe('Казань'));
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('id-kzn');
     unmount();
 
     // Перезапуск: выбор поднимается из localStorage, профиль его не перебивает.
-    render(<Probe />);
-    expect(choice()).toBe('RU/Казань');
-    expect(localStorage.getItem(STORAGE_KEY)).toContain('Казань');
+    renderProbe();
+    await waitFor(() => expect(choice()).toBe('Казань'));
   });
 });

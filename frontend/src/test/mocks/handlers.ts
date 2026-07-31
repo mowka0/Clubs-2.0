@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw';
-import type { ClubDetailDto, MembershipDto } from '../../types/api';
+import type { CityDto, ClubDetailDto, MembershipDto } from '../../types/api';
 
 // Default club for tests
 export const mockClubDetail: ClubDetailDto = {
@@ -10,6 +10,7 @@ export const mockClubDetail: ClubDetailDto = {
   category: 'sport',
   accessType: 'open',
   city: 'Москва',
+  cityId: null,
   district: null,
   memberLimit: 50,
   subscriptionPrice: 0,
@@ -38,7 +39,17 @@ export const mockMembership: MembershipDto = {
   subscriptionExpiresAt: null,
 };
 
+/** Справочник городов: пикер без него не отрисует ни одной строки. */
+export const mockCities: CityDto[] = [
+  { id: 'city-msk', name: 'Москва', region: null, needsRegion: false, countryCode: 'RU', isFeatured: true, hasClubs: true },
+  { id: 'city-spb', name: 'Санкт-Петербург', region: null, needsRegion: false, countryCode: 'RU', isFeatured: true, hasClubs: false },
+  { id: 'city-tver', name: 'Тверь', region: null, needsRegion: false, countryCode: 'RU', isFeatured: false, hasClubs: false },
+];
+
 export const handlers = [
+  // GET /api/cities — справочник для CityPicker
+  http.get('*/api/cities', () => HttpResponse.json(mockCities)),
+
   // GET /api/clubs/:id
   http.get('*/api/clubs/:id', ({ params }) => {
     return HttpResponse.json({ ...mockClubDetail, id: params.id as string });
@@ -96,6 +107,7 @@ export const handlers = [
         avatarUrl: null,
         city: null,
         country: null,
+        cityId: null,
         bio: null,
       },
     });

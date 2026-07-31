@@ -1,11 +1,16 @@
 package com.clubs.club
 
+import com.clubs.city.City
 import com.clubs.common.dto.PageResponse
 import java.util.UUID
 
 interface ClubRepository {
 
-    fun create(request: CreateClubRequest, ownerId: UUID, inviteCode: String? = null): Club
+    /**
+     * [city] резолвит Service из справочника — репозиторий в справочник не ходит. Имя города
+     * пишется в денормализованное `clubs.city` вместе с FK, поэтому разъехаться они не могут.
+     */
+    fun create(request: CreateClubRequest, ownerId: UUID, inviteCode: String? = null, city: City): Club
 
     fun findById(id: UUID): Club?
 
@@ -21,7 +26,8 @@ interface ClubRepository {
     /** Точечное поднятие лимита участников («Расширить клуб и принять всех», club-invites). */
     fun updateMemberLimit(id: UUID, memberLimit: Int): Club?
 
-    fun update(id: UUID, request: UpdateClubRequest): Club?
+    /** [city] задан ⇔ в запросе пришёл `cityId`; резолвит его Service. */
+    fun update(id: UUID, request: UpdateClubRequest, city: City? = null): Club?
 
     fun countByOwnerId(ownerId: UUID): Int
 

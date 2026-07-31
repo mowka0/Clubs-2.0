@@ -25,8 +25,11 @@ export interface UserDto {
   firstName: string;
   lastName: string | null;
   avatarUrl: string | null;
+  /** Денормализованные из справочника, только для показа. Источник правды — cityId. */
   city: string | null;
   country: string | null;
+  /** Город из справочника. null = не указан или легаси-профиль с нераспознанным городом. */
+  cityId: string | null;
   bio: string | null;
   /**
    * Пройденные туры онбординга. Пустой массив — новичок, не видевший ещё ничего;
@@ -52,8 +55,8 @@ export type OnboardingTour =
   | 'ACTIVITIES';
 
 export interface UpdateProfileBody {
-  country: string | null;
-  city: string | null;
+  /** Город из справочника. null = очистить город в профиле. */
+  cityId: string | null;
   bio: string | null;
   interests: string[];
 }
@@ -71,6 +74,8 @@ export interface ClubListItemDto {
   category: string;
   accessType: string;
   city: string;
+  /** Город из справочника. null = легаси-клуб с нераспознанным городом. */
+  cityId: string | null;
   subscriptionPrice: number;
   memberCount: number;
   memberLimit: number;
@@ -399,6 +404,8 @@ export interface ClubDetailDto {
   category: string;
   accessType: string;
   city: string;
+  /** Город из справочника. null = легаси-клуб; организатор уточняет город в управлении. */
+  cityId: string | null;
   district: string | null;
   memberLimit: number;
   subscriptionPrice: number;
@@ -804,4 +811,22 @@ export interface MyEventListItemDto {
   // (COMPLETION_GRACE_HOURS), поэтому выводить историчность из status/eventDatetime
   // на клиенте ЗАПРЕЩЕНО (см. events-feed.md, Итерация 5, AC-H14).
   isHistory: boolean;
+}
+
+/**
+ * Город из справочника (city-dictionary). Пополняется только миграцией — пользователи
+ * города не заводят, поэтому «Мааасквы» в списке быть не может.
+ */
+export interface CityDto {
+  id: string;
+  name: string;
+  /** Регион — показывается ТОЛЬКО при needsRegion, иначе город выводится голым именем. */
+  region: string | null;
+  /** У города есть тёзка в другом регионе (Железногорск, Эрегли) — без региона не различить. */
+  needsRegion: boolean;
+  countryCode: string;
+  /** Показывать в списке до ввода запроса. На поиск не влияет — он идёт по всему справочнику. */
+  isFeatured: boolean;
+  /** В городе есть хотя бы один клуб — витрина показывает такие города вместе с featured. */
+  hasClubs: boolean;
 }

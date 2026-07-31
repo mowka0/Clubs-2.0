@@ -7,6 +7,8 @@ import {
 } from '@telegram-apps/telegram-ui';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
+import { CityPicker } from '../components/CityPicker';
+import { useCities } from '../queries/cities';
 import { useAuthStore } from '../store/useAuthStore';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { AvatarUpload } from '../components/AvatarUpload';
@@ -147,7 +149,14 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
   const deleteMutation = useDeleteClubMutation();
 
   const [name, setName] = useState(club.name);
-  const [city, setCity] = useState(club.city);
+  // Город правится только через справочник — тем же пикером, что и при создании. Свободный ввод
+  // здесь был второй дырой той же природы: правка города в «мск» выбивала клуб из каталога.
+  const [cityId, setCityId] = useState<string | null>(club.cityId);
+  const [cityPickerOpen, setCityPickerOpen] = useState(false);
+  const { data: cities } = useCities();
+  const selectedCity = cityId ? cities?.find((c) => c.id === cityId) ?? null : null;
+  // Пока справочник грузится, показываем сохранённое имя — поле не должно мигать «Выберите город».
+  const cityLabel = selectedCity?.name ?? (club.cityId ? club.city : '');
   const [district, setDistrict] = useState(club.district ?? '');
   const [memberLimit, setMemberLimit] = useState(String(club.memberLimit));
   const [subscriptionPrice, setSubscriptionPrice] = useState(String(club.subscriptionPrice));
@@ -174,7 +183,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
 
   const dirty =
     name !== club.name ||
-    city !== club.city ||
+    cityId !== club.cityId ||
     district !== (club.district ?? '') ||
     memberLimit !== String(club.memberLimit) ||
     subscriptionPrice !== String(club.subscriptionPrice) ||
@@ -203,8 +212,8 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
       fail('name', 'Название: 1–60 символов');
       return;
     }
-    if (!city.trim()) {
-      fail('city', 'Укажите город');
+    if (!cityId) {
+      fail('city', 'Выберите город из списка');
       return;
     }
     const limit = Number(memberLimit);
@@ -241,7 +250,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
     // Поэтому когда пользователь очищает поле, мы отправляем '' (а не null/undefined).
     const payload: UpdateClubBody = {};
     if (name !== club.name) payload.name = name.trim();
-    if (city !== club.city) payload.city = city.trim();
+    if (cityId !== club.cityId) payload.cityId = cityId;
     if (district !== (club.district ?? '')) payload.district = district.trim();
     if (limit !== club.memberLimit) payload.memberLimit = limit;
     if (price !== club.subscriptionPrice) payload.subscriptionPrice = price;
@@ -309,14 +318,24 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
             onChange={(e) => setName(e.target.value)}
           />
         </label>
-        <label className="rd-field">
+        <div className="rd-field">
           <span className="rd-label">Город</span>
-          <input
-            className={`rd-input${errorField === 'city' ? ' rd-invalid' : ''}`}
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-          />
-        </label>
+          <button
+            type="button"
+            className={`rd-input rd-field-btn${errorField === 'city' ? ' rd-invalid' : ''}`}
+            onClick={() => { haptic.select(); setCityPickerOpen(true); }}
+          >
+            <span className={cityLabel ? '' : 'rd-placeholder'}>
+              {cityLabel || 'Выберите город'}
+            </span>
+            <span className="rd-chev" aria-hidden="true">›</span>
+          </button>
+          {!club.cityId && (
+            <span className="rd-hint">
+              Город клуба не распознан — выберите его, иначе клуб не найдут в каталоге.
+            </span>
+          )}
+        </div>
         <label className="rd-field">
           <span className="rd-label">Район (опционально)</span>
           <input className="rd-input" value={district} onChange={(e) => setDistrict(e.target.value)} />
@@ -472,6 +491,14 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
             </div>
           </Modal>
         </>
+      )}
+
+      {cityPickerOpen && (
+        <CityPicker
+          value={selectedCity}
+          onChange={(next) => setCityId(next.id)}
+          onClose={() => setCityPickerOpen(false)}
+        />
       )}
     </>
   );

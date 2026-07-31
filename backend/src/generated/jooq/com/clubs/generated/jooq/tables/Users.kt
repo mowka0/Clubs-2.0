@@ -24,10 +24,12 @@ import com.clubs.generated.jooq.keys.SKLADCHINA_PARTICIPANTS__SKLADCHINA_PARTICI
 import com.clubs.generated.jooq.keys.TRANSACTIONS__TRANSACTIONS_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.USERS_PKEY
 import com.clubs.generated.jooq.keys.USERS_TELEGRAM_ID_KEY
+import com.clubs.generated.jooq.keys.USERS__USERS_CITY_ID_FKEY
 import com.clubs.generated.jooq.keys.USER_CLUB_REPUTATION__USER_CLUB_REPUTATION_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.USER_INTERESTS__USER_INTERESTS_USER_ID_FKEY
 import com.clubs.generated.jooq.keys.USER_ONBOARDING_TOURS__USER_ONBOARDING_TOURS_USER_ID_FKEY
 import com.clubs.generated.jooq.tables.Applications.ApplicationsPath
+import com.clubs.generated.jooq.tables.Cities.CitiesPath
 import com.clubs.generated.jooq.tables.ClubAwards.ClubAwardsPath
 import com.clubs.generated.jooq.tables.ClubChatLinks.ClubChatLinksPath
 import com.clubs.generated.jooq.tables.ClubRank.ClubRankPath
@@ -204,6 +206,12 @@ open class Users(
      */
     val QUEST_BIO_AT: TableField<UsersRecord, OffsetDateTime?> = createField(DSL.name("quest_bio_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Веха профиль-квеста «О себе» (+15 XP): когда bio впервые заполнено. NULL = не достигнута. Одноразовая, не сбрасывается при очистке поля.")
 
+    /**
+     * The column <code>public.users.city_id</code>. Город пользователя из
+     * справочника cities (NULL = не указан).
+     */
+    val CITY_ID: TableField<UsersRecord, UUID?> = createField(DSL.name("city_id"), SQLDataType.UUID, this, "Город пользователя из справочника cities (NULL = не указан).")
+
     private constructor(alias: Name, aliased: Table<UsersRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<UsersRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<UsersRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -238,6 +246,22 @@ open class Users(
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
     override fun getPrimaryKey(): UniqueKey<UsersRecord> = USERS_PKEY
     override fun getUniqueKeys(): List<UniqueKey<UsersRecord>> = listOf(USERS_TELEGRAM_ID_KEY)
+    override fun getReferences(): List<ForeignKey<UsersRecord, *>> = listOf(USERS__USERS_CITY_ID_FKEY)
+
+    private lateinit var _cities: CitiesPath
+
+    /**
+     * Get the implicit join path to the <code>public.cities</code> table.
+     */
+    fun cities(): CitiesPath {
+        if (!this::_cities.isInitialized)
+            _cities = CitiesPath(this, USERS__USERS_CITY_ID_FKEY, null)
+
+        return _cities;
+    }
+
+    val cities: CitiesPath
+        get(): CitiesPath = cities()
 
     private lateinit var _applications: ApplicationsPath
 
