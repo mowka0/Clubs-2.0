@@ -1330,11 +1330,16 @@
 .rd-club-chatrow { display: flex; justify-content: flex-end; margin: 20px -17px -16px 0; }
 .rd-club-chatpill {
   display: inline-flex; align-items: center; gap: 8px;
-  padding: 11px 18px; border: 1px solid var(--hairline-2);
+  padding: 11px 18px;
   /* Капсула: при высоте 40px её радиус (20px) почти совпадает с внутренним радиусом угла
      карточки (21px), поэтому в прижатом углу дуги сливаются и просвета не остаётся. */
   border-radius: 999px;
-  background: var(--bg); color: var(--text);
+  /* Акцентный контур без заливки (PO 2026-07-31): нейтральная пилюля на нейтральной карточке
+     терялась, но заливка делала из неё призыв к действию, которым эта кнопка не является.
+     Обводка и надпись очерчивают кнопку, пустая середина оставляет её второстепенной —
+     вход в чат не спорит с «Вступить» и «Оплатить взнос». */
+  border: 1px solid var(--accent);
+  background: var(--bg); color: var(--accent);
   font-family: inherit; font-size: 12.5px; font-weight: 800; letter-spacing: 0.07em;
   text-transform: uppercase; cursor: pointer;
 }
