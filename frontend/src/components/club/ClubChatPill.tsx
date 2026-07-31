@@ -28,13 +28,10 @@ export const ClubChatPill: FC<ClubChatPillProps> = (props) => {
   };
 
   return (
-    // `data-coach` — якорь подсказки онбординга: шаг «О клубе» делает по этой пилюле вырез,
-    // а следующий шаг подсвечивает её саму.
     <div className="rd-club-chatrow">
       <button
         type="button"
         className="rd-club-chatpill"
-        data-coach="club-chat"
         onClick={handleClick}
         aria-expanded={props.mode === 'hint' ? hintOpen : undefined}
       >

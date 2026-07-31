@@ -38,7 +38,7 @@ import type {
   UserClubReputationDto,
 } from '../types/api';
 import type { ApplicationDto } from '../api/membership';
-import { CoachTour } from '../components/onboarding/CoachTour';
+import { ScreenPreview } from '../components/onboarding/ScreenPreview';
 
 interface MyClubsLocationState {
   toast?: string;
@@ -872,7 +872,6 @@ export const MyClubsPage: FC = () => {
         <button
           type="button"
           className="rd-city-pill"
-          data-coach="create-club"
           onClick={openCreate}
           aria-label="Создать клуб"
         >
@@ -1168,7 +1167,7 @@ export const MyClubsPage: FC = () => {
 
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
 
-      <CoachTour tour="MY_CLUBS" />
+      <ScreenPreview screen="MY_CLUBS" />
     </div>
   );
 };

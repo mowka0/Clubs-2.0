@@ -21,7 +21,7 @@ import foxErrorArt from '../assets/mascot/fox-error.png';
 import foxCatalogArt from '../assets/mascot/fox-catalog.png';
 import foxFilterArt from '../assets/mascot/fox-filter.png';
 import type { ClubFilters } from '../api/clubs';
-import { CoachTour } from '../components/onboarding/CoachTour';
+import { ScreenPreview } from '../components/onboarding/ScreenPreview';
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -159,7 +159,6 @@ export const DiscoveryPage: FC = () => {
         <button
           type="button"
           className="rd-city-pill"
-          data-coach="city"
           onClick={() => { haptic.select(); setPickerOpen(true); }}
           aria-label="Выбрать город"
         >
@@ -189,7 +188,6 @@ export const DiscoveryPage: FC = () => {
         <button
           type="button"
           className={filters.category ? 'rd-filter-pill rd-active' : 'rd-filter-pill'}
-          data-coach="categories"
           onClick={() => { haptic.select(); setCategoryOpen(true); }}
           aria-label="Фильтр по категории"
         >
@@ -270,9 +268,8 @@ export const DiscoveryPage: FC = () => {
           )
         )}
 
-        {clubs.map((club, i) => (
-          // Якорь коуч-марки вешаем на ПЕРВУЮ карточку: она гарантированно в зоне видимости.
-          <div key={club.id} data-coach={i === 0 ? 'club-card' : undefined}>
+        {clubs.map((club) => (
+          <div key={club.id}>
             <ClubCard club={club} facts={factsByClub.get(club.id)} />
           </div>
         ))}
@@ -308,8 +305,9 @@ export const DiscoveryPage: FC = () => {
         />
       )}
 
-      {/* Ждём клубы: последний шаг показывает на карточку, а до загрузки её ещё нет. */}
-      <CoachTour tour="DISCOVERY" ready={clubs.length > 0} />
+      {/* Ждём конца загрузки, но не самих клубов: правила игры каталога нужны и тому,
+          у кого в городе пока пусто. */}
+      <ScreenPreview screen="DISCOVERY" ready={!isPending} />
     </div>
   );
 };

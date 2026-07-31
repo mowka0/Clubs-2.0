@@ -89,8 +89,10 @@ describe('ProfilePage — профиль-квест', () => {
     expect(await screen.findByText('Прокачай профиль')).toBeInTheDocument();
     // Мотивация v2 под заголовком — маркер именно квест-карточки (не панели «Уровень»)
     expect(screen.getByText('чтобы лучше подбирать клубы')).toBeInTheDocument();
-    // Карусель: город заполнен → автопозиция на «О себе» (порядок v2)
-    expect(screen.getByText('Пару слов о себе')).toBeInTheDocument();
+    // Все три поля списком; у заполненного города — галочка и сохранённое значение
+    expect(screen.getByText('О себе')).toBeInTheDocument();
+    expect(screen.getByText('Интересы')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('заполнено')).toHaveLength(1);
     // Лис-экран интересов снят: при пустых интересах нет ни заголовка секции, ни призыва лиса
     expect(screen.queryByText('Расскажи, что тебе интересно')).not.toBeInTheDocument();
     expect(screen.queryByText('Лис ждёт твои интересы')).not.toBeInTheDocument();

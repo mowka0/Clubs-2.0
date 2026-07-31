@@ -101,10 +101,23 @@ class ProfileQuestIntegrationTest {
     }
 
     @Test
+    fun `short bio does not grant the bio milestone`() {
+        // Порог BIO_QUEST_MIN_LENGTH: галочка в редакторе профиля и начисление XP обязаны
+        // срабатывать по одному правилу, иначе «привет» даёт XP при сером чекбоксе.
+        userService.updateProfile(userId, UpdateMeRequest(cityId = moscowId, bio = "Привет!"))
+        assertNull(userRepository.findQuestFlags(userId)!!.bioAt)
+        assertFalse(xpService.getGamification(userId).quest.bioDone)
+
+        userService.updateProfile(userId, UpdateMeRequest(cityId = moscowId, bio = "Играю в настолки"))
+        assertNotNull(userRepository.findQuestFlags(userId)!!.bioAt)
+        assertTrue(xpService.getGamification(userId).quest.bioDone)
+    }
+
+    @Test
     fun `full profile reaches exactly level 2 with Визитка badge`() {
         userService.updateProfile(
             userId,
-            UpdateMeRequest(cityId = moscowId, bio = "Привет!", interests = listOf("настолки"))
+            UpdateMeRequest(cityId = moscowId, bio = "Играю в настолки", interests = listOf("настолки"))
         )
 
         val gam = xpService.getGamification(userId)
@@ -119,7 +132,7 @@ class ProfileQuestIntegrationTest {
     fun `milestones are one-time - clearing fields keeps XP, re-filling adds nothing`() {
         userService.updateProfile(
             userId,
-            UpdateMeRequest(cityId = moscowId, bio = "Привет!", interests = listOf("настолки"))
+            UpdateMeRequest(cityId = moscowId, bio = "Играю в настолки", interests = listOf("настолки"))
         )
         val flagsAfterFill = userRepository.findQuestFlags(userId)!!
 
@@ -132,7 +145,7 @@ class ProfileQuestIntegrationTest {
         // Повторное заполнение: фарм невозможен — те же метки, тот же XP (AC-7)
         userService.updateProfile(
             userId,
-            UpdateMeRequest(cityId = spbId, bio = "Снова тут", interests = listOf("походы"))
+            UpdateMeRequest(cityId = spbId, bio = "Снова тут, всем привет", interests = listOf("походы"))
         )
         assertEquals(flagsAfterFill, userRepository.findQuestFlags(userId)!!, "повторное заполнение не создаёт новых меток")
         assertEquals(50, xpService.getGamification(userId).xp)

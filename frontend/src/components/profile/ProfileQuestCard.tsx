@@ -1,20 +1,23 @@
-import { FC, useEffect, useRef, useState } from 'react';
+import { FC } from 'react';
 import type { ProfileQuestDto } from '../../types/api';
 
-/** Шаг квеста = поле профиля; ключ уходит в редактор как поле для подсветки. */
+/** Шаг квеста = поле профиля. */
 export type QuestStepKey = 'city' | 'bio' | 'interests';
 
 /**
- * Шаги профиль-квеста v2 — карусель «один экран = один шаг» (мокап
- * docs/design/profile-completion/mockups/04-quest-carousel.html, PO 2026-07-25).
- * Порядок изменён против v1: город → о себе → интересы (решение PO). XP остаются
- * за полями и зеркалят XpPolicy.QUEST_*_XP на бэке; сумма = порог уровня 2 «Свой».
+ * Шаги профиль-квеста — три поля одним списком.
+ *
+ * Карусель «один экран = один шаг» снята (решение PO 2026-07-31): человек заходит в редактор
+ * и заполняет всё за один раз, а не ходит по шагам туда-обратно. Карточка теперь только
+ * показывает, что осталось, — теми же тремя чекбоксами, которые он увидит в самом редакторе.
+ *
+ * XP остаются за полями и зеркалят XpPolicy.QUEST_*_XP на бэке; сумма = порог уровня 2 «Свой».
  * Тексты утверждены построчно — не переписывать.
  */
 const QUEST_STEPS = [
-  { key: 'city', icon: '📍', name: 'Укажи город', doneName: 'Город — готово', why: 'Найдём клубы рядом с тобой', xp: 10 },
-  { key: 'bio', icon: '✍️', name: 'Пару слов о себе', doneName: 'О себе — готово', why: 'Чем увлекаешься?)', xp: 15 },
-  { key: 'interests', icon: '🎯', name: 'Добавь интересы', doneName: 'Интересы — готово', why: 'Подберём интересные клубы', xp: 25 },
+  { key: 'city', name: 'Город', why: 'Найдём клубы рядом с тобой', xp: 10 },
+  { key: 'bio', name: 'О себе', why: 'Чем увлекаешься?)', xp: 15 },
+  { key: 'interests', name: 'Интересы', why: 'Подберём интересные клубы', xp: 25 },
 ] as const;
 
 /** Порог уровня 2 «Свой» (кривая 50·n²) — ровно сумма XP трёх шагов. */
@@ -23,10 +26,7 @@ const QUEST_TOTAL_XP = 50;
 /** localStorage-ключ свёрнутости; состоянием владеет ProfilePage (затенение зависит от него). */
 export const QUEST_FOLDED_KEY = 'profileQuestFolded';
 
-/** Насколько далеко нужно смахнуть, чтобы это считалось листанием (px) — как в OnboardingFlow. */
-const SWIPE_THRESHOLD_PX = 50;
-
-/** Максимум символов значения на «готово»-слайде («Москва», отрывок био, интересы). */
+/** Максимум символов значения заполненного шага («Москва», отрывок био, интересы). */
 const DONE_VALUE_MAX = 44;
 
 function isDone(quest: ProfileQuestDto, key: QuestStepKey): boolean {
@@ -39,7 +39,7 @@ function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
-/** Значения заполненных шагов — подписи «готово»-слайдов. */
+/** Значения заполненных шагов — подписи под названием поля. */
 export interface QuestDoneValues {
   city: string | null;
   bio: string | null;
@@ -76,84 +76,65 @@ const Donut: FC<{ size: number; stroke: number; fraction: number }> = ({ size, s
   );
 };
 
+/**
+ * Чекбокс поля: серый кружок → зелёная галочка. Один и тот же вид в карточке-квеста и в
+ * редакторе профиля — по нему человек понимает, что засчитано (решение PO 2026-07-31).
+ */
+export const QuestCheck: FC<{ done: boolean }> = ({ done }) => (
+  <span
+    className={done ? 'rd-qcheck rd-qcheck-on' : 'rd-qcheck'}
+    role="img"
+    aria-label={done ? 'заполнено' : 'не заполнено'}
+  >
+    {done && (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M20 6L9 17l-5-5" />
+      </svg>
+    )}
+  </span>
+);
+
 interface ProfileQuestCardProps {
   quest: ProfileQuestDto;
-  /** Значения заполненных шагов — «готово»-слайд показывает, что именно сохранено. */
+  /** Значения заполненных шагов — строка показывает, что именно сохранено. */
   doneValues: QuestDoneValues;
   /** Свёрнутость живёт в ProfilePage: от неё же зависит затенение остальных панелей. */
   folded: boolean;
   onToggleFold: () => void;
-  /** Тап по слайду / «Заполнить» — редактор профиля с подсветкой поля шага. */
-  onFill: (step: QuestStepKey) => void;
+  /** Кнопка карточки — редактор профиля целиком, без выделенных полей. */
+  onFill: () => void;
 }
 
 /**
- * Карточка-квест «Прокачай профиль» v2: карусель «один экран = один шаг» — виден ровно один
- * шаг, человека не пугает список полей (мотив редизайна PO 2026-07-25). Свайп/стрелки/точки;
- * точка жёлтая = шаг заполнен, вытянутая = текущий экран. Карточка подсвечена пульсом —
- * парная к затенению остальных панелей профиля в ProfilePage. При изменении прогресса
- * карусель сама встаёт на первый незаполненный шаг. Пилюля-сворачивание сохранена.
+ * Карточка-квест «Прокачай профиль»: три поля одним списком и одна кнопка в редактор.
+ * Чекбоксы — общий язык с редактором: здесь видно, что осталось, там галочки загораются
+ * по мере заполнения.
+ *
+ * Карточка подсвечена пульсом — парная к затенению остальных панелей профиля в ProfilePage.
+ * Пилюля-сворачивание сохранена.
  */
 export const ProfileQuestCard: FC<ProfileQuestCardProps> = ({ quest, doneValues, folded, onToggleFold, onFill }) => {
-  const firstUnfilled = () => {
-    const i = QUEST_STEPS.findIndex((s) => !isDone(quest, s.key));
-    return i === -1 ? QUEST_STEPS.length - 1 : i;
-  };
-
-  const [index, setIndex] = useState(firstUnfilled);
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
-
-  // После сохранения профиля прогресс меняется — карусель сама переезжает на первый
-  // незаполненный шаг (PO: «идём до самого последнего»). Ручное листание не трогаем.
-  const doneCount = QUEST_STEPS.filter((s) => isDone(quest, s.key)).length;
-  const prevDoneCount = useRef(doneCount);
-  useEffect(() => {
-    if (doneCount === prevDoneCount.current) return;
-    prevDoneCount.current = doneCount;
-    const i = QUEST_STEPS.findIndex((s) => !isDone(quest, s.key));
-    setIndex(i === -1 ? QUEST_STEPS.length - 1 : i);
-  }, [doneCount, quest]);
-
   const earnedXp = QUEST_STEPS.reduce((sum, s) => sum + (isDone(quest, s.key) ? s.xp : 0), 0);
   const fraction = earnedXp / QUEST_TOTAL_XP;
-  const nextStep = QUEST_STEPS.find((s) => !isDone(quest, s.key));
-
-  const goTo = (next: number) => {
-    if (next < 0 || next >= QUEST_STEPS.length) return;
-    setIndex(next);
-  };
-
-  const handleTouchEnd = (endX: number | undefined) => {
-    const startX = touchStartX;
-    setTouchStartX(null);
-    // Координаты нет — свайпа не было; 0 сюда подставлять нельзя (см. OnboardingFlow).
-    if (startX === null || endX === undefined) return;
-    const shift = endX - startX;
-    if (Math.abs(shift) < SWIPE_THRESHOLD_PX) return;
-    goTo(shift < 0 ? index + 1 : index - 1);
-  };
+  const leftCount = QUEST_STEPS.filter((s) => !isDone(quest, s.key)).length;
 
   if (folded) {
     return (
       <button type="button" className="rd-quest-pill" onClick={onToggleFold} aria-label="Развернуть квест профиля">
         <span className="rd-qp-donut"><Donut size={22} stroke={3} fraction={fraction} /></span>
         <span className="rd-qp-text">{earnedXp} / {QUEST_TOTAL_XP} XP</span>
-        {nextStep && (
-          <span className="rd-qp-next">Дальше: <b>{nextStep.name.toLowerCase()} +{nextStep.xp}</b></span>
+        {leftCount > 0 && (
+          <span className="rd-qp-next">Осталось: <b>{leftCount} из {QUEST_STEPS.length}</b></span>
         )}
         <svg className="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
       </button>
     );
   }
 
-  const step = QUEST_STEPS[index]!;
-  const stepDone = isDone(quest, step.key);
-  const isFirst = index === 0;
-  const isLast = index === QUEST_STEPS.length - 1;
-
   return (
     <div className="rd-quest rd-glass rd-q-pulse">
       <div className="rd-q-head">
+        <span className="rd-q-donut" aria-hidden="true"><Donut size={38} stroke={4} fraction={fraction} /></span>
         <div className="rd-q-titles">
           <div className="rd-q-title">Прокачай профиль</div>
           <div className="rd-q-motiv">чтобы лучше подбирать клубы</div>
@@ -164,55 +145,26 @@ export const ProfileQuestCard: FC<ProfileQuestCardProps> = ({ quest, doneValues,
         </button>
       </div>
 
-      {/* `data-swipe-nav="off"` — навигационный свайп «назад/вперёд» работает со всего экрана,
-          и без этой пометки он забирал бы себе горизонтальные жесты карусели: человек листал бы
-          шаги квеста, а уезжала бы страница. Внутри вьюпорта свайп листает только квест. */}
-      <div
-        className="rd-qc-viewport"
-        data-swipe-nav="off"
-        onTouchStart={(e) => setTouchStartX(e.changedTouches[0]?.clientX ?? null)}
-        onTouchEnd={(e) => handleTouchEnd(e.changedTouches[0]?.clientX)}
-      >
-        {!isFirst && (
-          <button type="button" className="rd-qc-arr rd-qc-arr-l" onClick={() => goTo(index - 1)} aria-label="Предыдущий шаг">‹</button>
-        )}
-        {!isLast && (
-          <button type="button" className="rd-qc-arr rd-qc-arr-r" onClick={() => goTo(index + 1)} aria-label="Следующий шаг">›</button>
-        )}
+      <ul className="rd-qlist">
+        {QUEST_STEPS.map((step) => {
+          const done = isDone(quest, step.key);
+          const value = done ? doneValueLabel(step.key, doneValues) : null;
+          return (
+            <li key={step.key} className={done ? 'rd-qrow rd-qrow-done' : 'rd-qrow'}>
+              <QuestCheck done={done} />
+              <span className="rd-qrow-body">
+                <span className="rd-qrow-name">{step.name}</span>
+                <span className="rd-qrow-why">{value ?? step.why}</span>
+              </span>
+              <span className={done ? 'rd-qrow-xp rd-qrow-xp-done' : 'rd-qrow-xp'}>+{step.xp} XP</span>
+            </li>
+          );
+        })}
+      </ul>
 
-        {/* Весь слайд — одна кнопка в редактор; «Заполнить» внутри — визуальный CTA (span:
-            button-в-button невалиден). Заполненный шаг тоже кликабелен — правки не запрещены. */}
-        <button type="button" className="rd-qc-slide" onClick={() => onFill(step.key)}>
-          <span className={`rd-qc-ic${stepDone ? ' rd-qc-ic-done' : ''}`} aria-hidden="true">{step.icon}</span>
-          <span className="rd-qc-body">
-            <span className="rd-qc-name">{stepDone ? step.doneName : step.name}</span>
-            <span className="rd-qc-why">{(stepDone && doneValueLabel(step.key, doneValues)) || step.why}</span>
-          </span>
-          <span className="rd-qc-cta-col">
-            {stepDone ? (
-              <span className="rd-qc-done-chip">✓ +{step.xp} XP</span>
-            ) : (
-              <>
-                <span className="rd-qc-xp-chip">+{step.xp} XP</span>
-                <span className="rd-qc-btn">Заполнить</span>
-              </>
-            )}
-          </span>
-        </button>
-      </div>
-
-      {/* Точки: жёлтая = шаг заполнен, вытянутая = текущий экран (мокап 04). */}
-      <div className="rd-qc-dots">
-        {QUEST_STEPS.map((s, i) => (
-          <button
-            key={s.key}
-            type="button"
-            className={`rd-qc-dot${i === index ? ' rd-on' : ''}${isDone(quest, s.key) ? ' rd-gold' : ''}`}
-            onClick={() => goTo(i)}
-            aria-label={`Шаг «${s.name}»${isDone(quest, s.key) ? ' — заполнен' : ''}`}
-          />
-        ))}
-      </div>
+      <button type="button" className="rd-btn-primary rd-q-cta" onClick={onFill}>
+        {earnedXp === 0 ? 'Заполнить профиль' : 'Дозаполнить профиль'}
+      </button>
     </div>
   );
 };
@@ -234,7 +186,7 @@ interface ProfileQuestCongratsProps {
 
 /** Поздравление на месте карточки-квеста: бейдж «Визитка», конфетти, «Отлично» убирает навсегда. */
 export const ProfileQuestCongrats: FC<ProfileQuestCongratsProps> = ({ title, onAck }) => (
-  <div className="rd-congrats rd-glass" role="status" data-coach="profile-congrats">
+  <div className="rd-congrats rd-glass" role="status">
     {CONFETTI.map((cf) => (
       <span key={cf.left} className="rd-cf" style={{ left: cf.left, top: 6, background: cf.color, animationDelay: cf.delay }} aria-hidden="true" />
     ))}
