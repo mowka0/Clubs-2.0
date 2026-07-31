@@ -1,18 +1,18 @@
 package com.clubs.user
 
-import com.clubs.common.exception.ConflictException
 import com.clubs.common.exception.NotFoundException
+import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.tables.records.UsersRecord
 import com.clubs.interest.InterestService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.OffsetDateTime
 import java.util.UUID
 
 @Service
 class UserService(
     private val userRepository: UserRepository,
+    private val onboardingTourRepository: OnboardingTourRepository,
     private val interestService: InterestService
 ) {
     private val log = LoggerFactory.getLogger(this::class.java)
@@ -20,7 +20,7 @@ class UserService(
     fun getUserById(id: UUID): UserDto {
         val record = userRepository.findById(id)
             ?: throw NotFoundException("User not found")
-        return record.toDto()
+        return record.toDto(onboardingTourRepository.findCompleted(id))
     }
 
     @Transactional
@@ -42,28 +42,34 @@ class UserService(
     fun getMyInterests(userId: UUID): List<String> = interestService.getUserInterests(userId)
 
     /**
-     * Отмечает онбординг пройденным. Пройденным считается только выход через дверь —
-     * тап главной кнопки слайда; «Пропустить» в потоке нет.
+     * Отмечает тур пройденным. Туры независимы: каждый экран закрывается своим ключом, и
+     * пройденный тур клуба ничего не говорит про тур профиля.
      *
-     * Дверь никуда не сохраняется, только в лог: это единственная метрика намерения,
-     * которая у нас есть, а колонка под неё была бы данными без потребителя.
+     * Повторный вызов — НЕ ошибка (в отличие от прежнего 409 на едином флаге): отметка
+     * идемпотентна, а «уже пройден» и «отметили сейчас» для клиента означают одно и то же —
+     * тур закрыт. Отличаются они только строчкой в логе.
      */
     @Transactional
-    fun completeOnboarding(userId: UUID, door: OnboardingDoor): UserDto {
-        if (!userRepository.markOnboarded(userId, OffsetDateTime.now())) {
-            // Строку не тронули по одной из двух причин — различаем их, чтобы не отвечать
-            // 409 «уже пройден» тому, кого вообще нет.
-            userRepository.findById(userId) ?: throw NotFoundException("User not found")
-            throw ConflictException("Onboarding already completed")
+    fun completeTour(userId: UUID, rawTour: String): UserDto {
+        val tour = OnboardingTour.parse(rawTour)
+            ?: throw ValidationException("Unknown onboarding tour: $rawTour")
+        // Явная проверка, хотя внешний ключ и так не дал бы вставить строку: без неё
+        // несуществующий пользователь получал бы 500 от нарушения FK вместо честного 404.
+        userRepository.findById(userId) ?: throw NotFoundException("User not found")
+        if (onboardingTourRepository.markCompleted(userId, tour)) {
+            log.info("Onboarding tour completed: userId={} tour={}", userId, tour)
         }
-        log.info("Onboarding completed: userId={} door={}", userId, door)
         return getUserById(userId)
     }
 }
 
 private fun String?.blankToNull(): String? = this?.trim()?.ifEmpty { null }
 
-fun UsersRecord.toDto() = UserDto(
+/**
+ * Туры приходят параметром, а не читаются здесь: маппер не должен ходить в базу, а оба
+ * вызывающих (профиль и авторизация) всё равно достают их сами.
+ */
+fun UsersRecord.toDto(onboardingTours: Set<OnboardingTour>) = UserDto(
     id = id!!,
     telegramId = telegramId,
     telegramUsername = telegramUsername,
@@ -73,5 +79,5 @@ fun UsersRecord.toDto() = UserDto(
     city = city,
     country = country,
     bio = bio,
-    onboardedAt = onboardedAt
+    onboardingTours = onboardingTours
 )

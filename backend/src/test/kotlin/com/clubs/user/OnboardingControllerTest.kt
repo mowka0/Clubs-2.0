@@ -2,14 +2,13 @@ package com.clubs.user
 
 import com.clubs.auth.JwtService
 import org.jooq.DSLContext
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
@@ -21,7 +20,6 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
-import java.time.OffsetDateTime
 import java.util.UUID
 
 @SpringBootTest(
@@ -60,131 +58,94 @@ class OnboardingControllerTest {
     @Autowired lateinit var dsl: DSLContext
 
     private lateinit var freshUserId: UUID
-    private lateinit var onboardedUserId: UUID
     private lateinit var freshToken: String
-    private lateinit var onboardedToken: String
 
     @BeforeEach
     fun setUp() {
         dsl.execute("DELETE FROM users")
-
         freshUserId = UUID.randomUUID()
-        onboardedUserId = UUID.randomUUID()
-
         dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$freshUserId', 5001, 'Fresh')")
-        dsl.execute(
-            "INSERT INTO users (id, telegram_id, first_name, onboarded_at) " +
-                "VALUES ('$onboardedUserId', 5002, 'Onboarded', now())"
-        )
-
         freshToken = jwtService.generateToken(freshUserId, 5001L)
-        onboardedToken = jwtService.generateToken(onboardedUserId, 5002L)
     }
 
-    private fun onboardedAtOf(userId: UUID): OffsetDateTime? =
-        dsl.fetchOne("SELECT onboarded_at FROM users WHERE id = ?", userId)
-            ?.get(0, OffsetDateTime::class.java)
+    /** Ключи пройденных туров прямо из БД, минуя сервис. */
+    private fun toursOf(userId: UUID): Set<String> =
+        dsl.fetch("SELECT tour_key FROM user_onboarding_tours WHERE user_id = ?", userId)
+            .map { it.get(0, String::class.java) }
+            .toSet()
+
+    private fun completeTour(tour: String, token: String = freshToken) =
+        post("/api/users/me/onboarding/$tour").header("Authorization", "Bearer $token")
 
     @Test
-    fun `POST me-onboarding marks user onboarded and returns updated profile`() {
-        assertNull(onboardedAtOf(freshUserId), "предусловие: пользователь ещё не онбординен")
+    fun `POST marks the tour and returns it in the profile`() {
+        assertTrue(toursOf(freshUserId).isEmpty(), "предусловие: новичок не прошёл ничего")
 
-        mockMvc.perform(
-            post("/api/users/me/onboarding")
-                .header("Authorization", "Bearer $freshToken")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"door":"MEMBER"}""")
-        )
+        mockMvc.perform(completeTour("INTRO"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.id").value(freshUserId.toString()))
-            .andExpect(jsonPath("$.onboardedAt").isNotEmpty)
+            .andExpect(jsonPath("$.onboardingTours").value("INTRO"))
 
-        assertNotNull(onboardedAtOf(freshUserId), "onboarded_at проставлен в БД")
+        assertEquals(setOf("INTRO"), toursOf(freshUserId), "строка тура появилась в БД")
     }
 
     @Test
-    fun `POST me-onboarding accepts organizer door`() {
-        mockMvc.perform(
-            post("/api/users/me/onboarding")
-                .header("Authorization", "Bearer $freshToken")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"door":"ORGANIZER"}""")
-        )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.onboardedAt").isNotEmpty)
+    fun `tours are independent — closing one leaves the others open`() {
+        mockMvc.perform(completeTour("CLUB")).andExpect(status().isOk)
+
+        // Суть новой модели: пройденный тур клуба ничего не говорит про остальные экраны.
+        assertEquals(setOf("CLUB"), toursOf(freshUserId))
+
+        mockMvc.perform(completeTour("PROFILE")).andExpect(status().isOk)
+        assertEquals(setOf("CLUB", "PROFILE"), toursOf(freshUserId))
     }
 
     @Test
-    fun `POST me-onboarding returns 409 when already onboarded`() {
-        mockMvc.perform(
-            post("/api/users/me/onboarding")
-                .header("Authorization", "Bearer $onboardedToken")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"door":"MEMBER"}""")
-        )
-            .andExpect(status().isConflict)
+    fun `repeat call is idempotent — 200 and still a single row`() {
+        // На едином флаге повтор давал 409; у туров отметка идемпотентна: «уже пройден»
+        // и «отметили сейчас» означают для клиента одно и то же — тур закрыт.
+        mockMvc.perform(completeTour("INTRO")).andExpect(status().isOk)
+        mockMvc.perform(completeTour("INTRO")).andExpect(status().isOk)
+
+        assertEquals(setOf("INTRO"), toursOf(freshUserId), "второй вызов не создал дубль")
     }
 
     @Test
-    fun `POST me-onboarding twice returns 409 on the second call`() {
-        val request = post("/api/users/me/onboarding")
-            .header("Authorization", "Bearer $freshToken")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content("""{"door":"MEMBER"}""")
-
-        mockMvc.perform(request).andExpect(status().isOk)
-        mockMvc.perform(request).andExpect(status().isConflict)
+    fun `tour key is case-insensitive`() {
+        mockMvc.perform(completeTour("my_clubs")).andExpect(status().isOk)
+        assertEquals(setOf("MY_CLUBS"), toursOf(freshUserId), "в БД ключ нормализован")
     }
 
     @Test
-    fun `POST me-onboarding rejects unknown door`() {
-        mockMvc.perform(
-            post("/api/users/me/onboarding")
-                .header("Authorization", "Bearer $freshToken")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"door":"TOURIST"}""")
-        )
-            .andExpect(status().isBadRequest)
-
-        assertNull(onboardedAtOf(freshUserId), "невалидная дверь не помечает онбординг пройденным")
+    fun `unknown tour returns 400 and marks nothing`() {
+        // Ключ разбирается в сервисе именно ради этого: enum в @PathVariable дал бы 500.
+        mockMvc.perform(completeTour("TOURIST")).andExpect(status().isBadRequest)
+        assertTrue(toursOf(freshUserId).isEmpty(), "неизвестный тур ничего не помечает")
     }
 
     @Test
-    fun `POST me-onboarding requires authentication`() {
-        mockMvc.perform(
-            post("/api/users/me/onboarding")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"door":"MEMBER"}""")
-        )
-            .andExpect(status().isUnauthorized)
-
-        assertNull(onboardedAtOf(freshUserId), "без токена ничего не помечается")
+    fun `POST requires authentication`() {
+        mockMvc.perform(post("/api/users/me/onboarding/INTRO")).andExpect(status().isUnauthorized)
+        assertTrue(toursOf(freshUserId).isEmpty(), "без токена ничего не помечается")
     }
 
     @Test
-    fun `POST me-onboarding touches only the caller — foreign profile stays untouched`() {
-        mockMvc.perform(
-            post("/api/users/me/onboarding")
-                .header("Authorization", "Bearer $freshToken")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"door":"MEMBER"}""")
-        )
-            .andExpect(status().isOk)
+    fun `POST touches only the caller — foreign profile stays untouched`() {
+        mockMvc.perform(completeTour("INTRO")).andExpect(status().isOk)
 
         // Цель — не «чужой userId отклоняется» (его негде передать: id берётся из JWT),
         // а что вызов не задевает соседние строки: онбординг строго свой.
         val foreignId = UUID.randomUUID()
         dsl.execute("INSERT INTO users (id, telegram_id, first_name) VALUES ('$foreignId', 5003, 'Foreign')")
-        assertNull(onboardedAtOf(foreignId), "чужой профиль не тронут")
+        assertTrue(toursOf(foreignId).isEmpty(), "чужой профиль не тронут")
     }
 
     @Test
-    fun `GET me exposes onboardedAt as null for a fresh user`() {
-        mockMvc.perform(
-            get("/api/users/me").header("Authorization", "Bearer $freshToken")
-        )
+    fun `GET me exposes an empty tour set for a fresh user`() {
+        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer $freshToken"))
             .andExpect(status().isOk)
-            // Поле есть в ответе и равно null — фронт различает «не проходил» именно по нему.
-            .andExpect(jsonPath("$.onboardedAt").isEmpty)
+            // Пустой массив, а не отсутствующее поле: фронт различает новичка именно по нему.
+            .andExpect(jsonPath("$.onboardingTours").isArray)
+            .andExpect(jsonPath("$.onboardingTours").isEmpty)
     }
 }

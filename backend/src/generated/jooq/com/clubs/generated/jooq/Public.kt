@@ -28,6 +28,7 @@ import com.clubs.generated.jooq.tables.Transactions
 import com.clubs.generated.jooq.tables.UserClubReputation
 import com.clubs.generated.jooq.tables.UserClubReputationPreV18
 import com.clubs.generated.jooq.tables.UserInterests
+import com.clubs.generated.jooq.tables.UserOnboardingTours
 import com.clubs.generated.jooq.tables.Users
 
 import kotlin.collections.List
@@ -229,6 +230,12 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
     val USER_INTERESTS: UserInterests get() = UserInterests.USER_INTERESTS
 
     /**
+     * Пройденные туры онбординга: одна строка = один экран, пройденный этим
+     * пользователем до конца. Строки нет — тур не пройден.
+     */
+    val USER_ONBOARDING_TOURS: UserOnboardingTours get() = UserOnboardingTours.USER_ONBOARDING_TOURS
+
+    /**
      * Пользователи: Telegram-профили, создаются и синхронизируются при
      * авторизации через подписанный initData Mini App.
      */
@@ -261,6 +268,7 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         UserClubReputation.USER_CLUB_REPUTATION,
         UserClubReputationPreV18.USER_CLUB_REPUTATION_PRE_V18,
         UserInterests.USER_INTERESTS,
+        UserOnboardingTours.USER_ONBOARDING_TOURS,
         Users.USERS
     )
 }

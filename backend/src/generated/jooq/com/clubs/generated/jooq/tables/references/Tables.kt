@@ -28,6 +28,7 @@ import com.clubs.generated.jooq.tables.Transactions
 import com.clubs.generated.jooq.tables.UserClubReputation
 import com.clubs.generated.jooq.tables.UserClubReputationPreV18
 import com.clubs.generated.jooq.tables.UserInterests
+import com.clubs.generated.jooq.tables.UserOnboardingTours
 import com.clubs.generated.jooq.tables.Users
 
 
@@ -204,6 +205,12 @@ val USER_CLUB_REPUTATION_PRE_V18: UserClubReputationPreV18 = UserClubReputationP
  * (user_id, interest_id).
  */
 val USER_INTERESTS: UserInterests = UserInterests.USER_INTERESTS
+
+/**
+ * Пройденные туры онбординга: одна строка = один экран, пройденный этим
+ * пользователем до конца. Строки нет — тур не пройден.
+ */
+val USER_ONBOARDING_TOURS: UserOnboardingTours = UserOnboardingTours.USER_ONBOARDING_TOURS
 
 /**
  * Пользователи: Telegram-профили, создаются и синхронизируются при авторизации

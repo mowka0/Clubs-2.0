@@ -27,6 +27,7 @@ import com.clubs.generated.jooq.tables.SubscriptionPricing
 import com.clubs.generated.jooq.tables.Transactions
 import com.clubs.generated.jooq.tables.UserClubReputation
 import com.clubs.generated.jooq.tables.UserInterests
+import com.clubs.generated.jooq.tables.UserOnboardingTours
 import com.clubs.generated.jooq.tables.Users
 import com.clubs.generated.jooq.tables.records.ApplicationsRecord
 import com.clubs.generated.jooq.tables.records.ChatAwardTagsRecord
@@ -51,6 +52,7 @@ import com.clubs.generated.jooq.tables.records.SubscriptionPricingRecord
 import com.clubs.generated.jooq.tables.records.TransactionsRecord
 import com.clubs.generated.jooq.tables.records.UserClubReputationRecord
 import com.clubs.generated.jooq.tables.records.UserInterestsRecord
+import com.clubs.generated.jooq.tables.records.UserOnboardingToursRecord
 import com.clubs.generated.jooq.tables.records.UsersRecord
 
 import org.jooq.ForeignKey
@@ -96,6 +98,7 @@ val TRANSACTIONS_PKEY: UniqueKey<TransactionsRecord> = Internal.createUniqueKey(
 val USER_CLUB_REPUTATION_PKEY: UniqueKey<UserClubReputationRecord> = Internal.createUniqueKey(UserClubReputation.USER_CLUB_REPUTATION, DSL.name("user_club_reputation_pkey"), arrayOf(UserClubReputation.USER_CLUB_REPUTATION.ID), true)
 val USER_CLUB_REPUTATION_USER_ID_CLUB_ID_KEY: UniqueKey<UserClubReputationRecord> = Internal.createUniqueKey(UserClubReputation.USER_CLUB_REPUTATION, DSL.name("user_club_reputation_user_id_club_id_key"), arrayOf(UserClubReputation.USER_CLUB_REPUTATION.USER_ID, UserClubReputation.USER_CLUB_REPUTATION.CLUB_ID), true)
 val USER_INTERESTS_PKEY: UniqueKey<UserInterestsRecord> = Internal.createUniqueKey(UserInterests.USER_INTERESTS, DSL.name("user_interests_pkey"), arrayOf(UserInterests.USER_INTERESTS.USER_ID, UserInterests.USER_INTERESTS.INTEREST_ID), true)
+val USER_ONBOARDING_TOURS_PKEY: UniqueKey<UserOnboardingToursRecord> = Internal.createUniqueKey(UserOnboardingTours.USER_ONBOARDING_TOURS, DSL.name("user_onboarding_tours_pkey"), arrayOf(UserOnboardingTours.USER_ONBOARDING_TOURS.USER_ID, UserOnboardingTours.USER_ONBOARDING_TOURS.TOUR_KEY), true)
 val USERS_PKEY: UniqueKey<UsersRecord> = Internal.createUniqueKey(Users.USERS, DSL.name("users_pkey"), arrayOf(Users.USERS.ID), true)
 val USERS_TELEGRAM_ID_KEY: UniqueKey<UsersRecord> = Internal.createUniqueKey(Users.USERS, DSL.name("users_telegram_id_key"), arrayOf(Users.USERS.TELEGRAM_ID), true)
 
@@ -144,3 +147,4 @@ val USER_CLUB_REPUTATION__USER_CLUB_REPUTATION_CLUB_ID_FKEY: ForeignKey<UserClub
 val USER_CLUB_REPUTATION__USER_CLUB_REPUTATION_USER_ID_FKEY: ForeignKey<UserClubReputationRecord, UsersRecord> = Internal.createForeignKey(UserClubReputation.USER_CLUB_REPUTATION, DSL.name("user_club_reputation_user_id_fkey"), arrayOf(UserClubReputation.USER_CLUB_REPUTATION.USER_ID), com.clubs.generated.jooq.keys.USERS_PKEY, arrayOf(Users.USERS.ID), true)
 val USER_INTERESTS__USER_INTERESTS_INTEREST_ID_FKEY: ForeignKey<UserInterestsRecord, InterestsRecord> = Internal.createForeignKey(UserInterests.USER_INTERESTS, DSL.name("user_interests_interest_id_fkey"), arrayOf(UserInterests.USER_INTERESTS.INTEREST_ID), com.clubs.generated.jooq.keys.INTERESTS_PKEY, arrayOf(Interests.INTERESTS.ID), true)
 val USER_INTERESTS__USER_INTERESTS_USER_ID_FKEY: ForeignKey<UserInterestsRecord, UsersRecord> = Internal.createForeignKey(UserInterests.USER_INTERESTS, DSL.name("user_interests_user_id_fkey"), arrayOf(UserInterests.USER_INTERESTS.USER_ID), com.clubs.generated.jooq.keys.USERS_PKEY, arrayOf(Users.USERS.ID), true)
+val USER_ONBOARDING_TOURS__USER_ONBOARDING_TOURS_USER_ID_FKEY: ForeignKey<UserOnboardingToursRecord, UsersRecord> = Internal.createForeignKey(UserOnboardingTours.USER_ONBOARDING_TOURS, DSL.name("user_onboarding_tours_user_id_fkey"), arrayOf(UserOnboardingTours.USER_ONBOARDING_TOURS.USER_ID), com.clubs.generated.jooq.keys.USERS_PKEY, arrayOf(Users.USERS.ID), true)

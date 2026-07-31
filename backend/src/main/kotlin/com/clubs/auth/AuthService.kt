@@ -1,6 +1,7 @@
 package com.clubs.auth
 
 import com.clubs.common.exception.ValidationException
+import com.clubs.user.OnboardingTourRepository
 import com.clubs.user.UserRepository
 import com.clubs.user.toDto
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -14,6 +15,7 @@ class AuthService(
     private val validator: TelegramInitDataValidator,
     private val jwtService: JwtService,
     private val userRepository: UserRepository,
+    private val onboardingTourRepository: OnboardingTourRepository,
     private val objectMapper: ObjectMapper
 ) {
 
@@ -52,7 +54,10 @@ class AuthService(
         )
 
         log.info("User upserted: id={} telegramId={} username={}", userRecord.id, telegramId, username)
-        val token = jwtService.generateToken(userRecord.id!!, telegramId)
-        return AuthResponse(token = token, user = userRecord.toDto())
+        val userId = userRecord.id!!
+        val token = jwtService.generateToken(userId, telegramId)
+        // Пройденные туры едут прямо в ответе авторизации: гейт интро решается на старте,
+        // без второго запроса — иначе первый кадр приложения мигал бы онбордингом.
+        return AuthResponse(token = token, user = userRecord.toDto(onboardingTourRepository.findCompleted(userId)))
     }
 }

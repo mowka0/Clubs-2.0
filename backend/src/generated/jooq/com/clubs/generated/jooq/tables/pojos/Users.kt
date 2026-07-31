@@ -26,7 +26,6 @@ data class Users(
     var updatedAt: OffsetDateTime? = null,
     var country: String? = null,
     var bio: String? = null,
-    var onboardedAt: OffsetDateTime? = null,
     var questCityAt: OffsetDateTime? = null,
     var questInterestsAt: OffsetDateTime? = null,
     var questBioAt: OffsetDateTime? = null
@@ -99,12 +98,6 @@ data class Users(
         }
         else if (this.bio != o.bio)
             return false
-        if (this.onboardedAt == null) {
-            if (o.onboardedAt != null)
-                return false
-        }
-        else if (this.onboardedAt != o.onboardedAt)
-            return false
         if (this.questCityAt == null) {
             if (o.questCityAt != null)
                 return false
@@ -140,7 +133,6 @@ data class Users(
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
         result = prime * result + (if (this.country == null) 0 else this.country.hashCode())
         result = prime * result + (if (this.bio == null) 0 else this.bio.hashCode())
-        result = prime * result + (if (this.onboardedAt == null) 0 else this.onboardedAt.hashCode())
         result = prime * result + (if (this.questCityAt == null) 0 else this.questCityAt.hashCode())
         result = prime * result + (if (this.questInterestsAt == null) 0 else this.questInterestsAt.hashCode())
         result = prime * result + (if (this.questBioAt == null) 0 else this.questBioAt.hashCode())
@@ -161,7 +153,6 @@ data class Users(
         sb.append(", ").append(updatedAt)
         sb.append(", ").append(country)
         sb.append(", ").append(bio)
-        sb.append(", ").append(onboardedAt)
         sb.append(", ").append(questCityAt)
         sb.append(", ").append(questInterestsAt)
         sb.append(", ").append(questBioAt)

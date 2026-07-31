@@ -54,21 +54,6 @@ class UserRepository(private val dsl: DSLContext) {
     }
 
     /**
-     * Помечает онбординг пройденным. Условие `onboarded_at IS NULL` — в самом UPDATE, а не
-     * отдельной проверкой перед ним: два одновременных тапа кнопки дают два запроса, и только
-     * один из них обновит строку. Второй получит 0 и превратится в 409, без гонки read-then-write.
-     *
-     * @return true — пометили сейчас; false — уже был пройден (или пользователя нет).
-     */
-    fun markOnboarded(userId: UUID, at: OffsetDateTime): Boolean =
-        dsl.update(USERS)
-            .set(USERS.ONBOARDED_AT, at)
-            .set(USERS.UPDATED_AT, at)
-            .where(USERS.ID.eq(userId))
-            .and(USERS.ONBOARDED_AT.isNull)
-            .execute() > 0
-
-    /**
      * Проставляет НЕдостигнутые вехи профиль-квеста, чьи поля сейчас непусты, одним атомарным
      * UPDATE (COALESCE + CASE): уже поставленные метки не трогаются, гонок read-then-write нет.
      * city/bio к этому моменту нормализованы через blankToNull → достаточно IS NOT NULL.
