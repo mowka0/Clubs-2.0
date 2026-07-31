@@ -168,7 +168,7 @@ interface WelcomeSceneProps {
  * вызывающего (onCta): порядок «сервер → навигация → setUser» обязателен,
  * см. useCompleteTourMutation.
  *
- * Полноэкранная сцена в стиле карусели (ob-* классы) — решение PO 2026-07-24: кадры A–C,
+ * Полноэкранная сцена со своими `wsc-*` классами — решение PO 2026-07-24: кадры A–C,
  * альтернатива-шторка (кадр D) отклонена.
  */
 export const WelcomeScene: FC<WelcomeSceneProps> = ({
@@ -182,13 +182,13 @@ export const WelcomeScene: FC<WelcomeSceneProps> = ({
   const content = CONTENT[variant];
 
   return (
-    <div className="ob-root">
-      <div className="ob-body">
-        <div className="ob-art">
+    <div className="wsc-root">
+      <div className="wsc-body">
+        <div className="wsc-art">
           <div className="wsc-ring" aria-hidden="true">{content.art}</div>
         </div>
 
-        <h2 className="ob-title">{content.title}</h2>
+        <h2 className="wsc-title">{content.title}</h2>
 
         <div className="wsc-club-chip">
           <span className="wsc-club-ava">
@@ -200,15 +200,15 @@ export const WelcomeScene: FC<WelcomeSceneProps> = ({
           </span>
         </div>
 
-        <p className="ob-sub">{content.subtitle}</p>
+        <p className="wsc-sub">{content.subtitle}</p>
 
-        <div className="ob-perks">
+        <div className="wsc-steps">
           {content.steps.map((step) => (
-            <div className="ob-perk" key={step.title}>
-              <div className="ob-perk-ic wsc-step-n" aria-hidden="true">{step.icon}</div>
+            <div className="wsc-step" key={step.title}>
+              <div className="wsc-step-ic wsc-step-n" aria-hidden="true">{step.icon}</div>
               <div>
-                <div className="ob-perk-t">{step.title}</div>
-                {step.text && <div className="ob-perk-d">{step.text}</div>}
+                <div className="wsc-step-t">{step.title}</div>
+                {step.text && <div className="wsc-step-d">{step.text}</div>}
               </div>
             </div>
           ))}
@@ -217,7 +217,7 @@ export const WelcomeScene: FC<WelcomeSceneProps> = ({
         <div className={`wsc-fact wsc-fact-${content.factTone}`}>{content.fact}</div>
       </div>
 
-      <div className="ob-cta">
+      <div className="wsc-cta">
         {/* «Секунду…» вместо TGUI-спиннера — как дверь карусели среза 1 (OnboardingFlow). */}
         <button type="button" className="rd-btn-primary" onClick={onCta} disabled={ctaPending}>
           {ctaPending ? 'Секунду…' : content.ctaLabel}

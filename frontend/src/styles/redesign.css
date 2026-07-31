@@ -2332,6 +2332,38 @@
 .ob-cta { position: relative; z-index: 2; flex-shrink: 0; padding: 14px 20px 6px; }
 
 /* ── Велком-сцена новичка в клубе (онбординг, срез 3; мокап welcome-scene.html, кадры A–C) ── */
+/* Собственный каркас сцены. Раньше он делился классами с каруселью интро, но интро v2
+   стало лентой на градиентном меше — общие `.ob-*` разъехались по смыслу, и сцена
+   переведена на свой неймспейс `wsc-*`. */
+.wsc-root {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; flex-direction: column;
+  background: var(--bg); color: var(--text);
+  padding: 18px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  padding-top: calc(18px + var(--app-inset-top, 0px));
+}
+.wsc-body { flex: 1; overflow-y: auto; padding-top: 10px; }
+.wsc-body::-webkit-scrollbar { display: none; }
+.wsc-art { display: flex; align-items: center; justify-content: center; margin: 6px 0 10px; flex-shrink: 0; }
+.wsc-title { font-size: 25px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.14; text-align: center; margin: 0; }
+.wsc-sub { font-size: 13.5px; color: var(--text-dim); line-height: 1.45; margin: 8px 0 0; text-align: center; }
+.wsc-sub b { font-weight: 700; color: var(--text); }
+.wsc-steps { display: flex; flex-direction: column; gap: 7px; margin-top: 14px; }
+.wsc-step {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 9px 11px; border-radius: 13px;
+  background: var(--surface); border: 1px solid var(--hairline);
+}
+.wsc-step-ic {
+  width: 26px; height: 26px; border-radius: 9px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); font-size: 13px;
+}
+.wsc-step-t { font-size: 12.5px; font-weight: 700; line-height: 1.3; }
+.wsc-step-d { font-size: 11.5px; color: var(--text-faint); line-height: 1.4; margin-top: 2px; }
+/* Кнопка закреплена внизу — не уезжает вместе с прокруткой списка шагов. */
+.wsc-cta { flex-shrink: 0; padding: 10px 0 6px; background: var(--bg); }
+
 /* Эмодзи-арт в тёплом свечении — как ринг мокапа; PNG-артов у сцены нет намеренно. */
 .wsc-ring {
   width: 96px; height: 96px; border-radius: 50%; font-size: 52px;
