@@ -56,7 +56,7 @@ Pattern: перед `setStep(s + 1)` вызвать `await trigger([...fields_of
 
 | Step | Поля | Rules |
 |---|---|---|
-| 0 | `name`, `city`, `district` | `name`: `required`, `minLength: 3`, `maxLength: 60` (с trim). `city`: `required`. `district`: optional. |
+| 0 | `name`, `cityId`, `district` | `name`: `required`, `minLength: 3`, `maxLength: 60` (с trim). `cityId`: `required` — выбор из справочника через `CityPicker`, свободного ввода нет (см. [`city-dictionary.md`](./city-dictionary.md)); ошибка «Выберите город из списка». `district`: optional, свободный текст. |
 | 1 | `category`, `accessType`, `applicationQuestion` | `category`: `required`, `defaultValue: 'other'` (нейтральный дефолт — пользователь явно выбирает категорию на шаге 1, не получая случайный «Спорт»). `accessType`: `required`, `defaultValue: 'open'`. `applicationQuestion`: optional, `maxLength: 200` (ширина колонки `clubs.application_question`); поле рендерится только при `accessType === 'closed'`. |
 | 2 | `memberLimit`, `subscriptionPrice` | `memberLimit`: `required`, `min: 10`, `max: 80`, integer (validate) — синхронизировано с backend Bean Validation `@Min(10) @Max(80)` в `CreateClubRequest.kt`. `subscriptionPrice`: `required`, `min: 0`, integer (validate). |
 | 3 | `description`, `rules` | `description`: `required`, `minLength: 10`, `maxLength: 500` (с trim). `rules`: optional. |
@@ -129,7 +129,7 @@ THEN переход не происходит; под полем виден те
 ### AC-3: payload идентичен
 GIVEN валидный wizard заполнен до конца
 WHEN submit
-THEN `body` запроса содержит ровно те же 10 полей (name, city, district, category, accessType, memberLimit, subscriptionPrice, description, rules, applicationQuestion) + avatarUrl что и до миграции. Имена и типы не меняются.
+THEN `body` запроса содержит те же 10 полей (name, cityId, district, category, accessType, memberLimit, subscriptionPrice, description, rules, applicationQuestion) + avatarUrl. С V74 город уехал из `city: string` в `cityId: uuid` — остальные имена и типы не меняются.
 
 ### AC-4: haptic preserved + validation-fail
 GIVEN миграция завершена

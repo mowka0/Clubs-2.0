@@ -39,7 +39,8 @@ premium «private clubs» позиционирование продукта.
 ## API контракты
 
 **Не меняются.** Используется существующий `GET /api/clubs` с теми же query-параметрами
-(`search`, `category`, `city`, `accessType`, `minPrice`, `maxPrice`, `page`, `size`).
+(`search`, `category`, `cityId`, `accessType`, `minPrice`, `maxPrice`, `page`, `size`).
+С V74 город фильтруется по id справочника, а не по тексту — см. [`city-dictionary.md`](./city-dictionary.md).
 Запросы делегированы `useClubsQuery` без изменений.
 
 ## Brand палитра (single source of truth)
@@ -74,8 +75,8 @@ premium «private clubs» позиционирование продукта.
 **GIVEN** пользователь выбирает город в sheet
 **THEN** срабатывает `haptic.select()`
 **AND** sheet закрывается
-**AND** выбор сохраняется в `localStorage` под ключом `clubs.cityChoice`
-**AND** список клубов фильтруется по `city` (query-param к `GET /api/clubs`)
+**AND** выбор сохраняется в `localStorage` под ключом `clubs.cityId` (с V74; прежний ключ `clubs.cityChoice` хранил пару страна+название и больше не читается)
+**AND** список клубов фильтруется по `cityId` (query-param к `GET /api/clubs`)
 
 **GIVEN** пользователь нажимает Escape / overlay / «Закрыть»
 **THEN** sheet закрывается без изменения выбора

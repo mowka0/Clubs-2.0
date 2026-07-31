@@ -273,14 +273,15 @@ interface UserDto {
   firstName: string;
   lastName: string | null;
   avatarUrl: string | null;
-  city: string | null;
+  city: string | null;         // денормализованное имя из справочника, только для показа
   country: string | null;      // добавлено 2026-05-30 (код страны, e.g. 'RU')
+  cityId: string | null;       // V74 (2026-07-31): источник правды, город из справочника cities
   bio: string | null;          // добавлено 2026-05-30 (≤280 символов)
   onboardingTours: OnboardingTour[];  // V72 (2026-07-31): пройденные туры; пустой массив — новичок
 }
 ```
 
-Поля `country`, `bio` и `onboardingTours` приходят из `/api/auth/telegram` (auth-response через `userRecord.toDto()`) и из `GET /api/users/me`. Имя / `lastName` / `avatarUrl` / `telegramUsername` синхронизируются из Telegram при каждом auth через `UserRepository.upsert` и **переписывают** локальные значения — поэтому в `ProfileEditModal` они не редактируются. `city`/`country`/`bio` НЕ участвуют в `upsert` и переживают синхронизацию; туры лежат в отдельной таблице и синхронизацией не затрагиваются. Полная спека редактирования — [`profile.md`](./profile.md).
+Поля `country`, `bio` и `onboardingTours` приходят из `/api/auth/telegram` (auth-response через `userRecord.toDto()`) и из `GET /api/users/me`. Имя / `lastName` / `avatarUrl` / `telegramUsername` синхронизируются из Telegram при каждом auth через `UserRepository.upsert` и **переписывают** локальные значения — поэтому в `ProfileEditModal` они не редактируются. `city`/`country`/`cityId`/`bio` НЕ участвуют в `upsert` и переживают синхронизацию; туры лежат в отдельной таблице и синхронизацией не затрагиваются. Полная спека редактирования — [`profile.md`](./profile.md).
 
 `setUser` вызывают двое: `useUpdateProfileMutation` (после `PATCH /api/users/me`) и `useCompleteTourMutation` (после `POST /api/users/me/onboarding/{tour}`). Второй важен структурно: на `user.onboardingTours` из этого стора построен **гейт первого входа** в `Layout` — интро гаснет ровно тогда, когда сервер подтвердил факт, а не «оптимистично» ([`onboarding.md`](./onboarding.md)).
 

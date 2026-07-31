@@ -126,13 +126,13 @@ CTA «Найти клуб» → `/`). Заменяет прежний нижни
 Свой `createPortal` sheet (overlay `.pf-edit-overlay` z-index `150`, sheet `.pf-edit-sheet` z-index `151`) — **не** TGUI `<Modal>` потому что CityPicker открывается на z-index `200/201` и должен оказываться поверх; TGUI Modal принудительно ставится на `1000` и накрыл бы CityPicker.
 
 Поля:
-- **Город** — `<button className="pf-edit-field">` показывает `«Москва, Россия»` или плейсхолдер «Не указан»; тап открывает `<CityPicker>` (переиспользование общего компонента, `CityChoice = { country, city }`).
+- **Город** — `<button className="pf-edit-field">` показывает `«Москва, Россия»` или плейсхолдер «Не указан»; тап открывает `<CityPicker>` (общий компонент). Форма хранит `cityId` справочника, отображаемое имя берётся из загруженного списка — см. [`city-dictionary.md`](./city-dictionary.md).
 - **О себе** — `<textarea>` с `maxLength={280}` + счётчик.
 - **Интересы** — `<InterestsInput value onChange>` (см. ниже).
 - Действия: «Отмена» (ghost) / «Сохранить» (brass).
 
-Сохранение → `PATCH /api/users/me` с **полным** состоянием формы (`{ country, city, bio, interests }`):
-- пустая строка / `null` → backend очистит поле;
+Сохранение → `PATCH /api/users/me` с **полным** состоянием формы (`{ cityId, bio, interests }`):
+- `null` → backend очистит поле; страну клиент не присылает — она приезжает из справочника вместе с городом;
 - интересы — массив, заменяет полностью.
 
 После успеха — `setUser(updated)` в `useAuthStore` + invalidate `clubs.myInterests()`.
@@ -180,8 +180,9 @@ data class UserDto(
     val firstName: String,
     val lastName: String?,
     val avatarUrl: String?,
-    val city: String?,
-    val country: String?,             // код страны (например "RU")
+    val city: String?,                // денормализованное имя из справочника, только для показа
+    val country: String?,             // код страны из справочника (например "RU")
+    val cityId: UUID?,                // V74: источник правды; null — город не указан
     val bio: String?,                 // ≤280 символов
     val onboardingTours: Set<OnboardingTour>  // V72: пройденные туры онбординга; пусто — новичок
 )
@@ -195,19 +196,21 @@ data class UserDto(
 
 ### `PATCH /api/users/me` (NEW)
 
-Полный replace user-editable полей. Форма всегда шлёт все четыре поля (включая интересы массивом), потому что бэкенд трактует `null`/`""` как «очистить».
+Полный replace user-editable полей. Форма всегда шлёт все поля (включая интересы массивом), потому что бэкенд трактует `null`/`""` как «очистить».
 
 ```kotlin
 data class UpdateMeRequest(
-    @field:Size(max = 8)   val country: String? = null,
-    @field:Size(max = 255) val city: String? = null,
+    val cityId: UUID? = null,          // V74: город только из справочника; null = очистить
     @field:Size(max = 280) val bio: String? = null,
     val interests: List<String> = emptyList()
 )
 ```
 
 Логика:
-- `country/city/bio` — `blankToNull` → `users.country/city/bio`. `UPDATED_AT = NOW()`.
+- `cityId` — резолвится в справочнике (`CityService.requireCity`, 400 если города нет) и пишет
+  сразу `users.city_id`, `users.city` и `users.country`: имя и страна берутся из справочника,
+  клиент их не присылает, поэтому разъехаться они не могут. `null` очищает все три.
+- `bio` — `blankToNull` → `users.bio`. `UPDATED_AT = NOW()`.
 - `interests` — `InterestNormalizer.normalizeList` → upsert в словарь `interests` → diff против существующих `user_interests` → unlink/link с корректировкой `usage_count`.
 
 Возвращает обновлённый `UserDto`. Имя / аватар / @username при этом **не трогаются** — они синхронизируются из Telegram через `UserRepository.upsert` на каждый auth и были бы перезаписаны.
