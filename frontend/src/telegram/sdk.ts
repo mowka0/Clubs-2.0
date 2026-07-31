@@ -9,6 +9,16 @@ import {
 
 let initialized = false;
 
+/**
+ * Платформы, где полноэкранный режим уместен. На телефоне экран узкий, и шапка Telegram
+ * съедает заметную долю высоты — там fullscreen выигрывает. На компьютере окно Mini App и так
+ * компактное, а полноэкранный режим растягивает его на весь монитор (просьба PO 2026-07-31).
+ *
+ * Список — whitelist, а не blacklist десктопов: незнакомая платформа получит обычный режим,
+ * и это безопаснее, чем случайно развернуть приложение во весь экран рабочего стола.
+ */
+const FULLSCREEN_PLATFORMS = new Set(['android', 'android_x', 'ios']);
+
 export function initTelegramSdk(): void {
   if (initialized) return;
   try {
@@ -40,7 +50,7 @@ function setupViewport(): void {
         .then(() => {
           if (viewport.expand.isAvailable()) viewport.expand();
           bindViewportCssVars();
-          enterFullscreen();
+          applyFullscreenPolicy();
         })
         .catch(() => {
           // Mount отклонён (хост без поддержки viewport) — оставляем высоту по умолчанию
@@ -48,7 +58,7 @@ function setupViewport(): void {
     } else {
       if (viewport.expand.isAvailable()) viewport.expand();
       bindViewportCssVars();
-      enterFullscreen();
+      applyFullscreenPolicy();
     }
   } catch (_e) {
     // Viewport API недоступен — пропускаем
@@ -56,28 +66,51 @@ function setupViewport(): void {
 }
 
 /**
- * Включает полноэкранный режим, если хост уже не открыл нас в нём.
+ * Приводит полноэкранный режим к тому, каким он должен быть на текущей платформе.
  *
  * Зачем вообще: стартовый режим решает НЕ приложение, а точка входа — Telegram присылает его
  * в launch-параметре `tgWebAppFullscreen`, из которого `viewport.mount()` инициализирует
  * `isFullscreen`. Прямая ссылка на Mini App (наши приглашения в клуб) приходила с
  * полноэкранным флагом, а menu-button у бота — без него, и одно и то же приложение
- * открывалось по-разному (баг PO 2026-07-29). Запрашиваем режим сами — тогда он одинаков
+ * открывалось по-разному (баг PO 2026-07-29). Поэтому режим задаём сами — тогда он одинаков
  * из любой точки входа и не зависит от настроек конкретной ссылки на стороне Telegram.
  *
- * Запрос одноразовый, на старте: если пользователь потом сам выйдет из полноэкранного
- * режима кнопкой Telegram, мы его обратно не загоняем.
+ * На телефоне это fullscreen, на компьютере — обычное окно, и выйти из режима нужно ЯВНО:
+ * иначе прямая ссылка растянет Mini App на весь монитор, а menu-button — нет, и получится
+ * та же непредсказуемость, только на десктопе.
+ *
+ * Приведение одноразовое, на старте: если пользователь потом сам сменит режим кнопкой
+ * Telegram, мы его обратно не переключаем.
  */
-function enterFullscreen(): void {
+function applyFullscreenPolicy(): void {
   try {
-    if (viewport.isFullscreen()) return;
-    if (!viewport.requestFullscreen.isAvailable()) return;
-    viewport.requestFullscreen().catch(() => {
-      // UNSUPPORTED (клиент < Bot API 8.0) / ALREADY_FULLSCREEN — остаёмся как есть,
-      // вёрстка корректна в обоих режимах (врезки тогда просто нулевые).
+    if (shouldUseFullscreen()) {
+      if (viewport.isFullscreen()) return;
+      if (!viewport.requestFullscreen.isAvailable()) return;
+      viewport.requestFullscreen().catch(() => {
+        // UNSUPPORTED (клиент < Bot API 8.0) / ALREADY_FULLSCREEN — остаёмся как есть,
+        // вёрстка корректна в обоих режимах (врезки тогда просто нулевые).
+      });
+      return;
+    }
+
+    if (!viewport.isFullscreen()) return;
+    if (!viewport.exitFullscreen.isAvailable()) return;
+    viewport.exitFullscreen().catch(() => {
+      // Хост отказал — остаёмся в полноэкранном режиме, вёрстка от этого не ломается.
     });
   } catch (_e) {
     // Fullscreen API недоступен — пропускаем
+  }
+}
+
+/** Телефон — да, компьютер и незнакомая платформа — нет. Вне Telegram режима нет вовсе. */
+function shouldUseFullscreen(): boolean {
+  try {
+    const { tgWebAppPlatform } = retrieveLaunchParams();
+    return FULLSCREEN_PLATFORMS.has(tgWebAppPlatform);
+  } catch (_e) {
+    return false;
   }
 }
 
