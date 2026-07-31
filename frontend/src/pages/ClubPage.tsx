@@ -20,7 +20,6 @@ import {
 import { ApiError } from '../api/apiClient';
 import { formatPrice } from '../utils/formatters';
 import { isActiveManagerMembership } from '../utils/membershipRole';
-import { openTmeLink } from '../utils/telegramLinks';
 import { ClubActivitiesTab } from '../components/club/ClubActivitiesTab';
 import { ClubCoverButton } from '../components/club/ClubCoverButton';
 import { ClubIdentityHeader } from '../components/club/ClubIdentityHeader';
@@ -35,6 +34,7 @@ import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
 import { InviteSheet } from '../components/club/InviteSheet';
 import { LeaveClubModal } from '../components/club/LeaveClubModal';
 import { CoachTour } from '../components/onboarding/CoachTour';
+import { ClubChatPill } from '../components/club/ClubChatPill';
 
 type TabId = 'activities' | 'members';
 
@@ -423,6 +423,20 @@ export const ClubPage: FC = () => {
     return null;
   };
 
+  /**
+   * Кнопка из подсказки чата у гостя: ведёт туда же, куда основная кнопка вступления —
+   * закрытый клуб через форму заявки, открытый вступает сразу. Дублировать здесь логику
+   * CTA нельзя: разойдутся при первом же изменении правил вступления.
+   */
+  const handleChatHintCta = () => {
+    haptic.impact('light');
+    if (club.accessType === 'closed') {
+      setShowApplyModal(true);
+      return;
+    }
+    handleJoin();
+  };
+
   const showLeaveIcon = !isOwner && isActiveMember;
   const showCancelledNote = !isOwner && isCancelledInPeriod && membership?.subscriptionExpiresAt;
 
@@ -506,25 +520,23 @@ export const ClubPage: FC = () => {
           </>
         )}
         {/* Вход в чат по door-ссылке (club-chat-link): участник уже в чате → Telegram просто
-            откроет его; ещё нет → заявка и авто-впуск ботом. */}
+            откроет его. Гость видит ту же пилюлю, но она ведёт к подсказке: двери у него ещё
+            нет, а сам факт чата — довод вступить (решение PO 2026-07-31; раньше гостю
+            доставалась лишь пассивная строчка у кнопки вступления). */}
         {showTabs && club.chatInviteLink && (
-          <div className="rd-club-chatrow">
-            <button
-              type="button"
-              className="rd-club-chatpill"
-              // Якорь именно на пилюле, не на строке: подсвечиваем сам вход в чат,
-              // а на предыдущем шаге эта же пилюля становится вырезом в блоке «О клубе».
-              data-coach="club-chat"
-              onClick={() => {
-                if (!club.chatInviteLink) return;
-                haptic.impact('light');
-                openTmeLink(club.chatInviteLink);
-              }}
-            >
-              <span aria-hidden="true">💬</span>
-              В чат
-            </button>
-          </div>
+          <ClubChatPill mode="open" inviteLink={club.chatInviteLink} />
+        )}
+        {!showTabs && club.chatLinked && (
+          <ClubChatPill
+            mode="hint"
+            hintText={
+              club.chatDoorEnabled
+                ? 'Чат клуба открыт участникам. Вступите — и бот впустит вас туда.'
+                : 'У клуба есть чат. Организатор позовёт вас туда после вступления.'
+            }
+            ctaLabel={club.accessType === 'closed' ? 'Хочу вступить' : 'Вступить в клуб'}
+            onCta={handleChatHintCta}
+          />
         )}
       </div>
 
@@ -605,17 +617,6 @@ export const ClubPage: FC = () => {
                 : 'Место встреч, голосование и участие откроются после вступления'
             }
           />
-
-          {/* Чат и клуб — одно целое (club-chat-link): гость видит, что вход в чат
-              лежит через вступление (мокап 02-C). */}
-          {club.chatLinked && club.chatDoorEnabled && (
-            <div className="rd-cl-chip">
-              <span aria-hidden="true">💬</span>
-              <span>
-                У клуба есть чат — вход откроется после {club.accessType === 'closed' ? 'одобрения заявки' : 'вступления'}
-              </span>
-            </div>
-          )}
 
           {joinError && <div className="rd-error">{joinError}</div>}
 

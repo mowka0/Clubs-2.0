@@ -25,6 +25,7 @@ import { WelcomeScene, memberCountCaption } from '../components/onboarding/Welco
 import { Toast } from '../components/Toast';
 import foxInviteArt from '../assets/mascot/fox-invite.png';
 import foxErrorArt from '../assets/mascot/fox-error.png';
+import { ClubChatPill } from '../components/club/ClubChatPill';
 
 /**
  * До скольки участников клуб ещё «только собирается»: при таком составе И полном отсутствии
@@ -51,7 +52,6 @@ export const InvitePage: FC = () => {
   const [applied, setApplied] = useState(false);
   const [answerText, setAnswerText] = useState('');
   const [welcomeError, setWelcomeError] = useState<string | null>(null);
-  const [showChatHint, setShowChatHint] = useState(false);
   /**
    * Оплата взноса сразу после вступления в платный клуб — вместо двух пересадок
    * («Добро пожаловать» → страница клуба) ради одной кнопки (решение PO 2026-07-30).
@@ -391,7 +391,7 @@ export const InvitePage: FC = () => {
   // Кнопка из подсказки: прямое вступление делаем сразу, а заявку — только доведя человека
   // до формы внизу, иначе он не увидит ни вопроса организатора, ни ошибки о пустом ответе.
   const handleChatHintCta = () => {
-    setShowChatHint(false);
+    // Подсказку закрывает сама пилюля — здесь остаётся только переход.
     haptic.impact('light');
     // Уже в клубе, но ссылки на чат нет — это frozen/expired (доступа нет, ссылка не выдаётся):
     // звать его вступать нельзя, бэкенд ответит 409. Ведём в клуб, там ждёт claim-флоу взноса.
@@ -451,33 +451,12 @@ export const InvitePage: FC = () => {
               </>
             )}
             {showChatPill && (
-              <div className="rd-club-chatrow">
-                <button
-                  type="button"
-                  className="rd-club-chatpill"
-                  onClick={() => { haptic.impact('light'); setShowChatHint((shown) => !shown); }}
-                  aria-expanded={showChatHint}
-                >
-                  <span aria-hidden="true">💬</span>
-                  В чат
-                </button>
-                {showChatHint && (
-                  <>
-                    {/* Завеса на весь экран: тап мимо подсказки закрывает её — на телефоне это
-                        единственный привычный способ выйти, клавиши Esc там нет. */}
-                    <div className="rd-chathint-veil" onClick={() => setShowChatHint(false)} />
-                    {/* Без role="dialog": глобальное правило brand-theme.css прибивает всё с этой
-                        ролью к низу экрана через !important (там живут боттом-шиты). Раскрытие
-                        и так объявлено через aria-expanded на самой пилюле. */}
-                    <div className="rd-chathint">
-                      <div className="rd-chathint-tx">{chatHintText}</div>
-                      <button type="button" className="rd-chathint-cta" onClick={handleChatHintCta}>
-                        {isAlreadyMember ? 'Перейти в клуб' : joinCtaLabel}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+              <ClubChatPill
+                mode="hint"
+                hintText={chatHintText}
+                ctaLabel={isAlreadyMember ? 'Перейти в клуб' : joinCtaLabel}
+                onCta={handleChatHintCta}
+              />
             )}
           </div>
         </>

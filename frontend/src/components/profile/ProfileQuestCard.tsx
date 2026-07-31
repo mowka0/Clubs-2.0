@@ -234,7 +234,7 @@ interface ProfileQuestCongratsProps {
 
 /** Поздравление на месте карточки-квеста: бейдж «Визитка», конфетти, «Отлично» убирает навсегда. */
 export const ProfileQuestCongrats: FC<ProfileQuestCongratsProps> = ({ title, onAck }) => (
-  <div className="rd-congrats rd-glass" role="status">
+  <div className="rd-congrats rd-glass" role="status" data-coach="profile-congrats">
     {CONFETTI.map((cf) => (
       <span key={cf.left} className="rd-cf" style={{ left: cf.left, top: 6, background: cf.color, animationDelay: cf.delay }} aria-hidden="true" />
     ))}
@@ -249,6 +249,6 @@ export const ProfileQuestCongrats: FC<ProfileQuestCongratsProps> = ({ title, onA
       <span className="rd-c-chip-badge">Бейдж «Визитка»</span>
       <span className="rd-c-chip-xp">+{QUEST_TOTAL_XP} XP</span>
     </div>
-    <button type="button" className="rd-c-btn" onClick={onAck}>Отлично</button>
+    <button type="button" className="rd-c-btn" onClick={onAck}>Отлично!</button>
   </div>
 );

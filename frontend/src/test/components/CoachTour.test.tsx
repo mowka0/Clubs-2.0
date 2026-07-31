@@ -195,6 +195,39 @@ describe('CoachTour — движок подсказок', () => {
     });
   }, 10_000);
 
+  it('награда закрывается кнопкой внутри неё, а не «Далее»', async () => {
+    useAuthStore.setState({ user: makeUser([]) });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const harness = (targets: string[]) => (
+      <QueryClientProvider client={queryClient}>
+        {targets.map((name) => (
+          <div key={name} data-coach={name}>
+            {name}
+          </div>
+        ))}
+        <CoachTour tour="PROFILE" gateSatisfied />
+      </QueryClientProvider>
+    );
+
+    // Карточки квеста нет — шаг-задание пропускается, тур встаёт на поздравление.
+    const { rerender } = render(harness(['profile-congrats', 'profile-level']));
+    await waitFor(() => expect(screen.getByText(/первая награда/)).toBeInTheDocument(), {
+      timeout: 4000,
+    });
+    // «Далее» здесь не должно быть НИКОГДА: иначе награду можно проскочить, не забрав.
+    expect(screen.queryByRole('button', { name: 'Далее' })).toBeNull();
+    expect(screen.getByText('Забери награду')).toBeInTheDocument();
+
+    // Тап по «Отлично!» убирает поздравление со страницы — это и есть ход тура.
+    rerender(harness(['profile-level']));
+    window.dispatchEvent(new Event('resize'));
+    await waitFor(() => expect(screen.getByText(/профиль, встречи, сборы/)).toBeInTheDocument(), {
+      timeout: 4000,
+    });
+  }, 15_000);
+
   it('нет точной цели — шаг падает на запасную, а не пропадает', async () => {
     useAuthStore.setState({ user: makeUser([]) });
     // Строки надёжности нет (новичок без репутации) — рассказ обязан состояться на панели.
@@ -202,11 +235,14 @@ describe('CoachTour — движок подсказок', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Далее' })).toBeInTheDocument());
     await userEvent.setup().click(screen.getByRole('button', { name: 'Далее' }));
+    // Поздравления в этой раскладке нет — шаг награды пропускается сам, тур едет к уровню.
     // Совпадение — по куску ОДНОГО текстового узла: акцент внутри фразы обёрнут в <em>.
-    await waitFor(() => expect(screen.getByText(/профиль, встречи, сборы/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/профиль, встречи, сборы/)).toBeInTheDocument(), {
+      timeout: 4000,
+    });
     await userEvent.setup().click(screen.getByRole('button', { name: 'Далее' }));
     await waitFor(() => expect(screen.getByText(/главное, что видят организаторы/)).toBeInTheDocument());
-  });
+  }, 10_000);
 
   it('профиль без списка туров подсказок не рисует и страницу не роняет', () => {
     // Fail-closed: компонент висит на каждом экране, белый экран из-за него недопустим.

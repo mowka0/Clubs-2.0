@@ -98,7 +98,12 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true, gateSatisfie
   // Шаг-задание («заполни профиль»): пока условие не выполнено, кнопки «Далее» нет.
   // Условие считает страница и передаёт готовым флагом — по умолчанию НЕ выполнено:
   // показать «Далее» раньше времени хуже, чем показать позже.
-  const locked = step?.gateHint !== undefined && !gateSatisfied;
+  //
+  // `awaitDismiss` — частный случай: кнопка живёт ВНУТРИ цели («Отлично!» на поздравлении),
+  // и ход даёт её исчезновение со страницы. Флага от страницы такому шагу не нужно, он
+  // заперт всегда — иначе «Далее» позволяло бы проскочить мимо награды.
+  const locked =
+    step?.gateHint !== undefined && (step.awaitDismiss === true || !gateSatisfied);
 
   /** Считает, где нарисовать дырку, вырез и пузырь для цели. */
   const measure = useCallback((target: Element, cutoutTarget: Element | null, fullBleed: boolean): Placement => {
