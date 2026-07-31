@@ -32,7 +32,9 @@ data class ClubChatLinks(
     var strictModeEnabled: Boolean? = null,
     var canRestrictMembers: Boolean? = null,
     var awardTagsEnabled: Boolean? = null,
-    var canManageTags: Boolean? = null
+    var canManageTags: Boolean? = null,
+    var clubPinMessageId: Long? = null,
+    var historyVisibleToNewMembers: Boolean? = null
 ): Serializable {
 
 
@@ -134,6 +136,18 @@ data class ClubChatLinks(
         }
         else if (this.canManageTags != o.canManageTags)
             return false
+        if (this.clubPinMessageId == null) {
+            if (o.clubPinMessageId != null)
+                return false
+        }
+        else if (this.clubPinMessageId != o.clubPinMessageId)
+            return false
+        if (this.historyVisibleToNewMembers == null) {
+            if (o.historyVisibleToNewMembers != null)
+                return false
+        }
+        else if (this.historyVisibleToNewMembers != o.historyVisibleToNewMembers)
+            return false
         return true
     }
 
@@ -157,6 +171,8 @@ data class ClubChatLinks(
         result = prime * result + (if (this.canRestrictMembers == null) 0 else this.canRestrictMembers.hashCode())
         result = prime * result + (if (this.awardTagsEnabled == null) 0 else this.awardTagsEnabled.hashCode())
         result = prime * result + (if (this.canManageTags == null) 0 else this.canManageTags.hashCode())
+        result = prime * result + (if (this.clubPinMessageId == null) 0 else this.clubPinMessageId.hashCode())
+        result = prime * result + (if (this.historyVisibleToNewMembers == null) 0 else this.historyVisibleToNewMembers.hashCode())
         return result
     }
 
@@ -180,6 +196,8 @@ data class ClubChatLinks(
         sb.append(", ").append(canRestrictMembers)
         sb.append(", ").append(awardTagsEnabled)
         sb.append(", ").append(canManageTags)
+        sb.append(", ").append(clubPinMessageId)
+        sb.append(", ").append(historyVisibleToNewMembers)
 
         sb.append(")")
         return sb.toString()

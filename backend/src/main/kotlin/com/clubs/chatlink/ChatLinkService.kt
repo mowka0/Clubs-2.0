@@ -69,8 +69,11 @@ class ChatLinkService(
             canRestrictMembers = state.canRestrictMembers,
             canManageTags = state.canManageTags
         )
-        gateway.getChatTitle(link.chatId)?.let { title ->
-            if (title != link.chatTitle) chatLinkRepository.updateChatTitle(clubId, title)
+        gateway.getChatInfo(link.chatId)?.let { info ->
+            info.title?.let { if (it != link.chatTitle) chatLinkRepository.updateChatTitle(clubId, it) }
+            // Настройку истории организатор меняет в самом Telegram, узнать об этом можно только
+            // спросив — поэтому «Проверить права ещё раз» перечитывает и её.
+            chatLinkRepository.updateHistoryVisibility(clubId, info.hasVisibleHistory)
         }
         // Лечим отсутствующую invite-ссылку (привязали без права приглашать, право выдали позже,
         // а my_chat_member-переход по какой-то причине не был пойман) — refresh как ручной ремонт.
@@ -256,6 +259,49 @@ class ChatLinkService(
         }
         return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
     }
+
+    /**
+     * Закрепляет в чате ссылку на клуб — чтобы участники не искали приложение по истории
+     * переписки. Ручное действие владельца: чаты, привязанные до появления закрепа, иначе
+     * остались бы без него навсегда.
+     *
+     * Старый закреп снимаем: иначе в чате копятся дубликаты одного и того же поста.
+     */
+    @Transactional
+    fun pinClubLink(clubId: UUID, callerId: UUID): ChatLinkStatusDto {
+        requireOwner(clubId, callerId)
+        val link = chatLinkRepository.findByClubId(clubId) ?: throw NotFoundException("Chat is not linked")
+        if (!link.botStatus.isInChat) throw ConflictException("Бот не в чате — сначала верните его")
+        if (!link.canPinMessages) throw ConflictException("У бота нет права закреплять сообщения")
+
+        val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
+        link.clubPinMessageId?.let { gateway.unpinChatMessage(link.chatId, it) }
+
+        val messageId = postAndPinClubLink(link.chatId, club.name, clubId)
+            ?: throw ConflictException("Не удалось отправить сообщение в чат — попробуйте позже")
+        chatLinkRepository.updateClubPinMessageId(clubId, messageId)
+        log.info("Club link pinned: clubId={} chatId={} messageId={}", clubId, link.chatId, messageId)
+        return mapper.toStatusDto(chatLinkRepository.findByClubId(clubId), startGroupUrl(clubId))
+    }
+
+    /**
+     * Пост со ссылкой на клуб + закреп. Возвращает id сообщения или null, если Telegram не принял
+     * пост (закреп тогда не наш — сохранять нечего). Сам pin best-effort: сообщение полезно и
+     * без закрепа, а право закреплять могли отнять между проверкой и отправкой.
+     */
+    fun postAndPinClubLink(chatId: Long, clubName: String, clubId: UUID): Long? {
+        val messageId = gateway.sendGroupMessageWithUrlButton(
+            chatId = chatId,
+            text = "📌 Клуб «$clubName» живёт в приложении Clubs: здесь встречи, записи и сборы.",
+            buttonText = "Открыть клуб",
+            url = clubMiniAppUrl(clubId)
+        ) ?: return null
+        gateway.pinChatMessage(chatId, messageId)
+        return messageId
+    }
+
+    private fun clubMiniAppUrl(clubId: UUID): String =
+        "https://t.me/$botUsername?startapp=club_$clubId"
 
     /** Отвязка владельцем из приложения (или кнопкой в DM-петле подтверждения — через [unlinkAsOwner]). */
     @Transactional

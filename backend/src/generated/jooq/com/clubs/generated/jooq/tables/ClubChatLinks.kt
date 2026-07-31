@@ -218,6 +218,24 @@ open class ClubChatLinks(
      */
     val CAN_MANAGE_TAGS: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("can_manage_tags"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "Право бота «Управление тегами» (Bot API 9.5, can_manage_tags). Библиотека бота его не знает — читается прямым HTTP-вызовом getChatMember при привязке/refresh/my_chat_member.")
 
+    /**
+     * The column <code>public.club_chat_links.club_pin_message_id</code>. ID
+     * закреплённого в чате поста со ссылкой на клуб. NULL = не закреплён (чат
+     * привязан до появления закрепа, организатор снял закреп вручную или у бота
+     * нет права закреплять).
+     */
+    val CLUB_PIN_MESSAGE_ID: TableField<ClubChatLinksRecord, Long?> = createField(DSL.name("club_pin_message_id"), SQLDataType.BIGINT, this, "ID закреплённого в чате поста со ссылкой на клуб. NULL = не закреплён (чат привязан до появления закрепа, организатор снял закреп вручную или у бота нет права закреплять).")
+
+    /**
+     * The column
+     * <code>public.club_chat_links.history_visible_to_new_members</code>. Видна
+     * ли новым участникам история чата (слепок getChat.has_visible_history,
+     * обновляется при привязке и по кнопке «Проверить права»). FALSE = новички
+     * не видят закрепы и переписку до вступления. NULL = ещё не проверяли (чат
+     * привязан до появления проверки).
+     */
+    val HISTORY_VISIBLE_TO_NEW_MEMBERS: TableField<ClubChatLinksRecord, Boolean?> = createField(DSL.name("history_visible_to_new_members"), SQLDataType.BOOLEAN, this, "Видна ли новым участникам история чата (слепок getChat.has_visible_history, обновляется при привязке и по кнопке «Проверить права»). FALSE = новички не видят закрепы и переписку до вступления. NULL = ещё не проверяли (чат привязан до появления проверки).")
+
     private constructor(alias: Name, aliased: Table<ClubChatLinksRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<ClubChatLinksRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<ClubChatLinksRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

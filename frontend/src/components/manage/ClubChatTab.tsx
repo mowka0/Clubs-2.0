@@ -3,6 +3,7 @@ import { Button, Modal, Spinner, Text } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../../hooks/useHaptic';
 import {
   useChatLinkStatusQuery,
+  usePinClubLinkMutation,
   useRefreshChatLinkMutation,
   useUnlinkChatMutation,
   useUpdateChatLinkMutation,
@@ -79,13 +80,27 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
   const refreshMutation = useRefreshChatLinkMutation(clubId);
   const updateMutation = useUpdateChatLinkMutation(clubId);
   const unlinkMutation = useUnlinkChatMutation(clubId);
+  const pinClubLinkMutation = usePinClubLinkMutation(clubId);
 
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [showUnlinkModal, setShowUnlinkModal] = useState(false);
 
   const botInChat = isBotInChat(status);
-  const busy = refreshMutation.isPending || updateMutation.isPending || unlinkMutation.isPending;
+  const busy = refreshMutation.isPending || updateMutation.isPending || unlinkMutation.isPending
+    || pinClubLinkMutation.isPending;
+
+  // Настройку меняет владелец в самом Telegram — мы можем только прочитать её и подсказать.
+  const historyHidden = status.historyVisibleToNewMembers === false;
+
+  const handlePinClubLink = () => {
+    haptic.impact('medium');
+    setError(null);
+    pinClubLinkMutation.mutate(undefined, {
+      onSuccess: () => { haptic.notify('success'); setToast('Ссылка на клуб закреплена в чате'); },
+      onError: (e) => { setError(e.message); haptic.notify('error'); },
+    });
+  };
 
   // Алерт деградации: что именно сломалось и как починить (мокап 01-C).
   const alert = !botInChat
@@ -190,6 +205,41 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
           <span className={`rd-cl-pill ${status.canRestrictMembers ? 'ok' : 'bad'}`}>{status.canRestrictMembers ? '✓ блокировки разрешены' : '✕ блокировки запрещены'}</span>
           <span className={`rd-cl-pill ${status.canManageTags ? 'ok' : 'bad'}`}>{status.canManageTags ? '✓ теги разрешены' : '✕ теги запрещены'}</span>
         </div>
+        {/* Скрытая история — причина «новички не видят закреп встречи»: Telegram прячет от них
+            ВСЁ, что было до вступления. Бот переключить это не может (в Bot API нет метода),
+            поэтому единственное, что мы делаем — показываем владельцу, что и где включить. */}
+        {historyHidden && (
+          <div className="rd-cl-hist">
+            <div className="rd-cl-hist-t">Новые участники не видят историю чата</div>
+            <div className="rd-cl-hist-d">
+              Telegram скрывает от них всё, что было до вступления, — включая закреплённые
+              сообщения о встречах и ссылку на клуб. Включается в самом Telegram:
+              <b> Управление группой → Тип группы → История чата → Видна новым участникам</b>.
+              После этого нажмите «Проверить права ещё раз».
+            </div>
+          </div>
+        )}
+
+        {/* Закреп ссылки на клуб: при привязке бот делает его сам, здесь — для чатов,
+            привязанных раньше, и для случая «организатор снял закреп вручную». */}
+        <div className="rd-cl-pinrow">
+          <div className="rd-cl-pin-tx">
+            {status.clubLinkPinned
+              ? 'Ссылка на клуб закреплена в чате.'
+              : 'Закрепите ссылку на клуб, чтобы участники не искали приложение в переписке.'}
+          </div>
+          <button
+            type="button"
+            className="rd-cl-copy"
+            disabled={busy || !botInChat || !status.canPinMessages}
+            onClick={handlePinClubLink}
+          >
+            {pinClubLinkMutation.isPending
+              ? <Spinner size="s" />
+              : (status.clubLinkPinned ? 'Закрепить заново' : 'Закрепить')}
+          </button>
+        </div>
+
         {/* Invite-ссылка живёт независимо от тумблера двери (создаётся при привязке) — по ней
             работает кнопка «Чат клуба» у участников. Реестр багов №4, текст — формулировка PO. */}
         {status.doorInviteLink && (

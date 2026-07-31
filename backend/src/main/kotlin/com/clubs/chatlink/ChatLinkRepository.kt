@@ -35,6 +35,12 @@ interface ChatLinkRepository {
     fun findAllWithAwardTags(): List<ChatLink>
 
     /** Миграция группы в супергруппу: Telegram меняет chat_id (migrate_to_chat_id). */
+    /** Запомнить/забыть закреплённый пост со ссылкой на клуб (null = закрепа больше нет). */
+    fun updateClubPinMessageId(clubId: UUID, messageId: Long?)
+
+    /** Обновить слепок «история видна новым участникам» (читается из getChat). */
+    fun updateHistoryVisibility(clubId: UUID, visible: Boolean)
+
     fun updateChatId(oldChatId: Long, newChatId: Long)
 
     fun delete(clubId: UUID)

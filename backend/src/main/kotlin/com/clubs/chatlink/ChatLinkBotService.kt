@@ -159,6 +159,18 @@ class ChatLinkBotService(
             buttonText = "Вступить в клуб",
             url = clubMiniAppUrl(clubId)
         )
+        // Отдельный закреплённый пост со ссылкой: приглашение выше уедет вверх за неделю
+        // переписки, а закреп остаётся под рукой. Best-effort — без права закреплять сообщение
+        // просто останется в ленте.
+        if (link.canPinMessages) {
+            chatLinkService.postAndPinClubLink(chatId, club.name, clubId)
+                ?.let { chatLinkRepository.updateClubPinMessageId(clubId, it) }
+        }
+        // Слепок «видна ли новичкам история»: при скрытой истории закрепы для них не существуют,
+        // и таб «Чат» покажет владельцу подсказку, как это переключить.
+        gateway.getChatInfo(chatId)?.let {
+            chatLinkRepository.updateHistoryVisibility(clubId, it.hasVisibleHistory)
+        }
         gateway.sendDmWithCallbackButton(
             telegramId = fromTelegramId,
             text = "Чат «${chatTitle ?: "без названия"}» привязан к вашему клубу «${club.name}». Это были вы?\n\nЕсли нет — отвяжите чат кнопкой ниже.",

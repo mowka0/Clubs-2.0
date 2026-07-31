@@ -89,6 +89,14 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
         set(value): Unit = set(16, value)
         get(): Boolean? = get(16) as Boolean?
 
+    open var clubPinMessageId: Long?
+        set(value): Unit = set(17, value)
+        get(): Long? = get(17) as Long?
+
+    open var historyVisibleToNewMembers: Boolean?
+        set(value): Unit = set(18, value)
+        get(): Boolean? = get(18) as Boolean?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -98,7 +106,7 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
     /**
      * Create a detached, initialised ClubChatLinksRecord
      */
-    constructor(clubId: UUID, chatId: Long, chatTitle: String? = null, linkedByUserId: UUID, linkedAt: OffsetDateTime? = null, botStatus: String? = null, canPinMessages: Boolean? = null, canInviteUsers: Boolean? = null, doorEnabled: Boolean? = null, doorInviteLink: String? = null, updatedAt: OffsetDateTime? = null, livePinEnabled: Boolean? = null, skladchinaStatusEnabled: Boolean? = null, strictModeEnabled: Boolean? = null, canRestrictMembers: Boolean? = null, awardTagsEnabled: Boolean? = null, canManageTags: Boolean? = null): this() {
+    constructor(clubId: UUID, chatId: Long, chatTitle: String? = null, linkedByUserId: UUID, linkedAt: OffsetDateTime? = null, botStatus: String? = null, canPinMessages: Boolean? = null, canInviteUsers: Boolean? = null, doorEnabled: Boolean? = null, doorInviteLink: String? = null, updatedAt: OffsetDateTime? = null, livePinEnabled: Boolean? = null, skladchinaStatusEnabled: Boolean? = null, strictModeEnabled: Boolean? = null, canRestrictMembers: Boolean? = null, awardTagsEnabled: Boolean? = null, canManageTags: Boolean? = null, clubPinMessageId: Long? = null, historyVisibleToNewMembers: Boolean? = null): this() {
         this.clubId = clubId
         this.chatId = chatId
         this.chatTitle = chatTitle
@@ -116,6 +124,8 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
         this.canRestrictMembers = canRestrictMembers
         this.awardTagsEnabled = awardTagsEnabled
         this.canManageTags = canManageTags
+        this.clubPinMessageId = clubPinMessageId
+        this.historyVisibleToNewMembers = historyVisibleToNewMembers
         resetChangedOnNotNull()
     }
 
@@ -141,6 +151,8 @@ open class ClubChatLinksRecord private constructor() : UpdatableRecordImpl<ClubC
             this.canRestrictMembers = value.canRestrictMembers
             this.awardTagsEnabled = value.awardTagsEnabled
             this.canManageTags = value.canManageTags
+            this.clubPinMessageId = value.clubPinMessageId
+            this.historyVisibleToNewMembers = value.historyVisibleToNewMembers
             resetChangedOnNotNull()
         }
     }

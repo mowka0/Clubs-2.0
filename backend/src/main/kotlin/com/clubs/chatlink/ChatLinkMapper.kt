@@ -22,7 +22,9 @@ class ChatLinkMapper {
         livePinEnabled = record.livePinEnabled!!,
         skladchinaStatusEnabled = record.skladchinaStatusEnabled!!,
         strictModeEnabled = record.strictModeEnabled!!,
-        awardTagsEnabled = record.awardTagsEnabled!!
+        awardTagsEnabled = record.awardTagsEnabled!!,
+        clubPinMessageId = record.clubPinMessageId,
+        historyVisibleToNewMembers = record.historyVisibleToNewMembers
     )
 
     fun toStatusDto(link: ChatLink?, startGroupUrl: String): ChatLinkStatusDto = ChatLinkStatusDto(
@@ -40,6 +42,8 @@ class ChatLinkMapper {
         skladchinaStatusEnabled = link?.skladchinaStatusEnabled ?: false,
         strictModeEnabled = link?.strictModeEnabled ?: false,
         awardTagsEnabled = link?.awardTagsEnabled ?: false,
+        clubLinkPinned = link?.clubPinMessageId != null,
+        historyVisibleToNewMembers = link?.historyVisibleToNewMembers,
         startGroupUrl = startGroupUrl
     )
 }

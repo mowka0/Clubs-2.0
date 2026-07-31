@@ -42,6 +42,16 @@ class ChatLinkController(
         return ResponseEntity.ok(chatLinkService.refresh(clubId, user.userId))
     }
 
+    /** Закрепить в чате ссылку на клуб (владелец). Повторный вызов заменяет прежний закреп. */
+    @PostMapping("/pin-club-link")
+    fun pinClubLink(
+        @PathVariable clubId: UUID,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<ChatLinkStatusDto> {
+        log.info("Club link pin requested: clubId={} userId={}", clubId, user.userId)
+        return ResponseEntity.ok(chatLinkService.pinClubLink(clubId, user.userId))
+    }
+
     @PatchMapping
     fun update(
         @PathVariable clubId: UUID,

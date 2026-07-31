@@ -18,6 +18,11 @@ export function updateChatLink(clubId: string, body: UpdateChatLinkRequest): Pro
   return apiClient.patch<ChatLinkStatusDto>(`/api/clubs/${clubId}/chat-link`, body);
 }
 
+/** Закрепить в чате ссылку на клуб. Повторный вызов заменяет прежний закреп новым. */
+export function pinClubLink(clubId: string): Promise<ChatLinkStatusDto> {
+  return apiClient.post<ChatLinkStatusDto>(`/api/clubs/${clubId}/chat-link/pin-club-link`);
+}
+
 export function unlinkChat(clubId: string): Promise<void> {
   return apiClient.delete<void>(`/api/clubs/${clubId}/chat-link`);
 }
