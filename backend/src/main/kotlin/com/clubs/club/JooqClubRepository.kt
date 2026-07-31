@@ -1,5 +1,6 @@
 package com.clubs.club
 
+import com.clubs.city.City
 import com.clubs.common.dto.PageResponse
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
@@ -67,7 +68,7 @@ class JooqClubRepository(
                 .where(MEMBERSHIPS.CLUB_ID.eq(CLUBS.ID).and(aliveMembers())),
         )
 
-    override fun create(request: CreateClubRequest, ownerId: UUID, inviteCode: String?): Club {
+    override fun create(request: CreateClubRequest, ownerId: UUID, inviteCode: String?, city: City): Club {
         val record = dsl.insertInto(CLUBS)
             .set(CLUBS.ID, UUID.randomUUID())
             .set(CLUBS.OWNER_ID, ownerId)
@@ -75,7 +76,8 @@ class JooqClubRepository(
             .set(CLUBS.DESCRIPTION, request.description)
             .set(CLUBS.CATEGORY, ClubCategory.valueOf(request.category))
             .set(CLUBS.ACCESS_TYPE, AccessType.valueOf(request.accessType))
-            .set(CLUBS.CITY, request.city)
+            .set(CLUBS.CITY, city.name)
+            .set(CLUBS.CITY_ID, city.id)
             .set(CLUBS.DISTRICT, request.district)
             .set(CLUBS.MEMBER_LIMIT, request.memberLimit)
             .set(CLUBS.SUBSCRIPTION_PRICE, request.subscriptionPrice)
@@ -204,8 +206,8 @@ class JooqClubRepository(
         filters.category?.let {
             condition = condition.and(CLUBS.CATEGORY.eq(ClubCategory.valueOf(it)))
         }
-        filters.city?.let {
-            condition = condition.and(CLUBS.CITY.equalIgnoreCase(it))
+        filters.cityId?.let {
+            condition = condition.and(CLUBS.CITY_ID.eq(it))
         }
         filters.accessType?.let {
             condition = condition.and(CLUBS.ACCESS_TYPE.eq(AccessType.valueOf(it)))
@@ -273,6 +275,7 @@ class JooqClubRepository(
                 category = club.category.literal,
                 accessType = club.accessType?.literal ?: "open",
                 city = club.city,
+                cityId = club.cityId,
                 subscriptionPrice = club.subscriptionPrice ?: 0,
                 memberCount = memberCount,
                 memberLimit = memberLimit,
@@ -344,14 +347,18 @@ class JooqClubRepository(
         }.toMap()
     }
 
-    override fun update(id: UUID, request: UpdateClubRequest): Club? {
+    override fun update(id: UUID, request: UpdateClubRequest, city: City?): Club? {
         val step = dsl.update(CLUBS).set(CLUBS.UPDATED_AT, OffsetDateTime.now())
 
         // Обязательные в БД поля: трогаем только при non-null (null = «оставить как есть»),
         // пустая строка для них не имеет смысла — слой валидации её отклоняет.
         request.name?.let { step.set(CLUBS.NAME, it) }
         request.description?.let { step.set(CLUBS.DESCRIPTION, it) }
-        request.city?.let { step.set(CLUBS.CITY, it) }
+        // Город меняется только парой (FK + денормализованное имя) — порознь они бы разъехались.
+        city?.let {
+            step.set(CLUBS.CITY_ID, it.id)
+            step.set(CLUBS.CITY, it.name)
+        }
         request.memberLimit?.let { step.set(CLUBS.MEMBER_LIMIT, it) }
         request.subscriptionPrice?.let { step.set(CLUBS.SUBSCRIPTION_PRICE, it) }
 

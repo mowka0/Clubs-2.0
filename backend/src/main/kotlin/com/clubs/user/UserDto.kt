@@ -9,8 +9,11 @@ data class UserDto(
     val firstName: String,
     val lastName: String?,
     val avatarUrl: String?,
+    // `city`/`country` — денормализованные из справочника, только для показа. Источник правды — cityId.
     val city: String?,
     val country: String?,
+    // null = город не указан или это легаси-профиль, чей город не распознался миграцией V74.
+    val cityId: UUID? = null,
     val bio: String?,
     /**
      * Туры онбординга, пройденные этим пользователем. Едет прямо в профиле, а не отдельным

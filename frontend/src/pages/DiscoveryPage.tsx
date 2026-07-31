@@ -86,12 +86,13 @@ export const DiscoveryPage: FC = () => {
   const queryFilters = useMemo<ClubFilters>(
     () => ({
       ...debouncedFilters,
-      city: cityChoice.city,
+      // Фильтруем по id справочника: сравнение строк не находило клуб «мск» по запросу «Москва».
+      cityId: cityChoice?.id,
       minPrice: priceRange.min !== undefined ? String(priceRange.min) : undefined,
       maxPrice: priceRange.max !== undefined ? String(priceRange.max) : undefined,
       size: '20',
     }),
-    [debouncedFilters, cityChoice.city, priceRange.min, priceRange.max],
+    [debouncedFilters, cityChoice?.id, priceRange.min, priceRange.max],
   );
 
   const {
@@ -162,7 +163,7 @@ export const DiscoveryPage: FC = () => {
           onClick={() => { haptic.select(); setPickerOpen(true); }}
           aria-label="Выбрать город"
         >
-          {cityChoice.city}
+          {cityChoice?.name ?? 'Город'}
           {CHEVRON_DOWN}
         </button>
       </header>

@@ -12,7 +12,10 @@ data class Club(
     val description: String,
     val category: ClubCategory,
     val accessType: AccessType,
+    // Денормализованное имя города для показа. Источник правды — cityId; оба поля пишутся вместе.
     val city: String,
+    // Город из справочника. null = легаси-клуб, город которого не распознался миграцией V74.
+    val cityId: UUID? = null,
     val district: String?,
     val memberLimit: Int,
     val subscriptionPrice: Int,

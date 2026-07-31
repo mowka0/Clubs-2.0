@@ -28,7 +28,8 @@ data class Users(
     var bio: String? = null,
     var questCityAt: OffsetDateTime? = null,
     var questInterestsAt: OffsetDateTime? = null,
-    var questBioAt: OffsetDateTime? = null
+    var questBioAt: OffsetDateTime? = null,
+    var cityId: UUID? = null
 ): Serializable {
 
 
@@ -116,6 +117,12 @@ data class Users(
         }
         else if (this.questBioAt != o.questBioAt)
             return false
+        if (this.cityId == null) {
+            if (o.cityId != null)
+                return false
+        }
+        else if (this.cityId != o.cityId)
+            return false
         return true
     }
 
@@ -136,6 +143,7 @@ data class Users(
         result = prime * result + (if (this.questCityAt == null) 0 else this.questCityAt.hashCode())
         result = prime * result + (if (this.questInterestsAt == null) 0 else this.questInterestsAt.hashCode())
         result = prime * result + (if (this.questBioAt == null) 0 else this.questBioAt.hashCode())
+        result = prime * result + (if (this.cityId == null) 0 else this.cityId.hashCode())
         return result
     }
 
@@ -156,6 +164,7 @@ data class Users(
         sb.append(", ").append(questCityAt)
         sb.append(", ").append(questInterestsAt)
         sb.append(", ").append(questBioAt)
+        sb.append(", ").append(cityId)
 
         sb.append(")")
         return sb.toString()

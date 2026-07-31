@@ -2,131 +2,100 @@ import { FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
+import { useCities } from '../queries/cities';
+import { FoxEmpty } from './feed/FoxEmpty';
+import foxFilterArt from '../assets/mascot/fox-filter.png';
+import type { CityDto } from '../types/api';
 
-export interface CityChoice {
-  readonly country: string;
-  readonly city: string;
+/**
+ * Названия стран живут на фронте, а не в справочнике: это локализация интерфейса, а не данные
+ * о городах. Ключи — коды ISO из `cities.country_code`.
+ */
+const COUNTRY_NAMES: Record<string, string> = {
+  RU: 'Россия',
+  BY: 'Беларусь',
+  KZ: 'Казахстан',
+  AM: 'Армения',
+  GE: 'Грузия',
+  AE: 'ОАЭ',
+  TR: 'Турция',
+};
+
+// Порядок вкладок: сначала страны с наибольшим числом городов у нас, дальше по списку.
+const COUNTRY_ORDER = ['RU', 'BY', 'KZ', 'AM', 'GE', 'AE', 'TR'];
+
+const STORAGE_KEY = 'clubs.cityId';
+
+// Потолок выдачи поиска: список рисуется целиком, а сотни строк на один запрос никто не листает.
+const SEARCH_RESULT_LIMIT = 50;
+
+/** Ключ поиска: тот же, что в `cities.normalized_name` — lower + ё→е. Дефис сохраняем. */
+function normalize(value: string): string {
+  return value.trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ');
 }
 
-interface Country {
-  readonly code: string;
-  readonly name: string;
-  readonly cities: readonly string[];
-}
-
-const COUNTRIES: readonly Country[] = [
-  {
-    code: 'RU',
-    name: 'Россия',
-    cities: [
-      'Москва', 'Санкт-Петербург', 'Новосибирск', 'Екатеринбург',
-      'Казань', 'Нижний Новгород', 'Краснодар', 'Ростов-на-Дону',
-      'Самара', 'Уфа', 'Челябинск', 'Сочи', 'Воронеж',
-      'Калининград', 'Владивосток',
-    ],
-  },
-  {
-    code: 'BY',
-    name: 'Беларусь',
-    cities: ['Минск', 'Гомель', 'Гродно', 'Брест', 'Витебск'],
-  },
-  {
-    code: 'KZ',
-    name: 'Казахстан',
-    cities: ['Алматы', 'Астана', 'Шымкент', 'Караганда'],
-  },
-  {
-    code: 'AM',
-    name: 'Армения',
-    cities: ['Ереван', 'Гюмри'],
-  },
-  {
-    code: 'GE',
-    name: 'Грузия',
-    cities: ['Тбилиси', 'Батуми'],
-  },
-  {
-    code: 'AE',
-    name: 'ОАЭ',
-    cities: ['Дубай', 'Абу-Даби'],
-  },
-  {
-    code: 'TR',
-    name: 'Турция',
-    cities: ['Стамбул', 'Анталья'],
-  },
-] as const;
-
-const STORAGE_KEY = 'clubs.cityChoice';
-const DEFAULT_CHOICE: CityChoice = { country: 'RU', city: 'Москва' };
-
-/** Читаемое название страны по сохранённому коду (например, 'RU' → 'Россия'). */
 export function countryNameByCode(code: string | null | undefined): string | null {
   if (!code) return null;
-  return COUNTRIES.find((c) => c.code === code)?.name ?? null;
+  return COUNTRY_NAMES[code] ?? null;
 }
 
-/** Явный выбор человека, если он был. null — не выбирал: тогда город берётся из профиля. */
-function loadStored(): CityChoice | null {
+/**
+ * Подпись под названием города. Регион показываем ТОЛЬКО тёзкам (`needsRegion`) — иначе область
+ * лезла бы в 99% строк, где она не нужна. У городов федерального значения регион совпадает с
+ * именем («Москва · Москва»), поэтому там остаётся одна страна.
+ */
+export function citySubtitle(city: CityDto): string | null {
+  if (!city.needsRegion) return null;
+  const country = countryNameByCode(city.countryCode);
+  if (!city.region || city.region === city.name) return country;
+  return country ? `${city.region}, ${country}` : city.region;
+}
+
+function loadStoredId(): string | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<CityChoice>;
-    if (typeof parsed.country !== 'string' || typeof parsed.city !== 'string') return null;
-    return { country: parsed.country, city: parsed.city };
+    return localStorage.getItem(STORAGE_KEY);
   } catch {
     return null;
   }
 }
 
 /**
- * Город из профиля как выбор для каталога. Страна в профиле может быть не заполнена —
- * тогда ищем её по городу в известном списке, иначе пикер открылся бы не на той вкладке.
- */
-function fromProfile(city: string | null, country: string | null): CityChoice | null {
-  const trimmed = city?.trim();
-  if (!trimmed) return null;
-  const known = COUNTRIES.find((c) => (c.cities as readonly string[]).includes(trimmed));
-  return { country: country ?? known?.code ?? DEFAULT_CHOICE.country, city: trimmed };
-}
-
-/**
- * Город каталога. Порядок источников — от самого явного к самому общему:
+ * Город каталога. Источники — от самого явного к общему:
  *
  * 1. **явный выбор** человека в пикере (переживает перезапуск, лежит в localStorage);
- * 2. **город из профиля** — человек уже указал, где живёт, и спрашивать второй раз незачем;
- * 3. Москва — когда не известно ничего.
+ * 2. **город из профиля** — человек уже указал, где живёт, спрашивать второй раз незачем;
+ * 3. первый featured-город справочника — когда не известно ничего.
  *
- * Профиль не перебивает выбор: сменив город в каталоге, человек ожидает, что каталог
- * останется в нём, даже если в профиле стоит другой.
+ * Профиль не перебивает выбор: сменив город в каталоге, человек ожидает, что каталог останется
+ * в нём, даже если в профиле стоит другой.
  */
-export function useCityChoice(): [CityChoice, (next: CityChoice) => void] {
-  const profileCity = useAuthStore((s) => s.user?.city ?? null);
-  const profileCountry = useAuthStore((s) => s.user?.country ?? null);
-  const [picked, setPicked] = useState<CityChoice | null>(loadStored);
+export function useCityChoice(): [CityDto | null, (next: CityDto) => void] {
+  const profileCityId = useAuthStore((s) => s.user?.cityId ?? null);
+  const { data: cities } = useCities();
+  const [pickedId, setPickedId] = useState<string | null>(loadStoredId);
 
-  const update = useCallback((next: CityChoice) => {
-    setPicked(next);
+  const update = useCallback((next: CityDto) => {
+    setPickedId(next.id);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      localStorage.setItem(STORAGE_KEY, next.id);
     } catch {
       // localStorage недоступен в некоторых клиентах Telegram — выбор живёт только в памяти.
     }
   }, []);
 
-  // Мемоизация не для скорости, а для стабильной ссылки: объект уезжает в ключи запросов
-  // и в зависимости эффектов, и новый литерал на каждый рендер дёргал бы их впустую.
-  const choice = useMemo(
-    () => picked ?? fromProfile(profileCity, profileCountry) ?? DEFAULT_CHOICE,
-    [picked, profileCity, profileCountry],
-  );
+  const choice = useMemo(() => {
+    if (!cities?.length) return null;
+    const byId = (id: string | null) => (id ? cities.find((c) => c.id === id) ?? null : null);
+    return byId(pickedId) ?? byId(profileCityId) ?? cities.find((c) => c.isFeatured) ?? cities[0] ?? null;
+  }, [cities, pickedId, profileCityId]);
 
   return [choice, update];
 }
 
 interface CityPickerProps {
-  value: CityChoice;
-  onChange: (next: CityChoice) => void;
+  /** Выбранный город; null — ничего не выбрано (пустой профиль). */
+  value: CityDto | null;
+  onChange: (next: CityDto) => void;
   onClose: () => void;
 }
 
@@ -138,7 +107,9 @@ const CHECK_ICON = (
 
 export const CityPicker: FC<CityPickerProps> = ({ value, onChange, onClose }) => {
   const haptic = useHaptic();
-  const [activeCountry, setActiveCountry] = useState<string>(value.country);
+  const { data: cities, isLoading } = useCities();
+  const [activeCountry, setActiveCountry] = useState<string>(value?.countryCode ?? 'RU');
+  const [query, setQuery] = useState('');
 
   // Блокируем скролл фона, пока открыт шит
   useEffect(() => {
@@ -154,14 +125,40 @@ export const CityPicker: FC<CityPickerProps> = ({ value, onChange, onClose }) =>
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const country = useMemo(
-    () => COUNTRIES.find((c) => c.code === activeCountry) ?? COUNTRIES[0],
-    [activeCountry],
-  );
+  const countries = useMemo(() => {
+    const present = new Set((cities ?? []).map((c) => c.countryCode));
+    return COUNTRY_ORDER.filter((code) => present.has(code));
+  }, [cities]);
 
-  const handlePick = (city: string) => {
+  const normalizedQuery = normalize(query);
+
+  /**
+   * Пустой запрос — короткая витрина выбранной страны (featured + города с клубами), иначе
+   * человек упирается в простыню из сотен строк. Как только он начинает печатать, ищем по
+   * ВСЕМУ справочнику без оглядки на страну: житель Твери должен найти себя с первых букв.
+   */
+  const visible = useMemo(() => {
+    const all = cities ?? [];
+    if (!normalizedQuery) {
+      return all.filter(
+        (c) => c.countryCode === activeCountry && (c.isFeatured || c.hasClubs),
+      );
+    }
+    return all
+      .filter((c) => normalize(c.name).includes(normalizedQuery))
+      .sort((a, b) => {
+        // Совпадение с начала названия важнее совпадения в середине: «твер» → Тверь, не Ахтверь.
+        const aStarts = normalize(a.name).startsWith(normalizedQuery);
+        const bStarts = normalize(b.name).startsWith(normalizedQuery);
+        if (aStarts !== bStarts) return aStarts ? -1 : 1;
+        return 0;
+      })
+      .slice(0, SEARCH_RESULT_LIMIT);
+  }, [cities, normalizedQuery, activeCountry]);
+
+  const handlePick = (city: CityDto) => {
     haptic.select();
-    onChange({ country: country.code, city });
+    onChange(city);
     onClose();
   };
 
@@ -182,38 +179,71 @@ export const CityPicker: FC<CityPickerProps> = ({ value, onChange, onClose }) =>
           </button>
         </div>
 
-        <div className="rd-sheet-tabs" role="tablist" aria-label="Страна">
-          {COUNTRIES.map((c) => {
-            const isActive = c.code === activeCountry;
-            return (
-              <button
-                key={c.code}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                className={`rd-cat-chip${isActive ? ' rd-active' : ''}`}
-                onClick={() => {
-                  haptic.select();
-                  setActiveCountry(c.code);
-                }}
-              >
-                {c.name}
-              </button>
-            );
-          })}
+        <div className="rd-city-search">
+          <input
+            className="rd-input"
+            type="search"
+            inputMode="search"
+            placeholder="Найти город"
+            aria-label="Найти город"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
         </div>
 
+        {/* Вкладки стран — навигация по витрине; при активном поиске они ни на что не влияют. */}
+        {!normalizedQuery && (
+          <div className="rd-sheet-tabs" role="tablist" aria-label="Страна">
+            {countries.map((code) => {
+              const isActive = code === activeCountry;
+              return (
+                <button
+                  key={code}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  className={`rd-cat-chip${isActive ? ' rd-active' : ''}`}
+                  onClick={() => {
+                    haptic.select();
+                    setActiveCountry(code);
+                  }}
+                >
+                  {COUNTRY_NAMES[code] ?? code}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <div className="rd-sheet-body">
-          {country.cities.map((city) => {
-            const isSelected = value.country === country.code && value.city === city;
+          {isLoading && <p className="rd-cta-hint">Загружаем города…</p>}
+
+          {!isLoading && visible.length === 0 && (
+            <FoxEmpty
+              art={foxFilterArt}
+              title="Не нашли такой город"
+              description={
+                normalizedQuery
+                  ? 'Проверьте написание или выберите ближайший крупный город.'
+                  : 'В этой стране пока нет городов для выбора.'
+              }
+            />
+          )}
+
+          {visible.map((city) => {
+            const isSelected = value?.id === city.id;
+            const subtitle = citySubtitle(city);
             return (
               <button
-                key={city}
+                key={city.id}
                 type="button"
                 className={`rd-pick-item${isSelected ? ' rd-selected' : ''}`}
                 onClick={() => handlePick(city)}
               >
-                <span>{city}</span>
+                <span className="rd-pick-text">
+                  <span>{city.name}</span>
+                  {subtitle && <span className="rd-pick-sub">{subtitle}</span>}
+                </span>
                 {isSelected && <span className="rd-check">{CHECK_ICON}</span>}
               </button>
             );

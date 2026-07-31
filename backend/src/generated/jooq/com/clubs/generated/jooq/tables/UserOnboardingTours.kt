@@ -85,11 +85,13 @@ open class UserOnboardingTours(
 
     /**
      * The column <code>public.user_onboarding_tours.tour_key</code>. Экран:
-     * INTRO (три слайда первого входа), PROFILE, DISCOVERY (главная), CLUB
-     * (страница клуба), MY_CLUBS, ACTIVITIES. Допустимые значения задаёт enum
-     * OnboardingTour на бэкенде.
+     * INTRO (три слайда первого входа), WELCOME (сцена «Ты в клубе!» после
+     * первого вступления), PROFILE, DISCOVERY (главная), CLUB (страница клуба
+     * глазами участника), CLUB_OWNER (она же глазами владельца после создания
+     * клуба), CLUB_MANAGE (настройки клуба), MY_CLUBS, ACTIVITIES. Допустимые
+     * значения задаёт enum OnboardingTour на бэкенде.
      */
-    val TOUR_KEY: TableField<UserOnboardingToursRecord, String?> = createField(DSL.name("tour_key"), SQLDataType.VARCHAR(32).nullable(false), this, "Экран: INTRO (три слайда первого входа), PROFILE, DISCOVERY (главная), CLUB (страница клуба), MY_CLUBS, ACTIVITIES. Допустимые значения задаёт enum OnboardingTour на бэкенде.")
+    val TOUR_KEY: TableField<UserOnboardingToursRecord, String?> = createField(DSL.name("tour_key"), SQLDataType.VARCHAR(32).nullable(false), this, "Экран: INTRO (три слайда первого входа), WELCOME (сцена «Ты в клубе!» после первого вступления), PROFILE, DISCOVERY (главная), CLUB (страница клуба глазами участника), CLUB_OWNER (она же глазами владельца после создания клуба), CLUB_MANAGE (настройки клуба), MY_CLUBS, ACTIVITIES. Допустимые значения задаёт enum OnboardingTour на бэкенде.")
 
     /**
      * The column <code>public.user_onboarding_tours.completed_at</code>. Когда

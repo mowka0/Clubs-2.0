@@ -8,6 +8,8 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.application.ApplicationRepository
 import com.clubs.chatlink.ChatLinkRepository
 import com.clubs.chatlink.ChatLinkService
+import com.clubs.city.City
+import com.clubs.city.CityService
 import com.clubs.event.EventRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
@@ -25,9 +27,16 @@ import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
 
+// Город из справочника, который сервис резолвит по cityId в каждом создании/правке клуба.
+private val TEST_CITY = City(
+    id = UUID.randomUUID(), countryCode = "RU", name = "Moscow",
+    region = null, needsRegion = false, isFeatured = true
+)
+
 class ClubServiceTest {
 
     private lateinit var clubRepository: ClubRepository
+    private lateinit var cityService: CityService
     private lateinit var membershipRepository: MembershipRepository
     private lateinit var eventRepository: EventRepository
     private lateinit var skladchinaRepository: SkladchinaRepository
@@ -49,8 +58,10 @@ class ClubServiceTest {
         chatLinkRepository = mockk(relaxed = true)
         chatLinkService = mockk(relaxed = true)
         mapper = ClubMapper()
-        clubService = ClubService(clubRepository, membershipRepository, ClubRoleGuard(clubRepository, membershipRepository), eventRepository, skladchinaRepository, applicationRepository, subscriptionService, chatLinkRepository = chatLinkRepository, chatLinkService = chatLinkService, userRepository = mockk(relaxed = true), mapper = mapper)
+        cityService = mockk(relaxed = true)
+        clubService = ClubService(clubRepository, membershipRepository, ClubRoleGuard(clubRepository, membershipRepository), eventRepository, skladchinaRepository, applicationRepository, subscriptionService, chatLinkRepository = chatLinkRepository, chatLinkService = chatLinkService, userRepository = mockk(relaxed = true), cityService = cityService, mapper = mapper)
         every { chatLinkService.releaseOnClubDeleted(any()) } returns false
+        every { cityService.requireCity(TEST_CITY.id) } returns TEST_CITY
     }
 
     private fun makeClub(
@@ -99,7 +110,7 @@ class ClubServiceTest {
             description = "A test club description",
             category = "sport",
             accessType = "open",
-            city = "Moscow",
+            cityId = TEST_CITY.id,
             memberLimit = 50,
             subscriptionPrice = 100,
             paymentLink = "https://sbp.example/pay"
@@ -112,14 +123,14 @@ class ClubServiceTest {
             description = request.description,
             category = ClubCategory.sport,
             accessType = AccessType.`open`,
-            city = request.city,
+            city = TEST_CITY.name,
             memberLimit = request.memberLimit,
             subscriptionPrice = request.subscriptionPrice,
             memberCount = 0
         )
 
         every { clubRepository.countByOwnerId(ownerId) } returns 0
-        every { clubRepository.create(request, ownerId, any()) } returns club
+        every { clubRepository.create(request, ownerId, any(), any()) } returns club
         // createClub re-reads via findById so the response carries the live member count.
         every { clubRepository.findById(clubId) } returns club
 
@@ -132,7 +143,7 @@ class ClubServiceTest {
         assertEquals("Moscow", result.city)
         assertEquals(50, result.memberLimit)
         assertEquals(100, result.subscriptionPrice)
-        verify(exactly = 1) { clubRepository.create(request, ownerId, any()) }
+        verify(exactly = 1) { clubRepository.create(request, ownerId, any(), any()) }
         verify(exactly = 1) { membershipRepository.createOrganizer(ownerId, clubId) }
     }
 
@@ -144,7 +155,7 @@ class ClubServiceTest {
             description = "Description",
             category = "invalid_category",
             accessType = "open",
-            city = "Moscow",
+            cityId = TEST_CITY.id,
             memberLimit = 50,
             subscriptionPrice = 100
         )
@@ -154,7 +165,7 @@ class ClubServiceTest {
         }
 
         assertEquals("Invalid category: invalid_category", exception.message)
-        verify(exactly = 0) { clubRepository.create(any(), any(), any()) }
+        verify(exactly = 0) { clubRepository.create(any(), any(), any(), any()) }
     }
 
     @Test
@@ -165,7 +176,7 @@ class ClubServiceTest {
             description = "Description",
             category = "sport",
             accessType = "nonexistent",
-            city = "Moscow",
+            cityId = TEST_CITY.id,
             memberLimit = 50,
             subscriptionPrice = 100
         )
@@ -178,6 +189,55 @@ class ClubServiceTest {
     }
 
     @Test
+    fun `createClub rejects a city that is not in the dictionary`() {
+        val ownerId = UUID.randomUUID()
+        val unknownCityId = UUID.randomUUID()
+        val request = CreateClubRequest(
+            name = "Test Club",
+            description = "Description",
+            category = "sport",
+            accessType = "open",
+            cityId = unknownCityId,
+            memberLimit = 50,
+            subscriptionPrice = 0
+        )
+        every { cityService.requireCity(unknownCityId) } throws ValidationException("Город не найден в справочнике")
+
+        val exception = assertThrows<ValidationException> {
+            clubService.createClub(request, ownerId)
+        }
+
+        assertEquals("Город не найден в справочнике", exception.message)
+        // Клуб-призрак с городом вне справочника не должен создаваться вообще.
+        verify(exactly = 0) { clubRepository.create(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `createClub writes the dictionary city name, not client input`() {
+        val ownerId = UUID.randomUUID()
+        val clubId = UUID.randomUUID()
+        val request = CreateClubRequest(
+            name = "Test Club",
+            description = "Description",
+            category = "sport",
+            accessType = "open",
+            cityId = TEST_CITY.id,
+            memberLimit = 50,
+            subscriptionPrice = 0
+        )
+        val club = makeClub(clubId = clubId, ownerId = ownerId, city = TEST_CITY.name)
+        every { clubRepository.countByOwnerId(ownerId) } returns 0
+        every { clubRepository.create(request, ownerId, any(), TEST_CITY) } returns club
+        every { clubRepository.findById(clubId) } returns club
+
+        clubService.createClub(request, ownerId)
+
+        // Репозиторий получает резолвнутый город целиком: имя в clubs.city пишется из справочника,
+        // поэтому денормализованное поле не может разойтись с FK.
+        verify(exactly = 1) { clubRepository.create(request, ownerId, any(), TEST_CITY) }
+    }
+
+    @Test
     fun `createClub should throw ConflictException when owner has 10 clubs`() {
         val ownerId = UUID.randomUUID()
         val request = CreateClubRequest(
@@ -185,7 +245,7 @@ class ClubServiceTest {
             description = "Description",
             category = "sport",
             accessType = "open",
-            city = "Moscow",
+            cityId = TEST_CITY.id,
             memberLimit = 50,
             subscriptionPrice = 100
         )
@@ -197,7 +257,7 @@ class ClubServiceTest {
         }
 
         assertEquals("Maximum 10 clubs per organizer", exception.message)
-        verify(exactly = 0) { clubRepository.create(any(), any(), any()) }
+        verify(exactly = 0) { clubRepository.create(any(), any(), any(), any()) }
     }
 
     @Test
@@ -205,13 +265,13 @@ class ClubServiceTest {
         val ownerId = UUID.randomUUID()
         val request = CreateClubRequest(
             name = "Paid Club", description = "Desc", category = "sport", accessType = "open",
-            city = "Moscow", memberLimit = 30, subscriptionPrice = 100 // no paymentLink
+            cityId = TEST_CITY.id, memberLimit = 30, subscriptionPrice = 100 // no paymentLink
         )
 
         val exception = assertThrows<ValidationException> { clubService.createClub(request, ownerId) }
 
         assertEquals("Для платного клуба укажите реквизиты для взноса (СБП)", exception.message)
-        verify(exactly = 0) { clubRepository.create(any(), any(), any()) }
+        verify(exactly = 0) { clubRepository.create(any(), any(), any(), any()) }
     }
 
     @Test
@@ -220,17 +280,17 @@ class ClubServiceTest {
         val clubId = UUID.randomUUID()
         val request = CreateClubRequest(
             name = "Free Club", description = "Desc", category = "sport", accessType = "open",
-            city = "Moscow", memberLimit = 30, subscriptionPrice = 0 // free → no link needed
+            cityId = TEST_CITY.id, memberLimit = 30, subscriptionPrice = 0 // free → no link needed
         )
         val club = makeClub(clubId = clubId, ownerId = ownerId, subscriptionPrice = 0)
         every { clubRepository.countByOwnerId(ownerId) } returns 0
-        every { clubRepository.create(request, ownerId, any()) } returns club
+        every { clubRepository.create(request, ownerId, any(), any()) } returns club
         every { clubRepository.findById(clubId) } returns club
 
         val result = clubService.createClub(request, ownerId)
 
         assertEquals(clubId, result.id)
-        verify(exactly = 1) { clubRepository.create(request, ownerId, any()) }
+        verify(exactly = 1) { clubRepository.create(request, ownerId, any(), any()) }
     }
 
     @Test

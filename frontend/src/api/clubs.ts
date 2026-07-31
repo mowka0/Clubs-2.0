@@ -3,7 +3,8 @@ import type { ClubDetailDto, ClubListItemDto, InviteShareDto, MembershipDto, Org
 
 export interface ClubFilters {
   category?: string;
-  city?: string;
+  /** Город фильтруется по id справочника: сравнение строк не находило клуб «мск» по «Москва». */
+  cityId?: string;
   accessType?: string;
   minPrice?: string;
   maxPrice?: string;
@@ -17,7 +18,8 @@ export interface CreateClubBody {
   description: string;
   category: string;
   accessType: string;
-  city: string;
+  /** Только id из справочника — свободного текста в контракте больше нет. */
+  cityId: string;
   district?: string;
   memberLimit: number;
   subscriptionPrice: number;
@@ -65,7 +67,7 @@ export function createInviteShare(clubId: string): Promise<InviteShareDto> {
 export interface UpdateClubBody {
   name?: string;
   description?: string;
-  city?: string;
+  cityId?: string;
   district?: string;
   memberLimit?: number;
   subscriptionPrice?: number;

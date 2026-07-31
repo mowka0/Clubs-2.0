@@ -94,6 +94,7 @@ describe('ClubPage', () => {
         avatarUrl: null,
         city: null,
         country: null,
+        cityId: null,
         bio: null,
         onboardingTours: ['INTRO', 'WELCOME'],
       },
@@ -550,7 +551,7 @@ describe('ClubPage', () => {
   it('members tab (organizer viewer): shows «Новичок» for a genuine no-track-record member', async () => {
     // Владелец видит скоры честно: у него trust=null означает именно «нет истории» → «Новичок» уместен.
     useAuthStore.setState({
-      user: { id: 'owner-1', telegramId: 1, telegramUsername: null, firstName: 'O', lastName: null, avatarUrl: null, city: null, country: null, bio: null, onboardingTours: ['INTRO', 'WELCOME'] },
+      user: { id: 'owner-1', telegramId: 1, telegramUsername: null, firstName: 'O', lastName: null, avatarUrl: null, city: null, country: null, cityId: null, bio: null, onboardingTours: ['INTRO', 'WELCOME'] },
       isAuthenticated: true, isLoading: false, error: null,
     });
     server.use(
@@ -587,6 +588,7 @@ describe('ClubPage', () => {
         avatarUrl: null,
         city: null,
         country: null,
+        cityId: null,
         bio: null,
         onboardingTours: ['INTRO', 'WELCOME'],
       },
@@ -660,6 +662,7 @@ describe('ClubPage', () => {
         avatarUrl: null,
         city: null,
         country: null,
+        cityId: null,
         bio: null,
         onboardingTours: ['INTRO', 'WELCOME'],
       },
@@ -699,6 +702,7 @@ describe('ClubPage', () => {
           ...mockClubDetail,
           name: 'Книжный клуб',
           city: 'Москва',
+          cityId: null,
           description: 'Клуб для любителей чтения',
           subscriptionPrice: 200,
           ownerId: 'other-owner',

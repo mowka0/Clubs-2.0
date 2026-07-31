@@ -73,20 +73,20 @@ DELETE /api/clubs/{id}     → 204 No Content        (soft delete)
 | description | not blank, 1-500 символов | 400 |
 | category | one of: sport, creative, food, board_games, cinema, education, travel, other | 400 |
 | accessType | one of: open, closed, private | 400 |
-| city | not blank | 400 |
+| cityId | not null, город существует в справочнике `cities` | 400 |
 | memberLimit | 1-80 (мин. временно 1, V56; было 10) | 400 |
 | subscriptionPrice | >= 0 (0 = free club) | 400 |
 
 ### UpdateClubRequest (PUT /api/clubs/{id})
 Все поля nullable (частичное обновление). Набор редактируемых полей **уже**, чем CreateClubRequest:
-`name`, `description`, `city`, `district`, `memberLimit`, `subscriptionPrice`, `avatarUrl`, `coverUrl`, `rules`, `applicationQuestion`.
+`name`, `description`, `cityId`, `district`, `memberLimit`, `subscriptionPrice`, `avatarUrl`, `coverUrl`, `rules`, `applicationQuestion`.
 
 **Семантика null vs пустой строки** (для nullable-в-БД полей `district`, `avatarUrl`, `coverUrl`, `rules`, `applicationQuestion`):
 - **ключ отсутствует в JSON** → поле не трогается
 - **значение `""` (blank)** → поле очищается в `NULL` в БД (пользователь удалил аватар / стёр правила)
 - **значение non-blank** → поле обновляется
 
-Для required-в-БД полей (`name`, `description`, `city`, `memberLimit`, `subscriptionPrice`) пустая строка невалидна; Bean Validation отклонит запрос.
+Для required-в-БД полей (`name`, `description`, `cityId`, `memberLimit`, `subscriptionPrice`) пустая строка невалидна; Bean Validation отклонит запрос.
 
 **НЕ редактируемы после создания**:
 - `category` — смена категории сломает discovery/фильтры
@@ -296,7 +296,7 @@ AND под ними подсказка о невозможности смены
 ### Endpoint
 ```
 GET /api/clubs
-  Query: category?, city?, accessType?, minPrice?, maxPrice?, search?, page=0, size=20
+  Query: category?, cityId?, accessType?, minPrice?, maxPrice?, search?, page=0, size=20
   Response 200: PageResponse<ClubListItemDto>
 ```
 
@@ -307,6 +307,9 @@ GET /api/clubs
 - `nearestEvent` = ближайшее событие клуба с `status = 'upcoming'` и `event_datetime > now()`, limit 1
 - Фильтр `search` ищет по полям `name` и `description` (case-insensitive LIKE)
 - Фильтры `minPrice`/`maxPrice` по `subscription_price`
+- Фильтр `cityId` — сравнение по внешнему ключу `clubs.city_id`, а не по тексту города. До V74
+  сравнивались строки (`equalIgnoreCase`), и клуб, созданный как «мск», не находился по запросу
+  «Москва» никогда. Полная спека — [`city-dictionary.md`](./city-dictionary.md)
 
 ### ClubListItemDto
 ```json
@@ -316,6 +319,7 @@ GET /api/clubs
   "category": "sport",
   "accessType": "open",
   "city": "Москва",
+  "cityId": "uuid|null",
   "subscriptionPrice": 500,
   "memberCount": 25,
   "memberLimit": 40,

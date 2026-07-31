@@ -7,6 +7,7 @@ package com.clubs.generated.jooq
 import com.clubs.generated.jooq.tables.Applications
 import com.clubs.generated.jooq.tables.ChatAwardTags
 import com.clubs.generated.jooq.tables.ChatStrictBans
+import com.clubs.generated.jooq.tables.Cities
 import com.clubs.generated.jooq.tables.ClubAwards
 import com.clubs.generated.jooq.tables.ClubChatLinks
 import com.clubs.generated.jooq.tables.ClubRank
@@ -74,6 +75,12 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
      * не учитываются и не снимаются.
      */
     val CHAT_STRICT_BANS: ChatStrictBans get() = ChatStrictBans.CHAT_STRICT_BANS
+
+    /**
+     * Справочник городов (GeoNames, население от 50 000). Пополняется только
+     * новой миграцией — пользователи города не заводят.
+     */
+    val CITIES: Cities get() = Cities.CITIES
 
     /**
      * Награды уровня клуба, которые организатор вручает участнику (club-local,
@@ -247,6 +254,7 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         Applications.APPLICATIONS,
         ChatAwardTags.CHAT_AWARD_TAGS,
         ChatStrictBans.CHAT_STRICT_BANS,
+        Cities.CITIES,
         ClubAwards.CLUB_AWARDS,
         ClubChatLinks.CLUB_CHAT_LINKS,
         ClubRank.CLUB_RANK,

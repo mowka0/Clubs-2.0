@@ -20,7 +20,11 @@ data class ClubListItemDto(
     val name: String,
     val category: String,
     val accessType: String,
+    // `city` — денормализованное имя из справочника, только для показа. Источник правды — cityId;
+    // сервер пишет оба поля вместе, поэтому разъехаться они не могут.
     val city: String,
+    // null = легаси-клуб, город которого не распознался при миграции V74.
+    val cityId: UUID? = null,
     val subscriptionPrice: Int,
     val memberCount: Int,
     val memberLimit: Int,
@@ -40,6 +44,8 @@ data class ClubDetailDto(
     val category: String,
     val accessType: String,
     val city: String,
+    // null = легаси-клуб с нераспознанным городом; организатор уточняет город из управления.
+    val cityId: UUID? = null,
     val district: String?,
     val memberLimit: Int,
     val subscriptionPrice: Int,
@@ -109,8 +115,10 @@ data class CreateClubRequest(
     @field:NotBlank(message = "Access type is required")
     val accessType: String,
 
-    @field:NotBlank(message = "City is required")
-    val city: String,
+    // Город только из справочника: свободного текста в контракте больше нет, поэтому клуб-призрак
+    // с городом «мск» создать физически нельзя. Существование проверяет ClubService.
+    @field:NotNull(message = "City is required")
+    val cityId: UUID,
 
     val district: String? = null,
 
@@ -143,7 +151,7 @@ data class UpdateClubRequest(
     @field:Size(max = 500, message = "Description must be at most 500 characters")
     val description: String? = null,
 
-    val city: String? = null,
+    val cityId: UUID? = null,
     val district: String? = null,
 
     // Минимум временно 1 (было 10) — тест заполняемости полного клуба (PO 2026-07-11, club-invites).
@@ -189,7 +197,9 @@ data class OrganizerCardDto(
 
 data class ClubFilterParams(
     val category: String? = null,
-    val city: String? = null,
+    // Фильтр по FK, а не по строке: раньше сравнение шло equalIgnoreCase, и клуб «мск» не находился
+    // фильтром «Москва» никогда. Регистр, пробелы и написание больше не влияют ни на что.
+    val cityId: UUID? = null,
     val accessType: String? = null,
     val minPrice: Int? = null,
     val maxPrice: Int? = null,

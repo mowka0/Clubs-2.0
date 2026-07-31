@@ -193,4 +193,15 @@ open class UsersDao(configuration: Configuration?) : DAOImpl<UsersRecord, com.cl
      * Fetch records that have <code>quest_bio_at IN (values)</code>
      */
     fun fetchByQuestBioAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Users> = fetch(Users.USERS.QUEST_BIO_AT, *values)
+
+    /**
+     * Fetch records that have <code>city_id BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfCityId(lowerInclusive: UUID?, upperInclusive: UUID?): List<com.clubs.generated.jooq.tables.pojos.Users> = fetchRange(Users.USERS.CITY_ID, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>city_id IN (values)</code>
+     */
+    fun fetchByCityId(vararg values: UUID): List<com.clubs.generated.jooq.tables.pojos.Users> = fetch(Users.USERS.CITY_ID, *values)
 }

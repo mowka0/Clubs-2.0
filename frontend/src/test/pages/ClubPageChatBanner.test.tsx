@@ -130,6 +130,7 @@ function setViewer(id: string) {
       avatarUrl: null,
       city: null,
       country: null,
+      cityId: null,
       bio: null,
       onboardingTours: ['INTRO', 'WELCOME'],
     },

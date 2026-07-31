@@ -1,5 +1,6 @@
 package com.clubs.user
 
+import com.clubs.city.CityService
 import com.clubs.common.exception.NotFoundException
 import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.tables.records.UsersRecord
@@ -13,7 +14,9 @@ import java.util.UUID
 class UserService(
     private val userRepository: UserRepository,
     private val onboardingTourRepository: OnboardingTourRepository,
-    private val interestService: InterestService
+    private val interestService: InterestService,
+    // Резолвит cityId в город справочника: имя города и страна берутся оттуда, не от клиента.
+    private val cityService: CityService
 ) {
     private val log = LoggerFactory.getLogger(this::class.java)
 
@@ -25,10 +28,11 @@ class UserService(
 
     @Transactional
     fun updateProfile(userId: UUID, request: UpdateMeRequest): UserDto {
+        // Город только из справочника; null = человек очистил город в профиле.
+        val city = request.cityId?.let { cityService.requireCity(it) }
         userRepository.updateProfileFields(
             userId = userId,
-            country = request.country.blankToNull(),
-            city = request.city.blankToNull(),
+            city = city,
             bio = request.bio.blankToNull()
         )
         interestService.replaceUserInterests(userId, request.interests)
@@ -78,6 +82,7 @@ fun UsersRecord.toDto(onboardingTours: Set<OnboardingTour>) = UserDto(
     avatarUrl = avatarUrl,
     city = city,
     country = country,
+    cityId = cityId,
     bio = bio,
     onboardingTours = onboardingTours
 )

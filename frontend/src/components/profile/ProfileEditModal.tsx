@@ -4,7 +4,9 @@ import { Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useUpdateProfileMutation } from '../../queries/profile';
-import { CityPicker, countryNameByCode, type CityChoice } from '../CityPicker';
+import { CityPicker, countryNameByCode } from '../CityPicker';
+import { useCities } from '../../queries/cities';
+import type { CityDto } from '../../types/api';
 import { InterestsInput, type InterestsInputHandle } from './InterestsInput';
 import type { QuestStepKey } from './ProfileQuestCard';
 
@@ -36,10 +38,11 @@ export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, 
   const user = useAuthStore((s) => s.user);
   const updateMutation = useUpdateProfileMutation();
 
-  const [cityChoice, setCityChoice] = useState<CityChoice>({
-    country: user?.country ?? 'RU',
-    city: user?.city ?? '',
-  });
+  // Город хранится идентификатором справочника; отображаемое имя берётся из загруженного списка,
+  // а не из профиля — так подпись не разъедется с выбором.
+  const { data: cities } = useCities();
+  const [cityId, setCityId] = useState<string | null>(user?.cityId ?? null);
+  const city = cityId ? cities?.find((c) => c.id === cityId) ?? null : null;
   const [bio, setBio] = useState(user?.bio ?? '');
   const [interests, setInterests] = useState<string[]>(initialInterests);
   const interestsRef = useRef<InterestsInputHandle>(null);
@@ -59,10 +62,12 @@ export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, 
     if (highlightField === 'bio') bioRef.current?.focus();
   }, [highlightField]);
 
-  const hasCity = Boolean(cityChoice.city);
-  const locationLabel = hasCity
-    ? [cityChoice.city, countryNameByCode(cityChoice.country)].filter(Boolean).join(', ')
-    : 'Не указан';
+  // Пока справочник грузится, показываем сохранённое в профиле имя — иначе поле мигало бы
+  // «Не указан» у человека, который город давно выбрал.
+  const locationLabel = city
+    ? [city.name, countryNameByCode(city.countryCode)].filter(Boolean).join(', ')
+    : (cityId && user?.city ? user.city : 'Не указан');
+  const hasCity = Boolean(cityId);
 
   const handleSave = () => {
     haptic.impact('medium');
@@ -72,8 +77,7 @@ export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, 
     const finalInterests = interestsRef.current?.commitPending() ?? interests;
     updateMutation.mutate(
       {
-        country: hasCity ? cityChoice.country : null,
-        city: hasCity ? cityChoice.city : null,
+        cityId,
         bio: bio.trim() || null,
         interests: finalInterests,
       },
@@ -141,8 +145,8 @@ export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, 
 
       {cityPickerOpen && (
         <CityPicker
-          value={cityChoice}
-          onChange={setCityChoice}
+          value={city}
+          onChange={(next: CityDto) => setCityId(next.id)}
           onClose={() => setCityPickerOpen(false)}
         />
       )}

@@ -1758,6 +1758,15 @@
 .rd-pick-item.rd-selected { color: var(--accent); font-weight: 600; }
 .rd-pick-item .rd-check { display: flex; color: var(--accent); flex-shrink: 0; }
 
+/* Строка города в две строки: название + уточнение региона. Регион показывается только
+   тёзкам (Железногорск в Курской и Красноярском) — у остальных подписи нет вовсе. */
+.rd-pick-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rd-pick-sub { font-size: 13px; color: var(--text-faint); font-weight: 400; }
+
+/* Поиск по справочнику городов: список локальный, поэтому поле фильтрует без задержек. */
+.rd-city-search { padding: 0 14px 10px; }
+.rd-city-search .rd-input { width: 100%; }
+
 /* самостоятельный аватар (градиент + инициалы/фото) — в отличие от `.rd-ico`, не привязан
    к строкам репутации/хоста, поэтому используется где угодно (шиты, hero-баннеры).
    Размер/радиус задаёт вызывающий компонент инлайн. */

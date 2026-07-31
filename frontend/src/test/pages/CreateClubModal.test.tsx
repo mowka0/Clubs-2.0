@@ -37,6 +37,16 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
+/**
+ * Выбирает город через общий CityPicker: поле города — кнопка, а не input, поэтому
+ * «напечатать Москву» больше нельзя (в этом и смысл справочника).
+ */
+async function pickCity(user: ReturnType<typeof userEvent.setup>, name = 'Москва') {
+  await user.click(screen.getByRole('button', { name: /выберите город/i }));
+  const option = await screen.findByRole('button', { name: new RegExp(name, 'i') });
+  await user.click(option);
+}
+
 function renderModal(props?: { onCreated?: (id: string) => void; onClose?: () => void }) {
   const onClose = props?.onClose ?? vi.fn();
   const onCreated = props?.onCreated ?? vi.fn();
@@ -73,7 +83,7 @@ describe('CreateClubModal', () => {
     const nextButton = screen.getByRole('button', { name: /далее/i });
     await user.click(nextButton);
 
-    expect(screen.getByText('Укажите город')).toBeInTheDocument();
+    expect(screen.getByText('Выберите город из списка')).toBeInTheDocument();
   });
 
   it('successfully advances through steps when valid data is entered', async () => {
@@ -81,8 +91,7 @@ describe('CreateClubModal', () => {
 
     const nameInput = screen.getByLabelText(/название клуба/i);
     await user.type(nameInput, 'My Great Club');
-    const cityInput = screen.getByLabelText(/город/i);
-    await user.type(cityInput, 'Москва');
+    await pickCity(user);
 
     await user.click(screen.getByRole('button', { name: /далее/i }));
     expect(screen.getByText(/шаг 2/i)).toBeInTheDocument();
@@ -106,7 +115,7 @@ describe('CreateClubModal', () => {
     const { user } = renderModal();
 
     await user.type(screen.getByLabelText(/название клуба/i), 'Закрытый клуб');
-    await user.type(screen.getByLabelText(/город/i), 'Москва');
+    await pickCity(user);
     await user.click(screen.getByRole('button', { name: /далее/i })); // → шаг 2 «Категория»
 
     // Открытый клуб выбран по умолчанию — вопроса нет.
@@ -133,7 +142,7 @@ describe('CreateClubModal', () => {
     const { user } = renderModal();
 
     await user.type(screen.getByLabelText(/название клуба/i), 'Закрытый клуб');
-    await user.type(screen.getByLabelText(/город/i), 'Москва');
+    await pickCity(user);
     await user.click(screen.getByRole('button', { name: /далее/i }));
 
     await user.click(screen.getByRole('radio', { name: /закрытый клуб/i }));
@@ -165,7 +174,8 @@ describe('CreateClubModal', () => {
           description: capturedBody.description as string,
           category: capturedBody.category as string,
           accessType: capturedBody.accessType as string,
-          city: capturedBody.city as string,
+          city: 'Москва',
+          cityId: capturedBody.cityId as string,
           district: null,
           memberLimit: capturedBody.memberLimit as number,
           subscriptionPrice: capturedBody.subscriptionPrice as number,
@@ -191,7 +201,7 @@ describe('CreateClubModal', () => {
     const { user } = renderModal({ onCreated });
 
     await user.type(screen.getByLabelText(/название клуба/i), 'API Test Club');
-    await user.type(screen.getByLabelText(/город/i), 'Санкт-Петербург');
+    await pickCity(user, 'Санкт-Петербург');
     await user.click(screen.getByRole('button', { name: /далее/i }));
 
     await user.click(screen.getByRole('button', { name: /далее/i }));
@@ -217,7 +227,7 @@ describe('CreateClubModal', () => {
 
     expect(capturedBody).not.toBeNull();
     expect(capturedBody!.name).toBe('API Test Club');
-    expect(capturedBody!.city).toBe('Санкт-Петербург');
+    expect(capturedBody!.cityId).toBe('city-spb');
     expect(capturedBody!.description).toBe('Description for API test club verification.');
     expect(capturedBody!.category).toBe('other');
     expect(capturedBody!.accessType).toBe('open');
@@ -229,7 +239,7 @@ describe('CreateClubModal', () => {
     const { user } = renderModal();
 
     await user.type(screen.getByLabelText(/название клуба/i), 'Платный клуб');
-    await user.type(screen.getByLabelText(/город/i), 'Москва');
+    await pickCity(user);
     await user.click(screen.getByRole('button', { name: /далее/i })); // → шаг 1
     await user.click(screen.getByRole('button', { name: /далее/i })); // → шаг 2 (цена)
 
@@ -262,7 +272,7 @@ describe('CreateClubModal', () => {
     const { user } = renderModal();
 
     await user.type(screen.getByLabelText(/название клуба/i), 'Duplicate Club');
-    await user.type(screen.getByLabelText(/город/i), 'Москва');
+    await pickCity(user);
     await user.click(screen.getByRole('button', { name: /далее/i }));
     await user.click(screen.getByRole('button', { name: /далее/i }));
     await user.click(screen.getByRole('button', { name: /далее/i }));
