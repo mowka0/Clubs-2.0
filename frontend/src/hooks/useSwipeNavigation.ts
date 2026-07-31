@@ -6,14 +6,16 @@ import { useHistoryPosition } from './useHistoryPosition';
 /** Куда уводит жест: к предыдущей записи истории или к следующей. */
 export type SwipeDirection = 'back' | 'forward';
 
-/** Ширина «живой» кромки экрана, с которой начинается жест (px). Уже — не поймать, шире — мешает контенту. */
-const EDGE_ZONE_PX = 28;
 /** Сдвиг пальца, после которого решаем: это горизонтальный жест, а не вертикальная прокрутка (px). */
 const DIRECTION_LOCK_PX = 12;
 /** Во сколько раз горизонталь должна опережать вертикаль, чтобы жест считался «назад/вперёд». */
 const HORIZONTAL_DOMINANCE = 1.2;
-/** Доля ширины экрана, после которой отпускание пальца засчитывается как переход. */
-const COMMIT_DISTANCE_RATIO = 0.3;
+/**
+ * Доля ширины экрана, после которой отпускание пальца засчитывается как переход.
+ * Считается от ПОЛНОЙ ширины, а жест теперь начинается где угодно — из середины экрана
+ * до края остаётся лишь половина пути, поэтому порог ниже прежних 0.3.
+ */
+const COMMIT_DISTANCE_RATIO = 0.25;
 /** Скорость (px/ms), при которой короткий флик засчитывается как переход, не добрав дистанцию. */
 const COMMIT_VELOCITY = 0.5;
 /** Сколько страница доигрывает за край экрана после отпускания (мс). */
@@ -42,7 +44,11 @@ export interface SwipeNavigationRefs {
 }
 
 interface ActiveGesture {
-  direction: SwipeDirection;
+  /**
+   * Куда ведёт жест. null, пока палец не сдвинулся достаточно: зоны кромки больше нет,
+   * и при касании неизвестно, потянут вправо (назад) или влево (вперёд).
+   */
+  direction: SwipeDirection | null;
   /** identifier касания — чтобы не перепутать пальцы при мультитаче. */
   touchId: number;
   startX: number;
@@ -183,15 +189,10 @@ export function useSwipeNavigation({ hostRef, pageRef, scrimRef }: SwipeNavigati
       const target = event.target;
       if (target instanceof Element && target.closest(BLOCKING_SELECTOR) !== null) return;
 
-      const width = host.getBoundingClientRect().width;
-      const fromLeftEdge = touch.clientX <= EDGE_ZONE_PX;
-      const fromRightEdge = touch.clientX >= width - EDGE_ZONE_PX;
-      const direction: SwipeDirection | null =
-        fromLeftEdge && canGoBack() ? 'back' : fromRightEdge && canGoForward() ? 'forward' : null;
-      if (direction === null) return;
-
+      // Направление решается позже, по знаку сдвига: жест ловится со всего экрана,
+      // и в момент касания ещё неизвестно, куда потянут.
       gestureRef.current = {
-        direction,
+        direction: null,
         touchId: touch.identifier,
         startX: touch.clientX,
         startY: touch.clientY,
@@ -209,24 +210,30 @@ export function useSwipeNavigation({ hostRef, pageRef, scrimRef }: SwipeNavigati
       if (touch === undefined) return;
 
       const width = host.getBoundingClientRect().width;
-      const travelled =
-        gesture.direction === 'back'
-          ? touch.clientX - gesture.startX
-          : gesture.startX - touch.clientX;
+      const shift = touch.clientX - gesture.startX;
       const verticalDrift = Math.abs(touch.clientY - gesture.startY);
 
       if (!gesture.isLocked) {
-        // Палец ушёл вверх/вниз или в сторону от кромки — это прокрутка, отдаём жест странице.
-        if (verticalDrift > DIRECTION_LOCK_PX || travelled < -DIRECTION_LOCK_PX) {
+        // Палец ушёл вверх/вниз — это прокрутка, отдаём жест странице.
+        if (verticalDrift > DIRECTION_LOCK_PX) {
           gestureRef.current = null;
           return;
         }
-        if (travelled < DIRECTION_LOCK_PX) return;
-        if (travelled < verticalDrift * HORIZONTAL_DOMINANCE) return;
+        if (Math.abs(shift) < DIRECTION_LOCK_PX) return;
+        if (Math.abs(shift) < verticalDrift * HORIZONTAL_DOMINANCE) return;
         if (event.target instanceof Element && hasHorizontalScrollAncestor(event.target, host)) {
           gestureRef.current = null;
           return;
         }
+        // Вправо — назад, влево — вперёд. Идти некуда (нет записи истории) — жест не наш:
+        // отпускаем, чтобы страница могла обработать касание как обычно.
+        const intended: SwipeDirection = shift > 0 ? 'back' : 'forward';
+        const canGo = intended === 'back' ? canGoBack() : canGoForward();
+        if (!canGo) {
+          gestureRef.current = null;
+          return;
+        }
+        gesture.direction = intended;
         gesture.isLocked = true;
         const page = pageRef.current;
         if (page !== null) {
@@ -238,13 +245,15 @@ export function useSwipeNavigation({ hostRef, pageRef, scrimRef }: SwipeNavigati
         scrimRef.current?.classList.add('rd-swipe-scrim-on');
       }
 
+      const direction = gesture.direction;
+      if (direction === null) return;
+      const travelled = direction === 'back' ? shift : -shift;
+
       const elapsed = event.timeStamp - gesture.lastTime;
       if (elapsed > 0) {
-        // Скорость знаковая: флик обратно к кромке — это отмена, а не быстрый переход.
+        // Скорость знаковая: флик обратно — это отмена, а не быстрый переход.
         const step =
-          gesture.direction === 'back'
-            ? touch.clientX - gesture.lastX
-            : gesture.lastX - touch.clientX;
+          direction === 'back' ? touch.clientX - gesture.lastX : gesture.lastX - touch.clientX;
         gesture.velocity = step / elapsed;
         gesture.lastX = touch.clientX;
         gesture.lastTime = event.timeStamp;
@@ -252,7 +261,7 @@ export function useSwipeNavigation({ hostRef, pageRef, scrimRef }: SwipeNavigati
 
       // Прокрутка отменяется только здесь и только после подтверждения направления.
       if (event.cancelable) event.preventDefault();
-      paint(gesture.direction, Math.max(0, Math.min(travelled, width)), width);
+      paint(direction, Math.max(0, Math.min(travelled, width)), width);
     };
 
     const endGesture = (event: TouchEvent) => {
@@ -262,14 +271,16 @@ export function useSwipeNavigation({ hostRef, pageRef, scrimRef }: SwipeNavigati
       if (stillTouching) return;
 
       gestureRef.current = null;
-      if (!gesture.isLocked) return;
+      const direction = gesture.direction;
+      // Направление подтверждается вместе с локом, поэтому без лока его и нет.
+      if (!gesture.isLocked || direction === null) return;
 
       const width = host.getBoundingClientRect().width;
       const travelled =
-        gesture.direction === 'back' ? gesture.lastX - gesture.startX : gesture.startX - gesture.lastX;
+        direction === 'back' ? gesture.lastX - gesture.startX : gesture.startX - gesture.lastX;
       const isCommitted =
         travelled >= width * COMMIT_DISTANCE_RATIO || gesture.velocity >= COMMIT_VELOCITY;
-      if (isCommitted) commit(gesture.direction, width);
+      if (isCommitted) commit(direction, width);
       else cancel();
     };
 

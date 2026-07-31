@@ -17,6 +17,7 @@ import {
 } from '../components/profile/ProfileQuestCard';
 import { SubscriptionCard } from '../components/subscription/SubscriptionCard';
 import { tierWord, clubsPrepositional } from '../utils/reputationTier';
+import { CoachTour } from '../components/onboarding/CoachTour';
 
 const GearIcon: FC = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -183,6 +184,7 @@ export const ProfilePage: FC = () => {
           завершён; на её месте поздравление при завершении в этой сессии
           (profile-quest.md, мокап 04-quest-carousel). */}
       {gam && !gam.quest.completed && (
+        <div data-coach="profile-quest">
         <ProfileQuestCard
           quest={gam.quest}
           doneValues={{ city: user.city ?? null, bio: user.bio ?? null, interests }}
@@ -190,6 +192,7 @@ export const ProfilePage: FC = () => {
           onToggleFold={toggleQuestFold}
           onFill={(step) => openEditor(step)}
         />
+        </div>
       )}
       {congratsOpen && (
         <ProfileQuestCongrats
@@ -243,7 +246,9 @@ export const ProfilePage: FC = () => {
         // При ошибке фонового рефетча поверх устаревших данных остаёмся здесь, а не на плашке.
         <>
           <div className="rd-section-sub-h">Уровень</div>
-          <GamificationPanel data={gam} />
+          <div data-coach="profile-stats">
+            <GamificationPanel data={gam} />
+          </div>
           {gam.xp === 0 && gam.badges.length === 0 && (
             // Пояснение под нулевой панелью — откуда берётся XP и зачем уровни. Только на старте.
             <div className="rd-cta-hint">
@@ -388,6 +393,10 @@ export const ProfilePage: FC = () => {
           onClose={() => { setEditOpen(false); setEditHighlight(null); }}
         />
       )}
+
+      {/* Тур профиля — первый после интро: сюда приводит «Погнали!». Ждём геймификацию:
+          подсказка про квест не должна прилететь раньше самой карточки квеста. */}
+      <CoachTour tour="PROFILE" ready={gam !== undefined} />
     </div>
   );
 };

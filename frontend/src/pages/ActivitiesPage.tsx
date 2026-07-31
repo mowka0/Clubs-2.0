@@ -5,6 +5,7 @@ import { Toast } from '../components/Toast';
 import { EventsTab } from '../components/activities/EventsTab';
 import { SkladchinasTab } from '../components/activities/SkladchinasTab';
 import { useSkladchinaActionRequiredCountQuery } from '../queries/skladchina';
+import { CoachTour } from '../components/onboarding/CoachTour';
 
 type SegmentKey = 'events' | 'skladchina';
 
@@ -56,7 +57,7 @@ export const ActivitiesPage: FC = () => {
         </div>
       </header>
 
-      <div className="rd-seg" role="tablist" aria-label="Тип активностей">
+      <div className="rd-seg" role="tablist" aria-label="Тип активностей" data-coach="activities-tabs">
         <button
           type="button"
           role="tab"
@@ -85,6 +86,8 @@ export const ActivitiesPage: FC = () => {
       {segment === 'events' ? <EventsTab /> : <SkladchinasTab />}
 
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
+
+      <CoachTour tour="ACTIVITIES" />
     </div>
   );
 };

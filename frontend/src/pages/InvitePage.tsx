@@ -11,7 +11,7 @@ import {
   useMyClubsQuery,
 } from '../queries/clubs';
 import { useClubQualityQuery } from '../queries/clubQuality';
-import { useCompleteOnboardingMutation } from '../queries/profile';
+import { useCompleteTourMutation } from '../queries/profile';
 import { useAuthStore } from '../store/useAuthStore';
 import { ApiError } from '../api/apiClient';
 import { formatPrice } from '../utils/formatters';
@@ -42,7 +42,7 @@ export const InvitePage: FC = () => {
   const myClubsQuery = useMyClubsQuery();
   const joinMutation = useJoinByInviteMutation();
   const applyMutation = useApplyToClubMutation();
-  const completeOnboarding = useCompleteOnboardingMutation();
+  const completeWelcome = useCompleteTourMutation();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
 
@@ -63,9 +63,9 @@ export const InvitePage: FC = () => {
   // Кнопка «В чат» стоит вверху экрана, а форма заявки — внизу: подсказке нужно к ней прокрутить.
   const ctaRef = useRef<HTMLDivElement>(null);
 
-  // Велком-сцена (онбординг, срез 3): инвайт — главная точка входа новичка, карусель ему
-  // отложена deep-link'ом (Layout), поэтому продукт рассказывает сцена ПОСЛЕ вступления.
-  const isNewbie = !!user && user.onboardedAt == null;
+  // Велком-сцена: инвайт — главная точка входа новичка, интро ему не показывается вовсе
+  // (deep-link), поэтому продукт рассказывает сцена ПОСЛЕ вступления. Один раз за аккаунт.
+  const isNewbie = !!user && !user.onboardingTours.includes('WELCOME');
 
   const club = clubQuery.data;
   const loading = clubQuery.isPending;
@@ -203,13 +203,13 @@ export const InvitePage: FC = () => {
   if (!club) return invalidInviteScene;
 
   // Велком-CTA «Перейти в клуб»: порядок ЖЁСТКИЙ — ответ сервера → навигация → setUser
-  // (ловушка среза 1: профиль в сторе = гейт Layout; см. useCompleteOnboardingMutation).
+  // (ловушка среза 1: профиль в сторе = гейт Layout; см. useCompleteTourMutation).
   // Здесь гейт закрыт startParam'ом, но порядок сохраняем — он единственный корректный везде.
   const handleWelcomeCta = async () => {
-    if (completeOnboarding.isPending) return;
+    if (completeWelcome.isPending) return;
     haptic.impact('medium');
     try {
-      const freshUser = await completeOnboarding.mutateAsync('MEMBER');
+      const freshUser = await completeWelcome.mutateAsync('WELCOME');
       navigate(`/clubs/${club.id}`);
       setUser(freshUser);
     } catch {
@@ -299,7 +299,7 @@ export const InvitePage: FC = () => {
             clubName={club.name}
             clubCaption={`${club.city} · ${isPaid ? formatPrice(club.subscriptionPrice) : memberCountCaption(club.memberCount)}`}
             clubAvatarUrl={club.avatarUrl}
-            ctaPending={completeOnboarding.isPending}
+            ctaPending={completeWelcome.isPending}
             onCta={handleWelcomeCta}
           />
           {welcomeError && <Toast message={welcomeError} onClose={() => setWelcomeError(null)} />}

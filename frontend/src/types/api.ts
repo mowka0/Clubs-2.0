@@ -28,12 +28,26 @@ export interface UserDto {
   city: string | null;
   country: string | null;
   bio: string | null;
-  /** ISO-дата прохождения онбординга; null — ещё не проходил, показываем карусель вместо приложения. */
-  onboardedAt: string | null;
+  /**
+   * Пройденные туры онбординга. Пустой массив — новичок, не видевший ещё ничего;
+   * именно по нему решается, показывать ли интро вместо приложения.
+   */
+  onboardingTours: OnboardingTour[];
 }
 
-/** Дверь, через которую человек вышел из онбординга: её задаёт нажатая кнопка слайда. */
-export type OnboardingDoor = 'MEMBER' | 'ORGANIZER';
+/**
+ * Экран со своим онбордингом. Прохождение считается по каждому отдельно: закрытый тур
+ * страницы клуба ничего не говорит про тур профиля. Значения зеркалят enum OnboardingTour
+ * на бэкенде — они же лежат в `user_onboarding_tours.tour_key` (V72).
+ */
+export type OnboardingTour =
+  | 'INTRO'
+  | 'WELCOME'
+  | 'PROFILE'
+  | 'DISCOVERY'
+  | 'CLUB'
+  | 'MY_CLUBS'
+  | 'ACTIVITIES';
 
 export interface UpdateProfileBody {
   country: string | null;

@@ -28,12 +28,13 @@ import { ClubLockedNotice } from '../components/club/ClubLockedNotice';
 import { ClubChatConnectBanner } from '../components/club/ClubChatConnectBanner';
 import { ClubEventsTeaser } from '../components/club/ClubEventsTeaser';
 import { WelcomeScene, memberCountCaption } from '../components/onboarding/WelcomeScene';
-import { useCompleteOnboardingMutation } from '../queries/profile';
+import { useCompleteTourMutation } from '../queries/profile';
 import { ClubMembersTab } from '../components/club/ClubMembersTab';
 import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
 import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
 import { InviteSheet } from '../components/club/InviteSheet';
 import { LeaveClubModal } from '../components/club/LeaveClubModal';
+import { CoachTour } from '../components/onboarding/CoachTour';
 
 type TabId = 'activities' | 'members';
 
@@ -88,7 +89,7 @@ export const ClubPage: FC = () => {
   const applyMutation = useApplyToClubMutation();
   const completeFreeMutation = useCompleteFreeMembershipMutation();
   const leaveMutation = useLeaveClubMutation();
-  const completeOnboarding = useCompleteOnboardingMutation();
+  const completeWelcome = useCompleteTourMutation();
 
   const [joinError, setJoinError] = useState<string | null>(null);
   const [showApplyModal, setShowApplyModal] = useState(false);
@@ -190,8 +191,8 @@ export const ClubPage: FC = () => {
       onSuccess: (membership) => {
         setJoinedStatus(membership.status);
         haptic.notify('success');
-        // Первое вступление новичка (onboardedAt пуст) → велком-сцена вместо голой страницы.
-        if (user?.onboardedAt == null) setShowWelcome(true);
+        // Самое первое вступление в жизни аккаунта → велком-сцена вместо голой страницы.
+        if (user !== null && !user.onboardingTours.includes('WELCOME')) setShowWelcome(true);
       },
       onError: (e) => {
         // 409 — тихое восстановление: кэш уже инвалидирован, UI был просто устаревшим.
@@ -202,20 +203,20 @@ export const ClubPage: FC = () => {
     });
   };
 
-  // CTA велком-сцены: помечаем онбординг (дверь MEMBER) и закрываем оверлей — мы уже на
-  // странице клуба, навигация не нужна. mutateAsync ждём до setUser: упавший запрос не должен
-  // молча оставить onboardedAt пустым (иначе при следующем входе вылезла бы карусель).
+  // CTA велком-сцены: помечаем тур WELCOME и закрываем оверлей — мы уже на странице клуба,
+  // навигация не нужна. mutateAsync ждём до setUser: упавший запрос не должен молча оставить
+  // тур неотмеченным (иначе сцена вылезла бы при следующем вступлении).
   const handleWelcomeCta = async () => {
-    if (completeOnboarding.isPending) return;
+    if (completeWelcome.isPending) return;
     haptic.impact('medium');
     try {
-      const freshUser = await completeOnboarding.mutateAsync('MEMBER');
+      const freshUser = await completeWelcome.mutateAsync('WELCOME');
       setUser(freshUser);
       setShowWelcome(false);
     } catch {
       haptic.notify('error');
       // Не запираем человека на сцене из-за сети: клуб уже открыт под оверлеем, закрываем.
-      // onboardedAt остался пустым — сцену/карусель он увидит ещё раз, это честнее тупика.
+      // Тур остался неотмеченным — сцену он увидит ещё раз, это честнее тупика.
       setShowWelcome(false);
     }
   };
@@ -441,6 +442,7 @@ export const ClubPage: FC = () => {
     <div className="rd-page">
       {/* Шапка (обложка → аватар → название → чипы) общая с посадочной приглашения —
           см. ClubIdentityHeader. Здесь в угол обложки уезжают кнопки роли. */}
+      <div data-coach="club-identity">
       <ClubIdentityHeader
         club={club}
         avatarEditable={isManager}
@@ -474,6 +476,7 @@ export const ClubPage: FC = () => {
           </>
         }
       />
+      </div>
 
       {showCancelledNote && membership?.subscriptionExpiresAt && (
         <div className="rd-note" role="status">
@@ -504,7 +507,7 @@ export const ClubPage: FC = () => {
         {/* Вход в чат по door-ссылке (club-chat-link): участник уже в чате → Telegram просто
             откроет его; ещё нет → заявка и авто-впуск ботом. */}
         {showTabs && club.chatInviteLink && (
-          <div className="rd-club-chatrow">
+          <div className="rd-club-chatrow" data-coach="club-chat">
             <button
               type="button"
               className="rd-club-chatpill"
@@ -727,10 +730,14 @@ export const ClubPage: FC = () => {
           clubName={club.name}
           clubCaption={`${club.city} · ${club.subscriptionPrice > 0 ? formatPrice(club.subscriptionPrice) : memberCountCaption(club.memberCount)}`}
           clubAvatarUrl={club.avatarUrl}
-          ctaPending={completeOnboarding.isPending}
+          ctaPending={completeWelcome.isPending}
           onCta={handleWelcomeCta}
         />
       )}
+
+      {/* Тур клуба — первый экран пришедшего по приглашению. Пока висит велком-сцена,
+          подсказки не лезут: она перекрывает страницу целиком. */}
+      <CoachTour tour="CLUB" ready={!showWelcome} />
     </div>
   );
 };

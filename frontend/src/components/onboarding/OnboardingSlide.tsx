@@ -6,53 +6,42 @@ interface OnboardingSlideProps {
 }
 
 /**
- * Содержимое одного слайда: арт, заголовок, подзаголовок и список преимуществ.
- * Чистое представление — кнопки живут в карусели (OnboardingFlow), она же владеет
- * переходами и завершением онбординга.
+ * Содержимое одного слайда интро: арт, заголовок, микро-строка. Чистое представление —
+ * кнопки, точки и жест живут в карусели (OnboardingFlow).
+ *
+ * Заголовок разбивается по `\n` вручную: перенос — часть композиции (две коротких строки
+ * читаются как слоган, одна длинная расползается на четыре и выдавливает арт).
  */
-export const OnboardingSlide: FC<OnboardingSlideProps> = ({ slide }) => {
-  const hasBrand = slide.title.some((part) => part.brand);
-
-  return (
-    <div className="ob-slide">
-      <div className="ob-art">
-        <img className="ob-art-img" src={slide.artSrc} alt="" draggable={false} />
-      </div>
-
-      {/* Слоган со вшитым названием длиннее обычных заголовков, поэтому у него свой кегль:
-          иначе он съедает высоту и выдавливает преимущества за пределы экрана. */}
-      <h2 className={hasBrand ? 'ob-title ob-title-brand' : 'ob-title'}>
-        {slide.title.map((part) => {
-          if (part.brand) {
-            return (
-              <span className="ob-brand" key={part.text}>
-                {part.text}
-              </span>
-            );
-          }
-          if (part.accent) return <em key={part.text}>{part.text}</em>;
-          return <span key={part.text}>{part.text}</span>;
-        })}
-      </h2>
-
-      <p className="ob-sub">
-        {slide.subtitle}
-        {slide.subtitleStrong && <b>{slide.subtitleStrong}</b>}
-      </p>
-
-      <div className="ob-perks">
-        {slide.perks.map((perk) => (
-          <div className="ob-perk" key={perk.title}>
-            <div className="ob-perk-ic" aria-hidden="true">
-              {perk.icon}
-            </div>
-            <div>
-              <div className="ob-perk-t">{perk.title}</div>
-              <div className="ob-perk-d">{perk.text}</div>
-            </div>
-          </div>
-        ))}
-      </div>
+export const OnboardingSlide: FC<OnboardingSlideProps> = ({ slide }) => (
+  <div className="ob-slide">
+    <div className="ob-art">
+      <img className="ob-art-img" src={slide.artSrc} alt="" draggable={false} />
     </div>
-  );
-};
+
+    <h2 className="ob-title">
+      {slide.title.map((part) =>
+        part.accent ? (
+          <em key={part.text}>{renderWithBreaks(part.text)}</em>
+        ) : (
+          <span key={part.text}>{renderWithBreaks(part.text)}</span>
+        ),
+      )}
+    </h2>
+
+    <p className="ob-micro">
+      {slide.micro}
+      {slide.microStrong !== undefined && <b>{slide.microStrong}</b>}
+    </p>
+  </div>
+);
+
+/** Переносы в тексте сегмента — в реальные <br/>. */
+function renderWithBreaks(text: string) {
+  const lines = text.split('\n');
+  return lines.map((line, i) => (
+    <span key={line + String(i)}>
+      {line}
+      {i < lines.length - 1 && <br />}
+    </span>
+  ));
+}

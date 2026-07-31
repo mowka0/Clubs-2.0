@@ -113,6 +113,8 @@ export const BottomTabBar: FC<BottomTabBarProps> = ({ onCreate, scoped = false }
             <button
               key={tab.path}
               type="button"
+              // Якорь коуч-марки: тур профиля заканчивается указанием на «Главную».
+              data-coach={tab.path === '/' ? 'tab-discovery' : undefined}
               className={isActive ? 'rd-dock-item rd-active' : 'rd-dock-item'}
               onClick={() => handleTabClick(tab.path)}
               aria-current={isActive ? 'page' : undefined}

@@ -16,12 +16,12 @@ import {
   type PriceRange,
 } from '../components/PriceFilter';
 import { useHaptic } from '../hooks/useHaptic';
-import { useHighlight } from '../hooks/useHighlight';
 import { FoxEmpty } from '../components/feed/FoxEmpty';
 import foxErrorArt from '../assets/mascot/fox-error.png';
 import foxCatalogArt from '../assets/mascot/fox-catalog.png';
 import foxFilterArt from '../assets/mascot/fox-filter.png';
 import type { ClubFilters } from '../api/clubs';
+import { CoachTour } from '../components/onboarding/CoachTour';
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -66,9 +66,6 @@ const CHEVRON_DOWN = (
 export const DiscoveryPage: FC = () => {
   const [filters, setFilters] = useState<ClubFilters>({});
   const [cityChoice, setCityChoice] = useCityChoice();
-  // Пришёл сюда из онбординга по кнопке «Найти клубы в своём городе» — подсвечиваем
-  // селектор города: человек должен запомнить, где он живёт, и в следующий раз найти сам.
-  const cityHighlighted = useHighlight('city');
   const [priceRange, setPriceRange] = useState<PriceRange>({});
   const [pickerOpen, setPickerOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
@@ -160,7 +157,8 @@ export const DiscoveryPage: FC = () => {
         </div>
         <button
           type="button"
-          className={cityHighlighted ? 'rd-city-pill rd-highlight-pulse' : 'rd-city-pill'}
+          className="rd-city-pill"
+          data-coach="city"
           onClick={() => { haptic.select(); setPickerOpen(true); }}
           aria-label="Выбрать город"
         >
@@ -190,6 +188,7 @@ export const DiscoveryPage: FC = () => {
         <button
           type="button"
           className={filters.category ? 'rd-filter-pill rd-active' : 'rd-filter-pill'}
+          data-coach="categories"
           onClick={() => { haptic.select(); setCategoryOpen(true); }}
           aria-label="Фильтр по категории"
         >
@@ -270,8 +269,11 @@ export const DiscoveryPage: FC = () => {
           )
         )}
 
-        {clubs.map((club) => (
-          <ClubCard key={club.id} club={club} facts={factsByClub.get(club.id)} />
+        {clubs.map((club, i) => (
+          // Якорь коуч-марки вешаем на ПЕРВУЮ карточку: она гарантированно в зоне видимости.
+          <div key={club.id} data-coach={i === 0 ? 'club-card' : undefined}>
+            <ClubCard club={club} facts={factsByClub.get(club.id)} />
+          </div>
         ))}
 
         {isFetchingNextPage && (
@@ -304,6 +306,9 @@ export const DiscoveryPage: FC = () => {
           onClose={() => setPriceOpen(false)}
         />
       )}
+
+      {/* Ждём клубы: последний шаг показывает на карточку, а до загрузки её ещё нет. */}
+      <CoachTour tour="DISCOVERY" ready={clubs.length > 0} />
     </div>
   );
 };
