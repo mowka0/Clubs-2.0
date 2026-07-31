@@ -164,8 +164,12 @@ export const ProfileQuestCard: FC<ProfileQuestCardProps> = ({ quest, doneValues,
         </button>
       </div>
 
+      {/* `data-swipe-nav="off"` — навигационный свайп «назад/вперёд» работает со всего экрана,
+          и без этой пометки он забирал бы себе горизонтальные жесты карусели: человек листал бы
+          шаги квеста, а уезжала бы страница. Внутри вьюпорта свайп листает только квест. */}
       <div
         className="rd-qc-viewport"
+        data-swipe-nav="off"
         onTouchStart={(e) => setTouchStartX(e.changedTouches[0]?.clientX ?? null)}
         onTouchEnd={(e) => handleTouchEnd(e.changedTouches[0]?.clientX)}
       >

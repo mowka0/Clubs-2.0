@@ -2637,6 +2637,13 @@
 .rd-s2-edit { margin-left: auto; color: var(--accent); font-weight: 700; font-size: 12px; white-space: nowrap; }
 
 .rd-s2-timeline { margin-top: 12px; animation: rd-s2-drop .3s cubic-bezier(.2, .9, .3, 1.1); }
+/* Сама шкала (дорожка + насечки) — зона протяжки: `touch-action: none` отдаёт жест ей целиком,
+   иначе браузер успевает начать вертикальную прокрутку и значение прыгает. `user-select: none`
+   убирает выделение подписей насечек, когда палец едет по ним. */
+.rd-s2-scale { touch-action: none; -webkit-user-select: none; user-select: none; }
+/* На время протяжки плавность выключена: с ней заливка и насечка догоняют палец с задержкой. */
+.rd-s2-dragging .rd-s2-fill,
+.rd-s2-dragging .rd-s2-knob { transition: none; }
 @keyframes rd-s2-drop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 .rd-s2-track {
   position: relative; height: 4px; border-radius: 2px;
