@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getChatLinkStatus, refreshChatLink, unlinkChat, updateChatLink } from '../api/chatLink';
+import { getChatLinkStatus, pinClubLink, refreshChatLink, unlinkChat, updateChatLink } from '../api/chatLink';
 import type { ChatLinkStatusDto, UpdateChatLinkRequest } from '../types/api';
 import { queryKeys } from './queryKeys';
 
@@ -41,6 +41,14 @@ export function useUpdateChatLinkMutation(clubId: string) {
   const apply = useApplyChatLinkResult(clubId);
   return useMutation({
     mutationFn: (body: UpdateChatLinkRequest) => updateChatLink(clubId, body),
+    onSuccess: apply,
+  });
+}
+
+export function usePinClubLinkMutation(clubId: string) {
+  const apply = useApplyChatLinkResult(clubId);
+  return useMutation({
+    mutationFn: () => pinClubLink(clubId),
     onSuccess: apply,
   });
 }

@@ -55,5 +55,17 @@ data class ChatLink(
     val livePinEnabled: Boolean,
     val skladchinaStatusEnabled: Boolean,
     val strictModeEnabled: Boolean,
-    val awardTagsEnabled: Boolean
+    val awardTagsEnabled: Boolean,
+    /**
+     * ID закреплённого поста со ссылкой на клуб. null = не закреплён: чат привязан до появления
+     * закрепа, организатор снял его вручную или у бота нет права закреплять.
+     * Дефолт нужен, чтобы существующие билдеры ChatLink(...) в тестах не переписывать.
+     */
+    val clubPinMessageId: Long? = null,
+    /**
+     * Видна ли новым участникам история чата (слепок getChat). false = новичок не увидит ни
+     * закреп встречи, ни закреплённую ссылку на клуб — всё это старше его вступления.
+     * null = ещё не проверяли: чат привязан до появления проверки.
+     */
+    val historyVisibleToNewMembers: Boolean? = null
 )

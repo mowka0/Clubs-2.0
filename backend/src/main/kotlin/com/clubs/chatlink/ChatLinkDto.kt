@@ -22,6 +22,13 @@ data class ChatLinkStatusDto(
     val skladchinaStatusEnabled: Boolean,
     val strictModeEnabled: Boolean,
     val awardTagsEnabled: Boolean,
+    /** Ссылка на клуб закреплена в чате. */
+    val clubLinkPinned: Boolean = false,
+    /**
+     * Видна ли новым участникам история чата. false — они не увидят ни закреп встречи, ни
+     * закреплённую ссылку на клуб: всё это старше их вступления. null — ещё не проверяли.
+     */
+    val historyVisibleToNewMembers: Boolean? = null,
     /** Deep link ?startgroup= для кнопки «Привязать чат» (username бота живёт на сервере). */
     val startGroupUrl: String
 )

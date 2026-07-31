@@ -112,6 +112,20 @@ class JooqChatLinkRepository(
             .execute()
     }
 
+    override fun updateClubPinMessageId(clubId: UUID, messageId: Long?) {
+        dsl.update(CLUB_CHAT_LINKS)
+            .set(CLUB_CHAT_LINKS.CLUB_PIN_MESSAGE_ID, messageId)
+            .where(CLUB_CHAT_LINKS.CLUB_ID.eq(clubId))
+            .execute()
+    }
+
+    override fun updateHistoryVisibility(clubId: UUID, visible: Boolean) {
+        dsl.update(CLUB_CHAT_LINKS)
+            .set(CLUB_CHAT_LINKS.HISTORY_VISIBLE_TO_NEW_MEMBERS, visible)
+            .where(CLUB_CHAT_LINKS.CLUB_ID.eq(clubId))
+            .execute()
+    }
+
     override fun updateChatId(oldChatId: Long, newChatId: Long) {
         dsl.update(CLUB_CHAT_LINKS)
             .set(CLUB_CHAT_LINKS.CHAT_ID, newChatId)

@@ -43,6 +43,8 @@ function status(over: Partial<ChatLinkStatusDto> = {}): ChatLinkStatusDto {
     botStatus: null,
     canPinMessages: false,
     canInviteUsers: false,
+    clubLinkPinned: false,
+    historyVisibleToNewMembers: true,
     doorEnabled: false,
     doorInviteLink: null,
     canRestrictMembers: false,
@@ -62,7 +64,7 @@ function mockStatus(dto: ChatLinkStatusDto) {
   );
 }
 
-const linkedHealthy = () => status({
+const linkedHealthy = (over: Partial<ChatLinkStatusDto> = {}) => status({
   linked: true,
   chatTitle: 'Партия — чат',
   linkedAt: new Date().toISOString(),
@@ -71,6 +73,7 @@ const linkedHealthy = () => status({
   canInviteUsers: true,
   canRestrictMembers: true,
   canManageTags: true,
+  ...over,
 });
 
 describe('ClubChatTab', () => {
@@ -352,4 +355,46 @@ describe('ClubChatTab', () => {
 
     await waitFor(() => expect(deleted).toBe(true));
   });
+
+  it('скрытая история чата — подсказка владельцу, как её включить', async () => {
+    // Причина «новички не видят закреп встречи»: Telegram прячет от них всё до вступления.
+    mockStatus(linkedHealthy({ historyVisibleToNewMembers: false }));
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByText('Новые участники не видят историю чата')).toBeInTheDocument();
+    expect(screen.getByText(/История чата → Видна новым участникам/)).toBeInTheDocument();
+  });
+
+  it('история видна — подсказки нет', async () => {
+    mockStatus(linkedHealthy({ historyVisibleToNewMembers: true }));
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    await screen.findByText('Партия — чат');
+    expect(screen.queryByText('Новые участники не видят историю чата')).not.toBeInTheDocument();
+  });
+
+  it('ссылка на клуб не закреплена — кнопка «Закрепить» шлёт запрос', async () => {
+    let called = false;
+    mockStatus(linkedHealthy({ clubLinkPinned: false }));
+    server.use(
+      http.post(`*/api/clubs/${CLUB_ID}/chat-link/pin-club-link`, () => {
+        called = true;
+        return HttpResponse.json(linkedHealthy({ clubLinkPinned: true }));
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Закрепить' }));
+
+    await waitFor(() => expect(called).toBe(true));
+  });
+
+  it('без права закрепа кнопку закрепить нельзя', async () => {
+    mockStatus(linkedHealthy({ canPinMessages: false, clubLinkPinned: false }));
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByRole('button', { name: 'Закрепить' })).toBeDisabled();
+  });
+
 });

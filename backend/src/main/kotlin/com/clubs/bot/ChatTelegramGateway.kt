@@ -58,6 +58,13 @@ enum class UserChatState { IN_CHAT, NOT_IN_CHAT, BANNED, UNKNOWN }
  */
 data class MemberTagLookup(val tag: String?, val inChat: Boolean)
 
+/**
+ * Сведения о чате из getChat. [hasVisibleHistory] = false означает, что новые участники не видят
+ * ничего отправленного до их вступления — ни истории, ни закреплённых сообщений. Изменить это
+ * бот не может (в Bot API нет такого метода), только владелец группы в её настройках.
+ */
+data class ChatInfo(val title: String?, val hasVisibleHistory: Boolean)
+
 // HTML parse_mode Telegram — нужен сообщениям с text_mention-упоминаниями («живой статус
 // сбора»); вызывающий обязан экранировать пользовательский ввод (&, <, >).
 const val PARSE_MODE_HTML = "HTML"
@@ -238,8 +245,21 @@ class ChatTelegramGateway(
         false
     }
 
-    fun getChatTitle(chatId: Long): String? = try {
-        telegramClient.execute(GetChat.builder().chatId(chatId).build()).title
+    fun getChatTitle(chatId: Long): String? = getChatInfo(chatId)?.title
+
+    /**
+     * Название чата + видна ли новым участникам история. Один вызов getChat на оба факта —
+     * их читает одна и та же панель управления чатом.
+     */
+    fun getChatInfo(chatId: Long): ChatInfo? = try {
+        val chat = telegramClient.execute(GetChat.builder().chatId(chatId).build())
+        ChatInfo(
+            title = chat.title,
+            // Telegram присылает has_visible_history ТОЛЬКО когда история видима, и только
+            // администраторам. Отсутствие поля у бота-администратора = история СКРЫТА:
+            // такой участник не видит ничего, отправленного до его вступления, включая закрепы.
+            hasVisibleHistory = chat.hasVisibleHistory == true
+        )
     } catch (e: Exception) {
         log.warn("getChat failed: chatId={} error={}", chatId, e.message)
         null

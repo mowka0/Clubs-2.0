@@ -228,4 +228,27 @@ open class ClubChatLinksDao(configuration: Configuration?) : DAOImpl<ClubChatLin
      * Fetch records that have <code>can_manage_tags IN (values)</code>
      */
     fun fetchByCanManageTags(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetch(ClubChatLinks.CLUB_CHAT_LINKS.CAN_MANAGE_TAGS, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>club_pin_message_id BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfClubPinMessageId(lowerInclusive: Long?, upperInclusive: Long?): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetchRange(ClubChatLinks.CLUB_CHAT_LINKS.CLUB_PIN_MESSAGE_ID, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>club_pin_message_id IN (values)</code>
+     */
+    fun fetchByClubPinMessageId(vararg values: Long): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetch(ClubChatLinks.CLUB_CHAT_LINKS.CLUB_PIN_MESSAGE_ID, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>history_visible_to_new_members BETWEEN
+     * lowerInclusive AND upperInclusive</code>
+     */
+    fun fetchRangeOfHistoryVisibleToNewMembers(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetchRange(ClubChatLinks.CLUB_CHAT_LINKS.HISTORY_VISIBLE_TO_NEW_MEMBERS, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>history_visible_to_new_members IN
+     * (values)</code>
+     */
+    fun fetchByHistoryVisibleToNewMembers(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.ClubChatLinks> = fetch(ClubChatLinks.CLUB_CHAT_LINKS.HISTORY_VISIBLE_TO_NEW_MEMBERS, *values.toTypedArray())
 }

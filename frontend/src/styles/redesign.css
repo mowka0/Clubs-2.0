@@ -1994,6 +1994,24 @@
   border: none; background: none; color: var(--accent); font-size: 12px; font-weight: 600;
   cursor: pointer; padding: 2px 4px; flex-shrink: 0; font-family: inherit;
 }
+.rd-cl-copy:disabled { color: var(--text-faint); cursor: default; }
+
+/* Предупреждение «история скрыта от новичков» — не ошибка нашей интеграции, а настройка
+   группы, поэтому тон нейтральный (не danger): владельцу нужно объяснение, а не тревога. */
+.rd-cl-hist {
+  margin-top: 10px; padding: 10px 12px; border-radius: 10px;
+  background: var(--accent-soft); border: 1px solid var(--accent-soft);
+}
+.rd-cl-hist-t { font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.rd-cl-hist-d { font-size: 11.5px; line-height: 1.5; color: var(--text-dim); }
+.rd-cl-hist-d b { color: var(--text); font-weight: 600; }
+
+/* Строка закрепа ссылки на клуб — та же раскладка, что у строки invite-ссылки. */
+.rd-cl-pinrow {
+  display: flex; align-items: center; gap: 8px; margin-top: 10px;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 10px; padding: 8px 10px;
+}
+.rd-cl-pin-tx { flex: 1; min-width: 0; font-size: 11.5px; line-height: 1.4; color: var(--text-dim); }
 
 /* Страница клуба: чип «у клуба есть чат» (гость) и кнопка «Чат клуба» (участник) */
 .rd-cl-chip {
