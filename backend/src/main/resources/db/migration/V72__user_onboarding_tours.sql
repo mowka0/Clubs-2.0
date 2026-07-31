@@ -23,7 +23,7 @@ COMMENT ON TABLE user_onboarding_tours IS
 COMMENT ON COLUMN user_onboarding_tours.user_id IS
     'Кто прошёл тур. При удалении пользователя строки уходят каскадом.';
 COMMENT ON COLUMN user_onboarding_tours.tour_key IS
-    'Экран: INTRO (три слайда первого входа), WELCOME (сцена «Ты в клубе!» после первого вступления), PROFILE, DISCOVERY (главная), CLUB (страница клуба глазами участника), CLUB_OWNER (она же глазами владельца после создания клуба), CLUB_MANAGE (настройки клуба), MY_CLUBS, ACTIVITIES. Допустимые значения задаёт enum OnboardingTour на бэкенде.';
+    'Экран: INTRO (три слайда первого входа), WELCOME (сцена «Ты в клубе!» после первого вступления), PROFILE, DISCOVERY (главная), CLUB (страница клуба), MY_CLUBS, ACTIVITIES. Допустимые значения задаёт enum OnboardingTour на бэкенде.';
 COMMENT ON COLUMN user_onboarding_tours.completed_at IS
     'Когда тур пройден. Отдельного индекса нет: строки читаются только по user_id, а это ведущая колонка первичного ключа.';
 
