@@ -5,10 +5,19 @@ import { useCompleteTourMutation } from '../../queries/profile';
 import { useAuthStore } from '../../store/useAuthStore';
 import type { OnboardingTour } from '../../types/api';
 
-/** Сколько ждём появления цели, прежде чем счесть шаг непоказуемым (мс). */
+/**
+ * Сколько ждём появления цели ПЕРВОГО показанного шага (мс). Страница в этот момент может
+ * ещё грузиться, поэтому запас щедрый.
+ */
 const TARGET_WAIT_MS = 1800;
+/**
+ * Сколько ждём цель, когда что-то в туре уже показано (мс). К этому моменту страница
+ * отрисована, и длинное ожидание превращается в паузу на ровном месте: шаг без цели
+ * (нет плашки чата, ушло поздравление) выглядел как зависшая подсказка на 1,8 секунды.
+ */
+const TARGET_RETRY_MS = 250;
 /** Как часто перепроверяем, не появилась ли цель (мс). */
-const TARGET_POLL_MS = 150;
+const TARGET_POLL_MS = 50;
 /** Воздух вокруг подсвеченного элемента — «дырка» чуть больше самой цели (px). */
 const HOLE_PADDING_PX = 6;
 /** Сколько места нужно под пузырь, чтобы поставить его ПОД целью, а не над (px). */
@@ -222,7 +231,7 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true, gateSatisfie
         return;
       }
       waited += TARGET_POLL_MS;
-      if (waited >= TARGET_WAIT_MS) {
+      if (waited >= (shownAnyRef.current ? TARGET_RETRY_MS : TARGET_WAIT_MS)) {
         // Цели на экране нет — шаг молча пропускаем, тур не имеет права зависнуть.
         setStepIndex((i) => i + 1);
         return;

@@ -220,7 +220,7 @@ describe('CoachTour — движок подсказок', () => {
     expect(screen.queryByRole('button', { name: 'Далее' })).toBeNull();
     expect(screen.getByText('Забери награду')).toBeInTheDocument();
 
-    // Тап по «Отлично!» убирает поздравление со страницы — это и есть ход тура.
+    // Тап по «Забрать!» убирает поздравление со страницы — это и есть ход тура.
     rerender(harness(['profile-level']));
     window.dispatchEvent(new Event('resize'));
     await waitFor(() => expect(screen.getByText(/профиль, встречи, сборы/)).toBeInTheDocument(), {

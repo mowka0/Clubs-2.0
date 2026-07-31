@@ -249,6 +249,6 @@ export const ProfileQuestCongrats: FC<ProfileQuestCongratsProps> = ({ title, onA
       <span className="rd-c-chip-badge">Бейдж «Визитка»</span>
       <span className="rd-c-chip-xp">+{QUEST_TOTAL_XP} XP</span>
     </div>
-    <button type="button" className="rd-c-btn" onClick={onAck}>Отлично!</button>
+    <button type="button" className="rd-c-btn" onClick={onAck}>Забрать!</button>
   </div>
 );

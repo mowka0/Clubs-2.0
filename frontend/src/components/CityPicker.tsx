@@ -1,6 +1,7 @@
 import { FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useHaptic } from '../hooks/useHaptic';
+import { useAuthStore } from '../store/useAuthStore';
 
 export interface CityChoice {
   readonly country: string;
@@ -65,30 +66,61 @@ export function countryNameByCode(code: string | null | undefined): string | nul
   return COUNTRIES.find((c) => c.code === code)?.name ?? null;
 }
 
-function loadStored(): CityChoice {
+/** Явный выбор человека, если он был. null — не выбирал: тогда город берётся из профиля. */
+function loadStored(): CityChoice | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_CHOICE;
+    if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<CityChoice>;
-    if (typeof parsed.country !== 'string' || typeof parsed.city !== 'string') {
-      return DEFAULT_CHOICE;
-    }
+    if (typeof parsed.country !== 'string' || typeof parsed.city !== 'string') return null;
     return { country: parsed.country, city: parsed.city };
   } catch {
-    return DEFAULT_CHOICE;
+    return null;
   }
 }
 
+/**
+ * Город из профиля как выбор для каталога. Страна в профиле может быть не заполнена —
+ * тогда ищем её по городу в известном списке, иначе пикер открылся бы не на той вкладке.
+ */
+function fromProfile(city: string | null, country: string | null): CityChoice | null {
+  const trimmed = city?.trim();
+  if (!trimmed) return null;
+  const known = COUNTRIES.find((c) => (c.cities as readonly string[]).includes(trimmed));
+  return { country: country ?? known?.code ?? DEFAULT_CHOICE.country, city: trimmed };
+}
+
+/**
+ * Город каталога. Порядок источников — от самого явного к самому общему:
+ *
+ * 1. **явный выбор** человека в пикере (переживает перезапуск, лежит в localStorage);
+ * 2. **город из профиля** — человек уже указал, где живёт, и спрашивать второй раз незачем;
+ * 3. Москва — когда не известно ничего.
+ *
+ * Профиль не перебивает выбор: сменив город в каталоге, человек ожидает, что каталог
+ * останется в нём, даже если в профиле стоит другой.
+ */
 export function useCityChoice(): [CityChoice, (next: CityChoice) => void] {
-  const [choice, setChoice] = useState<CityChoice>(loadStored);
+  const profileCity = useAuthStore((s) => s.user?.city ?? null);
+  const profileCountry = useAuthStore((s) => s.user?.country ?? null);
+  const [picked, setPicked] = useState<CityChoice | null>(loadStored);
+
   const update = useCallback((next: CityChoice) => {
-    setChoice(next);
+    setPicked(next);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch {
       // localStorage недоступен в некоторых клиентах Telegram — выбор живёт только в памяти.
     }
   }, []);
+
+  // Мемоизация не для скорости, а для стабильной ссылки: объект уезжает в ключи запросов
+  // и в зависимости эффектов, и новый литерал на каждый рендер дёргал бы их впустую.
+  const choice = useMemo(
+    () => picked ?? fromProfile(profileCity, profileCountry) ?? DEFAULT_CHOICE,
+    [picked, profileCity, profileCountry],
+  );
+
   return [choice, update];
 }
 
