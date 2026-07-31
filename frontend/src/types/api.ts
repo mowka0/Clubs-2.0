@@ -46,6 +46,8 @@ export type OnboardingTour =
   | 'PROFILE'
   | 'DISCOVERY'
   | 'CLUB'
+  | 'CLUB_OWNER'
+  | 'CLUB_MANAGE'
   | 'MY_CLUBS'
   | 'ACTIVITIES';
 

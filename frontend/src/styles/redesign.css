@@ -2404,7 +2404,7 @@
 @media (prefers-reduced-motion: reduce) {
   .ob-mesh i, .ob-art-img, .ob-hand { animation: none; }
   .ob-hand { opacity: 1; }
-  .ct-bubble { animation: none; }
+  .ct-bubble, .ct-ring { animation: none; }
 }
 
 /* ---------- Пустая заставка «лис в кафе» (FoxCafeEmpty) ----------
@@ -2783,19 +2783,20 @@
    ============================================================ */
 .ct-root { position: fixed; inset: 0; z-index: 90; }
 
-/* «Дырка» сделана огромной тенью-распоркой, а не маской: box-shadow работает
-   в любом вебвью, тогда как mask/clip-path в старых WebView Telegram — через раз. */
-.ct-hole {
-  position: fixed; border-radius: 18px; pointer-events: none;
-  box-shadow:
-    0 0 0 9999px rgba(6, 6, 9, 0.8),
-    0 0 0 2px var(--accent),
-    0 0 22px 3px var(--accent-glow);
-  animation: ct-hole-pulse 2.2s ease-in-out infinite;
+/* Затемнение целиком рисует SVG: маска умеет и «дырку», и ВЫРЕЗ внутри неё (шаг «О клубе»
+   подсвечивает блок, но оставляет плашку чата затемнённой). box-shadow-распорка так не умеет —
+   у неё ровно одна область. */
+.ct-scrim { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* Акцентный контур подсветки и выреза. Пульсирует прозрачностью, а не размером: обводка
+   в SVG масштабируется вместе с координатами и «дышала» бы вместе с дыркой. */
+.ct-ring {
+  fill: none; stroke: var(--accent); stroke-width: 2;
+  filter: drop-shadow(0 0 8px var(--accent-glow));
+  animation: ct-ring-pulse 2.2s ease-in-out infinite;
 }
-@keyframes ct-hole-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.018); }
+@keyframes ct-ring-pulse {
+  0%, 100% { stroke-opacity: 1; }
+  50% { stroke-opacity: 0.55; }
 }
 
 /* Реплика, а не карточка: асимметричный радиус и хвост к цели. */

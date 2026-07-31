@@ -456,6 +456,7 @@ export const ClubPage: FC = () => {
               <button
                 type="button"
                 className="rd-hero-btn"
+                data-coach="club-manage"
                 onClick={handleOpenManage}
                 aria-label="Управление клубом"
                 title="Управление клубом"
@@ -496,7 +497,7 @@ export const ClubPage: FC = () => {
       {/* О клубе — описание, правила и вход в чат одним блоком (решение PO 2026-07-30):
           отдельные секции «Правила» и широкая кнопка чата упразднены. */}
       <div className="rd-section-sub-h">О клубе</div>
-      <div className="rd-club-about">
+      <div className="rd-club-about" data-coach="club-about">
         <div className="rd-txt">{club.description}</div>
         {club.rules && (
           <>
@@ -507,10 +508,13 @@ export const ClubPage: FC = () => {
         {/* Вход в чат по door-ссылке (club-chat-link): участник уже в чате → Telegram просто
             откроет его; ещё нет → заявка и авто-впуск ботом. */}
         {showTabs && club.chatInviteLink && (
-          <div className="rd-club-chatrow" data-coach="club-chat">
+          <div className="rd-club-chatrow">
             <button
               type="button"
               className="rd-club-chatpill"
+              // Якорь именно на пилюле, не на строке: подсвечиваем сам вход в чат,
+              // а на предыдущем шаге эта же пилюля становится вырезом в блоке «О клубе».
+              data-coach="club-chat"
               onClick={() => {
                 if (!club.chatInviteLink) return;
                 haptic.impact('light');
@@ -525,7 +529,11 @@ export const ClubPage: FC = () => {
       </div>
 
       {/* Жизнь клуба — кольца качества + подпись возраст/активность, видны всем */}
-      {id && <ClubQualityFacts clubId={id} memberCount={club.memberCount} />}
+      {id && (
+        <div data-coach="club-life">
+          <ClubQualityFacts clubId={id} memberCount={club.memberCount} />
+        </div>
+      )}
 
       {/* Участник без доступа: frozen (вступил, ждёт подтверждения первого взноса) или expired
           (подписка истекла — должник по продлению). Один claim-флоу, разные тексты. */}
@@ -626,6 +634,7 @@ export const ClubPage: FC = () => {
                 key={item.key}
                 type="button"
                 className={`rd-seg-btn${item.selected ? ' rd-active' : ''}`}
+                data-coach={item.key === 'activities' ? 'club-tab-activities' : 'club-tab-members'}
                 onClick={() => handleTabClick(item.key)}
               >
                 {item.label}
@@ -735,9 +744,11 @@ export const ClubPage: FC = () => {
         />
       )}
 
-      {/* Тур клуба — первый экран пришедшего по приглашению. Пока висит велком-сцена,
-          подсказки не лезут: она перекрывает страницу целиком. */}
-      <CoachTour tour="CLUB" ready={!showWelcome} />
+      {/* Тур клуба. Владельцу — свой, более подробный (те же блоки плюс вход в настройки):
+          он только что создал клуб, и ему нужно донастроить своё, а не осмотреться в чужом.
+          Рендерится ровно один — у двух одновременных туров подрались бы затемнения.
+          Пока висит велком-сцена, подсказки не лезут: она перекрывает страницу целиком. */}
+      <CoachTour tour={isOwner ? 'CLUB_OWNER' : 'CLUB'} ready={!showWelcome} />
     </div>
   );
 };

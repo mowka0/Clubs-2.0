@@ -18,8 +18,12 @@ const BUBBLE_MARGIN_PX = 12;
 /** Ширина пузыря (px). Парное значение с `.ct-bubble` в CSS. */
 const BUBBLE_WIDTH_PX = 262;
 
+interface Rect { top: number; left: number; width: number; height: number }
+
 interface Placement {
-  hole: { top: number; left: number; width: number; height: number };
+  hole: Rect;
+  /** Область внутри подсветки, которая ОСТАЁТСЯ затемнённой (вырез). */
+  cutout: Rect | null;
   bubbleTop: number;
   bubbleLeft: number;
   /** Пузырь под целью — хвостик смотрит вверх; иначе вниз. */
@@ -67,8 +71,8 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true }) => {
   const step: CoachStep | undefined = steps[stepIndex];
   const active = !alreadyDone && ready && !finished && step !== undefined;
 
-  /** Считает, где нарисовать дырку и пузырь для цели. */
-  const measure = useCallback((target: Element): Placement => {
+  /** Считает, где нарисовать дырку, вырез и пузырь для цели. */
+  const measure = useCallback((target: Element, cutoutTarget: Element | null): Placement => {
     const box = target.getBoundingClientRect();
     const hole = {
       top: box.top - HOLE_PADDING_PX,
@@ -76,10 +80,20 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true }) => {
       width: box.width + HOLE_PADDING_PX * 2,
       height: box.height + HOLE_PADDING_PX * 2,
     };
+    // Вырез рисуется ВПРИТЫК к элементу, без воздуха: он должен читаться как аккуратная
+    // выемка в подсвеченном блоке, а не как вторая дырка рядом.
+    const cutoutBox = cutoutTarget?.getBoundingClientRect() ?? null;
+    const cutout: Rect | null = cutoutBox === null ? null : {
+      top: cutoutBox.top - 4,
+      left: cutoutBox.left - 4,
+      width: cutoutBox.width + 8,
+      height: cutoutBox.height + 8,
+    };
     const below = window.innerHeight - box.bottom > BUBBLE_SPACE_PX;
     const maxLeft = window.innerWidth - BUBBLE_WIDTH_PX - BUBBLE_MARGIN_PX;
     return {
       hole,
+      cutout,
       below,
       bubbleTop: below ? hole.top + hole.height + 12 : hole.top - 12,
       bubbleLeft: Math.min(Math.max(box.left, BUBBLE_MARGIN_PX), Math.max(maxLeft, BUBBLE_MARGIN_PX)),
@@ -105,7 +119,9 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true }) => {
       const target = document.querySelector(step.target);
       if (target !== null) {
         target.scrollIntoView({ block: 'center', behavior: 'auto' });
-        setPlacement(measure(target));
+        // Вырез необязателен: нет его на экране — просто подсвечиваем блок целиком.
+        const cutoutTarget = step.cutout === undefined ? null : document.querySelector(step.cutout);
+        setPlacement(measure(target, cutoutTarget));
         shownAnyRef.current = true;
         haptic.impact('light');
         return;
@@ -162,15 +178,53 @@ export const CoachTour: FC<CoachTourProps> = ({ tour, ready = true }) => {
   return (
     // `data-swipe-nav="off"` — под затемнением не должен срабатывать навигационный свайп.
     <div className="ct-root" data-swipe-nav="off">
-      <div
-        className="ct-hole"
-        style={{
-          top: placement.hole.top,
-          left: placement.hole.left,
-          width: placement.hole.width,
-          height: placement.hole.height,
-        }}
-      />
+      {/* Затемнение с дыркой — SVG-маска, а не box-shadow: тень умеет ровно одну область,
+          а шагу нужен ещё и ВЫРЕЗ внутри подсветки (белый прямоугольник поверх чёрного
+          возвращает затемнение). Скруглённые углы выреза и дают тот самый изгиб. */}
+      <svg className="ct-scrim" aria-hidden="true">
+        <defs>
+          <mask id="ct-mask">
+            <rect x="0" y="0" width="100%" height="100%" fill="white" />
+            <rect
+              x={placement.hole.left}
+              y={placement.hole.top}
+              width={placement.hole.width}
+              height={placement.hole.height}
+              rx="18"
+              fill="black"
+            />
+            {placement.cutout !== null && (
+              <rect
+                x={placement.cutout.left}
+                y={placement.cutout.top}
+                width={placement.cutout.width}
+                height={placement.cutout.height}
+                rx={placement.cutout.height / 2}
+                fill="white"
+              />
+            )}
+          </mask>
+        </defs>
+        <rect x="0" y="0" width="100%" height="100%" fill="rgba(6, 6, 9, 0.8)" mask="url(#ct-mask)" />
+        <rect
+          className="ct-ring"
+          x={placement.hole.left}
+          y={placement.hole.top}
+          width={placement.hole.width}
+          height={placement.hole.height}
+          rx="18"
+        />
+        {placement.cutout !== null && (
+          <rect
+            className="ct-ring"
+            x={placement.cutout.left}
+            y={placement.cutout.top}
+            width={placement.cutout.width}
+            height={placement.cutout.height}
+            rx={placement.cutout.height / 2}
+          />
+        )}
+      </svg>
       <div
         className={placement.below ? 'ct-bubble' : 'ct-bubble ct-bubble-above'}
         style={{ top: placement.bubbleTop, left: placement.bubbleLeft }}
