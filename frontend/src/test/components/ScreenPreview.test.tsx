@@ -31,11 +31,22 @@ const makeUser = (onboardingTours: OnboardingTour[]): UserDto => ({
 });
 
 /**
- * Сколько ждём, прежде чем считать, что шторка НЕ появится. Чуть больше задержки подъёма
- * (`RISE_DELAY_MS` = 420 мс) — с запасом, но без лишних секунд: файл целиком должен
- * укладываться в дефолтный таймаут vitest.
+ * Сколько «прокручиваем» времени, прежде чем считать, что шторка НЕ появится. Чуть больше
+ * задержки подъёма (`RISE_DELAY_MS` = 420 мс). Время фейковое: ждать по-настоящему незачем,
+ * запросов в этих сценариях не бывает.
  */
 const NO_SHOW_WAIT_MS = 500;
+
+/** Проверка «шторка так и не поднялась» — без реального ожидания. */
+async function expectNoSheet(title: string) {
+  vi.useFakeTimers();
+  try {
+    await vi.advanceTimersByTimeAsync(NO_SHOW_WAIT_MS);
+  } finally {
+    vi.useRealTimers();
+  }
+  expect(screen.queryByText(title)).toBeNull();
+}
 
 function renderPreview(screenKey: OnboardingTour, ready = true) {
   const queryClient = new QueryClient({
@@ -138,7 +149,12 @@ describe('ScreenPreview — превью экрана', () => {
     fireEvent.touchMove(grip, { changedTouches: [{ clientY: 120 }] });
     fireEvent.touchEnd(grip, { changedTouches: [{ clientY: 140 }] });
 
-    await new Promise((r) => setTimeout(r, NO_SHOW_WAIT_MS));
+    vi.useFakeTimers();
+    try {
+      await vi.advanceTimersByTimeAsync(NO_SHOW_WAIT_MS);
+    } finally {
+      vi.useRealTimers();
+    }
     expect(calls).toBe(0);
     expect(screen.getByText(SCREEN_PREVIEWS.CLUB_OWNER!.title)).toBeInTheDocument();
   });
@@ -147,23 +163,20 @@ describe('ScreenPreview — превью экрана', () => {
     useAuthStore.setState({ user: makeUser(['DISCOVERY']) });
     renderPreview('DISCOVERY');
 
-    await new Promise((r) => setTimeout(r, NO_SHOW_WAIT_MS));
-    expect(screen.queryByText(SCREEN_PREVIEWS.DISCOVERY!.title)).toBeNull();
+    await expectNoSheet(SCREEN_PREVIEWS.DISCOVERY!.title);
   });
 
   it('ready=false: ждём страницу, шторка не лезет на пустой экран', async () => {
     useAuthStore.setState({ user: makeUser([]) });
     renderPreview('CLUB', false);
 
-    await new Promise((r) => setTimeout(r, NO_SHOW_WAIT_MS));
-    expect(screen.queryByText(SCREEN_PREVIEWS.CLUB!.title)).toBeNull();
+    await expectNoSheet(SCREEN_PREVIEWS.CLUB!.title);
   });
 
   it('профиль ещё не приехал: молчим, а не показываем превью вслепую', async () => {
     useAuthStore.setState({ user: null });
     renderPreview('PROFILE');
 
-    await new Promise((r) => setTimeout(r, NO_SHOW_WAIT_MS));
-    expect(screen.queryByText(SCREEN_PREVIEWS.PROFILE!.title)).toBeNull();
+    await expectNoSheet(SCREEN_PREVIEWS.PROFILE!.title);
   });
 });
