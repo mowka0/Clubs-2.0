@@ -26,6 +26,8 @@ export interface CreateClubBody {
   avatarUrl?: string;
   rules?: string;
   applicationQuestion?: string;
+  /** Темы клуба (0–7). Необязательны: клуб без разметки создаётся штатно. */
+  interests?: string[];
   // Реквизиты СБП для взносов — обязательны на бэкенде, если subscriptionPrice > 0.
   paymentLink?: string;
   paymentMethodNote?: string;
@@ -76,6 +78,8 @@ export interface UpdateClubBody {
   coverUrl?: string | null;
   rules?: string | null;
   applicationQuestion?: string | null;
+  /** Темы клуба: ключ отсутствует = не трогать, пустой массив = снять все, список = заменить. */
+  interests?: string[];
   // Реквизиты СБП для взносов (пустая строка очищает значение, как rules/district).
   paymentLink?: string | null;
   paymentMethodNote?: string | null;

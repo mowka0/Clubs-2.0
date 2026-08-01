@@ -21,9 +21,5 @@ export function getMyInterests(): Promise<string[]> {
   return apiClient.get<string[]>('/api/users/me/interests');
 }
 
-export function suggestInterests(query: string, limit = 10): Promise<string[]> {
-  return apiClient.get<string[]>('/api/interests/suggest', {
-    q: query,
-    limit: String(limit),
-  });
-}
+// Автодополнение интересов переехало в ./interests — словарь общий с темами клуба,
+// и держать его половину в профиле стало неверно (club-interests.md).

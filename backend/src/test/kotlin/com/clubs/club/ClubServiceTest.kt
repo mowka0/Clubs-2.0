@@ -11,6 +11,7 @@ import com.clubs.chatlink.ChatLinkService
 import com.clubs.city.City
 import com.clubs.city.CityService
 import com.clubs.event.EventRepository
+import com.clubs.interest.InterestService
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.membership.MembershipRepository
@@ -44,6 +45,7 @@ class ClubServiceTest {
     private lateinit var subscriptionService: SubscriptionService
     private lateinit var chatLinkRepository: ChatLinkRepository
     private lateinit var chatLinkService: ChatLinkService
+    private lateinit var interestService: InterestService
     private lateinit var mapper: ClubMapper
     private lateinit var clubService: ClubService
 
@@ -59,7 +61,8 @@ class ClubServiceTest {
         chatLinkService = mockk(relaxed = true)
         mapper = ClubMapper()
         cityService = mockk(relaxed = true)
-        clubService = ClubService(clubRepository, membershipRepository, ClubRoleGuard(clubRepository, membershipRepository), eventRepository, skladchinaRepository, applicationRepository, subscriptionService, chatLinkRepository = chatLinkRepository, chatLinkService = chatLinkService, userRepository = mockk(relaxed = true), cityService = cityService, mapper = mapper)
+        interestService = mockk(relaxed = true)
+        clubService = ClubService(clubRepository, membershipRepository, ClubRoleGuard(clubRepository, membershipRepository), eventRepository, skladchinaRepository, applicationRepository, subscriptionService, chatLinkRepository = chatLinkRepository, chatLinkService = chatLinkService, userRepository = mockk(relaxed = true), cityService = cityService, interestService = interestService, mapper = mapper)
         every { chatLinkService.releaseOnClubDeleted(any()) } returns false
         every { cityService.requireCity(TEST_CITY.id) } returns TEST_CITY
     }

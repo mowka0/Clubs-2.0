@@ -17,4 +17,15 @@ class InterestController(private val interestService: InterestService) {
         @RequestParam(defaultValue = "10") limit: Int
     ): ResponseEntity<List<String>> =
         ResponseEntity.ok(interestService.suggest(q, limit))
+
+    /**
+     * Темы полки для чипов при разметке клуба (club-interests). Словарь общий и публичный
+     * по смыслу — отдаётся любому авторизованному, как и автодополнение выше.
+     */
+    @GetMapping
+    fun byCategory(
+        @RequestParam category: String,
+        @RequestParam(defaultValue = "24") limit: Int
+    ): ResponseEntity<List<String>> =
+        ResponseEntity.ok(interestService.suggestByCategory(category, limit))
 }

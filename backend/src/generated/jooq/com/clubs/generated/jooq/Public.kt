@@ -10,6 +10,7 @@ import com.clubs.generated.jooq.tables.ChatStrictBans
 import com.clubs.generated.jooq.tables.Cities
 import com.clubs.generated.jooq.tables.ClubAwards
 import com.clubs.generated.jooq.tables.ClubChatLinks
+import com.clubs.generated.jooq.tables.ClubInterests
 import com.clubs.generated.jooq.tables.ClubRank
 import com.clubs.generated.jooq.tables.Clubs
 import com.clubs.generated.jooq.tables.EventChatPins
@@ -95,6 +96,13 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
      * link ?startgroup=&lt;club_id&gt;. Спека: docs/modules/club-chat-link.md
      */
     val CLUB_CHAT_LINKS: ClubChatLinks get() = ClubChatLinks.CLUB_CHAT_LINKS
+
+    /**
+     * Связь M:N «клуб — тема» (0–7 тем на клуб). Уточняет категорию клуба: по
+     * темам работает поиск каталога и, начиная со среза 2, подбор клубов под
+     * интересы человека.
+     */
+    val CLUB_INTERESTS: ClubInterests get() = ClubInterests.CLUB_INTERESTS
 
     /**
      * Внутренний скрытый ранг клуба L3 — результат периодического пересчёта
@@ -257,6 +265,7 @@ open class Public : SchemaImpl("public", DefaultCatalog.DEFAULT_CATALOG) {
         Cities.CITIES,
         ClubAwards.CLUB_AWARDS,
         ClubChatLinks.CLUB_CHAT_LINKS,
+        ClubInterests.CLUB_INTERESTS,
         ClubRank.CLUB_RANK,
         Clubs.CLUBS,
         EventChatPins.EVENT_CHAT_PINS,

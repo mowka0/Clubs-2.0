@@ -5,10 +5,15 @@ package com.clubs.generated.jooq.tables
 
 
 import com.clubs.generated.jooq.Public
+import com.clubs.generated.jooq.enums.ClubCategory
+import com.clubs.generated.jooq.indexes.IDX_INTERESTS_CATEGORY_CLUB_USAGE
 import com.clubs.generated.jooq.indexes.IDX_INTERESTS_NAME_PREFIX
+import com.clubs.generated.jooq.keys.CLUB_INTERESTS__CLUB_INTERESTS_INTEREST_ID_FKEY
 import com.clubs.generated.jooq.keys.INTERESTS_NAME_KEY
 import com.clubs.generated.jooq.keys.INTERESTS_PKEY
 import com.clubs.generated.jooq.keys.USER_INTERESTS__USER_INTERESTS_INTEREST_ID_FKEY
+import com.clubs.generated.jooq.tables.ClubInterests.ClubInterestsPath
+import com.clubs.generated.jooq.tables.Clubs.ClubsPath
 import com.clubs.generated.jooq.tables.UserInterests.UserInterestsPath
 import com.clubs.generated.jooq.tables.Users.UsersPath
 import com.clubs.generated.jooq.tables.records.InterestsRecord
@@ -107,6 +112,23 @@ open class Interests(
      */
     val CREATED_AT: TableField<InterestsRecord, OffsetDateTime?> = createField(DSL.name("created_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "Когда интерес впервые появился в словаре.")
 
+    /**
+     * The column <code>public.interests.category</code>. Категория-полка темы
+     * (enum club_category). NULL = тема ещё не разложена по полкам — так
+     * выглядят интересы, введённые в профиле свободным вводом. Такие не
+     * попадают в чипы при разметке клуба, но живут в профиле и участвуют в
+     * поиске.
+     */
+    val CATEGORY: TableField<InterestsRecord, ClubCategory?> = createField(DSL.name("category"), SQLDataType.VARCHAR.asEnumDataType(ClubCategory::class.java), this, "Категория-полка темы (enum club_category). NULL = тема ещё не разложена по полкам — так выглядят интересы, введённые в профиле свободным вводом. Такие не попадают в чипы при разметке клуба, но живут в профиле и участвуют в поиске.")
+
+    /**
+     * The column <code>public.interests.club_usage_count</code>. Сколько клубов
+     * сейчас размечены этой темой (инкремент/декремент при правке тем клуба, не
+     * ниже 0). Сортировка чипов при разметке клуба. Считается отдельно от
+     * usage_count, который остаётся про пользователей.
+     */
+    val CLUB_USAGE_COUNT: TableField<InterestsRecord, Int?> = createField(DSL.name("club_usage_count"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("0"), SQLDataType.INTEGER)), this, "Сколько клубов сейчас размечены этой темой (инкремент/декремент при правке тем клуба, не ниже 0). Сортировка чипов при разметке клуба. Считается отдельно от usage_count, который остаётся про пользователей.")
+
     private constructor(alias: Name, aliased: Table<InterestsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<InterestsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<InterestsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)
@@ -139,9 +161,25 @@ open class Interests(
         override fun `as`(alias: Table<*>): InterestsPath = InterestsPath(alias.qualifiedName, this)
     }
     override fun getSchema(): Schema? = if (aliased()) null else Public.PUBLIC
-    override fun getIndexes(): List<Index> = listOf(IDX_INTERESTS_NAME_PREFIX)
+    override fun getIndexes(): List<Index> = listOf(IDX_INTERESTS_CATEGORY_CLUB_USAGE, IDX_INTERESTS_NAME_PREFIX)
     override fun getPrimaryKey(): UniqueKey<InterestsRecord> = INTERESTS_PKEY
     override fun getUniqueKeys(): List<UniqueKey<InterestsRecord>> = listOf(INTERESTS_NAME_KEY)
+
+    private lateinit var _clubInterests: ClubInterestsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.club_interests</code> table
+     */
+    fun clubInterests(): ClubInterestsPath {
+        if (!this::_clubInterests.isInitialized)
+            _clubInterests = ClubInterestsPath(this, null, CLUB_INTERESTS__CLUB_INTERESTS_INTEREST_ID_FKEY.inverseKey)
+
+        return _clubInterests;
+    }
+
+    val clubInterests: ClubInterestsPath
+        get(): ClubInterestsPath = clubInterests()
 
     private lateinit var _userInterests: UserInterestsPath
 
@@ -158,6 +196,13 @@ open class Interests(
 
     val userInterests: UserInterestsPath
         get(): UserInterestsPath = userInterests()
+
+    /**
+     * Get the implicit many-to-many join path to the <code>public.clubs</code>
+     * table
+     */
+    val clubs: ClubsPath
+        get(): ClubsPath = clubInterests().clubs()
 
     /**
      * Get the implicit many-to-many join path to the <code>public.users</code>

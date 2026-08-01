@@ -1,37 +1,11 @@
 import { forwardRef, KeyboardEvent, useEffect, useImperativeHandle, useState } from 'react';
-import { useInterestSuggestQuery } from '../../queries/profile';
+import { useInterestSuggestQuery } from '../../queries/interests';
+import { MAX_PROFILE_INTERESTS, mergeInterests as merge } from '../../utils/interests';
 
 // Максимум интересов в профиле.
-const MAX_INTERESTS = 15;
-// Максимальная длина одного интереса (символов).
-const MAX_LEN = 40;
-// Обрамляющие кавычки — срезаются с краёв строки при нормализации.
-const QUOTES = /^["'«»“”‘’`]+|["'«»“”‘’`]+$/g;
+const MAX_INTERESTS = MAX_PROFILE_INTERESTS;
 
-/** Зеркало серверного InterestNormalizer — чипы показывают каноничную форму. */
-export function normalizeInterest(raw: string): string {
-  return raw
-    .normalize('NFC')
-    .trim()
-    .replace(QUOTES, '')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .toLowerCase()
-    .replace(/ё/g, 'е')
-    .slice(0, MAX_LEN);
-}
-
-/** Чистое слияние: нормализует сырые токены и добавляет новые к текущему списку (лимит, дедуп). */
-function mergeInterests(current: string[], raw: string[]): string[] {
-  const next = [...current];
-  for (const part of raw) {
-    const normalized = normalizeInterest(part);
-    if (!normalized) continue;
-    if (next.length >= MAX_INTERESTS) break;
-    if (!next.includes(normalized)) next.push(normalized);
-  }
-  return next;
-}
+const mergeInterests = (current: string[], raw: string[]) => merge(current, raw, MAX_INTERESTS);
 
 export interface InterestsInputHandle {
   /**

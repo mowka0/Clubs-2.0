@@ -44,8 +44,8 @@
    отдельная задача `feature/pull-to-refresh-hook`.
 5. **Empty state v1 = stub без recommendations.** Рекомендации клубов «по
    интересам с ближайшими событиями» отложены в
-   `docs/backlog/onboarding-interests-and-recommendations.md` (зависит от модели
-   интересов пользователя, которой ещё нет).
+   `docs/backlog/club-interests-recommendations.md`. Блокер «нет модели интересов»
+   снят 2026-08-01: интересы профиля есть с V16, темы клуба — с V76.
 6. **Расширяемость для складчины** реализуется через generic naming:
    `frontend/src/components/feed/` (не `events/`). Generic-компоненты
    (FeedSection, FeedSkeleton, FeedEmpty — последний удалён 2026-07-20 в пользу
@@ -316,8 +316,8 @@ Quick-actions могут быть добавлены позже на основ�
 > текстов в AC-5/AC-6/AC-9 ниже — тоже исторические.
 
 v1 — stub-варианты без recommendations. Рекомендации клубов по интересам
-отложены в `docs/backlog/onboarding-interests-and-recommendations.md` (нет
-модели интересов user'а в БД).
+отложены в `docs/backlog/club-interests-recommendations.md` (модель есть с V76,
+сам подбор не реализован).
 
 | Состояние | Текст | CTA |
 |---|---|---|

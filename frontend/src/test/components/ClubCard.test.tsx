@@ -20,6 +20,7 @@ function club(o: Partial<ClubListItemDto> = {}): ClubListItemDto {
     coverUrl: null,
     nearestEvent: null,
     tags: [],
+    interests: [],
     ...o,
   };
 }
@@ -121,6 +122,21 @@ describe('ClubCard — карточка Discovery v2 (полка метрик н
     });
     expect(screen.getByText('завтра')).toBeInTheDocument();
     expect(screen.getByText('19:00')).toBeInTheDocument();
+  });
+
+  it('темы клуба идут строкой в порядке разметки', () => {
+    renderCard({ club: club({ interests: ['бег', 'марафон'] }) });
+    expect(screen.getByText('бег · марафон')).toBeInTheDocument();
+  });
+
+  it('лишние темы сворачиваются в «+N», строка не растёт', () => {
+    renderCard({ club: club({ interests: ['бег', 'марафон', 'трейл', 'йога', 'бокс'] }) });
+    expect(screen.getByText('бег · марафон · трейл · +2')).toBeInTheDocument();
+  });
+
+  it('у клуба без тем строки тем нет вовсе', () => {
+    const { container } = renderCard({ club: club({ interests: [] }) });
+    expect(container.querySelector('.rd-topics')).toBeNull();
   });
 
   it('shows the "★ Топ-5 в категории" badge only when topInCategory is true', () => {

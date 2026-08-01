@@ -56,7 +56,10 @@ class ClubMapper {
          * иначе правило «обычный участник не может дать ссылку в обход заявки» обходилось бы
          * чтением кода из ответа `GET /api/clubs/{id}`.
          */
-        includeInviteLink: Boolean = false
+        includeInviteLink: Boolean = false,
+        // Темы клуба читает вызывающий (они живут в отдельной таблице, а не в строке клуба).
+        // Пустой список = у клуба тем нет; на всех путях показываются одинаково — они публичны.
+        interests: List<String> = emptyList()
     ): ClubDetailDto = ClubDetailDto(
         id = club.id,
         ownerId = club.ownerId,
@@ -83,6 +86,7 @@ class ClubMapper {
         chatInviteLink = chatInviteLink,
         ownerFirstName = ownerFirstName,
         ownerLastName = ownerLastName,
-        inviteRequiresApplication = inviteRequiresApplication
+        inviteRequiresApplication = inviteRequiresApplication,
+        interests = interests
     )
 }

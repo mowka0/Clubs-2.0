@@ -88,8 +88,14 @@ DELETE /api/clubs/{id}     → 204 No Content        (soft delete)
 
 Для required-в-БД полей (`name`, `description`, `cityId`, `memberLimit`, `subscriptionPrice`) пустая строка невалидна; Bean Validation отклонит запрос.
 
+**Редактируемы** (помимо базовых полей выше):
+- `interests` — темы клуба (0–7), второй уровень описания поверх категории. Ключ отсутствует =
+  не трогать, пустой массив = снять все, список = заменить набор целиком. В отличие от категории
+  меняются свободно: на ранг не влияют, а ошибку разметки организатор должен уметь исправить.
+  Спека: [`club-interests.md`](club-interests.md).
+
 **НЕ редактируемы после создания**:
-- `category` — смена категории сломает discovery/фильтры
+- `category` — смена категории сломает discovery/фильтры и ранг L3 (`club_rank.category`)
 - `accessType` — смена типа доступа у клуба с действующими membership'ами/заявками требует отдельной миграции бизнес-логики (out-of-scope MVP)
 - `ownerId`, `memberCount`, `inviteLink`, `isActive` — служебные
 
@@ -174,6 +180,8 @@ Backend явно не принимает category/accessType в `UpdateClubReque
 7. Описание — 1-500 символов
 8. Правила (опционально)
 9. Вопрос для заявки (показывается только если `accessType = closed`)
+10. Темы клуба — `ClubInterestsPicker`: чипы выбранной полки, поиск по словарю, своя тема
+    последним шагом (см. [`club-interests.md`](club-interests.md))
 
 Read-only блок внизу с текущими `category` и `accessType` + подсказка *«Смена категории / типа доступа не поддерживается»*.
 

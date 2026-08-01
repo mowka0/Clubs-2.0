@@ -305,6 +305,14 @@
 .rd-club-card .rd-meta svg { width: 12px; height: 12px; opacity: 0.7; flex-shrink: 0; }
 /* Город (позже — с районом) обрезается многоточием, не толкая колонку времени справа */
 .rd-club-card .rd-meta-city { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Темы клуба (club-interests) — одна строка под названием, «бег · марафон · трейл».
+   Мельче и тусклее города: это уточнение, а не факт первого порядка. Не переносится —
+   лишние темы уже свёрнуты в «+N» на стороне компонента. */
+.rd-club-card .rd-topics {
+  margin-top: 7px;
+  font-size: 11px; color: var(--text-dim); opacity: 0.85;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 /* Нижний ряд тела: слева название+город (ужимаются), справа — колонка времени встречи */
 .rd-club-card .rd-brow { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
 .rd-club-card .rd-bl { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 5px; }
@@ -1302,6 +1310,16 @@
 }
 .rd-club-about .rd-txt {
   font-size: 13.5px; line-height: 1.45; letter-spacing: -0.012em; color: var(--text-dim);
+}
+/* Темы клуба (club-interests) — пилюли под описанием. Здесь, в отличие от карточки каталога,
+   места хватает: блок «О клубе» широкий и не конкурирует с бейджами. */
+.rd-club-topics { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
+.rd-club-topic {
+  font-size: 11.5px; font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-2); color: var(--text-dim);
+  border: 1px solid var(--hairline);
 }
 .rd-club-about .rd-rules-h {
   font-size: 8.5px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;

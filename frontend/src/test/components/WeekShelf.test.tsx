@@ -39,6 +39,7 @@ function club(o: Partial<ClubListItemDto> = {}): ClubListItemDto {
     coverUrl: null,
     nearestEvent: null,
     tags: [],
+    interests: [],
     ...o,
   };
 }

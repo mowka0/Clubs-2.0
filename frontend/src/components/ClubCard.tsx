@@ -5,6 +5,9 @@ import { formatTimeHM, isToday, isTomorrow } from '../utils/formatters';
 import { KNOWN_CATEGORIES } from '../utils/categoryLabels';
 import type { ClubCardFactsDto, ClubListItemDto } from '../types/api';
 
+// Сколько тем помещается в строку карточки до сворачивания остатка в «+N».
+const MAX_CARD_TOPICS = 3;
+
 /** Российский ₽ — бренд использует настоящую валюту, а не символ Telegram Stars */
 function formatPrice(price: number): string {
   if (price === 0) return 'бесплатно';
@@ -64,6 +67,13 @@ export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
     return null;
   }, [club.nearestEvent]);
   const cat = KNOWN_CATEGORIES.has(club.category) ? club.category : 'other';
+  // Первые темы в порядке разметки (первая = главная); остаток сворачивается в «+N»,
+  // чтобы строка не переносилась и не растила карточку.
+  const topics = useMemo(() => {
+    const shown = club.interests.slice(0, MAX_CARD_TOPICS);
+    const rest = club.interests.length - shown.length;
+    return rest > 0 ? [...shown, `+${rest}`] : shown;
+  }, [club.interests]);
   // Обложка карточки: с V70 у клуба своё поле обложки, аватар остаётся кружком. Фолбэк на аватар
   // нужен клубам, созданным до разделения полей — иначе их карточки разом потеряли бы картинку.
   const cardCover = club.coverUrl ?? club.avatarUrl;
@@ -115,6 +125,12 @@ export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
             </div>
           )}
         </div>
+        {/* Темы строкой, а не рядом пилюль: на карточке уже живут ценник, полка метрик,
+            топ-бейдж и колонка встречи — ещё один ряд плашек её бы перегрузил. Приглушённый
+            текст добавляет смысл («бег · марафон» вместо просто «Спорт»), не добавляя веса. */}
+        {topics.length > 0 && (
+          <div className="rd-topics">{topics.join(' · ')}</div>
+        )}
       </div>
     </button>
   );

@@ -4,6 +4,8 @@
 package com.clubs.generated.jooq.tables.pojos
 
 
+import com.clubs.generated.jooq.enums.ClubCategory
+
 import java.io.Serializable
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -19,7 +21,9 @@ data class Interests(
     var id: UUID? = null,
     var name: String,
     var usageCount: Int? = null,
-    var createdAt: OffsetDateTime? = null
+    var createdAt: OffsetDateTime? = null,
+    var category: ClubCategory? = null,
+    var clubUsageCount: Int? = null
 ): Serializable {
 
 
@@ -51,6 +55,18 @@ data class Interests(
         }
         else if (this.createdAt != o.createdAt)
             return false
+        if (this.category == null) {
+            if (o.category != null)
+                return false
+        }
+        else if (this.category != o.category)
+            return false
+        if (this.clubUsageCount == null) {
+            if (o.clubUsageCount != null)
+                return false
+        }
+        else if (this.clubUsageCount != o.clubUsageCount)
+            return false
         return true
     }
 
@@ -61,6 +77,8 @@ data class Interests(
         result = prime * result + this.name.hashCode()
         result = prime * result + (if (this.usageCount == null) 0 else this.usageCount.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
+        result = prime * result + (if (this.category == null) 0 else this.category.hashCode())
+        result = prime * result + (if (this.clubUsageCount == null) 0 else this.clubUsageCount.hashCode())
         return result
     }
 
@@ -71,6 +89,8 @@ data class Interests(
         sb.append(", ").append(name)
         sb.append(", ").append(usageCount)
         sb.append(", ").append(createdAt)
+        sb.append(", ").append(category)
+        sb.append(", ").append(clubUsageCount)
 
         sb.append(")")
         return sb.toString()

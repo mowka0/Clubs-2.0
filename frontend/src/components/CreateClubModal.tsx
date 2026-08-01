@@ -7,6 +7,7 @@ import { useSubscribeMutation } from '../queries/subscription';
 import { paywallFromError, type PaywallInfo } from '../api/subscription';
 import { PaywallModal } from './subscription/PaywallModal';
 import { AvatarUpload } from './AvatarUpload';
+import { ClubInterestsPicker } from './club/ClubInterestsPicker';
 import { CityPicker } from './CityPicker';
 import { useCities } from '../queries/cities';
 import foxClubCreatedArt from '../assets/mascot/fox-club-created.png';
@@ -68,6 +69,9 @@ export const CreateClubModal: FC<{
   const subscribeMutation = useSubscribeMutation();
   const [step, setStep] = useState(0);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  // Темы живут вне react-hook-form: это не поле ввода, а набор, который правится тапами
+  // по чипам, и валидировать в форме нечего — лимит держит сам пикер.
+  const [interests, setInterests] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   // club-invites (кадр E): после успешного создания форма сменяется экраном «Клуб создан 🎉».
   const [created, setCreated] = useState<ClubDetailDto | null>(null);
@@ -146,6 +150,7 @@ export const CreateClubModal: FC<{
   const memberLimit = watch('memberLimit');
   const subscriptionPrice = watch('subscriptionPrice');
   const accessType = watch('accessType');
+  const category = watch('category');
 
   // De-Stars: взносы идут напрямую участник→организатор (вне платформы), платформа не берёт комиссию — вся сумма.
   const monthlyIncome = Math.round(Number(memberLimit) * Number(subscriptionPrice));
@@ -181,6 +186,8 @@ export const CreateClubModal: FC<{
       subscriptionPrice: Number(data.subscriptionPrice),
       avatarUrl: avatarUrl ?? undefined,
       rules: data.rules.trim() || undefined,
+      // Пустой набор не шлём: у создания «не задано» и «снять все» — одно и то же.
+      interests: interests.length > 0 ? interests : undefined,
       applicationQuestion: (data.accessType === 'closed' && data.applicationQuestion.trim())
         ? data.applicationQuestion.trim()
         : undefined,
@@ -384,6 +391,11 @@ export const CreateClubModal: FC<{
             </div>
             <FieldError message={errors.category?.message} />
           </label>
+          {/* Темы идут сразу за полкой: чипы зависят от выбранной категории, и разрывать
+              «полка → что на ней стоит» другим полем значило бы порвать смысловую пару.
+              Смена полки темы НЕ сбрасывает — человек мог отметить «бег», потом передумать
+              про категорию, и молча терять его выбор нельзя (club-interests.md AC-7). */}
+          <ClubInterestsPicker category={category} value={interests} onChange={setInterests} />
           <div className="rd-mode-list">
             <label className={`rd-mode-option${accessType === 'open' ? ' rd-active' : ''}`}>
               <input type="radio" value="open" {...register('accessType')} />

@@ -10,6 +10,7 @@ import com.clubs.generated.jooq.tables.ChatStrictBans
 import com.clubs.generated.jooq.tables.Cities
 import com.clubs.generated.jooq.tables.ClubAwards
 import com.clubs.generated.jooq.tables.ClubChatLinks
+import com.clubs.generated.jooq.tables.ClubInterests
 import com.clubs.generated.jooq.tables.ClubRank
 import com.clubs.generated.jooq.tables.Clubs
 import com.clubs.generated.jooq.tables.EventChatPins
@@ -76,6 +77,13 @@ val CLUB_AWARDS: ClubAwards = ClubAwards.CLUB_AWARDS
  * ?startgroup=&lt;club_id&gt;. Спека: docs/modules/club-chat-link.md
  */
 val CLUB_CHAT_LINKS: ClubChatLinks = ClubChatLinks.CLUB_CHAT_LINKS
+
+/**
+ * Связь M:N «клуб — тема» (0–7 тем на клуб). Уточняет категорию клуба: по темам
+ * работает поиск каталога и, начиная со среза 2, подбор клубов под интересы
+ * человека.
+ */
+val CLUB_INTERESTS: ClubInterests = ClubInterests.CLUB_INTERESTS
 
 /**
  * Внутренний скрытый ранг клуба L3 — результат периодического пересчёта

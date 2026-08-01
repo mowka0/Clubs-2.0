@@ -4,6 +4,7 @@
 package com.clubs.generated.jooq.tables.daos
 
 
+import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.tables.Interests
 import com.clubs.generated.jooq.tables.records.InterestsRecord
 
@@ -84,4 +85,26 @@ open class InterestsDao(configuration: Configuration?) : DAOImpl<InterestsRecord
      * Fetch records that have <code>created_at IN (values)</code>
      */
     fun fetchByCreatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Interests> = fetch(Interests.INTERESTS.CREATED_AT, *values)
+
+    /**
+     * Fetch records that have <code>category BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfCategory(lowerInclusive: ClubCategory?, upperInclusive: ClubCategory?): List<com.clubs.generated.jooq.tables.pojos.Interests> = fetchRange(Interests.INTERESTS.CATEGORY, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>category IN (values)</code>
+     */
+    fun fetchByCategory(vararg values: ClubCategory): List<com.clubs.generated.jooq.tables.pojos.Interests> = fetch(Interests.INTERESTS.CATEGORY, *values)
+
+    /**
+     * Fetch records that have <code>club_usage_count BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfClubUsageCount(lowerInclusive: Int?, upperInclusive: Int?): List<com.clubs.generated.jooq.tables.pojos.Interests> = fetchRange(Interests.INTERESTS.CLUB_USAGE_COUNT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>club_usage_count IN (values)</code>
+     */
+    fun fetchByClubUsageCount(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.Interests> = fetch(Interests.INTERESTS.CLUB_USAGE_COUNT, *values.toTypedArray())
 }
