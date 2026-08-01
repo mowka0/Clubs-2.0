@@ -30,6 +30,13 @@ const makeUser = (onboardingTours: OnboardingTour[]): UserDto => ({
   onboardingTours,
 });
 
+/**
+ * Сколько ждём, прежде чем считать, что шторка НЕ появится. Чуть больше задержки подъёма
+ * (`RISE_DELAY_MS` = 420 мс) — с запасом, но без лишних секунд: файл целиком должен
+ * укладываться в дефолтный таймаут vitest.
+ */
+const NO_SHOW_WAIT_MS = 500;
+
 function renderPreview(screenKey: OnboardingTour, ready = true) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -86,7 +93,7 @@ describe('ScreenPreview — превью экрана', () => {
     const { container } = renderPreview('MY_CLUBS');
 
     await waitFor(() => expect(screen.getByText(SCREEN_PREVIEWS.MY_CLUBS!.title)).toBeInTheDocument());
-    await user.click(container.ownerDocument.querySelector('.sp-overlay')!);
+    await user.click(container.ownerDocument.querySelector('.rd-sheet-overlay')!);
 
     await waitFor(() => expect(calls).toBe(1));
     expect(screen.queryByText(SCREEN_PREVIEWS.MY_CLUBS!.title)).toBeNull();
@@ -131,7 +138,7 @@ describe('ScreenPreview — превью экрана', () => {
     fireEvent.touchMove(grip, { changedTouches: [{ clientY: 120 }] });
     fireEvent.touchEnd(grip, { changedTouches: [{ clientY: 140 }] });
 
-    await new Promise((r) => setTimeout(r, 400));
+    await new Promise((r) => setTimeout(r, NO_SHOW_WAIT_MS));
     expect(calls).toBe(0);
     expect(screen.getByText(SCREEN_PREVIEWS.CLUB_OWNER!.title)).toBeInTheDocument();
   });
@@ -140,7 +147,7 @@ describe('ScreenPreview — превью экрана', () => {
     useAuthStore.setState({ user: makeUser(['DISCOVERY']) });
     renderPreview('DISCOVERY');
 
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, NO_SHOW_WAIT_MS));
     expect(screen.queryByText(SCREEN_PREVIEWS.DISCOVERY!.title)).toBeNull();
   });
 
@@ -148,7 +155,7 @@ describe('ScreenPreview — превью экрана', () => {
     useAuthStore.setState({ user: makeUser([]) });
     renderPreview('CLUB', false);
 
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, NO_SHOW_WAIT_MS));
     expect(screen.queryByText(SCREEN_PREVIEWS.CLUB!.title)).toBeNull();
   });
 
@@ -156,7 +163,7 @@ describe('ScreenPreview — превью экрана', () => {
     useAuthStore.setState({ user: null });
     renderPreview('PROFILE');
 
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, NO_SHOW_WAIT_MS));
     expect(screen.queryByText(SCREEN_PREVIEWS.PROFILE!.title)).toBeNull();
   });
 });

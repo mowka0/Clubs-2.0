@@ -109,8 +109,8 @@ export const ScreenPreview: FC<ScreenPreviewProps> = ({ screen, ready = true }) 
   return createPortal(
     // `data-swipe-nav="off"` — под шторкой не должен срабатывать навигационный свайп «назад».
     <div data-swipe-nav="off">
-      <div className="rd-sheet-overlay sp-overlay" onClick={close} aria-hidden="true" />
-      <div className="rd-sheet sp-sheet" role="dialog" aria-modal="true" aria-labelledby="sp-title" ref={sheetRef}>
+      <div className="rd-sheet-overlay rd-overlay-in" onClick={close} aria-hidden="true" />
+      <div className="rd-sheet sp-sheet rd-sheet-in" role="dialog" aria-modal="true" aria-labelledby="sp-title" ref={sheetRef}>
         {/* Зона захвата: грабер и арт. За неё шторку тянут вниз — грабер в 4px под палец
             не попадает, а арт всё равно не интерактивен. Текст ниже остаётся выделяемым. */}
         <div className="sp-grip" {...dragHandlers}>
