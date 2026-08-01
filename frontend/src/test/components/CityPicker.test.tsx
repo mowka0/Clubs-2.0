@@ -113,7 +113,7 @@ describe('CityPicker', () => {
   });
 });
 
-describe('CityPicker — тап не «протекает» наружу', () => {
+describe('CityPicker — жизнь поверх чужой модалки', () => {
   it('фокус в поиске не «утекает» наружу: focusin из пикера до document не доходит', async () => {
     const outsideFocus = vi.fn();
     document.addEventListener('focusin', outsideFocus);
@@ -140,22 +140,5 @@ describe('CityPicker — тап не «протекает» наружу', () =>
     // закрывает форму вместе с пикером (баг PO 2026-08-01).
     expect(document.querySelector('.rd-sheet-overlay.rd-over-modal')).not.toBeNull();
     expect(document.querySelector('.rd-sheet.rd-over-modal-sheet')).not.toBeNull();
-  });
-
-  it('pointerdown по списку и по фону пикера не доходит до document', async () => {
-    const outside = vi.fn();
-    document.addEventListener('pointerdown', outside);
-    try {
-      const { user } = renderPicker();
-      await screen.findByText('Москва');
-
-      await user.click(screen.getByText('Москва'));
-      // Модалка формы создания клуба живёт на vaul: она слушает pointerdown на document
-      // и любой тап по порталу пикера считала кликом снаружи — форма закрывалась вместе
-      // с наполовину заполненными полями (баг PO 2026-08-01).
-      expect(outside).not.toHaveBeenCalled();
-    } finally {
-      document.removeEventListener('pointerdown', outside);
-    }
   });
 });

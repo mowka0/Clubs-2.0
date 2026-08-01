@@ -189,44 +189,15 @@ export const CityPicker: FC<CityPickerProps> = ({ value, onChange, onClose }) =>
     onClose();
   };
 
-  /**
-   * Пикер живёт порталом в `body`, но React-события всплывают не по DOM, а по РЕАКТ-дереву —
-   * то есть доходят до модалки, из которой пикер открыт. Форма создания клуба живёт в
-   * `Modal` telegram-ui (vaul): её `Drawer.Content` ловит указатель, считает касание началом
-   * протяжки собственной шторки и на отпускании закрывается — вместе с наполовину
-   * заполненной формой (баг PO 2026-08-01: «нажимаю в пикере куда угодно, и всё закрывается»).
-   *
-   * Гасим ВЕСЬ указательный цикл (down → move → up и их touch-двойники): пикер сам решает,
-   * когда закрыться, а шторка под ним не должна знать о касаниях внутри него. `click` тоже:
-   * Radix при `pointerType === 'touch'` решает вопрос «снаружи ли» именно по нему.
-   */
-  const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
-  const keepInside = {
-    onPointerDown: stop,
-    onPointerMove: stop,
-    onPointerUp: stop,
-    onMouseDown: stop,
-    onTouchStart: stop,
-    onTouchMove: stop,
-    onTouchEnd: stop,
-    onClick: stop,
-  };
-
   return createPortal(
     <>
-      <div
-        className="rd-sheet-overlay rd-over-modal"
-        aria-hidden="true"
-        {...keepInside}
-        onClick={(e) => { e.stopPropagation(); onClose(); }}
-      />
+      <div className="rd-sheet-overlay rd-over-modal" onClick={onClose} aria-hidden="true" />
       <div
         ref={sheetRef}
         className="rd-sheet rd-over-modal-sheet"
         role="dialog"
         aria-modal="true"
         aria-label="Выбор города"
-        {...keepInside}
       >
         <div className="rd-sheet-grabber" aria-hidden="true" />
         <div className="rd-sheet-head">
