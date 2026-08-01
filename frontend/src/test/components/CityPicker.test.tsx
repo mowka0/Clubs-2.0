@@ -114,6 +114,23 @@ describe('CityPicker', () => {
 });
 
 describe('CityPicker — тап не «протекает» наружу', () => {
+  it('фокус в поиске не «утекает» наружу: focusin из пикера до document не доходит', async () => {
+    const outsideFocus = vi.fn();
+    document.addEventListener('focusin', outsideFocus);
+    try {
+      renderPicker();
+      const search = await screen.findByLabelText('Найти город');
+      search.focus();
+
+      // Форма создания клуба живёт в Radix Dialog: его FocusScope слушает focusin на document
+      // и возвращает фокус себе, из-за чего в поиск нельзя было печатать (баг PO 2026-08-01).
+      expect(outsideFocus).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(search);
+    } finally {
+      document.removeEventListener('focusin', outsideFocus);
+    }
+  });
+
   it('лежит поверх модалки, из которой открыт: свои классы слоёв на месте', async () => {
     renderPicker();
     await screen.findByText('Москва');
