@@ -112,3 +112,22 @@ describe('CityPicker', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ id: 'msk', name: 'Москва' }));
   });
 });
+
+describe('CityPicker — тап не «протекает» наружу', () => {
+  it('pointerdown по списку и по фону пикера не доходит до document', async () => {
+    const outside = vi.fn();
+    document.addEventListener('pointerdown', outside);
+    try {
+      const { user } = renderPicker();
+      await screen.findByText('Москва');
+
+      await user.click(screen.getByText('Москва'));
+      // Модалка формы создания клуба живёт на vaul: она слушает pointerdown на document
+      // и любой тап по порталу пикера считала кликом снаружи — форма закрывалась вместе
+      // с наполовину заполненными полями (баг PO 2026-08-01).
+      expect(outside).not.toHaveBeenCalled();
+    } finally {
+      document.removeEventListener('pointerdown', outside);
+    }
+  });
+});

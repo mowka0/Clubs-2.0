@@ -162,14 +162,32 @@ export const CityPicker: FC<CityPickerProps> = ({ value, onChange, onClose }) =>
     onClose();
   };
 
+  /**
+   * Пикер живёт порталом в `body`, то есть ВНЕ поддерева модалки, из которой его открыли.
+   * Для модалок на vaul/Radix (форма создания клуба) любой тап по нему выглядит как «клик
+   * снаружи», и они закрываются — вместе с наполовину заполненной формой (баг PO 2026-08-01).
+   * Гасим всплытие указателя до `document`: закрыть пикер — решение самого пикера.
+   */
+  const keepInside = {
+    onPointerDown: (e: React.PointerEvent) => e.stopPropagation(),
+    onMouseDown: (e: React.MouseEvent) => e.stopPropagation(),
+    onTouchStart: (e: React.TouchEvent) => e.stopPropagation(),
+  };
+
   return createPortal(
     <>
-      <div className="rd-sheet-overlay" onClick={onClose} aria-hidden="true" />
+      <div
+        className="rd-sheet-overlay"
+        onClick={onClose}
+        aria-hidden="true"
+        {...keepInside}
+      />
       <div
         className="rd-sheet"
         role="dialog"
         aria-modal="true"
         aria-label="Выбор города"
+        {...keepInside}
       >
         <div className="rd-sheet-grabber" aria-hidden="true" />
         <div className="rd-sheet-head">

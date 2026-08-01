@@ -1588,7 +1588,7 @@
 }
 .rd-input::placeholder, .rd-textarea::placeholder { color: var(--text-faint); }
 .rd-input:focus, .rd-textarea:focus, .rd-select:focus {
-  border-color: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--accent); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 .rd-input.rd-invalid, .rd-textarea.rd-invalid { border-color: var(--danger); }
 .rd-textarea { resize: vertical; min-height: 78px; line-height: 1.45; }
@@ -1710,13 +1710,6 @@
   .rd-sheet-in, .rd-overlay-in { animation: none; }
 }
 
-/* Поля формы профиля: фокус помечается рамкой, без наружного кольца в 3px — оно доходило
-   до кромок экрана и читалось как съехавшая вёрстка (баг PO 2026-08-01). */
-.rd-profile-sheet .rd-input:focus,
-.rd-profile-sheet .rd-textarea:focus {
-  border-color: var(--accent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
 .rd-sheet-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-shrink: 0; }
 /* Шапка шторки, за которую её тянут вниз (useSheetDrag): жест наш, скролл под ней не мешает.
    Кнопка «Закрыть» внутри продолжает работать — тап это не движение. */

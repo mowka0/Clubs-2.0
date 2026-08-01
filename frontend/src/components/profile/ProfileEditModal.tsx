@@ -92,7 +92,7 @@ export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, 
   return createPortal(
     <>
       <div className="rd-sheet-overlay rd-overlay-in" onClick={onClose} aria-hidden="true" />
-      <div className="rd-sheet rd-profile-sheet rd-sheet-in" role="dialog" aria-modal="true" aria-label="Редактировать профиль" ref={sheetRef}>
+      <div className="rd-sheet rd-sheet-in" role="dialog" aria-modal="true" aria-label="Редактировать профиль" ref={sheetRef}>
         {/* Шапка-«ручка»: за неё шторку тянут вниз, чтобы закрыть. Тело со скроллом не трогаем. */}
         <div className="rd-sheet-grip" {...dragHandlers}>
           <div className="rd-sheet-grabber" aria-hidden="true" />
