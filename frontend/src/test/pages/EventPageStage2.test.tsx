@@ -55,6 +55,7 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     participantLimit: 10,
     votingOpensDaysBefore: 14,
     status: 'stage_2',
+    isUrgent: false,
     goingCount: 3,
     maybeCount: 1,
     notGoingCount: 0,
@@ -344,14 +345,14 @@ describe('EventPage — отмена события (F5-14)', () => {
     expect(screen.queryByText(/надёжность вырастет/)).not.toBeInTheDocument();
   });
 
-  it('Этап 1 (upcoming): секция откликов озаглавлена «Предварительные голоса», не «Кто идёт»', async () => {
+  it('Этап 1 (upcoming): секция откликов озаглавлена «Кто откликнулся», не «Кто идёт»', async () => {
     const responders: EventResponderDto[] = [
       { userId: 'g1', firstName: 'Гость', lastName: null, avatarUrl: null, status: 'going', attendance: null },
     ];
     mockEndpoints({ event: stage2Event({ status: 'upcoming', eventDatetime: FUTURE }), myVote: 'going', responders });
     renderEventPage();
 
-    expect(await screen.findByText(/Предварительные голоса/)).toBeInTheDocument();
+    expect(await screen.findByText('Кто откликнулся')).toBeInTheDocument();
     expect(screen.queryByText(/Кто идёт/)).not.toBeInTheDocument();
   });
 });
@@ -448,7 +449,7 @@ describe('EventPage — открытая встреча (participantLimit = null
     mockEndpoints({ event: openEvent({ confirmedCount: 7 }), myVote: 'going' });
     renderEventPage();
 
-    expect(await screen.findByText('ОТКРЫТАЯ ВСТРЕЧА')).toBeInTheDocument();
+    expect(await screen.findByText('🌊 ОТКРЫТАЯ ВСТРЕЧА')).toBeInTheDocument();
     // «Состав · 7» без « / limit»
     expect(screen.getByText('Состав · 7')).toBeInTheDocument();
     expect(screen.queryByText(/Состав · 7 \//)).not.toBeInTheDocument();
@@ -490,7 +491,7 @@ describe('EventPage — открытая встреча (participantLimit = null
     );
     renderEventPage();
 
-    expect(await screen.findByText('ОТКРЫТАЯ ВСТРЕЧА')).toBeInTheDocument();
+    expect(await screen.findByText('🌊 ОТКРЫТАЯ ВСТРЕЧА')).toBeInTheDocument();
     expect(screen.queryByText(/надёжность вырастет/)).not.toBeInTheDocument();
   });
 

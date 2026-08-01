@@ -1,4 +1,4 @@
-import { FC, useEffect, useState } from 'react';
+import { FC, ReactElement, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/apiClient';
@@ -43,6 +43,49 @@ function statusDotClass(status: string): string {
   if (status === 'expired_no_confirm') return 'rd-d-expired';
   return 'rd-d-no';
 }
+
+/**
+ * Метка-иконка голоса в кнопке: цветной кружок с ✓ / ? / ✕. Цвет берётся от кнопки
+ * (`currentColor`), сама иконка рисуется цветом фона страницы.
+ */
+const VOTE_ICONS: Record<'going' | 'maybe' | 'not_going', ReactElement> = {
+  going: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  ),
+  maybe: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" />
+      <path d="M12 17h.01" />
+    </svg>
+  ),
+  not_going: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round">
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  ),
+};
+
+/**
+ * Табы секции «Кто откликнулся» (Этап 1). Ключ — значение `status` в ростере: бэкенд отдаёт
+ * `stage_1_vote` как есть, включая `not_going`, поэтому фильтрация чисто клиентская.
+ */
+const RESPONDER_TABS = [
+  { key: 'going', label: 'Идут' },
+  { key: 'maybe', label: 'Возможно' },
+  { key: 'not_going', label: 'Не идут' },
+] as const;
+
+type ResponderTab = (typeof RESPONDER_TABS)[number]['key'];
+
+/** Сколько строк ростера показываем до нажатия «Показать всех». */
+const ROSTER_PREVIEW_SIZE = 6;
+
+/** Радиус дуги кольца занятости в координатах viewBox (128×128 при обводке 11). */
+const DONUT_RADIUS = 57;
+/** Длина окружности кольца — знаменатель stroke-dasharray, которым отмеряется дуга. */
+const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
 
 // Русские подписи статусов голоса/участия — для бейджей и строки «Ваш голос».
 const VOTE_LABELS: Record<string, string> = {
@@ -140,6 +183,9 @@ export const EventPage: FC = () => {
   // Только явные переопределения; отсутствие записи означает «пришёл» (attended[id] ?? true).
   const [attended, setAttended] = useState<Record<string, boolean>>({});
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  // Секция «Кто откликнулся» (Этап 1): выбранный таб статуса и раскрытие длинного списка.
+  const [responderTab, setResponderTab] = useState<ResponderTab>('going');
+  const [rosterExpanded, setRosterExpanded] = useState(false);
   // Необязательный комментарий, который участник прикладывает, оспаривая отметку «не пришёл».
   const [disputeNote, setDisputeNote] = useState('');
   // F5-14 шторка отмены события: флаг открытия, необязательная причина и собственный слот ошибки.
@@ -416,27 +462,15 @@ export const EventPage: FC = () => {
   // и порога), лист ожидания недостижим. См. events.md § «Открытая встреча».
   const isOpenEvent = event.participantLimit == null;
 
-  // Пончик-диаграмма: Этап 1 = раскладка голосов (going / maybe / not going); Этап 2+ = занято vs свободно.
-  const donutStyle: { background: string } = (() => {
-    if (finalComposition) {
-      // Открытая встреча: понятия «занято/свободно» нет — кольцо целиком закрашено составом,
-      // а при нуле подтвердивших — нейтральное (как stage-1 без голосов), не «заполненное».
-      if (isOpenEvent) {
-        return event.confirmedCount > 0
-          ? { background: 'conic-gradient(var(--vote-go) 0 360deg)' }
-          : { background: 'var(--surface-2)' };
-      }
-      const limit = event.participantLimit || 1;
-      const filled = Math.min(event.confirmedCount, limit);
-      const c = (filled / limit) * 360;
-      return { background: `conic-gradient(var(--vote-go) 0 ${c}deg, var(--vote-no) ${c}deg 360deg)` };
-    }
-    const voteTotal = event.goingCount + event.maybeCount + event.notGoingCount;
-    if (voteTotal === 0) return { background: 'var(--surface-2)' };
-    const g = (event.goingCount / voteTotal) * 360;
-    const m = (event.maybeCount / voteTotal) * 360;
-    return { background: `conic-gradient(var(--vote-go) 0 ${g}deg, var(--vote-maybe) ${g}deg ${g + m}deg, var(--vote-no) ${g + m}deg 360deg)` };
-  })();
+  // Кольцо считает ТОЛЬКО занятость мест — на обеих фазах: Этап 1 = going/лимит, Этап 2+ =
+  // confirmed/лимит. Прежде на Этапе 1 дуга показывала доли голосов, а число внутри неё —
+  // заполненность мест: два разных смысла в одном элементе читались как один (event-vote-block.md).
+  // Открытая встреча: «занято/свободно» не существует — кольцо целиком закрашено при первом
+  // отклике и пустое, пока откликов нет.
+  const donutCount = finalComposition ? event.confirmedCount : event.goingCount;
+  const donutRatio = isOpenEvent
+    ? (donutCount > 0 ? 1 : 0)
+    : Math.min(donutCount / (event.participantLimit || 1), 1);
 
   // Знаменатель счётчиков состава/набора; у открытой встречи его нет (лимит отсутствует).
   const limitSuffix = isOpenEvent ? '' : ` / ${event.participantLimit}`;
@@ -542,6 +576,28 @@ export const EventPage: FC = () => {
   const showVoteRosterHint =
     !isCancelled && showVoting && respondersQuery.isSuccess && comingList.length === 0;
 
+  // Секция «Кто откликнулся» (Этап 1): те же ярлыки формата, что на карточках лент, но список
+  // разложен по статусу — прежде «возможно» и «не иду» отличались только цветом точки в общей сетке.
+  const respondersInTab = responders.filter((r) => r.status === responderTab);
+  const visibleResponders = rosterExpanded
+    ? respondersInTab
+    : respondersInTab.slice(0, ROSTER_PREVIEW_SIZE);
+  // Счётчики табов считаем ПО РОСТЕРУ, а не по счётчикам detail-запроса: иначе «Идут (12)»
+  // могло разойтись со списком под ним (два разных запроса, каждый со своим моментом времени).
+  const tabCounts: Record<ResponderTab, number> = {
+    going: responders.filter((r) => r.status === 'going').length,
+    maybe: responders.filter((r) => r.status === 'maybe').length,
+    not_going: responders.filter((r) => r.status === 'not_going').length,
+  };
+
+  // Формат встречи в бейдже хиро (PO 2026-08-01): вместо родового «СОБЫТИЕ» — конкретный тип,
+  // ярлыки и эмодзи те же, что на карточках лент (feed/EventCard, ярлыки PO 2026-07-23).
+  const formatBadge = event.isUrgent
+    ? '⚡ СРОЧНАЯ ВСТРЕЧА'
+    : isOpenEvent
+      ? '🌊 ОТКРЫТАЯ ВСТРЕЧА'
+      : '🎟 ВСТРЕЧА С МЕСТАМИ';
+
   // Фон хиро: фото события (решение PO 2026-07-11 — прежде нигде не показывалось),
   // фолбэк — аватар клуба, как раньше.
   const heroImage = event.photoUrl ?? hostClubQuery.data?.avatarUrl ?? null;
@@ -557,7 +613,7 @@ export const EventPage: FC = () => {
           style={heroImage ? { backgroundImage: `url(${heroImage})` } : undefined}
         />
         <div className="rd-hero-meta">
-          <div className="rd-hero-type-badge">{isOpenEvent ? 'ОТКРЫТАЯ ВСТРЕЧА' : 'СОБЫТИЕ'}</div>
+          <div className="rd-hero-type-badge">{formatBadge}</div>
           <div className="rd-hero-ttl">{event.title}</div>
           <div className="rd-hero-eyebrow" style={{ marginTop: 6 }}>
             {formatEventDate(event.eventDatetime)}
@@ -642,13 +698,19 @@ export const EventPage: FC = () => {
           {showVoting ? (
             <>
               <button type="button" className={`rd-vote-btn rd-vb-go${myVote === 'going' ? ' rd-active' : ''}`} onClick={() => handleVote('going')} disabled={voting}>
-                Пойду <span className="rd-vc">{event.goingCount}</span>
+                <span className="rd-vm">{VOTE_ICONS.going}</span>
+                <span className="rd-vl">Пойду</span>
+                <span className="rd-vc">{event.goingCount}</span>
               </button>
               <button type="button" className={`rd-vote-btn rd-vb-maybe${myVote === 'maybe' ? ' rd-active' : ''}`} onClick={() => handleVote('maybe')} disabled={voting}>
-                Возможно <span className="rd-vc">{event.maybeCount}</span>
+                <span className="rd-vm">{VOTE_ICONS.maybe}</span>
+                <span className="rd-vl">Возможно</span>
+                <span className="rd-vc">{event.maybeCount}</span>
               </button>
               <button type="button" className={`rd-vote-btn rd-vb-no${myVote === 'not_going' ? ' rd-active' : ''}`} onClick={() => handleVote('not_going')} disabled={voting}>
-                Не пойду <span className="rd-vc">{event.notGoingCount}</span>
+                <span className="rd-vm">{VOTE_ICONS.not_going}</span>
+                <span className="rd-vl">Не пойду</span>
+                <span className="rd-vc">{event.notGoingCount}</span>
               </button>
             </>
           ) : finalComposition ? (
@@ -665,13 +727,34 @@ export const EventPage: FC = () => {
             </div>
           )}
         </div>
-        <div className="rd-donut" style={donutStyle} aria-hidden="true">
+        {/* Кольцо занятости мест. SVG, а не conic-gradient: нужен скруглённый конец дуги.
+            Диаметр 140px задан в CSS и равен высоте стопки кнопок (3 × 42 + 2 × 7). */}
+        <div className="rd-donut" aria-hidden="true">
+          <svg viewBox="0 0 128 128">
+            <defs>
+              {/* Объём дуги: блик сверху-слева → тёмный тон снизу-справа, как у акцентных кнопок. */}
+              <linearGradient id="rd-donut-arc-grad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="var(--donut-arc-hi)" />
+                <stop offset="100%" stopColor="var(--donut-arc-lo)" />
+              </linearGradient>
+            </defs>
+            <circle cx="64" cy="64" r={DONUT_RADIUS} fill="none" stroke="var(--ring-track)" strokeWidth="11" />
+            {donutRatio > 0 && (
+              <circle
+                className="rd-donut-arc"
+                cx="64" cy="64" r={DONUT_RADIUS} fill="none"
+                stroke="url(#rd-donut-arc-grad)" strokeWidth="11" strokeLinecap="round"
+                strokeDasharray={`${DONUT_CIRCUMFERENCE * donutRatio} ${DONUT_CIRCUMFERENCE}`}
+              />
+            )}
+          </svg>
           <div className="rd-donut-center">
             <span className="rd-donut-num">
-              <sup>{finalComposition ? event.confirmedCount : event.goingCount}</sup>
+              {donutCount}
               {/* Открытая встреча: знаменателя нет — только счёт. */}
-              {!isOpenEvent && <><span className="rd-sl">/</span><sub>{event.participantLimit}</sub></>}
+              {!isOpenEvent && <small> / {event.participantLimit}</small>}
             </span>
+            <span className="rd-donut-cap">{isOpenEvent ? 'идут' : 'мест занято'}</span>
           </div>
         </div>
       </div>
@@ -690,10 +773,62 @@ export const EventPage: FC = () => {
       </>
       )}
 
-      {/* Этап 1: предварительные голоса (интерес, мест не резервируют). Этап 2+: подтверждённый состав. */}
-      {!isCancelled && comingList.length > 0 && (
+      {/* Этап 1: отклики разложены по статусу — «возможно» и «не иду» прежде отличались от идущих
+          только цветом точки в общей сетке, а их счётчики в кнопках вели в никуда. */}
+      {!isCancelled && !finalComposition && comingList.length > 0 && (
         <>
-          <div className="rd-section-sub-h">{finalComposition ? 'Кто идёт' : 'Предварительные голоса'} <span className="rd-count">· {comingList.length}</span></div>
+          <div className="rd-section-sub-h">Кто откликнулся</div>
+          <div className="rd-seg rd-seg-flush" style={{ marginBottom: 10 }}>
+            {RESPONDER_TABS.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                className={`rd-seg-btn${responderTab === tab.key ? ' rd-active' : ''}`}
+                aria-pressed={responderTab === tab.key}
+                onClick={() => { haptic.impact('light'); setResponderTab(tab.key); setRosterExpanded(false); }}
+              >
+                {tab.label} ({tabCounts[tab.key]})
+              </button>
+            ))}
+          </div>
+          <div className="rd-glass rd-resp-panel">
+            {visibleResponders.length === 0 ? (
+              <div className="rd-resp-empty">Здесь пока пусто.</div>
+            ) : (
+              <>
+                {visibleResponders.map((r) => {
+                  const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
+                  return (
+                    <div className="rd-resp-row" key={r.userId}>
+                      <div className="rd-voter">
+                        <span className="rd-av">
+                          {r.avatarUrl ? <img src={r.avatarUrl} alt="" /> : getInitials(name)}
+                        </span>
+                        <span className="rd-vn">{name}</span>
+                        <span className={`rd-vdot ${statusDotClass(r.status)}`} title={r.status} />
+                      </div>
+                    </div>
+                  );
+                })}
+                {respondersInTab.length > visibleResponders.length && (
+                  <button
+                    type="button"
+                    className="rd-resp-more"
+                    onClick={() => { haptic.impact('light'); setRosterExpanded(true); }}
+                  >
+                    Показать всех · {respondersInTab.length}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Этап 2+: подтверждённый состав — без табов (waitlisted и отказавшиеся живут своими блоками). */}
+      {!isCancelled && finalComposition && comingList.length > 0 && (
+        <>
+          <div className="rd-section-sub-h">Кто идёт <span className="rd-count">· {comingList.length}</span></div>
           <div className="rd-voters">
             {comingList.map((r) => {
               const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
