@@ -112,3 +112,33 @@ describe('CityPicker', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ id: 'msk', name: 'Москва' }));
   });
 });
+
+describe('CityPicker — жизнь поверх чужой модалки', () => {
+  it('фокус в поиске не «утекает» наружу: focusin из пикера до document не доходит', async () => {
+    const outsideFocus = vi.fn();
+    document.addEventListener('focusin', outsideFocus);
+    try {
+      renderPicker();
+      const search = await screen.findByLabelText('Найти город');
+      search.focus();
+
+      // Форма создания клуба живёт в Radix Dialog: его FocusScope слушает focusin на document
+      // и возвращает фокус себе, из-за чего в поиск нельзя было печатать (баг PO 2026-08-01).
+      expect(outsideFocus).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(search);
+    } finally {
+      document.removeEventListener('focusin', outsideFocus);
+    }
+  });
+
+  it('лежит поверх модалки, из которой открыт: свои классы слоёв на месте', async () => {
+    renderPicker();
+    await screen.findByText('Москва');
+
+    // Пикер открывают из формы создания клуба (модалка на vaul) и из редактора профиля.
+    // Без этих классов затемнение пикера остаётся ниже чужого оверлея, и тап мимо листа
+    // закрывает форму вместе с пикером (баг PO 2026-08-01).
+    expect(document.querySelector('.rd-sheet-overlay.rd-over-modal')).not.toBeNull();
+    expect(document.querySelector('.rd-sheet.rd-over-modal-sheet')).not.toBeNull();
+  });
+});

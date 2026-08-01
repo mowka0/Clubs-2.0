@@ -1,4 +1,4 @@
-import { FC, useCallback, useEffect, useMemo, useState } from 'react';
+import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthStore } from '../store/useAuthStore';
@@ -125,6 +125,33 @@ export const CityPicker: FC<CityPickerProps> = ({ value, onChange, onClose }) =>
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  /**
+   * Поле поиска не принимало ввод, когда пикер открыт из формы создания клуба
+   * (баг PO 2026-08-01). Причина — та же природа, что у некликабельности: модалка формы
+   * это Radix Dialog, а он запирает фокус внутри себя. Его `FocusScope` слушает на
+   * `document` события `focusin` / `focusout` и, увидев фокус вне своего контента,
+   * немедленно возвращает его обратно — курсор из нашего поля выбивало в тот же кадр.
+   *
+   * Гасим оба события в ФАЗЕ ПЕРЕХВАТА, пока они касаются пикера: перехват на `document`
+   * идёт до всплытия, поэтому обработчик Radix их не увидит. Сам фокус при этом уже
+   * установлен браузером — событие лишь уведомление, и его остановка ничего не ломает.
+   */
+  const sheetRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const touchesPicker = (node: EventTarget | null) =>
+      node instanceof Node && sheetRef.current !== null && sheetRef.current.contains(node);
+
+    const guard = (e: FocusEvent) => {
+      if (touchesPicker(e.target) || touchesPicker(e.relatedTarget)) e.stopPropagation();
+    };
+    document.addEventListener('focusin', guard, true);
+    document.addEventListener('focusout', guard, true);
+    return () => {
+      document.removeEventListener('focusin', guard, true);
+      document.removeEventListener('focusout', guard, true);
+    };
+  }, []);
+
   const countries = useMemo(() => {
     const present = new Set((cities ?? []).map((c) => c.countryCode));
     return COUNTRY_ORDER.filter((code) => present.has(code));
@@ -164,9 +191,10 @@ export const CityPicker: FC<CityPickerProps> = ({ value, onChange, onClose }) =>
 
   return createPortal(
     <>
-      <div className="rd-sheet-overlay" onClick={onClose} aria-hidden="true" />
+      <div className="rd-sheet-overlay rd-over-modal" onClick={onClose} aria-hidden="true" />
       <div
-        className="rd-sheet"
+        ref={sheetRef}
+        className="rd-sheet rd-over-modal-sheet"
         role="dialog"
         aria-modal="true"
         aria-label="Выбор города"

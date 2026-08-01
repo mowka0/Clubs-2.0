@@ -800,39 +800,17 @@
 .rd-q-donut { width: 46px; height: 46px; flex-shrink: 0; }
 .rd-q-titles { flex: 1; min-width: 0; }
 .rd-q-title { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); }
-.rd-q-sub { font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
-.rd-q-sub b { color: var(--accent); font-weight: 700; }
 .rd-q-fold {
   width: 28px; height: 28px; flex-shrink: 0; border-radius: 999px;
   border: 1px solid var(--hairline-2); background: var(--surface); color: var(--text-dim);
   cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
 }
-/* Чеклист шагов: порядок = нумерация в кружках, done = зелёная галочка, next = подсветка + кнопка */
-.rd-q-steps { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
-.rd-q-step { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 16px; border: 1px solid transparent; }
-.rd-q-check {
-  width: 26px; height: 26px; flex-shrink: 0; border-radius: 999px;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 800;
-  border: 1.5px solid var(--hairline-2); color: var(--text-faint);
-}
-.rd-q-step-body { flex: 1; min-width: 0; }
-.rd-q-step-name { font-size: 13px; font-weight: 700; color: var(--text); }
-.rd-q-step-why { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
-.rd-q-xp { flex-shrink: 0; padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; background: var(--accent-soft); color: var(--accent); }
-.rd-q-step.rd-done { opacity: 0.9; }
-.rd-q-step.rd-done .rd-q-check { background: var(--live-soft); border-color: transparent; color: var(--live); }
-.rd-q-step.rd-done .rd-q-step-name { color: var(--text-dim); }
-.rd-q-step.rd-done .rd-q-xp { background: var(--live-soft); color: var(--live); }
-.rd-q-step.rd-next { background: var(--accent-soft); border-color: var(--accent-glow); flex-wrap: wrap; /* кнопка уезжает вниз на всю ширину */ }
-.rd-q-step.rd-next .rd-q-check { border-color: var(--accent); color: var(--accent); }
 .rd-q-cta {
   width: 100%; margin-top: 8px; height: 36px; border-radius: 999px; border: none; cursor: pointer;
   background: var(--accent-grad); color: var(--on-accent);
   font-family: inherit; font-size: 13px; font-weight: 800;
   box-shadow: 0 4px 12px var(--accent-shadow);
 }
-/* ── Квест v2: карусель «один экран = один шаг» (мокап 04-quest-carousel, PO 2026-07-25) ── */
 /* Пульс карточки — парный к затенению .rd-profile-dim остальных панелей профиля. */
 .rd-q-pulse { border-color: var(--accent); animation: rd-q-glow 1.6s ease-in-out infinite; }
 @keyframes rd-q-glow {
@@ -848,58 +826,43 @@
   background: linear-gradient(135deg, #ff8a3d, #ff5e8a);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
-.rd-qc-viewport { position: relative; margin-top: 10px; }
-.rd-qc-slide {
-  width: 100%; display: flex; align-items: center; gap: 13px; text-align: left;
-  padding: 6px 18px 6px 20px; border: 0; background: transparent;
-  font-family: inherit; color: var(--text); cursor: pointer;
+/* Список полей квеста: чекбокс — общий язык с редактором профиля, где та же галочка
+   загорается по мере заполнения (решение PO 2026-07-31, карусель по шагам снята). */
+.rd-qlist { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rd-qrow {
+  display: flex; align-items: center; gap: 11px;
+  padding: 10px 12px; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--hairline);
 }
-.rd-qc-ic {
-  width: 52px; height: 52px; border-radius: 16px; flex-shrink: 0;
-  background: var(--accent-soft); display: flex; align-items: center; justify-content: center; font-size: 24px;
+.rd-qrow-done { background: transparent; border-color: transparent; }
+.rd-qrow-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rd-qrow-name { font-size: 14px; font-weight: 700; color: var(--text); }
+.rd-qrow-why {
+  font-size: 11.5px; color: var(--text-dim); line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* Жёлтое «готово» (в обеих темах золото читается как выполненность). */
-.rd-qc-ic-done { background: rgba(255, 201, 61, 0.16); }
-.rd-qc-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.rd-qc-name { font-size: 15px; font-weight: 800; }
-.rd-qc-why { font-size: 11.5px; color: var(--text-dim); line-height: 1.35; }
-.rd-qc-cta-col { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.rd-qc-xp-chip { font-size: 11px; font-weight: 800; color: var(--accent); background: var(--accent-soft); padding: 3px 8px; border-radius: 8px; }
-.rd-qc-btn {
-  display: inline-block; font-size: 12px; font-weight: 700; color: var(--on-accent);
-  background: var(--accent-grad); border-radius: 999px; padding: 7px 13px;
-  box-shadow: 0 4px 12px var(--accent-shadow);
+.rd-qrow-done .rd-qrow-name { color: var(--text-dim); }
+.rd-qrow-xp {
+  flex-shrink: 0; font-size: 11px; font-weight: 800;
+  padding: 3px 8px; border-radius: 8px;
+  background: var(--accent-soft); color: var(--accent);
 }
-.rd-qc-done-chip { font-size: 11px; font-weight: 800; color: #FFC93D; background: rgba(255, 201, 61, 0.16); padding: 3px 8px; border-radius: 8px; }
-.rd-qc-arr {
-  position: absolute; top: 50%; transform: translateY(-50%); z-index: 2;
-  width: 20px; height: 34px; padding: 0; border: 0; border-radius: 8px;
-  background: transparent; color: var(--text-faint); font-size: 15px; font-family: inherit; cursor: pointer;
-}
-.rd-qc-arr-l { left: -4px; }
-.rd-qc-arr-r { right: -4px; color: var(--accent); }
-/* Точки прогресса: серая = не заполнено, ЖЁЛТАЯ = заполнено, вытянутая = текущий экран. */
-.rd-qc-dots { display: flex; gap: 6px; justify-content: center; padding-top: 8px; }
-.rd-qc-dot {
-  width: 6px; height: 6px; padding: 0; border: 0; border-radius: 50%;
-  background: var(--hairline-2); cursor: pointer; transition: all 0.2s ease;
-}
-.rd-qc-dot.rd-on { width: 18px; border-radius: 3px; background: var(--accent); }
-.rd-qc-dot.rd-gold { background: #FFC93D; box-shadow: 0 0 6px rgba(255, 201, 61, 0.45); }
+.rd-qrow-xp-done { background: var(--live-soft); color: var(--live); }
 
-/* Подсветка поля в редакторе профиля (вход из шага квеста) + притенение остальных полей. */
-.rd-field-dim { opacity: 0.4; filter: saturate(0.6); }
-.rd-field-hl .rd-label { color: var(--accent); }
-.rd-field-hl .rd-input,
-.rd-field-hl .rd-textarea,
-.rd-field-hl .pf-chips {
-  border-color: var(--accent);
-  animation: rd-field-glow 1.6s ease-in-out infinite;
+/* Чекбокс поля (карточка квеста + редактор профиля): пустой кружок → зелёная галочка.
+   Зелёный, а не брендовый оранжевый: это подтверждение факта, а не призыв к действию. */
+.rd-qcheck {
+  width: 22px; height: 22px; flex-shrink: 0; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--hairline-2); color: transparent;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
-@keyframes rd-field-glow {
-  0%, 100% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 18px var(--accent-glow); }
-  50%      { box-shadow: 0 0 0 5px var(--accent-soft), 0 0 26px var(--accent-glow); }
-}
+.rd-qcheck-on { background: var(--live-soft); border-color: var(--live); color: var(--live); }
+
+/* Подпись поля в редакторе, когда слева от неё стоит чекбокс. */
+.rd-label-check { display: inline-flex; align-items: center; gap: 8px; }
+/* Подсказка под «О себе»: слева — сколько осталось до галочки, справа — счётчик символов. */
+.rd-hint-row { display: flex; justify-content: space-between; gap: 10px; }
 
 /* Строка «В клубах» в «Статистике» — кнопка-переход: пусто → каталог (лупа), с клубами → «Мои клубы». */
 .rd-ostat-link {
@@ -924,7 +887,28 @@
 .rd-qp-next b { color: var(--accent); font-weight: 700; }
 .rd-quest-pill .chev { flex-shrink: 0; color: var(--text-faint); }
 /* Поздравление на месте карточки: бейдж-звезда, градиентный титул, CSS-конфетти */
-.rd-congrats { padding: 22px 16px 18px; margin-bottom: 16px; text-align: center; position: relative; overflow: hidden; }
+/* Поздравление квеста — окно поверх профиля (PO 2026-08-01): в потоке страницы оно вставало
+   на место исчезнувшей карточки и утаскивало человека вниз в момент награды. */
+.rd-congrats-scrim {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 1001;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: rgba(6, 6, 9, 0.72);
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  animation: rd-overlay-fade 0.2s ease both;
+}
+.rd-congrats {
+  width: 100%; max-width: 340px; max-height: 100%; overflow: hidden;
+  padding: 24px 18px 20px; text-align: center; position: relative;
+  border-radius: 22px;
+  animation: rd-congrats-pop 0.42s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+@keyframes rd-congrats-pop {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rd-congrats-scrim, .rd-congrats { animation: none; }
+}
 .rd-c-badge {
   width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 12px;
   display: flex; align-items: center; justify-content: center;
@@ -1604,7 +1588,7 @@
 }
 .rd-input::placeholder, .rd-textarea::placeholder { color: var(--text-faint); }
 .rd-input:focus, .rd-textarea:focus, .rd-select:focus {
-  border-color: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--accent); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 .rd-input.rd-invalid, .rd-textarea.rd-invalid { border-color: var(--danger); }
 .rd-textarea { resize: vertical; min-height: 78px; line-height: 1.45; }
@@ -1711,8 +1695,41 @@
   box-shadow: 0 -16px 50px rgba(0, 0, 0, 0.45);
   padding: 8px 16px calc(18px + env(safe-area-inset-bottom, 0px));
 }
+/* Шторка, открытая ПОВЕРХ другой модалки (пикер города из формы создания клуба или из
+   редактора профиля). Два независимых слоя проблем, оба ловились как один баг PO 2026-08-01
+   «пикер виден, но тап в него закрывает всю форму»:
+
+   1. **Указатель.** Модалка формы — Radix Dialog (под vaul), а он на время своей жизни ставит
+      `document.body.style.pointerEvents = 'none'` и возвращает `auto` только своему контенту.
+      Пикер — портал в `body`, значение наследуется, и он становится ВИДИМЫМ, НО НЕКЛИКАБЕЛЬНЫМ:
+      тапы проходят насквозь в оверлей модалки, та считает их кликом снаружи и закрывается
+      вместе с формой. Поэтому `pointer-events: auto` здесь — не косметика, а условие работы.
+   2. **Порядок слоёв.** Лист пикера несёт `role="dialog"`, и глобальное правило поднимает его
+      на z-index 1000, а затемнение остаётся на 150 — ниже чужого оверлея. `!important` нужен
+      затем, что глобальный `[role="dialog"] { z-index: 1000 !important }` иначе перебивает. */
+.rd-over-modal, .rd-over-modal-sheet { pointer-events: auto; }
+.rd-over-modal { z-index: 1100 !important; }
+.rd-over-modal-sheet { z-index: 1101 !important; }
+
 .rd-sheet-grabber { width: 40px; height: 4px; border-radius: 2px; background: var(--hairline-2); margin: 4px auto 14px; flex-shrink: 0; }
+/* Появление шторки: выезд снизу вместо мгновенной подстановки (PO 2026-08-01 — «а то рывком»).
+   Классы отдельные, а не правило на `.rd-sheet`: шторки, живущие внутри чужих модалок
+   (пикер города поверх формы), не должны переигрывать анимацию при каждом открытии родителя. */
+.rd-sheet-in { animation: rd-sheet-rise 0.34s cubic-bezier(0.2, 1, 0.3, 1) both; }
+.rd-overlay-in { animation: rd-overlay-fade 0.24s ease both; }
+@keyframes rd-sheet-rise {
+  from { transform: translate3d(0, 100%, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+@keyframes rd-overlay-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .rd-sheet-in, .rd-overlay-in { animation: none; }
+}
+
 .rd-sheet-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-shrink: 0; }
+/* Шапка шторки, за которую её тянут вниз (useSheetDrag): жест наш, скролл под ней не мешает.
+   Кнопка «Закрыть» внутри продолжает работать — тап это не движение. */
+.rd-sheet-grip { touch-action: none; flex-shrink: 0; }
 .rd-sheet-head h2 { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); margin: 0; }
 .rd-sheet-close { background: none; border: 0; color: var(--accent); font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; padding: 4px 2px; }
 .rd-sheet-close:disabled { opacity: 0.5; }
@@ -2262,7 +2279,7 @@
    2026-07-31, «подсказки вообще не видны»).
    Переопределяем токены ЛОКАЛЬНО на корнях этих сцен, а не правим каждое правило: любой
    потомок с `--text-dim`/`--text-faint` получает тёмную палитру сам. */
-.ob-root, .ct-bubble {
+.ob-root {
   --text: #F4F4F6;
   --text-dim: rgba(244, 244, 246, 0.6);
   --text-faint: rgba(244, 244, 246, 0.45);
@@ -2459,7 +2476,6 @@
 @media (prefers-reduced-motion: reduce) {
   .ob-mesh i, .ob-art-img, .ob-hand { animation: none; }
   .ob-hand { opacity: 1; }
-  .ct-bubble, .ct-ring { animation: none; }
 }
 
 /* ---------- Пустая заставка «лис в кафе» (FoxCafeEmpty) ----------
@@ -2831,74 +2847,50 @@
 }
 
 /* ============================================================
-   Коуч-марки (CoachTour) — подсказки по одной за раз.
-   Затемнение с «дыркой» вокруг реального элемента и реплика
-   с хвостом к нему. Крестика нет: каждый шаг закрывается
-   кнопкой подтверждения (решение PO 2026-07-31).
+   Превью экрана (ScreenPreview) — шторка снизу при первом
+   заходе. Заменила коуч-марки: одна карточка на экран вместо
+   цепочки подсказок с тапом «Далее» (решение PO 2026-07-31).
+   Геометрия — общая с `.rd-sheet`, здесь только наполнение.
    ============================================================ */
-.ct-root { position: fixed; inset: 0; z-index: 90; }
-/* Шаг-задание: сам слой тапы не ловит, но экран вокруг дырки перекрыт четырьмя полосами.
-   Итог — нажать можно только цель задания и саму подсказку, всё остальное замьючено:
-   «сначала заполни профиль» должно быть выполнимо, но не ценой свободы тыкать во что попало. */
-.ct-root-open { pointer-events: none; }
-.ct-root-open .ct-bubble { pointer-events: auto; }
-.ct-block { position: fixed; pointer-events: auto; }
 
-/* Затемнение целиком рисует SVG: маска умеет и «дырку», и ВЫРЕЗ внутри неё (шаг «О клубе»
-   подсвечивает блок, но оставляет плашку чата затемнённой). box-shadow-распорка так не умеет —
-   у неё ровно одна область. */
-.ct-scrim { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-/* Акцентный контур подсветки и выреза. Пульсирует прозрачностью, а не размером: обводка
-   в SVG масштабируется вместе с координатами и «дышала» бы вместе с дыркой. */
-.ct-ring {
-  fill: none; stroke: var(--accent); stroke-width: 2;
-  filter: drop-shadow(0 0 8px var(--accent-glow));
-  animation: ct-ring-pulse 2.2s ease-in-out infinite;
+/* Зона захвата шторки: грабер вместе с артом, а не полоска в 4px. `touch-action: none`
+   отдаёт вертикальный жест нам — иначе его забирает прокрутка страницы под шторкой. */
+.sp-grip {
+  width: 100%; touch-action: none; cursor: grab;
+  display: flex; flex-direction: column; align-items: center;
 }
-@keyframes ct-ring-pulse {
-  0%, 100% { stroke-opacity: 1; }
-  50% { stroke-opacity: 0.55; }
+.sp-sheet {
+  align-items: center; text-align: center; overflow-y: auto;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+}
+/* На коротком экране (SE) шторка упирается в свои 88vh — тогда скроллится она, а не сжимаются
+   арт и текст: раздавленная иллюстрация читается как сломанная вёрстка. */
+.sp-sheet > * { flex-shrink: 0; }
+/* Арт держим скромным: превью — это текст с иллюстрацией, а не сцена с подписью.
+   Высота фиксирована, ширина по пропорции — арты разного кадрирования встают ровно. */
+.sp-art { height: 128px; width: auto; object-fit: contain; margin: 2px 0 12px; user-select: none; }
+
+.sp-title { font-size: 21px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); margin: 0; }
+.sp-lead {
+  font-size: 14.5px; line-height: 1.45; color: var(--text-dim);
+  margin: 8px 0 0; max-width: 34ch;
 }
 
-/* Реплика, а не карточка: асимметричный радиус и хвост к цели. */
-.ct-bubble {
-  position: fixed; width: 262px; padding: 14px 15px 12px;
-  border-radius: 20px 20px 20px 7px;
-  background: linear-gradient(150deg, #221912, #14100d);
-  border: 1px solid rgba(244, 123, 60, 0.3);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  animation: ct-bubble-in 0.38s cubic-bezier(0.2, 1.3, 0.4, 1) both;
+/* Правила игры — карточка со строками, а не абзац: так видно, что их конечное число
+   и читать надо каждую. Маркер акцентный, но мелкий: это не чеклист и не задание. */
+.sp-rules {
+  list-style: none; margin: 16px 0 0; padding: 12px 14px; width: 100%;
+  display: flex; flex-direction: column; gap: 10px;
+  background: var(--surface-2); border-radius: 16px; border: 1px solid var(--hairline);
+  text-align: left;
 }
-/* Пузырь над целью: якорим за нижний край, чтобы он рос вверх, а не наезжал на дырку. */
-.ct-bubble-above { transform: translateY(-100%); border-radius: 20px 20px 7px 20px; }
-@keyframes ct-bubble-in {
-  from { transform: translate3d(0, 10px, 0) scale(0.93); }
-  to { transform: translate3d(0, 0, 0) scale(1); }
+.sp-rules li {
+  position: relative; padding-left: 18px;
+  font-size: 13.5px; line-height: 1.42; font-weight: 500; color: var(--text);
 }
-.ct-bubble-above { animation: none; }
+.sp-rules li::before {
+  content: ''; position: absolute; left: 2px; top: 7px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+}
 
-.ct-tail {
-  position: absolute; width: 13px; height: 13px; background: #221912;
-  border-left: 1px solid rgba(244, 123, 60, 0.3);
-  border-top: 1px solid rgba(244, 123, 60, 0.3);
-}
-/* `left` приходит инлайном из CoachTour: хвостик наводится на центр цели, потому что сам
-   пузырь у кромки экрана съезжает от неё. Здесь — только вертикаль и поворот клина. */
-.ct-tail-up { top: -7px; transform: rotate(45deg); }
-.ct-tail-down { bottom: -7px; transform: rotate(225deg); }
-
-.ct-text { font-size: 14.5px; font-weight: 650; line-height: 1.35; letter-spacing: -0.015em; }
-.ct-text em { font-style: normal; color: var(--accent); }
-
-.ct-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
-.ct-prog { display: flex; gap: 4px; align-items: center; }
-.ct-prog i { display: block; width: 5px; height: 5px; border-radius: 50%; background: rgba(255, 255, 255, 0.22); }
-.ct-prog i.ct-prog-on { width: 14px; border-radius: 3px; background: var(--accent); }
-.ct-next {
-  border: 0; font-family: inherit; font-size: 13px; font-weight: 700;
-  padding: 8px 15px; border-radius: 11px; cursor: pointer;
-  background: var(--accent); color: var(--on-accent);
-}
-/* Место кнопки на шаге-задании: не серая «выключенная» кнопка (её жмут и злятся), а строка
-   с тем, что нужно сделать. Кнопка появится сама, когда условие выполнится. */
-.ct-gate { font-size: 12px; font-weight: 600; color: var(--accent); text-align: right; max-width: 160px; line-height: 1.3; }
+.sp-ack { margin-top: 18px; }

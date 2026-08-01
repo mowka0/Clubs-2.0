@@ -593,7 +593,7 @@
 - city: varchar(255)
 - country: varchar(255)
 - bio: text
-- пройденные туры онбординга живут в отдельной таблице `user_onboarding_tours` (V72: user_id + tour_key + completed_at); прохождение считается по каждому экрану отдельно, пустой набор = новичок, показываем интро вместо приложения (см. `docs/modules/onboarding.md`)
+- показанные превью экранов живут в отдельной таблице `user_onboarding_tours` (V72: user_id + tour_key + completed_at); считается по каждому экрану отдельно, пустой набор = новичок, показываем интро вместо приложения. Превью — одна шторка на экран при первом заходе (туры-подсказки сняты 2026-08-01, см. `docs/modules/onboarding.md`)
 - created_at: timestamp
 - updated_at: timestamp
 

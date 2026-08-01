@@ -33,7 +33,7 @@ import { ClubQualityFacts } from '../components/club/ClubQualityFacts';
 import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
 import { InviteSheet } from '../components/club/InviteSheet';
 import { LeaveClubModal } from '../components/club/LeaveClubModal';
-import { CoachTour } from '../components/onboarding/CoachTour';
+import { ScreenPreview } from '../components/onboarding/ScreenPreview';
 import { ClubChatPill } from '../components/club/ClubChatPill';
 
 type TabId = 'activities' | 'members';
@@ -456,7 +456,6 @@ export const ClubPage: FC = () => {
     <div className="rd-page">
       {/* Шапка (обложка → аватар → название → чипы) общая с посадочной приглашения —
           см. ClubIdentityHeader. Здесь в угол обложки уезжают кнопки роли. */}
-      <div data-coach="club-identity">
       <ClubIdentityHeader
         club={club}
         avatarEditable={isManager}
@@ -470,7 +469,6 @@ export const ClubPage: FC = () => {
               <button
                 type="button"
                 className="rd-hero-btn"
-                data-coach="club-manage"
                 onClick={handleOpenManage}
                 aria-label="Управление клубом"
                 title="Управление клубом"
@@ -491,7 +489,6 @@ export const ClubPage: FC = () => {
           </>
         }
       />
-      </div>
 
       {showCancelledNote && membership?.subscriptionExpiresAt && (
         <div className="rd-note" role="status">
@@ -511,7 +508,7 @@ export const ClubPage: FC = () => {
       {/* О клубе — описание, правила и вход в чат одним блоком (решение PO 2026-07-30):
           отдельные секции «Правила» и широкая кнопка чата упразднены. */}
       <div className="rd-section-sub-h">О клубе</div>
-      <div className="rd-club-about" data-coach="club-about">
+      <div className="rd-club-about">
         <div className="rd-txt">{club.description}</div>
         {club.rules && (
           <>
@@ -541,11 +538,7 @@ export const ClubPage: FC = () => {
       </div>
 
       {/* Жизнь клуба — кольца качества + подпись возраст/активность, видны всем */}
-      {id && (
-        <div data-coach="club-life">
-          <ClubQualityFacts clubId={id} memberCount={club.memberCount} />
-        </div>
-      )}
+      {id && <ClubQualityFacts clubId={id} memberCount={club.memberCount} />}
 
       {/* Участник без доступа: frozen (вступил, ждёт подтверждения первого взноса) или expired
           (подписка истекла — должник по продлению). Один claim-флоу, разные тексты. */}
@@ -635,7 +628,6 @@ export const ClubPage: FC = () => {
                 key={item.key}
                 type="button"
                 className={`rd-seg-btn${item.selected ? ' rd-active' : ''}`}
-                data-coach={item.key === 'activities' ? 'club-tab-activities' : 'club-tab-members'}
                 onClick={() => handleTabClick(item.key)}
               >
                 {item.label}
@@ -749,7 +741,7 @@ export const ClubPage: FC = () => {
           он только что создал клуб, и ему нужно донастроить своё, а не осмотреться в чужом.
           Рендерится ровно один — у двух одновременных туров подрались бы затемнения.
           Пока висит велком-сцена, подсказки не лезут: она перекрывает страницу целиком. */}
-      <CoachTour tour={isOwner ? 'CLUB_OWNER' : 'CLUB'} ready={!showWelcome} />
+      <ScreenPreview screen={isOwner ? 'CLUB_OWNER' : 'CLUB'} ready={!showWelcome} />
     </div>
   );
 };

@@ -10,6 +10,13 @@ import org.springframework.stereotype.Repository
 import java.time.OffsetDateTime
 import java.util.UUID
 
+/**
+ * Минимальная длина «о себе» (символов), при которой веха квеста считается достигнутой.
+ * Парное значение с `BIO_QUEST_MIN` в редакторе профиля на фронте: галочка у поля и
+ * начисление XP обязаны срабатывать по одному и тому же правилу.
+ */
+const val BIO_QUEST_MIN_LENGTH = 10
+
 /** Вехи профиль-квеста (V66): метки первого заполнения поля; NULL = веха не достигнута. */
 data class QuestFlags(
     val cityAt: OffsetDateTime?,
@@ -62,15 +69,20 @@ class UserRepository(private val dsl: DSLContext) {
     /**
      * Проставляет НЕдостигнутые вехи профиль-квеста, чьи поля сейчас непусты, одним атомарным
      * UPDATE (COALESCE + CASE): уже поставленные метки не трогаются, гонок read-then-write нет.
-     * city/bio к этому моменту нормализованы через blankToNull → достаточно IS NOT NULL.
+     * city к этому моменту нормализован через blankToNull → достаточно IS NOT NULL.
      */
     fun markQuestMilestones(userId: UUID, at: OffsetDateTime = OffsetDateTime.now()) {
         val hasInterest = DSL.exists(
             DSL.selectOne().from(USER_INTERESTS).where(USER_INTERESTS.USER_ID.eq(USERS.ID))
         )
+        // Веха «о себе» требует BIO_QUEST_MIN_LENGTH символов, а не просто непустой строки:
+        // редактор профиля зажигает галочку по тому же порогу (решение PO 2026-07-31), и
+        // «привет» из шести букв не должен давать XP при сером чекбоксе. Уже поставленные
+        // вехи коротких bio не отзываются — COALESCE их не трогает.
+        val bioFilled = USERS.BIO.isNotNull.and(DSL.length(USERS.BIO).ge(BIO_QUEST_MIN_LENGTH))
         dsl.update(USERS)
             .set(USERS.QUEST_CITY_AT, DSL.coalesce(USERS.QUEST_CITY_AT, DSL.`when`(USERS.CITY.isNotNull, at)))
-            .set(USERS.QUEST_BIO_AT, DSL.coalesce(USERS.QUEST_BIO_AT, DSL.`when`(USERS.BIO.isNotNull, at)))
+            .set(USERS.QUEST_BIO_AT, DSL.coalesce(USERS.QUEST_BIO_AT, DSL.`when`(bioFilled, at)))
             .set(USERS.QUEST_INTERESTS_AT, DSL.coalesce(USERS.QUEST_INTERESTS_AT, DSL.`when`(hasInterest, at)))
             .where(USERS.ID.eq(userId))
             .execute()

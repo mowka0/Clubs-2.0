@@ -13,11 +13,10 @@ import {
   ProfileQuestCard,
   ProfileQuestCongrats,
   QUEST_FOLDED_KEY,
-  type QuestStepKey,
 } from '../components/profile/ProfileQuestCard';
 import { SubscriptionCard } from '../components/subscription/SubscriptionCard';
 import { tierWord, clubsPrepositional } from '../utils/reputationTier';
-import { CoachTour } from '../components/onboarding/CoachTour';
+import { ScreenPreview } from '../components/onboarding/ScreenPreview';
 
 const GearIcon: FC = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -56,8 +55,6 @@ export const ProfilePage: FC = () => {
   const interests = useMemo(() => interestsQuery.data ?? [], [interestsQuery.data]);
 
   const [editOpen, setEditOpen] = useState(false);
-  // Вход из шага квеста: какое поле редактора подсветить (null = обычное открытие шестерёнкой).
-  const [editHighlight, setEditHighlight] = useState<QuestStepKey | null>(null);
   // Свёрнутость квеста живёт здесь (не в карточке): от неё зависит затенение остальных панелей —
   // свёрнутый в пилюлю квест затенять профиль не должен.
   const [questFolded, setQuestFolded] = useState(() => localStorage.getItem(QUEST_FOLDED_KEY) === '1');
@@ -67,9 +64,10 @@ export const ProfilePage: FC = () => {
     setQuestFolded(next);
   };
 
-  const openEditor = (highlight: QuestStepKey | null) => {
+  // Редактор всегда открывается целиком: заполнение профиля идёт в один заход, без
+  // прохода по полям и без подсветки отдельного поля (решение PO 2026-07-31).
+  const openEditor = () => {
     haptic.impact('light');
-    setEditHighlight(highlight);
     setEditOpen(true);
   };
 
@@ -147,7 +145,7 @@ export const ProfilePage: FC = () => {
         <button
           type="button"
           className="rd-icon-btn"
-          onClick={() => openEditor(null)}
+          onClick={openEditor}
           disabled={interestsQuery.isPending}
           aria-label="Редактировать профиль"
         >
@@ -169,30 +167,26 @@ export const ProfilePage: FC = () => {
       {user.bio ? (
         <div className="rd-bio">{user.bio}</div>
       ) : (
-        // Пустой bio раньше просто скрывал секцию — теперь мягкий нудж, открывающий редактор
-        // сразу с подсвеченным полем «О себе» (тот же вход, что шаг квеста).
+        // Пустой bio раньше просто скрывал секцию — теперь мягкий нудж, открывающий редактор.
         <button
           type="button"
           className="rd-bio-nudge"
-          onClick={() => openEditor('bio')}
+          onClick={openEditor}
         >
           Добавь пару слов о себе →
         </button>
       )}
 
-      {/* Карточка-квест «Прокачай профиль» v2 — карусель «один экран = один шаг», пока не
-          завершён; на её месте поздравление при завершении в этой сессии
-          (profile-quest.md, мокап 04-quest-carousel). */}
+      {/* Карточка-квест «Прокачай профиль»: три поля списком, пока квест не завершён;
+          на её месте поздравление при завершении в этой сессии (profile-quest.md). */}
       {gam && !gam.quest.completed && (
-        <div data-coach="profile-quest">
         <ProfileQuestCard
           quest={gam.quest}
           doneValues={{ city: user.city ?? null, bio: user.bio ?? null, interests }}
           folded={questFolded}
           onToggleFold={toggleQuestFold}
-          onFill={(step) => openEditor(step)}
+          onFill={openEditor}
         />
-        </div>
       )}
       {congratsOpen && (
         <ProfileQuestCongrats
@@ -246,9 +240,7 @@ export const ProfilePage: FC = () => {
         // При ошибке фонового рефетча поверх устаревших данных остаёмся здесь, а не на плашке.
         <>
           <div className="rd-section-sub-h">Уровень</div>
-          <div data-coach="profile-level">
-            <GamificationPanel data={gam} />
-          </div>
+          <GamificationPanel data={gam} />
           {gam.xp === 0 && gam.badges.length === 0 && (
             // Пояснение под нулевой панелью — откуда берётся XP и зачем уровни. Только на старте.
             <div className="rd-cta-hint">
@@ -285,12 +277,12 @@ export const ProfilePage: FC = () => {
           <div className="rd-section-sub-h">Статистика</div>
           {/* Якорь коуч-марки: шаг «остальная статистика» подсвечивает панель целиком, но с
               вырезом под строку надёжности — про неё был отдельный шаг до этого. */}
-          <div className="rd-glass rd-ostat" data-coach="profile-stats-panel" style={{ marginTop: 0, marginBottom: 14 }}>
+          <div className="rd-glass rd-ostat" style={{ marginTop: 0, marginBottom: 14 }}>
             {hasReputation && (
               // Отдельный якорь: про надёжность тур говорит одной подсказкой и подсвечивает
               // ровно эту строку, а не всю панель. Строки нет (новичок без репутации) —
               // шаг падает на запасную цель, всю панель, чтобы рассказ не пропал.
-              <div className="rd-ostat-row rd-ostat-hero" data-coach="profile-reliability">
+              <div className="rd-ostat-row rd-ostat-hero">
                 <span className="rd-ostat-ico rd-ost-shield" aria-hidden="true">🛡</span>
                 <span>
                   <span className="rd-ostat-lbl">Надёжность</span>
@@ -394,19 +386,15 @@ export const ProfilePage: FC = () => {
       {editOpen && (
         <ProfileEditModal
           initialInterests={interests}
-          highlightField={editHighlight}
-          onClose={() => { setEditOpen(false); setEditHighlight(null); }}
+          onClose={() => setEditOpen(false)}
         />
       )}
 
-      {/* Тур профиля — первый после интро: сюда приводит «Погнали!». Ждём геймификацию:
-          подсказка про квест не должна прилететь раньше самой карточки квеста. */}
-      {/* Шаг «заполни профиль» открывается закрытым квестом — тремя вехами (город, интересы,
-          «о себе»), а НЕ вторым уровнем. Совпадение «50 XP квеста = порог уровня 2» верно
-          только у аккаунта без участия: активный человек добирает уровень встречами и с пустым
-          профилем прошёл бы шаг мимо (поймано на реальном аккаунте staging: профиль пуст,
-          уровень 3). Данные уже загружены этой страницей — коуч-марка своих запросов не заводит. */}
-      <CoachTour tour="PROFILE" ready={gam !== undefined} gateSatisfied={gam?.quest.completed ?? false} />
+      {/* Превью профиля — первое после интро: сюда приводит «Погнали!». Блокирующий шаг
+          «заполни профиль — и продолжим» снят вместе с турами (решение PO 2026-07-31):
+          заставлять человека нельзя, причину заполнить он получает текстом превью, а
+          мотивацию — квестом с XP. */}
+      <ScreenPreview screen="PROFILE" />
     </div>
   );
 };

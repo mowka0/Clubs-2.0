@@ -22,7 +22,7 @@ import { useClubQuery, useDeleteClubMutation, useUpdateClubMutation } from '../q
 import { useClubFinancesQuery } from '../queries/finances';
 import type { UpdateClubBody } from '../api/clubs';
 import type { ClubDetailDto } from '../types/api';
-import { CoachTour } from '../components/onboarding/CoachTour';
+import { ScreenPreview } from '../components/onboarding/ScreenPreview';
 
 type TabKey = 'stats' | 'finances' | 'chat' | 'settings';
 
@@ -308,7 +308,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
         <AvatarUpload value={coverUrl} onChange={setCoverUrl} disabled={saving || deleting} />
       </div>
 
-      <div className="rd-section-sub-h" data-coach="manage-basics">Основное</div>
+      <div className="rd-section-sub-h">Основное</div>
       <div className="rd-form" style={{ marginBottom: 14 }}>
         <label className="rd-field">
           <span className="rd-label">Название</span>
@@ -360,7 +360,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
         </label>
       </div>
 
-      <div className="rd-section-sub-h" data-coach="manage-about">Описание и правила</div>
+      <div className="rd-section-sub-h">Описание и правила</div>
       <div className="rd-form" style={{ marginBottom: 14 }}>
         <label className="rd-field">
           <span className="rd-label">Описание</span>
@@ -618,7 +618,7 @@ export const OrganizerClubManage: FC = () => {
       {/* Тот же сегментный переключатель, что на странице клуба и в «Активностях» —
           переключатель в приложении один (решение PO 2026-07-30). Четыре сегмента влезают
           в 390px без переноса; у со-организатора их и вовсе три. */}
-      <div className="rd-seg" role="tablist" data-coach="manage-tabs">
+      <div className="rd-seg" role="tablist">
         {visibleTabs.map((tab) => (
           <button
             key={tab.key}
@@ -639,7 +639,7 @@ export const OrganizerClubManage: FC = () => {
 
       {/* Настройки клуба — продолжение владельческого погружения: сюда его приводит
           последний шаг тура CLUB_OWNER. */}
-      <CoachTour tour="CLUB_MANAGE" />
+      <ScreenPreview screen="CLUB_MANAGE" />
     </div>
   );
 };
