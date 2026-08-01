@@ -114,6 +114,17 @@ describe('CityPicker', () => {
 });
 
 describe('CityPicker — тап не «протекает» наружу', () => {
+  it('лежит поверх модалки, из которой открыт: свои классы слоёв на месте', async () => {
+    renderPicker();
+    await screen.findByText('Москва');
+
+    // Пикер открывают из формы создания клуба (модалка на vaul) и из редактора профиля.
+    // Без этих классов затемнение пикера остаётся ниже чужого оверлея, и тап мимо листа
+    // закрывает форму вместе с пикером (баг PO 2026-08-01).
+    expect(document.querySelector('.rd-sheet-overlay.rd-over-modal')).not.toBeNull();
+    expect(document.querySelector('.rd-sheet.rd-over-modal-sheet')).not.toBeNull();
+  });
+
   it('pointerdown по списку и по фону пикера не доходит до document', async () => {
     const outside = vi.fn();
     document.addEventListener('pointerdown', outside);
