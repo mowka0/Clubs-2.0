@@ -72,6 +72,7 @@ class EventMapper(
         // (staging: 5 минут) он ещё и не пройдёт валидацию @Min(1080) и заблокирует любую правку.
         stage2LeadMinutesOverride = event.stage2LeadMinutes,
         status = event.status.literal,
+        isUrgent = event.isUrgent,
         goingCount = goingCount,
         maybeCount = maybeCount,
         notGoingCount = notGoingCount,

@@ -41,6 +41,10 @@ data class EventDetailDto(
     // молча стал бы собственным значением события.
     val stage2LeadMinutesOverride: Int?,
     val status: String,
+    // Срочная встреча (V69): рождается сразу в stage_2, Этапа 1 у неё нет. На механику не влияет —
+    // нужна подаче: страница события показывает формат («⚡ срочная» / «🌊 открытая» / «🎟 с местами»)
+    // теми же ярлыками, что карточки лент, где поле уже отдаётся.
+    val isUrgent: Boolean,
     val goingCount: Int,
     val maybeCount: Int,
     val notGoingCount: Int,

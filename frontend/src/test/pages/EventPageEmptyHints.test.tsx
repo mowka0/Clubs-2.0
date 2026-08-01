@@ -49,6 +49,7 @@ function buildEvent(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     participantLimit: 10,
     votingOpensDaysBefore: 14,
     status: 'upcoming',
+    isUrgent: false,
     goingCount: 0,
     maybeCount: 0,
     notGoingCount: 0,
@@ -133,14 +134,14 @@ describe('EventPage — W3-09 строка-намёк при 0 откликах 
     expect(screen.queryByText(/Пока никто не откликнулся/)).not.toBeInTheDocument();
   });
 
-  it('появился первый голос → строки нет, есть «Предварительные голоса · 1»', async () => {
+  it('появился первый голос → строки нет, есть секция «Кто откликнулся»', async () => {
     const responders: EventResponderDto[] = [
       { userId: 'g1', firstName: 'Гость', lastName: null, avatarUrl: null, status: 'going', attendance: null },
     ];
     mockEndpoints({ event: buildEvent({ goingCount: 1 }), responders, ownerId: 'someone-else' });
     renderEventPage();
 
-    expect(await screen.findByText(/Предварительные голоса/)).toBeInTheDocument();
+    expect(await screen.findByText('Кто откликнулся')).toBeInTheDocument();
     expect(screen.queryByText(/Пока никто не откликнулся/)).not.toBeInTheDocument();
   });
 

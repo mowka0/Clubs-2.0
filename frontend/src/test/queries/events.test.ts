@@ -50,6 +50,7 @@ const mockEvent: EventDetailDto = {
   participantLimit: 10,
   votingOpensDaysBefore: 7,
   status: 'upcoming',
+  isUrgent: false,
   goingCount: 0,
   maybeCount: 0,
   notGoingCount: 0,

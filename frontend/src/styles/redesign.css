@@ -1425,36 +1425,74 @@
   cursor: pointer; font-family: inherit;
 }
 .rd-vote-btn:disabled { opacity: 0.6; cursor: default; }
-/* Активная кнопка голоса окрашивается в свой цвет — совпадает с сегментом donut-диаграммы
-   и точкой статуса (иду = оранжевый, может быть = фиолетовый, не иду = серый; см. --vote-*
-   в brand-theme.css). */
-.rd-vote-btn.rd-active { color: #fff; border-color: transparent; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28); }
-.rd-vote-btn.rd-active.rd-vb-go { background: var(--vote-go); color: var(--on-accent); box-shadow: 0 2px 6px var(--accent-shadow); }
-.rd-vote-btn.rd-active.rd-vb-maybe { background: var(--vote-maybe); }
-.rd-vote-btn.rd-active.rd-vb-no { background: var(--vote-no); }
-/* голосование: колонка кнопок (левая половина) + donut-диаграмма (правая половина, ~50/50) */
+/* Кнопка голоса несёт свой цвет через color (--vote-*): от него живут метка-кружок и счётчик
+   (currentColor), подпись остаётся цветом текста. Те же цвета у точки статуса в ростере. */
+.rd-vote-btn.rd-vb-go { color: var(--vote-go); }
+.rd-vote-btn.rd-vb-maybe { color: var(--vote-maybe); }
+.rd-vote-btn.rd-vb-no { color: var(--vote-no); }
+/* Выбранный голос — обводка своим цветом и плотнее поверхность, БЕЗ сплошной заливки:
+   залитая кнопка на тёмной теме читалась как «недоступна». */
+.rd-vote-btn.rd-active {
+  border-color: currentColor; background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+/* Голосование: колонка кнопок слева + кольцо занятости справа. Высота кнопки фиксирована
+   (42px): три кнопки с зазорами по 7px дают ровно 140px — диаметр кольца. Вывести диаметр из
+   содержимого нельзя, ширина кольца зависела бы от его высоты, а высота — от высоты строки. */
 .rd-vote-layout { display: flex; gap: 14px; align-items: center; margin-bottom: 8px; }
-.rd-vote-stack { flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.rd-vote-stack { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+/* Высота задаётся через flex-basis, а не height: у базового `.rd-vote-btn` стоит `flex: 1`
+   (для горизонтального ряда), а это `flex-basis: 0%` — в КОЛОНОЧНОМ флексе basis управляет
+   высотой и обнуляет любой height, схлопывая кнопку до содержимого. */
 .rd-vote-stack .rd-vote-btn {
-  width: 100%; text-align: left; padding: 9px 12px; font-size: 13px;
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; flex: 0 0 42px; text-align: left; padding: 0 13px; font-size: 13px;
+  display: flex; align-items: center; gap: 9px;
 }
-.rd-vote-btn .rd-vc { font-size: 12px; font-weight: 700; opacity: 0.85; }
-.rd-donut {
-  flex: 0 0 46%; aspect-ratio: 1 / 1; max-width: 168px;
-  border-radius: 50%; position: relative; align-self: center;
+/* Метка-кружок: залита цветом голоса, сама иконка — цветом фона страницы. */
+.rd-vote-btn .rd-vm {
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; background: currentColor;
 }
-.rd-donut::after { content: ''; position: absolute; inset: 18px; border-radius: 50%; background: var(--bg); }
-.rd-donut-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 1; }
-/* Диагональная дробь (числитель приподнят, знаменатель опущен) — как рукописная 3/4. */
-.rd-donut-num {
-  font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1;
-  white-space: nowrap;
-  background: var(--grad-num); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+.rd-vote-btn .rd-vm svg { width: 11px; height: 11px; color: var(--bg); }
+.rd-vote-btn .rd-vl { flex: 1; min-width: 0; color: var(--text); }
+.rd-vote-btn .rd-vc { font-size: 13px; font-weight: 800; letter-spacing: -0.02em; }
+.rd-donut { flex: 0 0 140px; width: 140px; height: 140px; position: relative; }
+/* Объём кольца (PO 2026-08-01: «всё объёмное, а она плоская»). Язык — стекло, как у карточек:
+   утопленный жёлоб = тёмная внутренняя тень сверху + тонкий блик по нижней кромке (тот же
+   рисунок, что в --glass-shadow). Неоморфизм сюда НЕ берём: он строится на том, что объект
+   одного цвета с фоном, и в проекте намеренно оставлен только на сегментном переключателе.
+   Маска оставляет от круга кольцевую зону — иначе тень залила бы центр и он стал бы ямой. */
+.rd-donut::before {
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  box-shadow: var(--ring-groove-shadow);
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 0 55px, #000 56px);
+          mask: radial-gradient(circle at 50% 50%, transparent 0 55px, #000 56px);
 }
-.rd-donut-num sup, .rd-donut-num sub { font-size: 0.78em; font-weight: 800; }
-.rd-donut-num .rd-sl { font-size: 1.25em; font-weight: 600; margin: 0 -1px; }
-.rd-donut-cap { font-size: 9px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 3px; }
+/* Дуга рисуется от 12 часов по часовой стрелке. */
+.rd-donut svg { position: relative; z-index: 1; display: block; width: 100%; height: 100%; transform: rotate(-90deg); }
+/* Заполненная часть приподнята над канавкой: градиент даёт блик сверху-слева, тень — отрыв
+   от жёлоба. Тень нейтральная, НЕ акцентная: цветная превращала дугу в неоновый ободок. */
+.rd-donut-arc { filter: drop-shadow(0 1.5px 2px var(--ring-arc-shadow)); }
+.rd-donut-center {
+  position: absolute; inset: 0; z-index: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+}
+.rd-donut-num { font-size: 25px; font-weight: 800; letter-spacing: -0.035em; line-height: 1; color: var(--text); }
+.rd-donut-num small { font-size: 0.52em; font-weight: 700; color: var(--text-faint); }
+.rd-donut-cap { font-size: 8.5px; font-weight: 700; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.12em; }
+
+/* «Кто откликнулся» (Этап 1) — список под табами статуса: строки вместо сетки, потому что
+   в один момент показан ровно один статус, а не смесь. Геометрия как у листа ожидания. */
+.rd-resp-panel { padding: 4px; margin-bottom: 18px; }
+.rd-resp-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; }
+.rd-resp-row + .rd-resp-row { border-top: 1px solid var(--hairline); }
+.rd-resp-row .rd-voter { flex: 1; min-width: 0; }
+.rd-resp-empty { padding: 14px 10px; font-size: 12.5px; color: var(--text-dim); text-align: center; }
+.rd-resp-more {
+  width: 100%; padding: 10px; border: 0; border-top: 1px solid var(--hairline);
+  background: transparent; color: var(--accent); cursor: pointer; font-family: inherit;
+  font-size: 12.5px; font-weight: 600;
+}
 
 /* список проголосовавших — компактная сетка в 2 колонки (аватар + имя + точка статуса) */
 .rd-voters { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 12px; margin-bottom: 18px; }

@@ -597,6 +597,9 @@ export interface EventDetailDto {
   // в @Min(1080), когда дефолт на окружении ужат).
   stage2LeadMinutesOverride: number | null;
   status: string;
+  // Срочная встреча (V69) — вместе с participantLimit определяет формат в бейдже хиро:
+  // «⚡ срочная» / «🌊 открытая» / «🎟 с местами». Те же ярлыки, что на карточках лент.
+  isUrgent: boolean;
   goingCount: number;
   maybeCount: number;
   notGoingCount: number;

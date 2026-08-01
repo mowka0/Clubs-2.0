@@ -52,6 +52,7 @@ function pastCompletedEvent(overrides: Partial<EventDetailDto> = {}): EventDetai
     participantLimit: 10,
     votingOpensDaysBefore: 14,
     status: 'completed',
+    isUrgent: false,
     goingCount: 2,
     maybeCount: 0,
     notGoingCount: 1,
