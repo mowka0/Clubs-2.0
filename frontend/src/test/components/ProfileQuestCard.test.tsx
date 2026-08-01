@@ -80,7 +80,7 @@ describe('ProfileQuestCard — три поля списком, заполнен�
   });
 });
 
-describe('ProfileQuestCongrats — поздравление с уровнем 2', () => {
+describe('ProfileQuestCongrats — окно награды поверх профиля', () => {
   it('рендерит титул, бейдж «Визитка», +50 XP; «Забрать!» вызывает onAck', () => {
     const onAck = vi.fn();
     render(<ProfileQuestCongrats title="Уровень 2 — «Свой»!" onAck={onAck} />);
@@ -90,6 +90,26 @@ describe('ProfileQuestCongrats — поздравление с уровнем 2'
     expect(screen.getByText('+50 XP')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Забрать!' }));
+    expect(onAck).toHaveBeenCalledOnce();
+  });
+
+  it('окно висит поверх страницы (портал в body), а не в потоке профиля', () => {
+    const { container } = render(<ProfileQuestCongrats title="Профиль заполнен!" onAck={vi.fn()} />);
+
+    // В своём поддереве пусто — карточка ушла порталом, поэтому высота страницы не меняется
+    // и человека не утаскивает вниз в момент награды (баг PO 2026-08-01).
+    expect(container).toBeEmptyDOMElement();
+    expect(document.body.querySelector('.rd-congrats-scrim')).not.toBeNull();
+  });
+
+  it('тап мимо карточки закрывает, тап по самой карточке — нет', () => {
+    const onAck = vi.fn();
+    render(<ProfileQuestCongrats title="Профиль заполнен!" onAck={onAck} />);
+
+    fireEvent.click(document.querySelector('.rd-congrats')!);
+    expect(onAck).not.toHaveBeenCalled();
+
+    fireEvent.click(document.querySelector('.rd-congrats-scrim')!);
     expect(onAck).toHaveBeenCalledOnce();
   });
 });

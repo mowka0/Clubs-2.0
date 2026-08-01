@@ -2,6 +2,7 @@ import { FC, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { SCREEN_PREVIEWS, PREVIEW_ACK } from './previews';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useSheetDrag } from '../../hooks/useSheetDrag';
 import { useCompleteTourMutation } from '../../queries/profile';
 import { useAuthStore } from '../../store/useAuthStore';
 import type { OnboardingTour } from '../../types/api';
@@ -77,6 +78,9 @@ export const ScreenPreview: FC<ScreenPreviewProps> = ({ screen, ready = true }) 
     };
   }, [open]);
 
+  // Шторку закрывают и протяжкой вниз за шапку — привычный жест боттом-шита.
+  const { sheetRef, dragHandlers } = useSheetDrag(() => close());
+
   const close = () => {
     if (acked) return;
     haptic.impact('light');
@@ -106,10 +110,13 @@ export const ScreenPreview: FC<ScreenPreviewProps> = ({ screen, ready = true }) 
     // `data-swipe-nav="off"` — под шторкой не должен срабатывать навигационный свайп «назад».
     <div data-swipe-nav="off">
       <div className="rd-sheet-overlay sp-overlay" onClick={close} aria-hidden="true" />
-      <div className="rd-sheet sp-sheet" role="dialog" aria-modal="true" aria-labelledby="sp-title">
-        <div className="rd-sheet-grabber" aria-hidden="true" />
-
-        <img className="sp-art" src={preview.artSrc} alt="" draggable={false} />
+      <div className="rd-sheet sp-sheet" role="dialog" aria-modal="true" aria-labelledby="sp-title" ref={sheetRef}>
+        {/* Зона захвата: грабер и арт. За неё шторку тянут вниз — грабер в 4px под палец
+            не попадает, а арт всё равно не интерактивен. Текст ниже остаётся выделяемым. */}
+        <div className="sp-grip" {...dragHandlers}>
+          <div className="rd-sheet-grabber" aria-hidden="true" />
+          <img className="sp-art" src={preview.artSrc} alt="" draggable={false} />
+        </div>
 
         <h2 className="sp-title" id="sp-title">{preview.title}</h2>
         <p className="sp-lead">{preview.lead}</p>

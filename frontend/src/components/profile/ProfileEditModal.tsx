@@ -2,6 +2,8 @@ import { FC, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useSheetDrag } from '../../hooks/useSheetDrag';
+import { useKeyboardAwareSheet } from '../../hooks/useKeyboardAwareSheet';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useUpdateProfileMutation } from '../../queries/profile';
 import { CityPicker, countryNameByCode } from '../CityPicker';
@@ -44,6 +46,11 @@ export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, 
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Шторку закрывают протяжкой вниз за шапку; под клавиатурой она ужимается по видимой
+  // области, а не по высоте окна, и доводит поле в фокусе до видимой зоны.
+  const { sheetRef, dragHandlers } = useSheetDrag(onClose);
+  useKeyboardAwareSheet(sheetRef);
+
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -85,11 +92,14 @@ export const ProfileEditModal: FC<ProfileEditModalProps> = ({ initialInterests, 
   return createPortal(
     <>
       <div className="rd-sheet-overlay" onClick={onClose} aria-hidden="true" />
-      <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Редактировать профиль">
-        <div className="rd-sheet-grabber" aria-hidden="true" />
-        <div className="rd-sheet-head">
-          <h2>Профиль</h2>
-          <button type="button" className="rd-sheet-close" onClick={onClose}>Закрыть</button>
+      <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Редактировать профиль" ref={sheetRef}>
+        {/* Шапка-«ручка»: за неё шторку тянут вниз, чтобы закрыть. Тело со скроллом не трогаем. */}
+        <div className="rd-sheet-grip" {...dragHandlers}>
+          <div className="rd-sheet-grabber" aria-hidden="true" />
+          <div className="rd-sheet-head">
+            <h2>Профиль</h2>
+            <button type="button" className="rd-sheet-close" onClick={onClose}>Закрыть</button>
+          </div>
         </div>
 
         <div className="rd-sheet-body">

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
@@ -90,6 +90,50 @@ describe('ScreenPreview — превью экрана', () => {
 
     await waitFor(() => expect(calls).toBe(1));
     expect(screen.queryByText(SCREEN_PREVIEWS.MY_CLUBS!.title)).toBeNull();
+  });
+
+  it('протяжка вниз за шапку закрывает шторку и засчитывает показ', async () => {
+    let calls = 0;
+    server.use(
+      http.post('*/api/users/me/onboarding/:tour', () => {
+        calls += 1;
+        return HttpResponse.json(makeUser(['CLUB_MANAGE']));
+      }),
+    );
+    useAuthStore.setState({ user: makeUser([]) });
+    renderPreview('CLUB_MANAGE');
+    await waitFor(() => expect(screen.getByText(SCREEN_PREVIEWS.CLUB_MANAGE!.title)).toBeInTheDocument());
+
+    const grip = document.querySelector('.sp-grip')!;
+    fireEvent.touchStart(grip, { changedTouches: [{ clientY: 100 }] });
+    fireEvent.touchMove(grip, { changedTouches: [{ clientY: 200 }] });
+    fireEvent.touchEnd(grip, { changedTouches: [{ clientY: 260 }] });
+
+    await waitFor(() => expect(calls).toBe(1));
+    expect(screen.queryByText(SCREEN_PREVIEWS.CLUB_MANAGE!.title)).toBeNull();
+  });
+
+  it('короткая протяжка шторку не закрывает — она возвращается на место', async () => {
+    let calls = 0;
+    server.use(
+      http.post('*/api/users/me/onboarding/:tour', () => {
+        calls += 1;
+        return HttpResponse.json(makeUser(['CLUB_OWNER']));
+      }),
+    );
+    useAuthStore.setState({ user: makeUser([]) });
+    renderPreview('CLUB_OWNER');
+    await waitFor(() => expect(screen.getByText(SCREEN_PREVIEWS.CLUB_OWNER!.title)).toBeInTheDocument());
+
+    const grip = document.querySelector('.sp-grip')!;
+    // 40px — меньше порога в 90px, и медленно: ни дистанции, ни скорости.
+    fireEvent.touchStart(grip, { changedTouches: [{ clientY: 100 }] });
+    fireEvent.touchMove(grip, { changedTouches: [{ clientY: 120 }] });
+    fireEvent.touchEnd(grip, { changedTouches: [{ clientY: 140 }] });
+
+    await new Promise((r) => setTimeout(r, 400));
+    expect(calls).toBe(0);
+    expect(screen.getByText(SCREEN_PREVIEWS.CLUB_OWNER!.title)).toBeInTheDocument();
   });
 
   it('уже показанное превью не поднимается вовсе', async () => {

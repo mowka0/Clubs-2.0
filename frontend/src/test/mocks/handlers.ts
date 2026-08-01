@@ -94,6 +94,26 @@ export const handlers = [
     return HttpResponse.json(membership);
   }),
 
+  // POST /api/users/me/onboarding/{screen} — отметка показанного превью.
+  // Дефолтный хендлер нужен всем страничным тестам: `ScreenPreview` висит на каждом экране
+  // и у пользователя без списка показанных экранов честно шлёт отметку. Без мока запрос
+  // оставался необработанным и ронял случайный тестовый файл целиком (503).
+  http.post('*/api/users/me/onboarding/:screen', ({ params }) => {
+    return HttpResponse.json({
+      id: 'user-1',
+      telegramId: 12345,
+      telegramUsername: 'testuser',
+      firstName: 'Test',
+      lastName: 'User',
+      avatarUrl: null,
+      city: null,
+      country: null,
+      cityId: null,
+      bio: null,
+      onboardingTours: [params.screen],
+    });
+  }),
+
   // POST /api/auth/telegram
   http.post('*/api/auth/telegram', () => {
     return HttpResponse.json({

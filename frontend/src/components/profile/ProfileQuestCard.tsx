@@ -1,4 +1,5 @@
 import { FC } from 'react';
+import { createPortal } from 'react-dom';
 import type { ProfileQuestDto } from '../../types/api';
 
 /** Шаг квеста = поле профиля. */
@@ -184,23 +185,35 @@ interface ProfileQuestCongratsProps {
   onAck: () => void;
 }
 
-/** Поздравление на месте карточки-квеста: бейдж «Визитка», конфетти, «Отлично» убирает навсегда. */
-export const ProfileQuestCongrats: FC<ProfileQuestCongratsProps> = ({ title, onAck }) => (
-  <div className="rd-congrats rd-glass" role="status">
-    {CONFETTI.map((cf) => (
-      <span key={cf.left} className="rd-cf" style={{ left: cf.left, top: 6, background: cf.color, animationDelay: cf.delay }} aria-hidden="true" />
-    ))}
-    <div className="rd-c-badge" aria-hidden="true">
-      <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 16.9 5.9 20.4l1.5-6.8L2.2 9l6.9-.7z" /></svg>
+/**
+ * Поздравление — окно ПОВЕРХ профиля, а не блок в его потоке (баг PO 2026-08-01).
+ * В потоке оно вставало на место исчезнувшей карточки-квеста, страница меняла высоту,
+ * и человека утаскивало вниз ровно в момент награды. Поверх — страница под ним не двигается,
+ * а закрывается окно чем угодно: кнопкой или тапом мимо.
+ */
+export const ProfileQuestCongrats: FC<ProfileQuestCongratsProps> = ({ title, onAck }) => createPortal(
+  // Затемнение и центрирование — на обёртке; `role="dialog"` тоже на ней: глобальное правило
+  // прибивает диалоги к низу экрана (left/right/bottom: 0 !important), и своим `top: 0`
+  // обёртка честно разворачивается на весь экран, а карточка центрируется внутри.
+  <div className="rd-congrats-scrim" role="dialog" aria-modal="true" onClick={onAck}>
+    {/* Тап по самой карточке не закрывает — иначе не прочитать, что дали. */}
+    <div className="rd-congrats rd-glass" onClick={(e) => e.stopPropagation()}>
+      {CONFETTI.map((cf) => (
+        <span key={cf.left} className="rd-cf" style={{ left: cf.left, top: 6, background: cf.color, animationDelay: cf.delay }} aria-hidden="true" />
+      ))}
+      <div className="rd-c-badge" aria-hidden="true">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 16.9 5.9 20.4l1.5-6.8L2.2 9l6.9-.7z" /></svg>
+      </div>
+      <div className="rd-c-title">{title}</div>
+      <div className="rd-c-text">
+        Профиль заполнен: город, интересы и пара слов о себе. Теперь клубы и организаторы видят, кто ты.
+      </div>
+      <div className="rd-c-chips">
+        <span className="rd-c-chip-badge">Бейдж «Визитка»</span>
+        <span className="rd-c-chip-xp">+{QUEST_TOTAL_XP} XP</span>
+      </div>
+      <button type="button" className="rd-c-btn" onClick={onAck}>Забрать!</button>
     </div>
-    <div className="rd-c-title">{title}</div>
-    <div className="rd-c-text">
-      Профиль заполнен: город, интересы и пара слов о себе. Теперь клубы и организаторы видят, кто ты.
-    </div>
-    <div className="rd-c-chips">
-      <span className="rd-c-chip-badge">Бейдж «Визитка»</span>
-      <span className="rd-c-chip-xp">+{QUEST_TOTAL_XP} XP</span>
-    </div>
-    <button type="button" className="rd-c-btn" onClick={onAck}>Забрать!</button>
-  </div>
+  </div>,
+  document.body,
 );
