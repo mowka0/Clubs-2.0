@@ -3,13 +3,178 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <style>
+      /*
+        Стартовый лоадер. Живёт прямо в index.html и НЕ зависит от бандла: наш CSS приезжает
+        тем же билдом, что и приложение, поэтому при проблемах с загрузкой он недоступен —
+        цвета продублированы здесь намеренно, это не дубликат токенов, а автономная копия.
+
+        Тема ловится через prefers-color-scheme: на старте [data-theme] ещё не проставлен
+        (его ставит useThemeStore уже после запуска React), а системную схему Telegram отдаёт сразу.
+      */
+      #boot-loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        padding: 24px;
+        text-align: center;
+        background: #0B0B0E;            /* --bg тёмной темы */
+        color: #F4F4F6;                 /* --text тёмной темы */
+        font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+      }
+      @media (prefers-color-scheme: light) {
+        #boot-loader {
+          background: #F7F6F3;          /* --bg светлой темы */
+          color: #1A1A1A;               /* --text светлой темы */
+        }
+      }
+
+      #boot-loader .boot-ring {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        border: 3px solid rgba(244, 123, 60, 0.18);   /* --accent-soft */
+        border-top-color: #F47B3C;                    /* --accent */
+        animation: boot-spin 0.9s linear infinite;
+      }
+      @keyframes boot-spin {
+        to { transform: rotate(360deg); }
+      }
+
+      /* Показывается только когда обе попытки загрузки провалились. */
+      #boot-loader .boot-failed { display: none; max-width: 300px; }
+      #boot-loader.is-failed .boot-ring { display: none; }
+      #boot-loader.is-failed .boot-failed { display: block; }
+
+      #boot-loader .boot-title { font-size: 16px; font-weight: 600; margin: 0 0 6px; }
+      #boot-loader .boot-hint { font-size: 14px; opacity: 0.65; margin: 0 0 18px; line-height: 1.4; }
+      #boot-loader .boot-retry {
+        appearance: none;
+        border: none;
+        border-radius: 10px;
+        padding: 11px 22px;
+        font-size: 15px;
+        font-weight: 600;
+        color: #fff;
+        background: #F47B3C;            /* --accent */
+        cursor: pointer;
+      }
+    </style>
+    <script>
+      /*
+        Самолечение застрявшего бандла (инцидент 2026-08-02).
+
+        Если браузер сохранил в кэше обрезанный JS (обрыв связи посреди загрузки), приложение
+        не стартует вообще: белый экран, ни одного запроса к API, в логах сервера пусто, и сам
+        человек выбраться не может — за новой копией браузер не идёт, у него «уже есть файл».
+
+        Этот скрипт лежит в index.html, который НИКОГДА не кэшируется (см. nginx.conf), поэтому
+        доезжает даже до тех, у кого бандл уже испорчен, и вытаскивает их без чистки кэша.
+        Приём: повторный запрос с добавленным query-параметром — для кэша это другой адрес,
+        поэтому файл гарантированно скачивается заново.
+
+        Ровно одна попытка за вкладку: флаг в sessionStorage защищает от петли перезагрузок,
+        если приложение падает по собственной причине, а не из-за битого файла.
+      */
+      (function () {
+        var RETRY_FLAG = 'clubs-bundle-retry';
+        /* Сколько ждём старта приложения, прежде чем счесть загрузку провалившейся. */
+        var STARTUP_TIMEOUT_MS = 12000;
+
+        /* Лоадер удаляет сам React, затирая содержимое #root при первом рендере. Поэтому
+           «лоадер ещё на месте» — это надёжный признак, что приложение так и не стартовало. */
+        function appNotStarted() {
+          return document.getElementById('boot-loader') !== null;
+        }
+
+        function alreadyRetried() {
+          try {
+            return sessionStorage.getItem(RETRY_FLAG) !== null;
+          } catch (e) {
+            /* Хранилище недоступно (приватный режим) — считаем, что попытка была,
+               иначе рискуем зациклиться без возможности запомнить обратное. */
+            return true;
+          }
+        }
+
+        function markRetried() {
+          try {
+            sessionStorage.setItem(RETRY_FLAG, '1');
+          } catch (e) {
+            /* Записать не вышло — попытка всё равно одна: следующий заход отсечётся выше. */
+          }
+        }
+
+        function showFailure() {
+          var loader = document.getElementById('boot-loader');
+          if (loader) loader.className = 'is-failed';
+        }
+
+        function refetchBundle() {
+          if (!appNotStarted()) return;
+          if (alreadyRetried()) { showFailure(); return; }
+
+          var original = document.querySelector('script[type="module"][src]');
+          if (!original || !original.src) { showFailure(); return; }
+          markRetried();
+
+          var fresh = document.createElement('script');
+          fresh.type = 'module';
+          fresh.crossOrigin = 'anonymous';
+          fresh.src = original.src + (original.src.indexOf('?') === -1 ? '?' : '&') +
+                      'cachebust=' + new Date().getTime();
+          document.head.appendChild(fresh);
+
+          /* Вторая проверка: если и свежая копия не подняла приложение, дальше пытаться
+             бессмысленно — показываем человеку понятный экран вместо вечного спиннера. */
+          window.setTimeout(function () {
+            if (appNotStarted()) showFailure();
+          }, STARTUP_TIMEOUT_MS);
+        }
+
+        /* Сеть не отдала файл: событие всплывает только в фазе перехвата. */
+        window.addEventListener('error', function (e) {
+          var target = e && e.target;
+          if (target && target.tagName === 'SCRIPT' && target.type === 'module') {
+            refetchBundle();
+          }
+        }, true);
+
+        /* Страховка на все остальные исходы — файл пришёл битым и не разобрался, упал на старте,
+           либо тихо не выполнился. */
+        window.setTimeout(refetchBundle, STARTUP_TIMEOUT_MS);
+
+        window.addEventListener('DOMContentLoaded', function () {
+          var retry = document.querySelector('.boot-retry');
+          if (retry) {
+            retry.addEventListener('click', function () {
+              try { sessionStorage.removeItem(RETRY_FLAG); } catch (e) { /* не критично */ }
+              window.location.reload();
+            });
+          }
+        });
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <title>Clubs</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="boot-loader" role="status" aria-label="Загрузка приложения">
+        <div class="boot-ring"></div>
+        <div class="boot-failed">
+          <p class="boot-title">Не удалось загрузить</p>
+          <p class="boot-hint">Проверьте соединение и попробуйте ещё раз.</p>
+          <button type="button" class="boot-retry">Обновить</button>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
