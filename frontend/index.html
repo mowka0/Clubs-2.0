@@ -63,6 +63,27 @@
         background: #F47B3C;            /* --accent */
         cursor: pointer;
       }
+
+      /* Техническая строка — для пересылки в поддержку, человеку читать не обязательно. */
+      #boot-loader .boot-detail {
+        margin: 16px 0 0;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 11px;
+        opacity: 0.4;
+        word-break: break-all;
+      }
+      #boot-loader .boot-copy {
+        appearance: none;
+        margin-top: 8px;
+        padding: 6px 12px;
+        font-size: 12px;
+        border-radius: 8px;
+        background: transparent;
+        color: inherit;
+        border: 1px solid currentColor;
+        opacity: 0.5;
+        cursor: pointer;
+      }
     </style>
     <script>
       /*
@@ -109,30 +130,121 @@
           }
         }
 
-        function showFailure() {
+        /*
+          Тексты под конкретный диагноз. Человеку нужен не факт ошибки, а следующий шаг:
+          «прокси» и «нет интернета» лечатся по-разному, и сказать это должно приложение,
+          а не оставлять пользователя перед пустым экраном (инцидент 2026-08-02 — сутки
+          диагностики ровно потому, что человек видел белый экран и не мог ничего сообщить).
+        */
+        var DIAGNOSES = {
+          /* Мелкий запрос прошёл, крупный — нет: канал режет объём. У наших пользователей
+             самая частая причина — встроенный прокси Telegram, он же был причиной инцидента. */
+          'big-blocked': {
+            title: 'Не удалось загрузить',
+            hint: 'Соединение не пропускает большие файлы. Если в Telegram включён прокси — отключите его в настройках или подключитесь через VPN.'
+          },
+          /* Не прошёл даже крошечный запрос — связи нет вовсе. */
+          'offline': {
+            title: 'Нет связи с сервером',
+            hint: 'Проверьте интернет и попробуйте ещё раз.'
+          },
+          /* Файлы доезжают, но приложение не поднялось — это уже наша ошибка, не сеть. */
+          'app-error': {
+            title: 'Не удалось запустить',
+            hint: 'Мы уже знаем о проблеме. Попробуйте обновить — если не поможет, пришлите нам код ниже.'
+          }
+        };
+
+        /* К экрану ошибки ведут три пути (событие ошибки и два таймаута), и сойтись они могут
+           все разом. Право показать ошибку забирается один раз — иначе человек получит
+           тройной маячок в логах и лишние запросы в и без того больном канале. */
+        var failureHandled = false;
+        function claimFailure() {
+          if (failureHandled) return false;
+          failureHandled = true;
+          return true;
+        }
+
+        function showFailure(reason, detail) {
+          if (!claimFailure()) return;
+          renderFailure(reason, detail);
+        }
+
+        function renderFailure(reason, detail) {
           var loader = document.getElementById('boot-loader');
-          if (loader) loader.className = 'is-failed';
+          if (!loader) return;
+
+          var diagnosis = DIAGNOSES[reason] || DIAGNOSES['app-error'];
+          var titleNode = loader.querySelector('.boot-title');
+          var hintNode = loader.querySelector('.boot-hint');
+          var detailNode = loader.querySelector('.boot-detail');
+          if (titleNode) titleNode.textContent = diagnosis.title;
+          if (hintNode) hintNode.textContent = diagnosis.hint;
+          if (detailNode) detailNode.textContent = reason + ' · ' + (detail || '—');
+
+          loader.className = 'is-failed';
+
+          /* Маячок в access_log nginx: обычный GET по корню с меткой причины. Отдельный
+             endpoint не нужен, бэкенд не задействован, а мы впервые видим такие сбои —
+             раньше упавший старт не оставлял в логах вообще никакого следа. */
+          try {
+            new Image().src = '/?boot-failure=' + encodeURIComponent(reason) +
+                              '&t=' + new Date().getTime();
+          } catch (e) { /* не смогли сообщить — экран пользователю всё равно уже показан */ }
+        }
+
+        /*
+          Различаем «канал режет объём» и «связи нет совсем»: шлём заведомо крошечный запрос.
+          Прошёл — значит сеть жива и режется именно объём; не прошёл — нет связи.
+        */
+        function diagnoseAndShow(detail) {
+          if (!claimFailure()) return;
+
+          var ping = new XMLHttpRequest();
+          var settled = false;
+          function finish(reason) {
+            if (settled) return;
+            settled = true;
+            renderFailure(reason, detail);
+          }
+          try {
+            ping.open('GET', '/?bootping=' + new Date().getTime(), true);
+            ping.timeout = 8000;
+            ping.onload = function () { finish('big-blocked'); };
+            ping.onerror = function () { finish('offline'); };
+            ping.ontimeout = function () { finish('offline'); };
+            ping.send();
+          } catch (e) {
+            finish('offline');
+          }
         }
 
         function refetchBundle() {
           if (!appNotStarted()) return;
-          if (alreadyRetried()) { showFailure(); return; }
+          if (alreadyRetried()) { diagnoseAndShow('повтор уже был'); return; }
 
           var original = document.querySelector('script[type="module"][src]');
-          if (!original || !original.src) { showFailure(); return; }
+          if (!original || !original.src) { showFailure('app-error', 'нет тега бандла'); return; }
           markRetried();
+
+          /* Долетел ли файл со второй попытки — от этого зависит вердикт: не долетел, значит
+             канал, долетел и приложение всё равно не поднялось — значит ошибка в самом коде. */
+          var freshArrived = false;
 
           var fresh = document.createElement('script');
           fresh.type = 'module';
           fresh.crossOrigin = 'anonymous';
           fresh.src = original.src + (original.src.indexOf('?') === -1 ? '?' : '&') +
                       'cachebust=' + new Date().getTime();
+          fresh.onload = function () { freshArrived = true; };
           document.head.appendChild(fresh);
 
           /* Вторая проверка: если и свежая копия не подняла приложение, дальше пытаться
              бессмысленно — показываем человеку понятный экран вместо вечного спиннера. */
           window.setTimeout(function () {
-            if (appNotStarted()) showFailure();
+            if (!appNotStarted()) return;
+            if (freshArrived) showFailure('app-error', 'бандл выполнен, приложение не отрисовалось');
+            else diagnoseAndShow('бандл не долетел');
           }, STARTUP_TIMEOUT_MS);
         }
 
@@ -156,6 +268,41 @@
               window.location.reload();
             });
           }
+
+          /* Код ошибки нужен, чтобы человек мог переслать его нам одним движением:
+             приложение не запустилось, значит форма обратной связи внутри недоступна. */
+          var copy = document.querySelector('.boot-copy');
+          if (copy) {
+            copy.addEventListener('click', function () {
+              var detailNode = document.querySelector('.boot-detail');
+              var text = 'Clubs: ' + (detailNode ? detailNode.textContent : '—') +
+                         ' · ' + navigator.userAgent;
+              function done() { copy.textContent = 'Скопировано'; }
+              try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  navigator.clipboard.writeText(text).then(done, fallbackCopy);
+                } else {
+                  fallbackCopy();
+                }
+              } catch (e) {
+                fallbackCopy();
+              }
+              /* Старые webview без Clipboard API — выделяем текст, дальше человек копирует сам. */
+              function fallbackCopy() {
+                try {
+                  var area = document.createElement('textarea');
+                  area.value = text;
+                  document.body.appendChild(area);
+                  area.select();
+                  document.execCommand('copy');
+                  document.body.removeChild(area);
+                  done();
+                } catch (e2) {
+                  copy.textContent = 'Скопируйте текст выше вручную';
+                }
+              }
+            });
+          }
         });
       })();
     </script>
@@ -172,6 +319,8 @@
           <p class="boot-title">Не удалось загрузить</p>
           <p class="boot-hint">Проверьте соединение и попробуйте ещё раз.</p>
           <button type="button" class="boot-retry">Обновить</button>
+          <p class="boot-detail"></p>
+          <button type="button" class="boot-copy">Скопировать код ошибки</button>
         </div>
       </div>
     </div>
