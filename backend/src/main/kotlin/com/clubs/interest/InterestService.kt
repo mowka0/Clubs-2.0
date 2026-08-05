@@ -12,11 +12,15 @@ class InterestService(private val interestRepository: InterestRepository) {
 
     private val log = LoggerFactory.getLogger(InterestService::class.java)
 
+    /**
+     * Автодополнение по словарю. [clubsOnly] = true — режим поиска каталога: только темы,
+     * которыми размечен хотя бы один клуб, в порядке употребления клубами.
+     */
     @Transactional(readOnly = true)
-    fun suggest(rawQuery: String, limit: Int): List<String> {
+    fun suggest(rawQuery: String, limit: Int, clubsOnly: Boolean = false): List<String> {
         val query = InterestNormalizer.normalize(rawQuery) ?: return emptyList()
         if (query.length < InterestNormalizer.MIN_QUERY_LEN) return emptyList()
-        return interestRepository.suggest(query, limit.coerceIn(1, MAX_SUGGEST))
+        return interestRepository.suggest(query, limit.coerceIn(1, MAX_SUGGEST), clubsOnly)
     }
 
     /** Чипы полки при разметке клуба: топ-темы категории по употреблению клубами. */

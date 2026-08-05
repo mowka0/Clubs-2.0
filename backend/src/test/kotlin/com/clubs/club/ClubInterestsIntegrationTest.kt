@@ -290,6 +290,59 @@ class ClubInterestsIntegrationTest {
     }
 
     @Test
+    fun `подсказки поиска каталога отдают только темы, которые есть у клубов`() {
+        // «настолки» получат клуб, «настроение» останется интересом профиля без единого клуба.
+        createClub("Клуб с темой", interests = listOf("настолки"))
+        dsl.execute("INSERT INTO interests (name, usage_count) VALUES ('настроение', 5) ON CONFLICT (name) DO NOTHING")
+
+        val clubsOnly = mockMvc.perform(
+            get("/api/interests/suggest")
+                .param("q", "наст").param("clubsOnly", "true")
+                .header("Authorization", "Bearer $ownerToken")
+        )
+            .andExpect(status().isOk)
+            .andReturn().response.contentAsString
+        val forClubs = objectMapper.readValue(clubsOnly, Array<String>::class.java).toList()
+        assertTrue(forClubs.contains("настолки"), "Тема клуба обязана быть в подсказках: $forClubs")
+        assertTrue(
+            forClubs.none { it == "настроение" },
+            "Интерес без единого клуба подсказывать нельзя — тап по нему упрётся в пустую выдачу: $forClubs"
+        )
+
+        // Обычный режим (профиль) по-прежнему видит весь словарь.
+        val all = mockMvc.perform(
+            get("/api/interests/suggest").param("q", "наст")
+                .header("Authorization", "Bearer $ownerToken")
+        )
+            .andExpect(status().isOk)
+            .andReturn().response.contentAsString
+        assertTrue(
+            objectMapper.readValue(all, Array<String>::class.java).contains("настроение"),
+            "Автодополнение профиля не должно потерять интересы без клубов"
+        )
+    }
+
+    @Test
+    fun `подсказки каталога сортируются по употреблению клубами`() {
+        // «мафия» у двух клубов, «марафон» у одного — порядок должен идти от частой к редкой,
+        // независимо от популярности этих слов в профилях.
+        createClub("Первый", interests = listOf("мафия"))
+        createClub("Второй", interests = listOf("мафия"))
+        createClub("Третий", category = "sport", interests = listOf("марафон"))
+        dsl.execute("UPDATE interests SET usage_count = 99 WHERE name = 'марафон'")
+
+        val body = mockMvc.perform(
+            get("/api/interests/suggest")
+                .param("q", "ма").param("clubsOnly", "true")
+                .header("Authorization", "Bearer $ownerToken")
+        )
+            .andExpect(status().isOk)
+            .andReturn().response.contentAsString
+        val hints = objectMapper.readValue(body, Array<String>::class.java).toList()
+        assertEquals(listOf("мафия", "марафон"), hints, "Порядок обязан идти по club_usage_count")
+    }
+
+    @Test
     fun `AC-11 клуб без тем отдаёт пустой список, а не null`() {
         val clubId = createClub("Клуб без разметки")
 

@@ -4,6 +4,7 @@ import { Spinner } from '@telegram-apps/telegram-ui';
 import { useClubsQuery } from '../queries/clubs';
 import { useClubCardFacts } from '../queries/clubQuality';
 import { useMyReputationQuery } from '../queries/members';
+import { useClubTopicSuggestQuery } from '../queries/interests';
 import { useAuthStore } from '../store/useAuthStore';
 import { ClubCard } from '../components/ClubCard';
 import { WeekShelf } from '../components/WeekShelf';
@@ -70,6 +71,10 @@ export const DiscoveryPage: FC = () => {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [priceOpen, setPriceOpen] = useState(false);
+  // Выпадашка подсказок тем: открывается вводом, закрывается выбором, Escape и тапом мимо.
+  // Отдельный флаг, а не производное «есть ли подсказки» — иначе после выбора темы она бы
+  // всплывала снова: подсказка совпадает с тем, что теперь в поле.
+  const [topicsOpen, setTopicsOpen] = useState(false);
   const debouncedFilters = useDebounce(filters, 300);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const haptic = useHaptic();
@@ -82,6 +87,25 @@ export const DiscoveryPage: FC = () => {
   const activeCount = reputationQuery.data?.activeClubs.length ?? 0;
 
   const fullName = user ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}` : '';
+
+  // Подсказки берём от debounced-значения — того же, по которому строится и сам запрос выдачи,
+  // так что подсказки и результаты не расходятся во времени.
+  const topicSuggestQuery = useClubTopicSuggestQuery(debouncedFilters.search ?? '', topicsOpen);
+  // Точное совпадение с уже введённым отбрасываем: подсказывать то, что человек и так набрал,
+  // нечего — строка бы просто мигала под полем.
+  const topicHints = (topicSuggestQuery.data ?? []).filter((t) => t !== filters.search?.trim().toLowerCase());
+
+  // Тап мимо выпадашки закрывает её. Слушаем pointerdown, а не click: на тапе по самой
+  // подсказке click ещё не случился, и закрытие по нему съедало бы выбор.
+  useEffect(() => {
+    if (!topicsOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target?.closest('.rd-search-wrap')) setTopicsOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [topicsOpen]);
 
   const queryFilters = useMemo<ClubFilters>(
     () => ({
@@ -175,16 +199,46 @@ export const DiscoveryPage: FC = () => {
           пилюли берут ширину по содержимому («Спорт», «до 1 000 ₽»), поиск —
           флексом занимает остаток и ужимается под них. */}
       <div className="rd-filter-row">
-        <label className="rd-search">
-          {SEARCH_ICON}
-          <input
-            type="search"
-            placeholder="Поиск клубов"
-            value={filters.search ?? ''}
-            onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value || undefined }))}
-            aria-label="Поиск клубов"
-          />
-        </label>
+        {/* Обёртка нужна выпадашке подсказок: она позиционируется от поля, а не от строки
+            фильтров, иначе уезжала бы под пилюли «Категория»/«Цена». */}
+        <div className="rd-search-wrap">
+          <label className="rd-search">
+            {SEARCH_ICON}
+            <input
+              type="search"
+              placeholder="Поиск клубов"
+              value={filters.search ?? ''}
+              onChange={(e) => {
+                setFilters((f) => ({ ...f, search: e.target.value || undefined }));
+                setTopicsOpen(true);
+              }}
+              onKeyDown={(e) => { if (e.key === 'Escape') setTopicsOpen(false); }}
+              aria-label="Поиск клубов"
+            />
+          </label>
+          {/* Подсказки тем: человеку нечем угадать, каким словом размечен клуб («настолки»,
+              а не «настольные игры»). Приходят только темы, по которым в каталоге кто-то
+              найдётся, — тап по пустой подсказке был бы хуже её отсутствия. */}
+          {topicsOpen && topicHints.length > 0 && (
+            <div className="rd-search-hints" role="listbox" aria-label="Подсказки тем">
+              {topicHints.map((topic) => (
+                <button
+                  key={topic}
+                  type="button"
+                  className="rd-search-hint"
+                  onClick={() => {
+                    haptic.select();
+                    setFilters((f) => ({ ...f, search: topic }));
+                    setTopicsOpen(false);
+                  }}
+                >
+                  {SEARCH_ICON}
+                  <span>{topic}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button
           type="button"
           className={filters.category ? 'rd-filter-pill rd-active' : 'rd-filter-pill'}

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getCategoryInterests, suggestInterests } from '../api/interests';
+import { getCategoryInterests, suggestClubTopics, suggestInterests } from '../api/interests';
 
 /**
  * Автодополнение интересов по префиксу. Вызывающий передаёт уже debounced-запрос;
@@ -11,6 +11,21 @@ export function useInterestSuggestQuery(query: string) {
     queryKey: ['interests', 'suggest', trimmed.toLowerCase()],
     queryFn: () => suggestInterests(trimmed),
     enabled: trimmed.length >= 2,
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Подсказки тем для поиска каталога — только те, по которым в каталоге кто-то найдётся.
+ * Отдельный ключ кэша от `useInterestSuggestQuery`: там весь словарь, здесь его подмножество,
+ * и смешивать их в одном ключе значило бы отдавать профильные интересы в каталог.
+ */
+export function useClubTopicSuggestQuery(query: string, enabled = true) {
+  const trimmed = query.trim();
+  return useQuery({
+    queryKey: ['interests', 'suggest', 'clubs', trimmed.toLowerCase()],
+    queryFn: () => suggestClubTopics(trimmed),
+    enabled: enabled && trimmed.length >= 2,
     staleTime: 60_000,
   });
 }

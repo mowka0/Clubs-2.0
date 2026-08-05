@@ -11,17 +11,23 @@ import java.util.UUID
 @Repository
 class JooqInterestRepository(private val dsl: DSLContext) : InterestRepository {
 
-    override fun suggest(prefix: String, limit: Int): List<String> =
-        dsl.select(INTERESTS.NAME)
+    override fun suggest(prefix: String, limit: Int, clubsOnly: Boolean): List<String> {
+        // startsWith экранирует %/_ и генерирует `name LIKE 'prefix%'`, который обслуживается
+        // индексом varchar_pattern_ops; имена хранятся в канонической форме, поэтому простого
+        // (чувствительного к регистру) префикс-матча достаточно.
+        var condition = INTERESTS.NAME.startsWith(prefix)
+        if (clubsOnly) condition = condition.and(INTERESTS.CLUB_USAGE_COUNT.greaterThan(0))
+        return dsl.select(INTERESTS.NAME)
             .from(INTERESTS)
-            // startsWith экранирует %/_ и генерирует `name LIKE 'prefix%'`, который
-            // обслуживается индексом varchar_pattern_ops; имена хранятся в канонической
-            // форме, поэтому простого (чувствительного к регистру) префикс-матча достаточно.
-            .where(INTERESTS.NAME.startsWith(prefix))
-            .orderBy(INTERESTS.USAGE_COUNT.desc(), INTERESTS.NAME.asc())
+            .where(condition)
+            .orderBy(
+                if (clubsOnly) INTERESTS.CLUB_USAGE_COUNT.desc() else INTERESTS.USAGE_COUNT.desc(),
+                INTERESTS.NAME.asc()
+            )
             .limit(limit)
             .fetch(INTERESTS.NAME)
             .filterNotNull()
+    }
 
     override fun suggestByCategory(category: ClubCategory, limit: Int): List<String> =
         dsl.select(INTERESTS.NAME)

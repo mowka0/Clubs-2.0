@@ -224,7 +224,29 @@
 /* Пилюли — по ширине содержимого (flex-shrink: 0), поиск флексом занимает остаток
    и адаптируется под выбранные значения («Путешествия» шире «Спорт» → поле ужмётся). */
 .rd-filter-row { display: flex; gap: 8px; align-items: stretch; margin-bottom: 16px; }
-.rd-filter-row .rd-search { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
+/* Обёртка поля поиска — якорь для выпадашки подсказок (position: relative на ней, а не на
+   всей строке фильтров, иначе список уезжал бы под пилюли «Категория»/«Цена»). */
+.rd-filter-row .rd-search-wrap { position: relative; flex: 1 1 auto; min-width: 0; }
+.rd-filter-row .rd-search { min-width: 0; margin-bottom: 0; }
+
+/* Подсказки тем под полем поиска (club-interests). z-index ниже шторок фильтров (rd-sheet
+   живёт на 200) — выпадашка не должна всплывать поверх открытой шторки категории. */
+.rd-search-hints {
+  position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; right: 0;
+  border-radius: 14px; overflow: hidden;
+  background: var(--card-solid); border: 1px solid var(--hairline-2);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+.rd-search-hint {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  padding: 11px 14px;
+  border: 0; border-bottom: 1px solid var(--hairline);
+  background: transparent; cursor: pointer;
+  font-family: inherit; font-size: 13.5px; color: var(--text);
+}
+.rd-search-hint:last-child { border-bottom: 0; }
+.rd-search-hint svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--text-faint); }
+.rd-search-hint:active { background: var(--accent-soft); color: var(--accent); }
 .rd-filter-pill {
   flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px;
   padding: 0 13px; border-radius: 14px;
