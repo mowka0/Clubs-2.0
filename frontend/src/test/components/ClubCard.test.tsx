@@ -37,41 +37,33 @@ function renderCard(props: { club?: ClubListItemDto; facts?: ClubCardFactsDto } 
   );
 }
 
-describe('ClubCard — карточка Discovery v2 (полка метрик на обложке)', () => {
-  it('до фактов: имя + город в meta без числа участников, полки метрик нет', () => {
+describe('ClubCard — карточка Discovery (чистая обложка, вариант G)', () => {
+  it('до фактов: имя и город есть, активности ещё нет', () => {
     renderCard();
     expect(screen.getByText('Беговой клуб')).toBeInTheDocument();
     expect(screen.getByText('Москва')).toBeInTheDocument();
-    expect(screen.queryByText(/участник/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/дн/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/актив/)).not.toBeInTheDocument();
   });
 
-  it('с фактами: полка «возраст · участники · вовлечённость» голым текстом', () => {
+  it('с фактами: размер и активность в строке города, возраста клуба нет', () => {
     renderCard({
       club: club({ memberCount: 24 }),
       facts: facts({ ageDays: 145, engagementPercent: 78 }),
     });
 
-    expect(screen.getByText('145 дн')).toBeInTheDocument();
-    expect(screen.getByText('24')).toBeInTheDocument(); // участники из списка, не из facts
-    expect(screen.getByText('78%')).toBeInTheDocument();
-    // Старые словесные подписи трио ушли вместе с телом-сеткой
-    expect(screen.queryByText('дней')).not.toBeInTheDocument();
-    expect(screen.queryByText('участников')).not.toBeInTheDocument();
-    expect(screen.queryByText('вовлечены')).not.toBeInTheDocument();
-  });
-
-  it('meta с фактами — только город, участники не дублируются', () => {
-    renderCard({ facts: facts({ ageDays: 10, engagementPercent: 50 }) });
     expect(screen.getByText('Москва')).toBeInTheDocument();
-    expect(screen.queryByText(/Москва ·/)).not.toBeInTheDocument();
+    expect(screen.getByText('24 чел')).toBeInTheDocument();
+    expect(screen.getByText('78% актив')).toBeInTheDocument();
+    // Возраст клуба снят вместе с полкой метрик — самый слабый сигнал при выборе.
+    expect(screen.queryByText(/145/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/дн/)).not.toBeInTheDocument();
   });
 
-  it('«дн» не склоняется даже для 1 дня', () => {
-    renderCard({ facts: facts({ ageDays: 1, engagementPercent: 0 }) });
-    expect(screen.getByText('1 дн')).toBeInTheDocument();
-    expect(screen.queryByText('день')).not.toBeInTheDocument();
+  it('полки метрик на обложке больше нет — фото не режется', () => {
+    const { container } = renderCard({ facts: facts({ ageDays: 10, engagementPercent: 50 }) });
+    expect(container.querySelector('.rd-shelf')).toBeNull();
+    // Единственное наложение на обложке — чип цены.
+    expect(container.querySelector('.rd-cover .rd-price-chip')).not.toBeNull();
   });
 
   afterEach(() => {
@@ -124,14 +116,16 @@ describe('ClubCard — карточка Discovery v2 (полка метрик н
     expect(screen.getByText('19:00')).toBeInTheDocument();
   });
 
-  it('темы клуба идут строкой в порядке разметки', () => {
-    renderCard({ club: club({ interests: ['бег', 'марафон'] }) });
-    expect(screen.getByText('бег · марафон')).toBeInTheDocument();
+  it('темы клуба идут плашками в порядке разметки', () => {
+    const { container } = renderCard({ club: club({ interests: ['бег', 'марафон'] }) });
+    const topics = [...container.querySelectorAll('.rd-topic')].map((n) => n.textContent);
+    expect(topics).toEqual(['бег', 'марафон']);
   });
 
-  it('лишние темы сворачиваются в «+N», строка не растёт', () => {
-    renderCard({ club: club({ interests: ['бег', 'марафон', 'трейл', 'йога', 'бокс'] }) });
-    expect(screen.getByText('бег · марафон · трейл · +2')).toBeInTheDocument();
+  it('лишние темы сворачиваются в «+N» — ряд не переносится', () => {
+    const { container } = renderCard({ club: club({ interests: ['бег', 'марафон', 'трейл', 'йога', 'бокс'] }) });
+    const topics = [...container.querySelectorAll('.rd-topic')].map((n) => n.textContent);
+    expect(topics).toEqual(['бег', 'марафон', 'трейл', '+2']);
   });
 
   it('у клуба без тем строки тем нет вовсе', () => {

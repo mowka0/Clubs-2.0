@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>if(new URLSearchParams(location.search).has('light'))document.documentElement.dataset.theme='light'</script>
+<title>Темы на карточке + свободная обложка</title>
+<style>
+:root {
+  --bg:#0B0B0E; --text:#F4F4F6; --text-dim:rgba(244,244,246,0.6); --text-faint:rgba(244,244,246,0.45);
+  --panel:#17171C; --hairline:rgba(255,255,255,0.06); --hairline-2:rgba(255,255,255,0.1);
+  --accent:#F47B3C; --accent-deep:#D5611C; --accent-soft:rgba(244,123,60,0.14);
+  --accent-grad:linear-gradient(135deg,#FFA070 0%,#F47B3C 100%); --on-accent:#2A0E04;
+  --live:#66D49A; --page:#141416; --shelf-hl:rgba(255,255,255,0.12);
+  --topic-bg:rgba(255,255,255,0.07); --topic-br:rgba(255,255,255,0.10);
+}
+[data-theme="light"] {
+  --bg:#F7F6F3; --text:#1A1A1A; --text-dim:#6B6B70; --text-faint:#8A8A8E;
+  --panel:#FFFFFF; --hairline:rgba(0,0,0,0.06); --hairline-2:rgba(0,0,0,0.1);
+  --accent-soft:rgba(244,123,60,0.12); --accent-grad:linear-gradient(135deg,#F47B3C 0%,#D5611C 100%); --on-accent:#FFFFFF;
+  --live:#2E7D5A; --page:#E9E7E2; --shelf-hl:rgba(255,255,255,0.9);
+  --topic-bg:rgba(0,0,0,0.045); --topic-br:rgba(0,0,0,0.08);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif; background:var(--page); color:var(--text); -webkit-font-smoothing:antialiased; }
+.topbar { position:sticky; top:0; z-index:10; display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:16px 24px; background:var(--page); border-bottom:1px solid var(--hairline); }
+.topbar h1 { font-size:17px; font-weight:800; letter-spacing:-0.02em; }
+.topbar .hint { font-size:12px; color:var(--text-dim); margin-top:3px; max-width:760px; line-height:1.45; }
+.toggle { flex-shrink:0; display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 15px; border-radius:999px; border:1px solid var(--hairline-2); background:var(--panel); color:var(--text); font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+.rail { display:flex; gap:30px; padding:26px 28px 40px; overflow-x:auto; align-items:flex-start; }
+.col { width:340px; flex-shrink:0; }
+.col > h2 { font-size:13px; font-weight:800; letter-spacing:-0.01em; margin-bottom:3px; }
+.col > .note { font-size:11.5px; color:var(--text-dim); line-height:1.5; margin-bottom:4px; min-height:64px; }
+.col > .trade { font-size:11px; color:var(--text-faint); line-height:1.45; margin-bottom:14px; min-height:32px; }
+.col > .trade b { color:var(--accent); font-weight:700; }
+.metric { font-size:10.5px; color:var(--text-faint); margin:10px 2px 0; font-variant-numeric:tabular-nums; }
+
+/* ── общие атомы ───────────────────────────────────────────────── */
+.card { position:relative; border-radius:18px; overflow:hidden; background:var(--panel); box-shadow:0 8px 26px rgba(0,0,0,0.28); margin-bottom:14px; }
+.cov { position:relative; background-size:cover; background-position:center; height:112px; }
+.cov.tall { height:150px; }
+.grad-sport { background:radial-gradient(circle at 70% 30%, rgba(255,232,200,0.5), transparent 50%), linear-gradient(135deg,#F47B3C 0%,#5a3f1f 60%,#1a1108 100%); }
+.grad-games { background:radial-gradient(circle at 70% 30%, rgba(170,235,200,0.4), transparent 50%), linear-gradient(135deg,#2E9A6A 0%,#144a32 60%,#061a10 100%); }
+.price-chip { position:absolute; z-index:3; top:10px; right:12px; font-size:12px; font-weight:700; color:#fff; background:rgba(0,0,0,0.5); padding:4px 10px; border-radius:999px; backdrop-filter:blur(8px); }
+.chip-row { position:absolute; left:0; bottom:0; z-index:2; display:flex; align-items:center; gap:12px; padding:9px 12px 4px; background:var(--panel); border-top-right-radius:13px; box-shadow:inset 0 1px 0 var(--shelf-hl); }
+.cc { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:700; color:var(--text); white-space:nowrap; }
+.cc svg { width:11px; height:11px; flex-shrink:0; color:var(--text-faint); }
+.cc.ok, .cc.ok svg { color:var(--live); }
+.body { padding:9px 14px 14px; }
+.ttl { font-size:15.5px; font-weight:700; letter-spacing:-0.01em; }
+.loc { margin-top:4px; font-size:12px; color:var(--text-dim); display:inline-flex; align-items:center; gap:5px; min-width:0; }
+.loc svg { width:12px; height:12px; opacity:0.7; flex-shrink:0; }
+.brow { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; }
+.bl { min-width:0; flex:1; }
+.meet { flex-shrink:0; display:flex; align-items:center; gap:8px; }
+.meet-bar { width:2.5px; align-self:stretch; border-radius:2px; background:var(--accent-grad); }
+.meet-tx { display:flex; flex-direction:column; line-height:1.1; }
+.meet-d { font-size:7.5px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-faint); }
+.meet-t { font-size:13px; font-weight:800; font-variant-numeric:tabular-nums; margin-top:1px; }
+
+/* ── A. как сейчас: строка тем добавлена к карточке v2 ─────────── */
+.a-topics { margin-top:7px; font-size:11px; color:var(--text-dim); opacity:0.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* ── B. чистая обложка: наложения сняты, всё в теле ────────────── */
+.b-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+.b-price { flex-shrink:0; font-size:12px; font-weight:800; color:var(--accent); }
+.b-line { margin-top:5px; display:flex; align-items:center; gap:7px; flex-wrap:wrap; font-size:11.5px; color:var(--text-dim); }
+.b-line .dot { width:2.5px; height:2.5px; border-radius:50%; background:var(--text-faint); flex-shrink:0; }
+.b-line .ok { color:var(--live); font-weight:700; }
+.b-topics { margin-top:8px; display:flex; gap:5px; flex-wrap:nowrap; overflow:hidden; }
+.tp { flex-shrink:0; font-size:10.5px; font-weight:600; padding:3px 8px; border-radius:6px; background:var(--topic-bg); border:1px solid var(--topic-br); color:var(--text-dim); white-space:nowrap; }
+
+/* ── G. рекомендация: обложке возвращены съеденные полкой пиксели ── */
+.g-cov { height:126px; }
+.g-live { color:var(--live); font-weight:700; }
+
+/* ── C. темы вместо метрик ─────────────────────────────────────── */
+.c-line { margin-top:5px; font-size:11.5px; color:var(--text-dim); display:flex; align-items:center; gap:5px; min-width:0; }
+.c-line svg { width:12px; height:12px; opacity:0.7; flex-shrink:0; }
+
+/* ── D. темы срослись с городом (нулевой прирост высоты) ───────── */
+.d-line { margin-top:4px; font-size:11.5px; color:var(--text-dim); display:flex; align-items:center; gap:6px; min-width:0; }
+.d-line svg { width:12px; height:12px; opacity:0.7; flex-shrink:0; }
+.d-city { font-weight:600; color:var(--text-dim); flex-shrink:0; }
+.d-rest { color:var(--text-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* ── E. горизонталь: обложка слева квадратом ───────────────────── */
+.e-card { display:flex; gap:12px; padding:11px; align-items:stretch; }
+.e-cov { width:96px; height:96px; flex-shrink:0; border-radius:13px; background-size:cover; background-position:center; position:relative; overflow:hidden; }
+.e-body { flex:1; min-width:0; display:flex; flex-direction:column; }
+.e-top { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+.e-ttl { font-size:14.5px; font-weight:700; letter-spacing:-0.01em; line-height:1.25; }
+.e-price { flex-shrink:0; font-size:11.5px; font-weight:800; color:var(--accent); white-space:nowrap; }
+.e-topics { margin-top:6px; display:flex; gap:5px; overflow:hidden; }
+.e-foot { margin-top:auto; padding-top:7px; display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px; color:var(--text-dim); }
+.e-meet { display:inline-flex; align-items:center; gap:5px; font-weight:700; color:var(--text); }
+.e-meet i { width:5px; height:5px; border-radius:50%; background:var(--accent); display:inline-block; }
+
+/* ── F. постер: имя печатается по низу обложки ─────────────────── */
+.f-scrim { position:absolute; inset:auto 0 0 0; height:76px; background:linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.45) 45%, transparent 100%); z-index:1; }
+.f-over { position:absolute; left:14px; right:14px; bottom:10px; z-index:2; }
+.f-ttl { font-size:15.5px; font-weight:800; color:#fff; letter-spacing:-0.01em; text-shadow:0 1px 8px rgba(0,0,0,0.5); }
+.f-loc { margin-top:2px; font-size:11.5px; color:rgba(255,255,255,0.82); display:inline-flex; align-items:center; gap:5px; }
+.f-loc svg { width:11px; height:11px; }
+.f-body { padding:10px 14px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.f-topics { display:flex; gap:5px; overflow:hidden; min-width:0; }
+.f-right { flex-shrink:0; display:inline-flex; align-items:center; gap:9px; font-size:11px; font-weight:700; color:var(--text-dim); }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div>
+    <h1>Темы на карточке + свободная обложка</h1>
+    <div class="hint">
+      Проблема (PO 2026-08-01): карточка перегружена и обложка урезается. На неё легло восемь
+      сущностей — цена, три метрики полкой, ранг, имя, город, время встречи, темы, — а сама
+      картинка отдана под наложения сверху и снизу. Ниже шесть развязок; в каждой колонке верхняя
+      карточка с фото, нижняя — с градиентом (у большинства клубов фото нет). Кнопка — тема.
+    </div>
+  </div>
+  <button class="toggle" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'light' ? '' : 'light'">☀︎ / ☾</button>
+</div>
+
+<div class="rail" id="rail"></div>
+
+<script>
+const ICON_PIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
+const ICON_CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+const ICON_PPL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><path d="M16 6a3 3 0 0 1 0 6"/></svg>';
+const ICON_BOLT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>';
+
+// Два клуба: с фотографией и без (градиент по категории) — обе беды видно на обоих.
+const A = { img:'covers/running.jpg', grad:'', ttl:'Беговой клуб «Второе дыхание»', city:'Москва', price:'1 200 ₽/мес',
+            age:'145 дн', ppl:'24', eng:'78%', topics:['бег','марафон','трейл'], more:2, meet:['сегодня','19:30'] };
+const B = { img:'', grad:'grad-games', ttl:'Пятничные партии', city:'Санкт-Петербург', price:'бесплатно',
+            age:'12 дн', ppl:'8', eng:'64%', topics:['настолки','мафия','днд'], more:0, meet:null };
+
+const cov = (c, extra='') => `<div class="cov ${c.grad} ${extra}" ${c.img ? `style="background-image:url('${c.img}')"` : ''}>`;
+const shelf = c => `<div class="chip-row"><span class="cc">${ICON_CLOCK}${c.age}</span><span class="cc">${ICON_PPL}${c.ppl}</span><span class="cc ok">${ICON_BOLT}${c.eng}</span></div>`;
+const meetCol = c => c.meet ? `<div class="meet"><span class="meet-bar"></span><span class="meet-tx"><span class="meet-d">${c.meet[0]}</span><span class="meet-t">${c.meet[1]}</span></span></div>` : '';
+const tps = (c, cls='tp') => c.topics.map(t => `<span class="${cls}">${t}</span>`).join('') + (c.more ? `<span class="${cls}">+${c.more}</span>` : '');
+const topicsText = c => c.topics.join(' · ') + (c.more ? ` · +${c.more}` : '');
+
+const VARIANTS = [
+  {
+    h: 'A. Как сейчас (эталон проблемы)',
+    note: 'Карточка v2 из прода плюс строка тем, которую я добавил. Полка метрик срезает нижнюю треть фото, ценник — верх, тем достаётся отдельная строка внизу.',
+    trade: '<b>Обе беды разом:</b> восемь сущностей и фото видно наполовину.',
+    render: c => `
+      <div class="card">
+        ${cov(c)}<span class="price-chip">${c.price}</span>${shelf(c)}</div>
+        <div class="body">
+          <div class="brow">
+            <div class="bl"><div class="ttl">${c.ttl}</div><div class="loc">${ICON_PIN}${c.city}</div></div>
+            ${meetCol(c)}
+          </div>
+          <div class="a-topics">${topicsText(c)}</div>
+        </div>
+      </div>`
+  },
+  {
+    h: 'B. Чистая обложка',
+    note: 'С фото снято всё: цена уезжает к названию, метрики — тихой строкой в тело, темы — плашками. Картинка работает целиком, порядок чтения сверху вниз.',
+    trade: 'Тело выросло на строку, но карточка перестала спорить сама с собой.',
+    render: c => `
+      <div class="card">
+        ${cov(c)}</div>
+        <div class="body">
+          <div class="b-head"><div class="ttl">${c.ttl}</div><div class="b-price">${c.price}</div></div>
+          <div class="b-line">
+            <span>${c.city}</span><span class="dot"></span><span>${c.ppl} чел</span>
+            <span class="dot"></span><span class="ok">${c.eng} живых</span>
+            ${c.meet ? `<span class="dot"></span><span>${c.meet[0]} ${c.meet[1]}</span>` : ''}
+          </div>
+          <div class="b-topics">${tps(c)}</div>
+        </div>
+      </div>`
+  },
+  {
+    h: 'C. Темы вместо метрик',
+    note: 'Возраст и вовлечённость уходят с карточки совсем — они живут на странице клуба. В каталоге человек решает «о чём это и где», а не «какой у клуба процент явки».',
+    trade: 'Самая лёгкая карточка. Цена — <b>качество клуба больше не видно из ленты</b>.',
+    render: c => `
+      <div class="card">
+        ${cov(c)}<span class="price-chip">${c.price}</span></div>
+        <div class="body">
+          <div class="brow">
+            <div class="bl">
+              <div class="ttl">${c.ttl}</div>
+              <div class="c-line">${ICON_PIN}${c.city} · ${c.ppl} чел</div>
+            </div>
+            ${meetCol(c)}
+          </div>
+          <div class="b-topics">${tps(c)}</div>
+        </div>
+      </div>`
+  },
+  {
+    h: 'D. Темы срослись с городом',
+    note: 'Ноль новых строк: темы дописываются к городу через точку и глушатся цветом. Полка метрик уходит с фото наверх — обложка снова целая.',
+    trade: 'Прирост высоты нулевой. Цена — <b>темы читаются как хвост адреса</b>.',
+    render: c => `
+      <div class="card">
+        ${cov(c)}<span class="price-chip">${c.price}</span></div>
+        <div class="body">
+          <div class="brow">
+            <div class="bl">
+              <div class="ttl">${c.ttl}</div>
+              <div class="d-line">${ICON_PIN}<span class="d-city">${c.city}</span><span class="d-rest">· ${topicsText(c)}</span></div>
+            </div>
+            ${meetCol(c)}
+          </div>
+          <div class="b-line" style="margin-top:7px">
+            <span>${c.age}</span><span class="dot"></span><span>${c.ppl} чел</span><span class="dot"></span><span class="ok">${c.eng}</span>
+          </div>
+        </div>
+      </div>`
+  },
+  {
+    h: 'E. Горизонталь',
+    note: 'Обложка — квадрат слева, на неё вообще ничего не кладётся. Справа стек: имя+цена, темы, подвал с городом и встречей. В экран влезает вдвое больше клубов.',
+    trade: 'Обложка целая, но <b>мелкая</b> — витринность теряется.',
+    render: c => `
+      <div class="card e-card">
+        <div class="e-cov ${c.grad}" ${c.img ? `style="background-image:url('${c.img}')"` : ''}></div>
+        <div class="e-body">
+          <div class="e-top"><div class="e-ttl">${c.ttl}</div><div class="e-price">${c.price}</div></div>
+          <div class="e-topics">${tps(c)}</div>
+          <div class="e-foot">
+            <span>${c.city} · ${c.ppl} чел</span>
+            ${c.meet ? `<span class="e-meet"><i></i>${c.meet[0]} ${c.meet[1]}</span>` : `<span>${c.eng} живых</span>`}
+          </div>
+        </div>
+      </div>`
+  },
+  {
+    h: 'G. ✅ ВЫБРАН PO 2026-08-05',
+    note: 'То же, что C, но живость клуба остаётся — одним числом в строке города, без иконки и полки. Освободившиеся с обложки 30px отданы самой обложке (126px): фото стало крупнее, чем в проде.',
+    trade: 'Обе беды сняты, а из тройки метрик потерян только возраст — самый слабый сигнал при выборе.',
+    render: c => `
+      <div class="card">
+        ${cov(c, 'g-cov')}<span class="price-chip">${c.price}</span></div>
+        <div class="body">
+          <div class="brow">
+            <div class="bl">
+              <div class="ttl">${c.ttl}</div>
+              <div class="c-line">${ICON_PIN}<span>${c.city} · ${c.ppl} чел · <span class="g-live">${c.eng} актив</span></span></div>
+            </div>
+            ${meetCol(c)}
+          </div>
+          <div class="b-topics">${tps(c)}</div>
+        </div>
+      </div>`
+  },
+  {
+    h: 'F. Постер',
+    note: 'Обложка выше (150px) и работает как афиша: имя и город печатаются по её низу под скримом. Телу остаётся одна строка — темы слева, метрики справа.',
+    trade: 'Самый витринный вид. Цена — <b>карточка выше, клубов на экран меньше</b>.',
+    render: c => `
+      <div class="card">
+        ${cov(c, 'tall')}
+          <span class="price-chip">${c.price}</span>
+          <div class="f-scrim"></div>
+          <div class="f-over">
+            <div class="f-ttl">${c.ttl}</div>
+            <div class="f-loc">${ICON_PIN}${c.city}${c.meet ? ` · ${c.meet[0]} ${c.meet[1]}` : ''}</div>
+          </div>
+        </div>
+        <div class="f-body">
+          <div class="f-topics">${tps(c)}</div>
+          <div class="f-right"><span>${c.ppl} чел</span><span style="color:var(--live)">${c.eng}</span></div>
+        </div>
+      </div>`
+  },
+];
+
+document.getElementById('rail').innerHTML = VARIANTS.map((v, i) => `
+  <div class="col">
+    <h2>${v.h}</h2>
+    <div class="note">${v.note}</div>
+    <div class="trade">${v.trade}</div>
+    <div id="col${i}">${v.render(A)}${v.render(B)}</div>
+    <div class="metric" id="m${i}"></div>
+  </div>
+`).join('');
+
+// Высота первой карточки в колонке — прямой ответ на «сколько клубов влезет в экран».
+requestAnimationFrame(() => {
+  VARIANTS.forEach((_, i) => {
+    const card = document.querySelector(`#col${i} .card`);
+    const h = Math.round(card.getBoundingClientRect().height);
+    const perScreen = (720 / (h + 14)).toFixed(1);
+    document.getElementById(`m${i}`).textContent = `высота карточки ${h}px · на экран ≈ ${perScreen} шт`;
+  });
+});
+</script>
+</body>
+</html>

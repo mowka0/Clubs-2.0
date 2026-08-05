@@ -15,29 +15,8 @@ function formatPrice(price: number): string {
   return `${formatted} ₽/мес`;
 }
 
-/* Иконки полки метрик и пина города (мокап 11-chip-bare): stroke: currentColor,
-   цвет задаёт CSS (.rd-m svg / .rd-meta svg). */
-const ICON_CLOCK = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 7v5l3 2" />
-  </svg>
-);
-
-const ICON_PEOPLE = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-    <circle cx="9" cy="8" r="3.2" />
-    <path d="M3 20c0-3 2.7-5 6-5s6 2 6 5" />
-    <path d="M16 6a3 3 0 0 1 0 6" />
-  </svg>
-);
-
-const ICON_BOLT = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M13 2 4 14h6l-1 8 9-12h-6z" />
-  </svg>
-);
-
+/* Иконка пина города: stroke: currentColor, цвет задаёт CSS (.rd-meta svg).
+   Часы/люди/молния удалены вместе с полкой метрик (PO 2026-08-05). */
 const ICON_PIN = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
@@ -87,22 +66,15 @@ export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
         navigate(`/clubs/${club.id}`);
       }}
     >
+      {/* Обложка чистая: единственное наложение — чип цены. Полка метрик, съедавшая нижние
+          ~30px фотографии, снята (PO 2026-08-05, вариант G мокапа 16-topics-and-cover),
+          и эти пиксели отданы самой картинке — она стала выше, чем была с полкой. */}
       <div
         className="rd-cover"
         data-cat={cat}
         style={cardCover ? { backgroundImage: `url(${cardCover})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
       >
         <span className="rd-price-chip">{formatPrice(club.subscriptionPrice)}</span>
-        {/* Полка метрик: возраст · участники · вовлечённость — уголок из материала карточки
-            в нижнем-левом углу обложки. Намеренно НЕ встреч/мес и НЕ ядро (это кольца на
-            странице клуба), чтобы карточка не дублировала страницу. */}
-        {facts && (
-          <div className="rd-shelf">
-            <span className="rd-m">{ICON_CLOCK}{facts.ageDays} дн</span>
-            <span className="rd-m">{ICON_PEOPLE}{club.memberCount}</span>
-            <span className="rd-m ok">{ICON_BOLT}{facts.engagementPercent}%</span>
-          </div>
-        )}
       </div>
       <div className="rd-body">
         {/* Soft-rank L3 бейдж — единственный внешне видимый сигнал ранга (boolean; никогда не число).
@@ -113,7 +85,20 @@ export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
         <div className="rd-brow">
           <div className="rd-bl">
             <div className="rd-ttl">{club.name}</div>
-            <div className="rd-meta">{ICON_PIN}<span className="rd-meta-city">{club.city}</span></div>
+            {/* Одна строка вместо полки: город, размер и активность клуба. Возраст («145 дн»)
+                убран совсем — при выборе клуба это самый слабый сигнал, а место дороже. */}
+            <div className="rd-meta">
+              {ICON_PIN}
+              <span className="rd-meta-city">{club.city}</span>
+              <span className="rd-meta-sep" aria-hidden="true">·</span>
+              <span className="rd-meta-num">{club.memberCount} чел</span>
+              {facts && (
+                <>
+                  <span className="rd-meta-sep" aria-hidden="true">·</span>
+                  <span className="rd-meta-live">{facts.engagementPercent}% актив</span>
+                </>
+              )}
+            </div>
           </div>
           {meetingDay && club.nearestEvent && (
             <div className="rd-meet">
@@ -125,11 +110,15 @@ export const ClubCard: FC<ClubCardProps> = ({ club, facts }) => {
             </div>
           )}
         </div>
-        {/* Темы строкой, а не рядом пилюль: на карточке уже живут ценник, полка метрик,
-            топ-бейдж и колонка встречи — ещё один ряд плашек её бы перегрузил. Приглушённый
-            текст добавляет смысл («бег · марафон» вместо просто «Спорт»), не добавляя веса. */}
+        {/* Темы плашками: со снятием полки метрик место освободилось, и «бег · марафон» больше
+            не приходится жать в серый хвост под городом. Плашка читается как самостоятельная
+            сущность — это ответ на «о чём клуб», ради которого человек и открывает каталог. */}
         {topics.length > 0 && (
-          <div className="rd-topics">{topics.join(' · ')}</div>
+          <div className="rd-topics">
+            {topics.map((topic) => (
+              <span key={topic} className="rd-topic">{topic}</span>
+            ))}
+          </div>
         )}
       </div>
     </button>
