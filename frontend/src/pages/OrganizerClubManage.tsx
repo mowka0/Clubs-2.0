@@ -15,6 +15,7 @@ import { AvatarUpload } from '../components/AvatarUpload';
 import { FoxEmpty } from '../components/feed/FoxEmpty';
 import foxFinancesArt from '../assets/mascot/fox-finances.png';
 import { Toast } from '../components/Toast';
+import { ClubInterestsPicker } from '../components/club/ClubInterestsPicker';
 import { ManageHeader } from '../components/manage/ManageHeader';
 import { ClubStatsTab } from '../components/manage/ClubStatsTab';
 import { ClubChatTab } from '../components/manage/ClubChatTab';
@@ -163,6 +164,9 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
   const [description, setDescription] = useState(club.description);
   const [rules, setRules] = useState(club.rules ?? '');
   const [applicationQuestion, setApplicationQuestion] = useState(club.applicationQuestion ?? '');
+  // Темы, в отличие от категории, редактируются: ошибку разметки организатор должен уметь
+  // исправить, а на ранг клуба темы не влияют (club-interests.md).
+  const [interests, setInterests] = useState<string[]>(club.interests ?? []);
   const [paymentLink, setPaymentLink] = useState(club.paymentLink ?? '');
   const [paymentMethodNote, setPaymentMethodNote] = useState(club.paymentMethodNote ?? '');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(club.avatarUrl ?? null);
@@ -190,6 +194,8 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
     description !== club.description ||
     rules !== (club.rules ?? '') ||
     applicationQuestion !== (club.applicationQuestion ?? '') ||
+    // Порядок тем значим (первая = главная), поэтому сравниваем как строку, а не как множество.
+    interests.join(' ') !== (club.interests ?? []).join(' ') ||
     paymentLink !== (club.paymentLink ?? '') ||
     paymentMethodNote !== (club.paymentMethodNote ?? '') ||
     avatarUrl !== (club.avatarUrl ?? null) ||
@@ -259,6 +265,9 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
     if (applicationQuestion !== (club.applicationQuestion ?? '')) {
       payload.applicationQuestion = applicationQuestion.trim();
     }
+    // Пустой массив здесь означает «снять все темы» и шлётся осознанно — в отличие от создания,
+    // где отличать «не задано» от «снять» не от чего.
+    if (interests.join(' ') !== (club.interests ?? []).join(' ')) payload.interests = interests;
     if (paymentLink !== (club.paymentLink ?? '')) payload.paymentLink = paymentLink.trim();
     if (paymentMethodNote !== (club.paymentMethodNote ?? '')) payload.paymentMethodNote = paymentMethodNote.trim();
     if (avatarUrl !== (club.avatarUrl ?? null)) payload.avatarUrl = avatarUrl ?? '';
@@ -390,6 +399,13 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
             />
           </label>
         )}
+        <div className="rd-field">
+          <ClubInterestsPicker
+            category={club.category}
+            value={interests}
+            onChange={setInterests}
+          />
+        </div>
       </div>
 
       {/* СБП-реквизиты — владельческая секция (PO №2): деньги идут владельцу, со-орг их не меняет. */}

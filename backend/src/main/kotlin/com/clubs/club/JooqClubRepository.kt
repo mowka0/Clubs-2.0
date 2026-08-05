@@ -9,9 +9,12 @@ import com.clubs.generated.jooq.enums.MembershipRole
 import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
 import com.clubs.generated.jooq.tables.references.CLUBS
+import com.clubs.generated.jooq.tables.references.CLUB_INTERESTS
 import com.clubs.generated.jooq.tables.references.EVENTS
 import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
+import com.clubs.generated.jooq.tables.references.INTERESTS
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
+import com.clubs.interest.InterestRepository
 import org.jooq.DSLContext
 import org.jooq.Field
 import org.jooq.impl.DSL
@@ -22,6 +25,9 @@ import java.util.UUID
 @Repository
 class JooqClubRepository(
     private val dsl: DSLContext,
+    // Темы карточек каталога читаются готовым батч-методом словаря, а не вторым таким же
+    // запросом здесь (club-interests.md).
+    private val interestRepository: InterestRepository,
     private val mapper: ClubMapper
 ) : ClubRepository {
 
@@ -223,6 +229,11 @@ class JooqClubRepository(
             condition = condition.and(
                 DSL.lower(CLUBS.NAME).like(pattern)
                     .or(DSL.lower(CLUBS.DESCRIPTION).like(pattern))
+                    // Темы клуба — третье место поиска: «Пятничные партии» с темой «настолки»
+                    // раньше не находились по слову «настолки» никогда (club-interests.md).
+                    // EXISTS, а не JOIN: джойн размножил бы строку клуба по числу совпавших тем
+                    // и сломал бы count/пагинацию.
+                    .or(matchesInterest(pattern))
             )
         }
 
@@ -247,6 +258,8 @@ class JooqClubRepository(
         val nearestEvents = fetchNearestEvents(clubIds)
         // Живые счётчики из `memberships` (active+grace, включая организатора) — не дрейфующая колонка.
         val liveCounts = countLiveMembersByClub(clubIds)
+        // Темы всей страницы выдачи одним запросом — поштучно вышло бы N+1 (club-interests.md AC-8).
+        val interestsByClub = interestRepository.findClubInterestNamesByClubIds(clubIds)
 
         val newThreshold = now.minusDays(NEW_CLUB_DAYS)
 
@@ -282,7 +295,8 @@ class JooqClubRepository(
                 avatarUrl = club.avatarUrl,
                 coverUrl = club.coverUrl,
                 nearestEvent = nearestEvents[club.id],
-                tags = tags
+                tags = tags,
+                interests = interestsByClub[club.id] ?: emptyList()
             )
         }
 
@@ -295,6 +309,18 @@ class JooqClubRepository(
             size = filters.size
         )
     }
+
+    /** У клуба есть тема, попадающая под поисковый шаблон. Имена в словаре уже канонично строчные. */
+    private fun matchesInterest(pattern: String): org.jooq.Condition =
+        DSL.exists(
+            DSL.selectOne()
+                .from(CLUB_INTERESTS)
+                .join(INTERESTS).on(INTERESTS.ID.eq(CLUB_INTERESTS.INTEREST_ID))
+                .where(
+                    CLUB_INTERESTS.CLUB_ID.eq(CLUBS.ID)
+                        .and(INTERESTS.NAME.like(pattern))
+                )
+        )
 
     /**
      * Сигнал сортировки по недавней активности: число неотменённых событий клуба с датой в пределах

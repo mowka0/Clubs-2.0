@@ -8,6 +8,11 @@ import jakarta.validation.constraints.Size
 import java.time.OffsetDateTime
 import java.util.UUID
 
+// Потолок размера списка тем В ЗАПРОСЕ — защита от абсурдного тела, а не бизнес-лимит.
+// Бизнес-лимит (7) применяет InterestService, отбрасывая лишние молча: восьмая тема не повод
+// уронить создание клуба, а десять тысяч строк в JSON — повод отказать сразу.
+private const val MAX_INTERESTS_IN_REQUEST = 50
+
 data class NearestEventDto(
     val id: UUID,
     val title: String,
@@ -33,7 +38,11 @@ data class ClubListItemDto(
     // Фолбэк на avatarUrl держит фронтенд — у клубов, созданных до разделения, обложки нет.
     val coverUrl: String? = null,
     val nearestEvent: NearestEventDto?,
-    val tags: List<String> = emptyList()
+    // ВНИМАНИЕ: `tags` — вычисляемые бейджи каталога («Новый», «Популярный», «Свободные места»),
+    // считаются на лету в findAll. Темы клуба из словаря — это `interests` ниже.
+    val tags: List<String> = emptyList(),
+    // Темы клуба (0–7) — уточнение категории, по ним же работает поиск (club-interests.md).
+    val interests: List<String> = emptyList()
 )
 
 data class ClubDetailDto(
@@ -77,7 +86,9 @@ data class ClubDetailDto(
     // Имя владельца — только для посадочной инвайта (подпись «Приглашение от <имя>», club-invites).
     // В остальных ответах null: не тянем лишний lookup пользователя.
     val ownerFirstName: String? = null,
-    val ownerLastName: String? = null
+    val ownerLastName: String? = null,
+    // Темы клуба (0–7) из общего с профилем словаря — уточняют категорию (club-interests.md).
+    val interests: List<String> = emptyList()
 )
 
 /**
@@ -136,6 +147,13 @@ data class CreateClubRequest(
     val rules: String? = null,
     val applicationQuestion: String? = null,
 
+    /**
+     * Темы клуба. Лишние сверх [InterestNormalizer.MAX_CLUB_COUNT] отбрасываются молча —
+     * потолок здесь только против абсурдного тела запроса, а не против восьмой темы.
+     */
+    @field:Size(max = MAX_INTERESTS_IN_REQUEST, message = "Слишком много тем")
+    val interests: List<String>? = null,
+
     // Реквизиты для взносов по СБП. Обязательны при subscriptionPrice > 0 (проверяется в ClubService.createClub):
     // платный клуб обязан сообщить участникам, как платить. paymentLink = ссылка СБП/телефон; note = опциональная подсказка.
     @field:Size(max = 500, message = "Реквизиты: максимум 500 символов")
@@ -168,6 +186,13 @@ data class UpdateClubRequest(
     val coverUrl: String? = null,
     val rules: String? = null,
     val applicationQuestion: String? = null,
+
+    /**
+     * Темы клуба. Та же конвенция, что у остальных полей: null = не трогать, пустой список =
+     * снять все темы, непустой = заменить набор целиком.
+     */
+    @field:Size(max = MAX_INTERESTS_IN_REQUEST, message = "Слишком много тем")
+    val interests: List<String>? = null,
 
     // Реквизиты для взносов по СБП (настройки). null = оставить как есть; пустая строка = очистить в NULL (как rules/district).
     @field:Size(max = 500, message = "Реквизиты: максимум 500 символов")

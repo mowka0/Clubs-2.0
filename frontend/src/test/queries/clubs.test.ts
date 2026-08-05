@@ -154,7 +154,7 @@ describe('useClubsQuery (infinite)', () => {
         avatarUrl: null,
         coverUrl: null,
         nearestEvent: null,
-        tags: [],
+        tags: [], interests: [],
       },
     ];
     const page1: ClubListItemDto[] = [
@@ -171,7 +171,7 @@ describe('useClubsQuery (infinite)', () => {
         avatarUrl: null,
         coverUrl: null,
         nearestEvent: null,
-        tags: [],
+        tags: [], interests: [],
       },
     ];
 

@@ -83,7 +83,10 @@ export interface ClubListItemDto {
   /** Обложка карточки (V70). null у клубов, созданных до разделения обложки и аватара — фолбэк на avatarUrl. */
   coverUrl: string | null;
   nearestEvent: NearestEventDto | null;
+  /** Вычисляемые бейджи каталога («Новый», «Популярный», «Свободные места») — НЕ темы клуба. */
   tags: string[];
+  /** Темы клуба (0–7) из словаря — уточняют категорию, по ним же ищет каталог. */
+  interests: string[];
 }
 
 export interface MemberListItemDto {
@@ -414,6 +417,8 @@ export interface ClubDetailDto {
   coverUrl: string | null;
   rules: string | null;
   applicationQuestion: string | null;
+  /** Темы клуба (0–7) из общего с профилем словаря. Публичны, приходят всем. */
+  interests: string[];
   /** Прямой инвайт-код (вход мимо заявки) — приходит ТОЛЬКО менеджеру клуба, остальным null. */
   inviteLink: string | null;
   /**

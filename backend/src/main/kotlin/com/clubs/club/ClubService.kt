@@ -15,6 +15,7 @@ import com.clubs.event.EventRepository
 import com.clubs.generated.jooq.enums.AccessType
 import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.enums.MembershipStatus
+import com.clubs.interest.InterestService
 import com.clubs.membership.MembershipRepository
 import com.clubs.skladchina.SkladchinaRepository
 import com.clubs.subscription.SubscriptionService
@@ -53,6 +54,9 @@ class ClubService(
     private val userRepository: UserRepository,
     // Резолвит cityId в город справочника: клиент присылает только id, имя города берётся отсюда.
     private val cityService: CityService,
+    // Темы клуба живут в общем с профилем словаре (club-interests.md). Цикла нет:
+    // InterestService зависит только от своего репозитория.
+    private val interestService: InterestService,
     private val mapper: ClubMapper
 ) {
 
@@ -100,9 +104,18 @@ class ClubService(
         // осиротевших клубов без organizer-членства.
         membershipRepository.createOrganizer(ownerId, club.id)
 
+        // Темы необязательны: клуб без разметки создаётся штатно (трение в воронке создания
+        // дороже идеальной разметки — решение PO). Лишние сверх лимита отбрасывает сервис.
+        val interests = request.interests.orEmpty()
+        if (interests.isNotEmpty()) interestService.replaceClubInterests(club.id, interests)
+
         // Перечитываем, чтобы ответ нёс актуальный счётчик участников (= 1, организатор только
         // что добавлен), а не голый результат create() (0). findById считает счётчик из `memberships`.
-        return mapper.toDetailDto(clubRepository.findById(club.id) ?: club, includeRequisites = true)
+        return mapper.toDetailDto(
+            clubRepository.findById(club.id) ?: club,
+            includeRequisites = true,
+            interests = interestService.getClubInterests(club.id)
+        )
     }
 
     fun getClubByInviteCode(code: String): ClubDetailDto {
@@ -128,7 +141,8 @@ class ClubService(
             chatDoorEnabled = chatLinked && chatLink?.doorEnabled == true,
             ownerFirstName = owner?.firstName,
             ownerLastName = owner?.lastName,
-            inviteRequiresApplication = requiresApplication
+            inviteRequiresApplication = requiresApplication,
+            interests = interestService.getClubInterests(club.id)
         )
     }
 
@@ -171,7 +185,12 @@ class ClubService(
         val updated = clubRepository.updateInviteCode(clubId, newCode) ?: throw NotFoundException("Club not found")
         log.info("Invite link regenerated: clubId={} userId={}", clubId, userId)
         // Вызвать сюда мог только менеджер (гейт выше) — новый код ему и возвращаем.
-        return mapper.toDetailDto(updated, includeRequisites = true, includeInviteLink = true)
+        return mapper.toDetailDto(
+            updated,
+            includeRequisites = true,
+            includeInviteLink = true,
+            interests = interestService.getClubInterests(clubId)
+        )
     }
 
     fun getClub(id: UUID, callerId: UUID): ClubDetailDto {
@@ -203,7 +222,8 @@ class ClubService(
             chatInviteLink = if (chatLinked && hasChatAccess) chatLink?.doorInviteLink else null,
             // Прямой инвайт-код (вход мимо заявки) — только менеджеру: обычный участник не должен
             // иметь возможности раздать ссылку в обход одобрения (решение PO 2026-07-30).
-            includeInviteLink = clubRoleGuard.hasCapability(club, callerId, ClubCapability.MANAGE_INVITE_LINK)
+            includeInviteLink = clubRoleGuard.hasCapability(club, callerId, ClubCapability.MANAGE_INVITE_LINK),
+            interests = interestService.getClubInterests(id)
         )
     }
 
@@ -253,8 +273,18 @@ class ClubService(
         // Город меняется только на существующий из справочника; не прислали cityId — не трогаем.
         val city = request.cityId?.let { cityService.requireCity(it) }
         val updated = clubRepository.update(id, request, city) ?: throw NotFoundException("Club not found after update")
+
+        // Темы — часть настроек клуба (гейт EDIT_CLUB_SETTINGS выше), отдельного права не заводим:
+        // тема не про деньги и не про доступ. null = ключа нет в теле = не трогать; пустой список
+        // = снять все темы — та же конвенция, что у остальных nullable-полей апдейта.
+        request.interests?.let { interestService.replaceClubInterests(id, it) }
+
         log.info("Club updated: id={} userId={}", id, userId)
-        return mapper.toDetailDto(updated, includeRequisites = true)
+        return mapper.toDetailDto(
+            updated,
+            includeRequisites = true,
+            interests = interestService.getClubInterests(id)
+        )
     }
 
     @Transactional

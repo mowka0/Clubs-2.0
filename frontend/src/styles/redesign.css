@@ -224,7 +224,29 @@
 /* Пилюли — по ширине содержимого (flex-shrink: 0), поиск флексом занимает остаток
    и адаптируется под выбранные значения («Путешествия» шире «Спорт» → поле ужмётся). */
 .rd-filter-row { display: flex; gap: 8px; align-items: stretch; margin-bottom: 16px; }
-.rd-filter-row .rd-search { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
+/* Обёртка поля поиска — якорь для выпадашки подсказок (position: relative на ней, а не на
+   всей строке фильтров, иначе список уезжал бы под пилюли «Категория»/«Цена»). */
+.rd-filter-row .rd-search-wrap { position: relative; flex: 1 1 auto; min-width: 0; }
+.rd-filter-row .rd-search { min-width: 0; margin-bottom: 0; }
+
+/* Подсказки тем под полем поиска (club-interests). z-index ниже шторок фильтров (rd-sheet
+   живёт на 200) — выпадашка не должна всплывать поверх открытой шторки категории. */
+.rd-search-hints {
+  position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; right: 0;
+  border-radius: 14px; overflow: hidden;
+  background: var(--card-solid); border: 1px solid var(--hairline-2);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+.rd-search-hint {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  padding: 11px 14px;
+  border: 0; border-bottom: 1px solid var(--hairline);
+  background: transparent; cursor: pointer;
+  font-family: inherit; font-size: 13.5px; color: var(--text);
+}
+.rd-search-hint:last-child { border-bottom: 0; }
+.rd-search-hint svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--text-faint); }
+.rd-search-hint:active { background: var(--accent-soft); color: var(--accent); }
 .rd-filter-pill {
   flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px;
   padding: 0 13px; border-radius: 14px;
@@ -268,7 +290,10 @@
    у чипа цены и бейджа встречи своя подложка. 112px — по мокапу 11-chip-bare:
    полка метрик съедает нижние ~30px фото. */
 .rd-club-card .rd-cover {
-  height: 112px;
+  /* 126px, а не прежние 112: полка метрик съедала нижние ~30px фотографии, и после её
+     сноса (PO 2026-08-05, вариант G мокапа 16-topics-and-cover) эти пиксели возвращены
+     самой картинке — обложка стала КРУПНЕЕ, чем была, при том же весе карточки. */
+  height: 126px;
   position: relative;
   /* Лёгкая десатурация, чтобы лента из разных категорийных цветов/фото не пестрила */
   filter: saturate(0.9);
@@ -276,23 +301,9 @@
     radial-gradient(circle at 70% 30%, rgba(255, 232, 200, 0.5), transparent 50%),
     linear-gradient(135deg, #F47B3C 0%, #5a3f1f 60%, #1a1108 100%);
 }
-/* Полка метрик — уголок из материала карточки в нижнем-левом углу обложки.
-   Скруглён только правый верхний угол; тонкий блик по верхней кромке. */
-.rd-club-card .rd-shelf {
-  position: absolute; left: 0; bottom: 0; z-index: 2;
-  display: flex; align-items: center; gap: 12px;
-  padding: 9px 12px 4px 12px;      /* верх 9 — с воздухом (PO); низ 4 — придвинуто к кромке */
-  background: var(--card-solid);   /* тот же материал, что тело карточки */
-  border-top-right-radius: 13px;   /* тот самый скруглённый правый угол */
-  box-shadow: inset 0 1px 0 var(--shelf-hl);
-}
-/* Метрика полки: голый текст «иконка + значение», без пилюль. Зелёная (.ok) — вовлечённость. */
-.rd-club-card .rd-m {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 11px; font-weight: 700; color: var(--text); white-space: nowrap;
-}
-.rd-club-card .rd-m svg { width: 11px; height: 11px; flex-shrink: 0; color: var(--text-faint); }
-.rd-club-card .rd-m.ok, .rd-club-card .rd-m.ok svg { color: var(--live); }
+/* Полка метрик (.rd-shelf/.rd-m) удалена 2026-08-05: она лежала уголком на обложке и
+   съедала нижние ~30px фотографии — ровно то, на что жаловался PO («обложка урезается»).
+   Возраст клуба снят совсем, размер и активность переехали в строку города ниже. */
 /* Flex-колонка с единым gap: расстояния между бейджем, именем и городом одинаковые —
    и равны верхнему padding, т.е. тому же отступу вниз от обложки (обои). */
 .rd-club-card .rd-body { padding: 5px 14px 14px; display: flex; flex-direction: column; gap: 5px; }
@@ -305,6 +316,24 @@
 .rd-club-card .rd-meta svg { width: 12px; height: 12px; opacity: 0.7; flex-shrink: 0; }
 /* Город (позже — с районом) обрезается многоточием, не толкая колонку времени справа */
 .rd-club-card .rd-meta-city { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Размер и активность — бывшая полка метрик, теперь хвост строки города. Не ужимаются:
+   первым многоточием жертвуется город, а числа обязаны остаться читаемыми целиком. */
+.rd-club-card .rd-meta-sep { flex-shrink: 0; opacity: 0.5; }
+.rd-club-card .rd-meta-num { flex-shrink: 0; white-space: nowrap; }
+.rd-club-card .rd-meta-live { flex-shrink: 0; white-space: nowrap; color: var(--live); font-weight: 700; }
+/* Темы клуба (club-interests) — одна строка под названием, «бег · марафон · трейл».
+   Мельче и тусклее города: это уточнение, а не факт первого порядка. Не переносится —
+   лишние темы уже свёрнуты в «+N» на стороне компонента. */
+.rd-club-card .rd-topics { display: flex; gap: 5px; margin-top: 2px; overflow: hidden; }
+.rd-club-card .rd-topic {
+  flex-shrink: 0;
+  font-size: 10.5px; font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--surface-2); color: var(--text-dim);
+  border: 1px solid var(--hairline);
+  white-space: nowrap;
+}
 /* Нижний ряд тела: слева название+город (ужимаются), справа — колонка времени встречи */
 .rd-club-card .rd-brow { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
 .rd-club-card .rd-bl { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 5px; }
@@ -1302,6 +1331,16 @@
 }
 .rd-club-about .rd-txt {
   font-size: 13.5px; line-height: 1.45; letter-spacing: -0.012em; color: var(--text-dim);
+}
+/* Темы клуба (club-interests) — пилюли под описанием. Здесь, в отличие от карточки каталога,
+   места хватает: блок «О клубе» широкий и не конкурирует с бейджами. */
+.rd-club-topics { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
+.rd-club-topic {
+  font-size: 11.5px; font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-2); color: var(--text-dim);
+  border: 1px solid var(--hairline);
 }
 .rd-club-about .rd-rules-h {
   font-size: 8.5px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;

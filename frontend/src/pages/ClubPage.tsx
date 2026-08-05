@@ -510,6 +510,15 @@ export const ClubPage: FC = () => {
       <div className="rd-section-sub-h">О клубе</div>
       <div className="rd-club-about">
         <div className="rd-txt">{club.description}</div>
+        {/* Темы — сразу под описанием: они его продолжают («о чём клуб» словами словаря),
+            а правила и вход в чат уже про другое (club-interests.md). */}
+        {club.interests.length > 0 && (
+          <div className="rd-club-topics">
+            {club.interests.map((topic) => (
+              <span key={topic} className="rd-club-topic">{topic}</span>
+            ))}
+          </div>
+        )}
         {club.rules && (
           <>
             <div className="rd-rules-h">Правила</div>

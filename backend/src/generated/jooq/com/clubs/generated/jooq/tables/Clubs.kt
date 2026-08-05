@@ -22,6 +22,7 @@ import com.clubs.generated.jooq.keys.CLUBS__CLUBS_CITY_ID_FKEY
 import com.clubs.generated.jooq.keys.CLUBS__CLUBS_OWNER_ID_FKEY
 import com.clubs.generated.jooq.keys.CLUB_AWARDS__CLUB_AWARDS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.CLUB_CHAT_LINKS__CLUB_CHAT_LINKS_CLUB_ID_FKEY
+import com.clubs.generated.jooq.keys.CLUB_INTERESTS__CLUB_INTERESTS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.CLUB_RANK__CLUB_RANK_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_CLUB_ID_FKEY
@@ -37,8 +38,10 @@ import com.clubs.generated.jooq.tables.ChatStrictBans.ChatStrictBansPath
 import com.clubs.generated.jooq.tables.Cities.CitiesPath
 import com.clubs.generated.jooq.tables.ClubAwards.ClubAwardsPath
 import com.clubs.generated.jooq.tables.ClubChatLinks.ClubChatLinksPath
+import com.clubs.generated.jooq.tables.ClubInterests.ClubInterestsPath
 import com.clubs.generated.jooq.tables.ClubRank.ClubRankPath
 import com.clubs.generated.jooq.tables.Events.EventsPath
+import com.clubs.generated.jooq.tables.Interests.InterestsPath
 import com.clubs.generated.jooq.tables.MembershipHistory.MembershipHistoryPath
 import com.clubs.generated.jooq.tables.Memberships.MembershipsPath
 import com.clubs.generated.jooq.tables.ReputationLedger.ReputationLedgerPath
@@ -416,6 +419,22 @@ open class Clubs(
     val clubChatLinks: ClubChatLinksPath
         get(): ClubChatLinksPath = clubChatLinks()
 
+    private lateinit var _clubInterests: ClubInterestsPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.club_interests</code> table
+     */
+    fun clubInterests(): ClubInterestsPath {
+        if (!this::_clubInterests.isInitialized)
+            _clubInterests = ClubInterestsPath(this, null, CLUB_INTERESTS__CLUB_INTERESTS_CLUB_ID_FKEY.inverseKey)
+
+        return _clubInterests;
+    }
+
+    val clubInterests: ClubInterestsPath
+        get(): ClubInterestsPath = clubInterests()
+
     private lateinit var _clubRank: ClubRankPath
 
     /**
@@ -559,6 +578,13 @@ open class Clubs(
 
     val userClubReputation: UserClubReputationPath
         get(): UserClubReputationPath = userClubReputation()
+
+    /**
+     * Get the implicit many-to-many join path to the
+     * <code>public.interests</code> table
+     */
+    val interests: InterestsPath
+        get(): InterestsPath = clubInterests().interests()
 
     /**
      * Get the implicit many-to-many join path to the <code>public.users</code>

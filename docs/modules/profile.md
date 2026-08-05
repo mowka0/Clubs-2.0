@@ -10,7 +10,16 @@
 Сделать «Профиль» единым местом «обо мне»:
 - видна моя репутация по **всем клубам** сразу (раньше — только внутри каждой карточки клуба отдельным табом);
 - доступно редактирование пользовательских полей, которые не приходят из Telegram (страна/город, «о себе», интересы);
-- интересы нормализуются и собираются в общий словарь с авто-подсказками, чтобы дубликаты схлопывались и можно было дальше строить рекомендации (см. backlog `onboarding-interests-and-recommendations.md`).
+- интересы нормализуются и собираются в общий словарь с авто-подсказками, чтобы дубликаты схлопывались и можно было дальше строить рекомендации (см. backlog `club-interests-recommendations.md`).
+
+> **Словарь `interests` стал общим (2026-08-01, club-interests).** С теми же строками теперь
+> работают темы клуба: `interests.category` (полка темы), `interests.club_usage_count` (счётчик
+> употребления **клубами** — отдельный от `usage_count`, который остаётся про пользователей),
+> таблица `club_interests`. Профиль от этого не меняется: свободный ввод, лимит 15, сортировка
+> подсказок по-прежнему по `usage_count`. Клиентские `suggestInterests` /
+> `useInterestSuggestQuery` переехали из `api/profile.ts` и `queries/profile.ts` в
+> `api/interests.ts` и `queries/interests.ts` — словарь один, и его половина не должна жить
+> в профиле. Спека: [`club-interests.md`](club-interests.md).
 
 ## Scope
 
@@ -31,7 +40,7 @@
 - Онбординг при первом запуске. **Upd 2026-07-13:** реализован отдельной фичей — карусель из 3 слайдов
   **без вопросов об интересах** (`docs/modules/onboarding.md`). Сбор города/категорий/интересов в онбординге
   осознанно отложен до появления клубов в системе.
-- Recommendations клубов по интересам (`docs/backlog/onboarding-interests-and-recommendations.md` Part 3 + `myclubs-recommended-clubs.md` V2).
+- Recommendations клубов по интересам (`docs/backlog/club-interests-recommendations.md` — срез 2 + `myclubs-recommended-clubs.md` V2). Обе стороны сопоставления уже есть: интересы профиля (V16) и темы клуба (V76).
 - Редактирование имени / аватара / @username — это TG-managed поля, перезаписываются при каждом auth через `UserRepository.upsert` (см. `frontend-core.md` § auth).
 - Распознавание опечаток в интересах (`pg_trgm`) — fallback, добавим если упрёмся.
 - Кросс-клубовый «топ-N надёжных» — рейтинги вне scope.
@@ -454,5 +463,5 @@ AND на повторном старте (V16 уже применена) — exi
 - [`club-page-unified.md`](./club-page-unified.md) — устаревшее «Мой профиль» upd-блок наверху.
 - [`ui-pages.md`](./ui-pages.md) § «ProfilePage» — это место в общей навигации фронт-страниц.
 - [`frontend-stores.md`](./frontend-stores.md) § «Query-хуки» — расширение таблицы хуками этой итерации + `AuthStore.setUser`.
-- [`docs/backlog/onboarding-interests-and-recommendations.md`](../backlog/onboarding-interests-and-recommendations.md) — Part 1 (модель интересов + редактирование) частично закрыт этой спекой; Part 2 (онбординг) закрыт 2026-07-13 в другой форме — карусель без вопросов, см. [`onboarding.md`](./onboarding.md); сбор интересов при первом входе и Part 3 (recommendations) остаются open.
+- [`docs/backlog/onboarding-interests-and-recommendations.md`](../backlog/onboarding-interests-and-recommendations.md) — Part 1 (модель интересов + редактирование) частично закрыт этой спекой; Part 2 (онбординг) закрыт 2026-07-13 в другой форме — карусель без вопросов, см. [`onboarding.md`](./onboarding.md); сбор интересов при первом входе остаётся open; Part 3 (recommendations) переехал в [`club-interests-recommendations.md`](../backlog/club-interests-recommendations.md).
 - [`onboarding.md`](./onboarding.md) — первый вход: `UserDto.onboardingTours` (V72) и гейт интро.

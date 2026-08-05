@@ -1,11 +1,25 @@
 package com.clubs.interest
 
+import com.clubs.generated.jooq.enums.ClubCategory
 import java.util.UUID
 
 interface InterestRepository {
 
-    /** Названия, чья каноническая форма начинается с [prefix], сначала самые используемые. */
-    fun suggest(prefix: String, limit: Int): List<String>
+    /**
+     * Названия, чья каноническая форма начинается с [prefix], сначала самые используемые.
+     *
+     * [clubsOnly] переключает словарь на «темы, которые реально есть у клубов»: фильтрует по
+     * club_usage_count > 0 и по нему же сортирует. Нужен поиску каталога — подсказка, по которой
+     * не найдётся ни одного клуба, хуже, чем её отсутствие, а порядок по популярности В ПРОФИЛЯХ
+     * там врёт (частый интерес людей ≠ частая тема клубов).
+     */
+    fun suggest(prefix: String, limit: Int, clubsOnly: Boolean = false): List<String>
+
+    /**
+     * Топ-темы полки [category] — из них собираются чипы при разметке клуба. Сортировка по
+     * club_usage_count, а не usage_count: частый интерес в профилях ≠ частая тема клубов.
+     */
+    fun suggestByCategory(category: ClubCategory, limit: Int): List<String>
 
     /** Вставить отсутствующие названия (игнорируя конфликты) и вернуть name → id для всех. */
     fun upsertAll(names: List<String>): Map<String, UUID>
@@ -26,4 +40,27 @@ interface InterestRepository {
 
     /** Скорректировать счётчики популярности (delta ограничена снизу нулём). */
     fun adjustUsage(interestIds: Collection<UUID>, delta: Int)
+
+    // ── Темы клуба (club-interests) ─────────────────────────────────────────────────────
+
+    fun findClubInterestIds(clubId: UUID): Set<UUID>
+    fun findClubInterestNames(clubId: UUID): List<String>
+
+    /**
+     * Пакетное чтение тем по клубам (один SQL-запрос) — каталог рисует чипы на всей странице
+     * выдачи, поштучный запрос дал бы N+1. Пустой вход → emptyMap без запроса; клубы без тем
+     * в карте отсутствуют, вызывающие используют emptyList по умолчанию.
+     */
+    fun findClubInterestNamesByClubIds(clubIds: Collection<UUID>): Map<UUID, List<String>>
+
+    /**
+     * Перезаписывает набор тем клуба целиком, сохраняя порядок [orderedInterestIds] в колонке
+     * position. Перезапись, а не точечные link/unlink: позиции должны соответствовать
+     * присланному порядку даже когда состав не изменился, а темы лишь переставили местами.
+     * Счётчики употребления двигает вызывающий — он знает разницу наборов.
+     */
+    fun replaceClubInterestLinks(clubId: UUID, orderedInterestIds: List<UUID>)
+
+    /** Скорректировать счётчики употребления КЛУБАМИ (delta ограничена снизу нулём). */
+    fun adjustClubUsage(interestIds: Collection<UUID>, delta: Int)
 }

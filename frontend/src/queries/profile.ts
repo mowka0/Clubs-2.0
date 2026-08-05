@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { completeTour, getMyInterests, suggestInterests, updateMyProfile } from '../api/profile';
+import { completeTour, getMyInterests, updateMyProfile } from '../api/profile';
 import { useAuthStore } from '../store/useAuthStore';
 import type { OnboardingTour, UpdateProfileBody } from '../types/api';
 import { queryKeys } from './queryKeys';
@@ -11,19 +11,7 @@ export function useMyInterestsQuery() {
   });
 }
 
-/**
- * Автодополнение интересов по префиксу. Вызывающий передаёт уже debounced-запрос;
- * отключено при длине < 2 символов, чтобы не слать запрос на каждое нажатие клавиши.
- */
-export function useInterestSuggestQuery(query: string) {
-  const trimmed = query.trim();
-  return useQuery({
-    queryKey: ['interests', 'suggest', trimmed.toLowerCase()],
-    queryFn: () => suggestInterests(trimmed),
-    enabled: trimmed.length >= 2,
-    staleTime: 60_000,
-  });
-}
+// Автодополнение интересов переехало в ./interests — рядом с темами клуба, словарь общий.
 
 export function useUpdateProfileMutation() {
   const qc = useQueryClient();

@@ -183,6 +183,7 @@ describe('CreateClubModal', () => {
           coverUrl: null,
           rules: null,
           applicationQuestion: null,
+          interests: [],
           inviteLink: null,
           inviteRequiresApplication: false,
           memberCount: 0,

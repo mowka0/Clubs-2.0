@@ -1,5 +1,7 @@
 package com.clubs.interest
 
+import com.clubs.generated.jooq.enums.ClubCategory
+import com.clubs.generated.jooq.tables.references.CLUB_INTERESTS
 import com.clubs.generated.jooq.tables.references.INTERESTS
 import com.clubs.generated.jooq.tables.references.USER_INTERESTS
 import org.jooq.DSLContext
@@ -9,14 +11,29 @@ import java.util.UUID
 @Repository
 class JooqInterestRepository(private val dsl: DSLContext) : InterestRepository {
 
-    override fun suggest(prefix: String, limit: Int): List<String> =
+    override fun suggest(prefix: String, limit: Int, clubsOnly: Boolean): List<String> {
+        // startsWith экранирует %/_ и генерирует `name LIKE 'prefix%'`, который обслуживается
+        // индексом varchar_pattern_ops; имена хранятся в канонической форме, поэтому простого
+        // (чувствительного к регистру) префикс-матча достаточно.
+        var condition = INTERESTS.NAME.startsWith(prefix)
+        if (clubsOnly) condition = condition.and(INTERESTS.CLUB_USAGE_COUNT.greaterThan(0))
+        return dsl.select(INTERESTS.NAME)
+            .from(INTERESTS)
+            .where(condition)
+            .orderBy(
+                if (clubsOnly) INTERESTS.CLUB_USAGE_COUNT.desc() else INTERESTS.USAGE_COUNT.desc(),
+                INTERESTS.NAME.asc()
+            )
+            .limit(limit)
+            .fetch(INTERESTS.NAME)
+            .filterNotNull()
+    }
+
+    override fun suggestByCategory(category: ClubCategory, limit: Int): List<String> =
         dsl.select(INTERESTS.NAME)
             .from(INTERESTS)
-            // startsWith экранирует %/_ и генерирует `name LIKE 'prefix%'`, который
-            // обслуживается индексом varchar_pattern_ops; имена хранятся в канонической
-            // форме, поэтому простого (чувствительного к регистру) префикс-матча достаточно.
-            .where(INTERESTS.NAME.startsWith(prefix))
-            .orderBy(INTERESTS.USAGE_COUNT.desc(), INTERESTS.NAME.asc())
+            .where(INTERESTS.CATEGORY.eq(category))
+            .orderBy(INTERESTS.CLUB_USAGE_COUNT.desc(), INTERESTS.NAME.asc())
             .limit(limit)
             .fetch(INTERESTS.NAME)
             .filterNotNull()
@@ -93,6 +110,63 @@ class JooqInterestRepository(private val dsl: DSLContext) : InterestRepository {
         if (delta < 0) condition = condition.and(INTERESTS.USAGE_COUNT.greaterThan(0))
         dsl.update(INTERESTS)
             .set(INTERESTS.USAGE_COUNT, INTERESTS.USAGE_COUNT.plus(delta))
+            .where(condition)
+            .execute()
+    }
+
+    // ── Темы клуба (club-interests) ─────────────────────────────────────────────────────
+
+    override fun findClubInterestIds(clubId: UUID): Set<UUID> =
+        dsl.select(CLUB_INTERESTS.INTEREST_ID)
+            .from(CLUB_INTERESTS)
+            .where(CLUB_INTERESTS.CLUB_ID.eq(clubId))
+            .fetch(CLUB_INTERESTS.INTEREST_ID)
+            .filterNotNull()
+            .toSet()
+
+    override fun findClubInterestNames(clubId: UUID): List<String> =
+        dsl.select(INTERESTS.NAME)
+            .from(CLUB_INTERESTS)
+            .join(INTERESTS).on(INTERESTS.ID.eq(CLUB_INTERESTS.INTEREST_ID))
+            .where(CLUB_INTERESTS.CLUB_ID.eq(clubId))
+            // Порядок разметки, а не алфавит: организатор ставит главную тему первой,
+            // а карточка каталога показывает только первые несколько.
+            .orderBy(CLUB_INTERESTS.POSITION.asc())
+            .fetch(INTERESTS.NAME)
+            .filterNotNull()
+
+    override fun findClubInterestNamesByClubIds(clubIds: Collection<UUID>): Map<UUID, List<String>> {
+        if (clubIds.isEmpty()) return emptyMap()
+        return dsl.select(CLUB_INTERESTS.CLUB_ID, INTERESTS.NAME)
+            .from(CLUB_INTERESTS)
+            .join(INTERESTS).on(INTERESTS.ID.eq(CLUB_INTERESTS.INTEREST_ID))
+            .where(CLUB_INTERESTS.CLUB_ID.`in`(clubIds))
+            .orderBy(CLUB_INTERESTS.CLUB_ID.asc(), CLUB_INTERESTS.POSITION.asc())
+            .fetch()
+            .groupBy(
+                { it.get(CLUB_INTERESTS.CLUB_ID)!! },
+                { it.get(INTERESTS.NAME)!! }
+            )
+    }
+
+    override fun replaceClubInterestLinks(clubId: UUID, orderedInterestIds: List<UUID>) {
+        dsl.deleteFrom(CLUB_INTERESTS).where(CLUB_INTERESTS.CLUB_ID.eq(clubId)).execute()
+        orderedInterestIds.forEachIndexed { index, interestId ->
+            dsl.insertInto(
+                CLUB_INTERESTS,
+                CLUB_INTERESTS.CLUB_ID, CLUB_INTERESTS.INTEREST_ID, CLUB_INTERESTS.POSITION
+            )
+                .values(clubId, interestId, index.toShort())
+                .execute()
+        }
+    }
+
+    override fun adjustClubUsage(interestIds: Collection<UUID>, delta: Int) {
+        if (interestIds.isEmpty() || delta == 0) return
+        var condition = INTERESTS.ID.`in`(interestIds)
+        if (delta < 0) condition = condition.and(INTERESTS.CLUB_USAGE_COUNT.greaterThan(0))
+        dsl.update(INTERESTS)
+            .set(INTERESTS.CLUB_USAGE_COUNT, INTERESTS.CLUB_USAGE_COUNT.plus(delta))
             .where(condition)
             .execute()
     }

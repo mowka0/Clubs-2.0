@@ -4,6 +4,7 @@
 package com.clubs.generated.jooq.tables.records
 
 
+import com.clubs.generated.jooq.enums.ClubCategory
 import com.clubs.generated.jooq.tables.Interests
 
 import java.time.OffsetDateTime
@@ -37,6 +38,14 @@ open class InterestsRecord private constructor() : UpdatableRecordImpl<Interests
         set(value): Unit = set(3, value)
         get(): OffsetDateTime? = get(3) as OffsetDateTime?
 
+    open var category: ClubCategory?
+        set(value): Unit = set(4, value)
+        get(): ClubCategory? = get(4) as ClubCategory?
+
+    open var clubUsageCount: Int?
+        set(value): Unit = set(5, value)
+        get(): Int? = get(5) as Int?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -46,11 +55,13 @@ open class InterestsRecord private constructor() : UpdatableRecordImpl<Interests
     /**
      * Create a detached, initialised InterestsRecord
      */
-    constructor(id: UUID? = null, name: String, usageCount: Int? = null, createdAt: OffsetDateTime? = null): this() {
+    constructor(id: UUID? = null, name: String, usageCount: Int? = null, createdAt: OffsetDateTime? = null, category: ClubCategory? = null, clubUsageCount: Int? = null): this() {
         this.id = id
         this.name = name
         this.usageCount = usageCount
         this.createdAt = createdAt
+        this.category = category
+        this.clubUsageCount = clubUsageCount
         resetChangedOnNotNull()
     }
 
@@ -63,6 +74,8 @@ open class InterestsRecord private constructor() : UpdatableRecordImpl<Interests
             this.name = value.name
             this.usageCount = value.usageCount
             this.createdAt = value.createdAt
+            this.category = value.category
+            this.clubUsageCount = value.clubUsageCount
             resetChangedOnNotNull()
         }
     }

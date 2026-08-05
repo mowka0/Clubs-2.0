@@ -6,6 +6,7 @@ package com.clubs.generated.jooq.indexes
 
 import com.clubs.generated.jooq.tables.Applications
 import com.clubs.generated.jooq.tables.Cities
+import com.clubs.generated.jooq.tables.ClubInterests
 import com.clubs.generated.jooq.tables.ClubRank
 import com.clubs.generated.jooq.tables.Clubs
 import com.clubs.generated.jooq.tables.EventResponses
@@ -36,6 +37,7 @@ val APPLICATIONS_ONE_ACTIVE_PER_USER_CLUB: Index = Internal.createIndex(DSL.name
 val IDX_APPLICATIONS_CLUB_ID_STATUS: Index = Internal.createIndex(DSL.name("idx_applications_club_id_status"), Applications.APPLICATIONS, arrayOf(Applications.APPLICATIONS.CLUB_ID, Applications.APPLICATIONS.STATUS), false)
 val IDX_APPLICATIONS_USER_ID: Index = Internal.createIndex(DSL.name("idx_applications_user_id"), Applications.APPLICATIONS, arrayOf(Applications.APPLICATIONS.USER_ID), false)
 val IDX_CITIES_FEATURED: Index = Internal.createIndex(DSL.name("idx_cities_featured"), Cities.CITIES, arrayOf(Cities.CITIES.IS_FEATURED), false)
+val IDX_CLUB_INTERESTS_INTEREST: Index = Internal.createIndex(DSL.name("idx_club_interests_interest"), ClubInterests.CLUB_INTERESTS, arrayOf(ClubInterests.CLUB_INTERESTS.INTEREST_ID), false)
 val IDX_CLUB_RANK_CAT_OWNER_SCORE: Index = Internal.createIndex(DSL.name("idx_club_rank_cat_owner_score"), ClubRank.CLUB_RANK, arrayOf(ClubRank.CLUB_RANK.CATEGORY, ClubRank.CLUB_RANK.OWNER_ID, ClubRank.CLUB_RANK.RANK_SCORE.desc()), false)
 val IDX_CLUBS_ACCESS_TYPE: Index = Internal.createIndex(DSL.name("idx_clubs_access_type"), Clubs.CLUBS, arrayOf(Clubs.CLUBS.ACCESS_TYPE), false)
 val IDX_CLUBS_CATEGORY: Index = Internal.createIndex(DSL.name("idx_clubs_category"), Clubs.CLUBS, arrayOf(Clubs.CLUBS.CATEGORY), false)
@@ -49,6 +51,7 @@ val IDX_EVENT_RESPONSES_USER_ID: Index = Internal.createIndex(DSL.name("idx_even
 val IDX_EVENTS_CLUB_ID_DATETIME: Index = Internal.createIndex(DSL.name("idx_events_club_id_datetime"), Events.EVENTS, arrayOf(Events.EVENTS.CLUB_ID, Events.EVENTS.EVENT_DATETIME.desc()), false)
 val IDX_EVENTS_REPUTATION_PENDING: Index = Internal.createIndex(DSL.name("idx_events_reputation_pending"), Events.EVENTS, arrayOf(Events.EVENTS.ID), false)
 val IDX_EVENTS_STATUS: Index = Internal.createIndex(DSL.name("idx_events_status"), Events.EVENTS, arrayOf(Events.EVENTS.STATUS), false)
+val IDX_INTERESTS_CATEGORY_CLUB_USAGE: Index = Internal.createIndex(DSL.name("idx_interests_category_club_usage"), Interests.INTERESTS, arrayOf(Interests.INTERESTS.CATEGORY, Interests.INTERESTS.CLUB_USAGE_COUNT.desc()), false)
 val IDX_INTERESTS_NAME_PREFIX: Index = Internal.createIndex(DSL.name("idx_interests_name_prefix"), Interests.INTERESTS, arrayOf(Interests.INTERESTS.NAME), false)
 val IDX_MEMBERSHIP_HISTORY_CLUB_OCCURRED: Index = Internal.createIndex(DSL.name("idx_membership_history_club_occurred"), MembershipHistory.MEMBERSHIP_HISTORY, arrayOf(MembershipHistory.MEMBERSHIP_HISTORY.CLUB_ID, MembershipHistory.MEMBERSHIP_HISTORY.OCCURRED_AT), false)
 val IDX_MEMBERSHIP_HISTORY_USER_CLUB: Index = Internal.createIndex(DSL.name("idx_membership_history_user_club"), MembershipHistory.MEMBERSHIP_HISTORY, arrayOf(MembershipHistory.MEMBERSHIP_HISTORY.USER_ID, MembershipHistory.MEMBERSHIP_HISTORY.CLUB_ID, MembershipHistory.MEMBERSHIP_HISTORY.OCCURRED_AT), false)
