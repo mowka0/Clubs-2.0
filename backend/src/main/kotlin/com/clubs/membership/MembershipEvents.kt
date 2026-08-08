@@ -19,8 +19,6 @@ data class ExpiryReminderCandidate(
     val membershipId: UUID,
     val telegramId: Long,
     val clubName: String,
-    // Для inline-кнопки-диплинка «Продлить подписку» и логов — какой именно клуб истекает.
-    val clubId: UUID,
     val expiresAt: OffsetDateTime,
     val lastReminderDaysLeft: Int?
 )

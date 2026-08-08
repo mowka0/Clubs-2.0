@@ -64,7 +64,6 @@ class SubscriptionSchedulerTest {
         membershipId = membershipId,
         telegramId = telegramId,
         clubName = clubName,
-        clubId = UUID.randomUUID(),
         // +2ч к моменту тика: окно почти всегда заканчивается не ровно в час крона.
         expiresAt = fixedNow.plusDays(daysLeft).plusHours(2),
         lastReminderDaysLeft = lastReminderDaysLeft
@@ -184,6 +183,29 @@ class SubscriptionSchedulerTest {
             )
         }
         verify(exactly = 1) { membershipRepository.markExpiryReminderSent(listOf(membershipId), 1) }
+    }
+
+    // Отметка порогов идёт пачкой: один UPDATE на порог со всеми id сразу, а не по строке на участника.
+    @Test
+    fun `scheduler marks each threshold once with all its recipients`() {
+        val firstOfEarly = UUID.randomUUID()
+        val secondOfEarly = UUID.randomUUID()
+        val final = UUID.randomUUID()
+        freezeNow()
+        every { membershipRepository.findExpiryReminderCandidates(any(), any()) } returns listOf(
+            candidate(daysLeft = 3, lastReminderDaysLeft = null, membershipId = firstOfEarly, telegramId = 1L),
+            candidate(daysLeft = 1, lastReminderDaysLeft = 3, membershipId = final, telegramId = 2L),
+            candidate(daysLeft = 3, lastReminderDaysLeft = null, membershipId = secondOfEarly, telegramId = 3L),
+            // Порог уже закрыт — в пачку не попадает.
+            candidate(daysLeft = 2, lastReminderDaysLeft = 3, telegramId = 4L)
+        )
+        every { membershipRepository.findActiveExpired(any()) } returns emptyList()
+
+        scheduler.checkSubscriptions()
+
+        verify(exactly = 3) { notificationService.sendDirectMessageWithDeepLink(any(), any(), any(), any()) }
+        verify(exactly = 1) { membershipRepository.markExpiryReminderSent(listOf(firstOfEarly, secondOfEarly), 3) }
+        verify(exactly = 1) { membershipRepository.markExpiryReminderSent(listOf(final), 1) }
     }
 
     @Test

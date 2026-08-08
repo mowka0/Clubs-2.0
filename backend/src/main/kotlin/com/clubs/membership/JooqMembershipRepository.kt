@@ -538,7 +538,6 @@ class JooqMembershipRepository(
             MEMBERSHIPS.ID,
             USERS.TELEGRAM_ID,
             CLUBS.NAME,
-            CLUBS.ID,
             MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT,
             MEMBERSHIPS.EXPIRY_REMINDER_DAYS_LEFT
         )
@@ -555,7 +554,6 @@ class JooqMembershipRepository(
                     membershipId = record.get(MEMBERSHIPS.ID)!!,
                     telegramId = record.get(USERS.TELEGRAM_ID)!!,
                     clubName = record.get(CLUBS.NAME)!!,
-                    clubId = record.get(CLUBS.ID)!!,
                     expiresAt = record.get(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT)!!,
                     lastReminderDaysLeft = record.get(MEMBERSHIPS.EXPIRY_REMINDER_DAYS_LEFT)
                 )
@@ -563,11 +561,13 @@ class JooqMembershipRepository(
 
     // Служебная отметка дедупа — updated_at намеренно не трогаем: членство не изменилось, а по
     // updated_at строятся пользовательские сортировки/меты («истекла N дн назад» и т.п.).
+    // Условие на active: между чтением кандидатов и отметкой участник мог выйти/быть кикнут —
+    // тот путь уже обнулил колонку вместе с окном доступа, и отметка не должна её воскрешать.
     override fun markExpiryReminderSent(membershipIds: Collection<UUID>, daysLeft: Int): Int {
         if (membershipIds.isEmpty()) return 0
         return dsl.update(MEMBERSHIPS)
             .set(MEMBERSHIPS.EXPIRY_REMINDER_DAYS_LEFT, daysLeft)
-            .where(MEMBERSHIPS.ID.`in`(membershipIds))
+            .where(MEMBERSHIPS.ID.`in`(membershipIds).and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active)))
             .execute()
     }
 
