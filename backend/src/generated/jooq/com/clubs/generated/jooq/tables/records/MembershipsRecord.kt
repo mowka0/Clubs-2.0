@@ -87,6 +87,10 @@ open class MembershipsRecord private constructor() : UpdatableRecordImpl<Members
         set(value): Unit = set(15, value)
         get(): String? = get(15) as String?
 
+    open var expiryReminderDaysLeft: Int?
+        set(value): Unit = set(16, value)
+        get(): Int? = get(16) as Int?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -96,7 +100,7 @@ open class MembershipsRecord private constructor() : UpdatableRecordImpl<Members
     /**
      * Create a detached, initialised MembershipsRecord
      */
-    constructor(id: UUID? = null, userId: UUID, clubId: UUID, status: MembershipStatus? = null, role: MembershipRole? = null, joinedAt: OffsetDateTime? = null, subscriptionExpiresAt: OffsetDateTime? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, accessFrozenAt: OffsetDateTime? = null, duesMarkedPaidAt: OffsetDateTime? = null, duesMarkedBy: UUID? = null, organizerNote: String? = null, duesClaimedAt: OffsetDateTime? = null, duesClaimMethod: String? = null, duesProofUrl: String? = null): this() {
+    constructor(id: UUID? = null, userId: UUID, clubId: UUID, status: MembershipStatus? = null, role: MembershipRole? = null, joinedAt: OffsetDateTime? = null, subscriptionExpiresAt: OffsetDateTime? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, accessFrozenAt: OffsetDateTime? = null, duesMarkedPaidAt: OffsetDateTime? = null, duesMarkedBy: UUID? = null, organizerNote: String? = null, duesClaimedAt: OffsetDateTime? = null, duesClaimMethod: String? = null, duesProofUrl: String? = null, expiryReminderDaysLeft: Int? = null): this() {
         this.id = id
         this.userId = userId
         this.clubId = clubId
@@ -113,6 +117,7 @@ open class MembershipsRecord private constructor() : UpdatableRecordImpl<Members
         this.duesClaimedAt = duesClaimedAt
         this.duesClaimMethod = duesClaimMethod
         this.duesProofUrl = duesProofUrl
+        this.expiryReminderDaysLeft = expiryReminderDaysLeft
         resetChangedOnNotNull()
     }
 
@@ -137,6 +142,7 @@ open class MembershipsRecord private constructor() : UpdatableRecordImpl<Members
             this.duesClaimedAt = value.duesClaimedAt
             this.duesClaimMethod = value.duesClaimMethod
             this.duesProofUrl = value.duesProofUrl
+            this.expiryReminderDaysLeft = value.expiryReminderDaysLeft
             resetChangedOnNotNull()
         }
     }

@@ -11,6 +11,21 @@ data class ExpiringSubscriptionNotification(
 )
 
 /**
+ * Кандидат на DM «подписка истекает»: active-членство с окном доступа на исходе плюс порог уже
+ * отправленного напоминания ([lastReminderDaysLeft], null = ни одного в этом окне). По этим полям
+ * планировщик решает, наступил ли следующий порог; без них он слал DM на каждом тике крона.
+ */
+data class ExpiryReminderCandidate(
+    val membershipId: UUID,
+    val telegramId: Long,
+    val clubName: String,
+    // Для inline-кнопки-диплинка «Продлить подписку» и логов — какой именно клуб истекает.
+    val clubId: UUID,
+    val expiresAt: OffsetDateTime,
+    val lastReminderDaysLeft: Int?
+)
+
+/**
  * Минимальная проекция строки membership — ровно столько, чтобы платёжные/шедулерные
  * флоу отличили «новую» подписку от «продления», не вытягивая полный jOOQ Record.
  * Полный домен Membership появится при рефакторинге модуля `membership`.

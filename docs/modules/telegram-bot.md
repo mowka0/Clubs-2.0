@@ -167,7 +167,7 @@ Telegram-бот `@clubs_admin_bot` — точка входа в Clubs Mini App *
 **Получатель:** один `telegramId`.
 **Caller'ы (реальные):**
 - `PaymentNotificationHandler.onPaymentConfirmed` — welcome DM после успешной оплаты (`@TransactionalEventListener`, AFTER_COMMIT).
-- `SubscriptionScheduler.checkSubscriptions` — оба варианта через `sendDirectMessageWithDeepLink`: «истекает через 3 дня» с кнопкой «Продлить подписку» → `/my-clubs` (раннее продление, membership-lifecycle.md §7) и «подписка истекла» с кнопкой «Оплатить взнос» → `/clubs/{id}?pay=1` (шит взноса открывается сам, 2026-07-30).
+- `SubscriptionScheduler.checkSubscriptions` — оба варианта через `sendDirectMessageWithDeepLink`: «истекает через 3 дня» / «истекает завтра» с кнопкой «Продлить подписку» → `/my-clubs` (ровно два напоминания на окно доступа, дедуп `expiry_reminder_days_left`; раннее продление, membership-lifecycle.md §4, §7) и «подписка истекла» с кнопкой «Оплатить взнос» → `/clubs/{id}?pay=1` (шит взноса открывается сам, 2026-07-30).
 
 > **Правило `?pay=1` (PO 2026-07-30):** если кнопка DM называется «Оплатить взнос», её ссылка обязана
 > открывать шит оплаты, а не страницу, на которой кнопку надо найти заново. Параметр читает `ClubPage`

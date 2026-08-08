@@ -75,7 +75,13 @@ interface MembershipRepository {
     fun lockRoleChanges(clubId: UUID)
 
     // Жизненный цикл / планировщик (honor-system окно доступа)
-    fun findExpiringWithin(now: OffsetDateTime, threshold: OffsetDateTime): List<ExpiringSubscriptionNotification>
+    /** Кандидаты на DM «подписка истекает»: active-членства с окном доступа в интервале (now; threshold]
+     *  вместе с порогом уже отправленного напоминания. Какому порогу отвечает сегодняшний тик и не
+     *  отправлено ли напоминание раньше — решает планировщик (ExpiryReminderRules). */
+    fun findExpiryReminderCandidates(now: OffsetDateTime, threshold: OffsetDateTime): List<ExpiryReminderCandidate>
+    /** Отмечает отправленный порог напоминания ([daysLeft]) у строк [membershipIds]: следующий тик
+     *  того же порога DM уже не пошлёт. Возвращает число обновлённых строк. */
+    fun markExpiryReminderSent(membershipIds: Collection<UUID>, daysLeft: Int): Int
     fun findActiveExpired(now: OffsetDateTime): List<ExpiringSubscriptionNotification>
     /** Переводит в `expired` каждый membership в статусе `active`, чьё окно доступа (subscription_expires_at)
      *  истекло. Возвращает затронутые (clubId, userId) — по ним строгий режим чата мьютит должников. */
