@@ -292,10 +292,10 @@ COPY . .
 # Публичные фронтовые ключи Яндекс.Карт (event-geo): Vite инлайнит VITE_* в бандл на сборке
 ARG VITE_YANDEX_MAPS_API_KEY
 ARG VITE_YANDEX_STATIC_API_KEY
-ARG VITE_YANDEX_GEOCODER_API_KEY
 ENV VITE_YANDEX_MAPS_API_KEY=$VITE_YANDEX_MAPS_API_KEY \
-    VITE_YANDEX_STATIC_API_KEY=$VITE_YANDEX_STATIC_API_KEY \
-    VITE_YANDEX_GEOCODER_API_KEY=$VITE_YANDEX_GEOCODER_API_KEY
+    VITE_YANDEX_STATIC_API_KEY=$VITE_YANDEX_STATIC_API_KEY
+# Ключа геокодера здесь НЕТ с 2026-08-05: геокодинг проксирует бэкенд, ключ живёт в его env
+# (YANDEX_GEOCODER_API_KEY), в бандл не попадает. См. docs/modules/event-geo.md.
 RUN npm run build
 
 FROM nginx:alpine

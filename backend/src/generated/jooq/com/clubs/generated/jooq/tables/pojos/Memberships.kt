@@ -34,7 +34,8 @@ data class Memberships(
     var organizerNote: String? = null,
     var duesClaimedAt: OffsetDateTime? = null,
     var duesClaimMethod: String? = null,
-    var duesProofUrl: String? = null
+    var duesProofUrl: String? = null,
+    var expiryReminderDaysLeft: Int? = null
 ): Serializable {
 
 
@@ -134,6 +135,12 @@ data class Memberships(
         }
         else if (this.duesProofUrl != o.duesProofUrl)
             return false
+        if (this.expiryReminderDaysLeft == null) {
+            if (o.expiryReminderDaysLeft != null)
+                return false
+        }
+        else if (this.expiryReminderDaysLeft != o.expiryReminderDaysLeft)
+            return false
         return true
     }
 
@@ -156,6 +163,7 @@ data class Memberships(
         result = prime * result + (if (this.duesClaimedAt == null) 0 else this.duesClaimedAt.hashCode())
         result = prime * result + (if (this.duesClaimMethod == null) 0 else this.duesClaimMethod.hashCode())
         result = prime * result + (if (this.duesProofUrl == null) 0 else this.duesProofUrl.hashCode())
+        result = prime * result + (if (this.expiryReminderDaysLeft == null) 0 else this.expiryReminderDaysLeft.hashCode())
         return result
     }
 
@@ -178,6 +186,7 @@ data class Memberships(
         sb.append(", ").append(duesClaimedAt)
         sb.append(", ").append(duesClaimMethod)
         sb.append(", ").append(duesProofUrl)
+        sb.append(", ").append(expiryReminderDaysLeft)
 
         sb.append(")")
         return sb.toString()

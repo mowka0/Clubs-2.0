@@ -11,6 +11,8 @@
  * а в `rtext` (маршрут) — **lat,lon**.
  */
 
+
+import { ApiError, apiClient } from '../api/apiClient';
 // Ключи читаются лениво (не в module scope): vitest может застабить их через vi.stubEnv
 // уже после импорта модуля.
 // Ключ продукта «JavaScript API» (v2.1) — только скрипт карты.
@@ -21,11 +23,8 @@ function mapsApiKey(): string | undefined {
 function staticApiKey(): string | undefined {
   return import.meta.env.VITE_YANDEX_STATIC_API_KEY;
 }
-// Отдельный ключ HTTP-геокодера: в кабинете PO «API Геокодера» — самостоятельный продукт
-// со своим ключом (связки с JS API нет).
-function geocoderApiKey(): string | undefined {
-  return import.meta.env.VITE_YANDEX_GEOCODER_API_KEY;
-}
+// Ключа геокодера на клиенте БОЛЬШЕ НЕТ: с 2026-08-05 геокодинг проксирует бэкенд, ключ
+// живёт в его env (VITE_-переменные публичны и попадают в бандл — см. requestGeocoder).
 
 // Дефолт-центр пикера, пока точка не выбрана (решение мокапа): Москва.
 export const DEFAULT_CENTER: GeoPoint = { lat: 55.751244, lon: 37.618423 };
@@ -140,7 +139,6 @@ export async function createPickerMap(
 }
 
 // Предел ожидания ответа геокодера, мс.
-const GEOCODER_TIMEOUT_MS = 10_000;
 
 /** HTTP-ошибка геокодера (4xx = лимит/ключ, а не сеть) — пикер различает текст сообщения. */
 export class GeocoderHttpError extends Error {
@@ -154,46 +152,41 @@ export class GeocoderHttpError extends Error {
 }
 
 /** Форма ответа HTTP-геокодера 1.x (все поля защитно-опциональны — внешнее API). */
-interface GeocoderResponse {
-  response?: {
-    GeoObjectCollection?: {
-      featureMember?: Array<{
-        GeoObject?: {
-          Point?: { pos?: string };
-          metaDataProperty?: { GeocoderMetaData?: { text?: string } };
-        };
-      }>;
-    };
-  };
+/** Ответ нашего `/api/geo/geocode` (порядок полей привычный — lat/lon, не яндексовский). */
+interface GeocodeApiResult {
+  address: string;
+  lat: number;
+  lon: number;
 }
 
+
+/**
+ * Геокодинг идёт через НАШ бэкенд, а не напрямую в Яндекс (с 2026-08-05).
+ *
+ * Прямой поход из браузера означал публичный ключ в бандле и ограничение по HTTP Referer как
+ * единственную защиту. На проде это выстрелило трижды: ключ виден любому; поиск лежал, пока
+ * домен вносили в кабинет Яндекса (раскатка заняла час); а клиент со старым бандлом в кэше
+ * (assets отдаются `immutable` на год) продолжал слать старый ключ, и починить это с сервера
+ * было нечем. Теперь ключ живёт только в env бэкенда.
+ *
+ * Параметр тот же, что понимает Яндекс: адрес строкой для прямого геокодинга либо «lon,lat»
+ * для обратного — разбирать его на клиенте не нужно.
+ */
 async function requestGeocoder(geocodeParam: string): Promise<GeocodeResult | null> {
-  const apiKey = geocoderApiKey();
-  if (!apiKey) throw new Error('VITE_YANDEX_GEOCODER_API_KEY is not set');
-  // /v1/ — документированный endpoint нового продукта «API Геокодера»; /1.x/ — легаси
-  // для ключей старой связки. Формат ответа (GeoObjectCollection) одинаковый.
-  const url =
-    'https://geocode-maps.yandex.ru/v1/' +
-    `?apikey=${encodeURIComponent(apiKey)}` +
-    `&geocode=${encodeURIComponent(geocodeParam)}` +
-    '&format=json&results=1&lang=ru_RU';
-  // Таймаут: зависший fetch не должен держать пикер в «Сохраняем…» до браузерного дефолта.
-  // AbortSignal.timeout недоступен в старых webview (и jsdom) — тогда едем без таймаута.
-  const signal = typeof AbortSignal.timeout === 'function'
-    ? AbortSignal.timeout(GEOCODER_TIMEOUT_MS)
-    : undefined;
-  const res = await fetch(url, { signal });
-  if (!res.ok) throw new GeocoderHttpError(res.status);
-  const data = (await res.json()) as GeocoderResponse;
-  const geoObject = data.response?.GeoObjectCollection?.featureMember?.[0]?.GeoObject;
-  const pos = geoObject?.Point?.pos; // "lon lat" через пробел
-  const address = geoObject?.metaDataProperty?.GeocoderMetaData?.text;
-  if (!pos || !address) return null;
-  const [lonStr, latStr] = pos.split(' ');
-  const lon = Number(lonStr);
-  const lat = Number(latStr);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-  return { point: { lat, lon }, address };
+  try {
+    const dto = await apiClient.get<GeocodeApiResult | undefined>('/api/geo/geocode', {
+      q: geocodeParam,
+    });
+    // 204 No Content — адрес не найден; apiClient отдаёт undefined.
+    if (!dto) return null;
+    if (!Number.isFinite(dto.lat) || !Number.isFinite(dto.lon)) return null;
+    return { point: { lat: dto.lat, lon: dto.lon }, address: dto.address };
+  } catch (e) {
+    // Сохраняем прежний контракт для пикера: HTTP-ошибка (503 «геокодер недоступен») — это
+    // не проблема связи, и текст пользователю показывается другой.
+    if (e instanceof ApiError) throw new GeocoderHttpError(e.status);
+    throw e;
+  }
 }
 
 /** Прямой геокодинг «адрес → точка». null = ничего не найдено; ошибки сети/HTTP летят наружу. */

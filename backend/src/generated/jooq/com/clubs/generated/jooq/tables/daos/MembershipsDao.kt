@@ -213,4 +213,16 @@ open class MembershipsDao(configuration: Configuration?) : DAOImpl<MembershipsRe
      * Fetch records that have <code>dues_proof_url IN (values)</code>
      */
     fun fetchByDuesProofUrl(vararg values: String): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.DUES_PROOF_URL, *values)
+
+    /**
+     * Fetch records that have <code>expiry_reminder_days_left BETWEEN
+     * lowerInclusive AND upperInclusive</code>
+     */
+    fun fetchRangeOfExpiryReminderDaysLeft(lowerInclusive: Int?, upperInclusive: Int?): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetchRange(Memberships.MEMBERSHIPS.EXPIRY_REMINDER_DAYS_LEFT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>expiry_reminder_days_left IN
+     * (values)</code>
+     */
+    fun fetchByExpiryReminderDaysLeft(vararg values: Int): List<com.clubs.generated.jooq.tables.pojos.Memberships> = fetch(Memberships.MEMBERSHIPS.EXPIRY_REMINDER_DAYS_LEFT, *values.toTypedArray())
 }

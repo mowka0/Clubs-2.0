@@ -87,6 +87,12 @@ services:
       TELEGRAM_SUPPORT_USERNAME: ${TELEGRAM_SUPPORT_USERNAME:-clubs_tech_support}
       # Числовой chat id саппорта (приоритетнее username; защита от угона канала сменой username)
       TELEGRAM_SUPPORT_CHAT_ID: ${TELEGRAM_SUPPORT_CHAT_ID:-}
+      # Ключ Яндекс-Геокодера теперь серверный: фронтенд в Яндекс не ходит, ключ не публикуется
+      # в бандле, а ограничение по Referer перестало зависеть от клиента (см. GeocoderService).
+      YANDEX_GEOCODER_API_KEY: ${YANDEX_GEOCODER_API_KEY:-}
+      # Совместимость: до появления отдельного серверного ключа берём тот же, что собирался
+      # во фронтенд (он уже задан в окружении Coolify) — иначе поиск лёг бы до ручной правки env.
+      VITE_YANDEX_GEOCODER_API_KEY: ${VITE_YANDEX_GEOCODER_API_KEY:-}
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
       S3_ENDPOINT_URL: http://minio:9000
@@ -127,9 +133,11 @@ services:
       args:
         # Публичные ключи Яндекс.Карт (event-geo) — Vite инлайнит их в бандл при сборке.
         # Значения задаются в env приложения Coolify (staging и prod), не в репозитории.
+        # Здесь ТОЛЬКО те продукты, что реально работают из браузера: JS API (карта) и
+        # Static API (мини-карта). Ключ геокодера сюда больше НЕ передаётся — с 2026-08-05
+        # геокодинг проксирует backend, и в бандле ключа быть не должно.
         VITE_YANDEX_MAPS_API_KEY: ${VITE_YANDEX_MAPS_API_KEY}
         VITE_YANDEX_STATIC_API_KEY: ${VITE_YANDEX_STATIC_API_KEY}
-        VITE_YANDEX_GEOCODER_API_KEY: ${VITE_YANDEX_GEOCODER_API_KEY}
     labels:
       - "traefik.docker.network=coolify"
       # Здесь намеренно нет явного лейбла traefik.http.services.*.loadbalancer.

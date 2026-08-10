@@ -10,7 +10,7 @@
 ### Входит
 - Создание Stars-инвойса (DM в Telegram) при вступлении в клуб
 - Обработка `successful_payment` от Telegram Bot API: создание/продление membership + запись транзакции
-- Scheduler: предупреждения за 3 дня, перевод истёкших в grace_period, финальное истечение через 3 дня
+- Scheduler: предупреждения за 3 дня и за 1 день (ровно по одному на окно доступа), перевод истёкших в grace_period, финальное истечение через 3 дня
 - Идемпотентность webhook `successful_payment` (Telegram может повторить)
 - Комиссия платформы 20%, выручка организатора 80% (PRD §4.7.1)
 
@@ -104,7 +104,8 @@ Fast-path проверка `existsByTelegramChargeId` — оптимизация
 
 Разделение слоёв:
 - `SubscriptionScheduler.checkSubscriptions()` — cron entry. **Без `@Transactional`**. Сначала снимает read-only снапшоты будущих нотификаций, шлёт DM (сетевые вызовы **вне** транзакции), затем делегирует DB-мутации.
-- `SubscriptionLifecycleService.findExpiringWithin(...)` — read-only, подписки с `expires_at ∈ (now, now + 3d]`.
+- `SubscriptionLifecycleService.findExpiryReminderCandidates(...)` — read-only, подписки с `expires_at ∈ (now, now + 4d]` вместе с колонкой `memberships.expiry_reminder_days_left` (порог уже отправленного напоминания). Горизонт на сутки шире дальнего порога: пороги считаются календарными днями по МСК (`ExpiryReminderRules`), а выборка идёт по абсолютному времени.
+- `SubscriptionLifecycleService.markExpiryRemindersSent(ids, daysLeft)` — `@Transactional`, закрывает отправленный порог (дедуп).
 - `SubscriptionLifecycleService.findActiveExpired(now)` — read-only, подписки со статусом `active` и `expires_at ≤ now` (те, которых сейчас переведут в grace).
 - `SubscriptionLifecycleService.processExpiry(now)` — `@Transactional` write-часть:
   1. `active` c `expires_at ≤ now` → `grace_period` (`moveActiveToGracePeriod`).
@@ -113,7 +114,7 @@ Fast-path проверка `existsByTelegramChargeId` — оптимизация
 > Счётчика клуба scheduler не трогает: колонка `clubs.member_count` дропнута в V33, отображаемое значение считается на лету из `memberships`. Раньше шаг 3 декрементил колонку (per-club SELECT-count + `GREATEST(...−delta, 0)`) — этой машинерии больше нет; expired-membership просто выпадает из live-счёта.
 
 Порядок в scheduler:
-1. Read `findExpiringWithin` — кого уведомить «истекает через 3 дня».
+1. Read `findExpiryReminderCandidates` — кандидаты на «истекает»; DM получают только те, у кого наступил непройденный порог (3 дня, затем 1 день), после отправки порог помечается.
 2. Read `findActiveExpired` — кого уведомить «истекла, grace period 3 дня» (PRD §4.7.3.3). **Делаем до** `processExpiry`, иначе статус уже перейдёт в grace и выборка будет пуста.
 3. Отправляем обе пачки нотификаций.
 4. `processExpiry` — DB mutations в одной короткой транзакции.
@@ -208,10 +209,12 @@ THEN вся транзакция откатывается: membership не со�
 
 **AC-9: предупреждение за 3 дня**
 ```
-GIVEN membership status=active, expires_at = now + 2d
+GIVEN membership status=active, expires_at = now + 3d (календарных, МСК),
+      expiry_reminder_days_left IS NULL
 WHEN scheduler.checkSubscriptions() прогон
-THEN NotificationService.sendDirectMessage вызван с users.telegram_id
+THEN NotificationService.sendDirectMessageWithDeepLink вызван с users.telegram_id
      и текстом про истечение через 3 дня
+AND expiry_reminder_days_left = 3 (повторный прогон DM не шлёт)
 AND status / expires_at НЕ меняются
 ```
 

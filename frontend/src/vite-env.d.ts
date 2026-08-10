@@ -7,7 +7,6 @@ interface ImportMetaEnv {
   // Локально — frontend/.env.local (gitignored), в Docker-сборке — build args из Coolify env.
   readonly VITE_YANDEX_MAPS_API_KEY: string | undefined;
   readonly VITE_YANDEX_STATIC_API_KEY: string | undefined;
-  readonly VITE_YANDEX_GEOCODER_API_KEY: string | undefined;
 }
 
 interface ImportMeta {

@@ -1,6 +1,7 @@
 package com.clubs.payment
 
 import com.clubs.membership.ExpiringSubscriptionNotification
+import com.clubs.membership.ExpiryReminderCandidate
 import com.clubs.membership.MembershipAccessClosedEvent
 import com.clubs.membership.MembershipAccessRevokedEvent
 import com.clubs.membership.MembershipRepository
@@ -9,6 +10,7 @@ import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
+import java.util.UUID
 
 @Service
 class SubscriptionLifecycleService(
@@ -19,8 +21,15 @@ class SubscriptionLifecycleService(
     private val log = LoggerFactory.getLogger(SubscriptionLifecycleService::class.java)
 
     @Transactional(readOnly = true)
-    fun findExpiringWithin(now: OffsetDateTime, threshold: OffsetDateTime): List<ExpiringSubscriptionNotification> =
-        membershipRepository.findExpiringWithin(now, threshold)
+    fun findExpiryReminderCandidates(now: OffsetDateTime, threshold: OffsetDateTime): List<ExpiryReminderCandidate> =
+        membershipRepository.findExpiryReminderCandidates(now, threshold)
+
+    /** Закрывает отправленный порог напоминания — следующий тик крона DM по нему уже не пошлёт. */
+    @Transactional
+    fun markExpiryRemindersSent(membershipIds: List<UUID>, daysLeft: Int) {
+        if (membershipIds.isEmpty()) return
+        membershipRepository.markExpiryReminderSent(membershipIds, daysLeft)
+    }
 
     @Transactional(readOnly = true)
     fun findActiveExpired(now: OffsetDateTime): List<ExpiringSubscriptionNotification> =

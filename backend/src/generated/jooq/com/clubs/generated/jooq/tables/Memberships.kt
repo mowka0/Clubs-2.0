@@ -209,6 +209,16 @@ open class Memberships(
      */
     val DUES_PROOF_URL: TableField<MembershipsRecord, String?> = createField(DSL.name("dues_proof_url"), SQLDataType.CLOB, this, "URL скриншота оплаты для заявки по СБП (NULL для наличных или когда заявки нет). Виден только организаторам клуба.")
 
+    /**
+     * The column <code>public.memberships.expiry_reminder_days_left</code>.
+     * Порог последнего отправленного DM «подписка истекает» в текущем окне
+     * доступа, в днях до его конца: 3 = ушло напоминание за 3 дня, 1 = ушло
+     * последнее (за 1 день), NULL = ни одного (новое или продлённое окно).
+     * Сбрасывается вместе с записью subscription_expires_at. Дедуп
+     * планировщика: без него DM уходил на каждом тике крона.
+     */
+    val EXPIRY_REMINDER_DAYS_LEFT: TableField<MembershipsRecord, Int?> = createField(DSL.name("expiry_reminder_days_left"), SQLDataType.INTEGER, this, "Порог последнего отправленного DM «подписка истекает» в текущем окне доступа, в днях до его конца: 3 = ушло напоминание за 3 дня, 1 = ушло последнее (за 1 день), NULL = ни одного (новое или продлённое окно). Сбрасывается вместе с записью subscription_expires_at. Дедуп планировщика: без него DM уходил на каждом тике крона.")
+
     private constructor(alias: Name, aliased: Table<MembershipsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<MembershipsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<MembershipsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

@@ -40,6 +40,18 @@ class GlobalExceptionHandler {
         )
     }
 
+    /**
+     * Внешний геокодер недоступен. 503, а не 500: наш сервис исправен, лежит зависимость —
+     * и фронтенд по этому коду показывает «попробуйте позже», а не общую ошибку.
+     * Детали (код и тело ответа Яндекса) уже записаны в лог сервисом.
+     */
+    @ExceptionHandler(com.clubs.geo.GeocoderUnavailableException::class)
+    fun handleGeocoderUnavailable(ex: com.clubs.geo.GeocoderUnavailableException): ResponseEntity<ErrorResponse> {
+        logger.warn("Geocoder unavailable: {}", ex.message)
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+            .body(ErrorResponse("GEOCODER_UNAVAILABLE", "Поиск адреса временно недоступен"))
+    }
+
     @ExceptionHandler(NotFoundException::class)
     fun handleNotFound(ex: NotFoundException): ResponseEntity<ErrorResponse> {
         logger.debug("Not found: {}", ex.message)

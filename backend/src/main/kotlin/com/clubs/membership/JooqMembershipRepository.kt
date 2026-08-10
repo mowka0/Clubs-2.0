@@ -334,6 +334,8 @@ class JooqMembershipRepository(
             .set(MEMBERSHIPS.ROLE, MembershipRole.member)
             .set(MEMBERSHIPS.JOINED_AT, now)
             .setNull(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT)
+            // Окна доступа больше нет — вместе с ним обнуляем счёт напоминаний прошлого цикла.
+            .setNull(MEMBERSHIPS.EXPIRY_REMINDER_DAYS_LEFT)
             // Свежее вступление: очистить устаревшие метки взноса от предыдущего жизненного цикла;
             // проставить «заморожен с» при переходе во frozen.
             .setNull(MEMBERSHIPS.DUES_MARKED_PAID_AT)
@@ -380,6 +382,7 @@ class JooqMembershipRepository(
         val row = dsl.update(MEMBERSHIPS)
             .set(MEMBERSHIPS.STATUS, MembershipStatus.cancelled)
             .set(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT, null as OffsetDateTime?)
+            .setNull(MEMBERSHIPS.EXPIRY_REMINDER_DAYS_LEFT)
             .set(MEMBERSHIPS.UPDATED_AT, now)
             .where(MEMBERSHIPS.ID.eq(membershipId).and(MEMBERSHIPS.STATUS.ne(MembershipStatus.cancelled)))
             .returningResult(MEMBERSHIPS.USER_ID, MEMBERSHIPS.CLUB_ID)
@@ -455,6 +458,9 @@ class JooqMembershipRepository(
             .set(MEMBERSHIPS.DUES_MARKED_PAID_AT, now)
             .set(MEMBERSHIPS.DUES_MARKED_BY, markedBy)
             .set(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT, accessUntil)
+            // Новое окно доступа — новый счёт напоминаний: продлённый участник снова получит DM
+            // за 3 дня и за 1 день до нового конца.
+            .setNull(MEMBERSHIPS.EXPIRY_REMINDER_DAYS_LEFT)
             // Открытие доступа закрывает любой ожидающий claim взноса — очистить, чтобы он покинул «Ждут оплаты».
             .setNull(MEMBERSHIPS.DUES_CLAIMED_AT)
             .setNull(MEMBERSHIPS.DUES_CLAIM_METHOD)
@@ -488,6 +494,8 @@ class JooqMembershipRepository(
             .set(MEMBERSHIPS.STATUS, MembershipStatus.active)
             .setNull(MEMBERSHIPS.ACCESS_FROZEN_AT)
             .set(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT, accessUntil)
+            // Окно доступа переписано вручную — напоминания об истечении считаем заново.
+            .setNull(MEMBERSHIPS.EXPIRY_REMINDER_DAYS_LEFT)
             // Открытие доступа закрывает любой ожидающий claim взноса.
             .setNull(MEMBERSHIPS.DUES_CLAIMED_AT)
             .setNull(MEMBERSHIPS.DUES_CLAIM_METHOD)
@@ -525,8 +533,14 @@ class JooqMembershipRepository(
             .execute()
     }
 
-    override fun findExpiringWithin(now: OffsetDateTime, threshold: OffsetDateTime): List<ExpiringSubscriptionNotification> =
-        dsl.select(USERS.TELEGRAM_ID, CLUBS.NAME, CLUBS.ID)
+    override fun findExpiryReminderCandidates(now: OffsetDateTime, threshold: OffsetDateTime): List<ExpiryReminderCandidate> =
+        dsl.select(
+            MEMBERSHIPS.ID,
+            USERS.TELEGRAM_ID,
+            CLUBS.NAME,
+            MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT,
+            MEMBERSHIPS.EXPIRY_REMINDER_DAYS_LEFT
+        )
             .from(MEMBERSHIPS)
             .join(USERS).on(USERS.ID.eq(MEMBERSHIPS.USER_ID))
             .join(CLUBS).on(CLUBS.ID.eq(MEMBERSHIPS.CLUB_ID))
@@ -536,12 +550,26 @@ class JooqMembershipRepository(
                     .and(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT.greaterThan(now))
             )
             .fetch { record ->
-                ExpiringSubscriptionNotification(
+                ExpiryReminderCandidate(
+                    membershipId = record.get(MEMBERSHIPS.ID)!!,
                     telegramId = record.get(USERS.TELEGRAM_ID)!!,
                     clubName = record.get(CLUBS.NAME)!!,
-                    clubId = record.get(CLUBS.ID)!!
+                    expiresAt = record.get(MEMBERSHIPS.SUBSCRIPTION_EXPIRES_AT)!!,
+                    lastReminderDaysLeft = record.get(MEMBERSHIPS.EXPIRY_REMINDER_DAYS_LEFT)
                 )
             }
+
+    // Служебная отметка дедупа — updated_at намеренно не трогаем: членство не изменилось, а по
+    // updated_at строятся пользовательские сортировки/меты («истекла N дн назад» и т.п.).
+    // Условие на active: между чтением кандидатов и отметкой участник мог выйти/быть кикнут —
+    // тот путь уже обнулил колонку вместе с окном доступа, и отметка не должна её воскрешать.
+    override fun markExpiryReminderSent(membershipIds: Collection<UUID>, daysLeft: Int): Int {
+        if (membershipIds.isEmpty()) return 0
+        return dsl.update(MEMBERSHIPS)
+            .set(MEMBERSHIPS.EXPIRY_REMINDER_DAYS_LEFT, daysLeft)
+            .where(MEMBERSHIPS.ID.`in`(membershipIds).and(MEMBERSHIPS.STATUS.eq(MembershipStatus.active)))
+            .execute()
+    }
 
     override fun findActiveExpired(now: OffsetDateTime): List<ExpiringSubscriptionNotification> =
         dsl.select(USERS.TELEGRAM_ID, CLUBS.NAME, CLUBS.ID)
