@@ -31,7 +31,16 @@ import java.time.Duration
  */
 @Service
 class GeocoderService(
-    @Value("\${yandex.geocoder-api-key:}") private val apiKey: String,
+    @Value("\${yandex.geocoder-api-key:}") private val configuredKey: String,
+    /**
+     * Совместимость на время переезда: тем же ключом раньше собирался фронтенд, и в окружении
+     * Coolify он уже лежит под VITE_-именем. Берём его, только если серверного нет.
+     *
+     * Проверяем именно на ПУСТОТУ, а не на отсутствие: docker-compose объявляет переменную как
+     * `${YANDEX_GEOCODER_API_KEY:-}`, то есть она всегда существует, просто пустая — и
+     * spring-дефолт `${a:${b:}}` в этом случае не срабатывает, подставляя пустую строку.
+     */
+    @Value("\${yandex.geocoder-api-key-fallback:}") private val fallbackKey: String,
     // Referer нужен, потому что ключ ограничен списком доменов в кабинете Яндекса: server-to-server
     // запрос без него получает 403. Берём тот же адрес, что и остальные ссылки на приложение.
     @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String,
@@ -39,6 +48,8 @@ class GeocoderService(
 ) {
 
     private val log = LoggerFactory.getLogger(GeocoderService::class.java)
+
+    private val apiKey: String = configuredKey.ifBlank { fallbackKey }
 
     private val http: HttpClient = HttpClient.newBuilder()
         .connectTimeout(CONNECT_TIMEOUT)

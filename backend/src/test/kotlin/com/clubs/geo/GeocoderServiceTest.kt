@@ -17,8 +17,21 @@ class GeocoderServiceTest {
 
     private val objectMapper = ObjectMapper()
 
-    private fun service(apiKey: String = "test-key") =
-        GeocoderService(apiKey, "https://example.test", objectMapper)
+    private fun service(apiKey: String = "test-key", fallbackKey: String = "") =
+        GeocoderService(apiKey, fallbackKey, "https://example.test", objectMapper)
+
+    @Test
+    fun `пустой серверный ключ подхватывает фолбэк, а не ложится`() {
+        // На проде YANDEX_GEOCODER_API_KEY объявлена, но пустая, а рабочий ключ лежит под
+        // VITE_-именем: раньше это давало 503 на ровном месте.
+        val svc = service(apiKey = "", fallbackKey = "legacy-key")
+        // Ключ есть → до сети дойдёт (упадёт уже на сетевом вызове, а не на «не настроен»).
+        val e = assertFailsWith<GeocoderUnavailableException> { svc.geocode("Москва, Тверская 1") }
+        assertTrue(
+            e.message?.contains("не настроен") != true,
+            "Ключ из фолбэка обязан использоваться, получили: ${e.message}"
+        )
+    }
 
     @Test
     fun `пустой ключ — недоступность, а не тихое молчание`() {
