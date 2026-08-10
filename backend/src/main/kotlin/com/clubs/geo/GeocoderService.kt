@@ -41,9 +41,19 @@ class GeocoderService(
      * spring-дефолт `${a:${b:}}` в этом случае не срабатывает, подставляя пустую строку.
      */
     @Value("\${yandex.geocoder-api-key-fallback:}") private val fallbackKey: String,
-    // Referer нужен, потому что ключ ограничен списком доменов в кабинете Яндекса: server-to-server
-    // запрос без него получает 403. Берём тот же адрес, что и остальные ссылки на приложение.
-    @Value("\${telegram.webapp-base-url}") private val webAppBaseUrl: String,
+    /**
+     * Referer, с которым идём в Яндекс. Ключ ограничен списком доменов в кабинете, и запрос
+     * БЕЗ этого заголовка получает 403 — проверено с самого сервера.
+     *
+     * Отдельная настройка, а НЕ `telegram.webapp-base-url`: на проде та переменная указывает на
+     * технический домен Coolify (`u342…sslip.io`), которого в белом списке Яндекса нет и быть не
+     * должно. На staging она случайно совпадала с публичным доменом — из-за этого поиск работал
+     * там и падал на проде уже после переезда геокодера на сервер.
+     *
+     * Значение не обязано совпадать с доменом, откуда пришёл пользователь: проверяется только
+     * вхождение в белый список, а запрос всё равно server-to-server.
+     */
+    @Value("\${yandex.geocoder-referer}") private val geocoderReferer: String,
     private val objectMapper: ObjectMapper
 ) {
 
@@ -76,7 +86,7 @@ class GeocoderService(
         )
         val request = HttpRequest.newBuilder(url)
             .timeout(REQUEST_TIMEOUT)
-            .header("Referer", webAppBaseUrl)
+            .header("Referer", geocoderReferer)
             .GET()
             .build()
 
