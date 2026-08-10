@@ -105,9 +105,13 @@ class LivePinServiceTest {
         verify {
             gateway.sendGroupMessageWithUrlButton(
                 chatId = chatId,
-                text = match { it.contains("где стало: парк имени Революции 1905 года") },
-                buttonText = null,
-                url = null,
+                // Правка зовёт переголосовать — призыв идёт и текстом, и кнопкой.
+                text = match {
+                    it.contains("где стало: парк имени Революции 1905 года") &&
+                        it.contains("Проголосуй в клубе!")
+                },
+                buttonText = "К событию",
+                url = "https://t.me/clubs_test_bot?startapp=event_${moved.id}",
                 parseMode = any(),
                 silent = any(),
                 secondaryButton = OPEN_IN_YANDEX_MAPS_BUTTON to
@@ -128,8 +132,9 @@ class LivePinServiceTest {
             gateway.sendGroupMessageWithUrlButton(
                 chatId = chatId,
                 text = any(),
-                buttonText = null,
-                url = null,
+                // Кнопка «К событию» есть всегда, а вот второй строки с картами быть не должно.
+                buttonText = "К событию",
+                url = "https://t.me/clubs_test_bot?startapp=event_${moved.id}",
                 parseMode = any(),
                 silent = any(),
                 secondaryButton = null

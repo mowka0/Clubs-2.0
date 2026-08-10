@@ -19,6 +19,12 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
+ * Кнопка под постом о правке встречи. Нейтральная формулировка вместо «Проголосовать»:
+ * правка приходит и на Этапе 2, где голосование закрыто и ждут подтверждения участия.
+ */
+private const val EDITED_POST_BUTTON = "К событию"
+
+/**
  * «Живой закреп» (слайс 3 club-chat-link, мокап 03): у бота ОДНО закреплённое сообщение-статус
  * на событие, которое он редактирует, и один пост-итог после отметки явки. Всё остальное — тишина.
  *
@@ -104,11 +110,13 @@ class LivePinService(
         val messageId = gateway.sendGroupMessageWithUrlButton(
             chatId = link.chatId,
             text = renderer.editedText(edited),
-            buttonText = null,
-            url = null,
+            // «К событию», а не «Проголосовать»: правка приходит и на Этапе 2, где голосование
+            // уже закрыто и ждут подтверждения, — нейтральная формулировка верна в обоих случаях.
+            buttonText = EDITED_POST_BUTTON,
+            url = renderer.eventUrl(edited.event.id),
             parseMode = PARSE_MODE_HTML,
-            // У события с гео-точкой — кнопка карт: пост о переезде без неё заставляет
-            // копировать новый адрес руками. Единственная кнопка поста (первой строки нет).
+            // У события с гео-точкой — вторая строка клавиатуры: пост о переезде без неё
+            // заставляет копировать новый адрес руками.
             secondaryButton = mapsButton(edited.event)
         )
         return if (messageId != null) link.chatId else null

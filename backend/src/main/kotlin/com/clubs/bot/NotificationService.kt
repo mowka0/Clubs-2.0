@@ -275,6 +275,9 @@ class NotificationService(
         } else {
             event.locationDisplay?.let { sb.append("где: ${esc(it)}") }
         }
+        // Правка — повод переголосовать: у кого планы поменялись из-за новой даты или места,
+        // должен сказать об этом сейчас, а не молча не прийти. Текст общий с постом в чате.
+        sb.append("\n\n").append(EventMessageTemplate.VOTE_CALL_TO_ACTION)
         return sb.toString().trimEnd()
     }
 
