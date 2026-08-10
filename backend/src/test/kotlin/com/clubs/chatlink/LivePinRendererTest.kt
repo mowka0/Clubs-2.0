@@ -41,6 +41,8 @@ class LivePinRendererTest {
         assertTrue(text.contains("<b>Обычная встреча</b>"))
         assertTrue(text.contains("Поход в баню"))
         assertTrue(text.contains("когда: 12.07.2026 19:00 МСК"))
+        // Призыв к действию стоит прямо над счётчиками (PO 2026-08-10)
+        assertTrue(text.contains("Проголосуй в клубе!\n✅ Идут — 9"))
         assertTrue(text.contains("✅ Идут — 9"))
         assertTrue(text.contains("🤔 Возможно — 3"))
         assertTrue(text.contains("👥 Мест — 15"))

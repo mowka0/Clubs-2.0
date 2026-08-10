@@ -44,10 +44,12 @@ class LivePinRenderer(
         if (event.stage2Triggered) "Подтвердить участие" else "Проголосовать"
 
     /**
-     * Этап 1 (идёт голосование) — общий шаблон встречи: формат жирным, что/когда/где, голоса.
+     * Этап 1 (идёт голосование) — общий шаблон встречи: формат жирным, что/когда/где, призыв
+     * проголосовать и голоса.
      */
     fun stage1Text(event: Event, going: Int, maybe: Int): String =
         "${EventMessageTemplate.head(event, fmt)}\n\n" +
+            "$VOTE_CALL_TO_ACTION\n" +
             EventMessageTemplate.stage1Stats(event, going, maybe)
 
     /**
@@ -152,5 +154,10 @@ class LivePinRenderer(
     companion object {
         // Сколько имён «впервые» показываем в итоге до схлопывания в «и ещё k»
         private const val MAX_FIRST_TIMER_NAMES = 3
+
+        // Призыв к действию над счётчиками Этапа 1 (PO 2026-08-10): пост живёт в общей ленте чата,
+        // где кнопка под сообщением читается как оформление — строка прямым текстом говорит, что
+        // от участника ждут. Только в чате: в личном DM счётчиков и голосования нет.
+        private const val VOTE_CALL_TO_ACTION = "Проголосуй в клубе!"
     }
 }
