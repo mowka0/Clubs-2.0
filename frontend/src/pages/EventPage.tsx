@@ -1328,6 +1328,7 @@ export const EventPage: FC = () => {
 
       {editPickerOpen && (
         <LocationPickerSheet
+          clubId={event.clubId}
           initial={
             editLocation.lat != null && editLocation.lon != null
               ? { lat: editLocation.lat, lon: editLocation.lon }

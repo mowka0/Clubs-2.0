@@ -106,4 +106,78 @@ class GeocoderServiceTest {
             "Ожидали GeocoderUnavailableException, получили ${e.cause}"
         )
     }
+
+    // ── координаты по uri подсказки ────────────────────────────────────────────────────
+    // Геосаджест координат не отдаёт принципиально, поэтому выбор места в пикере стоит второго
+    // запроса — сюда. HTTP-клиент подменяется фейком (FakeHttpClient.kt), сеть не гоняется.
+
+    /** Ответ геокодера с одной точкой — форма та же, что у поиска по адресу. */
+    private val ONE_POINT_BODY = """
+        {"response":{"GeoObjectCollection":{"featureMember":[{"GeoObject":{
+          "metaDataProperty":{"GeocoderMetaData":{"text":"Россия, Иваново, Old Friends"}},
+          "Point":{"pos":"40.972935 57.012830"}
+        }}]}}}
+    """.trimIndent()
+
+    @Test
+    fun `uri уходит своим параметром, а не подставляется в geocode`() {
+        val svc = service()
+        val http = installFakeHttp(svc, listOf(ok(ONE_POINT_BODY)))
+
+        val result = svc.resolveUri("ymapsbm1://org?oid=1024394521")!!
+
+        assertEquals(57.012830, result.lat)
+        assertEquals(40.972935, result.lon)
+        // Идентификатор непрозрачный: уедь он в geocode= — Яндекс искал бы адрес по строке
+        // «ymapsbm1://…» и не нашёл бы ничего.
+        assertTrue(http.urlOf(0).contains("&uri=ymapsbm1"), "uri не ушёл: ${http.urlOf(0)}")
+        assertTrue(!http.urlOf(0).contains("geocode="), "Лишний geocode=: ${http.urlOf(0)}")
+        assertEquals(REFERER, http.headerOf(0, "Referer"))
+        assertEquals(1, http.requestCount)
+    }
+
+    @Test
+    fun `uri не разрешился — null, то есть 204, а не ошибка`() {
+        // Клиент по 204 оставляет пин там, где он стоял; ошибку показывать не за что.
+        val svc = service()
+        installFakeHttp(svc, listOf(ok("""{"response":{"GeoObjectCollection":{"featureMember":[]}}}""")))
+
+        assertNull(svc.resolveUri("ymapsbm1://org?oid=404"))
+    }
+
+    @Test
+    fun `не-2xx на resolve — недоступность`() {
+        val svc = service()
+        installFakeHttp(svc, listOf(failed(403, """{"message":"Invalid referer"}""")))
+
+        assertFailsWith<GeocoderUnavailableException> { svc.resolveUri("ymapsbm1://org?oid=1") }
+    }
+
+    @Test
+    fun `обрыв сети на resolve — недоступность`() {
+        val svc = service()
+        installFakeHttp(svc, listOf(networkFailure()))
+
+        assertFailsWith<GeocoderUnavailableException> { svc.resolveUri("ymapsbm1://org?oid=1") }
+    }
+
+    @Test
+    fun `пустой uri отклоняется до похода в сеть`() {
+        val e = assertFailsWith<ValidationException> { service().resolveUri("   ") }
+        assertEquals("Идентификатор места пуст", e.message)
+    }
+
+    @Test
+    fun `слишком длинный uri отклоняется до похода в сеть`() {
+        // Потолок 512 символов — защита от мусора в параметре: реальные ymapsbm1://-идентификаторы
+        // умещаются в десятки символов.
+        assertFailsWith<ValidationException> { service().resolveUri("ymapsbm1://" + "x".repeat(512)) }
+    }
+
+    @Test
+    fun `ключ не настроен — resolve тоже отвечает недоступностью`() {
+        assertFailsWith<GeocoderUnavailableException> {
+            service(apiKey = "").resolveUri("ymapsbm1://org?oid=1")
+        }
+    }
 }

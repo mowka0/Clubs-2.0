@@ -4,6 +4,7 @@
  *
  * Бюджет бесплатного тарифа ~100 запросов/сутки на сервис, поэтому:
  *  - геокодинг вызывается только по кнопке «Найти» (никакого live-саджеста);
+ *  - подсказки мест — тоже по кнопке-лупе: 1 поиск = 1 запрос, плюс 1 на выбор строки;
  *  - обратный геокодинг — один раз по «Готово» в пикере;
  *  - JS API грузится лениво, только при открытии пикера.
  *
@@ -130,15 +131,18 @@ export async function createPickerMap(
       return { lat, lon };
     },
     panTo(point, targetZoom) {
-      map.setCenter([point.lat, point.lon], targetZoom, { duration: 300 });
+      // duration: 0 — БЕЗ анимации, и это требование корректности, а не вкусовщина.
+      // Пикер определяет «пользователь не двигал карту после выбора» сравнением getCenter()
+      // с выбранной точкой. Пока летит анимация, центр — промежуточная координата: успевший
+      // нажать «Готово» получил бы в событие точку, которую никто не выбирал, а название
+      // заведения затёрлось бы обратным геокодингом этой середины пути.
+      map.setCenter([point.lat, point.lon], targetZoom, { duration: 0 });
     },
     destroy() {
       map.destroy();
     },
   };
 }
-
-// Предел ожидания ответа геокодера, мс.
 
 /** HTTP-ошибка геокодера (4xx = лимит/ключ, а не сеть) — пикер различает текст сообщения. */
 export class GeocoderHttpError extends Error {
@@ -151,8 +155,7 @@ export class GeocoderHttpError extends Error {
   }
 }
 
-/** Форма ответа HTTP-геокодера 1.x (все поля защитно-опциональны — внешнее API). */
-/** Ответ нашего `/api/geo/geocode` (порядок полей привычный — lat/lon, не яндексовский). */
+/** Ответ нашего `/api/geo/geocode` и `/api/geo/resolve` (порядок полей — lat/lon, не яндексовский). */
 interface GeocodeApiResult {
   address: string;
   lat: number;
@@ -173,20 +176,41 @@ interface GeocodeApiResult {
  * для обратного — разбирать его на клиенте не нужно.
  */
 async function requestGeocoder(geocodeParam: string): Promise<GeocodeResult | null> {
+  const dto = await requestGeoApi<GeocodeApiResult>('/api/geo/geocode', { q: geocodeParam });
+  return toGeocodeResult(dto);
+}
+
+/**
+ * Общий поход в гео-эндпоинты бэкенда (`/geocode`, `/suggest`, `/resolve`): различаются они
+ * только путём и параметрами, а обработка ошибок у всех одна.
+ *
+ * HTTP-ошибка заворачивается в GeocoderHttpError — пикер по типу исключения отличает
+ * «сервис недоступен» (503, лимит, ключ не настроен) от обрыва связи и показывает разный
+ * текст. Всё остальное (сеть, парсинг) летит наружу как есть.
+ */
+async function requestGeoApi<T>(
+  path: string,
+  params: Record<string, string>,
+): Promise<T | undefined> {
   try {
-    const dto = await apiClient.get<GeocodeApiResult | undefined>('/api/geo/geocode', {
-      q: geocodeParam,
-    });
-    // 204 No Content — адрес не найден; apiClient отдаёт undefined.
-    if (!dto) return null;
-    if (!Number.isFinite(dto.lat) || !Number.isFinite(dto.lon)) return null;
-    return { point: { lat: dto.lat, lon: dto.lon }, address: dto.address };
+    // 204 No Content — apiClient отдаёт undefined, тело разбирать не пытается.
+    return await apiClient.get<T | undefined>(path, params);
   } catch (e) {
-    // Сохраняем прежний контракт для пикера: HTTP-ошибка (503 «геокодер недоступен») — это
-    // не проблема связи, и текст пользователю показывается другой.
     if (e instanceof ApiError) throw new GeocoderHttpError(e.status);
     throw e;
   }
+}
+
+/** Разбор ответа `{address,lat,lon}` в GeocodeResult. null = точки нет (204 или мусор в теле). */
+function toGeocodeResult(dto: GeocodeApiResult | undefined): GeocodeResult | null {
+  if (!dto) return null;
+  if (!Number.isFinite(dto.lat) || !Number.isFinite(dto.lon)) return null;
+  // Адрес защитно приводим к строке: координата ценна сама по себе, ронять её из-за
+  // отсутствующей подписи незачем — текст в пикере всё равно перекрывается выбранным местом.
+  return {
+    point: { lat: dto.lat, lon: dto.lon },
+    address: typeof dto.address === 'string' ? dto.address : '',
+  };
 }
 
 /** Прямой геокодинг «адрес → точка». null = ничего не найдено; ошибки сети/HTTP летят наружу. */
@@ -198,6 +222,85 @@ export function geocode(query: string): Promise<GeocodeResult | null> {
 export async function reverseGeocode(point: GeoPoint): Promise<string | null> {
   const result = await requestGeocoder(`${point.lon},${point.lat}`);
   return result?.address ?? null;
+}
+
+// ---- Подсказки мест (Геосаджест через бэкенд) ----
+// Геосаджест знает организации, которых нет у геокодера («Old Friends»), но НЕ отдаёт
+// координаты — только текст и непрозрачный uri. Поэтому выбор места стоит двух запросов:
+// лупа → /suggest (список), тап по строке → /resolve (координаты по uri).
+// Ключ Геосаджеста, как и ключ геокодера, живёт в env бэкенда и на клиент не уезжает.
+
+/** Класс подсказки: заведение / дом / улица / всё прочее — пикер по нему выбирает иконку. */
+export type SuggestKind = 'business' | 'house' | 'street' | 'other';
+
+// Те же значения в рантайме: kind приходит из внешнего API, и незнакомое значение нужно
+// уметь отбросить (→ 'other'), а не верить типу на слово.
+const SUGGEST_KINDS: readonly SuggestKind[] = ['business', 'house', 'street', 'other'];
+
+/** Строка списка подсказок. `uri` — идентификатор Яндекса, разбирать его на клиенте нельзя. */
+export interface PlaceSuggestion {
+  /** Название места: «Old Friends» либо сам адрес, если это дом/улица. */
+  title: string;
+  /** Пояснение под названием: «Кальян-бар · Иваново, Пограничный переулок, 62». */
+  subtitle: string;
+  /** Почтовый адрес отдельной строкой — из него собирается location_text события. */
+  address: string;
+  kind: SuggestKind;
+  uri: string;
+}
+
+/** Ответ `/api/geo/suggest`. `results` — unknown: содержимое приходит извне и не гарантировано. */
+interface SuggestApiResponse {
+  results?: unknown;
+}
+
+function isSuggestKind(value: unknown): value is SuggestKind {
+  return SUGGEST_KINDS.some((kind) => kind === value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** Валидация одного элемента выдачи. null = строка непригодна и в список не попадает. */
+function toPlaceSuggestion(raw: unknown): PlaceSuggestion | null {
+  if (!isRecord(raw)) return null;
+  const { title, subtitle, address, kind, uri } = raw;
+  // Без названия и без uri строка мертва: показать нечего либо по тапу не достать координату.
+  // Бэкенд такие отбрасывает сам, но клиент внешнему ответу на слово не верит.
+  if (typeof title !== 'string' || title.length === 0) return null;
+  if (typeof uri !== 'string' || uri.length === 0) return null;
+  return {
+    title,
+    subtitle: typeof subtitle === 'string' ? subtitle : '',
+    address: typeof address === 'string' ? address : '',
+    kind: isSuggestKind(kind) ? kind : 'other',
+    uri,
+  };
+}
+
+/**
+ * Подсказки по строке. Пустой массив = ничего не нашли (это валидный ответ, а не ошибка).
+ * HTTP-ошибка (503 «саджест недоступен») → GeocoderHttpError, как у геокодера.
+ *
+ * `clubId` сужает поиск до города клуба; координаты города бэкенд достаёт сам — клиенту их
+ * не отдают.
+ */
+export async function suggestPlaces(query: string, clubId?: string): Promise<PlaceSuggestion[]> {
+  const params: Record<string, string> = { q: query };
+  if (clubId) params.clubId = clubId;
+  const dto = await requestGeoApi<SuggestApiResponse>('/api/geo/suggest', params);
+  const items = dto?.results;
+  if (!Array.isArray(items)) return [];
+  return items
+    .map(toPlaceSuggestion)
+    .filter((suggestion): suggestion is PlaceSuggestion => suggestion !== null);
+}
+
+/** Координаты выбранной подсказки по её uri. null = не разрешилось (204). */
+export async function resolveSuggestion(uri: string): Promise<GeocodeResult | null> {
+  const dto = await requestGeoApi<GeocodeApiResult>('/api/geo/resolve', { uri });
+  return toGeocodeResult(dto);
 }
 
 /** URL статичной мини-карты с пином (Static API). Порядок в ll/pt — lon,lat. */

@@ -445,6 +445,7 @@ export const CreateEventPage: FC = () => {
       {pickerOpen && (
         <LocationPickerSheet
           initial={location?.point ?? null}
+          clubId={clubId}
           onSelect={(point, address) => {
             setLocation({ point, address });
             setPickerOpen(false);

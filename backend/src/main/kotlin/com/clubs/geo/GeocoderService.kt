@@ -75,13 +75,44 @@ class GeocoderService(
         val query = rawQuery.trim()
         if (query.length < MIN_QUERY_LEN) throw ValidationException("Запрос слишком короткий")
         if (query.length > MAX_QUERY_LEN) throw ValidationException("Запрос слишком длинный")
+        return fetchFirstResult(TARGET_PARAM_QUERY, query)
+    }
+
+    /**
+     * Достаёт координаты объекта по его `uri` из Геосаджеста (см. [SuggestService]): саджест
+     * координат не возвращает принципиально, поэтому выбор подсказки стоит второго запроса.
+     *
+     * Тот же эндпоинт и тот же ключ, что у [geocode] — меняется только параметр цели: вместо
+     * `geocode=<строка>` уходит `uri=<непрозрачный идентификатор Яндекса>`.
+     *
+     * Адрес в ответе для организации — её НАЗВАНИЕ («Россия, …, Иваново, Old Friends»), поэтому
+     * текст места собирается из ответа саджеста, а отсюда берутся только `lat`/`lon`.
+     */
+    fun resolveUri(rawUri: String): GeocodeResultDto? {
+        val uri = rawUri.trim()
+        if (uri.isEmpty()) throw ValidationException("Идентификатор места пуст")
+        if (uri.length > MAX_URI_LEN) throw ValidationException("Идентификатор места слишком длинный")
+        // Формат проверяем ДО похода в сеть: здесь ждут непрозрачный идентификатор из выдачи
+        // саджеста, а не произвольную строку. Без проверки эндпоинт превращался бы в открытый
+        // доступ к нашему платному ключу геокодера любым текстом (`uri=Москва, Кремль` уходил
+        // в Яндекс и тратил общую суточную квоту). SSRF тут нет — хост константный, значение
+        // экранируется, — но лишнюю поверхность держать незачем.
+        if (!URI_PATTERN.matches(uri)) throw ValidationException("Некорректный идентификатор места")
+        return fetchFirstResult(TARGET_PARAM_URI, uri)
+    }
+
+    /**
+     * Общий поход в геокодер: подстановка ключа, Referer, таймауты, разбор ответа.
+     * [targetParam] — имя параметра цели (`geocode` или `uri`), [targetValue] — его значение.
+     */
+    private fun fetchFirstResult(targetParam: String, targetValue: String): GeocodeResultDto? {
         if (apiKey.isBlank()) {
             log.error("Geocoder key is not configured: set YANDEX_GEOCODER_API_KEY")
             throw GeocoderUnavailableException("Геокодер не настроен")
         }
 
         val url = URI.create(
-            "$GEOCODER_ENDPOINT?apikey=${enc(apiKey)}&geocode=${enc(query)}" +
+            "$GEOCODER_ENDPOINT?apikey=${enc(apiKey)}&$targetParam=${enc(targetValue)}" +
                 "&format=json&results=1&lang=ru_RU"
         )
         val request = HttpRequest.newBuilder(url)
@@ -93,7 +124,7 @@ class GeocoderService(
         val response = try {
             http.send(request, HttpResponse.BodyHandlers.ofString())
         } catch (e: java.io.IOException) {
-            log.warn("Geocoder request failed: query='{}' reason={}", query, e.message)
+            log.warn("Geocoder request failed: {}='{}' reason={}", targetParam, targetValue, e.message)
             throw GeocoderUnavailableException("Геокодер недоступен", e)
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
@@ -104,8 +135,9 @@ class GeocoderService(
             // Тело Яндекса пишем в лог целиком: только по нему отличают «домен не разрешён»
             // от «исчерпан лимит» — оба приходят как 403 с одинаковым текстом наружу.
             log.error(
-                "Geocoder returned {}: query='{}' body={}",
-                response.statusCode(), query, response.body().take(ERROR_BODY_LOG_LIMIT)
+                "Geocoder returned {}: {}='{}' body={}",
+                response.statusCode(), targetParam, targetValue,
+                response.body().take(ERROR_BODY_LOG_LIMIT)
             )
             throw GeocoderUnavailableException("Геокодер ответил ${response.statusCode()}")
         }
@@ -150,6 +182,16 @@ class GeocoderService(
         private const val MIN_QUERY_LEN = 3
         // Потолок длины запроса — защита от абсурдного тела, у Яндекса свои лимиты строки.
         private const val MAX_QUERY_LEN = 200
+        // Потолок длины uri подсказки. Реальные ymapsbm1://-идентификаторы — десятки символов,
+        // запас взят с большим избытком: это защита от мусора в параметре, а не бизнес-правило.
+        private const val MAX_URI_LEN = 512
+        // Схема идентификаторов объектов Яндекса: `ymapsbm1://org?oid=…`, `ymapsbm1://geo?data=…`.
+        // Набор символов — то, что реально встречается в base64url-полезной нагрузке и query.
+        private val URI_PATTERN = Regex("^ymapsbm1://[A-Za-z0-9_\\-?=&.,%:/+]{1,500}$")
+        // Параметр цели для поиска по строке адреса.
+        private const val TARGET_PARAM_QUERY = "geocode"
+        // Параметр цели для поиска по идентификатору объекта из Геосаджеста.
+        private const val TARGET_PARAM_URI = "uri"
         // Сколько ждать соединения с Яндексом.
         private val CONNECT_TIMEOUT: Duration = Duration.ofSeconds(5)
         // Полный таймаут запроса: пикер не должен висеть в «Ищем…» дольше.
@@ -159,8 +201,13 @@ class GeocoderService(
     }
 }
 
-/** Геокодер недоступен (сеть, таймаут, не-2xx от Яндекса, кривой ответ). Мапится в 503. */
-class GeocoderUnavailableException(
+/**
+ * Внешний гео-сервис Яндекса недоступен (сеть, таймаут, не-2xx, кривой ответ). Мапится в 503
+ * через `GlobalExceptionHandler`. Открыт для наследования: подсказки заведений ходят в
+ * ДРУГОЙ продукт Яндекса и бросают [SuggestUnavailableException], но снаружи это та же
+ * деградация «поиск временно недоступен» — отдельный обработчик ей не нужен.
+ */
+open class GeocoderUnavailableException(
     message: String,
     cause: Throwable? = null
 ) : RuntimeException(message, cause)
