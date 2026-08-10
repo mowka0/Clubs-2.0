@@ -93,6 +93,10 @@ services:
       # Совместимость: до появления отдельного серверного ключа берём тот же, что собирался
       # во фронтенд (он уже задан в окружении Coolify) — иначе поиск лёг бы до ручной правки env.
       VITE_YANDEX_GEOCODER_API_KEY: ${VITE_YANDEX_GEOCODER_API_KEY:-}
+      # Ключ «API Геосаджеста» — подсказки заведений в пикере места. Отдельный продукт кабинета
+      # (ключ геокодера тут не работает) и тоже только серверный: в бандл фронтенда не уезжает.
+      # Пусто = /api/geo/suggest отвечает 503, точку всё ещё можно поставить пином.
+      YANDEX_SUGGEST_API_KEY: ${YANDEX_SUGGEST_API_KEY:-}
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
       S3_ENDPOINT_URL: http://minio:9000

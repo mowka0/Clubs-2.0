@@ -22,6 +22,7 @@ class RateLimitFilter : OncePerRequestFilter() {
     private val apiBuckets = ConcurrentHashMap<String, Bucket>()
     private val authBuckets = ConcurrentHashMap<String, Bucket>()
     private val feedbackBuckets = ConcurrentHashMap<String, Bucket>()
+    private val geoBuckets = ConcurrentHashMap<String, Bucket>()
 
     override fun doFilterInternal(
         request: HttpServletRequest,
@@ -40,10 +41,12 @@ class RateLimitFilter : OncePerRequestFilter() {
 
         val isAuthEndpoint = path.startsWith("/api/auth/")
         val isFeedbackEndpoint = path == "/api/feedback"
+        val isGeoEndpoint = path.startsWith("/api/geo/")
         val key = resolveKey(request)
         val bucket = when {
             isAuthEndpoint -> authBuckets.computeIfAbsent(key) { createAuthBucket() }
             isFeedbackEndpoint -> feedbackBuckets.computeIfAbsent(key) { createFeedbackBucket() }
+            isGeoEndpoint -> geoBuckets.computeIfAbsent(key) { createGeoBucket() }
             else -> apiBuckets.computeIfAbsent(key) { createApiBucket() }
         }
 
@@ -53,6 +56,7 @@ class RateLimitFilter : OncePerRequestFilter() {
             val limit = when {
                 isAuthEndpoint -> AUTH_LIMIT_PER_MIN
                 isFeedbackEndpoint -> FEEDBACK_LIMIT_PER_MIN
+                isGeoEndpoint -> GEO_LIMIT_PER_MIN
                 else -> API_LIMIT_PER_MIN
             }
             logger.warn(
@@ -124,6 +128,15 @@ class RateLimitFilter : OncePerRequestFilter() {
         )
         .build()
 
+    private fun createGeoBucket(): Bucket = Bucket.builder()
+        .addLimit(
+            Bandwidth.builder()
+                .capacity(GEO_LIMIT_PER_MIN)
+                .refillGreedy(GEO_LIMIT_PER_MIN, Duration.ofMinutes(1))
+                .build()
+        )
+        .build()
+
     companion object {
         // Общий лимит на обычные API-запросы, в минуту на ключ (пользователь или IP).
         private const val API_LIMIT_PER_MIN = 60L
@@ -133,5 +146,12 @@ class RateLimitFilter : OncePerRequestFilter() {
         // Жёсткий лимит для /api/feedback — каждый запрос превращается в DM саппорту,
         // общий лимит 60/мин позволил бы заспамить личку техподдержки.
         private const val FEEDBACK_LIMIT_PER_MIN = 3L
+        // Жёсткий лимит для /api/geo/* — каждый запрос тратит ЧУЖУЮ суточную квоту, общую на всё
+        // приложение: 1 000 запросов у Геосаджеста и столько же у Геокодера (бесплатный тариф).
+        // Один вызов /suggest стоит до ДВУХ обращений в Яндекс (пустая выдача → повтор без рамки),
+        // поэтому под общим лимитом 60/мин один клиент выжигал бы суточный бюджет за ~8 минут —
+        // и ронял бы вместе с подсказками поиск адреса, живущий в проде с 2026-07-11.
+        // 12/мин с запасом покрывает живой сценарий «открыл пикер, поискал, выбрал» (3-5 запросов).
+        private const val GEO_LIMIT_PER_MIN = 12L
     }
 }

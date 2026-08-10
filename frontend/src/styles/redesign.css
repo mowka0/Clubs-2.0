@@ -2307,6 +2307,51 @@
   font-size: 12.5px; color: var(--text-dim); padding: 16px; text-align: center;
 }
 
+/* ---------- venue-search: подсказки мест шторкой поверх карты (вариант C) ---------- */
+/* Слой-ловушка тапов: пока список открыт, карта жестов не получает, а тап мимо шторки
+   её закрывает и жесты возвращает. Прозрачный — карта под ним видна целиком. */
+.rd-geo-sugg-backdrop { position: absolute; inset: 0; z-index: 6; }
+/* Шторка занимает не всю высоту карты (~2/3), чтобы карта под ней читалась. Позиция
+   абсолютная: высота шита не меняется ни в одном состоянии пикера. */
+.rd-geo-sugg {
+  position: absolute; left: 0; right: 0; top: 0; z-index: 7;
+  max-height: 66%; overflow-y: auto;
+  /* Скролл внутри списка не «протекает» на карту и страницу. */
+  overscroll-behavior: contain;
+  padding: 4px 6px; border-radius: 16px;
+  background: var(--glass-strong-bg);
+  backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-strong-border);
+  box-shadow: var(--glass-strong-shadow);
+}
+.rd-geo-sugg-row {
+  display: flex; gap: 11px; align-items: flex-start; width: 100%; text-align: left;
+  background: transparent; border: none; border-bottom: 1px solid var(--hairline);
+  padding: 11px 8px; border-radius: 12px; cursor: pointer;
+  color: inherit; font-family: inherit;
+}
+.rd-geo-sugg-row:last-child { border-bottom: none; }
+.rd-geo-sugg-row:active { background: var(--accent-soft); }
+.rd-geo-sugg-row:disabled { cursor: default; }
+.rd-geo-sugg-ic {
+  flex-shrink: 0; width: 32px; height: 32px; border-radius: 10px; background: var(--surface-2);
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+/* Заведение выделено акцентной плашкой: ради него фича и делалась. */
+.rd-geo-sugg-ic.biz { background: var(--accent-soft); }
+.rd-geo-sugg-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rd-geo-sugg-txt b {
+  font-size: 13.5px; font-weight: 600; letter-spacing: -.005em;
+  color: var(--text); overflow-wrap: anywhere;
+}
+.rd-geo-sugg-txt b i { font-style: normal; color: var(--accent); }
+.rd-geo-sugg-txt span { font-size: 11.5px; color: var(--text-dim); line-height: 1.35; }
+/* Ничего не нашли — одна строка вместо списка (шторки нет), чтобы вёрстка не прыгала. */
+.rd-geo-empty {
+  display: flex; gap: 8px; align-items: baseline;
+  font-size: 11.5px; color: var(--text-dim); margin: -4px 2px 0; line-height: 1.45;
+}
+
 /* ---------- event-geo: выбранное место в форме создания (кадр A) ---------- */
 .rd-place-chip {
   display: flex; align-items: center; gap: 11px;

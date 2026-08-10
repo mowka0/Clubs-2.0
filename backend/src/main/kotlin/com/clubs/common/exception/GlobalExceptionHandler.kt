@@ -66,6 +66,20 @@ class GlobalExceptionHandler {
             .body(ErrorResponse("VALIDATION_ERROR", ex.message ?: "Validation failed"))
     }
 
+    /**
+     * Параметр запроса не разобрался в объявленный тип: `?clubId=не-uuid`, `?id=abc` вместо числа.
+     * Это ошибка клиента, а не сбой сервера, — без этого обработчика Spring отдавал бы 500
+     * со стектрейсом в ERROR-логе и шумел бы при любом кривом query-параметре.
+     */
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException::class)
+    fun handleTypeMismatch(
+        ex: org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
+    ): ResponseEntity<ErrorResponse> {
+        logger.debug("Type mismatch for parameter '{}'", ex.name)
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(ErrorResponse("VALIDATION_ERROR", "Некорректное значение параметра '${ex.name}'"))
+    }
+
     @ExceptionHandler(ConflictException::class)
     fun handleConflict(ex: ConflictException): ResponseEntity<ErrorResponse> {
         logger.warn("Conflict: {}", ex.message)
