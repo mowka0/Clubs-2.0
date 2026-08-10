@@ -17,8 +17,12 @@ class GeocoderServiceTest {
 
     private val objectMapper = ObjectMapper()
 
+    // Referer берётся из отдельной настройки, а не из webapp-base-url: на проде там технический
+    // домен Coolify, которого нет в белом списке ключа Яндекса (инцидент 2026-08-10).
+    private val REFERER = "https://77-42-23-177.sslip.io"
+
     private fun service(apiKey: String = "test-key", fallbackKey: String = "") =
-        GeocoderService(apiKey, fallbackKey, "https://example.test", objectMapper)
+        GeocoderService(apiKey, fallbackKey, REFERER, objectMapper)
 
     @Test
     fun `пустой серверный ключ подхватывает фолбэк, а не ложится`() {

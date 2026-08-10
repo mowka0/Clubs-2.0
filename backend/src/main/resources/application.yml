@@ -211,3 +211,7 @@ yandex:
   # Со временем стоит завести отдельный YANDEX_GEOCODER_API_KEY и убрать фолбэк — VITE_-имя
   # вводит в заблуждение, будто ключ всё ещё публичный.
   geocoder-api-key-fallback: ${VITE_YANDEX_GEOCODER_API_KEY:}
+  # Referer для запросов в Яндекс. Дефолт — ПУБЛИЧНЫЙ домен приложения: именно он внесён в белый
+  # список ключа в кабинете. Намеренно не берётся из telegram.webapp-base-url — на проде там
+  # технический домен Coolify, и геокодер отвечал 403 (2026-08-10).
+  geocoder-referer: ${YANDEX_GEOCODER_REFERER:https://77-42-23-177.sslip.io}
