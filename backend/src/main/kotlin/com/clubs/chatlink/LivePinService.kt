@@ -106,7 +106,10 @@ class LivePinService(
             text = renderer.editedText(edited),
             buttonText = null,
             url = null,
-            parseMode = PARSE_MODE_HTML
+            parseMode = PARSE_MODE_HTML,
+            // У события с гео-точкой — кнопка карт: пост о переезде без неё заставляет
+            // копировать новый адрес руками. Единственная кнопка поста (первой строки нет).
+            secondaryButton = mapsButton(edited.event)
         )
         return if (messageId != null) link.chatId else null
     }

@@ -231,10 +231,16 @@ class NotificationService(
         log.info("Event-edited DM: eventId={} clubId={} recipients={}", event.id, event.clubId, recipientTelegramIds.size)
         val text = renderEditedDm(edited)
         val webAppPath = "/events/${event.id}"
+        // Сообщение о правке всегда показывает место («где стало» или «где»), поэтому у события
+        // с гео-точкой даём кнопку карт: иначе новый адрес приходится копировать руками.
+        val mapsButton = event.locationLat?.let { lat ->
+            event.locationLon?.let { lon -> OPEN_IN_YANDEX_MAPS_BUTTON to openMapUrl(lat, lon) }
+        }
         recipientTelegramIds.forEach { telegramId ->
             sendDm(
                 telegramId.toString(), text, webAppPath = webAppPath,
-                buttonText = "📅 Открыть событие", parseMode = PARSE_MODE_HTML
+                buttonText = "📅 Открыть событие", parseMode = PARSE_MODE_HTML,
+                externalUrlButton = mapsButton
             )
         }
     }
@@ -262,7 +268,9 @@ class NotificationService(
             sb.append("когда: ${event.eventDatetime.format(fmt)}\n")
         }
         if (edited.isLocationChanged) {
-            sb.append("\nгде было: ${esc(old.locationDisplayOrDash)}\n")
+            // Пустая строка между «было» и «стало»: адреса длинные и переносятся на две-три
+            // строки, слипшись они читаются как один абзац и разница теряется (правка PO).
+            sb.append("\nгде было: ${esc(old.locationDisplayOrDash)}\n\n")
             sb.append("где стало: ${esc(event.locationDisplayOrDash)}")
         } else {
             event.locationDisplay?.let { sb.append("где: ${esc(it)}") }
@@ -510,11 +518,14 @@ class NotificationService(
         buttonText: String = DEFAULT_BUTTON_TEXT,
         // HTML нужен сообщениям по общему шаблону встречи (жирный заголовок формата);
         // остальные DM остаются plain text, как раньше.
-        parseMode: String? = null
+        parseMode: String? = null,
+        // Необязательная вторая строка клавиатуры — например «Открыть в Яндекс.Картах»
+        // у сообщения о смене места: адрес без карты заставляет копировать текст руками.
+        externalUrlButton: Pair<String, String>? = null
     ) {
         log.info("Sending DM to chatId={} webAppPath={}", chatId, webAppPath)
         try {
-            val markup = buildKeyboard(buttonText, webAppPath = webAppPath)
+            val markup = buildKeyboard(buttonText, webAppPath = webAppPath, externalUrlButton = externalUrlButton)
             val msg = SendMessage.builder()
                 .chatId(chatId)
                 .text(text)

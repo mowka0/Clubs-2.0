@@ -2,7 +2,9 @@ package com.clubs.chatlink
 
 import com.clubs.bot.ChatTelegramGateway
 import com.clubs.event.Event
+import com.clubs.event.EventEditedEvent
 import com.clubs.event.EventRepository
+import com.clubs.event.OPEN_IN_YANDEX_MAPS_BUTTON
 import com.clubs.event.EventResponseRepository
 import com.clubs.generated.jooq.enums.EventStatus
 import io.mockk.every
@@ -88,6 +90,51 @@ class LivePinServiceTest {
         }
         verify { pinRepository.insert(match { it.eventId == event.id && it.messageId == 777L }) }
         verify { gateway.pinChatMessage(chatId, 777L) }
+    }
+
+    // ---- переезд встречи: кнопка карт в посте (PO 2026-08-10) ----
+
+    @Test
+    fun `onEventEdited — у события с точкой пост получает кнопку карт`() {
+        val old = livePinEvent(clubId = clubId).copy(locationLat = 57.01283, locationLon = 40.972935)
+        val moved = old.copy(locationText = "парк имени Революции 1905 года")
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any(), any(), any(), any()) } returns 780L
+
+        service.onEventEdited(EventEditedEvent(event = moved, oldEvent = old))
+
+        verify {
+            gateway.sendGroupMessageWithUrlButton(
+                chatId = chatId,
+                text = match { it.contains("где стало: парк имени Революции 1905 года") },
+                buttonText = null,
+                url = null,
+                parseMode = any(),
+                silent = any(),
+                secondaryButton = OPEN_IN_YANDEX_MAPS_BUTTON to
+                    "https://yandex.ru/maps/?pt=40.972935,57.01283&z=17"
+            )
+        }
+    }
+
+    @Test
+    fun `onEventEdited — без гео-точки кнопки карт нет`() {
+        val old = livePinEvent(clubId = clubId)
+        val moved = old.copy(locationText = "у фонтана")
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any(), any(), any(), any()) } returns 781L
+
+        service.onEventEdited(EventEditedEvent(event = moved, oldEvent = old))
+
+        verify {
+            gateway.sendGroupMessageWithUrlButton(
+                chatId = chatId,
+                text = any(),
+                buttonText = null,
+                url = null,
+                parseMode = any(),
+                silent = any(),
+                secondaryButton = null
+            )
+        }
     }
 
     // ---- фото встречи в чате (PO 2026-08-08: в личку картинка уходила, в чат — нет) ----

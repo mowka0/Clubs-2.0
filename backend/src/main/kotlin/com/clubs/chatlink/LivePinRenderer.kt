@@ -95,7 +95,9 @@ class LivePinRenderer(
             sb.append("когда: ${event.eventDatetime.format(fmt)}\n")
         }
         if (edited.isLocationChanged) {
-            sb.append("\nгде было: ${esc(old.locationDisplayOrDash)}\n")
+            // Пустая строка между «было» и «стало»: адреса длинные и переносятся на две-три
+            // строки, слипшись они читаются как один абзац и разница теряется (правка PO).
+            sb.append("\nгде было: ${esc(old.locationDisplayOrDash)}\n\n")
             sb.append("где стало: ${esc(event.locationDisplayOrDash)}")
         } else {
             event.locationDisplay?.let { sb.append("где: ${esc(it)}") }
