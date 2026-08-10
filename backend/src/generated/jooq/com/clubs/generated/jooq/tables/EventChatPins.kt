@@ -125,6 +125,15 @@ open class EventChatPins(
      */
     val UPDATED_AT: TableField<EventChatPinsRecord, OffsetDateTime?> = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "Когда строка обновлялась в последний раз (закрытие, итог).")
 
+    /**
+     * The column <code>public.event_chat_pins.has_photo</code>. TRUE =
+     * сообщение-статус отправлено картинкой встречи с подписью (правки идут
+     * через editMessageCaption), FALSE = обычным текстом (editMessageText).
+     * Фиксирует фактический вид поста: фото могло не уйти и деградировать до
+     * текста.
+     */
+    val HAS_PHOTO: TableField<EventChatPinsRecord, Boolean?> = createField(DSL.name("has_photo"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "TRUE = сообщение-статус отправлено картинкой встречи с подписью (правки идут через editMessageCaption), FALSE = обычным текстом (editMessageText). Фиксирует фактический вид поста: фото могло не уйти и деградировать до текста.")
+
     private constructor(alias: Name, aliased: Table<EventChatPinsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<EventChatPinsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<EventChatPinsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

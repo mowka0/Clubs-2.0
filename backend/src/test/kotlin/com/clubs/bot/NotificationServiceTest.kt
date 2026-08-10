@@ -160,6 +160,27 @@ class NotificationServiceTest {
         assertTrue(markupUrls(msgSlot.captured.replyMarkup as InlineKeyboardMarkup).none { it.contains("yandex.ru/maps") })
     }
 
+    // ---- счётчики в DM (PO 2026-08-08) ----
+
+    // Личное сообщение отправляется один раз и не перерисовывается при голосовании, поэтому
+    // «Идут — 0» в нём навсегда оставался нулём. Живой счёт остаётся только в закрепе чата;
+    // в DM живут лишь неизменные факты — число мест и (у срочной) дедлайн подтверждения.
+    @Test
+    fun `DM о событии — без счётчиков голосов, но с числом мест`() {
+        val event = sampleEvent()
+        every { membershipRepository.findMemberTelegramIds(event.clubId) } returns listOf(101L)
+        val msgSlot = slot<SendMessage>()
+        every { telegramClient.execute(capture(msgSlot)) } returns mockk(relaxed = true)
+
+        service.sendEventCreated(event)
+
+        val text = msgSlot.captured.text
+        assertTrue(!text.contains("Идут"), "живой счётчик голосов в DM не нужен: $text")
+        assertTrue(!text.contains("Возможно"), "живой счётчик голосов в DM не нужен: $text")
+        assertTrue(!text.contains("Подтвердили"), "живой счётчик подтверждений в DM не нужен: $text")
+        assertTrue(text.contains("Мест — 20"), "число мест — неизменный факт, его оставляем: $text")
+    }
+
     // ---- фото события в DM (PO 2026-07-11) ----
 
     @Test

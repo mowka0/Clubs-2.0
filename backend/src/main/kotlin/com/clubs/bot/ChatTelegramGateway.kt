@@ -1,5 +1,6 @@
 package com.clubs.bot
 
+import com.clubs.common.util.absolutePhotoUrl
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
@@ -18,7 +19,10 @@ import org.telegram.telegrambots.meta.api.methods.groupadministration.UnbanChatM
 import org.telegram.telegrambots.meta.api.methods.pinnedmessages.PinChatMessage
 import org.telegram.telegrambots.meta.api.methods.pinnedmessages.UnpinChatMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageCaption
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
+import org.telegram.telegrambots.meta.api.objects.InputFile
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberAdministrator
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMemberMember
@@ -68,6 +72,10 @@ data class ChatInfo(val title: String?, val hasVisibleHistory: Boolean)
 // HTML parse_mode Telegram — нужен сообщениям с text_mention-упоминаниями («живой статус
 // сбора»); вызывающий обязан экранировать пользовательский ввод (&, <, >).
 const val PARSE_MODE_HTML = "HTML"
+
+// Предел подписи под картинкой в Telegram. Текст длиннее не станет фото-постом (Telegram
+// откажет) — вызывающий отправляет такой статус обычным текстовым сообщением.
+const val TELEGRAM_CAPTION_LIMIT = 1024
 
 /**
  * Тонкая обёртка над Telegram Bot API для чат-интеграции (club-chat-link): всё общение бота
@@ -309,6 +317,33 @@ class ChatTelegramGateway(
     }
 
     /**
+     * Пост в группу КАРТИНКОЙ с подписью — фото встречи в чате (PO 2026-08-08: в личке картинка
+     * была, в чате её не хватало). Возвращает message_id (null = не удалось; вызывающий
+     * деградирует до текстового поста — статус встречи важнее оформления). Подпись должна
+     * укладываться в [TELEGRAM_CAPTION_LIMIT], это забота вызывающего.
+     */
+    fun sendGroupPhotoWithUrlButton(
+        chatId: Long,
+        photoUrl: String,
+        caption: String,
+        buttonText: String?,
+        url: String?,
+        parseMode: String? = null,
+        secondaryButton: Pair<String, String>? = null
+    ): Long? = try {
+        val builder = SendPhoto.builder()
+            .chatId(chatId)
+            .photo(InputFile(absolutePhotoUrl(photoUrl, webAppBaseUrl)))
+            .caption(caption)
+        buildUrlKeyboard(buttonText, url, secondaryButton)?.let { builder.replyMarkup(it) }
+        parseMode?.let { builder.parseMode(it) }
+        telegramClient.execute(builder.build()).messageId?.toLong()
+    } catch (e: Exception) {
+        log.warn("sendGroupPhotoWithUrlButton failed: chatId={} error={}", chatId, e.message)
+        null
+    }
+
+    /**
      * Редактирование своего сообщения в группе (живой закреп). «Message is not modified» —
      * не ошибка (перерисовка совпала с текущим текстом), считаем успехом.
      */
@@ -320,7 +355,7 @@ class ChatTelegramGateway(
         url: String?,
         parseMode: String? = null,
         secondaryButton: Pair<String, String>? = null
-    ): Boolean = try {
+    ): Boolean = executeEdit("editGroupMessage", chatId, messageId) {
         val builder = EditMessageText.builder()
             .chatId(chatId)
             .messageId(messageId.toInt())
@@ -328,12 +363,41 @@ class ChatTelegramGateway(
         buildUrlKeyboard(buttonText, url, secondaryButton)?.let { builder.replyMarkup(it) }
         parseMode?.let { builder.parseMode(it) }
         telegramClient.execute(builder.build())
+    }
+
+    /**
+     * Редактирование подписи фото-поста (живой закреп с картинкой встречи): у сообщения-картинки
+     * нет текста, и EditMessageText вернул бы «there is no text in the message to edit» —
+     * закреп перестал бы обновляться. Кто из двух методов нужен, вызывающий знает по
+     * `event_chat_pins.has_photo`.
+     */
+    fun editGroupMessageCaption(
+        chatId: Long,
+        messageId: Long,
+        caption: String,
+        buttonText: String?,
+        url: String?,
+        parseMode: String? = null,
+        secondaryButton: Pair<String, String>? = null
+    ): Boolean = executeEdit("editGroupMessageCaption", chatId, messageId) {
+        val builder = EditMessageCaption.builder()
+            .chatId(chatId.toString())
+            .messageId(messageId.toInt())
+            .caption(caption)
+        buildUrlKeyboard(buttonText, url, secondaryButton)?.let { builder.replyMarkup(it) }
+        parseMode?.let { builder.parseMode(it) }
+        telegramClient.execute(builder.build())
+    }
+
+    /** Общая обвязка правок: «message is not modified» — не ошибка (перерисовка совпала с текущим). */
+    private fun executeEdit(method: String, chatId: Long, messageId: Long, send: () -> Unit): Boolean = try {
+        send()
         true
     } catch (e: Exception) {
         if (e.message?.contains("message is not modified") == true) {
             true
         } else {
-            log.warn("editGroupMessage failed: chatId={} messageId={} error={}", chatId, messageId, e.message)
+            log.warn("{} failed: chatId={} messageId={} error={}", method, chatId, messageId, e.message)
             false
         }
     }

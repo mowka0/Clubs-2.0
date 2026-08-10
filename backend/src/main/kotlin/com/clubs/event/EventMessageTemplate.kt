@@ -53,7 +53,19 @@ object EventMessageTemplate {
      */
     fun stage1Stats(event: Event, going: Int, maybe: Int): String {
         val sb = StringBuilder("✅ Идут — $going\n🤔 Возможно — $maybe\n")
-        sb.append(event.participantLimit?.let { "👥 Мест — $it" } ?: OPEN_EVENT_LIMIT_LINE)
+        sb.append(seatsLine(event))
+        return sb.toString()
+    }
+
+    /**
+     * Хвост ЛИЧНОГО сообщения: только неизменные факты — сколько мест и (у срочной, живущей
+     * сразу в Этапе 2) до когда подтверждать. Живых счётчиков тут намеренно нет (PO 2026-08-08):
+     * DM отправляется один раз и не перерисовывается, поэтому «✅ Идут — 0» навсегда оставался
+     * нулём и спорил с закрепом в чате, который как раз обновляется по ходу голосования.
+     */
+    fun dmFacts(event: Event, fmt: DateTimeFormatter): String {
+        val sb = StringBuilder(seatsLine(event))
+        if (event.isUrgent) sb.append("\n⏳ Подтвердить до — ${event.eventDatetime.format(fmt)}")
         return sb.toString()
     }
 
@@ -72,6 +84,10 @@ object EventMessageTemplate {
         sb.append("⏳ Подтвердить до — ${event.eventDatetime.format(fmt)}")
         return sb.toString()
     }
+
+    /** Строка о местах: у открытой встречи лимита нет — говорим суть формата, а не «Мест — null». */
+    private fun seatsLine(event: Event): String =
+        event.participantLimit?.let { "👥 Мест — $it" } ?: OPEN_EVENT_LIMIT_LINE
 
     /** HTML parse_mode: `&`, `<`, `>` в пользовательском вводе ломали бы разметку/давали инъекцию тегов. */
     fun escapeHtml(s: String): String =

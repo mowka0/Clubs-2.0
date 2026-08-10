@@ -49,6 +49,10 @@ open class EventChatPinsRecord private constructor() : UpdatableRecordImpl<Event
         set(value): Unit = set(6, value)
         get(): OffsetDateTime? = get(6) as OffsetDateTime?
 
+    open var hasPhoto: Boolean?
+        set(value): Unit = set(7, value)
+        get(): Boolean? = get(7) as Boolean?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -58,7 +62,7 @@ open class EventChatPinsRecord private constructor() : UpdatableRecordImpl<Event
     /**
      * Create a detached, initialised EventChatPinsRecord
      */
-    constructor(eventId: UUID, chatId: Long, messageId: Long? = null, closedAt: OffsetDateTime? = null, summaryMessageId: Long? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null): this() {
+    constructor(eventId: UUID, chatId: Long, messageId: Long? = null, closedAt: OffsetDateTime? = null, summaryMessageId: Long? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, hasPhoto: Boolean? = null): this() {
         this.eventId = eventId
         this.chatId = chatId
         this.messageId = messageId
@@ -66,6 +70,7 @@ open class EventChatPinsRecord private constructor() : UpdatableRecordImpl<Event
         this.summaryMessageId = summaryMessageId
         this.createdAt = createdAt
         this.updatedAt = updatedAt
+        this.hasPhoto = hasPhoto
         resetChangedOnNotNull()
     }
 
@@ -81,6 +86,7 @@ open class EventChatPinsRecord private constructor() : UpdatableRecordImpl<Event
             this.summaryMessageId = value.summaryMessageId
             this.createdAt = value.createdAt
             this.updatedAt = value.updatedAt
+            this.hasPhoto = value.hasPhoto
             resetChangedOnNotNull()
         }
     }

@@ -112,4 +112,15 @@ open class EventChatPinsDao(configuration: Configuration?) : DAOImpl<EventChatPi
      * Fetch records that have <code>updated_at IN (values)</code>
      */
     fun fetchByUpdatedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.EventChatPins> = fetch(EventChatPins.EVENT_CHAT_PINS.UPDATED_AT, *values)
+
+    /**
+     * Fetch records that have <code>has_photo BETWEEN lowerInclusive AND
+     * upperInclusive</code>
+     */
+    fun fetchRangeOfHasPhoto(lowerInclusive: Boolean?, upperInclusive: Boolean?): List<com.clubs.generated.jooq.tables.pojos.EventChatPins> = fetchRange(EventChatPins.EVENT_CHAT_PINS.HAS_PHOTO, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>has_photo IN (values)</code>
+     */
+    fun fetchByHasPhoto(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.EventChatPins> = fetch(EventChatPins.EVENT_CHAT_PINS.HAS_PHOTO, *values.toTypedArray())
 }

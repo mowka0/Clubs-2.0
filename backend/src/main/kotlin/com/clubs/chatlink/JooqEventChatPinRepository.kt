@@ -26,6 +26,7 @@ class JooqEventChatPinRepository(
             .set(EVENT_CHAT_PINS.MESSAGE_ID, pin.messageId)
             .set(EVENT_CHAT_PINS.CLOSED_AT, pin.closedAt)
             .set(EVENT_CHAT_PINS.SUMMARY_MESSAGE_ID, pin.summaryMessageId)
+            .set(EVENT_CHAT_PINS.HAS_PHOTO, pin.hasPhoto)
             .returning()
             .fetchOne()!!
         return toDomain(record)
@@ -97,7 +98,8 @@ class JooqEventChatPinRepository(
         chatId = record.chatId!!,
         messageId = record.messageId,
         closedAt = record.closedAt,
-        summaryMessageId = record.summaryMessageId
+        summaryMessageId = record.summaryMessageId,
+        hasPhoto = record.hasPhoto ?: false
     )
 
     companion object {

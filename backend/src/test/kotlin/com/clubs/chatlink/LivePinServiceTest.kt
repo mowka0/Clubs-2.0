@@ -19,13 +19,15 @@ private fun livePinEvent(
     clubId: UUID = UUID.randomUUID(),
     eventDatetime: OffsetDateTime = OffsetDateTime.now().plusDays(2),
     status: EventStatus = EventStatus.upcoming,
-    stage2Triggered: Boolean = false
+    stage2Triggered: Boolean = false,
+    photoUrl: String? = null,
+    description: String? = null
 ): Event = Event(
     id = id,
     clubId = clubId,
     createdBy = UUID.randomUUID(),
     title = "Поход в баню",
-    description = null,
+    description = description,
     locationText = "Сандуны",
     eventDatetime = eventDatetime,
     participantLimit = 15,
@@ -34,7 +36,7 @@ private fun livePinEvent(
     stage2Triggered = stage2Triggered,
     attendanceMarked = false,
     attendanceFinalized = false,
-    photoUrl = null,
+    photoUrl = photoUrl,
     createdAt = null,
     updatedAt = null
 )
@@ -86,6 +88,76 @@ class LivePinServiceTest {
         }
         verify { pinRepository.insert(match { it.eventId == event.id && it.messageId == 777L }) }
         verify { gateway.pinChatMessage(chatId, 777L) }
+    }
+
+    // ---- фото встречи в чате (PO 2026-08-08: в личку картинка уходила, в чат — нет) ----
+
+    @Test
+    fun `onEventCreated с фото — пост картинкой с подписью, строка помнит фото`() {
+        val event = livePinEvent(clubId = clubId, photoUrl = "/uploads/cover.jpg")
+        every { pinRepository.findByEventId(event.id) } returns null
+        every { gateway.sendGroupPhotoWithUrlButton(chatId, any(), any(), any(), any(), any(), any()) } returns 777L
+
+        service.onEventCreated(event)
+
+        verify {
+            gateway.sendGroupPhotoWithUrlButton(
+                chatId,
+                "/uploads/cover.jpg",
+                match { it.contains("Поход в баню") && it.contains("Идут — 3") },
+                "Проголосовать",
+                "https://t.me/clubs_test_bot?startapp=event_${event.id}",
+                any(), any()
+            )
+        }
+        verify(exactly = 0) { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any(), any(), any(), any()) }
+        verify { pinRepository.insert(match { it.messageId == 777L && it.hasPhoto }) }
+    }
+
+    @Test
+    fun `сбой отправки картинки деградирует до текстового поста`() {
+        val event = livePinEvent(clubId = clubId, photoUrl = "/uploads/cover.jpg")
+        every { pinRepository.findByEventId(event.id) } returns null
+        every { gateway.sendGroupPhotoWithUrlButton(chatId, any(), any(), any(), any(), any(), any()) } returns null
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any(), any(), any(), any()) } returns 778L
+
+        service.onEventCreated(event)
+
+        verify { pinRepository.insert(match { it.messageId == 778L && !it.hasPhoto }) }
+        verify { gateway.pinChatMessage(chatId, 778L) }
+    }
+
+    // Подпись под картинкой в Telegram ограничена 1024 символами — длинный статус уходит текстом,
+    // содержание встречи важнее оформления.
+    @Test
+    fun `слишком длинный статус уходит текстом, картинку не пробуем`() {
+        val event = livePinEvent(clubId = clubId, photoUrl = "/uploads/cover.jpg", description = "о".repeat(1100))
+        every { pinRepository.findByEventId(event.id) } returns null
+        every { gateway.sendGroupMessageWithUrlButton(chatId, any(), any(), any(), any(), any(), any()) } returns 779L
+
+        service.onEventCreated(event)
+
+        verify(exactly = 0) { gateway.sendGroupPhotoWithUrlButton(any(), any(), any(), any(), any(), any(), any()) }
+        verify { pinRepository.insert(match { it.messageId == 779L && !it.hasPhoto }) }
+    }
+
+    // У фото-поста нет текста: правка через editMessageText вернула бы ошибку, и закреп замер бы.
+    @Test
+    fun `flush перерисовывает фото-закреп подписью, а не текстом`() {
+        val event = livePinEvent(clubId = clubId, photoUrl = "/uploads/cover.jpg")
+        every { pinRepository.findByEventId(event.id) } returns
+            EventChatPin(event.id, chatId, 777L, closedAt = null, summaryMessageId = null, hasPhoto = true)
+        every { eventRepository.findById(event.id) } returns event
+
+        service.markDirty(event.id)
+        service.flush()
+
+        verify {
+            gateway.editGroupMessageCaption(
+                chatId, 777L, match { it.contains("Идут — 3") }, "Проголосовать", any(), any(), any()
+            )
+        }
+        verify(exactly = 0) { gateway.editGroupMessage(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test

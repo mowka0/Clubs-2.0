@@ -22,3 +22,9 @@ telegram:
 s3:
   bucket: test-bucket
   base-url: http://localhost:9000/test-bucket
+
+# Геокодер в тестах не дёргается — значение нужно только чтобы поднялся GeocoderService:
+# у yandex.geocoder-referer нет дефолта в @Value, и без него контекст интеграционных тестов
+# не стартует (тесты не должны зависеть от env-переменных на машине разработчика).
+yandex:
+  geocoder-referer: https://example.test

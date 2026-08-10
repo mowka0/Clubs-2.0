@@ -17,7 +17,13 @@ data class EventChatPin(
     /** NULL = закреп живой (редактируется); NOT NULL = закрыт (старт/отмена/тумблер выключен). */
     val closedAt: OffsetDateTime?,
     /** Id поста-итога «Встреча №N прошла» (NULL = итог не постился — гейт от дублей). */
-    val summaryMessageId: Long?
+    val summaryMessageId: Long?,
+    /**
+     * TRUE = статус вышел картинкой встречи с подписью, и правки идут через editMessageCaption
+     * (у фото-сообщения нет текста). FALSE = обычный текстовый пост: событие без фото, слишком
+     * длинная подпись, сбой отправки картинки или закреп, созданный до появления фото в чате.
+     */
+    val hasPhoto: Boolean = false
 )
 
 interface EventChatPinRepository {

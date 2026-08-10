@@ -1,6 +1,7 @@
 package com.clubs.bot
 
 import com.clubs.common.util.EventFormatTexts
+import com.clubs.common.util.absolutePhotoUrl
 import com.clubs.event.Event
 import com.clubs.event.EventEditedEvent
 import com.clubs.event.EventMessageTemplate
@@ -79,16 +80,12 @@ class NotificationService(
         }
         log.info("Event-created DM: eventId={} clubId={} recipients={}", event.id, event.clubId, memberTelegramIds.size)
         // Единый шаблон (PO 2026-07-26): формат встречи жирным заголовком, затем что/когда/где
-        // и счётчики по фазе. Срочность берём по флагу V69, а НЕ по статусу: обычное событие,
-        // созданное близко к старту, могло флипнуться в stage_2 до отправки async-DM и
-        // ошибочно назваться срочной.
-        // Срочная рождается сразу в Этапе 2 — у неё блок подтверждения, у остальных голосование.
-        val stats = if (event.isUrgent) {
-            EventMessageTemplate.stage2Stats(event, confirmed = 0, waitlisted = 0, fmt = fmt)
-        } else {
-            EventMessageTemplate.stage1Stats(event, going = 0, maybe = 0)
-        }
-        val text = "${EventMessageTemplate.head(event, fmt)}\n\n$stats"
+        // и факты по формату. Счётчиков голосов в DM НЕТ (PO 2026-08-08): личное сообщение
+        // не перерисовывается, и «Идут — 0» навсегда оставался нулём — живой счёт живёт в
+        // закрепе чата, который бот редактирует. Срочность внутри dmFacts берётся по флагу V69,
+        // а НЕ по статусу: обычное событие, созданное близко к старту, могло флипнуться в
+        // stage_2 до отправки async-DM и ошибочно назваться срочным.
+        val text = "${EventMessageTemplate.head(event, fmt)}\n\n${EventMessageTemplate.dmFacts(event, fmt)}"
         // Диплинк сразу на страницу события, чтобы кнопка открывала голосование, а не
         // общую домашнюю страницу приложения. React Router рендерит EventPage на /events/:id.
         val webAppPath = "/events/${event.id}"
@@ -117,7 +114,7 @@ class NotificationService(
         } else {
             buildKeyboard("📅 Открыть событие", webAppPath = webAppPath)
         }
-        val photoUrl = event.photoUrl?.let(::absolutePhotoUrl)
+        val photoUrl = event.photoUrl?.let { absolutePhotoUrl(it, webAppBaseUrl) }
         if (photoUrl != null) {
             try {
                 val photo = SendPhoto.builder()
@@ -145,14 +142,6 @@ class NotificationService(
             sendDm(chatId, text, webAppPath = webAppPath, buttonText = "📅 Открыть событие")
         }
     }
-
-    /**
-     * Абсолютный URL фото для Telegram: photo_url хранится относительным («/uploads/…»,
-     * S3_BASE_URL не задан — фронтовый nginx проксирует на MinIO), а Telegram скачивает
-     * картинку своими серверами и относительный путь не поймёт.
-     */
-    private fun absolutePhotoUrl(photoUrl: String): String =
-        if (photoUrl.startsWith("http")) photoUrl else "$webAppBaseUrl$photoUrl"
 
     /**
      * Приглашает подтвердить участие при старте Этапа 2. Этап 2 открыт всем участникам клуба,

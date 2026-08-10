@@ -22,7 +22,8 @@ data class EventChatPins(
     var closedAt: OffsetDateTime? = null,
     var summaryMessageId: Long? = null,
     var createdAt: OffsetDateTime? = null,
-    var updatedAt: OffsetDateTime? = null
+    var updatedAt: OffsetDateTime? = null,
+    var hasPhoto: Boolean? = null
 ): Serializable {
 
 
@@ -68,6 +69,12 @@ data class EventChatPins(
         }
         else if (this.updatedAt != o.updatedAt)
             return false
+        if (this.hasPhoto == null) {
+            if (o.hasPhoto != null)
+                return false
+        }
+        else if (this.hasPhoto != o.hasPhoto)
+            return false
         return true
     }
 
@@ -81,6 +88,7 @@ data class EventChatPins(
         result = prime * result + (if (this.summaryMessageId == null) 0 else this.summaryMessageId.hashCode())
         result = prime * result + (if (this.createdAt == null) 0 else this.createdAt.hashCode())
         result = prime * result + (if (this.updatedAt == null) 0 else this.updatedAt.hashCode())
+        result = prime * result + (if (this.hasPhoto == null) 0 else this.hasPhoto.hashCode())
         return result
     }
 
@@ -94,6 +102,7 @@ data class EventChatPins(
         sb.append(", ").append(summaryMessageId)
         sb.append(", ").append(createdAt)
         sb.append(", ").append(updatedAt)
+        sb.append(", ").append(hasPhoto)
 
         sb.append(")")
         return sb.toString()

@@ -2,6 +2,7 @@ package com.clubs.chatlink
 
 import com.clubs.bot.ChatTelegramGateway
 import com.clubs.bot.PARSE_MODE_HTML
+import com.clubs.bot.TELEGRAM_CAPTION_LIMIT
 import com.clubs.event.Event
 import com.clubs.event.EventEditedEvent
 import com.clubs.event.EventRepository
@@ -73,7 +74,7 @@ class LivePinService(
     fun onEventCancelled(event: Event, reason: String?): Long? {
         pinRepository.findByEventId(event.id)?.takeIf { it.closedAt == null }?.let { pin ->
             pin.messageId?.let { messageId ->
-                gateway.editGroupMessage(pin.chatId, messageId, renderer.cancelledText(event, reason), null, null, PARSE_MODE_HTML)
+                editPin(pin, messageId, renderer.cancelledText(event, reason))
                 gateway.unpinChatMessage(pin.chatId, messageId)
             }
             pinRepository.markClosed(event.id)
@@ -191,9 +192,26 @@ class LivePinService(
     /** TRUE = живой пост существует после попытки (уже был или только что создан). */
     private fun createPin(link: ChatLink, event: Event): Boolean {
         if (pinRepository.findByEventId(event.id) != null) return true
-        val messageId = gateway.sendGroupMessageWithUrlButton(
+        val text = renderStatus(event)
+        // Фото встречи в чате (PO 2026-08-08): раньше картинка уходила только в личку.
+        // Подпись Telegram ограничена — длинный статус уходит текстом, содержание важнее картинки.
+        val photoMessageId = event.photoUrl
+            ?.takeIf { text.length <= TELEGRAM_CAPTION_LIMIT }
+            ?.let { photoUrl ->
+                gateway.sendGroupPhotoWithUrlButton(
+                    chatId = link.chatId,
+                    photoUrl = photoUrl,
+                    caption = text,
+                    buttonText = renderer.buttonText(event),
+                    url = renderer.eventUrl(event.id),
+                    parseMode = PARSE_MODE_HTML,
+                    secondaryButton = mapsButton(event)
+                )
+            }
+        // Картинка не ушла (нет фото, длинная подпись, сбой Telegram) — обычный текстовый пост.
+        val messageId = photoMessageId ?: gateway.sendGroupMessageWithUrlButton(
             chatId = link.chatId,
-            text = renderStatus(event),
+            text = text,
             buttonText = renderer.buttonText(event),
             url = renderer.eventUrl(event.id),
             parseMode = PARSE_MODE_HTML,
@@ -205,7 +223,13 @@ class LivePinService(
             log.warn("Live pin post failed: eventId={} chatId={}", event.id, link.chatId)
             return false
         }
-        pinRepository.insert(EventChatPin(event.id, link.chatId, messageId, closedAt = null, summaryMessageId = null))
+        pinRepository.insert(
+            EventChatPin(
+                event.id, link.chatId, messageId,
+                closedAt = null, summaryMessageId = null,
+                hasPhoto = photoMessageId != null
+            )
+        )
         // Право закрепа могли и не выдать: пост уходит без pin, счётчики всё равно живут.
         if (link.canPinMessages) gateway.pinChatMessage(link.chatId, messageId)
         log.info("Live pin created: eventId={} chatId={} messageId={}", event.id, link.chatId, messageId)
@@ -219,13 +243,12 @@ class LivePinService(
         val event = eventRepository.findById(eventId) ?: return
         // Стартовавшие/отменённые закроют close-проход и onEventCancelled — здесь не трогаем.
         if (!event.eventDatetime.isAfter(OffsetDateTime.now())) return
-        gateway.editGroupMessage(
-            chatId = pin.chatId,
+        editPin(
+            pin = pin,
             messageId = messageId,
             text = renderStatus(event),
             buttonText = renderer.buttonText(event),
             url = renderer.eventUrl(event.id),
-            parseMode = PARSE_MODE_HTML,
             secondaryButton = mapsButton(event)
         )
     }
@@ -234,10 +257,27 @@ class LivePinService(
     private fun mapsButton(event: Event): Pair<String, String>? =
         event.yandexMapsUrl?.let { OPEN_IN_YANDEX_MAPS_BUTTON to it }
 
+    /**
+     * Правка закрепа: у фото-поста меняется подпись, у текстового — текст. Перепутать нельзя —
+     * у сообщения-картинки текста нет, и editMessageText его не находит (закреп замер бы).
+     */
+    private fun editPin(
+        pin: EventChatPin,
+        messageId: Long,
+        text: String,
+        buttonText: String? = null,
+        url: String? = null,
+        secondaryButton: Pair<String, String>? = null
+    ): Boolean = if (pin.hasPhoto) {
+        gateway.editGroupMessageCaption(pin.chatId, messageId, text, buttonText, url, PARSE_MODE_HTML, secondaryButton)
+    } else {
+        gateway.editGroupMessage(pin.chatId, messageId, text, buttonText, url, PARSE_MODE_HTML, secondaryButton)
+    }
+
     private fun closePin(pin: EventChatPin, event: Event) {
         pin.messageId?.let { messageId ->
             val confirmed = eventResponseRepository.countConfirmed(event.id)
-            gateway.editGroupMessage(pin.chatId, messageId, renderer.closedText(event, confirmed), null, null, PARSE_MODE_HTML)
+            editPin(pin, messageId, renderer.closedText(event, confirmed))
             gateway.unpinChatMessage(pin.chatId, messageId)
         }
         // Закрываем даже при сбое edit/unpin — иначе мёртвое сообщение ретраилось бы вечно.
