@@ -2,7 +2,7 @@ import { FC, useRef, useState } from 'react';
 import { uploadImage } from '../api/clubs';
 import { useHaptic } from '../hooks/useHaptic';
 import { ImageLightbox } from './ImageLightbox';
-import { validateImageFile } from '../utils/imageUpload';
+import { IMAGE_ACCEPT_ATTR, validateImageFile } from '../utils/imageUpload';
 
 interface Props {
   value: string | null;
@@ -97,7 +97,7 @@ export const PhotoAttach: FC<Props> = ({ value, onChange, disabled, addLabel = '
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png"
+        accept={IMAGE_ACCEPT_ATTR}
         onChange={handleChange}
         style={{ display: 'none' }}
       />

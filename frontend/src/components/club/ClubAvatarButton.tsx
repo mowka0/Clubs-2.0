@@ -1,6 +1,7 @@
 import { FC } from 'react';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useClubImageUpload } from '../../hooks/useClubImageUpload';
+import { IMAGE_ACCEPT_ATTR } from '../../utils/imageUpload';
 
 /** Камера в углу аватара — единственный намёк, что кружок кликабельный. */
 const CameraIcon: FC = () => (
@@ -60,7 +61,7 @@ export const ClubAvatarButton: FC<ClubAvatarButtonProps> = ({ clubId, clubName, 
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png"
+        accept={IMAGE_ACCEPT_ATTR}
         onChange={handleFile}
         data-testid="club-avatar-input"
         style={{ display: 'none' }}

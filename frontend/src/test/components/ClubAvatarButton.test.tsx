@@ -84,7 +84,7 @@ describe('ClubAvatarButton', () => {
 
     attach(imageFile('doc.gif', 'image/gif'));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/только jpeg и png/i);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/только jpeg, png или webp/i);
     expect(mockedUpload).not.toHaveBeenCalled();
     expect(mutateAsync).not.toHaveBeenCalled();
   });
