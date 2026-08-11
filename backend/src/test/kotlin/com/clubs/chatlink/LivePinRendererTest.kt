@@ -1,6 +1,7 @@
 package com.clubs.chatlink
 
 import com.clubs.event.Event
+import com.clubs.event.EventEditedEvent
 import com.clubs.generated.jooq.enums.EventStatus
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -148,6 +149,19 @@ class LivePinRendererTest {
         assertTrue(withReason.contains("<b>Обычная встреча отменена</b>"))
         assertTrue(withReason.contains("причина: все заболели"))
         assertFalse(renderer.cancelledText(event, null).contains("причина"))
+    }
+
+    @Test
+    fun `переезд — между «было» и «стало» пустая строка, иначе адреса слипаются`() {
+        val moved = event.copy(locationText = "парк имени Революции 1905 года")
+        val text = renderer.editedText(EventEditedEvent(event = moved, oldEvent = event))
+
+        assertTrue(text.contains("<b>Обычная встреча меняет место</b>"))
+        // Именно \n\n: адреса длинные, переносятся на две-три строки и без отступа читаются
+        // как один абзац — разница «было/стало» теряется (правка PO 2026-08-10).
+        assertTrue(text.contains("где было: Сандуны\n\nгде стало: парк имени Революции 1905 года"))
+        // Правка — повод переголосовать, и об этом просим текстом, а не только кнопкой.
+        assertTrue(text.trimEnd().endsWith("Проголосуй в клубе!"))
     }
 
     @Test

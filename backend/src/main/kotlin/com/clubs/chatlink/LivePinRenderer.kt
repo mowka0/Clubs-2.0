@@ -95,11 +95,17 @@ class LivePinRenderer(
             sb.append("когда: ${event.eventDatetime.format(fmt)}\n")
         }
         if (edited.isLocationChanged) {
-            sb.append("\nгде было: ${esc(old.locationDisplayOrDash)}\n")
+            // Пустая строка между «было» и «стало»: адреса длинные и переносятся на две-три
+            // строки, слипшись они читаются как один абзац и разница теряется (правка PO).
+            sb.append("\nгде было: ${esc(old.locationDisplayOrDash)}\n\n")
             sb.append("где стало: ${esc(event.locationDisplayOrDash)}")
         } else {
             event.locationDisplay?.let { sb.append("где: ${esc(it)}") }
         }
+        // Правка — повод переголосовать: у кого поменялись планы из-за новой даты или места,
+        // должен сказать об этом сейчас, а не молча не прийти. Пост живёт в общей ленте чата,
+        // где кнопка читается как оформление, поэтому просим ещё и текстом.
+        sb.append("\n\n").append(VOTE_CALL_TO_ACTION)
         return sb.toString().trimEnd()
     }
 
@@ -157,7 +163,7 @@ class LivePinRenderer(
 
         // Призыв к действию над счётчиками Этапа 1 (PO 2026-08-10): пост живёт в общей ленте чата,
         // где кнопка под сообщением читается как оформление — строка прямым текстом говорит, что
-        // от участника ждут. Только в чате: в личном DM счётчиков и голосования нет.
-        private const val VOTE_CALL_TO_ACTION = "Проголосуй в клубе!"
+        // от участника ждут. Текст общий с постом и DM о правке — см. EventMessageTemplate.
+        private const val VOTE_CALL_TO_ACTION = EventMessageTemplate.VOTE_CALL_TO_ACTION
     }
 }
