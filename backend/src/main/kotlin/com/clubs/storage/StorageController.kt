@@ -17,11 +17,23 @@ class StorageController(
     private val log = LoggerFactory.getLogger(StorageController::class.java)
 
     companion object {
+        // Потолок размера загружаемой картинки: 5 МБ.
         private const val MAX_FILE_SIZE = 5 * 1024 * 1024L // 5 MB
-        private val ALLOWED_CONTENT_TYPES = setOf("image/jpeg", "image/png")
+
+        /**
+         * Белый список форматов. WebP добавлен 2026-08-11: телефоны и мессенджеры отдают его
+         * всё чаще (скриншоты Android, пересланные из веба картинки), и пользователь не понимал,
+         * почему обычная с виду картинка «не та». Список обязан совпадать с IMAGE_ALLOWED_MIMES
+         * во `frontend/src/utils/imageUpload.ts` — иначе файл проходит выбор и падает на 400.
+         */
+        private val ALLOWED_CONTENT_TYPES = setOf("image/jpeg", "image/png", "image/webp")
+
+        // Расширение файла в хранилище по MIME: имя объекта генерируем сами, полагаться на
+        // originalFilename нельзя (он от клиента и может быть каким угодно).
         private val CONTENT_TYPE_TO_EXT = mapOf(
             "image/jpeg" to "jpg",
-            "image/png" to "png"
+            "image/png" to "png",
+            "image/webp" to "webp"
         )
     }
 
@@ -31,7 +43,7 @@ class StorageController(
             ?: throw ValidationException("Content type is required")
 
         if (contentType !in ALLOWED_CONTENT_TYPES) {
-            throw ValidationException("Only JPEG and PNG images are allowed, got: $contentType")
+            throw ValidationException("Only JPEG, PNG and WebP images are allowed, got: $contentType")
         }
 
         if (file.size > MAX_FILE_SIZE) {

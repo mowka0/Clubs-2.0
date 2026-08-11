@@ -1,6 +1,7 @@
 import { FC } from 'react';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { useClubImageUpload } from '../../hooks/useClubImageUpload';
+import { IMAGE_ACCEPT_ATTR } from '../../utils/imageUpload';
 
 /** Та же камера, что у аватара, — приём один: картинку меняют тапом по ней самой. */
 const CameraIcon: FC = () => (
@@ -40,7 +41,7 @@ export const ClubCoverButton: FC<ClubCoverButtonProps> = ({ clubId, hasCover }) 
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png"
+        accept={IMAGE_ACCEPT_ATTR}
         onChange={handleFile}
         data-testid="club-cover-input"
         style={{ display: 'none' }}

@@ -142,6 +142,9 @@ export const DuesPaymentSheet: FC<DuesPaymentSheetProps> = ({
     const file = e.target.files?.[0];
     e.target.value = ''; // позволяет выбрать тот же файл повторно
     if (!file) return;
+    // Список НАМЕРЕННО свой, не из utils/imageUpload: чек остаётся на JPEG/PNG, когда
+    // остальные картинки получили WebP (решение PO 2026-08-11) — чек фотографируют,
+    // а не пересылают из веба, и лишний формат тут ничего не даёт.
     if (!['image/jpeg', 'image/png'].includes(file.type)) {
       setError('Только JPEG или PNG');
       return;

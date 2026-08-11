@@ -2,7 +2,7 @@ import { FC, useRef, useState } from 'react';
 import { Button, Spinner, Text } from '@telegram-apps/telegram-ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { uploadImage } from '../api/clubs';
-import { validateImageFile } from '../utils/imageUpload';
+import { IMAGE_ACCEPT_ATTR, validateImageFile } from '../utils/imageUpload';
 
 interface Props {
   value: string | null;
@@ -88,7 +88,7 @@ export const AvatarUpload: FC<Props> = ({ value, onChange, disabled }) => {
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png"
+        accept={IMAGE_ACCEPT_ATTR}
         onChange={handleChange}
         style={{ display: 'none' }}
       />

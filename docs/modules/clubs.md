@@ -171,7 +171,11 @@ Backend явно не принимает category/accessType в `UpdateClubReque
 > **Update (`feature/applications-inbox`, 2026-05-30):** таб **«Заявки»** (`ApplicationsTab`) удалён из `OrganizerClubManage`. `TabKey` теперь = `'members' | 'finances' | 'settings'`. Approve/reject заявок выполняется только через кросс-клубовый organizer-inbox на `MyClubsPage` («Заявки на рассмотрении» секция) — см. [`applications-inbox.md`](./applications-inbox.md). Legacy deep-link `?tab=applications` добавлен в `LEGACY_TAB_KEYS` → fallback на `members`.
 
 ### Поля формы (из PRD §4.5.1, без category и accessType)
-1. **Аватар** — image upload через `POST /api/upload` (MinIO/S3). Формат jpeg/png, до 5 MB. Preview локально пока идёт загрузка.
+1. **Аватар** — image upload через `POST /api/upload` (MinIO/S3). Формат jpeg/png/webp, до 5 MB. Preview локально пока идёт загрузка.
+   > WebP добавлен 2026-08-11: телефоны и мессенджеры отдают его всё чаще, и пользователь не
+   > понимал, почему обычная с виду картинка «не та». Исключение — **чек складчины**
+   > (`DuesPaymentSheet`): там намеренно остались JPEG/PNG (решение PO), чек фотографируют,
+   > а не пересылают из веба.
 2. Название — 1-60 символов
 3. Город — not blank
 4. Район (опционально)
@@ -211,8 +215,8 @@ WHEN файл > 5 MB
 THEN frontend валидация "Файл больше 5 МБ"
 AND upload не запускается
 
-WHEN файл не jpeg/png
-THEN frontend валидация "Только JPEG и PNG"
+WHEN файл не jpeg/png/webp
+THEN frontend валидация "Только JPEG, PNG или WebP"
 ```
 > Ограничения зеркалят backend `StorageController` и на фронтенде живут в одном месте —
 > `frontend/src/utils/imageUpload.ts` (используется аватаром клуба, обложкой и фото активностей).
