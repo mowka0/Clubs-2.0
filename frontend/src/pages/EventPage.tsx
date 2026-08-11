@@ -9,7 +9,9 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useClubQuery, useMyClubsQuery } from '../queries/clubs';
 import { useMyReputationQuery } from '../queries/members';
 import { isActiveManagerMembership } from '../utils/membershipRole';
-import { formatLeadInterval } from '../utils/formatters';
+import { formatLeadInterval, toDatetimeLocalValue } from '../utils/formatters';
+import { eventToTemplateBody } from '../utils/eventTemplate';
+import { useSaveEventTemplateMutation } from '../queries/eventTemplates';
 import { useEventSplitStateQuery } from '../queries/skladchina';
 import { useSetClubContext } from '../store/useClubContextStore';
 import { Toast } from '../components/Toast';
@@ -82,6 +84,9 @@ type ResponderTab = (typeof RESPONDER_TABS)[number]['key'];
 /** Сколько строк ростера показываем до нажатия «Показать всех». */
 const ROSTER_PREVIEW_SIZE = 6;
 
+// Лимит имени шаблона встречи — зеркалит VARCHAR(60) и @Size(max=60) бэкенда.
+const TEMPLATE_NAME_MAX = 60;
+
 /** Радиус дуги кольца занятости в координатах viewBox (128×128 при обводке 11). */
 const DONUT_RADIUS = 57;
 /** Длина окружности кольца — знаменатель stroke-dasharray, которым отмеряется дуга. */
@@ -106,17 +111,6 @@ function formatEventDate(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-/**
- * ISO (UTC) → значение для input[type=datetime-local] в ЛОКАЛЬНОМ поясе устройства
- * («YYYY-MM-DDTHH:mm»). toISOString() не подходит: он вернул бы UTC-время, и пикер
- * показал бы организатору сдвинутые часы.
- */
-function toDatetimeLocalValue(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export const EventPage: FC = () => {
@@ -192,6 +186,13 @@ export const EventPage: FC = () => {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelError, setCancelError] = useState<string | null>(null);
+  // Шторка «Сохранить как шаблон»: одно поле — имя (предзаполняется названием встречи).
+  // Содержимое шаблона целиком берётся из уже загруженной встречи, поэтому формы полей тут нет.
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const [templateSaved, setTemplateSaved] = useState(false);
+  const saveTemplateMutation = useSaveEventTemplateMutation();
   // Шторка редактирования встречи (только Этап 1). Поля держим отдельными строками, а не
   // копией DTO: форма правит текст, а собирается payload уже при сохранении.
   const [editOpen, setEditOpen] = useState(false);
@@ -351,6 +352,39 @@ export const EventPage: FC = () => {
     );
   };
 
+  /**
+   * Сохранение встречи как шаблона клуба. Содержимое собирается из уже загруженного DTO —
+   * спрашиваем только имя, предзаполняя его названием встречи. Дата не переносится: вместо
+   * неё выводятся день недели и время (docs/modules/event-templates.md § 4).
+   */
+  const openSaveTemplate = () => {
+    if (!event) return;
+    haptic.impact('medium');
+    setTemplateError(null);
+    setTemplateSaved(false);
+    setTemplateName(event.title.slice(0, TEMPLATE_NAME_MAX));
+    setTemplateOpen(true);
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!event || saveTemplateMutation.isPending) return;
+    const name = templateName.trim();
+    if (!name) { setTemplateError('Укажите имя шаблона'); haptic.notify('error'); return; }
+    setTemplateError(null);
+    try {
+      await saveTemplateMutation.mutateAsync({
+        clubId: event.clubId,
+        body: eventToTemplateBody(event, name),
+      });
+      haptic.notify('success');
+      setTemplateSaved(true);
+      setTemplateOpen(false);
+    } catch (e) {
+      haptic.notify('error');
+      setTemplateError(e instanceof Error ? e.message : 'Не удалось сохранить шаблон');
+    }
+  };
+
   // Редактирование встречи (только Этап 1). Открытие шторки предзаполняет ВСЕ поля текущими
   // значениями: у PUT нет частичных правок, клиент присылает полный набор.
   const openEdit = () => {
@@ -365,7 +399,7 @@ export const EventPage: FC = () => {
       lon: event.locationLon ?? null,
     });
     setEditHint(event.locationHint ?? '');
-    setEditDatetime(toDatetimeLocalValue(event.eventDatetime));
+    setEditDatetime(toDatetimeLocalValue(new Date(event.eventDatetime)));
     setEditLimit(event.participantLimit != null ? String(event.participantLimit) : '');
     setEditOpen(true);
   };
@@ -1189,6 +1223,16 @@ export const EventPage: FC = () => {
         </>
       )}
 
+      {/* Сохранение шаблона доступно и у ПРОШЕДШЕЙ встречи — это основной случай: клуб провёл
+          серию одинаковых встреч и заводит из последней заготовку на следующие. */}
+      {isManager && !isCancelled && (
+        <div className="rd-cta-wrap" style={{ marginTop: 8 }}>
+          <button type="button" className="rd-btn-outline" onClick={openSaveTemplate}>
+            {templateSaved ? '📋 Шаблон сохранён' : '📋 Сохранить как шаблон'}
+          </button>
+        </div>
+      )}
+
       {/* Организаторские действия до старта: редактирование (включая перенос даты) — только на
           Этапе 1, с началом подтверждения мест правки запрещены; гейт зеркалит бэкенд-гард
           updateEvent — и отмена события (F5-14). */}
@@ -1375,6 +1419,54 @@ export const EventPage: FC = () => {
                   {cancelMutation.isPending ? <Spinner size="s" /> : 'Отменить событие'}
                 </button>
                 <button type="button" className="rd-btn-outline" style={{ marginTop: 8 }} onClick={() => setCancelOpen(false)}>
+                  Назад
+                </button>
+              </div>
+            </div>
+          </div>
+        </>,
+        document.body,
+      )}
+
+      {templateOpen && createPortal(
+        <>
+          <div className="rd-sheet-overlay" onClick={() => setTemplateOpen(false)} aria-hidden="true" />
+          <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Сохранение шаблона">
+            <div className="rd-sheet-grabber" aria-hidden="true" />
+            <div className="rd-sheet-head">
+              <h2>Сохранить как шаблон</h2>
+              <button type="button" className="rd-sheet-close" onClick={() => setTemplateOpen(false)}>Закрыть</button>
+            </div>
+            <div className="rd-sheet-body">
+              <div className="rd-body-text" style={{ marginTop: 0 }}>
+                Шаблон запомнит всё, кроме даты: место, описание, фото, лимит и формат. Вместо
+                даты — день недели и время, чтобы подставлять ближайшую подходящую.
+              </div>
+              <input
+                className="rd-input"
+                type="text"
+                style={{ width: '100%', marginBottom: 10, boxSizing: 'border-box' }}
+                placeholder="Имя шаблона"
+                maxLength={TEMPLATE_NAME_MAX}
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+              />
+              {templateError && <div className="rd-error">{templateError}</div>}
+              <div className="rd-cta-wrap">
+                <button
+                  type="button"
+                  className="rd-btn-primary"
+                  onClick={handleSaveTemplate}
+                  disabled={saveTemplateMutation.isPending}
+                >
+                  {saveTemplateMutation.isPending ? <Spinner size="s" /> : 'Сохранить шаблон'}
+                </button>
+                <button
+                  type="button"
+                  className="rd-btn-outline"
+                  style={{ marginTop: 8 }}
+                  onClick={() => setTemplateOpen(false)}
+                >
                   Назад
                 </button>
               </div>

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes, useLocation } from 'react-router-dom';
 
@@ -11,9 +11,25 @@ vi.mock('@telegram-apps/sdk-react', () => ({
 
 vi.mock('@telegram-apps/telegram-ui', () => import('../mocks/telegramUi'));
 
+// Флоу подтягивает шаблоны встреч при открытии — мокаем весь модуль API, чтобы шаги
+// без шаблонов оставались детерминированными, а не зависели от сетевой ошибки.
+vi.mock('../../api/eventTemplates', () => ({
+  getMyEventTemplates: vi.fn(),
+  getClubEventTemplates: vi.fn(),
+  createEventTemplate: vi.fn(),
+  updateEventTemplate: vi.fn(),
+  deleteEventTemplate: vi.fn(),
+}));
+
 import { CreateActivityFlow } from '../../components/manage/CreateActivityFlow';
 import type { ClubPickerOption } from '../../components/manage/ClubPickerModal';
 import { renderWithProviders } from '../utils/renderWithProviders';
+import {
+  deleteEventTemplate,
+  getMyEventTemplates,
+  updateEventTemplate,
+} from '../../api/eventTemplates';
+import type { EventTemplateDto } from '../../api/eventTemplates';
 
 const ONE_CLUB: ClubPickerOption[] = [
   { id: 'club-1', name: 'Alpha Club', avatarUrl: null, category: 'sport' },
@@ -22,6 +38,34 @@ const TWO_CLUBS: ClubPickerOption[] = [
   { id: 'club-1', name: 'Alpha Club', avatarUrl: null, category: 'sport' },
   { id: 'club-2', name: 'Beta Club', avatarUrl: null, category: 'food' },
 ];
+
+const TEMPLATE: EventTemplateDto = {
+  id: 'tpl-1',
+  clubId: 'club-2',
+  clubName: 'Beta Club',
+  name: 'Разговорный клуб',
+  title: 'Разговорный клуб',
+  description: null,
+  locationText: 'ул. Покровка, 47',
+  locationLat: 55.76,
+  locationLon: 37.64,
+  locationHint: null,
+  participantLimit: 12,
+  isOpenEvent: false,
+  isUrgentEvent: false,
+  stage2LeadMinutes: null,
+  photoUrl: null,
+  defaultWeekday: 2,
+  defaultTime: '19:00:00',
+  createdAt: null,
+  updatedAt: null,
+};
+
+beforeEach(() => {
+  vi.mocked(getMyEventTemplates).mockResolvedValue([]);
+  vi.mocked(updateEventTemplate).mockReset();
+  vi.mocked(deleteEventTemplate).mockReset();
+});
 
 const LocationProbe = () => {
   const loc = useLocation();
@@ -33,7 +77,7 @@ const LocationProbe = () => {
   );
 };
 
-function renderFlow(clubs: ClubPickerOption[]) {
+function renderFlow(clubs: ClubPickerOption[], presetClubId?: string) {
   const user = userEvent.setup();
   const result = renderWithProviders(
     <Routes>
@@ -41,7 +85,13 @@ function renderFlow(clubs: ClubPickerOption[]) {
         path="/"
         element={
           <>
-            <CreateActivityFlow open canCreate organizerClubs={clubs} onClose={vi.fn()} />
+            <CreateActivityFlow
+              open
+              canCreate
+              organizerClubs={clubs}
+              presetClubId={presetClubId ?? null}
+              onClose={vi.fn()}
+            />
             <LocationProbe />
           </>
         }
@@ -129,5 +179,97 @@ describe('CreateActivityFlow', () => {
     await user.click(screen.getByText('Сообщить о проблеме'));
 
     expect(screen.getByTestId('location').textContent).toBe('/feedback');
+  });
+
+  describe('шаблоны встреч', () => {
+    it('AC-1 без шаблонов пункт «Готовые шаблоны» не показывается', async () => {
+      const { user } = renderFlow(TWO_CLUBS);
+
+      await user.click(screen.getByText('Событие'));
+
+      expect(screen.getByText('С местами')).toBeInTheDocument();
+      expect(screen.queryByText(/Готовые шаблоны/)).toBeNull();
+    });
+
+    it('AC-3 шаблон ведёт прямо на форму своего клуба, минуя выбор формата и клуба', async () => {
+      vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
+      const { user } = renderFlow(TWO_CLUBS);
+
+      await user.click(screen.getByText('Событие'));
+      await user.click(await screen.findByText('Готовые шаблоны · 1'));
+      await user.click(screen.getByText('Разговорный клуб'));
+
+      // Клуб взят из шаблона (club-2), хотя организатор ведёт два клуба и пикер не показывался.
+      expect(screen.getByTestId('location').textContent).toBe('/clubs/club-2/events/new');
+      expect(screen.getByTestId('location-search').textContent).toBe('?template=tpl-1');
+    });
+
+    it('строка шаблона показывает клуб, формат и расписание', async () => {
+      vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
+      const { user } = renderFlow(TWO_CLUBS);
+
+      await user.click(screen.getByText('Событие'));
+      await user.click(await screen.findByText('Готовые шаблоны · 1'));
+
+      expect(screen.getByText('Beta Club · 🎟 12 мест · вт 19:00')).toBeInTheDocument();
+    });
+
+    it('на странице клуба показываются шаблоны только этого клуба', async () => {
+      vi.mocked(getMyEventTemplates).mockResolvedValue([
+        TEMPLATE,
+        { ...TEMPLATE, id: 'tpl-2', clubId: 'club-1', clubName: 'Alpha Club', name: 'Чужой' },
+      ]);
+      const { user } = renderFlow(TWO_CLUBS, 'club-2');
+
+      await user.click(screen.getByText('Событие'));
+      await user.click(await screen.findByText('Готовые шаблоны · 1'));
+
+      expect(screen.getByText('Разговорный клуб')).toBeInTheDocument();
+      expect(screen.queryByText('Чужой')).toBeNull();
+    });
+
+    it('режим правки переименовывает шаблон через PUT', async () => {
+      vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
+      vi.mocked(updateEventTemplate).mockResolvedValue({ ...TEMPLATE, name: 'Вторники' });
+      const { user } = renderFlow(TWO_CLUBS);
+
+      await user.click(screen.getByText('Событие'));
+      await user.click(await screen.findByText('Готовые шаблоны · 1'));
+      await user.click(screen.getByText('Изменить'));
+      await user.click(screen.getByLabelText('Переименовать Разговорный клуб'));
+
+      const input = screen.getByDisplayValue('Разговорный клуб');
+      await user.clear(input);
+      await user.type(input, 'Вторники');
+      await user.click(screen.getByText('Сохранить'));
+
+      await waitFor(() => expect(updateEventTemplate).toHaveBeenCalledTimes(1));
+      const [clubId, templateId, body] = vi.mocked(updateEventTemplate).mock.calls[0]!;
+      expect(clubId).toBe('club-2');
+      expect(templateId).toBe('tpl-1');
+      expect(body.name).toBe('Вторники');
+      // Содержимое уезжает целиком — PUT это полная замена, а не частичная правка.
+      expect(body.title).toBe('Разговорный клуб');
+      expect(body.participantLimit).toBe(12);
+    });
+
+    it('удаление требует подтверждения прямо в строке', async () => {
+      vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
+      vi.mocked(deleteEventTemplate).mockResolvedValue(undefined);
+      const { user } = renderFlow(TWO_CLUBS);
+
+      await user.click(screen.getByText('Событие'));
+      await user.click(await screen.findByText('Готовые шаблоны · 1'));
+      await user.click(screen.getByText('Изменить'));
+      await user.click(screen.getByLabelText('Удалить Разговорный клуб'));
+
+      // Первый тап только раскрывает подтверждение — запроса ещё нет.
+      expect(deleteEventTemplate).not.toHaveBeenCalled();
+      expect(screen.getByText('Удалить «Разговорный клуб»?')).toBeInTheDocument();
+
+      await user.click(screen.getByText('Удалить'));
+
+      await waitFor(() => expect(deleteEventTemplate).toHaveBeenCalledWith('club-2', 'tpl-1'));
+    });
   });
 });

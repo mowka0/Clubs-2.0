@@ -6,8 +6,11 @@ import { BrandStepper } from '../components/BrandStepper';
 import { AvatarUpload } from '../components/AvatarUpload';
 import { LocationPickerSheet } from '../components/event/LocationPickerSheet';
 import { useCreateEventMutation } from '../queries/events';
+import { useClubEventTemplatesQuery, useSaveEventTemplateMutation } from '../queries/eventTemplates';
 import { formatLeadInterval } from '../utils/formatters';
+import { isoWeekdayOf, localTimeOf, nextOccurrenceLocal, templateFormat } from '../utils/eventTemplate';
 import type { CreateEventBody } from '../api/events';
+import type { EventTemplateDto } from '../api/eventTemplates';
 import type { GeoPoint } from '../utils/yandexMaps';
 
 const TITLE_MAX = 255;
@@ -17,6 +20,12 @@ const LOCATION_MAX = 500;
 const LOCATION_HINT_MAX = 200;
 const PARTICIPANT_MIN = 1;
 const PARTICIPANT_MAX = 1000;
+// Лимит имени шаблона — зеркалит VARCHAR(60) и @Size(max=60) бэкенда.
+const TEMPLATE_NAME_MAX = 60;
+
+// Формат встречи: с местами / открытая (V62) / срочная (PO 2026-07-23). Тот же набор ключей,
+// что у шага пикера «+» и у шаблона встречи.
+type EventFormat = 'limited' | 'open' | 'urgent';
 
 // Пресеты интервала Этапа 2 (за сколько до старта открывается подтверждение мест), в минутах.
 // Значения зеркалят CHECK 1080..7200 (V68) и @Min/@Max бэкенда; дефолт 1080 = 18 ч зеркалит
@@ -43,32 +52,117 @@ const CalendarIcon: FC = () => (
   </svg>
 );
 
+/**
+ * Страница создания встречи. Тонкая обёртка: её единственная работа — дождаться шаблона,
+ * если форма открыта по `?template=<id>`, и только потом смонтировать форму. Так начальные
+ * значения приходят в `useState`-инициализаторы, а не досылаются `useEffect`'ом в уже
+ * смонтированную форму (правило «You Might Not Need an Effect»).
+ */
 export const CreateEventPage: FC = () => {
   useBackButton(true);
   const { id: clubId } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const templateId = searchParams.get('template');
   // Формат из шага пикера «+»: open (V62) — без лимита, степпер скрыт; urgent (PO 2026-07-23) —
-  // сразу Этап 2, интервал подтверждения не настраивается. setSearchParams нужен кнопке
-  // «Сделать срочной» — переключение формата без размонтирования (введённые поля живут).
-  const [searchParams, setSearchParams] = useSearchParams();
-  const isOpenEvent = searchParams.get('format') === 'open';
-  const isUrgentEvent = searchParams.get('format') === 'urgent';
+  // сразу Этап 2, интервал подтверждения не настраивается. При входе по шаблону формат несёт
+  // сам шаблон, и ?format не читается.
+  const initialFormat: EventFormat =
+    searchParams.get('format') === 'open' ? 'open'
+      : searchParams.get('format') === 'urgent' ? 'urgent'
+        : 'limited';
+
+  const templatesQuery = useClubEventTemplatesQuery(templateId ? clubId : undefined);
+
+  if (!clubId) {
+    return (
+      <div className="rd-page">
+        <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)' }}>
+          Клуб не найден
+        </div>
+      </div>
+    );
+  }
+
+  if (templateId && templatesQuery.isLoading) {
+    return (
+      <div className="rd-page">
+        <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)' }}>Загружаем шаблон…</div>
+      </div>
+    );
+  }
+
+  const template = templateId
+    ? (templatesQuery.data ?? []).find((t) => t.id === templateId) ?? null
+    : null;
+
+  return (
+    <CreateEventForm
+      // Ключ гарантирует, что переход между «с нуля» и «по шаблону» пересоздаёт форму с новыми
+      // начальными значениями: без него React переиспользовал бы состояние прошлого прохода.
+      key={templateId ?? initialFormat}
+      clubId={clubId}
+      template={template}
+      initialFormat={template ? templateFormat(template) : initialFormat}
+      // Шаблон могли удалить с другого устройства, пока пользователь шёл по ссылке.
+      templateMissing={Boolean(templateId) && template === null}
+    />
+  );
+};
+
+interface CreateEventFormProps {
+  clubId: string;
+  template: EventTemplateDto | null;
+  initialFormat: EventFormat;
+  templateMissing: boolean;
+}
+
+const CreateEventForm: FC<CreateEventFormProps> = ({
+  clubId,
+  template,
+  initialFormat,
+  templateMissing,
+}) => {
   const navigate = useNavigate();
   const haptic = useHaptic();
   const createMut = useCreateEventMutation();
+  const saveTemplateMut = useSaveEventTemplateMutation();
 
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [location, setLocation] = useState<PickedLocation | null>(null);
-  const [locationHint, setLocationHint] = useState('');
+  // Формат живёт в состоянии, а не в query-параметре: кнопка «Сделать срочной» иначе
+  // переписывала бы строку запроса и роняла бы ?template, вместе с ним — предзаполнение.
+  const [format, setFormat] = useState<EventFormat>(initialFormat);
+  const isOpenEvent = format === 'open';
+  const isUrgentEvent = format === 'urgent';
+
+  const [title, setTitle] = useState(template?.title ?? '');
+  const [description, setDescription] = useState(template?.description ?? '');
+  const [photoUrl, setPhotoUrl] = useState<string | null>(template?.photoUrl ?? null);
+  const [location, setLocation] = useState<PickedLocation | null>(() =>
+    template && template.locationLat !== null && template.locationLon !== null
+      ? {
+          point: { lat: template.locationLat, lon: template.locationLon },
+          address: template.locationText ?? '',
+        }
+      : null,
+  );
+  const [locationHint, setLocationHint] = useState(template?.locationHint ?? '');
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [eventDatetime, setEventDatetime] = useState('');
-  const [participantLimit, setParticipantLimit] = useState(20);
+  // Дата — единственное, чего в шаблоне нет: подставляем ближайшее совпадение «день недели + время».
+  const [eventDatetime, setEventDatetime] = useState(() =>
+    template ? nextOccurrenceLocal(template.defaultWeekday, template.defaultTime) : '',
+  );
+  const [participantLimit, setParticipantLimit] = useState(template?.participantLimit ?? 20);
+  // Сохранить введённое как шаблон (или перезаписать применённый). По умолчанию выключено:
+  // молча плодить шаблоны при каждом создании встречи — не то, чего ждёт организатор.
+  const [saveAsTemplate, setSaveAsTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState(template?.name ?? '');
   // null = организатор интервал не трогал → поле НЕ уходит в body, событие несёт NULL в БД и
   // следует серверному дефолту (в т.ч. staging-ужимке STAGE2_TRIGGER_MINUTES_BEFORE — она жива
   // только для NULL-событий). STAGE2_LEAD_DEFAULT здесь — лишь визуальный маркер активного чипа,
-  // фактический дефолт применяет бэкенд.
-  const [stage2LeadMinutes, setStage2LeadMinutes] = useState<number | null>(null);
+  // фактический дефолт применяет бэкенд. Шаблон переносит СВОЁ значение (у него та же
+  // семантика null = «следовать серверному дефолту»), поэтому подставляется как есть.
+  const [stage2LeadMinutes, setStage2LeadMinutes] = useState<number | null>(
+    template?.stage2LeadMinutes ?? null,
+  );
   // Раскрыта ли шкала выбора интервала (дизайн PO 2026-07-23: свёрнутая строка-факт под датой).
   const [leadEditorOpen, setLeadEditorOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -122,18 +216,8 @@ export const CreateEventPage: FC = () => {
 
   const handleMakeUrgent = () => {
     haptic.impact('medium');
-    setSearchParams({ format: 'urgent' }, { replace: true });
+    setFormat('urgent');
   };
-
-  if (!clubId) {
-    return (
-      <div className="rd-page">
-        <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)' }}>
-          Клуб не найден
-        </div>
-      </div>
-    );
-  }
 
   const fail = (msg: string) => {
     haptic.notify('error');
@@ -161,6 +245,10 @@ export const CreateEventPage: FC = () => {
     if (!isOpenEvent && (!Number.isInteger(participantLimit) || participantLimit < PARTICIPANT_MIN)) {
       return fail('Лимит участников: целое число больше нуля');
     }
+    if (saveAsTemplate && !templateName.trim()) return fail('Укажите имя шаблона');
+    if (saveAsTemplate && templateName.trim().length > TEMPLATE_NAME_MAX) {
+      return fail(`Имя шаблона: максимум ${TEMPLATE_NAME_MAX} символов`);
+    }
 
     const body: CreateEventBody = {
       title: title.trim(),
@@ -185,15 +273,56 @@ export const CreateEventPage: FC = () => {
       haptic.impact('medium');
       await createMut.mutateAsync({ clubId, body });
       haptic.notify('success');
+      // Шаблон сохраняем ПОСЛЕ встречи и отдельной попыткой: встреча — главное действие, и
+      // упавшее сохранение шаблона не должно ни отменять её, ни притворяться, что всё прошло.
+      const templateFailed = saveAsTemplate ? !(await persistTemplate(eventDate)) : false;
       navigate('/events', {
         replace: true,
-        state: { toast: 'Событие создано' },
+        state: {
+          toast: templateFailed
+            ? 'Событие создано, но шаблон сохранить не удалось'
+            : 'Событие создано',
+        },
       });
     } catch (e) {
       console.error('createEvent failed', e);
       haptic.notify('error');
       const msg = e instanceof Error ? e.message : 'Не удалось создать событие';
       setSubmitError(msg);
+    }
+  };
+
+  /**
+   * Пишет шаблон из текущего состояния формы: новый или поверх применённого. День недели и
+   * время берутся из выбранной даты — в локальной зоне, как их видит организатор.
+   * Возвращает признак успеха; ошибку не пробрасывает, чтобы не отменить созданную встречу.
+   */
+  const persistTemplate = async (eventDate: Date): Promise<boolean> => {
+    try {
+      await saveTemplateMut.mutateAsync({
+        clubId,
+        templateId: template?.id,
+        body: {
+          name: templateName.trim(),
+          title: title.trim(),
+          description: description.trim() || null,
+          locationText: location ? location.address.trim().slice(0, LOCATION_MAX) : null,
+          locationLat: location?.point.lat ?? null,
+          locationLon: location?.point.lon ?? null,
+          locationHint: locationHint.trim() || null,
+          participantLimit: isOpenEvent ? null : participantLimit,
+          isOpenEvent,
+          isUrgentEvent,
+          stage2LeadMinutes: isOpenEvent || isUrgentEvent ? null : stage2LeadMinutes,
+          photoUrl: photoUrl ?? null,
+          defaultWeekday: isoWeekdayOf(eventDate),
+          defaultTime: localTimeOf(eventDate),
+        },
+      });
+      return true;
+    } catch (e) {
+      console.error('saveEventTemplate failed', e);
+      return false;
     }
   };
 
@@ -218,6 +347,17 @@ export const CreateEventPage: FC = () => {
         <div className="rd-hint" style={{ marginTop: -10, marginBottom: 14 }}>
           Без этапа голосования — участники сразу подтверждают места, уведомление уйдёт
           немедленно. Репутация работает как у обычного события с местами.
+        </div>
+      )}
+      {template && (
+        <div className="rd-hint" style={{ marginTop: -10, marginBottom: 14 }}>
+          📋 Заполнено по шаблону «{template.name}». Правьте что угодно — на сам шаблон это
+          не влияет.
+        </div>
+      )}
+      {templateMissing && (
+        <div className="rd-hint" style={{ marginTop: -10, marginBottom: 14 }}>
+          Шаблон не найден — возможно, его удалили. Форма открыта пустой.
         </div>
       )}
 
@@ -424,6 +564,39 @@ export const CreateEventPage: FC = () => {
           </div>
         )}
 
+        {/* Шаблон: завести новый из этой встречи или перезаписать применённый. Отдельной формы
+            правки у шаблона нет намеренно — эта галочка и есть его редактирование
+            (docs/modules/event-templates.md § 7.1). */}
+        <div className="rd-field">
+          <label className="rd-check">
+            <input
+              type="checkbox"
+              checked={saveAsTemplate}
+              onChange={(e) => {
+                haptic.impact('light');
+                setSaveAsTemplate(e.target.checked);
+              }}
+            />
+            <span>
+              {template ? `Обновить шаблон «${template.name}»` : 'Сохранить как шаблон'}
+            </span>
+          </label>
+          {saveAsTemplate && (
+            <>
+              <input
+                className="rd-input"
+                style={{ marginTop: 10 }}
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                maxLength={TEMPLATE_NAME_MAX}
+                placeholder="Например: Разговорный клуб (вторники)"
+              />
+              <span className="rd-hint">
+                Сохранится всё, кроме даты: вместо неё шаблон запомнит день недели и время.
+              </span>
+            </>
+          )}
+        </div>
 
         {submitError && <div className="rd-error">{submitError}</div>}
 
@@ -435,7 +608,7 @@ export const CreateEventPage: FC = () => {
             type="button"
             className="rd-btn-primary"
             onClick={handleSubmit}
-            disabled={createMut.isPending}
+            disabled={createMut.isPending || saveTemplateMut.isPending}
           >
             {createMut.isPending ? 'Создаём…' : 'Создать событие'}
           </button>

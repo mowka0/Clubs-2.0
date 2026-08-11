@@ -1,5 +1,6 @@
-import { FC } from 'react';
+import { FC, useState } from 'react';
 import type { ActivityType } from '../../api/activities';
+import type { EventTemplateDto } from '../../api/eventTemplates';
 
 interface ActivityTypeOptionsProps {
   /** Вызывается с выбранным типом активности. Побочных эффектов здесь нет — шаг/хаптику владеет родительский flow. */
@@ -167,12 +168,263 @@ const EVENT_FORMAT_OPTIONS: { key: EventFormatKey; emoji: string; title: string;
 
 interface EventFormatOptionsProps {
   onPick: (format: EventFormatKey) => void;
+  /**
+   * Сколько сохранённых шаблонов доступно вызывающему. 0 — пункт «Готовые шаблоны» не
+   * показывается вовсе: пустой список хуже отсутствующего пункта.
+   */
+  templateCount: number;
+  onPickTemplates: () => void;
 }
 
+// Ключ пункта «Готовые шаблоны» на шаге формата. Формат встречи шаблон несёт сам, поэтому
+// пункт не выбирает формат, а уводит на список — отсюда отдельный ключ вне EventFormatKey.
+type FormatStepKey = EventFormatKey | 'templates';
+
 /** Выбор формата, показывается после «Событие» в flow создания (зеркалит шаг «Тип сбора»). */
-export const EventFormatOptions: FC<EventFormatOptionsProps> = ({ onPick }) => (
-  <PickerOptionList header="Формат события" options={EVENT_FORMAT_OPTIONS} onPick={onPick} />
-);
+export const EventFormatOptions: FC<EventFormatOptionsProps> = ({
+  onPick,
+  templateCount,
+  onPickTemplates,
+}) => {
+  const options: PickerListOption<FormatStepKey>[] =
+    templateCount > 0
+      ? [
+          {
+            key: 'templates',
+            emoji: '📋',
+            title: `Готовые шаблоны · ${templateCount}`,
+            subtitle: 'Сохранённые встречи — заполнят форму, останется поправить',
+          },
+          ...EVENT_FORMAT_OPTIONS,
+        ]
+      : EVENT_FORMAT_OPTIONS;
+
+  return (
+    <PickerOptionList
+      header="Формат события"
+      options={options}
+      onPick={(key) => (key === 'templates' ? onPickTemplates() : onPick(key))}
+    />
+  );
+};
+
+interface EventTemplateOptionsProps {
+  templates: EventTemplateDto[];
+  onPick: (template: EventTemplateDto) => void;
+  onRename: (template: EventTemplateDto) => void;
+  onDelete: (template: EventTemplateDto) => void;
+  isDeleting: boolean;
+}
+
+// Подпись формата в строке шаблона — те же ярлыки, что у карточек лент и страницы встречи.
+function formatLabel(template: EventTemplateDto): string {
+  if (template.isOpenEvent) return '🌊 открытая';
+  if (template.isUrgentEvent) return '⚡️ срочная';
+  return `🎟 ${template.participantLimit} мест`;
+}
+
+const WEEKDAY_SHORT = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
+
+/** «вт 19:00» — что именно подставится в дату; пусто, если день недели у шаблона не задан. */
+function scheduleLabel(template: EventTemplateDto): string {
+  if (template.defaultWeekday === null) return '';
+  const day = WEEKDAY_SHORT[template.defaultWeekday - 1] ?? '';
+  const time = template.defaultTime?.slice(0, 5) ?? '';
+  return time ? `${day} ${time}` : day;
+}
+
+const templateRowStyle: React.CSSProperties = {
+  ...optionStyle,
+  gap: 10,
+};
+
+const templateActionStyle: React.CSSProperties = {
+  flex: '0 0 auto',
+  padding: '6px 8px',
+  background: 'transparent',
+  border: 'none',
+  cursor: 'pointer',
+  fontSize: 18,
+  lineHeight: 1,
+};
+
+/**
+ * Список сохранённых шаблонов с режимом правки. Переключатель «Изменить» в шапке вместо
+ * «⋯» на строке: любое всплывающее меню здесь означало бы ВЛОЖЕННЫЙ Modal, а закрывающийся
+ * вложенный сносит общий portal/scroll-lock оверлей (см. CreateActivityFlow).
+ *
+ * Подтверждение удаления тоже инлайновое, по той же причине.
+ */
+export const EventTemplateOptions: FC<EventTemplateOptionsProps> = ({
+  templates,
+  onPick,
+  onRename,
+  onDelete,
+  isDeleting,
+}) => {
+  const [editing, setEditing] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  return (
+    <div style={{ paddingBottom: 8 }}>
+      <div style={{ ...headerStyle, display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+        <span>Готовые шаблоны</span>
+        <button
+          type="button"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+            font: 'inherit',
+            textTransform: 'none',
+            letterSpacing: 'normal',
+            color: 'var(--tgui--link_color, #6ab3f3)',
+            cursor: 'pointer',
+          }}
+          onClick={() => {
+            setPendingDeleteId(null);
+            setEditing((v) => !v);
+          }}
+        >
+          {editing ? 'Готово' : 'Изменить'}
+        </button>
+      </div>
+
+      {templates.map((template) => {
+        const schedule = scheduleLabel(template);
+        const isPendingDelete = pendingDeleteId === template.id;
+
+        if (isPendingDelete) {
+          return (
+            <div key={template.id} style={templateRowStyle}>
+              <span style={textStyle}>
+                <span style={titleStyle}>Удалить «{template.name}»?</span>
+                <span style={subtitleStyle}>Встречи, созданные по нему, останутся на месте</span>
+              </span>
+              <button
+                type="button"
+                style={{ ...templateActionStyle, fontSize: 14, color: 'var(--tgui--destructive_text_color, #e53935)' }}
+                disabled={isDeleting}
+                onClick={() => onDelete(template)}
+              >
+                Удалить
+              </button>
+              <button
+                type="button"
+                style={{ ...templateActionStyle, fontSize: 14 }}
+                onClick={() => setPendingDeleteId(null)}
+              >
+                Отмена
+              </button>
+            </div>
+          );
+        }
+
+        return (
+          <div key={template.id} style={templateRowStyle}>
+            <button
+              type="button"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 14,
+                flex: '1 1 auto',
+                minWidth: 0,
+                padding: 0,
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                textAlign: 'left',
+                color: 'inherit',
+              }}
+              onClick={() => (editing ? onRename(template) : onPick(template))}
+            >
+              <span style={emojiStyle} aria-hidden="true">📋</span>
+              <span style={{ ...textStyle, minWidth: 0 }}>
+                <span style={titleStyle}>{template.name}</span>
+                <span style={subtitleStyle}>
+                  {[template.clubName, formatLabel(template), schedule].filter(Boolean).join(' · ')}
+                </span>
+              </span>
+            </button>
+            {editing && (
+              <>
+                <button
+                  type="button"
+                  style={templateActionStyle}
+                  aria-label={`Переименовать ${template.name}`}
+                  onClick={() => onRename(template)}
+                >
+                  ✏️
+                </button>
+                <button
+                  type="button"
+                  style={templateActionStyle}
+                  aria-label={`Удалить ${template.name}`}
+                  onClick={() => setPendingDeleteId(template.id)}
+                >
+                  🗑
+                </button>
+              </>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+interface EventTemplateRenameStepProps {
+  template: EventTemplateDto;
+  onSubmit: (name: string) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+  error: string | null;
+}
+
+/**
+ * Переименование шаблона — подшаг внутри того же Modal (вложенных Modal здесь быть не может,
+ * см. EventTemplateOptions). Содержимое шаблона правится не тут, а через «Обновить шаблон»
+ * в форме создания: отдельная форма правки означала бы третью копию полей встречи.
+ */
+export const EventTemplateRenameStep: FC<EventTemplateRenameStepProps> = ({
+  template,
+  onSubmit,
+  onCancel,
+  isSaving,
+  error,
+}) => {
+  const [name, setName] = useState(template.name);
+  const trimmed = name.trim();
+
+  return (
+    <div style={{ padding: '8px 16px 16px' }}>
+      <div style={{ ...headerStyle, padding: '0 0 12px' }}>Название шаблона</div>
+      <input
+        className="rd-input"
+        value={name}
+        maxLength={60}
+        autoFocus
+        onChange={(e) => setName(e.target.value)}
+      />
+      {error && <div className="rd-error" style={{ marginTop: 10 }}>{error}</div>}
+      <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+        <button type="button" className="rd-btn-outline" style={{ flex: 1 }} onClick={onCancel}>
+          Отмена
+        </button>
+        <button
+          type="button"
+          className="rd-btn-primary"
+          style={{ flex: 1 }}
+          disabled={isSaving || trimmed.length === 0 || trimmed === template.name}
+          onClick={() => onSubmit(trimmed)}
+        >
+          {isSaving ? 'Сохраняем…' : 'Сохранить'}
+        </button>
+      </div>
+    </div>
+  );
+};
 
 // Показываются только уже реализованные шаблоны. По мере появления gear/booking/birthday — добавлять сюда.
 export type SkladchinaTemplateKey = 'split_bill' | 'custom';

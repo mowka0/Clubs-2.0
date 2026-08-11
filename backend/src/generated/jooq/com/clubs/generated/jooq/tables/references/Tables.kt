@@ -15,6 +15,7 @@ import com.clubs.generated.jooq.tables.ClubRank
 import com.clubs.generated.jooq.tables.Clubs
 import com.clubs.generated.jooq.tables.EventChatPins
 import com.clubs.generated.jooq.tables.EventResponses
+import com.clubs.generated.jooq.tables.EventTemplates
 import com.clubs.generated.jooq.tables.Events
 import com.clubs.generated.jooq.tables.Interests
 import com.clubs.generated.jooq.tables.MembershipHistory
@@ -111,6 +112,14 @@ val EVENT_CHAT_PINS: EventChatPins = EventChatPins.EVENT_CHAT_PINS
  * финальный статус и отметка явки. Одна строка на пару (event, user).
  */
 val EVENT_RESPONSES: EventResponses = EventResponses.EVENT_RESPONSES
+
+/**
+ * Именованные заготовки формы создания встречи, привязанные к клубу (не более
+ * 10 на клуб, лимит держит сервис). Хранят всё, кроме даты; применение шаблона
+ * открывает обычную форму создания с заполненными полями, ничего не блокируя.
+ * Расписанием и отдельным форматом события НЕ являются.
+ */
+val EVENT_TEMPLATES: EventTemplates = EventTemplates.EVENT_TEMPLATES
 
 /**
  * События клуба с двухэтапным подтверждением участия: Этап 1 — голосование

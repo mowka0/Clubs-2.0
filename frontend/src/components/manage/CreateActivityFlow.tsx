@@ -5,12 +5,21 @@ import { useHaptic } from '../../hooks/useHaptic';
 import {
   ActivityTypeOptions,
   EventFormatOptions,
+  EventTemplateOptions,
+  EventTemplateRenameStep,
   SkladchinaTemplateOptions,
   type EventFormatKey,
   type SkladchinaTemplateKey,
 } from './CreateActivityPicker';
 import { ClubPickerList, type ClubPickerOption } from './ClubPickerModal';
+import {
+  useDeleteEventTemplateMutation,
+  useMyEventTemplatesQuery,
+  useSaveEventTemplateMutation,
+} from '../../queries/eventTemplates';
+import { templateToSaveBody } from '../../utils/eventTemplate';
 import type { ActivityType } from '../../api/activities';
+import type { EventTemplateDto } from '../../api/eventTemplates';
 
 interface CreateActivityFlowProps {
   /** Открыт ли флоу создания. */
@@ -32,7 +41,7 @@ interface CreateActivityFlowProps {
   onClose: () => void;
 }
 
-type Step = 'type' | 'template' | 'event_format' | 'club';
+type Step = 'type' | 'template' | 'event_format' | 'event_templates' | 'template_rename' | 'club';
 
 function createRoute(
   clubId: string,
@@ -58,10 +67,12 @@ function createRoute(
  * тип активности; шаг 'club' — целевой клуб, если пользователь организует несколько.
  * Один Modal обязателен: при отдельном Modal на каждый шаг закрывающийся сносил
  * общий portal/scroll-lock оверлей, который только что смонтировал открывающийся,
- * и второй модал мгновенно схлопывался.
+ * и второй модал мгновенно схлопывался. По той же причине переименование и
+ * подтверждение удаления шаблона — подшаги здесь, а не всплывающие меню.
  *
  * После определения типа и клуба навигируем на per-club маршрут создания
- * (CreateEventPage / CreateSkladchinaPage читают :id).
+ * (CreateEventPage / CreateSkladchinaPage читают :id). Шаблон встречи — короткий путь:
+ * он несёт и клуб, и формат, поэтому уводит на форму, минуя оба шага.
  */
 export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   open,
@@ -77,6 +88,20 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   const [pendingType, setPendingType] = useState<ActivityType | null>(null);
   const [pendingTemplate, setPendingTemplate] = useState<SkladchinaTemplateKey | null>(null);
   const [pendingEventFormat, setPendingEventFormat] = useState<EventFormatKey | null>(null);
+  const [renamingTemplate, setRenamingTemplate] = useState<EventTemplateDto | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
+
+  // Список тянем только когда флоу открыт и пользователь вообще может создавать — иначе
+  // запрос уходил бы у каждого участника при каждом монтировании дока.
+  const templatesQuery = useMyEventTemplatesQuery(open && canCreate);
+  const saveTemplateMut = useSaveEventTemplateMutation();
+  const deleteTemplateMut = useDeleteEventTemplateMutation();
+
+  // На странице клуба «+» показывает шаблоны только этого клуба: предлагать чужие там,
+  // где контекст однозначен, — сбивать с толку.
+  const templates = (templatesQuery.data ?? []).filter(
+    (t) => !presetClubId || t.clubId === presetClubId,
+  );
 
   // Единый сброс flow к первому шагу — используется и при закрытии, и перед навигацией на форму,
   // чтобы повторное открытие «+» никогда не стартовало с призрачным состоянием прошлого прохода.
@@ -85,6 +110,8 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
     setPendingType(null);
     setPendingTemplate(null);
     setPendingEventFormat(null);
+    setRenamingTemplate(null);
+    setRenameError(null);
     onClose();
   };
 
@@ -151,6 +178,54 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
     resolveClub('event', null, format);
   };
 
+  const handleOpenEventTemplates = () => {
+    haptic.impact('medium');
+    setStep('event_templates');
+  };
+
+  // Шаблон знает и клуб, и формат — оба шага пропускаются, форма читает содержимое по ?template.
+  const handlePickEventTemplate = (template: EventTemplateDto) => {
+    haptic.impact('medium');
+    resetFlow();
+    navigate(`/clubs/${template.clubId}/events/new?template=${template.id}`);
+  };
+
+  const handleStartRename = (template: EventTemplateDto) => {
+    haptic.impact('light');
+    setRenameError(null);
+    setRenamingTemplate(template);
+    setStep('template_rename');
+  };
+
+  const handleSubmitRename = async (name: string) => {
+    const template = renamingTemplate;
+    if (!template) return;
+    setRenameError(null);
+    try {
+      // PUT — полная замена: шлём содержимое шаблона обратно, меняя только имя.
+      await saveTemplateMut.mutateAsync({
+        clubId: template.clubId,
+        templateId: template.id,
+        body: templateToSaveBody(template, { name }),
+      });
+      haptic.notify('success');
+      setRenamingTemplate(null);
+      setStep('event_templates');
+    } catch (e) {
+      haptic.notify('error');
+      setRenameError(e instanceof Error ? e.message : 'Не удалось переименовать шаблон');
+    }
+  };
+
+  const handleDeleteTemplate = async (template: EventTemplateDto) => {
+    try {
+      await deleteTemplateMut.mutateAsync({ clubId: template.clubId, templateId: template.id });
+      haptic.notify('success');
+    } catch {
+      haptic.notify('error');
+    }
+  };
+
   const handlePickClub = (clubId: string) => {
     if (!pendingType) return;
     haptic.impact('medium');
@@ -170,7 +245,35 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
         <ActivityTypeOptions onPick={handlePickType} onPickFeedback={handlePickFeedback} canCreate={canCreate} />
       )}
       {step === 'template' && <SkladchinaTemplateOptions onPick={handlePickTemplate} />}
-      {step === 'event_format' && <EventFormatOptions onPick={handlePickEventFormat} />}
+      {step === 'event_format' && (
+        <EventFormatOptions
+          onPick={handlePickEventFormat}
+          templateCount={templates.length}
+          onPickTemplates={handleOpenEventTemplates}
+        />
+      )}
+      {step === 'event_templates' && (
+        <EventTemplateOptions
+          templates={templates}
+          onPick={handlePickEventTemplate}
+          onRename={handleStartRename}
+          onDelete={handleDeleteTemplate}
+          isDeleting={deleteTemplateMut.isPending}
+        />
+      )}
+      {step === 'template_rename' && renamingTemplate && (
+        <EventTemplateRenameStep
+          template={renamingTemplate}
+          onSubmit={handleSubmitRename}
+          onCancel={() => {
+            setRenamingTemplate(null);
+            setRenameError(null);
+            setStep('event_templates');
+          }}
+          isSaving={saveTemplateMut.isPending}
+          error={renameError}
+        />
+      )}
       {step === 'club' && <ClubPickerList clubs={organizerClubs} onPick={handlePickClub} />}
     </Modal>
   );
