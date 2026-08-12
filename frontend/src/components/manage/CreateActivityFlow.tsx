@@ -6,7 +6,6 @@ import {
   ActivityTypeOptions,
   EventFormatOptions,
   EventTemplateOptions,
-  EventTemplateRenameStep,
   SkladchinaTemplateOptions,
   type EventFormatKey,
   type SkladchinaTemplateKey,
@@ -15,9 +14,7 @@ import { ClubPickerList, type ClubPickerOption } from './ClubPickerModal';
 import {
   useDeleteEventTemplateMutation,
   useMyEventTemplatesQuery,
-  useSaveEventTemplateMutation,
 } from '../../queries/eventTemplates';
-import { templateToSaveBody } from '../../utils/eventTemplate';
 import type { ActivityType } from '../../api/activities';
 import type { EventTemplateDto } from '../../api/eventTemplates';
 
@@ -41,7 +38,7 @@ interface CreateActivityFlowProps {
   onClose: () => void;
 }
 
-type Step = 'type' | 'template' | 'event_format' | 'event_templates' | 'template_rename' | 'club';
+type Step = 'type' | 'template' | 'event_format' | 'event_templates' | 'club';
 
 function createRoute(
   clubId: string,
@@ -88,13 +85,9 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   const [pendingType, setPendingType] = useState<ActivityType | null>(null);
   const [pendingTemplate, setPendingTemplate] = useState<SkladchinaTemplateKey | null>(null);
   const [pendingEventFormat, setPendingEventFormat] = useState<EventFormatKey | null>(null);
-  const [renamingTemplate, setRenamingTemplate] = useState<EventTemplateDto | null>(null);
-  const [renameError, setRenameError] = useState<string | null>(null);
-
   // Список тянем только когда флоу открыт и пользователь вообще может создавать — иначе
   // запрос уходил бы у каждого участника при каждом монтировании дока.
   const templatesQuery = useMyEventTemplatesQuery(open && canCreate);
-  const saveTemplateMut = useSaveEventTemplateMutation();
   const deleteTemplateMut = useDeleteEventTemplateMutation();
 
   // На странице клуба «+» показывает шаблоны только этого клуба: предлагать чужие там,
@@ -110,8 +103,6 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
     setPendingType(null);
     setPendingTemplate(null);
     setPendingEventFormat(null);
-    setRenamingTemplate(null);
-    setRenameError(null);
     onClose();
   };
 
@@ -199,11 +190,6 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
       case 'event_templates':
         setStep('event_format');
         return;
-      case 'template_rename':
-        setRenamingTemplate(null);
-        setRenameError(null);
-        setStep('event_templates');
-        return;
       case 'club':
         setStep(pendingType === 'skladchina' ? 'template' : 'event_format');
         return;
@@ -219,31 +205,15 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
     navigate(`/clubs/${template.clubId}/events/new?template=${template.id}`);
   };
 
-  const handleStartRename = (template: EventTemplateDto) => {
-    haptic.impact('light');
-    setRenameError(null);
-    setRenamingTemplate(template);
-    setStep('template_rename');
-  };
-
-  const handleSubmitRename = async (name: string) => {
-    const template = renamingTemplate;
-    if (!template) return;
-    setRenameError(null);
-    try {
-      // PUT — полная замена: шлём содержимое шаблона обратно, меняя только имя.
-      await saveTemplateMut.mutateAsync({
-        clubId: template.clubId,
-        templateId: template.id,
-        body: templateToSaveBody(template, { name }),
-      });
-      haptic.notify('success');
-      setRenamingTemplate(null);
-      setStep('event_templates');
-    } catch (e) {
-      haptic.notify('error');
-      setRenameError(e instanceof Error ? e.message : 'Не удалось переименовать шаблон');
-    }
+  /**
+   * Полная правка шаблона — отдельный экран с той же формой встречи (EventForm в режиме
+   * `template`). Раньше карандаш открывал только переименование, а поправить место или
+   * лимит можно было лишь заодно с созданием ненужной встречи (правка PO 2026-08-12).
+   */
+  const handleEditTemplate = (template: EventTemplateDto) => {
+    haptic.impact('medium');
+    resetFlow();
+    navigate(`/clubs/${template.clubId}/event-templates/${template.id}/edit`);
   };
 
   const handleDeleteTemplate = async (template: EventTemplateDto) => {
@@ -286,19 +256,10 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
         <EventTemplateOptions
           templates={templates}
           onPick={handlePickEventTemplate}
-          onRename={handleStartRename}
+          onEdit={handleEditTemplate}
           onDelete={handleDeleteTemplate}
           onBack={handleBack}
           isDeleting={deleteTemplateMut.isPending}
-        />
-      )}
-      {step === 'template_rename' && renamingTemplate && (
-        <EventTemplateRenameStep
-          template={renamingTemplate}
-          onSubmit={handleSubmitRename}
-          onCancel={handleBack}
-          isSaving={saveTemplateMut.isPending}
-          error={renameError}
         />
       )}
       {step === 'club' && (

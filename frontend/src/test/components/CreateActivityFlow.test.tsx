@@ -97,6 +97,7 @@ function renderFlow(clubs: ClubPickerOption[], presetClubId?: string) {
         }
       />
       <Route path="/clubs/:id/events/new" element={<LocationProbe />} />
+      <Route path="/clubs/:id/event-templates/:templateId/edit" element={<LocationProbe />} />
       <Route path="/clubs/:id/skladchina/new" element={<LocationProbe />} />
       <Route path="/clubs/:id/skladchina/split" element={<LocationProbe />} />
       <Route path="/feedback" element={<LocationProbe />} />
@@ -244,29 +245,32 @@ describe('CreateActivityFlow', () => {
       expect(screen.queryByText('Чужой')).toBeNull();
     });
 
-    it('режим правки переименовывает шаблон через PUT', async () => {
+    it('карандаш ведёт на экран полной правки шаблона', async () => {
       vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
-      vi.mocked(updateEventTemplate).mockResolvedValue({ ...TEMPLATE, name: 'Вторники' });
       const { user } = renderFlow(TWO_CLUBS);
 
       await user.click(screen.getByText('Событие'));
       await user.click(await screen.findByText('Готовые шаблоны · 1'));
       await user.click(screen.getByText('Изменить'));
-      await user.click(screen.getByLabelText('Переименовать Разговорный клуб'));
+      await user.click(screen.getByLabelText('Изменить Разговорный клуб'));
 
-      const input = screen.getByDisplayValue('Разговорный клуб');
-      await user.clear(input);
-      await user.type(input, 'Вторники');
-      await user.click(screen.getByText('Сохранить'));
+      // Правка — отдельный экран с той же формой встречи, а не переименование в шите
+      // (правка PO 2026-08-12: поправить место нельзя было, не создав встречу).
+      expect(screen.getByTestId('location').textContent)
+        .toBe('/clubs/club-2/event-templates/tpl-1/edit');
+    });
 
-      await waitFor(() => expect(updateEventTemplate).toHaveBeenCalledTimes(1));
-      const [clubId, templateId, body] = vi.mocked(updateEventTemplate).mock.calls[0]!;
-      expect(clubId).toBe('club-2');
-      expect(templateId).toBe('tpl-1');
-      expect(body.name).toBe('Вторники');
-      // Содержимое уезжает целиком — PUT это полная замена, а не частичная правка.
-      expect(body.title).toBe('Разговорный клуб');
-      expect(body.participantLimit).toBe(12);
+    it('в режиме правки тап по самой строке тоже ведёт на правку, а не применяет шаблон', async () => {
+      vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
+      const { user } = renderFlow(TWO_CLUBS);
+
+      await user.click(screen.getByText('Событие'));
+      await user.click(await screen.findByText('Готовые шаблоны · 1'));
+      await user.click(screen.getByText('Изменить'));
+      await user.click(screen.getByText('Разговорный клуб'));
+
+      expect(screen.getByTestId('location').textContent)
+        .toBe('/clubs/club-2/event-templates/tpl-1/edit');
     });
 
     it('удалили последний шаблон — шаг не пустеет молча', async () => {
@@ -333,25 +337,6 @@ describe('CreateActivityFlow', () => {
       expect(screen.getByText('С местами')).toBeInTheDocument();
       // Никуда не ушли — форма создания не открывалась.
       expect(screen.getByTestId('location').textContent).toBe('/');
-    });
-
-    it('с переименования возвращает к списку шаблонов', async () => {
-      vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
-      const { user } = renderFlow(TWO_CLUBS);
-
-      await user.click(screen.getByText('Событие'));
-      await user.click(await screen.findByText('Готовые шаблоны · 1'));
-      await user.click(screen.getByText('Изменить'));
-      await user.click(screen.getByLabelText('Переименовать Разговорный клуб'));
-      expect(screen.getByText('Название шаблона')).toBeInTheDocument();
-      expect(screen.getByDisplayValue('Разговорный клуб')).toBeInTheDocument();
-
-      await user.click(screen.getByText('Назад'));
-
-      // Снова список шаблонов: видна строка шаблона и переключатель режима правки.
-      expect(screen.getByText('Разговорный клуб')).toBeInTheDocument();
-      expect(screen.getByText('Изменить')).toBeInTheDocument();
-      expect(updateEventTemplate).not.toHaveBeenCalled();
     });
 
     it('с выбора клуба возвращает на тот шаг, откуда пришли', async () => {

@@ -27,6 +27,9 @@ const CreateSplitBillPage = lazy(() =>
 const CreateEventPage = lazy(() =>
   import('./pages/CreateEventPage').then((m) => ({ default: m.CreateEventPage })),
 );
+const EditEventTemplatePage = lazy(() =>
+  import('./pages/EditEventTemplatePage').then((m) => ({ default: m.EditEventTemplatePage })),
+);
 const InvitePage = lazy(() =>
   import('./pages/InvitePage').then((m) => ({ default: m.InvitePage })),
 );
@@ -105,6 +108,10 @@ export const router = createBrowserRouter([
       {
         path: '/clubs/:id/events/new',
         element: <CreateEventPage />,
+      },
+      {
+        path: '/clubs/:id/event-templates/:templateId/edit',
+        element: <EditEventTemplatePage />,
       },
       {
         path: '/clubs/:id/skladchina/new',

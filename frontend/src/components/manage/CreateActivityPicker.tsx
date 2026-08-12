@@ -229,7 +229,8 @@ export const EventFormatOptions: FC<EventFormatOptionsProps> = ({
 interface EventTemplateOptionsProps {
   templates: EventTemplateDto[];
   onPick: (template: EventTemplateDto) => void;
-  onRename: (template: EventTemplateDto) => void;
+  /** Карандаш и тап по строке в режиме правки ведут на полную правку шаблона. */
+  onEdit: (template: EventTemplateDto) => void;
   onDelete: (template: EventTemplateDto) => void;
   onBack: () => void;
   isDeleting: boolean;
@@ -265,7 +266,7 @@ function scheduleLabel(template: EventTemplateDto): string {
 export const EventTemplateOptions: FC<EventTemplateOptionsProps> = ({
   templates,
   onPick,
-  onRename,
+  onEdit,
   onDelete,
   onBack,
   isDeleting,
@@ -337,7 +338,7 @@ export const EventTemplateOptions: FC<EventTemplateOptionsProps> = ({
             <button
               type="button"
               className="rd-pick-row"
-              onClick={() => (editing ? onRename(template) : onPick(template))}
+              onClick={() => (editing ? onEdit(template) : onPick(template))}
             >
               <span className="rd-pick-ic rd-pick-ic-accent" aria-hidden="true"><TemplateIcon /></span>
               <span className="rd-pick-txt">
@@ -350,8 +351,8 @@ export const EventTemplateOptions: FC<EventTemplateOptionsProps> = ({
                 <button
                   type="button"
                   className="rd-pick-iconbtn"
-                  aria-label={`Переименовать ${template.name}`}
-                  onClick={() => onRename(template)}
+                  aria-label={`Изменить ${template.name}`}
+                  onClick={() => onEdit(template)}
                 >
                   <PencilIcon />
                 </button>
@@ -368,61 +369,6 @@ export const EventTemplateOptions: FC<EventTemplateOptionsProps> = ({
           </div>
         );
       })}
-    </div>
-  );
-};
-
-interface EventTemplateRenameStepProps {
-  template: EventTemplateDto;
-  onSubmit: (name: string) => void;
-  onCancel: () => void;
-  isSaving: boolean;
-  error: string | null;
-}
-
-/**
- * Переименование шаблона — подшаг внутри того же Modal (вложенных Modal здесь быть не может,
- * см. EventTemplateOptions). Содержимое шаблона правится не тут, а через «Обновить шаблон»
- * в форме создания: отдельная форма правки означала бы третью копию полей встречи.
- */
-export const EventTemplateRenameStep: FC<EventTemplateRenameStepProps> = ({
-  template,
-  onSubmit,
-  onCancel,
-  isSaving,
-  error,
-}) => {
-  const [name, setName] = useState(template.name);
-  const trimmed = name.trim();
-
-  return (
-    <div className="rd-pick">
-      <PickerStepHeader onBack={onCancel} />
-      <div className="rd-pick-form">
-        {/* Подпись поля, а не заголовок шага: без неё непонятно, что именно правится. */}
-        <span className="rd-label">Название шаблона</span>
-        <input
-          className="rd-input"
-          value={name}
-          maxLength={60}
-          autoFocus
-          onChange={(e) => setName(e.target.value)}
-        />
-        {error && <div className="rd-error" style={{ marginTop: 10 }}>{error}</div>}
-        <div className="rd-pick-form-actions">
-          <button type="button" className="rd-btn-outline" onClick={onCancel}>
-            Отмена
-          </button>
-          <button
-            type="button"
-            className="rd-btn-primary"
-            disabled={isSaving || trimmed.length === 0 || trimmed === template.name}
-            onClick={() => onSubmit(trimmed)}
-          >
-            {isSaving ? 'Сохраняем…' : 'Сохранить'}
-          </button>
-        </div>
-      </div>
     </div>
   );
 };
