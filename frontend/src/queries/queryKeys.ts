@@ -49,6 +49,15 @@ export const queryKeys = {
     myVote: (id: string) => ['events', 'detail', id, 'my-vote'] as const,
     myFeed: ['events', 'my-feed'] as const,
   },
+  /**
+   * Шаблоны встреч. Общий префикс `all` — им инвалидируются оба списка разом: кросс-клубовый
+   * (пикер «+») и по клубу (форма создания) держат одни и те же строки.
+   */
+  eventTemplates: {
+    all: ['event-templates'] as const,
+    mine: ['event-templates', 'mine'] as const,
+    byClub: (clubId: string) => ['event-templates', 'by-club', clubId] as const,
+  },
   applications: {
     mine: () => ['applications', 'mine'] as const,
     myPending: ['applications', 'my-pending'] as const,

@@ -74,6 +74,16 @@ export function formatTimeHM(iso: string): string {
   return `${hh}:${mm}`;
 }
 
+/**
+ * Date → значение для input[type=datetime-local] («YYYY-MM-DDTHH:mm») в ЛОКАЛЬНОМ поясе
+ * устройства. toISOString() не подходит: он вернул бы UTC-время, и пикер показал бы
+ * организатору сдвинутые часы.
+ */
+export function toDatetimeLocalValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export function formatDatetime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString('ru-RU', {

@@ -73,7 +73,7 @@
 | Capability | За что отвечает |
 |---|---|
 | `APPROVE_APPLICATIONS` | Заявки клуба: смотреть инбокс и счётчики, одобрить, отклонить (с причиной), «Расширить клуб и принять всех». |
-| `MANAGE_EVENTS` | События: создать, отменить, отметить посещаемость, разрешать споры, видеть dispute-note откликнувшихся. |
+| `MANAGE_EVENTS` | События: создать, отменить, отметить посещаемость, разрешать споры, видеть dispute-note откликнувшихся. Плюс шаблоны встреч клуба — создать, переименовать, перезаписать, удалить ([`event-templates.md`](./event-templates.md)). |
 | `MANAGE_SKLADCHINA` | Складчины клуба: создать, вести, отметить оплату участнику, resolve-decline, закрыть — по ЛЮБОМУ сбору клуба (не только своему, У-1). |
 | `MANAGE_MEMBERS` | Участники (`role = member`): заморозка/разморозка, «взнос получен»/«не получен», reject-dues, своя дата доступа (access-until), заметка, кик; менеджерский вид ростера и карточки участника. |
 | `GRANT_AWARDS` | Награды участнику (`role = member`): выдать, снять, видеть подсказки-награды. |
@@ -255,6 +255,14 @@ capability. Все пути от `backend/src/main/kotlin/com/clubs/`.
 | 15 | `skladchina/SkladchinaController.kt:36` | POST `.../skladchinas` | `MANAGE_SKLADCHINA` |
 | 16 | `clubquality/ClubQualityController.kt:43` | GET `/{clubId}/stats` | `VIEW_STATS` |
 | 17 | `clubquality/ClubQualityController.kt:53` | GET `/{clubId}/churned-members` | `VIEW_STATS` |
+| 18 | `eventtemplate/EventTemplateController.kt` | GET `/{clubId}/event-templates` | `MANAGE_EVENTS` |
+| 19 | `eventtemplate/EventTemplateController.kt` | POST `/{clubId}/event-templates` | `MANAGE_EVENTS` |
+| 20 | `eventtemplate/EventTemplateController.kt` | PUT `/{clubId}/event-templates/{templateId}` | `MANAGE_EVENTS` |
+| 21 | `eventtemplate/EventTemplateController.kt` | DELETE `/{clubId}/event-templates/{templateId}` | `MANAGE_EVENTS` |
+
+`GET /api/me/event-templates` в таблице нет намеренно: club-scope'а в пути нет, аннотация
+неприменима, и авторизацией служит сама фильтрация клубов по `MANAGE_EVENTS` внутри
+`EventTemplateService.getMyTemplates` (тот же приём, что у `/me/events`).
 
 Точки 1–8 (per-target) дополнительно проходят `requireManageableTarget` в сервисе
 (делегат → только `role = member`).

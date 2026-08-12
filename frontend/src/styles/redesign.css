@@ -3016,3 +3016,117 @@
 }
 
 .sp-ack { margin-top: 18px; }
+
+/* ==========================================================================
+   Пикер «+» — создание активности (шит telegram-ui, содержимое наше)
+   ==========================================================================
+   telegram-ui даёт только контейнер-шторку; всё внутри раньше было набрано инлайновыми
+   стилями на токенах `--tgui--*`, из-за чего меню читалось как системное меню Telegram,
+   а не как экран приложения (правка PO 2026-08-11).
+
+   `box-sizing: border-box` на поддереве обязателен: строки с `width: 100%` и горизонтальным
+   padding вылезали за шит ровно на его ширину, и последняя иконка-действие обрезалась краем. */
+.rd-pick, .rd-pick * { box-sizing: border-box; }
+.rd-pick { padding: 2px 0 8px; }
+
+/* Сам шит: карточная поверхность проекта вместо телеграмного bg_color. */
+.rd-pick-modal { background: var(--card-solid); }
+
+/* Заголовков шагов в шапке нет (решение PO 2026-08-11) — только управление: «Назад» слева,
+   действие справа. Шапка не рендерится вовсе, когда управлять нечем. */
+.rd-pick-head { display: flex; align-items: center; gap: 10px; padding: 2px 16px 12px; }
+
+/* «Назад» и «Изменить» — одинаковые пилюли: обе управляют шагом, а не содержимым.
+   Фиксированная высота и line-height: 1 обязательны для выравнивания — у «Назад» внутри
+   ещё и SVG, из-за которого её строчный бокс был выше текстовой кнопки, и пилюли стояли
+   на разной высоте. */
+.rd-pick-back, .rd-pick-act {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  height: 30px; padding: 0 12px; border-radius: 999px; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--hairline-2); color: var(--text-dim);
+  font-family: inherit; font-size: 11.5px; font-weight: 700; letter-spacing: 0.03em; line-height: 1;
+}
+.rd-pick-back { padding-left: 9px; }
+/* Действие всегда у правого края — в том числе когда «Назад» нет. */
+.rd-pick-act { margin-left: auto; }
+.rd-pick-back:active, .rd-pick-act:active { background: var(--hairline-2); }
+.rd-pick-act.rd-active { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+
+.rd-pick-item { display: flex; align-items: center; border-top: 1px solid var(--hairline); }
+.rd-pick-item:first-of-type { border-top: 0; }
+.rd-pick-row {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 13px;
+  padding: 12px 16px; background: transparent; border: 0;
+  text-align: left; font-family: inherit; color: var(--text); cursor: pointer;
+}
+.rd-pick-row:active { background: var(--surface); }
+
+/* Иконка в мягком тайле: эмодзи в нём читаются как осознанный элемент, а не как символ,
+   уроненный в строку текста. */
+.rd-pick-ic {
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 13px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface); border: 1px solid var(--hairline-2);
+  font-size: 20px; line-height: 1;
+}
+.rd-pick-ic-accent { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+
+.rd-pick-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rd-pick-txt b {
+  font-size: 15px; font-weight: 650; letter-spacing: -0.01em; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rd-pick-txt span { font-size: 12.5px; color: var(--text-dim); line-height: 1.35; }
+/* Метаданные шаблона (клуб · формат · расписание) — строго одна строка с многоточием. */
+.rd-pick-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Действия режима правки: ширина фиксирована, ужимается строка (min-width: 0 выше). */
+.rd-pick-iconbtn {
+  flex: 0 0 auto; width: 34px; height: 34px; padding: 0; margin-left: 6px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 11px; border: 1px solid var(--hairline-2); background: var(--surface);
+  color: var(--text-dim); cursor: pointer;
+}
+.rd-pick-iconbtn:last-child { margin-right: 16px; }
+.rd-pick-iconbtn:active { background: var(--hairline-2); }
+.rd-pick-iconbtn.rd-danger { color: var(--danger); background: var(--danger-soft); border-color: transparent; }
+.rd-pick-iconbtn:disabled { opacity: 0.45; }
+
+/* Подтверждение удаления — инлайн в строке (вложенный Modal сносит общий оверлей).
+   Вопрос и кнопки В РАЗНЫХ строках: в одну строку на 375px имя шаблона схлопывалось до
+   «Удалить «Схо...» — из вопроса пропадало ровно то, что нужно прочитать перед удалением. */
+.rd-pick-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 16px; width: 100%; }
+.rd-pick-confirm .rd-pick-txt { flex: 1 1 100%; }
+.rd-pick-confirm-actions { display: flex; gap: 8px; margin-left: auto; }
+.rd-pick-confirm-btn {
+  flex: 0 0 auto; padding: 7px 12px; border-radius: 999px; cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 700;
+  border: 1px solid var(--hairline-2); background: var(--surface); color: var(--text-dim);
+}
+.rd-pick-confirm-btn.rd-danger { color: var(--danger); background: var(--danger-soft); border-color: transparent; }
+.rd-pick-confirm-btn:disabled { opacity: 0.45; }
+
+/* Шаг переименования шаблона. */
+.rd-pick-form { padding: 2px 16px 8px; }
+.rd-pick-form .rd-input { width: 100%; }
+.rd-pick-form-actions { display: flex; gap: 10px; margin-top: 14px; }
+.rd-pick-form-actions > * { flex: 1 1 0; }
+
+/* Пустой список шаблонов (все удалили, не выходя из шага). */
+.rd-pick-empty { padding: 6px 16px 16px; font-size: 13px; color: var(--text-dim); }
+
+/* ---------- Организаторские действия на странице встречи ----------
+   Раскладка PO 2026-08-12: «Редактировать» и «Отменить» — одной строкой в равных долях,
+   «Сохранить как шаблон» — отдельной строкой под ними, мельче и прижат вправо, по правому
+   краю кнопки отмены. Шаблон — самое редкое из трёх действий, поэтому и весит меньше. */
+.rd-ev-actions { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 18px; }
+.rd-ev-actions-row { display: flex; gap: 8px; }
+/* Равные доли и min-width: 0 — иначе более длинная подпись растягивает свою кнопку. */
+.rd-ev-actions-row > .rd-btn-outline { flex: 1 1 0; min-width: 0; padding: 14px 12px; }
+.rd-ev-danger { color: var(--danger); border-color: var(--danger); }
+/* Кнопка шаблона: ширина по содержимому, у правого края строки выше. */
+.rd-ev-tpl-btn {
+  align-self: flex-end; width: auto; padding: 10px 14px;
+  font-size: 13px; color: var(--text-dim);
+}

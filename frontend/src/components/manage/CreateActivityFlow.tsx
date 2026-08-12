@@ -5,12 +5,18 @@ import { useHaptic } from '../../hooks/useHaptic';
 import {
   ActivityTypeOptions,
   EventFormatOptions,
+  EventTemplateOptions,
   SkladchinaTemplateOptions,
   type EventFormatKey,
   type SkladchinaTemplateKey,
 } from './CreateActivityPicker';
 import { ClubPickerList, type ClubPickerOption } from './ClubPickerModal';
+import {
+  useDeleteEventTemplateMutation,
+  useMyEventTemplatesQuery,
+} from '../../queries/eventTemplates';
 import type { ActivityType } from '../../api/activities';
+import type { EventTemplateDto } from '../../api/eventTemplates';
 
 interface CreateActivityFlowProps {
   /** Открыт ли флоу создания. */
@@ -32,7 +38,7 @@ interface CreateActivityFlowProps {
   onClose: () => void;
 }
 
-type Step = 'type' | 'template' | 'event_format' | 'club';
+type Step = 'type' | 'template' | 'event_format' | 'event_templates' | 'club';
 
 function createRoute(
   clubId: string,
@@ -58,10 +64,12 @@ function createRoute(
  * тип активности; шаг 'club' — целевой клуб, если пользователь организует несколько.
  * Один Modal обязателен: при отдельном Modal на каждый шаг закрывающийся сносил
  * общий portal/scroll-lock оверлей, который только что смонтировал открывающийся,
- * и второй модал мгновенно схлопывался.
+ * и второй модал мгновенно схлопывался. По той же причине переименование и
+ * подтверждение удаления шаблона — подшаги здесь, а не всплывающие меню.
  *
  * После определения типа и клуба навигируем на per-club маршрут создания
- * (CreateEventPage / CreateSkladchinaPage читают :id).
+ * (CreateEventPage / CreateSkladchinaPage читают :id). Шаблон встречи — короткий путь:
+ * он несёт и клуб, и формат, поэтому уводит на форму, минуя оба шага.
  */
 export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   open,
@@ -77,6 +85,16 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   const [pendingType, setPendingType] = useState<ActivityType | null>(null);
   const [pendingTemplate, setPendingTemplate] = useState<SkladchinaTemplateKey | null>(null);
   const [pendingEventFormat, setPendingEventFormat] = useState<EventFormatKey | null>(null);
+  // Список тянем только когда флоу открыт и пользователь вообще может создавать — иначе
+  // запрос уходил бы у каждого участника при каждом монтировании дока.
+  const templatesQuery = useMyEventTemplatesQuery(open && canCreate);
+  const deleteTemplateMut = useDeleteEventTemplateMutation();
+
+  // На странице клуба «+» показывает шаблоны только этого клуба: предлагать чужие там,
+  // где контекст однозначен, — сбивать с толку.
+  const templates = (templatesQuery.data ?? []).filter(
+    (t) => !presetClubId || t.clubId === presetClubId,
+  );
 
   // Единый сброс flow к первому шагу — используется и при закрытии, и перед навигацией на форму,
   // чтобы повторное открытие «+» никогда не стартовало с призрачным состоянием прошлого прохода.
@@ -151,6 +169,62 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
     resolveClub('event', null, format);
   };
 
+  const handleOpenEventTemplates = () => {
+    haptic.impact('medium');
+    setStep('event_templates');
+  };
+
+  /**
+   * Возврат на шаг назад. Предыдущий шаг у каждого свой, и для 'club' он зависит от типа
+   * активности — потому это switch, а не стек истории: шагов пять, ветвление одно, и стек
+   * пришлось бы чистить в resetFlow наравне со всем остальным состоянием.
+   */
+  const handleBack = () => {
+    haptic.impact('light');
+    switch (step) {
+      case 'template':
+      case 'event_format':
+        setPendingType(null);
+        setStep('type');
+        return;
+      case 'event_templates':
+        setStep('event_format');
+        return;
+      case 'club':
+        setStep(pendingType === 'skladchina' ? 'template' : 'event_format');
+        return;
+      default:
+        return;
+    }
+  };
+
+  // Шаблон знает и клуб, и формат — оба шага пропускаются, форма читает содержимое по ?template.
+  const handlePickEventTemplate = (template: EventTemplateDto) => {
+    haptic.impact('medium');
+    resetFlow();
+    navigate(`/clubs/${template.clubId}/events/new?template=${template.id}`);
+  };
+
+  /**
+   * Полная правка шаблона — отдельный экран с той же формой встречи (EventForm в режиме
+   * `template`). Раньше карандаш открывал только переименование, а поправить место или
+   * лимит можно было лишь заодно с созданием ненужной встречи (правка PO 2026-08-12).
+   */
+  const handleEditTemplate = (template: EventTemplateDto) => {
+    haptic.impact('medium');
+    resetFlow();
+    navigate(`/clubs/${template.clubId}/event-templates/${template.id}/edit`);
+  };
+
+  const handleDeleteTemplate = async (template: EventTemplateDto) => {
+    try {
+      await deleteTemplateMut.mutateAsync({ clubId: template.clubId, templateId: template.id });
+      haptic.notify('success');
+    } catch {
+      haptic.notify('error');
+    }
+  };
+
   const handlePickClub = (clubId: string) => {
     if (!pendingType) return;
     haptic.impact('medium');
@@ -165,13 +239,32 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   };
 
   return (
-    <Modal open={open} onOpenChange={handleOpenChange}>
+    <Modal className="rd-pick-modal" open={open} onOpenChange={handleOpenChange}>
       {step === 'type' && (
         <ActivityTypeOptions onPick={handlePickType} onPickFeedback={handlePickFeedback} canCreate={canCreate} />
       )}
-      {step === 'template' && <SkladchinaTemplateOptions onPick={handlePickTemplate} />}
-      {step === 'event_format' && <EventFormatOptions onPick={handlePickEventFormat} />}
-      {step === 'club' && <ClubPickerList clubs={organizerClubs} onPick={handlePickClub} />}
+      {step === 'template' && <SkladchinaTemplateOptions onPick={handlePickTemplate} onBack={handleBack} />}
+      {step === 'event_format' && (
+        <EventFormatOptions
+          onPick={handlePickEventFormat}
+          templateCount={templates.length}
+          onPickTemplates={handleOpenEventTemplates}
+          onBack={handleBack}
+        />
+      )}
+      {step === 'event_templates' && (
+        <EventTemplateOptions
+          templates={templates}
+          onPick={handlePickEventTemplate}
+          onEdit={handleEditTemplate}
+          onDelete={handleDeleteTemplate}
+          onBack={handleBack}
+          isDeleting={deleteTemplateMut.isPending}
+        />
+      )}
+      {step === 'club' && (
+        <ClubPickerList clubs={organizerClubs} onPick={handlePickClub} onBack={handleBack} />
+      )}
     </Modal>
   );
 };

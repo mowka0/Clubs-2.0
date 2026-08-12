@@ -25,6 +25,7 @@ import com.clubs.generated.jooq.keys.CLUB_CHAT_LINKS__CLUB_CHAT_LINKS_CLUB_ID_FK
 import com.clubs.generated.jooq.keys.CLUB_INTERESTS__CLUB_INTERESTS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.CLUB_RANK__CLUB_RANK_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.EVENTS__EVENTS_CLUB_ID_FKEY
+import com.clubs.generated.jooq.keys.EVENT_TEMPLATES__EVENT_TEMPLATES_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIPS__MEMBERSHIPS_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.MEMBERSHIP_HISTORY__MEMBERSHIP_HISTORY_CLUB_ID_FKEY
 import com.clubs.generated.jooq.keys.REPUTATION_LEDGER__REPUTATION_LEDGER_CLUB_ID_FKEY
@@ -40,6 +41,7 @@ import com.clubs.generated.jooq.tables.ClubAwards.ClubAwardsPath
 import com.clubs.generated.jooq.tables.ClubChatLinks.ClubChatLinksPath
 import com.clubs.generated.jooq.tables.ClubInterests.ClubInterestsPath
 import com.clubs.generated.jooq.tables.ClubRank.ClubRankPath
+import com.clubs.generated.jooq.tables.EventTemplates.EventTemplatesPath
 import com.clubs.generated.jooq.tables.Events.EventsPath
 import com.clubs.generated.jooq.tables.Interests.InterestsPath
 import com.clubs.generated.jooq.tables.MembershipHistory.MembershipHistoryPath
@@ -450,6 +452,22 @@ open class Clubs(
 
     val clubRank: ClubRankPath
         get(): ClubRankPath = clubRank()
+
+    private lateinit var _eventTemplates: EventTemplatesPath
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.event_templates</code> table
+     */
+    fun eventTemplates(): EventTemplatesPath {
+        if (!this::_eventTemplates.isInitialized)
+            _eventTemplates = EventTemplatesPath(this, null, EVENT_TEMPLATES__EVENT_TEMPLATES_CLUB_ID_FKEY.inverseKey)
+
+        return _eventTemplates;
+    }
+
+    val eventTemplates: EventTemplatesPath
+        get(): EventTemplatesPath = eventTemplates()
 
     private lateinit var _events: EventsPath
 

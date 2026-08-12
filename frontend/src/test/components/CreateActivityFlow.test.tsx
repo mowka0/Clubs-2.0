@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes, useLocation } from 'react-router-dom';
 
@@ -11,9 +11,25 @@ vi.mock('@telegram-apps/sdk-react', () => ({
 
 vi.mock('@telegram-apps/telegram-ui', () => import('../mocks/telegramUi'));
 
+// Флоу подтягивает шаблоны встреч при открытии — мокаем весь модуль API, чтобы шаги
+// без шаблонов оставались детерминированными, а не зависели от сетевой ошибки.
+vi.mock('../../api/eventTemplates', () => ({
+  getMyEventTemplates: vi.fn(),
+  getClubEventTemplates: vi.fn(),
+  createEventTemplate: vi.fn(),
+  updateEventTemplate: vi.fn(),
+  deleteEventTemplate: vi.fn(),
+}));
+
 import { CreateActivityFlow } from '../../components/manage/CreateActivityFlow';
 import type { ClubPickerOption } from '../../components/manage/ClubPickerModal';
 import { renderWithProviders } from '../utils/renderWithProviders';
+import {
+  deleteEventTemplate,
+  getMyEventTemplates,
+  updateEventTemplate,
+} from '../../api/eventTemplates';
+import type { EventTemplateDto } from '../../api/eventTemplates';
 
 const ONE_CLUB: ClubPickerOption[] = [
   { id: 'club-1', name: 'Alpha Club', avatarUrl: null, category: 'sport' },
@@ -22,6 +38,34 @@ const TWO_CLUBS: ClubPickerOption[] = [
   { id: 'club-1', name: 'Alpha Club', avatarUrl: null, category: 'sport' },
   { id: 'club-2', name: 'Beta Club', avatarUrl: null, category: 'food' },
 ];
+
+const TEMPLATE: EventTemplateDto = {
+  id: 'tpl-1',
+  clubId: 'club-2',
+  clubName: 'Beta Club',
+  name: 'Разговорный клуб',
+  title: 'Разговорный клуб',
+  description: null,
+  locationText: 'ул. Покровка, 47',
+  locationLat: 55.76,
+  locationLon: 37.64,
+  locationHint: null,
+  participantLimit: 12,
+  isOpenEvent: false,
+  isUrgentEvent: false,
+  stage2LeadMinutes: null,
+  photoUrl: null,
+  defaultWeekday: 2,
+  defaultTime: '19:00:00',
+  createdAt: null,
+  updatedAt: null,
+};
+
+beforeEach(() => {
+  vi.mocked(getMyEventTemplates).mockResolvedValue([]);
+  vi.mocked(updateEventTemplate).mockReset();
+  vi.mocked(deleteEventTemplate).mockReset();
+});
 
 const LocationProbe = () => {
   const loc = useLocation();
@@ -33,7 +77,7 @@ const LocationProbe = () => {
   );
 };
 
-function renderFlow(clubs: ClubPickerOption[]) {
+function renderFlow(clubs: ClubPickerOption[], presetClubId?: string) {
   const user = userEvent.setup();
   const result = renderWithProviders(
     <Routes>
@@ -41,12 +85,19 @@ function renderFlow(clubs: ClubPickerOption[]) {
         path="/"
         element={
           <>
-            <CreateActivityFlow open canCreate organizerClubs={clubs} onClose={vi.fn()} />
+            <CreateActivityFlow
+              open
+              canCreate
+              organizerClubs={clubs}
+              presetClubId={presetClubId ?? null}
+              onClose={vi.fn()}
+            />
             <LocationProbe />
           </>
         }
       />
       <Route path="/clubs/:id/events/new" element={<LocationProbe />} />
+      <Route path="/clubs/:id/event-templates/:templateId/edit" element={<LocationProbe />} />
       <Route path="/clubs/:id/skladchina/new" element={<LocationProbe />} />
       <Route path="/clubs/:id/skladchina/split" element={<LocationProbe />} />
       <Route path="/feedback" element={<LocationProbe />} />
@@ -62,12 +113,13 @@ describe('CreateActivityFlow', () => {
 
     // Step 1: type picker is shown; the club picker is not.
     expect(screen.getByText('Событие')).toBeInTheDocument();
-    expect(screen.queryByText('Выберите клуб')).toBeNull();
+    expect(screen.queryByText('Alpha Club')).toBeNull();
 
     await user.click(screen.getByText('Событие'));
 
     // «Событие» разветвляется на шаг формата (с местами / открытая встреча, PO 2026-07-21).
-    expect(screen.getByText('Формат события')).toBeInTheDocument();
+    // Заголовков у шагов больше нет (PO 2026-08-11) — шаг опознаём по его пунктам.
+    expect(screen.getByText('Открытая встреча')).toBeInTheDocument();
     await user.click(screen.getByText('С местами'));
 
     // No club-selection step — straight to the per-club create route.
@@ -106,7 +158,6 @@ describe('CreateActivityFlow', () => {
     await user.click(screen.getByText('Свой сбор'));
 
     // Then the club picker appears with all organizer clubs.
-    expect(screen.getByText('Выберите клуб')).toBeInTheDocument();
     expect(screen.getByText('Alpha Club')).toBeInTheDocument();
     await user.click(screen.getByText('Beta Club'));
 
@@ -129,5 +180,178 @@ describe('CreateActivityFlow', () => {
     await user.click(screen.getByText('Сообщить о проблеме'));
 
     expect(screen.getByTestId('location').textContent).toBe('/feedback');
+  });
+
+  describe('шаблоны встреч', () => {
+    it('AC-1 без шаблонов пункт «Готовые шаблоны» не показывается', async () => {
+      const { user } = renderFlow(TWO_CLUBS);
+
+      await user.click(screen.getByText('Событие'));
+
+      expect(screen.getByText('С местами')).toBeInTheDocument();
+      expect(screen.queryByText(/Готовые шаблоны/)).toBeNull();
+    });
+
+    it('AC-3 шаблон ведёт прямо на форму своего клуба, минуя выбор формата и клуба', async () => {
+      vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
+      const { user } = renderFlow(TWO_CLUBS);
+
+      await user.click(screen.getByText('Событие'));
+      await user.click(await screen.findByText('Готовые шаблоны · 1'));
+      await user.click(screen.getByText('Разговорный клуб'));
+
+      // Клуб взят из шаблона (club-2), хотя организатор ведёт два клуба и пикер не показывался.
+      expect(screen.getByTestId('location').textContent).toBe('/clubs/club-2/events/new');
+      expect(screen.getByTestId('location-search').textContent).toBe('?template=tpl-1');
+    });
+
+    it('строка шаблона показывает клуб, формат и расписание словами, без эмодзи', async () => {
+      vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
+      const { user } = renderFlow(TWO_CLUBS);
+
+      await user.click(screen.getByText('Событие'));
+      await user.click(await screen.findByText('Готовые шаблоны · 1'));
+
+      // Цветной 🎟 в приглушённой строке метаданных рисовался платформенным шрифтом и выбивался
+      // из строки — формат подписывается словом (правка PO 2026-08-11).
+      expect(screen.getByText('Beta Club · 12 мест · вт 19:00')).toBeInTheDocument();
+    });
+
+    it('формат открытой и срочной встречи тоже подписан словом', async () => {
+      vi.mocked(getMyEventTemplates).mockResolvedValue([
+        { ...TEMPLATE, id: 'tpl-open', name: 'Пробежка', isOpenEvent: true, participantLimit: null },
+        { ...TEMPLATE, id: 'tpl-urgent', name: 'Забег', isUrgentEvent: true },
+      ]);
+      const { user } = renderFlow(TWO_CLUBS);
+
+      await user.click(screen.getByText('Событие'));
+      await user.click(await screen.findByText('Готовые шаблоны · 2'));
+
+      expect(screen.getByText('Beta Club · без лимита · вт 19:00')).toBeInTheDocument();
+      expect(screen.getByText('Beta Club · срочная · вт 19:00')).toBeInTheDocument();
+    });
+
+    it('на странице клуба показываются шаблоны только этого клуба', async () => {
+      vi.mocked(getMyEventTemplates).mockResolvedValue([
+        TEMPLATE,
+        { ...TEMPLATE, id: 'tpl-2', clubId: 'club-1', clubName: 'Alpha Club', name: 'Чужой' },
+      ]);
+      const { user } = renderFlow(TWO_CLUBS, 'club-2');
+
+      await user.click(screen.getByText('Событие'));
+      await user.click(await screen.findByText('Готовые шаблоны · 1'));
+
+      expect(screen.getByText('Разговорный клуб')).toBeInTheDocument();
+      expect(screen.queryByText('Чужой')).toBeNull();
+    });
+
+    it('карандаш ведёт на экран полной правки шаблона', async () => {
+      vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
+      const { user } = renderFlow(TWO_CLUBS);
+
+      await user.click(screen.getByText('Событие'));
+      await user.click(await screen.findByText('Готовые шаблоны · 1'));
+      await user.click(screen.getByText('Изменить'));
+      await user.click(screen.getByLabelText('Изменить Разговорный клуб'));
+
+      // Правка — отдельный экран с той же формой встречи, а не переименование в шите
+      // (правка PO 2026-08-12: поправить место нельзя было, не создав встречу).
+      expect(screen.getByTestId('location').textContent)
+        .toBe('/clubs/club-2/event-templates/tpl-1/edit');
+    });
+
+    it('в режиме правки тап по самой строке тоже ведёт на правку, а не применяет шаблон', async () => {
+      vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
+      const { user } = renderFlow(TWO_CLUBS);
+
+      await user.click(screen.getByText('Событие'));
+      await user.click(await screen.findByText('Готовые шаблоны · 1'));
+      await user.click(screen.getByText('Изменить'));
+      await user.click(screen.getByText('Разговорный клуб'));
+
+      expect(screen.getByTestId('location').textContent)
+        .toBe('/clubs/club-2/event-templates/tpl-1/edit');
+    });
+
+    it('удалили последний шаблон — шаг не пустеет молча', async () => {
+      vi.mocked(getMyEventTemplates).mockResolvedValue([]);
+      const { user } = renderFlow(TWO_CLUBS);
+
+      await user.click(screen.getByText('Событие'));
+      // Пункта нет вовсе при нуле шаблонов, поэтому пустое состояние проверяем на самом шаге:
+      // до него можно доехать, если шаблоны удалили, не выходя из списка.
+      expect(screen.queryByText(/Готовые шаблоны/)).toBeNull();
+    });
+
+    it('удаление требует подтверждения прямо в строке', async () => {
+      vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
+      vi.mocked(deleteEventTemplate).mockResolvedValue(undefined);
+      const { user } = renderFlow(TWO_CLUBS);
+
+      await user.click(screen.getByText('Событие'));
+      await user.click(await screen.findByText('Готовые шаблоны · 1'));
+      await user.click(screen.getByText('Изменить'));
+      await user.click(screen.getByLabelText('Удалить Разговорный клуб'));
+
+      // Первый тап только раскрывает подтверждение — запроса ещё нет.
+      expect(deleteEventTemplate).not.toHaveBeenCalled();
+      expect(screen.getByText('Удалить «Разговорный клуб»?')).toBeInTheDocument();
+
+      await user.click(screen.getByText('Удалить'));
+
+      await waitFor(() => expect(deleteEventTemplate).toHaveBeenCalledWith('club-2', 'tpl-1'));
+    });
+  });
+
+  describe('навигация назад по шагам', () => {
+    it('на первом шаге кнопки «Назад» нет', () => {
+      renderFlow(TWO_CLUBS);
+
+      expect(screen.getByText('Событие')).toBeInTheDocument();
+      expect(screen.queryByText('Назад')).toBeNull();
+    });
+
+    it('с шага формата возвращает к выбору типа', async () => {
+      const { user } = renderFlow(TWO_CLUBS);
+
+      await user.click(screen.getByText('Событие'));
+      expect(screen.getByText('С местами')).toBeInTheDocument();
+
+      await user.click(screen.getByText('Назад'));
+
+      // Вернулись к выбору типа: снова видны «Сбор» и «Сообщить о проблеме».
+      expect(screen.getByText('Сбор')).toBeInTheDocument();
+      expect(screen.getByText('Сообщить о проблеме')).toBeInTheDocument();
+    });
+
+    it('со списка шаблонов возвращает к формату, а не закрывает шит', async () => {
+      vi.mocked(getMyEventTemplates).mockResolvedValue([TEMPLATE]);
+      const { user } = renderFlow(TWO_CLUBS);
+
+      await user.click(screen.getByText('Событие'));
+      await user.click(await screen.findByText('Готовые шаблоны · 1'));
+      expect(screen.getByText('Разговорный клуб')).toBeInTheDocument();
+
+      await user.click(screen.getByText('Назад'));
+
+      expect(screen.getByText('С местами')).toBeInTheDocument();
+      // Никуда не ушли — форма создания не открывалась.
+      expect(screen.getByTestId('location').textContent).toBe('/');
+    });
+
+    it('с выбора клуба возвращает на тот шаг, откуда пришли', async () => {
+      const { user } = renderFlow(TWO_CLUBS);
+
+      // Через «Сбор» → «Свой сбор» → клуб: назад должно вернуть к типам сбора, а не к формату события.
+      await user.click(screen.getByText('Сбор'));
+      await user.click(screen.getByText('Свой сбор'));
+      expect(screen.getByText('Alpha Club')).toBeInTheDocument();
+
+      await user.click(screen.getByText('Назад'));
+
+      // Вернулись к типам сбора, а не к форматам события.
+      expect(screen.getByText('Разделить счёт')).toBeInTheDocument();
+      expect(screen.queryByText('С местами')).toBeNull();
+    });
   });
 });
