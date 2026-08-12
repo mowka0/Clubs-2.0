@@ -281,7 +281,7 @@ describe('EventPage — отмена события (F5-14)', () => {
     expect(screen.queryByRole('button', { name: /Пойду/ })).not.toBeInTheDocument();
   });
 
-  it('организатор видит кнопку «Отменить событие» на предстоящем событии', async () => {
+  it('организатор видит кнопку «Отменить» на предстоящем событии', async () => {
     mockEndpoints({
       event: stage2Event({ status: 'upcoming', eventDatetime: FUTURE }),
       myVote: 'going',
@@ -289,7 +289,7 @@ describe('EventPage — отмена события (F5-14)', () => {
     });
     renderEventPage();
 
-    expect(await screen.findByRole('button', { name: 'Отменить событие' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Отменить' })).toBeInTheDocument();
   });
 
   it('не-организатор не видит кнопку отмены', async () => {
@@ -301,7 +301,7 @@ describe('EventPage — отмена события (F5-14)', () => {
     renderEventPage();
 
     expect(await screen.findByText('Событие')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Отменить событие' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Отменить' })).not.toBeInTheDocument();
   });
 
   it('«путь назад» (C): при просадке Trust в клубе события видна строка-мотиватор с проекцией', async () => {

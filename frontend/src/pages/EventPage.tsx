@@ -1223,38 +1223,38 @@ export const EventPage: FC = () => {
         </>
       )}
 
-      {/* Сохранение шаблона доступно и у ПРОШЕДШЕЙ встречи — это основной случай: клуб провёл
-          серию одинаковых встреч и заводит из последней заготовку на следующие. */}
-      {isManager && !isCancelled && (
-        <div className="rd-cta-wrap" style={{ marginTop: 8 }}>
-          <button type="button" className="rd-btn-outline" onClick={openSaveTemplate}>
-            {templateSaved ? '📋 Шаблон сохранён' : '📋 Сохранить как шаблон'}
-          </button>
-        </div>
-      )}
+      {/* Организаторские действия. Раскладка PO 2026-08-12: правка и отмена — одной строкой
+          в равных долях, сохранение шаблона — строкой ниже, прижатое вправо и помельче.
 
-      {/* Организаторские действия до старта: редактирование (включая перенос даты) — только на
-          Этапе 1, с началом подтверждения мест правки запрещены; гейт зеркалит бэкенд-гард
-          updateEvent — и отмена события (F5-14). */}
-      {isManager && !isCancelled && !eventHappened && (
-        <div className="rd-cta-wrap" style={{ marginTop: 8 }}>
-          {showVoting && (
-            <button
-              type="button"
-              className="rd-btn-outline"
-              style={{ marginBottom: 8 }}
-              onClick={openEdit}
-            >
-              Редактировать встречу
-            </button>
+          Условия у строк разные, поэтому они и остаются разными строками:
+          - правка (только Этап 1, гейт зеркалит бэкенд-гард updateEvent) и отмена (F5-14)
+            живут до старта встречи;
+          - сохранение шаблона доступно и у ПРОШЕДШЕЙ встречи — это основной случай: клуб
+            провёл серию одинаковых встреч и заводит из последней заготовку на следующие. */}
+      {isManager && !isCancelled && (
+        <div className="rd-ev-actions" style={{ marginTop: 8 }}>
+          {!eventHappened && (
+            <div className="rd-ev-actions-row">
+              {showVoting && (
+                <button type="button" className="rd-btn-outline" onClick={openEdit}>
+                  Редактировать
+                </button>
+              )}
+              <button
+                type="button"
+                className="rd-btn-outline rd-ev-danger"
+                onClick={() => { haptic.impact('medium'); setCancelError(null); setCancelOpen(true); }}
+              >
+                Отменить
+              </button>
+            </div>
           )}
           <button
             type="button"
-            className="rd-btn-outline"
-            style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
-            onClick={() => { haptic.impact('medium'); setCancelError(null); setCancelOpen(true); }}
+            className="rd-btn-outline rd-ev-tpl-btn"
+            onClick={openSaveTemplate}
           >
-            Отменить событие
+            {templateSaved ? '📋 Шаблон сохранён' : '📋 Сохранить как шаблон'}
           </button>
         </div>
       )}
