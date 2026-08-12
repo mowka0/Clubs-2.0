@@ -1,6 +1,6 @@
 # Module: Шаблоны встреч (event templates)
 
-> **Status:** в разработке — ветка `feature/event-templates` (2026-08-11).
+> **Status:** ✅ в проде — PR #142 (ветка `feature/event-templates`, 2026-08-12).
 > Решения PO зафиксированы в § «Решения PO».
 >
 > Связанные спеки (не дублируем — ссылаемся):
