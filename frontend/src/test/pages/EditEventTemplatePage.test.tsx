@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
@@ -100,6 +100,39 @@ describe('EditEventTemplatePage', () => {
     // Лимит: степпер подставлен значением шаблона (подпись поля и ariaLabel степпера
     // совпадают, поэтому проверяем именно введённое значение).
     expect(screen.getByDisplayValue('12')).toBeInTheDocument();
+  });
+
+  it('AC-20 редактируются ВСЕ поля встречи, включая фото и интервал Этапа 2', async () => {
+    mockTemplates([{ ...TEMPLATE, photoUrl: 'https://cdn.test/poster.webp' }]);
+    renderPage();
+
+    await screen.findByDisplayValue('Разговорный клуб');
+    // Фото: показано и снимается — форма та же, что у создания встречи.
+    expect(document.querySelector('img[src="https://cdn.test/poster.webp"]')).not.toBeNull();
+    expect(screen.getByText('Заменить')).toBeInTheDocument();
+    // Описание, место и интервал Этапа 2 — тоже на месте.
+    expect(screen.getByDisplayValue('Говорим по-английски')).toBeInTheDocument();
+    expect(screen.getByText('ул. Покровка, 47')).toBeInTheDocument();
+    expect(screen.getByText('Подтверждение мест')).toBeInTheDocument();
+    // Интервал шаблона (2160 минут) показан словами и собирается из двух текстовых узлов,
+    // поэтому матчим по textContent элемента.
+    expect(
+      screen.getByText((_, el) => el?.tagName === 'B' && el.textContent === 'за 36 часов'),
+    ).toBeInTheDocument();
+  });
+
+  it('AC-20 снятое фото уезжает в PUT как null', async () => {
+    mockTemplates([{ ...TEMPLATE, photoUrl: 'https://cdn.test/poster.webp' }]);
+    const { user } = renderPage();
+
+    await screen.findByDisplayValue('Разговорный клуб');
+    // «Убрать» есть и у фото, и у выбранного места — берём кнопку из блока фото.
+    const photoField = screen.getByText('Фото (опц.)').closest('.rd-field')!;
+    await user.click(within(photoField as HTMLElement).getByText('Убрать'));
+    await user.click(screen.getByText('Сохранить шаблон'));
+
+    await waitFor(() => expect(puts).toHaveLength(1));
+    expect((puts[0] as Record<string, unknown>).photoUrl).toBeNull();
   });
 
   it('AC-21 вместо даты — расписание повторов, поля даты нет', async () => {
