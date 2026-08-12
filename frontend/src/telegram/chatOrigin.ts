@@ -70,6 +70,43 @@ function isLaunchedFromGroupChat(): boolean {
   return fromNative ? GROUP_CHAT_TYPES.has(fromNative) : false;
 }
 
+/**
+ * ВРЕМЕННО (диагностика staging, 2026-08-12): что именно Telegram прислал в launch-параметрах.
+ * Подсказка печатает это на экране, чтобы понять, почему запуск из чата не распознаётся.
+ * Отдаёт только имена полей и тип чата — ни initData, ни user, ни hash сюда не попадают.
+ * СНЯТЬ вместе с DEBUG_ALWAYS_SHOW_HINT перед мержем.
+ */
+export function describeChatOrigin(clubId: string): string {
+  let keys = '—';
+  let chatType = '—';
+  let platform = '—';
+  let startParam = '—';
+  try {
+    const params = retrieveLaunchParams();
+    platform = params.tgWebAppPlatform ?? '—';
+    startParam = params.tgWebAppStartParam ?? '—';
+    const data = params.tgWebAppData;
+    if (data) {
+      keys = Object.keys(data).join(',') || 'пусто';
+      chatType = data.chat_type ?? 'нет';
+    } else {
+      keys = 'tgWebAppData нет';
+    }
+  } catch (e) {
+    keys = `ошибка: ${e instanceof Error ? e.message : String(e)}`;
+  }
+  const short = (v: string | null) => (v ? v.slice(0, 8) : 'null');
+  return [
+    `chat_type=${chatType}`,
+    `platform=${platform}`,
+    `startapp=${startParam}`,
+    `src=${short(sourceClubId)}`,
+    `club=${short(clubId)}`,
+    `phone=${isPhonePlatform()}`,
+    `поля: ${keys}`,
+  ].join(' · ');
+}
+
 /** Только для тестов: сбрасывает зафиксированный источник между прогонами. */
 export function resetChatOriginForTests(): void {
   sourceClubId = null;
