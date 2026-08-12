@@ -530,7 +530,7 @@ export const ClubPage: FC = () => {
             нет, а сам факт чата — довод вступить (решение PO 2026-07-31; раньше гостю
             доставалась лишь пассивная строчка у кнопки вступления). */}
         {showTabs && club.chatInviteLink && (
-          <ClubChatPill mode="open" inviteLink={club.chatInviteLink} />
+          <ClubChatPill mode="open" clubId={club.id} inviteLink={club.chatInviteLink} />
         )}
         {!showTabs && club.chatLinked && (
           <ClubChatPill

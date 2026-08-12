@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { create } from 'zustand';
+import { rememberClubShown } from '../telegram/chatOrigin';
 
 interface ClubContextState {
   /**
@@ -26,6 +27,9 @@ export function useSetClubContext(clubId: string | null | undefined): void {
   const setClubId = useClubContextStore((s) => s.setClubId);
   useEffect(() => {
     setClubId(clubId ?? null);
+    // Заодно фиксируем клуб-хозяин чата, из которого открыто приложение: сюда сходятся все
+    // клубные страницы, а первая из них — та, на которую привела кнопка в чате (chatOrigin).
+    if (clubId) rememberClubShown(clubId);
     return () => setClubId(null);
   }, [clubId, setClubId]);
 }

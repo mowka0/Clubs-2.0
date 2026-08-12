@@ -2179,6 +2179,61 @@
   font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
 }
 
+/* Подсказка «вы уже в этом чате» (chat-button-minimize-hint): показывается вместо перехода,
+   когда чат клуба лежит прямо под приложением. Живёт у правого верхнего угла, потому что
+   действие человека — там: хвостик указывает в кнопку сворачивания Telegram, кольцо её
+   подсвечивает. Координаты считаются от врезок хоста, а не от круглых чисел: в полноэкранном
+   режиме контролы Telegram лежат в зоне --tg-viewport-content-safe-area-inset-top, в обычном
+   обе врезки нулевые и подсказка просто прижимается к верху страницы. */
+.rd-mzhint-veil {
+  position: fixed; inset: 0; z-index: 1001;
+  background: rgba(6, 6, 9, 0.62);
+  backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
+  animation: rd-overlay-fade 0.2s ease both;
+}
+.rd-mzhint {
+  position: fixed; right: 12px; width: 236px; max-width: calc(100vw - 24px);
+  top: calc(var(--app-inset-top, 0px) + 10px);
+  padding: 13px 14px 12px;
+  background: var(--card-solid); border: 1px solid var(--hairline-2); border-radius: 17px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+  animation: rd-mzhint-pop 0.3s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+/* Хвостик к кнопке сворачивания: квадрат под 45°, видны только две «верхние» стороны рамки. */
+.rd-mzhint::after {
+  content: ''; position: absolute; top: -7px; right: 42px;
+  width: 12px; height: 12px; transform: rotate(45deg);
+  background: var(--card-solid);
+  border-left: 1px solid var(--hairline-2); border-top: 1px solid var(--hairline-2);
+}
+.rd-mzhint-h { display: block; font-size: 13.5px; font-weight: 700; margin-bottom: 5px; }
+.rd-mzhint-tx { font-size: 12px; line-height: 1.45; color: var(--text-dim); margin: 0 0 11px; }
+.rd-mzhint-cta {
+  width: 100%; border: 0; border-radius: 11px; padding: 9px;
+  background: var(--accent-grad); color: var(--on-accent);
+  font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+}
+/* Пульсирующее кольцо вокруг самой кнопки: 60px от правого края — там, где Telegram рисует
+   левую из плавающих кнопок («свернуть»); точность до пикселя недостижима, клиенты рисуют
+   контролы по-разному, поэтому целимся в их область. */
+.rd-mzhint-halo {
+  position: fixed; right: 40px; width: 40px; height: 40px;
+  top: max(6px, calc(
+    var(--tg-viewport-safe-area-inset-top, 0px)
+    + var(--tg-viewport-content-safe-area-inset-top, 0px) / 2 - 20px
+  ));
+  border-radius: 50%; border: 2px solid var(--accent); pointer-events: none;
+  animation: rd-mzhint-halo 1.4s ease-out infinite;
+}
+@keyframes rd-mzhint-pop {
+  from { transform: translateY(-8px) scale(0.95); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes rd-mzhint-halo {
+  0% { transform: scale(0.8); opacity: 0.9; }
+  70%, 100% { transform: scale(1.55); opacity: 0; }
+}
+
 /* club-invites: строка «Пригласить в клуб» над ростером (только владелец/organizer, кадр A) */
 .rd-invite-row {
   display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
