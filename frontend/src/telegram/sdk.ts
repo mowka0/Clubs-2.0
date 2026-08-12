@@ -2,6 +2,7 @@ import {
   init,
   retrieveLaunchParams,
   initData,
+  miniApp,
   viewport,
   swipeBehavior,
   shareMessage,
@@ -174,6 +175,46 @@ export function getStartParam(): string | null {
     ?.Telegram?.WebApp?.initDataUnsafe?.start_param;
   if (fromNative) return fromNative;
   return null;
+}
+
+/**
+ * Типы чата-источника, означающие, что Mini App открыт ПОВЕРХ группового чата. Личка —
+ * это `sender` (диалог с ботом) и `private`, всё остальное из набора — группы и каналы.
+ */
+const GROUP_CHAT_TYPES = new Set(['group', 'supergroup', 'channel']);
+
+/**
+ * Открыто ли приложение кнопкой из группового чата (закреп встречи, ссылка на клуб),
+ * а не из лички с ботом.
+ *
+ * Разница принципиальна для перехода в чат клуба: открытый из группы Mini App лежит
+ * ПОВЕРХ этого самого чата, и просьба к Telegram «открой чат» для него ничего не значит —
+ * переходить некуда, экран мигает и остаётся приложение. Подробности — `openChatLink`.
+ */
+export function isLaunchedFromGroupChat(): boolean {
+  try {
+    const chatType = retrieveLaunchParams().tgWebAppData?.chat_type;
+    if (chatType) return GROUP_CHAT_TYPES.has(chatType);
+  } catch (_e) {
+    // Не в среде Telegram
+  }
+  // Фолбэк на нативный Telegram WebApp API — как в getStartParam
+  const fromNative = (window as unknown as {
+    Telegram?: { WebApp?: { initDataUnsafe?: { chat_type?: string } } };
+  })?.Telegram?.WebApp?.initDataUnsafe?.chat_type;
+  return fromNative ? GROUP_CHAT_TYPES.has(fromNative) : false;
+}
+
+/**
+ * Закрывает Mini App. Пользователь возвращается туда, откуда открыл приложение, —
+ * в чат с ботом или в групповой чат клуба.
+ */
+export function closeMiniApp(): void {
+  try {
+    if (miniApp.close.isAvailable()) miniApp.close();
+  } catch (_e) {
+    // Хост не поддерживает закрытие — остаёмся в приложении
+  }
 }
 
 /**

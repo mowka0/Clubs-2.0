@@ -1,6 +1,6 @@
 import { FC, useState } from 'react';
 import { useHaptic } from '../../hooks/useHaptic';
-import { openTmeLink } from '../../utils/telegramLinks';
+import { openChatLink } from '../../utils/telegramLinks';
 
 /**
  * Пилюля «В чат» под описанием клуба. Два режима, и они принципиально разные:
@@ -21,7 +21,7 @@ export const ClubChatPill: FC<ClubChatPillProps> = (props) => {
   const handleClick = () => {
     haptic.impact('light');
     if (props.mode === 'open') {
-      openTmeLink(props.inviteLink);
+      openChatLink(props.inviteLink);
       return;
     }
     setHintOpen((shown) => !shown);
