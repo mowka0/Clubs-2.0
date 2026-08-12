@@ -9,7 +9,7 @@ import type { EventTemplateDto, SaveEventTemplateBody } from '../api/eventTempla
  * как TIMESTAMPTZ, организатор выбирает время в `datetime-local`, то есть по своим настенным
  * часам. Выводи мы день недели из UTC — «вторник 19:00» в Москве стал бы «вторником 16:00»,
  * и подстановка промахивалась бы днём при вечерних встречах.
- * Спека: docs/modules/event-templates.md § 4.2.
+ * Спека: docs/modules/event-templates.md § 4.3.
  */
 
 /** Понедельник = 1 … воскресенье = 7 (ISO-8601). JS `getDay()` считает с воскресенья-0. */

@@ -1,4 +1,5 @@
 import { FC } from 'react';
+import { PickerStepHeader } from './CreateActivityPicker';
 
 export interface ClubPickerOption {
   id: string;
@@ -11,6 +12,8 @@ interface ClubPickerListProps {
   clubs: ClubPickerOption[];
   /** Вызывается с id выбранного клуба. Без побочных эффектов здесь — шаг/haptics владеет родительский flow. */
   onPick: (clubId: string) => void;
+  /** Возврат на предыдущий шаг flow; не задан — возвращаться некуда. */
+  onBack?: () => void;
 }
 
 function getInitials(name: string): string {
@@ -27,9 +30,11 @@ function getInitials(name: string): string {
  * Список клубов — только контент (без обёртки Modal). Рендерится внутри единственного Modal,
  * которым владеет CreateActivityFlow — он управляет переходами шагов и haptics.
  */
-export const ClubPickerList: FC<ClubPickerListProps> = ({ clubs, onPick }) => (
+export const ClubPickerList: FC<ClubPickerListProps> = ({ clubs, onPick, onBack }) => (
   <div className="club-picker">
-    <div className="picker-header">Выберите клуб</div>
+    {/* Шапка общая с остальными шагами пикера — ради единого «Назад» во всём flow.
+        Подписи шага в ней нет: решение PO 2026-08-11 (см. PickerStepHeader). */}
+    <PickerStepHeader onBack={onBack} />
     {clubs.map((club) => (
       <button
         key={club.id}

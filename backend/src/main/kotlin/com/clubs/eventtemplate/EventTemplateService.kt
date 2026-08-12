@@ -49,7 +49,8 @@ class EventTemplateService(
     }
 
     @Transactional
-    fun createTemplate(clubId: UUID, request: SaveEventTemplateRequest, userId: UUID): EventTemplateDto {
+    fun createTemplate(clubId: UUID, rawRequest: SaveEventTemplateRequest, userId: UUID): EventTemplateDto {
+        val request = rawRequest.normalized()
         val count = templateRepository.countByClubId(clubId)
         if (count >= MAX_TEMPLATES_PER_CLUB) {
             throw ConflictException(
@@ -57,6 +58,7 @@ class EventTemplateService(
             )
         }
         requireNameFree(clubId, request.name, exceptId = null)
+        requireContentUnique(clubId, request, exceptId = null)
 
         val created = runCatchingDuplicateName(request.name) {
             templateRepository.create(request, clubId, userId)
@@ -72,14 +74,16 @@ class EventTemplateService(
     fun updateTemplate(
         clubId: UUID,
         templateId: UUID,
-        request: SaveEventTemplateRequest,
+        rawRequest: SaveEventTemplateRequest,
         userId: UUID
     ): EventTemplateDto {
+        val request = rawRequest.normalized()
         // Существование проверяем В ПРЕДЕЛАХ клуба: шаблон чужого клуба должен выглядеть
         // несуществующим, а не «запрещённым» — иначе по коду ответа можно перебирать чужие id.
         templateRepository.findByIdAndClubId(templateId, clubId)
             ?: throw NotFoundException("Event template not found")
         requireNameFree(clubId, request.name, exceptId = templateId)
+        requireContentUnique(clubId, request, exceptId = templateId)
 
         val updated = runCatchingDuplicateName(request.name) {
             templateRepository.update(templateId, clubId, request)
@@ -101,10 +105,29 @@ class EventTemplateService(
 
     /** Дружелюбная проверка занятости имени; настоящий гарант — уникальный индекс в БД. */
     private fun requireNameFree(clubId: UUID, name: String, exceptId: UUID?) {
-        val existingId = templateRepository.findIdByClubAndName(clubId, name.trim())
+        val existingId = templateRepository.findIdByClubAndName(clubId, name)
         if (existingId != null && existingId != exceptId) {
-            throw ConflictException("Шаблон с именем «${name.trim()}» в этом клубе уже есть")
+            throw ConflictException("Шаблон с именем «$name» в этом клубе уже есть")
         }
+    }
+
+    /**
+     * Запрет шаблонов-близнецов (требование PO 2026-08-11): два шаблона с полностью совпадающими
+     * параметрами — это один шаблон под двумя именами, в списке выбора они неразличимы.
+     *
+     * Сравниваем в памяти, а не уникальным индексом по хешу содержимого: шаблонов у клуба
+     * максимум [MAX_TEMPLATES_PER_CLUB], сохранение делает живой человек руками (гонка нереальна),
+     * а взамен ответ называет шаблон-виновник по имени — с индексом остался бы безымянный 409.
+     */
+    private fun requireContentUnique(clubId: UUID, request: SaveEventTemplateRequest, exceptId: UUID?) {
+        val incoming = mapper.toContent(request)
+        val twin = templateRepository.findByClubId(clubId)
+            .map { it.template }
+            .firstOrNull { it.id != exceptId && mapper.toContent(it) == incoming }
+            ?: return
+        throw ConflictException(
+            "Такой же шаблон уже есть — «${twin.name}». Измените параметры или правьте его"
+        )
     }
 
     /**

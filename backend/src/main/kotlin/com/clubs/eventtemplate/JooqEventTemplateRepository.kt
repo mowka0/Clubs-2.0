@@ -82,26 +82,27 @@ class JooqEventTemplateRepository(
      * Содержимое шаблона одной картой «колонка → значение»: и insert, и update пишут ОДИН И ТОТ ЖЕ
      * набор — это семантика PUT «полная замена» (null = очистить). Общий источник избавляет от
      * ситуации, когда новое поле шаблона добавили в create и забыли в update.
+     *
+     * Значения пишутся КАК ЕСТЬ: пробелы схлопывает `SaveEventTemplateRequest.normalized()`
+     * на входе сервиса. Вторая нормализация здесь означала бы, что проверка на дубликат
+     * сравнивает одни значения, а в БД уезжают другие.
      */
     private fun contentOf(request: SaveEventTemplateRequest): Map<org.jooq.Field<*>, Any?> = mapOf(
-        EVENT_TEMPLATES.NAME to request.name.trim(),
-        EVENT_TEMPLATES.TITLE to request.title.trim(),
-        EVENT_TEMPLATES.DESCRIPTION to request.description.normalized(),
-        EVENT_TEMPLATES.LOCATION_TEXT to request.locationText.normalized(),
+        EVENT_TEMPLATES.NAME to request.name,
+        EVENT_TEMPLATES.TITLE to request.title,
+        EVENT_TEMPLATES.DESCRIPTION to request.description,
+        EVENT_TEMPLATES.LOCATION_TEXT to request.locationText,
         EVENT_TEMPLATES.LOCATION_LAT to request.locationLat,
         EVENT_TEMPLATES.LOCATION_LON to request.locationLon,
-        EVENT_TEMPLATES.LOCATION_HINT to request.locationHint.normalized(),
+        EVENT_TEMPLATES.LOCATION_HINT to request.locationHint,
         EVENT_TEMPLATES.PARTICIPANT_LIMIT to request.participantLimit,
         EVENT_TEMPLATES.IS_OPEN_EVENT to request.isOpenEvent,
         EVENT_TEMPLATES.IS_URGENT_EVENT to request.isUrgentEvent,
         EVENT_TEMPLATES.STAGE2_LEAD_MINUTES to request.stage2LeadMinutes,
-        EVENT_TEMPLATES.PHOTO_URL to request.photoUrl.normalized(),
+        EVENT_TEMPLATES.PHOTO_URL to request.photoUrl,
         EVENT_TEMPLATES.DEFAULT_WEEKDAY to request.defaultWeekday,
         EVENT_TEMPLATES.DEFAULT_TIME to request.defaultTime
     )
-
-    /** Пробельная строка = «поля нет»: та же нормализация, что у события в EventService.createEvent. */
-    private fun String?.normalized(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
 
     /** Шаблоны с именем клуба, отсортированные так же, как их показывает список выбора. */
     private fun selectWithClub(condition: Condition): List<EventTemplateWithClub> =

@@ -49,3 +49,28 @@ data class EventTemplateWithClub(
     val template: EventTemplate,
     val clubName: String
 )
+
+/**
+ * Содержимое шаблона БЕЗ имени-ярлыка — то, по чему два шаблона считаются одинаковыми
+ * (требование PO 2026-08-11: «Встреча в парке» и «Сходить в парк» с идентичными полями —
+ * это один шаблон под двумя именами, и в списке они неразличимы).
+ *
+ * Отдельный тип, а не сравнение полей вручную: `data class` даёт `equals` даром, и добавленное
+ * поле шаблона нельзя молча забыть в сравнении — компилятор потребует заполнить его в обоих
+ * конструкторах ([EventTemplateMapper.toContent]).
+ */
+data class EventTemplateContent(
+    val title: String,
+    val description: String?,
+    val locationText: String?,
+    val locationLat: Double?,
+    val locationLon: Double?,
+    val locationHint: String?,
+    val participantLimit: Int?,
+    val isOpenEvent: Boolean,
+    val isUrgentEvent: Boolean,
+    val stage2LeadMinutes: Int?,
+    val photoUrl: String?,
+    val defaultWeekday: Short?,
+    val defaultTime: LocalTime?
+)

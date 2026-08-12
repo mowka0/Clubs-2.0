@@ -10,7 +10,7 @@ describe('ActivityTypeOptions — состав пунктов шита «+»', (
   it('организатору показывает создание и обратную связь', () => {
     render(<ActivityTypeOptions onPick={vi.fn()} onPickFeedback={vi.fn()} canCreate />);
 
-    expect(screen.getByText('Создать активность')).toBeInTheDocument();
+    // Заголовка шага у шита больше нет (решение PO 2026-08-11) — состав проверяем по пунктам.
     expect(screen.getByText('Событие')).toBeInTheDocument();
     expect(screen.getByText('Сбор')).toBeInTheDocument();
     expect(screen.getByText('Сообщить о проблеме')).toBeInTheDocument();
@@ -19,7 +19,6 @@ describe('ActivityTypeOptions — состав пунктов шита «+»', (
   it('не-организатору показывает только обратную связь', () => {
     render(<ActivityTypeOptions onPick={vi.fn()} onPickFeedback={vi.fn()} canCreate={false} />);
 
-    expect(screen.getByText('Обратная связь')).toBeInTheDocument();
     expect(screen.getByText('Сообщить о проблеме')).toBeInTheDocument();
     expect(screen.queryByText('Событие')).toBeNull();
     expect(screen.queryByText('Сбор')).toBeNull();

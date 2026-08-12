@@ -183,6 +183,35 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
     setStep('event_templates');
   };
 
+  /**
+   * Возврат на шаг назад. Предыдущий шаг у каждого свой, и для 'club' он зависит от типа
+   * активности — потому это switch, а не стек истории: шагов пять, ветвление одно, и стек
+   * пришлось бы чистить в resetFlow наравне со всем остальным состоянием.
+   */
+  const handleBack = () => {
+    haptic.impact('light');
+    switch (step) {
+      case 'template':
+      case 'event_format':
+        setPendingType(null);
+        setStep('type');
+        return;
+      case 'event_templates':
+        setStep('event_format');
+        return;
+      case 'template_rename':
+        setRenamingTemplate(null);
+        setRenameError(null);
+        setStep('event_templates');
+        return;
+      case 'club':
+        setStep(pendingType === 'skladchina' ? 'template' : 'event_format');
+        return;
+      default:
+        return;
+    }
+  };
+
   // Шаблон знает и клуб, и формат — оба шага пропускаются, форма читает содержимое по ?template.
   const handlePickEventTemplate = (template: EventTemplateDto) => {
     haptic.impact('medium');
@@ -240,16 +269,17 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
   };
 
   return (
-    <Modal open={open} onOpenChange={handleOpenChange}>
+    <Modal className="rd-pick-modal" open={open} onOpenChange={handleOpenChange}>
       {step === 'type' && (
         <ActivityTypeOptions onPick={handlePickType} onPickFeedback={handlePickFeedback} canCreate={canCreate} />
       )}
-      {step === 'template' && <SkladchinaTemplateOptions onPick={handlePickTemplate} />}
+      {step === 'template' && <SkladchinaTemplateOptions onPick={handlePickTemplate} onBack={handleBack} />}
       {step === 'event_format' && (
         <EventFormatOptions
           onPick={handlePickEventFormat}
           templateCount={templates.length}
           onPickTemplates={handleOpenEventTemplates}
+          onBack={handleBack}
         />
       )}
       {step === 'event_templates' && (
@@ -258,6 +288,7 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
           onPick={handlePickEventTemplate}
           onRename={handleStartRename}
           onDelete={handleDeleteTemplate}
+          onBack={handleBack}
           isDeleting={deleteTemplateMut.isPending}
         />
       )}
@@ -265,16 +296,14 @@ export const CreateActivityFlow: FC<CreateActivityFlowProps> = ({
         <EventTemplateRenameStep
           template={renamingTemplate}
           onSubmit={handleSubmitRename}
-          onCancel={() => {
-            setRenamingTemplate(null);
-            setRenameError(null);
-            setStep('event_templates');
-          }}
+          onCancel={handleBack}
           isSaving={saveTemplateMut.isPending}
           error={renameError}
         />
       )}
-      {step === 'club' && <ClubPickerList clubs={organizerClubs} onPick={handlePickClub} />}
+      {step === 'club' && (
+        <ClubPickerList clubs={organizerClubs} onPick={handlePickClub} onBack={handleBack} />
+      )}
     </Modal>
   );
 };

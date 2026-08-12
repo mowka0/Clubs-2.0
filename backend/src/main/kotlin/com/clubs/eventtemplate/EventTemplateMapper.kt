@@ -28,6 +28,48 @@ class EventTemplateMapper {
         updatedAt = record.updatedAt
     )
 
+    /**
+     * Содержимое сохранённого шаблона — левая часть сравнения «такой шаблон уже есть».
+     * Имя-ярлык в [EventTemplateContent] намеренно не входит: одинаковыми считаются шаблоны
+     * с одинаковыми ПАРАМЕТРАМИ, как бы они ни назывались.
+     */
+    fun toContent(template: EventTemplate): EventTemplateContent = with(template) {
+        EventTemplateContent(
+            title = title,
+            description = description,
+            locationText = locationText,
+            locationLat = locationLat,
+            locationLon = locationLon,
+            locationHint = locationHint,
+            participantLimit = participantLimit,
+            isOpenEvent = isOpenEvent,
+            isUrgentEvent = isUrgentEvent,
+            stage2LeadMinutes = stage2LeadMinutes,
+            photoUrl = photoUrl,
+            defaultWeekday = defaultWeekday,
+            defaultTime = defaultTime
+        )
+    }
+
+    /** Содержимое входящего запроса. Ждёт УЖЕ нормализованный запрос (см. `normalized()`). */
+    fun toContent(request: SaveEventTemplateRequest): EventTemplateContent = with(request) {
+        EventTemplateContent(
+            title = title,
+            description = description,
+            locationText = locationText,
+            locationLat = locationLat,
+            locationLon = locationLon,
+            locationHint = locationHint,
+            participantLimit = participantLimit,
+            isOpenEvent = isOpenEvent,
+            isUrgentEvent = isUrgentEvent,
+            stage2LeadMinutes = stage2LeadMinutes,
+            photoUrl = photoUrl,
+            defaultWeekday = defaultWeekday,
+            defaultTime = defaultTime
+        )
+    }
+
     fun toDto(withClub: EventTemplateWithClub): EventTemplateDto = with(withClub.template) {
         EventTemplateDto(
             id = id,

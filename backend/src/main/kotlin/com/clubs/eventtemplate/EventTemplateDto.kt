@@ -114,4 +114,20 @@ data class SaveEventTemplateRequest(
     @get:AssertTrue(message = "Urgent event template must be a limited event without a custom stage 2 lead")
     val isUrgentConsistent: Boolean
         get() = !isUrgentEvent || (!isOpenEvent && stage2LeadMinutes == null)
+
+    /**
+     * Схлопывает пробелы: обрезанные строки, пустые → null. Сервис нормализует запрос ОДИН раз
+     * на входе, и дальше и сравнение на дубликат, и запись идут по одному значению — иначе
+     * «Йога » и «Йога» считались бы разными шаблонами, а в БД попадали бы одинаковыми.
+     */
+    fun normalized(): SaveEventTemplateRequest = copy(
+        name = name.trim(),
+        title = title.trim(),
+        description = description.blankToNull(),
+        locationText = locationText.blankToNull(),
+        locationHint = locationHint.blankToNull(),
+        photoUrl = photoUrl.blankToNull()
+    )
+
+    private fun String?.blankToNull(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
 }

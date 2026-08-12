@@ -10,7 +10,7 @@ import {
 import type { EventTemplateDto } from '../../api/eventTemplates';
 
 /**
- * Умная дата шаблона (docs/modules/event-templates.md § 4.2, AC-4..AC-6) и перенос полей
+ * Умная дата шаблона (docs/modules/event-templates.md § 4.3, AC-4..AC-6) и перенос полей
  * встречи в шаблон. Все даты создаются локальными конструкторами `new Date(y, m, d, ...)` —
  * ISO-строки с Z считались бы в UTC и тест ловил бы не то, что видит организатор.
  */

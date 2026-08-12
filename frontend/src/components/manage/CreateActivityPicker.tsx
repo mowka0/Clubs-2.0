@@ -1,4 +1,4 @@
-import { FC, useState } from 'react';
+import { FC, ReactNode, useState } from 'react';
 import type { ActivityType } from '../../api/activities';
 import type { EventTemplateDto } from '../../api/eventTemplates';
 
@@ -33,50 +33,65 @@ const OPTIONS: PickerOption[] = [
   },
 ];
 
-const headerStyle: React.CSSProperties = {
-  padding: '8px 16px 16px',
-  fontSize: 13,
-  fontWeight: 600,
-  letterSpacing: 0.6,
-  textTransform: 'uppercase',
-  color: 'var(--tgui--hint_color, rgba(255,255,255,0.55))',
-};
+// Штриховые иконки вместо цветных эмодзи там, где символ — управляющий элемент, а не содержание:
+// эмодзи ✏️/🗑 рисуются шрифтом платформы, из-за чего в тёмном шите выглядели инородными пятнами
+// (правка PO 2026-08-11). `currentColor` даёт им цвет строки — в том числе красный у удаления.
+const ChevronLeftIcon: FC = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M15 18l-6-6 6-6" />
+  </svg>
+);
 
-const optionStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 14,
-  width: '100%',
-  padding: '14px 16px',
-  background: 'transparent',
-  border: 'none',
-  borderTop: '1px solid var(--tgui--divider, rgba(255,255,255,0.08))',
-  cursor: 'pointer',
-  textAlign: 'left',
-  color: 'var(--tgui--text_color, #fff)',
-};
+const PencilIcon: FC = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+  </svg>
+);
 
-const emojiStyle: React.CSSProperties = {
-  fontSize: 24,
-  flex: '0 0 auto',
-  width: 32,
-  textAlign: 'center',
-};
+const TrashIcon: FC = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+    <path d="M10 11v6M14 11v6" />
+  </svg>
+);
 
-const textStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 2,
-};
+const TemplateIcon: FC = () => (
+  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="4" y="3" width="16" height="18" rx="2.5" />
+    <path d="M9 3h6v3H9z" />
+    <path d="M8 12h8M8 16h5" />
+  </svg>
+);
 
-const titleStyle: React.CSSProperties = {
-  fontSize: 16,
-  fontWeight: 600,
-};
+interface PickerStepHeaderProps {
+  /** Не задан — шаг первый, возвращаться некуда. */
+  onBack?: () => void;
+  /** Правый слот: у списка шаблонов — переключатель режима правки. */
+  action?: ReactNode;
+}
 
-const subtitleStyle: React.CSSProperties = {
-  fontSize: 13,
-  color: 'var(--tgui--hint_color, rgba(255,255,255,0.6))',
+/**
+ * Шапка шага: «Назад» слева, необязательное действие справа. Кнопка «Назад» есть у каждого
+ * шага, кроме первого — до неё выйти из подшага можно было только закрыв весь шит.
+ *
+ * Заголовка шага («Формат события», «Готовые шаблоны») тут НЕТ намеренно — решение PO
+ * 2026-08-11: подписи дублировали то, что и так читается по самим пунктам. Когда управлять
+ * нечем (первый шаг), шапка не рендерится вовсе и список начинается сразу.
+ */
+export const PickerStepHeader: FC<PickerStepHeaderProps> = ({ onBack, action }) => {
+  if (!onBack && !action) return null;
+  return (
+    <div className="rd-pick-head">
+      {onBack && (
+        <button type="button" className="rd-pick-back" onClick={onBack}>
+          <ChevronLeftIcon />
+          Назад
+        </button>
+      )}
+      {action}
+    </div>
+  );
 };
 
 interface PickerListOption<K extends string> {
@@ -94,22 +109,24 @@ interface PickerListOption<K extends string> {
  * оверлея. Один компонент на все шаги (тип/шаблон сбора/формат события): правка разметки
  * пункта меняет все шаги синхронно.
  */
-function PickerOptionList<K extends string>({ header, options, onPick }: {
-  header: string;
+function PickerOptionList<K extends string>({ options, onPick, onBack }: {
   options: PickerListOption<K>[];
   onPick: (key: K) => void;
+  onBack?: () => void;
 }) {
   return (
-    <div style={{ paddingBottom: 8 }}>
-      <div style={headerStyle}>{header}</div>
+    <div className="rd-pick">
+      <PickerStepHeader onBack={onBack} />
       {options.map((opt) => (
-        <button key={opt.key} type="button" style={optionStyle} onClick={() => onPick(opt.key)}>
-          <span style={emojiStyle} aria-hidden="true">{opt.emoji}</span>
-          <span style={textStyle}>
-            <span style={titleStyle}>{opt.title}</span>
-            <span style={subtitleStyle}>{opt.subtitle}</span>
-          </span>
-        </button>
+        <div className="rd-pick-item" key={opt.key}>
+          <button type="button" className="rd-pick-row" onClick={() => onPick(opt.key)}>
+            <span className="rd-pick-ic" aria-hidden="true">{opt.emoji}</span>
+            <span className="rd-pick-txt">
+              <b>{opt.title}</b>
+              <span>{opt.subtitle}</span>
+            </span>
+          </button>
+        </div>
       ))}
     </div>
   );
@@ -132,7 +149,6 @@ export const ActivityTypeOptions: FC<ActivityTypeOptionsProps> = ({ onPick, onPi
   const options: PickerListOption<TypePickKey>[] = canCreate ? [...OPTIONS, FEEDBACK_OPTION] : [FEEDBACK_OPTION];
   return (
     <PickerOptionList
-      header={canCreate ? 'Создать активность' : 'Обратная связь'}
       options={options}
       onPick={(key) => (key === 'feedback' ? onPickFeedback() : onPick(key))}
     />
@@ -174,6 +190,7 @@ interface EventFormatOptionsProps {
    */
   templateCount: number;
   onPickTemplates: () => void;
+  onBack: () => void;
 }
 
 // Ключ пункта «Готовые шаблоны» на шаге формата. Формат встречи шаблон несёт сам, поэтому
@@ -185,6 +202,7 @@ export const EventFormatOptions: FC<EventFormatOptionsProps> = ({
   onPick,
   templateCount,
   onPickTemplates,
+  onBack,
 }) => {
   const options: PickerListOption<FormatStepKey>[] =
     templateCount > 0
@@ -201,8 +219,8 @@ export const EventFormatOptions: FC<EventFormatOptionsProps> = ({
 
   return (
     <PickerOptionList
-      header="Формат события"
       options={options}
+      onBack={onBack}
       onPick={(key) => (key === 'templates' ? onPickTemplates() : onPick(key))}
     />
   );
@@ -213,14 +231,18 @@ interface EventTemplateOptionsProps {
   onPick: (template: EventTemplateDto) => void;
   onRename: (template: EventTemplateDto) => void;
   onDelete: (template: EventTemplateDto) => void;
+  onBack: () => void;
   isDeleting: boolean;
 }
 
-// Подпись формата в строке шаблона — те же ярлыки, что у карточек лент и страницы встречи.
+// Подпись формата в строке шаблона — СЛОВАМИ, без эмодзи: цветной 🎟 внутри приглушённой
+// строки метаданных рисовался платформенным шрифтом (ярко-красный «ADMIT ONE») и выбивался
+// из строки (правка PO 2026-08-11). Эмодзи-ярлыки форматов остались там, где они и были
+// задуманы, — на карточках лент и в шапке страницы встречи.
 function formatLabel(template: EventTemplateDto): string {
-  if (template.isOpenEvent) return '🌊 открытая';
-  if (template.isUrgentEvent) return '⚡️ срочная';
-  return `🎟 ${template.participantLimit} мест`;
+  if (template.isOpenEvent) return 'без лимита';
+  if (template.isUrgentEvent) return 'срочная';
+  return `${template.participantLimit} мест`;
 }
 
 const WEEKDAY_SHORT = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
@@ -232,21 +254,6 @@ function scheduleLabel(template: EventTemplateDto): string {
   const time = template.defaultTime?.slice(0, 5) ?? '';
   return time ? `${day} ${time}` : day;
 }
-
-const templateRowStyle: React.CSSProperties = {
-  ...optionStyle,
-  gap: 10,
-};
-
-const templateActionStyle: React.CSSProperties = {
-  flex: '0 0 auto',
-  padding: '6px 8px',
-  background: 'transparent',
-  border: 'none',
-  cursor: 'pointer',
-  fontSize: 18,
-  lineHeight: 1,
-};
 
 /**
  * Список сохранённых шаблонов с режимом правки. Переключатель «Изменить» в шапке вместо
@@ -260,110 +267,101 @@ export const EventTemplateOptions: FC<EventTemplateOptionsProps> = ({
   onPick,
   onRename,
   onDelete,
+  onBack,
   isDeleting,
 }) => {
   const [editing, setEditing] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   return (
-    <div style={{ paddingBottom: 8 }}>
-      <div style={{ ...headerStyle, display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-        <span>Готовые шаблоны</span>
-        <button
-          type="button"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            padding: 0,
-            font: 'inherit',
-            textTransform: 'none',
-            letterSpacing: 'normal',
-            color: 'var(--tgui--link_color, #6ab3f3)',
-            cursor: 'pointer',
-          }}
-          onClick={() => {
-            setPendingDeleteId(null);
-            setEditing((v) => !v);
-          }}
-        >
-          {editing ? 'Готово' : 'Изменить'}
-        </button>
-      </div>
+    <div className="rd-pick">
+      <PickerStepHeader
+        onBack={onBack}
+        action={
+          templates.length > 0 ? (
+            <button
+              type="button"
+              className={editing ? 'rd-pick-act rd-active' : 'rd-pick-act'}
+              onClick={() => {
+                setPendingDeleteId(null);
+                setEditing((v) => !v);
+              }}
+            >
+              {editing ? 'Готово' : 'Изменить'}
+            </button>
+          ) : undefined
+        }
+      />
+
+      {templates.length === 0 && (
+        <div className="rd-pick-empty">Шаблонов не осталось — «Назад», чтобы создать встречу с нуля.</div>
+      )}
 
       {templates.map((template) => {
-        const schedule = scheduleLabel(template);
-        const isPendingDelete = pendingDeleteId === template.id;
-
-        if (isPendingDelete) {
+        if (pendingDeleteId === template.id) {
           return (
-            <div key={template.id} style={templateRowStyle}>
-              <span style={textStyle}>
-                <span style={titleStyle}>Удалить «{template.name}»?</span>
-                <span style={subtitleStyle}>Встречи, созданные по нему, останутся на месте</span>
-              </span>
-              <button
-                type="button"
-                style={{ ...templateActionStyle, fontSize: 14, color: 'var(--tgui--destructive_text_color, #e53935)' }}
-                disabled={isDeleting}
-                onClick={() => onDelete(template)}
-              >
-                Удалить
-              </button>
-              <button
-                type="button"
-                style={{ ...templateActionStyle, fontSize: 14 }}
-                onClick={() => setPendingDeleteId(null)}
-              >
-                Отмена
-              </button>
+            <div className="rd-pick-item" key={template.id}>
+              <div className="rd-pick-confirm">
+                <span className="rd-pick-txt">
+                  <b>Удалить «{template.name}»?</b>
+                  <span>Созданные по нему встречи останутся</span>
+                </span>
+                <span className="rd-pick-confirm-actions">
+                  <button
+                    type="button"
+                    className="rd-pick-confirm-btn rd-danger"
+                    disabled={isDeleting}
+                    onClick={() => onDelete(template)}
+                  >
+                    Удалить
+                  </button>
+                  <button
+                    type="button"
+                    className="rd-pick-confirm-btn"
+                    onClick={() => setPendingDeleteId(null)}
+                  >
+                    Отмена
+                  </button>
+                </span>
+              </div>
             </div>
           );
         }
 
+        const meta = [template.clubName, formatLabel(template), scheduleLabel(template)]
+          .filter(Boolean)
+          .join(' · ');
+
         return (
-          <div key={template.id} style={templateRowStyle}>
+          <div className="rd-pick-item" key={template.id}>
             <button
               type="button"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 14,
-                flex: '1 1 auto',
-                minWidth: 0,
-                padding: 0,
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                textAlign: 'left',
-                color: 'inherit',
-              }}
+              className="rd-pick-row"
               onClick={() => (editing ? onRename(template) : onPick(template))}
             >
-              <span style={emojiStyle} aria-hidden="true">📋</span>
-              <span style={{ ...textStyle, minWidth: 0 }}>
-                <span style={titleStyle}>{template.name}</span>
-                <span style={subtitleStyle}>
-                  {[template.clubName, formatLabel(template), schedule].filter(Boolean).join(' · ')}
-                </span>
+              <span className="rd-pick-ic rd-pick-ic-accent" aria-hidden="true"><TemplateIcon /></span>
+              <span className="rd-pick-txt">
+                <b>{template.name}</b>
+                <span className="rd-pick-meta">{meta}</span>
               </span>
             </button>
             {editing && (
               <>
                 <button
                   type="button"
-                  style={templateActionStyle}
+                  className="rd-pick-iconbtn"
                   aria-label={`Переименовать ${template.name}`}
                   onClick={() => onRename(template)}
                 >
-                  ✏️
+                  <PencilIcon />
                 </button>
                 <button
                   type="button"
-                  style={templateActionStyle}
+                  className="rd-pick-iconbtn rd-danger"
                   aria-label={`Удалить ${template.name}`}
                   onClick={() => setPendingDeleteId(template.id)}
                 >
-                  🗑
+                  <TrashIcon />
                 </button>
               </>
             )}
@@ -398,29 +396,32 @@ export const EventTemplateRenameStep: FC<EventTemplateRenameStepProps> = ({
   const trimmed = name.trim();
 
   return (
-    <div style={{ padding: '8px 16px 16px' }}>
-      <div style={{ ...headerStyle, padding: '0 0 12px' }}>Название шаблона</div>
-      <input
-        className="rd-input"
-        value={name}
-        maxLength={60}
-        autoFocus
-        onChange={(e) => setName(e.target.value)}
-      />
-      {error && <div className="rd-error" style={{ marginTop: 10 }}>{error}</div>}
-      <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-        <button type="button" className="rd-btn-outline" style={{ flex: 1 }} onClick={onCancel}>
-          Отмена
-        </button>
-        <button
-          type="button"
-          className="rd-btn-primary"
-          style={{ flex: 1 }}
-          disabled={isSaving || trimmed.length === 0 || trimmed === template.name}
-          onClick={() => onSubmit(trimmed)}
-        >
-          {isSaving ? 'Сохраняем…' : 'Сохранить'}
-        </button>
+    <div className="rd-pick">
+      <PickerStepHeader onBack={onCancel} />
+      <div className="rd-pick-form">
+        {/* Подпись поля, а не заголовок шага: без неё непонятно, что именно правится. */}
+        <span className="rd-label">Название шаблона</span>
+        <input
+          className="rd-input"
+          value={name}
+          maxLength={60}
+          autoFocus
+          onChange={(e) => setName(e.target.value)}
+        />
+        {error && <div className="rd-error" style={{ marginTop: 10 }}>{error}</div>}
+        <div className="rd-pick-form-actions">
+          <button type="button" className="rd-btn-outline" onClick={onCancel}>
+            Отмена
+          </button>
+          <button
+            type="button"
+            className="rd-btn-primary"
+            disabled={isSaving || trimmed.length === 0 || trimmed === template.name}
+            onClick={() => onSubmit(trimmed)}
+          >
+            {isSaving ? 'Сохраняем…' : 'Сохранить'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -431,6 +432,7 @@ export type SkladchinaTemplateKey = 'split_bill' | 'custom';
 
 interface SkladchinaTemplateOptionsProps {
   onPick: (template: SkladchinaTemplateKey) => void;
+  onBack: () => void;
 }
 
 const SKLADCHINA_OPTIONS: { key: SkladchinaTemplateKey; emoji: string; title: string; subtitle: string }[] = [
@@ -449,6 +451,6 @@ const SKLADCHINA_OPTIONS: { key: SkladchinaTemplateKey; emoji: string; title: st
 ];
 
 /** Выбор шаблона, показывается после «Сбор» в flow создания. Только контент (без обёртки Modal). */
-export const SkladchinaTemplateOptions: FC<SkladchinaTemplateOptionsProps> = ({ onPick }) => (
-  <PickerOptionList header="Тип сбора" options={SKLADCHINA_OPTIONS} onPick={onPick} />
+export const SkladchinaTemplateOptions: FC<SkladchinaTemplateOptionsProps> = ({ onPick, onBack }) => (
+  <PickerOptionList options={SKLADCHINA_OPTIONS} onPick={onPick} onBack={onBack} />
 );

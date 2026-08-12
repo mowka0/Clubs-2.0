@@ -66,6 +66,14 @@ class EventTemplateIntegrationTest {
     @Autowired lateinit var jwtService: JwtService
     @Autowired lateinit var dsl: DSLContext
 
+    /**
+     * RateLimitFilter отрабатывает ДО аутентификации, поэтому все запросы MockMvc делят один
+     * bucket `ip:127.0.0.1` — общий на весь прогон, а не на класс. Без сброса этот класс падал
+     * 429-м в полном прогоне (в одиночку проходил), причём падал случайный тест. Тот же приём,
+     * что в SkladchinaControllerTest.
+     */
+    @Autowired lateinit var rateLimitFilter: com.clubs.common.security.RateLimitFilter
+
     private lateinit var ownerId: UUID
     private lateinit var coOrganizerId: UUID
     private lateinit var memberId: UUID
@@ -78,6 +86,7 @@ class EventTemplateIntegrationTest {
 
     @BeforeEach
     fun setUp() {
+        rateLimitFilter.resetBuckets()
         dsl.execute("DELETE FROM event_templates")
         dsl.execute("DELETE FROM event_responses")
         dsl.execute("DELETE FROM events")
@@ -276,7 +285,78 @@ class EventTemplateIntegrationTest {
     }
 
     @Test
-    fun `AC-10 одноимённые шаблоны в РАЗНЫХ клубах уживаются`() {
+    fun `AC-16 шаблон с теми же параметрами под другим именем отклоняется`() {
+        createdId(body(name = "Встреча в парке"))
+
+        // Ровно случай PO: «Встреча в парке» и «Сходить в парк» с идентичными полями — в списке
+        // выбора это два неразличимых пункта.
+        mockMvc.perform(
+            post("/api/clubs/$clubId/event-templates")
+                .header("Authorization", "Bearer $ownerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body(name = "Сходить в парк")))
+        )
+            .andExpect(status().isConflict)
+            // Ответ называет виновника: иначе непонятно, что именно дублируется.
+            .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Встреча в парке")))
+
+        assertEquals(1, dsl.fetchCount(dsl.selectFrom("event_templates")))
+    }
+
+    @Test
+    fun `AC-16 отличие хотя бы в одном параметре делает шаблон допустимым`() {
+        createdId(body(name = "Встреча в парке"))
+
+        // Другой лимит — уже другой шаблон.
+        create(ownerToken, clubId, body(name = "Встреча в парке вдвоём", participantLimit = 2))
+            .andExpect(status().isCreated)
+        // Другое время повтора — тоже.
+        create(ownerToken, clubId, body(name = "Утренняя встреча", defaultTime = LocalTime.of(9, 0)))
+            .andExpect(status().isCreated)
+
+        assertEquals(3, dsl.fetchCount(dsl.selectFrom("event_templates")))
+    }
+
+    @Test
+    fun `AC-16 разница только в пробелах не создаёт близнеца`() {
+        createdId(body(name = "Встреча в парке", title = "Йога"))
+
+        create(ownerToken, clubId, body(name = "Другое имя", title = "  Йога  "))
+            .andExpect(status().isConflict)
+
+        assertEquals(1, dsl.fetchCount(dsl.selectFrom("event_templates")))
+    }
+
+    @Test
+    fun `AC-16 обновление шаблона в копию соседа отклоняется, а сам себя не считает дубликатом`() {
+        val firstId = createdId(body(name = "Встреча в парке"))
+        createdId(body(name = "Киновечер", title = "Киновечер", participantLimit = 30))
+
+        // Правим первый так, чтобы он стал копией второго.
+        mockMvc.perform(
+            put("/api/clubs/$clubId/event-templates/$firstId")
+                .header("Authorization", "Bearer $ownerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        body(name = "Встреча в парке", title = "Киновечер", participantLimit = 30)
+                    )
+                )
+        ).andExpect(status().isConflict)
+
+        // А сохранение шаблона «как есть» проходит: сам себе близнецом он быть не должен,
+        // иначе «Обновить шаблон» без правок падало бы всегда.
+        mockMvc.perform(
+            put("/api/clubs/$clubId/event-templates/$firstId")
+                .header("Authorization", "Bearer $ownerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body(name = "Встреча в парке")))
+        ).andExpect(status().isOk)
+    }
+
+    /** Проверяет обе уникальности разом: у клубов независимы и имена, и содержимое. */
+    @Test
+    fun `AC-10 AC-16 шаблоны-близнецы в РАЗНЫХ клубах уживаются`() {
         createdId()
         create(outsiderToken, otherClubId, body()).andExpect(status().isCreated)
 
