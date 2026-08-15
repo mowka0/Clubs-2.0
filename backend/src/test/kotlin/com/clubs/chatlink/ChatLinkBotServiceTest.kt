@@ -120,7 +120,14 @@ class ChatLinkBotServiceTest {
         verify(exactly = 1) { chatLinkService.releaseKeepingBotInChat(orphan) }
         assertEquals(clubId, inserted.captured.clubId)
         assertEquals(chatId, inserted.captured.chatId)
-        verify { gateway.sendGroupMessage(chatId, match { it.contains("Чат привязан к клубу") }) }
+        verify {
+            gateway.sendDmWithCallbackButton(
+                telegramId = ownerTelegramId,
+                text = match { it.contains("привязан к клубу") },
+                buttonText = any(),
+                callbackData = "chatlink:unlink:$clubId"
+            )
+        }
         verify(exactly = 0) { gateway.leaveChat(any()) }
     }
 
@@ -223,7 +230,7 @@ class ChatLinkBotServiceTest {
     }
 
     @Test
-    fun `успешная привязка - insert, invite-ссылка сразу, подтверждение в чат и DM-петля владельцу`() {
+    fun `успешная привязка - insert, invite-ссылка сразу, ОДИН пост в чат и подтверждение в личку`() {
         every { gateway.getBotChatState(chatId) } returns
             BotChatState("administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, canManageTags = true)
         every { gateway.createJoinRequestInviteLink(chatId, any()) } returns "https://t.me/+fresh"
@@ -239,20 +246,17 @@ class ChatLinkBotServiceTest {
         assertEquals(ownerId, inserted.captured.linkedByUserId)
         // Реестр багов №4: ссылка создаётся при привязке, не дожидаясь тумблера двери
         verify { chatLinkRepository.updateInviteLink(clubId, "https://t.me/+fresh") }
-        verify { gateway.sendGroupMessage(chatId, match { it.contains("Чат привязан к клубу") }) }
-        // Приглашение сидящим в чате вступить в клуб (фидбек PO 2026-07-08) — кнопка-диплинк
-        verify {
-            gateway.sendGroupMessageWithUrlButton(
-                chatId = chatId,
-                text = match { it.contains("вступай") },
-                buttonText = "Вступить в клуб",
-                url = "https://t.me/clubs_test_bot?startapp=club_$clubId"
-            )
-        }
+        // В чат — ровно ОДНО сообщение: закреплённая ссылка на клуб с зовом вступить
+        // (решение PO 2026-08-15; раньше их было три подряд). Текст и закреп — в ChatLinkService,
+        // здесь проверяем сам факт вызова и что других постов в чат не осталось.
+        verify(exactly = 1) { chatLinkService.postAndPinClubLink(chatId, "Партия", clubId) }
+        verify(exactly = 0) { gateway.sendGroupMessage(any(), any()) }
+        verify(exactly = 0) { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any(), any(), any()) }
+        // Подтверждение привязки уехало в личку владельцу и там же несёт петлю безопасности
         verify {
             gateway.sendDmWithCallbackButton(
                 telegramId = ownerTelegramId,
-                text = match { it.contains("Это были вы") },
+                text = match { it.contains("привязан к клубу") && it.contains("Это были вы") },
                 buttonText = any(),
                 callbackData = "chatlink:unlink:$clubId"
             )
@@ -274,7 +278,7 @@ class ChatLinkBotServiceTest {
     }
 
     @Test
-    fun `повторный старт в том же чате - идемпотентно, ТО ЖЕ сообщение, без второй DM-петли`() {
+    fun `повторный старт в том же чате - идемпотентно, подтверждение в личку, чат не трогаем`() {
         // Реестр багов №3: «уже привязан» сбивал с толку после кика бота.
         val own = chatLinkFixture(clubId = clubId, chatId = chatId, doorInviteLink = "https://t.me/+alive")
         every { chatLinkRepository.findByClubId(clubId) } returns own
@@ -286,10 +290,19 @@ class ChatLinkBotServiceTest {
         service.handleGroupStart(chatId, "Партия — чат", ownerTelegramId, clubId)
 
         verify(exactly = 0) { chatLinkRepository.insert(any()) }
-        verify(exactly = 0) { gateway.sendDmWithCallbackButton(any(), any(), any(), any()) }
         verify(exactly = 0) { gateway.leaveChat(any()) }
-        verify { gateway.sendGroupMessage(chatId, match { it.contains("Чат привязан к клубу") }) }
-        // Приглашение «Вступить в клуб» — только при первичной привязке (спам-бюджет)
+        // Подтверждение — владельцу в личку: участникам группы оно не адресовано (PO 2026-08-15)
+        verify {
+            gateway.sendDmWithCallbackButton(
+                telegramId = ownerTelegramId,
+                text = match { it.contains("привязан к клубу") },
+                buttonText = any(),
+                callbackData = "chatlink:unlink:$clubId"
+            )
+        }
+        // В сам чат при повторном /start не летит ничего: закреп со ссылкой там уже висит
+        verify(exactly = 0) { chatLinkService.postAndPinClubLink(any(), any(), any()) }
+        verify(exactly = 0) { gateway.sendGroupMessage(any(), any()) }
         verify(exactly = 0) { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any(), any(), any()) }
         // Ссылка была живой (бот всё время мог приглашать) — не пересоздаём
         verify(exactly = 0) { gateway.createJoinRequestInviteLink(any(), any()) }

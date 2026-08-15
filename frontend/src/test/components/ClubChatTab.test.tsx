@@ -79,7 +79,7 @@ const linkedHealthy = (over: Partial<ChatLinkStatusDto> = {}) => status({
 });
 
 describe('ClubChatTab', () => {
-  it('состояние A: не привязан — CTA открывает startgroup deep link', async () => {
+  it('состояние A: не привязан — CTA открывает startgroup deep link и ставит отметку ожидания', async () => {
     mockStatus(status());
     renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
 
@@ -87,6 +87,9 @@ describe('ClubChatTab', () => {
     await userEvent.click(cta);
 
     expect(openTelegramLinkMock).toHaveBeenCalledWith(START_URL);
+    // Отсюда человек уходит в Telegram (на iOS приложение закрывается) — отметка переживает
+    // выход и по возвращении открывает окно со статусом подключения бота (ChatSetupGate).
+    expect(localStorage.getItem('clubs:chat-linking-pending')).toContain(CLUB_ID);
   });
 
   it('состояние B: привязан и здоров — карточка чата, зелёные пиллы, тумблер двери активен', async () => {
@@ -398,72 +401,6 @@ describe('ClubChatTab', () => {
     renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
 
     expect(await screen.findByRole('button', { name: 'Закрепить' })).toBeDisabled();
-  });
-
-  // ---- Памятка о правах сразу после привязки (жалоба PO 2026-08-15) ----
-  // Telegram добавляет бота с выключенными ползунками прав, и без них не включается ни одна
-  // функция чата. Организатору об этом никто не говорит — теперь говорит модалка.
-
-  it('чат привязан без прав — памятка со списком прав и путём в настройки группы', async () => {
-    mockStatus(linkedHealthy({
-      canPinMessages: false,
-      canInviteUsers: false,
-      canRestrictMembers: false,
-      canManageTags: false,
-    }));
-    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
-
-    expect(await screen.findByText(/Чат «Партия — чат» привязан/)).toBeInTheDocument();
-    expect(screen.getByText('Закрепление сообщений')).toBeInTheDocument();
-    expect(screen.getByText('Приглашение участников')).toBeInTheDocument();
-    expect(screen.getByText('Блокировка пользователей')).toBeInTheDocument();
-    expect(screen.getByText('Управление тегами')).toBeInTheDocument();
-    // Имя бота берём из deep link, чтобы организатор искал в списке админов конкретное имя
-    expect(screen.getByText(/@clubs_test_bot/)).toBeInTheDocument();
-  });
-
-  it('все права уже выданы — памятки нет, подтверждать нечего', async () => {
-    mockStatus(linkedHealthy());
-    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
-
-    await screen.findByText('Партия — чат');
-    expect(screen.queryByText(/привязан$/)).not.toBeInTheDocument();
-    expect(screen.queryByText('Закрепление сообщений')).not.toBeInTheDocument();
-  });
-
-  it('«Понятно» гасит памятку насовсем — второй заход в таб её не показывает', async () => {
-    mockStatus(linkedHealthy({ canPinMessages: false }));
-    const user = userEvent.setup();
-    const first = renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
-
-    await user.click(await screen.findByRole('button', { name: 'Понятно' }));
-    expect(screen.queryByText('Закрепление сообщений')).not.toBeInTheDocument();
-
-    first.unmount();
-    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
-
-    await screen.findByText('Партия — чат');
-    expect(screen.queryByText('Закрепление сообщений')).not.toBeInTheDocument();
-  });
-
-  it('«Проверить права» из памятки дёргает refresh и обновляет отметки', async () => {
-    let current = linkedHealthy({ canPinMessages: false });
-    let refreshed = false;
-    server.use(
-      http.get(`*/api/clubs/${CLUB_ID}/chat-link`, () => HttpResponse.json(current)),
-      http.post(`*/api/clubs/${CLUB_ID}/chat-link/refresh`, () => {
-        refreshed = true;
-        current = linkedHealthy();
-        return HttpResponse.json(current);
-      }),
-    );
-    const user = userEvent.setup();
-    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
-
-    await user.click(await screen.findByRole('button', { name: 'Проверить права' }));
-
-    await waitFor(() => expect(refreshed).toBe(true));
-    await waitFor(() => expect(screen.getByText('✓ закреп разрешён')).toBeInTheDocument());
   });
 
 });

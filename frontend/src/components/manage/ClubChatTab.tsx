@@ -9,6 +9,7 @@ import {
   useUpdateChatLinkMutation,
 } from '../../queries/chatLink';
 import { openTmeLink } from '../../utils/telegramLinks';
+import { rememberChatLinkingStarted } from '../../utils/chatLinkPending';
 import { Toast } from '../Toast';
 import type { ChatLinkStatusDto, UpdateChatLinkRequest } from '../../types/api';
 
@@ -21,46 +22,6 @@ interface ClubChatTabProps {
   clubId: string;
 }
 
-/**
- * Префикс ключа localStorage: организатор уже видел памятку о правах для этого клуба.
- * Хранится ПО КЛУБУ — привязав чат во втором клубе, он должен увидеть её снова.
- */
-const SETUP_SEEN_KEY_PREFIX = 'clubs:chat-setup-seen:';
-
-/** Значение отметки — само по себе смысла не несёт, важно наличие ключа. */
-const SETUP_SEEN_FLAG_VALUE = '1';
-
-/**
- * Права бота, без которых функции чата не включаются. Названия — ровно как в настройках
- * группы Telegram, чтобы организатор искал глазами то же слово, что видит на экране.
- */
-const BOT_RIGHTS: readonly {
-  title: string;
-  why: string;
-  granted: (s: ChatLinkStatusDto) => boolean;
-}[] = [
-  {
-    title: 'Закрепление сообщений',
-    why: 'живой закреп встреч и ссылка на клуб',
-    granted: (s) => s.canPinMessages,
-  },
-  {
-    title: 'Приглашение участников',
-    why: 'вход в чат через заявки',
-    granted: (s) => s.canInviteUsers,
-  },
-  {
-    title: 'Блокировка пользователей',
-    why: 'строгий режим: должники читают, но не пишут',
-    granted: (s) => s.canRestrictMembers,
-  },
-  {
-    title: 'Управление тегами',
-    why: 'теги наград рядом с именами',
-    granted: (s) => s.canManageTags,
-  },
-];
-
 function formatLinkedDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 }
@@ -70,37 +31,9 @@ function isBotInChat(status: ChatLinkStatusDto): boolean {
   return status.botStatus === 'administrator' || status.botStatus === 'member';
 }
 
-function isSetupSeen(clubId: string): boolean {
-  try {
-    return localStorage.getItem(`${SETUP_SEEN_KEY_PREFIX}${clubId}`) !== null;
-  } catch {
-    // localStorage недоступен (приватный режим, вебвью без storage) — считаем «не видел»:
-    // лишний раз показать памятку безопаснее, чем оставить чат без прав.
-    return false;
-  }
-}
-
-function rememberSetupSeen(clubId: string): void {
-  try {
-    localStorage.setItem(`${SETUP_SEEN_KEY_PREFIX}${clubId}`, SETUP_SEEN_FLAG_VALUE);
-  } catch {
-    // Запись не удалась — памятка не покажется повторно только до перезапуска приложения.
-  }
-}
-
-/** Username бота из deep link `t.me/<bot>?startgroup=…` — чтобы назвать его в инструкции. */
-function botUsernameFromStartUrl(startGroupUrl: string): string | null {
-  try {
-    const name = new URL(startGroupUrl).pathname.replace(/^\//, '');
-    return name.length > 0 ? `@${name}` : null;
-  } catch {
-    return null;
-  }
-}
-
 // ---- Состояние A: не привязан ----
 
-const NotLinkedState: FC<{ startGroupUrl: string }> = ({ startGroupUrl }) => {
+const NotLinkedState: FC<{ clubId: string; startGroupUrl: string }> = ({ clubId, startGroupUrl }) => {
   const haptic = useHaptic();
   return (
     <div className="rd-glass" style={{ padding: 16 }}>
@@ -129,7 +62,13 @@ const NotLinkedState: FC<{ startGroupUrl: string }> = ({ startGroupUrl }) => {
       <button
         type="button"
         className="rd-btn-primary"
-        onClick={() => { haptic.impact('medium'); openTmeLink(startGroupUrl); }}
+        onClick={() => {
+          haptic.impact('medium');
+          // Отсюда человек уходит в Telegram (на iOS — вместе с закрытием Mini App); отметка
+          // нужна, чтобы по возвращении показать окно со статусом подключения бота.
+          rememberChatLinkingStarted(clubId, Date.now());
+          openTmeLink(startGroupUrl);
+        }}
       >
         Привязать чат
       </button>
@@ -153,16 +92,8 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [showUnlinkModal, setShowUnlinkModal] = useState(false);
-  // Памятка о правах сразу после привязки: Telegram добавляет бота с ВЫКЛЮЧЕННЫМИ ползунками,
-  // и без них ни одна функция чата не включится, а организатор об этом ниоткуда не узнает
-  // (жалоба PO 2026-08-15). Показываем один раз на клуб и только пока прав не хватает —
-  // когда всё выдано, подтверждать нечего.
-  const [showSetupModal, setShowSetupModal] = useState(
-    () => !isSetupSeen(clubId) && BOT_RIGHTS.some((right) => !right.granted(status)),
-  );
 
   const botInChat = isBotInChat(status);
-  const botUsername = botUsernameFromStartUrl(status.startGroupUrl);
   const busy = refreshMutation.isPending || updateMutation.isPending || unlinkMutation.isPending
     || pinClubLinkMutation.isPending;
 
@@ -229,11 +160,6 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
     });
   };
 
-  const closeSetupModal = () => {
-    rememberSetupSeen(clubId);
-    setShowSetupModal(false);
-  };
-
   const handleCopyDoorLink = () => {
     if (!status.doorInviteLink) return;
     haptic.impact('light');
@@ -262,7 +188,11 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
           type="button"
           className="rd-btn-primary"
           style={{ marginBottom: 12 }}
-          onClick={() => { haptic.impact('medium'); openTmeLink(status.startGroupUrl); }}
+          onClick={() => {
+            haptic.impact('medium');
+            rememberChatLinkingStarted(clubId, Date.now());
+            openTmeLink(status.startGroupUrl);
+          }}
         >
           Привязать бота заново
         </button>
@@ -451,43 +381,6 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
         Отвязать чат
       </button>
 
-      <Modal open={showSetupModal} onOpenChange={(v) => !v && closeSetupModal()}>
-        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Text weight="2">✅ Чат «{status.chatTitle ?? 'без названия'}» привязан</Text>
-          <Text>
-            Осталось выдать боту права: Telegram добавляет его с выключенными ползунками,
-            и пока они выключены, функции чата не включатся.
-          </Text>
-          <div className="rd-cl-rights">
-            {BOT_RIGHTS.map((right) => {
-              const granted = right.granted(status);
-              return (
-                <div key={right.title} className={`rd-cl-right${granted ? ' ok' : ''}`}>
-                  <span className="rr-mark" aria-hidden="true">{granted ? '✓' : '○'}</span>
-                  <span className="rr-tx">
-                    <b>{right.title}</b>
-                    <span className="rr-why">{right.why}</span>
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          <Text>
-            Откройте группу → <b>Управление группой → Администраторы</b> → выберите бота
-            {botUsername ? ` ${botUsername}` : ''} и включите нужные ползунки. Потом вернитесь
-            сюда и нажмите «Проверить права».
-          </Text>
-          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-            <Button size="m" stretched mode="outline" onClick={closeSetupModal} disabled={busy}>
-              Понятно
-            </Button>
-            <Button size="m" stretched onClick={handleRefresh} disabled={busy}>
-              {refreshMutation.isPending ? <Spinner size="s" /> : 'Проверить права'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
       <Modal open={showUnlinkModal} onOpenChange={(v) => !unlinkMutation.isPending && setShowUnlinkModal(v)}>
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Text weight="2">Отвязать чат «{status.chatTitle ?? 'без названия'}»?</Text>
@@ -531,7 +424,7 @@ export const ClubChatTab: FC<ClubChatTabProps> = ({ clubId }) => {
       <div className="rd-section-sub-h">Телеграм-чат</div>
       {status.linked
         ? <LinkedState clubId={clubId} status={status} />
-        : <NotLinkedState startGroupUrl={status.startGroupUrl} />}
+        : <NotLinkedState clubId={clubId} startGroupUrl={status.startGroupUrl} />}
     </>
   );
 };
