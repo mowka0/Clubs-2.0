@@ -35,8 +35,6 @@ import { InviteSheet } from '../components/club/InviteSheet';
 import { LeaveClubModal } from '../components/club/LeaveClubModal';
 import { ScreenPreview } from '../components/onboarding/ScreenPreview';
 import { ClubChatPill } from '../components/club/ClubChatPill';
-// ВРЕМЕННО (диагностика staging 2026-08-12) — снять вместе с блоком .rd-chat-dbg ниже
-import { describeChatOrigin } from '../telegram/chatOrigin';
 
 type TabId = 'activities' | 'members';
 
@@ -532,13 +530,7 @@ export const ClubPage: FC = () => {
             нет, а сам факт чата — довод вступить (решение PO 2026-07-31; раньше гостю
             доставалась лишь пассивная строчка у кнопки вступления). */}
         {showTabs && club.chatInviteLink && (
-          <>
-            <ClubChatPill mode="open" clubId={club.id} inviteLink={club.chatInviteLink} />
-            {/* ВРЕМЕННО (диагностика staging, 2026-08-12): что Telegram прислал в launch-
-                параметрах. Заход по кнопке «Проголосовать» из чата не распознаётся как запуск
-                из группы — надо увидеть факты. СНЯТЬ перед мержем в master. */}
-            <div className="rd-chat-dbg">{describeChatOrigin(club.id)}</div>
-          </>
+          <ClubChatPill mode="open" clubId={club.id} inviteLink={club.chatInviteLink} />
         )}
         {!showTabs && club.chatLinked && (
           <ClubChatPill
