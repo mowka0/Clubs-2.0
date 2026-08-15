@@ -64,7 +64,11 @@ function status(over: Partial<ChatLinkStatusDto> = {}): ChatLinkStatusDto {
 }
 
 function mockStatus(dto: ChatLinkStatusDto) {
-  server.use(http.get(`*/api/clubs/${CLUB_ID}/chat-link`, () => HttpResponse.json(dto)));
+  server.use(
+    http.get(`*/api/clubs/${CLUB_ID}/chat-link`, () => HttpResponse.json(dto)),
+    // Название клуба берётся из детальки — окно должно назвать, к какому клубу подключён чат
+    http.get(`*/api/clubs/${CLUB_ID}`, () => HttpResponse.json({ id: CLUB_ID, name: 'Партия' })),
+  );
 }
 
 /** Организатор ушёл привязывать чат `ageMs` назад и вернулся. */
@@ -81,7 +85,10 @@ describe('ChatSetupGate — окно статуса после привязки 
     mockStatus(status());
     renderWithProviders(<ChatSetupGate />);
 
-    expect(await screen.findByText(/Чат «Партия — чат» подключён/)).toBeInTheDocument();
+    // В заголовке — и чат, и клуб: у организатора клубов может быть несколько
+    expect(
+      await screen.findByText(/Чат «Партия — чат» подключён к клубу «Партия»/),
+    ).toBeInTheDocument();
     expect(screen.getByText('Закрепление сообщений')).toBeInTheDocument();
     expect(screen.getByText('Приглашение участников')).toBeInTheDocument();
     expect(screen.getByText('Блокировка пользователей')).toBeInTheDocument();

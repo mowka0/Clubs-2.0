@@ -54,11 +54,14 @@ function botUsernameFromStartUrl(startGroupUrl: string): string | null {
 
 interface ChatSetupModalProps {
   clubId: string;
+  /** Название клуба: у организатора их может быть несколько, и он должен видеть, к какому именно
+   *  подключился чат. undefined — деталька клуба ещё грузится, тогда обходимся названием чата. */
+  clubName: string | undefined;
   status: ChatLinkStatusDto;
   onClose: () => void;
 }
 
-export const ChatSetupModal: FC<ChatSetupModalProps> = ({ clubId, status, onClose }) => {
+export const ChatSetupModal: FC<ChatSetupModalProps> = ({ clubId, clubName, status, onClose }) => {
   const refreshMutation = useRefreshChatLinkMutation(clubId);
   const missing = BOT_RIGHTS.filter((right) => !right.granted(status));
   const botUsername = botUsernameFromStartUrl(status.startGroupUrl);
@@ -66,7 +69,10 @@ export const ChatSetupModal: FC<ChatSetupModalProps> = ({ clubId, status, onClos
   return (
     <Modal open onOpenChange={(v) => !v && onClose()}>
       <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <Text weight="2">✅ Чат «{status.chatTitle ?? 'без названия'}» подключён</Text>
+        <Text weight="2">
+          ✅ Чат «{status.chatTitle ?? 'без названия'}» подключён
+          {clubName ? ` к клубу «${clubName}»` : ''}
+        </Text>
         <Text>
           {missing.length === 0
             ? 'Бот в чате и получил все права. Осталось включить нужные функции в «Управлении → Чат».'

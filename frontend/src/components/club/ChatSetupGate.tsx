@@ -1,5 +1,6 @@
 import { FC, useState } from 'react';
 import { useChatLinkStatusQuery } from '../../queries/chatLink';
+import { useClubQuery } from '../../queries/clubs';
 import { forgetChatLinking, readPendingChatLinkClubId } from '../../utils/chatLinkPending';
 import { ChatSetupModal } from './ChatSetupModal';
 
@@ -25,12 +26,16 @@ export const ChatSetupGate: FC = () => {
     enabled: Boolean(pendingClubId) && !closed,
   });
   const status = statusQuery.data;
+  // Название клуба — из детальки: у организатора клубов может быть несколько, и окно должно
+  // говорить, к какому именно подключился чат. Запрос идёт только когда окно и так открывается.
+  const clubQuery = useClubQuery(status?.linked ? pendingClubId ?? undefined : undefined);
 
   if (!pendingClubId || closed || !status?.linked) return null;
 
   return (
     <ChatSetupModal
       clubId={pendingClubId}
+      clubName={clubQuery.data?.name}
       status={status}
       onClose={() => {
         forgetChatLinking();
