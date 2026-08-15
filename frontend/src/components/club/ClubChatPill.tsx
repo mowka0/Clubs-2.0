@@ -1,6 +1,8 @@
 import { FC, useState } from 'react';
 import { useHaptic } from '../../hooks/useHaptic';
 import { openTmeLink } from '../../utils/telegramLinks';
+import { isClubChatUnderApp } from '../../telegram/chatOrigin';
+import { ChatMinimizeHint } from './ChatMinimizeHint';
 
 /**
  * Пилюля «В чат» под описанием клуба. Два режима, и они принципиально разные:
@@ -11,16 +13,23 @@ import { openTmeLink } from '../../utils/telegramLinks';
  *   пилюлю — врать: чат у клуба есть, и это довод вступить.
  */
 export type ClubChatPillProps =
-  | { mode: 'open'; inviteLink: string }
+  | { mode: 'open'; clubId: string; inviteLink: string }
   | { mode: 'hint'; hintText: string; ctaLabel: string; onCta: () => void };
 
 export const ClubChatPill: FC<ClubChatPillProps> = (props) => {
   const haptic = useHaptic();
   const [hintOpen, setHintOpen] = useState(false);
+  const [minimizeHintOpen, setMinimizeHintOpen] = useState(false);
 
   const handleClick = () => {
     haptic.impact('light');
     if (props.mode === 'open') {
+      // Чат этого клуба уже лежит под приложением — переходить некуда, объясняем как выйти
+      // к нему (chatOrigin). На чат любого другого клуба уводим ссылкой, как обычно.
+      if (isClubChatUnderApp(props.clubId)) {
+        setMinimizeHintOpen(true);
+        return;
+      }
       openTmeLink(props.inviteLink);
       return;
     }
@@ -38,6 +47,8 @@ export const ClubChatPill: FC<ClubChatPillProps> = (props) => {
         <span aria-hidden="true">💬</span>
         В чат
       </button>
+
+      {minimizeHintOpen && <ChatMinimizeHint onClose={() => setMinimizeHintOpen(false)} />}
 
       {props.mode === 'hint' && hintOpen && (
         <>

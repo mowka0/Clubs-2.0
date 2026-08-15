@@ -29,7 +29,9 @@ vi.mock('../../telegram/sdk', () => ({
 import { ClubChatTab } from '../../components/manage/ClubChatTab';
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
-afterEach(() => { server.resetHandlers(); vi.clearAllMocks(); });
+// localStorage чистим между тестами: памятка о правах помнит «уже видел» именно там,
+// иначе первый же тест погасил бы её для всех следующих.
+afterEach(() => { server.resetHandlers(); vi.clearAllMocks(); localStorage.clear(); });
 afterAll(() => server.close());
 
 const CLUB_ID = 'club-1';
@@ -77,7 +79,7 @@ const linkedHealthy = (over: Partial<ChatLinkStatusDto> = {}) => status({
 });
 
 describe('ClubChatTab', () => {
-  it('состояние A: не привязан — CTA открывает startgroup deep link', async () => {
+  it('состояние A: не привязан — CTA открывает startgroup deep link и ставит отметку ожидания', async () => {
     mockStatus(status());
     renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
 
@@ -85,6 +87,9 @@ describe('ClubChatTab', () => {
     await userEvent.click(cta);
 
     expect(openTelegramLinkMock).toHaveBeenCalledWith(START_URL);
+    // Отсюда человек уходит в Telegram (на iOS приложение закрывается) — отметка переживает
+    // выход и по возвращении открывает окно со статусом подключения бота (ChatSetupGate).
+    expect(localStorage.getItem('clubs:chat-linking-pending')).toContain(CLUB_ID);
   });
 
   it('состояние B: привязан и здоров — карточка чата, зелёные пиллы, тумблер двери активен', async () => {
@@ -362,7 +367,8 @@ describe('ClubChatTab', () => {
     renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
 
     expect(await screen.findByText('Новые участники не видят историю чата')).toBeInTheDocument();
-    expect(screen.getByText(/История чата → Видна новым участникам/)).toBeInTheDocument();
+    // Путь в настройках Telegram — как он называется в клиенте (уточнение PO 2026-08-15).
+    expect(screen.getByText(/Управление группой → История чата для новых участников/)).toBeInTheDocument();
   });
 
   it('история видна — подсказки нет', async () => {

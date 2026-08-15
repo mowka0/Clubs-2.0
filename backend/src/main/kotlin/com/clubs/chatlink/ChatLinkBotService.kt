@@ -60,9 +60,10 @@ class ChatLinkBotService(
         if (existingForClub != null && existingForClub.chatId == chatId) {
             // Повторное добавление в тот же чат (типовой случай — бота кикнули и вернули кнопкой
             // «Привязать бота заново»): идемпотентно освежаем права и при необходимости
-            // пересоздаём invite-ссылку. Сообщение в чат — ТО ЖЕ, что при первой привязке
-            // (реестр багов №3: «уже привязан» сбивал с толку, когда бот фактически отсутствовал).
-            // DM-петля подтверждения не дублируется — гейт владельца уже пройден.
+            // пересоздаём invite-ссылку. Подтверждение — ТО ЖЕ, что при первой привязке
+            // (реестр багов №3: «уже привязан» сбивал с толку, когда бот фактически отсутствовал),
+            // и уходит владельцу в личку, а не в чат: участникам группы это сообщение не адресовано
+            // (решение PO 2026-08-15). Закреп со ссылкой на клуб не переспамливаем — он уже висит.
             val state = gateway.getBotChatState(chatId)
             if (state != null) {
                 chatLinkRepository.updateBotState(
@@ -79,7 +80,12 @@ class ChatLinkBotService(
                     nowCanInvite = state.canInviteUsers
                 )
             }
-            gateway.sendGroupMessage(chatId, linkedMessage(club.name))
+            gateway.sendDmWithCallbackButton(
+                telegramId = fromTelegramId,
+                text = linkedMessage(chatTitle, club.name),
+                buttonText = "Отвязать чат",
+                callbackData = "$UNLINK_CALLBACK_PREFIX$clubId"
+            )
             return
         }
         if (existingForClub != null) {
@@ -147,33 +153,23 @@ class ChatLinkBotService(
         // «Чат клуба» у участников — не дожидаясь включения тумблера «Вход через заявки».
         ensureInviteLink(link, nowInChat = link.botStatus.isInChat, nowCanInvite = link.canInviteUsers)
 
-        // Петля подтверждения (решение PO): фишинг-привязка мгновенно видна и обратима.
-        gateway.sendGroupMessage(chatId, linkedMessage(club.name))
-        // Приглашение сидящим в чате (фидбек PO 2026-07-08): чат мог существовать до клуба —
-        // зовём его участников в клуб кнопкой-диплинком. Только при ПЕРВИЧНОЙ привязке:
-        // повторный /start (возврат кикнутого бота) приглашение не дублирует — спам-бюджет.
-        gateway.sendGroupMessageWithUrlButton(
-            chatId = chatId,
-            text = "👋 Теперь встречи, сборы и записи клуба «${club.name}» живут в приложении Clubs.\n" +
-                "Если ты ещё не в клубе — вступай, чтобы участвовать:",
-            buttonText = "Вступить в клуб",
-            url = clubMiniAppUrl(clubId)
-        )
-        // Отдельный закреплённый пост со ссылкой: приглашение выше уедет вверх за неделю
-        // переписки, а закреп остаётся под рукой. Best-effort — без права закреплять сообщение
-        // просто останется в ленте.
-        if (link.canPinMessages) {
-            chatLinkService.postAndPinClubLink(chatId, club.name, clubId)
-                ?.let { chatLinkRepository.updateClubPinMessageId(clubId, it) }
-        }
+        // Единственное сообщение в чат: ссылка на клуб + зов вступить, закреплённое (решение PO
+        // 2026-08-15 — раньше сюда прилетали три уведомления подряд). Постим ВСЕГДА, даже без
+        // права закреплять: без закрепа сообщение просто остаётся в ленте, а чат не должен
+        // оставаться вовсе без следа привязки. Подтверждение привязки уехало в личку владельцу.
+        chatLinkService.postAndPinClubLink(chatId, club.name, clubId)
+            ?.let { chatLinkRepository.updateClubPinMessageId(clubId, it) }
         // Слепок «видна ли новичкам история»: при скрытой истории закрепы для них не существуют,
         // и таб «Чат» покажет владельцу подсказку, как это переключить.
         gateway.getChatInfo(chatId)?.let {
             chatLinkRepository.updateHistoryVisibility(clubId, it.hasVisibleHistory)
         }
+        // Личка владельцу — одно сообщение на две задачи: подтверждение привязки (раньше висело
+        // отдельным постом В ЧАТЕ) и петля безопасности «это были вы?», из-за которой
+        // фишинг-привязка мгновенно видна и обратима.
         gateway.sendDmWithCallbackButton(
             telegramId = fromTelegramId,
-            text = "Чат «${chatTitle ?: "без названия"}» привязан к вашему клубу «${club.name}». Это были вы?\n\nЕсли нет — отвяжите чат кнопкой ниже.",
+            text = linkedMessage(chatTitle, club.name),
             buttonText = "Отвязать чат",
             callbackData = "$UNLINK_CALLBACK_PREFIX$clubId"
         )
@@ -259,9 +255,16 @@ class ChatLinkBotService(
         }
     }
 
-    // Единый текст подтверждения в чат — и при первой привязке, и при повторной (после кика).
-    private fun linkedMessage(clubName: String): String =
-        "✅ Чат привязан к клубу «$clubName». Управление — в приложении Clubs, вкладка «Чат»."
+    /**
+     * Единый текст подтверждения ВЛАДЕЛЬЦУ В ЛИЧКУ — и при первой привязке, и при повторной
+     * (после кика). Совмещает две задачи: сказать, что привязка прошла, и оставить петлю
+     * безопасности «это были вы?» с кнопкой отвязки. Раньше первая половина уходила отдельным
+     * постом в чат, где была не к месту (решение PO 2026-08-15).
+     */
+    private fun linkedMessage(chatTitle: String?, clubName: String): String =
+        "✅ Чат «${chatTitle ?: "без названия"}» привязан к клубу «$clubName».\n" +
+            "Управление — в приложении Clubs, вкладка «Чат».\n\n" +
+            "Это были вы? Если нет — отвяжите чат кнопкой ниже."
 
     // Deep link Main Mini App на страницу клуба (DeepLinkHandler фронта парсит club_<uuid>).
     // url-кнопка, не WebApp: WebApp-кнопки в группах запрещены Telegram (рамка слайса 3).

@@ -6,18 +6,9 @@ import {
   swipeBehavior,
   shareMessage,
 } from '@telegram-apps/sdk-react';
+import { isPhonePlatform } from './platform';
 
 let initialized = false;
-
-/**
- * Платформы, где полноэкранный режим уместен. На телефоне экран узкий, и шапка Telegram
- * съедает заметную долю высоты — там fullscreen выигрывает. На компьютере окно Mini App и так
- * компактное, а полноэкранный режим растягивает его на весь монитор (просьба PO 2026-07-31).
- *
- * Список — whitelist, а не blacklist десктопов: незнакомая платформа получит обычный режим,
- * и это безопаснее, чем случайно развернуть приложение во весь экран рабочего стола.
- */
-const FULLSCREEN_PLATFORMS = new Set(['android', 'android_x', 'ios']);
 
 export function initTelegramSdk(): void {
   if (initialized) return;
@@ -81,10 +72,14 @@ function setupViewport(): void {
  *
  * Приведение одноразовое, на старте: если пользователь потом сам сменит режим кнопкой
  * Telegram, мы его обратно не переключаем.
+ *
+ * На телефоне это fullscreen (узкий экран, шапка Telegram съедает заметную долю высоты),
+ * на компьютере — обычное окно: там окно Mini App и так компактное, а полноэкранный режим
+ * растянул бы его на весь монитор (просьба PO 2026-07-31).
  */
 function applyFullscreenPolicy(): void {
   try {
-    if (shouldUseFullscreen()) {
+    if (isPhonePlatform()) {
       if (viewport.isFullscreen()) return;
       if (!viewport.requestFullscreen.isAvailable()) return;
       viewport.requestFullscreen().catch(() => {
@@ -101,16 +96,6 @@ function applyFullscreenPolicy(): void {
     });
   } catch (_e) {
     // Fullscreen API недоступен — пропускаем
-  }
-}
-
-/** Телефон — да, компьютер и незнакомая платформа — нет. Вне Telegram режима нет вовсе. */
-function shouldUseFullscreen(): boolean {
-  try {
-    const { tgWebAppPlatform } = retrieveLaunchParams();
-    return FULLSCREEN_PLATFORMS.has(tgWebAppPlatform);
-  } catch (_e) {
-    return false;
   }
 }
 

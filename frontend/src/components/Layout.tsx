@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { BottomTabBar, isTabBarRoute } from './BottomTabBar';
 import { DeepLinkHandler } from './DeepLinkHandler';
+import { ChatSetupGate } from './club/ChatSetupGate';
 import { SwipeNavigator } from './SwipeNavigator';
 import { CreateActivityFlow } from './manage/CreateActivityFlow';
 import { OnboardingFlow } from './onboarding/OnboardingFlow';
@@ -142,6 +143,9 @@ export const Layout: FC = () => {
   return (
     <>
       <DeepLinkHandler />
+      {/* Окно «чат подключён» после возвращения из Telegram — в корне, потому что вернуться
+          человек может на любой экран (см. ChatSetupGate). */}
+      <ChatSetupGate />
       {/* Suspense внутри навигатора, а не снаружи: при lazy-загрузке страницы
           обёртка жеста не должна размонтироваться вместе с содержимым. */}
       <SwipeNavigator>

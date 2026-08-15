@@ -9,6 +9,7 @@ import {
   useUpdateChatLinkMutation,
 } from '../../queries/chatLink';
 import { openTmeLink } from '../../utils/telegramLinks';
+import { rememberChatLinkingStarted } from '../../utils/chatLinkPending';
 import { Toast } from '../Toast';
 import type { ChatLinkStatusDto, UpdateChatLinkRequest } from '../../types/api';
 
@@ -32,7 +33,7 @@ function isBotInChat(status: ChatLinkStatusDto): boolean {
 
 // ---- Состояние A: не привязан ----
 
-const NotLinkedState: FC<{ startGroupUrl: string }> = ({ startGroupUrl }) => {
+const NotLinkedState: FC<{ clubId: string; startGroupUrl: string }> = ({ clubId, startGroupUrl }) => {
   const haptic = useHaptic();
   return (
     <div className="rd-glass" style={{ padding: 16 }}>
@@ -61,7 +62,13 @@ const NotLinkedState: FC<{ startGroupUrl: string }> = ({ startGroupUrl }) => {
       <button
         type="button"
         className="rd-btn-primary"
-        onClick={() => { haptic.impact('medium'); openTmeLink(startGroupUrl); }}
+        onClick={() => {
+          haptic.impact('medium');
+          // Отсюда человек уходит в Telegram (на iOS — вместе с закрытием Mini App); отметка
+          // нужна, чтобы по возвращении показать окно со статусом подключения бота.
+          rememberChatLinkingStarted(clubId, Date.now());
+          openTmeLink(startGroupUrl);
+        }}
       >
         Привязать чат
       </button>
@@ -181,7 +188,11 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
           type="button"
           className="rd-btn-primary"
           style={{ marginBottom: 12 }}
-          onClick={() => { haptic.impact('medium'); openTmeLink(status.startGroupUrl); }}
+          onClick={() => {
+            haptic.impact('medium');
+            rememberChatLinkingStarted(clubId, Date.now());
+            openTmeLink(status.startGroupUrl);
+          }}
         >
           Привязать бота заново
         </button>
@@ -214,7 +225,7 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
             <div className="rd-cl-hist-d">
               Telegram скрывает от них всё, что было до вступления, — включая закреплённые
               сообщения о встречах и ссылку на клуб. Включается в самом Telegram:
-              <b> Управление группой → Тип группы → История чата → Видна новым участникам</b>.
+              <b> Управление группой → История чата для новых участников</b>.
               После этого нажмите «Проверить права ещё раз».
             </div>
           </div>
@@ -413,7 +424,7 @@ export const ClubChatTab: FC<ClubChatTabProps> = ({ clubId }) => {
       <div className="rd-section-sub-h">Телеграм-чат</div>
       {status.linked
         ? <LinkedState clubId={clubId} status={status} />
-        : <NotLinkedState startGroupUrl={status.startGroupUrl} />}
+        : <NotLinkedState clubId={clubId} startGroupUrl={status.startGroupUrl} />}
     </>
   );
 };
