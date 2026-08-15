@@ -13,7 +13,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useClubContextStore } from '../store/useClubContextStore';
 import { useCreateFlowStore } from '../store/useCreateFlowStore';
 import { useOrganizerClubs } from '../queries/organizerClubs';
-import { getStartParam } from '../telegram/sdk';
+import { closeMiniApp, getStartParam } from '../telegram/sdk';
 
 /**
  * Спиннер-заглушка, показывается пока подгружаются lazy-загруженные страницы.
@@ -99,8 +99,11 @@ export const Layout: FC = () => {
     if (!isAuthenticated && !isLoading && !error) login();
   }, [isAuthenticated, isLoading, error, login]);
 
-  // Показываем Telegram BackButton только на вложенных страницах (где док скрыт)
-  useBackButton(!showTabBar);
+  // Человек пришёл кнопкой из чата клуба и жмёт «назад» на первом же экране: внутри
+  // приложения идти некуда, а вернуться он хочет в чат — он прямо под приложением.
+  // «Назад» здесь значит «я тут закончил», поэтому закрываем приложение и отдаём человека
+  // чату. Свернуть вместо закрытия нельзя — в протоколе Mini Apps такого метода нет.
+  useBackButton(!showTabBar, closeMiniApp);
 
   if (!isAuthenticated) {
     if (error) {

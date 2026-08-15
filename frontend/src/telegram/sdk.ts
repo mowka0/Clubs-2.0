@@ -2,6 +2,7 @@ import {
   init,
   retrieveLaunchParams,
   initData,
+  miniApp,
   viewport,
   swipeBehavior,
   shareMessage,
@@ -138,6 +139,23 @@ function setupSwipeBehavior(): void {
     }
   } catch (_e) {
     // Swipe behavior не поддерживается (Mini Apps < 7.7) — прокрутка остаётся стандартной
+  }
+}
+
+/**
+ * Закрывает Mini App — единственный способ увести человека из приложения программно.
+ *
+ * Свернуть кодом нельзя: в протоколе Mini Apps (SDK 3.11.8, Bot API 9.5) есть `web_app_close`
+ * и нет ничего для минимизации — сворачивают только руками, жестом за шапку или кнопкой ⌄.
+ * Отсюда цена закрытия: состояние теряется, следующий заход — с нуля. Поэтому зовём его
+ * ровно там, где человек и так уходит: «назад» с той страницы, куда его привела кнопка из
+ * чата (решение PO 2026-08-15).
+ */
+export function closeMiniApp(): void {
+  try {
+    if (miniApp.close.isAvailable()) miniApp.close();
+  } catch (_e) {
+    // Не в среде Telegram — закрывать нечего
   }
 }
 
