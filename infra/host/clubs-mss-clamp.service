@@ -1,0 +1,21 @@
+[Unit]
+# Возвращает MSS clamping после каждой загрузки сервера. Без него часть пользователей
+# получает пустой белый экран (чёрная дыра PMTU) — см. clubs-mss-clamp.sh и
+# docs/modules/infrastructure.md § «MSS clamping».
+Description=Clubs: TCP MSS clamping (обход чёрной дыры PMTU)
+Documentation=https://github.com/mowka0/Clubs-2.0/blob/master/docs/modules/infrastructure.md
+# Правила живут в таблице mangle, которую Docker не пересоздаёт, но стартуем после него —
+# так порядок цепочек одинаков при загрузке и при ручном перезапуске юнита.
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Правила остаются в ядре после выхода скрипта — иначе systemd считал бы юнит «неактивным»
+# и `systemctl status` вводил бы в заблуждение.
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/clubs-mss-clamp apply
+ExecStop=/usr/local/sbin/clubs-mss-clamp remove
+
+[Install]
+WantedBy=multi-user.target
