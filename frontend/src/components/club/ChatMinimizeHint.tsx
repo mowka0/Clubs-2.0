@@ -1,6 +1,5 @@
 import { FC } from 'react';
 import { createPortal } from 'react-dom';
-import { closeMiniApp } from '../../telegram/miniApp';
 
 /**
  * Подсказка «вы уже в этом чате», которую пилюля «💬 В чат» показывает вместо перехода,
@@ -8,12 +7,12 @@ import { closeMiniApp } from '../../telegram/miniApp';
  *
  * Живёт в правом верхнем углу — вплотную к контролам Telegram, потому что читать текст и
  * искать кнопку человек должен в одном месте: хвостик подсказки указывает прямо в кнопку
- * сворачивания, а пульсирующее кольцо её подсвечивает (выбор PO из трёх вариантов,
- * `docs/design/chat-button-minimize-hint/`).
+ * сворачивания (выбор PO из трёх вариантов, `docs/design/chat-button-minimize-hint/`;
+ * подсвечивающее кольцо вокруг кнопки было и убрано по его же просьбе — хвостика достаточно).
  *
- * Две кнопки — это два разных выхода, а не дубль: «Выйти в чат» закрывает приложение (быстро,
- * но состояние теряется), кнопка сворачивания Telegram оставляет его в плашке. Свернуть кодом
- * нельзя, поэтому выбор за человеком.
+ * Своей кнопки «выйти в чат» здесь намеренно нет: закрыть Mini App кодом можно, а свернуть —
+ * нельзя (среди методов Mini Apps только `web_app_close`), и закрытие теряет состояние.
+ * Подсказка объясняет и уступает действие кнопке Telegram (решение PO 2026-08-15).
  *
  * Портал в body — иначе `position: fixed` считался бы от ближайшего предка с transform/filter,
  * а пилюля живёт внутри карточки «О клубе» с backdrop-filter.
@@ -22,7 +21,6 @@ export const ChatMinimizeHint: FC<{ onClose: () => void }> = ({ onClose }) =>
   createPortal(
     // Завеса перехватывает тап мимо подсказки — на телефоне это привычный способ её закрыть.
     <div className="rd-mzhint-veil" onClick={onClose}>
-      <div className="rd-mzhint-halo" aria-hidden="true" />
       {/* Без role="dialog": глобальное правило brand-theme.css прибивает всё с этой ролью
           к низу экрана через !important (там живут боттом-шиты). */}
       <div className="rd-mzhint" onClick={(e) => e.stopPropagation()}>
@@ -30,10 +28,7 @@ export const ChatMinimizeHint: FC<{ onClose: () => void }> = ({ onClose }) =>
         <p className="rd-mzhint-tx">
           Приложение открыто поверх него — сверните вот этой кнопкой, и оно останется под рукой.
         </p>
-        <button type="button" className="rd-mzhint-cta" onClick={closeMiniApp}>
-          Выйти в чат
-        </button>
-        <button type="button" className="rd-mzhint-ghost" onClick={onClose}>
+        <button type="button" className="rd-mzhint-cta" onClick={onClose}>
           Понятно
         </button>
       </div>

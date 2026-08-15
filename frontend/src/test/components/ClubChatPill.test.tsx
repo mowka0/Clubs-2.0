@@ -118,14 +118,16 @@ describe('ClubChatPill — переход в чат клуба', () => {
     },
   );
 
-  it('«Выйти в чат» закрывает приложение — человек оказывается в чате под ним', async () => {
+  it('подсказка ничего не закрывает сама: свернуть приложение человек должен кнопкой Telegram', async () => {
+    // Своя кнопка «выйти в чат» была и убрана по просьбе PO 2026-08-15: она закрывала Mini App
+    // по-настоящему (свернуть кодом нельзя), а человек ждал сворачивания с сохранением состояния.
     launchFromChatOf(CLUB_A);
     renderPill(CLUB_A);
 
     await userEvent.click(screen.getByRole('button', { name: /В чат/ }));
-    await userEvent.click(screen.getByRole('button', { name: 'Выйти в чат' }));
 
-    expect(closeMock).toHaveBeenCalledOnce();
+    expect(screen.getByText('Вы уже в этом чате')).toBeInTheDocument();
+    expect(closeMock).not.toHaveBeenCalled();
   });
 
   it('на компьютере подсказки нет: Mini App там отдельное окно рядом с чатом', async () => {
