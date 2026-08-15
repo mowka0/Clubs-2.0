@@ -35,6 +35,8 @@ const CLUB_CHAT_START_PARAM = /^(club|event|skladchina)_/i;
 let sourceClubId: string | null = null;
 /** Первый клуб уже зафиксирован — дальше человек ходит по приложению, и это уже не источник. */
 let sourceResolved = false;
+/** Путь, на который увела кнопка из чата. null — заходили не по deep link. */
+let landingPath: string | null = null;
 
 /**
  * Регистрирует клуб очередной открытой клубной страницы. Вызывается из `useSetClubContext` —
@@ -53,6 +55,35 @@ export function rememberClubShown(clubId: string): void {
  */
 export function isClubChatUnderApp(clubId: string): boolean {
   return sourceClubId === clubId && isPhonePlatform();
+}
+
+/**
+ * Лежит ли под приложением ЧАТ КЛУБА — без привязки к тому, какой именно клуб сейчас открыт.
+ *
+ * Нужно кнопке «назад»: человек, пришедший кнопкой из чата, жмёт её, чтобы вернуться в чат,
+ * а не к экрану приложения. Клуб для этого вопроса не важен — важен факт «мы поверх чата».
+ * Пуст ли путь назад внутри приложения, решает история (`useHistoryPosition`), не этот модуль.
+ */
+export function isChatUnderApp(): boolean {
+  return isLaunchedFromClubChat() && isPhonePlatform();
+}
+
+/** Запоминает страницу, открытую deep link'ом. Вызывается из `DeepLinkHandler`. */
+export function rememberDeepLinkLanding(path: string): void {
+  landingPath = path;
+}
+
+/**
+ * Страница, с которой «назад» ведёт в чат, а не внутрь приложения: та самая, куда привела
+ * кнопка из чата клуба.
+ *
+ * Нужно ещё до нажатия — чтобы ПОКАЗАТЬ на ней Telegram BackButton. Deep link приводит на
+ * детальные страницы (`/events/:id`, `/clubs/:id`, `/skladchina/:id`), а там показан док, и
+ * обычно кнопку «назад» мы прячем: внутри приложения ей некуда вести. Пока она спрятана,
+ * нажатие уходит мимо приложения — перехватить его и объяснить про сворачивание нельзя.
+ */
+export function isChatExitPoint(path: string): boolean {
+  return landingPath === path && isChatUnderApp();
 }
 
 /**
@@ -83,4 +114,5 @@ function readStartParam(): string | null {
 export function resetChatOriginForTests(): void {
   sourceClubId = null;
   sourceResolved = false;
+  landingPath = null;
 }

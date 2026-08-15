@@ -1,8 +1,9 @@
-import { FC, Suspense, useEffect, useMemo } from 'react';
+import { FC, Suspense, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { BottomTabBar, isTabBarRoute } from './BottomTabBar';
 import { DeepLinkHandler } from './DeepLinkHandler';
+import { ChatMinimizeHint } from './club/ChatMinimizeHint';
 import { ChatSetupGate } from './club/ChatSetupGate';
 import { SwipeNavigator } from './SwipeNavigator';
 import { CreateActivityFlow } from './manage/CreateActivityFlow';
@@ -99,8 +100,14 @@ export const Layout: FC = () => {
     if (!isAuthenticated && !isLoading && !error) login();
   }, [isAuthenticated, isLoading, error, login]);
 
+  // Человек пришёл кнопкой из чата клуба и жмёт «назад» на первом же экране: внутри
+  // приложения идти некуда, а вернуться он хочет в чат — он прямо под приложением.
+  // Свернуть Mini App кодом нельзя, поэтому вместо холостого хода показываем ту же
+  // подсказку, что и пилюля «В чат».
+  const [chatExitHintOpen, setChatExitHintOpen] = useState(false);
+
   // Показываем Telegram BackButton только на вложенных страницах (где док скрыт)
-  useBackButton(!showTabBar);
+  useBackButton(!showTabBar, () => setChatExitHintOpen(true));
 
   if (!isAuthenticated) {
     if (error) {
@@ -146,6 +153,13 @@ export const Layout: FC = () => {
       {/* Окно «чат подключён» после возвращения из Telegram — в корне, потому что вернуться
           человек может на любой экран (см. ChatSetupGate). */}
       <ChatSetupGate />
+      {chatExitHintOpen && (
+        <ChatMinimizeHint
+          title="Чат — прямо под приложением"
+          text="Вы пришли сюда из него. Сверните приложение вот этой кнопкой, и оно останется под рукой."
+          onClose={() => setChatExitHintOpen(false)}
+        />
+      )}
       {/* Suspense внутри навигатора, а не снаружи: при lazy-загрузке страницы
           обёртка жеста не должна размонтироваться вместе с содержимым. */}
       <SwipeNavigator>

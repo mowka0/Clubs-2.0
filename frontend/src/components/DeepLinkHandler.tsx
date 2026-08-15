@@ -1,6 +1,7 @@
 import { FC, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getStartParam } from '../telegram/sdk';
+import { rememberDeepLinkLanding } from '../telegram/chatOrigin';
 
 /**
  * Монтируется один раз в корне приложения и разбирает телеграмовский tgWebAppStartParam.
@@ -25,26 +26,34 @@ export const DeepLinkHandler: FC = () => {
     const startParam = getStartParam();
     if (!startParam) return;
 
+    // `replace`, а не push: заходом по ссылке приложение и НАЧИНАЕТСЯ, лишней записи истории
+    // позади быть не должно. Путь запоминаем — по нему кнопка «назад» узнаёт страницу, с
+    // которой внутри приложения возвращаться некуда (`chatOrigin.isChatExitPoint`).
+    const land = (path: string) => {
+      rememberDeepLinkLanding(path);
+      navigate(path, { replace: true });
+    };
+
     const sklad = startParam.match(/^skladchina_([0-9a-f-]{36})$/i);
     if (sklad) {
-      navigate(`/skladchina/${sklad[1]}`, { replace: true });
+      land(`/skladchina/${sklad[1]}`);
       return;
     }
     const event = startParam.match(/^event_([0-9a-f-]{36})$/i);
     if (event) {
-      navigate(`/events/${event[1]}`, { replace: true });
+      land(`/events/${event[1]}`);
       return;
     }
     const club = startParam.match(/^club_([0-9a-f-]{36})$/i);
     if (club) {
-      navigate(`/clubs/${club[1]}`, { replace: true });
+      land(`/clubs/${club[1]}`);
       return;
     }
     // Инвайт-код — 16 hex-символов (ClubService.generateInviteCode); диапазон в regex
     // шире на случай будущей смены длины.
     const invite = startParam.match(/^invite_([0-9a-f]{8,64})$/i);
     if (invite) {
-      navigate(`/invite/${invite[1]}`, { replace: true });
+      land(`/invite/${invite[1]}`);
       return;
     }
   }, [navigate]);
