@@ -29,7 +29,9 @@ vi.mock('../../telegram/sdk', () => ({
 import { ClubChatTab } from '../../components/manage/ClubChatTab';
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
-afterEach(() => { server.resetHandlers(); vi.clearAllMocks(); });
+// localStorage чистим между тестами: памятка о правах помнит «уже видел» именно там,
+// иначе первый же тест погасил бы её для всех следующих.
+afterEach(() => { server.resetHandlers(); vi.clearAllMocks(); localStorage.clear(); });
 afterAll(() => server.close());
 
 const CLUB_ID = 'club-1';
@@ -362,7 +364,8 @@ describe('ClubChatTab', () => {
     renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
 
     expect(await screen.findByText('Новые участники не видят историю чата')).toBeInTheDocument();
-    expect(screen.getByText(/История чата → Видна новым участникам/)).toBeInTheDocument();
+    // Путь в настройках Telegram — как он называется в клиенте (уточнение PO 2026-08-15).
+    expect(screen.getByText(/Управление группой → История чата для новых участников/)).toBeInTheDocument();
   });
 
   it('история видна — подсказки нет', async () => {
@@ -395,6 +398,72 @@ describe('ClubChatTab', () => {
     renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
 
     expect(await screen.findByRole('button', { name: 'Закрепить' })).toBeDisabled();
+  });
+
+  // ---- Памятка о правах сразу после привязки (жалоба PO 2026-08-15) ----
+  // Telegram добавляет бота с выключенными ползунками прав, и без них не включается ни одна
+  // функция чата. Организатору об этом никто не говорит — теперь говорит модалка.
+
+  it('чат привязан без прав — памятка со списком прав и путём в настройки группы', async () => {
+    mockStatus(linkedHealthy({
+      canPinMessages: false,
+      canInviteUsers: false,
+      canRestrictMembers: false,
+      canManageTags: false,
+    }));
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByText(/Чат «Партия — чат» привязан/)).toBeInTheDocument();
+    expect(screen.getByText('Закрепление сообщений')).toBeInTheDocument();
+    expect(screen.getByText('Приглашение участников')).toBeInTheDocument();
+    expect(screen.getByText('Блокировка пользователей')).toBeInTheDocument();
+    expect(screen.getByText('Управление тегами')).toBeInTheDocument();
+    // Имя бота берём из deep link, чтобы организатор искал в списке админов конкретное имя
+    expect(screen.getByText(/@clubs_test_bot/)).toBeInTheDocument();
+  });
+
+  it('все права уже выданы — памятки нет, подтверждать нечего', async () => {
+    mockStatus(linkedHealthy());
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    await screen.findByText('Партия — чат');
+    expect(screen.queryByText(/привязан$/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Закрепление сообщений')).not.toBeInTheDocument();
+  });
+
+  it('«Понятно» гасит памятку насовсем — второй заход в таб её не показывает', async () => {
+    mockStatus(linkedHealthy({ canPinMessages: false }));
+    const user = userEvent.setup();
+    const first = renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Понятно' }));
+    expect(screen.queryByText('Закрепление сообщений')).not.toBeInTheDocument();
+
+    first.unmount();
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    await screen.findByText('Партия — чат');
+    expect(screen.queryByText('Закрепление сообщений')).not.toBeInTheDocument();
+  });
+
+  it('«Проверить права» из памятки дёргает refresh и обновляет отметки', async () => {
+    let current = linkedHealthy({ canPinMessages: false });
+    let refreshed = false;
+    server.use(
+      http.get(`*/api/clubs/${CLUB_ID}/chat-link`, () => HttpResponse.json(current)),
+      http.post(`*/api/clubs/${CLUB_ID}/chat-link/refresh`, () => {
+        refreshed = true;
+        current = linkedHealthy();
+        return HttpResponse.json(current);
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Проверить права' }));
+
+    await waitFor(() => expect(refreshed).toBe(true));
+    await waitFor(() => expect(screen.getByText('✓ закреп разрешён')).toBeInTheDocument());
   });
 
 });
