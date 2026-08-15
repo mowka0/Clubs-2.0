@@ -26,8 +26,8 @@ import { isChatExitPoint, isChatUnderApp } from '../telegram/chatOrigin';
  *
  * Ради этого же случая кнопка ПОКАЗЫВАЕТСЯ там, где обычно спрятана: deep link из чата
  * приводит на детальные страницы с доком (`/events/:id`, `/clubs/:id`, `/skladchina/:id`),
- * а спрятанную кнопку нажимают мимо приложения — перехватить нажатие и объяснить про
- * сворачивание можно только когда кнопка наша.
+ * а спрятанную кнопку нажимают мимо приложения — перехватить нажатие можно только когда
+ * кнопка наша.
  */
 export function useBackButton(visible: boolean, onExitToChat?: () => void): void {
   const navigate = useNavigate();
@@ -77,7 +77,7 @@ export function useBackButton(visible: boolean, onExitToChat?: () => void): void
       // чтобы тап «назад» ощущался так же, как навигация внутри приложения.
       haptic.impact('light');
       // Позади пусто и под приложением лежит чат клуба — «назад» ведёт туда, а не внутрь
-      // приложения. Свернуть Mini App кодом нельзя, поэтому объясняем и уступаем действие.
+      // приложения.
       const exitToChat = exitToChatRef.current;
       if (exitToChat !== undefined && !canGoBack() && isChatUnderApp()) {
         exitToChat();

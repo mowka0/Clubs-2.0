@@ -23,6 +23,8 @@ vi.mock('@telegram-apps/telegram-ui', () => import('../mocks/telegramUi'));
 const getStartParamMock = vi.fn<[], string | null>();
 vi.mock('../../telegram/sdk', () => ({
   getStartParam: () => getStartParamMock(),
+  // Layout отдаёт его кнопке «назад» как выход в чат — в гейте не участвует.
+  closeMiniApp: vi.fn(),
 }));
 
 // Док не участвует в гейте, но монтируется вместе с приложением — глушим его запросы.

@@ -1,9 +1,8 @@
-import { FC, Suspense, useEffect, useMemo, useState } from 'react';
+import { FC, Suspense, useEffect, useMemo } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Spinner } from '@telegram-apps/telegram-ui';
 import { BottomTabBar, isTabBarRoute } from './BottomTabBar';
 import { DeepLinkHandler } from './DeepLinkHandler';
-import { ChatMinimizeHint } from './club/ChatMinimizeHint';
 import { ChatSetupGate } from './club/ChatSetupGate';
 import { SwipeNavigator } from './SwipeNavigator';
 import { CreateActivityFlow } from './manage/CreateActivityFlow';
@@ -14,7 +13,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useClubContextStore } from '../store/useClubContextStore';
 import { useCreateFlowStore } from '../store/useCreateFlowStore';
 import { useOrganizerClubs } from '../queries/organizerClubs';
-import { getStartParam } from '../telegram/sdk';
+import { closeMiniApp, getStartParam } from '../telegram/sdk';
 
 /**
  * Спиннер-заглушка, показывается пока подгружаются lazy-загруженные страницы.
@@ -102,12 +101,9 @@ export const Layout: FC = () => {
 
   // Человек пришёл кнопкой из чата клуба и жмёт «назад» на первом же экране: внутри
   // приложения идти некуда, а вернуться он хочет в чат — он прямо под приложением.
-  // Свернуть Mini App кодом нельзя, поэтому вместо холостого хода показываем ту же
-  // подсказку, что и пилюля «В чат».
-  const [chatExitHintOpen, setChatExitHintOpen] = useState(false);
-
-  // Показываем Telegram BackButton только на вложенных страницах (где док скрыт)
-  useBackButton(!showTabBar, () => setChatExitHintOpen(true));
+  // «Назад» здесь значит «я тут закончил», поэтому закрываем приложение и отдаём человека
+  // чату. Свернуть вместо закрытия нельзя — в протоколе Mini Apps такого метода нет.
+  useBackButton(!showTabBar, closeMiniApp);
 
   if (!isAuthenticated) {
     if (error) {
@@ -153,13 +149,6 @@ export const Layout: FC = () => {
       {/* Окно «чат подключён» после возвращения из Telegram — в корне, потому что вернуться
           человек может на любой экран (см. ChatSetupGate). */}
       <ChatSetupGate />
-      {chatExitHintOpen && (
-        <ChatMinimizeHint
-          title="Чат — прямо под приложением"
-          text="Вы пришли сюда из него. Сверните приложение вот этой кнопкой, и оно останется под рукой."
-          onClose={() => setChatExitHintOpen(false)}
-        />
-      )}
       {/* Suspense внутри навигатора, а не снаружи: при lazy-загрузке страницы
           обёртка жеста не должна размонтироваться вместе с содержимым. */}
       <SwipeNavigator>

@@ -48,13 +48,7 @@ export const ClubChatPill: FC<ClubChatPillProps> = (props) => {
         В чат
       </button>
 
-      {minimizeHintOpen && (
-        <ChatMinimizeHint
-          title="Вы уже в этом чате"
-          text="Приложение открыто поверх него — сверните вот этой кнопкой, и оно останется под рукой."
-          onClose={() => setMinimizeHintOpen(false)}
-        />
-      )}
+      {minimizeHintOpen && <ChatMinimizeHint onClose={() => setMinimizeHintOpen(false)} />}
 
       {props.mode === 'hint' && hintOpen && (
         <>
