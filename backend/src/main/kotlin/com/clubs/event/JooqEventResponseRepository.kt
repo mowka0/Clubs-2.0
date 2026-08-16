@@ -160,7 +160,8 @@ class JooqEventResponseRepository(
             EVENT_RESPONSES.STAGE_1_VOTE,
             EVENT_RESPONSES.FINAL_STATUS,
             EVENT_RESPONSES.ATTENDANCE,
-            EVENT_RESPONSES.DISPUTE_NOTE
+            EVENT_RESPONSES.DISPUTE_NOTE,
+            USERS.TELEGRAM_USERNAME
         )
             .from(EVENT_RESPONSES)
             .join(USERS).on(USERS.ID.eq(EVENT_RESPONSES.USER_ID))
@@ -184,7 +185,8 @@ class JooqEventResponseRepository(
                     stage1Vote = r.get(EVENT_RESPONSES.STAGE_1_VOTE),
                     finalStatus = r.get(EVENT_RESPONSES.FINAL_STATUS),
                     attendance = r.get(EVENT_RESPONSES.ATTENDANCE),
-                    disputeNote = r.get(EVENT_RESPONSES.DISPUTE_NOTE)
+                    disputeNote = r.get(EVENT_RESPONSES.DISPUTE_NOTE),
+                    telegramUsername = r.get(USERS.TELEGRAM_USERNAME)
                 )
             }
 

@@ -207,5 +207,8 @@ data class EventResponderInfo(
     val stage1Vote: Stage_1Vote?,
     val finalStatus: FinalStatus?,
     val attendance: AttendanceStatus?,
-    val disputeNote: String?
+    val disputeNote: String?,
+    // Username в Telegram (без @). NULL = не задан или скрыт настройками — личного чата
+    // для такого участника не существует. Наружу уходит только менеджеру, см. VoteService.
+    val telegramUsername: String?
 )

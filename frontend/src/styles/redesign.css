@@ -1520,6 +1520,33 @@
 .rd-donut-num small { font-size: 0.52em; font-weight: 700; color: var(--text-faint); }
 .rd-donut-cap { font-size: 8.5px; font-weight: 700; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.12em; }
 
+/* Сводка состава (Этап 2+) — плитки в геометрии кнопки голоса, но НЕ кнопки: на Этапе 2
+   нажимать нечего, а силуэт `.rd-vote-btn` обещал бы интерактив. Отсюда div, `cursor: default`
+   и отсутствие :active. Прежде эта зона была плоским списком `.rd-kv`, из-за чего Этап 2
+   говорил другим визуальным языком, чем Этап 1 (event-stage2-composition.md § 1). */
+.rd-stat-tile {
+  width: 100%; height: 42px; padding: 0 13px;
+  display: flex; align-items: center; gap: 9px;
+  border-radius: 12px; background: var(--surface); border: 1px solid var(--hairline);
+  font-size: 13px; font-weight: 600; color: var(--text); cursor: default;
+}
+.rd-stat-tile .rd-vm {
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; background: currentColor;
+}
+.rd-stat-tile .rd-vm svg { width: 11px; height: 11px; color: var(--bg); }
+/* Подписи Этапа 2 длиннее, чем «Пойду»/«Возможно», а высота плитки фиксирована:
+   без nowrap «Без ответа» ломало бы строку и распирало плитку. */
+.rd-stat-tile .rd-vl {
+  flex: 1; min-width: 0; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rd-stat-tile .rd-vc { font-size: 13px; font-weight: 800; letter-spacing: -0.02em; }
+/* Цвета те же, что у голосования и точек статуса: подтверждённые — «иду», молчуны — «возможно». */
+.rd-stat-tile.rd-st-confirmed { color: var(--vote-go); }
+.rd-stat-tile.rd-st-pending { color: var(--vote-maybe); }
+.rd-stat-tile.rd-st-waitlist { color: var(--vote-no); }
+
 /* «Кто откликнулся» (Этап 1) — список под табами статуса: строки вместо сетки, потому что
    в один момент показан ровно один статус, а не смесь. Геометрия как у листа ожидания. */
 .rd-resp-panel { padding: 4px; margin-bottom: 18px; }
@@ -1545,6 +1572,41 @@
 .rd-voter .rd-av img { width: 100%; height: 100%; object-fit: cover; }
 .rd-voter .rd-vn { font-size: 12.5px; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rd-voter .rd-vdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* Таб «Без ответа» (только менеджеру, Этап 2) — строка молчуна: слева кликабельная зона,
+   открывающая личный чат, справа отдельная кнопка действия. Зоны разведены намеренно:
+   промах по строке не должен запускать действие над участником. */
+.rd-pend-panel { padding: 4px; margin-bottom: 10px; }
+.rd-pend-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; }
+.rd-pend-row + .rd-pend-row { border-top: 1px solid var(--hairline); }
+.rd-pend-main {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px;
+  background: transparent; border: 0; padding: 0; margin: 0;
+  font-family: inherit; text-align: left; color: inherit; cursor: pointer;
+}
+/* Без username личного чата не существует — строка перестаёт быть кнопкой. */
+.rd-pend-main:disabled { cursor: default; }
+.rd-pend-av {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #FFA070, #F47B3C);
+}
+.rd-pend-av img { width: 100%; height: 100%; object-fit: cover; }
+.rd-pend-txt { flex: 1; min-width: 0; }
+.rd-pend-name {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12.5px; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Точка «пойду / возможно» рядом с именем: размеры свои — базовое правило висит
+   на `.rd-voter .rd-vdot`, а эта строка не ростерная. */
+.rd-pend-name .rd-vdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.rd-pend-met {
+  font-size: 10.5px; color: var(--text-faint); margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rd-pend-chev { color: var(--text-faint); font-size: 15px; flex-shrink: 0; line-height: 1; }
 
 /* Лист ожидания — вертикальный нумерованный список в порядке приоритета продвижения. */
 .rd-wl-panel { padding: 4px; margin-bottom: 18px; }

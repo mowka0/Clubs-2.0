@@ -40,7 +40,7 @@ function pickBadge(event: MyEventListItemDto): Badge | null {
   }
   switch (event.myParticipationStatus) {
     case 'confirmed':          return { text: 'Подтверждён',   accent: false };
-    case 'waitlisted':         return { text: 'Лист ожидания', accent: false };
+    case 'waitlisted':         return { text: 'В очереди', accent: false };
     case 'declined':           return { text: 'Отказался',     accent: false };
     // Бронь сгорела — проголосовал going/maybe, но так и не подтвердил. Должно перебивать
     // устаревший голос Этапа 1 ниже, иначе no-confirm показался бы как "Иду"/"Возможно".

@@ -93,6 +93,9 @@ class VoteService(
         // co-organizers точка 27), а не каждый участник. Ключ — менеджерство в клубе (НЕ event.createdBy:
         // создатель-невладелец без роли видеть заметку не должен).
         // Заметка остаётся в SQL-проекции; здесь мы зануляем её, чтобы участникам она не ушла по сети.
+        // Тем же гейтом закрыт telegram_username: он нужен менеджеру, чтобы написать не ответившему
+        // на Этапе 2 (event-stage2-composition.md § 5), но рядовому участнику контакты соседей
+        // по событию не полагаются.
         val club = clubRepository.findById(event.clubId)
         val isManager = club != null && clubRoleGuard.hasCapability(club, userId, ClubCapability.MANAGE_EVENTS)
 
@@ -104,7 +107,8 @@ class VoteService(
                 avatarUrl = r.avatarUrl,
                 status = r.finalStatus?.literal ?: r.stage1Vote?.literal ?: "going",
                 attendance = r.attendance?.literal,
-                disputeNote = if (isManager) r.disputeNote else null
+                disputeNote = if (isManager) r.disputeNote else null,
+                telegramUsername = if (isManager) r.telegramUsername else null
             )
         }
     }

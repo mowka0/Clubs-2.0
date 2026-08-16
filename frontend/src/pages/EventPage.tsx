@@ -11,6 +11,7 @@ import { useMyReputationQuery } from '../queries/members';
 import { isActiveManagerMembership } from '../utils/membershipRole';
 import { formatLeadInterval, toDatetimeLocalValue } from '../utils/formatters';
 import { eventToTemplateBody } from '../utils/eventTemplate';
+import { openTmeLink } from '../utils/telegramLinks';
 import { useSaveEventTemplateMutation } from '../queries/eventTemplates';
 import { useEventSplitStateQuery } from '../queries/skladchina';
 import { useSetClubContext } from '../store/useClubContextStore';
@@ -70,6 +71,17 @@ const VOTE_ICONS: Record<'going' | 'maybe' | 'not_going', ReactElement> = {
 };
 
 /**
+ * Метка плитки «В очереди» (Этап 2+) — часы: участник уже подтвердил, но упёрся в лимит мест
+ * и ждёт освободившийся слот. Галочка и знак вопроса заняты подтверждёнными и молчунами.
+ */
+const QUEUE_ICON: ReactElement = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  </svg>
+);
+
+/**
  * Табы секции «Кто откликнулся» (Этап 1). Ключ — значение `status` в ростере: бэкенд отдаёт
  * `stage_1_vote` как есть, включая `not_going`, поэтому фильтрация чисто клиентская.
  */
@@ -83,6 +95,28 @@ type ResponderTab = (typeof RESPONDER_TABS)[number]['key'];
 
 /** Сколько строк ростера показываем до нажатия «Показать всех». */
 const ROSTER_PREVIEW_SIZE = 6;
+
+/**
+ * Формат username в Telegram: латиница, цифры и подчёркивание, до 32 символов. Значение приходит
+ * из БД и подставляется в URL личного чата, поэтому формат проверяем перед подстановкой — иначе
+ * посторонние символы (`/`, `?`, `#`) увели бы ссылку на чужой адрес или дописали к ней параметры.
+ * Не прошедшее проверку значение трактуем как «username нет»: строка просто не будет кликабельной.
+ */
+const TELEGRAM_USERNAME_RE = /^[A-Za-z0-9_]{1,32}$/;
+
+function telegramChatUsername(raw: string | null | undefined): string | null {
+  return raw && TELEGRAM_USERNAME_RE.test(raw) ? raw : null;
+}
+
+/**
+ * Хвост длинного ростера: одна и та же кнопка нужна списку Этапа 1 и обоим табам состава
+ * Этапа 2, поэтому живёт отдельным компонентом, а не тремя копиями разметки.
+ */
+const RosterMoreButton: FC<{ total: number; onExpand: () => void }> = ({ total, onExpand }) => (
+  <button type="button" className="rd-resp-more" onClick={onExpand}>
+    Показать всех · {total}
+  </button>
+);
 
 // Лимит имени шаблона встречи — зеркалит VARCHAR(60) и @Size(max=60) бэкенда.
 const TEMPLATE_NAME_MAX = 60;
@@ -98,7 +132,7 @@ const VOTE_LABELS: Record<string, string> = {
   maybe: 'Возможно',
   not_going: 'Не пойду',
   confirmed: 'Подтверждён',
-  waitlisted: 'Лист ожидания',
+  waitlisted: 'В очереди',
   declined: 'Отказался',
   expired_no_confirm: 'Не подтвердил',
 };
@@ -180,6 +214,9 @@ export const EventPage: FC = () => {
   // Секция «Кто откликнулся» (Этап 1): выбранный таб статуса и раскрытие длинного списка.
   const [responderTab, setResponderTab] = useState<ResponderTab>('going');
   const [rosterExpanded, setRosterExpanded] = useState(false);
+  // Секция состава (Этап 2+): менеджеру доступен второй таб — имена тех, кто ещё не подтвердил.
+  // Открыт «Идут» по умолчанию, чтобы привычный вид оставался первым.
+  const [stage2Tab, setStage2Tab] = useState<'confirmed' | 'pending'>('confirmed');
   // Необязательный комментарий, который участник прикладывает, оспаривая отметку «не пришёл».
   const [disputeNote, setDisputeNote] = useState('');
   // F5-14 шторка отмены события: флаг открытия, необязательная причина и собственный слот ошибки.
@@ -596,7 +633,11 @@ export const EventPage: FC = () => {
   // только подтверждённый состав — pending (всё ещё going/maybe, без подтверждения), waitlisted,
   // declined и expired сводятся в счётчики и не показываются как «идут».
   const responders = respondersQuery.data ?? [];
-  const pendingCount = responders.filter((r) => r.status === 'going' || r.status === 'maybe').length;
+  // «Без ответа» — проголосовавшие на Этапе 1, но не нажавшие «Подтвердить участие». Это НЕ то же
+  // самое, что «В очереди» (waitlisted): те как раз нажали, но упёрлись в лимит мест. Статус
+  // у участника один, группы не пересекаются (event-stage2-composition.md § 3).
+  const pendingResponders = responders.filter((r) => r.status === 'going' || r.status === 'maybe');
+  const pendingCount = pendingResponders.length;
   const waitlistedCount = responders.filter((r) => r.status === 'waitlisted').length;
   const comingList = finalComposition ? responders.filter((r) => r.status === 'confirmed') : responders;
   // Лист ожидания (только Этап 2+): waitlisted в порядке приоритета. Бэкенд отдаёт респондеров по
@@ -609,6 +650,14 @@ export const EventPage: FC = () => {
   // сам вызывающий) появляется в responders → comingList становится непустым.
   const showVoteRosterHint =
     !isCancelled && showVoting && respondersQuery.isSuccess && comingList.length === 0;
+
+  // Переключатель составов Этапа 2 — только менеджеру (владелец или активный со-орг) и только
+  // когда есть кого догонять: все подтвердились → лишнего элемента на экране не появляется.
+  const showStage2Tabs = finalComposition && !isCancelled && isManager && pendingCount > 0;
+  // Активный список секции состава. Таб «Без ответа» существует только при showStage2Tabs,
+  // поэтому потеря менеджерства (или обнуление списка) сама возвращает экран к «Идут».
+  const stage2List = showStage2Tabs && stage2Tab === 'pending' ? pendingResponders : comingList;
+  const visibleStage2 = rosterExpanded ? stage2List : stage2List.slice(0, ROSTER_PREVIEW_SIZE);
 
   // Секция «Кто откликнулся» (Этап 1): те же ярлыки формата, что на карточках лент, но список
   // разложен по статусу — прежде «возможно» и «не иду» отличались только цветом точки в общей сетке.
@@ -748,11 +797,29 @@ export const EventPage: FC = () => {
               </button>
             </>
           ) : finalComposition ? (
-            <div className="rd-glass" style={{ padding: '4px 4px' }}>
-              <div className="rd-kv">Подтвердили <span className="rd-v">{event.confirmedCount}</span></div>
-              {pendingCount > 0 && <div className="rd-kv">Ждут подтверждения <span className="rd-v">{pendingCount}</span></div>}
-              {waitlistedCount > 0 && <div className="rd-kv">Лист ожидания <span className="rd-v">{waitlistedCount}</span></div>}
-            </div>
+            /* Те же плитки, что кнопки голоса Этапа 1, но БЕЗ интерактива: на Этапе 2 счётчики
+               никуда не ведут, поэтому это div, а не button (event-stage2-composition.md § 1). */
+            <>
+              <div className="rd-stat-tile rd-st-confirmed">
+                <span className="rd-vm">{VOTE_ICONS.going}</span>
+                <span className="rd-vl">Подтвердили</span>
+                <span className="rd-vc">{event.confirmedCount}</span>
+              </div>
+              {pendingCount > 0 && (
+                <div className="rd-stat-tile rd-st-pending">
+                  <span className="rd-vm">{VOTE_ICONS.maybe}</span>
+                  <span className="rd-vl">Без ответа</span>
+                  <span className="rd-vc">{pendingCount}</span>
+                </div>
+              )}
+              {waitlistedCount > 0 && (
+                <div className="rd-stat-tile rd-st-waitlist">
+                  <span className="rd-vm">{QUEUE_ICON}</span>
+                  <span className="rd-vl">В очереди</span>
+                  <span className="rd-vc">{waitlistedCount}</span>
+                </div>
+              )}
+            </>
           ) : (
             <div className="rd-glass" style={{ padding: '4px 4px' }}>
               <div className="rd-kv">Пойдут <span className="rd-v">{event.goingCount}</span></div>
@@ -845,13 +912,10 @@ export const EventPage: FC = () => {
                   );
                 })}
                 {respondersInTab.length > visibleResponders.length && (
-                  <button
-                    type="button"
-                    className="rd-resp-more"
-                    onClick={() => { haptic.impact('light'); setRosterExpanded(true); }}
-                  >
-                    Показать всех · {respondersInTab.length}
-                  </button>
+                  <RosterMoreButton
+                    total={respondersInTab.length}
+                    onExpand={() => { haptic.impact('light'); setRosterExpanded(true); }}
+                  />
                 )}
               </>
             )}
@@ -859,24 +923,118 @@ export const EventPage: FC = () => {
         </>
       )}
 
-      {/* Этап 2+: подтверждённый состав — без табов (waitlisted и отказавшиеся живут своими блоками). */}
-      {!isCancelled && finalComposition && comingList.length > 0 && (
+      {/* Этап 2+: состав той же панелью-стеклом, что «Кто откликнулся» на Этапе 1 — прежде здесь
+          была голая сетка без подложки и сворачивания. Менеджеру добавляется второй таб с именами
+          не ответивших: до встречи часы, и ему нужно с кем-то из них связаться. Waitlisted и
+          отказавшиеся по-прежнему живут своими блоками (отказавшиеся — только счётчиком). */}
+      {!isCancelled && finalComposition && (comingList.length > 0 || showStage2Tabs) && (
         <>
-          <div className="rd-section-sub-h">Кто идёт <span className="rd-count">· {comingList.length}</span></div>
-          <div className="rd-voters">
-            {comingList.map((r) => {
-              const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
-              return (
-                <div className="rd-voter" key={r.userId}>
-                  <span className="rd-av">
-                    {r.avatarUrl ? <img src={r.avatarUrl} alt="" /> : getInitials(name)}
-                  </span>
-                  <span className="rd-vn">{name}</span>
-                  <span className={`rd-vdot ${statusDotClass(r.status)}`} title={r.status} />
-                </div>
-              );
-            })}
+          <div className="rd-section-sub-h">
+            {showStage2Tabs
+              ? 'Состав'
+              : <>Кто идёт <span className="rd-count">· {comingList.length}</span></>}
           </div>
+          {showStage2Tabs && (
+            <div className="rd-seg rd-seg-flush" style={{ marginBottom: 10 }}>
+              <button
+                type="button"
+                className={`rd-seg-btn${stage2Tab === 'confirmed' ? ' rd-active' : ''}`}
+                aria-pressed={stage2Tab === 'confirmed'}
+                onClick={() => { haptic.impact('light'); setStage2Tab('confirmed'); setRosterExpanded(false); }}
+              >
+                Идут ({comingList.length})
+              </button>
+              <button
+                type="button"
+                className={`rd-seg-btn${stage2Tab === 'pending' ? ' rd-active' : ''}`}
+                aria-pressed={stage2Tab === 'pending'}
+                onClick={() => { haptic.impact('light'); setStage2Tab('pending'); setRosterExpanded(false); }}
+              >
+                Без ответа ({pendingCount})
+              </button>
+            </div>
+          )}
+          {showStage2Tabs && stage2Tab === 'pending' ? (
+            <>
+              <div className="rd-glass rd-pend-panel">
+                {visibleStage2.map((r) => {
+                  const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
+                  // Личного чата без username не существует: Telegram разрешает его не задавать,
+                  // а открыть диалог по telegram_id из Mini App нельзя. Такая строка — не кнопка.
+                  const username = telegramChatUsername(r.telegramUsername);
+                  return (
+                    <div className="rd-pend-row" key={r.userId}>
+                      <button
+                        type="button"
+                        className="rd-pend-main"
+                        disabled={!username}
+                        aria-label={username ? `Написать ${name}` : undefined}
+                        onClick={() => {
+                          if (!username) return;
+                          haptic.impact('light');
+                          openTmeLink(`https://t.me/${username}`);
+                        }}
+                      >
+                        <span className="rd-pend-av">
+                          {r.avatarUrl ? <img src={r.avatarUrl} alt="" /> : getInitials(name)}
+                        </span>
+                        <span className="rd-pend-txt">
+                          <span className="rd-pend-name">
+                            {name}
+                            <span className={`rd-vdot ${statusDotClass(r.status)}`} title={r.status} />
+                          </span>
+                          <span className="rd-pend-met">
+                            {username ? `@${username}` : 'без username'}
+                            {' · '}
+                            {(VOTE_LABELS[r.status] ?? r.status).toLowerCase()}
+                          </span>
+                        </span>
+                        {username && <span className="rd-pend-chev" aria-hidden="true">›</span>}
+                      </button>
+                    </div>
+                  );
+                })}
+                {stage2List.length > visibleStage2.length && (
+                  <RosterMoreButton
+                    total={stage2List.length}
+                    onExpand={() => { haptic.impact('light'); setRosterExpanded(true); }}
+                  />
+                )}
+              </div>
+              <div className="rd-hint" style={{ marginBottom: 18 }}>
+                Тап по имени открывает личный чат в Telegram.
+              </div>
+            </>
+          ) : (
+            <div className="rd-glass rd-resp-panel">
+              {visibleStage2.length === 0 ? (
+                <div className="rd-resp-empty">Пока никто не подтвердил участие.</div>
+              ) : (
+                <>
+                  {visibleStage2.map((r) => {
+                    const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
+                    return (
+                      <div className="rd-resp-row" key={r.userId}>
+                        <div className="rd-voter">
+                          <span className="rd-av">
+                            {r.avatarUrl ? <img src={r.avatarUrl} alt="" /> : getInitials(name)}
+                          </span>
+                          <span className="rd-vn">{name}</span>
+                          <span className={`rd-vdot ${statusDotClass(r.status)}`} title={r.status} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {stage2List.length > visibleStage2.length && (
+                    <RosterMoreButton
+                      total={stage2List.length}
+                      onExpand={() => { haptic.impact('light'); setRosterExpanded(true); }}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </>
       )}
 
@@ -894,7 +1052,7 @@ export const EventPage: FC = () => {
       {/* Лист ожидания (Этап 2+): в порядке приоритета — освободится слот, войдёт первый в очереди. */}
       {!isCancelled && finalComposition && waitlist.length > 0 && (
         <>
-          <div className="rd-section-sub-h">Лист ожидания <span className="rd-count">· {waitlist.length}</span></div>
+          <div className="rd-section-sub-h">В очереди <span className="rd-count">· {waitlist.length}</span></div>
           <div className="rd-attn-hint">Если участник откажется, место получит первый в очереди.</div>
           <div className="rd-glass rd-wl-panel">
             {waitlist.map((r, i) => {
@@ -1151,7 +1309,7 @@ export const EventPage: FC = () => {
           <div className="rd-section-sub-h">Подтверждение участия</div>
           <div style={{ marginBottom: 10 }}>
             {myVote === 'confirmed' && <span className="rd-badge rd-going">Подтверждён</span>}
-            {myVote === 'waitlisted' && <span className="rd-badge rd-warn">Лист ожидания</span>}
+            {myVote === 'waitlisted' && <span className="rd-badge rd-warn">В очереди</span>}
             {myVote === 'declined' && <span className="rd-badge rd-decline">Отказался</span>}
             {myVote && !['confirmed', 'waitlisted', 'declined'].includes(myVote) && (
               <span className="rd-badge rd-warn">Ваш статус: {VOTE_LABELS[myVote] ?? myVote}</span>

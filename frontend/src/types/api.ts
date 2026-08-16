@@ -671,6 +671,12 @@ export interface EventResponderDto {
   attendance: 'attended' | 'absent' | 'disputed' | null;
   /** Необязательная заметка участника при оспаривании (видна организатору). */
   disputeNote?: string | null;
+  /**
+   * Username в Telegram (без @) — чтобы менеджер мог написать не ответившему на Этапе 2.
+   * null и когда username не задан в Telegram, и когда смотрит НЕ менеджер: рядовому участнику
+   * бэкенд контакты не отдаёт (docs/modules/event-stage2-composition.md § 5).
+   */
+  telegramUsername?: string | null;
 }
 
 /**
