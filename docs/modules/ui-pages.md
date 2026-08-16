@@ -5,7 +5,13 @@
 ## TASK-026 — Discovery страница (лента клубов)
 
 ### Описание
-Главная страница приложения (`/`). Список карточек клубов с фильтрацией и поиском. Server state — через `useClubsQuery` (`@tanstack/react-query`, `useInfiniteQuery` для пагинации, см. [`frontend-stores.md`](./frontend-stores.md)), UI — `@telegram-apps/telegram-ui`.
+Каталог клубов — роут `/discovery`. Список карточек клубов с фильтрацией и поиском.
+
+> С 2026-08-16 (разворот на плагин к чату) каталог перестал быть главным экраном: «/»
+> ведёт в клуб человека, а из дока таб каталога убран. Роут `/discovery` остаётся живым,
+> и на «/» каталог по-прежнему показывается, пока у человека нет ни одного клуба.
+> Подробности — `frontend-core.md` § «Спринт 1.0, День 1».
+ Server state — через `useClubsQuery` (`@tanstack/react-query`, `useInfiniteQuery` для пагинации, см. [`frontend-stores.md`](./frontend-stores.md)), UI — `@telegram-apps/telegram-ui`.
 
 ### Файловая структура
 

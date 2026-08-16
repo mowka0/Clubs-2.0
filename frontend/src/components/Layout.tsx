@@ -17,8 +17,9 @@ import { closeMiniApp, getStartParam } from '../telegram/sdk';
 
 /**
  * Спиннер-заглушка, показывается пока подгружаются lazy-загруженные страницы.
+ * Экспортирован для HomeRoute — там та же пауза, пока резолвится список клубов.
  */
-const PageFallback: FC = () => (
+export const PageFallback: FC = () => (
   <div
     style={{
       display: 'flex',

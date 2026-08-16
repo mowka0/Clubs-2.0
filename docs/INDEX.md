@@ -75,6 +75,7 @@
 | Что трогаешь | Спеки для сверки |
 |---|---|
 | `src/api/`, `src/telegram/`, `router.tsx` | `frontend-core.md` |
+| `src/config/` (`PRODUCT_PROFILE`), `HomeRoute.tsx`, `BottomTabBar.tsx` | `frontend-core.md` § «Спринт 1.0, День 1» |
 | `src/store/`, `src/queries/` | `frontend-stores.md` |
 | `src/styles/`, общие компоненты | `redesign-banco-style.md`, `ui-pages.md` |
 | анимации / вибро / жесты | `haptic.md`, `swipe-navigation.md` |
