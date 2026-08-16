@@ -60,3 +60,9 @@ data class EventEditedEvent(val event: Event, val oldEvent: Event) {
  * с дебаунсом, поэтому шторм голосов не упирается в лимиты Telegram.
  */
 data class EventRosterChangedEvent(val eventId: UUID)
+
+/**
+ * Менеджер отправил ручное напоминание ответить (Этап 2). Несёт готовые telegram id: адресатов
+ * уже отобрал `markStage2Reminded`, повторно вычислить их нельзя — отметка проставлена.
+ */
+data class Stage2ReminderSentEvent(val event: Event, val telegramIds: List<Long>)

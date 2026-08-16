@@ -609,6 +609,8 @@ export interface EventDetailDto {
   maybeCount: number;
   notGoingCount: number;
   confirmedCount: number;
+  /** Сколько участников клуба ещё не ответили на Этапе 2 (кроме сказавших «не пойду»). */
+  noAnswerCount: number;
   // Крайний момент (ISO), до которого подтверждённый участник может отказаться от места. Считается
   // бэкендом из events.stage2-decline-cutoff-minutes — фронт не хранит копию порога, а прячет кнопку
   // «Отказаться» у confirmed, когда текущее время ≥ этого значения. Источник истины — бэкенд.
@@ -677,12 +679,8 @@ export interface EventResponderDto {
    * бэкенд контакты не отдаёт (docs/modules/event-stage2-composition.md § 5).
    */
   telegramUsername?: string | null;
-  /**
-   * Когда менеджер отправил участнику ручное напоминание подтвердить участие (ISO), null —
-   * не напоминали. Как и username, видно только менеджеру. Непустое значение гасит колокольчик:
-   * одно напоминание на участника на событие.
-   */
-  stage2RemindedAt?: string | null;
+  /** Когда менеджер отправил напоминание (ISO), null — не напоминали. Гасит колокольчик. */
+  remindedAt?: string | null;
 }
 
 /**

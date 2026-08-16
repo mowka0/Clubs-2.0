@@ -9,6 +9,7 @@ import {
   getClubEvents,
   getClubEventsTeaser,
   getEvent,
+  getEventPendingMembers,
   getEventResponders,
   getMyAttendance,
   getMyEvents,
@@ -117,8 +118,17 @@ export function useConfirmParticipationMutation() {
   });
 }
 
+/** Таб «Без ответа» — только для менеджера, поэтому запрос гейтится флагом enabled. */
+export function useEventPendingQuery(eventId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: [...queryKeys.events.detail(eventId ?? ''), 'pending'],
+    queryFn: () => getEventPendingMembers(eventId!),
+    enabled: Boolean(eventId) && enabled,
+  });
+}
+
 /**
- * Ручное напоминание подтвердить участие. Инвалидирует detail-ключ: список responders живёт
+ * Ручное напоминание ответить. Инвалидирует detail-ключ: список responders живёт
  * под его префиксом, поэтому отметка «напомнили» приезжает вместе с обновлённым ростером —
  * колокольчик гаснет сам, без локального состояния «уже нажал».
  */

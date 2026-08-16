@@ -55,6 +55,7 @@ function stage1Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     maybeCount: 1,
     notGoingCount: 1,
     confirmedCount: 0,
+    noAnswerCount: 0,
     confirmedDeclineDeadline: FUTURE,
     stage2LeadMinutes: 1080,
     stage2LeadMinutesOverride: null,

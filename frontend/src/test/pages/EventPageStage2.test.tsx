@@ -60,6 +60,7 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     maybeCount: 1,
     notGoingCount: 0,
     confirmedCount: 1,
+    noAnswerCount: 0,
     // По умолчанию дедлайн = дата события − 4ч (дефолт бэка): при FUTURE он в будущем (кнопка отказа
     // видна), при SOON — уже в прошлом (кнопка скрыта). Тест может переопределить явно.
     confirmedDeclineDeadline: new Date(new Date(eventDatetime).getTime() - DECLINE_CUTOFF_MS).toISOString(),

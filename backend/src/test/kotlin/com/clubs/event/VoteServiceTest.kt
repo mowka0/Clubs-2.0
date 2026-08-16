@@ -209,24 +209,6 @@ class VoteServiceTest {
         assertNull(service.getEventResponders(eventId, userId).single().telegramUsername)
     }
 
-    /** Отметка о напоминании — такая же менеджерская, как username: участнику её не показываем. */
-    @Test
-    fun `getEventResponders hides stage2RemindedAt from a plain member`() {
-        stubRespondersWithNote(ownerId = UUID.randomUUID(), viewerId = userId)
-        every { eventResponseRepository.findRespondersWithUsers(eventId) } returns
-            listOf(responderWithNote("был там", remindedAt = OffsetDateTime.now()))
-        assertNull(service.getEventResponders(eventId, userId).single().stage2RemindedAt)
-    }
-
-    @Test
-    fun `getEventResponders exposes stage2RemindedAt to the club owner`() {
-        val remindedAt = OffsetDateTime.now()
-        stubRespondersWithNote(ownerId = userId, viewerId = userId)
-        every { eventResponseRepository.findRespondersWithUsers(eventId) } returns
-            listOf(responderWithNote("был там", remindedAt = remindedAt))
-        assertEquals(remindedAt, service.getEventResponders(eventId, userId).single().stage2RemindedAt)
-    }
-
     /** Username не задан в Telegram — менеджер тоже получает null (личного чата не существует). */
     @Test
     fun `getEventResponders returns null telegramUsername when the user has none`() {
@@ -242,6 +224,102 @@ class VoteServiceTest {
             id = UUID.randomUUID(), userId = userId, clubId = clubId, status = status, role = role,
             joinedAt = now, subscriptionExpiresAt = null, createdAt = now, updatedAt = now
         )
+    }
+
+    // --- «Без ответа» и напоминания (event-stage2-composition.md § 6) ---
+
+    private fun pendingMember(vote: Stage_1Vote?, remindedAt: OffsetDateTime? = null, id: UUID = UUID.randomUUID()) =
+        EventResponderInfo(
+            userId = id, firstName = "M", lastName = null, avatarUrl = null,
+            stage1Vote = vote, finalStatus = null, attendance = null, disputeNote = null,
+            telegramUsername = null, stage2RemindedAt = remindedAt
+        )
+
+    private fun stubStage2Event(ownerId: UUID, eventDatetime: OffsetDateTime = OffsetDateTime.now().plusHours(3)) {
+        every { eventRepository.findById(eventId) } returns
+            upcomingEvent(eventDatetime).copy(status = EventStatus.stage_2)
+        val club = mockk<Club>()
+        every { club.ownerId } returns ownerId
+        every { club.id } returns clubId
+        every { clubRepository.findById(clubId) } returns club
+        every { membershipRepository.findByUserAndClub(userId, clubId) } returns null
+    }
+
+    /** Промолчавший на Этапе 1 — тоже «без ответа»: голоса нет, статус подменяется на no_answer. */
+    @Test
+    fun `getPendingMembers reports a silent member as no_answer`() {
+        stubStage2Event(ownerId = userId)
+        every { eventResponseRepository.findStage2PendingMembers(eventId) } returns
+            listOf(pendingMember(null), pendingMember(Stage_1Vote.maybe))
+
+        val result = service.getPendingMembers(eventId, userId)
+
+        assertEquals(listOf("no_answer", "maybe"), result.map { it.status })
+    }
+
+    @Test
+    fun `getPendingMembers is forbidden for a plain member`() {
+        stubStage2Event(ownerId = UUID.randomUUID())
+        assertFailsWith<ForbiddenException> { service.getPendingMembers(eventId, userId) }
+    }
+
+    @Test
+    fun `remind targets everyone pending when no user is given`() {
+        stubStage2Event(ownerId = userId)
+        val a = UUID.randomUUID()
+        val b = UUID.randomUUID()
+        every { eventResponseRepository.findStage2PendingMembers(eventId) } returns
+            listOf(pendingMember(Stage_1Vote.going, id = a), pendingMember(null, id = b))
+        every { eventResponseRepository.markStage2Reminded(eventId, listOf(a, b)) } returns listOf(1L, 2L)
+
+        assertEquals(2, service.remind(eventId, userId, null).remindedCount)
+    }
+
+    /** Чужой userId не должен попасть в рассылку и создать строку-заглушку постороннему. */
+    @Test
+    fun `remind ignores a target outside the pending set`() {
+        stubStage2Event(ownerId = userId)
+        every { eventResponseRepository.findStage2PendingMembers(eventId) } returns
+            listOf(pendingMember(Stage_1Vote.going))
+        every { eventResponseRepository.markStage2Reminded(eventId, emptyList()) } returns emptyList()
+
+        assertEquals(0, service.remind(eventId, userId, UUID.randomUUID()).remindedCount)
+    }
+
+    @Test
+    fun `remind is rejected before Stage 2 and after the event starts`() {
+        stubStage2Event(ownerId = userId)
+        every { eventRepository.findById(eventId) } returns upcomingEvent(OffsetDateTime.now().plusHours(3))
+        assertEquals(
+            "Confirmation is not open for this event",
+            assertFailsWith<ValidationException> { service.remind(eventId, userId, null) }.message
+        )
+
+        stubStage2Event(ownerId = userId, eventDatetime = OffsetDateTime.now().minusMinutes(1))
+        assertEquals(
+            "Event has already started",
+            assertFailsWith<ValidationException> { service.remind(eventId, userId, null) }.message
+        )
+    }
+
+    @Test
+    fun `remind is forbidden for a plain member`() {
+        stubStage2Event(ownerId = UUID.randomUUID())
+        assertFailsWith<ForbiddenException> { service.remind(eventId, userId, null) }
+    }
+
+    /** Активный со-организатор напоминает наравне с владельцем. */
+    @Test
+    fun `remind is allowed for an active co-organizer`() {
+        stubStage2Event(ownerId = UUID.randomUUID())
+        every { membershipRepository.findByUserAndClub(userId, clubId) } returns
+            membership(MembershipRole.co_organizer, MembershipStatus.active)
+        val target = UUID.randomUUID()
+        every { eventResponseRepository.findStage2PendingMembers(eventId) } returns
+            listOf(pendingMember(Stage_1Vote.going, id = target))
+        every { eventResponseRepository.markStage2Reminded(eventId, listOf(target)) } returns listOf(7L)
+
+        assertEquals(1, service.remind(eventId, userId, target).remindedCount)
     }
 
     private fun stubResponse(stage1: Stage_1Vote?, final: FinalStatus?) {

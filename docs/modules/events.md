@@ -254,8 +254,11 @@ POST /api/events/{id}/confirm
 POST /api/events/{id}/decline
   Response 200: ConfirmResponseDto
 
-POST /api/events/{id}/remind          # ручное напоминание подтвердить участие (менеджер)
-  Body: {"userId": "<uuid>"} — конкретному молчуну | {} — всем, кому ещё можно
+GET  /api/events/{id}/pending         # кто ещё не ответил, поимённо (менеджер)
+  Response 200: EventResponderDto[] — status: going | maybe | no_answer, плюс remindedAt
+
+POST /api/events/{id}/remind          # ручное напоминание ответить (менеджер)
+  Body: {"userId": "<uuid>"} — конкретному участнику | {} — всем, от кого ждут ответа
   Response 200: {"remindedCount": N} — сколько напоминаний реально ушло (повтор даёт 0)
   Errors: 400 (не stage_2 / событие началось), 403 (не владелец и не активный со-организатор)
   Детали и правило «одно напоминание на участника»: event-stage2-composition.md § 6

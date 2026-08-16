@@ -120,8 +120,13 @@ export function confirmParticipation(eventId: string): Promise<{ eventId: string
   return apiClient.post(`/api/events/${eventId}/confirm`);
 }
 
+/** Участники, от которых ещё ждут ответа на Этапе 2 (только менеджеру клуба события). */
+export function getEventPendingMembers(eventId: string): Promise<EventResponderDto[]> {
+  return apiClient.get(`/api/events/${eventId}/pending`);
+}
+
 /**
- * Ручное напоминание подтвердить участие (только менеджеру клуба события).
+ * Ручное напоминание ответить (только менеджеру клуба события).
  * `userId` — конкретный молчун; без него напоминание уходит всем, кому ещё можно.
  * Возвращает число реально отправленных: повторное напоминание тому же участнику даёт 0.
  */

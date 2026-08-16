@@ -49,6 +49,9 @@ data class EventDetailDto(
     val maybeCount: Int,
     val notGoingCount: Int,
     val confirmedCount: Int,
+    // Сколько участников клуба ещё не ответили на Этапе 2 (все с доступом, кроме сказавших
+    // «не пойду» и уже ответивших). Только счётчик — имена отдаёт менеджерский /pending.
+    val noAnswerCount: Int,
     // Крайний момент, до которого ПОДТВЕРЖДЁННЫЙ участник ещё может отказаться от места
     // (= eventDatetime − events.stage2-decline-cutoff-minutes). Фронт прячет кнопку «Отказаться»
     // у confirmed, когда now ≥ этого значения; бэк остаётся источником истины (declineParticipation

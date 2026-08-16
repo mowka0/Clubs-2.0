@@ -32,6 +32,7 @@ import {
   useUpdateEventMutation,
   useResolveDisputeMutation,
   useRemindToConfirmMutation,
+  useEventPendingQuery,
 } from '../queries/events';
 
 function getInitials(name: string): string {
@@ -222,6 +223,18 @@ export const EventPage: FC = () => {
   const disputeMutation = useDisputeAttendanceMutation();
   const resolveMutation = useResolveDisputeMutation();
   const remindMutation = useRemindToConfirmMutation();
+  // Менеджер клуба события: владелец ИЛИ активный со-организатор (fail-close — роль со-орга
+  // действует только при активном членстве, зеркалит серверный гейт AttendanceService/EventService).
+  // Считается до ранних return'ов: от него зависит enabled запроса «Без ответа».
+  const myHostMembership = myClubsQuery.data?.find((m) => m.clubId === eventQuery.data?.clubId);
+  const isManager =
+    (!!hostClubQuery.data && hostClubQuery.data.ownerId === userId)
+    || isActiveManagerMembership(myHostMembership);
+  // Поимённый список молчунов — менеджерский эндпоинт, участнику он вернёт 403.
+  const pendingQuery = useEventPendingQuery(
+    isAuthenticated ? id : undefined,
+    isManager && eventQuery.data?.status === 'stage_2',
+  );
   const cancelMutation = useCancelEventMutation();
   const updateMutation = useUpdateEventMutation();
 
@@ -652,12 +665,6 @@ export const EventPage: FC = () => {
   // кто подтвердил на Этапе 2»). Голосовавшие going/maybe, но не подтвердившие («забыли
   // подтвердить» → expired_no_confirm) в составе НЕ значатся — здесь они исключены,
   // и репутация их игнорирует (она читает только final_status=confirmed).
-  // Менеджер клуба события: владелец ИЛИ активный со-организатор (fail-close — роль со-орга
-  // действует только при активном членстве, зеркалит серверный гейт AttendanceService/EventService).
-  const myHostMembership = myClubsQuery.data?.find((m) => m.clubId === event.clubId);
-  const isManager =
-    (!!hostClubQuery.data && hostClubQuery.data.ownerId === userId)
-    || isActiveManagerMembership(myHostMembership);
   const attendanceCandidates = (respondersQuery.data ?? []).filter(
     (r) => r.status === 'confirmed',
   );
@@ -688,11 +695,10 @@ export const EventPage: FC = () => {
   // только подтверждённый состав — pending (всё ещё going/maybe, без подтверждения), waitlisted,
   // declined и expired сводятся в счётчики и не показываются как «идут».
   const responders = respondersQuery.data ?? [];
-  // «Без ответа» — проголосовавшие на Этапе 1, но не нажавшие «Подтвердить участие». Это НЕ то же
-  // самое, что «В очереди» (waitlisted): те как раз нажали, но упёрлись в лимит мест. Статус
-  // у участника один, группы не пересекаются (event-stage2-composition.md § 3).
-  const pendingResponders = responders.filter((r) => r.status === 'going' || r.status === 'maybe');
-  const pendingCount = pendingResponders.length;
+  // «Без ответа» — все участники клуба, кроме сказавших «не пойду» и уже ответивших (решение PO
+  // 2026-08-16). Счётчик приходит с бэка (виден всем), поимённый список — отдельным менеджерским
+  // запросом. Это НЕ «В очереди»: там как раз ответили, но упёрлись в лимит мест.
+  const pendingCount = event.noAnswerCount;
   const waitlistedCount = responders.filter((r) => r.status === 'waitlisted').length;
   const comingList = finalComposition ? responders.filter((r) => r.status === 'confirmed') : responders;
   // Лист ожидания (только Этап 2+): waitlisted в порядке приоритета. Бэкенд отдаёт респондеров по
@@ -708,14 +714,17 @@ export const EventPage: FC = () => {
 
   // Переключатель составов Этапа 2 — только менеджеру (владелец или активный со-орг) и только
   // когда есть кого догонять: все подтвердились → лишнего элемента на экране не появляется.
-  const showStage2Tabs = finalComposition && !isCancelled && isManager && pendingCount > 0;
+  // Переключатель у менеджера есть всегда: иначе о самой возможности догнать молчунов он
+  // узнавал бы только при удачном стечении обстоятельств.
+  const showStage2Tabs = finalComposition && !isCancelled && isManager;
+  const pendingResponders = pendingQuery.data ?? [];
   // Активный список секции состава. Таб «Без ответа» существует только при showStage2Tabs,
   // поэтому потеря менеджерства (или обнуление списка) сама возвращает экран к «Идут».
   const stage2List = showStage2Tabs && stage2Tab === 'pending' ? pendingResponders : comingList;
   const visibleStage2 = rosterExpanded ? stage2List : stage2List.slice(0, ROSTER_PREVIEW_SIZE);
   // Сколько молчунов ещё не получали напоминания — счётчик «Напомнить всем». Считаем по ВСЕМУ
   // списку, а не по видимой части: свёрнутый ростер не должен занижать число адресатов.
-  const remindableCount = pendingResponders.filter((r) => !r.stage2RemindedAt).length;
+  const remindableCount = pendingResponders.filter((r) => !r.remindedAt).length;
 
   // Секция «Кто откликнулся» (Этап 1): те же ярлыки формата, что на карточках лент, но список
   // разложен по статусу — прежде «возможно» и «не иду» отличались только цветом точки в общей сетке.
@@ -863,13 +872,11 @@ export const EventPage: FC = () => {
                 <span className="rd-vl">Подтвердили</span>
                 <span className="rd-vc">{event.confirmedCount}</span>
               </div>
-              {pendingCount > 0 && (
-                <div className="rd-stat-tile rd-st-pending">
-                  <span className="rd-vm">{VOTE_ICONS.maybe}</span>
-                  <span className="rd-vl">Без ответа</span>
-                  <span className="rd-vc">{pendingCount}</span>
-                </div>
-              )}
+              <div className="rd-stat-tile rd-st-pending">
+                <span className="rd-vm">{VOTE_ICONS.maybe}</span>
+                <span className="rd-vl">Без ответа</span>
+                <span className="rd-vc">{pendingCount}</span>
+              </div>
               {waitlistedCount > 0 && (
                 <div className="rd-stat-tile rd-st-waitlist">
                   <span className="rd-vm">{QUEUE_ICON}</span>
@@ -1015,6 +1022,9 @@ export const EventPage: FC = () => {
           {showStage2Tabs && stage2Tab === 'pending' ? (
             <>
               <div className="rd-glass rd-pend-panel">
+                {visibleStage2.length === 0 && (
+                  <div className="rd-resp-empty">Все ответили — напоминать некому.</div>
+                )}
                 {visibleStage2.map((r) => {
                   const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
                   // Личного чата без username не существует: Telegram разрешает его не задавать,
@@ -1041,11 +1051,11 @@ export const EventPage: FC = () => {
                             {name}
                             <span className={`rd-vdot ${statusDotClass(r.status)}`} title={r.status} />
                           </span>
-                          <span className={`rd-pend-met${r.stage2RemindedAt ? ' rd-done-met' : ''}`}>
+                          <span className={`rd-pend-met${r.remindedAt ? ' rd-done-met' : ''}`}>
                             {username ? `@${username}` : 'без username'}
                             {' · '}
-                            {r.stage2RemindedAt
-                              ? `напомнили в ${formatRemindedAt(r.stage2RemindedAt)}`
+                            {r.remindedAt
+                              ? `напомнили в ${formatRemindedAt(r.remindedAt)}`
                               : (VOTE_LABELS[r.status] ?? r.status).toLowerCase()}
                           </span>
                         </span>
@@ -1055,12 +1065,12 @@ export const EventPage: FC = () => {
                       <button
                         type="button"
                         className="rd-remind-btn"
-                        disabled={!!r.stage2RemindedAt || remindMutation.isPending}
-                        aria-label={r.stage2RemindedAt ? `Напоминание отправлено: ${name}` : `Напомнить ${name}`}
-                        title={r.stage2RemindedAt ? 'Напоминание уже отправлено' : 'Напомнить'}
+                        disabled={!!r.remindedAt || remindMutation.isPending}
+                        aria-label={r.remindedAt ? `Напоминание отправлено: ${name}` : `Напомнить ${name}`}
+                        title={r.remindedAt ? 'Напоминание уже отправлено' : 'Напомнить'}
                         onClick={() => handleRemind(r.userId)}
                       >
-                        {r.stage2RemindedAt ? CHECK_ICON : BELL_ICON}
+                        {r.remindedAt ? CHECK_ICON : BELL_ICON}
                       </button>
                     </div>
                   );
