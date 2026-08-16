@@ -12,6 +12,7 @@ import com.clubs.membership.MembershipRepository
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -111,5 +112,57 @@ class VoteService(
                 telegramUsername = if (isManager) r.telegramUsername else null
             )
         }
+    }
+
+    /**
+     * Таб «Без ответа»: участники клуба, от которых ещё ждут ответа на Этапе 2. Только менеджеру —
+     * рядовому участнику знать, кто молчит, незачем.
+     */
+    fun getPendingMembers(eventId: UUID, userId: UUID): List<EventResponderDto> {
+        requireEventManager(eventId, userId)
+        return eventResponseRepository.findStage2PendingMembers(eventId).map { r ->
+            EventResponderDto(
+                userId = r.userId,
+                firstName = r.firstName,
+                lastName = r.lastName,
+                avatarUrl = r.avatarUrl,
+                // Голоса может не быть вовсе — тогда это молчун, статус "no_answer".
+                status = r.stage1Vote?.literal ?: "no_answer",
+                attendance = null,
+                disputeNote = null,
+                telegramUsername = r.telegramUsername,
+                remindedAt = r.stage2RemindedAt
+            )
+        }
+    }
+
+    /**
+     * Ручное напоминание ответить: [targetUserId] — конкретному участнику, `null` — всем, от кого
+     * ждут ответа. Возвращает, сколько напоминаний реально ушло (повтор даёт 0).
+     */
+    @Transactional
+    fun remind(eventId: UUID, userId: UUID, targetUserId: UUID?): RemindResultDto {
+        val event = requireEventManager(eventId, userId)
+        // Окно то же, в котором участник может подтвердить (см. Stage2Service.confirmParticipation).
+        if (event.status != EventStatus.stage_2) throw ValidationException("Confirmation is not open for this event")
+        if (!event.eventDatetime.isAfter(OffsetDateTime.now())) throw ValidationException("Event has already started")
+
+        // Цели пересекаем с серверным набором: чужой userId не должен попасть в рассылку.
+        val pending = eventResponseRepository.findStage2PendingMembers(eventId).map { it.userId }
+        val targets = targetUserId?.let { target -> pending.filter { it == target } } ?: pending
+        val telegramIds = eventResponseRepository.markStage2Reminded(eventId, targets)
+
+        // DM — на AFTER_COMMIT: уведомление без закоммиченной отметки означало бы повторную отправку.
+        if (telegramIds.isNotEmpty()) eventPublisher.publishEvent(Stage2ReminderSentEvent(event, telegramIds))
+        log.info("Stage 2 reminder: eventId={} userId={} reminded={}", eventId, userId, telegramIds.size)
+        return RemindResultDto(remindedCount = telegramIds.size)
+    }
+
+    /** Событие + гейт «владелец или активный со-организатор клуба события». */
+    private fun requireEventManager(eventId: UUID, userId: UUID): Event {
+        val event = eventRepository.findById(eventId) ?: throw NotFoundException("Event not found")
+        val club = clubRepository.findById(event.clubId) ?: throw NotFoundException("Club not found")
+        clubRoleGuard.requireCapability(club, userId, ClubCapability.MANAGE_EVENTS)
+        return event
     }
 }

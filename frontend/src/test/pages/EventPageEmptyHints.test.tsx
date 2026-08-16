@@ -54,6 +54,7 @@ function buildEvent(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     maybeCount: 0,
     notGoingCount: 0,
     confirmedCount: 0,
+    noAnswerCount: 0,
     confirmedDeclineDeadline: PAST, abandonedSlotPenaltyPoints: 100, stage2LeadMinutes: 1080, stage2LeadMinutesOverride: null,
     attendanceMarked: false,
     attendanceFinalized: false,

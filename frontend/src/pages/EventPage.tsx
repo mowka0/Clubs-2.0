@@ -31,6 +31,8 @@ import {
   useCancelEventMutation,
   useUpdateEventMutation,
   useResolveDisputeMutation,
+  useRemindToConfirmMutation,
+  useEventPendingQuery,
 } from '../queries/events';
 
 function getInitials(name: string): string {
@@ -93,6 +95,19 @@ const RESPONDER_TABS = [
 
 type ResponderTab = (typeof RESPONDER_TABS)[number]['key'];
 
+/** Колокольчик «напомнить» и галочка «уже напомнили» — иконки кнопки в строке молчуна. */
+const BELL_ICON: ReactElement = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+  </svg>
+);
+const CHECK_ICON: ReactElement = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 6 9 17l-5-5" />
+  </svg>
+);
+
 /** Сколько строк ростера показываем до нажатия «Показать всех». */
 const ROSTER_PREVIEW_SIZE = 6;
 
@@ -106,6 +121,14 @@ const TELEGRAM_USERNAME_RE = /^[A-Za-z0-9_]{1,32}$/;
 
 function telegramChatUsername(raw: string | null | undefined): string | null {
   return raw && TELEGRAM_USERNAME_RE.test(raw) ? raw : null;
+}
+
+/**
+ * Момент отправки напоминания в строке молчуна. Только время: напоминать можно, лишь пока
+ * открыто окно подтверждения, поэтому дата всегда «сегодня-завтра» и лишь удлиняла бы строку.
+ */
+function formatRemindedAt(iso: string): string {
+  return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }
 
 /**
@@ -199,6 +222,23 @@ export const EventPage: FC = () => {
   const markAttendanceMutation = useMarkAttendanceMutation();
   const disputeMutation = useDisputeAttendanceMutation();
   const resolveMutation = useResolveDisputeMutation();
+  const remindMutation = useRemindToConfirmMutation();
+  // Менеджер клуба события: владелец ИЛИ активный со-организатор (fail-close — роль со-орга
+  // действует только при активном членстве, зеркалит серверный гейт AttendanceService/EventService).
+  // Считается до ранних return'ов: от него зависит enabled запроса «Без ответа».
+  const myHostMembership = myClubsQuery.data?.find((m) => m.clubId === eventQuery.data?.clubId);
+  const isManager =
+    (!!hostClubQuery.data && hostClubQuery.data.ownerId === userId)
+    || isActiveManagerMembership(myHostMembership);
+  // Поимённый список молчунов — менеджерский эндпоинт, участнику он вернёт 403.
+  const pendingQuery = useEventPendingQuery(
+    isAuthenticated ? id : undefined,
+    // То же окно, в котором работает напоминание: до старта встречи. На завершённой встрече
+    // бэкенд откажет, а «Без ответа» там уже не имеет смысла.
+    isManager
+      && eventQuery.data?.status === 'stage_2'
+      && new Date(eventQuery.data.eventDatetime).getTime() > Date.now(),
+  );
   const cancelMutation = useCancelEventMutation();
   const updateMutation = useUpdateEventMutation();
 
@@ -217,6 +257,9 @@ export const EventPage: FC = () => {
   // Секция состава (Этап 2+): менеджеру доступен второй таб — имена тех, кто ещё не подтвердил.
   // Открыт «Идут» по умолчанию, чтобы привычный вид оставался первым.
   const [stage2Tab, setStage2Tab] = useState<'confirmed' | 'pending'>('confirmed');
+  // Ошибка отправки напоминания — своим слотом под панелью, чтобы не смешиваться с actionError
+  // подтверждения/отказа (тот живёт в блоке «Подтверждение участия» ниже).
+  const [remindError, setRemindError] = useState<string | null>(null);
   // Необязательный комментарий, который участник прикладывает, оспаривая отметку «не пришёл».
   const [disputeNote, setDisputeNote] = useState('');
   // F5-14 шторка отмены события: флаг открытия, необязательная причина и собственный слот ошибки.
@@ -327,6 +370,35 @@ export const EventPage: FC = () => {
 
   // ATT-3: участник, отмеченный отсутствующим, оспаривает отметку (absent → disputed). Доступно
   // только пока открыто окно спора (marked && !finalized) — см. гейтинг ниже.
+  /**
+   * Напоминание подтвердить участие: `targetUserId` — конкретный молчун, `undefined` — все,
+   * кому ещё можно. Набор целей для «всем» считает сервер, поэтому сюда список не передаём.
+   * Ответ несёт число реально отправленных: сервер молча пропускает уже напомненных, и тост
+   * должен говорить правду, а не «отправлено» на пустую рассылку.
+   */
+  const handleRemind = (targetUserId: string | undefined) => {
+    if (!id || remindMutation.isPending) return;
+    haptic.impact('medium');
+    setRemindError(null);
+    remindMutation.mutate(
+      { eventId: id, userId: targetUserId },
+      {
+        onSuccess: ({ remindedCount }) => {
+          haptic.notify(remindedCount > 0 ? 'success' : 'warning');
+          setToastMessage(
+            remindedCount > 0
+              ? `Напоминание отправлено · ${remindedCount}`
+              : 'Всем, кому можно, уже напомнили',
+          );
+        },
+        onError: (e) => {
+          setRemindError(e.message);
+          haptic.notify('error');
+        },
+      },
+    );
+  };
+
   const handleDispute = () => {
     if (!id || disputeMutation.isPending) return;
     haptic.impact('medium');
@@ -597,12 +669,6 @@ export const EventPage: FC = () => {
   // кто подтвердил на Этапе 2»). Голосовавшие going/maybe, но не подтвердившие («забыли
   // подтвердить» → expired_no_confirm) в составе НЕ значатся — здесь они исключены,
   // и репутация их игнорирует (она читает только final_status=confirmed).
-  // Менеджер клуба события: владелец ИЛИ активный со-организатор (fail-close — роль со-орга
-  // действует только при активном членстве, зеркалит серверный гейт AttendanceService/EventService).
-  const myHostMembership = myClubsQuery.data?.find((m) => m.clubId === event.clubId);
-  const isManager =
-    (!!hostClubQuery.data && hostClubQuery.data.ownerId === userId)
-    || isActiveManagerMembership(myHostMembership);
   const attendanceCandidates = (respondersQuery.data ?? []).filter(
     (r) => r.status === 'confirmed',
   );
@@ -633,11 +699,10 @@ export const EventPage: FC = () => {
   // только подтверждённый состав — pending (всё ещё going/maybe, без подтверждения), waitlisted,
   // declined и expired сводятся в счётчики и не показываются как «идут».
   const responders = respondersQuery.data ?? [];
-  // «Без ответа» — проголосовавшие на Этапе 1, но не нажавшие «Подтвердить участие». Это НЕ то же
-  // самое, что «В очереди» (waitlisted): те как раз нажали, но упёрлись в лимит мест. Статус
-  // у участника один, группы не пересекаются (event-stage2-composition.md § 3).
-  const pendingResponders = responders.filter((r) => r.status === 'going' || r.status === 'maybe');
-  const pendingCount = pendingResponders.length;
+  // «Без ответа» — все участники клуба, кроме сказавших «не пойду» и уже ответивших (решение PO
+  // 2026-08-16). Счётчик приходит с бэка (виден всем), поимённый список — отдельным менеджерским
+  // запросом. Это НЕ «В очереди»: там как раз ответили, но упёрлись в лимит мест.
+  const pendingCount = event.noAnswerCount;
   const waitlistedCount = responders.filter((r) => r.status === 'waitlisted').length;
   const comingList = finalComposition ? responders.filter((r) => r.status === 'confirmed') : responders;
   // Лист ожидания (только Этап 2+): waitlisted в порядке приоритета. Бэкенд отдаёт респондеров по
@@ -653,11 +718,17 @@ export const EventPage: FC = () => {
 
   // Переключатель составов Этапа 2 — только менеджеру (владелец или активный со-орг) и только
   // когда есть кого догонять: все подтвердились → лишнего элемента на экране не появляется.
-  const showStage2Tabs = finalComposition && !isCancelled && isManager && pendingCount > 0;
+  // Переключатель у менеджера есть всегда: иначе о самой возможности догнать молчунов он
+  // узнавал бы только при удачном стечении обстоятельств.
+  const showStage2Tabs = showStage2 && isManager;
+  const pendingResponders = pendingQuery.data ?? [];
   // Активный список секции состава. Таб «Без ответа» существует только при showStage2Tabs,
   // поэтому потеря менеджерства (или обнуление списка) сама возвращает экран к «Идут».
   const stage2List = showStage2Tabs && stage2Tab === 'pending' ? pendingResponders : comingList;
   const visibleStage2 = rosterExpanded ? stage2List : stage2List.slice(0, ROSTER_PREVIEW_SIZE);
+  // Сколько молчунов ещё не получали напоминания — счётчик «Напомнить всем». Считаем по ВСЕМУ
+  // списку, а не по видимой части: свёрнутый ростер не должен занижать число адресатов.
+  const remindableCount = pendingResponders.filter((r) => !r.remindedAt).length;
 
   // Секция «Кто откликнулся» (Этап 1): те же ярлыки формата, что на карточках лент, но список
   // разложен по статусу — прежде «возможно» и «не иду» отличались только цветом точки в общей сетке.
@@ -805,13 +876,11 @@ export const EventPage: FC = () => {
                 <span className="rd-vl">Подтвердили</span>
                 <span className="rd-vc">{event.confirmedCount}</span>
               </div>
-              {pendingCount > 0 && (
-                <div className="rd-stat-tile rd-st-pending">
-                  <span className="rd-vm">{VOTE_ICONS.maybe}</span>
-                  <span className="rd-vl">Без ответа</span>
-                  <span className="rd-vc">{pendingCount}</span>
-                </div>
-              )}
+              <div className="rd-stat-tile rd-st-pending">
+                <span className="rd-vm">{VOTE_ICONS.maybe}</span>
+                <span className="rd-vl">Без ответа</span>
+                <span className="rd-vc">{pendingCount}</span>
+              </div>
               {waitlistedCount > 0 && (
                 <div className="rd-stat-tile rd-st-waitlist">
                   <span className="rd-vm">{QUEUE_ICON}</span>
@@ -957,6 +1026,9 @@ export const EventPage: FC = () => {
           {showStage2Tabs && stage2Tab === 'pending' ? (
             <>
               <div className="rd-glass rd-pend-panel">
+                {visibleStage2.length === 0 && (
+                  <div className="rd-resp-empty">Все ответили — напоминать некому.</div>
+                )}
                 {visibleStage2.map((r) => {
                   const name = `${r.firstName}${r.lastName ? ` ${r.lastName[0]}.` : ''}`;
                   // Личного чата без username не существует: Telegram разрешает его не задавать,
@@ -983,13 +1055,26 @@ export const EventPage: FC = () => {
                             {name}
                             <span className={`rd-vdot ${statusDotClass(r.status)}`} title={r.status} />
                           </span>
-                          <span className="rd-pend-met">
+                          <span className={`rd-pend-met${r.remindedAt ? ' rd-done-met' : ''}`}>
                             {username ? `@${username}` : 'без username'}
                             {' · '}
-                            {(VOTE_LABELS[r.status] ?? r.status).toLowerCase()}
+                            {r.remindedAt
+                              ? `напомнили в ${formatRemindedAt(r.remindedAt)}`
+                              : (VOTE_LABELS[r.status] ?? r.status).toLowerCase()}
                           </span>
                         </span>
                         {username && <span className="rd-pend-chev" aria-hidden="true">›</span>}
+                      </button>
+                      {/* Отдельная цель нажатия: промах по строке не должен слать человеку DM. */}
+                      <button
+                        type="button"
+                        className="rd-remind-btn"
+                        disabled={!!r.remindedAt || remindMutation.isPending}
+                        aria-label={r.remindedAt ? `Напоминание отправлено: ${name}` : `Напомнить ${name}`}
+                        title={r.remindedAt ? 'Напоминание уже отправлено' : 'Напомнить'}
+                        onClick={() => handleRemind(r.userId)}
+                      >
+                        {r.remindedAt ? CHECK_ICON : BELL_ICON}
                       </button>
                     </div>
                   );
@@ -1000,9 +1085,23 @@ export const EventPage: FC = () => {
                     onExpand={() => { haptic.impact('light'); setRosterExpanded(true); }}
                   />
                 )}
+                {/* Массовое напоминание считает только тех, кому ещё не напоминали: повторный
+                    тап никому ничего не отправит, и счётчик это показывает заранее. */}
+                {remindableCount > 0 && (
+                  <button
+                    type="button"
+                    className="rd-remind-all"
+                    disabled={remindMutation.isPending}
+                    onClick={() => handleRemind(undefined)}
+                  >
+                    {remindMutation.isPending ? <Spinner size="s" /> : `🔔 Напомнить всем · ${remindableCount}`}
+                  </button>
+                )}
               </div>
+              {remindError && <div className="rd-error">{remindError}</div>}
               <div className="rd-hint" style={{ marginBottom: 18 }}>
-                Тап по имени открывает личный чат в Telegram.
+                Тап по имени открывает личный чат. Колокольчик отправляет напоминание от бота —
+                по одному на участника.
               </div>
             </>
           ) : (

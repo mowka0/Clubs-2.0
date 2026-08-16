@@ -10,6 +10,7 @@ import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import com.clubs.generated.jooq.tables.references.USERS
 import com.clubs.membership.MembershipAccess
+import org.jooq.Condition
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
@@ -219,6 +220,86 @@ class JooqEventResponseRepository(
             )
             .fetch(USERS.TELEGRAM_ID)
             .filterNotNull()
+
+    /**
+     * «Ответа ещё нет»: шага Этапа 2 не сделал И на Этапе 1 не отказывался. `IS DISTINCT FROM`
+     * истинно и для NULL, поэтому промолчавший (строка-заглушка) сюда попадает, а сказавший
+     * «не пойду» — нет. Один источник истины для выборки, счётчика и записи отметки.
+     */
+    private fun pendingAnswerCondition(): Condition =
+        EVENT_RESPONSES.STAGE_2_VOTE.isNull
+            .and(EVENT_RESPONSES.STAGE_1_VOTE.isDistinctFrom(Stage_1Vote.not_going))
+
+    override fun findStage2PendingMembers(eventId: UUID): List<EventResponderInfo> =
+        // От мембершипов, а не от голосов: у промолчавшего строки ответа нет вовсе.
+        dsl.select(
+            MEMBERSHIPS.USER_ID,
+            USERS.FIRST_NAME,
+            USERS.LAST_NAME,
+            USERS.AVATAR_URL,
+            USERS.TELEGRAM_USERNAME,
+            EVENT_RESPONSES.STAGE_1_VOTE,
+            EVENT_RESPONSES.STAGE2_REMINDED_AT
+        )
+            .from(EVENTS)
+            .join(MEMBERSHIPS).on(MEMBERSHIPS.CLUB_ID.eq(EVENTS.CLUB_ID).and(MembershipAccess.hasAccess()))
+            .join(USERS).on(USERS.ID.eq(MEMBERSHIPS.USER_ID))
+            .leftJoin(EVENT_RESPONSES).on(
+                EVENT_RESPONSES.EVENT_ID.eq(EVENTS.ID).and(EVENT_RESPONSES.USER_ID.eq(MEMBERSHIPS.USER_ID))
+            )
+            .where(EVENTS.ID.eq(eventId).and(pendingAnswerCondition()))
+            // Сначала те, кто уже проявил интерес: с них организатору логично начинать обзвон.
+            .orderBy(
+                DSL.case_()
+                    .`when`(EVENT_RESPONSES.STAGE_1_VOTE.eq(Stage_1Vote.going), 0)
+                    .`when`(EVENT_RESPONSES.STAGE_1_VOTE.eq(Stage_1Vote.maybe), 1)
+                    .else_(2),
+                USERS.FIRST_NAME.asc()
+            )
+            .fetch { r ->
+                EventResponderInfo(
+                    userId = r.get(MEMBERSHIPS.USER_ID)!!,
+                    firstName = r.get(USERS.FIRST_NAME)!!,
+                    lastName = r.get(USERS.LAST_NAME),
+                    avatarUrl = r.get(USERS.AVATAR_URL),
+                    stage1Vote = r.get(EVENT_RESPONSES.STAGE_1_VOTE),
+                    finalStatus = null,
+                    attendance = null,
+                    disputeNote = null,
+                    telegramUsername = r.get(USERS.TELEGRAM_USERNAME),
+                    stage2RemindedAt = r.get(EVENT_RESPONSES.STAGE2_REMINDED_AT)
+                )
+            }
+
+    override fun markStage2Reminded(eventId: UUID, userIds: List<UUID>): List<Long> {
+        if (userIds.isEmpty()) return emptyList()
+        // Промолчавшему отмечать напоминание негде — строки ответа у него нет. Создаём заглушку
+        // (оба голоса NULL); ON CONFLICT DO NOTHING делает вставку безопасной для тех, у кого
+        // строка уже есть, и для гонки двух менеджеров.
+        dsl.insertInto(EVENT_RESPONSES, EVENT_RESPONSES.EVENT_ID, EVENT_RESPONSES.USER_ID)
+            .apply { userIds.forEach { values(eventId, it) } }
+            .onConflictDoNothing()
+            .execute()
+        // RETURNING user_id: адресаты берутся из фактически обновлённых строк, поэтому участник,
+        // которому параллельный запрос уже проставил отметку, второго DM не получит.
+        val remindedUserIds = dsl.update(EVENT_RESPONSES)
+            .set(EVENT_RESPONSES.STAGE2_REMINDED_AT, OffsetDateTime.now())
+            .where(
+                EVENT_RESPONSES.EVENT_ID.eq(eventId)
+                    .and(EVENT_RESPONSES.USER_ID.`in`(userIds))
+                    .and(EVENT_RESPONSES.STAGE2_REMINDED_AT.isNull)
+                    .and(pendingAnswerCondition())
+            )
+            .returning(EVENT_RESPONSES.USER_ID)
+            .fetch()
+            .mapNotNull { it.get(EVENT_RESPONSES.USER_ID) }
+        if (remindedUserIds.isEmpty()) return emptyList()
+        return dsl.select(USERS.TELEGRAM_ID)
+            .from(USERS)
+            .where(USERS.ID.`in`(remindedUserIds))
+            .fetch(USERS.TELEGRAM_ID)
+            .filterNotNull()
+    }
 
     override fun findTelegramIdsByEventAndUserIds(eventId: UUID, userIds: List<UUID>): List<Long> {
         if (userIds.isEmpty()) return emptyList()

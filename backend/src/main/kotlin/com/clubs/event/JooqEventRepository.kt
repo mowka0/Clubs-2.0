@@ -305,7 +305,24 @@ class JooqEventRepository(
         val confirmed = dsl.selectCount().from(EVENT_RESPONSES)
             .where(EVENT_RESPONSES.EVENT_ID.eq(eventId).and(EVENT_RESPONSES.STAGE_2_VOTE.eq(Stage_2Vote.confirmed)))
             .fetchOne(0, Int::class.java) ?: 0
-        return mapOf("going" to going, "maybe" to maybe, "notGoing" to notGoing, "confirmed" to confirmed)
+        // «Без ответа» на Этапе 2: участники клуба с доступом, кроме сказавших «не пойду» и кроме
+        // уже ответивших. Считается от мембершипов — промолчавшего в event_responses нет.
+        val noAnswer = dsl.selectCount()
+            .from(EVENTS)
+            .join(MEMBERSHIPS).on(MEMBERSHIPS.CLUB_ID.eq(EVENTS.CLUB_ID).and(MembershipAccess.hasAccess()))
+            .leftJoin(EVENT_RESPONSES).on(
+                EVENT_RESPONSES.EVENT_ID.eq(EVENTS.ID).and(EVENT_RESPONSES.USER_ID.eq(MEMBERSHIPS.USER_ID))
+            )
+            .where(
+                EVENTS.ID.eq(eventId)
+                    .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull)
+                    .and(EVENT_RESPONSES.STAGE_1_VOTE.isDistinctFrom(Stage_1Vote.not_going))
+            )
+            .fetchOne(0, Int::class.java) ?: 0
+        return mapOf(
+            "going" to going, "maybe" to maybe, "notGoing" to notGoing,
+            "confirmed" to confirmed, "noAnswer" to noAnswer
+        )
     }
 
     override fun findEventsToTriggerStage2(now: OffsetDateTime, defaultLeadMinutes: Long): List<Event> =

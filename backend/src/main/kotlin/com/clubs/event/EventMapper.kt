@@ -50,7 +50,8 @@ class EventMapper(
         goingCount: Int,
         maybeCount: Int,
         notGoingCount: Int,
-        confirmedCount: Int
+        confirmedCount: Int,
+        noAnswerCount: Int = 0
     ) = EventDetailDto(
         id = event.id,
         clubId = event.clubId,
@@ -77,6 +78,7 @@ class EventMapper(
         maybeCount = maybeCount,
         notGoingCount = notGoingCount,
         confirmedCount = confirmedCount,
+        noAnswerCount = noAnswerCount,
         // Открытая встреча: порога отказа нет — дедлайн совпадает со стартом события (окно
         // confirm/decline всё равно закрывается стартом, Bug B). Фронт различие не хардкодит.
         confirmedDeclineDeadline = if (event.isOpenEvent) event.eventDatetime

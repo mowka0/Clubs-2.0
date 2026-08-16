@@ -188,6 +188,14 @@ open class EventResponses(
      */
     val DISPUTE_TERMINAL: TableField<EventResponsesRecord, Boolean?> = createField(DSL.name("dispute_terminal"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field(DSL.raw("false"), SQLDataType.BOOLEAN)), this, "TRUE = организатор окончательно разрешил спор в absent — повторное оспаривание закрыто (защита от пинг-понга споров).")
 
+    /**
+     * The column <code>public.event_responses.stage2_reminded_at</code>. Когда
+     * организатор отправил участнику ручное напоминание подтвердить участие на
+     * Этапе 2 (NULL = не напоминали). Одно напоминание на участника на событие:
+     * непустое значение блокирует повторную отправку.
+     */
+    val STAGE2_REMINDED_AT: TableField<EventResponsesRecord, OffsetDateTime?> = createField(DSL.name("stage2_reminded_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда организатор отправил участнику ручное напоминание подтвердить участие на Этапе 2 (NULL = не напоминали). Одно напоминание на участника на событие: непустое значение блокирует повторную отправку.")
+
     private constructor(alias: Name, aliased: Table<EventResponsesRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<EventResponsesRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<EventResponsesRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

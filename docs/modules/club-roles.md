@@ -280,7 +280,8 @@ capability. Все пути от `backend/src/main/kotlin/com/clubs/`.
 | 24 | `event/AttendanceService.kt:146` | resolveDispute | `MANAGE_EVENTS` |
 | 25 | `event/EventService.kt:30` | createEvent (дублирует #13) | `MANAGE_EVENTS` |
 | 26 | `event/EventService.kt:77` | cancelEvent | `MANAGE_EVENTS` |
-| 27 | `event/VoteService.kt:92` | видимость `dispute_note` в getEventResponders | `MANAGE_EVENTS` |
+| 27 | `event/VoteService.kt:92` | видимость `dispute_note`, `telegram_username` и `stage2_reminded_at` в getEventResponders | `MANAGE_EVENTS` |
+| 27a | `event/Stage2ReminderService.kt:46` | remind (ручное напоминание подтвердить участие) | `MANAGE_EVENTS` — в пути id события, аннотация неприменима ([`event-stage2-composition.md`](./event-stage2-composition.md) § 6) |
 | 28 | `skladchina/SkladchinaCreationService.kt:38` | create (дублирует #15) | `MANAGE_SKLADCHINA` |
 | 29 | `skladchina/SkladchinaLifecycleService.kt:81` | closeManually | `MANAGE_SKLADCHINA` (creator ИЛИ право, У-1) |
 | 30 | `skladchina/SkladchinaPaymentService.kt:293` | requireActiveAsCreator (resolve-decline / mark-paid / unmark) | `MANAGE_SKLADCHINA` (creator ИЛИ право, У-1) |

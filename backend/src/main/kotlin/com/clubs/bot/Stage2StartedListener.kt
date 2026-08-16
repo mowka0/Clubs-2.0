@@ -1,5 +1,6 @@
 package com.clubs.bot
 
+import com.clubs.event.Stage2ReminderSentEvent
 import com.clubs.event.Stage2StartedEvent
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -24,5 +25,12 @@ class Stage2StartedListener(
     fun onStage2Started(event: Stage2StartedEvent) {
         log.info("Stage 2 started for event {} — notifying going/maybe voters", event.event.id)
         notificationService.sendStage2Started(event.event)
+    }
+
+    /** Ручное напоминание менеджера. AFTER_COMMIT по той же причине: DM не должен обгонять отметку. */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    fun onStage2ReminderSent(event: Stage2ReminderSentEvent) {
+        log.info("Manual Stage 2 reminder for event {} — {} recipient(s)", event.event.id, event.telegramIds.size)
+        notificationService.sendStage2Reminder(event.event, event.telegramIds)
     }
 }

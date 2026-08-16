@@ -58,6 +58,7 @@ function stage2Event(overrides: Partial<EventDetailDto> = {}): EventDetailDto {
     maybeCount: 1,
     notGoingCount: 0,
     confirmedCount: 1,
+    noAnswerCount: 0,
     confirmedDeclineDeadline: new Date(Date.now() + 3_600_000).toISOString(),
     stage2LeadMinutes: 1080,
     stage2LeadMinutesOverride: null,
@@ -95,9 +96,13 @@ function mockEndpoints(opts: {
   responders?: EventResponderDto[];
   ownerId?: string;
   myClubs?: MembershipDto[];
+  pending?: EventResponderDto[];
 }) {
+  const pending = opts.pending ?? [];
   server.use(
-    http.get(`*/api/events/${EVENT_ID}`, () => HttpResponse.json(opts.event ?? stage2Event())),
+    http.get(`*/api/events/${EVENT_ID}`, () =>
+      HttpResponse.json({ ...(opts.event ?? stage2Event()), noAnswerCount: pending.length })),
+    http.get(`*/api/events/${EVENT_ID}/pending`, () => HttpResponse.json(pending)),
     http.get(`*/api/events/${EVENT_ID}/my-vote`, () => HttpResponse.json({ vote: opts.myVote ?? 'confirmed' })),
     http.get(`*/api/events/${EVENT_ID}/responses`, () => HttpResponse.json(opts.responders ?? [])),
     http.get('*/api/users/me/clubs', () => HttpResponse.json(opts.myClubs ?? [])),
@@ -142,9 +147,9 @@ describe('EventPage — состав Этапа 2 в стиле Этапа 1 (ev
     mockEndpoints({
       responders: [
         responder({ userId: 'c1' }),
-        responder({ userId: 'p1', status: 'going' }),
         responder({ userId: 'w1', status: 'waitlisted' }),
       ],
+      pending: [responder({ userId: 'p1', status: 'going' })],
     });
     const { container } = renderEventPage();
 
@@ -175,8 +180,8 @@ describe('EventPage — состав Этапа 2 в стиле Этапа 1 (ev
     mockEndpoints({
       responders: [
         responder({ userId: 'c1', firstName: 'Анна' }),
-        responder({ userId: 'p1', firstName: 'Молчун', status: 'going' }),
       ],
+      pending: [responder({ userId: 'p1', firstName: 'Молчун', status: 'going' })],
     });
     renderEventPage();
 
@@ -190,8 +195,8 @@ describe('EventPage — состав Этапа 2 в стиле Этапа 1 (ev
       ownerId: VIEWER_ID,
       responders: [
         responder({ userId: 'c1', firstName: 'Анна' }),
-        responder({ userId: 'p1', firstName: 'Молчун', status: 'going' }),
       ],
+      pending: [responder({ userId: 'p1', firstName: 'Молчун', status: 'going' })],
     });
     renderEventPage();
 
@@ -207,8 +212,8 @@ describe('EventPage — состав Этапа 2 в стиле Этапа 1 (ev
       myClubs: [membership('co_organizer')],
       responders: [
         responder({ userId: 'c1', firstName: 'Анна' }),
-        responder({ userId: 'p1', firstName: 'Молчун', status: 'going' }),
       ],
+      pending: [responder({ userId: 'p1', firstName: 'Молчун', status: 'going' })],
     });
     renderEventPage();
 
@@ -220,8 +225,8 @@ describe('EventPage — состав Этапа 2 в стиле Этапа 1 (ev
       myClubs: [membership('co_organizer', 'frozen')],
       responders: [
         responder({ userId: 'c1', firstName: 'Анна' }),
-        responder({ userId: 'p1', firstName: 'Молчун', status: 'going' }),
       ],
+      pending: [responder({ userId: 'p1', firstName: 'Молчун', status: 'going' })],
     });
     renderEventPage();
 
@@ -229,12 +234,14 @@ describe('EventPage — состав Этапа 2 в стиле Этапа 1 (ev
     expect(screen.queryByRole('button', { name: /Без ответа \(/ })).not.toBeInTheDocument();
   });
 
-  it('AC-S6: все ответили — переключателя нет даже у владельца', async () => {
+  it('AC-S6: все ответили — таб на месте и объясняет, что напоминать некому', async () => {
+    // Видимость постоянная (решение PO 2026-08-16): иначе организатор не узнает о механике.
     mockEndpoints({ ownerId: VIEWER_ID, responders: [responder({ userId: 'c1', firstName: 'Анна' })] });
-    renderEventPage();
+    const { user } = renderEventPage();
 
-    expect(await screen.findByText(/Кто идёт/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Без ответа \(/ })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Без ответа (0)' }));
+    expect(screen.getByText('Все ответили — напоминать некому.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Напомнить всем/ })).not.toBeInTheDocument();
   });
 
   it('AC-S7: тап по молчуну с username открывает личный чат', async () => {
@@ -242,8 +249,8 @@ describe('EventPage — состав Этапа 2 в стиле Этапа 1 (ev
       ownerId: VIEWER_ID,
       responders: [
         responder({ userId: 'c1', firstName: 'Анна' }),
-        responder({ userId: 'p1', firstName: 'Пётр', status: 'going', telegramUsername: 'petr_s' }),
       ],
+      pending: [responder({ userId: 'p1', firstName: 'Пётр', status: 'going', telegramUsername: 'petr_s' })],
     });
     const { user } = renderEventPage();
 
@@ -259,8 +266,8 @@ describe('EventPage — состав Этапа 2 в стиле Этапа 1 (ev
       ownerId: VIEWER_ID,
       responders: [
         responder({ userId: 'c1', firstName: 'Анна' }),
-        responder({ userId: 'p1', firstName: 'Наталья', status: 'maybe', telegramUsername: null }),
       ],
+      pending: [responder({ userId: 'p1', firstName: 'Наталья', status: 'maybe', telegramUsername: null })],
     });
     const { container, user } = renderEventPage();
 
@@ -280,8 +287,8 @@ describe('EventPage — состав Этапа 2 в стиле Этапа 1 (ev
       ownerId: VIEWER_ID,
       responders: [
         responder({ userId: 'c1', firstName: 'Анна' }),
-        responder({ userId: 'p1', firstName: 'Кривой', status: 'going', telegramUsername: 'petr/../evil?x=1' }),
       ],
+      pending: [responder({ userId: 'p1', firstName: 'Кривой', status: 'going', telegramUsername: 'petr/../evil?x=1' })],
     });
     const { container, user } = renderEventPage();
 
@@ -299,7 +306,7 @@ describe('EventPage — состав Этапа 2 в стиле Этапа 1 (ev
       ownerId: VIEWER_ID,
       myVote: 'going',
       event: stage2Event({ confirmedCount: 0 }),
-      responders: [responder({ userId: 'p1', firstName: 'Молчун', status: 'going' })],
+      pending: [responder({ userId: 'p1', firstName: 'Молчун', status: 'going' })],
     });
     const { user } = renderEventPage();
 
@@ -310,13 +317,130 @@ describe('EventPage — состав Этапа 2 в стиле Этапа 1 (ev
     expect(screen.getByText('Молчун')).toBeInTheDocument();
   });
 
+  it('колокольчик отправляет напоминание конкретному участнику', async () => {
+    let body: unknown = null;
+    server.use(http.post(`*/api/events/${EVENT_ID}/remind`, async ({ request }) => {
+      body = await request.json();
+      return HttpResponse.json({ remindedCount: 1 });
+    }));
+    mockEndpoints({
+      ownerId: VIEWER_ID,
+      responders: [
+        responder({ userId: 'c1', firstName: 'Анна' }),
+      ],
+      pending: [responder({ userId: 'p1', firstName: 'Пётр', status: 'going', telegramUsername: 'petr_s' })],
+    });
+    const { user } = renderEventPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Без ответа (1)' }));
+    await user.click(screen.getByRole('button', { name: 'Напомнить Пётр' }));
+
+    await screen.findByText(/Напоминание отправлено · 1/);
+    expect(body).toEqual({ userId: 'p1' });
+  });
+
+  it('уже напомненному колокольчик заблокирован, в мете — время отправки', async () => {
+    const remindedAt = new Date('2026-08-16T18:42:00Z').toISOString();
+    mockEndpoints({
+      ownerId: VIEWER_ID,
+      responders: [
+        responder({ userId: 'c1', firstName: 'Анна' }),
+      ],
+      pending: [responder({
+        userId: 'p1', firstName: 'Кирилл', status: 'going',
+        telegramUsername: 'kirill', remindedAt,
+      })],
+    });
+    const { user } = renderEventPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Без ответа (1)' }));
+    const bell = screen.getByRole('button', { name: /Напоминание отправлено: Кирилл/ }) as HTMLButtonElement;
+    expect(bell.disabled).toBe(true);
+    expect(screen.getByText(/напомнили в/)).toBeInTheDocument();
+    // Всем уже напомнили — массовой кнопки нет.
+    expect(screen.queryByRole('button', { name: /Напомнить всем/ })).not.toBeInTheDocument();
+  });
+
+  it('«Напомнить всем» считает только тех, кому ещё не напоминали, и шлёт запрос без userId', async () => {
+    let body: unknown = 'not-called';
+    server.use(http.post(`*/api/events/${EVENT_ID}/remind`, async ({ request }) => {
+      body = await request.json();
+      return HttpResponse.json({ remindedCount: 2 });
+    }));
+    mockEndpoints({
+      ownerId: VIEWER_ID,
+      responders: [
+        responder({ userId: 'c1', firstName: 'Анна' }),
+        responder({ userId: 'p1', firstName: 'Пётр', status: 'going', telegramUsername: 'petr_s' }),
+      ],
+      pending: [
+        responder({ userId: 'p1', firstName: 'Пётр', status: 'going', telegramUsername: 'petr_s' }),
+        responder({ userId: 'p2', firstName: 'Мария', status: 'maybe' }),
+        responder({ userId: 'p3', firstName: 'Кирилл', status: 'going', remindedAt: new Date().toISOString() }),
+      ],
+    });
+    const { user } = renderEventPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Без ответа (3)' }));
+    // Трое молчунов, но одному уже напомнили → адресатов двое.
+    await user.click(screen.getByRole('button', { name: /Напомнить всем · 2/ }));
+
+    await screen.findByText(/Напоминание отправлено · 2/);
+    expect(body).toEqual({});
+  });
+
+  it('нулевой ответ сервера не выдаётся за отправку', async () => {
+    server.use(http.post(`*/api/events/${EVENT_ID}/remind`, () =>
+      HttpResponse.json({ remindedCount: 0 })));
+    mockEndpoints({
+      ownerId: VIEWER_ID,
+      responders: [
+        responder({ userId: 'c1', firstName: 'Анна' }),
+      ],
+      pending: [responder({ userId: 'p1', firstName: 'Пётр', status: 'going', telegramUsername: 'petr_s' })],
+    });
+    const { user } = renderEventPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Без ответа (1)' }));
+    await user.click(screen.getByRole('button', { name: 'Напомнить Пётр' }));
+
+    expect(await screen.findByText('Всем, кому можно, уже напомнили')).toBeInTheDocument();
+  });
+
+  it('участник не видит кнопок напоминания', async () => {
+    mockEndpoints({
+      responders: [
+        responder({ userId: 'c1', firstName: 'Анна' }),
+        responder({ userId: 'p1', firstName: 'Пётр', status: 'going' }),
+      ],
+    });
+    renderEventPage();
+
+    expect(await screen.findByText(/Кто идёт/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Напомнить/ })).not.toBeInTheDocument();
+  });
+
+  it('на завершённой встрече таба нет — напоминать уже поздно', async () => {
+    const PAST = new Date(Date.now() - 86_400_000).toISOString();
+    mockEndpoints({
+      ownerId: VIEWER_ID,
+      event: stage2Event({ status: 'completed', eventDatetime: PAST }),
+      responders: [responder({ userId: 'c1', firstName: 'Анна' })],
+      pending: [responder({ userId: 'p1', firstName: 'Молчун', status: 'no_answer' })],
+    });
+    renderEventPage();
+
+    expect(await screen.findByText(/Кто идёт/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Без ответа \(/ })).not.toBeInTheDocument();
+  });
+
   it('переключение таба сбрасывает раскрытие длинного списка', async () => {
     const responders = [
       ...Array.from({ length: 8 }, (_, i) => responder({ userId: `c${i}`, firstName: `Гость${i}` })),
-      ...Array.from({ length: 7 }, (_, i) =>
-        responder({ userId: `p${i}`, firstName: `Молчун${i}`, status: 'going' })),
     ];
-    mockEndpoints({ ownerId: VIEWER_ID, responders });
+    const pending = Array.from({ length: 7 }, (_, i) =>
+      responder({ userId: `p${i}`, firstName: `Молчун${i}`, status: 'going' }));
+    mockEndpoints({ ownerId: VIEWER_ID, responders, pending });
     const { container, user } = renderEventPage();
 
     await user.click(await screen.findByRole('button', { name: /Показать всех · 8/ }));

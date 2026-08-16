@@ -80,6 +80,10 @@ open class EventResponsesRecord private constructor() : UpdatableRecordImpl<Even
         set(value): Unit = set(13, value)
         get(): Boolean? = get(13) as Boolean?
 
+    open var stage2RemindedAt: OffsetDateTime?
+        set(value): Unit = set(14, value)
+        get(): OffsetDateTime? = get(14) as OffsetDateTime?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -89,7 +93,7 @@ open class EventResponsesRecord private constructor() : UpdatableRecordImpl<Even
     /**
      * Create a detached, initialised EventResponsesRecord
      */
-    constructor(id: UUID? = null, eventId: UUID, userId: UUID, stage_1Vote: Stage_1Vote? = null, stage_1Timestamp: OffsetDateTime? = null, stage_2Vote: Stage_2Vote? = null, stage_2Timestamp: OffsetDateTime? = null, finalStatus: FinalStatus? = null, attendance: AttendanceStatus? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, disputeNote: String? = null, disputeTerminal: Boolean? = null): this() {
+    constructor(id: UUID? = null, eventId: UUID, userId: UUID, stage_1Vote: Stage_1Vote? = null, stage_1Timestamp: OffsetDateTime? = null, stage_2Vote: Stage_2Vote? = null, stage_2Timestamp: OffsetDateTime? = null, finalStatus: FinalStatus? = null, attendance: AttendanceStatus? = null, attendanceFinalized: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, disputeNote: String? = null, disputeTerminal: Boolean? = null, stage2RemindedAt: OffsetDateTime? = null): this() {
         this.id = id
         this.eventId = eventId
         this.userId = userId
@@ -104,6 +108,7 @@ open class EventResponsesRecord private constructor() : UpdatableRecordImpl<Even
         this.updatedAt = updatedAt
         this.disputeNote = disputeNote
         this.disputeTerminal = disputeTerminal
+        this.stage2RemindedAt = stage2RemindedAt
         resetChangedOnNotNull()
     }
 
@@ -126,6 +131,7 @@ open class EventResponsesRecord private constructor() : UpdatableRecordImpl<Even
             this.updatedAt = value.updatedAt
             this.disputeNote = value.disputeNote
             this.disputeTerminal = value.disputeTerminal
+            this.stage2RemindedAt = value.stage2RemindedAt
             resetChangedOnNotNull()
         }
     }

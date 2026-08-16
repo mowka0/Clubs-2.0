@@ -192,4 +192,15 @@ open class EventResponsesDao(configuration: Configuration?) : DAOImpl<EventRespo
      * Fetch records that have <code>dispute_terminal IN (values)</code>
      */
     fun fetchByDisputeTerminal(vararg values: Boolean): List<com.clubs.generated.jooq.tables.pojos.EventResponses> = fetch(EventResponses.EVENT_RESPONSES.DISPUTE_TERMINAL, *values.toTypedArray())
+
+    /**
+     * Fetch records that have <code>stage2_reminded_at BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfStage2RemindedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.EventResponses> = fetchRange(EventResponses.EVENT_RESPONSES.STAGE2_REMINDED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>stage2_reminded_at IN (values)</code>
+     */
+    fun fetchByStage2RemindedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.EventResponses> = fetch(EventResponses.EVENT_RESPONSES.STAGE2_REMINDED_AT, *values)
 }

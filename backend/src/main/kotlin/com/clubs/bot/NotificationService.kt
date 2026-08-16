@@ -166,6 +166,34 @@ class NotificationService(
     }
 
     /**
+     * Ручное напоминание ответить: организатор (или со-организатор) жмёт колокольчик у участника,
+     * от которого ещё нет ответа. Отличается от [sendStage2Started] адресностью и тем, что
+     * инициатор — человек: автоматический пинг «за 2 часа до встречи» был удалён как лишний
+     * (V51, PO 2026-07-08), и возвращать его сюда нельзя. Одно напоминание на участника на
+     * событие гарантирует `markStage2Reminded`: сюда приходят telegram id только помеченных строк.
+     *
+     * Текст НЕ ссылается на голос Этапа 1: напоминание уходит и тем, кто голосовал «возможно»,
+     * и тем, кто вообще промолчал, — формулировка «ты голосовал, но не подтвердил» для половины
+     * адресатов была бы просто неверной.
+     */
+    @Async
+    fun sendStage2Reminder(event: Event, telegramIds: List<Long>) {
+        if (telegramIds.isEmpty()) {
+            log.info("Stage 2 reminder DM SKIPPED — no recipients for eventId={}", event.id)
+            return
+        }
+        log.info("Stage 2 reminder DM: eventId={} recipients={}", event.id, telegramIds.size)
+        val text = "🔔 Скоро встреча\n\n📌 ${event.title} — ${event.eventDatetime.format(fmt)}\n\n" +
+            "Организатор ждёт вашего ответа: идёте или нет? Отметьтесь в приложении, " +
+            "чтобы он знал, на сколько человек рассчитывать."
+        val webAppPath = "/events/${event.id}"
+
+        telegramIds.forEach { telegramId ->
+            sendDm(telegramId.toString(), text, webAppPath = webAppPath, buttonText = "✅ Подтвердить участие")
+        }
+    }
+
+    /**
      * DM участнику, автоматически повышённому из листа ожидания в confirmed (освободился слот —
      * подтверждённый отказался или вышел из клуба). Кнопка ведёт на страницу события. Best-effort
      * @Async: telegram id резолвим из строки ответа участника; если её/id нет — тихо пропускаем
