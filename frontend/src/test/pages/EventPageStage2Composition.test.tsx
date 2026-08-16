@@ -420,6 +420,20 @@ describe('EventPage — состав Этапа 2 в стиле Этапа 1 (ev
     expect(screen.queryByRole('button', { name: /Напомнить/ })).not.toBeInTheDocument();
   });
 
+  it('на завершённой встрече таба нет — напоминать уже поздно', async () => {
+    const PAST = new Date(Date.now() - 86_400_000).toISOString();
+    mockEndpoints({
+      ownerId: VIEWER_ID,
+      event: stage2Event({ status: 'completed', eventDatetime: PAST }),
+      responders: [responder({ userId: 'c1', firstName: 'Анна' })],
+      pending: [responder({ userId: 'p1', firstName: 'Молчун', status: 'no_answer' })],
+    });
+    renderEventPage();
+
+    expect(await screen.findByText(/Кто идёт/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Без ответа \(/ })).not.toBeInTheDocument();
+  });
+
   it('переключение таба сбрасывает раскрытие длинного списка', async () => {
     const responders = [
       ...Array.from({ length: 8 }, (_, i) => responder({ userId: `c${i}`, firstName: `Гость${i}` })),

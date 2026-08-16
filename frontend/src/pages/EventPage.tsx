@@ -233,7 +233,11 @@ export const EventPage: FC = () => {
   // Поимённый список молчунов — менеджерский эндпоинт, участнику он вернёт 403.
   const pendingQuery = useEventPendingQuery(
     isAuthenticated ? id : undefined,
-    isManager && eventQuery.data?.status === 'stage_2',
+    // То же окно, в котором работает напоминание: до старта встречи. На завершённой встрече
+    // бэкенд откажет, а «Без ответа» там уже не имеет смысла.
+    isManager
+      && eventQuery.data?.status === 'stage_2'
+      && new Date(eventQuery.data.eventDatetime).getTime() > Date.now(),
   );
   const cancelMutation = useCancelEventMutation();
   const updateMutation = useUpdateEventMutation();
@@ -716,7 +720,7 @@ export const EventPage: FC = () => {
   // когда есть кого догонять: все подтвердились → лишнего элемента на экране не появляется.
   // Переключатель у менеджера есть всегда: иначе о самой возможности догнать молчунов он
   // узнавал бы только при удачном стечении обстоятельств.
-  const showStage2Tabs = finalComposition && !isCancelled && isManager;
+  const showStage2Tabs = showStage2 && isManager;
   const pendingResponders = pendingQuery.data ?? [];
   // Активный список секции состава. Таб «Без ответа» существует только при showStage2Tabs,
   // поэтому потеря менеджерства (или обнуление списка) сама возвращает экран к «Идут».
