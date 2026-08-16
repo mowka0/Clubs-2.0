@@ -39,6 +39,8 @@ class CreateEventRequestValidationTest {
         stage2LeadMinutes = stage2LeadMinutes
     )
 
+    // ВНИМАНИЕ: путь свойства идёт БЕЗ префикса `is` — Bean Validation выводит имя по JavaBeans,
+    // и геттер `isFooConsistent()` даёт свойство `fooConsistent`.
     private fun violatedProperties(request: CreateEventRequest): Set<String> =
         validator.validate(request).map { it.propertyPath.toString() }.toSet()
 
@@ -162,13 +164,13 @@ class CreateEventRequestValidationTest {
     // Пропущенный лимит БЕЗ флага — это ошибка ввода (как до V62), а не молчаливая смена формата.
     @Test
     fun `missing limit without the open flag is rejected`() {
-        assertTrue("isParticipantLimitConsistent" in violatedProperties(request(participantLimit = null)))
+        assertTrue("participantLimitConsistent" in violatedProperties(request(participantLimit = null)))
     }
 
     // Противоречивый ввод: флаг открытой встречи вместе с лимитом.
     @Test
     fun `open flag combined with a limit is rejected`() {
-        assertTrue("isParticipantLimitConsistent" in violatedProperties(request(participantLimit = 20, isOpenEvent = true)))
+        assertTrue("participantLimitConsistent" in violatedProperties(request(participantLimit = 20, isOpenEvent = true)))
     }
 
     // @Positive продолжает отсекать бессмысленные ненулевые значения.
