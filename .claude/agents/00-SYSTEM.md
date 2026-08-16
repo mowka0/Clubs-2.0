@@ -215,6 +215,10 @@ Orchestrator → Developer → Self-check → Orchestrator (done)
 
 Полный цикл (Analyst → Developer → Tester → Reviewer) — для задач с бизнес-логикой: auth, clubs, events, payments, membership, UI pages.
 
+**Для работы вне tasks.json** (баги, фичи, правки по описанию от PO) действует та же идея,
+но с механическими критериями: треки S / M / L — см. `CLAUDE.md` § «Масштаб правки →
+длина процесса». Fast Track из этого раздела — исторический частный случай трека S.
+
 ### 2.4 Параллельная работа
 
 Агенты могут работать параллельно ТОЛЬКО если их задачи:
