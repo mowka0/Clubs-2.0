@@ -35,5 +35,9 @@ data class EventResponderDto(
     val status: String,
     val attendance: String?,
     // Опциональная свободная заметка, которую оставил участник при оспаривании (показывается организатору).
-    val disputeNote: String?
+    val disputeNote: String?,
+    // Username в Telegram (без @) — чтобы менеджер мог открыть личный чат с молчуном на Этапе 2.
+    // NULL и для тех, у кого username не задан, и для НЕ-менеджеров: обычному участнику клуба
+    // контакты соседей по событию не отдаём (см. event-stage2-composition.md § «Права»).
+    val telegramUsername: String?
 )

@@ -8,7 +8,10 @@ import com.clubs.common.exception.ValidationException
 import com.clubs.generated.jooq.enums.AttendanceStatus
 import com.clubs.generated.jooq.enums.EventStatus
 import com.clubs.generated.jooq.enums.FinalStatus
+import com.clubs.generated.jooq.enums.MembershipRole
+import com.clubs.generated.jooq.enums.MembershipStatus
 import com.clubs.generated.jooq.enums.Stage_1Vote
+import com.clubs.membership.Membership
 import com.clubs.membership.MembershipRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -138,10 +141,10 @@ class VoteServiceTest {
 
     // --- getEventResponders: dispute_note privacy (F5-06) ---
 
-    private fun responderWithNote(note: String?) = EventResponderInfo(
+    private fun responderWithNote(note: String?, username: String? = "petr_s") = EventResponderInfo(
         userId = UUID.randomUUID(), firstName = "A", lastName = null, avatarUrl = null,
         stage1Vote = Stage_1Vote.going, finalStatus = FinalStatus.confirmed,
-        attendance = AttendanceStatus.disputed, disputeNote = note
+        attendance = AttendanceStatus.disputed, disputeNote = note, telegramUsername = username
     )
 
     private fun stubRespondersWithNote(ownerId: UUID, viewerId: UUID) {
@@ -166,6 +169,56 @@ class VoteServiceTest {
     fun `getEventResponders hides disputeNote from a non-owner member (F5-06)`() {
         stubRespondersWithNote(ownerId = UUID.randomUUID(), viewerId = userId)
         assertNull(service.getEventResponders(eventId, userId).single().disputeNote)
+    }
+
+    // --- getEventResponders: telegram_username privacy (event-stage2-composition.md § 5) ---
+    // Username нужен менеджеру, чтобы открыть личный чат с не ответившим на Этапе 2. Рядовому
+    // участнику контакты соседей по событию не отдаём — гейт тот же, что у dispute-note.
+
+    @Test
+    fun `getEventResponders exposes telegramUsername to the club owner`() {
+        stubRespondersWithNote(ownerId = userId, viewerId = userId)
+        assertEquals("petr_s", service.getEventResponders(eventId, userId).single().telegramUsername)
+    }
+
+    @Test
+    fun `getEventResponders exposes telegramUsername to an active co-organizer`() {
+        stubRespondersWithNote(ownerId = UUID.randomUUID(), viewerId = userId)
+        every { membershipRepository.findByUserAndClub(userId, clubId) } returns
+            membership(MembershipRole.co_organizer, MembershipStatus.active)
+        assertEquals("petr_s", service.getEventResponders(eventId, userId).single().telegramUsername)
+    }
+
+    @Test
+    fun `getEventResponders hides telegramUsername from a plain member`() {
+        stubRespondersWithNote(ownerId = UUID.randomUUID(), viewerId = userId)
+        assertNull(service.getEventResponders(eventId, userId).single().telegramUsername)
+    }
+
+    /** Со-организатор без активного членства прав не имеет (fail-close, ClubRoleGuard). */
+    @Test
+    fun `getEventResponders hides telegramUsername from a frozen co-organizer`() {
+        stubRespondersWithNote(ownerId = UUID.randomUUID(), viewerId = userId)
+        every { membershipRepository.findByUserAndClub(userId, clubId) } returns
+            membership(MembershipRole.co_organizer, MembershipStatus.frozen)
+        assertNull(service.getEventResponders(eventId, userId).single().telegramUsername)
+    }
+
+    /** Username не задан в Telegram — менеджер тоже получает null (личного чата не существует). */
+    @Test
+    fun `getEventResponders returns null telegramUsername when the user has none`() {
+        stubRespondersWithNote(ownerId = userId, viewerId = userId)
+        every { eventResponseRepository.findRespondersWithUsers(eventId) } returns
+            listOf(responderWithNote(null, username = null))
+        assertNull(service.getEventResponders(eventId, userId).single().telegramUsername)
+    }
+
+    private fun membership(role: MembershipRole, status: MembershipStatus): Membership {
+        val now = OffsetDateTime.now()
+        return Membership(
+            id = UUID.randomUUID(), userId = userId, clubId = clubId, status = status, role = role,
+            joinedAt = now, subscriptionExpiresAt = null, createdAt = now, updatedAt = now
+        )
     }
 
     private fun stubResponse(stage1: Stage_1Vote?, final: FinalStatus?) {
