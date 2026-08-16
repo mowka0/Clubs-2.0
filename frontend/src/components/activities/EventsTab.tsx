@@ -54,7 +54,9 @@ export const EventsTab: FC = () => {
 
   const handleSearchClick = () => {
     haptic.impact('light');
-    navigate('/');
+    // Каталог адресуем явным роутом: «/» ведёт в клуб человека, и кнопка поиска
+    // вернула бы его туда, откуда он пришёл.
+    navigate('/discovery');
   };
 
   const handleCreateClick = () => {

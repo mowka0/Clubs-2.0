@@ -371,7 +371,7 @@ export const ProfilePage: FC = () => {
             <button
               type="button"
               className="rd-ghost-btn"
-              onClick={() => { haptic.impact('light'); navigate('/'); }}
+              onClick={() => { haptic.impact('light'); navigate('/discovery'); }}
             >
               Найти клуб
             </button>

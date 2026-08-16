@@ -1,6 +1,7 @@
 import { lazy, FC } from 'react';
 import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
 import { Layout } from './components/Layout';
+import { HomeRoute } from './components/HomeRoute';
 
 // Страницы основных табов — импортируются сразу, для мгновенного переключения таба
 import { DiscoveryPage } from './pages/DiscoveryPage';
@@ -53,7 +54,14 @@ export const router = createBrowserRouter([
     children: [
       // Маршруты основных табов
       {
+        // «/» решает, куда вести: в клуб человека или в каталог. См. HomeRoute.
         path: '/',
+        element: <HomeRoute />,
+      },
+      {
+        // Каталог убран из навигации, но роут живой: внешние ссылки и старые
+        // закладки на витрину не должны давать 404.
+        path: '/discovery',
         element: <DiscoveryPage />,
       },
       {

@@ -1,6 +1,7 @@
 import { FC, ReactNode, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useHaptic } from '../hooks/useHaptic';
+import { PRODUCT_PROFILE } from '../config/productProfile';
 import { useMyClubsActionCountsQuery } from '../queries/applications';
 import { useSkladchinaActionRequiredCountQuery } from '../queries/skladchina';
 
@@ -25,15 +26,28 @@ const Icon = ({ children }: { children: ReactNode }) => (
   </svg>
 );
 
+// Каталог клубов. В чат-модели из дока убран: первый экран отвечает на вопрос
+// «что у меня происходит», а не «какие вообще бывают клубы». Роут при этом живой.
+const DISCOVERY_TAB: TabConfig = {
+  path: '/',
+  label: 'Главная',
+  icon: <Icon><path d="M3 11.5 12 4l9 7.5" /><path d="M5 10v10h14V10" /></Icon>,
+};
+
 // Порядок и подписи следуют мокапу редизайна; роуты не менялись.
 const TABS: readonly TabConfig[] = [
-  { path: '/', label: 'Главная', icon: <Icon><path d="M3 11.5 12 4l9 7.5" /><path d="M5 10v10h14V10" /></Icon> },
+  ...(PRODUCT_PROFILE.showDiscoveryTab ? [DISCOVERY_TAB] : []),
   { path: '/activities', label: 'Активности', icon: <Icon><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 2v4M16 2v4" /></Icon> },
   { path: '/my-clubs', label: 'Клубы', icon: <Icon><circle cx="9" cy="8" r="3" /><path d="M15 11a3 3 0 1 0-2-5.2" /><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5" /><path d="M16 15c2.4.5 5 2.3 5 5" /></Icon> },
   { path: '/profile', label: 'Профиль', icon: <Icon><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" /></Icon> },
-] as const;
+];
 
 const TAB_PATHS = new Set(TABS.map((t) => t.path));
+
+// Экраны без собственного таба, на которых док всё равно нужен — иначе с них не уйти.
+// «/» показывает каталог, пока у человека нет ни одного клуба (временно, до онбординга
+// «подключите чат»), «/discovery» открывается по старым внешним ссылкам.
+const TABLESS_DOCK_PATHS = new Set<string>(['/', '/discovery']);
 
 // Роуты, на которых таб "Активности" должен визуально оставаться активным (под-разделы + детали).
 const ACTIVITIES_SECONDARY_PATHS = new Set<string>(['/events', '/skladchina']);
@@ -46,6 +60,7 @@ const ACTIVITIES_SECONDARY_PATHS = new Set<string>(['/events', '/skladchina']);
  */
 export function isTabBarRoute(pathname: string): boolean {
   if (TAB_PATHS.has(pathname)) return true;
+  if (TABLESS_DOCK_PATHS.has(pathname)) return true;
   if (ACTIVITIES_SECONDARY_PATHS.has(pathname)) return true;
   return /^\/(clubs|events|skladchina)\/[^/]+(\/manage|\/skladchina\/new)?$/.test(pathname);
 }

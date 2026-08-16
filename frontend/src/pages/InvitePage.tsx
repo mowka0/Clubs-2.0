@@ -193,7 +193,7 @@ export const InvitePage: FC = () => {
         art={foxInviteArt}
         title="Ссылка недействительна"
         description="Возможно, приглашение устарело или его отозвали — попроси друга прислать новую ссылку"
-        primary={{ label: 'Найти клубы', onClick: () => navigate('/') }}
+        primary={{ label: 'Найти клубы', onClick: () => navigate('/discovery') }}
       />
     </div>
   );
