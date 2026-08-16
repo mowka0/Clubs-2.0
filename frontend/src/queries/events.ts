@@ -14,6 +14,7 @@ import {
   getMyEvents,
   getMyVote,
   markAttendance,
+  remindToConfirm,
   resolveDispute,
   updateEvent,
 } from '../api/events';
@@ -112,6 +113,22 @@ export function useConfirmParticipationMutation() {
       qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
       qc.invalidateQueries({ queryKey: queryKeys.events.myVote(eventId) });
       qc.invalidateQueries({ queryKey: queryKeys.events.myFeed });
+    },
+  });
+}
+
+/**
+ * Ручное напоминание подтвердить участие. Инвалидирует detail-ключ: список responders живёт
+ * под его префиксом, поэтому отметка «напомнили» приезжает вместе с обновлённым ростером —
+ * колокольчик гаснет сам, без локального состояния «уже нажал».
+ */
+export function useRemindToConfirmMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ eventId, userId }: { eventId: string; userId?: string }) =>
+      remindToConfirm(eventId, userId),
+    onSuccess: (_data, { eventId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.events.detail(eventId) });
     },
   });
 }

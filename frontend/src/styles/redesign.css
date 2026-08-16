@@ -1606,7 +1606,29 @@
   font-size: 10.5px; color: var(--text-faint); margin-top: 1px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* Строка, которой уже отправили напоминание: мета перекрашивается в «живой» зелёный —
+   тот же сигнал, что и у погасшего колокольчика справа. */
+.rd-pend-met.rd-done-met { color: var(--live); }
 .rd-pend-chev { color: var(--text-faint); font-size: 15px; flex-shrink: 0; line-height: 1; }
+/* Колокольчик «напомнить»: акцентный, пока напоминание не отправлено; после отправки гаснет
+   в зелёную галочку и блокируется — одно напоминание на участника на событие. */
+.rd-remind-btn {
+  width: 34px; height: 34px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 10px; cursor: pointer;
+  background: var(--accent-soft); border: 1px solid var(--accent-soft-border, rgba(244, 123, 60, 0.3));
+  color: var(--accent);
+  transition: opacity 0.15s, transform 0.1s;
+}
+.rd-remind-btn:active:not(:disabled) { transform: scale(0.94); }
+.rd-remind-btn:disabled { background: var(--live-soft); border-color: var(--live-soft); color: var(--live); cursor: default; }
+/* Хвост панели «Без ответа»: массовое напоминание одной строкой, геометрия как у «Показать всех». */
+.rd-remind-all {
+  width: 100%; padding: 10px; border: 0; border-top: 1px solid var(--hairline);
+  background: transparent; color: var(--accent); cursor: pointer; font-family: inherit;
+  font-size: 12.5px; font-weight: 600;
+}
+.rd-remind-all:disabled { color: var(--text-faint); cursor: default; }
 
 /* Лист ожидания — вертикальный нумерованный список в порядке приоритета продвижения. */
 .rd-wl-panel { padding: 4px; margin-bottom: 18px; }

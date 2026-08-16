@@ -120,6 +120,15 @@ export function confirmParticipation(eventId: string): Promise<{ eventId: string
   return apiClient.post(`/api/events/${eventId}/confirm`);
 }
 
+/**
+ * Ручное напоминание подтвердить участие (только менеджеру клуба события).
+ * `userId` — конкретный молчун; без него напоминание уходит всем, кому ещё можно.
+ * Возвращает число реально отправленных: повторное напоминание тому же участнику даёт 0.
+ */
+export function remindToConfirm(eventId: string, userId?: string): Promise<{ remindedCount: number }> {
+  return apiClient.post(`/api/events/${eventId}/remind`, userId ? { userId } : {});
+}
+
 export function declineParticipation(eventId: string): Promise<{ eventId: string; status: string; confirmedCount: number; participantLimit: number | null }> {
   return apiClient.post(`/api/events/${eventId}/decline`);
 }

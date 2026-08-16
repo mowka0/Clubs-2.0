@@ -138,6 +138,26 @@ interface EventResponseRepository {
     fun findRespondersWithUsers(eventId: UUID): List<EventResponderInfo>
 
     /**
+     * Помечает ручное напоминание Этапа 2 отправленным для (eventId, [userIds]) и возвращает
+     * telegram id тех, кому оно действительно уходит. Фильтры внутри UPDATE, а не в вызывающем
+     * коде, потому что они же служат защитой от гонки двух менеджеров, жмущих колокольчик
+     * одновременно: напоминание получает только участник, который
+     *   - голосовал going/maybe и НЕ сделал шаг Этапа 2 (`stage_2_vote IS NULL`) — подтвердившим,
+     *     отказавшимся и стоящим в очереди напоминать не о чем;
+     *   - ещё не получал напоминания по этому событию (`stage2_reminded_at IS NULL`) — одно
+     *     напоминание на участника на событие (V80).
+     * Пустой ввод → пустой результат без запроса.
+     */
+    fun markStage2Reminded(eventId: UUID, userIds: List<UUID>): List<Long>
+
+    /**
+     * ID пользователей, которым ещё можно напомнить о подтверждении на [eventId]: те же фильтры,
+     * что в [markStage2Reminded], но без записи. Нужен для «Напомнить всем» — набор целей
+     * считает сервер, а не клиент по своей копии ростера.
+     */
+    fun findStage2RemindableUserIds(eventId: UUID): List<UUID>
+
+    /**
      * ID пользователей, чья посещаемость на [eventId] равна `attended` (отмечено организатором).
      * Верифицированный набор участников для шаблона складчины split_bill.
      */
@@ -210,5 +230,8 @@ data class EventResponderInfo(
     val disputeNote: String?,
     // Username в Telegram (без @). NULL = не задан или скрыт настройками — личного чата
     // для такого участника не существует. Наружу уходит только менеджеру, см. VoteService.
-    val telegramUsername: String?
+    val telegramUsername: String?,
+    // Когда участнику отправили ручное напоминание подтвердить участие (NULL = не напоминали).
+    // Как и username, уходит наружу только менеджеру.
+    val stage2RemindedAt: OffsetDateTime?
 )

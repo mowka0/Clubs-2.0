@@ -310,6 +310,109 @@ describe('EventPage — состав Этапа 2 в стиле Этапа 1 (ev
     expect(screen.getByText('Молчун')).toBeInTheDocument();
   });
 
+  it('колокольчик отправляет напоминание конкретному участнику', async () => {
+    let body: unknown = null;
+    server.use(http.post(`*/api/events/${EVENT_ID}/remind`, async ({ request }) => {
+      body = await request.json();
+      return HttpResponse.json({ remindedCount: 1 });
+    }));
+    mockEndpoints({
+      ownerId: VIEWER_ID,
+      responders: [
+        responder({ userId: 'c1', firstName: 'Анна' }),
+        responder({ userId: 'p1', firstName: 'Пётр', status: 'going', telegramUsername: 'petr_s' }),
+      ],
+    });
+    const { user } = renderEventPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Без ответа (1)' }));
+    await user.click(screen.getByRole('button', { name: 'Напомнить Пётр' }));
+
+    await screen.findByText(/Напоминание отправлено · 1/);
+    expect(body).toEqual({ userId: 'p1' });
+  });
+
+  it('уже напомненному колокольчик заблокирован, в мете — время отправки', async () => {
+    const remindedAt = new Date('2026-08-16T18:42:00Z').toISOString();
+    mockEndpoints({
+      ownerId: VIEWER_ID,
+      responders: [
+        responder({ userId: 'c1', firstName: 'Анна' }),
+        responder({
+          userId: 'p1', firstName: 'Кирилл', status: 'going',
+          telegramUsername: 'kirill', stage2RemindedAt: remindedAt,
+        }),
+      ],
+    });
+    const { user } = renderEventPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Без ответа (1)' }));
+    const bell = screen.getByRole('button', { name: /Напоминание отправлено: Кирилл/ }) as HTMLButtonElement;
+    expect(bell.disabled).toBe(true);
+    expect(screen.getByText(/напомнили в/)).toBeInTheDocument();
+    // Всем уже напомнили — массовой кнопки нет.
+    expect(screen.queryByRole('button', { name: /Напомнить всем/ })).not.toBeInTheDocument();
+  });
+
+  it('«Напомнить всем» считает только тех, кому ещё не напоминали, и шлёт запрос без userId', async () => {
+    let body: unknown = 'not-called';
+    server.use(http.post(`*/api/events/${EVENT_ID}/remind`, async ({ request }) => {
+      body = await request.json();
+      return HttpResponse.json({ remindedCount: 2 });
+    }));
+    mockEndpoints({
+      ownerId: VIEWER_ID,
+      responders: [
+        responder({ userId: 'c1', firstName: 'Анна' }),
+        responder({ userId: 'p1', firstName: 'Пётр', status: 'going', telegramUsername: 'petr_s' }),
+        responder({ userId: 'p2', firstName: 'Мария', status: 'maybe' }),
+        responder({
+          userId: 'p3', firstName: 'Кирилл', status: 'going',
+          stage2RemindedAt: new Date().toISOString(),
+        }),
+      ],
+    });
+    const { user } = renderEventPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Без ответа (3)' }));
+    // Трое молчунов, но одному уже напомнили → адресатов двое.
+    await user.click(screen.getByRole('button', { name: /Напомнить всем · 2/ }));
+
+    await screen.findByText(/Напоминание отправлено · 2/);
+    expect(body).toEqual({});
+  });
+
+  it('нулевой ответ сервера не выдаётся за отправку', async () => {
+    server.use(http.post(`*/api/events/${EVENT_ID}/remind`, () =>
+      HttpResponse.json({ remindedCount: 0 })));
+    mockEndpoints({
+      ownerId: VIEWER_ID,
+      responders: [
+        responder({ userId: 'c1', firstName: 'Анна' }),
+        responder({ userId: 'p1', firstName: 'Пётр', status: 'going', telegramUsername: 'petr_s' }),
+      ],
+    });
+    const { user } = renderEventPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Без ответа (1)' }));
+    await user.click(screen.getByRole('button', { name: 'Напомнить Пётр' }));
+
+    expect(await screen.findByText('Всем, кому можно, уже напомнили')).toBeInTheDocument();
+  });
+
+  it('участник не видит кнопок напоминания', async () => {
+    mockEndpoints({
+      responders: [
+        responder({ userId: 'c1', firstName: 'Анна' }),
+        responder({ userId: 'p1', firstName: 'Пётр', status: 'going' }),
+      ],
+    });
+    renderEventPage();
+
+    expect(await screen.findByText(/Кто идёт/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Напомнить/ })).not.toBeInTheDocument();
+  });
+
   it('переключение таба сбрасывает раскрытие длинного списка', async () => {
     const responders = [
       ...Array.from({ length: 8 }, (_, i) => responder({ userId: `c${i}`, firstName: `Гость${i}` })),

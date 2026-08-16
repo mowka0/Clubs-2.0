@@ -141,10 +141,15 @@ class VoteServiceTest {
 
     // --- getEventResponders: dispute_note privacy (F5-06) ---
 
-    private fun responderWithNote(note: String?, username: String? = "petr_s") = EventResponderInfo(
+    private fun responderWithNote(
+        note: String?,
+        username: String? = "petr_s",
+        remindedAt: OffsetDateTime? = null
+    ) = EventResponderInfo(
         userId = UUID.randomUUID(), firstName = "A", lastName = null, avatarUrl = null,
         stage1Vote = Stage_1Vote.going, finalStatus = FinalStatus.confirmed,
-        attendance = AttendanceStatus.disputed, disputeNote = note, telegramUsername = username
+        attendance = AttendanceStatus.disputed, disputeNote = note, telegramUsername = username,
+        stage2RemindedAt = remindedAt
     )
 
     private fun stubRespondersWithNote(ownerId: UUID, viewerId: UUID) {
@@ -202,6 +207,24 @@ class VoteServiceTest {
         every { membershipRepository.findByUserAndClub(userId, clubId) } returns
             membership(MembershipRole.co_organizer, MembershipStatus.frozen)
         assertNull(service.getEventResponders(eventId, userId).single().telegramUsername)
+    }
+
+    /** Отметка о напоминании — такая же менеджерская, как username: участнику её не показываем. */
+    @Test
+    fun `getEventResponders hides stage2RemindedAt from a plain member`() {
+        stubRespondersWithNote(ownerId = UUID.randomUUID(), viewerId = userId)
+        every { eventResponseRepository.findRespondersWithUsers(eventId) } returns
+            listOf(responderWithNote("был там", remindedAt = OffsetDateTime.now()))
+        assertNull(service.getEventResponders(eventId, userId).single().stage2RemindedAt)
+    }
+
+    @Test
+    fun `getEventResponders exposes stage2RemindedAt to the club owner`() {
+        val remindedAt = OffsetDateTime.now()
+        stubRespondersWithNote(ownerId = userId, viewerId = userId)
+        every { eventResponseRepository.findRespondersWithUsers(eventId) } returns
+            listOf(responderWithNote("был там", remindedAt = remindedAt))
+        assertEquals(remindedAt, service.getEventResponders(eventId, userId).single().stage2RemindedAt)
     }
 
     /** Username не задан в Telegram — менеджер тоже получает null (личного чата не существует). */

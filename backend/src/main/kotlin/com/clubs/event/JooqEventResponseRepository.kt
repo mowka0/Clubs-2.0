@@ -10,6 +10,7 @@ import com.clubs.generated.jooq.tables.references.EVENT_RESPONSES
 import com.clubs.generated.jooq.tables.references.MEMBERSHIPS
 import com.clubs.generated.jooq.tables.references.USERS
 import com.clubs.membership.MembershipAccess
+import org.jooq.Condition
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
@@ -161,7 +162,8 @@ class JooqEventResponseRepository(
             EVENT_RESPONSES.FINAL_STATUS,
             EVENT_RESPONSES.ATTENDANCE,
             EVENT_RESPONSES.DISPUTE_NOTE,
-            USERS.TELEGRAM_USERNAME
+            USERS.TELEGRAM_USERNAME,
+            EVENT_RESPONSES.STAGE2_REMINDED_AT
         )
             .from(EVENT_RESPONSES)
             .join(USERS).on(USERS.ID.eq(EVENT_RESPONSES.USER_ID))
@@ -186,7 +188,8 @@ class JooqEventResponseRepository(
                     finalStatus = r.get(EVENT_RESPONSES.FINAL_STATUS),
                     attendance = r.get(EVENT_RESPONSES.ATTENDANCE),
                     disputeNote = r.get(EVENT_RESPONSES.DISPUTE_NOTE),
-                    telegramUsername = r.get(USERS.TELEGRAM_USERNAME)
+                    telegramUsername = r.get(USERS.TELEGRAM_USERNAME),
+                    stage2RemindedAt = r.get(EVENT_RESPONSES.STAGE2_REMINDED_AT)
                 )
             }
 
@@ -219,6 +222,42 @@ class JooqEventResponseRepository(
             )
             .fetch(USERS.TELEGRAM_ID)
             .filterNotNull()
+
+    /**
+     * Предикат «этому участнику ещё можно напомнить»: голосовал going/maybe, шага Этапа 2 не сделал
+     * и напоминания по этому событию не получал. Один источник истины для проверки и для записи —
+     * иначе «Напомнить всем» и колокольчик разошлись бы в трактовке.
+     */
+    private fun remindableCondition(eventId: UUID): Condition =
+        EVENT_RESPONSES.EVENT_ID.eq(eventId)
+            .and(EVENT_RESPONSES.STAGE_1_VOTE.`in`(Stage_1Vote.going, Stage_1Vote.maybe))
+            .and(EVENT_RESPONSES.STAGE_2_VOTE.isNull)
+            .and(EVENT_RESPONSES.STAGE2_REMINDED_AT.isNull)
+
+    override fun findStage2RemindableUserIds(eventId: UUID): List<UUID> =
+        dsl.select(EVENT_RESPONSES.USER_ID)
+            .from(EVENT_RESPONSES)
+            .where(remindableCondition(eventId))
+            .fetch(EVENT_RESPONSES.USER_ID)
+            .filterNotNull()
+
+    override fun markStage2Reminded(eventId: UUID, userIds: List<UUID>): List<Long> {
+        if (userIds.isEmpty()) return emptyList()
+        // RETURNING user_id: адресаты берутся из фактически обновлённых строк, поэтому участник,
+        // которому параллельный запрос уже проставил отметку, второго DM не получит.
+        val remindedUserIds = dsl.update(EVENT_RESPONSES)
+            .set(EVENT_RESPONSES.STAGE2_REMINDED_AT, OffsetDateTime.now())
+            .where(remindableCondition(eventId).and(EVENT_RESPONSES.USER_ID.`in`(userIds)))
+            .returning(EVENT_RESPONSES.USER_ID)
+            .fetch()
+            .mapNotNull { it.get(EVENT_RESPONSES.USER_ID) }
+        if (remindedUserIds.isEmpty()) return emptyList()
+        return dsl.select(USERS.TELEGRAM_ID)
+            .from(USERS)
+            .where(USERS.ID.`in`(remindedUserIds))
+            .fetch(USERS.TELEGRAM_ID)
+            .filterNotNull()
+    }
 
     override fun findTelegramIdsByEventAndUserIds(eventId: UUID, userIds: List<UUID>): List<Long> {
         if (userIds.isEmpty()) return emptyList()

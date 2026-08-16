@@ -1,5 +1,6 @@
 package com.clubs.event
 
+import java.time.OffsetDateTime
 import java.util.UUID
 
 data class CastVoteRequest(
@@ -39,5 +40,19 @@ data class EventResponderDto(
     // Username в Telegram (без @) — чтобы менеджер мог открыть личный чат с молчуном на Этапе 2.
     // NULL и для тех, у кого username не задан, и для НЕ-менеджеров: обычному участнику клуба
     // контакты соседей по событию не отдаём (см. event-stage2-composition.md § «Права»).
-    val telegramUsername: String?
+    val telegramUsername: String?,
+    // Когда участнику отправили ручное напоминание подтвердить участие (null = не напоминали).
+    // Гасит колокольчик в интерфейсе и подписывает строку «напомнили в 18:42». Как и username,
+    // видно только менеджеру.
+    val stage2RemindedAt: OffsetDateTime?
+)
+
+/** Итог нажатия «Напомнить» / «Напомнить всем»: сколько напоминаний реально ушло. */
+data class RemindResultDto(
+    val remindedCount: Int
+)
+
+/** Тело запроса напоминания: конкретный участник либо `null` — «все, кому ещё можно». */
+data class RemindRequest(
+    val userId: UUID? = null
 )

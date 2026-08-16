@@ -31,6 +31,7 @@ import {
   useCancelEventMutation,
   useUpdateEventMutation,
   useResolveDisputeMutation,
+  useRemindToConfirmMutation,
 } from '../queries/events';
 
 function getInitials(name: string): string {
@@ -93,6 +94,19 @@ const RESPONDER_TABS = [
 
 type ResponderTab = (typeof RESPONDER_TABS)[number]['key'];
 
+/** Колокольчик «напомнить» и галочка «уже напомнили» — иконки кнопки в строке молчуна. */
+const BELL_ICON: ReactElement = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+  </svg>
+);
+const CHECK_ICON: ReactElement = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 6 9 17l-5-5" />
+  </svg>
+);
+
 /** Сколько строк ростера показываем до нажатия «Показать всех». */
 const ROSTER_PREVIEW_SIZE = 6;
 
@@ -106,6 +120,14 @@ const TELEGRAM_USERNAME_RE = /^[A-Za-z0-9_]{1,32}$/;
 
 function telegramChatUsername(raw: string | null | undefined): string | null {
   return raw && TELEGRAM_USERNAME_RE.test(raw) ? raw : null;
+}
+
+/**
+ * Момент отправки напоминания в строке молчуна. Только время: напоминать можно, лишь пока
+ * открыто окно подтверждения, поэтому дата всегда «сегодня-завтра» и лишь удлиняла бы строку.
+ */
+function formatRemindedAt(iso: string): string {
+  return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }
 
 /**
@@ -199,6 +221,7 @@ export const EventPage: FC = () => {
   const markAttendanceMutation = useMarkAttendanceMutation();
   const disputeMutation = useDisputeAttendanceMutation();
   const resolveMutation = useResolveDisputeMutation();
+  const remindMutation = useRemindToConfirmMutation();
   const cancelMutation = useCancelEventMutation();
   const updateMutation = useUpdateEventMutation();
 
@@ -217,6 +240,9 @@ export const EventPage: FC = () => {
   // Секция состава (Этап 2+): менеджеру доступен второй таб — имена тех, кто ещё не подтвердил.
   // Открыт «Идут» по умолчанию, чтобы привычный вид оставался первым.
   const [stage2Tab, setStage2Tab] = useState<'confirmed' | 'pending'>('confirmed');
+  // Ошибка отправки напоминания — своим слотом под панелью, чтобы не смешиваться с actionError
+  // подтверждения/отказа (тот живёт в блоке «Подтверждение участия» ниже).
+  const [remindError, setRemindError] = useState<string | null>(null);
   // Необязательный комментарий, который участник прикладывает, оспаривая отметку «не пришёл».
   const [disputeNote, setDisputeNote] = useState('');
   // F5-14 шторка отмены события: флаг открытия, необязательная причина и собственный слот ошибки.
@@ -327,6 +353,35 @@ export const EventPage: FC = () => {
 
   // ATT-3: участник, отмеченный отсутствующим, оспаривает отметку (absent → disputed). Доступно
   // только пока открыто окно спора (marked && !finalized) — см. гейтинг ниже.
+  /**
+   * Напоминание подтвердить участие: `targetUserId` — конкретный молчун, `undefined` — все,
+   * кому ещё можно. Набор целей для «всем» считает сервер, поэтому сюда список не передаём.
+   * Ответ несёт число реально отправленных: сервер молча пропускает уже напомненных, и тост
+   * должен говорить правду, а не «отправлено» на пустую рассылку.
+   */
+  const handleRemind = (targetUserId: string | undefined) => {
+    if (!id || remindMutation.isPending) return;
+    haptic.impact('medium');
+    setRemindError(null);
+    remindMutation.mutate(
+      { eventId: id, userId: targetUserId },
+      {
+        onSuccess: ({ remindedCount }) => {
+          haptic.notify(remindedCount > 0 ? 'success' : 'warning');
+          setToastMessage(
+            remindedCount > 0
+              ? `Напоминание отправлено · ${remindedCount}`
+              : 'Всем, кому можно, уже напомнили',
+          );
+        },
+        onError: (e) => {
+          setRemindError(e.message);
+          haptic.notify('error');
+        },
+      },
+    );
+  };
+
   const handleDispute = () => {
     if (!id || disputeMutation.isPending) return;
     haptic.impact('medium');
@@ -658,6 +713,9 @@ export const EventPage: FC = () => {
   // поэтому потеря менеджерства (или обнуление списка) сама возвращает экран к «Идут».
   const stage2List = showStage2Tabs && stage2Tab === 'pending' ? pendingResponders : comingList;
   const visibleStage2 = rosterExpanded ? stage2List : stage2List.slice(0, ROSTER_PREVIEW_SIZE);
+  // Сколько молчунов ещё не получали напоминания — счётчик «Напомнить всем». Считаем по ВСЕМУ
+  // списку, а не по видимой части: свёрнутый ростер не должен занижать число адресатов.
+  const remindableCount = pendingResponders.filter((r) => !r.stage2RemindedAt).length;
 
   // Секция «Кто откликнулся» (Этап 1): те же ярлыки формата, что на карточках лент, но список
   // разложен по статусу — прежде «возможно» и «не иду» отличались только цветом точки в общей сетке.
@@ -983,13 +1041,26 @@ export const EventPage: FC = () => {
                             {name}
                             <span className={`rd-vdot ${statusDotClass(r.status)}`} title={r.status} />
                           </span>
-                          <span className="rd-pend-met">
+                          <span className={`rd-pend-met${r.stage2RemindedAt ? ' rd-done-met' : ''}`}>
                             {username ? `@${username}` : 'без username'}
                             {' · '}
-                            {(VOTE_LABELS[r.status] ?? r.status).toLowerCase()}
+                            {r.stage2RemindedAt
+                              ? `напомнили в ${formatRemindedAt(r.stage2RemindedAt)}`
+                              : (VOTE_LABELS[r.status] ?? r.status).toLowerCase()}
                           </span>
                         </span>
                         {username && <span className="rd-pend-chev" aria-hidden="true">›</span>}
+                      </button>
+                      {/* Отдельная цель нажатия: промах по строке не должен слать человеку DM. */}
+                      <button
+                        type="button"
+                        className="rd-remind-btn"
+                        disabled={!!r.stage2RemindedAt || remindMutation.isPending}
+                        aria-label={r.stage2RemindedAt ? `Напоминание отправлено: ${name}` : `Напомнить ${name}`}
+                        title={r.stage2RemindedAt ? 'Напоминание уже отправлено' : 'Напомнить'}
+                        onClick={() => handleRemind(r.userId)}
+                      >
+                        {r.stage2RemindedAt ? CHECK_ICON : BELL_ICON}
                       </button>
                     </div>
                   );
@@ -1000,9 +1071,23 @@ export const EventPage: FC = () => {
                     onExpand={() => { haptic.impact('light'); setRosterExpanded(true); }}
                   />
                 )}
+                {/* Массовое напоминание считает только тех, кому ещё не напоминали: повторный
+                    тап никому ничего не отправит, и счётчик это показывает заранее. */}
+                {remindableCount > 0 && (
+                  <button
+                    type="button"
+                    className="rd-remind-all"
+                    disabled={remindMutation.isPending}
+                    onClick={() => handleRemind(undefined)}
+                  >
+                    {remindMutation.isPending ? <Spinner size="s" /> : `🔔 Напомнить всем · ${remindableCount}`}
+                  </button>
+                )}
               </div>
+              {remindError && <div className="rd-error">{remindError}</div>}
               <div className="rd-hint" style={{ marginBottom: 18 }}>
-                Тап по имени открывает личный чат в Telegram.
+                Тап по имени открывает личный чат. Колокольчик отправляет напоминание от бота —
+                по одному на участника.
               </div>
             </>
           ) : (

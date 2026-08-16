@@ -204,6 +204,33 @@ class EventControllerSecurityTest {
     }
 
     @Test
+    fun `POST remind as non-organizer should return 403`() {
+        // Гейт MANAGE_EVENTS живёт в Stage2ReminderService (аннотация не подходит: в пути id
+        // СОБЫТИЯ, а не клуба) — тест держит проводку контроллер→сервис, чтобы рядовой участник
+        // не смог разослать DM от имени клуба.
+        val eventId = insertEvent(OffsetDateTime.now().plusHours(3), status = "stage_2")
+        mockMvc.perform(
+            post("/api/events/$eventId/remind")
+                .header("Authorization", "Bearer $memberToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{}""")
+        )
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.error").value("FORBIDDEN"))
+    }
+
+    @Test
+    fun `POST remind without token should return 401`() {
+        val eventId = insertEvent(OffsetDateTime.now().plusHours(3), status = "stage_2")
+        mockMvc.perform(
+            post("/api/events/$eventId/remind")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{}""")
+        )
+            .andExpect(status().isUnauthorized)
+    }
+
+    @Test
     fun `POST attendance before the event happens should return 400`() {
         val eventId = insertEvent(OffsetDateTime.now().plusDays(5), status = "upcoming")
         mockMvc.perform(

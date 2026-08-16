@@ -108,7 +108,8 @@ class VoteService(
                 status = r.finalStatus?.literal ?: r.stage1Vote?.literal ?: "going",
                 attendance = r.attendance?.literal,
                 disputeNote = if (isManager) r.disputeNote else null,
-                telegramUsername = if (isManager) r.telegramUsername else null
+                telegramUsername = if (isManager) r.telegramUsername else null,
+                stage2RemindedAt = if (isManager) r.stage2RemindedAt else null
             )
         }
     }

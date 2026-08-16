@@ -677,6 +677,12 @@ export interface EventResponderDto {
    * бэкенд контакты не отдаёт (docs/modules/event-stage2-composition.md § 5).
    */
   telegramUsername?: string | null;
+  /**
+   * Когда менеджер отправил участнику ручное напоминание подтвердить участие (ISO), null —
+   * не напоминали. Как и username, видно только менеджеру. Непустое значение гасит колокольчик:
+   * одно напоминание на участника на событие.
+   */
+  stage2RemindedAt?: string | null;
 }
 
 /**

@@ -25,6 +25,7 @@ class EventController(
     private val eventService: EventService,
     private val voteService: VoteService,
     private val stage2Service: Stage2Service,
+    private val stage2ReminderService: Stage2ReminderService,
     private val attendanceService: AttendanceService
 ) {
 
@@ -115,6 +116,21 @@ class EventController(
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<List<EventResponderDto>> =
         ResponseEntity.ok(voteService.getEventResponders(id, user.userId))
+
+    /**
+     * Ручное напоминание подтвердить участие. Права проверяет сервис (`MANAGE_EVENTS` по клубу
+     * СОБЫТИЯ), а не аннотация `@RequiresCapability`: она резолвит клуб по `{id}` пути, а здесь
+     * в пути идентификатор события. Тело пустое или `{}` → напомнить всем, кому ещё можно.
+     */
+    @PostMapping("/api/events/{id}/remind")
+    fun remindToConfirm(
+        @PathVariable id: UUID,
+        @RequestBody(required = false) request: RemindRequest?,
+        @AuthenticationPrincipal user: AuthenticatedUser
+    ): ResponseEntity<RemindResultDto> {
+        log.info("Remind to confirm: eventId={} userId={} target={}", id, user.userId, request?.userId)
+        return ResponseEntity.ok(stage2ReminderService.remind(id, user.userId, request?.userId))
+    }
 
     @PostMapping("/api/events/{id}/confirm")
     fun confirmParticipation(
