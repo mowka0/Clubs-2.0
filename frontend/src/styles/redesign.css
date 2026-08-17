@@ -3270,3 +3270,20 @@
   align-self: flex-end; width: auto; padding: 10px 14px;
   font-size: 13px; color: var(--text-dim);
 }
+
+/* ---- Мастер наполнения клуба из чата (ClubSetupWizard) ---- */
+/* Полоска шагов: заполненные — приглушённым акцентом, текущий — сплошным. */
+.rd-wz-bar { display: flex; gap: 5px; padding: 4px 2px 10px; }
+.rd-wz-seg { height: 3px; border-radius: 2px; flex: 1; background: rgba(255,255,255,.1); }
+.rd-wz-seg.rd-on { background: var(--accent); }
+.rd-wz-seg.rd-done { background: rgba(244,123,60,.45); }
+.rd-wz-cap {
+  font-size: 10px; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--tg-hint, rgba(255,255,255,.45)); padding: 0 2px 10px;
+}
+.rd-wz-next { width: 100%; margin-top: 14px; }
+.rd-wz-skip { width: 100%; margin-top: 8px; }
+.rd-wz-area { min-height: 110px; resize: vertical; }
+/* Аватар и подпись рядом: кнопка сама по себе круглая и без контекста непонятна. */
+.rd-wz-avatar { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.rd-wz-cover { margin-top: 12px; }

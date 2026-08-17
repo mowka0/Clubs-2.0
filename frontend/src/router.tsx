@@ -34,6 +34,9 @@ const EditEventTemplatePage = lazy(() =>
 const InvitePage = lazy(() =>
   import('./pages/InvitePage').then((m) => ({ default: m.InvitePage })),
 );
+const ClubSetupWizard = lazy(() =>
+  import('./pages/ClubSetupWizard').then((m) => ({ default: m.ClubSetupWizard })),
+);
 const OrganizerClubManage = lazy(() =>
   import('./pages/OrganizerClubManage').then((m) => ({ default: m.OrganizerClubManage })),
 );
@@ -108,6 +111,11 @@ export const router = createBrowserRouter([
       {
         path: '/skladchina/:id',
         element: <SkladchinaPage />,
+      },
+      {
+        // Наполнение клуба, рождённого из чата, — до презентации участникам.
+        path: '/clubs/:id/setup',
+        element: <ClubSetupWizard />,
       },
       {
         path: '/clubs/:id/manage',

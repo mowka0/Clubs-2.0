@@ -20,9 +20,6 @@ vi.mock('../../queries/clubs', () => ({
   useMyClubsQuery: () => useMyClubsQueryMock(),
   useClubQuery: () => useClubQueryMock(),
 }));
-vi.mock('../../components/ChatConnectedScreen', () => ({
-  ChatConnectedScreen: () => <div>укажите город</div>,
-}));
 
 import { HomeRoute } from '../../components/HomeRoute';
 
@@ -38,6 +35,7 @@ function renderHome() {
         <Route path="/" element={<HomeRoute />} />
         <Route path="/my-clubs" element={<div>мои клубы</div>} />
         <Route path="/clubs/:id" element={<div>страница клуба</div>} />
+        <Route path="/clubs/:id/setup" element={<div>мастер наполнения</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -89,14 +87,14 @@ describe('HomeRoute — куда ведёт «/» в чат-модели', () =>
     expect(screen.getByText('мои клубы')).toBeInTheDocument();
   });
 
-  it('клуб только что создан из чата — сначала спрашиваем город', () => {
+  it('клуб только что создан из чата — сначала мастер наполнения', () => {
     useMyClubsQueryMock.mockReturnValue(queryResult({ data: [ownerMembership('abc-123')] }));
     useClubQueryMock.mockReturnValue({ isPending: false, data: { id: 'abc-123', cityId: null } });
     renderHome();
-    expect(screen.getByText('укажите город')).toBeInTheDocument();
+    expect(screen.getByText('мастер наполнения')).toBeInTheDocument();
   });
 
-  it('город не указан, но человек не менеджер — сразу в клуб, а не в тупик с 403', () => {
+  it('клуб не наполнен, но человек не менеджер — сразу в клуб, а не в чужой мастер', () => {
     useMyClubsQueryMock.mockReturnValue(
       queryResult({ data: [{ clubId: 'abc-123', role: 'member', status: 'active' }] }),
     );

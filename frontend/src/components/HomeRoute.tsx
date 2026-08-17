@@ -1,7 +1,6 @@
 import { FC } from 'react';
 import { Navigate } from 'react-router-dom';
 import { DiscoveryPage } from '../pages/DiscoveryPage';
-import { ChatConnectedScreen } from './ChatConnectedScreen';
 import { ConnectChatScreen } from './ConnectChatScreen';
 import { PageFallback } from './Layout';
 import { PRODUCT_PROFILE } from '../config/productProfile';
@@ -20,7 +19,8 @@ import { useClubQuery, useMyClubsQuery } from '../queries/clubs';
  *   а каталог в этот момент соврал бы, что клубов нет;
  * - ноль клубов — предложение подключить чат: в чат-модели это и есть начало пути,
  *   а каталог чужих клубов отвечал бы не на тот вопрос;
- * - ровно один клуб — сразу в него, это типичный случай «один чат = один клуб»;
+ * - ровно один клуб — сразу в него; если он ещё не наполнен (нет города) и человек им
+ *   управляет — сперва в мастер наполнения;
  * - несколько — список «Мои клубы».
  */
 export const HomeRoute: FC = () => {
@@ -56,8 +56,9 @@ export const HomeRoute: FC = () => {
     const club = onlyClubQuery.data;
     // Город спрашиваем сразу после подключения чата и только у того, кто может его сохранить:
     // рядовой участник упёрся бы в 403 и остался на экране без выхода.
+    // Клуб из чата ещё не наполнен — ведём в мастер, а не на пустую страницу.
     if (club && club.cityId === null && isActiveManagerMembership(onlyMembership)) {
-      return <ChatConnectedScreen club={club} />;
+      return <Navigate to={`/clubs/${club.id}/setup`} replace />;
     }
     return <Navigate to={`/clubs/${onlyMembership.clubId}`} replace />;
   }
