@@ -15,7 +15,17 @@ import { openTmeLink } from '../utils/telegramLinks';
  * Возвращается человек сам, когда захочет: Telegram не перебрасывает обратно в Mini App.
  * Появившийся клуб подхватывает HomeRoute при следующем открытии приложения.
  */
-export const ConnectChatScreen: FC = () => {
+export const ConnectChatScreen: FC = () => (
+  <div className="rd-page">
+    <ConnectChatEmpty />
+  </div>
+);
+
+/**
+ * Та же сцена без обёртки страницы — для встраивания в уже существующий экран
+ * (пустое состояние «Мои клубы»), где свой `rd-page` уже есть.
+ */
+export const ConnectChatEmpty: FC = () => {
   const haptic = useHaptic();
   const { data } = useNewClubChatLinkQuery();
 
@@ -32,17 +42,15 @@ export const ConnectChatScreen: FC = () => {
     : undefined;
 
   return (
-    <div className="rd-page">
-      <FoxEmpty
-        art={foxChatArt}
-        artLabel="Лис у телефона с чатом"
-        title="Бот ведёт встречи в вашем чате"
-        description={
-          'Опрос «когда удобно», сбор «иду / не иду», напоминания и итог явки — ' +
-          'прямо в чате. Клуб создастся сам из выбранной группы, заполнять ничего не нужно.'
-        }
-        primary={primary}
-      />
-    </div>
+    <FoxEmpty
+      art={foxChatArt}
+      artLabel="Лис у телефона с чатом"
+      title="Бот ведёт встречи в вашем чате"
+      description={
+        'Опрос «когда удобно», сбор «иду / не иду», напоминания и итог явки — ' +
+        'прямо в чате. Клуб создастся сам из выбранной группы, заполнять ничего не нужно.'
+      }
+      primary={primary}
+    />
   );
 };

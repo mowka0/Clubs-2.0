@@ -20,8 +20,8 @@ import { FullClubBlock } from '../components/applications/FullClubBlock';
 import { MemberProfileModal } from '../components/club/MemberProfileModal';
 import { DuesPaymentSheet } from '../components/club/DuesPaymentSheet';
 import { FoxEmpty } from '../components/feed/FoxEmpty';
+import { ConnectChatEmpty } from '../components/ConnectChatScreen';
 import foxErrorArt from '../assets/mascot/fox-error.png';
-import foxMyClubsArt from '../assets/mascot/fox-myclubs.png';
 import { formatPeerSignal } from '../features/applications-inbox/lib/peer-signal-format';
 import { LevelPill } from '../components/reputation/LevelPill';
 import { DonutRing } from '../components/reputation/DonutRing';
@@ -899,18 +899,11 @@ export const MyClubsPage: FC = () => {
         />
       )}
 
-      {/* Пустое состояние: обе «двери» (поиск и создание) сохранены как CTA сцены;
-          подсветка create-club из онбординга живёт на кнопке «+ Клуб» в шапке. */}
-      {empty && (
-        <FoxEmpty
-          art={foxMyClubsArt}
-          soonIcon="🤝"
-          title="Тут появятся твои клубы"
-          description="Найди подходящий клуб в Поиске или создай свой — будешь звать единомышленников сам."
-          primary={{ label: '+ Создать клуб', onClick: openCreate }}
-          secondary={{ label: 'Открыть Поиск', onClick: handleSearchClick }}
-        />
-      )}
+      {/* Пустое состояние — та же сцена, что и на «/»: в чат-модели путь начинается с
+          подключения чата, а прежние двери («создать клуб» формой и «открыть Поиск»)
+          ведут мимо неё. Создание клуба формой не удалено — оно осталось на кнопке
+          «+ Клуб» в шапке для тех, кому клуб нужен без чата. */}
+      {empty && <ConnectChatEmpty />}
 
       {/* Частичный сбой: вторичные query упали, но контент жив — плашка вместо полного
           экрана ошибки, загруженные секции остаются на месте. */}

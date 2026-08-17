@@ -142,7 +142,7 @@ describe('MyClubsPage — баннер «не состоишь ни в одно�
     // Секция «История» под баннером на месте.
     expect(await screen.findByText(/История/)).toBeInTheDocument();
     // Это НЕ полноэкранная сцена W3-01.
-    expect(screen.queryByText('Тут появятся твои клубы')).not.toBeInTheDocument();
+    expect(screen.queryByText('Бот ведёт встречи в вашем чате')).not.toBeInTheDocument();
   });
 
   it('только pending-заявка (членств нет) → баннер с текстом про заявку + секция «Мои заявки»', async () => {
@@ -173,11 +173,11 @@ describe('MyClubsPage — баннер «не состоишь ни в одно�
     expect(screen.queryByText(BANNER_TITLE)).not.toBeInTheDocument();
   });
 
-  it('всё пусто → баннера нет, работает пустая сцена W3-01', async () => {
+  it('всё пусто → баннера нет, работает сцена «подключите чат»', async () => {
     mockEndpoints({ clubs: [], applications: [], historyClubs: [] });
     renderPage();
 
-    expect(await screen.findByText('Тут появятся твои клубы')).toBeInTheDocument();
+    expect(await screen.findByText('Бот ведёт встречи в вашем чате')).toBeInTheDocument();
     expect(screen.queryByText(BANNER_TITLE)).not.toBeInTheDocument();
   });
 });
