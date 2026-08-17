@@ -25,6 +25,7 @@ import { ClubCoverButton } from '../components/club/ClubCoverButton';
 import { ClubIdentityHeader } from '../components/club/ClubIdentityHeader';
 import { ClubLockedNotice } from '../components/club/ClubLockedNotice';
 import { ClubChatConnectBanner } from '../components/club/ClubChatConnectBanner';
+import { ClubSetupBanner } from '../components/club/ClubSetupBanner';
 import { ClubEventsTeaser } from '../components/club/ClubEventsTeaser';
 import { WelcomeScene, memberCountCaption } from '../components/onboarding/WelcomeScene';
 import { useCompleteTourMutation } from '../queries/profile';
@@ -505,22 +506,11 @@ export const ClubPage: FC = () => {
         <ClubChatConnectBanner key={club.id} clubId={club.id} />
       )}
 
-      {/* Клуб из чата ещё не наполнен. Баннер стоит здесь, потому что в новый клуб есть вторая
-          дверь — кнопка из закрепа в самом чате, минующая корневой экран: через неё человек
-          видел голую страницу без единой подсказки, что делать дальше. */}
+      {/* Клуб из чата ещё не наполнен. Единственная дверь в мастер: при запуске приложения
+          человек попадает на страницу клуба, а не в форму (решение PO 2026-08-17) — заполняет,
+          когда сам решит. Кнопка помнит, где он остановился. */}
       {isManager && club.cityId === null && (
-        <div className="rd-glass rd-empty" style={{ marginBottom: 14 }}>
-          <div className="rd-ttl">Клуб ещё не заполнен</div>
-          <div className="rd-sub">Добавьте город, описание и обложку — участникам будет что смотреть.</div>
-          <button
-            type="button"
-            className="rd-btn-primary"
-            style={{ width: '100%', marginTop: 10 }}
-            onClick={() => { haptic.impact('light'); navigate(`/clubs/${club.id}/setup`); }}
-          >
-            Заполнить клуб
-          </button>
-        </div>
+        <ClubSetupBanner clubId={club.id} onOpen={() => navigate(`/clubs/${club.id}/setup`)} />
       )}
 
       {/* О клубе — описание, правила и вход в чат одним блоком (решение PO 2026-07-30):

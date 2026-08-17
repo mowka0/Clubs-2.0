@@ -15,10 +15,8 @@ vi.mock('../../components/ConnectChatScreen', () => ({
 }));
 
 const useMyClubsQueryMock = vi.fn();
-const useClubQueryMock = vi.fn();
 vi.mock('../../queries/clubs', () => ({
   useMyClubsQuery: () => useMyClubsQueryMock(),
-  useClubQuery: () => useClubQueryMock(),
 }));
 
 import { HomeRoute } from '../../components/HomeRoute';
@@ -41,16 +39,12 @@ function renderHome() {
   );
 }
 
-/** Членство владельца: только менеджер может сохранить город, см. HomeRoute. */
 function ownerMembership(clubId: string) {
   return { clubId, role: 'organizer', status: 'active' };
 }
 
 beforeEach(() => {
   useMyClubsQueryMock.mockReset();
-  useClubQueryMock.mockReset();
-  // По умолчанию у клуба город уже указан — ветка «спросить город» не срабатывает.
-  useClubQueryMock.mockReturnValue({ isPending: false, data: { id: 'abc-123', cityId: 'city-1' } });
 });
 
 describe('HomeRoute — куда ведёт «/» в чат-модели', () => {
@@ -87,19 +81,11 @@ describe('HomeRoute — куда ведёт «/» в чат-модели', () =>
     expect(screen.getByText('мои клубы')).toBeInTheDocument();
   });
 
-  it('клуб только что создан из чата — сначала мастер наполнения', () => {
+  // Решение PO 2026-08-17: незаполненный клуб из чата тоже открывается своей страницей —
+  // мастер человек зовёт сам кнопкой «Заполнить клуб», а не получает его при каждом запуске.
+  it('мастер наполнения при запуске не подсовывается', () => {
     useMyClubsQueryMock.mockReturnValue(queryResult({ data: [ownerMembership('abc-123')] }));
-    useClubQueryMock.mockReturnValue({ isPending: false, data: { id: 'abc-123', cityId: null } });
     renderHome();
-    expect(screen.getByText('мастер наполнения')).toBeInTheDocument();
-  });
-
-  it('клуб не наполнен, но человек не менеджер — сразу в клуб, а не в чужой мастер', () => {
-    useMyClubsQueryMock.mockReturnValue(
-      queryResult({ data: [{ clubId: 'abc-123', role: 'member', status: 'active' }] }),
-    );
-    useClubQueryMock.mockReturnValue({ isPending: false, data: { id: 'abc-123', cityId: null } });
-    renderHome();
-    expect(screen.getByText('страница клуба')).toBeInTheDocument();
+    expect(screen.queryByText('мастер наполнения')).not.toBeInTheDocument();
   });
 });

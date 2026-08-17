@@ -4,27 +4,20 @@ import { CityPicker } from '../components/CityPicker';
 import { ClubAvatarButton } from '../components/club/ClubAvatarButton';
 import { ClubCoverButton } from '../components/club/ClubCoverButton';
 import { ClubInterestsPicker } from '../components/club/ClubInterestsPicker';
-import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useClubQuery, useUpdateClubMutation } from '../queries/clubs';
+import {
+  CLUB_SETUP_TOTAL_STEPS as TOTAL_STEPS,
+  clearClubSetupProgress,
+  readClubSetupStep,
+  saveClubSetupStep,
+} from '../utils/clubSetupProgress';
 import type { CityDto } from '../types/api';
 
-/** Сколько шагов в мастере — от него считается полоска прогресса. */
-const TOTAL_STEPS = 4;
 /** Потолок названия клуба, совпадает с VARCHAR(60) в схеме. */
 const NAME_MAX = 60;
 /** Потолок описания, совпадает с VARCHAR(500). */
 const DESCRIPTION_MAX = 500;
-
-/** Ключ прогресса в localStorage: шаг переживает закрытие приложения, URL — нет. */
-function progressKey(clubId: string): string {
-  return `club-setup-step:${clubId}`;
-}
-
-function readSavedStep(clubId: string): number {
-  const raw = Number(localStorage.getItem(progressKey(clubId)));
-  return Number.isInteger(raw) && raw >= 1 && raw <= TOTAL_STEPS ? raw : 1;
-}
 
 /**
  * Наполнение клуба, рождённого из чата, — перед тем как показать его участникам.
@@ -43,6 +36,10 @@ function readSavedStep(clubId: string): number {
  * Разметка следует мокапу `docs/design/club-from-chat/mockups/02-club-setup-wizard.html`:
  * один вопрос на экран, поля-карточки с капс-метками, финальный шаг показывает превью
  * страницы — чтобы человек увидел, что именно получат участники.
+ *
+ * Своей подписки на Telegram BackButton здесь нет намеренно: единственный вход в мастер —
+ * кнопка на странице клуба, поэтому позади всегда есть куда вернуться, и общий обработчик
+ * Layout отматывает историю сам — с первого шага в клуб, с остальных на предыдущий вопрос.
  */
 export const ClubSetupWizard: FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -69,12 +66,12 @@ export const ClubSetupWizard: FC = () => {
   // в историю такой шаг попасть не должен, иначе «назад» уводило бы на него же.
   useEffect(() => {
     if (!id || searchParams.get('step')) return;
-    const saved = readSavedStep(id);
+    const saved = readClubSetupStep(id);
     if (saved > 1) setSearchParams({ step: String(saved) }, { replace: true });
   }, [id, searchParams, setSearchParams]);
 
   useEffect(() => {
-    if (id) localStorage.setItem(progressKey(id), String(urlStep));
+    if (id) saveClubSetupStep(id, urlStep);
   }, [id, urlStep]);
 
   if (clubQuery.isPending) return null;
@@ -84,7 +81,12 @@ export const ClubSetupWizard: FC = () => {
   const descriptionValue = description ?? club.description;
   const interestsValue = interests ?? club.interests;
   const cityLabel = city?.name ?? (club.cityId ? club.city : null);
-  const openClub = () => navigate(`/clubs/${club.id}`, { replace: true });
+  // Мастер пройден — прогресс стираем, иначе кнопка на странице клуба вечно звала бы
+  // «продолжить» с последнего шага.
+  const finish = () => {
+    clearClubSetupProgress(club.id);
+    navigate(`/clubs/${club.id}`, { replace: true });
+  };
   // Город обязателен, поэтому шаг дальше второго без него — рассинхрон (например, город
   // сбросили в управлении): возвращаем на него, а не показываем недостижимый прогресс.
   const step = club.cityId === null && urlStep > 2 ? 2 : urlStep;
@@ -98,10 +100,6 @@ export const ClubSetupWizard: FC = () => {
     haptic.impact('light');
     updateClub.mutate({ id: club.id, body }, { onSuccess: () => setStep(next) });
   };
-
-  // На первом шаге истории позади может не быть (сюда приходят редиректом), поэтому
-  // «назад» уводит в клуб, а не закрывает приложение, как делает Layout по умолчанию.
-  useBackButton(true, openClub);
 
   const saveError = updateClub.isError && (
     <p className="rd-wz-err" role="alert">Не получилось сохранить. Попробуйте ещё раз.</p>
@@ -257,10 +255,10 @@ export const ClubSetupWizard: FC = () => {
             </div>
           </div>
 
-          <button type="button" className="rd-btn-primary rd-wz-next" onClick={openClub}>
+          <button type="button" className="rd-btn-primary rd-wz-next" onClick={finish}>
             Готово
           </button>
-          <button type="button" className="rd-ghost-btn rd-wz-skip" onClick={openClub}>
+          <button type="button" className="rd-ghost-btn rd-wz-skip" onClick={finish}>
             Пропустить обложку
           </button>
         </>
