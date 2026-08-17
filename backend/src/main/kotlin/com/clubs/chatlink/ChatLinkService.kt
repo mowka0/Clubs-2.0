@@ -387,6 +387,14 @@ class ChatLinkService(
         "https://t.me/$botUsername?startgroup=${ChatLinkBotService.NEW_CLUB_START_PAYLOAD}" +
             "&admin=pin_messages+invite_users+restrict_members+manage_tags"
 
+    /**
+     * Тот же владельческий гейт, что и у остальных методов таба «Чат», но снаружи: им
+     * пользуется отметка намерения перед уходом в Telegram (`POST /api/chat-link/intent`).
+     */
+    fun requireOwnedClub(clubId: UUID, callerId: UUID) {
+        requireOwner(clubId, callerId)
+    }
+
     private fun requireOwner(clubId: UUID, callerId: UUID): Club {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != callerId) throw ForbiddenException("Only the club owner can manage the chat link")

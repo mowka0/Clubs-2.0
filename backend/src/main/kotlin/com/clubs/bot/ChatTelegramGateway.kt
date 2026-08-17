@@ -454,6 +454,18 @@ class ChatTelegramGateway(
     }
 
     /**
+     * DM без кнопок. Best-effort: Telegram запрещает боту писать первым тому, кто ни разу его
+     * не открывал, — такой отказ здесь ожидаем и гасится в лог.
+     */
+    fun sendDm(telegramId: Long, text: String): Boolean = try {
+        telegramClient.execute(SendMessage.builder().chatId(telegramId.toString()).text(text).build())
+        true
+    } catch (e: Exception) {
+        log.info("sendDm failed (often benign — user never opened the bot): telegramId={} error={}", telegramId, e.message)
+        false
+    }
+
+    /**
      * DM с inline-кнопкой callback (например «Отвязать чат» в петле подтверждения привязки).
      * WebApp-кнопки в DM строит [dmWithWebApp]; callback-кнопки — единственный не-WebApp кейс.
      */

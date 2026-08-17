@@ -34,3 +34,16 @@ export function unlinkChat(clubId: string): Promise<void> {
 export function getNewClubChatLinkUrl(): Promise<NewClubChatLinkDto> {
   return apiClient.get<NewClubChatLinkDto>('/api/chat-link/new-club-url');
 }
+
+/**
+ * «Я иду добавлять бота в группу» — зовётся перед самым уходом в Telegram.
+ *
+ * Бот узнаёт о добавлении апдейтом `my_chat_member`, в котором payload ссылки отсутствует, а
+ * команду `/start <payload>` Telegram не отправляет, когда ссылка просит права администратора.
+ * Отложенное здесь намерение и подсказывает боту, что делать с чатом (club-chat-link.md).
+ *
+ * `clubId = null` — клуба ещё нет, чат станет новым клубом.
+ */
+export function rememberChatLinkIntent(clubId: string | null): Promise<void> {
+  return apiClient.post<void>('/api/chat-link/intent', { clubId });
+}

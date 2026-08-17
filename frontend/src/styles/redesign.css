@@ -3360,6 +3360,17 @@
 .rd-wz-ava-row { display: flex; align-items: center; gap: 14px; }
 .rd-wz-hint { font-size: 12.5px; color: var(--text-dim); line-height: 1.45; }
 
+/* Права бота на последнем шаге: выданное гасим галочкой, недостающее оставляем ярким —
+   человек должен видеть, чего именно не хватает, а не общий статус «что-то не так». */
+.rd-wz-rights { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.rd-wz-right {
+  display: flex; gap: 9px; align-items: flex-start;
+  font-size: 13px; line-height: 1.45; color: var(--text);
+}
+.rd-wz-right.rd-on { color: var(--text-faint); }
+.rd-wz-right-mark { color: var(--accent); flex-shrink: 0; width: 12px; }
+.rd-wz-right.rd-on .rd-wz-right-mark { color: var(--live); }
+
 .rd-wz-next { width: 100%; margin-top: 20px; }
 .rd-wz-skip { width: 100%; margin-top: 8px; }
 .rd-wz-note { font-size: 11px; color: var(--text-faint); text-align: center; padding-top: 10px; }

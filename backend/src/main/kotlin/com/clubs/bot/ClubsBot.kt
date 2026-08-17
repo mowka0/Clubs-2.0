@@ -28,6 +28,11 @@ import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
+// Статусы бота в чате, означающие «его там нет» и «он там есть» (литералы Bot API). Переход
+// первого во второй = бота только что добавили в группу.
+private val OUTSIDE_CHAT_STATUSES = setOf("left", "kicked")
+private val INSIDE_CHAT_STATUSES = setOf("member", "administrator", "creator")
+
 @Component
 class ClubsBot(
     @Value("\${telegram.bot-token}") private val botToken: String,
@@ -169,7 +174,15 @@ class ClubsBot(
         )
     }
 
-    /** Статус самого бота в чате изменился: обновляем health привязки (мокап 01-C). */
+    /**
+     * Статус самого бота в чате изменился: обновляем health привязки (мокап 01-C), а если бота
+     * только что ДОБАВИЛИ в группу — это ещё и штатная точка входа привязки чата.
+     *
+     * Раньше входом была команда `/start <payload>`, которую Telegram отправлял за человека. Со
+     * ссылкой, запрашивающей права администратора (`&admin=…`), клиент показывает экран выбора
+     * прав и команду не отправляет — человеку приходилось писать её руками. Здесь payload'а нет,
+     * поэтому «зачем добавляли» приложение откладывает заранее (ChatLinkIntentStore).
+     */
     private fun handleMyChatMember(update: Update) {
         val updated = update.myChatMember
         val chat = updated.chat
@@ -183,6 +196,18 @@ class ClubsBot(
             canInviteUsers = admin?.canInviteUsers ?: false,
             canRestrictMembers = admin?.canRestrictMembers ?: false
         )
+
+        // Именно добавление, а не выдача прав уже сидящему боту: иначе каждая правка прав
+        // заводила бы привязку заново. Клуб-хозяин чата и прочие конфликты проверяет сервис.
+        val wasOutside = updated.oldChatMember.status in OUTSIDE_CHAT_STATUSES
+        val isInsideNow = newMember.status in INSIDE_CHAT_STATUSES
+        if (wasOutside && isInsideNow) {
+            chatLinkBotService.handleBotAddedToChat(
+                chatId = chat.id,
+                chatTitle = chat.title,
+                fromTelegramId = updated.from.id
+            )
+        }
     }
 
     /** Ответ на inline-кнопку. Формат data: «chatlink:unlink:<uuid>» (см. ChatLinkBotService). */

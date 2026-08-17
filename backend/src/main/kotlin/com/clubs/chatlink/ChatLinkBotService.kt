@@ -14,8 +14,10 @@ import java.util.UUID
 
 /**
  * Сторона БОТА в привязке чата: обработка событий Telegram, которые роутит [com.clubs.bot.ClubsBot].
- * Привязка (deep link ?startgroup=<club_id> → /start с payload в группе), health-мониторинг
- * my_chat_member, миграция группы в супергруппу, callback «Отвязать чат» из DM-петли подтверждения.
+ * Привязка по факту добавления бота в группу (`my_chat_member` + намерение из
+ * [ChatLinkIntentStore]), health-мониторинг того же апдейта, миграция группы в супергруппу,
+ * callback «Отвязать чат» из DM-петли подтверждения. Ветка `/start <payload>` осталась
+ * запасным путём — для ссылок без запроса прав и для тех, кто пишет команду руками.
  */
 @Service
 class ChatLinkBotService(
@@ -24,15 +26,40 @@ class ChatLinkBotService(
     private val clubService: ClubService,
     private val userRepository: UserRepository,
     private val chatLinkService: ChatLinkService,
+    private val intentStore: ChatLinkIntentStore,
     private val gateway: ChatTelegramGateway,
     @Value("\${telegram.bot-username}") private val botUsername: String
 ) {
     private val log = LoggerFactory.getLogger(ChatLinkBotService::class.java)
 
     /**
-     * `/start new` в группе — бота добавили ссылкой `?startgroup=new`, клуба ещё нет.
-     * Создаём его из самого чата: название берём у группы, владельцем становится тот, кто
+     * Бота добавили в группу (`my_chat_member`) — единственная штатная точка входа привязки.
+     *
+     * Что делать с чатом, подсказывает намерение, отложенное приложением перед уходом в Telegram
+     * ([ChatLinkIntentStore]): «привязать к клубу X» или «завести новый клуб». Намерения нет —
+     * бота добавили мимо приложения (из меню Telegram, по чужой ссылке); в чат-модели у такого
+     * добавления один разумный смысл, и это «пусть чат станет клубом».
+     *
+     * В самом чате при этом не появляется ни одного сообщения — ни от человека, ни от бота
+     * (решение PO 2026-08-17): подключение должно быть незаметным для участников группы, пока
+     * владелец не представит клуб сам.
+     */
+    @Transactional
+    fun handleBotAddedToChat(chatId: Long, chatTitle: String?, fromTelegramId: Long) {
+        when (val intent = intentStore.consume(fromTelegramId)) {
+            is ChatLinkIntentStore.Intent.LinkExistingClub ->
+                handleGroupStart(chatId, chatTitle, fromTelegramId, intent.clubId)
+            else -> handleGroupStartNewClub(chatId, chatTitle, fromTelegramId)
+        }
+    }
+
+    /**
+     * Чат становится новым клубом: название берём у группы, владельцем становится тот, кто
      * добавил бота. Это точка входа чат-модели (спринт 1.0): человек не заполняет форму.
+     *
+     * Владельцем становится добавивший, даже если он не администратор группы (решение PO
+     * 2026-08-17): инициативный участник имеет право попробовать бота и договориться с админом
+     * — права боту тот выдаст потом, а до тех пор клуб живёт с приглушёнными функциями чата.
      *
      * Проверки конфликтов те же, что при обычной привязке, и по той же причине: занятый чат
      * новый клуб забирать не имеет права.
@@ -43,8 +70,8 @@ class ChatLinkBotService(
         val liveLinkOfChat = existingForChat?.takeIf { clubRepository.findById(it.clubId) != null }
         if (liveLinkOfChat != null) {
             // Чужую живую привязку не трогаем и бота из чата не уводим — он там работает.
-            gateway.sendGroupMessage(
-                chatId,
+            gateway.sendDm(
+                fromTelegramId,
                 "Этот чат уже привязан к клубу. Один чат — один клуб: сначала отвяжите его " +
                     "в приложении Clubs, «Управление» → «Чат»."
             )
@@ -53,14 +80,10 @@ class ChatLinkBotService(
         }
 
         // Пользователь заводится только при входе в Mini App: человек мог добавить бота, ни разу
-        // не открыв приложение, и тогда владельца клубу назначить не из чего.
+        // не открыв приложение, и тогда владельца клубу назначить не из чего. Написать ему тоже
+        // нечем — Telegram запрещает боту первым писать незнакомцу, — поэтому просто уходим.
         val ownerId = userRepository.findByTelegramId(fromTelegramId)?.id
         if (ownerId == null) {
-            gateway.sendGroupMessage(
-                chatId,
-                "Сначала откройте приложение Clubs (кнопка «Открыть» в личке с ботом), " +
-                    "а потом подключите чат ещё раз."
-            )
             gateway.leaveChat(chatId)
             log.warn("New-club link refused, sender unknown: chatId={} telegramId={}", chatId, fromTelegramId)
             return
@@ -70,8 +93,8 @@ class ChatLinkBotService(
         // группе, поэтому — только администратору чата (та же защита, что при обычной привязке).
         if (existingForChat != null) {
             if (!gateway.isChatAdmin(chatId, fromTelegramId)) {
-                gateway.sendGroupMessage(
-                    chatId,
+                gateway.sendDm(
+                    fromTelegramId,
                     "Этот чат раньше принадлежал другому клубу. Подключить его заново может " +
                         "только администратор чата в Telegram."
                 )
@@ -110,7 +133,7 @@ class ChatLinkBotService(
 
         val club = clubRepository.findById(clubId)
         if (club == null || !club.isActive) {
-            refuse(chatId, clubId, liveLinkOfChat, senderIsVerifiedOwner = false, text = "Клуб не найден. Откройте «Управление клубом» в приложении Clubs и нажмите «Привязать чат» ещё раз.")
+            refuse(chatId, clubId, liveLinkOfChat, senderIsVerifiedOwner = false, fromTelegramId = fromTelegramId, text = "Клуб не найден. Откройте «Управление клубом» в приложении Clubs и нажмите «Привязать чат» ещё раз.")
             return
         }
 
@@ -118,7 +141,7 @@ class ChatLinkBotService(
         if (sender?.id != club.ownerId) {
             // Имени клуба в тексте нет намеренно: отказ уходит ДО проверки прав, и подстановка
             // названия подтверждала бы существование приватного клуба обладателю его UUID.
-            refuse(chatId, clubId, liveLinkOfChat, senderIsVerifiedOwner = false, text = "Привязать чат может только владелец клуба в приложении Clubs.")
+            refuse(chatId, clubId, liveLinkOfChat, senderIsVerifiedOwner = false, fromTelegramId = fromTelegramId, text = "Привязать чат может только владелец клуба в приложении Clubs.")
             return
         }
 
@@ -146,16 +169,19 @@ class ChatLinkBotService(
                     nowCanInvite = state.canInviteUsers
                 )
             }
-            sendLinkedDm(fromTelegramId, chatTitle, club.name, clubId)
+            sendLinkedDm(
+                fromTelegramId, chatTitle, club.name, clubId,
+                botHasAdminRights = state?.statusLiteral?.let { BotChatStatus.fromTelegramStatus(it) } == BotChatStatus.ADMINISTRATOR
+            )
             return
         }
         if (existingForClub != null) {
-            refuse(chatId, clubId, liveLinkOfChat, senderIsVerifiedOwner = true, text = "У клуба «${club.name}» уже привязан другой чат. Сначала отвяжите его в «Управлении клубом».")
+            refuse(chatId, clubId, liveLinkOfChat, senderIsVerifiedOwner = true, fromTelegramId = fromTelegramId, text = "У клуба «${club.name}» уже привязан другой чат. Сначала отвяжите его в «Управлении клубом».")
             return
         }
         if (liveLinkOfChat != null) {
             refuse(
-                chatId, clubId, liveLinkOfChat, senderIsVerifiedOwner = true,
+                chatId, clubId, liveLinkOfChat, senderIsVerifiedOwner = true, fromTelegramId = fromTelegramId,
                 text = "Этот чат уже привязан к другому клубу. Один чат — один клуб: сначала отвяжите его " +
                     "в том клубе, «Управление» → «Чат»."
             )
@@ -171,7 +197,7 @@ class ChatLinkBotService(
         if (existingForChat != null) {
             if (!gateway.isChatAdmin(chatId, fromTelegramId)) {
                 refuse(
-                    chatId, clubId, liveLinkOfChat, senderIsVerifiedOwner = true,
+                    chatId, clubId, liveLinkOfChat, senderIsVerifiedOwner = true, fromTelegramId = fromTelegramId,
                     text = "Этот чат раньше принадлежал другому клубу. Перепривязать его может только " +
                         "администратор чата в Telegram."
                 )
@@ -246,7 +272,7 @@ class ChatLinkBotService(
         // Личка владельцу — одно сообщение на две задачи: подтверждение привязки (раньше висело
         // отдельным постом В ЧАТЕ) и петля безопасности «это были вы?», из-за которой
         // фишинг-привязка мгновенно видна и обратима.
-        sendLinkedDm(fromTelegramId, chatTitle, club.name, clubId)
+        sendLinkedDm(fromTelegramId, chatTitle, club.name, clubId, botHasAdminRights = link.botStatus == BotChatStatus.ADMINISTRATOR)
     }
 
     /**
@@ -335,19 +361,35 @@ class ChatLinkBotService(
      * безопасности «это были вы?» с кнопкой отвязки. Раньше первая половина уходила отдельным
      * постом в чат, где была не к месту (решение PO 2026-08-15).
      */
-    private fun linkedMessage(chatTitle: String?, clubName: String): String =
-        "✅ Чат «${chatTitle ?: "без названия"}» привязан к клубу «$clubName».\n" +
-            "Управление — в приложении Clubs, вкладка «Чат».\n\n" +
+    private fun linkedMessage(chatTitle: String?, clubName: String, botHasAdminRights: Boolean): String {
+        val rights = if (botHasAdminRights) {
+            ""
+        } else {
+            // Права выдаёт только администратор группы — сам себя бот повысить не может. Если
+            // добавивший не админ, ему остаётся показать эту ссылку тому, кто админ; в приложении
+            // тот же шаг стоит последним в мастере наполнения.
+            "\n\n⚠️ Боту не выдали права администратора — опросы, закрепы и приглашения пока " +
+                "не работают. Выдать их можно последним шагом в приложении: «Заполнить клуб»."
+        }
+        return "✅ Чат «${chatTitle ?: "без названия"}» привязан к клубу «$clubName».\n" +
+            "Управление — в приложении Clubs, вкладка «Чат»." + rights + "\n\n" +
             "Это были вы? Если нет — отвяжите чат кнопкой ниже."
+    }
 
     /**
      * Подтверждение привязки в личку владельцу: сверху вход в клуб, снизу петля безопасности
      * «это были вы?». Один текст на оба вызова — первую привязку и повторное добавление бота.
      */
-    private fun sendLinkedDm(telegramId: Long, chatTitle: String?, clubName: String, clubId: UUID) {
+    private fun sendLinkedDm(
+        telegramId: Long,
+        chatTitle: String?,
+        clubName: String,
+        clubId: UUID,
+        botHasAdminRights: Boolean,
+    ) {
         gateway.sendDmWithWebAppAndCallbackButton(
             telegramId = telegramId,
-            text = linkedMessage(chatTitle, clubName),
+            text = linkedMessage(chatTitle, clubName, botHasAdminRights),
             webAppButtonText = "Перейти в клуб",
             webAppPath = "/clubs/$clubId",
             callbackButtonText = "Отвязать чат",
@@ -373,9 +415,21 @@ class ChatLinkBotService(
      *    Верифицированному владельцу (`senderIsVerifiedOwner`) сообщение уходит всегда — иначе
      *    он не поймёт, почему привязка не проходит.
      */
-    private fun refuse(chatId: Long, requestedClubId: UUID, liveLinkOfChat: ChatLink?, senderIsVerifiedOwner: Boolean, text: String) {
+    private fun refuse(
+        chatId: Long,
+        requestedClubId: UUID,
+        liveLinkOfChat: ChatLink?,
+        senderIsVerifiedOwner: Boolean,
+        text: String,
+        fromTelegramId: Long,
+    ) {
         val chatIsBusy = liveLinkOfChat != null
-        if (senderIsVerifiedOwner || !chatIsBusy) gateway.sendGroupMessage(chatId, text)
+        // Отказ уходит в личку тому, кто добавлял бота, а не в группу: участники чата к этому
+        // разговору отношения не имеют, а подключение обязано быть для них незаметным
+        // (решение PO 2026-08-17). Условие senderIsVerifiedOwner сохранено: постороннему, чей
+        // чат занят чужим клубом, не отвечаем вовсе — иначе перебором UUID можно было бы
+        // выяснять, к какому клубу привязана группа.
+        if (senderIsVerifiedOwner || !chatIsBusy) gateway.sendDm(fromTelegramId, text)
         if (!chatIsBusy) gateway.leaveChat(chatId)
         log.warn(
             "Chat link refused: requestedClubId={} chatId={} verifiedOwner={} botLeftChat={} chatOccupiedByClubId={}",

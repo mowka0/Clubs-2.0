@@ -10,8 +10,8 @@
  * из него утянул бы весь мастер в чанк страницы клуба.
  */
 
-/** Сколько шагов в мастере: название → город → описание с темами → обложка. */
-export const CLUB_SETUP_TOTAL_STEPS = 4;
+/** Шаги мастера: название с размером → город → описание с темами → обложка → права бота. */
+export const CLUB_SETUP_TOTAL_STEPS = 5;
 
 function progressKey(clubId: string): string {
   return `club-setup-step:${clubId}`;

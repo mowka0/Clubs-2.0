@@ -4,6 +4,7 @@ import { CityPicker } from '../components/CityPicker';
 import { ClubAvatarButton } from '../components/club/ClubAvatarButton';
 import { ClubCoverButton } from '../components/club/ClubCoverButton';
 import { ClubInterestsPicker } from '../components/club/ClubInterestsPicker';
+import { BotRightsStep } from '../components/club/BotRightsStep';
 import { useHaptic } from '../hooks/useHaptic';
 import { useClubQuery, useUpdateClubMutation } from '../queries/clubs';
 import {
@@ -285,14 +286,16 @@ export const ClubSetupWizard: FC = () => {
             </div>
           </div>
 
-          <button type="button" className="rd-btn-primary rd-wz-next" onClick={finish}>
-            Готово
+          <button type="button" className="rd-btn-primary rd-wz-next" onClick={() => setStep(5)}>
+            Дальше
           </button>
-          <button type="button" className="rd-ghost-btn rd-wz-skip" onClick={finish}>
+          <button type="button" className="rd-ghost-btn rd-wz-skip" onClick={() => setStep(5)}>
             Пропустить обложку
           </button>
         </>
       )}
+
+      {step === 5 && <BotRightsStep clubId={club.id} onFinish={finish} />}
     </div>
   );
 };

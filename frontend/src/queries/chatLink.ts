@@ -1,6 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getChatLinkStatus, getNewClubChatLinkUrl, pinClubLink, refreshChatLink, unlinkChat, updateChatLink } from '../api/chatLink';
+import {
+  getChatLinkStatus,
+  getNewClubChatLinkUrl,
+  pinClubLink,
+  refreshChatLink,
+  rememberChatLinkIntent,
+  unlinkChat,
+  updateChatLink,
+} from '../api/chatLink';
 import type { ChatLinkStatusDto, UpdateChatLinkRequest } from '../types/api';
+import { openTmeLink } from '../utils/telegramLinks';
 import { queryKeys } from './queryKeys';
 
 // Server state привязки чата (club-chat-link). Мутации кладут свежий статус в кэш сразу
@@ -60,6 +69,29 @@ export function useUnlinkChatMutation(clubId: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.clubs.chatLink(clubId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.clubs.detail(clubId) });
+    },
+  });
+}
+
+/**
+ * Отметить намерение перед уходом в Telegram и только потом открыть выбор группы.
+ *
+ * Порядок важен: бот узнаёт о добавлении из `my_chat_member`, где payload ссылки отсутствует, —
+ * без отметки он не поймёт, привязывать чат к существующему клубу или заводить новый.
+ *
+ * `clubId = null` (новый клуб) уводит в Telegram даже при неудачной отметке: это дефолт бота,
+ * и терять шаг человека из-за сетевой ошибки незачем. Для привязки к существующему клубу
+ * ошибка блокирует переход — иначе бот завёл бы вместо привязки лишний клуб.
+ */
+export function useStartChatLinkingMutation() {
+  return useMutation({
+    mutationFn: async ({ clubId, startGroupUrl }: { clubId: string | null; startGroupUrl: string }) => {
+      try {
+        await rememberChatLinkIntent(clubId);
+      } catch (e) {
+        if (clubId !== null) throw e;
+      }
+      openTmeLink(startGroupUrl);
     },
   });
 }

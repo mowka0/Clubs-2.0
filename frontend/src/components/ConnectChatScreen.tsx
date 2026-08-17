@@ -2,8 +2,7 @@ import { FC } from 'react';
 import { FoxEmpty } from './feed/FoxEmpty';
 import foxChatArt from '../assets/mascot/fox-chat.png';
 import { useHaptic } from '../hooks/useHaptic';
-import { useNewClubChatLinkQuery } from '../queries/chatLink';
-import { openTmeLink } from '../utils/telegramLinks';
+import { useNewClubChatLinkQuery, useStartChatLinkingMutation } from '../queries/chatLink';
 
 /**
  * Первый экран человека без клубов в чат-модели: предложение подключить свой телеграм-чат.
@@ -28,6 +27,7 @@ export const ConnectChatScreen: FC = () => (
 export const ConnectChatEmpty: FC = () => {
   const haptic = useHaptic();
   const { data } = useNewClubChatLinkQuery();
+  const startLinking = useStartChatLinkingMutation();
 
   // Кнопку показываем только с готовой ссылкой: тап «в пустоту» на первом же экране
   // выглядел бы как сломанный продукт. Запрос кэшируется навсегда, пауза почти незаметна.
@@ -36,7 +36,7 @@ export const ConnectChatEmpty: FC = () => {
         label: 'Выбрать чат',
         onClick: () => {
           haptic.impact('light');
-          openTmeLink(data.startGroupUrl);
+          startLinking.mutate({ clubId: null, startGroupUrl: data.startGroupUrl });
         },
       }
     : undefined;

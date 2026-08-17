@@ -15,6 +15,7 @@ import {
 import { queryKeys } from '../queries/queryKeys';
 import { Toast } from '../components/Toast';
 import { CreateClubModal } from '../components/CreateClubModal';
+import { CreateClubChoiceSheet } from '../components/club/CreateClubChoiceSheet';
 import { ApplicationReviewModal } from '../components/applications/ApplicationReviewModal';
 import { FullClubBlock } from '../components/applications/FullClubBlock';
 import { MemberProfileModal } from '../components/club/MemberProfileModal';
@@ -602,6 +603,8 @@ export const MyClubsPage: FC = () => {
   const pendingInboxQuery = useMyPendingApplicationsQuery();
   const reputationQuery = useMyReputationQuery();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  // Развилка «+ Клуб»: сначала способ (из чата / с нуля), и только потом форма.
+  const [showCreateChoice, setShowCreateChoice] = useState(false);
   const [reviewing, setReviewing] = useState<PendingApplicationDto | null>(null);
   const [duesMember, setDuesMember] = useState<OrganizerDuesMemberDto | null>(null);
   const cancelMutation = useCancelApplicationMutation();
@@ -830,7 +833,7 @@ export const MyClubsPage: FC = () => {
 
   const openCreate = () => {
     haptic.impact('light');
-    setShowCreateModal(true);
+    setShowCreateChoice(true);
   };
 
   const handleClubClick = (clubId: string) => {
@@ -1115,6 +1118,14 @@ export const MyClubsPage: FC = () => {
             ))}
           </div>
         </>
+      )}
+
+      {showCreateChoice && (
+        <Modal open onOpenChange={(open) => !open && setShowCreateChoice(false)}>
+          <CreateClubChoiceSheet
+            onPickFromScratch={() => { setShowCreateChoice(false); setShowCreateModal(true); }}
+          />
+        </Modal>
       )}
 
       {showCreateModal && (
