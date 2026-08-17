@@ -3287,3 +3287,5 @@
 /* Аватар и подпись рядом: кнопка сама по себе круглая и без контекста непонятна. */
 .rd-wz-avatar { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
 .rd-wz-cover { margin-top: 12px; }
+/* Темы в мастере — отделяем от описания воздухом, это отдельный вопрос. */
+.rd-wz-topics { margin-top: 16px; }

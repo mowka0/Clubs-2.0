@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { CityPicker } from '../components/CityPicker';
 import { ClubAvatarButton } from '../components/club/ClubAvatarButton';
 import { ClubCoverButton } from '../components/club/ClubCoverButton';
+import { ClubInterestsPicker } from '../components/club/ClubInterestsPicker';
 import { useHaptic } from '../hooks/useHaptic';
 import { useClubQuery, useUpdateClubMutation } from '../queries/clubs';
 import type { CityDto } from '../types/api';
@@ -24,6 +25,9 @@ const DESCRIPTION_MAX = 500;
  * Порядок шагов не случаен: сперва то, что человек знает про свой чат наизусть (название),
  * потом обязательный город, и лишь затем то, над чем нужно подумать (описание) и повозиться
  * (обложка). Пропустить можно всё, кроме города: без него не работает недельный опрос.
+ *
+ * Темы идут вместе с описанием — это одна мысль «о чём клуб», просто вторая половина
+ * записана словами общего словаря, по которым работает поиск.
  */
 export const ClubSetupWizard: FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -37,6 +41,7 @@ export const ClubSetupWizard: FC = () => {
   const [name, setName] = useState<string | null>(null);
   const [city, setCity] = useState<CityDto | null>(null);
   const [description, setDescription] = useState<string | null>(null);
+  const [interests, setInterests] = useState<string[] | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   if (clubQuery.isPending) return null;
@@ -44,6 +49,7 @@ export const ClubSetupWizard: FC = () => {
 
   const nameValue = name ?? club.name;
   const descriptionValue = description ?? club.description;
+  const interestsValue = interests ?? club.interests;
   const openClub = () => navigate(`/clubs/${club.id}`, { replace: true });
 
   /**
@@ -157,11 +163,20 @@ export const ClubSetupWizard: FC = () => {
             aria-label="Описание клуба"
           />
 
+          {/* Темы — продолжение описания: «о чём клуб» словами общего словаря. По ним же
+              работает поиск, поэтому свободный ввод здесь только последним шагом
+              (club-interests.md). Категория у клуба из чата — `other`, и полка чипов
+              подставляется по ней. */}
+          <div className="rd-wz-topics">
+            <div className="rd-section-sub-h">Темы клуба</div>
+            <ClubInterestsPicker category={club.category} value={interestsValue} onChange={setInterests} />
+          </div>
+
           <button
             type="button"
             className="rd-btn-primary rd-wz-next"
             disabled={updateClub.isPending}
-            onClick={() => saveAndNext({ description: descriptionValue.trim() }, 4)}
+            onClick={() => saveAndNext({ description: descriptionValue.trim(), interests: interestsValue }, 4)}
           >
             Дальше
           </button>
