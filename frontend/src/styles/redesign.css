@@ -3272,20 +3272,76 @@
 }
 
 /* ---- Мастер наполнения клуба из чата (ClubSetupWizard) ---- */
-/* Полоска шагов: заполненные — приглушённым акцентом, текущий — сплошным. */
+/* Разметка следует docs/design/club-from-chat/mockups/02-club-setup-wizard.html:
+   один вопрос на экран, капс-метки над полями, финальный шаг с превью страницы. */
+.rd-wz { padding-top: 6px; }
+
+/* Полоска шагов: пройденные — приглушённым акцентом, текущий — сплошным. */
 .rd-wz-bar { display: flex; gap: 5px; padding: 4px 2px 10px; }
-.rd-wz-seg { height: 3px; border-radius: 2px; flex: 1; background: rgba(255,255,255,.1); }
+.rd-wz-seg { height: 3px; border-radius: 2px; flex: 1; background: var(--hairline-2); }
 .rd-wz-seg.rd-on { background: var(--accent); }
-.rd-wz-seg.rd-done { background: rgba(244,123,60,.45); }
+.rd-wz-seg.rd-done { background: var(--accent); opacity: .45; }
 .rd-wz-cap {
   font-size: 10px; letter-spacing: .07em; text-transform: uppercase;
-  color: var(--tg-hint, rgba(255,255,255,.45)); padding: 0 2px 10px;
+  color: var(--text-faint); padding: 0 2px 12px;
 }
-.rd-wz-next { width: 100%; margin-top: 14px; }
+
+.rd-wz-q { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 6px; line-height: 1.25; }
+.rd-wz-qsub { font-size: 13px; color: var(--text-faint); line-height: 1.45; margin: 0 0 18px; }
+
+/* Капс-метка над полем — та же роль, что у подписи в форме создания клуба. */
+.rd-wz-lbl {
+  font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-faint); padding: 0 2px 7px; margin-top: 16px;
+}
+.rd-wz-lbl:first-of-type { margin-top: 0; }
+
+.rd-wz-area { min-height: 104px; }
+/* Кнопка, притворяющаяся полем: город выбирается пикером, а не вводится руками. */
+.rd-wz-pick { text-align: left; cursor: pointer; }
+.rd-wz-pick.rd-ph { color: var(--text-faint); }
+
+/* Обязательность города говорим словами: отключённая кнопка «Дальше» сама по себе не объясняет. */
+.rd-wz-req {
+  display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 560;
+  color: var(--accent); background: var(--accent-soft); border-radius: 8px;
+  padding: 5px 10px; margin-bottom: 4px;
+}
+.rd-wz-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.rd-wz-ava-row { display: flex; align-items: center; gap: 14px; }
+.rd-wz-hint { font-size: 12.5px; color: var(--text-dim); line-height: 1.45; }
+
+.rd-wz-next { width: 100%; margin-top: 20px; }
 .rd-wz-skip { width: 100%; margin-top: 8px; }
-.rd-wz-area { min-height: 110px; resize: vertical; }
-/* Аватар и подпись рядом: кнопка сама по себе круглая и без контекста непонятна. */
-.rd-wz-avatar { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
-.rd-wz-cover { margin-top: 12px; }
-/* Темы в мастере — отделяем от описания воздухом, это отдельный вопрос. */
-.rd-wz-topics { margin-top: 16px; }
+.rd-wz-note { font-size: 11px; color: var(--text-faint); text-align: center; padding-top: 10px; }
+.rd-wz-err { font-size: 12.5px; color: var(--danger); margin: 10px 0 0; }
+
+/* Слот обложки: пунктир, пока пусто; картинка, когда загружена. Кнопка смены — в углу. */
+.rd-wz-cover-slot {
+  position: relative; height: 104px; border-radius: 14px; overflow: hidden;
+  border: 1px dashed var(--hairline-2); background: var(--surface);
+  display: grid; place-items: center;
+}
+.rd-wz-cover-img { width: 100%; height: 100%; object-fit: cover; }
+.rd-wz-cover-empty { font-size: 12.5px; color: var(--text-faint); }
+.rd-wz-cover-btn { position: absolute; right: 8px; bottom: 8px; }
+
+/* Превью страницы клуба — единственное место, где орг видит её глазами участника. */
+.rd-wz-preview {
+  border: 1px solid var(--hairline); border-radius: 16px; padding: 0 12px 14px;
+  background: var(--glass-bg); overflow: hidden;
+}
+.rd-wz-pv-cover {
+  height: 78px; margin: 0 -12px 0; background: var(--hairline);
+}
+.rd-wz-pv-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rd-wz-pv-ava {
+  width: 54px; height: 54px; border-radius: 50%; margin: -27px auto 0; position: relative;
+  border: 3px solid var(--rd-page-bg, #0B0B0E); background: var(--accent-grad, var(--accent));
+  display: grid; place-items: center; overflow: hidden;
+  font-size: 20px; font-weight: 700; color: #17110C;
+}
+.rd-wz-pv-ava img { width: 100%; height: 100%; object-fit: cover; }
+.rd-wz-pv-name { text-align: center; font-size: 16px; font-weight: 700; padding: 9px 0 3px; }
+.rd-wz-pv-meta { text-align: center; font-size: 11.5px; color: var(--text-faint); }
