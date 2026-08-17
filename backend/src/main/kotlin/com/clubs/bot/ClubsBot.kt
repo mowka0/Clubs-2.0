@@ -28,6 +28,10 @@ import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
+// Payload ссылки ?startgroup=<payload>, означающий «клуба ещё нет, создай его из этого чата».
+// Не UUID намеренно: ссылка одна на всех и живёт в рекламе, её нельзя привязать к клубу заранее.
+private const val NEW_CLUB_PAYLOAD = "new"
+
 @Component
 class ClubsBot(
     @Value("\${telegram.bot-token}") private val botToken: String,
@@ -141,13 +145,26 @@ class ClubsBot(
      */
     private fun handleGroupStart(message: Message) {
         val payload = message.text.split(Regex("\\s+")).getOrNull(1) ?: return
+        val from = message.from ?: return
+
+        // Точка входа чат-модели: бота добавили ссылкой ?startgroup=new, клуба ещё нет —
+        // создаём его из самого чата. Прежний сценарий (payload = UUID существующего клуба)
+        // продолжает работать: привязка чата из «Управления клубом» никуда не делась.
+        if (payload == NEW_CLUB_PAYLOAD) {
+            chatLinkBotService.handleGroupStartNewClub(
+                chatId = message.chatId,
+                chatTitle = message.chat.title,
+                fromTelegramId = from.id
+            )
+            return
+        }
+
         val clubId = try {
             UUID.fromString(payload)
         } catch (_: IllegalArgumentException) {
             log.warn("Group /start with non-UUID payload ignored: chatId={}", message.chatId)
             return
         }
-        val from = message.from ?: return
         chatLinkBotService.handleGroupStart(
             chatId = message.chatId,
             chatTitle = message.chat.title,

@@ -3,6 +3,7 @@ package com.clubs.chatlink
 import com.clubs.bot.BotChatState
 import com.clubs.bot.ChatTelegramGateway
 import com.clubs.club.ClubRepository
+import com.clubs.club.ClubService
 import com.clubs.generated.jooq.tables.records.UsersRecord
 import com.clubs.user.UserRepository
 import io.mockk.every
@@ -19,6 +20,7 @@ class ChatLinkBotServiceTest {
 
     private lateinit var chatLinkRepository: ChatLinkRepository
     private lateinit var clubRepository: ClubRepository
+    private lateinit var clubService: ClubService
     private lateinit var userRepository: UserRepository
     private lateinit var chatLinkService: ChatLinkService
     private lateinit var gateway: ChatTelegramGateway
@@ -34,10 +36,11 @@ class ChatLinkBotServiceTest {
     fun setUp() {
         chatLinkRepository = mockk(relaxed = true)
         clubRepository = mockk(relaxed = true)
+        clubService = mockk(relaxed = true)
         userRepository = mockk(relaxed = true)
         chatLinkService = mockk(relaxed = true)
         gateway = mockk(relaxed = true)
-        service = ChatLinkBotService(chatLinkRepository, clubRepository, userRepository, chatLinkService, gateway, botUsername = "clubs_test_bot")
+        service = ChatLinkBotService(chatLinkRepository, clubRepository, clubService, userRepository, chatLinkService, gateway, botUsername = "clubs_test_bot")
 
         every { clubRepository.findById(clubId) } returns club
         val owner = mockk<UsersRecord>(relaxed = true) {
@@ -424,5 +427,61 @@ class ChatLinkBotServiceTest {
 
         verify { chatLinkRepository.updateChatId(chatId, -1009999L) }
         verify { chatLinkRepository.updateInviteLink(clubId, "https://t.me/+supergroup") }
+    }
+
+    // --- ?startgroup=new: клуб рождается из чата (спринт 1.0, чат-модель) ---
+
+    @Test
+    fun `startgroup new - клуб создаётся из чата и сразу привязывается`() {
+        val newClubId = UUID.randomUUID()
+        val newClub = chatLinkTestClub(clubId = newClubId, ownerId = ownerId, name = "Бегуны Сокольники")
+        every { clubService.createClubFromChat(any(), ownerId) } returns newClub
+        every { clubRepository.findById(newClubId) } returns newClub
+
+        service.handleGroupStartNewClub(chatId, "Бегуны Сокольники", ownerTelegramId)
+
+        // Название клуба берётся у чата, владельцем становится тот, кто добавил бота.
+        verify { clubService.createClubFromChat("Бегуны Сокольники", ownerId) }
+        verify { chatLinkRepository.insert(match { it.clubId == newClubId && it.chatId == chatId }) }
+    }
+
+    @Test
+    fun `startgroup new - чат уже за живым клубом - клуб НЕ создаётся и бот остаётся`() {
+        // Уход бота снёс бы работающую интеграцию клуба-хозяина руками постороннего.
+        val otherClubId = UUID.randomUUID()
+        every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(clubId = otherClubId, chatId = chatId)
+        every { clubRepository.findById(otherClubId) } returns chatLinkTestClub(clubId = otherClubId)
+
+        service.handleGroupStartNewClub(chatId, "Чат", ownerTelegramId)
+
+        verify(exactly = 0) { clubService.createClubFromChat(any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.insert(any()) }
+        verify(exactly = 0) { gateway.leaveChat(chatId) }
+    }
+
+    @Test
+    fun `startgroup new - добавивший ни разу не открывал приложение - отказ и выход`() {
+        // Пользователь заводится только при входе в Mini App — владельца назначить не из чего.
+        val unknownTelegramId = 777L
+        every { userRepository.findByTelegramId(unknownTelegramId) } returns null
+
+        service.handleGroupStartNewClub(chatId, "Чат", unknownTelegramId)
+
+        verify(exactly = 0) { clubService.createClubFromChat(any(), any()) }
+        verify { gateway.leaveChat(chatId) }
+    }
+
+    @Test
+    fun `startgroup new - осиротевший чат перехватывает только администратор чата`() {
+        // Иначе рядовой участник легаси-группы увёл бы её под свой клуб вместе с правами бота.
+        val staleClubId = UUID.randomUUID()
+        every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(clubId = staleClubId, chatId = chatId)
+        every { clubRepository.findById(staleClubId) } returns null
+        every { gateway.isChatAdmin(chatId, ownerTelegramId) } returns false
+
+        service.handleGroupStartNewClub(chatId, "Чат", ownerTelegramId)
+
+        verify(exactly = 0) { clubService.createClubFromChat(any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.insert(any()) }
     }
 }

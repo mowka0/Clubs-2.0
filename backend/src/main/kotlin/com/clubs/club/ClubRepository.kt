@@ -12,6 +12,13 @@ interface ClubRepository {
      */
     fun create(request: CreateClubRequest, ownerId: UUID, inviteCode: String? = null, city: City): Club
 
+    /**
+     * Клуб, рождённый из телеграм-чата: формы создания не было, известны только название чата
+     * и тот, кто добавил бота. Город остаётся пустым (`city_id IS NULL` — легальное состояние
+     * по V74) и спрашивается в приложении сразу после подключения.
+     */
+    fun createFromChat(name: String, ownerId: UUID, memberLimit: Int, inviteCode: String): Club
+
     fun findById(id: UUID): Club?
 
     fun findByInviteCode(code: String): Club?

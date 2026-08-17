@@ -1,7 +1,9 @@
 package com.clubs.chatlink
 
 import com.clubs.bot.ChatTelegramGateway
+import com.clubs.club.Club
 import com.clubs.club.ClubRepository
+import com.clubs.club.ClubService
 import com.clubs.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -19,12 +21,71 @@ import java.util.UUID
 class ChatLinkBotService(
     private val chatLinkRepository: ChatLinkRepository,
     private val clubRepository: ClubRepository,
+    private val clubService: ClubService,
     private val userRepository: UserRepository,
     private val chatLinkService: ChatLinkService,
     private val gateway: ChatTelegramGateway,
     @Value("\${telegram.bot-username}") private val botUsername: String
 ) {
     private val log = LoggerFactory.getLogger(ChatLinkBotService::class.java)
+
+    /**
+     * `/start new` в группе — бота добавили ссылкой `?startgroup=new`, клуба ещё нет.
+     * Создаём его из самого чата: название берём у группы, владельцем становится тот, кто
+     * добавил бота. Это точка входа чат-модели (спринт 1.0): человек не заполняет форму.
+     *
+     * Проверки конфликтов те же, что при обычной привязке, и по той же причине: занятый чат
+     * новый клуб забирать не имеет права.
+     */
+    @Transactional
+    fun handleGroupStartNewClub(chatId: Long, chatTitle: String?, fromTelegramId: Long) {
+        val existingForChat = chatLinkRepository.findByChatId(chatId)
+        val liveLinkOfChat = existingForChat?.takeIf { clubRepository.findById(it.clubId) != null }
+        if (liveLinkOfChat != null) {
+            // Чужую живую привязку не трогаем и бота из чата не уводим — он там работает.
+            gateway.sendGroupMessage(
+                chatId,
+                "Этот чат уже привязан к клубу. Один чат — один клуб: сначала отвяжите его " +
+                    "в приложении Clubs, «Управление» → «Чат»."
+            )
+            log.warn("New-club link refused, chat busy: chatId={} byClubId={}", chatId, liveLinkOfChat.clubId)
+            return
+        }
+
+        // Пользователь заводится только при входе в Mini App: человек мог добавить бота, ни разу
+        // не открыв приложение, и тогда владельца клубу назначить не из чего.
+        val ownerId = userRepository.findByTelegramId(fromTelegramId)?.id
+        if (ownerId == null) {
+            gateway.sendGroupMessage(
+                chatId,
+                "Сначала откройте приложение Clubs (кнопка «Открыть» в личке с ботом), " +
+                    "а потом подключите чат ещё раз."
+            )
+            gateway.leaveChat(chatId)
+            log.warn("New-club link refused, sender unknown: chatId={} telegramId={}", chatId, fromTelegramId)
+            return
+        }
+
+        // Осиротевшая строка удалённого клуба: перехват отдаёт новому клубу все права бота в этой
+        // группе, поэтому — только администратору чата (та же защита, что при обычной привязке).
+        if (existingForChat != null) {
+            if (!gateway.isChatAdmin(chatId, fromTelegramId)) {
+                gateway.sendGroupMessage(
+                    chatId,
+                    "Этот чат раньше принадлежал другому клубу. Подключить его заново может " +
+                        "только администратор чата в Telegram."
+                )
+                log.warn("New-club orphan takeover refused, not chat admin: chatId={} telegramId={}", chatId, fromTelegramId)
+                return
+            }
+            log.warn("Releasing orphan chat link for new club: staleClubId={} chatId={}", existingForChat.clubId, chatId)
+            chatLinkService.releaseKeepingBotInChat(existingForChat)
+        }
+
+        val club = clubService.createClubFromChat(chatTitle, ownerId)
+        log.info("Club created from chat: clubId={} chatId={} ownerTelegramId={}", club.id, chatId, fromTelegramId)
+        linkChatToClub(chatId, chatTitle, fromTelegramId, club)
+    }
 
     /**
      * `/start <club_id>` в группе — попытка привязки. Гейт безопасности (решение PO):
@@ -123,6 +184,16 @@ class ChatLinkBotService(
             chatLinkService.releaseKeepingBotInChat(existingForChat)
         }
 
+        linkChatToClub(chatId, chatTitle, fromTelegramId, club)
+    }
+
+    /**
+     * Собственно привязка: строка `club_chat_links`, invite-ссылка, закреп в чате и DM владельцу.
+     * Вызывается из двух мест — привязка к существующему клубу и создание клуба из чата
+     * (`?startgroup=new`), — поэтому все проверки конфликтов остаются у вызывающего.
+     */
+    private fun linkChatToClub(chatId: Long, chatTitle: String?, fromTelegramId: Long, club: Club) {
+        val clubId = club.id
         // Права на момент привязки: если владелец пропустил шаг «сделать админом», бот останется
         // member'ом — фичи в UI покажутся как недоступные, refresh дообогатит после выдачи прав.
         val state = gateway.getBotChatState(chatId)

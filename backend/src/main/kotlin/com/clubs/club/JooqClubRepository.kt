@@ -99,6 +99,32 @@ class JooqClubRepository(
         return mapper.toDomain(record)
     }
 
+    override fun createFromChat(name: String, ownerId: UUID, memberLimit: Int, inviteCode: String): Club {
+        val record = dsl.insertInto(CLUBS)
+            .set(CLUBS.ID, UUID.randomUUID())
+            .set(CLUBS.OWNER_ID, ownerId)
+            .set(CLUBS.NAME, name)
+            // Описание и категорию владелец уточняет в приложении; колонки NOT NULL с V2,
+            // поэтому заполняем пустой строкой и нейтральной категорией, а не NULL.
+            .set(CLUBS.DESCRIPTION, "")
+            .set(CLUBS.CATEGORY, ClubCategory.other)
+            // Клуб чата не показывается в каталоге: посторонним там делать нечего, а согласия
+            // на публикацию своей группы владелец не давал. Выход в каталог — отдельный тумблер.
+            .set(CLUBS.ACCESS_TYPE, AccessType.`private`)
+            // Город спрашивается в приложении после подключения: в чате его взять неоткуда.
+            // Денормализованное `city` держим пустым, пока не выбран город из справочника.
+            .set(CLUBS.CITY, "")
+            .set(CLUBS.CITY_ID, null as UUID?)
+            .set(CLUBS.MEMBER_LIMIT, memberLimit)
+            // Клуб из чата рождается бесплатным — вся машинерия взносов гаснет сама.
+            .set(CLUBS.SUBSCRIPTION_PRICE, 0)
+            .set(CLUBS.INVITE_LINK, inviteCode)
+            .set(CLUBS.IS_ACTIVE, true)
+            .returning()
+            .fetchOne()!!
+        return mapper.toDomain(record)
+    }
+
     override fun findByInviteCode(code: String): Club? =
         dsl.selectFrom(CLUBS)
             .where(CLUBS.INVITE_LINK.eq(code).and(CLUBS.IS_ACTIVE.eq(true)))

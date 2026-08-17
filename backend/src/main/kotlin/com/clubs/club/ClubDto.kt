@@ -136,7 +136,8 @@ data class CreateClubRequest(
     @field:NotNull(message = "Member limit is required")
     // Минимум временно 1 (было 10) — тест заполняемости полного клуба (PO 2026-07-11, club-invites).
     @field:Min(value = 1, message = "Member limit must be at least 1")
-    @field:Max(value = 80, message = "Member limit must be at most 80")
+    // Потолок 500 (V81, было 80): клуб создаётся из телеграм-чата и вмещает всех его участников.
+    @field:Max(value = 500, message = "Member limit must be at most 500")
     val memberLimit: Int,
 
     @field:NotNull(message = "Subscription price is required")
@@ -174,7 +175,8 @@ data class UpdateClubRequest(
 
     // Минимум временно 1 (было 10) — тест заполняемости полного клуба (PO 2026-07-11, club-invites).
     @field:Min(value = 1, message = "Member limit must be at least 1")
-    @field:Max(value = 80, message = "Member limit must be at most 80")
+    // Потолок 500 (V81, было 80): клуб создаётся из телеграм-чата и вмещает всех его участников.
+    @field:Max(value = 500, message = "Member limit must be at most 500")
     val memberLimit: Int? = null,
 
     @field:Min(value = 0, message = "Subscription price must be non-negative")

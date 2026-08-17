@@ -31,6 +31,14 @@ private const val MAX_CLUBS_PER_ORGANIZER = 10
 // Длина генерируемого инвайт-кода (символов)
 private const val INVITE_CODE_LENGTH = 16
 
+// Потолок длины названия клуба (совпадает с VARCHAR(60) в схеме): название чата длиннее — режем
+private const val CLUB_NAME_MAX_LENGTH = 60
+// Имя клуба, когда Telegram не отдал название чата (у групп оно бывает пустым)
+private const val DEFAULT_CHAT_CLUB_NAME = "Клуб из чата"
+// Лимит участников для клуба из чата: ставим потолок (V81), т.к. размер чата заранее неизвестен —
+// Bot API не отдаёт список участников группы, только счётчик
+private const val CHAT_CLUB_MEMBER_LIMIT = 500
+
 // "Принадлежит клубу" для видимости реквизитов СБП — участники, которым может понадобиться
 // платить, + действующий владелец. expired (должник по продлению) — главный кандидат на оплату.
 private val MEMBER_REQUISITE_STATUSES = setOf(
@@ -116,6 +124,40 @@ class ClubService(
             includeRequisites = true,
             interests = interestService.getClubInterests(club.id)
         )
+    }
+
+    /**
+     * Клуб из телеграм-чата (спринт 1.0, разворот на плагин к чату). Формы создания нет:
+     * известно только название чата и тот, кто добавил бота — он и становится владельцем.
+     *
+     * Отличия от [createClub], помимо отсутствия формы:
+     * - город не задан (`city_id IS NULL`) и спрашивается в приложении сразу после подключения;
+     * - клуб бесплатный, поэтому пейволл ёмкости плана не вызывается вовсе;
+     * - доступ `private` — клуб живёт при своём чате, в каталоге посторонним делать нечего.
+     *
+     * Лимит участников выставляется потолком: в чате может быть сколько угодно людей, а узнать
+     * их число заранее нельзя — Bot API не отдаёт список участников группы.
+     */
+    @Transactional
+    fun createClubFromChat(chatTitle: String?, ownerId: UUID): Club {
+        val count = clubRepository.countByOwnerId(ownerId)
+        if (count >= MAX_CLUBS_PER_ORGANIZER) throw ConflictException("Maximum $MAX_CLUBS_PER_ORGANIZER clubs per organizer")
+
+        val name = chatTitle?.trim()?.takeIf { it.isNotEmpty() }?.take(CLUB_NAME_MAX_LENGTH)
+            ?: DEFAULT_CHAT_CLUB_NAME
+        // Приватному клубу код нужен всегда: без него владелец не сможет позвать людей ссылкой.
+        val club = clubRepository.createFromChat(
+            name = name,
+            ownerId = ownerId,
+            memberLimit = CHAT_CLUB_MEMBER_LIMIT,
+            inviteCode = generateInviteCode()
+        )
+        log.info("Club created from chat: id={} name='{}' ownerId={}", club.id, club.name, ownerId)
+
+        // Тот же транзакционный scope, что и вставка клуба: организатор обязан существовать,
+        // иначе клуб останется без владельческого членства (см. createClub).
+        membershipRepository.createOrganizer(ownerId, club.id)
+        return club
     }
 
     fun getClubByInviteCode(code: String): ClubDetailDto {
