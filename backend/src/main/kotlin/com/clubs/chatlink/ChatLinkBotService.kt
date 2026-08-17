@@ -84,7 +84,10 @@ class ChatLinkBotService(
 
         val club = clubService.createClubFromChat(chatTitle, ownerId)
         log.info("Club created from chat: clubId={} chatId={} ownerTelegramId={}", club.id, chatId, fromTelegramId)
-        linkChatToClub(chatId, chatTitle, fromTelegramId, club)
+        // Ссылку в чат НЕ постим: клуб только что родился пустым, и приглашение смотреть на
+        // страницу без описания и обложки потратило бы первое впечатление впустую. Презентует
+        // орг сам, из шита «Пригласить» во вкладке «Участники» (решение PO 2026-08-17).
+        linkChatToClub(chatId, chatTitle, fromTelegramId, club, announceInChat = false)
     }
 
     /**
@@ -192,7 +195,13 @@ class ChatLinkBotService(
      * Вызывается из двух мест — привязка к существующему клубу и создание клуба из чата
      * (`?startgroup=new`), — поэтому все проверки конфликтов остаются у вызывающего.
      */
-    private fun linkChatToClub(chatId: Long, chatTitle: String?, fromTelegramId: Long, club: Club) {
+    private fun linkChatToClub(
+        chatId: Long,
+        chatTitle: String?,
+        fromTelegramId: Long,
+        club: Club,
+        announceInChat: Boolean = true,
+    ) {
         val clubId = club.id
         // Права на момент привязки: если владелец пропустил шаг «сделать админом», бот останется
         // member'ом — фичи в UI покажутся как недоступные, refresh дообогатит после выдачи прав.
@@ -228,8 +237,10 @@ class ChatLinkBotService(
         // 2026-08-15 — раньше сюда прилетали три уведомления подряд). Постим ВСЕГДА, даже без
         // права закреплять: без закрепа сообщение просто остаётся в ленте, а чат не должен
         // оставаться вовсе без следа привязки. Подтверждение привязки уехало в личку владельцу.
-        chatLinkService.postAndPinClubLink(chatId, club.name, clubId)
-            ?.let { chatLinkRepository.updateClubPinMessageId(clubId, it) }
+        if (announceInChat) {
+            chatLinkService.postAndPinClubLink(chatId, club.name, clubId)
+                ?.let { chatLinkRepository.updateClubPinMessageId(clubId, it) }
+        }
         // Слепок «видна ли новичкам история»: при скрытой истории закрепы для них не существуют,
         // и таб «Чат» покажет владельцу подсказку, как это переключить.
         gateway.getChatInfo(chatId)?.let {

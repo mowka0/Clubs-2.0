@@ -4,6 +4,9 @@ import { Spinner } from '@telegram-apps/telegram-ui';
 import { createInviteShare } from '../../api/clubs';
 import { canShareMessage, shareInviteMessage } from '../../telegram/sdk';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useAuthStore } from '../../store/useAuthStore';
+import { useChatLinkStatusQuery, usePinClubLinkMutation } from '../../queries/chatLink';
+import { useClubQuery } from '../../queries/clubs';
 import type { InviteShareDto } from '../../types/api';
 
 interface InviteSheetProps {
@@ -21,6 +24,15 @@ interface InviteSheetProps {
  */
 export const InviteSheet: FC<InviteSheetProps> = ({ clubId, onClose }) => {
   const haptic = useHaptic();
+  const { user } = useAuthStore();
+  const clubQuery = useClubQuery(clubId);
+  const isOwner = !!clubQuery.data && clubQuery.data.ownerId === user?.id;
+  // Статус привязки — эндпоинт владельческий (403 остальным), поэтому запрос только владельцу.
+  const chatLinkQuery = useChatLinkStatusQuery(clubId, { enabled: isOwner });
+  const pinClubLink = usePinClubLinkMutation(clubId);
+  // Показываем, только пока чат клуба ещё не видел: повторный закреп не нужен.
+  const canPublishToChat =
+    isOwner && !!clubQuery.data?.chatLinked && chatLinkQuery.data?.clubLinkPinned === false;
   const [share, setShare] = useState<InviteShareDto | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -120,6 +132,29 @@ export const InviteSheet: FC<InviteSheetProps> = ({ clubId, onClose }) => {
                   </span>
                 </button>
               )}
+              {/* Публикация в чате клуба — только владельцу и только пока чат её не видел.
+                  Автопост при подключении убран: клуб рождается пустым, и приглашение смотреть
+                  на голую страницу тратило бы первое впечатление впустую. Момент презентации
+                  выбирает орг (решение PO 2026-08-17). */}
+              {canPublishToChat && (
+                <button
+                  type="button"
+                  className="rd-inv-opt"
+                  onClick={() => { haptic.impact('medium'); pinClubLink.mutate(); }}
+                  disabled={pinClubLink.isPending}
+                >
+                  <span className="rd-inv-opt-ic" aria-hidden="true">{pinClubLink.isPending ? '⏳' : '📌'}</span>
+                  <span className="rd-inv-opt-txt">
+                    <b>Показать клуб в чате</b>
+                    <span>
+                      {pinClubLink.isError
+                        ? 'Не получилось — проверьте, что бот всё ещё админ чата'
+                        : 'Бот закрепит в чате сообщение со ссылкой — участники увидят клуб'}
+                    </span>
+                  </span>
+                </button>
+              )}
+
               <button type="button" className="rd-inv-opt" onClick={handleCopy}>
                 <span className="rd-inv-opt-ic" aria-hidden="true">🔗</span>
                 <span className="rd-inv-opt-txt">
