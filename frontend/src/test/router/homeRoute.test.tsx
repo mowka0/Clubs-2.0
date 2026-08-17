@@ -10,6 +10,9 @@ vi.mock('../../pages/DiscoveryPage', () => ({
 vi.mock('../../components/Layout', () => ({
   PageFallback: () => <div>загрузка</div>,
 }));
+vi.mock('../../components/ConnectChatScreen', () => ({
+  ConnectChatScreen: () => <div>подключите чат</div>,
+}));
 
 const useMyClubsQueryMock = vi.fn();
 vi.mock('../../queries/clubs', () => ({
@@ -60,10 +63,11 @@ describe('HomeRoute — куда ведёт «/» в чат-модели', () =>
     expect(screen.getByText('мои клубы')).toBeInTheDocument();
   });
 
-  it('клубов нет — временно каталог (до онбординга «подключите чат»)', () => {
+  it('клубов нет — предложение подключить чат, а не каталог чужих клубов', () => {
     useMyClubsQueryMock.mockReturnValue(queryResult({ data: [] }));
     renderHome();
-    expect(screen.getByText('каталог клубов')).toBeInTheDocument();
+    expect(screen.getByText('подключите чат')).toBeInTheDocument();
+    expect(screen.queryByText('каталог клубов')).not.toBeInTheDocument();
   });
 
   it('ошибка загрузки — «Мои клубы» с их экраном ошибки, а не пустой каталог', () => {

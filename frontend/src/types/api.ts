@@ -856,3 +856,8 @@ export interface CityDto {
   /** В городе есть хотя бы один клуб — витрина показывает такие города вместе с featured. */
   hasClubs: boolean;
 }
+
+/** Deep link `t.me/<bot>?startgroup=new` — подключение чата, когда клуба ещё нет. */
+export interface NewClubChatLinkDto {
+  startGroupUrl: string;
+}

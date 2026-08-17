@@ -1,6 +1,7 @@
 import { FC } from 'react';
 import { Navigate } from 'react-router-dom';
 import { DiscoveryPage } from '../pages/DiscoveryPage';
+import { ConnectChatScreen } from './ConnectChatScreen';
 import { PageFallback } from './Layout';
 import { PRODUCT_PROFILE } from '../config/productProfile';
 import { useMyClubsQuery } from '../queries/clubs';
@@ -15,8 +16,8 @@ import { useMyClubsQuery } from '../queries/clubs';
  * - клубы ещё грузятся — спиннер, чтобы не мигнуть каталогом и не увести не туда;
  * - ошибка загрузки — «Мои клубы»: там есть готовый экран ошибки с повтором,
  *   а каталог в этот момент соврал бы, что клубов нет;
- * - ноль клубов — Discovery **временно**, до нормального онбординга «подключите чат»
- *   на Днях 5–6 спринта 1.0 (решение PO 2026-08-16);
+ * - ноль клубов — предложение подключить чат: в чат-модели это и есть начало пути,
+ *   а каталог чужих клубов отвечал бы не на тот вопрос;
  * - ровно один клуб — сразу в него, это типичный случай «один чат = один клуб»;
  * - несколько — список «Мои клубы».
  */
@@ -38,7 +39,7 @@ export const HomeRoute: FC = () => {
   const myClubs = myClubsQuery.data ?? [];
 
   if (myClubs.length === 0) {
-    return <DiscoveryPage />;
+    return <ConnectChatScreen />;
   }
 
   if (myClubs.length === 1) {

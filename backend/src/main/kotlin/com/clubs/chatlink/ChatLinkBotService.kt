@@ -368,5 +368,12 @@ class ChatLinkBotService(
     companion object {
         /** Префикс callback_data кнопки «Отвязать чат» в DM-петле подтверждения (дальше — UUID клуба). */
         const val UNLINK_CALLBACK_PREFIX = "chatlink:unlink:"
+
+        /**
+         * Payload ссылки `?startgroup=<payload>`, означающий «клуба ещё нет, создай его из этого
+         * чата». Не UUID намеренно: ссылка одна на всех и живёт в рекламе, привязать её к
+         * конкретному клубу заранее нельзя.
+         */
+        const val NEW_CLUB_START_PAYLOAD = "new"
     }
 }

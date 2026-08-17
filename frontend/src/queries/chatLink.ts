@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getChatLinkStatus, pinClubLink, refreshChatLink, unlinkChat, updateChatLink } from '../api/chatLink';
+import { getChatLinkStatus, getNewClubChatLinkUrl, pinClubLink, refreshChatLink, unlinkChat, updateChatLink } from '../api/chatLink';
 import type { ChatLinkStatusDto, UpdateChatLinkRequest } from '../types/api';
 import { queryKeys } from './queryKeys';
 
@@ -61,5 +61,17 @@ export function useUnlinkChatMutation(clubId: string) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.clubs.chatLink(clubId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.clubs.detail(clubId) });
     },
+  });
+}
+
+/**
+ * Ссылка «подключить чат» для человека без клуба. Значение не меняется в пределах окружения
+ * (в нём только username бота), поэтому не протухает и не перезапрашивается.
+ */
+export function useNewClubChatLinkQuery() {
+  return useQuery({
+    queryKey: queryKeys.clubs.newClubChatLink(),
+    queryFn: getNewClubChatLinkUrl,
+    staleTime: Infinity,
   });
 }

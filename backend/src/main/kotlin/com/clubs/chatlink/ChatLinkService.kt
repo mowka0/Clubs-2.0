@@ -378,6 +378,15 @@ class ChatLinkService(
     fun startGroupUrl(clubId: UUID): String =
         "https://t.me/$botUsername?startgroup=$clubId&admin=pin_messages+invite_users+restrict_members+manage_tags"
 
+    /**
+     * Ссылка «подключить чат, клуба ещё нет»: payload `new` вместо UUID (см. ClubsBot).
+     * Одна на всех — её же можно давать в рекламе. Права запрашиваем те же, что при обычной
+     * привязке: без них бот в чате наполовину мёртв.
+     */
+    fun newClubStartGroupUrl(): String =
+        "https://t.me/$botUsername?startgroup=${ChatLinkBotService.NEW_CLUB_START_PAYLOAD}" +
+            "&admin=pin_messages+invite_users+restrict_members+manage_tags"
+
     private fun requireOwner(clubId: UUID, callerId: UUID): Club {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
         if (club.ownerId != callerId) throw ForbiddenException("Only the club owner can manage the chat link")

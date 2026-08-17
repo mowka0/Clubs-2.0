@@ -28,10 +28,6 @@ import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
-// Payload ссылки ?startgroup=<payload>, означающий «клуба ещё нет, создай его из этого чата».
-// Не UUID намеренно: ссылка одна на всех и живёт в рекламе, её нельзя привязать к клубу заранее.
-private const val NEW_CLUB_PAYLOAD = "new"
-
 @Component
 class ClubsBot(
     @Value("\${telegram.bot-token}") private val botToken: String,
@@ -150,7 +146,7 @@ class ClubsBot(
         // Точка входа чат-модели: бота добавили ссылкой ?startgroup=new, клуба ещё нет —
         // создаём его из самого чата. Прежний сценарий (payload = UUID существующего клуба)
         // продолжает работать: привязка чата из «Управления клубом» никуда не делась.
-        if (payload == NEW_CLUB_PAYLOAD) {
+        if (payload == ChatLinkBotService.NEW_CLUB_START_PAYLOAD) {
             chatLinkBotService.handleGroupStartNewClub(
                 chatId = message.chatId,
                 chatTitle = message.chat.title,

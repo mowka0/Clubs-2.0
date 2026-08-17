@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import type { ChatLinkStatusDto, UpdateChatLinkRequest } from '../types/api';
+import type { ChatLinkStatusDto, NewClubChatLinkDto, UpdateChatLinkRequest } from '../types/api';
 
 // Владельческий API привязки телеграм-чата (таб «Чат» в «Управлении клубом»).
 // Спека: docs/modules/club-chat-link.md
@@ -25,4 +25,12 @@ export function pinClubLink(clubId: string): Promise<ChatLinkStatusDto> {
 
 export function unlinkChat(clubId: string): Promise<void> {
   return apiClient.delete<void>(`/api/clubs/${clubId}/chat-link`);
+}
+
+/**
+ * Ссылка «подключить чат» для человека без клуба: `t.me/<bot>?startgroup=new`.
+ * Клуб создаётся из самого чата, поэтому clubId в пути нет.
+ */
+export function getNewClubChatLinkUrl(): Promise<NewClubChatLinkDto> {
+  return apiClient.get<NewClubChatLinkDto>('/api/chat-link/new-club-url');
 }
