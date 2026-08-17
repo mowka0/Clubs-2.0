@@ -15,8 +15,13 @@ vi.mock('../../components/ConnectChatScreen', () => ({
 }));
 
 const useMyClubsQueryMock = vi.fn();
+const useClubQueryMock = vi.fn();
 vi.mock('../../queries/clubs', () => ({
   useMyClubsQuery: () => useMyClubsQueryMock(),
+  useClubQuery: () => useClubQueryMock(),
+}));
+vi.mock('../../components/ChatConnectedScreen', () => ({
+  ChatConnectedScreen: () => <div>укажите город</div>,
 }));
 
 import { HomeRoute } from '../../components/HomeRoute';
@@ -38,8 +43,16 @@ function renderHome() {
   );
 }
 
+/** Членство владельца: только менеджер может сохранить город, см. HomeRoute. */
+function ownerMembership(clubId: string) {
+  return { clubId, role: 'organizer', status: 'active' };
+}
+
 beforeEach(() => {
   useMyClubsQueryMock.mockReset();
+  useClubQueryMock.mockReset();
+  // По умолчанию у клуба город уже указан — ветка «спросить город» не срабатывает.
+  useClubQueryMock.mockReturnValue({ isPending: false, data: { id: 'abc-123', cityId: 'city-1' } });
 });
 
 describe('HomeRoute — куда ведёт «/» в чат-модели', () => {
@@ -50,14 +63,14 @@ describe('HomeRoute — куда ведёт «/» в чат-модели', () =>
   });
 
   it('ровно один клуб — сразу в него, без лишнего тапа', () => {
-    useMyClubsQueryMock.mockReturnValue(queryResult({ data: [{ clubId: 'abc-123' }] }));
+    useMyClubsQueryMock.mockReturnValue(queryResult({ data: [ownerMembership('abc-123')] }));
     renderHome();
     expect(screen.getByText('страница клуба')).toBeInTheDocument();
   });
 
   it('несколько клубов — список «Мои клубы»', () => {
     useMyClubsQueryMock.mockReturnValue(
-      queryResult({ data: [{ clubId: 'abc-123' }, { clubId: 'def-456' }] }),
+      queryResult({ data: [ownerMembership('abc-123'), ownerMembership('def-456')] }),
     );
     renderHome();
     expect(screen.getByText('мои клубы')).toBeInTheDocument();
@@ -74,5 +87,21 @@ describe('HomeRoute — куда ведёт «/» в чат-модели', () =>
     useMyClubsQueryMock.mockReturnValue(queryResult({ isError: true, data: undefined }));
     renderHome();
     expect(screen.getByText('мои клубы')).toBeInTheDocument();
+  });
+
+  it('клуб только что создан из чата — сначала спрашиваем город', () => {
+    useMyClubsQueryMock.mockReturnValue(queryResult({ data: [ownerMembership('abc-123')] }));
+    useClubQueryMock.mockReturnValue({ isPending: false, data: { id: 'abc-123', cityId: null } });
+    renderHome();
+    expect(screen.getByText('укажите город')).toBeInTheDocument();
+  });
+
+  it('город не указан, но человек не менеджер — сразу в клуб, а не в тупик с 403', () => {
+    useMyClubsQueryMock.mockReturnValue(
+      queryResult({ data: [{ clubId: 'abc-123', role: 'member', status: 'active' }] }),
+    );
+    useClubQueryMock.mockReturnValue({ isPending: false, data: { id: 'abc-123', cityId: null } });
+    renderHome();
+    expect(screen.getByText('страница клуба')).toBeInTheDocument();
   });
 });

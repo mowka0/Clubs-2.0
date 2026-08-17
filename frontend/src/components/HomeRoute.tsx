@@ -1,10 +1,12 @@
 import { FC } from 'react';
 import { Navigate } from 'react-router-dom';
 import { DiscoveryPage } from '../pages/DiscoveryPage';
+import { ChatConnectedScreen } from './ChatConnectedScreen';
 import { ConnectChatScreen } from './ConnectChatScreen';
 import { PageFallback } from './Layout';
 import { PRODUCT_PROFILE } from '../config/productProfile';
-import { useMyClubsQuery } from '../queries/clubs';
+import { isActiveManagerMembership } from '../utils/membershipRole';
+import { useClubQuery, useMyClubsQuery } from '../queries/clubs';
 
 /**
  * Корневой роут «/». В чат-модели первый экран отвечает на вопрос «что у меня
@@ -24,6 +26,11 @@ import { useMyClubsQuery } from '../queries/clubs';
 export const HomeRoute: FC = () => {
   const myClubsQuery = useMyClubsQuery();
 
+  // Единственный клуб читаем всегда (хук не может стоять после return): у клуба, только что
+  // родившегося из чата, ещё нет города — его спрашивает ChatConnectedScreen.
+  const onlyMembership = myClubsQuery.data?.length === 1 ? myClubsQuery.data[0] : undefined;
+  const onlyClubQuery = useClubQuery(onlyMembership?.clubId);
+
   if (PRODUCT_PROFILE.homeTarget === 'catalog') {
     return <DiscoveryPage />;
   }
@@ -42,8 +49,17 @@ export const HomeRoute: FC = () => {
     return <ConnectChatScreen />;
   }
 
-  if (myClubs.length === 1) {
-    return <Navigate to={`/clubs/${myClubs[0].clubId}`} replace />;
+  if (onlyMembership) {
+    if (onlyClubQuery.isPending) {
+      return <PageFallback />;
+    }
+    const club = onlyClubQuery.data;
+    // Город спрашиваем сразу после подключения чата и только у того, кто может его сохранить:
+    // рядовой участник упёрся бы в 403 и остался на экране без выхода.
+    if (club && club.cityId === null && isActiveManagerMembership(onlyMembership)) {
+      return <ChatConnectedScreen club={club} />;
+    }
+    return <Navigate to={`/clubs/${onlyMembership.clubId}`} replace />;
   }
 
   return <Navigate to="/my-clubs" replace />;
