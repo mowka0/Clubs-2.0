@@ -15,9 +15,9 @@ interface ClubSetupBannerProps {
  * Приглашение наполнить клуб, рождённый из чата, — на его же странице.
  *
  * Мастер человеку не подсовывается: приложение открывается на странице клуба, и он сам решает,
- * когда сесть за описание и обложку (решение PO 2026-08-17). Значит на странице должна быть
- * заметная дверь внутрь, и она обязана помнить, где заполнение прервалось — иначе «продолжить»
- * читалось бы как «начать заново».
+ * когда сесть за описание и обложку (решение PO 2026-08-17). Раз дверь в мастер единственная,
+ * она обязана быть заметной — акцентная рамка со свечением и полоска пройденных шагов. Без
+ * пульсации и мигания: блок не один на странице, а вечная анимация быстро начинает раздражать.
  *
  * Прогресс читается при рендере, а не хранится в состоянии: страница перемонтируется при каждом
  * возврате из мастера, и значение всегда свежее.
@@ -28,18 +28,32 @@ export const ClubSetupBanner: FC<ClubSetupBannerProps> = ({ clubId, onOpen }) =>
   const isStarted = savedStep > 1;
 
   return (
-    <div className="rd-glass rd-empty" style={{ marginBottom: 14 }}>
-      <div className="rd-ttl">Клуб ещё не заполнен</div>
-      <div className="rd-sub">
-        {isStarted
-          ? `Вы остановились на шаге ${savedStep} из ${CLUB_SETUP_TOTAL_STEPS}.`
-          : 'Добавьте город, описание и обложку — участникам будет что смотреть.'}
+    <div className="rd-glass rd-setup-cta">
+      <div className="rd-setup-cta-head">
+        <span className="rd-setup-cta-dot" aria-hidden="true" />
+        Клуб ещё не заполнен
       </div>
+      <p className="rd-setup-cta-sub">
+        {isStarted
+          ? 'Осталось немного — участники увидят страницу такой, какой вы её оставите.'
+          : 'Добавьте город, описание и обложку — участникам будет что смотреть.'}
+      </p>
+
+      {isStarted && (
+        <div className="rd-setup-cta-progress">
+          <div className="rd-setup-cta-bar" aria-hidden="true">
+            {Array.from({ length: CLUB_SETUP_TOTAL_STEPS }, (_, i) => (
+              <span key={i} className={i < savedStep - 1 ? 'rd-setup-cta-seg rd-done' : 'rd-setup-cta-seg'} />
+            ))}
+          </div>
+          <span className="rd-setup-cta-step">Шаг {savedStep} из {CLUB_SETUP_TOTAL_STEPS}</span>
+        </div>
+      )}
+
       <button
         type="button"
-        className="rd-btn-primary"
-        style={{ width: '100%', marginTop: 10 }}
-        onClick={() => { haptic.impact('light'); onOpen(); }}
+        className="rd-btn-primary rd-setup-cta-btn"
+        onClick={() => { haptic.impact('medium'); onOpen(); }}
       >
         {isStarted ? 'Продолжить заполнение' : 'Заполнить клуб'}
       </button>

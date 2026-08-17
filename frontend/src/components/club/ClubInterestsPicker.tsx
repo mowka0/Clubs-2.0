@@ -101,6 +101,13 @@ export const ClubInterestsPicker: FC<ClubInterestsPickerProps> = ({ category, va
             className="rd-input ci-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            // Найденное рисуется ПОД полем, а на телефоне снизу выезжает клавиатура и закрывает
+            // его целиком — со стороны выглядит как «подсказки не работают». Подтягиваем поле к
+            // середине экрана, когда клавиатура уже поднялась (её анимация ~300 мс).
+            onFocus={(e) => {
+              const field = e.currentTarget;
+              setTimeout(() => field.scrollIntoView({ block: 'center', behavior: 'smooth' }), 350);
+            }}
             placeholder="Своей темы нет в списке? Найдите её"
             aria-label="Поиск темы"
             // Темы канонично строчные — глушим клавиатурную заглавную, чтобы ввод выглядел

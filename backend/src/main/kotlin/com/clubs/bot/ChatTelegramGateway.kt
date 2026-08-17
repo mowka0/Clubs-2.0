@@ -11,6 +11,7 @@ import org.telegram.telegrambots.meta.api.methods.groupadministration.CreateChat
 import org.telegram.telegrambots.meta.api.methods.groupadministration.DeclineChatJoinRequest
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember
+import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMemberCount
 import org.telegram.telegrambots.meta.api.methods.groupadministration.LeaveChat
 import org.telegram.telegrambots.meta.api.methods.groupadministration.RestrictChatMember
 import org.telegram.telegrambots.meta.api.methods.groupadministration.RevokeChatInviteLink
@@ -273,6 +274,18 @@ class ChatTelegramGateway(
         null
     }
 
+    /**
+     * Сколько человек в чате — размер клуба, рождающегося из этой группы. Считает вместе с
+     * ботами и самим ботом, поэтому число приблизительное; человек правит его в мастере.
+     * null — Telegram не ответил, вызывающий подставляет свой запасной лимит.
+     */
+    fun getChatMemberCount(chatId: Long): Int? = try {
+        telegramClient.execute(GetChatMemberCount.builder().chatId(chatId).build())
+    } catch (e: Exception) {
+        log.warn("getChatMemberCount failed: chatId={} error={}", chatId, e.message)
+        null
+    }
+
     private fun getChatMember(chatId: Long, userId: Long): ChatMember? = try {
         telegramClient.execute(GetChatMember.builder().chatId(chatId).userId(userId).build())
     } catch (e: Exception) {
@@ -455,6 +468,40 @@ class ChatTelegramGateway(
         true
     } catch (e: Exception) {
         log.warn("sendDmWithCallbackButton failed: telegramId={} error={}", telegramId, e.message)
+        false
+    }
+
+    /**
+     * DM с двумя кнопками: сверху WebApp-переход в приложение, снизу callback-действие.
+     *
+     * Порядок не случаен: подтверждение привязки читают как «готово, что дальше» — дальше идут
+     * в клуб, а «Отвязать чат» здесь запасной выход и стоять первым не должен.
+     */
+    fun sendDmWithWebAppAndCallbackButton(
+        telegramId: Long,
+        text: String,
+        webAppButtonText: String,
+        webAppPath: String,
+        callbackButtonText: String,
+        callbackData: String
+    ): Boolean = try {
+        val webAppButton = InlineKeyboardButton.builder()
+            .text(webAppButtonText)
+            .webApp(WebAppInfo(webAppBaseUrl + webAppPath))
+            .build()
+        val callbackButton = InlineKeyboardButton.builder()
+            .text(callbackButtonText)
+            .callbackData(callbackData)
+            .build()
+        val msg = SendMessage.builder()
+            .chatId(telegramId.toString())
+            .text(text)
+            .replyMarkup(InlineKeyboardMarkup(listOf(InlineKeyboardRow(webAppButton), InlineKeyboardRow(callbackButton))))
+            .build()
+        telegramClient.execute(msg)
+        true
+    } catch (e: Exception) {
+        log.warn("sendDmWithWebAppAndCallbackButton failed: telegramId={} error={}", telegramId, e.message)
         false
     }
 

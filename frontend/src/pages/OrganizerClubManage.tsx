@@ -28,14 +28,16 @@ import { ScreenPreview } from '../components/onboarding/ScreenPreview';
 type TabKey = 'stats' | 'finances' | 'chat' | 'settings';
 
 // Вкладки страницы управления клубом (порядок массива = порядок отображения).
-// «Чат» — привязка телеграм-группы (club-chat-link), решение PO 2026-07-05:
-// итоговые табы Статистика · Финансы · Чат · Настройки. Со-организатору (co-organizers, У-10)
-// таб «Чат» не показывается — GET /chat-link owner-only, таб с гарантированным 403 хуже скрытого.
+// «Чат» — привязка телеграм-группы (club-chat-link), решение PO 2026-07-05.
+// Порядок Настройки · Финансы · Чат · Статистика — решение PO 2026-08-17: в чат-модели сюда
+// заходят настраивать клуб, а статистика оживает только после первых встреч.
+// Со-организатору (co-organizers, У-10) таб «Чат» не показывается — GET /chat-link owner-only,
+// таб с гарантированным 403 хуже скрытого.
 const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
-  { key: 'stats', label: 'Статистика' },
+  { key: 'settings', label: 'Настройки' },
   { key: 'finances', label: 'Финансы' },
   { key: 'chat', label: 'Чат' },
-  { key: 'settings', label: 'Настройки' },
+  { key: 'stats', label: 'Статистика' },
 ];
 
 // Допустимые значения `?tab=` в URL — для валидации deep-link'ов.
@@ -46,12 +48,12 @@ const VALID_TABS = new Set<string>(TABS.map((t) => t.key));
 // docs/modules/applications-inbox.md. Участники теперь живут ТОЛЬКО на странице клуба
 // (вкладка «Участники»), без дубля в «Управлении» — организаторские attention-бакеты
 // переехали туда же (managementView). Legacy deep-link'и на удалённые вкладки
-// откатываются на дефолтную «Статистику», чтобы старые шары/рефреши не отдавали 404.
+// откатываются на дефолтные «Настройки», чтобы старые шары/рефреши не отдавали 404.
 const LEGACY_TAB_KEYS = new Set<string>(['members', 'activities', 'applications', 'events', 'skladchina']);
 
 function resolveInitialTab(raw: string | null): TabKey {
   if (raw && VALID_TABS.has(raw)) return raw as TabKey;
-  return 'stats';
+  return 'settings';
 }
 
 // ---- Вкладка «Финансы» ----
@@ -195,7 +197,7 @@ const SettingsTab: FC<SettingsTabProps> = ({ club, isOwner, onDeleted }) => {
     rules !== (club.rules ?? '') ||
     applicationQuestion !== (club.applicationQuestion ?? '') ||
     // Порядок тем значим (первая = главная), поэтому сравниваем как строку, а не как множество.
-    interests.join(' ') !== (club.interests ?? []).join(' ') ||
+    interests.join('\u0000') !== (club.interests ?? []).join('\u0000') ||
     paymentLink !== (club.paymentLink ?? '') ||
     paymentMethodNote !== (club.paymentMethodNote ?? '') ||
     avatarUrl !== (club.avatarUrl ?? null) ||
@@ -569,15 +571,15 @@ export const OrganizerClubManage: FC = () => {
   const club = clubQuery.data;
 
   // Владелец клуба видит все табы; со-организатору (co-organizers, У-10) таб «Чат» скрыт —
-  // привязка/настройка чата owner-only. Deep-link `?tab=chat` у со-орга откатывается на «Статистику».
+  // привязка/настройка чата owner-only. Deep-link `?tab=chat` у со-орга откатывается на «Настройки».
   const user = useAuthStore((s) => s.user);
   const isOwner = !!club && club.ownerId === user?.id;
   // Таб «Финансы» виден и у бесплатного клуба: бесплатный можно перевести в платный, и путь
   // к этому решению лежит именно отсюда — спрятать таб значило бы спрятать саму возможность.
   // Внутри у бесплатного клуба сцена с лисом и кнопкой в настройки (см. FinancesTab).
   const visibleTabs = TABS.filter((tab) => tab.key !== 'chat' || isOwner);
-  // Недостижимый таб (deep-link `?tab=chat` у со-организатора) откатывается на «Статистику».
-  const effectiveTab: TabKey = visibleTabs.some((t) => t.key === activeTab) ? activeTab : 'stats';
+  // Недостижимый таб (deep-link `?tab=chat` у со-организатора) откатывается на первый видимый.
+  const effectiveTab: TabKey = visibleTabs.some((t) => t.key === activeTab) ? activeTab : 'settings';
 
   const handleTabChange = (key: TabKey) => {
     if (key === effectiveTab) return;

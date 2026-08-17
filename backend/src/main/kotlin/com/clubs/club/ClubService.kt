@@ -35,9 +35,12 @@ private const val INVITE_CODE_LENGTH = 16
 private const val CLUB_NAME_MAX_LENGTH = 60
 // Имя клуба, когда Telegram не отдал название чата (у групп оно бывает пустым)
 private const val DEFAULT_CHAT_CLUB_NAME = "Клуб из чата"
-// Лимит участников для клуба из чата: ставим потолок (V81), т.к. размер чата заранее неизвестен —
-// Bot API не отдаёт список участников группы, только счётчик
-private const val CHAT_CLUB_MEMBER_LIMIT = 500
+// Запасной лимит участников для клуба из чата, когда Telegram не ответил на getChatMemberCount:
+// ставим потолок (V81), чтобы никто не упёрся в лимит на ровном месте
+private const val CHAT_CLUB_FALLBACK_MEMBER_LIMIT = 500
+// Границы лимита участников — те же, что в CHECK-констрейнте схемы (V81) и в валидации DTO
+private const val MEMBER_LIMIT_MIN = 1
+private const val MEMBER_LIMIT_MAX = 500
 
 // "Принадлежит клубу" для видимости реквизитов СБП — участники, которым может понадобиться
 // платить, + действующий владелец. expired (должник по продлению) — главный кандидат на оплату.
@@ -135,11 +138,12 @@ class ClubService(
      * - клуб бесплатный, поэтому пейволл ёмкости плана не вызывается вовсе;
      * - доступ `private` — клуб живёт при своём чате, в каталоге посторонним делать нечего.
      *
-     * Лимит участников выставляется потолком: в чате может быть сколько угодно людей, а узнать
-     * их число заранее нельзя — Bot API не отдаёт список участников группы.
+     * Лимит участников берётся из размера самого чата ([chatMemberCount]): клуб обязан вместить
+     * тех, кто уже в группе. Число приблизительное (Telegram считает вместе с ботами), поэтому
+     * человек правит его в мастере наполнения.
      */
     @Transactional
-    fun createClubFromChat(chatTitle: String?, ownerId: UUID): Club {
+    fun createClubFromChat(chatTitle: String?, ownerId: UUID, chatMemberCount: Int?): Club {
         val count = clubRepository.countByOwnerId(ownerId)
         if (count >= MAX_CLUBS_PER_ORGANIZER) throw ConflictException("Maximum $MAX_CLUBS_PER_ORGANIZER clubs per organizer")
 
@@ -149,7 +153,8 @@ class ClubService(
         val club = clubRepository.createFromChat(
             name = name,
             ownerId = ownerId,
-            memberLimit = CHAT_CLUB_MEMBER_LIMIT,
+            memberLimit = chatMemberCount?.coerceIn(MEMBER_LIMIT_MIN, MEMBER_LIMIT_MAX)
+                ?: CHAT_CLUB_FALLBACK_MEMBER_LIMIT,
             inviteCode = generateInviteCode()
         )
         log.info("Club created from chat: id={} name='{}' ownerId={}", club.id, club.name, ownerId)

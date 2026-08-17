@@ -18,6 +18,9 @@ import type { CityDto } from '../types/api';
 const NAME_MAX = 60;
 /** Потолок описания, совпадает с VARCHAR(500). */
 const DESCRIPTION_MAX = 500;
+/** Границы размера клуба — те же, что в CHECK-констрейнте схемы (V81) и в валидации DTO. */
+const MEMBER_LIMIT_MIN = 1;
+const MEMBER_LIMIT_MAX = 500;
 
 /**
  * Наполнение клуба, рождённого из чата, — перед тем как показать его участникам.
@@ -59,6 +62,7 @@ export const ClubSetupWizard: FC = () => {
   const [city, setCity] = useState<CityDto | null>(null);
   const [description, setDescription] = useState<string | null>(null);
   const [interests, setInterests] = useState<string[] | null>(null);
+  const [memberLimit, setMemberLimit] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // Вернулся в приложение — продолжает с того шага, где остановился. URL при новом запуске
@@ -81,6 +85,14 @@ export const ClubSetupWizard: FC = () => {
   const descriptionValue = description ?? club.description;
   const interestsValue = interests ?? club.interests;
   const cityLabel = city?.name ?? (club.cityId ? club.city : null);
+  const memberLimitValue = memberLimit ?? String(club.memberLimit);
+  // null = введено не число или значение вне границ схемы: кнопка «Дальше» тогда заблокирована,
+  // и мы не отправляем заведомо отбиваемый бэком PATCH.
+  const memberLimitNumber = /^\d+$/.test(memberLimitValue.trim())
+    ? Number(memberLimitValue) >= MEMBER_LIMIT_MIN && Number(memberLimitValue) <= MEMBER_LIMIT_MAX
+      ? Number(memberLimitValue)
+      : null
+    : null;
   // Мастер пройден — прогресс стираем, иначе кнопка на странице клуба вечно звала бы
   // «продолжить» с последнего шага.
   const finish = () => {
@@ -137,11 +149,29 @@ export const ClubSetupWizard: FC = () => {
             <span className="rd-wz-hint">Кружок клуба. Видно в списках и в шапке.</span>
           </div>
 
+          {/* Размер подставлен из чата (getChatMemberCount при рождении клуба) — Telegram считает
+              вместе с ботами, поэтому число приблизительное и правится руками. */}
+          <div className="rd-wz-lbl">Сколько человек в клубе</div>
+          <input
+            className="rd-input"
+            type="number"
+            inputMode="numeric"
+            min={MEMBER_LIMIT_MIN}
+            max={MEMBER_LIMIT_MAX}
+            value={memberLimitValue}
+            onChange={(e) => setMemberLimit(e.target.value)}
+            aria-label="Размер клуба"
+          />
+          <span className="rd-wz-hint">Взяли из чата. Потолок — {MEMBER_LIMIT_MAX}, потом можно поменять.</span>
+
           <button
             type="button"
             className="rd-btn-primary rd-wz-next"
-            disabled={!nameValue.trim() || updateClub.isPending}
-            onClick={() => saveAndNext({ name: nameValue.trim() }, 2)}
+            disabled={!nameValue.trim() || memberLimitNumber === null || updateClub.isPending}
+            onClick={() =>
+              memberLimitNumber !== null &&
+              saveAndNext({ name: nameValue.trim(), memberLimit: memberLimitNumber }, 2)
+            }
           >
             Дальше
           </button>

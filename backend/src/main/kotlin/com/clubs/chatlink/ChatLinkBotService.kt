@@ -82,7 +82,9 @@ class ChatLinkBotService(
             chatLinkService.releaseKeepingBotInChat(existingForChat)
         }
 
-        val club = clubService.createClubFromChat(chatTitle, ownerId)
+        // Размер клуба = размер чата: он должен вместить тех, кто уже в группе. Telegram может
+        // не ответить — тогда сервис ставит запасной потолок, а человек правит в мастере.
+        val club = clubService.createClubFromChat(chatTitle, ownerId, gateway.getChatMemberCount(chatId))
         log.info("Club created from chat: clubId={} chatId={} ownerTelegramId={}", club.id, chatId, fromTelegramId)
         // Ссылку в чат НЕ постим: клуб только что родился пустым, и приглашение смотреть на
         // страницу без описания и обложки потратило бы первое впечатление впустую. Презентует
@@ -144,12 +146,7 @@ class ChatLinkBotService(
                     nowCanInvite = state.canInviteUsers
                 )
             }
-            gateway.sendDmWithCallbackButton(
-                telegramId = fromTelegramId,
-                text = linkedMessage(chatTitle, club.name),
-                buttonText = "Отвязать чат",
-                callbackData = "$UNLINK_CALLBACK_PREFIX$clubId"
-            )
+            sendLinkedDm(fromTelegramId, chatTitle, club.name, clubId)
             return
         }
         if (existingForClub != null) {
@@ -249,12 +246,7 @@ class ChatLinkBotService(
         // Личка владельцу — одно сообщение на две задачи: подтверждение привязки (раньше висело
         // отдельным постом В ЧАТЕ) и петля безопасности «это были вы?», из-за которой
         // фишинг-привязка мгновенно видна и обратима.
-        gateway.sendDmWithCallbackButton(
-            telegramId = fromTelegramId,
-            text = linkedMessage(chatTitle, club.name),
-            buttonText = "Отвязать чат",
-            callbackData = "$UNLINK_CALLBACK_PREFIX$clubId"
-        )
+        sendLinkedDm(fromTelegramId, chatTitle, club.name, clubId)
     }
 
     /**
@@ -347,6 +339,21 @@ class ChatLinkBotService(
         "✅ Чат «${chatTitle ?: "без названия"}» привязан к клубу «$clubName».\n" +
             "Управление — в приложении Clubs, вкладка «Чат».\n\n" +
             "Это были вы? Если нет — отвяжите чат кнопкой ниже."
+
+    /**
+     * Подтверждение привязки в личку владельцу: сверху вход в клуб, снизу петля безопасности
+     * «это были вы?». Один текст на оба вызова — первую привязку и повторное добавление бота.
+     */
+    private fun sendLinkedDm(telegramId: Long, chatTitle: String?, clubName: String, clubId: UUID) {
+        gateway.sendDmWithWebAppAndCallbackButton(
+            telegramId = telegramId,
+            text = linkedMessage(chatTitle, clubName),
+            webAppButtonText = "Перейти в клуб",
+            webAppPath = "/clubs/$clubId",
+            callbackButtonText = "Отвязать чат",
+            callbackData = "$UNLINK_CALLBACK_PREFIX$clubId"
+        )
+    }
 
     // Deep link Main Mini App на страницу клуба (DeepLinkHandler фронта парсит club_<uuid>).
     // url-кнопка, не WebApp: WebApp-кнопки в группах запрещены Telegram (рамка слайса 3).

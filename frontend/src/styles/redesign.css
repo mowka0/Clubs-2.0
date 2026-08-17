@@ -3271,6 +3271,51 @@
   font-size: 13px; color: var(--text-dim);
 }
 
+/* ---- Приглашение наполнить клуб из чата (ClubSetupBanner) ---- */
+/* Единственная дверь в мастер наполнения, поэтому блок выделен из общего ряда карточек:
+   акцентная рамка, тёплое свечение и полоса-маркер слева. Выравнивание — по левому краю,
+   как у всей страницы клуба: центрированное пустое состояние (.rd-empty) здесь выглядело
+   инородно (правка PO 2026-08-17). */
+.rd-setup-cta {
+  position: relative;
+  overflow: hidden;
+  padding: 15px 16px 16px 18px;
+  margin-bottom: 14px;
+  border: 1px solid var(--accent-soft);
+  box-shadow: 0 10px 26px -12px var(--accent-shadow);
+}
+/* Полоса-маркер: тот же приём, что у акцентных блоков внимания, но тоньше — блок и так
+   выделен рамкой, а широкая заливка на пустой странице кричала бы. */
+.rd-setup-cta::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--accent-grad);
+}
+.rd-setup-cta-head {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 15px; font-weight: 700; color: var(--text);
+}
+.rd-setup-cta-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  flex-shrink: 0;
+}
+.rd-setup-cta-sub {
+  font-size: 13px; color: var(--text-dim); line-height: 1.5;
+  margin: 7px 0 0;
+}
+/* Полоска шагов повторяет шкалу самого мастера — человек видит ту же меру прогресса
+   до входа и внутри. */
+.rd-setup-cta-progress { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.rd-setup-cta-bar { display: flex; gap: 4px; flex: 1; }
+.rd-setup-cta-seg { height: 3px; border-radius: 2px; flex: 1; background: var(--hairline-2); }
+.rd-setup-cta-seg.rd-done { background: var(--accent); }
+.rd-setup-cta-step { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+.rd-setup-cta-btn { width: 100%; margin-top: 13px; }
+
 /* ---- Мастер наполнения клуба из чата (ClubSetupWizard) ---- */
 /* Разметка следует docs/design/club-from-chat/mockups/02-club-setup-wizard.html:
    один вопрос на экран, капс-метки над полями, финальный шаг с превью страницы. */
