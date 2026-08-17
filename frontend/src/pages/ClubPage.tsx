@@ -25,6 +25,7 @@ import { ClubCoverButton } from '../components/club/ClubCoverButton';
 import { ClubIdentityHeader } from '../components/club/ClubIdentityHeader';
 import { ClubLockedNotice } from '../components/club/ClubLockedNotice';
 import { ClubChatConnectBanner } from '../components/club/ClubChatConnectBanner';
+import { ClubCityPrompt } from '../components/club/ClubCityPrompt';
 import { ClubEventsTeaser } from '../components/club/ClubEventsTeaser';
 import { WelcomeScene, memberCountCaption } from '../components/onboarding/WelcomeScene';
 import { useCompleteTourMutation } from '../queries/profile';
@@ -504,6 +505,11 @@ export const ClubPage: FC = () => {
         // ключ гарантирует свежее состояние скрытия для каждого клуба.
         <ClubChatConnectBanner key={club.id} clubId={club.id} />
       )}
+
+      {/* Клуб родился из чата и города ещё не знает. Карточка стоит здесь, потому что в новый
+          клуб есть вторая дверь — кнопка из закрепа в самом чате, минующая корневой экран:
+          через неё человек видел голую страницу без единой подсказки, что делать дальше. */}
+      {isManager && club.cityId === null && <ClubCityPrompt club={club} />}
 
       {/* О клубе — описание, правила и вход в чат одним блоком (решение PO 2026-07-30):
           отдельные секции «Правила» и широкая кнопка чата упразднены. */}
