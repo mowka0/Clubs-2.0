@@ -46,7 +46,9 @@ export const ClubSetupBanner: FC<ClubSetupBannerProps> = ({ clubId, onOpen }) =>
               <span key={i} className={i < savedStep - 1 ? 'rd-setup-cta-seg rd-done' : 'rd-setup-cta-seg'} />
             ))}
           </div>
-          <span className="rd-setup-cta-step">Шаг {savedStep} из {CLUB_SETUP_TOTAL_STEPS}</span>
+          {/* Без «из N»: последний шаг (права бота) появляется не всегда, и общее число шагов
+              знает только сам мастер — здесь оно бы врало. */}
+          <span className="rd-setup-cta-step">Шаг {savedStep}</span>
         </div>
       )}
 

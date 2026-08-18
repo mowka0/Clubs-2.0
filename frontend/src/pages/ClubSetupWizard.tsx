@@ -1,15 +1,17 @@
-import { FC, useEffect, useState } from 'react';
+import { FC, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { CityPicker } from '../components/CityPicker';
 import { ClubAvatarButton } from '../components/club/ClubAvatarButton';
 import { ClubCoverButton } from '../components/club/ClubCoverButton';
 import { ClubInterestsPicker } from '../components/club/ClubInterestsPicker';
-import { BotRightsStep } from '../components/club/BotRightsStep';
+import { BotRightsStep, hasAllBotRights } from '../components/club/BotRightsStep';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
+import { useChatLinkStatusQuery } from '../queries/chatLink';
 import { useClubQuery, useUpdateClubMutation } from '../queries/clubs';
 import {
-  CLUB_SETUP_TOTAL_STEPS as TOTAL_STEPS,
+  CLUB_SETUP_TOTAL_STEPS,
+  CLUB_SETUP_STEPS_WITHOUT_RIGHTS,
   clearClubSetupProgress,
   readClubSetupStep,
   saveClubSetupStep,
@@ -53,6 +55,9 @@ export const ClubSetupWizard: FC = () => {
   const haptic = useHaptic();
   const clubQuery = useClubQuery(id);
   const updateClub = useUpdateClubMutation();
+  // Права бота Telegram выдаёт прямо при добавлении по ссылке, поэтому шаг про них нужен не
+  // всегда: он появляется, только если чего-то не хватает (правка PO 2026-08-18).
+  const chatLinkQuery = useChatLinkStatusQuery(id, { enabled: Boolean(id) });
   // До ранних return: количество хуков в рендере меняться не должно.
   useBackButton(true);
 
@@ -62,7 +67,11 @@ export const ClubSetupWizard: FC = () => {
   // отдельной навигации внутри компонента.
   const [searchParams, setSearchParams] = useSearchParams();
   const stepParam = Number(searchParams.get('step'));
-  const urlStep = Number.isInteger(stepParam) && stepParam >= 1 && stepParam <= TOTAL_STEPS ? stepParam : 1;
+  const chatStatus = chatLinkQuery.data;
+  // Пока статус едет, считаем шаг прав нужным: ошибиться в эту сторону безопаснее — шкала не
+  // прыгнет назад, а лишний шаг человек закроет одной кнопкой «Готово».
+  const totalSteps = chatStatus && hasAllBotRights(chatStatus) ? CLUB_SETUP_STEPS_WITHOUT_RIGHTS : CLUB_SETUP_TOTAL_STEPS;
+  const urlStep = Number.isInteger(stepParam) && stepParam >= 1 && stepParam <= totalSteps ? stepParam : 1;
   const [name, setName] = useState<string | null>(null);
   const [city, setCity] = useState<CityDto | null>(null);
   const [description, setDescription] = useState<string | null>(null);
@@ -71,10 +80,17 @@ export const ClubSetupWizard: FC = () => {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // Вернулся в приложение — продолжает с того шага, где остановился. URL при новом запуске
-  // пустой, поэтому прогресс держим в localStorage и подставляем один раз, replace'ом:
-  // в историю такой шаг попасть не должен, иначе «назад» уводило бы на него же.
+  // пустой, поэтому прогресс держим в localStorage и подставляем replace'ом: в историю такой
+  // шаг попасть не должен, иначе «назад» уводило бы на него же.
+  //
+  // Ровно один раз за открытие мастера (флаг в ref): у первого шага в URL нет `step`, и без
+  // флага возврат на него тут же подменялся сохранённым шагом — «назад» с первого шага не
+  // работал вовсе (баг PO 2026-08-18).
+  const progressRestored = useRef(false);
   useEffect(() => {
-    if (!id || searchParams.get('step')) return;
+    if (progressRestored.current || !id) return;
+    progressRestored.current = true;
+    if (searchParams.get('step')) return;
     const saved = readClubSetupStep(id);
     if (saved > 1) setSearchParams({ step: String(saved) }, { replace: true });
   }, [id, searchParams, setSearchParams]);
@@ -125,14 +141,14 @@ export const ClubSetupWizard: FC = () => {
   return (
     <div className="rd-page rd-wz">
       <div className="rd-wz-bar">
-        {Array.from({ length: TOTAL_STEPS }, (_, i) => (
+        {Array.from({ length: totalSteps }, (_, i) => (
           <span
             key={i}
             className={i + 1 === step ? 'rd-wz-seg rd-on' : i + 1 < step ? 'rd-wz-seg rd-done' : 'rd-wz-seg'}
           />
         ))}
       </div>
-      <div className="rd-wz-cap">Шаг {step} из {TOTAL_STEPS}</div>
+      <div className="rd-wz-cap">Шаг {step} из {totalSteps}</div>
 
       {step === 1 && (
         <>
@@ -290,10 +306,19 @@ export const ClubSetupWizard: FC = () => {
             </div>
           </div>
 
-          <button type="button" className="rd-btn-primary rd-wz-next" onClick={() => setStep(5)}>
-            Дальше
+          {/* Права уже выданы при добавлении бота — четвёртый шаг последний. */}
+          <button
+            type="button"
+            className="rd-btn-primary rd-wz-next"
+            onClick={() => (totalSteps === CLUB_SETUP_TOTAL_STEPS ? setStep(5) : finish())}
+          >
+            {totalSteps === CLUB_SETUP_TOTAL_STEPS ? 'Дальше' : 'Готово'}
           </button>
-          <button type="button" className="rd-ghost-btn rd-wz-skip" onClick={() => setStep(5)}>
+          <button
+            type="button"
+            className="rd-ghost-btn rd-wz-skip"
+            onClick={() => (totalSteps === CLUB_SETUP_TOTAL_STEPS ? setStep(5) : finish())}
+          >
             Пропустить обложку
           </button>
         </>

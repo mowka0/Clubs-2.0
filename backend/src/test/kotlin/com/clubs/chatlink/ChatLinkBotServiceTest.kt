@@ -287,8 +287,10 @@ class ChatLinkBotServiceTest {
     }
 
     @Test
-    fun `повторный старт в том же чате - идемпотентно, подтверждение в личку, чат не трогаем`() {
-        // Реестр багов №3: «уже привязан» сбивал с толку после кика бота.
+    fun `повторный старт в том же чате - идемпотентно и молча`() {
+        // Привязка не менялась, а это событие приходит на каждое техническое переприглашение
+        // бота (выдача прав, второй апдейт вслед за my_chat_member) — владелец получал дубль
+        // «чат привязан» (баг PO 2026-08-18). Состояние он видит в приложении.
         val own = chatLinkFixture(clubId = clubId, chatId = chatId, doorInviteLink = "https://t.me/+alive")
         every { chatLinkRepository.findByClubId(clubId) } returns own
         // В реальной БД по этому chat_id лежит собственная строка клуба — стаб это отражает.
@@ -300,17 +302,8 @@ class ChatLinkBotServiceTest {
 
         verify(exactly = 0) { chatLinkRepository.insert(any()) }
         verify(exactly = 0) { gateway.leaveChat(any()) }
-        // Подтверждение — владельцу в личку: участникам группы оно не адресовано (PO 2026-08-15)
-        verify {
-            gateway.sendDmWithWebAppAndCallbackButton(
-                telegramId = ownerTelegramId,
-                text = match { it.contains("привязан к клубу") },
-                webAppButtonText = any(),
-                webAppPath = "/clubs/$clubId",
-                callbackButtonText = any(),
-                callbackData = "chatlink:unlink:$clubId"
-            )
-        }
+        // Ни одного сообщения: ни подтверждения в личку, ни чего-либо в группу.
+        verify(exactly = 0) { gateway.sendDmWithWebAppAndCallbackButton(any(), any(), any(), any(), any(), any()) }
         // В сам чат при повторном /start не летит ничего: закреп со ссылкой там уже висит
         verify(exactly = 0) { chatLinkService.postAndPinClubLink(any(), any(), any()) }
         verify(exactly = 0) { gateway.sendDm(any(), any()) }

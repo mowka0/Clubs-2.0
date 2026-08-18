@@ -199,12 +199,9 @@ class ChatLinkBotService(
 
         val existingForClub = chatLinkRepository.findByClubId(clubId)
         if (existingForClub != null && existingForClub.chatId == chatId) {
-            // Повторное добавление в тот же чат (типовой случай — бота кикнули и вернули кнопкой
-            // «Привязать бота заново»): идемпотентно освежаем права и при необходимости
-            // пересоздаём invite-ссылку. Подтверждение — ТО ЖЕ, что при первой привязке
-            // (реестр багов №3: «уже привязан» сбивал с толку, когда бот фактически отсутствовал),
-            // и уходит владельцу в личку, а не в чат: участникам группы это сообщение не адресовано
-            // (решение PO 2026-08-15). Закреп со ссылкой на клуб не переспамливаем — он уже висит.
+            // Повторное добавление в тот же чат: бота кикнули и вернули, выдали права, тапнули
+            // по ссылке ещё раз. Идемпотентно освежаем права и при необходимости пересоздаём
+            // invite-ссылку. Закреп со ссылкой на клуб не переспамливаем — он уже висит.
             val state = gateway.getBotChatState(chatId)
             if (state != null) {
                 chatLinkRepository.updateBotState(
@@ -221,10 +218,11 @@ class ChatLinkBotService(
                     nowCanInvite = state.canInviteUsers
                 )
             }
-            sendLinkedDm(
-                fromTelegramId, chatTitle, club.name, clubId,
-                botHasAdminRights = state?.statusLiteral?.let { BotChatStatus.fromTelegramStatus(it) } == BotChatStatus.ADMINISTRATOR
-            )
+            // Подтверждение НЕ шлём: привязка не менялась, а это событие приходит на каждое
+            // техническое переприглашение бота — выдача прав, повторный тап по ссылке, второй
+            // апдейт вслед за my_chat_member. Владелец получал дубль «чат привязан» (баг PO
+            // 2026-08-18). Состояние бота он видит в приложении: таб «Чат» и шаг мастера.
+            log.info("Chat re-link is a no-op, staying silent: clubId={} chatId={}", clubId, chatId)
             return
         }
         if (existingForClub != null) {

@@ -1,6 +1,7 @@
 import { FC, useState } from 'react';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useChatLinkStatusQuery, useStartChatLinkingMutation } from '../../queries/chatLink';
+import type { ChatLinkStatusDto } from '../../types/api';
 
 interface BotRightsStepProps {
   clubId: string;
@@ -9,7 +10,7 @@ interface BotRightsStepProps {
 }
 
 /** Права, без которых бот в чате наполовину мёртв, — те же, что запрашивает ссылка привязки. */
-const REQUIRED_RIGHTS: ReadonlyArray<{ key: 'canPinMessages' | 'canInviteUsers' | 'canRestrictMembers' | 'canManageTags'; label: string }> = [
+export const REQUIRED_RIGHTS: ReadonlyArray<{ key: 'canPinMessages' | 'canInviteUsers' | 'canRestrictMembers' | 'canManageTags'; label: string }> = [
   { key: 'canPinMessages', label: 'Закреплять сообщения — живой статус встречи в шапке чата' },
   { key: 'canInviteUsers', label: 'Приглашать участников — вход в чат по заявке из приложения' },
   { key: 'canRestrictMembers', label: 'Ограничивать участников — строгий режим и возврат ушедших' },
@@ -28,6 +29,15 @@ const REQUIRED_RIGHTS: ReadonlyArray<{ key: 'canPinMessages' | 'canInviteUsers' 
  * Не админ группы — ссылку можно скопировать и отдать тому, кто админ: право выдаёт только он,
  * сам себя бот повысить не может.
  */
+/**
+ * Все ли права у бота уже есть. По этому же признаку мастер решает, показывать ли шаг: при
+ * добавлении по ссылке `?startgroup=…&admin=…` Telegram выдаёт права сразу, и просить их
+ * второй раз незачем (правка PO 2026-08-18).
+ */
+export function hasAllBotRights(status: ChatLinkStatusDto): boolean {
+  return REQUIRED_RIGHTS.every((right) => status[right.key]);
+}
+
 export const BotRightsStep: FC<BotRightsStepProps> = ({ clubId, onFinish }) => {
   const haptic = useHaptic();
   const statusQuery = useChatLinkStatusQuery(clubId);
@@ -35,8 +45,7 @@ export const BotRightsStep: FC<BotRightsStepProps> = ({ clubId, onFinish }) => {
   const [copied, setCopied] = useState(false);
 
   const status = statusQuery.data;
-  const missing = status ? REQUIRED_RIGHTS.filter((right) => !status[right.key]) : [];
-  const allGranted = !!status && missing.length === 0;
+  const allGranted = !!status && hasAllBotRights(status);
 
   const copyLink = async () => {
     if (!status?.startGroupUrl) return;
