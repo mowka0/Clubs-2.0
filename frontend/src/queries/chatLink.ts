@@ -87,9 +87,14 @@ export function useUnlinkChatMutation(clubId: string) {
 export function useStartChatLinkingMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ clubId, startGroupUrl }: { clubId: string | null; startGroupUrl: string }) => {
+    mutationFn: async ({ clubId, startGroupUrl, grantRightsOnly = false }: {
+      clubId: string | null;
+      startGroupUrl: string;
+      /** Чат уже привязан, идём только за правами бота — привязку заново не делаем. */
+      grantRightsOnly?: boolean;
+    }) => {
       try {
-        await rememberChatLinkIntent(clubId);
+        await rememberChatLinkIntent(clubId, grantRightsOnly);
       } catch (e) {
         if (clubId !== null) throw e;
       }

@@ -39,6 +39,14 @@ class ChatLinkIntentStore(
 
         /** Привязать чат к уже существующему клубу. */
         data class LinkExistingClub(val clubId: UUID) : Intent
+
+        /**
+         * Человек пошёл ВЫДАВАТЬ права боту, который уже сидит в этом чате (последний шаг
+         * мастера). Telegram делает это переприглашением: бот выходит и тут же входит обратно,
+         * и по событиям это неотличимо от нового добавления. Без отдельного намерения владелец
+         * получал второе «чат привязан» на каждую выдачу прав (баг staging 2026-08-18).
+         */
+        data class GrantRights(val clubId: UUID) : Intent
     }
 
     fun remember(telegramId: Long, intent: Intent) {
@@ -46,6 +54,7 @@ class ChatLinkIntentStore(
         val value = when (intent) {
             is Intent.NewClub -> NEW_CLUB_VALUE
             is Intent.LinkExistingClub -> intent.clubId.toString()
+            is Intent.GrantRights -> "$GRANT_RIGHTS_PREFIX${intent.clubId}"
         }
         runCatching { storage.opsForValue().set(key(telegramId), value, TTL) }
             .onFailure { log.warn("Chat-link intent not saved: telegramId={} error={}", telegramId, it.message) }
@@ -64,6 +73,10 @@ class ChatLinkIntentStore(
             .onFailure { log.warn("Chat-link intent not read: telegramId={} error={}", telegramId, it.message) }
             .getOrNull() ?: return null
         if (raw == NEW_CLUB_VALUE) return Intent.NewClub
+        if (raw.startsWith(GRANT_RIGHTS_PREFIX)) {
+            val clubId = runCatching { UUID.fromString(raw.removePrefix(GRANT_RIGHTS_PREFIX)) }.getOrNull()
+            return clubId?.let { Intent.GrantRights(it) }
+        }
         return runCatching { Intent.LinkExistingClub(UUID.fromString(raw)) }.getOrNull()
     }
 
@@ -75,6 +88,9 @@ class ChatLinkIntentStore(
 
         /** Значение намерения «клуба ещё нет». UUID клуба в этом месте невозможен, коллизии нет. */
         private const val NEW_CLUB_VALUE = "new"
+
+        /** Префикс намерения «иду выдавать права»: дальше UUID клуба. С UUID не пересекается. */
+        private const val GRANT_RIGHTS_PREFIX = "rights:"
 
         /**
          * Сколько живёт намерение. Пятнадцати минут хватает на выбор группы и экран прав даже с

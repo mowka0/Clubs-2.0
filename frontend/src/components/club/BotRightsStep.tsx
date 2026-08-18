@@ -81,7 +81,7 @@ export const BotRightsStep: FC<BotRightsStepProps> = ({ clubId, onFinish }) => {
                 disabled={startLinking.isPending}
                 onClick={() => {
                   haptic.impact('medium');
-                  startLinking.mutate({ clubId, startGroupUrl: status.startGroupUrl });
+                  startLinking.mutate({ clubId, startGroupUrl: status.startGroupUrl, grantRightsOnly: true });
                 }}
               >
                 Выдать права
@@ -90,7 +90,9 @@ export const BotRightsStep: FC<BotRightsStepProps> = ({ clubId, onFinish }) => {
                 {copied ? 'Ссылка скопирована' : 'Скопировать ссылку для админа'}
               </button>
               <div className="rd-wz-note">
-                Права выдаёт администратор группы. Если это не вы — отправьте ему ссылку.
+                Telegram попросит выбрать ту же группу — бот на секунду выйдет и вернётся уже с
+                правами. Выдать их может только администратор группы: если это не вы, отправьте
+                ему ссылку.
               </div>
             </>
           )}

@@ -58,10 +58,42 @@ class ChatLinkBotService(
     @Transactional
     fun handleBotAddedToChat(chatId: Long, chatTitle: String?, fromTelegramId: Long) {
         when (val intent = intentStore.consume(fromTelegramId)) {
+            is ChatLinkIntentStore.Intent.GrantRights -> refreshRightsAfterGrant(chatId, intent.clubId)
             is ChatLinkIntentStore.Intent.LinkExistingClub ->
                 handleGroupStart(chatId, chatTitle, fromTelegramId, intent.clubId)
             else -> handleGroupStartNewClub(chatId, chatTitle, fromTelegramId)
         }
+    }
+
+    /**
+     * Человек выдал боту права на последнем шаге мастера. Telegram делает это переприглашением
+     * — бот выходит и тут же входит обратно, — поэтому событие приходит как «бота добавили».
+     * Привязка при этом не менялась: перечитываем права и молчим, иначе владелец получал бы
+     * второе «чат привязан» на каждую выдачу прав (баг staging 2026-08-18).
+     */
+    private fun refreshRightsAfterGrant(chatId: Long, clubId: UUID) {
+        val link = chatLinkRepository.findByClubId(clubId)
+        if (link == null || link.chatId != chatId) {
+            // Выбрали не ту группу — это уже не выдача прав, а попытка привязки другого чата.
+            log.warn("Grant-rights intent hit a foreign chat: clubId={} intentChatId={} linkedChatId={}", clubId, chatId, link?.chatId)
+            return
+        }
+        val state = gateway.getBotChatState(chatId) ?: return
+        val status = BotChatStatus.fromTelegramStatus(state.statusLiteral)
+        chatLinkRepository.updateBotState(
+            clubId = clubId,
+            botStatus = status,
+            canPinMessages = state.canPinMessages,
+            canInviteUsers = state.canInviteUsers,
+            canRestrictMembers = state.canRestrictMembers,
+            canManageTags = state.canManageTags
+        )
+        // Переприглашение убивает старые invite-ссылки группы — та же уборка, что при миграции.
+        ensureInviteLink(link, nowInChat = status.isInChat, nowCanInvite = state.canInviteUsers)
+        log.info(
+            "Bot rights granted: clubId={} chatId={} status={} canPin={} canInvite={} canRestrict={} canManageTags={}",
+            clubId, chatId, status.literal, state.canPinMessages, state.canInviteUsers, state.canRestrictMembers, state.canManageTags
+        )
     }
 
     /**

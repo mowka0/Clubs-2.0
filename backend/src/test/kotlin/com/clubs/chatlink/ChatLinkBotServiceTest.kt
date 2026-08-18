@@ -464,6 +464,23 @@ class ChatLinkBotServiceTest {
     }
 
     @Test
+    fun `выдача прав не шлёт второе подтверждение привязки`() {
+        // Telegram выдаёт права переприглашением: бот выходит и входит обратно, и событие
+        // приходит как «бота добавили». Привязка при этом та же — писать владельцу нечего.
+        every { intentStore.consume(ownerTelegramId) } returns ChatLinkIntentStore.Intent.GrantRights(clubId)
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, chatId = chatId)
+        every { gateway.getBotChatState(chatId) } returns
+            com.clubs.bot.BotChatState("administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, canManageTags = true)
+
+        service.handleBotAddedToChat(chatId, "Чат клуба", ownerTelegramId)
+
+        verify(exactly = 0) { gateway.sendDmWithWebAppAndCallbackButton(any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.insert(any()) }
+        // Права при этом обязаны доехать до базы — ради них человек и ходил.
+        verify { chatLinkRepository.updateBotState(clubId, BotChatStatus.ADMINISTRATOR, true, true, true, true) }
+    }
+
+    @Test
     fun `подключение чата не оставляет в группе ни одного сообщения`() {
         val newClubId = UUID.randomUUID()
         val newClub = chatLinkTestClub(clubId = newClubId, ownerId = ownerId, name = "Тихий клуб")

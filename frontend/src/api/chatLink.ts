@@ -42,8 +42,10 @@ export function getNewClubChatLinkUrl(): Promise<NewClubChatLinkDto> {
  * команду `/start <payload>` Telegram не отправляет, когда ссылка просит права администратора.
  * Отложенное здесь намерение и подсказывает боту, что делать с чатом (club-chat-link.md).
  *
- * `clubId = null` — клуба ещё нет, чат станет новым клубом.
+ * `clubId = null` — клуба ещё нет, чат станет новым клубом. `grantRightsOnly` — чат уже
+ * привязан, человек идёт только за правами бота: Telegram выдаёт их переприглашением, и без
+ * этого флага событие выглядело бы как новое добавление.
  */
-export function rememberChatLinkIntent(clubId: string | null): Promise<void> {
-  return apiClient.post<void>('/api/chat-link/intent', { clubId });
+export function rememberChatLinkIntent(clubId: string | null, grantRightsOnly = false): Promise<void> {
+  return apiClient.post<void>('/api/chat-link/intent', { clubId, grantRightsOnly });
 }

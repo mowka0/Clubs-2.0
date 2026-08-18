@@ -52,7 +52,13 @@ class NewClubChatLinkController(
             // Привязать чат к клубу может только его владелец — проверяем до того, как
             // намерение ляжет в Redis, иначе чужой клуб забрал бы чат чужими руками.
             chatLinkService.requireOwnedClub(clubId, user.userId)
-            ChatLinkIntentStore.Intent.LinkExistingClub(clubId)
+            // «Иду выдавать права» — не привязка: Telegram переприглашает бота, и без отдельного
+            // намерения это событие выглядело бы как новое добавление (дубль DM владельцу).
+            if (request?.grantRightsOnly == true) {
+                ChatLinkIntentStore.Intent.GrantRights(clubId)
+            } else {
+                ChatLinkIntentStore.Intent.LinkExistingClub(clubId)
+            }
         }
         intentStore.remember(user.telegramId, intent)
         return ResponseEntity.noContent().build()
@@ -64,7 +70,11 @@ data class NewClubChatLinkDto(
     val startGroupUrl: String
 )
 
-/** Тело `POST /api/chat-link/intent`. `clubId = null` — человек заводит клуб из чата. */
+/**
+ * Тело `POST /api/chat-link/intent`. `clubId = null` — человек заводит клуб из чата.
+ * `grantRightsOnly` — чат уже привязан к этому клубу, человек идёт только за правами бота.
+ */
 data class ChatLinkIntentRequest(
-    val clubId: UUID? = null
+    val clubId: UUID? = null,
+    val grantRightsOnly: Boolean = false
 )
