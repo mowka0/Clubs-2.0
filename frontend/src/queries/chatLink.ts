@@ -9,6 +9,7 @@ import {
   updateChatLink,
 } from '../api/chatLink';
 import type { ChatLinkStatusDto, UpdateChatLinkRequest } from '../types/api';
+import { rememberNewClubLinkingStarted } from '../utils/chatLinkPending';
 import { openTmeLink } from '../utils/telegramLinks';
 import { queryKeys } from './queryKeys';
 
@@ -84,12 +85,19 @@ export function useUnlinkChatMutation(clubId: string) {
  * ошибка блокирует переход — иначе бот завёл бы вместо привязки лишний клуб.
  */
 export function useStartChatLinkingMutation() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ clubId, startGroupUrl }: { clubId: string | null; startGroupUrl: string }) => {
       try {
         await rememberChatLinkIntent(clubId);
       } catch (e) {
         if (clubId !== null) throw e;
+      }
+      if (clubId === null) {
+        // Клуб родится в чате, и его id приложение узнает только по возвращении — запоминаем
+        // снимок нынешних клубов, чтобы найти новорождённый по разнице (NewClubFromChatGate).
+        const known = queryClient.getQueryData<Array<{ clubId: string }>>(queryKeys.clubs.my()) ?? [];
+        rememberNewClubLinkingStarted(known.map((m) => m.clubId), Date.now());
       }
       openTmeLink(startGroupUrl);
     },

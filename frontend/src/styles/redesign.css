@@ -3280,7 +3280,9 @@
   position: relative;
   overflow: hidden;
   padding: 15px 16px 16px 18px;
-  margin-bottom: 14px;
+  /* Верхний отступ обязателен: над баннером идёт строка чипов шапки клуба, у которой своего
+     нижнего поля нет, и без него карточка прилипала к чипам (правка PO 2026-08-17). */
+  margin: 14px 0;
   border: 1px solid var(--accent-soft);
   box-shadow: 0 10px 26px -12px var(--accent-shadow);
 }

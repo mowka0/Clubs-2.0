@@ -33,6 +33,17 @@ class ChatLinkBotService(
     private val log = LoggerFactory.getLogger(ChatLinkBotService::class.java)
 
     /**
+     * Стереть из группы служебную команду `/start@bot`, которую кладёт туда клиент Telegram.
+     *
+     * Своей команды человек не писал — её отправляет приложение Telegram при добавлении бота,
+     * и в чате она выглядит мусором. Удаление best-effort: без права «Удаление сообщений»
+     * Telegram откажет, и команда останется висеть.
+     */
+    fun deleteServiceCommand(chatId: Long, messageId: Long) {
+        gateway.deleteMessage(chatId, messageId)
+    }
+
+    /**
      * Бота добавили в группу (`my_chat_member`) — единственная штатная точка входа привязки.
      *
      * Что делать с чатом, подсказывает намерение, отложенное приложением перед уходом в Telegram
@@ -69,6 +80,15 @@ class ChatLinkBotService(
         val existingForChat = chatLinkRepository.findByChatId(chatId)
         val liveLinkOfChat = existingForChat?.takeIf { clubRepository.findById(it.clubId) != null }
         if (liveLinkOfChat != null) {
+            // Чат уже принадлежит клубу ТОГО ЖЕ человека — это не конфликт, а повтор: следом за
+            // добавлением бота Telegram кладёт в группу `/start`, и он приходит вторым событием
+            // после `my_chat_member`, которое клуб уже создало. Отвечать на него нечего.
+            val ownerOfLiveLink = clubRepository.findById(liveLinkOfChat.clubId)?.ownerId
+            val sameOwner = ownerOfLiveLink != null && ownerOfLiveLink == userRepository.findByTelegramId(fromTelegramId)?.id
+            if (sameOwner) {
+                log.info("New-club link is a duplicate of just-created link, staying silent: chatId={} clubId={}", chatId, liveLinkOfChat.clubId)
+                return
+            }
             // Чужую живую привязку не трогаем и бота из чата не уводим — он там работает.
             gateway.sendDm(
                 fromTelegramId,

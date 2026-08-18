@@ -5,6 +5,7 @@ import { ClubAvatarButton } from '../components/club/ClubAvatarButton';
 import { ClubCoverButton } from '../components/club/ClubCoverButton';
 import { ClubInterestsPicker } from '../components/club/ClubInterestsPicker';
 import { BotRightsStep } from '../components/club/BotRightsStep';
+import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useClubQuery, useUpdateClubMutation } from '../queries/clubs';
 import {
@@ -41,9 +42,10 @@ const MEMBER_LIMIT_MAX = 500;
  * один вопрос на экран, поля-карточки с капс-метками, финальный шаг показывает превью
  * страницы — чтобы человек увидел, что именно получат участники.
  *
- * Своей подписки на Telegram BackButton здесь нет намеренно: единственный вход в мастер —
- * кнопка на странице клуба, поэтому позади всегда есть куда вернуться, и общий обработчик
- * Layout отматывает историю сам — с первого шага в клуб, с остальных на предыдущий вопрос.
+ * BackButton страница показывает сама, как и все вложенные экраны: уходя со страницы клуба,
+ * та в cleanup прячет кнопку, и без своей подписки мастер остаётся с телеграмным «закрыть»
+ * (баг staging 2026-08-17). Обработчик — стандартный `navigate(-1)`: шаги живут в истории,
+ * поэтому «назад» отматывает шаг, а с первого возвращает на страницу клуба, откуда пришли.
  */
 export const ClubSetupWizard: FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -51,6 +53,8 @@ export const ClubSetupWizard: FC = () => {
   const haptic = useHaptic();
   const clubQuery = useClubQuery(id);
   const updateClub = useUpdateClubMutation();
+  // До ранних return: количество хуков в рендере меняться не должно.
+  useBackButton(true);
 
   const club = clubQuery.data;
   // Шаг живёт в URL, а не в состоянии: тогда кнопка «назад» Telegram и свайп от кромки
@@ -135,6 +139,12 @@ export const ClubSetupWizard: FC = () => {
           <h1 className="rd-wz-q">Как назовём клуб?</h1>
           <p className="rd-wz-qsub">Взяли название чата — поменяйте, если хочется.</p>
 
+          <div className="rd-wz-lbl">Аватар</div>
+          <div className="rd-wz-ava-row">
+            <ClubAvatarButton clubId={club.id} clubName={nameValue} avatarUrl={club.avatarUrl} editable />
+            <span className="rd-wz-hint">Кружок клуба. Видно в списках и в шапке.</span>
+          </div>
+
           <div className="rd-wz-lbl">Название</div>
           <input
             className="rd-input"
@@ -143,12 +153,6 @@ export const ClubSetupWizard: FC = () => {
             onChange={(e) => setName(e.target.value)}
             aria-label="Название клуба"
           />
-
-          <div className="rd-wz-lbl">Аватар</div>
-          <div className="rd-wz-ava-row">
-            <ClubAvatarButton clubId={club.id} clubName={nameValue} avatarUrl={club.avatarUrl} editable />
-            <span className="rd-wz-hint">Кружок клуба. Видно в списках и в шапке.</span>
-          </div>
 
           {/* Размер подставлен из чата (getChatMemberCount при рождении клуба) — Telegram считает
               вместе с ботами, поэтому число приблизительное и правится руками. */}

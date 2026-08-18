@@ -143,8 +143,14 @@ class ClubsBot(
      * «/start <club_id>» в группе → привязка чата к клубу. Без валидного UUID-payload —
      * молчаливый no-op: бота могли добавить в группу руками или тапнуть /start@bot без
      * payload'а, спамить группу инструкциями не надо.
+     *
+     * Само сообщение с командой стираем: подключение обязано быть незаметным для участников
+     * группы, а команду в чат кладёт клиент Telegram — от бота это не зависит. Право
+     * «Удаление сообщений» запрашивается ссылкой привязки; без него Telegram откажет, и
+     * команда просто останется в ленте.
      */
     private fun handleGroupStart(message: Message) {
+        chatLinkBotService.deleteServiceCommand(message.chatId, message.messageId.toLong())
         val payload = message.text.split(Regex("\\s+")).getOrNull(1) ?: return
         val from = message.from ?: return
 

@@ -21,6 +21,7 @@ import org.telegram.telegrambots.meta.api.methods.pinnedmessages.PinChatMessage
 import org.telegram.telegrambots.meta.api.methods.pinnedmessages.UnpinChatMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageCaption
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.InputFile
@@ -442,6 +443,18 @@ class ChatTelegramGateway(
         true
     } catch (e: Exception) {
         log.warn("pinChatMessage failed (нет права «Закрепление сообщений»?): chatId={} messageId={} error={}", chatId, messageId, e.message)
+        false
+    }
+
+    /**
+     * Удалить сообщение в чате. Best-effort: без права «Удаление сообщений» Telegram откажет,
+     * и это ожидаемый исход — вызывающий на результат не смотрит.
+     */
+    fun deleteMessage(chatId: Long, messageId: Long): Boolean = try {
+        telegramClient.execute(DeleteMessage.builder().chatId(chatId.toString()).messageId(messageId.toInt()).build())
+        true
+    } catch (e: Exception) {
+        log.info("deleteMessage failed (often benign — no delete rights): chatId={} messageId={} error={}", chatId, messageId, e.message)
         false
     }
 
