@@ -164,7 +164,9 @@ describe('ClubChatTab', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'Отправить ссылку админу' }));
 
-    const shared = openTelegramLinkMock.mock.calls.at(-1)?.[0] as string;
+    // Индексом, а не .at(-1): у tsconfig фронта lib ниже es2022, и Array.prototype.at там нет.
+    const calls = openTelegramLinkMock.mock.calls;
+    const shared = calls[calls.length - 1][0] as string;
     expect(shared).toMatch(/^https:\/\/t\.me\/share\/url\?/);
     // Права разделены плюсами; URLSearchParams обязан отдать их как %2B, иначе на той стороне
     // список прочитается как пробелы и Telegram не запросит ни одного права.
