@@ -2984,6 +2984,22 @@
   cursor: pointer;
 }
 
+/* Свёрнутая панель: «Позже в настройках» больше не убирает предложение насовсем, а
+   складывает его в строку — тап разворачивает обратно. Вид и вес — как у чипа «у клуба
+   есть чат» рядом: это такая же спокойная строка состояния, а не второй призыв. Свои
+   отбивки повторяют отбивки развёрнутой панели, чтобы ритм страницы не прыгал при
+   сворачивании. */
+.rd-chat-panel-row {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  margin: 20px 0 14px; padding: 9px 12px;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 11px;
+  color: var(--text-dim); font-size: 12px; font-family: inherit; text-align: left;
+  cursor: pointer;
+}
+.rd-chat-panel-row img { width: 15px; height: auto; flex: none; }
+.rd-chat-panel-row-tx { flex: 1; min-width: 0; }
+.rd-chat-panel-row-chev { flex: none; color: var(--text-faint); font-size: 15px; line-height: 1; }
+
 /* Ниже 360px (AC 53 такие экраны не покрывает) строка не помещается даже при сжатом
    до пола лисе — разрешаем перенос заголовка: перенос читается, срез нет. */
 @media (max-width: 359.98px) {

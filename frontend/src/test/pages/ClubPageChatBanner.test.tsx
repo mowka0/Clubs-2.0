@@ -38,8 +38,14 @@ const OWNER_ID = 'owner-1';
 const CLUB_ID = 'club-123';
 const OTHER_CLUB_ID = 'club-999';
 const BANNER_TITLE = 'Подключи чат клуба';
-/** Ключ скрытия — контракт со спекой club-chat-link (§ «Скрытие "Позже в настройках"»). */
-const dismissKey = (clubId: string) => `clubs:chat-banner-dismissed:${clubId}`;
+/** Текст свёрнутой строки — в неё панель складывается по «Позже в настройках». */
+const COLLAPSED_ROW = 'Чат клуба не подключён';
+/**
+ * Ключ сворачивания — контракт со спекой club-chat-link (§ «Скрытие "Позже в настройках"»).
+ * Строка ключа осталась от прежнего смысла «скрыл насовсем» намеренно: у тех, кто уже
+ * нажимал «Позже», панель должна показаться свёрнутой строкой, а не вернуться целиком.
+ */
+const collapseKey = (clubId: string) => `clubs:chat-banner-dismissed:${clubId}`;
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
 afterEach(() => server.resetHandlers());
@@ -212,7 +218,7 @@ describe('ClubPage · панель подключения чата', () => {
     expect(screen.queryByText(BANNER_TITLE)).not.toBeInTheDocument();
   });
 
-  it('«Позже в настройках» скрывает панель и пишет отметку в localStorage', async () => {
+  it('«Позже в настройках» сворачивает панель в строку и пишет отметку в localStorage', async () => {
     mockClub();
 
     const { user } = renderClubPage();
@@ -222,21 +228,37 @@ describe('ClubPage · панель подключения чата', () => {
     await waitFor(() => {
       expect(screen.queryByText(BANNER_TITLE)).not.toBeInTheDocument();
     });
-    expect(localStorage.getItem(dismissKey(CLUB_ID))).not.toBeNull();
+    // Дверь к подключению чата остаётся на экране — раньше «Позже» закрывало её насовсем.
+    expect(screen.getByText(COLLAPSED_ROW)).toBeInTheDocument();
+    expect(localStorage.getItem(collapseKey(CLUB_ID))).not.toBeNull();
   });
 
-  it('при уже стоящей отметке панель не показывается', async () => {
-    localStorage.setItem(dismissKey(CLUB_ID), '1');
+  it('тап по свёрнутой строке разворачивает панель обратно', async () => {
+    localStorage.setItem(collapseKey(CLUB_ID), '1');
+    mockClub();
+
+    const { user } = renderClubPage();
+
+    await user.click(await screen.findByRole('button', { name: new RegExp(COLLAPSED_ROW, 'i') }));
+
+    expect(await screen.findByText(BANNER_TITLE)).toBeInTheDocument();
+    // Отметку разворот не стирает: человек сказал «потом», и следующий заход снова спокойный.
+    expect(localStorage.getItem(collapseKey(CLUB_ID))).not.toBeNull();
+  });
+
+  it('при уже стоящей отметке показывается свёрнутая строка, а не полная панель', async () => {
+    localStorage.setItem(collapseKey(CLUB_ID), '1');
     mockClub();
 
     renderClubPage();
 
     expect(await screen.findByText(mockClubDetail.name)).toBeInTheDocument();
     expect(screen.queryByText(BANNER_TITLE)).not.toBeInTheDocument();
+    expect(screen.getByText(COLLAPSED_ROW)).toBeInTheDocument();
   });
 
-  it('отметка одного клуба не скрывает панель в другом', async () => {
-    localStorage.setItem(dismissKey(CLUB_ID), '1');
+  it('отметка одного клуба не сворачивает панель в другом', async () => {
+    localStorage.setItem(collapseKey(CLUB_ID), '1');
     mockClub();
 
     renderClubPage(OTHER_CLUB_ID);
@@ -244,7 +266,7 @@ describe('ClubPage · панель подключения чата', () => {
     expect(await screen.findByText(BANNER_TITLE)).toBeInTheDocument();
   });
 
-  it('скрытие не протекает на другой клуб в пределах одного монтирования страницы', async () => {
+  it('сворачивание не протекает на другой клуб в пределах одного монтирования страницы', async () => {
     mockClub();
     // Данные обоих клубов заранее в кэше: иначе переход на клуб B уводит страницу
     // в спиннер (ранний выход по isPending), панель размонтируется сама и тест
@@ -294,7 +316,7 @@ describe('ClubPage · панель подключения чата', () => {
     getItem.mockRestore();
   });
 
-  it('localStorage недоступен на запись — «Позже» скрывает панель без падения рендера', async () => {
+  it('localStorage недоступен на запись — «Позже» сворачивает панель без падения рендера', async () => {
     const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('storage denied');
     });
