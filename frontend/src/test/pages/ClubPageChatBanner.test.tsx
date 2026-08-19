@@ -312,3 +312,22 @@ describe('ClubPage · панель подключения чата', () => {
     setItem.mockRestore();
   });
 });
+
+describe('ClubPage · баннер «Клуб ещё не заполнен»', () => {
+  it('держится, пока мастер не пройден, даже когда город уже выбран', async () => {
+    // Раньше признаком служило отсутствие города, и баннер пропадал после второго шага —
+    // описание с обложкой доделать было негде (баг PO 2026-08-19).
+    mockClub({ setupCompleted: false, cityId: 'city-1', city: 'Москва' });
+    renderClubPage();
+
+    expect(await screen.findByText('Клуб ещё не заполнен')).toBeInTheDocument();
+  });
+
+  it('исчезает, когда мастер пройден', async () => {
+    mockClub({ setupCompleted: true, cityId: null });
+    renderClubPage();
+
+    expect(await screen.findByText(mockClubDetail.name)).toBeInTheDocument();
+    expect(screen.queryByText('Клуб ещё не заполнен')).not.toBeInTheDocument();
+  });
+});

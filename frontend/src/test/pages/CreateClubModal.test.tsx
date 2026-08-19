@@ -190,6 +190,7 @@ describe('CreateClubModal', () => {
           isActive: true,
           paymentLink: null,
           paymentMethodNote: null,
+          setupCompleted: true,
           chatLinked: false,
           chatDoorEnabled: false,
           chatInviteLink: null,

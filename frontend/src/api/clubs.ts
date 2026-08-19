@@ -83,6 +83,8 @@ export interface UpdateClubBody {
   // Реквизиты СБП для взносов (пустая строка очищает значение, как rules/district).
   paymentLink?: string | null;
   paymentMethodNote?: string | null;
+  /** Мастер наполнения пройден: true ставит отметку один раз, снять её нельзя (V82). */
+  setupCompleted?: boolean;
 }
 
 export function updateClub(id: string, body: UpdateClubBody): Promise<ClubDetailDto> {

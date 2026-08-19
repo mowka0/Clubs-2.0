@@ -69,6 +69,12 @@ data class ClubDetailDto(
     // Реквизиты для взносов по СБП — заполняются только для участников клуба (active/frozen) + владельца; иначе null.
     val paymentLink: String?,
     val paymentMethodNote: String?,
+    /**
+     * Мастер наполнения пройден (V82). false — на странице клуба висит баннер «Клуб ещё не
+     * заполнен»: клуб родился из чата, и владелец до конца мастера не дошёл. Отдаём флагом, а
+     * не датой: фронту важен только сам факт.
+     */
+    val setupCompleted: Boolean = true,
     // Чат-интеграция (club-chat-link): к клубу привязан телеграм-чат и бот в нём жив.
     // Публично — гость видит чип «у клуба есть чат» (мокап 02-C).
     val chatLinked: Boolean = false,
@@ -188,6 +194,12 @@ data class UpdateClubRequest(
     val coverUrl: String? = null,
     val rules: String? = null,
     val applicationQuestion: String? = null,
+
+    /**
+     * Мастер наполнения пройден: true ставит отметку (повторная не сдвигает дату), null — не
+     * трогать. Снять отметку нельзя: «клуб заполнен» — событие, а не тумблер.
+     */
+    val setupCompleted: Boolean? = null,
 
     /**
      * Темы клуба. Та же конвенция, что у остальных полей: null = не трогать, пустой список =
