@@ -24,7 +24,7 @@ class MembershipController(private val membershipService: MembershipService) {
         @AuthenticationPrincipal user: AuthenticatedUser
     ): ResponseEntity<MembershipDto> {
         log.info("Join club {}: userId={}", id, user.userId)
-        return ResponseEntity.status(HttpStatus.CREATED).body(membershipService.joinOpenClub(id, user.userId))
+        return ResponseEntity.status(HttpStatus.CREATED).body(membershipService.joinWithoutApproval(id, user.userId))
     }
 
     @PostMapping("/{id}/cancel")

@@ -135,7 +135,7 @@ class MembershipServiceTest {
     }
 
     @Test
-    fun `joinOpenClub free joins active via activateFree`() {
+    fun `joinWithoutApproval free joins active via activateFree`() {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val club = freeClubRecord(clubId)
@@ -146,7 +146,7 @@ class MembershipServiceTest {
         every { membershipRepository.countActiveByClubId(clubId) } returns 5
         every { membershipActivator.activateFree(userId, clubId) } returns createdMembership
 
-        val result = membershipService.joinOpenClub(clubId, userId)
+        val result = membershipService.joinWithoutApproval(clubId, userId)
 
         assertEquals(userId, result.userId)
         assertEquals(clubId, result.clubId)
@@ -158,7 +158,7 @@ class MembershipServiceTest {
     }
 
     @Test
-    fun `joinOpenClub paid joins frozen via activateFrozen (no invoice)`() {
+    fun `joinWithoutApproval paid joins frozen via activateFrozen (no invoice)`() {
         // De-Stars: a paid join lands the member in `frozen` — they belong but have no access until
         // the organizer confirms the off-platform dues. No Stars invoice, membership created at once.
         val clubId = UUID.randomUUID()
@@ -171,7 +171,7 @@ class MembershipServiceTest {
         every { membershipRepository.countActiveByClubId(clubId) } returns 5
         every { membershipActivator.activateFrozen(userId, clubId) } returns frozenMembership
 
-        val result = membershipService.joinOpenClub(clubId, userId)
+        val result = membershipService.joinWithoutApproval(clubId, userId)
 
         assertEquals("frozen", result.status)
         assertEquals(userId, result.userId)
@@ -180,21 +180,40 @@ class MembershipServiceTest {
     }
 
     @Test
-    fun `joinOpenClub throws NotFoundException when club does not exist`() {
+    fun `joinWithoutApproval throws NotFoundException when club does not exist`() {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
 
         every { clubRepository.findById(clubId) } returns null
 
         val exception = assertThrows<NotFoundException> {
-            membershipService.joinOpenClub(clubId, userId)
+            membershipService.joinWithoutApproval(clubId, userId)
         }
 
         assertEquals("Club not found", exception.message)
     }
 
     @Test
-    fun `joinOpenClub throws ValidationException when club is not open`() {
+    fun `joinWithoutApproval пускает private напрямую — клуб из чата без invite-кода`() {
+        val clubId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        // Клуб из чата рождается приватным и бесплатным — таким его видит кнопка закрепа.
+        val privateClub = makeClub(
+            clubId, name = "Чат", description = "", accessType = AccessType.`private`, memberCount = 0,
+        )
+        every { clubRepository.findById(clubId) } returns privateClub
+        every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns null
+        every { membershipRepository.countActiveByClubId(clubId) } returns 0
+        every { membershipActivator.activateFree(userId, clubId) } returns membership(userId, clubId)
+
+        val result = membershipService.joinWithoutApproval(clubId, userId)
+
+        assertEquals("active", result.status)
+        verify(exactly = 1) { membershipActivator.activateFree(userId, clubId) }
+    }
+
+    @Test
+    fun `joinWithoutApproval throws ValidationException when club is closed`() {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val closedClub = makeClub(clubId, name = "Closed Club", description = "Closed", accessType = AccessType.closed, memberCount = 0)
@@ -202,14 +221,14 @@ class MembershipServiceTest {
         every { clubRepository.findById(clubId) } returns closedClub
 
         val exception = assertThrows<ValidationException> {
-            membershipService.joinOpenClub(clubId, userId)
+            membershipService.joinWithoutApproval(clubId, userId)
         }
 
         assertEquals("Club is not open for joining", exception.message)
     }
 
     @Test
-    fun `joinOpenClub throws ConflictException when user is already a member`() {
+    fun `joinWithoutApproval throws ConflictException when user is already a member`() {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val club = freeClubRecord(clubId)
@@ -219,7 +238,7 @@ class MembershipServiceTest {
         every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns existingMembership
 
         val exception = assertThrows<ConflictException> {
-            membershipService.joinOpenClub(clubId, userId)
+            membershipService.joinWithoutApproval(clubId, userId)
         }
 
         assertEquals("Already a member", exception.message)
@@ -228,7 +247,7 @@ class MembershipServiceTest {
     }
 
     @Test
-    fun `joinOpenClub throws ValidationException when club is full`() {
+    fun `joinWithoutApproval throws ValidationException when club is full`() {
         val clubId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val club = freeClubRecord(clubId, memberLimit = 20, memberCount = 20)
@@ -238,7 +257,7 @@ class MembershipServiceTest {
         every { membershipRepository.countActiveByClubId(clubId) } returns 20
 
         val exception = assertThrows<ValidationException> {
-            membershipService.joinOpenClub(clubId, userId)
+            membershipService.joinWithoutApproval(clubId, userId)
         }
 
         assertEquals("Club is full", exception.message)
@@ -247,7 +266,7 @@ class MembershipServiceTest {
     }
 
     @Test
-    fun `joinOpenClub when already a frozen member throws Conflict`() {
+    fun `joinWithoutApproval when already a frozen member throws Conflict`() {
         // De-Stars: findActiveByUserAndClub now includes `frozen`, so a gated member who tries to
         // re-join is correctly rejected as already a member (no duplicate membership).
         val clubId = UUID.randomUUID()
@@ -258,7 +277,7 @@ class MembershipServiceTest {
         every { clubRepository.findById(clubId) } returns club
         every { membershipRepository.findActiveByUserAndClub(userId, clubId) } returns frozenMembership
 
-        val exception = assertThrows<ConflictException> { membershipService.joinOpenClub(clubId, userId) }
+        val exception = assertThrows<ConflictException> { membershipService.joinWithoutApproval(clubId, userId) }
 
         assertEquals("Already a member", exception.message)
         verify(exactly = 0) { membershipActivator.activateFrozen(any(), any()) }

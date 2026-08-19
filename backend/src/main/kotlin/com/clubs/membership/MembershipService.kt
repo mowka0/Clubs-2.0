@@ -41,11 +41,25 @@ class MembershipService(
 
     private val log = LoggerFactory.getLogger(MembershipService::class.java)
 
+    /**
+     * Вступление без одобрения организатора — `open` и `private`.
+     *
+     * `private` попал сюда вместе с клубами из чата (баг PO 2026-08-19). Прежде приватный клуб
+     * пускал только по invite-коду, и кнопка «Открыть клуб» из закрепа приводила человека на
+     * страницу, где вступить было нечем: клуб из чата всегда `private`, а CTA у этого типа
+     * доступа не было ни на фронте, ни здесь. Инвайт-код при этом пускал в тот же клуб сразу,
+     * без одобрения (V71: «в open/private одобрения не существует»), — то есть разрешение
+     * зависело от того, какой ссылкой человек пришёл, а не от правил клуба.
+     *
+     * `closed` остаётся за заявкой: там одобрение — смысл типа доступа, а не формальность.
+     */
     @Transactional
-    fun joinOpenClub(clubId: UUID, userId: UUID): MembershipDto {
+    fun joinWithoutApproval(clubId: UUID, userId: UUID): MembershipDto {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")
 
-        if (club.accessType != AccessType.`open`) {
+        // Список разрешённых, а не запрет `closed`: новый тип доступа должен по умолчанию
+        // попадать под заявку, а не молча пускать всех.
+        if (club.accessType != AccessType.`open` && club.accessType != AccessType.`private`) {
             throw ValidationException("Club is not open for joining")
         }
 

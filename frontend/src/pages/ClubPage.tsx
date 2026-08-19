@@ -390,7 +390,11 @@ export const ClubPage: FC = () => {
         </>
       );
     }
-    if (club.accessType === 'open') {
+    // `private` вступает так же, как `open`: одобрения у этого типа доступа не существует
+    // (V71), и invite-код пускал в такой клуб сразу. Без этой ветки CTA не рендерился вовсе —
+    // кнопка «Открыть клуб» из закрепа в чате приводила на страницу без единого способа
+    // вступить, а клуб из чата всегда приватный (баг PO 2026-08-19).
+    if (club.accessType === 'open' || club.accessType === 'private') {
       const isPaid = (club.subscriptionPrice ?? 0) > 0;
       return (
         <>

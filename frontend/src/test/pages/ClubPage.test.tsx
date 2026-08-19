@@ -126,6 +126,36 @@ describe('ClubPage', () => {
     });
   });
 
+  // Клуб из чата всегда private, и кнопка «Открыть клуб» из закрепа ведёт СЮДА, а не на
+  // посадочную приглашения. Без ветки private CTA не рендерился вовсе — человек упирался
+  // в плашку с замком и не мог вступить (баг PO 2026-08-19).
+  it('приватный клуб (рождённый из чата): гость видит «Вступить», а не пустоту', async () => {
+    let joined = false;
+    server.use(
+      http.get('*/api/clubs/:id', () => HttpResponse.json({
+        ...mockClubDetail,
+        accessType: 'private',
+        ownerId: 'other-owner',
+        subscriptionPrice: 0,
+      })),
+      http.get('*/api/users/me/clubs', () => HttpResponse.json([] as MembershipDto[])),
+      http.post('*/api/clubs/:id/join', () => {
+        joined = true;
+        return HttpResponse.json({
+          id: 'mem-private', userId: 'user-1', clubId: 'club-123', status: 'active',
+          role: 'member', joinedAt: '2025-01-01T00:00:00Z', subscriptionExpiresAt: null,
+        } as MembershipDto, { status: 201 });
+      }),
+    );
+
+    renderClubPage();
+
+    const cta = await screen.findByRole('button', { name: /^вступить$/i });
+    await userEvent.click(cta);
+
+    await waitFor(() => expect(joined).toBe(true));
+  });
+
   it('visitor sees placeholder "Активности клуба доступны участникам" and no tabs', async () => {
     server.use(
       http.get('*/api/clubs/:id', () => {
