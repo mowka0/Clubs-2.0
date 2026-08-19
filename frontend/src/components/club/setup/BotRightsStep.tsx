@@ -1,7 +1,7 @@
 import { FC, useState } from 'react';
-import { useHaptic } from '../../hooks/useHaptic';
-import { useChatLinkStatusQuery, useStartChatLinkingMutation } from '../../queries/chatLink';
-import type { ChatLinkStatusDto } from '../../types/api';
+import { useHaptic } from '../../../hooks/useHaptic';
+import { useChatLinkStatusQuery, useStartChatLinkingMutation } from '../../../queries/chatLink';
+import type { ChatLinkStatusDto } from '../../../types/api';
 
 interface BotRightsStepProps {
   clubId: string;

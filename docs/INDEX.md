@@ -68,6 +68,7 @@
 | `ProfilePage.tsx` | `profile.md`, `profile-quest.md` |
 | `InvitePage.tsx` | `club-invites.md` |
 | `OrganizerClubManage.tsx` | `club-roles.md`, `co-organizers.md`, `member-admin-profile.md`, `club-chat-link.md` |
+| `ClubSetupWizard.tsx` + `src/components/club/setup/` | `club-chat-link.md` § «После подключения: мастер наполнения клуба» |
 | `FeedbackPage.tsx` | `feedback.md` |
 
 ### Сквозное (frontend)
