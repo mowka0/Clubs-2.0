@@ -155,7 +155,21 @@ describe('ClubChatTab', () => {
     renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
 
     expect(await screen.findByText('Боту не хватает прав администратора')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Скопировать ссылку для админа' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Отправить ссылку админу' })).toBeInTheDocument();
+  });
+
+  it('«Отправить ссылку админу» открывает выбор чата, а не кладёт ссылку в буфер', async () => {
+    mockStatus(status({ linked: true, chatTitle: 'Партия — чат', botStatus: 'member' }));
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Отправить ссылку админу' }));
+
+    const shared = openTelegramLinkMock.mock.calls.at(-1)?.[0] as string;
+    expect(shared).toMatch(/^https:\/\/t\.me\/share\/url\?/);
+    // Права разделены плюсами; URLSearchParams обязан отдать их как %2B, иначе на той стороне
+    // список прочитается как пробелы и Telegram не запросит ни одного права.
+    expect(shared).toContain(encodeURIComponent(START_URL));
+    expect(shared).toContain('%2B');
   });
 
   it('«Выдать права» открывает ту же ссылку и помечает намерение как выдачу прав', async () => {

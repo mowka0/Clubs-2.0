@@ -10,6 +10,7 @@ import {
   useUpdateChatLinkMutation,
 } from '../../queries/chatLink';
 import { rememberChatLinkingStarted } from '../../utils/chatLinkPending';
+import { ADMIN_RIGHTS_SHARE_TEXT, shareTmeLink } from '../../utils/telegramLinks';
 import { hasAllBotRights } from '../../utils/botRights';
 import { Toast } from '../Toast';
 import type { ChatLinkStatusDto, UpdateChatLinkRequest } from '../../types/api';
@@ -173,11 +174,9 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
    * не даст. Единственный рабочий путь — отдать ссылку тому, кто админ, поэтому её нужно
    * уметь взять отсюда, а не только из мастера наполнения (просьба PO 2026-08-19).
    */
-  const handleCopyAdminLink = () => {
+  const handleShareAdminLink = () => {
     haptic.impact('light');
-    void navigator.clipboard?.writeText(status.startGroupUrl)
-      .then(() => setToast('Ссылка скопирована — отправьте её администратору группы'))
-      .catch(() => setToast(status.startGroupUrl));
+    shareTmeLink(status.startGroupUrl, ADMIN_RIGHTS_SHARE_TEXT);
   };
 
   // Прав не хватает — тогда «Проверить права ещё раз» переезжает наверх, к «Выдать права»:
@@ -269,8 +268,8 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
                 Выдать права
               </button>
               {refreshButton}
-              <button type="button" className="rd-ghost-btn" onClick={handleCopyAdminLink}>
-                Скопировать ссылку для админа
+              <button type="button" className="rd-ghost-btn" onClick={handleShareAdminLink}>
+                Отправить ссылку админу
               </button>
             </div>
           </div>

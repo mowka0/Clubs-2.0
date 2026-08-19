@@ -1,7 +1,8 @@
-import { FC, useState } from 'react';
+import { FC } from 'react';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useChatLinkStatusQuery, useStartChatLinkingMutation } from '../../../queries/chatLink';
 import { OPTIONAL_BOT_RIGHT, REQUIRED_BOT_RIGHTS, hasAllBotRights } from '../../../utils/botRights';
+import { ADMIN_RIGHTS_SHARE_TEXT, shareTmeLink } from '../../../utils/telegramLinks';
 
 interface BotRightsStepProps {
   clubId: string;
@@ -25,21 +26,18 @@ export const BotRightsStep: FC<BotRightsStepProps> = ({ clubId, onFinish }) => {
   const haptic = useHaptic();
   const statusQuery = useChatLinkStatusQuery(clubId);
   const startLinking = useStartChatLinkingMutation();
-  const [copied, setCopied] = useState(false);
+
 
   const status = statusQuery.data;
   const allGranted = !!status && hasAllBotRights(status);
 
-  const copyLink = async () => {
+  // Отдать ссылку в один тап вместо буфера обмена: Telegram открывает выбор чата, и админу
+  // уходит готовое сообщение (правка PO 2026-08-19). Скопированную ссылку человек должен был
+  // ещё донести до нужного собеседника — путь терялся на любом из шагов.
+  const shareLink = () => {
     if (!status?.startGroupUrl) return;
     haptic.impact('light');
-    try {
-      await navigator.clipboard.writeText(status.startGroupUrl);
-      setCopied(true);
-    } catch (_e) {
-      // Буфер недоступен (старый вебвью, отказ в разрешении) — молча оставляем кнопку как есть:
-      // ссылку всё ещё можно открыть самому и переслать из Telegram.
-    }
+    shareTmeLink(status.startGroupUrl, ADMIN_RIGHTS_SHARE_TEXT);
   };
 
   return (
@@ -92,8 +90,8 @@ export const BotRightsStep: FC<BotRightsStepProps> = ({ clubId, onFinish }) => {
                 >
                   Выдать права
                 </button>
-                <button type="button" className="rd-ghost-btn" onClick={copyLink}>
-                  {copied ? 'Ссылка скопирована' : 'Скопировать ссылку для админа'}
+                <button type="button" className="rd-ghost-btn" onClick={shareLink}>
+                  Отправить ссылку админу
                 </button>
               </div>
               <p className="rd-wz-admin-note">
