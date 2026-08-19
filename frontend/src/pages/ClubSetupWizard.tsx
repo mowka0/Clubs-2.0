@@ -1,6 +1,6 @@
 import { FC, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { BotRightsStep, hasAllBotRights } from '../components/club/setup/BotRightsStep';
+import { BotRightsStep } from '../components/club/setup/BotRightsStep';
 import { ClubSetupAboutStep } from '../components/club/setup/ClubSetupAboutStep';
 import { ClubSetupCityStep } from '../components/club/setup/ClubSetupCityStep';
 import { ClubSetupCoverStep } from '../components/club/setup/ClubSetupCoverStep';
@@ -8,6 +8,7 @@ import { ClubSetupNameStep } from '../components/club/setup/ClubSetupNameStep';
 import type { ClubSetupDraft, ClubSetupStepProps } from '../components/club/setup/types';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
+import { hasAllBotRights } from '../utils/botRights';
 import { ApiError } from '../api/apiClient';
 import { useChatLinkStatusQuery } from '../queries/chatLink';
 import { useClubQuery, useUpdateClubMutation } from '../queries/clubs';

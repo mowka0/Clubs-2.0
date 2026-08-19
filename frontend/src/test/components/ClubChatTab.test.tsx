@@ -144,6 +144,56 @@ describe('ClubChatTab', () => {
     expect(screen.getByRole('switch', { name: 'Живой закреп' })).toBeDisabled();
   });
 
+  // ---- Ссылка выдачи прав для администратора группы ----
+  //
+  // Владельцем клуба становится тот, кто добавил бота, а он вполне может быть рядовым
+  // участником чата: сам права не выдаст. Значит ссылку нужно уметь взять из управления и
+  // отдать администратору (просьба PO 2026-08-19).
+
+  it('бот в чате без прав — блок с выдачей прав и ссылкой для админа', async () => {
+    mockStatus(status({ linked: true, chatTitle: 'Партия — чат', botStatus: 'member' }));
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByText('Боту не хватает прав администратора')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Скопировать ссылку для админа' })).toBeInTheDocument();
+  });
+
+  it('«Выдать права» открывает ту же ссылку и помечает намерение как выдачу прав', async () => {
+    let intent: unknown = null;
+    server.use(
+      http.get(`*/api/clubs/${CLUB_ID}/chat-link`, () => HttpResponse.json(
+        status({ linked: true, chatTitle: 'Партия — чат', botStatus: 'administrator' }),
+      )),
+      http.post('*/api/chat-link/intent', async ({ request }) => {
+        intent = await request.json();
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Выдать права' }));
+
+    // grantRightsOnly отличает выдачу прав от привязки: чат уже наш, заново привязывать нечего.
+    await waitFor(() => expect(intent).toEqual({ clubId: CLUB_ID, grantRightsOnly: true }));
+    expect(openTelegramLinkMock).toHaveBeenCalledWith(START_URL);
+  });
+
+  it('все обязательные права выданы — блока нет', async () => {
+    mockStatus(linkedHealthy());
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByText('Партия — чат')).toBeInTheDocument();
+    expect(screen.queryByText('Боту не хватает прав администратора')).not.toBeInTheDocument();
+  });
+
+  it('бот вне чата — блока нет, чинить надо повторной привязкой', async () => {
+    mockStatus(status({ linked: true, chatTitle: 'Партия — чат', botStatus: 'kicked' }));
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByRole('button', { name: 'Привязать бота заново' })).toBeInTheDocument();
+    expect(screen.queryByText('Боту не хватает прав администратора')).not.toBeInTheDocument();
+  });
+
   it('бот кикнут — статус сборов включить нельзя', async () => {
     mockStatus(status({ linked: true, chatTitle: 'Партия — чат', botStatus: 'kicked' }));
     renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);

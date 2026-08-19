@@ -10,6 +10,7 @@ import {
   useUpdateChatLinkMutation,
 } from '../../queries/chatLink';
 import { rememberChatLinkingStarted } from '../../utils/chatLinkPending';
+import { hasAllBotRights } from '../../utils/botRights';
 import { Toast } from '../Toast';
 import type { ChatLinkStatusDto, UpdateChatLinkRequest } from '../../types/api';
 
@@ -164,6 +165,21 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
     });
   };
 
+  /**
+   * Ссылка выдачи прав — для случая «бота добавил не администратор группы».
+   *
+   * Владельцем клуба становится тот, кто добавил бота (решение PO 2026-08-17), и он вполне
+   * может быть рядовым участником чата: сам права выдать не сможет, кнопка выше ему ничего
+   * не даст. Единственный рабочий путь — отдать ссылку тому, кто админ, поэтому её нужно
+   * уметь взять отсюда, а не только из мастера наполнения (просьба PO 2026-08-19).
+   */
+  const handleCopyAdminLink = () => {
+    haptic.impact('light');
+    void navigator.clipboard?.writeText(status.startGroupUrl)
+      .then(() => setToast('Ссылка скопирована — отправьте её администратору группы'))
+      .catch(() => setToast(status.startGroupUrl));
+  };
+
   const handleCopyDoorLink = () => {
     if (!status.doorInviteLink) return;
     haptic.impact('light');
@@ -220,6 +236,41 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
           <span className={`rd-cl-pill ${status.canRestrictMembers ? 'ok' : 'bad'}`}>{status.canRestrictMembers ? '✓ блокировки разрешены' : '✕ блокировки запрещены'}</span>
           <span className={`rd-cl-pill ${status.canManageTags ? 'ok' : 'bad'}`}>{status.canManageTags ? '✓ теги разрешены' : '✕ теги запрещены'}</span>
         </div>
+        {/* Прав не хватает — показываем оба пути сразу: выдать самому (если человек админ
+            группы) и передать ссылку тому, кто админ. Условие шире буквального «прав нет
+            совсем»: Telegram выдаёт права по ссылке пачкой, так что частичный набор означает
+            ровно ту же поломку и лечится той же ссылкой. */}
+        {botInChat && !hasAllBotRights(status) && (
+          <div className="rd-cl-fix">
+            <div className="rd-cl-fix-t">Боту не хватает прав администратора</div>
+            <div className="rd-cl-fix-d">
+              Пока их нет, бот молчит: не соберёт «иду / не иду», не закрепит встречу и не
+              позовёт в чат. <b>Выдать права может только администратор группы.</b> Если это
+              не вы — скопируйте ссылку и отправьте ему: Telegram попросит выбрать ту же
+              группу, бот на секунду выйдет и вернётся уже с правами.
+            </div>
+            <div className="rd-cl-fix-actions">
+              <button
+                type="button"
+                className="rd-btn-primary"
+                disabled={startLinking.isPending}
+                onClick={() => {
+                  haptic.impact('medium');
+                  // Отметка нужна, чтобы по возвращении из Telegram всплыло окно со свежим
+                  // списком прав — иначе непонятно, сработало ли.
+                  rememberChatLinkingStarted(clubId, Date.now());
+                  startLinking.mutate({ clubId, startGroupUrl: status.startGroupUrl, grantRightsOnly: true });
+                }}
+              >
+                Выдать права
+              </button>
+              <button type="button" className="rd-ghost-btn" onClick={handleCopyAdminLink}>
+                Скопировать ссылку для админа
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Скрытая история — причина «новички не видят закреп встречи»: Telegram прячет от них
             ВСЁ, что было до вступления. Бот переключить это не может (в Bot API нет метода),
             поэтому единственное, что мы делаем — показываем владельцу, что и где включить. */}

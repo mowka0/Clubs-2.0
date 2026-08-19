@@ -2174,15 +2174,20 @@
 }
 .rd-cl-copy:disabled { color: var(--text-faint); cursor: default; }
 
-/* Предупреждение «история скрыта от новичков» — не ошибка нашей интеграции, а настройка
+/* Заметки внутри карточки чата: «история скрыта от новичков» (`hist`) и «боту не хватает
+   прав» (`fix`). Обе — не аварии нашей интеграции, а невыставленные тумблеры в настройках
    группы, поэтому тон нейтральный (не danger): владельцу нужно объяснение, а не тревога. */
-.rd-cl-hist {
+.rd-cl-hist, .rd-cl-fix {
   margin-top: 10px; padding: 10px 12px; border-radius: 10px;
   background: var(--accent-soft); border: 1px solid var(--accent-soft);
 }
-.rd-cl-hist-t { font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
-.rd-cl-hist-d { font-size: 11.5px; line-height: 1.5; color: var(--text-dim); }
-.rd-cl-hist-d b { color: var(--text); font-weight: 600; }
+.rd-cl-hist-t, .rd-cl-fix-t { font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.rd-cl-hist-d, .rd-cl-fix-d { font-size: 11.5px; line-height: 1.5; color: var(--text-dim); }
+.rd-cl-hist-d b, .rd-cl-fix-d b { color: var(--text); font-weight: 600; }
+/* Действия заметки — колонкой во всю ширину: «Выдать права» и запасной путь «скопировать
+   ссылку» равнозначны, кому какой подходит, зависит от того, админ человек группы или нет. */
+.rd-cl-fix-actions { display: grid; gap: 8px; margin-top: 10px; }
+.rd-cl-fix-actions > button { width: 100%; margin: 0; }
 
 /* Памятка о правах бота (модалка сразу после привязки чата): список из четырёх прав с
    отметкой «выдано / ещё нет». Выданные приглушены — глазу нужны именно невыданные. */
