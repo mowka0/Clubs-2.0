@@ -1,6 +1,10 @@
 import { FC, useState } from 'react';
 import { useHaptic } from '../../hooks/useHaptic';
-import { useChatLinkStatusQuery, useStartChatLinkingMutation } from '../../queries/chatLink';
+import {
+  useChatLinkStatusQuery,
+  useRefreshChatLinkMutation,
+  useStartChatLinkingMutation,
+} from '../../queries/chatLink';
 import type { ChatLinkStatusDto } from '../../types/api';
 
 interface BotRightsStepProps {
@@ -55,6 +59,7 @@ export const BotRightsStep: FC<BotRightsStepProps> = ({ clubId, onFinish }) => {
   const haptic = useHaptic();
   const statusQuery = useChatLinkStatusQuery(clubId);
   const startLinking = useStartChatLinkingMutation();
+  const refresh = useRefreshChatLinkMutation(clubId);
   const [copied, setCopied] = useState(false);
 
   const status = statusQuery.data;
@@ -99,9 +104,19 @@ export const BotRightsStep: FC<BotRightsStepProps> = ({ clubId, onFinish }) => {
             <>
               <div className="rd-wz-lbl">Дополнительно</div>
               <p className="rd-wz-hint">
-                {OPTIONAL_RIGHT.label}. Это право Telegram выдаёт не всегда — включите его в
-                группе: профиль бота → «Изменить права» → «Управление тегами».
+                {OPTIONAL_RIGHT.label}. Telegram это право по ссылке не выдаёт — включается только
+                руками: откройте группу → профиль бота → «Изменить права» → «Управление тегами».
               </p>
+              {/* Кнопка рядом с инструкцией: включив тумблер, человек возвращается в приложение и
+                  должен увидеть результат здесь же, а не идти искать «Управление» → «Чат». */}
+              <button
+                type="button"
+                className="rd-ghost-btn rd-wz-skip"
+                disabled={refresh.isPending}
+                onClick={() => { haptic.impact('light'); refresh.mutate(); }}
+              >
+                {refresh.isPending ? 'Проверяем…' : 'Я включил — проверить'}
+              </button>
             </>
           )}
 

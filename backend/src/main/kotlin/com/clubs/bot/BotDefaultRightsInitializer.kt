@@ -17,7 +17,13 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
  * (замечание PO 2026-08-19).
  *
  * Дефолтные права — второй, независимый от ссылки канал: Telegram запоминает их за ботом и
- * подставляет в экран добавления. Ставятся один раз при старте приложения, вызов идемпотентный.
+ * подставляет в экран добавления (в том числе когда бота добавляют вообще без нашей ссылки,
+ * из меню группы). Ставятся при старте приложения, вызов идемпотентный.
+ *
+ * ВАЖНО, проверено вызовами Bot API 2026-08-19: поле `can_manage_tags` Telegram здесь **молча
+ * игнорирует** — `setMyDefaultAdministratorRights` отвечает `ok`, а `getMyDefault…` возвращает
+ * по нему `false`, тогда как остальные пять прав сохраняются. Право тегов выдаётся только
+ * руками в настройках группы; не «чинить» это повторно.
  */
 @Component
 class BotDefaultRightsInitializer(
@@ -33,6 +39,8 @@ class BotDefaultRightsInitializer(
             .canPinMessages(true)
             .canInviteUsers(true)
             .canRestrictMembers(true)
+            // Оставлено намеренно: Telegram поле игнорирует (см. KDoc), но когда научится
+            // принимать — заработает без правок.
             .canManageTags(true)
             .canDeleteMessages(true)
             // Обязательные поля объекта, которые нам не нужны, — явные false: билдер не проставит
