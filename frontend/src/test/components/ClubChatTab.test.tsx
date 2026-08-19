@@ -274,15 +274,19 @@ describe('ClubChatTab', () => {
     await userEvent.click(await screen.findByRole('switch', { name: 'Вход в чат через заявки' }));
 
     await waitFor(() => expect(patched).toEqual({ doorEnabled: true }));
-    expect(await screen.findByText('https://t.me/+door123')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Вход в чат через заявки' })).toHaveAttribute('aria-checked', 'true'));
   });
 
-  it('invite-ссылка видна и при ВЫКЛЮЧЕННОЙ двери (создаётся при привязке, реестр №4)', async () => {
+  // Сырую invite-ссылку в карточке не показываем (решение PO 2026-08-19). Сама ссылка живёт
+  // как жила — по ней работают кнопка «В чат» у участников и приглашения в DM.
+  it('сырой invite-ссылки в карточке нет — ни строки, ни кнопки «Копировать»', async () => {
     mockStatus({ ...linkedHealthy(), doorEnabled: false, doorInviteLink: 'https://t.me/+linked' });
     renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
 
-    expect(await screen.findByText('https://t.me/+linked')).toBeInTheDocument();
-    expect(screen.getByText(/Данная ссылка уже активна и работает/)).toBeInTheDocument();
+    expect(await screen.findByText('Партия — чат')).toBeInTheDocument();
+    expect(screen.queryByText('https://t.me/+linked')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Данная ссылка уже активна и работает/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Копировать' })).not.toBeInTheDocument();
   });
 
   it('без права приглашать тумблер двери задизейблен', async () => {

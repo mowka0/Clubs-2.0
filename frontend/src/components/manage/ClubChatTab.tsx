@@ -180,14 +180,6 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
       .catch(() => setToast(status.startGroupUrl));
   };
 
-  const handleCopyDoorLink = () => {
-    if (!status.doorInviteLink) return;
-    haptic.impact('light');
-    void navigator.clipboard?.writeText(status.doorInviteLink)
-      .then(() => setToast('Ссылка скопирована'))
-      .catch(() => setToast(status.doorInviteLink));
-  };
-
   // Прав не хватает — тогда «Проверить права ещё раз» переезжает наверх, к «Выдать права»:
   // это шаг того же действия («выдал — проверь»), и искать его внизу страницы незачем
   // (правка PO 2026-08-19). В остальных случаях кнопка живёт на прежнем месте — она нужна и
@@ -319,19 +311,10 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
           </button>
         </div>
 
-        {/* Invite-ссылка живёт независимо от тумблера двери (создаётся при привязке) — по ней
-            работает кнопка «Чат клуба» у участников. Реестр багов №4, текст — формулировка PO. */}
-        {status.doorInviteLink && (
-          <>
-            <div className="rd-cl-link-row">
-              <span className="rd-cl-link-text">{status.doorInviteLink}</span>
-              <button type="button" className="rd-cl-copy" onClick={handleCopyDoorLink}>Копировать</button>
-            </div>
-            <div className="rd-cl-chat-sub" style={{ marginTop: 6 }}>
-              Данная ссылка уже активна и работает, поменяйте старую, если где-то её используете.
-            </div>
-          </>
-        )}
+        {/* Сырую invite-ссылку в карточке больше не показываем (решение PO 2026-08-19): раздавать
+            её руками незачем — по ней работает кнопка «В чат» у участников и приглашения в DM,
+            а живёт она недолго. Telegram гасит ссылки бота при каждом переприглашении, так что
+            скопированная кем-то строка всё равно протухала. Сама ссылка никуда не делась. */}
       </div>
 
       {/* Тумблеры фич: дверь, живой закреп, статус сборов, строгий режим */}
