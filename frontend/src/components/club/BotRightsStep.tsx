@@ -9,13 +9,25 @@ interface BotRightsStepProps {
   onFinish: () => void;
 }
 
-/** Права, без которых бот в чате наполовину мёртв, — те же, что запрашивает ссылка привязки. */
-export const REQUIRED_RIGHTS: ReadonlyArray<{ key: 'canPinMessages' | 'canInviteUsers' | 'canRestrictMembers' | 'canManageTags'; label: string }> = [
+type RightKey = 'canPinMessages' | 'canInviteUsers' | 'canRestrictMembers' | 'canManageTags';
+
+/** Права, без которых бот в чате наполовину мёртв. Их Telegram выдаёт по ссылке привязки. */
+export const REQUIRED_RIGHTS: ReadonlyArray<{ key: RightKey; label: string }> = [
   { key: 'canPinMessages', label: 'Закреплять сообщения — живой статус встречи в шапке чата' },
   { key: 'canInviteUsers', label: 'Приглашать участников — вход в чат по заявке из приложения' },
   { key: 'canRestrictMembers', label: 'Ограничивать участников — строгий режим и возврат ушедших' },
-  { key: 'canManageTags', label: 'Управлять тегами — награды видны рядом с именами' },
 ];
+
+/**
+ * «Управление тегами» стоит особняком: право новое (Bot API 9.5), и галочка на него в экране
+ * добавления появляется не у всех клиентов — человеку приходится искать тумблер руками
+ * (замечание PO 2026-08-19). Держать из-за него весь шаг нельзя: без тегов работает всё,
+ * кроме наград рядом с именами.
+ */
+const OPTIONAL_RIGHT: { key: RightKey; label: string } = {
+  key: 'canManageTags',
+  label: 'Управлять тегами — награды участников видны рядом с именами в чате',
+};
 
 /**
  * Последний шаг мастера: права бота в чате (решение PO 2026-08-17).
@@ -30,9 +42,10 @@ export const REQUIRED_RIGHTS: ReadonlyArray<{ key: 'canPinMessages' | 'canInvite
  * сам себя бот повысить не может.
  */
 /**
- * Все ли права у бота уже есть. По этому же признаку мастер решает, показывать ли шаг: при
- * добавлении по ссылке `?startgroup=…&admin=…` Telegram выдаёт права сразу, и просить их
- * второй раз незачем (правка PO 2026-08-18).
+ * Есть ли у бота все обязательные права. По этому признаку мастер решает, показывать ли шаг:
+ * при добавлении по ссылке `?startgroup=…&admin=…` Telegram выдаёт их сразу, и просить второй
+ * раз незачем (правка PO 2026-08-18). Необязательные теги на решение не влияют — иначе шаг
+ * висел бы у всех, кому клиент не показал эту галочку.
  */
 export function hasAllBotRights(status: ChatLinkStatusDto): boolean {
   return REQUIRED_RIGHTS.every((right) => status[right.key]);
@@ -81,6 +94,16 @@ export const BotRightsStep: FC<BotRightsStepProps> = ({ clubId, onFinish }) => {
               </li>
             ))}
           </ul>
+
+          {!status[OPTIONAL_RIGHT.key] && (
+            <>
+              <div className="rd-wz-lbl">Дополнительно</div>
+              <p className="rd-wz-hint">
+                {OPTIONAL_RIGHT.label}. Это право Telegram выдаёт не всегда — включите его в
+                группе: профиль бота → «Изменить права» → «Управление тегами».
+              </p>
+            </>
+          )}
 
           {!allGranted && (
             <>
