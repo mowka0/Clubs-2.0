@@ -75,13 +75,23 @@ class ChatLinkService(
             // спросив — поэтому «Проверить права ещё раз» перечитывает и её.
             chatLinkRepository.updateHistoryVisibility(clubId, info.hasVisibleHistory)
         }
-        // Лечим отсутствующую invite-ссылку (привязали без права приглашать, право выдали позже,
-        // а my_chat_member-переход по какой-то причине не был пойман) — refresh как ручной ремонт.
+        // Ремонт invite-ссылки — «Проверить права ещё раз» и есть кнопка ручного ремонта.
+        // Лечим два случая: ссылки нет вовсе (привязали без права приглашать, право выдали
+        // позже, а my_chat_member-переход не был пойман) и ссылка есть, но мертва — Telegram
+        // гасит ссылки бота, когда тот теряет права или выходит из чата, и узнать об этом
+        // можно только спросив (баг PO 2026-08-19: кнопка «В чат» и DM вели на «срок действия
+        // истёк», а починить это из интерфейса было нечем).
         val nowInChat = BotChatStatus.fromTelegramStatus(state.statusLiteral).isInChat
-        if (link.doorInviteLink == null && nowInChat && state.canInviteUsers) {
-            gateway.createJoinRequestInviteLink(link.chatId, DOOR_INVITE_LINK_NAME)?.let {
-                chatLinkRepository.updateInviteLink(clubId, it)
-                log.info("Invite link created on refresh: clubId={} chatId={}", clubId, link.chatId)
+        if (nowInChat && state.canInviteUsers) {
+            val dead = link.doorInviteLink?.let { !gateway.isInviteLinkAlive(link.chatId, it) } ?: true
+            if (dead) {
+                // Мёртвую отзываем best-effort: если Telegram считает её живой, а мы ошиблись,
+                // дубля в списке ссылок группы всё равно не останется.
+                link.doorInviteLink?.let { gateway.revokeInviteLink(link.chatId, it) }
+                gateway.createJoinRequestInviteLink(link.chatId, DOOR_INVITE_LINK_NAME)?.let {
+                    chatLinkRepository.updateInviteLink(clubId, it)
+                    log.info("Invite link (re)created on refresh: clubId={} chatId={}", clubId, link.chatId)
+                }
             }
         }
         log.info("Chat link refreshed: clubId={} chatId={} status={}", clubId, link.chatId, state.statusLiteral)

@@ -8,6 +8,8 @@ import org.telegram.telegrambots.meta.api.methods.GetMe
 import org.telegram.telegrambots.meta.api.methods.groupadministration.ApproveChatJoinRequest
 import org.telegram.telegrambots.meta.api.methods.groupadministration.BanChatMember
 import org.telegram.telegrambots.meta.api.methods.groupadministration.CreateChatInviteLink
+import org.telegram.telegrambots.meta.api.methods.groupadministration.EditChatInviteLink
+import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 import org.telegram.telegrambots.meta.api.methods.groupadministration.DeclineChatJoinRequest
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember
@@ -593,6 +595,31 @@ class ChatTelegramGateway(
     } catch (e: Exception) {
         log.warn("createJoinRequestInviteLink failed: chatId={} error={}", chatId, e.message)
         null
+    }
+
+    /**
+     * Жива ли наша invite-ссылка. Отдельного «проверь ссылку» в Bot API нет, поэтому пробуем
+     * её отредактировать без изменений: живую Telegram вернёт, отозванную отобьёт ошибкой.
+     *
+     * Зачем вообще: Telegram сам гасит ссылки, созданные админом, когда тот теряет права или
+     * выходит из чата, — а бота из чата выводит и возвращает каждая выдача прав по нашей же
+     * ссылке `?startgroup=`. Наружу это не объявляется никаким апдейтом, и в базе остаётся
+     * строка с мёртвой ссылкой: кнопка «В чат» и все DM ведут на «срок действия истёк».
+     *
+     * Неопределённость трактуем в пользу «жива»: сетевой сбой не должен молча менять ссылку,
+     * которую люди уже разослали. Ошибка самого Telegram (ответ с описанием) — «мертва».
+     */
+    fun isInviteLinkAlive(chatId: Long, inviteLink: String): Boolean = try {
+        telegramClient.execute(
+            EditChatInviteLink.builder().chatId(chatId).inviteLink(inviteLink).build()
+        )
+        true
+    } catch (e: TelegramApiRequestException) {
+        log.info("Invite link looks revoked: chatId={} error={}", chatId, e.apiResponse ?: e.message)
+        false
+    } catch (e: Exception) {
+        log.warn("Invite link check failed, assuming alive: chatId={} error={}", chatId, e.message)
+        true
     }
 
     fun revokeInviteLink(chatId: Long, inviteLink: String): Boolean = try {

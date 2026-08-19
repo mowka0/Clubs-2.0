@@ -1,5 +1,6 @@
 package com.clubs.chatlink
 
+import com.clubs.bot.BotChatState
 import com.clubs.bot.ChatTelegramGateway
 import com.clubs.club.ClubRepository
 import com.clubs.common.exception.ConflictException
@@ -308,6 +309,44 @@ class ChatLinkServiceTest {
     fun `unlink без привязки — 404`() {
         every { chatLinkRepository.findByClubId(clubId) } returns null
         assertThrows(NotFoundException::class.java) { service.unlink(clubId, ownerId) }
+    }
+
+    // Telegram гасит ссылки, созданные ботом, когда тот теряет права или выходит из чата,
+    // — а выдача прав по нашей ссылке `?startgroup=` бота как раз выводит и возвращает.
+    // Апдейтом об этом не сообщают, поэтому в базе оставалась мёртвая ссылка: кнопка «В чат»
+    // и все DM вели на «срок действия ссылки истёк» (баг PO 2026-08-19).
+
+    @Test
+    fun `refresh пересоздаёт мёртвую invite-ссылку`() {
+        val dead = "https://t.me/+dead"
+        every { chatLinkRepository.findByClubId(clubId) } returns
+            chatLinkFixture(clubId = clubId, doorInviteLink = dead)
+        every { gateway.getBotChatState(any()) } returns
+            BotChatState("administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, canManageTags = true)
+        every { gateway.getChatInfo(any()) } returns null
+        every { gateway.isInviteLinkAlive(any(), dead) } returns false
+        every { gateway.revokeInviteLink(any(), dead) } returns true
+        every { gateway.createJoinRequestInviteLink(any(), any()) } returns "https://t.me/+fresh"
+
+        service.refresh(clubId, ownerId)
+
+        verify { chatLinkRepository.updateInviteLink(clubId, "https://t.me/+fresh") }
+    }
+
+    @Test
+    fun `refresh не трогает живую ссылку — люди её уже разослали`() {
+        val alive = "https://t.me/+alive"
+        every { chatLinkRepository.findByClubId(clubId) } returns
+            chatLinkFixture(clubId = clubId, doorInviteLink = alive)
+        every { gateway.getBotChatState(any()) } returns
+            BotChatState("administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, canManageTags = true)
+        every { gateway.getChatInfo(any()) } returns null
+        every { gateway.isInviteLinkAlive(any(), alive) } returns true
+
+        service.refresh(clubId, ownerId)
+
+        verify(exactly = 0) { gateway.createJoinRequestInviteLink(any(), any()) }
+        verify(exactly = 0) { gateway.revokeInviteLink(any(), any()) }
     }
 
     @Test

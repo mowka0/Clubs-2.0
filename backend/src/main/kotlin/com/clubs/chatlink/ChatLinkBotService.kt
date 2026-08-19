@@ -89,7 +89,7 @@ class ChatLinkBotService(
             canManageTags = state.canManageTags
         )
         // Переприглашение убивает старые invite-ссылки группы — та же уборка, что при миграции.
-        ensureInviteLink(link, nowInChat = status.isInChat, nowCanInvite = state.canInviteUsers)
+        ensureInviteLink(link, nowInChat = status.isInChat, nowCanInvite = state.canInviteUsers, botWasReAdded = true)
         log.info(
             "Bot rights granted: clubId={} chatId={} status={} canPin={} canInvite={} canRestrict={} canManageTags={}",
             clubId, chatId, status.literal, state.canPinMessages, state.canInviteUsers, state.canRestrictMembers, state.canManageTags
@@ -215,7 +215,8 @@ class ChatLinkBotService(
                 ensureInviteLink(
                     link = existingForClub,
                     nowInChat = BotChatStatus.fromTelegramStatus(state.statusLiteral).isInChat,
-                    nowCanInvite = state.canInviteUsers
+                    nowCanInvite = state.canInviteUsers,
+                    botWasReAdded = true
                 )
             }
             // Подтверждение НЕ шлём: привязка не менялась, а это событие приходит на каждое
@@ -388,11 +389,24 @@ class ChatLinkBotService(
      * гарантирует; двойного пересоздания нет, потому что условие сравнивает с состоянием строки
      * ДО обновления, а первый сработавший его уже обновил.
      */
-    private fun ensureInviteLink(link: ChatLink, nowInChat: Boolean, nowCanInvite: Boolean) {
+    /**
+     * [botWasReAdded] — бота только что вывели из чата и вернули обратно. Так работает выдача
+     * прав по ссылке `?startgroup=`, и Telegram при этом гасит все ссылки, которые бот создал
+     * раньше. Наш признак «ссылка живая» построен на записанном состоянии бота, а оно в этом
+     * случае и до, и после одинаковое — «в чате, приглашать может», — поэтому без явного флага
+     * мы оставляли в базе мёртвую ссылку навсегда: кнопка «В чат» и все DM вели на «срок
+     * действия ссылки истёк» (баг PO 2026-08-19).
+     */
+    private fun ensureInviteLink(
+        link: ChatLink,
+        nowInChat: Boolean,
+        nowCanInvite: Boolean,
+        botWasReAdded: Boolean = false
+    ) {
         if (!nowInChat || !nowCanInvite) return
         // Ссылка живая, если существует и бот всё это время оставался в чате с правом приглашать.
         val linkStillValid = link.doorInviteLink != null && link.botStatus.isInChat && link.canInviteUsers
-        if (linkStillValid) return
+        if (linkStillValid && !botWasReAdded) return
 
         // Старую отзываем best-effort (после кика она и так мертва) — не копим живые дубли.
         link.doorInviteLink?.let { gateway.revokeInviteLink(link.chatId, it) }
