@@ -1,12 +1,14 @@
 import { FC, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { CityPicker } from '../components/CityPicker';
-import { ClubAvatarButton } from '../components/club/ClubAvatarButton';
-import { ClubCoverButton } from '../components/club/ClubCoverButton';
-import { ClubInterestsPicker } from '../components/club/ClubInterestsPicker';
-import { BotRightsStep, hasAllBotRights } from '../components/club/BotRightsStep';
+import { BotRightsStep } from '../components/club/setup/BotRightsStep';
+import { ClubSetupAboutStep } from '../components/club/setup/ClubSetupAboutStep';
+import { ClubSetupCityStep } from '../components/club/setup/ClubSetupCityStep';
+import { ClubSetupCoverStep } from '../components/club/setup/ClubSetupCoverStep';
+import { ClubSetupNameStep } from '../components/club/setup/ClubSetupNameStep';
+import type { ClubSetupDraft, ClubSetupStepProps } from '../components/club/setup/types';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
+import { hasAllBotRights } from '../utils/botRights';
 import { ApiError } from '../api/apiClient';
 import { useChatLinkStatusQuery } from '../queries/chatLink';
 import { useClubQuery, useUpdateClubMutation } from '../queries/clubs';
@@ -17,15 +19,15 @@ import {
   readClubSetupStep,
   saveClubSetupStep,
 } from '../utils/clubSetupProgress';
-import type { CityDto } from '../types/api';
 
-/** Потолок названия клуба, совпадает с VARCHAR(60) в схеме. */
-const NAME_MAX = 60;
-/** Потолок описания, совпадает с VARCHAR(500). */
-const DESCRIPTION_MAX = 500;
-/** Границы размера клуба — те же, что в CHECK-констрейнте схемы (V81) и в валидации DTO. */
-const MEMBER_LIMIT_MIN = 1;
-const MEMBER_LIMIT_MAX = 500;
+/** Черновик на старте: ничего не трогали, шаги показывают то, что лежит в клубе. */
+const EMPTY_DRAFT: ClubSetupDraft = {
+  name: null,
+  city: null,
+  description: null,
+  interests: null,
+  memberLimit: null,
+};
 
 /**
  * Наполнение клуба, рождённого из чата, — перед тем как показать его участникам.
@@ -38,12 +40,12 @@ const MEMBER_LIMIT_MAX = 500;
  * потом обязательный город, и лишь затем то, над чем нужно подумать (описание) и повозиться
  * (обложка). Пропустить можно всё, кроме города: без него не работает недельный опрос.
  *
- * Темы идут вместе с описанием — это одна мысль «о чём клуб», просто вторая половина
- * записана словами общего словаря, по которым работает поиск.
- *
  * Разметка следует мокапу `docs/design/club-from-chat/mockups/02-club-setup-wizard.html`:
  * один вопрос на экран, поля-карточки с капс-метками, финальный шаг показывает превью
  * страницы — чтобы человек увидел, что именно получат участники.
+ *
+ * Сама страница держит только общее для всех шагов: номер шага, черновик, сохранение и
+ * шкалу прогресса. Вопросы живут по файлу на шаг в `components/club/setup/`.
  *
  * BackButton страница показывает сама, как и все вложенные экраны: уходя со страницы клуба,
  * та в cleanup прячет кнопку, и без своей подписки мастер остаётся с телеграмным «закрыть»
@@ -71,14 +73,11 @@ export const ClubSetupWizard: FC = () => {
   const chatStatus = chatLinkQuery.data;
   // Пока статус едет, считаем шаг прав нужным: ошибиться в эту сторону безопаснее — шкала не
   // прыгнет назад, а лишний шаг человек закроет одной кнопкой «Готово».
-  const totalSteps = chatStatus && hasAllBotRights(chatStatus) ? CLUB_SETUP_STEPS_WITHOUT_RIGHTS : CLUB_SETUP_TOTAL_STEPS;
+  const hasRightsStep = !(chatStatus && hasAllBotRights(chatStatus));
+  const totalSteps = hasRightsStep ? CLUB_SETUP_TOTAL_STEPS : CLUB_SETUP_STEPS_WITHOUT_RIGHTS;
   const urlStep = Number.isInteger(stepParam) && stepParam >= 1 && stepParam <= totalSteps ? stepParam : 1;
-  const [name, setName] = useState<string | null>(null);
-  const [city, setCity] = useState<CityDto | null>(null);
-  const [description, setDescription] = useState<string | null>(null);
-  const [interests, setInterests] = useState<string[] | null>(null);
-  const [memberLimit, setMemberLimit] = useState<string | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [draft, setDraft] = useState<ClubSetupDraft>(EMPTY_DRAFT);
+  const patchDraft = (patch: Partial<ClubSetupDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
 
   // Вернулся в приложение — продолжает с того шага, где остановился. URL при новом запуске
   // пустой, поэтому прогресс держим в localStorage и подставляем replace'ом: в историю такой
@@ -103,18 +102,6 @@ export const ClubSetupWizard: FC = () => {
   if (clubQuery.isPending) return null;
   if (!club) return null;
 
-  const nameValue = name ?? club.name;
-  const descriptionValue = description ?? club.description;
-  const interestsValue = interests ?? club.interests;
-  const cityLabel = city?.name ?? (club.cityId ? club.city : null);
-  const memberLimitValue = memberLimit ?? String(club.memberLimit);
-  // null = введено не число или значение вне границ схемы: кнопка «Дальше» тогда заблокирована,
-  // и мы не отправляем заведомо отбиваемый бэком PATCH.
-  const memberLimitNumber = /^\d+$/.test(memberLimitValue.trim())
-    ? Number(memberLimitValue) >= MEMBER_LIMIT_MIN && Number(memberLimitValue) <= MEMBER_LIMIT_MAX
-      ? Number(memberLimitValue)
-      : null
-    : null;
   /**
    * Мастер пройден: ставим отметку на сервере и стираем локальный прогресс.
    *
@@ -131,7 +118,7 @@ export const ClubSetupWizard: FC = () => {
   // Город обязателен, поэтому шаг дальше второго без него — рассинхрон (например, город
   // сбросили в управлении): возвращаем на него, а не показываем недостижимый прогресс.
   const step = club.cityId === null && urlStep > 2 ? 2 : urlStep;
-  const setStep = (next: number) => setSearchParams({ step: String(next) });
+  const goToStep = (next: number) => setSearchParams({ step: String(next) });
 
   /**
    * Сохраняем на каждом переходе, а не одной пачкой в конце: человек может закрыть приложение
@@ -139,7 +126,7 @@ export const ClubSetupWizard: FC = () => {
    */
   const saveAndNext = (body: Record<string, unknown>, next: number) => {
     haptic.impact('light');
-    updateClub.mutate({ id: club.id, body }, { onSuccess: () => setStep(next) });
+    updateClub.mutate({ id: club.id, body }, { onSuccess: () => goToStep(next) });
   };
 
   // 429 стоит отделить от прочих сбоев: «попробуйте ещё раз» здесь вредный совет — повтор
@@ -152,6 +139,15 @@ export const ClubSetupWizard: FC = () => {
         : 'Не получилось сохранить. Попробуйте ещё раз.'}
     </p>
   );
+  const stepProps: ClubSetupStepProps = {
+    club,
+    draft,
+    onDraftChange: patchDraft,
+    saving: updateClub.isPending,
+    error: saveError,
+    onSaveAndNext: saveAndNext,
+    onGoToStep: goToStep,
+  };
 
   return (
     <div className="rd-page rd-wz">
@@ -165,186 +161,18 @@ export const ClubSetupWizard: FC = () => {
       </div>
       <div className="rd-wz-cap">Шаг {step} из {totalSteps}</div>
 
-      {step === 1 && (
-        <>
-          <h1 className="rd-wz-q">Как назовём клуб?</h1>
-          <p className="rd-wz-qsub">Взяли название чата — поменяйте, если хочется.</p>
-
-          <div className="rd-wz-lbl">Аватар</div>
-          <div className="rd-wz-ava-row">
-            <ClubAvatarButton clubId={club.id} clubName={nameValue} avatarUrl={club.avatarUrl} editable />
-            <span className="rd-wz-hint">Кружок клуба. Видно в списках и в шапке.</span>
-          </div>
-
-          <div className="rd-wz-lbl">Название</div>
-          <input
-            className="rd-input"
-            value={nameValue}
-            maxLength={NAME_MAX}
-            onChange={(e) => setName(e.target.value)}
-            aria-label="Название клуба"
-          />
-
-          {/* Размер подставлен из чата (getChatMemberCount при рождении клуба) — Telegram считает
-              вместе с ботами, поэтому число приблизительное и правится руками. */}
-          <div className="rd-wz-lbl">Сколько человек в клубе</div>
-          <input
-            className="rd-input"
-            type="number"
-            inputMode="numeric"
-            min={MEMBER_LIMIT_MIN}
-            max={MEMBER_LIMIT_MAX}
-            value={memberLimitValue}
-            onChange={(e) => setMemberLimit(e.target.value)}
-            aria-label="Размер клуба"
-          />
-          <span className="rd-wz-hint">Взяли из чата. Потолок — {MEMBER_LIMIT_MAX}, потом можно поменять.</span>
-
-          <button
-            type="button"
-            className="rd-btn-primary rd-wz-next"
-            disabled={!nameValue.trim() || memberLimitNumber === null || updateClub.isPending}
-            onClick={() =>
-              memberLimitNumber !== null &&
-              saveAndNext({ name: nameValue.trim(), memberLimit: memberLimitNumber }, 2)
-            }
-          >
-            Дальше
-          </button>
-          {saveError}
-          <div className="rd-wz-note">Аватар можно добавить потом</div>
-        </>
-      )}
-
-      {step === 2 && (
-        <>
-          <h1 className="rd-wz-q">В каком городе встречаетесь?</h1>
-          <p className="rd-wz-qsub">Без города бот не сможет предлагать встречи рядом.</p>
-
-          {/* Единственный обязательный шаг — говорим об этом прямо, а не прячем в отключённой кнопке. */}
-          <div className="rd-wz-req"><span className="rd-wz-dot" aria-hidden="true" />Обязательный шаг</div>
-
-          <div className="rd-wz-lbl">Город</div>
-          <button
-            type="button"
-            className={cityLabel ? 'rd-input rd-wz-pick' : 'rd-input rd-wz-pick rd-ph'}
-            onClick={() => { haptic.impact('light'); setPickerOpen(true); }}
-          >
-            {cityLabel ?? 'Выбрать город'}
-          </button>
-
-          {/* Кнопка живёт и с уже сохранённым городом: вернувшись на этот шаг, человек видел
-              свой город в поле и мёртвую кнопку — локальный выбор был пуст (баг PO 2026-08-19).
-              Города не меняли — просто идём дальше, не трогая сервер. */}
-          <button
-            type="button"
-            className="rd-btn-primary rd-wz-next"
-            disabled={(!city && !club.cityId) || updateClub.isPending}
-            onClick={() => {
-              if (city) saveAndNext({ cityId: city.id }, 3);
-              else if (club.cityId) { haptic.impact('light'); setStep(3); }
-            }}
-          >
-            Дальше
-          </button>
-          {saveError}
-          <div className="rd-wz-note">Пропустить нельзя — это единственное исключение</div>
-
-          {pickerOpen && (
-            <CityPicker
-              value={city}
-              onChange={(next) => { setCity(next); setPickerOpen(false); }}
-              onClose={() => setPickerOpen(false)}
-            />
-          )}
-        </>
-      )}
-
-      {step === 3 && (
-        <>
-          <h1 className="rd-wz-q">О чём ваш клуб?</h1>
-          <p className="rd-wz-qsub">Это первое, что прочитают участники, открыв страницу.</p>
-
-          <div className="rd-wz-lbl">Описание</div>
-          <textarea
-            className="rd-textarea rd-wz-area"
-            value={descriptionValue}
-            maxLength={DESCRIPTION_MAX}
-            placeholder="Бегаем по вторникам и субботам в Сокольниках. Темп разный, догоняем всех."
-            onChange={(e) => setDescription(e.target.value)}
-            aria-label="Описание клуба"
-          />
-
-          {/* Темы — продолжение описания: «о чём клуб» словами общего словаря. По ним же
-              работает поиск, поэтому свободный ввод здесь только последним шагом
-              (club-interests.md). Полка чипов подставляется по категории клуба. */}
-          <div className="rd-wz-lbl">Темы</div>
-          <ClubInterestsPicker category={club.category} value={interestsValue} onChange={setInterests} />
-
-          <button
-            type="button"
-            className="rd-btn-primary rd-wz-next"
-            disabled={updateClub.isPending}
-            onClick={() => saveAndNext({ description: descriptionValue.trim(), interests: interestsValue }, 4)}
-          >
-            Дальше
-          </button>
-          <button type="button" className="rd-ghost-btn rd-wz-skip" onClick={() => setStep(4)}>
-            Пропустить
-          </button>
-          {saveError}
-        </>
-      )}
-
+      {step === 1 && <ClubSetupNameStep {...stepProps} />}
+      {step === 2 && <ClubSetupCityStep {...stepProps} />}
+      {step === 3 && <ClubSetupAboutStep {...stepProps} />}
       {step === 4 && (
-        <>
-          <h1 className="rd-wz-q">Обложка клуба</h1>
-          <p className="rd-wz-qsub">Так страницу увидят участники.</p>
-
-          <div className="rd-wz-cover-slot">
-            {club.coverUrl
-              ? <img className="rd-wz-cover-img" src={club.coverUrl} alt="" />
-              : <span className="rd-wz-cover-empty">Обложка не выбрана</span>}
-            <div className="rd-wz-cover-btn">
-              <ClubCoverButton clubId={club.id} hasCover={!!club.coverUrl} />
-            </div>
-          </div>
-
-          {/* Превью — единственное место, где орг видит клуб глазами участника до презентации. */}
-          <div className="rd-wz-lbl">Как это выглядит</div>
-          <div className="rd-wz-preview">
-            <div className="rd-wz-pv-cover">
-              {club.coverUrl && <img src={club.coverUrl} alt="" />}
-            </div>
-            <div className="rd-wz-pv-ava">
-              {club.avatarUrl
-                ? <img src={club.avatarUrl} alt="" />
-                : <span>{nameValue.trim().charAt(0).toUpperCase()}</span>}
-            </div>
-            <div className="rd-wz-pv-name">{nameValue}</div>
-            <div className="rd-wz-pv-meta">
-              {[cityLabel, ...interestsValue.slice(0, 2)].filter(Boolean).join(' · ') || 'Клуб чата'}
-            </div>
-          </div>
-
-          {/* Права уже выданы при добавлении бота — четвёртый шаг последний. */}
-          <button
-            type="button"
-            className="rd-btn-primary rd-wz-next"
-            onClick={() => (totalSteps === CLUB_SETUP_TOTAL_STEPS ? setStep(5) : finish())}
-          >
-            {totalSteps === CLUB_SETUP_TOTAL_STEPS ? 'Дальше' : 'Готово'}
-          </button>
-          <button
-            type="button"
-            className="rd-ghost-btn rd-wz-skip"
-            onClick={() => (totalSteps === CLUB_SETUP_TOTAL_STEPS ? setStep(5) : finish())}
-          >
-            Пропустить обложку
-          </button>
-        </>
+        <ClubSetupCoverStep
+          club={club}
+          draft={draft}
+          hasRightsStep={hasRightsStep}
+          onGoToStep={goToStep}
+          onFinish={finish}
+        />
       )}
-
       {step === 5 && <BotRightsStep clubId={club.id} onFinish={finish} />}
     </div>
   );

@@ -144,6 +144,91 @@ describe('ClubChatTab', () => {
     expect(screen.getByRole('switch', { name: 'Живой закреп' })).toBeDisabled();
   });
 
+  // ---- Ссылка выдачи прав для администратора группы ----
+  //
+  // Владельцем клуба становится тот, кто добавил бота, а он вполне может быть рядовым
+  // участником чата: сам права не выдаст. Значит ссылку нужно уметь взять из управления и
+  // отдать администратору (просьба PO 2026-08-19).
+
+  it('бот в чате без прав — блок с выдачей прав и ссылкой для админа', async () => {
+    mockStatus(status({ linked: true, chatTitle: 'Партия — чат', botStatus: 'member' }));
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByText('Боту не хватает прав администратора')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Отправить ссылку админу' })).toBeInTheDocument();
+  });
+
+  it('«Отправить ссылку админу» открывает выбор чата, а не кладёт ссылку в буфер', async () => {
+    mockStatus(status({ linked: true, chatTitle: 'Партия — чат', botStatus: 'member' }));
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Отправить ссылку админу' }));
+
+    // Индексом, а не .at(-1): у tsconfig фронта lib ниже es2022, и Array.prototype.at там нет.
+    const calls = openTelegramLinkMock.mock.calls;
+    const shared = calls[calls.length - 1][0] as string;
+    expect(shared).toMatch(/^https:\/\/t\.me\/share\/url\?/);
+    // Права разделены плюсами; URLSearchParams обязан отдать их как %2B, иначе на той стороне
+    // список прочитается как пробелы и Telegram не запросит ни одного права.
+    expect(shared).toContain(encodeURIComponent(START_URL));
+    expect(shared).toContain('%2B');
+    // Название группы в тексте: у админа их может быть несколько, а пикер Telegram покажет
+    // ему весь список — «выберите эту группу» не отвечает на вопрос «какую именно».
+    // «Ссылку выше» — потому что Telegram ставит url первой строкой, а наш text второй.
+    expect(decodeURIComponent(shared)).toContain('ссылку выше и выберите группу «Партия — чат»');
+  });
+
+  it('«Выдать права» открывает ту же ссылку и помечает намерение как выдачу прав', async () => {
+    let intent: unknown = null;
+    server.use(
+      http.get(`*/api/clubs/${CLUB_ID}/chat-link`, () => HttpResponse.json(
+        status({ linked: true, chatTitle: 'Партия — чат', botStatus: 'administrator' }),
+      )),
+      http.post('*/api/chat-link/intent', async ({ request }) => {
+        intent = await request.json();
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Выдать права' }));
+
+    // grantRightsOnly отличает выдачу прав от привязки: чат уже наш, заново привязывать нечего.
+    await waitFor(() => expect(intent).toEqual({ clubId: CLUB_ID, grantRightsOnly: true }));
+    expect(openTelegramLinkMock).toHaveBeenCalledWith(START_URL);
+  });
+
+  it('«Проверить права ещё раз» не задваивается — при нехватке прав она одна, наверху', async () => {
+    mockStatus(status({ linked: true, chatTitle: 'Партия — чат', botStatus: 'member' }));
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    await screen.findByText('Боту не хватает прав администратора');
+    expect(screen.getAllByRole('button', { name: 'Проверить права ещё раз' })).toHaveLength(1);
+  });
+
+  it('с полным набором прав «Проверить права ещё раз» остаётся на месте', async () => {
+    mockStatus(linkedHealthy());
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByRole('button', { name: 'Проверить права ещё раз' })).toBeInTheDocument();
+  });
+
+  it('все обязательные права выданы — блока нет', async () => {
+    mockStatus(linkedHealthy());
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByText('Партия — чат')).toBeInTheDocument();
+    expect(screen.queryByText('Боту не хватает прав администратора')).not.toBeInTheDocument();
+  });
+
+  it('бот вне чата — блока нет, чинить надо повторной привязкой', async () => {
+    mockStatus(status({ linked: true, chatTitle: 'Партия — чат', botStatus: 'kicked' }));
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByRole('button', { name: 'Привязать бота заново' })).toBeInTheDocument();
+    expect(screen.queryByText('Боту не хватает прав администратора')).not.toBeInTheDocument();
+  });
+
   it('бот кикнут — статус сборов включить нельзя', async () => {
     mockStatus(status({ linked: true, chatTitle: 'Партия — чат', botStatus: 'kicked' }));
     renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
@@ -209,15 +294,19 @@ describe('ClubChatTab', () => {
     await userEvent.click(await screen.findByRole('switch', { name: 'Вход в чат через заявки' }));
 
     await waitFor(() => expect(patched).toEqual({ doorEnabled: true }));
-    expect(await screen.findByText('https://t.me/+door123')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Вход в чат через заявки' })).toHaveAttribute('aria-checked', 'true'));
   });
 
-  it('invite-ссылка видна и при ВЫКЛЮЧЕННОЙ двери (создаётся при привязке, реестр №4)', async () => {
+  // Сырую invite-ссылку в карточке не показываем (решение PO 2026-08-19). Сама ссылка живёт
+  // как жила — по ней работают кнопка «В чат» у участников и приглашения в DM.
+  it('сырой invite-ссылки в карточке нет — ни строки, ни кнопки «Копировать»', async () => {
     mockStatus({ ...linkedHealthy(), doorEnabled: false, doorInviteLink: 'https://t.me/+linked' });
     renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
 
-    expect(await screen.findByText('https://t.me/+linked')).toBeInTheDocument();
-    expect(screen.getByText(/Данная ссылка уже активна и работает/)).toBeInTheDocument();
+    expect(await screen.findByText('Партия — чат')).toBeInTheDocument();
+    expect(screen.queryByText('https://t.me/+linked')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Данная ссылка уже активна и работает/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Копировать' })).not.toBeInTheDocument();
   });
 
   it('без права приглашать тумблер двери задизейблен', async () => {

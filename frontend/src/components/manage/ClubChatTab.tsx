@@ -10,6 +10,8 @@ import {
   useUpdateChatLinkMutation,
 } from '../../queries/chatLink';
 import { rememberChatLinkingStarted } from '../../utils/chatLinkPending';
+import { adminRightsShareText, shareTmeLink } from '../../utils/telegramLinks';
+import { hasAllBotRights } from '../../utils/botRights';
 import { Toast } from '../Toast';
 import type { ChatLinkStatusDto, UpdateChatLinkRequest } from '../../types/api';
 
@@ -164,13 +166,30 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
     });
   };
 
-  const handleCopyDoorLink = () => {
-    if (!status.doorInviteLink) return;
+  /**
+   * Ссылка выдачи прав — для случая «бота добавил не администратор группы».
+   *
+   * Владельцем клуба становится тот, кто добавил бота (решение PO 2026-08-17), и он вполне
+   * может быть рядовым участником чата: сам права выдать не сможет, кнопка выше ему ничего
+   * не даст. Единственный рабочий путь — отдать ссылку тому, кто админ, поэтому её нужно
+   * уметь взять отсюда, а не только из мастера наполнения (просьба PO 2026-08-19).
+   */
+  const handleShareAdminLink = () => {
     haptic.impact('light');
-    void navigator.clipboard?.writeText(status.doorInviteLink)
-      .then(() => setToast('Ссылка скопирована'))
-      .catch(() => setToast(status.doorInviteLink));
+    shareTmeLink(status.startGroupUrl, adminRightsShareText(status.chatTitle));
   };
+
+  // Прав не хватает — тогда «Проверить права ещё раз» переезжает наверх, к «Выдать права»:
+  // это шаг того же действия («выдал — проверь»), и искать его внизу страницы незачем
+  // (правка PO 2026-08-19). В остальных случаях кнопка живёт на прежнем месте — она нужна и
+  // с полным набором прав (перечитать название чата, видимость истории, право тегов), и в
+  // состоянии «бот удалён из чата», где блока прав нет вовсе.
+  const rightsMissing = botInChat && !hasAllBotRights(status);
+  const refreshButton = (
+    <button type="button" className="rd-btn-outline" onClick={handleRefresh} disabled={busy}>
+      {refreshMutation.isPending ? <Spinner size="s" /> : 'Проверить права ещё раз'}
+    </button>
+  );
 
   return (
     <>
@@ -220,6 +239,42 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
           <span className={`rd-cl-pill ${status.canRestrictMembers ? 'ok' : 'bad'}`}>{status.canRestrictMembers ? '✓ блокировки разрешены' : '✕ блокировки запрещены'}</span>
           <span className={`rd-cl-pill ${status.canManageTags ? 'ok' : 'bad'}`}>{status.canManageTags ? '✓ теги разрешены' : '✕ теги запрещены'}</span>
         </div>
+        {/* Прав не хватает — показываем оба пути сразу: выдать самому (если человек админ
+            группы) и передать ссылку тому, кто админ. Условие шире буквального «прав нет
+            совсем»: Telegram выдаёт права по ссылке пачкой, так что частичный набор означает
+            ровно ту же поломку и лечится той же ссылкой. */}
+        {rightsMissing && (
+          <div className="rd-cl-fix">
+            <div className="rd-cl-fix-t">Боту не хватает прав администратора</div>
+            <div className="rd-cl-fix-d">
+              Пока их нет, бот молчит: не соберёт «иду / не иду», не закрепит встречу и не
+              позовёт в чат. <b>Выдать права может только администратор группы.</b> Если это
+              не вы — скопируйте ссылку и отправьте ему: Telegram попросит выбрать ту же
+              группу, бот на секунду выйдет и вернётся уже с правами.
+            </div>
+            <div className="rd-cl-fix-actions">
+              <button
+                type="button"
+                className="rd-btn-primary"
+                disabled={startLinking.isPending}
+                onClick={() => {
+                  haptic.impact('medium');
+                  // Отметка нужна, чтобы по возвращении из Telegram всплыло окно со свежим
+                  // списком прав — иначе непонятно, сработало ли.
+                  rememberChatLinkingStarted(clubId, Date.now());
+                  startLinking.mutate({ clubId, startGroupUrl: status.startGroupUrl, grantRightsOnly: true });
+                }}
+              >
+                Выдать права
+              </button>
+              {refreshButton}
+              <button type="button" className="rd-ghost-btn" onClick={handleShareAdminLink}>
+                Отправить ссылку админу
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Скрытая история — причина «новички не видят закреп встречи»: Telegram прячет от них
             ВСЁ, что было до вступления. Бот переключить это не может (в Bot API нет метода),
             поэтому единственное, что мы делаем — показываем владельцу, что и где включить. */}
@@ -255,19 +310,10 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
           </button>
         </div>
 
-        {/* Invite-ссылка живёт независимо от тумблера двери (создаётся при привязке) — по ней
-            работает кнопка «Чат клуба» у участников. Реестр багов №4, текст — формулировка PO. */}
-        {status.doorInviteLink && (
-          <>
-            <div className="rd-cl-link-row">
-              <span className="rd-cl-link-text">{status.doorInviteLink}</span>
-              <button type="button" className="rd-cl-copy" onClick={handleCopyDoorLink}>Копировать</button>
-            </div>
-            <div className="rd-cl-chat-sub" style={{ marginTop: 6 }}>
-              Данная ссылка уже активна и работает, поменяйте старую, если где-то её используете.
-            </div>
-          </>
-        )}
+        {/* Сырую invite-ссылку в карточке больше не показываем (решение PO 2026-08-19): раздавать
+            её руками незачем — по ней работает кнопка «В чат» у участников и приглашения в DM,
+            а живёт она недолго. Telegram гасит ссылки бота при каждом переприглашении, так что
+            скопированная кем-то строка всё равно протухала. Сама ссылка никуда не делась. */}
       </div>
 
       {/* Тумблеры фич: дверь, живой закреп, статус сборов, строгий режим */}
@@ -382,9 +428,7 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
 
       {error && <div className="rd-error">{error}</div>}
 
-      <button type="button" className="rd-btn-outline" onClick={handleRefresh} disabled={busy}>
-        {refreshMutation.isPending ? <Spinner size="s" /> : 'Проверить права ещё раз'}
-      </button>
+      {!rightsMissing && refreshButton}
       <button
         type="button"
         className="rd-btn-outline"

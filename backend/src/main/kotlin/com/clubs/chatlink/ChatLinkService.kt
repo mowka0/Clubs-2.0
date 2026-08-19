@@ -75,13 +75,23 @@ class ChatLinkService(
             // спросив — поэтому «Проверить права ещё раз» перечитывает и её.
             chatLinkRepository.updateHistoryVisibility(clubId, info.hasVisibleHistory)
         }
-        // Лечим отсутствующую invite-ссылку (привязали без права приглашать, право выдали позже,
-        // а my_chat_member-переход по какой-то причине не был пойман) — refresh как ручной ремонт.
+        // Ремонт invite-ссылки — «Проверить права ещё раз» и есть кнопка ручного ремонта.
+        // Лечим два случая: ссылки нет вовсе (привязали без права приглашать, право выдали
+        // позже, а my_chat_member-переход не был пойман) и ссылка есть, но мертва — Telegram
+        // гасит ссылки бота, когда тот теряет права или выходит из чата, и узнать об этом
+        // можно только спросив (баг PO 2026-08-19: кнопка «В чат» и DM вели на «срок действия
+        // истёк», а починить это из интерфейса было нечем).
         val nowInChat = BotChatStatus.fromTelegramStatus(state.statusLiteral).isInChat
-        if (link.doorInviteLink == null && nowInChat && state.canInviteUsers) {
-            gateway.createJoinRequestInviteLink(link.chatId, DOOR_INVITE_LINK_NAME)?.let {
-                chatLinkRepository.updateInviteLink(clubId, it)
-                log.info("Invite link created on refresh: clubId={} chatId={}", clubId, link.chatId)
+        if (nowInChat && state.canInviteUsers) {
+            val dead = link.doorInviteLink?.let { !gateway.isInviteLinkAlive(link.chatId, it) } ?: true
+            if (dead) {
+                // Мёртвую отзываем best-effort: если Telegram считает её живой, а мы ошиблись,
+                // дубля в списке ссылок группы всё равно не останется.
+                link.doorInviteLink?.let { gateway.revokeInviteLink(link.chatId, it) }
+                gateway.createJoinRequestInviteLink(link.chatId, DOOR_INVITE_LINK_NAME)?.let {
+                    chatLinkRepository.updateInviteLink(clubId, it)
+                    log.info("Invite link (re)created on refresh: clubId={} chatId={}", clubId, link.chatId)
+                }
             }
         }
         log.info("Chat link refreshed: clubId={} chatId={} status={}", clubId, link.chatId, state.statusLiteral)
@@ -292,7 +302,8 @@ class ChatLinkService(
      * Это ЕДИНСТВЕННОЕ сообщение бота в чат при привязке (решение PO 2026-08-15). Раньше их было
      * три: подтверждение привязки, приглашение сидящим в чате и этот закреп — три уведомления
      * подряд на ровном месте. Приглашение влилось сюда второй строкой (кнопка ведёт на клуб и
-     * работает и как «вступить», и как «открыть»), подтверждение уехало в личку владельцу.
+     * работает и как «вступить», и как «открыть» — второе стало правдой только 2026-08-19,
+     * см. `MembershipService.joinWithoutApproval`), подтверждение уехало в личку владельцу.
      */
     fun postAndPinClubLink(chatId: Long, clubName: String, clubId: UUID): Long? {
         val messageId = gateway.sendGroupMessageWithUrlButton(
@@ -364,6 +375,16 @@ class ChatLinkService(
         // Снять теги наград, пока бот ещё в чате (учёт сам скажет, есть ли что снимать).
         memberTagService.disableForClub(link)
         link.doorInviteLink?.let { gateway.revokeInviteLink(link.chatId, it) }
+        // Стереть закреп со ссылкой на клуб: клуба больше нет (или он больше не этого чата), а
+        // сообщение с кнопкой «Открыть клуб» осталось бы висеть в шапке и вести в никуда
+        // (просьба PO 2026-08-19). Удаляем, а не открепляем: открепление оставляет в истории то
+        // же мёртвое сообщение, просто ниже.
+        //
+        // Best-effort и обязательно ДО выхода бота — вышедший из чата удалить уже ничего не
+        // может. Своё сообщение бот стирает без прав только первые 48 часов, дальше нужно
+        // `can_delete_messages` (его просит ссылка привязки). Нет права и закреп старый —
+        // сообщение останется, это деградация, а не поломка.
+        link.clubPinMessageId?.let { gateway.deleteMessage(link.chatId, it) }
         if (leaveChat) gateway.leaveChat(link.chatId)
         chatLinkRepository.delete(link.clubId)
         log.info("Chat link released: clubId={} chatId={} botLeftChat={}", link.clubId, link.chatId, leaveChat)

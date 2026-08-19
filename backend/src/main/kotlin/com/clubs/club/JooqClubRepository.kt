@@ -74,26 +74,35 @@ class JooqClubRepository(
                 .where(MEMBERSHIPS.CLUB_ID.eq(CLUBS.ID).and(aliveMembers())),
         )
 
-    override fun create(request: CreateClubRequest, ownerId: UUID, inviteCode: String?, city: City): Club {
-        val record = dsl.insertInto(CLUBS)
+    /**
+     * Скелет клуба, общий для обоих способов рождения — формы создания и привязки чата.
+     * Дальше пути расходятся почти во всём (город, доступ, цена, отметка мастера), поэтому
+     * склеивать методы целиком нельзя: здесь только то, что у клуба есть всегда и заполняется
+     * одинаково. Смысл — чтобы новую обязательную колонку такого рода не вспоминать дважды.
+     */
+    private fun insertClub(ownerId: UUID, name: String, memberLimit: Int, inviteCode: String?) =
+        dsl.insertInto(CLUBS)
             .set(CLUBS.ID, UUID.randomUUID())
             .set(CLUBS.OWNER_ID, ownerId)
-            .set(CLUBS.NAME, request.name)
+            .set(CLUBS.NAME, name)
+            .set(CLUBS.MEMBER_LIMIT, memberLimit)
+            .set(CLUBS.INVITE_LINK, inviteCode)
+            .set(CLUBS.IS_ACTIVE, true)
+
+    override fun create(request: CreateClubRequest, ownerId: UUID, inviteCode: String?, city: City): Club {
+        val record = insertClub(ownerId, request.name, request.memberLimit, inviteCode)
             .set(CLUBS.DESCRIPTION, request.description)
             .set(CLUBS.CATEGORY, ClubCategory.valueOf(request.category))
             .set(CLUBS.ACCESS_TYPE, AccessType.valueOf(request.accessType))
             .set(CLUBS.CITY, city.name)
             .set(CLUBS.CITY_ID, city.id)
             .set(CLUBS.DISTRICT, request.district)
-            .set(CLUBS.MEMBER_LIMIT, request.memberLimit)
             .set(CLUBS.SUBSCRIPTION_PRICE, request.subscriptionPrice)
             .set(CLUBS.AVATAR_URL, request.avatarUrl)
             .set(CLUBS.RULES, request.rules)
             .set(CLUBS.APPLICATION_QUESTION, request.applicationQuestion)
             .set(CLUBS.PAYMENT_LINK, request.paymentLink?.ifBlank { null })
             .set(CLUBS.PAYMENT_METHOD_NOTE, request.paymentMethodNote?.ifBlank { null })
-            .set(CLUBS.INVITE_LINK, inviteCode)
-            .set(CLUBS.IS_ACTIVE, true)
             // Форма и есть заполнение: мастер такому клубу не нужен, баннера на нём быть не должно.
             .set(CLUBS.SETUP_COMPLETED_AT, OffsetDateTime.now())
             .returning()
@@ -102,10 +111,7 @@ class JooqClubRepository(
     }
 
     override fun createFromChat(name: String, ownerId: UUID, memberLimit: Int, inviteCode: String): Club {
-        val record = dsl.insertInto(CLUBS)
-            .set(CLUBS.ID, UUID.randomUUID())
-            .set(CLUBS.OWNER_ID, ownerId)
-            .set(CLUBS.NAME, name)
+        val record = insertClub(ownerId, name, memberLimit, inviteCode)
             // Описание и категорию владелец уточняет в приложении; колонки NOT NULL с V2,
             // поэтому заполняем пустой строкой и нейтральной категорией, а не NULL.
             .set(CLUBS.DESCRIPTION, "")
@@ -117,13 +123,10 @@ class JooqClubRepository(
             // Денормализованное `city` держим пустым, пока не выбран город из справочника.
             .set(CLUBS.CITY, "")
             .set(CLUBS.CITY_ID, null as UUID?)
-            .set(CLUBS.MEMBER_LIMIT, memberLimit)
             // Клуб из чата рождается бесплатным — вся машинерия взносов гаснет сама.
             .set(CLUBS.SUBSCRIPTION_PRICE, 0)
             // Мастер наполнения ещё впереди: пока отметки нет, на странице висит баннер (V82).
             .set(CLUBS.SETUP_COMPLETED_AT, null as OffsetDateTime?)
-            .set(CLUBS.INVITE_LINK, inviteCode)
-            .set(CLUBS.IS_ACTIVE, true)
             .returning()
             .fetchOne()!!
         return mapper.toDomain(record)

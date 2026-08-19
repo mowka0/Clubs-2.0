@@ -2159,30 +2159,26 @@
 .rd-cl-alert .at b { font-weight: 650; }
 .rd-cl-alert .at .sub { display: block; color: var(--text-dim); font-size: 11.5px; margin-top: 3px; }
 
-/* Door-ссылка: моноширинная строка с кнопкой копирования */
-.rd-cl-link-row {
-  display: flex; align-items: center; gap: 8px; margin-top: 10px;
-  background: var(--surface); border: 1px solid var(--hairline); border-radius: 10px; padding: 8px 10px;
-}
-.rd-cl-link-text {
-  flex: 1; min-width: 0; font-size: 11.5px; color: var(--text-dim);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
 .rd-cl-copy {
   border: none; background: none; color: var(--accent); font-size: 12px; font-weight: 600;
   cursor: pointer; padding: 2px 4px; flex-shrink: 0; font-family: inherit;
 }
 .rd-cl-copy:disabled { color: var(--text-faint); cursor: default; }
 
-/* Предупреждение «история скрыта от новичков» — не ошибка нашей интеграции, а настройка
+/* Заметки внутри карточки чата: «история скрыта от новичков» (`hist`) и «боту не хватает
+   прав» (`fix`). Обе — не аварии нашей интеграции, а невыставленные тумблеры в настройках
    группы, поэтому тон нейтральный (не danger): владельцу нужно объяснение, а не тревога. */
-.rd-cl-hist {
+.rd-cl-hist, .rd-cl-fix {
   margin-top: 10px; padding: 10px 12px; border-radius: 10px;
   background: var(--accent-soft); border: 1px solid var(--accent-soft);
 }
-.rd-cl-hist-t { font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
-.rd-cl-hist-d { font-size: 11.5px; line-height: 1.5; color: var(--text-dim); }
-.rd-cl-hist-d b { color: var(--text); font-weight: 600; }
+.rd-cl-hist-t, .rd-cl-fix-t { font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.rd-cl-hist-d, .rd-cl-fix-d { font-size: 11.5px; line-height: 1.5; color: var(--text-dim); }
+.rd-cl-hist-d b, .rd-cl-fix-d b { color: var(--text); font-weight: 600; }
+/* Действия заметки — колонкой во всю ширину: «Выдать права» и запасной путь «скопировать
+   ссылку» равнозначны, кому какой подходит, зависит от того, админ человек группы или нет. */
+.rd-cl-fix-actions { display: grid; gap: 8px; margin-top: 10px; }
+.rd-cl-fix-actions > button { width: 100%; margin: 0; }
 
 /* Памятка о правах бота (модалка сразу после привязки чата): список из четырёх прав с
    отметкой «выдано / ещё нет». Выданные приглушены — глазу нужны именно невыданные. */
@@ -2978,6 +2974,22 @@
   color: var(--text-dim); font-size: 12.5px; font-family: inherit;
   cursor: pointer;
 }
+
+/* Свёрнутая панель: «Позже в настройках» больше не убирает предложение насовсем, а
+   складывает его в строку — тап разворачивает обратно. Вид и вес — как у чипа «у клуба
+   есть чат» рядом: это такая же спокойная строка состояния, а не второй призыв. Свои
+   отбивки повторяют отбивки развёрнутой панели, чтобы ритм страницы не прыгал при
+   сворачивании. */
+.rd-chat-panel-row {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  margin: 20px 0 14px; padding: 9px 12px;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 11px;
+  color: var(--text-dim); font-size: 12px; font-family: inherit; text-align: left;
+  cursor: pointer;
+}
+.rd-chat-panel-row img { width: 15px; height: auto; flex: none; }
+.rd-chat-panel-row-tx { flex: 1; min-width: 0; }
+.rd-chat-panel-row-chev { flex: none; color: var(--text-faint); font-size: 15px; line-height: 1; }
 
 /* Ниже 360px (AC 53 такие экраны не покрывает) строка не помещается даже при сжатом
    до пола лисе — разрешаем перенос заголовка: перенос читается, срез нет. */

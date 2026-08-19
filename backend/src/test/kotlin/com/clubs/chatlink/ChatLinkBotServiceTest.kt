@@ -297,6 +297,7 @@ class ChatLinkBotServiceTest {
         every { chatLinkRepository.findByChatId(chatId) } returns own
         every { gateway.getBotChatState(chatId) } returns
             BotChatState("administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, canManageTags = true)
+        every { gateway.createJoinRequestInviteLink(chatId, any()) } returns "https://t.me/+fresh"
 
         service.handleGroupStart(chatId, "Партия — чат", ownerTelegramId, clubId)
 
@@ -308,8 +309,12 @@ class ChatLinkBotServiceTest {
         verify(exactly = 0) { chatLinkService.postAndPinClubLink(any(), any(), any()) }
         verify(exactly = 0) { gateway.sendDm(any(), any()) }
         verify(exactly = 0) { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any(), any(), any()) }
-        // Ссылка была живой (бот всё время мог приглашать) — не пересоздаём
-        verify(exactly = 0) { gateway.createJoinRequestInviteLink(any(), any()) }
+        // А вот ссылку пересоздаём. Прежняя редакция теста ждала обратного — «бот всё время мог
+        // приглашать, значит ссылка жива», — и это допущение было неверным: событие приходит
+        // именно на переприглашение бота, а Telegram при выходе бота гасит все его ссылки.
+        // Записанное состояние остаётся прежним, поэтому мёртвую ссылку было ничем не отличить
+        // от живой, и она оставалась в базе навсегда (баг PO 2026-08-19).
+        verify { chatLinkRepository.updateInviteLink(clubId, "https://t.me/+fresh") }
     }
 
     @Test
@@ -454,6 +459,28 @@ class ChatLinkBotServiceTest {
 
         verify(exactly = 0) { clubService.createClubFromChat(any(), any(), any()) }
         verify { chatLinkRepository.insert(match { it.clubId == clubId && it.chatId == chatId }) }
+    }
+
+    @Test
+    fun `выдача прав пересоздаёт invite-ссылку — переприглашение её убивает`() {
+        // Бот выходит и входит обратно, и Telegram гасит все созданные им ссылки. Записанное
+        // состояние при этом и до, и после одинаковое («в чате, приглашать может»), поэтому
+        // проверка «ссылка живая» без явного признака оставляла в базе мёртвую (баг PO
+        // 2026-08-19: кнопка «В чат» и DM вели на «срок действия ссылки истёк»).
+        every { intentStore.consume(ownerTelegramId) } returns ChatLinkIntentStore.Intent.GrantRights(clubId)
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(
+            clubId = clubId, chatId = chatId,
+            botStatus = BotChatStatus.ADMINISTRATOR, canInviteUsers = true,
+            doorInviteLink = "https://t.me/+killed-by-readd"
+        )
+        every { gateway.getBotChatState(chatId) } returns
+            com.clubs.bot.BotChatState("administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, canManageTags = true)
+        every { gateway.createJoinRequestInviteLink(chatId, any()) } returns "https://t.me/+fresh"
+
+        service.handleBotAddedToChat(chatId, "Чат клуба", ownerTelegramId)
+
+        verify { gateway.revokeInviteLink(chatId, "https://t.me/+killed-by-readd") }
+        verify { chatLinkRepository.updateInviteLink(clubId, "https://t.me/+fresh") }
     }
 
     @Test

@@ -67,7 +67,8 @@
 | `SkladchinaPage.tsx`, `CreateSkladchinaPage.tsx`, `CreateSplitBillPage.tsx` | `skladchina.md` |
 | `ProfilePage.tsx` | `profile.md`, `profile-quest.md` |
 | `InvitePage.tsx` | `club-invites.md` |
-| `OrganizerClubManage.tsx` | `club-roles.md`, `co-organizers.md`, `member-admin-profile.md`, `club-chat-link.md` |
+| `OrganizerClubManage.tsx` + `src/components/manage/` | `club-roles.md`, `co-organizers.md`, `member-admin-profile.md`, `club-chat-link.md` |
+| `ClubSetupWizard.tsx` + `src/components/club/setup/` | `club-chat-link.md` § «После подключения: мастер наполнения клуба» |
 | `FeedbackPage.tsx` | `feedback.md` |
 
 ### Сквозное (frontend)
@@ -77,6 +78,7 @@
 | `src/api/`, `src/telegram/`, `router.tsx` | `frontend-core.md` |
 | `src/config/` (`PRODUCT_PROFILE`), `HomeRoute.tsx`, `BottomTabBar.tsx` | `frontend-core.md` § «Спринт 1.0, День 1» |
 | `src/store/`, `src/queries/` | `frontend-stores.md` |
+| `src/utils/` | спека модуля-потребителя (см. импортирующие страницы и компоненты) |
 | `src/styles/`, общие компоненты | `redesign-banco-style.md`, `ui-pages.md` |
 | анимации / вибро / жесты | `haptic.md`, `swipe-navigation.md` |
 | пустые экраны, первый вход | `empty-states.md`, `onboarding.md` |
