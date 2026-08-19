@@ -1,9 +1,6 @@
 import { FC } from 'react';
 import { useHaptic } from '../../hooks/useHaptic';
-import {
-  CLUB_SETUP_TOTAL_STEPS,
-  readClubSetupStep,
-} from '../../utils/clubSetupProgress';
+import { readClubSetupProgress } from '../../utils/clubSetupProgress';
 
 interface ClubSetupBannerProps {
   clubId: string;
@@ -24,7 +21,9 @@ interface ClubSetupBannerProps {
  */
 export const ClubSetupBanner: FC<ClubSetupBannerProps> = ({ clubId, onOpen }) => {
   const haptic = useHaptic();
-  const savedStep = readClubSetupStep(clubId);
+  // Шкала рисуется по числу шагов ИЗ ПРОГРЕССА: последний шаг (права бота) появляется не
+  // всегда, и фиксированные пять сегментов врали бы на один (баг PO 2026-08-19).
+  const { step: savedStep, totalSteps } = readClubSetupProgress(clubId);
   const isStarted = savedStep > 1;
 
   return (
@@ -42,13 +41,11 @@ export const ClubSetupBanner: FC<ClubSetupBannerProps> = ({ clubId, onOpen }) =>
       {isStarted && (
         <div className="rd-setup-cta-progress">
           <div className="rd-setup-cta-bar" aria-hidden="true">
-            {Array.from({ length: CLUB_SETUP_TOTAL_STEPS }, (_, i) => (
+            {Array.from({ length: totalSteps }, (_, i) => (
               <span key={i} className={i < savedStep - 1 ? 'rd-setup-cta-seg rd-done' : 'rd-setup-cta-seg'} />
             ))}
           </div>
-          {/* Без «из N»: последний шаг (права бота) появляется не всегда, и общее число шагов
-              знает только сам мастер — здесь оно бы врало. */}
-          <span className="rd-setup-cta-step">Шаг {savedStep}</span>
+          <span className="rd-setup-cta-step">Шаг {savedStep} из {totalSteps}</span>
         </div>
       )}
 

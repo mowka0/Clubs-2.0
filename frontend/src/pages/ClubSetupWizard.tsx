@@ -97,8 +97,8 @@ export const ClubSetupWizard: FC = () => {
   }, [id, searchParams, setSearchParams]);
 
   useEffect(() => {
-    if (id) saveClubSetupStep(id, urlStep);
-  }, [id, urlStep]);
+    if (id) saveClubSetupStep(id, urlStep, totalSteps);
+  }, [id, urlStep, totalSteps]);
 
   if (clubQuery.isPending) return null;
   if (!club) return null;

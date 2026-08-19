@@ -24,23 +24,50 @@ function progressKey(clubId: string): string {
 }
 
 /**
- * Шаг, на котором человек остановился. 1 — мастер ещё не открывали.
+ * Где человек остановился: шаг и сколько всего шагов было в его мастере.
+ *
+ * Общее число хранится вместе с шагом, потому что оно непостоянно: последний шаг (права бота)
+ * появляется, только если прав не хватает. Знает об этом мастер, а рисует шкалу баннер на
+ * странице клуба — он бы врал на один сегмент (баг PO 2026-08-19).
+ */
+export interface ClubSetupProgress {
+  step: number;
+  totalSteps: number;
+}
+
+/**
+ * Прогресс мастера. `step = 1` — мастер ещё не открывали.
  *
  * Недоступный localStorage (приватный режим, вебвью без storage) не должен ронять экраны,
  * которые всего лишь хотят подписать кнопку: без памяти мастер просто начинается сначала.
  */
-export function readClubSetupStep(clubId: string): number {
+export function readClubSetupProgress(clubId: string): ClubSetupProgress {
+  const fallback: ClubSetupProgress = { step: 1, totalSteps: CLUB_SETUP_TOTAL_STEPS };
   try {
-    const raw = Number(localStorage.getItem(progressKey(clubId)));
-    return Number.isInteger(raw) && raw >= 1 && raw <= CLUB_SETUP_TOTAL_STEPS ? raw : 1;
+    // Формат «шаг/всего»; голое число — запись прежней версии, у неё шагов было пять.
+    const raw = localStorage.getItem(progressKey(clubId));
+    if (!raw) return fallback;
+    const [rawStep, rawTotal] = raw.split('/');
+    const total = Number(rawTotal);
+    const totalSteps = Number.isInteger(total) && total >= 1 && total <= CLUB_SETUP_TOTAL_STEPS
+      ? total
+      : CLUB_SETUP_TOTAL_STEPS;
+    const step = Number(rawStep);
+    if (!Number.isInteger(step) || step < 1 || step > totalSteps) return fallback;
+    return { step, totalSteps };
   } catch (_e) {
-    return 1;
+    return fallback;
   }
 }
 
-export function saveClubSetupStep(clubId: string, step: number): void {
+/** Шаг, на котором человек остановился, — когда общее число шагов вызывающему не нужно. */
+export function readClubSetupStep(clubId: string): number {
+  return readClubSetupProgress(clubId).step;
+}
+
+export function saveClubSetupStep(clubId: string, step: number, totalSteps: number): void {
   try {
-    localStorage.setItem(progressKey(clubId), String(step));
+    localStorage.setItem(progressKey(clubId), `${step}/${totalSteps}`);
   } catch (_e) {
     // Хранилище недоступно — прогресс не переживёт перезапуск, но заполнение работает.
   }
