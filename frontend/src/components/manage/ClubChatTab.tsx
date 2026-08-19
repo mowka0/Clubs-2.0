@@ -10,7 +10,7 @@ import {
   useUpdateChatLinkMutation,
 } from '../../queries/chatLink';
 import { rememberChatLinkingStarted } from '../../utils/chatLinkPending';
-import { ADMIN_RIGHTS_SHARE_TEXT, shareTmeLink } from '../../utils/telegramLinks';
+import { adminRightsShareText, shareTmeLink } from '../../utils/telegramLinks';
 import { hasAllBotRights } from '../../utils/botRights';
 import { Toast } from '../Toast';
 import type { ChatLinkStatusDto, UpdateChatLinkRequest } from '../../types/api';
@@ -176,7 +176,7 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
    */
   const handleShareAdminLink = () => {
     haptic.impact('light');
-    shareTmeLink(status.startGroupUrl, ADMIN_RIGHTS_SHARE_TEXT);
+    shareTmeLink(status.startGroupUrl, adminRightsShareText(status.chatTitle));
   };
 
   // Прав не хватает — тогда «Проверить права ещё раз» переезжает наверх, к «Выдать права»:

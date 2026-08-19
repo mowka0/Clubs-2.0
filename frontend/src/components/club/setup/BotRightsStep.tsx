@@ -2,7 +2,7 @@ import { FC } from 'react';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useChatLinkStatusQuery, useStartChatLinkingMutation } from '../../../queries/chatLink';
 import { OPTIONAL_BOT_RIGHT, REQUIRED_BOT_RIGHTS, hasAllBotRights } from '../../../utils/botRights';
-import { ADMIN_RIGHTS_SHARE_TEXT, shareTmeLink } from '../../../utils/telegramLinks';
+import { adminRightsShareText, shareTmeLink } from '../../../utils/telegramLinks';
 
 interface BotRightsStepProps {
   clubId: string;
@@ -37,7 +37,7 @@ export const BotRightsStep: FC<BotRightsStepProps> = ({ clubId, onFinish }) => {
   const shareLink = () => {
     if (!status?.startGroupUrl) return;
     haptic.impact('light');
-    shareTmeLink(status.startGroupUrl, ADMIN_RIGHTS_SHARE_TEXT);
+    shareTmeLink(status.startGroupUrl, adminRightsShareText(status.chatTitle));
   };
 
   return (

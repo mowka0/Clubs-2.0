@@ -172,6 +172,9 @@ describe('ClubChatTab', () => {
     // список прочитается как пробелы и Telegram не запросит ни одного права.
     expect(shared).toContain(encodeURIComponent(START_URL));
     expect(shared).toContain('%2B');
+    // Название группы в тексте: у админа их может быть несколько, а пикер Telegram покажет
+    // ему весь список — «выберите эту группу» не отвечает на вопрос «какую именно».
+    expect(decodeURIComponent(shared)).toContain('выберите группу «Партия — чат»');
   });
 
   it('«Выдать права» открывает ту же ссылку и помечает намерение как выдачу прав', async () => {
