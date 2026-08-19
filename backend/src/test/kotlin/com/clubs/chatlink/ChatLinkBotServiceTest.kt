@@ -25,7 +25,6 @@ class ChatLinkBotServiceTest {
     private lateinit var chatLinkService: ChatLinkService
     private lateinit var gateway: ChatTelegramGateway
     private lateinit var intentStore: ChatLinkIntentStore
-    private lateinit var serviceMessageStore: ChatServiceMessageStore
     private lateinit var service: ChatLinkBotService
 
     private val clubId = UUID.randomUUID()
@@ -43,8 +42,7 @@ class ChatLinkBotServiceTest {
         chatLinkService = mockk(relaxed = true)
         gateway = mockk(relaxed = true)
         intentStore = mockk(relaxed = true)
-        serviceMessageStore = mockk(relaxed = true)
-        service = ChatLinkBotService(chatLinkRepository, clubRepository, clubService, userRepository, chatLinkService, intentStore, serviceMessageStore, gateway, botUsername = "clubs_test_bot")
+        service = ChatLinkBotService(chatLinkRepository, clubRepository, clubService, userRepository, chatLinkService, intentStore, gateway, botUsername = "clubs_test_bot")
 
         every { clubRepository.findById(clubId) } returns club
         val owner = mockk<UsersRecord>(relaxed = true) {
@@ -430,30 +428,6 @@ class ChatLinkBotServiceTest {
 
         verify { chatLinkRepository.updateChatId(chatId, -1009999L) }
         verify { chatLinkRepository.updateInviteLink(clubId, "https://t.me/+supergroup") }
-    }
-
-    // --- Служебная команда `/start@bot`: стереть сразу или когда появятся права ---
-
-    @Test
-    fun `команду не удалось стереть - запоминаем до появления прав`() {
-        every { gateway.deleteMessage(chatId, 120L) } returns false
-
-        service.deleteServiceCommand(chatId, 120L)
-
-        verify { serviceMessageStore.remember(chatId, 120L) }
-    }
-
-    @Test
-    fun `права появились - отложенная команда стирается`() {
-        // Бота добавил обычный участник: прав не было, команда осталась висеть у всех на виду.
-        every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(clubId = clubId, chatId = chatId)
-        every { serviceMessageStore.peek(chatId) } returns 120L
-        every { gateway.deleteMessage(chatId, 120L) } returns true
-
-        service.handleMyChatMember(chatId, "administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true)
-
-        verify { gateway.deleteMessage(chatId, 120L) }
-        verify { serviceMessageStore.forget(chatId) }
     }
 
     // --- Бота добавили в группу (my_chat_member): вход без команды /start ---
