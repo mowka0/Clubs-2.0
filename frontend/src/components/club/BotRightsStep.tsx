@@ -1,10 +1,6 @@
 import { FC, useState } from 'react';
 import { useHaptic } from '../../hooks/useHaptic';
-import {
-  useChatLinkStatusQuery,
-  useRefreshChatLinkMutation,
-  useStartChatLinkingMutation,
-} from '../../queries/chatLink';
+import { useChatLinkStatusQuery, useStartChatLinkingMutation } from '../../queries/chatLink';
 import type { ChatLinkStatusDto } from '../../types/api';
 
 interface BotRightsStepProps {
@@ -59,7 +55,6 @@ export const BotRightsStep: FC<BotRightsStepProps> = ({ clubId, onFinish }) => {
   const haptic = useHaptic();
   const statusQuery = useChatLinkStatusQuery(clubId);
   const startLinking = useStartChatLinkingMutation();
-  const refresh = useRefreshChatLinkMutation(clubId);
   const [copied, setCopied] = useState(false);
 
   const status = statusQuery.data;
@@ -106,41 +101,36 @@ export const BotRightsStep: FC<BotRightsStepProps> = ({ clubId, onFinish }) => {
               <p className="rd-wz-hint">
                 {OPTIONAL_RIGHT.label}. Telegram это право по ссылке не выдаёт — включается только
                 руками: откройте группу → профиль бота → «Изменить права» → «Управление тегами».
+                Галочка появится здесь сама, когда вернётесь в приложение.
               </p>
-              {/* Кнопка рядом с инструкцией: включив тумблер, человек возвращается в приложение и
-                  должен увидеть результат здесь же, а не идти искать «Управление» → «Чат». */}
-              <button
-                type="button"
-                className="rd-ghost-btn rd-wz-skip"
-                disabled={refresh.isPending}
-                onClick={() => { haptic.impact('light'); refresh.mutate(); }}
-              >
-                {refresh.isPending ? 'Проверяем…' : 'Я включил — проверить'}
-              </button>
             </>
           )}
 
           {!allGranted && (
             <>
-              <button
-                type="button"
-                className="rd-btn-primary rd-wz-next"
-                disabled={startLinking.isPending}
-                onClick={() => {
-                  haptic.impact('medium');
-                  startLinking.mutate({ clubId, startGroupUrl: status.startGroupUrl, grantRightsOnly: true });
-                }}
-              >
-                Выдать права
-              </button>
-              <button type="button" className="rd-ghost-btn rd-wz-skip" onClick={copyLink}>
-                {copied ? 'Ссылка скопирована' : 'Скопировать ссылку для админа'}
-              </button>
-              <div className="rd-wz-note">
-                Telegram попросит выбрать ту же группу — бот на секунду выйдет и вернётся уже с
-                правами. Выдать их может только администратор группы: если это не вы, отправьте
-                ему ссылку.
+              {/* Кнопки одной группой с равными промежутками: порядок — сначала главное действие,
+                  следом запасной путь для тех, кто не админ группы (правка PO 2026-08-19). */}
+              <div className="rd-wz-actions">
+                <button
+                  type="button"
+                  className="rd-btn-primary"
+                  disabled={startLinking.isPending}
+                  onClick={() => {
+                    haptic.impact('medium');
+                    startLinking.mutate({ clubId, startGroupUrl: status.startGroupUrl, grantRightsOnly: true });
+                  }}
+                >
+                  Выдать права
+                </button>
+                <button type="button" className="rd-ghost-btn" onClick={copyLink}>
+                  {copied ? 'Ссылка скопирована' : 'Скопировать ссылку для админа'}
+                </button>
               </div>
+              <p className="rd-wz-admin-note">
+                <b>Выдать права может только администратор группы.</b> Если это не вы — отправьте
+                ему ссылку. Telegram попросит выбрать ту же группу: бот на секунду выйдет и
+                вернётся уже с правами.
+              </p>
             </>
           )}
         </>
@@ -153,7 +143,7 @@ export const BotRightsStep: FC<BotRightsStepProps> = ({ clubId, onFinish }) => {
 
       <button
         type="button"
-        className={allGranted || statusQuery.isError ? 'rd-btn-primary rd-wz-next' : 'rd-ghost-btn rd-wz-skip'}
+        className={allGranted || statusQuery.isError ? 'rd-btn-primary rd-wz-next' : 'rd-ghost-btn rd-wz-done'}
         onClick={() => { haptic.impact('light'); onFinish(); }}
       >
         Готово

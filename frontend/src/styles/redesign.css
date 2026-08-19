@@ -3373,6 +3373,20 @@
 .rd-wz-right-mark { color: var(--accent); flex-shrink: 0; width: 12px; }
 .rd-wz-right.rd-on .rd-wz-right-mark { color: var(--live); }
 
+/* Кнопки последнего шага одной группой: равные промежутки вместо разнобоя из собственных
+   отступов у primary (20px) и ghost (8px) — на экране прав их сразу три (правка PO 2026-08-19). */
+.rd-wz-actions { display: grid; gap: 10px; margin-top: 18px; }
+.rd-wz-actions > button { width: 100%; margin: 0; }
+/* Условие «только администратор» — тем же тоном, что основной текст: это не сноска, а причина,
+   по которой у половины людей кнопка выше не сработает. */
+.rd-wz-admin-note {
+  font-size: 12.5px; color: var(--text-dim); line-height: 1.5;
+  margin: 12px 0 0; padding: 0 2px;
+}
+.rd-wz-admin-note b { color: var(--text); font-weight: 700; }
+/* «Готово» отделено от группы действий тем же шагом, что и промежутки внутри неё. */
+.rd-wz-done { width: 100%; margin-top: 16px; }
+
 .rd-wz-next { width: 100%; margin-top: 20px; }
 .rd-wz-skip { width: 100%; margin-top: 8px; }
 .rd-wz-note { font-size: 11px; color: var(--text-faint); text-align: center; padding-top: 10px; }
