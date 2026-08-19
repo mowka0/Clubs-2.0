@@ -9,6 +9,7 @@ import com.clubs.common.exception.NotFoundException
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import io.mockk.verifyOrder
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -292,11 +293,16 @@ class ChatLinkServiceTest {
 
     @Test
     fun `releaseOnClubDeleted — находит привязку сам и выводит бота, без привязки no-op`() {
-        val link = chatLinkFixture(clubId = clubId, doorInviteLink = "https://t.me/+abc")
+        val link = chatLinkFixture(clubId = clubId, doorInviteLink = "https://t.me/+abc", clubPinMessageId = 555L)
         every { chatLinkRepository.findByClubId(clubId) } returns link
 
         assertTrue(service.releaseOnClubDeleted(clubId))
-        verify { gateway.leaveChat(link.chatId) }
+        // Закреп со ссылкой на удалённый клуб стираем, и обязательно ДО выхода бота: вышедший
+        // из чата удалить уже ничего не может (просьба PO 2026-08-19).
+        verifyOrder {
+            gateway.deleteMessage(link.chatId, 555L)
+            gateway.leaveChat(link.chatId)
+        }
         verify { chatLinkRepository.delete(clubId) }
 
         val other = UUID.randomUUID()

@@ -49,6 +49,8 @@ fun chatLinkFixture(
     skladchinaStatusEnabled: Boolean = false,
     strictModeEnabled: Boolean = false,
     awardTagsEnabled: Boolean = false,
+    /** Закреп со ссылкой на клуб — его бот стирает, отпуская чат. */
+    clubPinMessageId: Long? = null,
     linkedByUserId: UUID = UUID.randomUUID()
 ): ChatLink = ChatLink(
     clubId = clubId,
@@ -66,5 +68,6 @@ fun chatLinkFixture(
     livePinEnabled = livePinEnabled,
     skladchinaStatusEnabled = skladchinaStatusEnabled,
     strictModeEnabled = strictModeEnabled,
-    awardTagsEnabled = awardTagsEnabled
+    awardTagsEnabled = awardTagsEnabled,
+    clubPinMessageId = clubPinMessageId
 )

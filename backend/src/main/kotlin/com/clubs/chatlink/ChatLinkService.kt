@@ -375,6 +375,16 @@ class ChatLinkService(
         // Снять теги наград, пока бот ещё в чате (учёт сам скажет, есть ли что снимать).
         memberTagService.disableForClub(link)
         link.doorInviteLink?.let { gateway.revokeInviteLink(link.chatId, it) }
+        // Стереть закреп со ссылкой на клуб: клуба больше нет (или он больше не этого чата), а
+        // сообщение с кнопкой «Открыть клуб» осталось бы висеть в шапке и вести в никуда
+        // (просьба PO 2026-08-19). Удаляем, а не открепляем: открепление оставляет в истории то
+        // же мёртвое сообщение, просто ниже.
+        //
+        // Best-effort и обязательно ДО выхода бота — вышедший из чата удалить уже ничего не
+        // может. Своё сообщение бот стирает без прав только первые 48 часов, дальше нужно
+        // `can_delete_messages` (его просит ссылка привязки). Нет права и закреп старый —
+        // сообщение останется, это деградация, а не поломка.
+        link.clubPinMessageId?.let { gateway.deleteMessage(link.chatId, it) }
         if (leaveChat) gateway.leaveChat(link.chatId)
         chatLinkRepository.delete(link.clubId)
         log.info("Chat link released: clubId={} chatId={} botLeftChat={}", link.clubId, link.chatId, leaveChat)
