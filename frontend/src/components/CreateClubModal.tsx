@@ -445,8 +445,8 @@ export const CreateClubModal: FC<{
                   const n = Number(v);
                   // Согласовано с Bean Validation на бэкенде в CreateClubRequest.kt
                   // (минимум временно 1 — тест заполняемости, PO 2026-07-11).
-                  if (!v || !Number.isFinite(n) || n < 1 || n > 80) return 'Лимит участников: 1–80';
-                  if (!Number.isInteger(n)) return 'Лимит участников: 1–80';
+                  if (!v || !Number.isFinite(n) || n < 1 || n > 500) return 'Лимит участников: 1–500';
+                  if (!Number.isInteger(n)) return 'Лимит участников: 1–500';
                   return true;
                 },
               })}

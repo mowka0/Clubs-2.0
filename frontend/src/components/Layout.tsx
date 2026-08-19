@@ -4,6 +4,7 @@ import { Spinner } from '@telegram-apps/telegram-ui';
 import { BottomTabBar, isTabBarRoute } from './BottomTabBar';
 import { DeepLinkHandler } from './DeepLinkHandler';
 import { ChatSetupGate } from './club/ChatSetupGate';
+import { NewClubFromChatGate } from './club/NewClubFromChatGate';
 import { SwipeNavigator } from './SwipeNavigator';
 import { CreateActivityFlow } from './manage/CreateActivityFlow';
 import { OnboardingFlow } from './onboarding/OnboardingFlow';
@@ -150,6 +151,8 @@ export const Layout: FC = () => {
       {/* Окно «чат подключён» после возвращения из Telegram — в корне, потому что вернуться
           человек может на любой экран (см. ChatSetupGate). */}
       <ChatSetupGate />
+      {/* Возврат из Telegram после «создать клуб из чата»: уводит на страницу нового клуба. */}
+      <NewClubFromChatGate />
       {/* Suspense внутри навигатора, а не снаружи: при lazy-загрузке страницы
           обёртка жеста не должна размонтироваться вместе с содержимым. */}
       <SwipeNavigator>

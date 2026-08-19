@@ -81,6 +81,7 @@ class RateLimitFilter : OncePerRequestFilter() {
         apiBuckets.clear()
         authBuckets.clear()
         feedbackBuckets.clear()
+        geoBuckets.clear()
     }
 
     private fun resolveKey(request: HttpServletRequest): String {
@@ -92,13 +93,27 @@ class RateLimitFilter : OncePerRequestFilter() {
         return "ip:${getClientIp(request)}"
     }
 
+    /**
+     * Адрес клиента из цепочки прокси: Traefik → nginx фронта → бэкенд.
+     *
+     * Каждый прокси дописывает в `X-Forwarded-For` того, от кого получил запрос, поэтому хвост
+     * цепочки выглядит как `…, <клиент>, <traefik>`. Последний элемент — внутренний адрес
+     * Traefik, один на всё окружение: ключ по нему складывал всех пользователей в один бакет
+     * (баг прода 2026-08-19). Берём предпоследний — его дописал доверенный Traefik, подделать
+     * клиент не может. Первые элементы клиентские и ненадёжны: ротацией фейков можно было бы
+     * штамповать свежие ключи `ip:*` и обходить лимит (security-ревью feedback).
+     */
     private fun getClientIp(request: HttpServletRequest): String {
-        // Последний элемент X-Forwarded-For дописан доверенным Traefik и не подделывается;
-        // первый контролируется клиентом — ротация фейковых значений давала бы неограниченный
-        // запас свежих ключей `ip:*` и обход лимита (security-ревью feedback).
-        val forwarded = request.getHeader("X-Forwarded-For")
-        return if (!forwarded.isNullOrBlank()) forwarded.split(",").last().trim()
-        else request.remoteAddr
+        val chain = request.getHeader("X-Forwarded-For")
+            ?.split(",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?: emptyList()
+        return when {
+            chain.size >= TRUSTED_PROXY_HOPS + 1 -> chain[chain.size - 1 - TRUSTED_PROXY_HOPS]
+            chain.isNotEmpty() -> chain.last()
+            else -> request.remoteAddr
+        }
     }
 
     private fun createApiBucket(): Bucket = Bucket.builder()
@@ -138,8 +153,19 @@ class RateLimitFilter : OncePerRequestFilter() {
         .build()
 
     companion object {
-        // Общий лимит на обычные API-запросы, в минуту на ключ (пользователь или IP).
-        private const val API_LIMIT_PER_MIN = 60L
+        /**
+         * Сколько прокси между клиентом и бэкендом дописывают себя в `X-Forwarded-For`.
+         * Сейчас один — nginx фронта, дописывающий адрес Traefik (docker-compose.prod.yml).
+         * Меняется вместе с цепочкой прокси, иначе ключ съедет на внутренний адрес.
+         */
+        private const val TRUSTED_PROXY_HOPS = 1
+
+        /**
+         * Общий лимит обычных API-запросов, в минуту на ключ (пользователь или IP). Поднят с 60
+         * вместе с переездом ключа на пользователя: одна страница клуба тянет около десятка
+         * запросов, и при живой навигации шестидесяти не хватало даже одному человеку.
+         */
+        private const val API_LIMIT_PER_MIN = 120L
         // Жёсткий лимит для /api/auth/* — защита от брутфорса и подбора HMAC
         // (security.md: "агрессивно" — 5 попыток в минуту на IP/user).
         private const val AUTH_LIMIT_PER_MIN = 5L

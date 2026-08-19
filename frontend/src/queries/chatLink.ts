@@ -1,6 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getChatLinkStatus, pinClubLink, refreshChatLink, unlinkChat, updateChatLink } from '../api/chatLink';
+import {
+  getChatLinkStatus,
+  getNewClubChatLinkUrl,
+  pinClubLink,
+  refreshChatLink,
+  rememberChatLinkIntent,
+  unlinkChat,
+  updateChatLink,
+} from '../api/chatLink';
 import type { ChatLinkStatusDto, UpdateChatLinkRequest } from '../types/api';
+import { rememberNewClubLinkingStarted } from '../utils/chatLinkPending';
+import { openTmeLink } from '../utils/telegramLinks';
 import { queryKeys } from './queryKeys';
 
 // Server state привязки чата (club-chat-link). Мутации кладут свежий статус в кэш сразу
@@ -61,5 +71,52 @@ export function useUnlinkChatMutation(clubId: string) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.clubs.chatLink(clubId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.clubs.detail(clubId) });
     },
+  });
+}
+
+/**
+ * Отметить намерение перед уходом в Telegram и только потом открыть выбор группы.
+ *
+ * Порядок важен: бот узнаёт о добавлении из `my_chat_member`, где payload ссылки отсутствует, —
+ * без отметки он не поймёт, привязывать чат к существующему клубу или заводить новый.
+ *
+ * `clubId = null` (новый клуб) уводит в Telegram даже при неудачной отметке: это дефолт бота,
+ * и терять шаг человека из-за сетевой ошибки незачем. Для привязки к существующему клубу
+ * ошибка блокирует переход — иначе бот завёл бы вместо привязки лишний клуб.
+ */
+export function useStartChatLinkingMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ clubId, startGroupUrl, grantRightsOnly = false }: {
+      clubId: string | null;
+      startGroupUrl: string;
+      /** Чат уже привязан, идём только за правами бота — привязку заново не делаем. */
+      grantRightsOnly?: boolean;
+    }) => {
+      try {
+        await rememberChatLinkIntent(clubId, grantRightsOnly);
+      } catch (e) {
+        if (clubId !== null) throw e;
+      }
+      if (clubId === null) {
+        // Клуб родится в чате, и его id приложение узнает только по возвращении — запоминаем
+        // снимок нынешних клубов, чтобы найти новорождённый по разнице (NewClubFromChatGate).
+        const known = queryClient.getQueryData<Array<{ clubId: string }>>(queryKeys.clubs.my()) ?? [];
+        rememberNewClubLinkingStarted(known.map((m) => m.clubId), Date.now());
+      }
+      openTmeLink(startGroupUrl);
+    },
+  });
+}
+
+/**
+ * Ссылка «подключить чат» для человека без клуба. Значение не меняется в пределах окружения
+ * (в нём только username бота), поэтому не протухает и не перезапрашивается.
+ */
+export function useNewClubChatLinkQuery() {
+  return useQuery({
+    queryKey: queryKeys.clubs.newClubChatLink(),
+    queryFn: getNewClubChatLinkUrl,
+    staleTime: Infinity,
   });
 }

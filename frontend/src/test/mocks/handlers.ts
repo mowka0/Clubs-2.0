@@ -25,6 +25,7 @@ export const mockClubDetail: ClubDetailDto = {
   isActive: true,
   paymentLink: null,
   paymentMethodNote: null,
+  setupCompleted: true,
   chatLinked: false,
   chatDoorEnabled: false,
   chatInviteLink: null,

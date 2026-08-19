@@ -54,7 +54,7 @@ class ChatLinkServiceTest {
 
         assertFalse(status.linked)
         // restrict_members — право снимать баны (реестр багов №1: «удалить из группы» = бан)
-        assertEquals("https://t.me/clubs_test_bot?startgroup=$clubId&admin=pin_messages+invite_users+restrict_members+manage_tags", status.startGroupUrl)
+        assertEquals("https://t.me/clubs_test_bot?startgroup=$clubId&admin=pin_messages+invite_users+restrict_members+manage_tags+delete_messages", status.startGroupUrl)
     }
 
     @Test

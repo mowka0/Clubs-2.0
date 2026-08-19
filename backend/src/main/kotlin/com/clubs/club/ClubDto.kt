@@ -69,6 +69,12 @@ data class ClubDetailDto(
     // Реквизиты для взносов по СБП — заполняются только для участников клуба (active/frozen) + владельца; иначе null.
     val paymentLink: String?,
     val paymentMethodNote: String?,
+    /**
+     * Мастер наполнения пройден (V82). false — на странице клуба висит баннер «Клуб ещё не
+     * заполнен»: клуб родился из чата, и владелец до конца мастера не дошёл. Отдаём флагом, а
+     * не датой: фронту важен только сам факт.
+     */
+    val setupCompleted: Boolean = true,
     // Чат-интеграция (club-chat-link): к клубу привязан телеграм-чат и бот в нём жив.
     // Публично — гость видит чип «у клуба есть чат» (мокап 02-C).
     val chatLinked: Boolean = false,
@@ -136,7 +142,8 @@ data class CreateClubRequest(
     @field:NotNull(message = "Member limit is required")
     // Минимум временно 1 (было 10) — тест заполняемости полного клуба (PO 2026-07-11, club-invites).
     @field:Min(value = 1, message = "Member limit must be at least 1")
-    @field:Max(value = 80, message = "Member limit must be at most 80")
+    // Потолок 500 (V81, было 80): клуб создаётся из телеграм-чата и вмещает всех его участников.
+    @field:Max(value = 500, message = "Member limit must be at most 500")
     val memberLimit: Int,
 
     @field:NotNull(message = "Subscription price is required")
@@ -174,7 +181,8 @@ data class UpdateClubRequest(
 
     // Минимум временно 1 (было 10) — тест заполняемости полного клуба (PO 2026-07-11, club-invites).
     @field:Min(value = 1, message = "Member limit must be at least 1")
-    @field:Max(value = 80, message = "Member limit must be at most 80")
+    // Потолок 500 (V81, было 80): клуб создаётся из телеграм-чата и вмещает всех его участников.
+    @field:Max(value = 500, message = "Member limit must be at most 500")
     val memberLimit: Int? = null,
 
     @field:Min(value = 0, message = "Subscription price must be non-negative")
@@ -186,6 +194,12 @@ data class UpdateClubRequest(
     val coverUrl: String? = null,
     val rules: String? = null,
     val applicationQuestion: String? = null,
+
+    /**
+     * Мастер наполнения пройден: true ставит отметку (повторная не сдвигает дату), null — не
+     * трогать. Снять отметку нельзя: «клуб заполнен» — событие, а не тумблер.
+     */
+    val setupCompleted: Boolean? = null,
 
     /**
      * Темы клуба. Та же конвенция, что у остальных полей: null = не трогать, пустой список =

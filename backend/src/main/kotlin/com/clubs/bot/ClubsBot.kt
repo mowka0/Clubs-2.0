@@ -28,6 +28,11 @@ import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
+// Статусы бота в чате, означающие «его там нет» и «он там есть» (литералы Bot API). Переход
+// первого во второй = бота только что добавили в группу.
+private val OUTSIDE_CHAT_STATUSES = setOf("left", "kicked")
+private val INSIDE_CHAT_STATUSES = setOf("member", "administrator", "creator")
+
 @Component
 class ClubsBot(
     @Value("\${telegram.bot-token}") private val botToken: String,
@@ -138,16 +143,35 @@ class ClubsBot(
      * «/start <club_id>» в группе → привязка чата к клубу. Без валидного UUID-payload —
      * молчаливый no-op: бота могли добавить в группу руками или тапнуть /start@bot без
      * payload'а, спамить группу инструкциями не надо.
+     *
+     * Само сообщение с командой стираем: подключение обязано быть незаметным для участников
+     * группы, а команду в чат кладёт клиент Telegram — от бота это не зависит. Право
+     * «Удаление сообщений» запрашивается ссылкой привязки; без него Telegram откажет, и
+     * команда просто останется в ленте.
      */
     private fun handleGroupStart(message: Message) {
+        chatLinkBotService.deleteServiceCommand(message.chatId, message.messageId.toLong())
         val payload = message.text.split(Regex("\\s+")).getOrNull(1) ?: return
+        val from = message.from ?: return
+
+        // Точка входа чат-модели: бота добавили ссылкой ?startgroup=new, клуба ещё нет —
+        // создаём его из самого чата. Прежний сценарий (payload = UUID существующего клуба)
+        // продолжает работать: привязка чата из «Управления клубом» никуда не делась.
+        if (payload == ChatLinkBotService.NEW_CLUB_START_PAYLOAD) {
+            chatLinkBotService.handleGroupStartNewClub(
+                chatId = message.chatId,
+                chatTitle = message.chat.title,
+                fromTelegramId = from.id
+            )
+            return
+        }
+
         val clubId = try {
             UUID.fromString(payload)
         } catch (_: IllegalArgumentException) {
             log.warn("Group /start with non-UUID payload ignored: chatId={}", message.chatId)
             return
         }
-        val from = message.from ?: return
         chatLinkBotService.handleGroupStart(
             chatId = message.chatId,
             chatTitle = message.chat.title,
@@ -156,7 +180,15 @@ class ClubsBot(
         )
     }
 
-    /** Статус самого бота в чате изменился: обновляем health привязки (мокап 01-C). */
+    /**
+     * Статус самого бота в чате изменился: обновляем health привязки (мокап 01-C), а если бота
+     * только что ДОБАВИЛИ в группу — это ещё и штатная точка входа привязки чата.
+     *
+     * Раньше входом была команда `/start <payload>`, которую Telegram отправлял за человека. Со
+     * ссылкой, запрашивающей права администратора (`&admin=…`), клиент показывает экран выбора
+     * прав и команду не отправляет — человеку приходилось писать её руками. Здесь payload'а нет,
+     * поэтому «зачем добавляли» приложение откладывает заранее (ChatLinkIntentStore).
+     */
     private fun handleMyChatMember(update: Update) {
         val updated = update.myChatMember
         val chat = updated.chat
@@ -170,6 +202,18 @@ class ClubsBot(
             canInviteUsers = admin?.canInviteUsers ?: false,
             canRestrictMembers = admin?.canRestrictMembers ?: false
         )
+
+        // Именно добавление, а не выдача прав уже сидящему боту: иначе каждая правка прав
+        // заводила бы привязку заново. Клуб-хозяин чата и прочие конфликты проверяет сервис.
+        val wasOutside = updated.oldChatMember.status in OUTSIDE_CHAT_STATUSES
+        val isInsideNow = newMember.status in INSIDE_CHAT_STATUSES
+        if (wasOutside && isInsideNow) {
+            chatLinkBotService.handleBotAddedToChat(
+                chatId = chat.id,
+                chatTitle = chat.title,
+                fromTelegramId = updated.from.id
+            )
+        }
     }
 
     /** Ответ на inline-кнопку. Формат data: «chatlink:unlink:<uuid>» (см. ChatLinkBotService). */

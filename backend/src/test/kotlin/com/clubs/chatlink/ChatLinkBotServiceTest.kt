@@ -3,6 +3,7 @@ package com.clubs.chatlink
 import com.clubs.bot.BotChatState
 import com.clubs.bot.ChatTelegramGateway
 import com.clubs.club.ClubRepository
+import com.clubs.club.ClubService
 import com.clubs.generated.jooq.tables.records.UsersRecord
 import com.clubs.user.UserRepository
 import io.mockk.every
@@ -19,9 +20,11 @@ class ChatLinkBotServiceTest {
 
     private lateinit var chatLinkRepository: ChatLinkRepository
     private lateinit var clubRepository: ClubRepository
+    private lateinit var clubService: ClubService
     private lateinit var userRepository: UserRepository
     private lateinit var chatLinkService: ChatLinkService
     private lateinit var gateway: ChatTelegramGateway
+    private lateinit var intentStore: ChatLinkIntentStore
     private lateinit var service: ChatLinkBotService
 
     private val clubId = UUID.randomUUID()
@@ -34,10 +37,12 @@ class ChatLinkBotServiceTest {
     fun setUp() {
         chatLinkRepository = mockk(relaxed = true)
         clubRepository = mockk(relaxed = true)
+        clubService = mockk(relaxed = true)
         userRepository = mockk(relaxed = true)
         chatLinkService = mockk(relaxed = true)
         gateway = mockk(relaxed = true)
-        service = ChatLinkBotService(chatLinkRepository, clubRepository, userRepository, chatLinkService, gateway, botUsername = "clubs_test_bot")
+        intentStore = mockk(relaxed = true)
+        service = ChatLinkBotService(chatLinkRepository, clubRepository, clubService, userRepository, chatLinkService, intentStore, gateway, botUsername = "clubs_test_bot")
 
         every { clubRepository.findById(clubId) } returns club
         val owner = mockk<UsersRecord>(relaxed = true) {
@@ -59,7 +64,7 @@ class ChatLinkBotServiceTest {
         service.handleGroupStart(chatId, "Чужой чат", strangerTelegramId, clubId)
 
         verify(exactly = 0) { chatLinkRepository.insert(any()) }
-        verify { gateway.sendGroupMessage(chatId, match { it.contains("только владелец") }) }
+        verify { gateway.sendDm(strangerTelegramId, match { it.contains("только владелец") }) }
         verify { gateway.leaveChat(chatId) }
     }
 
@@ -97,7 +102,7 @@ class ChatLinkBotServiceTest {
         verify(exactly = 0) { chatLinkRepository.insert(any()) }
         verify(exactly = 0) { chatLinkRepository.delete(any()) }
         verify(exactly = 0) { chatLinkService.releaseKeepingBotInChat(any()) }
-        verify { gateway.sendGroupMessage(chatId, match { it.contains("уже привязан к другому клубу") }) }
+        verify { gateway.sendDm(ownerTelegramId, match { it.contains("уже привязан к другому клубу") }) }
         verify(exactly = 0) { gateway.leaveChat(any()) }
     }
 
@@ -121,10 +126,12 @@ class ChatLinkBotServiceTest {
         assertEquals(clubId, inserted.captured.clubId)
         assertEquals(chatId, inserted.captured.chatId)
         verify {
-            gateway.sendDmWithCallbackButton(
+            gateway.sendDmWithWebAppAndCallbackButton(
                 telegramId = ownerTelegramId,
                 text = match { it.contains("привязан к клубу") },
-                buttonText = any(),
+                webAppButtonText = any(),
+                webAppPath = "/clubs/$clubId",
+                callbackButtonText = any(),
                 callbackData = "chatlink:unlink:$clubId"
             )
         }
@@ -145,7 +152,7 @@ class ChatLinkBotServiceTest {
 
         verify(exactly = 0) { chatLinkRepository.insert(any()) }
         verify(exactly = 0) { chatLinkService.releaseKeepingBotInChat(any()) }
-        verify { gateway.sendGroupMessage(chatId, match { it.contains("администратор чата") }) }
+        verify { gateway.sendDm(ownerTelegramId, match { it.contains("администратор чата") }) }
         // Чат свободен (за строкой мёртвый клуб) — сидеть в нём боту незачем.
         verify { gateway.leaveChat(chatId) }
     }
@@ -179,7 +186,7 @@ class ChatLinkBotServiceTest {
         service.handleGroupStart(chatId, "Чат клуба А", strangerTelegramId, clubId)
 
         verify(exactly = 0) { chatLinkRepository.insert(any()) }
-        verify(exactly = 0) { gateway.sendGroupMessage(any(), any()) }
+        verify(exactly = 0) { gateway.sendDm(any(), any()) }
         verify(exactly = 0) { gateway.leaveChat(any()) }
     }
 
@@ -194,7 +201,7 @@ class ChatLinkBotServiceTest {
         service.handleGroupStart(chatId, "Чат клуба А", ownerTelegramId, missing)
 
         verify(exactly = 0) { chatLinkRepository.insert(any()) }
-        verify(exactly = 0) { gateway.sendGroupMessage(any(), any()) }
+        verify(exactly = 0) { gateway.sendDm(any(), any()) }
         verify(exactly = 0) { gateway.leaveChat(any()) }
     }
 
@@ -211,7 +218,7 @@ class ChatLinkBotServiceTest {
 
         verify(exactly = 0) { chatLinkRepository.insert(any()) }
         verify(exactly = 0) { chatLinkService.releaseKeepingBotInChat(any()) }
-        verify { gateway.sendGroupMessage(chatId, match { it.contains("уже привязан другой чат") }) }
+        verify { gateway.sendDm(ownerTelegramId, match { it.contains("уже привязан другой чат") }) }
         verify { gateway.leaveChat(chatId) }
     }
 
@@ -225,7 +232,7 @@ class ChatLinkBotServiceTest {
         service.handleGroupStart(chatId, "Чат клуба А", ownerTelegramId, clubId)
 
         verify(exactly = 0) { chatLinkRepository.insert(any()) }
-        verify { gateway.sendGroupMessage(chatId, match { it.contains("уже привязан другой чат") }) }
+        verify { gateway.sendDm(ownerTelegramId, match { it.contains("уже привязан другой чат") }) }
         verify(exactly = 0) { gateway.leaveChat(any()) }
     }
 
@@ -250,14 +257,16 @@ class ChatLinkBotServiceTest {
         // (решение PO 2026-08-15; раньше их было три подряд). Текст и закреп — в ChatLinkService,
         // здесь проверяем сам факт вызова и что других постов в чат не осталось.
         verify(exactly = 1) { chatLinkService.postAndPinClubLink(chatId, "Партия", clubId) }
-        verify(exactly = 0) { gateway.sendGroupMessage(any(), any()) }
+        verify(exactly = 0) { gateway.sendDm(any(), any()) }
         verify(exactly = 0) { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any(), any(), any()) }
         // Подтверждение привязки уехало в личку владельцу и там же несёт петлю безопасности
         verify {
-            gateway.sendDmWithCallbackButton(
+            gateway.sendDmWithWebAppAndCallbackButton(
                 telegramId = ownerTelegramId,
                 text = match { it.contains("привязан к клубу") && it.contains("Это были вы") },
-                buttonText = any(),
+                webAppButtonText = any(),
+                webAppPath = "/clubs/$clubId",
+                callbackButtonText = any(),
                 callbackData = "chatlink:unlink:$clubId"
             )
         }
@@ -278,8 +287,10 @@ class ChatLinkBotServiceTest {
     }
 
     @Test
-    fun `повторный старт в том же чате - идемпотентно, подтверждение в личку, чат не трогаем`() {
-        // Реестр багов №3: «уже привязан» сбивал с толку после кика бота.
+    fun `повторный старт в том же чате - идемпотентно и молча`() {
+        // Привязка не менялась, а это событие приходит на каждое техническое переприглашение
+        // бота (выдача прав, второй апдейт вслед за my_chat_member) — владелец получал дубль
+        // «чат привязан» (баг PO 2026-08-18). Состояние он видит в приложении.
         val own = chatLinkFixture(clubId = clubId, chatId = chatId, doorInviteLink = "https://t.me/+alive")
         every { chatLinkRepository.findByClubId(clubId) } returns own
         // В реальной БД по этому chat_id лежит собственная строка клуба — стаб это отражает.
@@ -291,18 +302,11 @@ class ChatLinkBotServiceTest {
 
         verify(exactly = 0) { chatLinkRepository.insert(any()) }
         verify(exactly = 0) { gateway.leaveChat(any()) }
-        // Подтверждение — владельцу в личку: участникам группы оно не адресовано (PO 2026-08-15)
-        verify {
-            gateway.sendDmWithCallbackButton(
-                telegramId = ownerTelegramId,
-                text = match { it.contains("привязан к клубу") },
-                buttonText = any(),
-                callbackData = "chatlink:unlink:$clubId"
-            )
-        }
+        // Ни одного сообщения: ни подтверждения в личку, ни чего-либо в группу.
+        verify(exactly = 0) { gateway.sendDmWithWebAppAndCallbackButton(any(), any(), any(), any(), any(), any()) }
         // В сам чат при повторном /start не летит ничего: закреп со ссылкой там уже висит
         verify(exactly = 0) { chatLinkService.postAndPinClubLink(any(), any(), any()) }
-        verify(exactly = 0) { gateway.sendGroupMessage(any(), any()) }
+        verify(exactly = 0) { gateway.sendDm(any(), any()) }
         verify(exactly = 0) { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any(), any(), any()) }
         // Ссылка была живой (бот всё время мог приглашать) — не пересоздаём
         verify(exactly = 0) { gateway.createJoinRequestInviteLink(any(), any()) }
@@ -424,5 +428,134 @@ class ChatLinkBotServiceTest {
 
         verify { chatLinkRepository.updateChatId(chatId, -1009999L) }
         verify { chatLinkRepository.updateInviteLink(clubId, "https://t.me/+supergroup") }
+    }
+
+    // --- Бота добавили в группу (my_chat_member): вход без команды /start ---
+
+    @Test
+    fun `бота добавили без намерения - чат становится новым клубом`() {
+        val newClubId = UUID.randomUUID()
+        val newClub = chatLinkTestClub(clubId = newClubId, ownerId = ownerId, name = "Бегуны")
+        every { intentStore.consume(ownerTelegramId) } returns null
+        every { clubService.createClubFromChat(any(), ownerId, any()) } returns newClub
+        every { clubRepository.findById(newClubId) } returns newClub
+
+        service.handleBotAddedToChat(chatId, "Бегуны", ownerTelegramId)
+
+        // Добавление мимо приложения (меню Telegram) в чат-модели значит «пусть чат станет клубом».
+        verify { clubService.createClubFromChat("Бегуны", ownerId, any()) }
+    }
+
+    @Test
+    fun `бота добавили с намерением привязать клуб - привязка без создания нового`() {
+        every { intentStore.consume(ownerTelegramId) } returns ChatLinkIntentStore.Intent.LinkExistingClub(clubId)
+
+        service.handleBotAddedToChat(chatId, "Чат клуба", ownerTelegramId)
+
+        verify(exactly = 0) { clubService.createClubFromChat(any(), any(), any()) }
+        verify { chatLinkRepository.insert(match { it.clubId == clubId && it.chatId == chatId }) }
+    }
+
+    @Test
+    fun `выдача прав не шлёт второе подтверждение привязки`() {
+        // Telegram выдаёт права переприглашением: бот выходит и входит обратно, и событие
+        // приходит как «бота добавили». Привязка при этом та же — писать владельцу нечего.
+        every { intentStore.consume(ownerTelegramId) } returns ChatLinkIntentStore.Intent.GrantRights(clubId)
+        every { chatLinkRepository.findByClubId(clubId) } returns chatLinkFixture(clubId = clubId, chatId = chatId)
+        every { gateway.getBotChatState(chatId) } returns
+            com.clubs.bot.BotChatState("administrator", canPinMessages = true, canInviteUsers = true, canRestrictMembers = true, canManageTags = true)
+
+        service.handleBotAddedToChat(chatId, "Чат клуба", ownerTelegramId)
+
+        verify(exactly = 0) { gateway.sendDmWithWebAppAndCallbackButton(any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.insert(any()) }
+        // Права при этом обязаны доехать до базы — ради них человек и ходил.
+        verify { chatLinkRepository.updateBotState(clubId, BotChatStatus.ADMINISTRATOR, true, true, true, true) }
+    }
+
+    @Test
+    fun `подключение чата не оставляет в группе ни одного сообщения`() {
+        val newClubId = UUID.randomUUID()
+        val newClub = chatLinkTestClub(clubId = newClubId, ownerId = ownerId, name = "Тихий клуб")
+        every { intentStore.consume(ownerTelegramId) } returns ChatLinkIntentStore.Intent.NewClub
+        every { clubService.createClubFromChat(any(), ownerId, any()) } returns newClub
+        every { clubRepository.findById(newClubId) } returns newClub
+
+        service.handleBotAddedToChat(chatId, "Тихий клуб", ownerTelegramId)
+
+        // Участники группы не должны узнать о подключении, пока владелец не представит клуб сам.
+        verify(exactly = 0) { gateway.sendGroupMessage(any(), any()) }
+        verify(exactly = 0) { gateway.sendGroupMessageWithUrlButton(any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { chatLinkService.postAndPinClubLink(any(), any(), any()) }
+    }
+
+    // --- ?startgroup=new: клуб рождается из чата (спринт 1.0, чат-модель) ---
+
+    @Test
+    fun `startgroup new - клуб создаётся из чата и сразу привязывается`() {
+        val newClubId = UUID.randomUUID()
+        val newClub = chatLinkTestClub(clubId = newClubId, ownerId = ownerId, name = "Бегуны Сокольники")
+        every { clubService.createClubFromChat(any(), ownerId, any()) } returns newClub
+        every { clubRepository.findById(newClubId) } returns newClub
+
+        service.handleGroupStartNewClub(chatId, "Бегуны Сокольники", ownerTelegramId)
+
+        // Название клуба берётся у чата, владельцем становится тот, кто добавил бота.
+        verify { clubService.createClubFromChat("Бегуны Сокольники", ownerId, any()) }
+        verify { chatLinkRepository.insert(match { it.clubId == newClubId && it.chatId == chatId }) }
+    }
+
+    @Test
+    fun `startgroup new - размер клуба берётся из числа участников чата`() {
+        val newClubId = UUID.randomUUID()
+        val newClub = chatLinkTestClub(clubId = newClubId, ownerId = ownerId, name = "Бегуны Сокольники")
+        every { clubService.createClubFromChat(any(), ownerId, any()) } returns newClub
+        every { clubRepository.findById(newClubId) } returns newClub
+        every { gateway.getChatMemberCount(chatId) } returns 184
+
+        service.handleGroupStartNewClub(chatId, "Бегуны Сокольники", ownerTelegramId)
+
+        // Клуб обязан вместить тех, кто уже сидит в группе, — иначе часть чата упрётся в лимит.
+        verify { clubService.createClubFromChat(any(), ownerId, 184) }
+    }
+
+    @Test
+    fun `startgroup new - чат уже за живым клубом - клуб НЕ создаётся и бот остаётся`() {
+        // Уход бота снёс бы работающую интеграцию клуба-хозяина руками постороннего.
+        val otherClubId = UUID.randomUUID()
+        every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(clubId = otherClubId, chatId = chatId)
+        every { clubRepository.findById(otherClubId) } returns chatLinkTestClub(clubId = otherClubId)
+
+        service.handleGroupStartNewClub(chatId, "Чат", ownerTelegramId)
+
+        verify(exactly = 0) { clubService.createClubFromChat(any(), any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.insert(any()) }
+        verify(exactly = 0) { gateway.leaveChat(chatId) }
+    }
+
+    @Test
+    fun `startgroup new - добавивший ни разу не открывал приложение - отказ и выход`() {
+        // Пользователь заводится только при входе в Mini App — владельца назначить не из чего.
+        val unknownTelegramId = 777L
+        every { userRepository.findByTelegramId(unknownTelegramId) } returns null
+
+        service.handleGroupStartNewClub(chatId, "Чат", unknownTelegramId)
+
+        verify(exactly = 0) { clubService.createClubFromChat(any(), any(), any()) }
+        verify { gateway.leaveChat(chatId) }
+    }
+
+    @Test
+    fun `startgroup new - осиротевший чат перехватывает только администратор чата`() {
+        // Иначе рядовой участник легаси-группы увёл бы её под свой клуб вместе с правами бота.
+        val staleClubId = UUID.randomUUID()
+        every { chatLinkRepository.findByChatId(chatId) } returns chatLinkFixture(clubId = staleClubId, chatId = chatId)
+        every { clubRepository.findById(staleClubId) } returns null
+        every { gateway.isChatAdmin(chatId, ownerTelegramId) } returns false
+
+        service.handleGroupStartNewClub(chatId, "Чат", ownerTelegramId)
+
+        verify(exactly = 0) { clubService.createClubFromChat(any(), any(), any()) }
+        verify(exactly = 0) { chatLinkRepository.insert(any()) }
     }
 }

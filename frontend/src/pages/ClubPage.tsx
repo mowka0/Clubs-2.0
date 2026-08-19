@@ -25,6 +25,7 @@ import { ClubCoverButton } from '../components/club/ClubCoverButton';
 import { ClubIdentityHeader } from '../components/club/ClubIdentityHeader';
 import { ClubLockedNotice } from '../components/club/ClubLockedNotice';
 import { ClubChatConnectBanner } from '../components/club/ClubChatConnectBanner';
+import { ClubSetupBanner } from '../components/club/ClubSetupBanner';
 import { ClubEventsTeaser } from '../components/club/ClubEventsTeaser';
 import { WelcomeScene, memberCountCaption } from '../components/onboarding/WelcomeScene';
 import { useCompleteTourMutation } from '../queries/profile';
@@ -503,6 +504,18 @@ export const ClubPage: FC = () => {
         // key={club.id}: страница не перемонтируется при переходе между клубами,
         // ключ гарантирует свежее состояние скрытия для каждого клуба.
         <ClubChatConnectBanner key={club.id} clubId={club.id} />
+      )}
+
+      {/* Клуб из чата ещё не наполнен. Единственная дверь в мастер: при запуске приложения
+          человек попадает на страницу клуба, а не в форму (решение PO 2026-08-17) — заполняет,
+          когда сам решит. Кнопка помнит, где он остановился.
+          Признак — серверная отметка о завершении мастера, а не «город не заполнен»: город
+          спрашивают вторым шагом, и баннер исчезал на середине пути (баг PO 2026-08-19). */}
+      {/* Без key намеренно: прогресс баннер читает на каждом рендере, перемонтирование ему не
+          нужно — а key={club.id} совпал бы с ключом соседней панели чата, и React перестал бы
+          различать сиблингов (панель рисовалась дважды). */}
+      {isManager && !club.setupCompleted && (
+        <ClubSetupBanner clubId={club.id} onOpen={() => navigate(`/clubs/${club.id}/setup`)} />
       )}
 
       {/* О клубе — описание, правила и вход в чат одним блоком (решение PO 2026-07-30):

@@ -288,4 +288,15 @@ open class ClubsDao(configuration: Configuration?) : DAOImpl<ClubsRecord, com.cl
      * Fetch records that have <code>city_id IN (values)</code>
      */
     fun fetchByCityId(vararg values: UUID): List<com.clubs.generated.jooq.tables.pojos.Clubs> = fetch(Clubs.CLUBS.CITY_ID, *values)
+
+    /**
+     * Fetch records that have <code>setup_completed_at BETWEEN lowerInclusive
+     * AND upperInclusive</code>
+     */
+    fun fetchRangeOfSetupCompletedAt(lowerInclusive: OffsetDateTime?, upperInclusive: OffsetDateTime?): List<com.clubs.generated.jooq.tables.pojos.Clubs> = fetchRange(Clubs.CLUBS.SETUP_COMPLETED_AT, lowerInclusive, upperInclusive)
+
+    /**
+     * Fetch records that have <code>setup_completed_at IN (values)</code>
+     */
+    fun fetchBySetupCompletedAt(vararg values: OffsetDateTime): List<com.clubs.generated.jooq.tables.pojos.Clubs> = fetch(Clubs.CLUBS.SETUP_COMPLETED_AT, *values)
 }

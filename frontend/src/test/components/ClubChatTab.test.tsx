@@ -63,6 +63,9 @@ function status(over: Partial<ChatLinkStatusDto> = {}): ChatLinkStatusDto {
 function mockStatus(dto: ChatLinkStatusDto) {
   server.use(
     http.get(`*/api/clubs/${CLUB_ID}/chat-link`, () => HttpResponse.json(dto)),
+    // Намерение отмечается ПЕРЕД уходом в Telegram: без него бот, получив my_chat_member,
+    // не поймёт, что чат надо привязать к этому клубу (club-chat-link.md).
+    http.post('*/api/chat-link/intent', () => new HttpResponse(null, { status: 204 })),
   );
 }
 
@@ -86,7 +89,7 @@ describe('ClubChatTab', () => {
     const cta = await screen.findByRole('button', { name: 'Привязать чат' });
     await userEvent.click(cta);
 
-    expect(openTelegramLinkMock).toHaveBeenCalledWith(START_URL);
+    await waitFor(() => expect(openTelegramLinkMock).toHaveBeenCalledWith(START_URL));
     // Отсюда человек уходит в Telegram (на iOS приложение закрывается) — отметка переживает
     // выход и по возвращении открывает окно со статусом подключения бота (ChatSetupGate).
     expect(localStorage.getItem('clubs:chat-linking-pending')).toContain(CLUB_ID);
@@ -245,6 +248,7 @@ describe('ClubChatTab', () => {
         current = linkedHealthy();
         return HttpResponse.json(current);
       }),
+      http.post('*/api/chat-link/intent', () => new HttpResponse(null, { status: 204 })),
     );
     renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
 
@@ -252,7 +256,7 @@ describe('ClubChatTab', () => {
 
     // Под алертом — быстрая повторная привязка тем же deep link'ом (реестр №5)
     await userEvent.click(screen.getByRole('button', { name: 'Привязать бота заново' }));
-    expect(openTelegramLinkMock).toHaveBeenCalledWith(START_URL);
+    await waitFor(() => expect(openTelegramLinkMock).toHaveBeenCalledWith(START_URL));
 
     await userEvent.click(screen.getByRole('button', { name: 'Проверить права ещё раз' }));
 

@@ -94,6 +94,36 @@ class JooqClubRepository(
             .set(CLUBS.PAYMENT_METHOD_NOTE, request.paymentMethodNote?.ifBlank { null })
             .set(CLUBS.INVITE_LINK, inviteCode)
             .set(CLUBS.IS_ACTIVE, true)
+            // Форма и есть заполнение: мастер такому клубу не нужен, баннера на нём быть не должно.
+            .set(CLUBS.SETUP_COMPLETED_AT, OffsetDateTime.now())
+            .returning()
+            .fetchOne()!!
+        return mapper.toDomain(record)
+    }
+
+    override fun createFromChat(name: String, ownerId: UUID, memberLimit: Int, inviteCode: String): Club {
+        val record = dsl.insertInto(CLUBS)
+            .set(CLUBS.ID, UUID.randomUUID())
+            .set(CLUBS.OWNER_ID, ownerId)
+            .set(CLUBS.NAME, name)
+            // Описание и категорию владелец уточняет в приложении; колонки NOT NULL с V2,
+            // поэтому заполняем пустой строкой и нейтральной категорией, а не NULL.
+            .set(CLUBS.DESCRIPTION, "")
+            .set(CLUBS.CATEGORY, ClubCategory.other)
+            // Клуб чата не показывается в каталоге: посторонним там делать нечего, а согласия
+            // на публикацию своей группы владелец не давал. Выход в каталог — отдельный тумблер.
+            .set(CLUBS.ACCESS_TYPE, AccessType.`private`)
+            // Город спрашивается в приложении после подключения: в чате его взять неоткуда.
+            // Денормализованное `city` держим пустым, пока не выбран город из справочника.
+            .set(CLUBS.CITY, "")
+            .set(CLUBS.CITY_ID, null as UUID?)
+            .set(CLUBS.MEMBER_LIMIT, memberLimit)
+            // Клуб из чата рождается бесплатным — вся машинерия взносов гаснет сама.
+            .set(CLUBS.SUBSCRIPTION_PRICE, 0)
+            // Мастер наполнения ещё впереди: пока отметки нет, на странице висит баннер (V82).
+            .set(CLUBS.SETUP_COMPLETED_AT, null as OffsetDateTime?)
+            .set(CLUBS.INVITE_LINK, inviteCode)
+            .set(CLUBS.IS_ACTIVE, true)
             .returning()
             .fetchOne()!!
         return mapper.toDomain(record)
@@ -398,6 +428,12 @@ class JooqClubRepository(
         request.applicationQuestion?.let { step.set(CLUBS.APPLICATION_QUESTION, it.ifBlank { null }) }
         request.paymentLink?.let { step.set(CLUBS.PAYMENT_LINK, it.ifBlank { null }) }
         request.paymentMethodNote?.let { step.set(CLUBS.PAYMENT_METHOD_NOTE, it.ifBlank { null }) }
+
+        // Отметка «мастер пройден» ставится один раз: повторное «Готово» не должно сдвигать дату,
+        // а снять её нельзя вовсе — заполненность клуба событие, а не тумблер (V82).
+        if (request.setupCompleted == true) {
+            step.set(CLUBS.SETUP_COMPLETED_AT, DSL.coalesce(CLUBS.SETUP_COMPLETED_AT, DSL.value(OffsetDateTime.now())))
+        }
 
         step.where(CLUBS.ID.eq(id)).execute()
         return findById(id)

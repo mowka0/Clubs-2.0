@@ -41,7 +41,8 @@ data class Clubs(
     var paymentMethodNote: String? = null,
     var coverUrl: String? = null,
     var applyInviteCode: String? = null,
-    var cityId: UUID? = null
+    var cityId: UUID? = null,
+    var setupCompletedAt: OffsetDateTime? = null
 ): Serializable {
 
 
@@ -161,6 +162,12 @@ data class Clubs(
         }
         else if (this.cityId != o.cityId)
             return false
+        if (this.setupCompletedAt == null) {
+            if (o.setupCompletedAt != null)
+                return false
+        }
+        else if (this.setupCompletedAt != o.setupCompletedAt)
+            return false
         return true
     }
 
@@ -189,6 +196,7 @@ data class Clubs(
         result = prime * result + (if (this.coverUrl == null) 0 else this.coverUrl.hashCode())
         result = prime * result + (if (this.applyInviteCode == null) 0 else this.applyInviteCode.hashCode())
         result = prime * result + (if (this.cityId == null) 0 else this.cityId.hashCode())
+        result = prime * result + (if (this.setupCompletedAt == null) 0 else this.setupCompletedAt.hashCode())
         return result
     }
 
@@ -217,6 +225,7 @@ data class Clubs(
         sb.append(", ").append(coverUrl)
         sb.append(", ").append(applyInviteCode)
         sb.append(", ").append(cityId)
+        sb.append(", ").append(setupCompletedAt)
 
         sb.append(")")
         return sb.toString()

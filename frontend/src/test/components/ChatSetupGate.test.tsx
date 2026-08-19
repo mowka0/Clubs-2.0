@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
@@ -30,7 +30,11 @@ vi.mock('../../telegram/sdk', () => ({
   getInitDataRaw: () => 'test-init-data',
 }));
 
-import { ChatSetupGate } from '../../components/club/ChatSetupGate';
+import { ChatSetupGate, resetRightsReminderForTests } from '../../components/club/ChatSetupGate';
+import type { FC } from 'react';
+import { useChatLinkStatusQuery } from '../../queries/chatLink';
+import { useAuthStore } from '../../store/useAuthStore';
+import { useClubContextStore } from '../../store/useClubContextStore';
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
 afterEach(() => { server.resetHandlers(); vi.clearAllMocks(); localStorage.clear(); });
@@ -68,6 +72,28 @@ function mockStatus(dto: ChatLinkStatusDto) {
     http.get(`*/api/clubs/${CLUB_ID}/chat-link`, () => HttpResponse.json(dto)),
     // Название клуба берётся из детальки — окно должно назвать, к какому клубу подключён чат
     http.get(`*/api/clubs/${CLUB_ID}`, () => HttpResponse.json({ id: CLUB_ID, name: 'Партия' })),
+  );
+}
+
+const OWNER_ID = 'owner-1';
+
+/** Владелец открыл страницу своего клуба — без отметки об уходе за привязкой. */
+function openOwnedClub(chatLinked = true) {
+  useAuthStore.setState({
+    user: {
+      id: OWNER_ID, telegramId: 1, telegramUsername: 'owner', firstName: 'Owner', lastName: null,
+      avatarUrl: null, city: null, country: null, cityId: null, bio: null,
+      onboardingTours: ['INTRO', 'WELCOME'],
+    },
+    isAuthenticated: true,
+    isLoading: false,
+    error: null,
+  });
+  useClubContextStore.setState({ clubId: CLUB_ID });
+  server.use(
+    http.get(`*/api/clubs/${CLUB_ID}`, () => HttpResponse.json({
+      id: CLUB_ID, name: 'Партия', ownerId: OWNER_ID, chatLinked,
+    })),
   );
 }
 
@@ -179,5 +205,39 @@ describe('ChatSetupGate — окно статуса после привязки 
 
     await waitFor(() => expect(refreshed).toBe(true));
     await waitFor(() => expect(screen.getByText(/получил все права/)).toBeInTheDocument());
+  });
+});
+
+describe('ChatSetupGate — напоминание про права без отметки о привязке', () => {
+  // Флаг «уже показывали» живёт в модуле и переживает рендеры — между тестами его надо сбросить,
+  // иначе второй прогон зеленел бы просто потому, что первый уже показал окно.
+  beforeEach(() => { resetRightsReminderForTests(); });
+  afterEach(() => { useClubContextStore.setState({ clubId: null }); });
+
+  it('клуб из чата: прав не хватает — окно всплывает само', async () => {
+    // Клуб рождается из чата, отметку о привязке приложение при этом не ставит (её создаёт бот),
+    // и напоминание раньше не показывалось вовсе (баг PO 2026-08-19).
+    mockStatus(status({ canPinMessages: true, canInviteUsers: true, canRestrictMembers: true }));
+    openOwnedClub();
+    renderWithProviders(<ChatSetupGate />);
+
+    expect(await screen.findByText('Управление тегами')).toBeInTheDocument();
+  });
+
+  it('все права выданы — окно не всплывает', async () => {
+    mockStatus(status({
+      canPinMessages: true, canInviteUsers: true, canRestrictMembers: true, canManageTags: true,
+    }));
+    openOwnedClub();
+    // Пробник ждёт ТОТ ЖЕ запрос, что и гейт: без него проверка «окна нет» проходила бы просто
+    // потому, что статус ещё не приехал, и не поймала бы регресс.
+    const StatusProbe: FC = () => {
+      const { data } = useChatLinkStatusQuery(CLUB_ID);
+      return <div>{data ? 'статус получен' : 'ждём'}</div>;
+    };
+    renderWithProviders(<><ChatSetupGate /><StatusProbe /></>);
+
+    expect(await screen.findByText('статус получен')).toBeInTheDocument();
+    expect(screen.queryByText('Управление тегами')).not.toBeInTheDocument();
   });
 });

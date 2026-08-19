@@ -31,6 +31,17 @@ private const val MAX_CLUBS_PER_ORGANIZER = 10
 // Длина генерируемого инвайт-кода (символов)
 private const val INVITE_CODE_LENGTH = 16
 
+// Потолок длины названия клуба (совпадает с VARCHAR(60) в схеме): название чата длиннее — режем
+private const val CLUB_NAME_MAX_LENGTH = 60
+// Имя клуба, когда Telegram не отдал название чата (у групп оно бывает пустым)
+private const val DEFAULT_CHAT_CLUB_NAME = "Клуб из чата"
+// Запасной лимит участников для клуба из чата, когда Telegram не ответил на getChatMemberCount:
+// ставим потолок (V81), чтобы никто не упёрся в лимит на ровном месте
+private const val CHAT_CLUB_FALLBACK_MEMBER_LIMIT = 500
+// Границы лимита участников — те же, что в CHECK-констрейнте схемы (V81) и в валидации DTO
+private const val MEMBER_LIMIT_MIN = 1
+private const val MEMBER_LIMIT_MAX = 500
+
 // "Принадлежит клубу" для видимости реквизитов СБП — участники, которым может понадобиться
 // платить, + действующий владелец. expired (должник по продлению) — главный кандидат на оплату.
 private val MEMBER_REQUISITE_STATUSES = setOf(
@@ -116,6 +127,42 @@ class ClubService(
             includeRequisites = true,
             interests = interestService.getClubInterests(club.id)
         )
+    }
+
+    /**
+     * Клуб из телеграм-чата (спринт 1.0, разворот на плагин к чату). Формы создания нет:
+     * известно только название чата и тот, кто добавил бота — он и становится владельцем.
+     *
+     * Отличия от [createClub], помимо отсутствия формы:
+     * - город не задан (`city_id IS NULL`) и спрашивается в приложении сразу после подключения;
+     * - клуб бесплатный, поэтому пейволл ёмкости плана не вызывается вовсе;
+     * - доступ `private` — клуб живёт при своём чате, в каталоге посторонним делать нечего.
+     *
+     * Лимит участников берётся из размера самого чата ([chatMemberCount]): клуб обязан вместить
+     * тех, кто уже в группе. Число приблизительное (Telegram считает вместе с ботами), поэтому
+     * человек правит его в мастере наполнения.
+     */
+    @Transactional
+    fun createClubFromChat(chatTitle: String?, ownerId: UUID, chatMemberCount: Int?): Club {
+        val count = clubRepository.countByOwnerId(ownerId)
+        if (count >= MAX_CLUBS_PER_ORGANIZER) throw ConflictException("Maximum $MAX_CLUBS_PER_ORGANIZER clubs per organizer")
+
+        val name = chatTitle?.trim()?.takeIf { it.isNotEmpty() }?.take(CLUB_NAME_MAX_LENGTH)
+            ?: DEFAULT_CHAT_CLUB_NAME
+        // Приватному клубу код нужен всегда: без него владелец не сможет позвать людей ссылкой.
+        val club = clubRepository.createFromChat(
+            name = name,
+            ownerId = ownerId,
+            memberLimit = chatMemberCount?.coerceIn(MEMBER_LIMIT_MIN, MEMBER_LIMIT_MAX)
+                ?: CHAT_CLUB_FALLBACK_MEMBER_LIMIT,
+            inviteCode = generateInviteCode()
+        )
+        log.info("Club created from chat: id={} name='{}' ownerId={}", club.id, club.name, ownerId)
+
+        // Тот же транзакционный scope, что и вставка клуба: организатор обязан существовать,
+        // иначе клуб останется без владельческого членства (см. createClub).
+        membershipRepository.createOrganizer(ownerId, club.id)
+        return club
     }
 
     fun getClubByInviteCode(code: String): ClubDetailDto {

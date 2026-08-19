@@ -36,6 +36,11 @@ data class Club(
     // в проде значения выставляются через mapper.
     val paymentLink: String? = null,
     val paymentMethodNote: String? = null,
+    /**
+     * Когда владелец закончил мастер наполнения (V82). null — мастер не пройден, и на странице
+     * клуба висит баннер «Клуб ещё не заполнен». Клуб, созданный формой, получает отметку сразу.
+     */
+    val setupCompletedAt: OffsetDateTime? = null,
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime
 )

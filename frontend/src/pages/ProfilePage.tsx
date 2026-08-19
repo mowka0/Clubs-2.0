@@ -305,7 +305,7 @@ export const ProfilePage: FC = () => {
               <span>
                 <span className="rd-ostat-lbl">В клубах</span>
                 <div className="rd-ostat-sub">
-                  {activeClubs.length > 0 ? 'активных участий' : 'пока пусто — найди свой в каталоге'}
+                  {activeClubs.length > 0 ? 'активных участий' : 'пока пусто — подключи свой чат'}
                 </div>
               </span>
               <span className="rd-ostat-val">

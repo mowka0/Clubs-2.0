@@ -142,13 +142,13 @@ describe('OrganizerClubManage — набор табов и владельчес�
     expect(screen.queryByText('Опасная зона')).not.toBeInTheDocument();
   });
 
-  it('deep-link ?tab=chat у со-орга откатывается на «Статистику»', async () => {
+  it('deep-link ?tab=chat у со-орга откатывается на «Настройки»', async () => {
     setViewer(CO_ORG_ID);
     mockPaidClub();
     renderManage(`/clubs/${CLUB_ID}/manage?tab=chat`);
 
-    const statsTab = await screen.findByRole('tab', { name: 'Статистика' });
-    expect(statsTab).toHaveAttribute('aria-selected', 'true');
+    const settingsTab = await screen.findByRole('tab', { name: 'Настройки' });
+    expect(settingsTab).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('tab', { name: 'Чат' })).not.toBeInTheDocument();
   });
 });

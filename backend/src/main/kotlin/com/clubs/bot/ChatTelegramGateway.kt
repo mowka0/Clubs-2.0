@@ -11,6 +11,7 @@ import org.telegram.telegrambots.meta.api.methods.groupadministration.CreateChat
 import org.telegram.telegrambots.meta.api.methods.groupadministration.DeclineChatJoinRequest
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember
+import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMemberCount
 import org.telegram.telegrambots.meta.api.methods.groupadministration.LeaveChat
 import org.telegram.telegrambots.meta.api.methods.groupadministration.RestrictChatMember
 import org.telegram.telegrambots.meta.api.methods.groupadministration.RevokeChatInviteLink
@@ -20,6 +21,7 @@ import org.telegram.telegrambots.meta.api.methods.pinnedmessages.PinChatMessage
 import org.telegram.telegrambots.meta.api.methods.pinnedmessages.UnpinChatMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageCaption
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.InputFile
@@ -273,6 +275,18 @@ class ChatTelegramGateway(
         null
     }
 
+    /**
+     * Сколько человек в чате — размер клуба, рождающегося из этой группы. Считает вместе с
+     * ботами и самим ботом, поэтому число приблизительное; человек правит его в мастере.
+     * null — Telegram не ответил, вызывающий подставляет свой запасной лимит.
+     */
+    fun getChatMemberCount(chatId: Long): Int? = try {
+        telegramClient.execute(GetChatMemberCount.builder().chatId(chatId).build())
+    } catch (e: Exception) {
+        log.warn("getChatMemberCount failed: chatId={} error={}", chatId, e.message)
+        null
+    }
+
     private fun getChatMember(chatId: Long, userId: Long): ChatMember? = try {
         telegramClient.execute(GetChatMember.builder().chatId(chatId).userId(userId).build())
     } catch (e: Exception) {
@@ -432,11 +446,35 @@ class ChatTelegramGateway(
         false
     }
 
+    /**
+     * Удалить сообщение в чате. Best-effort: без права «Удаление сообщений» Telegram откажет,
+     * и это ожидаемый исход — вызывающий на результат не смотрит.
+     */
+    fun deleteMessage(chatId: Long, messageId: Long): Boolean = try {
+        telegramClient.execute(DeleteMessage.builder().chatId(chatId.toString()).messageId(messageId.toInt()).build())
+        true
+    } catch (e: Exception) {
+        log.info("deleteMessage failed (often benign — no delete rights): chatId={} messageId={} error={}", chatId, messageId, e.message)
+        false
+    }
+
     fun unpinChatMessage(chatId: Long, messageId: Long): Boolean = try {
         telegramClient.execute(UnpinChatMessage.builder().chatId(chatId).messageId(messageId.toInt()).build())
         true
     } catch (e: Exception) {
         log.warn("unpinChatMessage failed: chatId={} messageId={} error={}", chatId, messageId, e.message)
+        false
+    }
+
+    /**
+     * DM без кнопок. Best-effort: Telegram запрещает боту писать первым тому, кто ни разу его
+     * не открывал, — такой отказ здесь ожидаем и гасится в лог.
+     */
+    fun sendDm(telegramId: Long, text: String): Boolean = try {
+        telegramClient.execute(SendMessage.builder().chatId(telegramId.toString()).text(text).build())
+        true
+    } catch (e: Exception) {
+        log.info("sendDm failed (often benign — user never opened the bot): telegramId={} error={}", telegramId, e.message)
         false
     }
 
@@ -455,6 +493,40 @@ class ChatTelegramGateway(
         true
     } catch (e: Exception) {
         log.warn("sendDmWithCallbackButton failed: telegramId={} error={}", telegramId, e.message)
+        false
+    }
+
+    /**
+     * DM с двумя кнопками: сверху WebApp-переход в приложение, снизу callback-действие.
+     *
+     * Порядок не случаен: подтверждение привязки читают как «готово, что дальше» — дальше идут
+     * в клуб, а «Отвязать чат» здесь запасной выход и стоять первым не должен.
+     */
+    fun sendDmWithWebAppAndCallbackButton(
+        telegramId: Long,
+        text: String,
+        webAppButtonText: String,
+        webAppPath: String,
+        callbackButtonText: String,
+        callbackData: String
+    ): Boolean = try {
+        val webAppButton = InlineKeyboardButton.builder()
+            .text(webAppButtonText)
+            .webApp(WebAppInfo(webAppBaseUrl + webAppPath))
+            .build()
+        val callbackButton = InlineKeyboardButton.builder()
+            .text(callbackButtonText)
+            .callbackData(callbackData)
+            .build()
+        val msg = SendMessage.builder()
+            .chatId(telegramId.toString())
+            .text(text)
+            .replyMarkup(InlineKeyboardMarkup(listOf(InlineKeyboardRow(webAppButton), InlineKeyboardRow(callbackButton))))
+            .build()
+        telegramClient.execute(msg)
+        true
+    } catch (e: Exception) {
+        log.warn("sendDmWithWebAppAndCallbackButton failed: telegramId={} error={}", telegramId, e.message)
         false
     }
 

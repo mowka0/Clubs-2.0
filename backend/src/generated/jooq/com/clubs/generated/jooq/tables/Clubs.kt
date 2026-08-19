@@ -274,6 +274,14 @@ open class Clubs(
      */
     val CITY_ID: TableField<ClubsRecord, UUID?> = createField(DSL.name("city_id"), SQLDataType.UUID, this, "Город клуба из справочника cities. NULL = легаси-запись, город которой не удалось распознать; такой клуб не находится фильтром каталога, пока организатор не уточнит город.")
 
+    /**
+     * The column <code>public.clubs.setup_completed_at</code>. Когда владелец
+     * закончил мастер наполнения клуба из чата (NULL = мастер не пройден, на
+     * странице клуба висит баннер «Клуб ещё не заполнен»). Клубы, созданные
+     * формой, получают отметку сразу при создании: форма и есть заполнение.
+     */
+    val SETUP_COMPLETED_AT: TableField<ClubsRecord, OffsetDateTime?> = createField(DSL.name("setup_completed_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "Когда владелец закончил мастер наполнения клуба из чата (NULL = мастер не пройден, на странице клуба висит баннер «Клуб ещё не заполнен»). Клубы, созданные формой, получают отметку сразу при создании: форма и есть заполнение.")
+
     private constructor(alias: Name, aliased: Table<ClubsRecord>?): this(alias, null, null, null, aliased, null, null)
     private constructor(alias: Name, aliased: Table<ClubsRecord>?, parameters: Array<Field<*>?>?): this(alias, null, null, null, aliased, parameters, null)
     private constructor(alias: Name, aliased: Table<ClubsRecord>?, where: Condition?): this(alias, null, null, null, aliased, null, where)

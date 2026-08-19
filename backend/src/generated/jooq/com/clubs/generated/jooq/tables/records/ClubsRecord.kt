@@ -112,6 +112,10 @@ open class ClubsRecord private constructor() : UpdatableRecordImpl<ClubsRecord>(
         set(value): Unit = set(21, value)
         get(): UUID? = get(21) as UUID?
 
+    open var setupCompletedAt: OffsetDateTime?
+        set(value): Unit = set(22, value)
+        get(): OffsetDateTime? = get(22) as OffsetDateTime?
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -121,7 +125,7 @@ open class ClubsRecord private constructor() : UpdatableRecordImpl<ClubsRecord>(
     /**
      * Create a detached, initialised ClubsRecord
      */
-    constructor(id: UUID? = null, ownerId: UUID, name: String, description: String, category: ClubCategory, accessType: AccessType? = null, city: String, district: String? = null, memberLimit: Int, subscriptionPrice: Int? = null, avatarUrl: String? = null, rules: String? = null, applicationQuestion: String? = null, inviteLink: String? = null, isActive: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, paymentLink: String? = null, paymentMethodNote: String? = null, coverUrl: String? = null, applyInviteCode: String? = null, cityId: UUID? = null): this() {
+    constructor(id: UUID? = null, ownerId: UUID, name: String, description: String, category: ClubCategory, accessType: AccessType? = null, city: String, district: String? = null, memberLimit: Int, subscriptionPrice: Int? = null, avatarUrl: String? = null, rules: String? = null, applicationQuestion: String? = null, inviteLink: String? = null, isActive: Boolean? = null, createdAt: OffsetDateTime? = null, updatedAt: OffsetDateTime? = null, paymentLink: String? = null, paymentMethodNote: String? = null, coverUrl: String? = null, applyInviteCode: String? = null, cityId: UUID? = null, setupCompletedAt: OffsetDateTime? = null): this() {
         this.id = id
         this.ownerId = ownerId
         this.name = name
@@ -144,6 +148,7 @@ open class ClubsRecord private constructor() : UpdatableRecordImpl<ClubsRecord>(
         this.coverUrl = coverUrl
         this.applyInviteCode = applyInviteCode
         this.cityId = cityId
+        this.setupCompletedAt = setupCompletedAt
         resetChangedOnNotNull()
     }
 
@@ -174,6 +179,7 @@ open class ClubsRecord private constructor() : UpdatableRecordImpl<ClubsRecord>(
             this.coverUrl = value.coverUrl
             this.applyInviteCode = value.applyInviteCode
             this.cityId = value.cityId
+            this.setupCompletedAt = value.setupCompletedAt
             resetChangedOnNotNull()
         }
     }

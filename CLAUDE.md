@@ -19,7 +19,7 @@ Telegram Mini App для создания и управления платным
 - jOOQ (генерация из БД, KotlinGenerator)
 - Flyway для миграций
 - JWT (jjwt 0.12.x) для авторизации
-- Redis (Lettuce) для rate limiting и кэширования
+- Redis (Lettuce) — намерение привязки чата (`ChatLinkIntentStore`, TTL 15 мин). Rate limiting фактически живёт в памяти процесса (`RateLimitFilter`, ConcurrentHashMap), Redis для него не используется
 - PostgreSQL 16
 
 ### Frontend

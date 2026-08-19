@@ -10,6 +10,9 @@ vi.mock('../../pages/DiscoveryPage', () => ({
 vi.mock('../../components/Layout', () => ({
   PageFallback: () => <div>загрузка</div>,
 }));
+vi.mock('../../components/ConnectChatScreen', () => ({
+  ConnectChatScreen: () => <div>подключите чат</div>,
+}));
 
 const useMyClubsQueryMock = vi.fn();
 vi.mock('../../queries/clubs', () => ({
@@ -30,9 +33,14 @@ function renderHome() {
         <Route path="/" element={<HomeRoute />} />
         <Route path="/my-clubs" element={<div>мои клубы</div>} />
         <Route path="/clubs/:id" element={<div>страница клуба</div>} />
+        <Route path="/clubs/:id/setup" element={<div>мастер наполнения</div>} />
       </Routes>
     </MemoryRouter>,
   );
+}
+
+function ownerMembership(clubId: string) {
+  return { clubId, role: 'organizer', status: 'active' };
 }
 
 beforeEach(() => {
@@ -47,28 +55,37 @@ describe('HomeRoute — куда ведёт «/» в чат-модели', () =>
   });
 
   it('ровно один клуб — сразу в него, без лишнего тапа', () => {
-    useMyClubsQueryMock.mockReturnValue(queryResult({ data: [{ clubId: 'abc-123' }] }));
+    useMyClubsQueryMock.mockReturnValue(queryResult({ data: [ownerMembership('abc-123')] }));
     renderHome();
     expect(screen.getByText('страница клуба')).toBeInTheDocument();
   });
 
   it('несколько клубов — список «Мои клубы»', () => {
     useMyClubsQueryMock.mockReturnValue(
-      queryResult({ data: [{ clubId: 'abc-123' }, { clubId: 'def-456' }] }),
+      queryResult({ data: [ownerMembership('abc-123'), ownerMembership('def-456')] }),
     );
     renderHome();
     expect(screen.getByText('мои клубы')).toBeInTheDocument();
   });
 
-  it('клубов нет — временно каталог (до онбординга «подключите чат»)', () => {
+  it('клубов нет — предложение подключить чат, а не каталог чужих клубов', () => {
     useMyClubsQueryMock.mockReturnValue(queryResult({ data: [] }));
     renderHome();
-    expect(screen.getByText('каталог клубов')).toBeInTheDocument();
+    expect(screen.getByText('подключите чат')).toBeInTheDocument();
+    expect(screen.queryByText('каталог клубов')).not.toBeInTheDocument();
   });
 
   it('ошибка загрузки — «Мои клубы» с их экраном ошибки, а не пустой каталог', () => {
     useMyClubsQueryMock.mockReturnValue(queryResult({ isError: true, data: undefined }));
     renderHome();
     expect(screen.getByText('мои клубы')).toBeInTheDocument();
+  });
+
+  // Решение PO 2026-08-17: незаполненный клуб из чата тоже открывается своей страницей —
+  // мастер человек зовёт сам кнопкой «Заполнить клуб», а не получает его при каждом запуске.
+  it('мастер наполнения при запуске не подсовывается', () => {
+    useMyClubsQueryMock.mockReturnValue(queryResult({ data: [ownerMembership('abc-123')] }));
+    renderHome();
+    expect(screen.queryByText('мастер наполнения')).not.toBeInTheDocument();
   });
 });

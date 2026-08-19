@@ -3270,3 +3270,153 @@
   align-self: flex-end; width: auto; padding: 10px 14px;
   font-size: 13px; color: var(--text-dim);
 }
+
+/* ---- Приглашение наполнить клуб из чата (ClubSetupBanner) ---- */
+/* Единственная дверь в мастер наполнения, поэтому блок выделен из общего ряда карточек:
+   акцентная рамка, тёплое свечение и полоса-маркер слева. Выравнивание — по левому краю,
+   как у всей страницы клуба: центрированное пустое состояние (.rd-empty) здесь выглядело
+   инородно (правка PO 2026-08-17). */
+.rd-setup-cta {
+  position: relative;
+  overflow: hidden;
+  padding: 15px 16px 16px 18px;
+  /* Верхний отступ обязателен: над баннером идёт строка чипов шапки клуба, у которой своего
+     нижнего поля нет, и без него карточка прилипала к чипам (правка PO 2026-08-17). */
+  margin: 14px 0;
+  border: 1px solid var(--accent-soft);
+  box-shadow: 0 10px 26px -12px var(--accent-shadow);
+}
+/* Полоса-маркер: тот же приём, что у акцентных блоков внимания, но тоньше — блок и так
+   выделен рамкой, а широкая заливка на пустой странице кричала бы. */
+.rd-setup-cta::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--accent-grad);
+}
+.rd-setup-cta-head {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 15px; font-weight: 700; color: var(--text);
+}
+.rd-setup-cta-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  flex-shrink: 0;
+}
+.rd-setup-cta-sub {
+  font-size: 13px; color: var(--text-dim); line-height: 1.5;
+  margin: 7px 0 0;
+}
+/* Полоска шагов повторяет шкалу самого мастера — человек видит ту же меру прогресса
+   до входа и внутри. */
+.rd-setup-cta-progress { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.rd-setup-cta-bar { display: flex; gap: 4px; flex: 1; }
+.rd-setup-cta-seg { height: 3px; border-radius: 2px; flex: 1; background: var(--hairline-2); }
+.rd-setup-cta-seg.rd-done { background: var(--accent); }
+.rd-setup-cta-step { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+.rd-setup-cta-btn { width: 100%; margin-top: 13px; }
+
+/* ---- Мастер наполнения клуба из чата (ClubSetupWizard) ---- */
+/* Разметка следует docs/design/club-from-chat/mockups/02-club-setup-wizard.html:
+   один вопрос на экран, капс-метки над полями, финальный шаг с превью страницы. */
+/* Свой отступ сверху меньше страничного, но врезку `.rd-page` он обязан сохранить: в
+   полноэкранном режиме под ней прячутся статус-бар и плавающие контролы Telegram. Без
+   слагаемого мастер начинался под часами (баг staging 2026-08-17). */
+.rd-wz { padding-top: calc(6px + var(--app-inset-top, 0px)); }
+
+/* Полоска шагов: пройденные — приглушённым акцентом, текущий — сплошным. */
+.rd-wz-bar { display: flex; gap: 5px; padding: 4px 2px 10px; }
+.rd-wz-seg { height: 3px; border-radius: 2px; flex: 1; background: var(--hairline-2); }
+.rd-wz-seg.rd-on { background: var(--accent); }
+.rd-wz-seg.rd-done { background: var(--accent); opacity: .45; }
+.rd-wz-cap {
+  font-size: 10px; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--text-faint); padding: 0 2px 12px;
+}
+
+.rd-wz-q { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 6px; line-height: 1.25; }
+.rd-wz-qsub { font-size: 13px; color: var(--text-faint); line-height: 1.45; margin: 0 0 18px; }
+
+/* Капс-метка над полем — та же роль, что у подписи в форме создания клуба. */
+.rd-wz-lbl {
+  font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-faint); padding: 0 2px 7px; margin-top: 16px;
+}
+.rd-wz-lbl:first-of-type { margin-top: 0; }
+
+.rd-wz-area { min-height: 104px; }
+/* Кнопка, притворяющаяся полем: город выбирается пикером, а не вводится руками. */
+.rd-wz-pick { text-align: left; cursor: pointer; }
+.rd-wz-pick.rd-ph { color: var(--text-faint); }
+
+/* Обязательность города говорим словами: отключённая кнопка «Дальше» сама по себе не объясняет. */
+.rd-wz-req {
+  display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 560;
+  color: var(--accent); background: var(--accent-soft); border-radius: 8px;
+  padding: 5px 10px; margin-bottom: 4px;
+}
+.rd-wz-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.rd-wz-ava-row { display: flex; align-items: center; gap: 14px; }
+.rd-wz-hint { font-size: 12.5px; color: var(--text-dim); line-height: 1.45; }
+
+/* Права бота на последнем шаге: выданное гасим галочкой, недостающее оставляем ярким —
+   человек должен видеть, чего именно не хватает, а не общий статус «что-то не так». */
+.rd-wz-rights { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.rd-wz-right {
+  display: flex; gap: 9px; align-items: flex-start;
+  font-size: 13px; line-height: 1.45; color: var(--text);
+}
+.rd-wz-right.rd-on { color: var(--text-faint); }
+.rd-wz-right-mark { color: var(--accent); flex-shrink: 0; width: 12px; }
+.rd-wz-right.rd-on .rd-wz-right-mark { color: var(--live); }
+
+/* Кнопки последнего шага одной группой: равные промежутки вместо разнобоя из собственных
+   отступов у primary (20px) и ghost (8px) — на экране прав их сразу три (правка PO 2026-08-19). */
+.rd-wz-actions { display: grid; gap: 10px; margin-top: 18px; }
+.rd-wz-actions > button { width: 100%; margin: 0; }
+/* Условие «только администратор» — тем же тоном, что основной текст: это не сноска, а причина,
+   по которой у половины людей кнопка выше не сработает. */
+.rd-wz-admin-note {
+  font-size: 12.5px; color: var(--text-dim); line-height: 1.5;
+  margin: 12px 0 0; padding: 0 2px;
+}
+.rd-wz-admin-note b { color: var(--text); font-weight: 700; }
+/* «Готово» отделено от группы действий тем же шагом, что и промежутки внутри неё. */
+.rd-wz-done { width: 100%; margin-top: 16px; }
+
+.rd-wz-next { width: 100%; margin-top: 20px; }
+.rd-wz-skip { width: 100%; margin-top: 8px; }
+.rd-wz-note { font-size: 11px; color: var(--text-faint); text-align: center; padding-top: 10px; }
+.rd-wz-err { font-size: 12.5px; color: var(--danger); margin: 10px 0 0; }
+
+/* Слот обложки: пунктир, пока пусто; картинка, когда загружена. Кнопка смены — в углу. */
+.rd-wz-cover-slot {
+  position: relative; height: 104px; border-radius: 14px; overflow: hidden;
+  border: 1px dashed var(--hairline-2); background: var(--surface);
+  display: grid; place-items: center;
+}
+.rd-wz-cover-img { width: 100%; height: 100%; object-fit: cover; }
+.rd-wz-cover-empty { font-size: 12.5px; color: var(--text-faint); }
+.rd-wz-cover-btn { position: absolute; right: 8px; bottom: 8px; }
+
+/* Превью страницы клуба — единственное место, где орг видит её глазами участника. */
+.rd-wz-preview {
+  border: 1px solid var(--hairline); border-radius: 16px; padding: 0 12px 14px;
+  background: var(--glass-bg); overflow: hidden;
+}
+.rd-wz-pv-cover {
+  height: 78px; margin: 0 -12px 0; background: var(--hairline);
+}
+.rd-wz-pv-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rd-wz-pv-ava {
+  width: 54px; height: 54px; border-radius: 50%; margin: -27px auto 0; position: relative;
+  border: 3px solid var(--rd-page-bg, #0B0B0E); background: var(--accent-grad, var(--accent));
+  display: grid; place-items: center; overflow: hidden;
+  font-size: 20px; font-weight: 700; color: #17110C;
+}
+.rd-wz-pv-ava img { width: 100%; height: 100%; object-fit: cover; }
+.rd-wz-pv-name { text-align: center; font-size: 16px; font-weight: 700; padding: 9px 0 3px; }
+.rd-wz-pv-meta { text-align: center; font-size: 11.5px; color: var(--text-faint); }

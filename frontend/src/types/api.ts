@@ -433,6 +433,12 @@ export interface ClubDetailDto {
   // участникам, которые должны взнос.
   paymentLink: string | null;
   paymentMethodNote: string | null;
+  /**
+   * Мастер наполнения пройден (V82). false — клуб родился из чата и не доведён до конца:
+   * на странице висит баннер «Клуб ещё не заполнен». Заполненность полей тут ни при чём —
+   * шаги можно пропускать, важен факт «дошёл до конца».
+   */
+  setupCompleted: boolean;
   // Чат-интеграция (club-chat-link): чат привязан и бот в нём жив — гость видит чип «у клуба есть чат».
   chatLinked: boolean;
   // Включён «вход в чат через заявки» (дверь).
@@ -855,4 +861,9 @@ export interface CityDto {
   isFeatured: boolean;
   /** В городе есть хотя бы один клуб — витрина показывает такие города вместе с featured. */
   hasClubs: boolean;
+}
+
+/** Deep link `t.me/<bot>?startgroup=new` — подключение чата, когда клуба ещё нет. */
+export interface NewClubChatLinkDto {
+  startGroupUrl: string;
 }

@@ -176,7 +176,7 @@ CTA «Найти клуб» → `/discovery`). Заменяет прежний �
 
 ## API контракты
 
-Все эндпоинты под `/api/**` — требуют JWT (`SecurityConfig` уже покрывает) + rate-limit 60/мин (`RateLimitFilter`). Дополнительной конфигурации не нужно.
+Все эндпоинты под `/api/**` — требуют JWT (`SecurityConfig` уже покрывает) + rate-limit 120/мин (`RateLimitFilter`). Дополнительной конфигурации не нужно.
 
 ### `GET /api/users/me`
 Расширен полями `country`, `bio`. Возвращает `UserDto`.
@@ -272,7 +272,7 @@ data class UserClubReputationDto(
 
 Под капотом: `SELECT name FROM interests WHERE name LIKE 'prefix%' ORDER BY usage_count DESC, name ASC LIMIT ?` — обслуживается индексом `idx_interests_name_prefix` (см. § «Миграция»).
 
-Защищён JWT и накрыт глобальным rate-limit 60/мин на юзера (`RateLimitFilter`). При больших нагрузках первая остановка — Redis-кэш горячих префиксов (Redis уже в стэке). Сейчас YAGNI.
+Защищён JWT и накрыт глобальным rate-limit 120/мин на юзера (`RateLimitFilter`). При больших нагрузках первая остановка — Redis-кэш горячих префиксов (Redis уже в стэке). Сейчас YAGNI.
 
 ---
 
@@ -451,7 +451,7 @@ AND на повторном старте (V16 уже применена) — exi
 
 - **Производительность.** `GET /me/reputation` (P1b) — SELECT membership-проекции (два join'а, включает покинутые клубы с track record) + один batch-read ledger-исходов юзера для on-read Trust (`TrustService.computeForUser`, без N+1); покрывается существующими PK/FK + индексом `(user_id, club_id)` на `reputation_ledger`. `GET /me/interests` — два таблицы, через PK. Suggest — индекс `varchar_pattern_ops` даёт O(log n) + matched rows для `LIKE 'prefix%'`. На текущем масштабе (десятки тысяч интересов в перспективе) — < 10ms на запрос.
 - **Безопасность.** Все новые эндпоинты под `/api/users/me/**` или `/api/interests/**` → JWT (`SecurityConfig`). `UpdateMeRequest` валидирует `@Size`. `PATCH /me` действует ТОЛЬКО над `user.userId` из принципала — IDOR невозможен. `q` для suggest нормализуется (нет SQL-инъекции — jOOQ параметризует, `startsWith` escape'ит `%/_`). Интересы — публичный словарь, без PII.
-- **Rate limiting.** Глобальный `RateLimitFilter` (60/мин на юзера для `/api/**`) покрывает оба новых эндпоинта. Дебаунс 250 мс + `enabled: q.length >= 2` на фронте дополнительно сжимают трафик.
+- **Rate limiting.** Глобальный `RateLimitFilter` (120/мин на юзера для `/api/**`) покрывает оба новых эндпоинта. Дебаунс 250 мс + `enabled: q.length >= 2` на фронте дополнительно сжимают трафик.
 - **Логирование.** `InterestService.replaceUserInterests` пишет `INFO` с counts (`added=`, `removed=`). Sensitive данных нет.
 
 ---

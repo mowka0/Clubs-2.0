@@ -5,10 +5,10 @@ import {
   useChatLinkStatusQuery,
   usePinClubLinkMutation,
   useRefreshChatLinkMutation,
+  useStartChatLinkingMutation,
   useUnlinkChatMutation,
   useUpdateChatLinkMutation,
 } from '../../queries/chatLink';
-import { openTmeLink } from '../../utils/telegramLinks';
 import { rememberChatLinkingStarted } from '../../utils/chatLinkPending';
 import { Toast } from '../Toast';
 import type { ChatLinkStatusDto, UpdateChatLinkRequest } from '../../types/api';
@@ -35,6 +35,7 @@ function isBotInChat(status: ChatLinkStatusDto): boolean {
 
 const NotLinkedState: FC<{ clubId: string; startGroupUrl: string }> = ({ clubId, startGroupUrl }) => {
   const haptic = useHaptic();
+  const startLinking = useStartChatLinkingMutation();
   return (
     <div className="rd-glass" style={{ padding: 16 }}>
       <div style={{ fontSize: 14, fontWeight: 650, marginBottom: 4 }}>💬 Подключите чат клуба</div>
@@ -67,7 +68,9 @@ const NotLinkedState: FC<{ clubId: string; startGroupUrl: string }> = ({ clubId,
           // Отсюда человек уходит в Telegram (на iOS — вместе с закрытием Mini App); отметка
           // нужна, чтобы по возвращении показать окно со статусом подключения бота.
           rememberChatLinkingStarted(clubId, Date.now());
-          openTmeLink(startGroupUrl);
+          // Намерение отмечается на сервере: бот узнаёт о добавлении из my_chat_member, где
+          // payload ссылки отсутствует, и без отметки завёл бы новый клуб вместо привязки.
+          startLinking.mutate({ clubId, startGroupUrl });
         }}
       >
         Привязать чат
@@ -84,6 +87,7 @@ const NotLinkedState: FC<{ clubId: string; startGroupUrl: string }> = ({ clubId,
 
 const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId, status }) => {
   const haptic = useHaptic();
+  const startLinking = useStartChatLinkingMutation();
   const refreshMutation = useRefreshChatLinkMutation(clubId);
   const updateMutation = useUpdateChatLinkMutation(clubId);
   const unlinkMutation = useUnlinkChatMutation(clubId);
@@ -191,7 +195,7 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
           onClick={() => {
             haptic.impact('medium');
             rememberChatLinkingStarted(clubId, Date.now());
-            openTmeLink(status.startGroupUrl);
+            startLinking.mutate({ clubId, startGroupUrl: status.startGroupUrl });
           }}
         >
           Привязать бота заново
@@ -332,6 +336,16 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
             <div className="fd">
               Последняя награда участника видна в чате тегом рядом с именем. Работает в обе
               стороны: тег, поставленный в чате руками, станет наградой в приложении.
+              {!status.canManageTags && (
+                <>
+                  {' '}
+                  {/* Единственное право, которого нет в экране добавления бота: Telegram не отдаёт
+                      его ни по ссылке, ни через дефолтные права (проверено 2026-08-19). */}
+                  <b>Боту нужно право «Управление тегами»</b> — включается только руками: профиль
+                  бота в группе → «Изменить права» → «Управление тегами», затем «Проверить права
+                  ещё раз» выше.
+                </>
+              )}
             </div>
           </div>
           <button

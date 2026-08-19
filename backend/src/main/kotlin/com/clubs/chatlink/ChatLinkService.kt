@@ -371,12 +371,30 @@ class ChatLinkService(
 
     /**
      * Deep link для кнопки «Привязать чат»: payload = club_id (решение PO — без одноразовых
-     * кодов, гейт — верификация владельца при /start), admin= сразу просит права для
-     * закрепа, двери и снятия банов (restrict_members — реестр багов №1: «удалить из группы»
-     * = бан, и без этого права бот не может впустить вернувшегося участника).
+     * кодов, гейт — верификация владельца), admin= сразу просит права для закрепа, двери и
+     * снятия банов (restrict_members — реестр багов №1: «удалить из группы» = бан, и без этого
+     * права бот не может впустить вернувшегося участника). delete_messages — чтобы стереть из
+     * группы служебную команду `/start@bot`, которую клиент Telegram кладёт туда сам.
      */
     fun startGroupUrl(clubId: UUID): String =
-        "https://t.me/$botUsername?startgroup=$clubId&admin=pin_messages+invite_users+restrict_members+manage_tags"
+        "https://t.me/$botUsername?startgroup=$clubId&admin=pin_messages+invite_users+restrict_members+manage_tags+delete_messages"
+
+    /**
+     * Ссылка «подключить чат, клуба ещё нет»: payload `new` вместо UUID (см. ClubsBot).
+     * Одна на всех — её же можно давать в рекламе. Права запрашиваем те же, что при обычной
+     * привязке: без них бот в чате наполовину мёртв.
+     */
+    fun newClubStartGroupUrl(): String =
+        "https://t.me/$botUsername?startgroup=${ChatLinkBotService.NEW_CLUB_START_PAYLOAD}" +
+            "&admin=pin_messages+invite_users+restrict_members+manage_tags+delete_messages"
+
+    /**
+     * Тот же владельческий гейт, что и у остальных методов таба «Чат», но снаружи: им
+     * пользуется отметка намерения перед уходом в Telegram (`POST /api/chat-link/intent`).
+     */
+    fun requireOwnedClub(clubId: UUID, callerId: UUID) {
+        requireOwner(clubId, callerId)
+    }
 
     private fun requireOwner(clubId: UUID, callerId: UUID): Club {
         val club = clubRepository.findById(clubId) ?: throw NotFoundException("Club not found")

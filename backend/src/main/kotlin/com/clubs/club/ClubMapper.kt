@@ -31,6 +31,7 @@ class ClubMapper {
         isActive = record.isActive ?: true,
         paymentLink = record.paymentLink,
         paymentMethodNote = record.paymentMethodNote,
+        setupCompletedAt = record.setupCompletedAt,
         createdAt = record.createdAt!!,
         updatedAt = record.updatedAt!!
     )
@@ -79,6 +80,7 @@ class ClubMapper {
         inviteLink = if (includeInviteLink) club.inviteLink else null,
         memberCount = club.memberCount,
         isActive = club.isActive,
+        setupCompleted = club.setupCompletedAt != null,
         paymentLink = if (includeRequisites) club.paymentLink else null,
         paymentMethodNote = if (includeRequisites) club.paymentMethodNote else null,
         chatLinked = chatLinked,
