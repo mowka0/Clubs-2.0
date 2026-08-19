@@ -27,6 +27,7 @@ class ChatLinkBotService(
     private val userRepository: UserRepository,
     private val chatLinkService: ChatLinkService,
     private val intentStore: ChatLinkIntentStore,
+    private val serviceMessageStore: ChatServiceMessageStore,
     private val gateway: ChatTelegramGateway,
     @Value("\${telegram.bot-username}") private val botUsername: String
 ) {
@@ -40,7 +41,11 @@ class ChatLinkBotService(
      * Telegram откажет, и команда останется висеть.
      */
     fun deleteServiceCommand(chatId: Long, messageId: Long) {
-        gateway.deleteMessage(chatId, messageId)
+        if (gateway.deleteMessage(chatId, messageId)) return
+        // Прав на удаление ещё нет — типовой случай, когда бота добавил не администратор группы.
+        // Запоминаем: как только права появятся, сотрём задним числом (см. handleMyChatMember).
+        serviceMessageStore.remember(chatId, messageId)
+        log.info("Service command left in chat until rights arrive: chatId={} messageId={}", chatId, messageId)
     }
 
     /**
@@ -337,11 +342,23 @@ class ChatLinkBotService(
         // дотягиваем raw-вызовом, пока бот в чате (событие редкое, вызов дешёвый).
         val canManageTags = status.isInChat && gateway.fetchCanManageTags(chatId)
         chatLinkRepository.updateBotState(link.clubId, status, canPinMessages, canInviteUsers, canRestrictMembers, canManageTags)
+        // Права могли только что появиться — доудаляем служебную команду, если она осталась
+        // висеть в чате с момента добавления бота.
+        if (status.isInChat) deletePendingServiceMessage(chatId)
         log.info(
             "Bot chat state updated: clubId={} chatId={} status={} canPin={} canInvite={} canRestrict={} canManageTags={}",
             link.clubId, chatId, status.literal, canPinMessages, canInviteUsers, canRestrictMembers, canManageTags
         )
         ensureInviteLink(link, nowInChat = status.isInChat, nowCanInvite = canInviteUsers)
+    }
+
+    /** Стирает отложенную служебную команду, когда у бота наконец появились права. */
+    private fun deletePendingServiceMessage(chatId: Long) {
+        val messageId = serviceMessageStore.peek(chatId) ?: return
+        if (gateway.deleteMessage(chatId, messageId)) {
+            serviceMessageStore.forget(chatId)
+            log.info("Service command deleted after rights were granted: chatId={} messageId={}", chatId, messageId)
+        }
     }
 
     /**
