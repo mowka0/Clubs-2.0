@@ -188,6 +188,18 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
       .catch(() => setToast(status.doorInviteLink));
   };
 
+  // Прав не хватает — тогда «Проверить права ещё раз» переезжает наверх, к «Выдать права»:
+  // это шаг того же действия («выдал — проверь»), и искать его внизу страницы незачем
+  // (правка PO 2026-08-19). В остальных случаях кнопка живёт на прежнем месте — она нужна и
+  // с полным набором прав (перечитать название чата, видимость истории, право тегов), и в
+  // состоянии «бот удалён из чата», где блока прав нет вовсе.
+  const rightsMissing = botInChat && !hasAllBotRights(status);
+  const refreshButton = (
+    <button type="button" className="rd-btn-outline" onClick={handleRefresh} disabled={busy}>
+      {refreshMutation.isPending ? <Spinner size="s" /> : 'Проверить права ещё раз'}
+    </button>
+  );
+
   return (
     <>
       {alert && (
@@ -240,7 +252,7 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
             группы) и передать ссылку тому, кто админ. Условие шире буквального «прав нет
             совсем»: Telegram выдаёт права по ссылке пачкой, так что частичный набор означает
             ровно ту же поломку и лечится той же ссылкой. */}
-        {botInChat && !hasAllBotRights(status) && (
+        {rightsMissing && (
           <div className="rd-cl-fix">
             <div className="rd-cl-fix-t">Боту не хватает прав администратора</div>
             <div className="rd-cl-fix-d">
@@ -264,6 +276,7 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
               >
                 Выдать права
               </button>
+              {refreshButton}
               <button type="button" className="rd-ghost-btn" onClick={handleCopyAdminLink}>
                 Скопировать ссылку для админа
               </button>
@@ -433,9 +446,7 @@ const LinkedState: FC<{ clubId: string; status: ChatLinkStatusDto }> = ({ clubId
 
       {error && <div className="rd-error">{error}</div>}
 
-      <button type="button" className="rd-btn-outline" onClick={handleRefresh} disabled={busy}>
-        {refreshMutation.isPending ? <Spinner size="s" /> : 'Проверить права ещё раз'}
-      </button>
+      {!rightsMissing && refreshButton}
       <button
         type="button"
         className="rd-btn-outline"

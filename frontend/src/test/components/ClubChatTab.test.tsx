@@ -178,6 +178,21 @@ describe('ClubChatTab', () => {
     expect(openTelegramLinkMock).toHaveBeenCalledWith(START_URL);
   });
 
+  it('«Проверить права ещё раз» не задваивается — при нехватке прав она одна, наверху', async () => {
+    mockStatus(status({ linked: true, chatTitle: 'Партия — чат', botStatus: 'member' }));
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    await screen.findByText('Боту не хватает прав администратора');
+    expect(screen.getAllByRole('button', { name: 'Проверить права ещё раз' })).toHaveLength(1);
+  });
+
+  it('с полным набором прав «Проверить права ещё раз» остаётся на месте', async () => {
+    mockStatus(linkedHealthy());
+    renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
+
+    expect(await screen.findByRole('button', { name: 'Проверить права ещё раз' })).toBeInTheDocument();
+  });
+
   it('все обязательные права выданы — блока нет', async () => {
     mockStatus(linkedHealthy());
     renderWithProviders(<ClubChatTab clubId={CLUB_ID} />);
