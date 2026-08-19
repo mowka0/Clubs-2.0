@@ -180,7 +180,7 @@ PO зафиксировал: **оба плательщика обязатель�
 ### 7.1 HARD-гейт перед реальным acquirer (из Security/Reviewer ревью Slice 1)
 Когда стаб-`PaymentProvider` заменяется реальным (ЮKassa/Т-Банк), ОБЯЗАТЕЛЬНО до включения:
 1. **Верификация подписи вебхука** (HMAC/RSA по raw-body, секрет из env, constant-time, + replay-окно по timestamp). Сейчас `/api/subscriptions/webhook` = permitAll и стаб возвращает `Ignored` (no-op) → риска нет; с реальным провайдером `handleWebhook` начнёт менять состояние по неаутентифицированному телу. Сеам готов (`X-Signature` уже прокидывается), но enforce нет. **CWE-345 / OWASP A07-A08.**
-2. **Тайтовый rate-limit на `POST /api/subscriptions*`** (несколько/мин на юзера, как auth-bucket) — сейчас только общий 60/мин.
+2. **Тайтовый rate-limit на `POST /api/subscriptions*`** (несколько/мин на юзера, как auth-bucket) — сейчас только общий 120/мин.
 3. **Over-capacity при НЕдобровольном `ENDED`** (провал продления → `PAST_DUE→ENDED`) — обработчик freeze/архив (данные целы). Добровольный путь уже защищён гардом §4.3.
 4. **TOCTOU на capacity-гарде** (`COUNT` без лока): при реальных деньгах закрыть advisory-локом/`SELECT … FOR UPDATE` на подписке владельца. Сейчас риск низкий (один юзер, double-submit; first-time race уже даёт чистый 409).
 

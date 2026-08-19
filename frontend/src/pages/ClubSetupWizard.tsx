@@ -7,6 +7,7 @@ import { ClubInterestsPicker } from '../components/club/ClubInterestsPicker';
 import { BotRightsStep, hasAllBotRights } from '../components/club/BotRightsStep';
 import { useBackButton } from '../hooks/useBackButton';
 import { useHaptic } from '../hooks/useHaptic';
+import { ApiError } from '../api/apiClient';
 import { useChatLinkStatusQuery } from '../queries/chatLink';
 import { useClubQuery, useUpdateClubMutation } from '../queries/clubs';
 import {
@@ -134,8 +135,15 @@ export const ClubSetupWizard: FC = () => {
     updateClub.mutate({ id: club.id, body }, { onSuccess: () => setStep(next) });
   };
 
+  // 429 стоит отделить от прочих сбоев: «попробуйте ещё раз» здесь вредный совет — повтор
+  // упирается в тот же лимит, помогает только пауза.
+  const isRateLimited = updateClub.error instanceof ApiError && updateClub.error.status === 429;
   const saveError = updateClub.isError && (
-    <p className="rd-wz-err" role="alert">Не получилось сохранить. Попробуйте ещё раз.</p>
+    <p className="rd-wz-err" role="alert">
+      {isRateLimited
+        ? 'Слишком много запросов подряд. Подождите минуту и попробуйте снова.'
+        : 'Не получилось сохранить. Попробуйте ещё раз.'}
+    </p>
   );
 
   return (
@@ -218,11 +226,17 @@ export const ClubSetupWizard: FC = () => {
             {cityLabel ?? 'Выбрать город'}
           </button>
 
+          {/* Кнопка живёт и с уже сохранённым городом: вернувшись на этот шаг, человек видел
+              свой город в поле и мёртвую кнопку — локальный выбор был пуст (баг PO 2026-08-19).
+              Города не меняли — просто идём дальше, не трогая сервер. */}
           <button
             type="button"
             className="rd-btn-primary rd-wz-next"
-            disabled={!city || updateClub.isPending}
-            onClick={() => city && saveAndNext({ cityId: city.id }, 3)}
+            disabled={(!city && !club.cityId) || updateClub.isPending}
+            onClick={() => {
+              if (city) saveAndNext({ cityId: city.id }, 3);
+              else if (club.cityId) { haptic.impact('light'); setStep(3); }
+            }}
           >
             Дальше
           </button>

@@ -46,7 +46,10 @@ class SecurityConfig(
                     .anyRequest().permitAll()
             }
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
-            .addFilterBefore(rateLimitFilter, JwtAuthenticationFilter::class.java)
+            // ПОСЛЕ jwt-фильтра, а не до: лимитеру нужен опознанный пользователь, иначе ключом
+            // всегда становится IP — а за Traefik и nginx это один внутренний адрес на всех,
+            // и лимит 60/мин делило всё окружение разом (баг прода 2026-08-19).
+            .addFilterAfter(rateLimitFilter, JwtAuthenticationFilter::class.java)
 
         return http.build()
     }
