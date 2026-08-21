@@ -169,7 +169,9 @@ class SkladchinaChatStatusService(
             return true
         }
         // Право закрепа могли и не выдать: пост уходит без pin, статус всё равно живёт.
-        if (link.canPinMessages) gateway.pinChatMessage(link.chatId, messageId)
+        // notify = true — как у живого закрепа встречи: сбор должен увидеть весь чат, а не
+        // только те, кто прокрутит ленту. Один пуш на создание, перерисовки статуса молчат.
+        if (link.canPinMessages) gateway.pinChatMessage(link.chatId, messageId, notify = true)
         log.info("Skladchina chat status created: skladchinaId={} chatId={} messageId={}",
             skladchina.id, link.chatId, messageId)
         return true

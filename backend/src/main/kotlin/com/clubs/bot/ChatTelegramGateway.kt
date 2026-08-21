@@ -464,10 +464,22 @@ class ChatTelegramGateway(
         return if (rows.isEmpty()) null else InlineKeyboardMarkup(rows)
     }
 
-    /** Закрепить сообщение (тихо, без пуша всем участникам). Нужно право «Закрепление сообщений». */
-    fun pinChatMessage(chatId: Long, messageId: Long): Boolean = try {
+    /**
+     * Закрепить сообщение. Нужно право «Закрепление сообщений».
+     *
+     * [notify] = true — Telegram шлёт пуш «сообщение закреплено» ВСЕМ участникам чата. Это
+     * единственный способ докричаться до всего чата: тега `@all` в Telegram нет, а список
+     * участников группы боту недоступен (`getChatMembers` из Bot API удалён). Поэтому уведомляем
+     * закрепом, и только при СОЗДАНИИ поста — перерисовки идут через `editMessageText`, который
+     * пуш не шлёт вовсе.
+     *
+     * Параметр назван от «уведомить», а не `silent` как у [sendGroupMessageWithUrlButton]:
+     * у закрепа тихий режим — состояние по умолчанию, и `silent = false` в месте, где мы зовём
+     * весь чат, читалось бы двойным отрицанием.
+     */
+    fun pinChatMessage(chatId: Long, messageId: Long, notify: Boolean = false): Boolean = try {
         telegramClient.execute(
-            PinChatMessage.builder().chatId(chatId).messageId(messageId.toInt()).disableNotification(true).build()
+            PinChatMessage.builder().chatId(chatId).messageId(messageId.toInt()).disableNotification(!notify).build()
         )
         true
     } catch (e: Exception) {

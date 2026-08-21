@@ -242,7 +242,10 @@ class LivePinService(
             )
         )
         // Право закрепа могли и не выдать: пост уходит без pin, счётчики всё равно живут.
-        if (link.canPinMessages) gateway.pinChatMessage(link.chatId, messageId)
+        // notify = true: пуш о закрепе — единственный способ показать встречу ВСЕМУ чату
+        // (тега `@all` в Telegram нет). Шумим ровно один раз, при создании: перерисовки
+        // счётчиков идут через editPin → editMessageText, а он уведомлений не шлёт.
+        if (link.canPinMessages) gateway.pinChatMessage(link.chatId, messageId, notify = true)
         log.info("Live pin created: eventId={} chatId={} messageId={}", event.id, link.chatId, messageId)
         return true
     }

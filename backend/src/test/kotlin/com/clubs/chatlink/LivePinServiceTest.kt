@@ -89,7 +89,8 @@ class LivePinServiceTest {
             )
         }
         verify { pinRepository.insert(match { it.eventId == event.id && it.messageId == 777L }) }
-        verify { gateway.pinChatMessage(chatId, 777L) }
+        // notify = true: закреп зовёт весь чат — это и есть «докричаться до всех» вместо @all.
+        verify { gateway.pinChatMessage(chatId, 777L, notify = true) }
     }
 
     // ---- переезд встречи: кнопка карт в посте (PO 2026-08-10) ----
@@ -176,7 +177,7 @@ class LivePinServiceTest {
         service.onEventCreated(event)
 
         verify { pinRepository.insert(match { it.messageId == 778L && !it.hasPhoto }) }
-        verify { gateway.pinChatMessage(chatId, 778L) }
+        verify { gateway.pinChatMessage(chatId, 778L, notify = true) }
     }
 
     // Подпись под картинкой в Telegram ограничена 1024 символами — длинный статус уходит текстом,
@@ -240,7 +241,7 @@ class LivePinServiceTest {
         service.onEventCreated(event)
 
         verify { pinRepository.insert(any()) }
-        verify(exactly = 0) { gateway.pinChatMessage(any(), any()) }
+        verify(exactly = 0) { gateway.pinChatMessage(any(), any(), any()) }
     }
 
     @Test

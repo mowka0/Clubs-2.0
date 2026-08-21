@@ -130,7 +130,8 @@ class SkladchinaChatStatusServiceTest {
             )
         }
         verify { postRepository.insertIfAbsent(match { it.skladchinaId == skladchina.id && it.messageId == 777L }) }
-        verify { gateway.pinChatMessage(chatId, 777L) }
+        // notify = true — сбор должен увидеть весь чат, как и встреча.
+        verify { gateway.pinChatMessage(chatId, 777L, notify = true) }
     }
 
     @Test
@@ -143,7 +144,7 @@ class SkladchinaChatStatusServiceTest {
 
         service.onSkladchinaCreated(clubId, skladchina.id)
 
-        verify(exactly = 0) { gateway.pinChatMessage(any(), any()) }
+        verify(exactly = 0) { gateway.pinChatMessage(any(), any(), any()) }
     }
 
     @Test
@@ -188,7 +189,7 @@ class SkladchinaChatStatusServiceTest {
         service.onSkladchinaCreated(clubId, skladchina.id)
 
         verify { postRepository.insertIfAbsent(any()) }
-        verify(exactly = 0) { gateway.pinChatMessage(any(), any()) }
+        verify(exactly = 0) { gateway.pinChatMessage(any(), any(), any()) }
     }
 
     @Test
